@@ -9,6 +9,9 @@ description: Создавать или проверять Docker images, Compose
 health/readiness, resource limits, graceful stop, provenance и rollback path.
 
 - Compose is the first executable reference topology and contains no real secrets.
+- Нормативные настройки находятся только в `config/platform.yaml`; секреты —
+  только в SOPS-encrypted `secrets/platform.secrets.sops.yaml`. Runtime получает
+  scoped tmpfs materialization, а не общий secrets-файл.
 - Pin runtime/dependency/action versions and produce lockfiles, SBOM, and image digest.
 - CI validates contracts before builds, then types/lint/tests/integration/security.
 - Deploy immutable digests; configuration and migrations are explicit stages.

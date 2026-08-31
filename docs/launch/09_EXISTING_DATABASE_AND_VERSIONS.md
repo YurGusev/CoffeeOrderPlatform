@@ -127,6 +127,8 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
 | Dependency Cruiser | `18.2.0` | architecture boundaries |
 | ESLint | `10.9.1` | static checks |
 | Prettier | `3.9.6` | formatting |
+| SOPS | `3.13.3` | единый encrypted secrets file |
+| age | `1.3.2` | recipients/identity для SOPS |
 | Docker Engine | `29.7.2` | подтверждённая версия host |
 | Docker Compose plugin | `5.4.0` | подтверждённая версия host |
 
@@ -190,3 +192,5 @@ Compose smoke и rollback на прежний pin.
 - [Документация PostgreSQL 17.11](https://www.postgresql.org/docs/17/)
 - [OpenAPI 3.2.0](https://spec.openapis.org/oas/v3.2.0.html)
 - [TypeScript](https://www.typescriptlang.org/)
+- [SOPS releases](https://github.com/getsops/sops/releases)
+- [age releases](https://github.com/FiloSottile/age/releases)

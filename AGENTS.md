@@ -32,6 +32,11 @@
 - AROMA Gateway владеет только транспортом провайдера; Orders владеет convergence корзины.
 - React использует `client-v1`, серверные состояния и `allowedActions`.
 - Новая технология добавляется только ради названной гарантии, измеренного ограничения или требования провайдера.
+- Все несекретные настройки читаются только из `config/platform.yaml`; все
+  секреты хранятся только в encrypted `secrets/platform.secrets.sops.yaml`.
+  Другие `.env`, service config и password files запрещены.
+- Runtime получает только свою scoped secret materialization в tmpfs; общий
+  secrets-файл может расшифровывать только trusted `config-bootstrap`.
 
 Работать локально в `/home/yurgusev/CoffeeOrderPlatform` и проверять изменения
 до коммита. Push, создание/изменение issue и PR, deployment, мутации провайдера

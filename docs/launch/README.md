@@ -31,6 +31,7 @@
 9. [План реализации](08_DELIVERY_PLAN.md)
 10. [Существующая БД и зафиксированные версии](09_EXISTING_DATABASE_AND_VERSIONS.md)
 11. [Нормативный каталог runtime](10_RUNTIME_CATALOG.md)
+12. [Единая конфигурация и единое хранилище секретов](11_CONFIGURATION_AND_SECRETS.md)
 
 ## Сила канонических документов
 
