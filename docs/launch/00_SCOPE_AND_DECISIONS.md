@@ -21,7 +21,7 @@
 - `edge-gateway`;
 - `web`;
 - `customer-service`;
-- `catalog-service` и `catalog-supplier-sync`;
+- `catalog-service`, `catalog-supplier-sync` и `catalog-activation-worker`;
 - `pricing-service`;
 - `orders-service`;
 - `orders-aroma-preparation`;

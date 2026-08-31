@@ -25,7 +25,7 @@
 | БД | Единственный владелец миграций | Runtime с правом записи |
 |---|---|---|
 | `coffee_platform_customer` | `customer-service` | `customer-service` |
-| `coffee_platform_catalog` | `catalog-service` | `catalog-service`, `catalog-supplier-sync` через отдельные ограниченные роли |
+| `coffee_platform_catalog` | `catalog_migrator` | `catalog-service` (read-only), `catalog-supplier-sync` (staging writer), `catalog-activation-worker` (active/Outbox writer) через отдельные роли |
 | `coffee_platform_pricing` | `pricing-service` | `pricing-service` |
 | `coffee_platform_orders` | `orders-service` | runtime Orders через отдельные роли с явным allowlist таблиц |
 | `coffee_platform_integration` | `aroma-gateway` | `aroma-gateway` |

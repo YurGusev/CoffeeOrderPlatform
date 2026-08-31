@@ -14,6 +14,7 @@
 | `customer-service` | Customer | customer commands/queries | customer DB |
 | `catalog-service` | Catalog | products, mappings, availability | catalog DB |
 | `catalog-supplier-sync` | Catalog | complete safe AROMA catalog reads | catalog DB |
+| `catalog-activation-worker` | Catalog | validate/atomically activate received generations + Outbox | catalog DB |
 | `pricing-service` | Pricing | quote calculation and validation | pricing DB |
 | `orders-service` | Orders | Draft, Confirm, Order Card | orders DB |
 | `orders-aroma-preparation` | Orders | reacts to Catalog facts, updates Desired | orders DB |

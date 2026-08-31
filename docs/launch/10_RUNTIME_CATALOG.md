@@ -49,11 +49,11 @@ manifests без изменения смысла. Любое отклонени�
 - **Владелец:** Catalog.
 - **Входящие HTTP:** `GET /api/client-v1/catalog/products`; private
   `GET /api/internal-v1/catalog/products/{productRef}/pricing-input`.
-- **Входящие события:** `CatalogSnapshotCompleted.v1` от `catalog-supplier-sync`.
-- **Исходящие вызовы:** Kafka events `CatalogMappingChanged.v1` и
-  `RealtimeInvalidated.v1`; внешних/provider HTTP нет.
-- **Хранилище:** target-БД `coffee_platform_catalog`, role `coffee_catalog_rw`.
-- **Секреты:** Catalog DB и Kafka credentials.
+- **Входящие события:** нет; HTTP читает active generation из Catalog DB.
+- **Исходящие вызовы:** отсутствуют; внешних/provider HTTP и Kafka publish нет.
+- **Хранилище:** target-БД `coffee_platform_catalog`, role `coffee_catalog_api_ro`,
+  только active projection reads.
+- **Секреты:** read-only Catalog DB, service identity и telemetry.
 - **Публичность:** не public; client route только через edge, internal route только private network.
 
 ## 5. `catalog-supplier-sync`
@@ -65,12 +65,28 @@ manifests без изменения смысла. Любое отклонени�
 - **Входящие события:** нет; запуск выполняет internal scheduler этого runtime,
   а не дополнительное Kafka-сообщение.
 - **Исходящие вызовы:** private HTTP
-  `POST /api/internal-v1/aroma/catalog-snapshots:read` к `aroma-gateway`;
-  Kafka `CatalogSnapshotCompleted.v1`.
-- **Хранилище:** `coffee_platform_catalog`, role `coffee_catalog_rw`, только
+  `POST /api/internal-v1/aroma/catalog-exports` к `aroma-gateway`; Kafka не
+  используется для передачи batch rows или запуска внутренней активации.
+- **Хранилище:** `coffee_platform_catalog`, role `coffee_catalog_import_rw`, только
   snapshot staging/import tables из allowlist.
-- **Секреты:** Catalog DB, Kafka и service-to-service identity; AROMA credentials отсутствуют.
+- **Секреты:** Catalog DB и service-to-service identity; Kafka и AROMA credentials отсутствуют.
 - **Публичность:** private worker; public/internal business HTTP отсутствует.
+
+## 5.1. `catalog-activation-worker`
+
+- **Назначение:** выбрать `Received` generation из Catalog DB, повторно проверить
+  manifests/hashes/counts, материализовать owner state и атомарно переключить
+  active revision вместе с Outbox.
+- **Владелец:** Catalog.
+- **Входящие HTTP/события:** нет; durable DB queue через
+  `FOR UPDATE SKIP LOCKED`.
+- **Исходящие вызовы:** Kafka `CatalogSnapshotActivated.v1` и
+  `CatalogMappingChanged.v1` только через Outbox после commit.
+- **Хранилище:** `coffee_platform_catalog`, role
+  `coffee_catalog_activate_rw`, allowlist staging reads, active writes и Outbox.
+- **Секреты:** Catalog DB, Kafka producer identity и telemetry; provider secrets
+  отсутствуют.
+- **Публичность:** private worker.
 
 ## 6. `pricing-service`
 
@@ -148,7 +164,7 @@ manifests без изменения смысла. Любое отклонени�
 - **Назначение:** AROMA login/session/cookies, allowlisted provider HTTP,
   schema mapping, rate/circuit и журнал provider operations; бизнес-решений не принимает.
 - **Владелец:** Integration.
-- **Входящие HTTP:** private typed routes: catalog snapshot read, cart snapshot
+- **Входящие HTTP:** private typed routes: catalog NDJSON export, cart snapshot
   read, set line quantity, remove line; health.
 - **Входящие события:** нет.
 - **Исходящие вызовы:** HTTPS только к allowlisted AROMA origin.

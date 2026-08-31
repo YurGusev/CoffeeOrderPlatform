@@ -48,7 +48,7 @@ services:
     permissions: {net: [coffee_postgres:5432, kafka:9092], fsRead: [], fsWrite: []}
 ```
 
-Файл обязан содержать все 12 runtime из `10_RUNTIME_CATALOG.md`. Для каждого
+Файл обязан содержать все 13 runtime из `10_RUNTIME_CATALOG.md`. Для каждого
 задаются `listen`, health paths, timeouts, pools, database или явное `null`,
 Kafka topics/groups, outbound allowlist, `secretRefs` и Node Permission Model
 allowlist. Отсутствующее значение не берётся из скрытого default: loader
@@ -67,7 +67,9 @@ environments:
       postgresAdminPassword: ENC[...]
     postgres:
       customer: {username: coffee_customer_rw, password: ENC[...]}
-      catalog: {username: coffee_catalog_rw, password: ENC[...]}
+      catalogImport: {username: coffee_catalog_import_rw, password: ENC[...]}
+      catalogActivate: {username: coffee_catalog_activate_rw, password: ENC[...]}
+      catalogApi: {username: coffee_catalog_api_ro, password: ENC[...]}
       pricing: {username: coffee_pricing_rw, password: ENC[...]}
       orders: {username: coffee_orders_rw, password: ENC[...]}
       aromaGateway: {username: coffee_aroma_gateway_rw, password: ENC[...]}

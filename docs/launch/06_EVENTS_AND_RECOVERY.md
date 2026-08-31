@@ -8,8 +8,8 @@ launch-сообщения нельзя вводить без изменения 
 
 | Сообщение | Вид | Producer | Consumer | Ключ |
 |---|---|---|---|---|
-| `CatalogSnapshotCompleted` | event | catalog-supplier-sync | catalog-service | supplierRef |
-| `CatalogMappingChanged` | event | catalog-service | orders-aroma-preparation | productRef |
+| `CatalogSnapshotActivated` | event | catalog-activation-worker | Pricing, Orders preparation | supplierRef |
+| `CatalogMappingChanged` | event | catalog-activation-worker | orders-aroma-preparation | productRef |
 | `OrderConfirmed` | event | orders-service | orders-aroma-preparation | orderRef |
 | `AromaConvergenceRequested` | command | Orders | aroma-convergence | orderRef |
 | `AromaObservationChanged` | event | aroma-observer/convergence | Orders projections | orderRef |

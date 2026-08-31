@@ -12,7 +12,7 @@ contracts/
   openapi/internal-v1.yaml
   schemas/common/problem-details.v1.schema.json
   schemas/common/message-envelope.v1.schema.json
-  schemas/events/catalog-snapshot-completed.v1.schema.json
+  schemas/events/catalog-snapshot-activated.v1.schema.json
   schemas/events/catalog-mapping-changed.v1.schema.json
   schemas/events/order-confirmed.v1.schema.json
   schemas/events/aroma-convergence-requested.v1.schema.json
@@ -208,7 +208,10 @@ money, Desired/Observed quantities или `allowedActions`; после него 
 
 - `GET /api/internal-v1/catalog/products/{productRef}/pricing-input`;
 - `POST /api/internal-v1/pricing/quotes:verify`;
-- `POST /api/internal-v1/aroma/catalog-snapshots:read`;
+- `POST /api/internal-v1/aroma/catalog-exports` с response
+  `application/x-ndjson`; точные request, record types, batch/hash limits,
+  terminal semantics и audience заданы в
+  `docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md`, раздел 3;
 - `POST /api/internal-v1/aroma/cart-snapshots:read`;
 - `POST /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity`;
 - `POST /api/internal-v1/aroma/cart-lines/{offerRef}:remove`.
@@ -249,8 +252,8 @@ provider response и secret data запрещены.
 
 | messageType | Producer | Key | Payload required |
 |---|---|---|---|
-| `CatalogSnapshotCompleted.v1` | catalog-supplier-sync | supplierRef | `supplierRef`, `snapshotRevision`, `completedAt`, `productCount`, `contentHash` |
-| `CatalogMappingChanged.v1` | catalog-service | productRef | `productRef`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `effectiveAt` |
+| `CatalogSnapshotActivated.v1` | catalog-activation-worker | supplierRef | `supplierRef`, `snapshotRef`, `snapshotRevision`, `activatedAt`, `productCount`, `variantCount`, `offerCount`, `batchCount`, `contentHash` |
+| `CatalogMappingChanged.v1` | catalog-activation-worker | productRef | `productRef`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `effectiveAt` |
 | `OrderConfirmed.v1` | orders-service | orderRef | `orderRef`, `orderVersion`, `customerRef`, `confirmedAt`, `desiredRevision` |
 | `AromaConvergenceRequested.v1` | Orders | orderRef | `orderRef`, `desiredRevision`, `reason: OrderConfirmed|CatalogChanged|OperatorRequested|Recovery` |
 | `AromaObservationChanged.v1` | aroma-observer/aroma-convergence | orderRef | `orderRef`, `observedRevision`, `observedAt`, `state`, `cartFingerprint` |
