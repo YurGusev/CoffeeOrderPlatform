@@ -10,7 +10,8 @@ test не принят следующей задачей. Все outputs объ�
 ## Граф
 
 ```text
-#2 Boundaries
+#14 Authority package + ADR-0019/ADR-0020
+ └─> #2 Boundaries
  └─> #3 Foundation/config/secrets/DB/toolchain
       └─> #4 Unified HTTP/event contracts + generated clients/mocks
            ├─> #5 Customer ───────────────────────────────┐
@@ -27,6 +28,7 @@ test не принят следующей задачей. Все outputs объ�
 
 | Issue | Принимает | Публикует | Разблокирует |
 |---|---|---|---|
+| #14 | повторный аудит | launch authority + ADR-0019/ADR-0020 | #2 |
 | #2 | launch docs | service/DB/interaction/secret ownership manifests + architecture checker | #3, #4 |
 | #3 | manifests #2 | workspace, exact versions, config/secrets bootstrap, DB roles, Compose | #4–#12, #16–#18 |
 | #4 | #2–#3 | единую OpenAPI/JSON Schema authority, generated client/mocks | #5–#12, #16–#18 |

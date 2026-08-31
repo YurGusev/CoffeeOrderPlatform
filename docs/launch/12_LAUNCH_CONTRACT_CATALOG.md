@@ -187,7 +187,7 @@ model не экспортируется и не используется как 
   - `pricing: {totalMinor, currency, quoteProofs[]}` или `null`, где proof =
     `{quoteRef, hash, expiresAt}`; несколько позиций могут ссылаться на разные
     неизменяемые quotes;
-  - `aroma: {state, desiredRevision, observedRevision, lastObservedAt,
+  - `aroma: {state, projectionVersion, desiredRevision, observedRevision, lastObservedAt,
     blockers[]}`;
   - `allowedActions[]` enum `edit-items|confirm|request-aroma-reconciliation`;
 - Aroma state enum: `NotRequested|PendingObservation|OutOfSync|Converging|InSync|Blocked|UnknownOutcome`;
@@ -219,7 +219,7 @@ fanout/backpressure и frontend invalidation заданы в
 
 Все routes private, требуют mTLS/service identity и отсутствуют в edge routing:
 
-- `GET /api/internal-v1/catalog/products/{productRef}/pricing-input`;
+- `GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input`;
 - `GET /api/internal-v1/customers/{customerRef}/order-input`; response только
   `customerRef`, `customerVersion`, `displayName`, `state`, audience
   `orders-service`, без contacts/addresses;
@@ -272,7 +272,7 @@ provider response и secret data запрещены.
 | messageType | Producer | Key | Payload required |
 |---|---|---|---|
 | `CatalogSnapshotActivated.v1` | catalog-activation-worker | supplierRef | `supplierRef`, `snapshotRef`, `snapshotRevision`, `activatedAt`, `productCount`, `variantCount`, `offerCount`, `batchCount`, `contentHash` |
-| `CatalogMappingChanged.v1` | catalog-activation-worker | productRef | `productRef`, `variantRef`, `offerRef|null`, `catalogSnapshotRevision`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `availability`, `effectiveAt` |
+| `CatalogMappingChanged.v2` | catalog-activation-worker | productRef | `productRef`, `variantRef`, `offerRef|null`, `catalogSnapshotRevision`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `availability`, `effectiveAt` |
 | `OrderConfirmed.v1` | orders-service | orderRef | `orderRef`, `orderVersion`, `customerRef`, `confirmedAt`, `contributionRevision` |
 | `AromaConvergenceRequested.v1` | Orders | cartScopeRef | `cartScopeRef`, `desiredRevision`, `reason: OrderConfirmed|CatalogChanged|OperatorRequested|Recovery`, `orderRef|null` |
 | `AromaObservationChanged.v1` | aroma-observer/aroma-convergence | cartScopeRef | `cartScopeRef`, `observedRevision`, `observedAt`, `state`, `cartFingerprint` |

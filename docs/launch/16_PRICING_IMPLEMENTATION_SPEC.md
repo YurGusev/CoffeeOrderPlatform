@@ -11,7 +11,7 @@ writer `coffee_platform_pricing` и использует роль `coffee_pricin
 Он принимает HTTP только от `edge-gateway` и `orders-service`, а исходящий
 business-вызов выполняет только к Catalog API #17:
 
-`GET /api/internal-v1/catalog/products/{productRef}/pricing-input`.
+`GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input`.
 
 Pricing не читает Customer, Catalog или Orders DB, не принимает цену из
 браузера и не публикует Kafka в первом срезе. Customer context в первом срезе
@@ -75,7 +75,8 @@ floating point, banker's rounding и локаль-зависимое форма�
 
 `quote_ref` PK (`prq_<ULID>`), `customer_ref`, `policy_version_ref` FK,
 `catalog_snapshot_revision` bigint, `currency` check `RUB`, `total_minor`
-bigint check `>=0`, `canonical_hash` `char(64)`, `created_at`, `expires_at`,
+bigint check `>=0`, `canonical_hash` `char(64)`, `internal_proof_hash`
+`char(64)`, `created_at`, `expires_at`,
 `actor_ref`, `correlation_id`, `request_hash char(64)`. Check:
 `expires_at > created_at`. Runtime grants разрешают только INSERT/SELECT;
 UPDATE/DELETE для quote tables отсутствуют.
@@ -167,6 +168,11 @@ quantity canonical (`2.500 -> 2.5`); money/version — canonical decimal без
 leading zeros. JSON сериализуется compact, UTF-8, без whitespace/BOM. Hash
 пересчитывается из сохранённых DB facts, а не из response object клиента.
 
+`canonical_hash` защищает публичный immutable response. Отдельный
+`internal_proof_hash` использует тот же алгоритм, но дополнительно включает
+`offerRef`, `mappingRevision`, `supplierUnitMinor`, `catalogSnapshotRevision`
+каждой строки и все применённые policy facts. Публичный API его не выдаёт.
+
 ## 6. Проверка для Orders
 
 `POST /api/internal-v1/pricing/quotes:verify`, audience только
@@ -180,7 +186,9 @@ lines, пересчитывает hash, проверяет exact expected facts 
 `200 PricingQuoteVerificationResponse`:
 `valid:true`, `quoteRef`, `policyVersionRef`, `catalogSnapshotRevision`,
 `customerRef`, `expiresAt`, `currency`, authoritative lines, включая
-`productDisplayName`, `offerRef` и mapping revision для Orders, и `totalMinor`.
+`productDisplayName`, `offerRef`, mapping revision, `internalProofHash` и
+`totalMinor`. Pricing пересчитывает оба hash из сохранённых DB facts; Orders не
+конструирует доказательство из данных браузера.
 
 Ошибки: `404 PRICING_QUOTE_NOT_FOUND`, `409 PRICING_QUOTE_HASH_MISMATCH`,
 `409 PRICING_QUOTE_EXPIRED`, `409 PRICING_QUOTE_SCOPE_MISMATCH`,

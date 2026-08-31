@@ -45,7 +45,8 @@ services:
     database: coffee_platform_customer
     secretRefs: [postgres.customer]
     outbound: []
-    permissions: {net: [coffee_postgres:5432, kafka:9092], fsRead: [], fsWrite: []}
+    kafka: {topics: [], groups: []}
+    permissions: {net: [coffee_postgres:5432], fsRead: [], fsWrite: []}
 ```
 
 Файл обязан содержать все 13 runtime из `10_RUNTIME_CATALOG.md`. Для каждого
@@ -79,7 +80,6 @@ environments:
     kafka:
       catalog: {username: catalog, password: ENC[...]}
       orders: {username: orders, password: ENC[...]}
-      aromaGateway: {username: aroma-gateway, password: ENC[...]}
       realtime: {username: realtime, password: ENC[...]}
     aroma:
       email: ENC[...]
@@ -88,6 +88,9 @@ environments:
     edge:
       tlsPrivateKey: ENC[...]
       oidcClientSecret: ENC[...]
+    security:
+      actorContextEdgeSigningPrivateKey: ENC[...]
+      catalogCursorSigningPrivateKey: ENC[...]
     telemetry:
       exporterToken: ENC[...]
 sops: {}
@@ -127,12 +130,40 @@ admin password доступен только отдельной одноразо
 - Unknown YAML keys запрещены; schema validation работает с `additionalProperties: false`.
 - Config и secret schema versions проверяются до открытия network listeners.
 
+## 5.1. Обязательный launch-профиль без скрытых defaults
+
+Порты/DB pool: `edge-gateway 4000/0`, `web 3000/0`,
+`customer-service 4101/8`, `catalog-service 4102/8`,
+`catalog-supplier-sync 4201/4`, `catalog-activation-worker 4202/4`,
+`pricing-service 4103/8`, `orders-service 4104/12`,
+`orders-aroma-preparation 4203/4`, `aroma-observer 4204/4`,
+`aroma-convergence 4205/4`, `aroma-gateway 4301/8`,
+`realtime-gateway 4401/0`. Общий application pool budget — 64; PostgreSQL
+`max_connections>=96`, 32 соединения резервируются для migrations/DBA.
+
+Для всех DB pools: checkout/lock timeout `250ms`, interactive statement
+timeout `1500ms`, background `5000ms`, idle `30000ms`, max lifetime `1800000ms`.
+Health paths: `/health/live`, `/health/ready`, `/metrics`; interval `5000ms`,
+timeout `1000ms`, startup grace `30000ms`, failure threshold `3`, success `1`.
+
+Outbox/Inbox: poll `250ms`, batch `100`, claim lease `30000ms`, максимум 12
+попыток, backoff `1s,5s,30s,60s`, published retention `168h`, failed/quarantine
+`720h`. Invalid schema сразу quarantine, без бесконечного retry.
+
+В `security.actorContext`: `Ed25519`, issuer `edge-gateway`, max age `60s`,
+clock skew `5s`, overlap active/previous key `86400s`. В
+`security.catalogCursor`: отдельный Ed25519 key, max age `86400s`, overlap
+`172800s`. Active/previous `kid` и public verification keys находятся в
+`platform.yaml`; private keys — только в SOPS. Старый key проверяет подписи лишь
+до конца overlap и никогда не подписывает новые. Actor, cursor, TLS и OIDC keys
+не переиспользуются друг для друга.
+
 ## 6. Проверки
 
 Команда `pnpm config:check` обязана:
 
 - валидировать оба YAML по schema;
-- сверять 12 runtime с service catalog;
+- сверять точное множество 13 runtime с service catalog, а не только count;
 - проверять, что каждый `secretRef` существует и разрешён runtime;
 - запрещать plaintext по всем secret leaves;
 - запрещать secret-like keys (`password`, `token`, `privateKey`, `secret`) в
@@ -152,6 +183,9 @@ admin password доступен только отдельной одноразо
 6. `.env` или пароль в Compose → отказ;
 7. неверный SOPS MAC/recipient → отказ без partial startup;
 8. secret попал в logger/error → redaction test падает.
+9. `customer-service` имеет Kafka network/topic/group/credential → отказ;
+10. `aroma-gateway` имеет Kafka network/topic/group/credential → отказ;
+11. повторно использован actor/cursor/TLS/OIDC key или неизвестный `kid` → отказ.
 
 ## 7. Ротация
 

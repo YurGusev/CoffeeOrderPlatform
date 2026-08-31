@@ -19,6 +19,25 @@ launch-сообщения нельзя вводить без изменения 
 Every contract has versioned JSON Schema, `messageId`, `occurredAt`, trace,
 causation, correlation and owner-defined aggregate version where applicable.
 
+## Kafka registry первого запуска
+
+| Message | Topic | Partitions / retention | Consumer group |
+|---|---|---|---|
+| `CatalogSnapshotActivated.v1` | `coffee.catalog.snapshot.v1` | 12 / 2160h | `pricing-catalog-snapshot-v1` |
+| `CatalogMappingChanged.v2` | `coffee.catalog.mapping.v2` | 12 / 2160h | `orders-catalog-mapping-v2` |
+| `OrderConfirmed.v1` | `coffee.orders.lifecycle.v1` | 12 / 2160h | `orders-aroma-preparation-v1` |
+| `AromaConvergenceRequested.v1` | `coffee.aroma.cart.commands.v1` | 24 / 168h | `aroma-convergence-v1` |
+| `AromaObservationChanged.v1` | `coffee.aroma.cart.events.v1` | 24 / 720h | `orders-aroma-projection-v1` |
+| `AromaConvergenceChanged.v1` | `coffee.aroma.cart.events.v1` | 24 / 720h | `orders-aroma-projection-v1` |
+| `RealtimeInvalidated.v1` | `coffee.realtime.invalidate.v1` | 24 / 1h | `realtime-gateway-<replica-id>` |
+
+Topic creation выполняет только #3. Key берётся из таблицы контрактов выше;
+ordering гарантируется только внутри key. Для каждого topic создаётся
+`<topic>.dlq`, invalid schema отправляется туда один раз с original envelope и
+sanitized validation result. Business retry выполняется через Inbox/durable
+state, не через бесконечный Kafka redelivery. Realtime group уникальна на
+replica, иначе invalidation не попадёт в процесс с нужным SSE connection.
+
 ## Семантика доставки
 
 - business state and Outbox are written in one owner transaction;

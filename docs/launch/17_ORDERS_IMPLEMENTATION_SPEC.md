@@ -202,7 +202,9 @@ AROMA state precedence:
 3. active Attempt `UnknownOutcome` -> `UnknownOutcome`;
 4. blocker -> `Blocked`;
 5. active lease/attempt -> `Converging`;
-6. Desired revision = Observed revision и fingerprint совпал -> `InSync`;
+6. terminal proof `NoOpInSync|VerifiedInSync` совпадает с current Desired
+   revision/hash, complete Current Observed revision/fingerprint, current fence
+   и актуальной contribution Order -> `InSync`;
 7. иначе -> `OutOfSync`.
 
 До #11 доступны только первые два состояния.

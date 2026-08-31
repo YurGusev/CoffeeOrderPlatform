@@ -48,7 +48,7 @@ manifests без изменения смысла. Любое отклонени�
   offer mapping, availability и клиентский поиск.
 - **Владелец:** Catalog.
 - **Входящие HTTP:** `GET /api/client-v1/catalog/products`; private
-  `GET /api/internal-v1/catalog/products/{productRef}/pricing-input`.
+  `GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input`.
 - **Входящие события:** нет; HTTP читает active generation из Catalog DB.
 - **Исходящие вызовы:** отсутствуют; внешних/provider HTTP и Kafka publish нет.
 - **Хранилище:** target-БД `coffee_platform_catalog`, role `coffee_catalog_api_ro`,
@@ -81,7 +81,7 @@ manifests без изменения смысла. Любое отклонени�
 - **Входящие HTTP/события:** нет; durable DB queue через
   `FOR UPDATE SKIP LOCKED`.
 - **Исходящие вызовы:** Kafka `CatalogSnapshotActivated.v1` и
-  `CatalogMappingChanged.v1` только через Outbox после commit.
+  `CatalogMappingChanged.v2` только через Outbox после commit.
 - **Хранилище:** `coffee_platform_catalog`, role
   `coffee_catalog_activate_rw`, allowlist staging reads, active writes и Outbox.
 - **Секреты:** Catalog DB, Kafka producer identity и telemetry; provider secrets
@@ -96,7 +96,7 @@ manifests без изменения смысла. Любое отклонени�
   `POST /api/internal-v1/pricing/quotes:verify` для проверки сохранённого proof.
 - **Входящие события:** нет в первом срезе.
 - **Исходящие вызовы:** private HTTP к
-  `catalog-service /api/internal-v1/catalog/products/{productRef}/pricing-input`.
+  `catalog-service /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input`.
 - **Хранилище:** `coffee_platform_pricing`, role `coffee_pricing_rw`.
 - **Секреты:** Pricing DB и service-to-service identity.
 - **Публичность:** не public; client route через edge, verify route private only.
@@ -125,7 +125,7 @@ manifests без изменения смысла. Любое отклонени�
   и запустить convergence, не обращаясь к provider.
 - **Владелец:** Orders.
 - **Входящие HTTP:** только health.
-- **Входящие события:** `OrderConfirmed.v1`, `CatalogMappingChanged.v1`.
+- **Входящие события:** `OrderConfirmed.v1`, `CatalogMappingChanged.v2`.
 - **Исходящие вызовы:** Kafka `AromaConvergenceRequested.v1`,
   `RealtimeInvalidated.v1`; HTTP отсутствует.
 - **Хранилище:** `coffee_platform_orders`, role `coffee_orders_prepare_rw`, allowlist

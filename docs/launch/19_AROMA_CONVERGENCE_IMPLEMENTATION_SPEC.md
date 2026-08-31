@@ -34,6 +34,7 @@
 5. `011_create_convergence_attempts.sql`;
 6. `012_create_convergence_leases.sql`;
 7. `013_create_mutation_reservations.sql`.
+8. `014_create_order_aroma_projections.sql`.
 
 ### Inbox и mapping projection
 
@@ -92,11 +93,11 @@ Gateway outcome hash и timestamps. Одна Attempt имеет максимум
 
 ## 4. Preparation
 
-`OrderConfirmed.v1` и `CatalogMappingChanged.v1` обрабатываются одной DB
+`OrderConfirmed.v1` и `CatalogMappingChanged.v2` обрабатываются одной DB
 transaction: Inbox insert/lock, revision guard, projection/contribution read,
 recompute и optional Desired/Outbox.
 
-`CatalogMappingChanged.v1` обязан содержать `productRef`, `variantRef`,
+`CatalogMappingChanged.v2` обязан содержать `productRef`, `variantRef`,
 `offerRef|null`, `mappingRevision`, `catalogSnapshotRevision`, `mappingState`,
 `availability`, `effectiveAt`. Это малый owner fact, не полный Catalog row.
 
@@ -197,6 +198,31 @@ Order lock, Confirmed/status/version/action check, version +1, History
 не получает lease и не вызывает Gateway. Exact replay возвращает исходный 202.
 
 ## 10. Events и Order Card
+
+### Per-Order projection
+
+Cart result никогда не подменяет Order state напрямую. Orders DB содержит
+`cart_desired_order_facts(cart_scope_ref,desired_revision,order_ref,
+contribution_revision,contribution_hash)` и
+`order_aroma_projections(cart_scope_ref,order_ref,projection_version,
+desired_revision,desired_hash,observed_revision,observed_cart_fingerprint,
+verified_desired_revision,verified_desired_hash,verified_observed_revision,
+verified_cart_fingerprint,attempt_ref,fence_epoch,state,blocker_codes,
+changed_at,source_message_id)`.
+
+Impacted Orders — объединение order refs прежней и новой Desired revision;
+поэтому remap/remove не теряет заказ, исчезнувший из Current. В terminal
+transaction worker пересчитывает каждую проекцию, увеличивает её собственный
+`projection_version` только при material change и пишет по одному
+`RealtimeInvalidated.v1` с `subjectRef=orderRef` и
+`ownerVersion=projectionVersion`. Это не `Order.version`: AROMA меняется без
+команды над aggregate.
+
+`InSync` допустим только для terminal `NoOpInSync|VerifiedInSync`, когда current
+Desired revision/hash совпадают с verified Desired, complete Current Observed
+revision/fingerprint — с verified Observed, fence относится к Attempt, нет
+blocker/UnknownOutcome, а contribution revision/hash конкретного Order актуальны.
+Числовое равенство Desired и Observed revisions ничего не доказывает.
 
 `AromaObservationChanged.v1` публикуется только после complete Observed commit.
 `AromaConvergenceChanged.v1` публикуется для terminal Attempt. Payload не

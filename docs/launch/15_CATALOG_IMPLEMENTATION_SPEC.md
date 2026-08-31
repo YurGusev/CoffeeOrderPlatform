@@ -128,8 +128,9 @@ PostgreSQL-транзакции:
 `CatalogSnapshotActivated.v1` означает только: generation полностью проверена,
 committed и уже видна Catalog API. Payload: `supplierRef`, `snapshotRef`,
 `snapshotRevision`, `activatedAt`, `productCount`, `variantCount`, `offerCount`,
-`batchCount`, `contentHash`. `CatalogMappingChanged.v1` содержит только
-`productRef`, `mappingRevision`, `mappingState`, `effectiveAt`. Полные Catalog
+`batchCount`, `contentHash`. `CatalogMappingChanged.v2` содержит ровно
+`productRef`, `variantRef`, `offerRef|null`, `catalogSnapshotRevision`,
+`mappingRevision`, `mappingState`, `availability`, `effectiveAt`. Полные Catalog
 rows в событиях запрещены.
 
 ## 6. Catalog HTTP API
@@ -157,11 +158,42 @@ provider identifiers и session data публично не возвращают�
 
 ### 6.2 Pricing input
 
-`GET /api/internal-v1/catalog/products/{productRef}/pricing-input` доступен
+`GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input` доступен
 только audience `pricing-service`. Response содержит `productRef`, `variantRef`,
 `offerRef`, `snapshotRevision`, `supplierUnitMinor`, `currency`, `unit`,
 `availability`, `mappingRevision`, `displayName`. Pricing не читает Catalog DB
 напрямую; `displayName` становится частью immutable quote/order snapshot.
+
+## 7. Обязательная проверка
+
+### 6.3. Точная active-модель
+
+Миграции называются `001_catalog_import.sql`, `002_catalog_active.sql`,
+`003_catalog_outbox.sql`, `004_catalog_grants.sql`. Active-таблицы generation-
+scoped и не перезаписываются «на месте»:
+
+- `catalog.catalog_state(id boolean PK CHECK(id), active_snapshot_ref FK,
+  active_snapshot_revision bigint, active_content_hash char(64), updated_at)`;
+- `catalog.products(snapshot_ref, product_ref, display_name,
+  display_name_sort_key, created_at, PK(snapshot_ref,product_ref))`;
+- `catalog.variants(snapshot_ref, variant_ref, product_ref, unit, image_url,
+  PK(snapshot_ref,variant_ref), FK(snapshot_ref,product_ref))`;
+- `catalog.offer_mappings(snapshot_ref, variant_ref, offer_ref,
+  mapping_revision bigint, mapping_state, effective_at,
+  PK(snapshot_ref,variant_ref), UNIQUE(snapshot_ref,offer_ref))`;
+- `catalog.availability(snapshot_ref,variant_ref,state,checked_at,
+  PK(snapshot_ref,variant_ref), FK(snapshot_ref,variant_ref))`;
+- `catalog.outbox_messages(message_id PK,message_type,aggregate_ref,
+  aggregate_version,partition_key,schema_version,payload,publish_state,
+  attempts,next_attempt_at,occurred_at)`.
+
+Все client/internal reads join через единственную строку `catalog_state`; один
+response не смешивает generations. Activation блокирует state, проверяет
+FK/count/hash/enums, переключает pointer и пишет Outbox в одной transaction.
+`coffee_catalog_import_rw` имеет DML только на staging,
+`coffee_catalog_activate_rw` — staging read + active/Outbox write,
+`coffee_catalog_api_ro` — SELECT active views, migrator — DDL. Negative grant
+tests обязаны получить PostgreSQL `permission denied` на любой иной путь.
 
 ## 7. Обязательная проверка
 

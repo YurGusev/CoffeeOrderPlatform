@@ -21,8 +21,8 @@ owner transaction + Outbox
 
 ## 2. Kafka consumer
 
-- topic `coffee.realtime.invalidated.v1`, key=`subjectRef`;
-- group `realtime-gateway-v1`;
+- topic `coffee.realtime.invalidate.v1`, key=`subjectRef`;
+- group `realtime-gateway-<replica-id>`;
 - auto topic creation/auto commit запрещены;
 - validate JSON Schema/envelope before use;
 - поддерживается только `subjectType=order` в первом запуске;

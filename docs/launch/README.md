@@ -1,6 +1,7 @@
 # Пакет первого запуска: React, backend и корзина AROMA
 
-Статус: исходная точка реализации новой CoffeeOrderPlatform.
+Статус: authority package; runtime-реализация начинается только после merge
+PR #15, принятия ADR-0019 и завершения #2–#4.
 
 Этот пакет превращает каноническую архитектуру в короткий исполнимый план. Он
 не описывает миграцию с CoffeeOrderSystem, не требует совместимости с C# и не
@@ -42,9 +43,15 @@
 20. [Исполнимая спецификация AROMA convergence](19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md)
 21. [Исполнимая спецификация realtime SSE](20_REALTIME_SSE_IMPLEMENTATION_SPEC.md)
 22. [Исполнимая спецификация итогового launch gate](21_LAUNCH_VERIFICATION_SPEC.md)
+23. [AROMA Gateway: журнал mutation](22_AROMA_GATEWAY_OPERATION_JOURNAL.md)
 
 ## Сила канонических документов
 
 Пакет является прикладной проекцией новой системы и не изменяет пять
-неизменяемых канонических revision roots. При конфликте бизнес-инвариантов действуют M04,
-M06, M07, M11, M12, M19, M20 и актуальные pricing/contract-closure overlays.
+неизменяемых канонических revision roots. Бизнес-инварианты M06/M07/M11/M12 и
+contract/security guarantees M19/M20 сохраняются. Production Node и physical
+runtime topology для отдельного greenfield-репозитория определяет
+[ADR-0019](../adr/ADR-0019-greenfield-node26-and-service-topology.md), явно
+superseding ADR-0018 только в перечисленной области. Wire-расхождения первого
+запуска закрывает [ADR-0020](../adr/ADR-0020-launch-contract-closure.md), не
+переиспользуя каноническое имя `CatalogMappingChanged.v1` для нового payload.

@@ -112,7 +112,9 @@ CHECK требует хотя бы одно из `phone_e164`/`email_normalized`
 |---|---|---|
 | `scope`, `idempotency_key` | `varchar(64)`, `uuid` | составной PK; scope `customers:create` |
 | `request_hash` | `char(64)` | SHA-256 канонического нормализованного body |
-| `state` | `varchar(16)` | `Pending` или `Completed` |
+| `state` | `varchar(16)` | `Acquired` или `Completed` |
+| `lease_owner` | `uuid` | владелец незавершённой попытки |
+| `lease_until` | `timestamptz` | 30 секунд от acquire |
 | `response_status` | `smallint` | nullable до завершения |
 | `response_body` | `jsonb` | nullable до завершения |
 | `resource_ref` | `varchar(30)` | nullable до завершения |
@@ -168,12 +170,14 @@ E-mail: Unicode NFC → trim → lowercase всей строки → прове�
 1. Валидировать schema и нормализовать body.
 2. Канонически сериализовать нормализованный body (ключи lexicographic, без
    insignificant whitespace) и вычислить SHA-256 `request_hash`.
-3. Открыть одну PostgreSQL transaction с isolation `READ COMMITTED` и timeout
-   `1500 ms`; сетевые вызовы внутри неё запрещены.
-4. Вставить idempotency row `Pending`. При конфликте заблокировать существующую
-   строку `FOR UPDATE`: другой hash → `409 IDEMPOTENCY_CONFLICT`; тот же hash и
-   `Completed` → byte-for-byte вернуть сохранённые status/body; тот же hash и
-   `Pending` после ожидания lock → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`.
+3. Короткой транзакцией выполнить atomic acquire: вставить `Acquired` с новым
+   `lease_owner` и `lease_until=transaction_timestamp()+30s`. При конфликте:
+   другой hash → `409 IDEMPOTENCY_CONFLICT`; `Completed` → byte-for-byte replay;
+   активная lease → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`; истёкшую lease с тем
+   же hash разрешено забрать условным `UPDATE ... WHERE lease_until<=now()`.
+4. Открыть business transaction `READ COMMITTED`, timeout `1500 ms`; заново
+   заблокировать idempotency row и доказать совпадение `lease_owner`, hash и
+   неистёкшую lease. Сетевые вызовы внутри неё запрещены.
 5. Сервером сгенерировать monotonic ULID и `customerRef = cus_<ULID>`; при
    наличии address создать `adr_<ULID>`.
 6. Вставить Customer, optional Address и audit row.
@@ -182,7 +186,9 @@ E-mail: Unicode NFC → trim → lowercase всей строки → прове�
 8. Нарушение phone unique index вернуть как `409 CUSTOMER_PHONE_CONFLICT`,
    e-mail index — `409 CUSTOMER_EMAIL_CONFLICT`; не выполнять предварительный
    `SELECT` как доказательство уникальности.
-9. Любая ошибка до commit откатывает Customer, Address, audit и idempotency row.
+9. Ошибка business transaction откатывает Customer, Address и audit, но
+   оставляет durable `Acquired` до истечения lease; повтор безопасно продолжает
+   с тем же hash. Cleanup удаляет только незавершённые записи старше 24 часов.
 
 `version` начинается с PostgreSQL `bigint 1`, но в HTTP возвращается строкой
 `"1"`. Timestamp возвращается в UTC с `Z`.
