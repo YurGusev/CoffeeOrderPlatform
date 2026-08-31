@@ -83,7 +83,7 @@ UPDATE/DELETE для quote tables отсутствуют.
 ### `pricing_quote_lines`
 
 `quote_ref` FK, `line_number` integer `1..100`, `product_ref`, `variant_ref`,
-`offer_ref`, `catalog_snapshot_revision`, `mapping_revision`, `unit`,
+`product_display_name`, `offer_ref`, `catalog_snapshot_revision`, `mapping_revision`, `unit`,
 `quantity_milli` bigint, `supplier_unit_minor` bigint, `markup_basis_points`,
 `minimum_margin_minor`, `unit_minor`, `line_total_minor`, `currency`, PK
 `(quote_ref,line_number)`. Это неизменяемые основания расчёта, а не копия
@@ -160,7 +160,7 @@ Hash — lowercase SHA-256 UTF-8 bytes канонического JSON object б
 
 Ключи строки строго:
 
-`lineNumber,productRef,variantRef,quantity,unit,unitMinor,lineTotalMinor`.
+`lineNumber,productRef,variantRef,productDisplayName,quantity,unit,unitMinor,lineTotalMinor`.
 
 Строки идут по `lineNumber`; timestamps — RFC 3339 UTC с миллисекундами;
 quantity canonical (`2.500 -> 2.5`); money/version — canonical decimal без
@@ -179,7 +179,8 @@ lines, пересчитывает hash, проверяет exact expected facts 
 
 `200 PricingQuoteVerificationResponse`:
 `valid:true`, `quoteRef`, `policyVersionRef`, `catalogSnapshotRevision`,
-`customerRef`, `expiresAt`, `currency`, authoritative lines и `totalMinor`.
+`customerRef`, `expiresAt`, `currency`, authoritative lines, включая
+`productDisplayName`, `offerRef` и mapping revision для Orders, и `totalMinor`.
 
 Ошибки: `404 PRICING_QUOTE_NOT_FOUND`, `409 PRICING_QUOTE_HASH_MISMATCH`,
 `409 PRICING_QUOTE_EXPIRED`, `409 PRICING_QUOTE_SCOPE_MISMATCH`,

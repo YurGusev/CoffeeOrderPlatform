@@ -71,7 +71,10 @@ environments:
       catalogActivate: {username: coffee_catalog_activate_rw, password: ENC[...]}
       catalogApi: {username: coffee_catalog_api_ro, password: ENC[...]}
       pricing: {username: coffee_pricing_rw, password: ENC[...]}
-      orders: {username: coffee_orders_rw, password: ENC[...]}
+      ordersService: {username: coffee_orders_service_rw, password: ENC[...]}
+      ordersPreparation: {username: coffee_orders_prepare_rw, password: ENC[...]}
+      aromaObserver: {username: coffee_orders_observer_rw, password: ENC[...]}
+      aromaConvergence: {username: coffee_orders_convergence_rw, password: ENC[...]}
       aromaGateway: {username: coffee_aroma_gateway_rw, password: ENC[...]}
     kafka:
       catalog: {username: catalog, password: ENC[...]}

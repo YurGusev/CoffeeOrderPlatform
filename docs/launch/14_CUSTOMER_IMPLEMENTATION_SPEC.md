@@ -210,6 +210,16 @@ SHA-256 нормализованного query.
 Ответ `CustomerSummary` возвращает имя, `customerRef`, string version и только
 masked контакты: телефон `+7******1234`, e-mail `a***@example.com`.
 
+## 6.1. Private Customer snapshot для Orders
+
+`GET /api/internal-v1/customers/{customerRef}/order-input` доступен только
+service identity/audience `orders-service`, deadline `1 s`. Он читает owner row
+и возвращает строго `customerRef`, decimal-string `customerVersion`,
+`displayName`, `state: Active|Inactive`. Телефон, e-mail, адрес, channel links и
+audit data не возвращаются. Неизвестный ref — `404 CUSTOMER_NOT_FOUND`;
+неактивный Customer возвращается как `200 state=Inactive`, а решение запретить
+Draft принимает Orders. Browser/edge route к этому endpoint отсутствует.
+
 ## 7. Ошибки и логирование
 
 Все ошибки — RFC 9457 `application/problem+json` по общей schema:

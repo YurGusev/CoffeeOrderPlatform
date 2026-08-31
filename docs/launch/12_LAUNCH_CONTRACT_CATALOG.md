@@ -126,8 +126,8 @@ model не экспортируется и не используется как 
 - `201 PricingQuoteResponse`: `quoteRef`, `policyVersionRef`,
   `catalogSnapshotRevision`, `customerRef`, `createdAt`, `expiresAt`,
   `currency: RUB`, `lines`, `totalMinor`, `hash`;
-- response line: `lineNumber`, `productRef`, `variantRef`, `quantity`, `unit`,
-  `unitMinor`, `lineTotalMinor`;
+- response line: `lineNumber`, `productRef`, `variantRef`,
+  `productDisplayName`, `quantity`, `unit`, `unitMinor`, `lineTotalMinor`;
 - errors: `400 VALIDATION_FAILED`, `404 CATALOG_PRODUCT_NOT_FOUND`,
   `409 CATALOG_PRODUCT_UNAVAILABLE`, `409 IDEMPOTENCY_CONFLICT`.
 
@@ -137,12 +137,15 @@ model не экспортируется и не используется как 
 
 - body: `{customerRef}`;
 - `201 OrderCardResponse` со статусом `Draft`, `version: "1"`, пустыми items;
-- errors: `404 CUSTOMER_NOT_FOUND`, `409 IDEMPOTENCY_CONFLICT`.
+- errors: `404 CUSTOMER_NOT_FOUND`, `409 CUSTOMER_NOT_ACTIVE`,
+  `503 CUSTOMER_UNAVAILABLE`, `409 IDEMPOTENCY_CONFLICT`.
 
 `PUT /api/client-v1/orders/{orderRef}/items/{itemRef}`
 
 - path refs по общим patterns;
-- body: `expectedVersion`, `productRef`, positive `quantity`, `quoteRef`, `quoteHash`;
+- body: `expectedVersion`, `productRef`, `variantRef`, positive `quantity`,
+  `quoteRef`, `quoteLineNumber`, `quoteHash`; displayName, money, offer/mapping,
+  currency и expiry во входе запрещены;
 - `200 OrderCardResponse` с увеличенной version;
 - errors: `404 ORDER_NOT_FOUND`, `404 CATALOG_PRODUCT_NOT_FOUND`,
   `409 ORDER_VERSION_CONFLICT`, `409 ORDER_QUOTE_STALE`,
@@ -179,13 +182,15 @@ model не экспортируется и не используется как 
 - `200 OrderCardResponse`:
   - `orderRef`, `version`, `status: Draft|Confirmed`;
   - `customer: {customerRef, displayName}`;
-  - `items[]: {itemRef, productRef, displayName, quantity, quoteRef,
-    unitMinor, lineTotalMinor}`;
-  - `pricing: {quoteRef, totalMinor, currency, hash}` или `null`;
+  - `items[]: {itemRef, linePosition, productRef, variantRef, displayName,
+    quantity, unit, quoteRef, quoteLineNumber, unitMinor, lineTotalMinor}`;
+  - `pricing: {totalMinor, currency, quoteProofs[]}` или `null`, где proof =
+    `{quoteRef, hash, expiresAt}`; несколько позиций могут ссылаться на разные
+    неизменяемые quotes;
   - `aroma: {state, desiredRevision, observedRevision, lastObservedAt,
     blockers[]}`;
   - `allowedActions[]` enum `edit-items|confirm|request-aroma-reconciliation`;
-- Aroma state enum: `PendingCatalogProof|PendingObservation|OutOfSync|Converging|InSync|Blocked|UnknownOutcome`;
+- Aroma state enum: `NotRequested|PendingObservation|OutOfSync|Converging|InSync|Blocked|UnknownOutcome`;
 - blocker: `{code, message, productRef?}`;
 - errors: `404 ORDER_NOT_FOUND`.
 
@@ -209,6 +214,9 @@ money, Desired/Observed quantities или `allowedActions`; после него 
 Все routes private, требуют mTLS/service identity и отсутствуют в edge routing:
 
 - `GET /api/internal-v1/catalog/products/{productRef}/pricing-input`;
+- `GET /api/internal-v1/customers/{customerRef}/order-input`; response только
+  `customerRef`, `customerVersion`, `displayName`, `state`, audience
+  `orders-service`, без contacts/addresses;
 - `POST /api/internal-v1/pricing/quotes:verify`; request содержит `quoteRef`,
   `hash`, `customerRef`, ожидаемые `productRef`/`variantRef`/`quantity`, response
   возвращает authoritative immutable quote facts; точная семантика задана в

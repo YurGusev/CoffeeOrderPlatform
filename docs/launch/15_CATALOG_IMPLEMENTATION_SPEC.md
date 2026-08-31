@@ -160,7 +160,8 @@ provider identifiers и session data публично не возвращают�
 `GET /api/internal-v1/catalog/products/{productRef}/pricing-input` доступен
 только audience `pricing-service`. Response содержит `productRef`, `variantRef`,
 `offerRef`, `snapshotRevision`, `supplierUnitMinor`, `currency`, `unit`,
-`availability`, `mappingRevision`. Pricing не читает Catalog DB напрямую.
+`availability`, `mappingRevision`, `displayName`. Pricing не читает Catalog DB
+напрямую; `displayName` становится частью immutable quote/order snapshot.
 
 ## 7. Обязательная проверка
 

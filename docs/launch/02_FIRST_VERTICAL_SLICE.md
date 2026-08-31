@@ -27,7 +27,7 @@ Draft -> Confirmed
 AROMA state is orthogonal:
 
 ```text
-PendingCatalogProof
+NotRequested
 PendingObservation
 OutOfSync
 Converging

@@ -110,10 +110,12 @@ manifests без изменения смысла. Любое отклонени�
   `docs/launch/03_HTTP_API_CONTRACT.md`.
 - **Входящие события:** `AromaObservationChanged.v1`,
   `AromaConvergenceChanged.v1` для owner projection.
-- **Исходящие вызовы:** во время Draft/item — private quote verification у
-  `pricing-service`; Kafka `OrderConfirmed.v1`, `AromaConvergenceRequested.v1`,
+- **Исходящие вызовы:** перед Draft — private Customer order-input; перед
+  PUT item — private quote verification у `pricing-service`; Kafka
+  `OrderConfirmed.v1`, `AromaConvergenceRequested.v1`,
   `RealtimeInvalidated.v1`. `Confirm` не выполняет HTTP.
-- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_rw`.
+- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_service_rw`,
+  allowlist core Order/Item/History/Desired/Idempotency/Outbox.
 - **Секреты:** Orders DB, Kafka и service-to-service identity.
 - **Публичность:** не public; client routes только через edge.
 
@@ -126,7 +128,7 @@ manifests без изменения смысла. Любое отклонени�
 - **Входящие события:** `OrderConfirmed.v1`, `CatalogMappingChanged.v1`.
 - **Исходящие вызовы:** Kafka `AromaConvergenceRequested.v1`,
   `RealtimeInvalidated.v1`; HTTP отсутствует.
-- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_rw`, allowlist
+- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_prepare_rw`, allowlist
   Desired/Inbox/Outbox и необходимые order snapshot reads.
 - **Секреты:** Orders DB и Kafka credentials.
 - **Публичность:** private worker.
@@ -141,7 +143,7 @@ manifests без изменения смысла. Любое отклонени�
 - **Исходящие вызовы:** private HTTP
   `POST /api/internal-v1/aroma/cart-snapshots:read` к `aroma-gateway`; Kafka
   `AromaObservationChanged.v1`, `RealtimeInvalidated.v1`.
-- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_rw`, allowlist Observed/Attempt/Inbox/Outbox.
+- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_observer_rw`, allowlist Observed/Attempt/Inbox/Outbox.
 - **Секреты:** Orders DB, Kafka и service-to-service identity; provider secrets отсутствуют.
 - **Публичность:** private worker.
 
@@ -155,7 +157,7 @@ manifests без изменения смысла. Любое отклонени�
 - **Исходящие вызовы:** private typed HTTP к `aroma-gateway` для cart GET,
   set quantity и remove line; Kafka `AromaObservationChanged.v1`,
   `AromaConvergenceChanged.v1`, `RealtimeInvalidated.v1`.
-- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_rw`, allowlist Desired/Observed/Attempt/Lease/Fence/Reservation/Inbox/Outbox.
+- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_convergence_rw`, allowlist Desired/Observed/Attempt/Lease/Fence/Reservation/Inbox/Outbox.
 - **Секреты:** Orders DB, Kafka и service-to-service identity; provider secrets отсутствуют.
 - **Публичность:** private worker; mutation capability доступна только этой identity.
 
