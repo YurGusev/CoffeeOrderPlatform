@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/channel-transcription-requested.v1.schema.json",
+  "title": "ChannelTranscriptionRequested",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "conversationKeyHash",
+    "sanitizedArtifactRef",
+    "sanitizedSha256",
+    "sanitizedSizeBytes",
+    "languageHint",
+    "correlationId"
+  ],
+  "properties": {
+    "conversationKeyHash": {"type": "string", "minLength": 16, "maxLength": 128},
+    "sanitizedArtifactRef": {"type": "string", "pattern": "^art_[A-Za-z0-9_-]+$"},
+    "sanitizedSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sanitizedSizeBytes": {"type": "string", "pattern": "^[0-9]+$"},
+    "languageHint": {"type": "string", "enum": ["ru", "auto"]},
+    "correlationId": {"type": "string", "minLength": 8, "maxLength": 128}
+  }
+}

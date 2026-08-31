@@ -1,0 +1,10 @@
+{
+  "refundRef": "refundRef-ref",
+  "paymentIntentRef": "paymentIntentRef-ref",
+  "paymentRequirementRef": "paymentRequirementRef-ref",
+  "orderRef": "orderRef-ref",
+  "amountMinor": "1",
+  "currency": "RUB",
+  "compensationRef": "compensationRef-ref",
+  "reasonCode": "reasonCode-ref"
+}

@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/closure/service-interaction-policy-delta.v1.schema.json",
+  "title": "Service interaction policy additive delta v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "authority",
+    "baselinePolicy",
+    "materialization",
+    "addAllowedEdges",
+    "addDeniedEdges",
+    "removeAllowedEdges"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 4
+    },
+    "authority": {
+      "type": "string",
+      "const": "additive"
+    },
+    "baselinePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalRelease",
+        "path"
+      ],
+      "properties": {
+        "canonicalRelease": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "materialization": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "edgeKey",
+        "mergeOrder",
+        "conflictRule",
+        "wildcardEdges",
+        "undeclaredInteraction"
+      ],
+      "properties": {
+        "edgeKey": {
+          "type": "array",
+          "const": [
+            "from",
+            "to",
+            "mode",
+            "purposeOrReason"
+          ]
+        },
+        "mergeOrder": {
+          "type": "string",
+          "const": "baseline-then-removals-then-additions"
+        },
+        "conflictRule": {
+          "type": "string",
+          "const": "reject-edge-present-in-both-allowed-and-denied"
+        },
+        "wildcardEdges": {
+          "type": "boolean",
+          "const": false
+        },
+        "undeclaredInteraction": {
+          "type": "string",
+          "const": "reject"
+        }
+      }
+    },
+    "addAllowedEdges": {
+      "$ref": "#/$defs/allowedEdgeList"
+    },
+    "addDeniedEdges": {
+      "$ref": "#/$defs/deniedEdgeList"
+    },
+    "removeAllowedEdges": {
+      "$ref": "#/$defs/allowedEdgeList"
+    }
+  },
+  "$defs": {
+    "allowedEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "mode",
+        "purpose"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "deniedEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "reason"
+      ],
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "minLength": 1,
+          "default": "DENY"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "allowedEdgeList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/allowedEdge"
+      }
+    },
+    "deniedEdgeList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/deniedEdge"
+      }
+    }
+  }
+}

@@ -1,0 +1,689 @@
+version: 2
+specialConsumerGroups:
+  ephemeral-per-replica: realtime-gateway creates unique group per replica
+roles:
+- name: channel-ingress
+  owner: channel-platform
+  executable: platform/apps/channel-ingress
+  productionCritical: true
+  composeService: channel-ingress
+  kubernetesWorkload: channel-ingress
+  dbPrincipal: channel_ingress_rw
+  consumerGroups: []
+  producesTopics:
+  - coffee.channels.inbound.v1
+  allowedHttpTargets:
+  - channel-identity-broker
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: http-and-downstream-pool-bounded
+  drainPolicy: readiness-false-stop-new-http-drain-inflight-close-pools
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces:
+  - /channels/vk/callback
+  requiredSecretClasses: []
+- name: channel-identity-broker
+  owner: channel-platform
+  executable: platform/apps/channel-identity-broker
+  productionCritical: true
+  composeService: channel-identity-broker
+  kubernetesWorkload: channel-identity-broker
+  dbPrincipal: channel_identity_rw
+  consumerGroups: []
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: http-and-downstream-pool-bounded
+  drainPolicy: readiness-false-stop-new-http-drain-inflight-close-pools
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses:
+  - channel-identity-hash-pepper
+- name: channel-intake
+  owner: channel-platform
+  executable: platform/apps/channel-intake
+  productionCritical: true
+  composeService: channel-intake
+  kubernetesWorkload: channel-intake
+  dbPrincipal: channel_intake_rw
+  consumerGroups:
+  - channel-intake
+  producesTopics:
+  - coffee.agent.turn.requested.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: channel-response-mapper
+  owner: channel-platform
+  executable: platform/apps/channel-response-mapper
+  productionCritical: true
+  composeService: channel-response-mapper
+  kubernetesWorkload: channel-response-mapper
+  dbPrincipal: channel_response_rw
+  consumerGroups:
+  - channel-response-mapper
+  producesTopics:
+  - coffee.channels.outbound.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: channel-egress
+  owner: channel-platform
+  executable: platform/apps/channel-egress
+  productionCritical: true
+  composeService: channel-egress
+  kubernetesWorkload: channel-egress
+  dbPrincipal: channel_egress_rw
+  consumerGroups:
+  - channel-egress
+  producesTopics:
+  - coffee.channels.delivery.v1
+  allowedHttpTargets: []
+  allowedProviders:
+  - vk.send
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses:
+  - vk-provider-credential
+- name: hermes-dispatcher
+  owner: agent-platform
+  executable: platform/apps/hermes-dispatcher
+  productionCritical: true
+  composeService: hermes-dispatcher
+  kubernetesWorkload: hermes-dispatcher
+  dbPrincipal: agent_dispatcher_rw
+  consumerGroups:
+  - hermes-dispatcher
+  producesTopics:
+  - coffee.agent.turn.completed.v1
+  - coffee.agent.turn.failed.v1
+  allowedHttpTargets:
+  - hermes-runtime
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: hermes-runtime
+  owner: agent-platform
+  executable: hermes/runtime
+  productionCritical: true
+  composeService: hermes-runtime
+  kubernetesWorkload: hermes-runtime
+  dbPrincipal: none
+  consumerGroups: []
+  producesTopics: []
+  allowedHttpTargets:
+  - api-agent
+  allowedProviders: []
+  stateful: true
+  workloadKind: StatefulSet
+  concurrencyPolicy: stateful-session-shard-bounded
+  drainPolicy: stop-placement-drain-runs-backup-verify-zero-bindings
+  networkZone: agent-stateful
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: catalog-supplier-sync
+  owner: catalog
+  executable: platform/apps/catalog-supplier-sync
+  productionCritical: true
+  composeService: catalog-supplier-sync
+  kubernetesWorkload: catalog-supplier-sync
+  dbPrincipal: catalog_rw
+  consumerGroups:
+  - catalog-supplier-sync
+  producesTopics:
+  - coffee.catalog.products.v1
+  - coffee.catalog.availability.v1
+  - coffee.catalog.mapping.v1
+  allowedHttpTargets:
+  - aroma-gateway
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: catalog-mapping-resolver
+  owner: catalog
+  executable: platform/apps/catalog-mapping-resolver
+  productionCritical: true
+  composeService: catalog-mapping-resolver
+  kubernetesWorkload: catalog-mapping-resolver
+  dbPrincipal: catalog_rw
+  consumerGroups:
+  - catalog-mapping-resolver
+  producesTopics:
+  - coffee.catalog.mapping.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: catalog-search-indexer
+  owner: catalog
+  executable: platform/apps/catalog-search-indexer
+  productionCritical: false
+  composeService: catalog-search-indexer
+  kubernetesWorkload: catalog-search-indexer
+  dbPrincipal: catalog_search_rw
+  consumerGroups:
+  - catalog-indexing
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: orders-aroma-preparation
+  owner: orders
+  executable: platform/apps/orders-aroma-preparation
+  productionCritical: true
+  composeService: orders-aroma-preparation
+  kubernetesWorkload: orders-aroma-preparation
+  dbPrincipal: orders_rw
+  consumerGroups:
+  - orders-aroma-preparation
+  producesTopics:
+  - coffee.catalog.mapping.commands.v1
+  - coffee.aroma.cart.commands.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: orders-catalog-projection
+  owner: orders
+  executable: platform/apps/orders-catalog-projection
+  productionCritical: true
+  composeService: orders-catalog-projection
+  kubernetesWorkload: orders-catalog-projection
+  dbPrincipal: orders_rw
+  consumerGroups:
+  - orders-catalog-projection
+  - orders-catalog-mapping
+  producesTopics:
+  - coffee.aroma.cart.commands.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: aroma-observer
+  owner: orders
+  executable: platform/apps/aroma-observer
+  productionCritical: true
+  composeService: aroma-observer
+  kubernetesWorkload: aroma-observer
+  dbPrincipal: orders_rw
+  consumerGroups: []
+  producesTopics:
+  - coffee.aroma.cart.events.v1
+  allowedHttpTargets:
+  - aroma-gateway
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: provider-quota-and-connection-pool-bounded
+  drainPolicy: stop-new-work-finish-bounded-attempt-persist-replayable-state
+  networkZone: internal-provider-egress
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: aroma-convergence
+  owner: orders
+  executable: platform/apps/aroma-convergence
+  productionCritical: true
+  composeService: aroma-convergence
+  kubernetesWorkload: aroma-convergence
+  dbPrincipal: orders_rw
+  consumerGroups:
+  - aroma-convergence
+  producesTopics:
+  - coffee.aroma.cart.events.v1
+  - coffee.catalog.sync.commands.v1
+  allowedHttpTargets:
+  - catalog
+  - aroma-gateway
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: orders-aroma-event-projector
+  owner: orders
+  executable: platform/apps/orders-aroma-event-projector
+  productionCritical: true
+  composeService: orders-aroma-event-projector
+  kubernetesWorkload: orders-aroma-event-projector
+  dbPrincipal: orders_rw
+  consumerGroups:
+  - orders-aroma-events
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: aroma-checkout-poller
+  owner: orders
+  executable: platform/apps/aroma-checkout-poller
+  productionCritical: true
+  composeService: aroma-checkout-poller
+  kubernetesWorkload: aroma-checkout-poller
+  dbPrincipal: orders_rw
+  consumerGroups: []
+  producesTopics: []
+  allowedHttpTargets:
+  - aroma-gateway
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: provider-quota-and-connection-pool-bounded
+  drainPolicy: stop-new-work-finish-bounded-attempt-persist-replayable-state
+  networkZone: internal-provider-egress
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: payments-order-consumer
+  owner: payments
+  executable: platform/apps/payments-order-consumer
+  productionCritical: true
+  composeService: payments-order-consumer
+  kubernetesWorkload: payments-order-consumer
+  dbPrincipal: payments_rw
+  consumerGroups:
+  - payments-order-events
+  producesTopics:
+  - coffee.payments.lifecycle.v1
+  allowedHttpTargets: []
+  allowedProviders:
+  - payment.create
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses:
+  - payment-provider-credential-or-webhook-secret
+- name: payments-command-handler
+  owner: payments
+  executable: platform/apps/payments-command-handler
+  productionCritical: true
+  composeService: payments-command-handler
+  kubernetesWorkload: payments-command-handler
+  dbPrincipal: payments_rw
+  consumerGroups:
+  - payments-command-handler
+  producesTopics:
+  - coffee.payments.lifecycle.v1
+  allowedHttpTargets: []
+  allowedProviders:
+  - payment.cancel
+  - payment.refund
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses:
+  - payment-provider-credential-or-webhook-secret
+- name: payments-webhook
+  owner: payments
+  executable: platform/apps/payments-webhook
+  productionCritical: true
+  composeService: payments-webhook
+  kubernetesWorkload: payments-webhook
+  dbPrincipal: payments_rw
+  consumerGroups: []
+  producesTopics:
+  - coffee.payments.lifecycle.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: http-and-downstream-pool-bounded
+  drainPolicy: readiness-false-stop-new-http-drain-inflight-close-pools
+  networkZone: provider-ingress
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces:
+  - /webhooks/payments/{provider}
+  requiredSecretClasses:
+  - payment-provider-credential-or-webhook-secret
+- name: payments-reconciliation
+  owner: payments
+  executable: platform/apps/payments-reconciliation
+  productionCritical: true
+  composeService: payments-reconciliation
+  kubernetesWorkload: payments-reconciliation
+  dbPrincipal: payments_rw
+  consumerGroups: []
+  producesTopics:
+  - coffee.payments.lifecycle.v1
+  allowedHttpTargets: []
+  allowedProviders:
+  - payment.lookup
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: provider-quota-and-connection-pool-bounded
+  drainPolicy: stop-new-work-finish-bounded-attempt-persist-replayable-state
+  networkZone: internal-provider-egress
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses:
+  - payment-provider-credential-or-webhook-secret
+- name: orders-payment-consumer
+  owner: orders
+  executable: platform/apps/orders-payment-consumer
+  productionCritical: true
+  composeService: orders-payment-consumer
+  kubernetesWorkload: orders-payment-consumer
+  dbPrincipal: orders_rw
+  consumerGroups:
+  - orders-payment-events
+  producesTopics:
+  - coffee.orders.lifecycle.v1
+  - coffee.payments.commands.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: invoices-command-handler
+  owner: invoices
+  executable: platform/apps/invoices-worker
+  productionCritical: true
+  composeService: invoices-worker
+  kubernetesWorkload: invoices-command-handler
+  dbPrincipal: invoices_rw
+  consumerGroups:
+  - invoices-command-handler
+  producesTopics:
+  - coffee.invoices.events.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: invoice-intake
+  owner: invoices
+  executable: platform/apps/invoice-intake
+  productionCritical: true
+  composeService: invoice-intake
+  kubernetesWorkload: invoice-intake
+  dbPrincipal: invoices_rw
+  consumerGroups: []
+  producesTopics:
+  - coffee.invoices.commands.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: bounded-worker-pool
+  drainPolicy: stop-new-work-finish-bounded-inflight
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: invoice-document-worker
+  owner: invoices
+  executable: platform/apps/invoice-document-worker
+  productionCritical: true
+  composeService: invoice-document-worker
+  kubernetesWorkload: invoice-document-worker
+  dbPrincipal: invoices_rw
+  consumerGroups: []
+  producesTopics:
+  - coffee.invoices.events.v1
+  allowedHttpTargets:
+  - artifact-storage
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: bounded-worker-pool
+  drainPolicy: stop-new-work-finish-bounded-inflight
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: orders-invoice-consumer
+  owner: orders
+  executable: platform/apps/orders-invoice-consumer
+  productionCritical: true
+  composeService: orders-invoice-consumer
+  kubernetesWorkload: orders-invoice-consumer
+  dbPrincipal: orders_rw
+  consumerGroups:
+  - orders-invoice-events
+  producesTopics:
+  - coffee.orders.lifecycle.v1
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: realtime-gateway
+  owner: realtime-platform
+  executable: platform/apps/realtime-gateway
+  productionCritical: true
+  composeService: realtime-gateway
+  kubernetesWorkload: realtime-gateway
+  dbPrincipal: none
+  consumerGroups:
+  - ephemeral-per-replica
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: bounded-sse-connections-and-pending-bytes
+  drainPolicy: stop-new-sse-send-reconnect-hint-close-kafka
+  networkZone: edge-internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces:
+  - /events/**
+  requiredSecretClasses: []
+- name: operations-projections
+  owner: operations
+  executable: platform/apps/operations-projections
+  productionCritical: false
+  composeService: operations-projections
+  kubernetesWorkload: operations-projections
+  dbPrincipal: operations_rw
+  consumerGroups:
+  - agent-telemetry
+  - agent-operations
+  - channel-operations
+  - payment-audit
+  - aroma-operations
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: kafka-partition-and-configured-inflight-bounded
+  drainPolicy: pause-intake-finish-bounded-inflight-commit-safe-offsets-disconnect
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []
+- name: api-public
+  owner: platform
+  executable: platform/apps/api-public
+  productionCritical: true
+  composeService: api-public
+  kubernetesWorkload: api-public
+  dbPrincipal: platform_api_public
+  consumerGroups: []
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: http-and-downstream-pool-bounded
+  drainPolicy: readiness-false-stop-new-http-drain-inflight-close-pools
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces:
+  - /api/client-v1/**
+  requiredSecretClasses: []
+- name: api-agent
+  owner: platform
+  executable: platform/apps/api-agent
+  productionCritical: true
+  composeService: api-agent
+  kubernetesWorkload: api-agent
+  dbPrincipal: platform_api_agent
+  consumerGroups: []
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: http-and-downstream-pool-bounded
+  drainPolicy: readiness-false-stop-new-http-drain-inflight-close-pools
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces:
+  - /api/agent-v1/**
+  requiredSecretClasses: []
+- name: api-internal
+  owner: platform
+  executable: platform/apps/api-internal
+  productionCritical: true
+  composeService: api-internal
+  kubernetesWorkload: api-internal
+  dbPrincipal: platform_api_internal
+  consumerGroups: []
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: http-and-downstream-pool-bounded
+  drainPolicy: readiness-false-stop-new-http-drain-inflight-close-pools
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces:
+  - /api/internal-v1/**
+  requiredSecretClasses: []
+- name: aroma-gateway
+  owner: integration
+  executable: platform/apps/aroma-gateway
+  productionCritical: true
+  composeService: aroma-gateway
+  kubernetesWorkload: aroma-gateway
+  dbPrincipal: aroma_gateway_state
+  consumerGroups: []
+  producesTopics: []
+  allowedHttpTargets: []
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: http-and-downstream-pool-bounded
+  drainPolicy: readiness-false-stop-new-http-drain-inflight-close-pools
+  networkZone: provider-boundary
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses:
+  - aroma-provider-credential-session
+- name: artifact-scan-worker
+  owner: platform
+  executable: platform/apps/artifact-scan-worker
+  productionCritical: true
+  composeService: artifact-scan-worker
+  kubernetesWorkload: artifact-scan-worker
+  dbPrincipal: artifact_metadata_rw
+  consumerGroups: []
+  producesTopics: []
+  allowedHttpTargets:
+  - artifact-storage
+  allowedProviders: []
+  stateful: false
+  workloadKind: Deployment
+  concurrencyPolicy: bounded-worker-pool
+  drainPolicy: stop-new-work-finish-bounded-inflight
+  networkZone: internal
+  sloRef: M15_RELIABILITY_OPERATIONS/11_BUSINESS_SLO_RPO_RTO_V1.md
+  httpSurfaces: []
+  requiredSecretClasses: []

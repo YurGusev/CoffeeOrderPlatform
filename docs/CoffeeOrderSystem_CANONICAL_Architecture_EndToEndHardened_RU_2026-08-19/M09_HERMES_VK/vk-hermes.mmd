@@ -1,0 +1,11 @@
+flowchart LR
+  VK[VK] --> E[Nginx]
+  E --> N[TS Channel Ingress]
+  N --> K1[(channels.inbound)]
+  K1 --> D[TS Hermes Dispatcher]
+  D --> H[Hermes Runtime]
+  H --> A[agent-v1 TS API]
+  A --> P[(PostgreSQL)]
+  H --> K2[(turn.completed)]
+  K2 --> O[TS Channel Egress]
+  O --> VK

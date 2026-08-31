@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/events/orders/OrderConfirmed.v1.schema.json",
+  "title": "OrderConfirmed payload v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderRef", "confirmedAtUtc"],
+  "properties": {
+    "orderRef": { "type": "string", "minLength": 1 },
+    "confirmedAtUtc": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/invoicematerializationrequested.v1.schema.json",
+  "title": "InvoiceMaterializationRequested.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "invoiceOperationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkoutSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "wholesaleSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "profileName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "convergenceProofHash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "allocationManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifactRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteSize": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "schemaVersion": {
+          "const": 1
+        }
+      },
+      "required": [
+        "artifactRef",
+        "sha256",
+        "byteSize",
+        "schemaVersion"
+      ]
+    },
+    "wholesaleOrderSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wholesaleOrderRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "wholesaleOrderNumber": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "observedAtUtc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "wholesaleOrderRef",
+        "observedAtUtc"
+      ]
+    }
+  },
+  "required": [
+    "invoiceOperationRef",
+    "checkoutSnapshotRef",
+    "wholesaleSnapshotRef",
+    "profileName",
+    "convergenceProofHash",
+    "allocationManifest",
+    "wholesaleOrderSnapshot"
+  ]
+}

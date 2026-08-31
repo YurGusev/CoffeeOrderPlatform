@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pricing-policy-changed",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "pricingPolicyRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pricingPolicyVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "baseDiscountPercent": {
+      "type": "string",
+      "pattern": "^\\d+(?:\\.\\d{1,4})?$"
+    },
+    "defaultMarkupPercent": {
+      "type": "string",
+      "pattern": "^\\d+(?:\\.\\d{1,4})?$"
+    },
+    "allowedMarkupPercents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^\\d+(?:\\.\\d{1,4})?$"
+      },
+      "minItems": 1
+    },
+    "effectiveAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "pricingPolicyRef",
+    "pricingPolicyVersion",
+    "baseDiscountPercent",
+    "defaultMarkupPercent",
+    "allowedMarkupPercents",
+    "effectiveAtUtc"
+  ]
+}

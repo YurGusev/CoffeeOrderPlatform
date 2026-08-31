@@ -1,0 +1,11 @@
+surface,actor,transport,auth,public,owner_rule
+client-v1,React/browser,HTTP JSON,user/session + CSRF for unsafe,true,bounded context through api-public adapters
+agent-v1,Hermes plugin,HTTP JSON,service identity + trusted conversation context,false,bounded capabilities; no provider/admin mutation
+internal-v1,internal workloads/n8n bounded control,HTTP JSON,service identity,false,explicit workload audience
+order-card,React/Hermes read,HTTP JSON,actor-specific,true via client/agent projection,Orders projection with foreign snapshots
+aroma-admin,operator/admin/internal,HTTP JSON,strong role/service identity,restricted,Orders-owned process controls; not generic provider API
+channel-callback,VK/provider,Webhook HTTP,provider verification,narrow true,Channel Ingress
+payment-webhook,Payment provider,Webhook HTTP,provider signature/secret,narrow true,Payments
+realtime,React/browser,SSE,scoped auth,true through edge,Realtime hints only
+kafka-events,platform services,Kafka,Kafka principal + ACL,false,event owner bounded context
+provider-outbound,Catalog/Orders process roles/Payments,provider HTTP/provider adapters,provider credential,outbound only,Gateway/owner adapter; no browser exposure

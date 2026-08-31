@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "decisionId": "DEC-PLT-M00-SEC-003",
+  "status": "governed-external-owner-exception",
+  "reviewDate": "2026-11-28",
+  "reviewEnforcement": "operational-preflight-before-acceptance-not-wall-clock-canonical-integrity",
+  "exception": {
+    "system": "AROMA",
+    "owner": "supplier/manufacturer",
+    "credentialClasses": ["login", "password"],
+    "aliases": [
+      "AROMA_AUTH_EMAIL",
+      "AROMA_AUTH_PASSWORD",
+      "AROMA_AUTH_EMAIL__{PROFILE}",
+      "AROMA_AUTH_PASSWORD__{PROFILE}",
+      "Integrations:Aroma:AuthEmail",
+      "Integrations:Aroma:AuthPassword",
+      "Integrations:Aroma:Profiles:{profileName}:AuthEmail",
+      "Integrations:Aroma:Profiles:{profileName}:AuthPassword"
+    ],
+    "handling": "external-owner-controlled",
+    "rotation": "supplier-owner-only",
+    "revocation": "supplier-owner-only",
+    "cleanup": "repository-owner-prohibited-while-external-owned",
+    "secretMaterial": "values-hashes-raw-logs-prohibited"
+  },
+  "excludedCredentialClasses": [
+    "session/cookie state",
+    "Gitea/CI/API credentials",
+    "database credentials",
+    "VK credentials",
+    "payment credentials",
+    "AI/model-provider credentials",
+    "JWT signing keys",
+    "repository-owned credentials"
+  ],
+  "compatibilityAllowlist": {
+    "owner": {
+      "login": "YurGusev",
+      "kind": "repository-owner"
+    },
+    "collaborator": {
+      "login": "project4-migrator",
+      "permission": "write",
+      "admin": false
+    },
+    "tokenSource": {
+      "kind": "protected-file",
+      "mode": "0600",
+      "protected": true,
+      "path": "configured-local-service-secret-source"
+    },
+    "authority": {
+      "review": false,
+      "approval": false,
+      "selfApproval": false,
+      "productionCredentialAccess": false
+    }
+  },
+  "expiryTriggers": [
+    "repository visibility becomes public",
+    "any collaborator/developer/bot/shared access other than YurGusev and project4-migrator appears",
+    "project4-migrator permission/admin/token protection drifts",
+    "supplier/manufacturer ownership ends or credential scope changes",
+    "production credential access or deployment sharing appears",
+    "history rewrite, transfer, export, mirror, or shared deployment is requested"
+  ],
+  "reviewTriggers": [
+    "review date reached without explicit revalidation",
+    "AROMA server configuration aliases change",
+    "the #1086 acceptance boundary changes"
+  ],
+  "supersession": {
+    "historicalPredecessor": "#1172 / ADR-0015 expired and historical; not revived",
+    "supersedesOnly": "only the #1086 completion requirement for supplier-owned AROMA login/password under the exact owner plus project4-migrator predicate",
+    "doesNotSupersede": [
+      "any other #1086 credential class",
+      "repository security revalidation #1077",
+      "history rewrite approval or proof",
+      "production cutover, deployment, or credential mutation"
+    ]
+  },
+  "prohibitions": [
+    "no history rewrite",
+    "no production cutover or deploy",
+    "repository owner must not mutate supplier-owned AROMA credentials while external ownership holds",
+    "no storage of values, hashes, or raw logs"
+  ],
+  "evidence": [
+    {"type": "current-tree-hygiene", "status": "pass", "secretFree": true},
+    {"type": "repository-owner-scope-decision", "status": "accepted", "secretFree": true},
+    {"type": "supplier-ownership", "status": "external-owner-confirmed", "secretFree": true}
+  ]
+}

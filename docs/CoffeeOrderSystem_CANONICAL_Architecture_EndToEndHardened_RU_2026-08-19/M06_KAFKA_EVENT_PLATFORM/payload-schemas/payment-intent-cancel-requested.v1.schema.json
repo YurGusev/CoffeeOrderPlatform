@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/cancelpaymentintentrequested.v1.schema.json",
+  "title": "CancelPaymentIntentRequested.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "cancelRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "paymentIntentRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "paymentRequirementRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  },
+  "required": [
+    "cancelRef",
+    "paymentIntentRef",
+    "paymentRequirementRef",
+    "orderRef",
+    "reasonCode"
+  ]
+}

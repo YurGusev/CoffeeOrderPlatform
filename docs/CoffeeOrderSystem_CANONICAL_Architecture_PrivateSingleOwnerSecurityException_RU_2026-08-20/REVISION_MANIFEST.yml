@@ -1,0 +1,45 @@
+version: 2
+revisionId: DEC-PLT-M00-SEC-002
+revisionDate: 2026-08-20
+revisionType: canonical-revision-overlay
+baselineSha256: e869535c9c5c0f19d84ff1d2582bd541c4ed1781c44fa5d49836be85235f37f5
+precedence: revision-over-parent-revision-over-baseline
+parentRevision:
+  name: BusinessParityPricingV2
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20
+  treeSha256: b913b94c766ed620c897b7cb87d506af141cf60115d0744308deb8d42b615758
+revisionChain:
+- name: EndToEndHardened-baseline
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19
+- name: BusinessParityPricingV2
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20
+- name: PrivateSingleOwnerSecurityException
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_PrivateSingleOwnerSecurityException_RU_2026-08-20
+supersession:
+  scope: current-tree-deletion-order-only
+  previousRule: provider rotation must precede current-tree deletion
+  newRule: exact two-path current-tree cleanup may precede provider rotation under the private single-owner single-developer predicate
+exactPaths:
+- .env.agent
+- cognee-docker/.env
+conditions:
+- repository visibility is private
+- owner is the only collaborator and developer
+- server is single-user and deployment is not shared
+- repository transfer and export are prohibited until rotation
+- provider rotation remains deferred/incomplete under #1086
+expiryTriggers:
+- visibility is no longer private
+- any additional collaborator, developer, bot, or shared access appears
+- repository transfer, export, mirroring, or shared deployment occurs
+- exact path scope is expanded or renamed
+- provider rotation is confirmed
+prohibitions:
+- do not claim #1086 complete or credentials revoked/rotated
+- do not authorize #1088 history rewrite or force publication
+- do not delete current-tree env files in the Decision PR
+- do not alter baseline, BusinessParityPricingV2, or hardening roots
+unchangedPaths:
+- python-agent/venv311
+- all baseline files not explicitly superseded by this manifest
+- all BusinessParityPricingV2 and hardening files

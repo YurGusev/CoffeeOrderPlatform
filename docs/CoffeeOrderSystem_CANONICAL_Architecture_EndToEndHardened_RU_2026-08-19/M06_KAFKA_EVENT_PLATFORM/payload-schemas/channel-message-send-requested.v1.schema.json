@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/channelmessagesendrequested.v1.schema.json",
+  "title": "ChannelMessageSendRequested.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "deliveryRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "conversationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "channelIdentityRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000
+    },
+    "sourceTurnRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "requestedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "deliveryRef",
+    "conversationRef",
+    "channelIdentityRef",
+    "text",
+    "requestedAtUtc"
+  ]
+}

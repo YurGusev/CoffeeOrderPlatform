@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "product-price-projection-changed",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "productVariantRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pricingVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "pricingHash": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state": {
+      "enum": [
+        "Current",
+        "Stale",
+        "Unresolved",
+        "Unavailable"
+      ]
+    },
+    "supplierListUnitPrice": {
+      "type": "string",
+      "pattern": "^-?\\d+(?:\\.\\d{1,4})?$"
+    },
+    "effectiveDiscountPercent": {
+      "type": "string",
+      "pattern": "^\\d+(?:\\.\\d{1,4})?$"
+    },
+    "deliveryCoefficientPercent": {
+      "type": "string",
+      "pattern": "^\\d+(?:\\.\\d{1,4})?$"
+    },
+    "landedUnitCost": {
+      "type": "string",
+      "pattern": "^-?\\d+(?:\\.\\d{1,4})?$"
+    },
+    "defaultMarkupPercent": {
+      "type": "string",
+      "pattern": "^\\d+(?:\\.\\d{1,4})?$"
+    },
+    "recommendedCustomerUnitPrice": {
+      "type": "string",
+      "pattern": "^-?\\d+(?:\\.\\d{1,4})?$"
+    },
+    "calculatedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "productVariantRef",
+    "pricingVersion",
+    "pricingHash",
+    "state",
+    "supplierListUnitPrice",
+    "effectiveDiscountPercent",
+    "deliveryCoefficientPercent",
+    "landedUnitCost",
+    "defaultMarkupPercent",
+    "recommendedCustomerUnitPrice",
+    "calculatedAtUtc"
+  ]
+}

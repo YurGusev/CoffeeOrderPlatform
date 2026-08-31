@@ -1,0 +1,7 @@
+{
+  "cancelRef": "cancelRef-ref",
+  "paymentIntentRef": "paymentIntentRef-ref",
+  "paymentRequirementRef": "paymentRequirementRef-ref",
+  "orderRef": "orderRef-ref",
+  "cancelledAtUtc": "2026-08-19T12:00:00Z"
+}

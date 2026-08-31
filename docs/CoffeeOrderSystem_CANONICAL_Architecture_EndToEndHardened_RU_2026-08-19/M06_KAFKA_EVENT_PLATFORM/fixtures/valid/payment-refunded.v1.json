@@ -1,0 +1,11 @@
+{
+  "refundRef": "refundRef-ref",
+  "paymentIntentRef": "paymentIntentRef-ref",
+  "paymentRequirementRef": "paymentRequirementRef-ref",
+  "orderRef": "orderRef-ref",
+  "amountMinor": "1",
+  "currency": "RUB",
+  "providerRefundRef": "providerRefundRef-ref",
+  "proofRef": "proofRef-ref",
+  "refundedAtUtc": "2026-08-19T12:00:00Z"
+}

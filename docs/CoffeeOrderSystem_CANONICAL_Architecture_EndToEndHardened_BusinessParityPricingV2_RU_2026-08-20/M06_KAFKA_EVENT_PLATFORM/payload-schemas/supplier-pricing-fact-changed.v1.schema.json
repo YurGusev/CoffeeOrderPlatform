@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "supplier-pricing-fact-changed",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "productRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "productVariantRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "catalogSnapshotRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "supplierListUnitPrice": {
+      "type": "string",
+      "pattern": "^-?\\d+(?:\\.\\d{1,4})?$"
+    },
+    "currency": {
+      "type": "string",
+      "const": "RUB"
+    },
+    "specialDiscountRuleRef": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "specialDiscountPercent": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^\\d+(?:\\.\\d{1,4})?$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "minimumWeightGrams": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "minimumQuantity": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "observedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "productRef",
+    "productVariantRef",
+    "catalogSnapshotRef",
+    "supplierListUnitPrice",
+    "currency",
+    "observedAtUtc"
+  ]
+}

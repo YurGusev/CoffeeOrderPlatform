@@ -1,0 +1,27 @@
+{
+  "baselineSha256": "e869535c9c5c0f19d84ff1d2582bd541c4ed1781c44fa5d49836be85235f37f5",
+  "parentRevision": {
+    "name": "ArchitectureContractClosure",
+    "root": "docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22",
+    "treeSha256": "1e8beb238734c2126745a02363b52fc0d40cad0efc9f9dac990ed4696b48eca1"
+  },
+  "revisionId": "DEC-PLT-M00-SEC-003",
+  "revisionDate": "2026-08-28",
+  "revisionChain": [
+    "EndToEndHardened-baseline",
+    "BusinessParityPricingV2",
+    "PrivateSingleOwnerSecurityException",
+    "ArchitectureContractClosure",
+    "SupplierOwnedCredentialException"
+  ],
+  "decisionIds": ["DEC-PLT-M00-SEC-003"],
+  "precedence": "revision-over-parent-revision-over-baseline",
+  "releaseSchemaVersion": 4,
+  "rule": "Only the exact supplier-owned AROMA login/password exception in SECURITY_EXCEPTION.json is superseded; all other parent rules remain unchanged.",
+  "integrity": {
+    "manifest": "REVISION_MANIFEST.yml",
+    "sha256Manifest": "SHA256SUMS.txt",
+    "sha256ManifestExcludesSelf": true,
+    "policy": "SECURITY_EXCEPTION.json"
+  }
+}

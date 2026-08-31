@@ -1,0 +1,9 @@
+flowchart LR
+  C[Client] --> E[Nginx Edge]
+  E -->|/app old| OW[Old React Web]
+  E -->|/app target| NW[platform-web]
+  E -->|legacy API route| L[C# src]
+  E -->|platform API route| T[TypeScript platform]
+  L --> P[(Production PostgreSQL)]
+  T --> CDB[(Clone/Read Shadow)]
+  T -. DB5 after gate .-> P

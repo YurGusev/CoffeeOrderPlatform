@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/ordercancelled.v1.schema.json",
+  "title": "OrderCancelled.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "orderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "cancellationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "BeforeCheckout",
+        "CheckoutCancelled",
+        "CompensatedAfterProcurement"
+      ]
+    },
+    "paymentRequirementRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    }
+  },
+  "required": [
+    "orderRef",
+    "orderVersion",
+    "cancellationRef",
+    "reasonCode",
+    "stage"
+  ]
+}

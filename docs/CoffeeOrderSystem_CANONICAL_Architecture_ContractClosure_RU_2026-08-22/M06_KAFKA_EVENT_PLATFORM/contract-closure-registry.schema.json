@@ -1,0 +1,341 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/closure/contract-closure-registry.v1.schema.json",
+  "title": "CoffeeOrder Contract Closure Registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "authority",
+    "baseline",
+    "revision",
+    "materialization",
+    "artifactRefPolicy",
+    "roleCatalog",
+    "bindings"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "authority": {
+      "type": "string",
+      "const": "additive-closure"
+    },
+    "baseline": {
+      "$ref": "#/$defs/sourceRefs"
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topicRegistry",
+        "messageSchemaRegistry",
+        "workloadRegistry"
+      ],
+      "properties": {
+        "topicRegistry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageSchemaRegistry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workloadRegistry": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "materialization": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "topicMergeKey",
+        "groupMergeKey",
+        "bindingKey",
+        "producerRule",
+        "consumerRule",
+        "missingConsumesTopicsRule",
+        "crossTopicGroupRule",
+        "undeclaredInteractionRule",
+        "logicalProducerScope"
+      ],
+      "properties": {
+        "topicMergeKey": {
+          "type": "string",
+          "const": "name"
+        },
+        "groupMergeKey": {
+          "type": "array",
+          "const": [
+            "topic",
+            "consumerGroup"
+          ]
+        },
+        "bindingKey": {
+          "type": "array",
+          "const": [
+            "topic",
+            "consumerGroup"
+          ]
+        },
+        "producerRule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "consumerRule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "missingConsumesTopicsRule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "crossTopicGroupRule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "undeclaredInteractionRule": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logicalProducerScope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "unresolvedRoleRefs",
+            "runtimeEvidence",
+            "runtimeRoleCount",
+            "resolution"
+          ],
+          "properties": {
+            "status": {
+              "const": "authority-gap"
+            },
+            "unresolvedRoleRefs": {
+              "type": "array",
+              "uniqueItems": true,
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "runtimeEvidence": {
+              "const": "excluded"
+            },
+            "runtimeRoleCount": {
+              "const": "excluded"
+            },
+            "resolution": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "artifactRefPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mediaAndTranscription"
+      ],
+      "properties": {
+        "mediaAndTranscription": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "transport",
+            "kafkaPayload",
+            "bytesField",
+            "requiredArtifactRefFields"
+          ],
+          "properties": {
+            "transport": {
+              "type": "string",
+              "const": "artifact-storage"
+            },
+            "kafkaPayload": {
+              "type": "string",
+              "const": "ArtifactRef-only"
+            },
+            "bytesField": {
+              "type": "string",
+              "const": "forbidden"
+            },
+            "requiredArtifactRefFields": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "roleCatalog": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/role"
+      },
+      "minItems": 1
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/binding"
+      },
+      "minItems": 1
+    },
+    "authorityGaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "roleRef",
+          "gap"
+        ],
+        "properties": {
+          "roleRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gap": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sourceRefs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonicalRelease",
+        "topicRegistry",
+        "runtimeWorkloadRegistry"
+      ],
+      "properties": {
+        "canonicalRelease": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topicRegistry": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtimeWorkloadRegistry": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "roleRef",
+        "owner",
+        "executable",
+        "executableIdentity",
+        "runtimeSource"
+      ],
+      "properties": {
+        "roleRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "executable": {
+          "type": "boolean",
+          "const": true
+        },
+        "executableIdentity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runtimeSource": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceStatus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "crossTopicProjection": {
+          "type": "string",
+          "const": "canonical"
+        }
+      }
+    },
+    "consumer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consumerGroup",
+        "roleRef"
+      ],
+      "properties": {
+        "consumerGroup": {
+          "type": "string",
+          "minLength": 1
+        },
+        "roleRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bindingMode": {
+          "type": "string",
+          "enum": [
+            "durable",
+            "ephemeral-per-replica"
+          ]
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic",
+        "producerRefs",
+        "consumers"
+      ],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "pattern": "^coffee\\.[a-z0-9.-]+\\.v[0-9]+$"
+        },
+        "producerRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "consumers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/consumer"
+          }
+        }
+      }
+    }
+  }
+}

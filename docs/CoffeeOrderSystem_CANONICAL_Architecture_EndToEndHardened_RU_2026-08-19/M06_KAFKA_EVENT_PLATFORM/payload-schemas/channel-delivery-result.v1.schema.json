@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/channeldeliveryresult.v1.schema.json",
+  "title": "ChannelDeliveryResult.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "deliveryRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "conversationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "providerMessageRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Sent",
+        "FailedTransient",
+        "FailedPermanent",
+        "UnknownOutcome"
+      ]
+    },
+    "errorCode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "occurredAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "deliveryRef",
+    "conversationRef",
+    "status",
+    "occurredAtUtc"
+  ]
+}

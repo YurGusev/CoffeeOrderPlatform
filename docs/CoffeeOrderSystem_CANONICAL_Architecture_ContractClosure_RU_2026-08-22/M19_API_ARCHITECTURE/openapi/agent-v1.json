@@ -1,0 +1,780 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "CoffeeOrderSystem agent-v1 API authority closure",
+    "version": "1.0.0",
+    "description": "Generated from the normative M19 API authority closure registry."
+  },
+  "x-coffeeordersystem-surface": {
+    "surface": "agent-v1",
+    "prefix": "/api/agent-v1",
+    "actor": "Hermes CoffeeOrder plugin",
+    "auth": "service identity + trusted conversation context",
+    "publicEdge": "private",
+    "ownerRule": "bounded capabilities; no provider/admin mutation",
+    "contractId": "coffeeordersystem-m19-api-authority-closure",
+    "sourceCommit": "c54b225339156e451ba0811a7b66e2ed60b1f5f6"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "ProblemDetails": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "errorCode",
+          "traceId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "securitySchemes": {
+      "sessionAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "session-token"
+      },
+      "hermesServiceAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "workload-token"
+      },
+      "workloadAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "service-token"
+      }
+    }
+  },
+  "paths": {
+    "/api/agent-v1/customer/current": {
+      "get": {
+        "operationId": "resolveCurrentCustomer",
+        "tags": [
+          "customer"
+        ],
+        "security": [
+          {
+            "hermesServiceAuth": []
+          }
+        ],
+        "x-coffeeordersystem-contract": {
+          "routeId": "resolve-current-customer",
+          "owner": "customer",
+          "capability": "customer.current.resolve",
+          "actor": "Hermes CoffeeOrder plugin",
+          "auth": "service identity + trusted conversation context",
+          "operationKind": "read",
+          "mutation": false,
+          "staleVersionGuard": {
+            "required": false,
+            "type": "trusted-context",
+            "source": "trusted conversation context is transport-injected",
+            "conflictStatus": 409
+          },
+          "idempotency": {
+            "required": false,
+            "key": "none",
+            "scope": "agent-v1:resolveCurrentCustomer:read",
+            "unknownOutcome": "read may be retried after deadline; it has no declared side effect"
+          },
+          "rollback": {
+            "strategy": "no mutation; retry/fresh read is safe",
+            "owner": "customer",
+            "safe": true
+          },
+          "publicEdge": "private",
+          "source": {
+            "kind": "canonical",
+            "references": [
+              "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M19_API_ARCHITECTURE/openapi/agent-v1.yaml",
+              "platform/evidence/contracts/openapi/agent-v1.yaml"
+            ],
+            "proof": "Immutable M19 canonical OpenAPI route; evidence snapshot preserves this route and its operationId."
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current customer"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not allowed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent-v1/order/current": {
+      "get": {
+        "operationId": "getCurrentOrder",
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "hermesServiceAuth": []
+          }
+        ],
+        "x-coffeeordersystem-contract": {
+          "routeId": "get-current-order",
+          "owner": "orders",
+          "capability": "orders.current.read",
+          "actor": "Hermes CoffeeOrder plugin",
+          "auth": "service identity + trusted conversation context",
+          "operationKind": "read",
+          "mutation": false,
+          "staleVersionGuard": {
+            "required": false,
+            "type": "trusted-context",
+            "source": "trusted conversation context is transport-injected",
+            "conflictStatus": 409
+          },
+          "idempotency": {
+            "required": false,
+            "key": "none",
+            "scope": "agent-v1:getCurrentOrder:read",
+            "unknownOutcome": "read may be retried after deadline; it has no declared side effect"
+          },
+          "rollback": {
+            "strategy": "no mutation; retry/fresh read is safe",
+            "owner": "orders",
+            "safe": true
+          },
+          "publicEdge": "private",
+          "source": {
+            "kind": "canonical",
+            "references": [
+              "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M19_API_ARCHITECTURE/openapi/agent-v1.yaml",
+              "platform/evidence/contracts/openapi/agent-v1.yaml"
+            ],
+            "proof": "Immutable M19 canonical OpenAPI route; evidence snapshot preserves this route and its operationId."
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current order"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not allowed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent-v1/order/current/confirm": {
+      "post": {
+        "operationId": "confirmCurrentOrderWithTrustedProof",
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "hermesServiceAuth": []
+          }
+        ],
+        "x-coffeeordersystem-contract": {
+          "routeId": "confirm-current-order-with-trusted-proof",
+          "owner": "orders",
+          "capability": "orders.current.confirm",
+          "actor": "Hermes CoffeeOrder plugin",
+          "auth": "service identity + trusted conversation context",
+          "operationKind": "mutation",
+          "mutation": true,
+          "staleVersionGuard": {
+            "required": true,
+            "type": "confirmation-proof",
+            "source": "fresh server-issued confirmation proof plus expected aggregate version",
+            "conflictStatus": 409
+          },
+          "idempotency": {
+            "required": true,
+            "key": "trusted-operation-id",
+            "scope": "agent-v1:confirmCurrentOrderWithTrustedProof",
+            "unknownOutcome": "persist uncertain outcome, fresh-read or reconcile before any repeat"
+          },
+          "rollback": {
+            "strategy": "transactional command rollback; compensate asynchronously when provider work already escaped",
+            "owner": "orders",
+            "safe": false
+          },
+          "publicEdge": "private",
+          "source": {
+            "kind": "canonical",
+            "references": [
+              "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M19_API_ARCHITECTURE/openapi/agent-v1.yaml",
+              "platform/evidence/contracts/openapi/agent-v1.yaml"
+            ],
+            "proof": "Immutable M19 canonical OpenAPI route; evidence snapshot preserves this route and its operationId."
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Confirmed"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not allowed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Proof/version conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent-v1/order/current/confirmation": {
+      "post": {
+        "operationId": "prepareConfirmation",
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "hermesServiceAuth": []
+          }
+        ],
+        "x-coffeeordersystem-contract": {
+          "routeId": "prepare-confirmation",
+          "owner": "orders",
+          "capability": "orders.current.prepare-confirmation",
+          "actor": "Hermes CoffeeOrder plugin",
+          "auth": "service identity + trusted conversation context",
+          "operationKind": "read",
+          "mutation": false,
+          "staleVersionGuard": {
+            "required": false,
+            "type": "trusted-context",
+            "source": "trusted conversation context is transport-injected",
+            "conflictStatus": 409
+          },
+          "idempotency": {
+            "required": false,
+            "key": "none",
+            "scope": "agent-v1:prepareConfirmation:read",
+            "unknownOutcome": "read may be retried after deadline; it has no declared side effect"
+          },
+          "rollback": {
+            "strategy": "no mutation; retry/fresh read is safe",
+            "owner": "orders",
+            "safe": true
+          },
+          "publicEdge": "private",
+          "source": {
+            "kind": "canonical",
+            "references": [
+              "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M19_API_ARCHITECTURE/openapi/agent-v1.yaml",
+              "platform/evidence/contracts/openapi/agent-v1.yaml"
+            ],
+            "proof": "Immutable M19 canonical OpenAPI route; evidence snapshot preserves this route and its operationId."
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Challenge"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not allowed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent-v1/order/current/items": {
+      "post": {
+        "operationId": "addOrderItem",
+        "tags": [
+          "orders"
+        ],
+        "security": [
+          {
+            "hermesServiceAuth": []
+          }
+        ],
+        "x-coffeeordersystem-contract": {
+          "routeId": "add-order-item",
+          "owner": "orders",
+          "capability": "orders.current.add-item",
+          "actor": "Hermes CoffeeOrder plugin",
+          "auth": "service identity + trusted conversation context",
+          "operationKind": "mutation",
+          "mutation": true,
+          "staleVersionGuard": {
+            "required": true,
+            "type": "idempotency-key",
+            "source": "Idempotency-Key scopes the create/command replay",
+            "conflictStatus": 409
+          },
+          "idempotency": {
+            "required": true,
+            "key": "trusted-operation-id",
+            "scope": "agent-v1:addOrderItem",
+            "unknownOutcome": "persist uncertain outcome, fresh-read or reconcile before any repeat"
+          },
+          "rollback": {
+            "strategy": "transactional command rollback; compensate asynchronously when provider work already escaped",
+            "owner": "orders",
+            "safe": false
+          },
+          "publicEdge": "private",
+          "source": {
+            "kind": "canonical",
+            "references": [
+              "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M19_API_ARCHITECTURE/openapi/agent-v1.yaml",
+              "platform/evidence/contracts/openapi/agent-v1.yaml"
+            ],
+            "proof": "Immutable M19 canonical OpenAPI route; evidence snapshot preserves this route and its operationId."
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not allowed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Current state or version conflicts with the request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent-v1/products/search": {
+      "get": {
+        "operationId": "searchProducts",
+        "tags": [
+          "catalog"
+        ],
+        "security": [
+          {
+            "hermesServiceAuth": []
+          }
+        ],
+        "x-coffeeordersystem-contract": {
+          "routeId": "search-products",
+          "owner": "catalog",
+          "capability": "catalog.product.search",
+          "actor": "Hermes CoffeeOrder plugin",
+          "auth": "service identity + trusted conversation context",
+          "operationKind": "read",
+          "mutation": false,
+          "staleVersionGuard": {
+            "required": false,
+            "type": "trusted-context",
+            "source": "trusted conversation context is transport-injected",
+            "conflictStatus": 409
+          },
+          "idempotency": {
+            "required": false,
+            "key": "none",
+            "scope": "agent-v1:searchProducts:read",
+            "unknownOutcome": "read may be retried after deadline; it has no declared side effect"
+          },
+          "rollback": {
+            "strategy": "no mutation; retry/fresh read is safe",
+            "owner": "catalog",
+            "safe": true
+          },
+          "publicEdge": "private",
+          "source": {
+            "kind": "canonical",
+            "references": [
+              "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M19_API_ARCHITECTURE/openapi/agent-v1.yaml",
+              "platform/evidence/contracts/openapi/agent-v1.yaml"
+            ],
+            "proof": "Immutable M19 canonical OpenAPI route; evidence snapshot preserves this route and its operationId."
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Products"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller is not allowed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource was not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

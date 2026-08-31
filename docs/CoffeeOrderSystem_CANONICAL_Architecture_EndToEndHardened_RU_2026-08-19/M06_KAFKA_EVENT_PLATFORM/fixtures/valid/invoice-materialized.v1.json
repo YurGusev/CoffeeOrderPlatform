@@ -1,0 +1,7 @@
+{
+  "invoiceOperationRef": "invoiceOperationRef-ref",
+  "clientInvoiceRef": "clientInvoiceRef-ref",
+  "checkoutSnapshotRef": "checkoutSnapshotRef-ref",
+  "wholesaleSnapshotRef": "wholesaleSnapshotRef-ref",
+  "outcome": "Created"
+}

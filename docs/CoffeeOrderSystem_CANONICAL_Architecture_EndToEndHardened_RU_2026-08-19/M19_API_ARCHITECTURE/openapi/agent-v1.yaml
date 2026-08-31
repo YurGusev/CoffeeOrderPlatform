@@ -1,0 +1,48 @@
+openapi: 3.1.0
+info:
+  title: CoffeeOrderSystem agent-v1
+  version: 1.0.0
+components:
+  schemas:
+    ProblemDetails:
+      type: object
+      additionalProperties: true
+paths:
+  /api/agent-v1/customer/current:
+    get:
+      operationId: resolveCurrentCustomer
+      responses:
+        '200':
+          description: Current customer
+  /api/agent-v1/products/search:
+    get:
+      operationId: searchProducts
+      responses:
+        '200':
+          description: Products
+  /api/agent-v1/order/current:
+    get:
+      operationId: getCurrentOrder
+      responses:
+        '200':
+          description: Current order
+  /api/agent-v1/order/current/items:
+    post:
+      operationId: addOrderItem
+      responses:
+        '200':
+          description: Updated
+  /api/agent-v1/order/current/confirmation:
+    post:
+      operationId: prepareConfirmation
+      responses:
+        '200':
+          description: Challenge
+  /api/agent-v1/order/current/confirm:
+    post:
+      operationId: confirmCurrentOrderWithTrustedProof
+      responses:
+        '200':
+          description: Confirmed
+        '409':
+          description: Proof/version conflict

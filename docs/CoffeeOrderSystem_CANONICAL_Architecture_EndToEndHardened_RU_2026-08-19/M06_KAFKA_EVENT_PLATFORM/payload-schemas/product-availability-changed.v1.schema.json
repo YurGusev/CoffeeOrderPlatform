@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/product-availability-changed.v1.schema.json",
+  "title": "ProductAvailabilityChanged.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "productRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "variantRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "availabilityStreamRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "sourceSequence": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "isAvailable": {
+      "type": "boolean"
+    },
+    "isTombstone": {
+      "type": "boolean"
+    },
+    "availabilityUpdatedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "occurredAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ManualProductMutation",
+        "SupplierSnapshot",
+        "Delete",
+        "Repair"
+      ]
+    }
+  },
+  "required": [
+    "productRef",
+    "availabilityStreamRef",
+    "sourceSequence",
+    "isAvailable",
+    "isTombstone",
+    "availabilityUpdatedAtUtc",
+    "occurredAtUtc",
+    "source"
+  ]
+}

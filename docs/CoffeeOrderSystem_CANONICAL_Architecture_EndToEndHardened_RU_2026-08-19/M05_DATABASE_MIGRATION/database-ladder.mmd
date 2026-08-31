@@ -1,0 +1,6 @@
+flowchart LR
+  DB0[DB0 Domain only] --> DB1[DB1 Real DDL]
+  DB1 --> DB2[DB2 Sanitized read-only clone]
+  DB2 --> DB3[DB3 Writable shadow clone]
+  DB3 --> DB4[DB4 Production read shadow]
+  DB4 --> DB5[DB5 Sole production writer]

@@ -1,0 +1,7 @@
+{
+  "importJobRef": "imp_1",
+  "artifactRef": "art_xlsx_1",
+  "artifactSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "importRevision": "1",
+  "requestedBy": "usr_1"
+}

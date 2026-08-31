@@ -1,0 +1,31 @@
+flowchart TB
+  Browser[Browser / React]
+  Edge[coffee-edge\nPUBLIC Nginx]
+  Web[platform-web\nINTERNAL Nginx]
+  Client[client-v1\nBrowser API]
+  Agent[agent-v1\nHermes API]
+  Internal[internal-v1\nService API]
+  Hooks[Webhook/Callback APIs]
+  Realtime[SSE / events]
+  Kafka[(Kafka Event APIs)]
+  Hermes[Hermes + CoffeeOrder Plugin]
+  Services[TypeScript Bounded Contexts]
+  Providers[VK / AROMA / PSP]
+
+  Browser --> Edge
+  Edge -->|/app/*| Web
+  Web --> Browser
+  Browser -->|/api/client-v1/*| Edge
+  Edge --> Client
+  Browser -->|/events| Edge
+  Edge --> Realtime
+  Hermes --> Agent
+  Agent --> Services
+  Client --> Services
+  Internal --> Services
+  Providers -->|callbacks/webhooks| Edge
+  Edge --> Hooks
+  Hooks --> Services
+  Services <--> Kafka
+  Kafka --> Realtime
+  Services -->|outbound provider APIs| Providers

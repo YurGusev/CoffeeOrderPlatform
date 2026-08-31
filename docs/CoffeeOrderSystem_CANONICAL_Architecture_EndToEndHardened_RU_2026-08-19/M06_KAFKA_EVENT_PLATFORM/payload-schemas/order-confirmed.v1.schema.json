@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/order-confirmed.v1.schema.json",
+  "title": "OrderConfirmed.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "orderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "totalMinor": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    }
+  },
+  "required": [
+    "orderRef",
+    "orderVersion",
+    "source",
+    "totalMinor",
+    "currency"
+  ]
+}

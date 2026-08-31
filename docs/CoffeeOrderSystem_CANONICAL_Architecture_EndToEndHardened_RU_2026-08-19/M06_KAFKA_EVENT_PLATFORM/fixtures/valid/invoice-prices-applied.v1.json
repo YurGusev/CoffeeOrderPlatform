@@ -1,0 +1,20 @@
+{
+  "clientInvoiceRef": "clientInvoiceRef-ref",
+  "checkoutSnapshotRef": "checkoutSnapshotRef-ref",
+  "wholesaleSnapshotRef": "wholesaleSnapshotRef-ref",
+  "priceProofManifest": {
+    "artifactRef": "artifactRef-ref",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "byteSize": "1",
+    "schemaVersion": 1
+  },
+  "orderProofs": [
+    {
+      "orderRef": "orderRef-ref",
+      "orderVersionAtCheckout": "1",
+      "amountMinor": "1",
+      "currency": "RUB",
+      "lineCoverageHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

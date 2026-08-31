@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/catalog-mapping-changed.v1.schema.json",
+  "title": "CatalogMappingChanged.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "coffeeWeightVariantRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "catalogMappingRevision": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "supplierSnapshotRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "observedAtUtc": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Ready",
+        "TemporarilyUnavailable",
+        "RequiresManualReview",
+        "MissingFromSnapshot",
+        "Removed"
+      ]
+    },
+    "externalOfferRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "externalVendorCode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "externalPacking": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "SupplierSnapshot",
+        "ManualOverride",
+        "AdminRepair",
+        "Delete"
+      ]
+    }
+  },
+  "required": [
+    "coffeeWeightVariantRef",
+    "catalogMappingRevision",
+    "status",
+    "reasonCode",
+    "source"
+  ]
+}

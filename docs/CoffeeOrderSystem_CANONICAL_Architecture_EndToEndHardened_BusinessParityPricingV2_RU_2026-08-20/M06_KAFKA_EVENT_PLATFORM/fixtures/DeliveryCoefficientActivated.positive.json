@@ -1,0 +1,8 @@
+{
+  "deliveryCoefficientVersionRef": "dc_2",
+  "version": "2",
+  "percent": "1.4000",
+  "source": "ActualProcurementBatch",
+  "basedOnProcurementBatchRef": "pb_42",
+  "effectiveAtUtc": "2026-08-21T00:00:00Z"
+}

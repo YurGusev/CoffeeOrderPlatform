@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/paymentrefundfailed.v1.schema.json",
+  "title": "PaymentRefundFailed.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "refundRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "paymentIntentRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "errorCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "unknownOutcome": {
+      "type": "boolean"
+    },
+    "failedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "refundRef",
+    "paymentIntentRef",
+    "orderRef",
+    "errorCode",
+    "retryable",
+    "unknownOutcome",
+    "failedAtUtc"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "paymentIntentRef": "paymentIntentRef-ref",
+  "paymentRequirementRef": "paymentRequirementRef-ref",
+  "orderRef": "orderRef-ref",
+  "failureCode": "failureCode-ref",
+  "retryable": false
+}

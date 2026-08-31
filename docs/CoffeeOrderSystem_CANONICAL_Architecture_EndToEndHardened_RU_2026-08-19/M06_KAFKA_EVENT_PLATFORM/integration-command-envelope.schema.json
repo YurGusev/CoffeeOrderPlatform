@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/integration-command-envelope.v1.schema.json",
+  "title": "CoffeeOrder Integration Command Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "commandId",
+    "commandType",
+    "schemaVersion",
+    "requestedAtUtc",
+    "producer",
+    "targetType",
+    "targetId",
+    "idempotencyKey",
+    "correlationId",
+    "payload"
+  ],
+  "properties": {
+    "commandId": { "type": "string", "minLength": 1 },
+    "commandType": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "requestedAtUtc": { "type": "string", "format": "date-time" },
+    "producer": { "type": "string", "minLength": 1 },
+    "targetType": { "type": "string", "minLength": 1 },
+    "targetId": { "type": "string", "minLength": 1 },
+    "idempotencyKey": { "type": "string", "minLength": 1 },
+    "deadlineAtUtc": { "type": ["string", "null"], "format": "date-time" },
+    "correlationId": { "type": "string", "minLength": 1 },
+    "causationId": { "type": ["string", "null"] },
+    "traceparent": { "type": ["string", "null"] },
+    "payload": { "type": "object" }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "procurementBatchRef": "pb_42",
+  "wholesaleOrderRef": "wh_42",
+  "invoiceRefs": [
+    "inv_42"
+  ],
+  "currency": "RUB",
+  "goodsAmountBasis": "gross-paid",
+  "actualSupplierGoodsTotal": "80000.0000",
+  "allocationManifestRef": "art_alloc_42",
+  "allocationManifestSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "occurredAtUtc": "2026-08-20T01:00:00Z"
+}

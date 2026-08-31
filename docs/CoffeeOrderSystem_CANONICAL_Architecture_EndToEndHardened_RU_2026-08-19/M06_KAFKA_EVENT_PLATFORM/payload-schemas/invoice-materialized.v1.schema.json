@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/invoice-materialized.v1.schema.json",
+  "title": "InvoiceMaterialized.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "invoiceOperationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "clientInvoiceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkoutSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "wholesaleSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "Created",
+        "ResumedExisting"
+      ]
+    }
+  },
+  "required": [
+    "invoiceOperationRef",
+    "clientInvoiceRef",
+    "checkoutSnapshotRef",
+    "wholesaleSnapshotRef",
+    "outcome"
+  ]
+}

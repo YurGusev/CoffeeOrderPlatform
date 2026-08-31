@@ -1,0 +1,398 @@
+version: 2
+productionRules:
+  autoCreateTopics: false
+  criticalReplicationFactor: 3
+  criticalMinInSyncReplicas: 2
+  productionPartitionsMustBeExplicit: true
+  partitionCountLockedAfterCutover: true
+  defaultApplicationMaxSerializedBytes: 262144
+  wireInt64: decimal-string
+  realtimeInvalidationModel: direct-bounded-context-outbox
+topics:
+- name: coffee.channels.inbound.v1
+  kind: event
+  owner: channel-platform
+  key: ConversationKeyHash
+  retentionClass: TIER_A_INGRESS
+  durabilityClass: critical
+  productionPartitions: 24
+  productionRetentionHours: 168
+  producers:
+  - channel-ingress
+  consumerGroups:
+  - channel-intake
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/channel-message-received.v1.schema.json
+  piiClass: user-generated-content-possible-pii
+  replayPolicy: business-ingress-controlled
+  drClass: tier-a
+- name: coffee.agent.turn.requested.v1
+  kind: command
+  owner: agent-platform
+  key: ConversationKeyHash
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: critical
+  productionPartitions: 24
+  productionRetentionHours: 168
+  producers:
+  - channel-intake
+  consumerGroups:
+  - hermes-dispatcher
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/agent-turn-requested.v1.schema.json
+  piiClass: user-generated-content-possible-pii
+  replayPolicy: command-idempotent-controlled
+  drClass: tier-a
+- name: coffee.agent.turn.completed.v1
+  kind: event
+  owner: agent-platform
+  key: ConversationKeyHash
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 24
+  productionRetentionHours: 168
+  producers:
+  - hermes-dispatcher
+  consumerGroups:
+  - channel-response-mapper
+  - agent-telemetry
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/agent-turn-completed.v1.schema.json
+  piiClass: user-generated-content-possible-pii
+  replayPolicy: projection-safe
+  drClass: standard
+- name: coffee.agent.turn.failed.v1
+  kind: event
+  owner: agent-platform
+  key: ConversationKeyHash
+  retentionClass: DELIVERY_AUDIT
+  durabilityClass: critical
+  productionPartitions: 12
+  productionRetentionHours: 168
+  producers:
+  - hermes-dispatcher
+  consumerGroups:
+  - channel-response-mapper
+  - agent-operations
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/agent-turn-failed.v1.schema.json
+  piiClass: user-generated-content-possible-pii
+  replayPolicy: terminal-fallback-and-ops
+  drClass: standard
+- name: coffee.channels.outbound.v1
+  kind: command
+  owner: channel-platform
+  key: ConversationKeyHash
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: critical
+  productionPartitions: 24
+  productionRetentionHours: 168
+  producers:
+  - channel-response-mapper
+  - platform-notifications
+  consumerGroups:
+  - channel-egress
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/channel-message-send-requested.v1.schema.json
+  piiClass: user-generated-content-possible-pii
+  replayPolicy: provider-side-effect-controlled
+  drClass: tier-a
+- name: coffee.channels.delivery.v1
+  kind: event
+  owner: channel-platform
+  key: DeliveryRef
+  retentionClass: DELIVERY_AUDIT
+  durabilityClass: standard
+  productionPartitions: 12
+  productionRetentionHours: 720
+  producers:
+  - channel-egress
+  consumerGroups:
+  - channel-operations
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/channel-delivery-result.v1.schema.json
+  piiClass: provider-delivery-metadata
+  replayPolicy: audit-projection
+  drClass: standard
+- name: coffee.orders.lifecycle.v1
+  kind: event
+  owner: orders
+  key: OrderRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 12
+  productionRetentionHours: 2160
+  producers:
+  - orders
+  consumerGroups:
+  - payments-order-events
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/order-confirmed.v1.schema.json
+  - payload-schemas/order-payment-required.v1.schema.json
+  - payload-schemas/order-completed.v1.schema.json
+  - payload-schemas/order-cancelled.v1.schema.json
+  piiClass: business-minimized
+  replayPolicy: consumer-specific
+  drClass: tier-a
+- name: coffee.catalog.products.v1
+  kind: event
+  owner: catalog
+  key: ProductRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: standard
+  productionPartitions: 6
+  productionRetentionHours: 720
+  producers:
+  - catalog
+  consumerGroups:
+  - catalog-indexing
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/catalog-product-changed.v1.schema.json
+  piiClass: none
+  replayPolicy: projection-safe
+  drClass: standard
+- name: coffee.catalog.availability.v1
+  kind: event
+  owner: catalog
+  key: CatalogAvailabilityStreamRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 12
+  productionRetentionHours: 720
+  producers:
+  - catalog
+  consumerGroups:
+  - orders-catalog-projection
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/product-availability-changed.v1.schema.json
+  piiClass: none
+  replayPolicy: projection-safe
+  drClass: standard
+- name: coffee.catalog.mapping.commands.v1
+  kind: command
+  owner: catalog
+  key: CoffeeWeightVariantRef
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: standard
+  productionPartitions: 12
+  productionRetentionHours: 168
+  producers:
+  - orders-aroma-preparation
+  consumerGroups:
+  - catalog-mapping-resolver
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/catalog-mapping-resolution-requested.v1.schema.json
+  piiClass: none
+  replayPolicy: command-idempotent-controlled
+  drClass: standard
+- name: coffee.catalog.mapping.v1
+  kind: event
+  owner: catalog
+  key: CoffeeWeightVariantRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 12
+  productionRetentionHours: 2160
+  producers:
+  - catalog
+  consumerGroups:
+  - orders-catalog-mapping
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/catalog-mapping-changed.v1.schema.json
+  piiClass: none
+  replayPolicy: projection-safe
+  drClass: standard
+- name: coffee.catalog.sync.commands.v1
+  kind: command
+  owner: catalog
+  key: WholesaleCatalog
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: standard
+  productionPartitions: 3
+  productionRetentionHours: 24
+  producers:
+  - aroma-convergence
+  - api-internal
+  consumerGroups:
+  - catalog-supplier-sync
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/catalog-refresh-requested.v1.schema.json
+  piiClass: none
+  replayPolicy: coalesced-command
+  drClass: standard
+- name: coffee.invoices.commands.v1
+  kind: command
+  owner: invoices
+  key: InvoiceOperationRef
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: critical
+  productionPartitions: 6
+  productionRetentionHours: 720
+  producers:
+  - orders
+  - invoice-intake
+  consumerGroups:
+  - invoices-command-handler
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/invoice-materialization-requested.v1.schema.json
+  - payload-schemas/invoice-compensation-requested.v1.schema.json
+  piiClass: business-minimized
+  replayPolicy: command-idempotent-controlled
+  drClass: standard
+- name: coffee.invoices.events.v1
+  kind: event
+  owner: invoices
+  key: ClientInvoiceRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 6
+  productionRetentionHours: 2160
+  producers:
+  - invoices
+  consumerGroups:
+  - orders-invoice-events
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/invoice-materialized.v1.schema.json
+  - payload-schemas/invoice-pdf-linked.v1.schema.json
+  - payload-schemas/invoice-prices-applied.v1.schema.json
+  - payload-schemas/invoice-compensated.v1.schema.json
+  - payload-schemas/invoice-compensation-failed.v1.schema.json
+  piiClass: business-minimized
+  replayPolicy: consumer-specific
+  drClass: standard
+- name: coffee.payments.commands.v1
+  kind: command
+  owner: payments
+  key: PaymentOperationRef
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: critical
+  productionPartitions: 6
+  productionRetentionHours: 720
+  producers:
+  - orders
+  consumerGroups:
+  - payments-command-handler
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/payment-refund-requested.v1.schema.json
+  - payload-schemas/payment-intent-cancel-requested.v1.schema.json
+  piiClass: payment-metadata-no-card-data
+  replayPolicy: provider-side-effect-controlled
+  drClass: tier-a
+- name: coffee.payments.lifecycle.v1
+  kind: event
+  owner: payments
+  key: PaymentIntentRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 6
+  productionRetentionHours: 2160
+  producers:
+  - payments
+  consumerGroups:
+  - orders-payment-events
+  - payment-audit
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/payment-intent-ready.v1.schema.json
+  - payload-schemas/payment-succeeded.v1.schema.json
+  - payload-schemas/payment-failed.v1.schema.json
+  - payload-schemas/payment-refunded.v1.schema.json
+  - payload-schemas/payment-refund-failed.v1.schema.json
+  - payload-schemas/payment-intent-cancelled.v1.schema.json
+  piiClass: payment-metadata-no-card-data
+  replayPolicy: consumer-specific
+  drClass: tier-a
+- name: coffee.aroma.preparation.commands.v1
+  kind: command
+  owner: orders
+  key: OrderRef
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: critical
+  productionPartitions: 12
+  productionRetentionHours: 168
+  producers:
+  - orders
+  consumerGroups:
+  - orders-aroma-preparation
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/aroma-preparation-requested.v1.schema.json
+  piiClass: business-refs-only
+  replayPolicy: command-idempotent-controlled
+  drClass: standard
+- name: coffee.aroma.cart.commands.v1
+  kind: command
+  owner: orders
+  key: ProfileName+CartKeyHash
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: critical
+  productionPartitions: 24
+  productionRetentionHours: 168
+  producers:
+  - orders
+  consumerGroups:
+  - aroma-convergence
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/aroma-converge-requested.v1.schema.json
+  piiClass: business-refs-only
+  replayPolicy: external-side-effect-controlled
+  drClass: standard
+- name: coffee.aroma.cart.events.v1
+  kind: event
+  owner: orders
+  key: ProfileName+CartKeyHash
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 24
+  productionRetentionHours: 720
+  producers:
+  - aroma-convergence
+  - aroma-observer
+  consumerGroups:
+  - orders-aroma-events
+  - aroma-operations
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/aroma-cart-observed.v1.schema.json
+  - payload-schemas/aroma-convergence-result.v1.schema.json
+  piiClass: business-minimized
+  replayPolicy: consumer-specific
+  drClass: standard
+- name: coffee.realtime.invalidate.v1
+  kind: event
+  owner: realtime-platform
+  key: ScopeEntityKey
+  retentionClass: EPHEMERAL
+  durabilityClass: standard
+  productionPartitions: 24
+  productionRetentionHours: 1
+  producers:
+  - orders
+  - catalog
+  - invoices
+  - payments
+  - customer
+  consumerGroups:
+  - ephemeral-per-replica
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/realtime-invalidation.v1.schema.json
+  piiClass: refs-only
+  replayPolicy: no-history-required
+  drClass: none

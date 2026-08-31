@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "merge": {
+    "baselineCollection": "topics",
+    "parentAddCollection": "addTopics",
+    "closureAddCollection": "addTopics",
+    "key": "name",
+    "outputCollection": "topics"
+  },
+  "parentResultingTopicCount": 28,
+  "addTopics": [
+    {
+      "name": "coffee.channels.media.commands.v1",
+      "kind": "command",
+      "owner": "channel-platform",
+      "key": "ConversationKeyHash",
+      "orderingInvariant": "one media operation order per conversation",
+      "retentionClass": "ASYNC_COMMAND",
+      "durabilityClass": "critical",
+      "productionPartitions": 24,
+      "productionRetentionHours": 168,
+      "producers": ["channel-ingress"],
+      "consumerGroups": ["channel-media-worker"],
+      "schema": "parent:M06_KAFKA_EVENT_PLATFORM/schemas/integration-command-envelope.schema.json",
+      "payloadSchemas": ["M06_KAFKA_EVENT_PLATFORM/payload-schemas/channel-media-processing-requested.v1.schema.json"],
+      "piiClass": "artifact-ref-user-content-possible-pii",
+      "replayPolicy": "command-idempotent-controlled",
+      "drClass": "tier-a",
+      "externalSideEffect": false
+    },
+    {
+      "name": "coffee.channels.transcription.commands.v1",
+      "kind": "command",
+      "owner": "channel-platform",
+      "key": "ConversationKeyHash",
+      "orderingInvariant": "one transcript operation order per conversation",
+      "retentionClass": "ASYNC_COMMAND",
+      "durabilityClass": "critical",
+      "productionPartitions": 24,
+      "productionRetentionHours": 168,
+      "producers": ["channel-media-worker"],
+      "consumerGroups": ["channel-transcription-worker"],
+      "schema": "parent:M06_KAFKA_EVENT_PLATFORM/schemas/integration-command-envelope.schema.json",
+      "payloadSchemas": ["M06_KAFKA_EVENT_PLATFORM/payload-schemas/channel-transcription-requested.v1.schema.json"],
+      "piiClass": "artifact-ref-user-content-possible-pii",
+      "replayPolicy": "command-idempotent-controlled",
+      "drClass": "tier-a",
+      "externalSideEffect": false
+    }
+  ],
+  "producerAdds": [
+    {
+      "topic": "coffee.channels.inbound.v1",
+      "producer": "channel-transcription-worker",
+      "constraint": "sanitized transcript artifact converted to existing ChannelMessageReceived contract"
+    }
+  ],
+  "messageTypeAdds": [
+    {
+      "messageType": "ChannelMediaProcessingRequested",
+      "schema": "M06_KAFKA_EVENT_PLATFORM/payload-schemas/channel-media-processing-requested.v1.schema.json",
+      "fixture": "M06_KAFKA_EVENT_PLATFORM/fixtures/channel-media-processing-requested.v1.valid.json"
+    },
+    {
+      "messageType": "ChannelTranscriptionRequested",
+      "schema": "M06_KAFKA_EVENT_PLATFORM/payload-schemas/channel-transcription-requested.v1.schema.json",
+      "fixture": "M06_KAFKA_EVENT_PLATFORM/fixtures/channel-transcription-requested.v1.valid.json"
+    }
+  ],
+  "resultingTopicCount": 30
+}

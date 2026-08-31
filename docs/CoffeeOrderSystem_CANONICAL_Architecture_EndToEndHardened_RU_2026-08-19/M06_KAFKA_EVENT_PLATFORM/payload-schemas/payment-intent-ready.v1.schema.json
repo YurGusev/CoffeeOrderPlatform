@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/payment-intent-ready.v1.schema.json",
+  "title": "PaymentIntentReady.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "paymentIntentRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "paymentRequirementRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "amountMinor": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "checkoutAvailable": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "paymentIntentRef",
+    "paymentRequirementRef",
+    "orderRef",
+    "amountMinor",
+    "currency",
+    "checkoutAvailable"
+  ]
+}

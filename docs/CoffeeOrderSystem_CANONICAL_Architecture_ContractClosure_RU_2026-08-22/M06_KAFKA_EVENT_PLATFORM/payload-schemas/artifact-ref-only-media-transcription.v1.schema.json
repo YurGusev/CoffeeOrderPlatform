@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/artifact-ref-only-media-transcription.v1.schema.json",
+  "title": "ArtifactRef-only media/transcription handoff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "mediaArtifact",
+    "transcriptionArtifact"
+  ],
+  "properties": {
+    "contractVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "mediaArtifact": {
+      "$ref": "#/$defs/artifactRef"
+    },
+    "transcriptionArtifact": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/artifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactRef",
+        "ownerContext",
+        "artifactType",
+        "schemaVersion",
+        "sha256",
+        "byteSize",
+        "contentType",
+        "createdAtUtc"
+      ],
+      "properties": {
+        "artifactRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ownerContext": {
+          "type": "string",
+          "enum": [
+            "channel-platform",
+            "agent-platform"
+          ]
+        },
+        "artifactType": {
+          "type": "string",
+          "enum": [
+            "vk-media",
+            "voice-audio",
+            "sanitized-transcript"
+          ]
+        },
+        "schemaVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "byteSize": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "contentType": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]*/[a-z0-9][a-z0-9!#$&^_.+-]*$"
+        },
+        "createdAtUtc": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "paymentRequirementRef": "paymentRequirementRef-ref",
+  "orderRef": "orderRef-ref",
+  "orderVersion": "1",
+  "invoiceRef": "invoiceRef-ref",
+  "amountMinor": "1",
+  "currency": "RUB",
+  "priceProofHash": "priceProofHash-ref"
+}

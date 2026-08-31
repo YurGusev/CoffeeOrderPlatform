@@ -1,0 +1,17 @@
+{
+  "invoiceOperationRef": "invoiceOperationRef-ref",
+  "checkoutSnapshotRef": "checkoutSnapshotRef-ref",
+  "wholesaleSnapshotRef": "wholesaleSnapshotRef-ref",
+  "profileName": "profileName-ref",
+  "convergenceProofHash": "convergenceProofHash-ref",
+  "allocationManifest": {
+    "artifactRef": "artifactRef-ref",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "byteSize": "1",
+    "schemaVersion": 1
+  },
+  "wholesaleOrderSnapshot": {
+    "wholesaleOrderRef": "wholesaleOrderRef-ref",
+    "observedAtUtc": "2026-08-19T12:00:00Z"
+  }
+}

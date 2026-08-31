@@ -1,0 +1,8 @@
+flowchart LR
+  S[src/CoffeeOrderSystem.Web] -->|exact copy| T[platform/apps/web]
+  T --> B[Build/Test/CSP/E2E parity]
+  B --> C[Contract decoupling\nOpenAPI artifact]
+  C --> I[platform-web image]
+  I --> N[Nginx /app cutover]
+  N --> F[Freeze old source]
+  F --> D[Delete after soak]

@@ -1,0 +1,23 @@
+# Program → Skill Map
+
+- **M00**: `next-architecture-foundation`
+- **M01**: `next-react-handover`
+- **M02**: `next-docker-compose-runtime`
+- **M03**: `next-nginx-strangler`
+- **M04**: `next-typescript-platform`, `next-nodejs-runtime`
+- **M05**: `next-postgres-migration`
+- **M06**: `next-kafka-event-platform`
+- **M07**: `next-customer-catalog-migration`, `next-catalog-product-lifecycle`
+- **M08**: `next-payments-platform`
+- **M09**: `next-hermes-vk-runtime`
+- **M10**: `next-invoices-migration`
+- **M11**: `next-aroma-migration`
+- **M12**: `next-orders-migration`
+- **M13**: `next-kubernetes-microservices`
+- **M14**: `next-legacy-decommission`
+- **M15**: `next-reliability-operations`
+- **M16**: `next-cicd-supply-chain`
+- **M17**: `next-areal-training`
+- **M18**: `next-system-design-governance`
+- **M19**: `next-api-architecture`
+- **M20**: `next-business-orchestration`

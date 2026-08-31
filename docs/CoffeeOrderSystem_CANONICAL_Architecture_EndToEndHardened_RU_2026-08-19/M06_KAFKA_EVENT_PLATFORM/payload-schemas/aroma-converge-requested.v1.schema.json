@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/aroma-converge-requested.v1.schema.json",
+  "title": "ConvergeAromaCartRequested.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "profileName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "cartKeyHash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "desiredKeyVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "desiredRevision": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$"
+    }
+  },
+  "required": [
+    "profileName",
+    "cartKeyHash",
+    "desiredKeyVersion",
+    "desiredRevision"
+  ]
+}

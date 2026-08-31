@@ -1,0 +1,9 @@
+{
+  "compensationRef": "compensationRef-ref",
+  "clientInvoiceRef": "clientInvoiceRef-ref",
+  "checkoutSnapshotRef": "checkoutSnapshotRef-ref",
+  "orderRefs": [
+    "item-ref"
+  ],
+  "reasonCode": "reasonCode-ref"
+}

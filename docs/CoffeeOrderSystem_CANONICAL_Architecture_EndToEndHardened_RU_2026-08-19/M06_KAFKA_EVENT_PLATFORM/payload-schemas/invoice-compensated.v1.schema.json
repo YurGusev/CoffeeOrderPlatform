@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/invoicecompensated.v1.schema.json",
+  "title": "InvoiceCompensated.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "compensationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "clientInvoiceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "CancelledBeforePriceProof",
+        "CorrectionCreated",
+        "CreditCreated",
+        "ManualResolved"
+      ]
+    },
+    "proofRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "occurredAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "compensationRef",
+    "clientInvoiceRef",
+    "outcome",
+    "proofRef",
+    "occurredAtUtc"
+  ]
+}

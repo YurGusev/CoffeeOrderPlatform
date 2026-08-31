@@ -1,0 +1,7 @@
+{
+  "compensationRef": "compensationRef-ref",
+  "clientInvoiceRef": "clientInvoiceRef-ref",
+  "errorCode": "errorCode-ref",
+  "manualReviewRequired": false,
+  "occurredAtUtc": "2026-08-19T12:00:00Z"
+}

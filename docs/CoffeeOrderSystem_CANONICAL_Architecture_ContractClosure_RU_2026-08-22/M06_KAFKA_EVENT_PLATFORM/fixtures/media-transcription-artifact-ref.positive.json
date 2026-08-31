@@ -1,0 +1,23 @@
+{
+  "contractVersion": "1",
+  "mediaArtifact": {
+    "artifactRef": "art_vk_voice_001",
+    "ownerContext": "channel-platform",
+    "artifactType": "voice-audio",
+    "schemaVersion": "1",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "byteSize": "4096",
+    "contentType": "audio/ogg",
+    "createdAtUtc": "2026-08-22T00:00:00Z"
+  },
+  "transcriptionArtifact": {
+    "artifactRef": "art_vk_transcript_001",
+    "ownerContext": "agent-platform",
+    "artifactType": "sanitized-transcript",
+    "schemaVersion": "1",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "byteSize": "512",
+    "contentType": "text/plain",
+    "createdAtUtc": "2026-08-22T00:00:01Z"
+  }
+}

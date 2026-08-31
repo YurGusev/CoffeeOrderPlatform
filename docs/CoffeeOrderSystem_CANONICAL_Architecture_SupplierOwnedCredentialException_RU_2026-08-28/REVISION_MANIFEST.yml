@@ -1,0 +1,23 @@
+version: 4
+revisionId: DEC-PLT-M00-SEC-003
+revisionDate: 2026-08-28
+revisionType: canonical-revision-overlay
+parentRevision:
+  name: ArchitectureContractClosure
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22
+  treeSha256: 1e8beb238734c2126745a02363b52fc0d40cad0efc9f9dac990ed4696b48eca1
+revisionChain:
+- name: EndToEndHardened-baseline
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19
+- name: BusinessParityPricingV2
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20
+- name: PrivateSingleOwnerSecurityException
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_PrivateSingleOwnerSecurityException_RU_2026-08-20
+- name: ArchitectureContractClosure
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22
+- name: SupplierOwnedCredentialException
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_SupplierOwnedCredentialException_RU_2026-08-28
+adds:
+- SECURITY_EXCEPTION.json
+replaces:
+- README.md

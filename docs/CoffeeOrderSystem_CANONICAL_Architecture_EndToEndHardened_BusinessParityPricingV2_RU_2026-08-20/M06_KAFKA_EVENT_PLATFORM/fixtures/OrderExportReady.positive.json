@@ -1,0 +1,8 @@
+{
+  "exportJobRef": "exp_1",
+  "exportRevision": "1",
+  "artifactRef": "art_exp_1",
+  "artifactSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "sizeBytes": 12345,
+  "status": "Ready"
+}

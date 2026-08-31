@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "order-export-ready",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "exportJobRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exportRevision": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "artifactRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifactSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sizeBytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "enum": [
+        "Ready",
+        "Failed"
+      ]
+    }
+  },
+  "required": [
+    "exportJobRef",
+    "exportRevision",
+    "artifactRef",
+    "artifactSha256",
+    "sizeBytes",
+    "status"
+  ]
+}

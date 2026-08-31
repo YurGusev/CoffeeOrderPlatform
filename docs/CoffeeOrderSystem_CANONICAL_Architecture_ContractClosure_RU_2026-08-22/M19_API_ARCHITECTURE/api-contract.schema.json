@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.dev/contracts/m19-api-authority-closure.schema.json",
+  "title": "CoffeeOrderSystem M19 API authority closure",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contractId",
+    "status",
+    "sourceCommit",
+    "sourceAuthority",
+    "surfaces",
+    "problemDetails",
+    "routes"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "contractId": { "const": "coffeeordersystem-m19-api-authority-closure" },
+    "status": { "const": "NORMATIVE" },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sourceAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical", "evidence", "derivation"],
+      "properties": {
+        "canonical": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "derivation": { "type": "string", "minLength": 1 }
+      }
+    },
+    "surfaces": {
+      "type": "object",
+      "minProperties": 3,
+      "additionalProperties": {
+        "$ref": "#/$defs/surface"
+      }
+    },
+    "problemDetails": { "$ref": "#/$defs/problemDetails" },
+    "routes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/route" }
+    }
+  },
+  "$defs": {
+    "surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prefix", "actor", "auth", "publicEdge", "ownerRule"],
+      "properties": {
+        "prefix": { "type": "string", "pattern": "^/api/(client-v1|agent-v1|internal-v1)$" },
+        "actor": { "type": "string", "minLength": 1 },
+        "auth": { "type": "string", "minLength": 1 },
+        "publicEdge": { "enum": ["public", "private"] },
+        "ownerRule": { "type": "string", "minLength": 1 }
+      }
+    },
+    "problemDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "requiredProperties", "errorTaxonomy"],
+      "properties": {
+        "schema": { "const": "ProblemDetails" },
+        "requiredProperties": {
+          "const": ["type", "title", "status", "errorCode", "traceId"]
+        },
+        "errorTaxonomy": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "surface",
+        "method",
+        "path",
+        "operationId",
+        "owner",
+        "capability",
+        "actor",
+        "auth",
+        "operationKind",
+        "mutation",
+        "staleVersionGuard",
+        "idempotency",
+        "success",
+        "errors",
+        "rollback",
+        "publicEdge",
+        "source"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "surface": { "enum": ["client-v1", "agent-v1", "internal-v1"] },
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+        "path": { "type": "string", "pattern": "^/api/(client-v1|agent-v1|internal-v1)/[^ ]+$" },
+        "operationId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+        "owner": { "type": "string", "minLength": 1 },
+        "capability": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" },
+        "actor": { "type": "string", "minLength": 1 },
+        "auth": { "type": "string", "minLength": 1 },
+        "operationKind": { "enum": ["read", "mutation"] },
+        "mutation": { "type": "boolean" },
+        "parameters": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "in", "required", "schema"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "in": { "const": "path" },
+              "required": { "const": true },
+              "schema": { "const": "string" }
+            }
+          }
+        },
+        "staleVersionGuard": { "$ref": "#/$defs/guard" },
+        "idempotency": { "$ref": "#/$defs/idempotency" },
+        "success": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/response" }
+        },
+        "errors": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/error" }
+        },
+        "rollback": { "$ref": "#/$defs/rollback" },
+        "publicEdge": { "enum": ["public", "private"] },
+        "source": { "$ref": "#/$defs/source" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mutation": { "const": true } } },
+          "then": {
+            "properties": {
+              "operationKind": { "const": "mutation" },
+              "staleVersionGuard": { "properties": { "required": { "const": true } } },
+              "idempotency": { "properties": { "required": { "const": true } } }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "mutation": { "const": false } } },
+          "then": { "properties": { "operationKind": { "const": "read" } } }
+        }
+      ]
+    },
+    "guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "type", "source", "conflictStatus"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "type": { "enum": ["expected-version", "confirmation-proof", "idempotency-key", "trusted-context", "not-applicable"] },
+        "source": { "type": "string", "minLength": 1 },
+        "conflictStatus": { "const": 409 }
+      }
+    },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "key", "scope", "unknownOutcome"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "key": { "enum": ["Idempotency-Key", "trusted-operation-id", "none"] },
+        "scope": { "type": "string", "minLength": 1 },
+        "unknownOutcome": { "type": "string", "minLength": 1 }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "description"],
+      "properties": {
+        "status": {
+          "anyOf": [
+            { "type": "integer", "minimum": 100, "maximum": 599 },
+            { "const": "default" }
+          ]
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "schema": { "type": "string", "minLength": 1 }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "errorCode", "description"],
+      "properties": {
+        "status": { "type": "integer", "minimum": 400, "maximum": 599 },
+        "errorCode": { "type": "string", "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "owner", "safe"],
+      "properties": {
+        "strategy": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "safe": { "type": "boolean" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "references", "proof"],
+      "properties": {
+        "kind": { "enum": ["canonical", "evidence-overlay"] },
+        "references": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "proof": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

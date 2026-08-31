@@ -1,0 +1,30 @@
+{
+  "baselineArtifact": "CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_WithAgentSkills_API_RU_2026-08-19.zip",
+  "baselineSha256": "e869535c9c5c0f19d84ff1d2582bd541c4ed1781c44fa5d49836be85235f37f5",
+  "parentRevision": {
+    "name": "PrivateSingleOwnerSecurityException",
+    "root": "docs/CoffeeOrderSystem_CANONICAL_Architecture_PrivateSingleOwnerSecurityException_RU_2026-08-20",
+    "treeSha256": "50802c7a119b4a2a9c6bcfaadb82e0144c5bb65bf064952eba6039f7544e2236"
+  },
+  "revisionId": "DEC-PLT-ARCH-CONTRACT-CLOSURE-001",
+  "revisionDate": "2026-08-22",
+  "revisionChain": [
+    "EndToEndHardened-baseline",
+    "BusinessParityPricingV2",
+    "PrivateSingleOwnerSecurityException",
+    "ArchitectureContractClosure"
+  ],
+  "decisionIds": [
+    "D19-007",
+    "D20-001",
+    "D21-004"
+  ],
+  "precedence": "revision-over-parent-revision-over-baseline",
+  "releaseSchemaVersion": 3,
+  "rule": "Only the exact M19, M20, M21 and media-pipeline authorities listed by REVISION_MANIFEST.yml are superseded; all other parent rules remain unchanged.",
+  "integrity": {
+    "manifest": "REVISION_MANIFEST.yml",
+    "sha256Manifest": "SHA256SUMS.txt",
+    "sha256ManifestExcludesSelf": true
+  }
+}

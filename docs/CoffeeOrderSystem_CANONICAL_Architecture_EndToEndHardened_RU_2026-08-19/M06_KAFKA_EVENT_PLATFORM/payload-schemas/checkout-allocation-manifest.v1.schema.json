@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/checkoutallocationmanifest.v1.schema.json",
+  "title": "CheckoutAllocationManifest.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "manifestRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkoutSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "profileName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkoutVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "convergenceProofHash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "wholesaleSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "wholesaleOrderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "wholesaleOrderNumber": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "wholesaleObservedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "allocations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allocationRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderVersionAtCheckout": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "orderItemRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "cartKeyHash": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "externalOfferRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "externalGrindRef": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "externalPacking": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "wholesaleLineRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "supplierUnitPriceMinor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9]+$"
+          }
+        },
+        "required": [
+          "allocationRef",
+          "orderRef",
+          "orderVersionAtCheckout",
+          "orderItemRef",
+          "cartKeyHash",
+          "externalOfferRef",
+          "quantity",
+          "wholesaleLineRef"
+        ]
+      }
+    }
+  },
+  "required": [
+    "manifestRef",
+    "checkoutSnapshotRef",
+    "profileName",
+    "checkoutVersion",
+    "convergenceProofHash",
+    "wholesaleSnapshotRef",
+    "wholesaleOrderRef",
+    "wholesaleObservedAtUtc",
+    "currency",
+    "allocations"
+  ]
+}

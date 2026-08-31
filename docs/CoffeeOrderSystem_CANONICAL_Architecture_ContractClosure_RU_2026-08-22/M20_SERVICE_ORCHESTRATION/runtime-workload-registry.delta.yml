@@ -1,0 +1,431 @@
+version: 3
+authority: additive
+baselineRuntimeRoles: 32
+materialization:
+  identityKey: name
+  order: baseline-then-addWorkloads
+  noImplicitBindings: true
+  legacyAliases:
+    consumes: consumesTopics
+    produces: producesTopics
+  consumesTopics:
+    source: ../M06_KAFKA_EVENT_PLATFORM/contract-closure-registry.yml#bindings
+    join: roleRef-and-consumerGroup
+    rule: materialize-only-when-an-exact-topic-group-binding-exists
+    missingEvidence: preserve-empty-and-report-authority-gap
+  producedTopics:
+    source: ../M06_KAFKA_EVENT_PLATFORM/contract-closure-registry.yml#bindings
+    join: roleRef-and-producerRef
+    rule: materialize-only-when-an-exact-producer-binding-exists
+    missingEvidence: preserve-empty-and-report-authority-gap
+  consumerGroupOwnership:
+    rule: one-exact-runtime-role-per-durable-group
+    exception: ephemeral-per-replica
+  fieldPolicy:
+    baselineRoleMissingConsumesTopics: not-inferred
+    baselineRoleMissingRetryDlqEvidence: not-inferred
+addWorkloads:
+- name: pricing-api
+  owner: pricing
+  role: internal-http
+  productionCritical: true
+  database: pricing
+  consumes: []
+  produces:
+  - coffee.pricing.lifecycle.v1
+  composeService: pricing-api
+  kubernetes: Deployment
+  workloadIdentity: pricing-api
+  entrypoint: platform/apps/pricing-api
+  dbPrincipal: pricing_api_rw
+  dbAccess: readwrite
+  consumesTopics: []
+  consumerGroups: []
+  producesTopics:
+  - coffee.pricing.lifecycle.v1
+  httpDependencies: []
+  retryPolicy:
+    owner: pricing-api
+    maxAttempts: 3
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: true
+    topic: null
+    mode: operator-review-before-replay
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=pricing-api]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: disable-workload-and-restore-last-accepted-registry
+- name: pricing-projection
+  owner: pricing
+  role: kafka-consumer
+  productionCritical: true
+  database: pricing
+  consumes:
+  - coffee.catalog.pricing.v1
+  produces:
+  - coffee.pricing.lifecycle.v1
+  composeService: pricing-projection
+  kubernetes: Deployment
+  workloadIdentity: pricing-projection
+  entrypoint: platform/apps/pricing-projection
+  dbPrincipal: pricing_projection_rw
+  dbAccess: readwrite
+  consumesTopics:
+  - coffee.catalog.pricing.v1
+  consumerGroups:
+  - pricing-projection
+  producesTopics:
+  - coffee.pricing.lifecycle.v1
+  httpDependencies: []
+  retryPolicy:
+    owner: pricing-projection
+    maxAttempts: 5
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: true
+    topic: null
+    mode: operator-review-before-replay
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=pricing-projection]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: pause-consumer-drain-replay-safe-offsets-restore-registry
+- name: pricing-delivery-calculator
+  owner: pricing
+  role: kafka-worker
+  productionCritical: true
+  database: pricing
+  consumes:
+  - coffee.invoices.procurement-cost.v1
+  produces:
+  - coffee.pricing.lifecycle.v1
+  composeService: pricing-delivery-calculator
+  kubernetes: Deployment
+  workloadIdentity: pricing-delivery-calculator
+  entrypoint: platform/apps/pricing-delivery-calculator
+  dbPrincipal: pricing_delivery_calculator_rw
+  dbAccess: readwrite
+  consumesTopics:
+  - coffee.invoices.procurement-cost.v1
+  consumerGroups:
+  - pricing-delivery-calculator
+  producesTopics:
+  - coffee.pricing.lifecycle.v1
+  httpDependencies: []
+  retryPolicy:
+    owner: pricing-delivery-calculator
+    maxAttempts: 5
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: true
+    topic: null
+    mode: operator-review-before-replay
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=pricing-delivery-calculator]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: pause-consumer-drain-replay-safe-offsets-restore-registry
+- name: orders-pricing-projection
+  owner: orders
+  role: kafka-consumer
+  productionCritical: true
+  database: orders
+  consumes:
+  - coffee.pricing.lifecycle.v1
+  produces: []
+  composeService: orders-pricing-projection
+  kubernetes: Deployment
+  workloadIdentity: orders-pricing-projection
+  entrypoint: platform/apps/orders-pricing-projection
+  dbPrincipal: orders_pricing_projection_rw
+  dbAccess: readwrite
+  consumesTopics:
+  - coffee.pricing.lifecycle.v1
+  consumerGroups:
+  - orders-pricing-projection
+  producesTopics: []
+  httpDependencies: []
+  retryPolicy:
+    owner: orders-pricing-projection
+    maxAttempts: 5
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: true
+    topic: null
+    mode: operator-review-before-replay
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=orders-pricing-projection]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: pause-consumer-drain-replay-safe-offsets-restore-registry
+- name: order-import-worker
+  owner: orders
+  role: kafka-worker
+  productionCritical: false
+  database: orders
+  consumes:
+  - coffee.orders.import.commands.v1
+  produces:
+  - coffee.orders.import.events.v1
+  composeService: order-import-worker
+  kubernetes: Deployment
+  workloadIdentity: order-import-worker
+  entrypoint: platform/apps/order-import-worker
+  dbPrincipal: orders_import_worker_rw
+  dbAccess: readwrite
+  consumesTopics:
+  - coffee.orders.import.commands.v1
+  consumerGroups:
+  - order-import-worker
+  producesTopics:
+  - coffee.orders.import.events.v1
+  httpDependencies:
+  - artifact-storage
+  - catalog
+  - customer
+  retryPolicy:
+    owner: order-import-worker
+    maxAttempts: 3
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: true
+    topic: null
+    mode: operator-review-before-replay
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=order-import-worker]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: pause-consumer-drain-replay-safe-offsets-restore-registry
+- name: order-export-worker
+  owner: orders
+  role: kafka-worker
+  productionCritical: false
+  database: orders
+  consumes:
+  - coffee.orders.export.commands.v1
+  produces:
+  - coffee.orders.export.events.v1
+  composeService: order-export-worker
+  kubernetes: Deployment
+  workloadIdentity: order-export-worker
+  entrypoint: platform/apps/order-export-worker
+  dbPrincipal: orders_export_worker_rw
+  dbAccess: read
+  consumesTopics:
+  - coffee.orders.export.commands.v1
+  consumerGroups:
+  - order-export-worker
+  producesTopics:
+  - coffee.orders.export.events.v1
+  httpDependencies:
+  - artifact-storage
+  retryPolicy:
+    owner: order-export-worker
+    maxAttempts: 3
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: true
+    topic: null
+    mode: operator-review-before-replay
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=order-export-worker]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: pause-consumer-drain-replay-safe-offsets-restore-registry
+- name: work-center-projection
+  owner: work-center
+  role: multi-topic-projection
+  productionCritical: false
+  database: work-center
+  consumes:
+  - coffee.orders.lifecycle.v1
+  - coffee.catalog.availability.v1
+  - coffee.catalog.mapping.v1
+  - coffee.aroma.cart.events.v1
+  - coffee.invoices.events.v1
+  - coffee.payments.lifecycle.v1
+  - coffee.customer.lifecycle.v1
+  - coffee.pricing.lifecycle.v1
+  - coffee.orders.import.events.v1
+  - coffee.orders.export.events.v1
+  produces: []
+  composeService: work-center-projection
+  kubernetes: Deployment
+  workloadIdentity: work-center-projection
+  entrypoint: platform/apps/work-center-projection
+  dbPrincipal: work_center_projection_rw
+  dbAccess: readwrite
+  consumesTopics:
+  - coffee.orders.lifecycle.v1
+  - coffee.catalog.availability.v1
+  - coffee.catalog.mapping.v1
+  - coffee.aroma.cart.events.v1
+  - coffee.invoices.events.v1
+  - coffee.payments.lifecycle.v1
+  - coffee.customer.lifecycle.v1
+  - coffee.pricing.lifecycle.v1
+  - coffee.orders.import.events.v1
+  - coffee.orders.export.events.v1
+  consumerGroups:
+  - work-center-projection
+  producesTopics: []
+  httpDependencies: []
+  retryPolicy:
+    owner: work-center-projection
+    maxAttempts: 5
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: true
+    topic: null
+    mode: operator-review-before-replay
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=work-center-projection]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: pause-consumer-drain-replay-safe-offsets-restore-registry
+- name: work-center-api
+  owner: work-center
+  role: internal-http
+  productionCritical: false
+  database: work-center
+  consumes: []
+  produces: []
+  composeService: work-center-api
+  kubernetes: Deployment
+  workloadIdentity: work-center-api
+  entrypoint: platform/apps/work-center-api
+  dbPrincipal: work_center_api_rw
+  dbAccess: read
+  consumesTopics: []
+  consumerGroups: []
+  producesTopics: []
+  httpDependencies:
+  - work-center-db
+  retryPolicy:
+    owner: work-center-api
+    maxAttempts: 3
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: false
+    topic: null
+    mode: not-applicable
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=work-center-api]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: disable-route-restore-last-accepted-registry
+- name: channel-media-worker
+  owner: channel-platform
+  role: artifact-worker
+  productionCritical: false
+  database: null
+  consumes: []
+  produces: []
+  composeService: channel-media-worker
+  kubernetes: Deployment
+  workloadIdentity: channel-media-worker
+  entrypoint: platform/apps/channel-media-worker
+  dbPrincipal: none
+  dbAccess: none
+  consumesTopics: []
+  consumerGroups: []
+  producesTopics: []
+  httpDependencies:
+  - artifact-storage
+  retryPolicy:
+    owner: channel-media-worker
+    maxAttempts: 3
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: false
+    topic: null
+    mode: artifact-quarantine-and-operator-review
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=channel-media-worker]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: stop-worker-preserve-quarantine-and-restore-registry
+- name: channel-transcription-worker
+  owner: channel-platform
+  role: artifact-worker
+  productionCritical: false
+  database: null
+  consumes: []
+  produces: []
+  composeService: channel-transcription-worker
+  kubernetes: Deployment
+  workloadIdentity: channel-transcription-worker
+  entrypoint: platform/apps/channel-transcription-worker
+  dbPrincipal: none
+  dbAccess: none
+  consumesTopics: []
+  consumerGroups: []
+  producesTopics: []
+  httpDependencies:
+  - artifact-storage
+  retryPolicy:
+    owner: channel-transcription-worker
+    maxAttempts: 3
+    mode: bounded-exponential-jitter
+    unknownOutcome: reconcile
+  dlqPolicy:
+    enabled: false
+    topic: null
+    mode: artifact-quarantine-and-operator-review
+  activationEvidence:
+    required: true
+    status: specification-only
+    refs:
+    - platform/evidence/contracts/behavior/runtime-workload-registry.delta.yml#addWorkloads[name=channel-transcription-worker]
+  rollbackEvidence:
+    required: true
+    status: specification-only
+    procedure: stop-worker-preserve-quarantine-and-restore-registry
+resultingRuntimeRoles: 42

@@ -1,0 +1,113 @@
+version: 2
+baselineRuntimeRoles: 32
+addWorkloads:
+- name: pricing-api
+  owner: pricing
+  role: internal-http
+  productionCritical: true
+  database: pricing
+  consumes: []
+  produces:
+  - coffee.pricing.lifecycle.v1
+  composeService: pricing-api
+  kubernetes: Deployment
+- name: pricing-projection
+  owner: pricing
+  role: kafka-consumer
+  productionCritical: true
+  database: pricing
+  consumes:
+  - coffee.catalog.pricing.v1
+  produces:
+  - coffee.pricing.lifecycle.v1
+  composeService: pricing-projection
+  kubernetes: Deployment
+- name: pricing-delivery-calculator
+  owner: pricing
+  role: kafka-worker
+  productionCritical: true
+  database: pricing
+  consumes:
+  - coffee.invoices.procurement-cost.v1
+  produces:
+  - coffee.pricing.lifecycle.v1
+  composeService: pricing-delivery-calculator
+  kubernetes: Deployment
+- name: orders-pricing-projection
+  owner: orders
+  role: kafka-consumer
+  productionCritical: true
+  database: orders
+  consumes:
+  - coffee.pricing.lifecycle.v1
+  produces: []
+  composeService: orders-pricing-projection
+  kubernetes: Deployment
+- name: order-import-worker
+  owner: orders
+  role: kafka-worker
+  productionCritical: false
+  database: orders
+  consumes:
+  - coffee.orders.import.commands.v1
+  produces:
+  - coffee.orders.import.events.v1
+  composeService: order-import-worker
+  kubernetes: Deployment
+- name: order-export-worker
+  owner: orders
+  role: kafka-worker
+  productionCritical: false
+  database: orders
+  consumes:
+  - coffee.orders.export.commands.v1
+  produces:
+  - coffee.orders.export.events.v1
+  composeService: order-export-worker
+  kubernetes: Deployment
+- name: work-center-projection
+  owner: work-center
+  role: multi-topic-projection
+  productionCritical: false
+  database: work-center
+  consumes:
+  - coffee.orders.lifecycle.v1
+  - coffee.catalog.availability.v1
+  - coffee.catalog.mapping.v1
+  - coffee.aroma.cart.events.v1
+  - coffee.invoices.events.v1
+  - coffee.payments.lifecycle.v1
+  - coffee.customer.lifecycle.v1
+  - coffee.pricing.lifecycle.v1
+  - coffee.orders.import.events.v1
+  produces: []
+  composeService: work-center-projection
+  kubernetes: Deployment
+- name: work-center-api
+  owner: work-center
+  role: internal-http
+  productionCritical: false
+  database: work-center
+  consumes: []
+  produces: []
+  composeService: work-center-api
+  kubernetes: Deployment
+- name: channel-media-worker
+  owner: channel-platform
+  role: artifact-worker
+  productionCritical: false
+  database: null
+  consumes: []
+  produces: []
+  composeService: channel-media-worker
+  kubernetes: Deployment
+- name: channel-transcription-worker
+  owner: channel-platform
+  role: artifact-worker
+  productionCritical: false
+  database: null
+  consumes: []
+  produces: []
+  composeService: channel-transcription-worker
+  kubernetes: Deployment
+resultingRuntimeRoles: 42

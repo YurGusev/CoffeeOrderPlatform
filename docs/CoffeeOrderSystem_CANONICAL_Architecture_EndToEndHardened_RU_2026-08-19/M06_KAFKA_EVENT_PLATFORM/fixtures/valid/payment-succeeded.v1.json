@@ -1,0 +1,8 @@
+{
+  "paymentIntentRef": "paymentIntentRef-ref",
+  "paymentRequirementRef": "paymentRequirementRef-ref",
+  "orderRef": "orderRef-ref",
+  "amountMinor": "1",
+  "currency": "RUB",
+  "proofRef": "proofRef-ref"
+}

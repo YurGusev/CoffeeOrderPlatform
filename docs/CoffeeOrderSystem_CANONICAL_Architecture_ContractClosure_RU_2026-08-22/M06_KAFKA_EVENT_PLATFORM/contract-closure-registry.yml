@@ -1,0 +1,449 @@
+version: 1
+authority: additive-closure
+baseline:
+  canonicalRelease: CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19
+  topicRegistry: M06_KAFKA_EVENT_PLATFORM/kafka-topic-registry.yml
+  runtimeWorkloadRegistry: M20_SERVICE_ORCHESTRATION/runtime-workload-registry.yml
+revision:
+  topicRegistry: kafka-topic-registry.delta.yml
+  messageSchemaRegistry: message-schema-registry.delta.yml
+  workloadRegistry: ../M20_SERVICE_ORCHESTRATION/runtime-workload-registry.delta.yml
+materialization:
+  topicMergeKey: name
+  groupMergeKey:
+  - topic
+  - consumerGroup
+  bindingKey:
+  - topic
+  - consumerGroup
+  producerRule: producerRef-must-exist-in-roleCatalog-and-be-executable
+  consumerRule: one-exact-roleRef-for-each-topic-consumerGroup
+  missingConsumesTopicsRule: derive-only-from-this-registry-binding; never-from-empty-baseline-field
+  crossTopicGroupRule: allow-only-when-roleCatalog-documents-canonical-multi-topic-projection
+  undeclaredInteractionRule: reject-if-no-M20-allowed-edge-or-topic-binding
+  logicalProducerScope:
+    status: authority-gap
+    unresolvedRoleRefs:
+    - orders
+    - catalog
+    - payments
+    - customer
+    - invoices
+    - platform-notifications
+    runtimeEvidence: excluded
+    runtimeRoleCount: excluded
+    resolution: materialize-audited-runtime-role-before-runtime-claim
+  unresolvedProducerRule: retain-declared-binding-and-report-authority-gap
+artifactRefPolicy:
+  mediaAndTranscription:
+    transport: artifact-storage
+    kafkaPayload: ArtifactRef-only
+    bytesField: forbidden
+    requiredArtifactRefFields:
+    - artifactRef
+    - ownerContext
+    - artifactType
+    - schemaVersion
+    - sha256
+    - byteSize
+    - contentType
+    - createdAtUtc
+roleCatalog:
+- roleRef: channel-ingress
+  owner: channel-platform
+  executable: true
+  executableIdentity: platform/apps/channel-ingress
+  runtimeSource: baseline-runtime-registry
+- roleRef: channel-intake
+  owner: channel-platform
+  executable: true
+  executableIdentity: platform/apps/channel-intake
+  runtimeSource: baseline-runtime-registry
+- roleRef: hermes-dispatcher
+  owner: agent-platform
+  executable: true
+  executableIdentity: platform/apps/hermes-dispatcher
+  runtimeSource: baseline-runtime-registry
+- roleRef: channel-response-mapper
+  owner: channel-platform
+  executable: true
+  executableIdentity: platform/apps/channel-response-mapper
+  runtimeSource: baseline-runtime-registry
+- roleRef: platform-notifications
+  owner: platform
+  executable: true
+  executableIdentity: platform/apps/platform-notifications
+  runtimeSource: canonical-logical-producer
+  evidenceStatus: declared-not-runtime-proven
+- roleRef: channel-egress
+  owner: channel-platform
+  executable: true
+  executableIdentity: platform/apps/channel-egress
+  runtimeSource: baseline-runtime-registry
+- roleRef: operations-projections
+  owner: operations
+  executable: true
+  executableIdentity: platform/apps/operations-projections
+  runtimeSource: baseline-runtime-registry
+  crossTopicProjection: canonical
+- roleRef: orders
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/orders
+  runtimeSource: canonical-logical-producer
+  evidenceStatus: declared-not-runtime-proven
+- roleRef: payments-order-consumer
+  owner: payments
+  executable: true
+  executableIdentity: platform/apps/payments-order-consumer
+  runtimeSource: baseline-runtime-registry
+- roleRef: work-center-projection
+  owner: work-center
+  executable: true
+  executableIdentity: platform/apps/work-center-projection
+  runtimeSource: revision-runtime-registry
+  crossTopicProjection: canonical
+- roleRef: catalog
+  owner: catalog
+  executable: true
+  executableIdentity: platform/apps/catalog
+  runtimeSource: canonical-logical-producer
+  evidenceStatus: declared-not-runtime-proven
+- roleRef: catalog-supplier-sync
+  owner: catalog
+  executable: true
+  executableIdentity: platform/apps/catalog-supplier-sync
+  runtimeSource: baseline-runtime-registry
+- roleRef: catalog-search-indexer
+  owner: catalog
+  executable: true
+  executableIdentity: platform/apps/catalog-search-indexer
+  runtimeSource: baseline-runtime-registry
+- roleRef: orders-catalog-projection
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/orders-catalog-projection
+  runtimeSource: baseline-runtime-registry
+- roleRef: orders-aroma-preparation
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/orders-aroma-preparation
+  runtimeSource: baseline-runtime-registry
+- roleRef: catalog-mapping-resolver
+  owner: catalog
+  executable: true
+  executableIdentity: platform/apps/catalog-mapping-resolver
+  runtimeSource: baseline-runtime-registry
+- roleRef: aroma-convergence
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/aroma-convergence
+  runtimeSource: baseline-runtime-registry
+- roleRef: api-internal
+  owner: platform
+  executable: true
+  executableIdentity: platform/apps/api-internal
+  runtimeSource: baseline-runtime-registry
+- roleRef: invoice-intake
+  owner: invoices
+  executable: true
+  executableIdentity: platform/apps/invoice-intake
+  runtimeSource: baseline-runtime-registry
+- roleRef: invoices
+  owner: invoices
+  executable: true
+  executableIdentity: platform/apps/invoices
+  runtimeSource: canonical-logical-producer
+  evidenceStatus: declared-not-runtime-proven
+- roleRef: invoices-command-handler
+  owner: invoices
+  executable: true
+  executableIdentity: platform/apps/invoices-worker
+  runtimeSource: baseline-runtime-registry
+- roleRef: orders-invoice-consumer
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/orders-invoice-consumer
+  runtimeSource: baseline-runtime-registry
+- roleRef: payments-command-handler
+  owner: payments
+  executable: true
+  executableIdentity: platform/apps/payments-command-handler
+  runtimeSource: baseline-runtime-registry
+- roleRef: payments
+  owner: payments
+  executable: true
+  executableIdentity: platform/apps/payments
+  runtimeSource: canonical-logical-producer
+  evidenceStatus: declared-not-runtime-proven
+- roleRef: orders-payment-consumer
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/orders-payment-consumer
+  runtimeSource: baseline-runtime-registry
+- roleRef: orders-aroma-event-projector
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/orders-aroma-event-projector
+  runtimeSource: baseline-runtime-registry
+- roleRef: aroma-observer
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/aroma-observer
+  runtimeSource: baseline-runtime-registry
+- roleRef: realtime-gateway
+  owner: realtime-platform
+  executable: true
+  executableIdentity: platform/apps/realtime-gateway
+  runtimeSource: baseline-runtime-registry
+- roleRef: customer
+  owner: customer
+  executable: true
+  executableIdentity: platform/apps/customer
+  runtimeSource: canonical-logical-producer
+  evidenceStatus: declared-not-runtime-proven
+- roleRef: pricing-projection
+  owner: pricing
+  executable: true
+  executableIdentity: platform/apps/pricing-projection
+  runtimeSource: revision-runtime-registry
+- roleRef: pricing-api
+  owner: pricing
+  executable: true
+  executableIdentity: platform/apps/pricing-api
+  runtimeSource: revision-runtime-registry
+- roleRef: pricing-delivery-calculator
+  owner: pricing
+  executable: true
+  executableIdentity: platform/apps/pricing-delivery-calculator
+  runtimeSource: revision-runtime-registry
+- roleRef: orders-pricing-projection
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/orders-pricing-projection
+  runtimeSource: revision-runtime-registry
+- roleRef: order-import-worker
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/order-import-worker
+  runtimeSource: revision-runtime-registry
+- roleRef: order-export-worker
+  owner: orders
+  executable: true
+  executableIdentity: platform/apps/order-export-worker
+  runtimeSource: revision-runtime-registry
+bindings:
+- topic: coffee.channels.inbound.v1
+  producerRefs:
+  - channel-ingress
+  consumers:
+  - consumerGroup: channel-intake
+    roleRef: channel-intake
+- topic: coffee.agent.turn.requested.v1
+  producerRefs:
+  - channel-intake
+  consumers:
+  - consumerGroup: hermes-dispatcher
+    roleRef: hermes-dispatcher
+- topic: coffee.agent.turn.completed.v1
+  producerRefs:
+  - hermes-dispatcher
+  consumers:
+  - consumerGroup: channel-response-mapper
+    roleRef: channel-response-mapper
+  - consumerGroup: agent-telemetry
+    roleRef: operations-projections
+- topic: coffee.agent.turn.failed.v1
+  producerRefs:
+  - hermes-dispatcher
+  consumers:
+  - consumerGroup: channel-response-mapper
+    roleRef: channel-response-mapper
+  - consumerGroup: agent-operations
+    roleRef: operations-projections
+- topic: coffee.channels.outbound.v1
+  producerRefs:
+  - channel-response-mapper
+  - platform-notifications
+  consumers:
+  - consumerGroup: channel-egress
+    roleRef: channel-egress
+- topic: coffee.channels.delivery.v1
+  producerRefs:
+  - channel-egress
+  consumers:
+  - consumerGroup: channel-operations
+    roleRef: operations-projections
+- topic: coffee.orders.lifecycle.v1
+  producerRefs:
+  - orders
+  consumers:
+  - consumerGroup: payments-order-events
+    roleRef: payments-order-consumer
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.catalog.products.v1
+  producerRefs:
+  - catalog
+  consumers:
+  - consumerGroup: catalog-indexing
+    roleRef: catalog-search-indexer
+- topic: coffee.catalog.availability.v1
+  producerRefs:
+  - catalog
+  consumers:
+  - consumerGroup: orders-catalog-projection
+    roleRef: orders-catalog-projection
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.catalog.mapping.commands.v1
+  producerRefs:
+  - orders-aroma-preparation
+  consumers:
+  - consumerGroup: catalog-mapping-resolver
+    roleRef: catalog-mapping-resolver
+- topic: coffee.catalog.mapping.v1
+  producerRefs:
+  - catalog
+  consumers:
+  - consumerGroup: orders-catalog-mapping
+    roleRef: orders-catalog-projection
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.catalog.sync.commands.v1
+  producerRefs:
+  - aroma-convergence
+  - api-internal
+  consumers:
+  - consumerGroup: catalog-supplier-sync
+    roleRef: catalog-supplier-sync
+- topic: coffee.invoices.commands.v1
+  producerRefs:
+  - orders
+  - invoice-intake
+  consumers:
+  - consumerGroup: invoices-command-handler
+    roleRef: invoices-command-handler
+- topic: coffee.invoices.events.v1
+  producerRefs:
+  - invoices
+  consumers:
+  - consumerGroup: orders-invoice-events
+    roleRef: orders-invoice-consumer
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.payments.commands.v1
+  producerRefs:
+  - orders
+  consumers:
+  - consumerGroup: payments-command-handler
+    roleRef: payments-command-handler
+- topic: coffee.payments.lifecycle.v1
+  producerRefs:
+  - payments
+  consumers:
+  - consumerGroup: orders-payment-events
+    roleRef: orders-payment-consumer
+  - consumerGroup: payment-audit
+    roleRef: operations-projections
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.aroma.preparation.commands.v1
+  producerRefs:
+  - orders
+  consumers:
+  - consumerGroup: orders-aroma-preparation
+    roleRef: orders-aroma-preparation
+- topic: coffee.aroma.cart.commands.v1
+  producerRefs:
+  - orders
+  consumers:
+  - consumerGroup: aroma-convergence
+    roleRef: aroma-convergence
+- topic: coffee.aroma.cart.events.v1
+  producerRefs:
+  - aroma-convergence
+  - aroma-observer
+  consumers:
+  - consumerGroup: orders-aroma-events
+    roleRef: orders-aroma-event-projector
+  - consumerGroup: aroma-operations
+    roleRef: operations-projections
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.realtime.invalidate.v1
+  producerRefs:
+  - orders
+  - catalog
+  - invoices
+  - payments
+  - customer
+  consumers:
+  - consumerGroup: ephemeral-per-replica
+    roleRef: realtime-gateway
+    bindingMode: ephemeral-per-replica
+- topic: coffee.customer.lifecycle.v1
+  producerRefs:
+  - customer
+  consumers:
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.catalog.pricing.v1
+  producerRefs:
+  - catalog
+  consumers:
+  - consumerGroup: pricing-projection
+    roleRef: pricing-projection
+- topic: coffee.pricing.lifecycle.v1
+  producerRefs:
+  - pricing-projection
+  - pricing-api
+  - pricing-delivery-calculator
+  consumers:
+  - consumerGroup: orders-pricing-projection
+    roleRef: orders-pricing-projection
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.invoices.procurement-cost.v1
+  producerRefs:
+  - invoices
+  consumers:
+  - consumerGroup: pricing-delivery-calculator
+    roleRef: pricing-delivery-calculator
+- topic: coffee.orders.import.commands.v1
+  producerRefs:
+  - orders
+  consumers:
+  - consumerGroup: order-import-worker
+    roleRef: order-import-worker
+- topic: coffee.orders.import.events.v1
+  producerRefs:
+  - order-import-worker
+  consumers:
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+- topic: coffee.orders.export.commands.v1
+  producerRefs:
+  - orders
+  consumers:
+  - consumerGroup: order-export-worker
+    roleRef: order-export-worker
+- topic: coffee.orders.export.events.v1
+  producerRefs:
+  - order-export-worker
+  consumers:
+  - consumerGroup: work-center-projection
+    roleRef: work-center-projection
+authorityGaps:
+- roleRef: orders
+  gap: baseline-evidence-names-bounded-context-producer-but-not-an-executable-workload-record
+- roleRef: catalog
+  gap: baseline-evidence-names-bounded-context-producer-but-not-an-executable-workload-record
+- roleRef: payments
+  gap: baseline-evidence-names-bounded-context-producer-but-not-an-executable-workload-record
+- roleRef: customer
+  gap: revision-topic-producer-has-no-baseline-executable-workload-record
+- roleRef: invoices
+  gap: baseline-evidence-names-bounded-context-producer-but-not-an-executable-workload-record
+- roleRef: platform-notifications
+  gap: baseline-topic-producer-has-no-baseline-executable-workload-record

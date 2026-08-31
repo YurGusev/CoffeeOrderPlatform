@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/invoicepdflinked.v1.schema.json",
+  "title": "InvoicePdfLinked.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "clientInvoiceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkoutSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "wholesaleSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "pdfArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifactRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteSize": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "schemaVersion": {
+          "const": 1
+        }
+      },
+      "required": [
+        "artifactRef",
+        "sha256",
+        "byteSize",
+        "schemaVersion"
+      ]
+    },
+    "pdfProofHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "required": [
+    "clientInvoiceRef",
+    "checkoutSnapshotRef",
+    "wholesaleSnapshotRef",
+    "pdfArtifact",
+    "pdfProofHash"
+  ]
+}

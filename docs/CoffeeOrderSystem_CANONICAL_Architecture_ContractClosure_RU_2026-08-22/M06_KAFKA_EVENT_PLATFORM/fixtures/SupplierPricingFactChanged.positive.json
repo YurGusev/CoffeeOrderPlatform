@@ -1,0 +1,12 @@
+{
+  "productRef": "prd_1",
+  "productVariantRef": "var_1",
+  "catalogSnapshotRef": "cat_10",
+  "supplierListUnitPrice": "1000.0000",
+  "currency": "RUB",
+  "specialDiscountRuleRef": "disc_10",
+  "specialDiscountPercent": "10.0000",
+  "minimumWeightGrams": null,
+  "minimumQuantity": null,
+  "observedAtUtc": "2026-08-20T00:00:00Z"
+}

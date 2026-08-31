@@ -1,0 +1,32 @@
+CoffeeOrderSystem/
+├── src/                       legacy/reference .NET
+├── platform/
+│   ├── apps/
+│   │   ├── web
+│   │   ├── api-public
+│   │   ├── api-agent
+│   │   ├── api-internal
+│   │   ├── channel-ingress
+│   │   ├── channel-egress
+│   │   ├── realtime-gateway
+│   │   ├── hermes-dispatcher
+│   │   ├── catalog-supplier-sync
+│   │   ├── orders-aroma-preparation
+│   │   ├── aroma-observer
+│   │   ├── aroma-convergence
+│   │   ├── aroma-checkout-poller
+│   │   ├── invoices-worker
+│   │   ├── payments-worker
+│   │   └── aroma-gateway
+│   ├── modules/
+│   │   ├── customer
+│   │   ├── catalog
+│   │   ├── orders
+│   │   ├── invoices
+│   │   └── payments
+│   ├── integrations/aroma-provider
+│   └── packages/contracts,http-runtime,http-client,kafka-runtime,database,observability,security,idempotency,testkit
+├── edge/
+├── infra/
+├── hermes/
+└── training/

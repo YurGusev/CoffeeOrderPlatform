@@ -1,0 +1,78 @@
+version: 3
+revisionId: DEC-PLT-ARCH-CONTRACT-CLOSURE-001
+revisionDate: 2026-08-22
+revisionType: canonical-revision-overlay
+parentRevision:
+  name: PrivateSingleOwnerSecurityException
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_PrivateSingleOwnerSecurityException_RU_2026-08-20
+  treeSha256: 50802c7a119b4a2a9c6bcfaadb82e0144c5bb65bf064952eba6039f7544e2236
+revisionChain:
+- name: EndToEndHardened-baseline
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19
+- name: BusinessParityPricingV2
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20
+- name: PrivateSingleOwnerSecurityException
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_PrivateSingleOwnerSecurityException_RU_2026-08-20
+- name: ArchitectureContractClosure
+  root: docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22
+adds:
+- M06_KAFKA_EVENT_PLATFORM/contract-closure-registry.schema.json
+- M06_KAFKA_EVENT_PLATFORM/contract-closure-registry.yml
+- M06_KAFKA_EVENT_PLATFORM/fixtures/channel-media-processing-requested.v1.valid.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/channel-transcription-requested.v1.valid.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/media-transcription-artifact-ref.invalid.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/media-transcription-artifact-ref.positive.json
+- M06_KAFKA_EVENT_PLATFORM/kafka-topic-registry.closure.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/artifact-ref-only-media-transcription.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/channel-media-processing-requested.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/channel-transcription-requested.v1.schema.json
+- M19_API_ARCHITECTURE/API_ROUTE_AUTHORITY.md
+- M19_API_ARCHITECTURE/PROOF_AND_EXCLUSIONS.md
+- M19_API_ARCHITECTURE/api-contract.json
+- M19_API_ARCHITECTURE/api-contract.schema.json
+- M19_API_ARCHITECTURE/api-route-contracts.json
+- M19_API_ARCHITECTURE/openapi/agent-v1.json
+- M19_API_ARCHITECTURE/openapi/client-v1.json
+- M19_API_ARCHITECTURE/openapi/internal-v1.json
+- M20_SERVICE_ORCHESTRATION/RUNTIME_AND_INTERACTION_AUTHORITY.md
+- M20_SERVICE_ORCHESTRATION/runtime-workload-registry.closure.json
+- M20_SERVICE_ORCHESTRATION/runtime-workload-registry.delta.schema.json
+- M20_SERVICE_ORCHESTRATION/service-interaction-matrix.delta.csv
+- M20_SERVICE_ORCHESTRATION/service-interaction-policy.closure.json
+- M20_SERVICE_ORCHESTRATION/service-interaction-policy.schema.json
+- M21_OPERATOR_WORK_CENTER/OWNER_COMMAND_ALLOWLIST_AND_AUDIT.md
+- M21_OPERATOR_WORK_CENTER/owner-command-matrix.json
+- M21_OPERATOR_WORK_CENTER/owner-command-matrix.schema.json
+- M21_OPERATOR_WORK_CENTER/test_owner_command_matrix.py
+replaces:
+- M06_KAFKA_EVENT_PLATFORM/README.md
+- M06_KAFKA_EVENT_PLATFORM/fixtures/CustomerLifecycleChanged.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/DeliveryCoefficientActivated.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/OrderExportReady.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/OrderExportRequested.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/OrderImportParseRequested.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/OrderImportPreviewReady.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/PricingPolicyChanged.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/ProcurementGoodsCostFinalized.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/ProductPriceProjectionChanged.positive.json
+- M06_KAFKA_EVENT_PLATFORM/fixtures/SupplierPricingFactChanged.positive.json
+- M06_KAFKA_EVENT_PLATFORM/kafka-topic-registry.delta.yml
+- M06_KAFKA_EVENT_PLATFORM/message-schema-registry.delta.yml
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/customer-lifecycle-changed.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/delivery-coefficient-activated.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/order-export-ready.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/order-export-requested.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/order-import-parse-requested.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/order-import-preview-ready.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/pricing-policy-changed.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/procurement-goods-cost-finalized.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/product-price-projection-changed.v1.schema.json
+- M06_KAFKA_EVENT_PLATFORM/payload-schemas/supplier-pricing-fact-changed.v1.schema.json
+- M19_API_ARCHITECTURE/README.md
+- M20_SERVICE_ORCHESTRATION/README.md
+- M20_SERVICE_ORCHESTRATION/runtime-workload-registry.delta.yml
+- M20_SERVICE_ORCHESTRATION/service-interaction-policy.delta.yml
+- PREVIOUS_RELEASE_LOCK.json
+- README.md
+- REVISION_MANIFEST.yml
+- SHA256SUMS.txt

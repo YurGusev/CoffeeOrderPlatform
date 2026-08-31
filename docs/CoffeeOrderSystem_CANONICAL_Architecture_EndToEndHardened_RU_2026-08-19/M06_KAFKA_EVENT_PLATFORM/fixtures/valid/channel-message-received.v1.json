@@ -1,0 +1,10 @@
+{
+  "messageRef": "messageRef-ref",
+  "conversationRef": "conversationRef-ref",
+  "channelIdentityRef": "channelIdentityRef-ref",
+  "identityEpoch": "1",
+  "providerEventRef": "providerEventRef-ref",
+  "channel": "VK",
+  "attachmentRefs": [],
+  "receivedAtUtc": "2026-08-19T12:00:00Z"
+}

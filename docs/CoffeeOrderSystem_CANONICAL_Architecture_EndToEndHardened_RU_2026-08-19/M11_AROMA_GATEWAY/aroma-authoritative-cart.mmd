@@ -1,0 +1,17 @@
+flowchart LR
+    Confirm[Orders Confirm] --> Desired[Orders Desired Sources]
+    Desired --> Prep[Orders AROMA Preparation]
+    Prep --> MapCmd[Kafka Catalog Mapping Command]
+    MapCmd --> Catalog[Catalog]
+    Catalog --> GW[AROMA Gateway safe catalog reads]
+    Catalog --> Facts[Kafka Mapping/Availability Facts]
+    Facts --> Desired
+    Desired --> ConvState[Convergence State]
+    Observer[AROMA Observer] -->|safe GET| GW
+    GW --> AROMA[AROMA]
+    Observer --> Observed[Orders Observed]
+    Observed --> ConvState
+    ConvState --> Worker[AROMA Convergence]
+    Worker -->|GET -> one mutation -> GET| GW
+    Worker --> Attempts[Attempts / Fence / UnknownOutcome]
+    Worker --> Observed

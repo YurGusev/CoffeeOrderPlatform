@@ -1,0 +1,8 @@
+{
+  "baselineArtifact": "CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_WithAgentSkills_API_RU_2026-08-19.zip",
+  "baselineSha256": "e869535c9c5c0f19d84ff1d2582bd541c4ed1781c44fa5d49836be85235f37f5",
+  "baselineDate": "2026-08-19",
+  "revisionDate": "2026-08-20",
+  "revisionType": "canonical-revision-overlay",
+  "rule": "Все baseline-файлы, не перечисленные как replace/merge/add в REVISION_MANIFEST.yml, сохраняют нормативную силу без изменений."
+}

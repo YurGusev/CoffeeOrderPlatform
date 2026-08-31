@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/closure/runtime-workload-registry-delta.v1.schema.json",
+  "title": "Runtime workload registry additive delta v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "authority",
+    "baselineRuntimeRoles",
+    "materialization",
+    "addWorkloads",
+    "resultingRuntimeRoles"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 3
+    },
+    "authority": {
+      "type": "string",
+      "const": "additive"
+    },
+    "baselineRuntimeRoles": {
+      "type": "integer",
+      "const": 32
+    },
+    "materialization": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "identityKey",
+        "order",
+        "noImplicitBindings",
+        "consumesTopics",
+        "producedTopics",
+        "consumerGroupOwnership",
+        "fieldPolicy"
+      ],
+      "properties": {
+        "identityKey": {
+          "type": "string",
+          "const": "name"
+        },
+        "order": {
+          "type": "string",
+          "const": "baseline-then-addWorkloads"
+        },
+        "noImplicitBindings": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    "addWorkloads": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/workload"
+      }
+    },
+    "resultingRuntimeRoles": {
+      "type": "integer",
+      "const": 42
+    }
+  },
+  "$defs": {
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "owner",
+        "role",
+        "productionCritical",
+        "database",
+        "consumes",
+        "produces",
+        "composeService",
+        "kubernetes",
+        "workloadIdentity",
+        "entrypoint",
+        "dbPrincipal",
+        "dbAccess",
+        "consumesTopics",
+        "consumerGroups",
+        "producesTopics",
+        "httpDependencies",
+        "retryPolicy",
+        "dlqPolicy",
+        "activationEvidence",
+        "rollbackEvidence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "productionCritical": {
+          "type": "boolean"
+        },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "consumes": {
+          "$ref": "#/$defs/topicList"
+        },
+        "produces": {
+          "$ref": "#/$defs/topicList"
+        },
+        "composeService": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kubernetes": {
+          "type": "string",
+          "const": "Deployment"
+        },
+        "workloadIdentity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entrypoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dbPrincipal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dbAccess": {
+          "type": "string",
+          "enum": [
+            "none",
+            "read",
+            "readwrite"
+          ]
+        },
+        "consumesTopics": {
+          "$ref": "#/$defs/topicList"
+        },
+        "consumerGroups": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "producesTopics": {
+          "$ref": "#/$defs/topicList"
+        },
+        "httpDependencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "retryPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "owner",
+            "maxAttempts",
+            "mode",
+            "unknownOutcome"
+          ],
+          "properties": {
+            "owner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxAttempts": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "mode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "unknownOutcome": {
+              "type": "string",
+              "const": "reconcile"
+            }
+          }
+        },
+        "dlqPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "topic",
+            "mode"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "topic": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "mode": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "activationEvidence": {
+          "$ref": "#/$defs/evidence"
+        },
+        "rollbackEvidence": {
+          "$ref": "#/$defs/evidence"
+        }
+      }
+    },
+    "topicList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^coffee\\.[a-z0-9.-]+\\.v[0-9]+$"
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "status"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "const": true
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "procedure": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

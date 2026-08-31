@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/agentturnfailed.v1.schema.json",
+  "title": "AgentTurnFailed.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "turnRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "conversationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "turnSequence": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "errorCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "userSafeFallbackText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "terminal": {
+      "const": true
+    },
+    "failedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "turnRef",
+    "conversationRef",
+    "turnSequence",
+    "errorCode",
+    "userSafeFallbackText",
+    "terminal",
+    "failedAtUtc"
+  ]
+}

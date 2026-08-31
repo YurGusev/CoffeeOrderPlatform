@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/invoicecompensationfailed.v1.schema.json",
+  "title": "InvoiceCompensationFailed.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "compensationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "clientInvoiceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "errorCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "manualReviewRequired": {
+      "type": "boolean"
+    },
+    "occurredAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "compensationRef",
+    "clientInvoiceRef",
+    "errorCode",
+    "manualReviewRequired",
+    "occurredAtUtc"
+  ]
+}

@@ -1,0 +1,671 @@
+{
+  "$schema": "./owner-command-matrix.schema.json",
+  "schemaVersion": 1,
+  "contractId": "m21-owner-command-matrix-2026-08-22",
+  "status": "SPECIFICATION_ONLY",
+  "owner": "operator-work-center",
+  "scope": {
+    "readModelOwner": "operator-work-center",
+    "businessStateOwner": "command-owning-bounded-context",
+    "workCenterDatabaseWrites": "forbidden",
+    "queueResolution": "requires-authoritative-owner-fact",
+    "acceptedActionCount": 8
+  },
+  "commandEnvelope": {
+    "actor": {
+      "required": true,
+      "source": "server-derived authenticated client-v1 operator principal",
+      "clientSupplied": false,
+      "capabilityCheckedByServer": true
+    },
+    "reason": {
+      "required": true,
+      "source": "operator command request",
+      "persistedInAudit": true,
+      "blankOrMissing": "reject"
+    },
+    "expectedVersionOrFingerprint": {
+      "required": true,
+      "source": "owner state or owner-issued preview",
+      "checkedByOwnerBeforeWrite": true,
+      "staleResult": "reject-without-business-write"
+    },
+    "idempotency": {
+      "header": "Idempotency-Key",
+      "required": true,
+      "serverGeneratedFallback": false,
+      "scope": "owning-context-operation-target"
+    },
+    "trace": {
+      "correlationId": {
+        "required": true,
+        "source": "server request/envelope context"
+      },
+      "causationId": {
+        "required": true,
+        "source": "server command or originating event envelope"
+      }
+    },
+    "workCenterItemRef": {
+      "required": true,
+      "purpose": "link the owner command audit record to the projected queue item"
+    }
+  },
+  "commands": [
+    {
+      "id": "reprice-draft",
+      "canonicalAction": "reprice Draft",
+      "accepted": true,
+      "method": "POST",
+      "route": "/api/client-v1/orders/{orderRef}/commands/reprice",
+      "operationId": "repriceDraftOrder",
+      "owningBoundedContext": "orders",
+      "owner": "orders",
+      "capability": "orders.reprice-draft",
+      "actor": {
+        "serverDerived": true,
+        "clientSupplied": false,
+        "source": "authenticated client-v1 operator principal"
+      },
+      "reason": {
+        "required": true,
+        "field": "reason",
+        "storedWithCommandAudit": true
+      },
+      "expectedVersionOrFingerprint": {
+        "required": true,
+        "fields": ["expectedOrderVersion", "pricingVersion", "pricingHash"],
+        "kind": "expectedVersion-and-pricingVersion-and-pricingHash"
+      },
+      "idempotencyKey": {
+        "header": "Idempotency-Key",
+        "required": true
+      },
+      "correlationAndCausation": {
+        "correlationId": "required",
+        "causationId": "required",
+        "serverGeneratedOrPropagated": true
+      },
+      "auditEvent": {
+        "required": true,
+        "eventType": "owner-defined command audit event",
+        "eventId": "server-generated",
+        "fields": ["operationId", "actor", "reason", "expectedOrderVersion", "correlationId", "causationId", "workCenterItemRef"],
+        "owner": "orders"
+      },
+      "outbox": {
+        "required": true,
+        "owner": "orders",
+        "transactional": true,
+        "publication": "orders-owned transactional outbox; no Work Center business write",
+        "topic": null,
+        "topicReason": "M06 does not define a dedicated reprice message type; the owner-local audit/outbox record is authoritative"
+      },
+      "authoritativeCompletionFact": {
+        "required": true,
+        "facts": ["Orders draft quote is Quoted(Current) with the current pricingVersion and pricingHash"],
+        "queueMayResolveOnlyAfterFact": true,
+        "evidence": [
+          "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M22_PRICING/04_ORDER_PRICE_LOCK_AND_STALE_RULES.md",
+          "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M12_ORDERS/10_ORDER_PRICING_AND_PRICE_LOCK.md"
+        ]
+      },
+      "completionFact": "Orders draft quote is Quoted(Current) with the current pricingVersion and pricingHash",
+      "rollback": {
+        "required": true,
+        "owner": "orders",
+        "policy": "retain-prior-draft-quote-on-failure; reject stale without write",
+        "blindRetry": false,
+        "workCenterSql": false
+      },
+      "evidenceOwner": "next-work-center",
+      "evidenceRefs": [
+        "platform/evidence/characterization/characterization-registry.yml#M21-REPAIR-01",
+        "platform/evidence/contracts/work-center/typed-command-contract.yml#commands[id=reprice-draft]"
+      ]
+    },
+    {
+      "id": "resolve-customer-duplicate-link",
+      "canonicalAction": "resolve Customer duplicate/link",
+      "accepted": true,
+      "method": "POST",
+      "route": "/api/client-v1/customers/{ref}/merge",
+      "operationId": "customerMerge",
+      "owningBoundedContext": "customer",
+      "owner": "customer",
+      "capability": "customer.customer-merge",
+      "actor": {
+        "serverDerived": true,
+        "clientSupplied": false,
+        "source": "authenticated client-v1 operator principal"
+      },
+      "reason": {
+        "required": true,
+        "field": "reason",
+        "storedWithCommandAudit": true
+      },
+      "expectedVersionOrFingerprint": {
+        "required": true,
+        "fields": ["expectedVersion", "mergePlanRef"],
+        "kind": "expectedVersion-and-mergePlanRef"
+      },
+      "idempotencyKey": {
+        "header": "Idempotency-Key",
+        "required": true
+      },
+      "correlationAndCausation": {
+        "correlationId": "required",
+        "causationId": "required",
+        "serverGeneratedOrPropagated": true
+      },
+      "auditEvent": {
+        "required": true,
+        "eventType": "owner-defined command audit event",
+        "eventId": "server-generated",
+        "fields": ["operationId", "actor", "reason", "expectedVersion", "correlationId", "causationId", "workCenterItemRef"],
+        "owner": "customer"
+      },
+      "outbox": {
+        "required": true,
+        "owner": "customer",
+        "transactional": true,
+        "publication": "Customer owner transaction and outbox",
+        "topic": "coffee.customer.lifecycle.v1",
+        "topicReason": "CustomerLifecycleChanged.v1 is the owner lifecycle publication consumed by Work Center"
+      },
+      "authoritativeCompletionFact": {
+        "required": true,
+        "facts": ["CustomerLifecycleChanged.v1 with status Merged, customerVersion and redirectCustomerRef"],
+        "queueMayResolveOnlyAfterFact": true,
+        "evidence": [
+          "platform/evidence/contracts/kafka/revision/payload-schemas/customer-lifecycle-changed.v1.schema.json",
+          "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M07_CUSTOMER_CATALOG/CUSTOMER_LIFECYCLE_AND_DUPLICATE_RESOLUTION.md"
+        ]
+      },
+      "completionFact": "CustomerLifecycleChanged.v1 with status Merged, customerVersion and redirectCustomerRef",
+      "rollback": {
+        "required": true,
+        "owner": "customer",
+        "policy": "merge-ledger-compensation-only; historical Order snapshots are not rewritten",
+        "blindRetry": false,
+        "workCenterSql": false
+      },
+      "evidenceOwner": "next-work-center",
+      "evidenceRefs": [
+        "platform/evidence/characterization/characterization-registry.yml#M21-REPAIR-02",
+        "platform/evidence/contracts/work-center/typed-command-contract.yml#commands[id=resolve-customer-duplicate-link]"
+      ]
+    },
+    {
+      "id": "request-catalog-remap",
+      "canonicalAction": "request Catalog remap",
+      "accepted": true,
+      "method": "POST",
+      "route": "/api/client-v1/catalog/mappings/{mappingRef}/commands/remap",
+      "operationId": "requestCatalogRemap",
+      "owningBoundedContext": "catalog",
+      "owner": "catalog",
+      "capability": "catalog.remap",
+      "actor": {
+        "serverDerived": true,
+        "clientSupplied": false,
+        "source": "authenticated client-v1 operator principal"
+      },
+      "reason": {
+        "required": true,
+        "field": "reason",
+        "storedWithCommandAudit": true
+      },
+      "expectedVersionOrFingerprint": {
+        "required": true,
+        "fields": ["expectedVersion", "supplierSnapshotRef"],
+        "kind": "expectedVersion-and-supplierProof"
+      },
+      "idempotencyKey": {
+        "header": "Idempotency-Key",
+        "required": true
+      },
+      "correlationAndCausation": {
+        "correlationId": "required",
+        "causationId": "required",
+        "serverGeneratedOrPropagated": true
+      },
+      "auditEvent": {
+        "required": true,
+        "eventType": "owner-defined command audit event",
+        "eventId": "server-generated",
+        "fields": ["operationId", "actor", "reason", "expectedVersion", "correlationId", "causationId", "workCenterItemRef"],
+        "owner": "catalog"
+      },
+      "outbox": {
+        "required": true,
+        "owner": "catalog",
+        "transactional": true,
+        "publication": "Catalog owner command/outbox",
+        "topic": null,
+        "topicReason": "M06 maps this command topic to the Orders AROMA preparation producer; the Catalog owner command therefore retains an owner-local transactional outbox until a dedicated Catalog producer contract exists"
+      },
+      "authoritativeCompletionFact": {
+        "required": true,
+        "facts": ["CatalogMappingChanged.v1 with a new catalogMappingRevision and a terminal mapping status"],
+        "queueMayResolveOnlyAfterFact": true,
+        "evidence": [
+          "platform/evidence/contracts/kafka/baseline/payload-schemas/catalog-mapping-changed.v1.schema.json",
+          "platform/evidence/contracts/kafka/baseline/payload-schemas/catalog-mapping-resolution-requested.v1.schema.json"
+        ]
+      },
+      "completionFact": "CatalogMappingChanged.v1 with a new catalogMappingRevision and a terminal mapping status",
+      "rollback": {
+        "required": true,
+        "owner": "catalog",
+        "policy": "retain-prior-mapping-until-new-mapping-is verified; compensate through a Catalog owner command",
+        "blindRetry": false,
+        "workCenterSql": false
+      },
+      "evidenceOwner": "next-work-center",
+      "evidenceRefs": [
+        "platform/evidence/characterization/characterization-registry.yml#M21-REPAIR-03",
+        "platform/evidence/contracts/work-center/typed-command-contract.yml#commands[id=request-catalog-remap]"
+      ]
+    },
+    {
+      "id": "trigger-aroma-fresh-reconciliation",
+      "canonicalAction": "trigger AROMA fresh reconciliation",
+      "accepted": true,
+      "method": "POST",
+      "route": "/api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation",
+      "operationId": "requestOrderAromaReconciliation",
+      "owningBoundedContext": "orders",
+      "owner": "orders",
+      "capability": "orders.reconcile-aroma",
+      "actor": {
+        "serverDerived": true,
+        "clientSupplied": false,
+        "source": "authenticated client-v1 operator principal"
+      },
+      "reason": {
+        "required": true,
+        "field": "reason",
+        "storedWithCommandAudit": true
+      },
+      "expectedVersionOrFingerprint": {
+        "required": true,
+        "fields": ["expectedOrderVersion", "ownerEpoch"],
+        "kind": "expectedOrderVersion-and-ownerEpoch"
+      },
+      "idempotencyKey": {
+        "header": "Idempotency-Key",
+        "required": true
+      },
+      "correlationAndCausation": {
+        "correlationId": "required",
+        "causationId": "required",
+        "serverGeneratedOrPropagated": true
+      },
+      "auditEvent": {
+        "required": true,
+        "eventType": "owner-defined command audit event",
+        "eventId": "server-generated",
+        "fields": ["operationId", "actor", "reason", "expectedOrderVersion", "correlationId", "causationId", "workCenterItemRef"],
+        "owner": "orders"
+      },
+      "outbox": {
+        "required": true,
+        "owner": "orders",
+        "transactional": true,
+        "publication": "Orders convergence command through owner outbox",
+        "topic": "coffee.aroma.cart.commands.v1",
+        "topicReason": "AROMA convergence request is an existing Orders-owned command topic"
+      },
+      "authoritativeCompletionFact": {
+        "required": true,
+        "facts": ["AromaConvergenceResult.v1 with outcome Verified"],
+        "queueMayResolveOnlyAfterFact": true,
+        "unknownOutcome": "keep queue open and reconcile with a fresh read; never blind-retry",
+        "evidence": [
+          "platform/evidence/contracts/kafka/baseline/payload-schemas/aroma-converge-requested.v1.schema.json",
+          "platform/evidence/contracts/kafka/baseline/payload-schemas/aroma-convergence-result.v1.schema.json"
+        ]
+      },
+      "completionFact": "AromaConvergenceResult.v1 with outcome Verified",
+      "rollback": {
+        "required": true,
+        "owner": "orders",
+        "policy": "unknown-outcome-fresh-read-no-blind-retry; preserve Desired/Observed/Attempt history",
+        "blindRetry": false,
+        "workCenterSql": false
+      },
+      "evidenceOwner": "next-work-center",
+      "evidenceRefs": [
+        "platform/evidence/characterization/characterization-registry.yml#M21-REPAIR-04",
+        "platform/evidence/contracts/work-center/typed-command-contract.yml#commands[id=trigger-aroma-fresh-reconciliation]"
+      ]
+    },
+    {
+      "id": "save-manual-invoice-allocation",
+      "canonicalAction": "save/manual invoice allocation",
+      "accepted": true,
+      "method": "POST",
+      "route": "/api/client-v1/invoices/{ref}/allocations",
+      "operationId": "invoiceAllocations",
+      "owningBoundedContext": "invoices",
+      "owner": "invoices",
+      "capability": "invoices.invoice-allocations",
+      "actor": {
+        "serverDerived": true,
+        "clientSupplied": false,
+        "source": "authenticated client-v1 operator principal"
+      },
+      "reason": {
+        "required": true,
+        "field": "reason",
+        "storedWithCommandAudit": true
+      },
+      "expectedVersionOrFingerprint": {
+        "required": true,
+        "fields": ["allocationFingerprint", "expectedVersion"],
+        "kind": "allocationFingerprint-and-expectedVersion"
+      },
+      "idempotencyKey": {
+        "header": "Idempotency-Key",
+        "required": true
+      },
+      "correlationAndCausation": {
+        "correlationId": "required",
+        "causationId": "required",
+        "serverGeneratedOrPropagated": true
+      },
+      "auditEvent": {
+        "required": true,
+        "eventType": "owner-defined command audit event",
+        "eventId": "server-generated",
+        "fields": ["operationId", "actor", "reason", "expectedVersion", "allocationFingerprint", "correlationId", "causationId", "workCenterItemRef"],
+        "owner": "invoices"
+      },
+      "outbox": {
+        "required": true,
+        "owner": "invoices",
+        "transactional": true,
+        "publication": "Invoices owner transaction/outbox",
+        "topic": "coffee.invoices.events.v1",
+        "topicReason": "Invoices owns the allocation audit and its lifecycle publication"
+      },
+      "authoritativeCompletionFact": {
+        "required": true,
+        "facts": ["Invoices-owned allocation manifest with exact quantities and actor/reason persisted"],
+        "queueMayResolveOnlyAfterFact": true,
+        "evidence": [
+          "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M10_INVOICES/06_MANUAL_ALLOCATION_AND_RECONCILIATION.md",
+          "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M19_API_ARCHITECTURE/15_CUSTOMER_SEARCH_INVOICE_RECOVERY_API_CONTRACTS.md"
+        ]
+      },
+      "completionFact": "Invoices-owned allocation manifest with exact quantities and actor/reason persisted",
+      "rollback": {
+        "required": true,
+        "owner": "invoices",
+        "policy": "write a new versioned allocation or owner compensation; never delete applied allocation rows",
+        "blindRetry": false,
+        "workCenterSql": false
+      },
+      "evidenceOwner": "next-work-center",
+      "evidenceRefs": [
+        "platform/evidence/characterization/characterization-registry.yml#M21-REPAIR-05",
+        "platform/evidence/contracts/work-center/typed-command-contract.yml#commands[id=save-manual-invoice-allocation]"
+      ]
+    },
+    {
+      "id": "retry-invoice-price-application",
+      "canonicalAction": "retry invoice price application",
+      "accepted": true,
+      "method": "POST",
+      "route": "/api/client-v1/invoices/{ref}/apply-prices",
+      "operationId": "invoiceApplyPrices",
+      "owningBoundedContext": "invoices",
+      "owner": "invoices",
+      "capability": "invoices.invoice-apply-prices",
+      "actor": {
+        "serverDerived": true,
+        "clientSupplied": false,
+        "source": "authenticated client-v1 operator principal"
+      },
+      "reason": {
+        "required": true,
+        "field": "reason",
+        "storedWithCommandAudit": true
+      },
+      "expectedVersionOrFingerprint": {
+        "required": true,
+        "fields": ["validationFingerprint", "expectedVersion"],
+        "kind": "validationFingerprint-and-expectedVersion"
+      },
+      "idempotencyKey": {
+        "header": "Idempotency-Key",
+        "required": true
+      },
+      "correlationAndCausation": {
+        "correlationId": "required",
+        "causationId": "required",
+        "serverGeneratedOrPropagated": true
+      },
+      "auditEvent": {
+        "required": true,
+        "eventType": "owner-defined command audit event",
+        "eventId": "server-generated",
+        "fields": ["operationId", "actor", "reason", "expectedVersion", "validationFingerprint", "correlationId", "causationId", "workCenterItemRef"],
+        "owner": "invoices"
+      },
+      "outbox": {
+        "required": true,
+        "owner": "invoices",
+        "transactional": true,
+        "publication": "Invoices price-application outbox and lifecycle event",
+        "topic": "coffee.invoices.events.v1",
+        "topicReason": "InvoicePricesApplied.v1 is the existing owner completion event"
+      },
+      "authoritativeCompletionFact": {
+        "required": true,
+        "facts": ["InvoicePricesApplied.v1 for the invoice and its checkout allocation proof"],
+        "queueMayResolveOnlyAfterFact": true,
+        "evidence": [
+          "platform/evidence/contracts/kafka/baseline/payload-schemas/invoice-prices-applied.v1.schema.json",
+          "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M10_INVOICES/06_MANUAL_ALLOCATION_AND_RECONCILIATION.md"
+        ]
+      },
+      "completionFact": "InvoicePricesApplied.v1 for the invoice and its checkout allocation proof",
+      "rollback": {
+        "required": true,
+        "owner": "invoices",
+        "policy": "owner reconciliation retries the idempotent operation; no customer-price rewrite; compensate unlink through owner process",
+        "blindRetry": false,
+        "workCenterSql": false
+      },
+      "evidenceOwner": "next-work-center",
+      "evidenceRefs": [
+        "platform/evidence/characterization/characterization-registry.yml#M21-REPAIR-06",
+        "platform/evidence/contracts/work-center/typed-command-contract.yml#commands[id=retry-invoice-price-application]"
+      ]
+    },
+    {
+      "id": "payment-reconciliation-refund",
+      "canonicalAction": "payment reconciliation/refund",
+      "accepted": true,
+      "method": "POST",
+      "route": "/api/client-v1/payments/{paymentIntentRef}/commands/refund",
+      "operationId": "refundPayment",
+      "owningBoundedContext": "payments",
+      "owner": "payments",
+      "capability": "payments.refund",
+      "actor": {
+        "serverDerived": true,
+        "clientSupplied": false,
+        "source": "authenticated client-v1 operator principal"
+      },
+      "reason": {
+        "required": true,
+        "field": "reason",
+        "storedWithCommandAudit": true
+      },
+      "expectedVersionOrFingerprint": {
+        "required": true,
+        "fields": ["expectedVersion", "providerProof"],
+        "kind": "expectedVersion-and-providerProof"
+      },
+      "idempotencyKey": {
+        "header": "Idempotency-Key",
+        "required": true
+      },
+      "correlationAndCausation": {
+        "correlationId": "required",
+        "causationId": "required",
+        "serverGeneratedOrPropagated": true
+      },
+      "auditEvent": {
+        "required": true,
+        "eventType": "owner-defined command audit event",
+        "eventId": "server-generated",
+        "fields": ["operationId", "actor", "reason", "expectedVersion", "providerProof", "correlationId", "causationId", "workCenterItemRef"],
+        "owner": "payments"
+      },
+      "outbox": {
+        "required": true,
+        "owner": "payments",
+        "transactional": true,
+        "publication": "Payments command/outbox and lifecycle event",
+        "topic": null,
+        "topicReason": "M06 maps this command topic to the Orders producer; the Payments owner command therefore retains an owner-local transactional outbox until a dedicated Payments producer contract exists"
+      },
+      "authoritativeCompletionFact": {
+        "required": true,
+        "facts": ["PaymentRefunded.v1 with providerRefundRef and proofRef", "PaymentRefundFailed.v1 remains an open/failed reconciliation fact"],
+        "queueMayResolveOnlyAfterFact": true,
+        "unknownOutcome": "fresh provider lookup/reconciliation before any further mutation",
+        "evidence": [
+          "platform/evidence/contracts/kafka/baseline/payload-schemas/payment-refund-requested.v1.schema.json",
+          "platform/evidence/contracts/kafka/baseline/payload-schemas/payment-refunded.v1.schema.json",
+          "platform/evidence/contracts/kafka/baseline/payload-schemas/payment-refund-failed.v1.schema.json"
+        ]
+      },
+      "completionFact": "PaymentRefunded.v1 with providerRefundRef and proofRef",
+      "rollback": {
+        "required": true,
+        "owner": "payments",
+        "policy": "irreversible provider operation is reconciled by verified result; no blind retry or Work Center compensation",
+        "blindRetry": false,
+        "workCenterSql": false
+      },
+      "evidenceOwner": "next-work-center",
+      "evidenceRefs": [
+        "platform/evidence/characterization/characterization-registry.yml#M21-REPAIR-07",
+        "platform/evidence/contracts/work-center/typed-command-contract.yml#commands[id=payment-reconciliation-refund]"
+      ]
+    },
+    {
+      "id": "review-activate-delivery-coefficient",
+      "canonicalAction": "review/activate delivery coefficient",
+      "accepted": true,
+      "method": "POST",
+      "route": "/api/client-v1/pricing/procurement-batches/{batchRef}/delivery-cost/activate",
+      "operationId": "pricingDeliveryCostActivate",
+      "owningBoundedContext": "pricing",
+      "owner": "pricing",
+      "capability": "pricing.pricing-delivery-cost-activate",
+      "actor": {
+        "serverDerived": true,
+        "clientSupplied": false,
+        "source": "authenticated client-v1 operator principal"
+      },
+      "reason": {
+        "required": true,
+        "field": "reason",
+        "storedWithCommandAudit": true
+      },
+      "expectedVersionOrFingerprint": {
+        "required": true,
+        "fields": ["expectedVersion", "previewFingerprint"],
+        "kind": "expectedVersion-and-previewFingerprint"
+      },
+      "idempotencyKey": {
+        "header": "Idempotency-Key",
+        "required": true
+      },
+      "correlationAndCausation": {
+        "correlationId": "required",
+        "causationId": "required",
+        "serverGeneratedOrPropagated": true
+      },
+      "auditEvent": {
+        "required": true,
+        "eventType": "owner-defined command audit event",
+        "eventId": "server-generated",
+        "fields": ["operationId", "actor", "reason", "expectedVersion", "previewFingerprint", "correlationId", "causationId", "workCenterItemRef"],
+        "owner": "pricing"
+      },
+      "outbox": {
+        "required": true,
+        "owner": "pricing",
+        "transactional": true,
+        "publication": "Pricing owner transaction and lifecycle outbox",
+        "topic": "coffee.pricing.lifecycle.v1",
+        "topicReason": "DeliveryCoefficientActivated.v1 is the existing Pricing lifecycle publication"
+      },
+      "authoritativeCompletionFact": {
+        "required": true,
+        "facts": ["DeliveryCoefficientActivated.v1 with a new active deliveryCoefficientVersionRef and version"],
+        "queueMayResolveOnlyAfterFact": true,
+        "evidence": [
+          "platform/evidence/contracts/kafka/revision/payload-schemas/delivery-coefficient-activated.v1.schema.json",
+          "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M22_PRICING/05_DELIVERY_COEFFICIENT_LIFECYCLE.md"
+        ]
+      },
+      "completionFact": "DeliveryCoefficientActivated.v1 with a new active deliveryCoefficientVersionRef and version",
+      "rollback": {
+        "required": true,
+        "owner": "pricing",
+        "policy": "reactivate prior active version through an audited Pricing owner command; never rewrite locked orders",
+        "blindRetry": false,
+        "workCenterSql": false
+      },
+      "evidenceOwner": "next-work-center",
+      "evidenceRefs": [
+        "platform/evidence/characterization/characterization-registry.yml#M21-REPAIR-08",
+        "platform/evidence/contracts/work-center/typed-command-contract.yml#commands[id=review-activate-delivery-coefficient]"
+      ]
+    }
+  ],
+  "denials": [
+    {
+      "id": "generic-repair-endpoint",
+      "decision": "DENY",
+      "routePattern": "POST /api/client-v1/work-center/**",
+      "operationIdPattern": "generic repair or repairWorkCenterItem",
+      "reason": "Work Center has no business command owner; only the eight typed owner routes are allowlisted"
+    },
+    {
+      "id": "universal-patch",
+      "decision": "DENY",
+      "routePattern": "PATCH /api/client-v1/{business-resource}/**",
+      "operationIdPattern": "generic patch or updateBusinessState",
+      "reason": "Lifecycle and business transitions require an explicit owner command with a stale guard"
+    },
+    {
+      "id": "work-center-db-business-write",
+      "decision": "DENY",
+      "target": "work-center-db",
+      "operationIdPattern": "direct SQL/ORM business-state write",
+      "reason": "Work Center DB is projection metadata only; cross-owner SQL is forbidden"
+    },
+    {
+      "id": "resolve-without-owner-fact",
+      "decision": "DENY",
+      "operationIdPattern": "acknowledge/snooze/resolve queue item as business completion",
+      "reason": "Queue state is projection metadata and cannot replace an authoritative downstream completion fact"
+    }
+  ],
+  "evidenceOwner": "next-work-center",
+  "evidenceRefs": [
+    "platform/evidence/contracts/work-center/typed-command-contract.yml",
+    "platform/evidence/characterization/characterization-registry.yml#m21RepairAudit",
+    "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M21_OPERATOR_WORK_CENTER/04_REPAIR_COMMANDS_AND_AUDIT.md",
+    "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20/M19_API_ARCHITECTURE/14_IMPORT_EXPORT_WORK_CENTER_API_CONTRACTS.md"
+  ]
+}

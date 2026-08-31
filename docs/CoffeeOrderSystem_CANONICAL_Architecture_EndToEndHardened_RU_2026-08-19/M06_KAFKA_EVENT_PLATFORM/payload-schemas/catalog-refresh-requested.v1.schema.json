@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/catalogrefreshrequested.v1.schema.json",
+  "title": "CatalogRefreshRequested.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "refreshRequestRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "StalePreflight",
+        "Operator",
+        "Repair",
+        "StartupRecovery"
+      ]
+    },
+    "requestedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "minimumIntervalSeconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 3600
+    }
+  },
+  "required": [
+    "refreshRequestRef",
+    "reason",
+    "requestedAtUtc",
+    "minimumIntervalSeconds"
+  ]
+}

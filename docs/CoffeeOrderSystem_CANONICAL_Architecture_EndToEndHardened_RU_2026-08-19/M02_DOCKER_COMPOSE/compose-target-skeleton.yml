@@ -1,0 +1,157 @@
+# ИЛЛЮСТРАТИВНЫЙ skeleton. Source of truth для workload list: M20/runtime-workload-registry.yml
+services:
+  edge:
+    build: ../../edge
+    depends_on:
+    - platform-web
+    - api-public
+    - realtime-gateway
+    - channel-ingress
+    - payments-webhook
+  platform-web:
+    build:
+      context: ../..
+      dockerfile: platform/apps/web/Dockerfile
+  api-public:
+    build:
+      context: ../..
+      dockerfile: platform/apps/api-public/Dockerfile
+  api-agent:
+    build:
+      context: ../..
+      dockerfile: platform/apps/api-agent/Dockerfile
+  api-internal:
+    build:
+      context: ../..
+      dockerfile: platform/apps/api-internal/Dockerfile
+  channel-ingress:
+    build:
+      context: ../..
+      dockerfile: platform/apps/channel-ingress/Dockerfile
+  channel-identity-broker:
+    build:
+      context: ../..
+      dockerfile: platform/apps/channel-identity-broker/Dockerfile
+  channel-intake:
+    build:
+      context: ../..
+      dockerfile: platform/apps/channel-intake/Dockerfile
+  channel-response-mapper:
+    build:
+      context: ../..
+      dockerfile: platform/apps/channel-response-mapper/Dockerfile
+  channel-egress:
+    build:
+      context: ../..
+      dockerfile: platform/apps/channel-egress/Dockerfile
+  realtime-gateway:
+    build:
+      context: ../..
+      dockerfile: platform/apps/realtime-gateway/Dockerfile
+  hermes-dispatcher:
+    build:
+      context: ../..
+      dockerfile: platform/apps/hermes-dispatcher/Dockerfile
+  hermes-runtime:
+    build:
+      context: ../..
+      dockerfile: hermes/runtime/Dockerfile
+    volumes:
+    - hermes-state:/var/lib/hermes
+  catalog-supplier-sync:
+    build:
+      context: ../..
+      dockerfile: platform/apps/catalog-supplier-sync/Dockerfile
+  catalog-mapping-resolver:
+    build:
+      context: ../..
+      dockerfile: platform/apps/catalog-mapping-resolver/Dockerfile
+  catalog-search-indexer:
+    build:
+      context: ../..
+      dockerfile: platform/apps/catalog-search-indexer/Dockerfile
+  orders-aroma-preparation:
+    build:
+      context: ../..
+      dockerfile: platform/apps/orders-aroma-preparation/Dockerfile
+  orders-catalog-projection:
+    build:
+      context: ../..
+      dockerfile: platform/apps/orders-catalog-projection/Dockerfile
+  aroma-observer:
+    build:
+      context: ../..
+      dockerfile: platform/apps/aroma-observer/Dockerfile
+  aroma-convergence:
+    build:
+      context: ../..
+      dockerfile: platform/apps/aroma-convergence/Dockerfile
+  orders-aroma-event-projector:
+    build:
+      context: ../..
+      dockerfile: platform/apps/orders-aroma-event-projector/Dockerfile
+  aroma-checkout-poller:
+    build:
+      context: ../..
+      dockerfile: platform/apps/aroma-checkout-poller/Dockerfile
+  invoices-worker:
+    build:
+      context: ../..
+      dockerfile: platform/apps/invoices-worker/Dockerfile
+  invoice-intake:
+    build:
+      context: ../..
+      dockerfile: platform/apps/invoice-intake/Dockerfile
+  invoice-document-worker:
+    build:
+      context: ../..
+      dockerfile: platform/apps/invoice-document-worker/Dockerfile
+  payments-order-consumer:
+    build:
+      context: ../..
+      dockerfile: platform/apps/payments-order-consumer/Dockerfile
+  payments-command-handler:
+    build:
+      context: ../..
+      dockerfile: platform/apps/payments-command-handler/Dockerfile
+  payments-webhook:
+    build:
+      context: ../..
+      dockerfile: platform/apps/payments-webhook/Dockerfile
+  payments-reconciliation:
+    build:
+      context: ../..
+      dockerfile: platform/apps/payments-reconciliation/Dockerfile
+  orders-payment-consumer:
+    build:
+      context: ../..
+      dockerfile: platform/apps/orders-payment-consumer/Dockerfile
+  orders-invoice-consumer:
+    build:
+      context: ../..
+      dockerfile: platform/apps/orders-invoice-consumer/Dockerfile
+  operations-projections:
+    build:
+      context: ../..
+      dockerfile: platform/apps/operations-projections/Dockerfile
+  artifact-scan-worker:
+    build:
+      context: ../..
+      dockerfile: platform/apps/artifact-scan-worker/Dockerfile
+  aroma-gateway:
+    build:
+      context: ../..
+      dockerfile: platform/apps/aroma-gateway/Dockerfile
+  postgres:
+    image: postgres:<pinned>
+  kafka:
+    image: <pinned-kafka-image>
+  kafka-connect:
+    image: <pinned-connect-debezium-image>
+  artifact-storage:
+    image: <pinned-s3-compatible-dev-image>
+    profiles:
+    - dev
+    - test
+volumes:
+  hermes-state: {}

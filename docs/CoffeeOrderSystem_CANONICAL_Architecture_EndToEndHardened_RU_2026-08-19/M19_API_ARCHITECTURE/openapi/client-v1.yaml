@@ -1,0 +1,102 @@
+openapi: 3.1.0
+info:
+  title: CoffeeOrderSystem client-v1
+  version: 1.0.0
+components:
+  schemas:
+    ProblemDetails:
+      type: object
+      additionalProperties: true
+paths:
+  /api/client-v1/orders/{orderRef}:
+    get:
+      operationId: getOrderCard
+      responses:
+        '200':
+          description: Order card
+  /api/client-v1/orders/{orderRef}/commands/confirm:
+    post:
+      operationId: confirmOrder
+      responses:
+        '200':
+          description: Confirmed
+        '409':
+          description: Conflict
+  /api/client-v1/orders/{orderRef}/commands/add-item:
+    post:
+      operationId: addConfirmedOrderItem
+      responses:
+        '200':
+          description: Updated
+        '409':
+          description: Conflict
+  /api/client-v1/orders/{orderRef}/commands/change-quantity:
+    post:
+      operationId: changeConfirmedQuantity
+      responses:
+        '200':
+          description: Updated
+  /api/client-v1/orders/{orderRef}/commands/remove-item:
+    post:
+      operationId: removeConfirmedOrderItem
+      responses:
+        '200':
+          description: Updated
+  /api/client-v1/orders/{orderRef}/commands/cancel:
+    post:
+      operationId: cancelOrder
+      responses:
+        '200':
+          description: Cancelled or compensation started
+  /api/client-v1/products:
+    get:
+      operationId: listProducts
+      responses:
+        '200':
+          description: Products
+    post:
+      operationId: createProduct
+      responses:
+        '201':
+          description: Created
+  /api/client-v1/products/{productRef}:
+    get:
+      operationId: getProduct
+      responses:
+        '200':
+          description: Product
+    put:
+      operationId: updateProduct
+      responses:
+        '200':
+          description: Updated
+        '409':
+          description: Conflict
+    delete:
+      operationId: tombstoneProduct
+      responses:
+        '204':
+          description: Tombstoned
+  /api/client-v1/products/{productRef}/variants:
+    post:
+      operationId: createVariant
+      responses:
+        '201':
+          description: Created
+  /api/client-v1/products/{productRef}/variants/{variantRef}:
+    put:
+      operationId: updateVariant
+      responses:
+        '200':
+          description: Updated
+    delete:
+      operationId: tombstoneVariant
+      responses:
+        '204':
+          description: Tombstoned
+  /api/client-v1/payments/{paymentIntentRef}/checkout:
+    post:
+      operationId: openPaymentCheckout
+      responses:
+        '303':
+          description: Hosted PSP redirect

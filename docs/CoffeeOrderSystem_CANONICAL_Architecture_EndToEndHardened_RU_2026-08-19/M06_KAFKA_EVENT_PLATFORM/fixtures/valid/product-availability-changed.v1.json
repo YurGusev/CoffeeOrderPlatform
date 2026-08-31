@@ -1,0 +1,10 @@
+{
+  "productRef": "productRef-ref",
+  "availabilityStreamRef": "availabilityStreamRef-ref",
+  "sourceSequence": "1",
+  "isAvailable": false,
+  "isTombstone": false,
+  "availabilityUpdatedAtUtc": "2026-08-19T12:00:00Z",
+  "occurredAtUtc": "2026-08-19T12:00:00Z",
+  "source": "ManualProductMutation"
+}

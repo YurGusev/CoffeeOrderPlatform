@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/paymentrefunded.v1.schema.json",
+  "title": "PaymentRefunded.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "refundRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "paymentIntentRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "paymentRequirementRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "amountMinor": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "providerRefundRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "proofRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "refundedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "refundRef",
+    "paymentIntentRef",
+    "paymentRequirementRef",
+    "orderRef",
+    "amountMinor",
+    "currency",
+    "providerRefundRef",
+    "proofRef",
+    "refundedAtUtc"
+  ]
+}

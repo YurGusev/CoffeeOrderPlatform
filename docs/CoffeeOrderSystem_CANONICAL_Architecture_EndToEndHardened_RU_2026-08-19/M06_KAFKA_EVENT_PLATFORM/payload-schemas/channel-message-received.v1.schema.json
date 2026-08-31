@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/channelmessagereceived.v1.schema.json",
+  "title": "ChannelMessageReceived.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "messageRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "conversationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "channelIdentityRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "identityEpoch": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "providerEventRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "channel": {
+      "type": "string",
+      "enum": [
+        "VK"
+      ]
+    },
+    "messageText": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 4000
+    },
+    "attachmentRefs": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "confirmationProofRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "receivedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "messageRef",
+    "conversationRef",
+    "channelIdentityRef",
+    "identityEpoch",
+    "providerEventRef",
+    "channel",
+    "attachmentRefs",
+    "receivedAtUtc"
+  ]
+}

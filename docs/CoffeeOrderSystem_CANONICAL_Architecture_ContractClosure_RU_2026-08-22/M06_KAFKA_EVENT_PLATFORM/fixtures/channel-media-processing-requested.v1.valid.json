@@ -1,0 +1,9 @@
+{
+  "conversationKeyHash": "9f7d2c313ca84c71b9c48dde5adfcb75",
+  "sourceArtifactRef": "art_vk_voice_01",
+  "sourceSha256": "2f8fca67ebffe390d315c5f83c8f5f0d09010b4335c3d051a1a6f3fb4db6c18f",
+  "sourceSizeBytes": "48192",
+  "mediaKind": "voice",
+  "declaredMimeType": "audio/ogg",
+  "correlationId": "corr_media_01"
+}

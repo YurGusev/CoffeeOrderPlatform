@@ -1,0 +1,25 @@
+{
+  "baselineArtifact": "CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_WithAgentSkills_API_RU_2026-08-19.zip",
+  "baselineSha256": "e869535c9c5c0f19d84ff1d2582bd541c4ed1781c44fa5d49836be85235f37f5",
+  "baselineRoot": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19",
+  "parentRevision": {
+    "name": "BusinessParityPricingV2",
+    "root": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_BusinessParityPricingV2_RU_2026-08-20",
+    "treeSha256": "b913b94c766ed620c897b7cb87d506af141cf60115d0744308deb8d42b615758"
+  },
+  "revisionId": "DEC-PLT-M00-SEC-002",
+  "revisionDate": "2026-08-20",
+  "revisionChain": [
+    "EndToEndHardened-baseline",
+    "BusinessParityPricingV2",
+    "PrivateSingleOwnerSecurityException"
+  ],
+  "precedence": "revision-over-parent-revision-over-baseline",
+  "exactCurrentTreePaths": [
+    ".env.agent",
+    "cognee-docker/.env"
+  ],
+  "rotationStatus": "deferred-incomplete-#1086",
+  "historyRewriteApproval": "#1088 remains separately destructive-approval gated",
+  "rule": "Only the two exact current-tree paths may be removed before provider rotation while repository visibility, server and development remain private single-owner and single-developer; all other rules remain unchanged."
+}

@@ -1,0 +1,51 @@
+services:
+  pricing-api:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - pricing-api
+    restart: unless-stopped
+  pricing-projection:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - pricing-projection
+    restart: unless-stopped
+  pricing-delivery-calculator:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - pricing-delivery-calculator
+    restart: unless-stopped
+  orders-pricing-projection:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - orders-pricing-projection
+    restart: unless-stopped
+  order-import-worker:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - order-import-worker
+    restart: unless-stopped
+  order-export-worker:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - order-export-worker
+    restart: unless-stopped
+  work-center-projection:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - work-center-projection
+    restart: unless-stopped
+  work-center-api:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - work-center-api
+    restart: unless-stopped
+  channel-media-worker:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - channel-media-worker
+    restart: unless-stopped
+  channel-transcription-worker:
+    image: ${COFFEE_PLATFORM_IMAGE}
+    command:
+    - channel-transcription-worker
+    restart: unless-stopped

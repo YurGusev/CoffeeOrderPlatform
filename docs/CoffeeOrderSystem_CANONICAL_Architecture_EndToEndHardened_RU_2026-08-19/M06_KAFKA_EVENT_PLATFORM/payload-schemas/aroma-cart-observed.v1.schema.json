@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/aroma-cart-observed.v1.schema.json",
+  "title": "AromaCartObserved.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "profileName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "observedSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "observedGeneration": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "freshness": {
+      "type": "string",
+      "enum": [
+        "Fresh",
+        "Stale",
+        "Unavailable"
+      ]
+    }
+  },
+  "required": [
+    "profileName",
+    "observedSnapshotRef",
+    "observedGeneration",
+    "freshness"
+  ]
+}

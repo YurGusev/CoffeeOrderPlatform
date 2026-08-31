@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/order-payment-required.v1.schema.json",
+  "title": "OrderPaymentRequired.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "paymentRequirementRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "invoiceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "amountMinor": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "priceProofHash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  },
+  "required": [
+    "paymentRequirementRef",
+    "orderRef",
+    "orderVersion",
+    "invoiceRef",
+    "amountMinor",
+    "currency",
+    "priceProofHash"
+  ]
+}

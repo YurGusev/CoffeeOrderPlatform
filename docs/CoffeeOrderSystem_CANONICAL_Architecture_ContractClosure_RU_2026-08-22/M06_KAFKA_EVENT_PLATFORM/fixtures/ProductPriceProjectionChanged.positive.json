@@ -1,0 +1,13 @@
+{
+  "productVariantRef": "var_1",
+  "pricingVersion": "17",
+  "pricingHash": "abc123",
+  "state": "Current",
+  "supplierListUnitPrice": "1000.0000",
+  "effectiveDiscountPercent": "10.0000",
+  "deliveryCoefficientPercent": "1.3000",
+  "landedUnitCost": "911.7000",
+  "defaultMarkupPercent": "5.0000",
+  "recommendedCustomerUnitPrice": "957.29",
+  "calculatedAtUtc": "2026-08-20T00:00:01Z"
+}

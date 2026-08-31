@@ -1,0 +1,91 @@
+version: 1
+rule: Legacy behavior is preserved only when disposition=PRESERVE. INTENTIONAL_CHANGE
+  and RETIRE are explicit migration decisions.
+capabilities:
+- id: customer-matching
+  disposition: PRESERVE
+  anchors:
+  - exact
+  - equivalent
+  - surname-expansion
+  - conflicting-initials
+  - fuzzy-review
+  - manual-override
+- id: pricing-discount-max
+  disposition: INTENTIONAL_CHANGE
+  from: max(base,special)
+  to: special-overrides-base-when-present
+- id: pricing-markup-range
+  disposition: INTENTIONAL_CHANGE
+  from: 1..8 normal
+  to: 5..10 normal; 0 audited exception
+- id: pricing-invoice-reprice-customer
+  disposition: INTENTIONAL_CHANGE
+  from: invoice may recalculate customer price
+  to: Confirmed customer price locked; invoice updates actual cost
+- id: excel-import
+  disposition: PRESERVE
+  anchors:
+  - preview
+  - fingerprint
+  - manual-overrides
+  - stale-reject
+  - atomic-commit
+- id: catalog-search
+  disposition: PRESERVE
+  anchors:
+  - aliases
+  - deterministic
+  - vector-advisory
+  - reranker
+  - feedback
+  - abstention
+- id: ai-policy
+  disposition: PRESERVE
+  anchors:
+  - dedupe
+  - ttl
+  - rate-limit
+  - clarification
+  - confirmation
+  - tool-budget
+  - redaction
+- id: invoice-manual
+  disposition: PRESERVE
+  anchors:
+  - parse
+  - validation-fingerprint
+  - manual-allocation
+  - reconciliation
+  - compensation
+- id: work-center
+  disposition: PRESERVE
+  anchors:
+  - priority
+  - paging
+  - business-calendar
+  - source-completeness
+- id: vk-media
+  disposition: PRESERVE
+  anchors:
+  - voice
+  - media
+  - keyboard
+  - carousel
+  - dedupe
+- id: aroma-authoritative
+  disposition: PRESERVE
+  anchors:
+  - fresh-get
+  - one-mutation
+  - fresh-get
+  - lease
+  - fence
+  - mutation-reservation
+  - unknown-outcome
+- id: legacy-draft-aroma-send
+  disposition: RETIRE
+- id: unsafe-refresh-token
+  disposition: RETIRE
+- id: hardcoded-bootstrap-password
+  disposition: RETIRE

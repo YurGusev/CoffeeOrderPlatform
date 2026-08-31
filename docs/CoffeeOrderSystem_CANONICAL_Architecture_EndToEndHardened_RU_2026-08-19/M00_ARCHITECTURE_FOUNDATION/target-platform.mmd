@@ -1,0 +1,26 @@
+flowchart TB
+  Edge[Public Nginx] --> Web[React Web Nginx]
+  Edge --> APIP[api-public]
+  Edge --> CIN[channel-ingress]
+  Edge --> PWH[payments-webhook]
+  CIN --> CID[channel-identity-broker]
+  CIN --> Kafka[(Kafka)]
+  Kafka --> Intake[channel-intake]
+  Intake --> Kafka
+  Kafka --> HD[Hermes Dispatcher]
+  HD --> HR[Hermes Runtime]
+  HR --> APIA[api-agent]
+  HD --> Kafka
+  Kafka --> RM[channel-response-mapper]
+  RM --> Kafka
+  Kafka --> CE[channel-egress]
+  APIP --> PG[(PostgreSQL)]
+  APIA --> PG
+  PG --> Debezium --> Kafka
+  CS[catalog-supplier-sync] --> GW[AROMA Gateway]
+  Conv[AROMA Convergence] --> GW
+  GW --> AROMA[AROMA]
+  Checkout[Checkout] --> Art[(Artifact Storage)]
+  Kafka --> Inv[Invoices]
+  Inv --> Art
+  Kafka --> Pay[Payments]

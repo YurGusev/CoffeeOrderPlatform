@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/invoicecompensationrequested.v1.schema.json",
+  "title": "InvoiceCompensationRequested.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "compensationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "clientInvoiceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkoutSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "uniqueItems": true
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "priceProofHash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    }
+  },
+  "required": [
+    "compensationRef",
+    "clientInvoiceRef",
+    "checkoutSnapshotRef",
+    "orderRefs",
+    "reasonCode"
+  ]
+}

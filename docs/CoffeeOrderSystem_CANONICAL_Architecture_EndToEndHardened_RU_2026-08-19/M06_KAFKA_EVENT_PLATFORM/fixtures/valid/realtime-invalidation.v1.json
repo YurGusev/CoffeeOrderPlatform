@@ -1,0 +1,6 @@
+{
+  "scope": "Order",
+  "entityRef": "entityRef-ref",
+  "reasonCode": "reasonCode-ref",
+  "occurredAtUtc": "2026-08-19T12:00:00Z"
+}

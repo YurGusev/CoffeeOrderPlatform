@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Confirmed: Confirm + Desired + Outbox
+    Draft --> [*]: HardDeleteDraft
+    Confirmed --> Cancelled: Guarded CancelOrder
+    Confirmed --> AwaitingCustomerPayment: Verified InvoicePricesApplied
+    AwaitingCustomerPayment --> Completed: PaymentSucceeded / ManualProof

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/agentturncompleted.v1.schema.json",
+  "title": "AgentTurnCompleted.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "turnRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "conversationRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "turnSequence": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "hermesRunRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "responseText": {
+      "type": "string",
+      "maxLength": 8000
+    },
+    "toolOutcomeHash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "completedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "turnRef",
+    "conversationRef",
+    "turnSequence",
+    "hermesRunRef",
+    "responseText",
+    "completedAtUtc"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "exportJobRef": "exp_1",
+  "querySnapshotRef": "qry_1",
+  "exportRevision": "1",
+  "format": "xlsx",
+  "requestedBy": "usr_1"
+}

@@ -1,0 +1,7 @@
+{
+  "deliveryRef": "deliveryRef-ref",
+  "conversationRef": "conversationRef-ref",
+  "channelIdentityRef": "channelIdentityRef-ref",
+  "text": "text-ref",
+  "requestedAtUtc": "2026-08-19T12:00:00Z"
+}

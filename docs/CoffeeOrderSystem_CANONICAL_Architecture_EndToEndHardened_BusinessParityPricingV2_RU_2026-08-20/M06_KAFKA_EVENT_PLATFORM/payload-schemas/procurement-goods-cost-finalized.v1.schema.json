@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "procurement-goods-cost-finalized",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "procurementBatchRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "wholesaleOrderRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "invoiceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "currency": {
+      "type": "string",
+      "const": "RUB"
+    },
+    "goodsAmountBasis": {
+      "enum": [
+        "gross-paid",
+        "net-ex-tax"
+      ]
+    },
+    "actualSupplierGoodsTotal": {
+      "type": "string",
+      "pattern": "^-?\\d+(?:\\.\\d{1,4})?$"
+    },
+    "allocationManifestRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allocationManifestSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "occurredAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "procurementBatchRef",
+    "wholesaleOrderRef",
+    "invoiceRefs",
+    "currency",
+    "goodsAmountBasis",
+    "actualSupplierGoodsTotal",
+    "allocationManifestRef",
+    "allocationManifestSha256",
+    "occurredAtUtc"
+  ]
+}

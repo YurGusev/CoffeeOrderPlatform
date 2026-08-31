@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/realtimeinvalidation.v1.schema.json",
+  "title": "RealtimeInvalidation.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": [
+        "Order",
+        "Product",
+        "Invoice",
+        "Payment",
+        "Customer",
+        "Operations"
+      ]
+    },
+    "entityRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "reasonCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "revision": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^(0|[1-9][0-9]*)$"
+    },
+    "occurredAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "scope",
+    "entityRef",
+    "reasonCode",
+    "occurredAtUtc"
+  ]
+}

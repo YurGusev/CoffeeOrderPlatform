@@ -1,0 +1,40 @@
+openapi: 3.1.0
+info:
+  title: CoffeeOrderSystem internal-v1
+  version: 1.0.0
+components:
+  schemas:
+    ProblemDetails:
+      type: object
+      additionalProperties: true
+paths:
+  /api/internal-v1/channel-identities/attest:
+    post:
+      operationId: attestChannelIdentity
+      responses:
+        '200':
+          description: Opaque identity
+  /api/internal-v1/catalog/cart-preflight:
+    post:
+      operationId: getCatalogCartPreflight
+      responses:
+        '200':
+          description: Snapshot proof
+  /api/internal-v1/catalog/supplier-sync/status:
+    get:
+      operationId: getCatalogSupplierSyncStatus
+      responses:
+        '200':
+          description: Status
+  /api/internal-v1/catalog/supplier-sync/refresh:
+    post:
+      operationId: requestCatalogSupplierRefresh
+      responses:
+        '202':
+          description: Coalesced refresh requested
+  /api/internal-v1/artifacts/{artifactRef}/metadata:
+    get:
+      operationId: getArtifactMetadata
+      responses:
+        '200':
+          description: Metadata

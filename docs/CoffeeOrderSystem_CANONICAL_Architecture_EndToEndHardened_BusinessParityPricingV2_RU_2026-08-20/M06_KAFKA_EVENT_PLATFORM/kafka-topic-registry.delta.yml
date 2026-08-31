@@ -1,0 +1,166 @@
+version: 3
+baselineTopics: 20
+addTopics:
+- name: coffee.customer.lifecycle.v1
+  kind: event
+  owner: customer
+  key: CustomerRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 6
+  productionRetentionHours: 2160
+  producers:
+  - customer
+  consumerGroups:
+  - work-center-projection
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/customer-lifecycle-changed.v1.schema.json
+  piiClass: business-minimized
+  replayPolicy: projection-safe
+  drClass: tier-a
+- name: coffee.catalog.pricing.v1
+  kind: event
+  owner: catalog
+  key: ProductVariantRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 12
+  productionRetentionHours: 2160
+  producers:
+  - catalog
+  consumerGroups:
+  - pricing-projection
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/supplier-pricing-fact-changed.v1.schema.json
+  piiClass: none
+  replayPolicy: projection-safe
+  drClass: standard
+- name: coffee.pricing.lifecycle.v1
+  kind: event
+  owner: pricing
+  key: ProductVariantRefOrPolicyRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 12
+  productionRetentionHours: 2160
+  producers:
+  - pricing-projection
+  - pricing-api
+  - pricing-delivery-calculator
+  consumerGroups:
+  - orders-pricing-projection
+  - work-center-projection
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/product-price-projection-changed.v1.schema.json
+  - payload-schemas/pricing-policy-changed.v1.schema.json
+  - payload-schemas/delivery-coefficient-activated.v1.schema.json
+  piiClass: none
+  replayPolicy: projection-safe
+  drClass: tier-a
+- name: coffee.invoices.procurement-cost.v1
+  kind: event
+  owner: invoices
+  key: ProcurementBatchRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: critical
+  productionPartitions: 6
+  productionRetentionHours: 2160
+  producers:
+  - invoices
+  consumerGroups:
+  - pricing-delivery-calculator
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/procurement-goods-cost-finalized.v1.schema.json
+  piiClass: business-minimized
+  replayPolicy: projection-safe
+  drClass: standard
+- name: coffee.orders.import.commands.v1
+  kind: command
+  owner: orders
+  key: ImportJobRef
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: standard
+  productionPartitions: 6
+  productionRetentionHours: 168
+  producers:
+  - orders
+  consumerGroups:
+  - order-import-worker
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/order-import-parse-requested.v1.schema.json
+  piiClass: artifact-ref-only
+  replayPolicy: command-idempotent-controlled
+  drClass: standard
+- name: coffee.orders.import.events.v1
+  kind: event
+  owner: orders
+  key: ImportJobRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: standard
+  productionPartitions: 6
+  productionRetentionHours: 720
+  producers:
+  - order-import-worker
+  consumerGroups:
+  - work-center-projection
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/order-import-preview-ready.v1.schema.json
+  piiClass: business-minimized
+  replayPolicy: projection-safe
+  drClass: standard
+- name: coffee.orders.export.commands.v1
+  kind: command
+  owner: orders
+  key: ExportJobRef
+  retentionClass: ASYNC_COMMAND
+  durabilityClass: standard
+  productionPartitions: 3
+  productionRetentionHours: 168
+  producers:
+  - orders
+  consumerGroups:
+  - order-export-worker
+  schema: integration-command-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/order-export-requested.v1.schema.json
+  piiClass: business-refs-only
+  replayPolicy: command-idempotent-controlled
+  drClass: standard
+- name: coffee.orders.export.events.v1
+  kind: event
+  owner: orders
+  key: ExportJobRef
+  retentionClass: DOMAIN_LIFECYCLE
+  durabilityClass: standard
+  productionPartitions: 3
+  productionRetentionHours: 720
+  producers:
+  - order-export-worker
+  consumerGroups:
+  - work-center-projection
+  schema: integration-event-envelope.schema.json
+  payloadSchemas:
+  - payload-schemas/order-export-ready.v1.schema.json
+  piiClass: artifact-ref-only
+  replayPolicy: projection-safe
+  drClass: standard
+resultingTopicCount: 28
+existingTopicConsumerGroupAdds:
+- topic: coffee.orders.lifecycle.v1
+  consumerGroup: work-center-projection
+- topic: coffee.catalog.availability.v1
+  consumerGroup: work-center-projection
+- topic: coffee.catalog.mapping.v1
+  consumerGroup: work-center-projection
+- topic: coffee.aroma.cart.events.v1
+  consumerGroup: work-center-projection
+- topic: coffee.invoices.events.v1
+  consumerGroup: work-center-projection
+- topic: coffee.payments.lifecycle.v1
+  consumerGroup: work-center-projection

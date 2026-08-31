@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "order-import-preview-ready",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "importJobRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "importRevision": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "previewFingerprint": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rowCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "unresolvedCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "enum": [
+        "Ready",
+        "NeedsReview",
+        "Failed"
+      ]
+    }
+  },
+  "required": [
+    "importJobRef",
+    "importRevision",
+    "previewFingerprint",
+    "rowCount",
+    "unresolvedCount",
+    "status"
+  ]
+}

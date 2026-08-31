@@ -1,0 +1,7 @@
+{
+  "orderRef": "orderRef-ref",
+  "orderVersion": "1",
+  "cancellationRef": "cancellationRef-ref",
+  "reasonCode": "reasonCode-ref",
+  "stage": "BeforeCheckout"
+}

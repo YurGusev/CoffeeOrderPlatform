@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/payment-failed.v1.schema.json",
+  "title": "PaymentFailed.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "paymentIntentRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "paymentRequirementRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "orderRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "failureCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "retryable": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "paymentIntentRef",
+    "paymentRequirementRef",
+    "orderRef",
+    "failureCode",
+    "retryable"
+  ]
+}

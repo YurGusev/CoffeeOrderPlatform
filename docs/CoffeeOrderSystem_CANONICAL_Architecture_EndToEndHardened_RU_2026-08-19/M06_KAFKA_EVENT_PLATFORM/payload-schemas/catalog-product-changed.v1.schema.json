@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeordersystem.local/schemas/catalog-product-changed.v1.schema.json",
+  "title": "CatalogProductChanged.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "productRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "productVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*$"
+    },
+    "changeType": {
+      "type": "string",
+      "enum": [
+        "Created",
+        "Updated",
+        "PriceChanged",
+        "Deleted"
+      ]
+    },
+    "supplierArticle": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256
+    },
+    "changedFields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 128
+      },
+      "uniqueItems": true
+    },
+    "supplierSnapshotRef": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "effectiveAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "ManualProductMutation",
+        "SupplierSnapshot",
+        "Delete",
+        "AdminRepair"
+      ]
+    }
+  },
+  "required": [
+    "productRef",
+    "productVersion",
+    "changeType",
+    "changedFields",
+    "effectiveAtUtc",
+    "source"
+  ]
+}

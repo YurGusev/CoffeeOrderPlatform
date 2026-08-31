@@ -1,0 +1,30 @@
+version: 3
+authority: additive
+baselineMessageTypes: 35
+materialization:
+  mergeKey: messageType
+  schemaPathsRelativeTo: M06_KAFKA_EVENT_PLATFORM
+  fixtureRule: every-addMessageType-has-positive-fixture
+  duplicateMessageType: reject
+addMessageTypes:
+- messageType: CustomerLifecycleChanged
+  schema: payload-schemas/customer-lifecycle-changed.v1.schema.json
+- messageType: SupplierPricingFactChanged
+  schema: payload-schemas/supplier-pricing-fact-changed.v1.schema.json
+- messageType: ProductPriceProjectionChanged
+  schema: payload-schemas/product-price-projection-changed.v1.schema.json
+- messageType: PricingPolicyChanged
+  schema: payload-schemas/pricing-policy-changed.v1.schema.json
+- messageType: DeliveryCoefficientActivated
+  schema: payload-schemas/delivery-coefficient-activated.v1.schema.json
+- messageType: ProcurementGoodsCostFinalized
+  schema: payload-schemas/procurement-goods-cost-finalized.v1.schema.json
+- messageType: OrderImportParseRequested
+  schema: payload-schemas/order-import-parse-requested.v1.schema.json
+- messageType: OrderImportPreviewReady
+  schema: payload-schemas/order-import-preview-ready.v1.schema.json
+- messageType: OrderExportRequested
+  schema: payload-schemas/order-export-requested.v1.schema.json
+- messageType: OrderExportReady
+  schema: payload-schemas/order-export-ready.v1.schema.json
+resultingMessageTypeCount: 45

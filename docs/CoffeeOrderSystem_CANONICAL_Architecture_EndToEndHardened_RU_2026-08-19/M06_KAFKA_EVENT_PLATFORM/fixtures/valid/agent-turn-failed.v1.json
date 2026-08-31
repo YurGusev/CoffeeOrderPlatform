@@ -1,0 +1,9 @@
+{
+  "turnRef": "turnRef-ref",
+  "conversationRef": "conversationRef-ref",
+  "turnSequence": "1",
+  "errorCode": "errorCode-ref",
+  "userSafeFallbackText": "userSafeFallbackText-ref",
+  "terminal": true,
+  "failedAtUtc": "2026-08-19T12:00:00Z"
+}

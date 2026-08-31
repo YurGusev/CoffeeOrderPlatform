@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "order-export-requested",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "exportJobRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "querySnapshotRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "exportRevision": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "format": {
+      "enum": [
+        "xlsx",
+        "pdf"
+      ]
+    },
+    "requestedBy": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "exportJobRef",
+    "querySnapshotRef",
+    "exportRevision",
+    "format",
+    "requestedBy"
+  ]
+}

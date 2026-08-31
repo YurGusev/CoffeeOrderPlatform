@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorder.local/contracts/kafka/invoicepriceproofmanifest.v1.schema.json",
+  "title": "InvoicePriceProofManifest.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "priceProofRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "clientInvoiceRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "checkoutSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "wholesaleSnapshotRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "allocationManifestSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "allocationRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderItemRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "supplierUnitPriceMinor": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "lineAmountMinor": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "supplierLineRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "allocationRef",
+          "orderRef",
+          "orderItemRef",
+          "quantity",
+          "supplierUnitPriceMinor",
+          "lineAmountMinor",
+          "supplierLineRef"
+        ]
+      }
+    },
+    "orders": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "orderRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "orderVersionAtCheckout": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "amountMinor": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "lineCoverageHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "allocationCount": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "orderRef",
+          "orderVersionAtCheckout",
+          "amountMinor",
+          "lineCoverageHash",
+          "allocationCount"
+        ]
+      }
+    }
+  },
+  "required": [
+    "priceProofRef",
+    "clientInvoiceRef",
+    "checkoutSnapshotRef",
+    "wholesaleSnapshotRef",
+    "allocationManifestSha256",
+    "currency",
+    "lines",
+    "orders"
+  ]
+}
