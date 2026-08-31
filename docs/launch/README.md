@@ -1,6 +1,6 @@
-# Launch Package: React + Backend + AROMA Cart
+# Пакет первого запуска: React, backend и корзина AROMA
 
-Статус: greenfield implementation baseline для первого запуска CoffeeOrderPlatform.
+Статус: исходная точка реализации новой CoffeeOrderPlatform.
 
 Этот пакет превращает каноническую архитектуру в короткий исполнимый план. Он
 не описывает миграцию с CoffeeOrderSystem, не требует совместимости с C# и не
@@ -20,19 +20,18 @@
 
 ## Состав пакета
 
-1. [Scope and decisions](00_SCOPE_AND_DECISIONS.md)
-2. [Runtime architecture](01_RUNTIME_ARCHITECTURE.md)
-3. [First vertical slice](02_FIRST_VERTICAL_SLICE.md)
-4. [HTTP API contract](03_HTTP_API_CONTRACT.md)
-5. [AROMA cart safety](04_AROMA_CART_SAFETY.md)
-6. [Data ownership](05_DATA_OWNERSHIP.md)
-7. [Events and recovery](06_EVENTS_AND_RECOVERY.md)
-8. [Frontend contract](07_FRONTEND_CONTRACT.md)
-9. [Delivery plan](08_DELIVERY_PLAN.md)
+1. [Границы и решения](00_SCOPE_AND_DECISIONS.md)
+2. [Архитектура исполнения](01_RUNTIME_ARCHITECTURE.md)
+3. [Первая вертикаль](02_FIRST_VERTICAL_SLICE.md)
+4. [Контракт HTTP API](03_HTTP_API_CONTRACT.md)
+5. [Безопасность корзины AROMA](04_AROMA_CART_SAFETY.md)
+6. [Владение данными](05_DATA_OWNERSHIP.md)
+7. [События и восстановление](06_EVENTS_AND_RECOVERY.md)
+8. [Контракт frontend](07_FRONTEND_CONTRACT.md)
+9. [План реализации](08_DELIVERY_PLAN.md)
 
-## Canonical authority
+## Сила канонических документов
 
-Пакет является прикладной greenfield-проекцией и не изменяет пять immutable
-canonical revision roots. При конфликте бизнес-инвариантов действуют M04,
+Пакет является прикладной проекцией новой системы и не изменяет пять
+неизменяемых канонических revision roots. При конфликте бизнес-инвариантов действуют M04,
 M06, M07, M11, M12, M19, M20 и актуальные pricing/contract-closure overlays.
-

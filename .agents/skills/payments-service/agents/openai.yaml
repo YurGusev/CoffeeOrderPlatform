@@ -1,0 +1,4 @@
+interface:
+  display_name: "Сервис платежей"
+  short_description: "Безопасный для провайдера lifecycle платежей"
+  default_prompt: "Используй $payments-service для реализации или проверки платёжной возможности."

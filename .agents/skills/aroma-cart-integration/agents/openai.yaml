@@ -1,0 +1,4 @@
+interface:
+  display_name: "Интеграция корзины AROMA"
+  short_description: "Безопасное приведение корзины к целевому состоянию"
+  default_prompt: "Используй $aroma-cart-integration для реализации или проверки сценария корзины AROMA."

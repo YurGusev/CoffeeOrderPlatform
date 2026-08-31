@@ -1,12 +1,12 @@
-# Frontend Contract
+# Контракт frontend
 
-## Recommendation
+## Рекомендация
 
-Build a new React application against `client-v1`. Existing CoffeeOrderSystem
-React is UX/reference material only; reuse visually independent components
-after dependency review, not its API/state layer.
+Создать новое React-приложение поверх `client-v1`. React из CoffeeOrderSystem
+используется только как источник UX-решений. После проверки зависимостей можно
+брать визуально независимые компоненты, но не его API/state слой.
 
-## Launch routes
+## Маршруты первого запуска
 
 ```text
 /app/customers
@@ -15,7 +15,7 @@ after dependency review, not its API/state layer.
 /app/orders/:orderRef
 ```
 
-## Order creation flow
+## Сценарий создания заказа
 
 1. select/create customer;
 2. search persisted Catalog;
@@ -25,7 +25,7 @@ after dependency review, not its API/state layer.
 6. navigate to Order Card;
 7. subscribe to SSE invalidations and refetch the owner resource.
 
-## Required UI states
+## Обязательные состояния UI
 
 - loading, empty, validation and Problem Details;
 - stale quote;
@@ -39,7 +39,7 @@ after dependency review, not its API/state layer.
 The browser never calculates authoritative totals, selects actor identity,
 calls AROMA directly or synthesizes allowed actions.
 
-## Frontend foundation
+## Основа frontend
 
 - React Router;
 - TanStack Query for server state;
@@ -48,4 +48,3 @@ calls AROMA directly or synthesizes allowed actions.
 - Playwright critical-path E2E;
 - CSP and immutable static assets;
 - API mocks generated from the same contracts for parallel frontend work.
-

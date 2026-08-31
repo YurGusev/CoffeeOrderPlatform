@@ -1,0 +1,4 @@
+interface:
+  display_name: "Владение PostgreSQL"
+  short_description: "Защищает границы БД на владельца"
+  default_prompt: "Используй $postgres-service-ownership для проектирования модели данных и транзакции сервиса."

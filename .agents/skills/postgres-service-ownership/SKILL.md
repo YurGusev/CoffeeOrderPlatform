@@ -1,0 +1,21 @@
+---
+name: postgres-service-ownership
+description: Проектировать или менять PostgreSQL schemas, migrations, transactions, locks, indexes и границы «БД на владельца» в CoffeeOrderPlatform.
+---
+
+# Владение PostgreSQL в сервисах
+
+У каждого контекста один writer и владелец миграций. Остальные используют API,
+события владельца и локальные projections; межвладельческий SQL запрещён.
+
+- Version and forward-test migrations; make recovery explicit.
+- One acquired connection per transaction; no network under DB locks.
+- Constraints/indexes encode correctness and performance.
+- Use application-owned optimistic versions on public boundaries.
+- Define money, time, identity, retention, PII, and deletion semantics.
+- Keep Outbox/Inbox with the owning transaction.
+- Prefer visible raw SQL for locks, fencing, CTEs, and queues.
+- Budget pools fleet-wide with operational headroom.
+
+Проверять чистую миграцию, constraints, concurrency, deadlocks/timeouts, планы,
+backup и restore на настоящем PostgreSQL.

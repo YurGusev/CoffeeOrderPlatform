@@ -1,22 +1,22 @@
-# First Vertical Slice
+# Первая вертикаль
 
-## Happy path
+## Успешный сценарий
 
 ```text
-1. React creates/selects Customer.
-2. React searches Catalog persisted snapshot.
-3. React requests PricingQuote.
-4. React creates Draft Order with quoteRef/hash and product snapshot.
-5. React confirms Draft with expected OrderVersion and Idempotency-Key.
-6. Orders transaction writes Confirmed + Desired + history + Outbox.
-7. Orders preparation verifies persisted Catalog mapping/availability facts.
-8. Convergence acquires lease/fence and invokes AROMA Gateway.
-9. Gateway performs fresh GET -> at most one mutation -> fresh GET.
-10. Orders stores Observed and Convergence result.
-11. Realtime invalidation refreshes Order Card in React.
+1. React создаёт или выбирает Customer.
+2. React ищет товар в сохранённом снимке Catalog.
+3. React запрашивает PricingQuote.
+4. React создаёт Draft Order с quoteRef/hash и снимком товара.
+5. React подтверждает Draft с ожидаемой OrderVersion и Idempotency-Key.
+6. Транзакция Orders сохраняет Confirmed, Desired, историю и Outbox.
+7. Подготовка Orders проверяет сохранённые факты mapping/availability Catalog.
+8. Convergence получает lease/fence и вызывает AROMA Gateway.
+9. Gateway выполняет свежий GET, не более одной мутации и свежий GET.
+10. Orders сохраняет Observed и результат Convergence.
+11. Realtime-инвалидация обновляет Order Card в React.
 ```
 
-## User-visible states
+## Состояния, видимые пользователю
 
 Order lifecycle:
 
@@ -36,14 +36,13 @@ Blocked
 UnknownOutcome
 ```
 
-## Acceptance scenario
+## Приёмочный сценарий
 
-Given a complete Catalog snapshot and valid AROMA mapping, when an operator
-confirms a Draft, then the HTTP response is returned after the local Orders
-transaction only. The UI subsequently receives invalidation and eventually
-shows `InSync` with desired and observed quantities equal.
+При полном снимке Catalog и корректном AROMA mapping подтверждение Draft
+возвращает HTTP-ответ сразу после локальной транзакции Orders. Затем интерфейс
+получает инвалидацию и показывает `InSync`, когда desired и observed quantities
+совпадают.
 
-If the mutation response is lost, the UI shows `UnknownOutcome`; the system
-performs a fresh observation before allowing a new mutation. The operator has
-no generic “send again” action.
-
+Если ответ на мутацию потерян, интерфейс показывает `UnknownOutcome`. До новой
+мутации система обязана выполнить свежее наблюдение. Универсального действия
+«отправить ещё раз» у оператора нет.

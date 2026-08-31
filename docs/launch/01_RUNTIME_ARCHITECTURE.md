@@ -1,8 +1,8 @@
-# Runtime Architecture
+# Архитектура исполнения
 
-## Deployment units
+## Единицы развёртывания
 
-| Runtime | Owner | Назначение | Data access |
+| Runtime | Владелец | Назначение | Доступ к данным |
 |---|---|---|---|
 | `edge-gateway` | Platform | TLS, auth handoff, routing, limits | none |
 | `web` | Frontend | React static assets | none |
@@ -20,7 +20,7 @@
 Каждый runtime — один Node process на container. Масштабирование выполняется
 replicas, а не `node:cluster` или PM2.
 
-## Trust surfaces
+## Границы доверия
 
 ```text
 Browser -> edge -> /api/client-v1/* -> owning services
@@ -32,13 +32,12 @@ Orders convergence -> aroma-gateway -> allowlisted provider origin
 Edge не содержит business authorization и не обращается к PostgreSQL.
 AROMA credentials доступны только `aroma-gateway`.
 
-## Platform packages
+## Технические пакеты платформы
 
 ```text
 contracts, config, database, migrations, http-runtime, http-client,
 security, observability, idempotency, outbox, inbox, kafka-runtime, testing
 ```
 
-Business types не помещаются в shared packages. Межсервисные зависимости
-разрешены только через versioned OpenAPI/JSON Schema contracts.
-
+Бизнес-типы не помещаются в общие пакеты. Межсервисные зависимости
+разрешены только через версионированные контракты OpenAPI/JSON Schema.

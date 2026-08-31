@@ -1,0 +1,4 @@
+interface:
+  display_name: "React-интерфейс оператора"
+  short_description: "Contract-first SPA оператора"
+  default_prompt: "Используй $react-operator-frontend для реализации frontend-среза оператора."

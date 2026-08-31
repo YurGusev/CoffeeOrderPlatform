@@ -1,0 +1,4 @@
+interface:
+  display_name: "Микросервисы новой платформы"
+  short_description: "Границы сервисов и владение"
+  default_prompt: "Используй $greenfield-microservices для проектирования границы сервиса CoffeeOrderPlatform."

@@ -1,15 +1,15 @@
-# Scope and Decisions
+# Границы и принятые решения
 
 ## Принятый подход
 
-- Greenfield microservices-first, без промежуточного модульного монолита.
+- Новая система строится сразу на микросервисах, без промежуточного модульного монолита.
 - TypeScript strict, Node.js 24 LTS, Fastify-first.
 - React SPA; OpenAPI-generated client; server state через TanStack Query.
-- PostgreSQL — authoritative state, отдельная database/schema и writer на owner.
-- Kafka — durable asynchronous transport; business state в Kafka не хранится.
-- HTTP — немедленные query/command и bounded provider calls.
-- SSE — invalidation и progress для браузера.
-- Docker Compose — первый воспроизводимый runtime; Kubernetes не нужен для MVP.
+- PostgreSQL — источник истины; у каждого владельца отдельная БД/схема и единственный writer.
+- Kafka — долговечный асинхронный транспорт; бизнес-состояние в Kafka не хранится.
+- HTTP — немедленные запросы/команды и ограниченные вызовы провайдера.
+- SSE — инвалидация и отображение прогресса в браузере.
+- Docker Compose — первое воспроизводимое окружение; Kubernetes для первой версии не нужен.
 
 ## В первой вертикали реализуются
 
@@ -42,4 +42,3 @@
 - Failed provider GET не очищает последнее Observed.
 - Timeout unsafe mutation означает `UnknownOutcome`, а не автоматический retry.
 - React показывает server-derived state и `allowedActions`.
-

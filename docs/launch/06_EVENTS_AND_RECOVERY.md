@@ -1,8 +1,8 @@
-# Events and Recovery
+# События и восстановление
 
-## Launch contracts
+## Контракты первого запуска
 
-| Message | Kind | Producer | Consumer | Key |
+| Сообщение | Вид | Producer | Consumer | Ключ |
 |---|---|---|---|---|
 | `CatalogSnapshotCompleted` | event | catalog-supplier-sync | catalog-service | supplierRef |
 | `CatalogMappingChanged` | event | catalog-service | orders-aroma-preparation | productRef |
@@ -15,7 +15,7 @@
 Every contract has versioned JSON Schema, `messageId`, `occurredAt`, trace,
 causation, correlation and owner-defined aggregate version where applicable.
 
-## Delivery semantics
+## Семантика доставки
 
 - business state and Outbox are written in one owner transaction;
 - transport is at-least-once;
@@ -24,7 +24,7 @@ causation, correlation and owner-defined aggregate version where applicable.
 - offsets commit only after durable processing;
 - out-of-order events cannot roll back newer owner versions.
 
-## Retry policy
+## Политика повторов
 
 - transient safe reads: bounded exponential retry with deadline;
 - invalid schema: quarantine/DLQ, no retry loop;
@@ -32,7 +32,7 @@ causation, correlation and owner-defined aggregate version where applicable.
 - long delay: durable scheduled state, never consumer sleep;
 - replay preserves original message and operation IDs.
 
-## Required failure tests
+## Обязательные тесты отказов
 
 1. duplicate `OrderConfirmed`;
 2. crash after DB commit before Kafka offset;
@@ -42,4 +42,3 @@ causation, correlation and owner-defined aggregate version where applicable.
 6. provider accepted mutation but response was lost;
 7. failed verification GET;
 8. service restart with unfinished MutationReservation;
-

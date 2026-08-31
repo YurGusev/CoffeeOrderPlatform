@@ -1,0 +1,4 @@
+interface:
+  display_name: "Контракты HTTP API"
+  short_description: "Разделённые по доверию OpenAPI surfaces"
+  default_prompt: "Используй $http-api-contracts для проектирования и проверки HTTP API."

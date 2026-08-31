@@ -1,6 +1,6 @@
-# HTTP API Contract
+# Контракт HTTP API
 
-## Client routes for launch
+## Клиентские маршруты первого запуска
 
 ```http
 POST /api/client-v1/customers
@@ -16,22 +16,22 @@ GET  /api/client-v1/orders/{orderRef}
 GET  /events
 ```
 
-## Command requirements
+## Требования к командам
 
-Mutating commands require:
+Команды, изменяющие состояние, требуют:
 
-- authenticated actor derived by the server;
+- аутентифицированного actor, определённого сервером;
 - `Idempotency-Key`;
-- expected application-owned decimal-string version;
-- request and response schemas;
-- correlation and trace context;
-- stable Problem Details code.
+- ожидаемой версии владельца в виде decimal string;
+- схем request и response;
+- контекста correlation и trace;
+- стабильного кода Problem Details.
 
 `confirm` receives no provider identifier, URL, credential or authoritative
 price from the browser. It validates the persisted quote reference/hash and
 current OrderVersion locally.
 
-## Order Card response minimum
+## Минимальный ответ Order Card
 
 ```json
 {
@@ -52,11 +52,11 @@ current OrderVersion locally.
 }
 ```
 
-Money and BIGINT versions are decimal strings on the wire.
+Денежные значения и версии BIGINT передаются как decimal strings.
 
-## Errors
+## Ошибки
 
-Use RFC 9457 Problem Details with stable `code`. Required launch codes include:
+Использовать RFC 9457 Problem Details со стабильным `code`. Обязательные коды первого запуска:
 
 ```text
 ORDER_VERSION_CONFLICT
@@ -69,4 +69,3 @@ AROMA_UNKNOWN_OUTCOME
 AROMA_MUTATION_FENCED
 IDEMPOTENCY_CONFLICT
 ```
-

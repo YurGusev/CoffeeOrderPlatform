@@ -1,0 +1,4 @@
+interface:
+  display_name: "Жизненный цикл Orders"
+  short_description: "Ядро согласованности Orders"
+  default_prompt: "Используй $orders-lifecycle для безопасной реализации поведения Orders."

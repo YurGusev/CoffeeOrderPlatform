@@ -1,0 +1,4 @@
+interface:
+  display_name: "Обработка артефактов"
+  short_description: "Безопасная обработка документов и media"
+  default_prompt: "Используй $artifact-processing для проектирования обработки артефакта или документа."

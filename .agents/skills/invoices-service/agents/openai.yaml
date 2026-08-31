@@ -1,0 +1,4 @@
+interface:
+  display_name: "Сервис счетов"
+  short_description: "Материализация и восстановление счетов"
+  default_prompt: "Используй $invoices-service для реализации или проверки возможности счетов."

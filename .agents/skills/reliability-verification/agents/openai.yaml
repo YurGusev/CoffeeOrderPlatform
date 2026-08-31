@@ -1,0 +1,4 @@
+interface:
+  display_name: "Проверка надёжности"
+  short_description: "Контракты, отказы, восстановление и SLO"
+  default_prompt: "Используй $reliability-verification для проверки изменения платформы."
