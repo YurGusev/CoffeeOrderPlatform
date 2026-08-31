@@ -122,10 +122,12 @@ model не экспортируется и не используется как 
 
 - headers: Authorization + Idempotency-Key + correlation/trace;
 - body: `customerRef`, `lines` array 1–100; line = `productRef`,
-  `quantity` positive decimal string;
-- `201 PricingQuoteResponse`: `quoteRef`, `policyVersionRef`, `createdAt`,
-  `expiresAt`, `currency: RUB`, `lines`, `totalMinor`, `hash`;
-- response line: `productRef`, `quantity`, `unitMinor`, `lineTotalMinor`;
+  `variantRef`, `quantity` positive decimal string с scale не более 3;
+- `201 PricingQuoteResponse`: `quoteRef`, `policyVersionRef`,
+  `catalogSnapshotRevision`, `customerRef`, `createdAt`, `expiresAt`,
+  `currency: RUB`, `lines`, `totalMinor`, `hash`;
+- response line: `lineNumber`, `productRef`, `variantRef`, `quantity`, `unit`,
+  `unitMinor`, `lineTotalMinor`;
 - errors: `400 VALIDATION_FAILED`, `404 CATALOG_PRODUCT_NOT_FOUND`,
   `409 CATALOG_PRODUCT_UNAVAILABLE`, `409 IDEMPOTENCY_CONFLICT`.
 
@@ -207,7 +209,10 @@ money, Desired/Observed quantities или `allowedActions`; после него 
 Все routes private, требуют mTLS/service identity и отсутствуют в edge routing:
 
 - `GET /api/internal-v1/catalog/products/{productRef}/pricing-input`;
-- `POST /api/internal-v1/pricing/quotes:verify`;
+- `POST /api/internal-v1/pricing/quotes:verify`; request содержит `quoteRef`,
+  `hash`, `customerRef`, ожидаемые `productRef`/`variantRef`/`quantity`, response
+  возвращает authoritative immutable quote facts; точная семантика задана в
+  `docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md`, раздел 6;
 - `POST /api/internal-v1/aroma/catalog-exports` с response
   `application/x-ndjson`; точные request, record types, batch/hash limits,
   terminal semantics и audience заданы в

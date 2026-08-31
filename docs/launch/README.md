@@ -36,6 +36,7 @@
 14. [Единая линия реализации и зависимости задач](13_DELIVERY_DEPENDENCY_GRAPH.md)
 15. [Исполнимая спецификация Customer](14_CUSTOMER_IMPLEMENTATION_SPEC.md)
 16. [Исполнимая спецификация Catalog](15_CATALOG_IMPLEMENTATION_SPEC.md)
+17. [Исполнимая спецификация PricingQuote](16_PRICING_IMPLEMENTATION_SPEC.md)
 
 ## Сила канонических документов
 
