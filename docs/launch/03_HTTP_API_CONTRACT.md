@@ -40,7 +40,7 @@ current OrderVersion locally.
   "status": "Confirmed",
   "customer": {"customerRef": "cus_...", "displayName": "..."},
   "items": [],
-  "pricing": {"quoteRef": "prq_...", "totalMinor": "12500", "currency": "RUB"},
+  "pricing": {"totalMinor": "12500", "currency": "RUB", "quoteProofs": [{"quoteRef": "prq_...", "hash": "...", "expiresAt": "2026-09-01T10:15:00Z"}]},
   "aroma": {
     "state": "OutOfSync",
     "desiredRevision": "3",

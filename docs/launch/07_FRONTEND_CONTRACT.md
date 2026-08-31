@@ -30,7 +30,7 @@
 - loading, empty, validation and Problem Details;
 - stale quote;
 - optimistic concurrency conflict with explicit refresh;
-- pending Catalog proof;
+- Draft state `NotRequested` и Confirmed state `PendingObservation`;
 - AROMA OutOfSync/Converging/InSync;
 - Blocked with owner-provided reason;
 - UnknownOutcome with no blind retry button;
