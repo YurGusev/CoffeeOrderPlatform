@@ -30,17 +30,17 @@ audience is restricted to Orders convergence.
 ```text
 1. Получить долговечный lease и монотонно растущий fence epoch.
 2. Проверить актуальность Desired revision.
-3. Проверить последний полный снимок Catalog и активный mapping.
-4. Зарезервировать одну точную операцию мутации.
-5. Выполнить свежий GET корзины.
-6. При равенстве сохранить InSync без мутации.
-7. Выполнить не более одной мутации.
-8. Выполнить свежий GET корзины.
-9. Сохранить Observed и точный результат проверки.
-10. Завершить попытку и освободить lease.
+3. Создать durable Attempt и выполнить свежий GET корзины.
+4. Сохранить только полный Observed при актуальном fence.
+5. При равенстве сохранить InSync без мутации.
+6. Выбрать ровно одну детерминированную разницу и проверить mapping.
+7. Зарезервировать точную mutation с новым operationRef.
+8. Повторно проверить fence и выполнить не более одной mutation.
+9. Выполнить свежий verification GET корзины.
+10. Сохранить Observed/result при актуальном fence и освободить lease.
 ```
 
-Timeout after step 7 persists `UnknownOutcome`. A new attempt must reconcile
+Timeout after step 8 persists `UnknownOutcome`. A new attempt must reconcile
 with fresh GET and operation reservation before any further mutation.
 
 ## Правила обработки отказов

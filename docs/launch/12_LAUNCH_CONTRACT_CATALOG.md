@@ -266,11 +266,11 @@ provider response и secret data запрещены.
 | messageType | Producer | Key | Payload required |
 |---|---|---|---|
 | `CatalogSnapshotActivated.v1` | catalog-activation-worker | supplierRef | `supplierRef`, `snapshotRef`, `snapshotRevision`, `activatedAt`, `productCount`, `variantCount`, `offerCount`, `batchCount`, `contentHash` |
-| `CatalogMappingChanged.v1` | catalog-activation-worker | productRef | `productRef`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `effectiveAt` |
-| `OrderConfirmed.v1` | orders-service | orderRef | `orderRef`, `orderVersion`, `customerRef`, `confirmedAt`, `desiredRevision` |
-| `AromaConvergenceRequested.v1` | Orders | orderRef | `orderRef`, `desiredRevision`, `reason: OrderConfirmed|CatalogChanged|OperatorRequested|Recovery` |
-| `AromaObservationChanged.v1` | aroma-observer/aroma-convergence | orderRef | `orderRef`, `observedRevision`, `observedAt`, `state`, `cartFingerprint` |
-| `AromaConvergenceChanged.v1` | aroma-convergence | orderRef | `orderRef`, `desiredRevision`, `observedRevision`, `attemptRef`, `state`, `changedAt`, `blockerCodes[]` |
+| `CatalogMappingChanged.v1` | catalog-activation-worker | productRef | `productRef`, `variantRef`, `offerRef|null`, `catalogSnapshotRevision`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `availability`, `effectiveAt` |
+| `OrderConfirmed.v1` | orders-service | orderRef | `orderRef`, `orderVersion`, `customerRef`, `confirmedAt`, `contributionRevision` |
+| `AromaConvergenceRequested.v1` | Orders | cartScopeRef | `cartScopeRef`, `desiredRevision`, `reason: OrderConfirmed|CatalogChanged|OperatorRequested|Recovery`, `orderRef|null` |
+| `AromaObservationChanged.v1` | aroma-observer/aroma-convergence | cartScopeRef | `cartScopeRef`, `observedRevision`, `observedAt`, `state`, `cartFingerprint` |
+| `AromaConvergenceChanged.v1` | aroma-convergence | cartScopeRef | `cartScopeRef`, `desiredRevision`, `observedRevision`, `attemptRef`, `state`, `changedAt`, `blockerCodes[]` |
 | `RealtimeInvalidated.v1` | owner services | subjectRef | `subjectType: order`, `subjectRef`, `ownerVersion`, `reason: OrderChanged|AromaStateChanged` |
 
 Дополнительные ограничения payload:

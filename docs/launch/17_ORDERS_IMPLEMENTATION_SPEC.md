@@ -6,7 +6,7 @@
 ## 1. Граница #8 и #11
 
 Issue #8 реализует `orders-service`: Draft, позиции, локальные snapshots,
-атомарный Confirm, initial Desired, History, Idempotency, Outbox и Order Card.
+атомарный Confirm, immutable Order contribution, History, Idempotency, Outbox и Order Card.
 
 Issue #11 отдельно создаёт и использует `Observed`, `ConvergenceAttempt`,
 `MutationReservation`, `Lease`, `Fence` и Inbox. Эти таблицы нельзя создавать в
@@ -63,14 +63,14 @@ Append-only: `history_ref`, `order_ref`, `order_version`, `event_type`
 не содержит PII, Authorization или произвольный request body. Unique
 `(order_ref,order_version,event_type,item_ref-or-empty)` предотвращает дубли.
 
-### `orders.desired_cart_revisions` и `orders.desired_cart_lines`
+### `orders.order_desired_contributions` и строки
 
-Header: `(order_ref,desired_revision)` PK, `order_version`, `state=Current`,
+Header: `(order_ref,contribution_revision)` PK, `order_version`, `state=Current`,
 `created_at`, unique один Current на order. Line: `offer_ref`,
 `quantity_milli`, `contribution_hash`, массив отсортированных `item_ref` только
-для audit. PK `(order_ref,desired_revision,offer_ref)`.
+для audit. PK `(order_ref,contribution_revision,offer_ref)`.
 
-Initial `desiredRevision="1"` создаётся только при Confirm. Строки Order с
+Initial `contributionRevision="1"` создаётся только при Confirm. Строки Order с
 одинаковым `offerRef` агрегируются суммой `quantityMilli`; zero отсутствует.
 `contributionHash` — SHA-256 compact canonical JSON отсортированных
 `itemRef/productRef/variantRef/quantityMilli/quoteRef/quoteLineNumber`.
@@ -169,12 +169,13 @@ Confirmed Order возвращает `409 ORDER_NOT_EDITABLE`.
 3. проверить для каждой сохранённой строки refs/hash format, `RUB`,
    `quote_expires_at > transaction_timestamp()`, положительное quantity и money;
 4. проверить одну currency и отсутствие duplicate item/line proof;
-5. агрегировать Desired lines по `offerRef`, проверить bigint overflow;
+5. агрегировать Order contribution lines по `offerRef`, проверить bigint overflow;
 6. UPDATE Order: `Confirmed`, version `+1`, `confirmed_at`;
 7. запретить дальнейшую мутацию snapshots правами/trigger;
-8. INSERT History `OrderConfirmed` и Desired revision 1/lines;
-9. INSERT Outbox `OrderConfirmed.v1` и `AromaConvergenceRequested.v1` с reason
-   `OrderConfirmed`; оба key=`orderRef`, aggregate version=new OrderVersion;
+8. INSERT History `OrderConfirmed` и contribution revision 1/lines;
+9. INSERT Outbox только `OrderConfirmed.v1` с `contributionRevision="1"`,
+   key=`orderRef`, aggregate version=new OrderVersion; convergence wake-up
+   публикует preparation #11 после построения cart-level Desired;
 10. сохранить completed idempotency response и commit.
 
 В шагах 1–10 запрещены HTTP, Kafka publish, AROMA/provider calls, filesystem и

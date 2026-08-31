@@ -41,7 +41,8 @@
 ## Неподвижные инварианты
 
 - `Confirm` не вызывает Catalog, Pricing или AROMA по HTTP.
-- `Confirm` атомарно сохраняет Order, Desired, history и Outbox.
+- `Confirm` атомарно сохраняет Order, contribution, history и Outbox;
+  cart-level Desired строит `orders-aroma-preparation` после commit.
 - Orders владеет Desired/Observed/Convergence/Attempt/Lease/Fencing.
 - AROMA Gateway владеет только provider session/protocol/HTTP.
 - Failed provider GET не очищает последнее Observed.

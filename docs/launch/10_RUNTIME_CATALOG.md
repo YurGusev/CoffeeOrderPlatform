@@ -103,7 +103,7 @@ manifests без изменения смысла. Любое отклонени�
 
 ## 7. `orders-service`
 
-- **Назначение:** Draft/items, quote proof, атомарный Confirm, Desired, history,
+- **Назначение:** Draft/items, quote proof, атомарный Confirm, Order contribution, history,
   idempotency и server-derived Order Card.
 - **Владелец:** Orders.
 - **Входящие HTTP:** draft/item/confirm/reconciliation/Order Card routes из

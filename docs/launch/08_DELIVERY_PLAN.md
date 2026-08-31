@@ -26,7 +26,7 @@
 
 - Draft/items/version/history;
 - quote/product snapshots;
-- atomic Confirm + Desired + Outbox;
+- atomic Confirm + Order contribution + Outbox; preparation строит cart Desired;
 - Order Card and SSE invalidation;
 - lifecycle, idempotency and concurrency tests.
 

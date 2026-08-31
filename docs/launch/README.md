@@ -39,6 +39,7 @@
 17. [Исполнимая спецификация PricingQuote](16_PRICING_IMPLEMENTATION_SPEC.md)
 18. [Исполнимая спецификация Orders Draft и Confirm](17_ORDERS_IMPLEMENTATION_SPEC.md)
 19. [Исполнимая спецификация React-интерфейса](18_FRONTEND_IMPLEMENTATION_SPEC.md)
+20. [Исполнимая спецификация AROMA convergence](19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md)
 
 ## Сила канонических документов
 

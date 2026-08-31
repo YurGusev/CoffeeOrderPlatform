@@ -8,10 +8,10 @@
 3. React запрашивает PricingQuote.
 4. React создаёт Draft Order с quoteRef/hash и снимком товара.
 5. React подтверждает Draft с ожидаемой OrderVersion и Idempotency-Key.
-6. Транзакция Orders сохраняет Confirmed, Desired, историю и Outbox.
-7. Подготовка Orders проверяет сохранённые факты mapping/availability Catalog.
-8. Convergence получает lease/fence и вызывает AROMA Gateway.
-9. Gateway выполняет свежий GET, не более одной мутации и свежий GET.
+6. Транзакция Orders сохраняет Confirmed, Order contribution, историю и Outbox.
+7. Подготовка Orders агрегирует contributions и mapping facts в cart-level Desired.
+8. Convergence получает lease/fence и выполняет fresh GET через AROMA Gateway.
+9. После GET он резервирует максимум одну точную mutation и выполняет verification GET.
 10. Orders сохраняет Observed и результат Convergence.
 11. Realtime-инвалидация обновляет Order Card в React.
 ```

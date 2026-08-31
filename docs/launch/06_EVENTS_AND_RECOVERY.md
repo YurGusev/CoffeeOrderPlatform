@@ -11,9 +11,9 @@ launch-сообщения нельзя вводить без изменения 
 | `CatalogSnapshotActivated` | event | catalog-activation-worker | Pricing, Orders preparation | supplierRef |
 | `CatalogMappingChanged` | event | catalog-activation-worker | orders-aroma-preparation | productRef |
 | `OrderConfirmed` | event | orders-service | orders-aroma-preparation | orderRef |
-| `AromaConvergenceRequested` | command | Orders | aroma-convergence | orderRef |
-| `AromaObservationChanged` | event | aroma-observer/convergence | Orders projections | orderRef |
-| `AromaConvergenceChanged` | event | aroma-convergence | realtime projection | orderRef |
+| `AromaConvergenceRequested` | command | Orders preparation/service | aroma-convergence | cartScopeRef |
+| `AromaObservationChanged` | event | aroma-observer/convergence | Orders projections | cartScopeRef |
+| `AromaConvergenceChanged` | event | aroma-convergence | realtime projection | cartScopeRef |
 | `RealtimeInvalidated` | event | owners | realtime-gateway | subjectRef |
 
 Every contract has versioned JSON Schema, `messageId`, `occurredAt`, trace,

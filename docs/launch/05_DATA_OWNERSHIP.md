@@ -25,7 +25,7 @@
 ```text
 Order status/version
 + immutable item/product/price snapshots
-+ Desired contribution/revision
++ immutable Order contribution
 + Order history/audit
 + Outbox records
 ```
