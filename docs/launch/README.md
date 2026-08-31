@@ -41,6 +41,7 @@
 19. [Исполнимая спецификация React-интерфейса](18_FRONTEND_IMPLEMENTATION_SPEC.md)
 20. [Исполнимая спецификация AROMA convergence](19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md)
 21. [Исполнимая спецификация realtime SSE](20_REALTIME_SSE_IMPLEMENTATION_SPEC.md)
+22. [Исполнимая спецификация итогового launch gate](21_LAUNCH_VERIFICATION_SPEC.md)
 
 ## Сила канонических документов
 
