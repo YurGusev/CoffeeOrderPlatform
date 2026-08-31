@@ -9,7 +9,8 @@
 
 - repository/app/package layout;
 - OpenAPI and event schemas for launch routes/messages;
-- Docker Compose with PostgreSQL, Kafka and observability;
+- Docker Compose с подключением к существующему PostgreSQL, а также Kafka и observability;
+- provisioning отдельных БД/ролей новой платформы без изменения `coffeeorderdb`;
 - shared HTTP, DB, Outbox/Inbox, auth and telemetry runtimes;
 - React shell and generated mock client.
 

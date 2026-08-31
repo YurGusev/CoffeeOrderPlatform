@@ -17,7 +17,9 @@
 | `aroma-gateway` | Integration | provider session and typed primitives | integration DB/cache only |
 | `realtime-gateway` | Realtime | SSE invalidation fanout | no business DB |
 
-Каждый runtime — один Node process на container. Масштабирование выполняется
+Каждый runtime — один Node process на container. Compose новой платформы
+подключает процессы к уже работающему `coffee_postgres` и не создаёт второй
+PostgreSQL. Масштабирование выполняется
 replicas, а не `node:cluster` или PM2.
 
 ## Границы доверия

@@ -29,6 +29,7 @@
 7. [События и восстановление](06_EVENTS_AND_RECOVERY.md)
 8. [Контракт frontend](07_FRONTEND_CONTRACT.md)
 9. [План реализации](08_DELIVERY_PLAN.md)
+10. [Существующая БД и зафиксированные версии](09_EXISTING_DATABASE_AND_VERSIONS.md)
 
 ## Сила канонических документов
 
