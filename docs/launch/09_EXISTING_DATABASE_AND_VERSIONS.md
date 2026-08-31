@@ -30,8 +30,10 @@
 | `coffee_platform_orders` | `orders-service` | runtime Orders через отдельные роли с явным allowlist таблиц |
 | `coffee_platform_integration` | `aroma-gateway` | `aroma-gateway` |
 
-Для каждой БД создаются две роли: `<context>_migrator` для DDL и
-`<runtime>_app` для runtime DML. Runtime-роль не получает `CREATEDB`,
+Для каждой БД создаются migration-role `<context>_migrator` для DDL и одна или
+несколько явно названных runtime-ролей из нормативной спецификации сервиса.
+Для Customer это `coffee_customer_migrator` и `coffee_customer_rw`.
+Runtime-роль не получает `CREATEDB`,
 `CREATEROLE`, DDL и права на другую БД. Пароли не хранятся в Git.
 
 «Чужая БД» — любая БД, отсутствующая в строке runtime в таблице выше. Например,
@@ -123,6 +125,7 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
 | Spectral CLI | `6.16.3` | contract lint |
 | AJV | `8.20.0` | runtime JSON Schema validation |
 | Pino | `10.3.1` | structured logging |
+| `libphonenumber-js` | `1.13.12` | Customer phone parsing, region RU, output E.164 |
 | OpenTelemetry API | `1.9.1` | tracing/metrics API |
 | Dependency Cruiser | `18.2.0` | architecture boundaries |
 | ESLint | `10.9.1` | static checks |

@@ -32,6 +32,9 @@ objects используется `additionalProperties: false`.
 | Тип | Формат |
 |---|---|
 | CustomerRef | `^cus_[0-9A-HJKMNP-TV-Z]{26}$` |
+| AddressRef | `^adr_[0-9A-HJKMNP-TV-Z]{26}$` |
+| ChannelLinkRef | `^chl_[0-9A-HJKMNP-TV-Z]{26}$` |
+| AuditRef | `^aud_[0-9A-HJKMNP-TV-Z]{26}$` |
 | ProductRef | `^prd_[0-9A-HJKMNP-TV-Z]{26}$` |
 | VariantRef | `^var_[0-9A-HJKMNP-TV-Z]{26}$` |
 | QuoteRef | `^prq_[0-9A-HJKMNP-TV-Z]{26}$` |
@@ -80,14 +83,17 @@ model не экспортируется и не используется как 
 - headers: `Authorization`, `Idempotency-Key`, optional `X-Correlation-ID`, `traceparent`;
 - body `CustomerCreateRequest`:
   - `displayName`: required, trimmed string, 1–200;
-  - `phone`: optional E.164 `^\+[1-9][0-9]{7,14}$`;
+  - `phone`: optional raw user input, string 1–64; Customer нормализует его
+    `libphonenumber-js@1.13.12` с region `RU` и возвращает E.164;
   - `email`: optional email, max 254;
   - `address`: optional object `{line1, line2?, city, postalCode?, countryCode}`;
   - как минимум одно из `phone`/`email` обязательно;
 - `201 CustomerResponse`: `customerRef`, `version`, `displayName`, `phone?`,
   `email?`, `address?`, `createdAt`, `updatedAt`;
-- errors: `400 VALIDATION_FAILED`, `409 CUSTOMER_IDENTITY_CONFLICT`,
-  `409 IDEMPOTENCY_CONFLICT`.
+- errors: `400 VALIDATION_FAILED`, `401 AUTHENTICATION_REQUIRED`,
+  `403 ACTOR_CONTEXT_INVALID`, `409 CUSTOMER_PHONE_CONFLICT`,
+  `409 CUSTOMER_EMAIL_CONFLICT`, `409 IDEMPOTENCY_CONFLICT`,
+  `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`.
 
 `GET /api/client-v1/customers`
 
@@ -95,7 +101,8 @@ model не экспортируется и не используется как 
   `cursor` optional opaque string max 512;
 - `200 CustomerSearchResponse`: `{items: CustomerSummary[], nextCursor: string|null}`;
 - `CustomerSummary`: `customerRef`, `version`, `displayName`, masked `phone?`, masked `email?`;
-- errors: `400 VALIDATION_FAILED`.
+- errors: `400 VALIDATION_FAILED`, `400 INVALID_CURSOR`,
+  `401 AUTHENTICATION_REQUIRED`, `403 ACTOR_CONTEXT_INVALID`.
 
 ### 3.2 Catalog
 

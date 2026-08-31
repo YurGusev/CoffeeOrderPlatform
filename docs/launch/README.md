@@ -34,6 +34,7 @@
 12. [Единая конфигурация и единое хранилище секретов](11_CONFIGURATION_AND_SECRETS.md)
 13. [Нормативный каталог HTTP, SSE и событийных контрактов](12_LAUNCH_CONTRACT_CATALOG.md)
 14. [Единая линия реализации и зависимости задач](13_DELIVERY_DEPENDENCY_GRAPH.md)
+15. [Исполнимая спецификация Customer](14_CUSTOMER_IMPLEMENTATION_SPEC.md)
 
 ## Сила канонических документов
 
