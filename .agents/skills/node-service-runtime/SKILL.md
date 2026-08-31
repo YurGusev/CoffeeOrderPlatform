@@ -5,8 +5,12 @@ description: "Создавать или проверять production-серви
 
 # Runtime сервисов Node.js
 
-Основа: зафиксированный Node.js 24 LTS, строгий TypeScript, Fastify-first, один
+Основа: зафиксированный Node.js 26 Current, строгий TypeScript, Fastify-first, один
 процесс на контейнер, ограниченная конкурентность, отмена и OpenTelemetry.
+
+Использовать Temporal для business time, Permission Model audit/enforce,
+native fetch/Undici 8, `node:test` для runtime seams и встроенный TypeScript для
+простых scripts. Экспериментальные FFI/SQLite/VFS требуют отдельного ADR.
 
 - Один composition root на runtime; не вводить вторую framework/DI модель.
 - У каждого маршрута есть схемы request, response и error.

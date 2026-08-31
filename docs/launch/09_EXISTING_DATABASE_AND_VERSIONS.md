@@ -94,43 +94,79 @@ app-role каждого runtime: запись в свою БД должна бы
 
 ## 3. Реестр версий первого запуска
 
-Сейчас репозиторий не содержит package manifest или lockfile, поэтому точные
-версии приложения ещё не являются исполнимыми pins. Таблица разделяет
-подтверждённое окружение и **целевые кандидаты**, которые задача #3 обязана
-проверить, записать в `config/toolchain-versions.json`, manifests и lockfile.
-Только после успешного PR #3 кандидат становится утверждённым pin. В manifests
+Ниже приняты точные версии первого запуска. Задача #3 обязана материализовать
+их в `config/toolchain-versions.json`, manifests и lockfile и доказать
+совместимость. Используется самая свежая доступная версия на дату решения;
+Node.js 26 выбран осознанно, хотя ещё имеет статус Current. В manifests
 запрещены `latest`, `*`, `^` и `~`; images фиксируются также по digest.
 
-| Компонент | Версия | Статус до PR #3 |
+| Компонент | Принятая версия | Примечание |
 |---|---|---|
-| PostgreSQL server | `17.11` (`17-alpine`) | подтверждено на хосте |
-| Docker Engine | `29.7.2` | подтверждено на хосте |
-| Docker Compose plugin | `5.4.0` | подтверждено на хосте |
-| OpenAPI Specification | `3.1.0` | подтверждено каноническими контрактами |
-| Node.js production | `24.20.0` LTS | целевой кандидат; проверить image digest |
-| npm для Node.js | `11.19.0` | кандидат, зависит от Node image |
-| Corepack | `0.35.0` | подтверждено foundation evidence; кандидат |
-| pnpm | `11.22.0` | подтверждено foundation evidence; кандидат |
-| TypeScript | `5.9.3` | подтверждено foundation evidence; кандидат |
-| Fastify | `5.12.1` | целевой кандидат; требуется compatibility spike |
-| `pg` | `8.23.0` | целевой кандидат |
-| Apache Kafka broker | `4.3.1` KRaft | целевой кандидат; проверить `apache/kafka:4.3.1` и зафиксировать digest |
-| `@confluentinc/kafka-javascript` | `1.10.0` | целевой кандидат; требуется compatibility spike |
-| React / React DOM | `19.2.8` | подтверждено legacy UI, для нового frontend кандидат |
-| React Router DOM | `7.18.3` | целевой кандидат |
-| TanStack Query | `5.102.8` | целевой кандидат |
-| Vite | `8.2.2` | целевой кандидат |
-| Vitest | `4.1.10` | подтверждено legacy UI, для новой платформы кандидат |
-| Playwright | `1.62.0` | подтверждено legacy UI, для новой платформы кандидат |
-| `@fastify/swagger` | `9.8.1` | целевой кандидат |
-| `openapi-typescript` | `7.13.0` | подтверждено legacy UI, кандидат |
-| Spectral CLI | `6.16.3` | целевой кандидат |
-| AJV | `8.20.0` | подтверждено foundation evidence; кандидат |
-| Pino | `10.3.1` | целевой кандидат |
-| OpenTelemetry API | `1.9.1` | целевой кандидат |
-| Dependency Cruiser | `18.2.0` | целевой кандидат |
-| ESLint | `10.9.1` | целевой кандидат |
-| Prettier | `3.9.6` | подтверждено foundation evidence; кандидат |
+| Node.js | `26.8.1` Current | production/dev/CI, без fallback на Node 24 |
+| npm | `11.19.0` | версия из Node 26.8.1 distribution |
+| pnpm | `11.24.0` | точный `packageManager` pin |
+| TypeScript | `7.0.2` | strict, `verbatimModuleSyntax`, без downgrade |
+| Fastify | `5.12.1` | полный JSON Schema request/response |
+| PostgreSQL server | существующий `17.11` | временное исключение: общий legacy server; upgrade не входит в этот PR |
+| `pg` | `8.23.0` | прямой driver baseline |
+| Apache Kafka broker | `4.3.1` KRaft | `apache/kafka:4.3.1@sha256:<digest>` |
+| `@confluentinc/kafka-javascript` | `1.10.0` | провести Node 26 compatibility test |
+| React / React DOM | `19.2.8` | новый frontend |
+| React Router DOM | `7.18.3` | data/router APIs только по frontend ADR |
+| TanStack Query | `5.102.8` | server state |
+| Vite | `8.2.2` | build/dev server |
+| Vitest | `4.1.11` | unit/component tests |
+| Playwright | `1.62.1` | browser E2E |
+| OpenAPI Specification | `3.2.0` | проверить поддержку всем toolchain; downgrade требует ADR |
+| `@fastify/swagger` | `9.8.1` | contract publication |
+| `openapi-typescript` | `7.13.0` | generated client types |
+| Spectral CLI | `6.16.3` | contract lint |
+| AJV | `8.20.0` | runtime JSON Schema validation |
+| Pino | `10.3.1` | structured logging |
+| OpenTelemetry API | `1.9.1` | tracing/metrics API |
+| Dependency Cruiser | `18.2.0` | architecture boundaries |
+| ESLint | `10.9.1` | static checks |
+| Prettier | `3.9.6` | formatting |
+| Docker Engine | `29.7.2` | подтверждённая версия host |
+| Docker Compose plugin | `5.4.0` | подтверждённая версия host |
+
+## 4. Обязательное использование возможностей Node.js 26
+
+- **Temporal:** новые domain timestamps, deadlines, expiry и duration реализуются
+  через `Temporal.Instant`, `Temporal.Duration` и `Temporal.ZonedDateTime`.
+  Создание нового business-кода на mutable `Date` запрещено architecture/lint rule.
+- **Permission Model:** каждый runtime имеет декларацию разрешённых network/file/
+  child-process/worker ресурсов. В dev сначала запускается `--permission-audit`,
+  в integration/production — `--permission` с минимальными `--allow-*`.
+- **Native TypeScript:** однофайловые repository/admin scripts без стороннего
+  runtime runner могут запускаться встроенной поддержкой TypeScript. Application
+  build остаётся через `tsc`; decorators/transform-dependent syntax запрещены.
+- **Встроенный `node:test`:** permission, process lifecycle, AbortSignal,
+  graceful shutdown и low-level HTTP tests пишутся на `node:test`; Vitest
+  остаётся для domain/frontend suites.
+- **Native fetch / Undici 8:** технический HTTP client строится на `fetch`,
+  `AbortSignal.timeout/any`, connection pooling и diagnostics; Axios не добавляется.
+- **V8 14.6:** разрешены `Map.getOrInsert`, `Map.getOrInsertComputed` и
+  `Iterator.concat`, когда они уменьшают ручной mutable boilerplate. Для browser-
+  кода обязательна проверка target compatibility.
+- Экспериментальные FFI, Virtual File System и SQLite не применяются в production
+  без отдельного ADR, threat model и failure tests.
+
+## 5. Возможности других свежих версий
+
+- OpenAPI 3.2 используется для `$self`, современных security/webhook описаний и
+  строгой обработки external references; toolchain обязан доказать поддержку 3.2.
+- Kafka 4.3.1 запускается только в KRaft; auto-topic creation выключен, новый
+  consumer protocol включается только после compatibility/rebalance tests.
+- TypeScript 7 используется со строгими ESM boundaries и без compatibility
+  shims под старые compiler versions.
+- React 19 использует Actions/transition APIs только для UI orchestration;
+  server state остаётся в TanStack Query, authoritative business state — на backend.
+- Fastify 5 получает полные JSON Schema для params/query/body/response и
+  `diagnostics_channel`/OpenTelemetry instrumentation.
+- PostgreSQL 18.6 является свежей доступной версией, но общий существующий server
+  остаётся 17.11. Его upgrade — отдельное infrastructure issue с проверкой legacy;
+  разработчик сервиса не обновляет общий сервер сам.
 
 Node фиксируется в `.node-version`, `package.json#engines` и Dockerfile. pnpm —
 в `package.json#packageManager`. NPM-зависимости фиксируются точными версиями в
@@ -142,12 +178,15 @@ Node фиксируется в `.node-version`, `package.json#engines` и Docker
 release notes, regenerated lockfile/SBOM, clean install, typecheck, tests,
 Compose smoke и rollback на прежний pin.
 
-## 4. Первичные источники версии
+## 6. Первичные источники версии
 
-- [Архив Node.js 24](https://nodejs.org/en/download/archive/v24)
+- [Релизы Node.js](https://nodejs.org/en/blog/release)
+- [Node.js 26.0.0 и новые возможности](https://nodejs.org/en/blog/release/v26.0.0)
+- [Permission Model Node.js 26](https://nodejs.org/api/permissions.html)
 - [Документация Fastify 5](https://fastify.dev/docs/v5.7.x/)
 - [Версии React](https://react.dev/versions)
 - [Apache Kafka 4.3](https://kafka.apache.org/43/)
 - [Загрузки Apache Kafka](https://kafka.apache.org/community/downloads/)
 - [Документация PostgreSQL 17.11](https://www.postgresql.org/docs/17/)
-- [Release notes TypeScript 5.9](https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-9.html)
+- [OpenAPI 3.2.0](https://spec.openapis.org/oas/v3.2.0.html)
+- [TypeScript](https://www.typescriptlang.org/)

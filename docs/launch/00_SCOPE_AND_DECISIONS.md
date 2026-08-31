@@ -3,7 +3,8 @@
 ## Принятый подход
 
 - Новая система строится сразу на микросервисах, без промежуточного модульного монолита.
-- TypeScript strict, Node.js 24 LTS, Fastify-first.
+- TypeScript strict, Node.js 26 Current, Fastify-first. Статус LTS не является
+  ограничением: проект сознательно использует свежую ветку Node.js.
 - React SPA; OpenAPI-generated client; server state через TanStack Query.
 - Используется уже работающий PostgreSQL 17; второй PostgreSQL не поднимается.
   Legacy-БД `coffeeorderdb` не изменяется. Для новой платформы на существующем

@@ -5,7 +5,7 @@ description: Проектировать или реализовывать REST/O
 
 # Контракты HTTP API
 
-Использовать OpenAPI 3.1 и runtime JSON Schema. Разделять `/api/client-v1`,
+Использовать OpenAPI 3.2 и runtime JSON Schema. Разделять `/api/client-v1`,
 `/api/agent-v1`, `/api/internal-v1`, provider ingress, and `/events` trust
 модели доверия.
 
