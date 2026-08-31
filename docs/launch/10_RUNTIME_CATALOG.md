@@ -62,7 +62,8 @@ manifests без изменения смысла. Любое отклонени�
   валидировать поколение и передавать его Catalog owner без частичной активации.
 - **Владелец:** Catalog.
 - **Входящие HTTP:** только health; ручной trigger отсутствует в первом срезе.
-- **Входящие события:** internal durable schedule `CatalogSnapshotRefreshRequested.v1`.
+- **Входящие события:** нет; запуск выполняет internal scheduler этого runtime,
+  а не дополнительное Kafka-сообщение.
 - **Исходящие вызовы:** private HTTP
   `POST /api/internal-v1/aroma/catalog-snapshots:read` к `aroma-gateway`;
   Kafka `CatalogSnapshotCompleted.v1`.
@@ -119,7 +120,8 @@ manifests без изменения смысла. Любое отклонени�
 - **Назначение:** выполнять безопасный полный GET физической корзины и сохранять Observed.
 - **Владелец:** Orders.
 - **Входящие HTTP:** только health.
-- **Входящие события:** `AromaObservationRequested.v1` и durable schedule.
+- **Входящие события:** `AromaConvergenceRequested.v1` и internal durable schedule;
+  отдельное восьмое launch-сообщение не вводится.
 - **Исходящие вызовы:** private HTTP
   `POST /api/internal-v1/aroma/cart-snapshots:read` к `aroma-gateway`; Kafka
   `AromaObservationChanged.v1`, `RealtimeInvalidated.v1`.

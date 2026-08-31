@@ -1,0 +1,279 @@
+# Нормативный каталог контрактов первого запуска
+
+Исполнитель не проектирует поля заново. Он реализует перечисленные файлы,
+routes, schemas, status codes и fixtures. Изменение поля, типа, обязательности
+или route требует ADR и отдельного изменения этого документа.
+
+## 1. Файлы
+
+```text
+contracts/
+  openapi/client-v1.yaml
+  openapi/internal-v1.yaml
+  schemas/common/problem-details.v1.schema.json
+  schemas/common/message-envelope.v1.schema.json
+  schemas/events/catalog-snapshot-completed.v1.schema.json
+  schemas/events/catalog-mapping-changed.v1.schema.json
+  schemas/events/order-confirmed.v1.schema.json
+  schemas/events/aroma-convergence-requested.v1.schema.json
+  schemas/events/aroma-observation-changed.v1.schema.json
+  schemas/events/aroma-convergence-changed.v1.schema.json
+  schemas/events/realtime-invalidated.v1.schema.json
+  manifest.yaml
+  fixtures/positive/**
+  fixtures/negative/**
+```
+
+OpenAPI version — `3.2.0`. JSON Schema dialect — draft 2020-12. Во всех
+objects используется `additionalProperties: false`.
+
+## 2. Общие типы
+
+| Тип | Формат |
+|---|---|
+| CustomerRef | `^cus_[0-9A-HJKMNP-TV-Z]{26}$` |
+| ProductRef | `^prd_[0-9A-HJKMNP-TV-Z]{26}$` |
+| VariantRef | `^var_[0-9A-HJKMNP-TV-Z]{26}$` |
+| QuoteRef | `^prq_[0-9A-HJKMNP-TV-Z]{26}$` |
+| OrderRef | `^ord_[0-9A-HJKMNP-TV-Z]{26}$` |
+| ItemRef | `^itm_[0-9A-HJKMNP-TV-Z]{26}$` |
+| MessageId | `^msg_[0-9A-HJKMNP-TV-Z]{26}$` |
+| OperationRef | `^op_[0-9A-HJKMNP-TV-Z]{26}$` |
+| SupplierRef | `^sup_[0-9A-HJKMNP-TV-Z]{26}$` |
+| AttemptRef | `^att_[0-9A-HJKMNP-TV-Z]{26}$` |
+| PolicyVersionRef | `^pvr_[0-9A-HJKMNP-TV-Z]{26}$` |
+| version/revision | строка `^(0|[1-9][0-9]*)$` |
+| money minor units | строка `^-?(0|[1-9][0-9]*)$` |
+| quantity | строка `^(0|[1-9][0-9]*)$` |
+| hash | lowercase SHA-256: `^[a-f0-9]{64}$` |
+| timestamp | RFC 3339 UTC `date-time`, суффикс `Z` |
+| currency | `RUB` в первом срезе |
+| Idempotency-Key | UUID, header, обязателен для POST/PUT/DELETE commands |
+| X-Correlation-ID | UUID; optional input, always present in response |
+| traceparent | W3C Trace Context pattern |
+
+Actor отсутствует во всех request bodies. `actorRef` создаётся edge из
+проверенной identity и передаётся только trusted internal context.
+
+### Владение и повторное использование schemas
+
+| Schema | Определяется один раз в | Используют |
+|---|---|---|
+| Ref/Money/Version/Timestamp | `schemas/common/identifiers` и `money-version-time` | все HTTP/events/frontend |
+| ProblemDetails | `schemas/common/problem-details` | все HTTP services и generated client |
+| MessageEnvelope | `schemas/common/message-envelope` | все семь event schemas |
+| CustomerResponse/Summary | `client-v1.yaml#/components/schemas` | Customer provider, Orders customer snapshot, React |
+| CatalogProductSummary | `client-v1.yaml#/components/schemas` | Catalog provider, Pricing request UI, React |
+| PricingQuoteResponse | `client-v1.yaml#/components/schemas` | Pricing provider, Orders quote proof, React |
+| OrderCardResponse | `client-v1.yaml#/components/schemas` | Orders provider, React, realtime refetch test |
+
+Consumer не копирует schema в свой каталог. Для persisted snapshot он создаёт
+внутреннюю модель с явным mapper test `contract DTO → owner snapshot`; internal
+model не экспортируется и не используется как HTTP/event schema.
+
+## 3. `client-v1.yaml`
+
+### 3.1 Customer
+
+`POST /api/client-v1/customers`
+
+- headers: `Authorization`, `Idempotency-Key`, optional `X-Correlation-ID`, `traceparent`;
+- body `CustomerCreateRequest`:
+  - `displayName`: required, trimmed string, 1–200;
+  - `phone`: optional E.164 `^\+[1-9][0-9]{7,14}$`;
+  - `email`: optional email, max 254;
+  - `address`: optional object `{line1, line2?, city, postalCode?, countryCode}`;
+  - как минимум одно из `phone`/`email` обязательно;
+- `201 CustomerResponse`: `customerRef`, `version`, `displayName`, `phone?`,
+  `email?`, `address?`, `createdAt`, `updatedAt`;
+- errors: `400 VALIDATION_FAILED`, `409 CUSTOMER_IDENTITY_CONFLICT`,
+  `409 IDEMPOTENCY_CONFLICT`.
+
+`GET /api/client-v1/customers`
+
+- query: `query` required 2–200; `limit` integer 1–50 default 20;
+  `cursor` optional opaque string max 512;
+- `200 CustomerSearchResponse`: `{items: CustomerSummary[], nextCursor: string|null}`;
+- `CustomerSummary`: `customerRef`, `version`, `displayName`, masked `phone?`, masked `email?`;
+- errors: `400 VALIDATION_FAILED`.
+
+### 3.2 Catalog
+
+`GET /api/client-v1/catalog/products`
+
+- query: `query` required 2–200; `availability` optional enum
+  `Available|Unavailable|Stopped`; `limit` 1–50 default 20; `cursor` optional;
+- `200 CatalogSearchResponse`: `{snapshotRevision, items, nextCursor}`;
+- item: `productRef`, `variantRef`, `displayName`, `unit` enum
+  `piece|gram|kilogram`, `availability`, `mappingAvailable` boolean,
+  `imageUrl?`; provider offer/session identifiers не возвращаются;
+- errors: `400 VALIDATION_FAILED`, `503 CATALOG_SNAPSHOT_INCOMPLETE`.
+
+### 3.3 PricingQuote
+
+`POST /api/client-v1/pricing/quotes`
+
+- headers: Authorization + Idempotency-Key + correlation/trace;
+- body: `customerRef`, `lines` array 1–100; line = `productRef`,
+  `quantity` positive decimal string;
+- `201 PricingQuoteResponse`: `quoteRef`, `policyVersionRef`, `createdAt`,
+  `expiresAt`, `currency: RUB`, `lines`, `totalMinor`, `hash`;
+- response line: `productRef`, `quantity`, `unitMinor`, `lineTotalMinor`;
+- errors: `400 VALIDATION_FAILED`, `404 CATALOG_PRODUCT_NOT_FOUND`,
+  `409 CATALOG_PRODUCT_UNAVAILABLE`, `409 IDEMPOTENCY_CONFLICT`.
+
+### 3.4 Draft и позиции
+
+`POST /api/client-v1/orders/drafts`
+
+- body: `{customerRef}`;
+- `201 OrderCardResponse` со статусом `Draft`, `version: "1"`, пустыми items;
+- errors: `404 CUSTOMER_NOT_FOUND`, `409 IDEMPOTENCY_CONFLICT`.
+
+`PUT /api/client-v1/orders/{orderRef}/items/{itemRef}`
+
+- path refs по общим patterns;
+- body: `expectedVersion`, `productRef`, positive `quantity`, `quoteRef`, `quoteHash`;
+- `200 OrderCardResponse` с увеличенной version;
+- errors: `404 ORDER_NOT_FOUND`, `404 CATALOG_PRODUCT_NOT_FOUND`,
+  `409 ORDER_VERSION_CONFLICT`, `409 ORDER_QUOTE_STALE`,
+  `409 ORDER_NOT_EDITABLE`, `409 IDEMPOTENCY_CONFLICT`.
+
+`DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}`
+
+- headers: `Idempotency-Key`, `If-Match-Version` decimal string;
+- body отсутствует;
+- `200 OrderCardResponse`;
+- errors: `404 ORDER_NOT_FOUND`, `404 ORDER_ITEM_NOT_FOUND`,
+  `409 ORDER_VERSION_CONFLICT`, `409 ORDER_NOT_EDITABLE`.
+
+### 3.5 Commands и Order Card
+
+`POST /api/client-v1/orders/{orderRef}/commands/confirm`
+
+- body: `{expectedVersion}`; provider URL/id/credential/price запрещены;
+- `200 OrderCardResponse` со статусом `Confirmed`;
+- errors: `404 ORDER_NOT_FOUND`, `409 ORDER_VERSION_CONFLICT`,
+  `409 ORDER_QUOTE_STALE`, `422 ORDER_CONFIRMATION_REJECTED`,
+  `409 IDEMPOTENCY_CONFLICT`.
+
+`POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation`
+
+- body: `{expectedVersion, reason}`; `reason` trimmed 1–500;
+- `202 ReconciliationAcceptedResponse`:
+  `{orderRef, orderVersion, requestedAt, aromaState}`;
+- errors: `404 ORDER_NOT_FOUND`, `409 ORDER_VERSION_CONFLICT`,
+  `409 AROMA_RECONCILIATION_NOT_ALLOWED`, `409 IDEMPOTENCY_CONFLICT`.
+
+`GET /api/client-v1/orders/{orderRef}`
+
+- `200 OrderCardResponse`:
+  - `orderRef`, `version`, `status: Draft|Confirmed`;
+  - `customer: {customerRef, displayName}`;
+  - `items[]: {itemRef, productRef, displayName, quantity, quoteRef,
+    unitMinor, lineTotalMinor}`;
+  - `pricing: {quoteRef, totalMinor, currency, hash}` или `null`;
+  - `aroma: {state, desiredRevision, observedRevision, lastObservedAt,
+    blockers[]}`;
+  - `allowedActions[]` enum `edit-items|confirm|request-aroma-reconciliation`;
+- Aroma state enum: `PendingCatalogProof|PendingObservation|OutOfSync|Converging|InSync|Blocked|UnknownOutcome`;
+- blocker: `{code, message, productRef?}`;
+- errors: `404 ORDER_NOT_FOUND`.
+
+### 3.6 SSE
+
+`GET /events` возвращает `text/event-stream`:
+
+```text
+id: msg_01...
+event: resource-invalidated.v1
+retry: 5000
+data: {"subjectType":"order","subjectRef":"ord_...","ownerVersion":"7","reason":"AromaStateChanged","correlationId":"..."}
+```
+
+`reason`: `OrderChanged|AromaStateChanged`. Event не содержит Customer, items,
+money, Desired/Observed quantities или `allowedActions`; после него клиент
+выполняет owner GET.
+
+## 4. `internal-v1.yaml`
+
+Все routes private, требуют mTLS/service identity и отсутствуют в edge routing:
+
+- `GET /api/internal-v1/catalog/products/{productRef}/pricing-input`;
+- `POST /api/internal-v1/pricing/quotes:verify`;
+- `POST /api/internal-v1/aroma/catalog-snapshots:read`;
+- `POST /api/internal-v1/aroma/cart-snapshots:read`;
+- `POST /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity`;
+- `POST /api/internal-v1/aroma/cart-lines/{offerRef}:remove`.
+
+AROMA mutation bodies обязательно содержат `operationRef`; set quantity также
+содержит non-negative decimal-string `quantity`. Произвольные URL, HTTP method,
+headers или raw body в schema отсутствуют.
+
+## 5. Problem Details
+
+`application/problem+json` строго содержит:
+
+```json
+{
+  "type": "https://errors.coffeeorderplatform.local/ORDER_VERSION_CONFLICT",
+  "title": "Конфликт версии заказа",
+  "status": 409,
+  "code": "ORDER_VERSION_CONFLICT",
+  "detail": "...",
+  "instance": "/api/client-v1/orders/ord_...",
+  "correlationId": "uuid",
+  "errors": []
+}
+```
+
+`code` и `status` обязаны совпадать с route mapping выше. Stack trace, SQL,
+provider response и secret data запрещены.
+
+## 6. Семь событий
+
+Общий envelope каждого JSON Schema:
+
+- `schemaVersion: "1"`;
+- `messageId`, `messageType`, `occurredAt`, `producer`;
+- `correlationId` UUID, `causationId` MessageId|null, `traceparent`;
+- `aggregate: {type, ref, version}`;
+- `payload`; additional properties запрещены.
+
+| messageType | Producer | Key | Payload required |
+|---|---|---|---|
+| `CatalogSnapshotCompleted.v1` | catalog-supplier-sync | supplierRef | `supplierRef`, `snapshotRevision`, `completedAt`, `productCount`, `contentHash` |
+| `CatalogMappingChanged.v1` | catalog-service | productRef | `productRef`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `effectiveAt` |
+| `OrderConfirmed.v1` | orders-service | orderRef | `orderRef`, `orderVersion`, `customerRef`, `confirmedAt`, `desiredRevision` |
+| `AromaConvergenceRequested.v1` | Orders | orderRef | `orderRef`, `desiredRevision`, `reason: OrderConfirmed|CatalogChanged|OperatorRequested|Recovery` |
+| `AromaObservationChanged.v1` | aroma-observer/aroma-convergence | orderRef | `orderRef`, `observedRevision`, `observedAt`, `state`, `cartFingerprint` |
+| `AromaConvergenceChanged.v1` | aroma-convergence | orderRef | `orderRef`, `desiredRevision`, `observedRevision`, `attemptRef`, `state`, `changedAt`, `blockerCodes[]` |
+| `RealtimeInvalidated.v1` | owner services | subjectRef | `subjectType: order`, `subjectRef`, `ownerVersion`, `reason: OrderChanged|AromaStateChanged` |
+
+Дополнительные ограничения payload:
+
+- `productCount`: JSON integer, minimum `0`;
+- `contentHash` и `cartFingerprint`: lowercase SHA-256;
+- `mappingState`: `Active|Missing|Stopped`;
+- convergence reason: `OrderConfirmed|CatalogChanged|OperatorRequested|Recovery`;
+- observation/convergence state использует тот же Aroma state enum, что Order Card;
+- `blockerCodes`: unique string array, maximum 100;
+- все refs/version/timestamps используют только общие `$ref`, локальное
+  переопределение pattern/type запрещено meta-schema test.
+
+Kafka event payloads не содержат credentials, phone/email/address, provider
+cookies, arbitrary URLs или полную корзину.
+
+## 7. Генерация и fixtures
+
+- `pnpm contracts:lint`: Redocly/Spectral + JSON Schema validation;
+- `pnpm contracts:generate`: `openapi-typescript 7.13.0` и
+  `openapi-fetch 0.17.0`, output `packages/generated/client-v1/**`;
+- `pnpm contracts:check-generated`: повторная генерация и zero diff;
+- `pnpm contracts:breaking`: сравнение с `origin/develop`; удаление/rename/
+  required-field/type/enum narrowing/status removal блокирует PR;
+- по одному positive fixture на route/status и messageType;
+- negative fixtures: missing required field, additional field, invalid ref,
+  numeric money/version, invalid enum, actor/provider credential in body,
+  secret in event, malformed traceparent и неверный Problem status/code;
+- каждый negative fixture содержит `expected-error.json` с schema path и rule ID.

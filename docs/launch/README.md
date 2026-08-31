@@ -32,6 +32,8 @@
 10. [Существующая БД и зафиксированные версии](09_EXISTING_DATABASE_AND_VERSIONS.md)
 11. [Нормативный каталог runtime](10_RUNTIME_CATALOG.md)
 12. [Единая конфигурация и единое хранилище секретов](11_CONFIGURATION_AND_SECRETS.md)
+13. [Нормативный каталог HTTP, SSE и событийных контрактов](12_LAUNCH_CONTRACT_CATALOG.md)
+14. [Единая линия реализации и зависимости задач](13_DELIVERY_DEPENDENCY_GRAPH.md)
 
 ## Сила канонических документов
 

@@ -2,6 +2,10 @@
 
 ## Контракты первого запуска
 
+Точные envelope и payload schemas семи сообщений определены в
+[нормативном каталоге контрактов](12_LAUNCH_CONTRACT_CATALOG.md). Дополнительные
+launch-сообщения нельзя вводить без изменения каталога и ADR.
+
 | Сообщение | Вид | Producer | Consumer | Ключ |
 |---|---|---|---|---|
 | `CatalogSnapshotCompleted` | event | catalog-supplier-sync | catalog-service | supplierRef |
