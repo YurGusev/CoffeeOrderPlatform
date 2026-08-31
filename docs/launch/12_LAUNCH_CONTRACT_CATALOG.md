@@ -201,13 +201,19 @@ model не экспортируется и не используется как 
 ```text
 id: msg_01...
 event: resource-invalidated.v1
-retry: 5000
+retry: 3000
 data: {"subjectType":"order","subjectRef":"ord_...","ownerVersion":"7","reason":"AromaStateChanged","correlationId":"..."}
 ```
 
 `reason`: `OrderChanged|AromaStateChanged`. Event не содержит Customer, items,
 money, Desired/Observed quantities или `allowedActions`; после него клиент
 выполняет owner GET.
+
+Дополнительно разрешены только `stream-ready.v1` без `id` и
+`stream-reset.v1` с `{reason:"REPLAY_UNAVAILABLE"}` без `id`; heartbeat — SSE
+comment каждые 15 секунд. `Last-Event-ID`, local replay window, authorization,
+fanout/backpressure и frontend invalidation заданы в
+`docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md`.
 
 ## 4. `internal-v1.yaml`
 

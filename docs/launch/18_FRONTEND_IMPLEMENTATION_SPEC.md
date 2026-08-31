@@ -107,6 +107,10 @@ keypress. Previous page data не показывается как результ
 - #12 позже инвалидирует `['orders','detail',orderRef]` по SSE; #9 не
   интерпретирует SSE payload как business state.
 
+#12 добавляет один EventSource на tab. `resource-invalidated.v1` инвалидирует
+только exact Order query; `stream-reset.v1` инвалидирует только существующие
+Order detail queries. Cache изменяется исключительно результатом owner GET.
+
 ## 5. Idempotency и версия
 
 Для каждого нажатия command создаётся `crypto.randomUUID()` один раз. Запись

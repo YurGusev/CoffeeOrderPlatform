@@ -176,11 +176,13 @@ manifests без изменения смысла. Любое отклонени�
 
 ## 12. `realtime-gateway`
 
-- **Назначение:** авторизованный SSE fanout инвалидаций; не хранит business state.
+- **Назначение:** авторизованный bounded SSE fanout `RealtimeInvalidated.v1` с
+  кратким in-memory replay/reset fallback; не хранит business state.
 - **Владелец:** Realtime.
 - **Входящие HTTP:** private origin `GET /events`, публикуемый наружу только через edge.
 - **Входящие события:** `RealtimeInvalidated.v1`.
-- **Исходящие вызовы:** SSE к авторизованным browser connections; owner HTTP не вызывает.
+- **Исходящие вызовы:** SSE к actor с permission `orders:read:any`; owner HTTP
+  не вызывает, client subject filters не принимает.
 - **Хранилище:** нет business DB и нет `DATABASE_URL`.
 - **Секреты:** Kafka credential и ключ/конфигурация проверки trusted actor context.
 - **Публичность:** browser-visible только через edge; прямой container port private.
