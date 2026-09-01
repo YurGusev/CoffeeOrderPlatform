@@ -128,6 +128,7 @@ runtime становится `implemented=true` только когда одно
 
 - `platform/runtime-foundation-decision.json` и JSON Schema;
 - `platform/launch-v1-runtime-profile.json` и JSON Schema;
+- `platform/launch-v1-connectivity-policy.json` и JSON Schema;
 - `platform/target-layout.json` и JSON Schema;
 - validators и negative fixtures в `scripts/`/`tests/authority/`;
 
@@ -141,6 +142,25 @@ Runtime profile содержит для каждого из 15 имён: `owner`
 явное `launch-v1-only`, `networkZone`, `dbPrincipal`, `httpSurfaces`,
 `secretRefs`, `implemented`. Совпадение с M20 нельзя выводить по похожему имени.
 До принятого implementation PR значение `implemented=false`.
+
+`platform/launch-v1-runtime-profile.json` является нормативным именем machine
+topology; встречавшееся в планировании имя
+`platform/launch-runtime-topology.json` не создаётся как alias и не является
+отдельной authority.
+
+`networkZone` — логическая trust-классификация, а не имя Docker network.
+Отдельный connectivity policy для каждого runtime содержит точные
+`dockerNetworks`, `hostPortPolicy.default=deny`, полный `allowedHostPorts`,
+`allowedExternalEgress` и обязательные `denyAssertions`. Его нормативные
+значения заданы в
+[матрице runtime](../launch/23_RUNTIME_CONFIGURATION_MATRIX.md). Docker network
+сам по себе не считается egress policy: Compose attachments, Node Permission
+Model и проверка соединения должны совпасть с policy поле-в-поле.
+
+Физическая topology использует отдельные application planes, а также
+dependency planes `coffee_postgres_data` и `coffee_kafka_event`. Новый runtime
+не подключается к legacy `coffee_network`. Наличие общей сети с разрешённым
+endpoint не отменяет default-deny для остальных её участников.
 
 До materialization authority разрешена только последовательная документационная
 работа: сначала #14 и #19; после принятия #19 — #2 и #3. Runtime feature branches
@@ -180,3 +200,13 @@ pnpm config:check
 `implemented=false`, Node/pnpm identities и
 наличие всех machine manifests. Пока #2/#3 не завершены, проверка обязана
 fail-closed, а не считать документы реализацией.
+
+До появления workspace и `pnpm` scripts в #3 authority #19 проверяется
+автономными dependency-free командами:
+
+```text
+python3 scripts/validate-launch-authority.py
+python3 -m unittest discover -s tests/authority -p 'test_*.py'
+```
+
+#3 подключает эти команды к `pnpm authority:check` без изменения их semantics.

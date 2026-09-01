@@ -1,0 +1,147 @@
+{
+  "$schema": "./launch-v1-connectivity-policy.schema.json",
+  "schemaVersion": 1,
+  "authorityRef": "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md",
+  "logicalZones": ["public-ingress", "public-api-backend", "internal-api", "provider-egress"],
+  "dockerNetworks": [
+    { "name": "coffee_public_ingress", "internal": true, "external": false },
+    { "name": "coffee_edge_backend", "internal": true, "external": false },
+    { "name": "coffee_public_api_backend", "internal": true, "external": false },
+    { "name": "coffee_internal_api", "internal": true, "external": false },
+    { "name": "coffee_postgres_data", "internal": true, "external": true },
+    { "name": "coffee_kafka_event", "internal": true, "external": false },
+    { "name": "coffee_provider_egress", "internal": false, "external": false }
+  ],
+  "forbiddenNetworks": ["coffee_network"],
+  "runtimePolicies": [
+    {
+      "runtime": "edge-gateway",
+      "dockerNetworks": ["coffee_public_ingress", "coffee_edge_backend"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [4000] },
+      "allowedHostPorts": ["web:3000", "api-public:4050", "realtime-gateway:4401"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-owner-service-route", "no-api-internal-route", "no-postgres", "no-kafka", "no-provider-egress"]
+    },
+    {
+      "runtime": "api-public",
+      "dockerNetworks": ["coffee_edge_backend", "coffee_public_api_backend"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["customer-service:4101", "catalog-service:4102", "pricing-service:4103", "orders-service:4104"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-api-internal", "no-aroma-gateway", "no-postgres", "no-kafka", "no-provider-egress"]
+    },
+    {
+      "runtime": "api-internal",
+      "dockerNetworks": ["coffee_internal_api"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["customer-service:4101", "catalog-service:4102", "pricing-service:4103", "aroma-gateway:4301"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-client-v1", "no-postgres", "no-kafka", "no-provider-origin-direct"]
+    },
+    {
+      "runtime": "web",
+      "dockerNetworks": ["coffee_public_ingress"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": [],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-direct-host-publish", "no-owner-route", "no-postgres", "no-kafka", "no-provider-egress"]
+    },
+    {
+      "runtime": "customer-service",
+      "dockerNetworks": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-kafka", "no-provider-egress", "own-database-only"]
+    },
+    {
+      "runtime": "catalog-service",
+      "dockerNetworks": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-kafka", "no-provider-egress", "read-only-catalog-database"]
+    },
+    {
+      "runtime": "catalog-supplier-sync",
+      "dockerNetworks": ["coffee_internal_api", "coffee_postgres_data"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432", "api-internal:4051"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-kafka", "no-provider-origin-direct", "no-public-route"]
+    },
+    {
+      "runtime": "catalog-activation-worker",
+      "dockerNetworks": ["coffee_postgres_data", "coffee_kafka_event"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432", "kafka:9092"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-http-business-route", "no-provider-egress", "own-database-only"]
+    },
+    {
+      "runtime": "pricing-service",
+      "dockerNetworks": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432", "api-internal:4051"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-kafka", "no-provider-egress", "own-database-only"]
+    },
+    {
+      "runtime": "orders-service",
+      "dockerNetworks": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data", "coffee_kafka_event"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432", "api-internal:4051", "kafka:9092"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-provider-egress", "own-database-only", "no-direct-owner-http"]
+    },
+    {
+      "runtime": "orders-aroma-preparation",
+      "dockerNetworks": ["coffee_postgres_data", "coffee_kafka_event"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432", "kafka:9092"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-http-business-route", "no-provider-egress", "single-orders-projection-writer"]
+    },
+    {
+      "runtime": "aroma-observer",
+      "dockerNetworks": ["coffee_internal_api", "coffee_postgres_data", "coffee_kafka_event"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432", "api-internal:4051", "kafka:9092"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-provider-origin-direct", "no-gateway-mutation", "no-attempt-write"]
+    },
+    {
+      "runtime": "aroma-convergence",
+      "dockerNetworks": ["coffee_internal_api", "coffee_postgres_data", "coffee_kafka_event"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432", "api-internal:4051", "kafka:9092"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-provider-origin-direct", "gateway-mutation-via-delegation-only", "own-database-only"]
+    },
+    {
+      "runtime": "aroma-gateway",
+      "dockerNetworks": ["coffee_internal_api", "coffee_postgres_data", "coffee_provider_egress"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["coffee-postgres:5432"],
+      "allowedExternalEgress": ["${aroma.origin.host}:443"],
+      "denyAssertions": ["no-kafka", "no-business-database", "no-non-allowlisted-provider-host", "no-redirect-host-change"]
+    },
+    {
+      "runtime": "realtime-gateway",
+      "dockerNetworks": ["coffee_edge_backend", "coffee_kafka_event"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
+      "allowedHostPorts": ["kafka:9092"],
+      "allowedExternalEgress": [],
+      "denyAssertions": ["no-business-database", "no-owner-http", "no-provider-egress", "no-direct-host-publish"]
+    }
+  ],
+  "globalDenyAssertions": [
+    "unknown-runtime-denied",
+    "unknown-network-denied",
+    "unknown-host-port-denied",
+    "dns-and-resolved-ip-must-match-allowlist",
+    "docker-network-does-not-grant-application-egress",
+    "no-launch-runtime-on-coffee_network",
+    "provider-origin-only-from-aroma-gateway"
+  ]
+}

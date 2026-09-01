@@ -34,6 +34,24 @@ Caller устанавливает mTLS к `api-internal`. Root проверяе�
 `api-internal` и все claims. Gateway mutation разрешена только при
 `originalCaller=aroma-convergence` и exact set/remove operation.
 
+Machine authority #19 фиксирует следующие `operationId`; #4 переносит их в
+`internal-v1.yaml` без повторного выбора:
+
+| Original caller | Target | Method и path | `operationId` | Mutation |
+|---|---|---|---|---|
+| `orders-service` | `customer-service` | `GET /api/internal-v1/customers/{customerRef}/order-input` | `getCustomerOrderInput` | нет |
+| `pricing-service` | `catalog-service` | `GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input` | `getCatalogPricingInput` | нет |
+| `orders-service` | `pricing-service` | `POST /api/internal-v1/pricing/quotes:verify` | `verifyPricingQuote` | нет |
+| `catalog-supplier-sync` | `aroma-gateway` | `POST /api/internal-v1/aroma/catalog-exports` | `exportAromaCatalog` | нет |
+| `aroma-observer` | `aroma-gateway` | `POST /api/internal-v1/aroma/cart-snapshots:read` | `readAromaCartSnapshot` | нет |
+| `aroma-convergence` | `aroma-gateway` | `POST /api/internal-v1/aroma/cart-snapshots:read` | `readAromaCartSnapshot` | нет |
+| `aroma-convergence` | `aroma-gateway` | `POST /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity` | `setAromaCartLineQuantity` | да |
+| `aroma-convergence` | `aroma-gateway` | `POST /api/internal-v1/aroma/cart-lines/{offerRef}:remove` | `removeAromaCartLine` | да |
+
+Allowlist является точным множеством. Совпадение только path, caller или
+transport SAN не предоставляет capability: target одновременно проверяет
+transport caller, issuer, audience, original caller и `operationId`.
+
 Negative tests: forged actor/originalCaller, wrong SAN/audience/operation,
 expired/revoked certificate, key rotation overlap, api-public internal route,
 api-internal client route и mutation от observer/catalog sync.

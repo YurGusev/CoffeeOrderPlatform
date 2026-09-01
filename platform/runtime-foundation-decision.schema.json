@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/schemas/runtime-foundation-decision.v1.schema.json",
+  "title": "CoffeeOrderPlatform runtime foundation decision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "decisionId",
+    "decisionRef",
+    "runtime",
+    "productionImage",
+    "registryVerification",
+    "toolchainDecision",
+    "prohibitions",
+    "materializationOwner"
+  ],
+  "properties": {
+    "$schema": { "const": "./runtime-foundation-decision.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "decisionId": { "const": "ADR-COP-RUNTIME-001" },
+    "decisionRef": { "const": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md" },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "npm", "corepack", "packageManager"],
+      "properties": {
+        "node": { "const": "26.8.1" },
+        "npm": { "const": "11.19.0" },
+        "corepack": { "const": "0.35.0" },
+        "packageManager": { "const": "pnpm@11.24.0" }
+      }
+    },
+    "productionImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "indexDigest", "platform", "platformManifestDigest", "reference"],
+      "properties": {
+        "repository": { "const": "docker.io/library/node" },
+        "tag": { "const": "26.8.1-bookworm-slim" },
+        "indexDigest": { "const": "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e" },
+        "platform": { "const": "linux/amd64" },
+        "platformManifestDigest": { "const": "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae" },
+        "reference": { "const": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae" }
+      }
+    },
+    "registryVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifiedAt", "command", "digestPolicy"],
+      "properties": {
+        "verifiedAt": { "type": "string", "format": "date" },
+        "command": { "const": "docker buildx imagetools inspect node:26.8.1-bookworm-slim" },
+        "digestPolicy": { "const": "record-index-and-pin-target-platform-manifest" }
+      }
+    },
+    "toolchainDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisionId",
+        "decisionRef",
+        "typescript",
+        "structuralLinter",
+        "typeAwareLinter",
+        "openApiGenerator",
+        "openApiGeneratorPlugin",
+        "generatorMode",
+        "compilerLanes"
+      ],
+      "properties": {
+        "decisionId": { "const": "ADR-COP-TS7-NATIVE-001" },
+        "decisionRef": { "const": "docs/adr/ADR-0022-ts7-native-toolchain.md" },
+        "typescript": { "const": "typescript@7.0.2" },
+        "structuralLinter": { "const": "oxlint@1.80.0" },
+        "typeAwareLinter": { "const": "oxlint-tsgolint@7.0.2001" },
+        "openApiGenerator": { "const": "@hey-api/openapi-ts@0.99.0" },
+        "openApiGeneratorPlugin": { "const": "@hey-api/typescript" },
+        "generatorMode": { "const": "types-only" },
+        "compilerLanes": { "const": 1 }
+      }
+    },
+    "prohibitions": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "node-24",
+          "floating-image-tag",
+          "placeholder-digest",
+          "typescript-5-or-6",
+          "second-typescript-compiler",
+          "nightly-toolchain-pin",
+          "compiler-api",
+          "custom-transformer"
+        ]
+      }
+    },
+    "materializationOwner": { "const": "issue-3" }
+  }
+}
