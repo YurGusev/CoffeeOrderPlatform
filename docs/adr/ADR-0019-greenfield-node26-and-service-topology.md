@@ -8,6 +8,11 @@ Supersedes: `ADR-0018` в части production Node authority, физическ
 только внутри репозитория `CoffeeOrderPlatform`.
 Does not modify: неизменяемые канонические revision roots.
 
+Compiler, linting, ESM/erasable syntax, project references и contract-codegen
+authority определяет [ADR-0022](ADR-0022-ts7-native-toolchain.md). #19 фиксирует
+в foundation authority только decision ref, exact pin identity и запрет TS5/6
+lane; workspace/lockfile/tsconfig/lint/build materialization принадлежит #3.
+
 ## Контекст
 
 `CoffeeOrderPlatform` создаётся с нуля как отдельная система, а не как

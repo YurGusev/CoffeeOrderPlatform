@@ -62,3 +62,6 @@ runtime topology для отдельного greenfield-репозитория �
 superseding ADR-0018 только в перечисленной области. Wire-расхождения первого
 запуска закрывает [ADR-0020](../adr/ADR-0020-launch-contract-closure.md), не
 переиспользуя каноническое имя `CatalogMappingChanged.v1` для нового payload.
+Единственную TS7-native compiler/lint/codegen authority определяет
+[ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md); TS5/6 compatibility lane и
+второй compiler для этого greenfield launch запрещены.

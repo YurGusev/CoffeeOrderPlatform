@@ -107,7 +107,7 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
 | Node.js | `26.8.1` Current | production/dev/CI, без fallback на Node 24 |
 | npm | `11.19.0` | версия из Node 26.8.1 distribution |
 | pnpm | `11.24.0` | точный `packageManager` pin |
-| TypeScript | `7.0.2` | strict, `verbatimModuleSyntax`, без downgrade |
+| TypeScript | `7.0.2` | единственный native Go `tsc`; TS5/6 и compiler API запрещены |
 | Fastify | `5.12.1` | полный JSON Schema request/response |
 | PostgreSQL server | существующий `17.11` | временное исключение: общий legacy server; upgrade не входит в этот PR |
 | `pg` | `8.23.0` | прямой driver baseline |
@@ -121,14 +121,15 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
 | Playwright | `1.62.1` | browser E2E |
 | OpenAPI Specification | `3.2.0` | проверить поддержку всем toolchain; downgrade требует ADR |
 | `@fastify/swagger` | `9.8.1` | contract publication |
-| `openapi-typescript` | `7.13.0` | generated client types |
+| `@hey-api/openapi-ts` | `0.99.0` | кандидат types-only codegen; принятие только после OpenAPI 3.2 golden gates #4 |
 | Spectral CLI | `6.16.3` | contract lint |
 | AJV | `8.20.0` | runtime JSON Schema validation |
 | Pino | `10.3.1` | structured logging |
 | `libphonenumber-js` | `1.13.12` | Customer phone parsing, region RU, output E.164 |
 | OpenTelemetry API | `1.9.1` | tracing/metrics API |
 | Dependency Cruiser | `18.2.0` | architecture boundaries |
-| ESLint | `10.9.1` | static checks |
+| Oxlint | `1.80.0` | structural/syntax linting |
+| `oxlint-tsgolint` | `7.0.2001` | type-aware linting, exact line TypeScript 7.0.2 |
 | Prettier | `3.9.6` | formatting |
 | SOPS | `3.13.3` | единый encrypted secrets file |
 | age | `1.3.2` | recipients/identity для SOPS |
@@ -163,8 +164,10 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
   строгой обработки external references; toolchain обязан доказать поддержку 3.2.
 - Kafka 4.3.1 запускается только в KRaft; auto-topic creation выключен, новый
   consumer protocol включается только после compatibility/rebalance tests.
-- TypeScript 7 используется со строгими ESM boundaries и без compatibility
-  shims под старые compiler versions.
+- TypeScript 7 используется по [ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md):
+  строгие ESM/erasable boundaries, Oxlint+tsgolint, без TS5/6 compatibility lane.
+- `@hey-api/openapi-ts` не считается доказанно совместимым с используемым
+  OpenAPI 3.2 corpus до golden/negative/deterministic generation gates #4.
 - React 19 использует Actions/transition APIs только для UI orchestration;
   server state остаётся в TanStack Query, authoritative business state — на backend.
 - Fastify 5 получает полные JSON Schema для params/query/body/response и
@@ -195,5 +198,7 @@ Compose smoke и rollback на прежний pin.
 - [Документация PostgreSQL 17.11](https://www.postgresql.org/docs/17/)
 - [OpenAPI 3.2.0](https://spec.openapis.org/oas/v3.2.0.html)
 - [TypeScript](https://www.typescriptlang.org/)
+- [Oxlint type-aware linting](https://oxc.rs/docs/guide/usage/linter/type-aware.html)
+- [Hey API OpenAPI TypeScript](https://heyapi.dev/docs/openapi/typescript/get-started)
 - [SOPS releases](https://github.com/getsops/sops/releases)
 - [age releases](https://github.com/FiloSottile/age/releases)

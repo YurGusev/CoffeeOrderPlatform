@@ -9,6 +9,13 @@ description: Проектировать или реализовывать REST/O
 `/api/agent-v1`, `/api/internal-v1`, provider ingress, and `/events` trust
 модели доверия.
 
+Contract codegen по ADR-0022 — только types-only
+`@hey-api/openapi-ts@0.99.0` с `@hey-api/typescript`. Generated SDK/client/hooks,
+Zod и Axios запрещены; native fetch client использует generated transport types.
+Generator принимается только после golden corpus всех используемых OpenAPI 3.2
+constructs, deterministic generation, zero diff и `tsc 7.0.2` compile; silent
+field loss или unsupported construct блокирует контракт.
+
 Браузер и модели не выбирают actor identity, credentials, произвольные URL или
 авторитетные денежные значения. Команды выражают намерение, требуют
 `Idempotency-Key` и expected owner version; универсальный lifecycle PATCH

@@ -312,8 +312,12 @@ cookies, arbitrary URLs или полную корзину.
 ## 7. Генерация и fixtures
 
 - `pnpm contracts:lint`: Redocly/Spectral + JSON Schema validation;
-- `pnpm contracts:generate`: `openapi-typescript 7.13.0` и
-  `openapi-fetch 0.17.0`, output `packages/generated/client-v1/**`;
+- `pnpm contracts:generate`: `@hey-api/openapi-ts 0.99.0` только с
+  `@hey-api/typescript`, output `packages/generated/client-v1/**`;
+- SDK/client/hooks/Zod/Axios не генерируются; project-owned client использует
+  native fetch/Undici;
+- генератор принимается только после golden corpus используемых OpenAPI 3.2
+  constructs, deterministic double generation, zero diff и `tsc 7.0.2` compile;
 - `pnpm contracts:check-generated`: повторная генерация и zero diff;
 - `pnpm contracts:breaking`: сравнение с `origin/develop`; удаление/rename/
   required-field/type/enum narrowing/status removal блокирует PR;

@@ -30,10 +30,10 @@ test не принят следующей задачей. Все outputs объ�
 | Issue | Принимает | Публикует | Разблокирует |
 |---|---|---|---|
 | #14 | повторный аудит | launch authority + ADR-0019/ADR-0020/ADR-0021 | #19 |
-| #19 | #14 | 15-runtime machine authority, delegation/security closure | #2 |
+| #19 | #14 | 15-runtime machine authority + TS7 decision/pin identity, delegation/security closure | #2 |
 | #2 | launch docs | service/DB/interaction/secret ownership manifests + architecture checker | #3, #4 |
-| #3 | manifests #2 | workspace, exact versions, config/secrets bootstrap, DB roles, Compose | #4–#12, #16–#18 |
-| #4 | #2–#3 | единую OpenAPI/JSON Schema authority, generated client/mocks | #5–#12, #16–#18 |
+| #3 | manifests #2/#19 | workspace, TS7-only manifests/lockfile/tsconfig graph/Oxlint, config/secrets bootstrap, DB roles, Compose | #4–#12, #16–#18 |
+| #4 | #2–#3 | OpenAPI/JSON Schema authority, доказанный TS7 types-only codegen, generated types/mocks | #5–#12, #16–#18 |
 | #5 | Customer contracts | работающий Customer API + DB migrations | #8, #9, #13 |
 | #10 | private AROMA contracts | NDJSON Catalog export + typed cart primitives | #6, #11 |
 | #6 | NDJSON contract/fixtures #10 | batch manifests + `Received` staging generation | #16 |
