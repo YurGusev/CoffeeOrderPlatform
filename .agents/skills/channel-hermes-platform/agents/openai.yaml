@@ -1,0 +1,4 @@
+interface:
+  display_name: "Канальная платформа Hermes"
+  short_description: "Канальный ingress и runtime Hermes"
+  default_prompt: "Используй $channel-hermes-platform для проектирования канальной или агентской возможности."

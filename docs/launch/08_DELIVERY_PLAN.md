@@ -1,19 +1,20 @@
-# Delivery Plan
+# План реализации
 
-## Goal
+## Цель
 
-Produce a demonstrable, production-shaped vertical slice quickly while all
-unsafe provider behavior remains fail-closed.
+Быстро получить демонстрируемый вертикальный срез, построенный по production-
+принципам, при этом любое небезопасное поведение провайдера закрывается отказом.
 
-## Days 1-2: contracts and skeleton
+## Дни 1–2: контракты и каркас
 
 - repository/app/package layout;
 - OpenAPI and event schemas for launch routes/messages;
-- Docker Compose with PostgreSQL, Kafka and observability;
+- Docker Compose с подключением к существующему PostgreSQL, а также Kafka и observability;
+- provisioning отдельных БД/ролей новой платформы без изменения `coffeeorderdb`;
 - shared HTTP, DB, Outbox/Inbox, auth and telemetry runtimes;
 - React shell and generated mock client.
 
-## Days 3-5: Customer, Catalog, Pricing
+## Дни 3–5: Customer, Catalog, Pricing
 
 - Customer create/search;
 - safe full AROMA catalog snapshot through Gateway;
@@ -21,15 +22,15 @@ unsafe provider behavior remains fail-closed.
 - PricingQuote creation and validation;
 - frontend customer/catalog/order-draft screens.
 
-## Days 6-8: Orders
+## Дни 6–8: Orders
 
 - Draft/items/version/history;
 - quote/product snapshots;
-- atomic Confirm + Desired + Outbox;
+- atomic Confirm + Order contribution + Outbox; preparation строит cart Desired;
 - Order Card and SSE invalidation;
 - lifecycle, idempotency and concurrency tests.
 
-## Days 9-11: AROMA cart
+## Дни 9–11: корзина AROMA
 
 - Gateway session and typed operations;
 - observer;
@@ -37,7 +38,7 @@ unsafe provider behavior remains fail-closed.
 - lease/fencing/reservation/UnknownOutcome;
 - GET-mutate-GET verification and recovery tests.
 
-## Days 12-14: hardening and demo
+## Дни 12–14: усиление надёжности и демонстрация
 
 - E2E browser flow;
 - duplicate/crash/restart/provider-timeout tests;
@@ -46,7 +47,7 @@ unsafe provider behavior remains fail-closed.
 - security review of credentials and public routes;
 - operator demo with a controlled provider sandbox/account.
 
-## Launch gates
+## Условия допуска к запуску
 
 - no public `internal-v1` or Gateway route;
 - Confirm contains no provider/network call;
@@ -59,10 +60,9 @@ unsafe provider behavior remains fail-closed.
 - rollback is disabling convergence mutation while preserving observer and
   all durable Order/attempt state.
 
-## Parallel work
+## Параллельная работа
 
-Frontend starts on day 1 from OpenAPI mocks. Backend and provider integration
-develop independently against the same contracts. AROMA live mutation remains
-disabled until safety/failure tests pass; safe catalog/cart reads can be
-integrated earlier.
-
+Frontend начинается в первый день на основе OpenAPI mocks. Backend и интеграция
+с провайдером разрабатываются независимо по одним контрактам. Живая мутация
+AROMA остаётся выключенной до успешных safety/failure tests; безопасные чтения
+каталога и корзины можно подключить раньше.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Маршрутизатор CoffeeOrderPlatform"
+  short_description: "Выбирает навыки новой платформы"
+  default_prompt: "Используй $coffee-platform-router для выбора владеющих навыков этой задачи."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Событийные сервисы"
+  short_description: "Kafka, Outbox, Inbox и восстановление"
+  default_prompt: "Используй $event-driven-services для проектирования асинхронного взаимодействия сервисов."

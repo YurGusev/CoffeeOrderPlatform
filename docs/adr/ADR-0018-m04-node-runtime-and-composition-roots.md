@@ -215,7 +215,7 @@ byte-identical.
 ## Rollout
 
 Rollout changes repository decision authority only. The integration line is
-local Gitea `next-generation`; this issue's change is one documentation and
+GitHub `develop`; this issue's change is one documentation and
 contract PR linked to #1203. The ADR index, companion, dependency-free
 validator, focused negative/state-transition tests, CI invocation, and active
 platform documentation are updated together. #1196, #1204, and #1205 are
@@ -242,7 +242,7 @@ transition is partial or unrelated; a runtime role becomes `implemented=true`
 without a new accepted superseding Decision and workload Evidence; scope reaches
 target-layout, planned API directories, runtime dependencies,
 Docker/deployment, production operations, legacy code, or immutable canonical/
-evidence artifacts; or Project #4 parent, membership, mapping, or parity is
+evidence artifacts; or legacy Project parent, membership, mapping, or parity is
 ambiguous.
 
 ## Verification
@@ -270,7 +270,7 @@ python3 scripts/validate-architecture-contract-closure.py
 python3 scripts/verify-canonical-release-integrity.py
 python3 scripts/test-canonical-release-integrity.py
 python3 scripts/test-platform-agent-routing.py
-python3 scripts/check-gitea-first-agent-routing.py
+gh repo view YurGusev/CoffeeOrderPlatform
 python3 scripts/check-skill-catalog.py
 ```
 

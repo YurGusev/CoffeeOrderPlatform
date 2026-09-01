@@ -1,0 +1,4 @@
+interface:
+  display_name: "Customer, Catalog и Pricing"
+  short_description: "Сервисы клиентов, каталога и цен"
+  default_prompt: "Используй $customer-catalog-pricing для реализации Customer, Catalog или Pricing."

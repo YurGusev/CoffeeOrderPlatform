@@ -1,37 +1,47 @@
-# Data Ownership
+# Владение данными
 
-## Databases
+## Базы данных
 
-| Database/schema | Writer | Launch entities |
+Физический PostgreSQL-сервер уже существует. Таблица описывает отдельные
+логические БД новой платформы на этом сервере; legacy `coffeeorderdb` в неё не
+входит и новой платформой не изменяется. Точные имена БД, роли и проверка прав
+описаны в [документе существующей БД](09_EXISTING_DATABASE_AND_VERSIONS.md).
+
+| База данных/схема | Writer | Сущности первого запуска |
 |---|---|---|
-| `customer` | customer-service | Customer, Address, ChannelLink |
-| `catalog` | catalog services | Product, Variant, SupplierSnapshot, OfferMapping, Availability |
-| `pricing` | pricing-service | PricingPolicyVersion, PricingQuote |
-| `orders` | Orders runtimes | Order, OrderItem, History, Desired, Observed, ConvergenceAttempt, MutationReservation, Outbox, Inbox |
-| `integration` | aroma-gateway | encrypted session metadata, provider operation journal |
+| `coffee_platform_customer` | customer-service | Customer, Address, ChannelLink |
+| `coffee_platform_catalog` | catalog services | Product, Variant, SupplierSnapshot, OfferMapping, Availability |
+| `coffee_platform_pricing` | pricing-service | PricingPolicyVersion, PricingQuote |
+| `coffee_platform_orders` | Orders runtimes | Order, OrderItem, History, Desired, `cart_desired_order_facts`, Observed, ConvergenceAttempt, MutationReservation, `order_aroma_projections`, Outbox, Inbox |
+| `coffee_platform_integration` | aroma-gateway | encrypted session metadata, provider operation journal |
 
-No service receives write credentials for another owner's database. Read
-models use events or explicit owner APIs; cross-owner SQL is forbidden.
+Ни один сервис не получает права записи в БД другого владельца. Read models
+используют события или явные owner API; межвладельческий SQL запрещён.
 
-## Transaction boundaries
+Core Order tables пишет только `orders-service`. Cart Desired и
+`order_aroma_projections` пишет только `orders-aroma-preparation`; observer и
+convergence публикуют owner facts, но не per-Order realtime и не обновляют Card
+projection напрямую.
 
-`Confirm` transaction:
+## Границы транзакций
+
+Транзакция `Confirm`:
 
 ```text
 Order status/version
 + immutable item/product/price snapshots
-+ Desired contribution/revision
++ immutable Order contribution
 + Order history/audit
 + Outbox records
 ```
 
-It contains no external HTTP and no distributed transaction.
+В ней нет внешнего HTTP или распределённой транзакции.
 
-Convergence transaction boundaries are short. Network I/O is surrounded by
-durable attempt/reservation states; database locks are not held across provider
-HTTP calls.
+Транзакции convergence остаются короткими. Сетевой I/O окружён долговечными
+состояниями attempt/reservation; блокировки БД не удерживаются во время HTTP-
+вызовов провайдера.
 
-## Minimum indexes and constraints
+## Минимальные индексы и ограничения
 
 - unique idempotency owner/scope/key;
 - unique active convergence lease per order/cart scope;
@@ -40,4 +50,3 @@ HTTP calls.
 - OrderVersion optimistic concurrency;
 - unique Catalog snapshot generation and mapping identity;
 - Outbox publish state and Inbox event ID uniqueness.
-

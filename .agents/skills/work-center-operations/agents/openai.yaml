@@ -1,0 +1,4 @@
+interface:
+  display_name: "Операции Work Center"
+  short_description: "Операционные projections и команды"
+  default_prompt: "Используй $work-center-operations для реализации сценария Work Center оператора."
