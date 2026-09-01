@@ -1,0 +1,110 @@
+schemaVersion: 1
+issue: 19
+title: Закрыть authority для 15 runtime, trust roots и delegation
+state: implemented-awaiting-review
+operationalAuthority:
+  forge: github
+  repository: YurGusev/CoffeeOrderPlatform
+  baseBranch: develop
+  workingBranch: docs/19-authority-closure
+  baseCommit: 9b5a320b936cecafcb74de2d6a1253e3d0a155ce
+inputs:
+  predecessorIssue: 14
+  predecessorPullRequest: 15
+  decisions:
+    - docs/adr/ADR-0019-greenfield-node26-and-service-topology.md
+    - docs/adr/ADR-0020-launch-contract-closure.md
+    - docs/adr/ADR-0022-ts7-native-toolchain.md
+  launchAuthority:
+    - docs/launch/10_RUNTIME_CATALOG.md
+    - docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    - docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
+outputs:
+  exactDeployableRuntimeCount: 15
+  manifests:
+    - path: platform/runtime-foundation-decision.json
+      sha256: 6a60486a87c6eaf680db3d450590610ec34f4c276456521373490ca6ad6570f8
+    - path: platform/launch-v1-runtime-profile.json
+      sha256: 5b5019dfb2d88912f8854b16fb2d97accb8301fd1bdecc1f8b6f7767384e1671
+    - path: platform/launch-v1-connectivity-policy.json
+      sha256: 458b139c29c43f7a94756a330d85b7757abb3c628acc71cb68c398ae60b8a76b
+    - path: platform/target-layout.json
+      sha256: 190e957364352967959ab505e8dfdf740648b0f31e2acb573755c8cf375633bb
+  schemas:
+    - path: platform/runtime-foundation-decision.schema.json
+      sha256: 7acde4408acc9e0128f1067da33bec11bef796eafa2493fce4f78cf5e56ddb5f
+    - path: platform/launch-v1-runtime-profile.schema.json
+      sha256: 8e98dd39c2f8990f423c0787dcbab7bf13bc2c7d8d409231e70830eecd018a9b
+    - path: platform/launch-v1-connectivity-policy.schema.json
+      sha256: 1d687ce71f670ccc67e1ac031ad1f76e7fa8bdba57f104ef54fb0ce01d7beda8
+    - path: platform/target-layout.schema.json
+      sha256: 00c7aa7ebf448819c183236f9fb860d53b0587fa8da9a8b0e0a6763338366452
+  verificationCode:
+    - path: scripts/validate-launch-authority.py
+      sha256: cef1b1d7e119ded76585be32fe8015128959e25ffc7efd18c4751da6d351e260
+    - path: tests/authority/test_launch_authority.py
+      sha256: b8e6517326975640c5a4f9cf5c6607ecbf8473fa6e36b51d5ed4d9509464cb73
+    - path: tests/authority/fixtures/negative/cases.json
+      sha256: 7d98a2173a466792d51d6d46fe57f23dfcdb066498d974d435ed324874024a73
+foundationDecision:
+  node: 26.8.1
+  pnpm: 11.24.0
+  imageIndexDigest: sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e
+  linuxAmd64ManifestDigest: sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+toolchainHandoff:
+  decisionId: ADR-COP-TS7-NATIVE-001
+  typescript: typescript@7.0.2
+  structuralLinter: oxlint@1.80.0
+  typeAwareLinter: oxlint-tsgolint@7.0.2001
+  openApiGenerator: '@hey-api/openapi-ts@0.99.0'
+  openApiGeneratorPlugin: '@hey-api/typescript'
+  generatorMode: types-only
+  secondCompilerLaneAllowed: false
+consumers:
+  issue-2:
+    receives:
+      - exact runtime inventory and owner boundaries
+      - M20 traceability without inherited canonical runtime fields
+      - DB principals, HTTP surfaces and secretRef allowlists
+  issue-3:
+    receives:
+      - exact Node/pnpm/image identity
+      - exact TS7 pins without workspace re-selection
+      - target layout and Docker network attachments
+      - authority validator wiring for pnpm authority:check
+      - scoped tmpfs identity materialization and restart-based rotation
+  issue-4:
+    receives:
+      - exact internal operationId allowlist
+      - types-only OpenAPI generator identity
+      - public and internal delegation claims
+  issue-13:
+    receives:
+      - authority negative corpus
+      - image and toolchain supply-chain identities
+      - trust, egress and projection invariants for launch gates
+verification:
+  - command: docker buildx imagetools inspect node:26.8.1-bookworm-slim
+    result: passed
+    summary: OCI index and linux/amd64 manifest digests match runtime-foundation-decision.json
+  - command: PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate-launch-authority.py
+    result: passed
+    summary: foundation, topology, connectivity, layout, security and domain invariants accepted
+  - command: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/authority -p 'test_*.py' -v
+    result: passed
+    summary: 4 tests, including 32 non-mutating RED cases and deterministic double run
+  - command: python3 JSON Schema Draft 2020-12 validation with jsonschema 4.10.3
+    result: passed
+    summary: four schemas valid and four manifests accepted
+  - command: git diff --check
+    result: passed
+  - command: sha256sum --quiet -c SHA256SUMS.txt for every immutable canonical root
+    result: passed
+  - command: UTF-8 and mojibake scan of changed text files
+    result: passed
+limitations:
+  - pnpm authority:check wiring belongs to issue 3 because issue 19 does not create workspace or package manifests
+  - Compose workloads, real certificates, SOPS materialization and live network probes belong to issue 3
+  - OpenAPI schemas and operationId materialization belong to issue 4
+  - production launch gates belong to issue 13
+  - merge acceptance is not asserted by this pre-review handoff

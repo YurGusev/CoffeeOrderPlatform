@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/schemas/target-layout.v1.schema.json",
+  "title": "CoffeeOrderPlatform greenfield target layout v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "authorityRef", "workspaceMaterializationOwner", "runtimeRoots", "plannedRoots", "technicalRoots", "forbiddenRoots", "filesystemCreationAuthorized"],
+  "properties": {
+    "$schema": { "const": "./target-layout.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "authorityRef": { "const": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md" },
+    "workspaceMaterializationOwner": { "const": "issue-3" },
+    "runtimeRoots": {
+      "type": "array", "minItems": 15, "maxItems": 15,
+      "items": { "$ref": "#/$defs/runtimeRoot" }
+    },
+    "plannedRoots": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "items": { "$ref": "#/$defs/plannedRoot" }
+    },
+    "technicalRoots": {
+      "const": [
+        "packages/contracts",
+        "packages/generated",
+        "packages/platform-config",
+        "packages/platform-observability",
+        "packages/platform-security"
+      ]
+    },
+    "forbiddenRoots": {
+      "const": ["platform/apps", "packages/domain", "packages/models", "packages/shared-business"]
+    },
+    "filesystemCreationAuthorized": { "const": false }
+  },
+  "$defs": {
+    "runtimeName": {
+      "enum": [
+        "edge-gateway", "api-public", "api-internal", "web", "customer-service",
+        "catalog-service", "catalog-supplier-sync", "catalog-activation-worker",
+        "pricing-service", "orders-service", "orders-aroma-preparation",
+        "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
+      ]
+    },
+    "runtimeRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path", "classification", "state", "implemented"],
+      "properties": {
+        "name": { "$ref": "#/$defs/runtimeName" },
+        "path": { "type": "string", "pattern": "^apps/[a-z0-9-]+$" },
+        "classification": { "const": "deployable-runtime" },
+        "state": { "const": "planned" },
+        "implemented": { "const": false }
+      }
+    },
+    "plannedRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "path", "classification", "state", "implemented", "deployedInFirstLaunch"],
+      "properties": {
+        "name": { "enum": ["api-agent", "config-bootstrap"] },
+        "path": { "enum": ["apps/api-agent", "tools/config-bootstrap"] },
+        "classification": { "enum": ["deployable-runtime-role", "trusted-initialization-provisioning-role"] },
+        "state": { "const": "planned" },
+        "implemented": { "const": false },
+        "deployedInFirstLaunch": { "type": "boolean" }
+      }
+    }
+  }
+}

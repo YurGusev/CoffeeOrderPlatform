@@ -45,6 +45,12 @@ business DB, Kafka или provider credentials. Delegation context позвол�
 Gateway проверить transport caller, original caller и operation audience.
 AROMA credentials доступны только `aroma-gateway`.
 
+Эти trust zones не совпадают один-к-одному с Docker networks. Exact physical
+attachments, отдельные `coffee_postgres_data`/`coffee_kafka_event`, разрешённые
+host:port и default-deny проверки заданы в
+[матрице runtime](23_RUNTIME_CONFIGURATION_MATRIX.md). Ни один новый runtime не
+подключается к legacy `coffee_network`.
+
 ## Технические пакеты платформы
 
 ```text

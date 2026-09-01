@@ -1,0 +1,261 @@
+{
+  "$schema": "./launch-v1-runtime-profile.schema.json",
+  "schemaVersion": 1,
+  "authority": {
+    "runtimeDecisionRef": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
+    "contractDecisionRef": "docs/adr/ADR-0020-launch-contract-closure.md",
+    "identityRef": "docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md",
+    "runtimeCatalogRef": "docs/launch/10_RUNTIME_CATALOG.md"
+  },
+  "exactDeployableRuntimeCount": 15,
+  "runtimes": [
+    {
+      "name": "edge-gateway",
+      "owner": "platform",
+      "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
+      "networkZone": "public-ingress",
+      "dbPrincipal": null,
+      "httpSurfaces": ["public-edge"],
+      "secretRefs": ["edge.tlsPrivateKey", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "api-public",
+      "owner": "platform",
+      "m20Traceability": { "classification": "exact-role-ref", "roleRef": "api-public" },
+      "networkZone": "public-api-backend",
+      "dbPrincipal": null,
+      "httpSurfaces": ["client-v1"],
+      "secretRefs": ["security.apiPublicDelegationSigningPrivateKey", "security.serviceTransportKeys.api-public", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "api-internal",
+      "owner": "platform",
+      "m20Traceability": { "classification": "exact-role-ref", "roleRef": "api-internal" },
+      "networkZone": "internal-api",
+      "dbPrincipal": null,
+      "httpSurfaces": ["internal-v1"],
+      "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "web",
+      "owner": "frontend",
+      "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
+      "networkZone": "public-ingress",
+      "dbPrincipal": null,
+      "httpSurfaces": ["web-assets"],
+      "secretRefs": ["security.serviceTransportKeys.web"],
+      "implemented": false
+    },
+    {
+      "name": "customer-service",
+      "owner": "customer",
+      "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_customer_rw",
+      "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
+      "secretRefs": ["postgres.customer", "security.serviceTransportKeys.customer-service", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "catalog-service",
+      "owner": "catalog",
+      "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_catalog_api_ro",
+      "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
+      "secretRefs": ["postgres.catalogApi", "security.catalogCursorSigningPrivateKey", "security.serviceTransportKeys.catalog-service", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "catalog-supplier-sync",
+      "owner": "catalog",
+      "m20Traceability": { "classification": "exact-role-ref", "roleRef": "catalog-supplier-sync" },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_catalog_import_rw",
+      "httpSurfaces": ["health-only"],
+      "secretRefs": ["postgres.catalogImport", "security.serviceTransportKeys.catalog-supplier-sync", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "catalog-activation-worker",
+      "owner": "catalog",
+      "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_catalog_activate_rw",
+      "httpSurfaces": [],
+      "secretRefs": ["postgres.catalogActivate", "kafka.catalog", "security.serviceTransportKeys.catalog-activation-worker", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "pricing-service",
+      "owner": "pricing",
+      "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_pricing_rw",
+      "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
+      "secretRefs": ["postgres.pricing", "security.serviceTransportKeys.pricing-service", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "orders-service",
+      "owner": "orders",
+      "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_orders_service_rw",
+      "httpSurfaces": ["client-v1-owner"],
+      "secretRefs": ["postgres.ordersService", "kafka.orders", "security.serviceTransportKeys.orders-service", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "orders-aroma-preparation",
+      "owner": "orders",
+      "m20Traceability": { "classification": "exact-role-ref", "roleRef": "orders-aroma-preparation" },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_orders_prepare_rw",
+      "httpSurfaces": ["health-only"],
+      "secretRefs": ["postgres.ordersPreparation", "kafka.orders", "security.serviceTransportKeys.orders-aroma-preparation", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "aroma-observer",
+      "owner": "orders",
+      "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-observer" },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_orders_observer_rw",
+      "httpSurfaces": ["health-only"],
+      "secretRefs": ["postgres.aromaObserver", "kafka.orders", "security.serviceTransportKeys.aroma-observer", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "aroma-convergence",
+      "owner": "orders",
+      "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-convergence" },
+      "networkZone": "internal-api",
+      "dbPrincipal": "coffee_orders_convergence_rw",
+      "httpSurfaces": ["health-only"],
+      "secretRefs": ["postgres.aromaConvergence", "kafka.orders", "security.serviceTransportKeys.aroma-convergence", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "aroma-gateway",
+      "owner": "integration",
+      "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-gateway" },
+      "networkZone": "provider-egress",
+      "dbPrincipal": "coffee_aroma_gateway_rw",
+      "httpSurfaces": ["internal-v1-owner", "provider-outbound"],
+      "secretRefs": ["postgres.aromaGateway", "aroma.email", "aroma.password", "aroma.sessionEncryptionKey", "aroma.catalogIdentityKeyV1", "security.serviceTransportKeys.aroma-gateway", "telemetry.exporterToken"],
+      "implemented": false
+    },
+    {
+      "name": "realtime-gateway",
+      "owner": "realtime",
+      "m20Traceability": { "classification": "exact-role-ref", "roleRef": "realtime-gateway" },
+      "networkZone": "public-ingress",
+      "dbPrincipal": null,
+      "httpSurfaces": ["events"],
+      "secretRefs": ["kafka.realtime", "security.serviceTransportKeys.realtime-gateway", "telemetry.exporterToken"],
+      "implemented": false
+    }
+  ],
+  "specialRoles": {
+    "api-agent": {
+      "classification": "deployable-runtime-role",
+      "state": "planned",
+      "implemented": false,
+      "deployedInFirstLaunch": false,
+      "composeEntryAllowed": false
+    },
+    "config-bootstrap": {
+      "classification": "trusted-initialization-provisioning-role",
+      "lifecycle": "init-only",
+      "longRunning": false,
+      "listenerAllowed": false,
+      "replicasAllowed": false
+    }
+  },
+  "routeMounts": [
+    { "source": "edge-gateway", "method": "GET", "path": "/", "target": "web", "targetPort": 3000 },
+    { "source": "edge-gateway", "method": "GET", "path": "/assets/**", "target": "web", "targetPort": 3000 },
+    { "source": "edge-gateway", "method": "ANY", "path": "/api/client-v1/**", "target": "api-public", "targetPort": 4050 },
+    { "source": "edge-gateway", "method": "GET", "path": "/events", "target": "realtime-gateway", "targetPort": 4401 }
+  ],
+  "surfaceIsolation": {
+    "api-public": ["client-v1"],
+    "api-internal": ["internal-v1"],
+    "edgeDirectOwnerRoutingAllowed": false,
+    "ownerHostPortPublishingAllowed": false,
+    "webHostPortPublishingAllowed": false
+  },
+  "internalOperationAllowlist": [
+    { "originalCaller": "orders-service", "target": "customer-service", "method": "GET", "path": "/api/internal-v1/customers/{customerRef}/order-input", "operationId": "getCustomerOrderInput", "mutation": false },
+    { "originalCaller": "pricing-service", "target": "catalog-service", "method": "GET", "path": "/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input", "operationId": "getCatalogPricingInput", "mutation": false },
+    { "originalCaller": "orders-service", "target": "pricing-service", "method": "POST", "path": "/api/internal-v1/pricing/quotes:verify", "operationId": "verifyPricingQuote", "mutation": false },
+    { "originalCaller": "catalog-supplier-sync", "target": "aroma-gateway", "method": "POST", "path": "/api/internal-v1/aroma/catalog-exports", "operationId": "exportAromaCatalog", "mutation": false },
+    { "originalCaller": "aroma-observer", "target": "aroma-gateway", "method": "POST", "path": "/api/internal-v1/aroma/cart-snapshots:read", "operationId": "readAromaCartSnapshot", "mutation": false },
+    { "originalCaller": "aroma-convergence", "target": "aroma-gateway", "method": "POST", "path": "/api/internal-v1/aroma/cart-snapshots:read", "operationId": "readAromaCartSnapshot", "mutation": false },
+    { "originalCaller": "aroma-convergence", "target": "aroma-gateway", "method": "POST", "path": "/api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity", "operationId": "setAromaCartLineQuantity", "mutation": true },
+    { "originalCaller": "aroma-convergence", "target": "aroma-gateway", "method": "POST", "path": "/api/internal-v1/aroma/cart-lines/{offerRef}:remove", "operationId": "removeAromaCartLine", "mutation": true }
+  ],
+  "delegation": {
+    "publicActor": {
+      "edgeAssertionIssuer": "edge-gateway",
+      "edgeAssertionAudience": "api-public",
+      "ownerAssertionIssuer": "api-public",
+      "transportCallerAtOwner": "api-public",
+      "signingKeyRef": "security.apiPublicDelegationSigningPrivateKey",
+      "transportKeyReuseAllowed": false,
+      "requiredClaims": ["iss", "aud", "originalIssuer", "sub", "permissions", "operationId", "correlationId", "traceparent", "iat", "exp", "jti", "kid"],
+      "edgeAssertionMaxTtlSeconds": 60,
+      "clockSkewSeconds": 5
+    },
+    "internalService": {
+      "issuer": "api-internal",
+      "transportCallerAtTarget": "api-internal",
+      "signingKeyRef": "security.apiInternalDelegationSigningPrivateKey",
+      "requiredClaims": ["iss", "aud", "originalCaller", "operationId", "correlationId", "traceparent", "iat", "exp", "jti", "kid"],
+      "maxTtlRule": "remaining-request-deadline-plus-5s-skew",
+      "gatewayMutationOriginalCaller": "aroma-convergence"
+    }
+  },
+  "transportIdentity": {
+    "algorithm": "Ed25519",
+    "sanTemplate": "spiffe://coffee-platform/{environment}/{runtime}",
+    "certificateTtlHours": 24,
+    "rotateBeforeExpiryHours": 6,
+    "trustBundleOverlapHours": 12,
+    "trustBundleRef": "platform.security.serviceTrustBundles",
+    "privateMaterialDelivery": "per-runtime-scoped-tmpfs",
+    "activePreviousTrustRequired": true,
+    "caPrivateKeyRuntimeAccess": false,
+    "composeRotation": "config-bootstrap-plus-restart",
+    "revocationMode": "config-bootstrap-reissue-trust-update-restart",
+    "invalidIdentityReadinessStatus": 503,
+    "identities": [
+      "edge-gateway", "api-public", "api-internal", "web", "customer-service",
+      "catalog-service", "catalog-supplier-sync", "catalog-activation-worker",
+      "pricing-service", "orders-service", "orders-aroma-preparation",
+      "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
+    ]
+  },
+  "catalogIdentity": {
+    "algorithm": "hmac-sha256-v1",
+    "secretRef": "aroma.catalogIdentityKeyV1",
+    "input": ["supplierProductRef", "supplierVariantRef", "normalizedPack", "normalizedUnit"],
+    "collisionPolicy": "quarantine-generation",
+    "rotationPolicy": "versioned-key-new-snapshots-only-existing-identities-remain-stable"
+  },
+  "ordersAuthority": {
+    "confirmedOfferPolicy": "frozen-no-automatic-remap",
+    "blockers": ["MAPPING_CHANGED", "MAPPING_MISSING", "MAPPING_STOPPED", "PRODUCT_UNAVAILABLE"],
+    "projectionRepositoryOwner": "orders-service",
+    "projectionRepositoryCount": 1,
+    "ownerVersionSource": "OrderCard.projectionVersion",
+    "commandVersionSource": "Order.version",
+    "versionsIndependent": true,
+    "desiredObservedComparison": "semantic-state-only-never-revision-equality",
+    "terminalInSyncProof": "observed matches desired for frozen offers and no unresolved blocker or unknown outcome"
+  }
+}

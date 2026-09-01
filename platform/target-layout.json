@@ -1,0 +1,41 @@
+{
+  "$schema": "./target-layout.schema.json",
+  "schemaVersion": 1,
+  "authorityRef": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
+  "workspaceMaterializationOwner": "issue-3",
+  "runtimeRoots": [
+    { "name": "edge-gateway", "path": "apps/edge-gateway", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "api-public", "path": "apps/api-public", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "api-internal", "path": "apps/api-internal", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "web", "path": "apps/web", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "customer-service", "path": "apps/customer-service", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "catalog-service", "path": "apps/catalog-service", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "catalog-supplier-sync", "path": "apps/catalog-supplier-sync", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "catalog-activation-worker", "path": "apps/catalog-activation-worker", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "pricing-service", "path": "apps/pricing-service", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "orders-service", "path": "apps/orders-service", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "orders-aroma-preparation", "path": "apps/orders-aroma-preparation", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "aroma-observer", "path": "apps/aroma-observer", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "aroma-convergence", "path": "apps/aroma-convergence", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "aroma-gateway", "path": "apps/aroma-gateway", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "realtime-gateway", "path": "apps/realtime-gateway", "classification": "deployable-runtime", "state": "planned", "implemented": false }
+  ],
+  "plannedRoots": [
+    { "name": "api-agent", "path": "apps/api-agent", "classification": "deployable-runtime-role", "state": "planned", "implemented": false, "deployedInFirstLaunch": false },
+    { "name": "config-bootstrap", "path": "tools/config-bootstrap", "classification": "trusted-initialization-provisioning-role", "state": "planned", "implemented": false, "deployedInFirstLaunch": true }
+  ],
+  "technicalRoots": [
+    "packages/contracts",
+    "packages/generated",
+    "packages/platform-config",
+    "packages/platform-observability",
+    "packages/platform-security"
+  ],
+  "forbiddenRoots": [
+    "platform/apps",
+    "packages/domain",
+    "packages/models",
+    "packages/shared-business"
+  ],
+  "filesystemCreationAuthorized": false
+}
