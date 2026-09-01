@@ -11,12 +11,14 @@ manifests без изменения смысла. Любое отклонени�
   request-size/rate/deadline limits и маршрутизирует `client-v1` только в
   `api-public`, а `/events` только в `realtime-gateway`.
 - **Владелец:** Platform.
-- **Входящие HTTP:** публичные `/api/client-v1/**`, `/events`, `/health/live`.
+- **Входящие HTTP:** публичные `GET /`, `GET /assets/**`,
+  `/api/client-v1/**`, `/events`, `/health/live`.
 - **Входящие события:** нет.
 - **Исходящие вызовы:** HTTP к `web` для `/`/`assets`, к `api-public` для
   client API; SSE proxy к `realtime-gateway`. Direct owner/API-internal route отсутствует.
 - **Хранилище:** нет БД, нет persistent cache.
-- **Секреты:** TLS private key/certificate; OIDC/JWT verification configuration.
+- **Секреты:** TLS private key/certificate, OIDC/JWT verification configuration
+  и собственная service transport identity.
 - **Публичность:** public internet; `internal-v1` и `aroma-gateway` не маршрутизирует.
 
 ## 1.1. `api-public`
@@ -29,7 +31,8 @@ manifests без изменения смысла. Любое отклонени�
 - **Исходящие:** Customer routes → `customer-service`; Catalog search →
   `catalog-service`; quote → `pricing-service`; Orders routes → `orders-service`.
 - **Хранилище/события:** DB, persistent cache и Kafka отсутствуют.
-- **Секреты:** service identity, actor verification keys, telemetry.
+- **Секреты:** service identity, actor verification keys, отдельный public
+  delegation signing key, telemetry.
 - **Публичность:** private backend; browser/host port отсутствует.
 
 ## 1.2. `api-internal`
@@ -56,7 +59,8 @@ manifests без изменения смысла. Любое отклонени�
 - **Исходящие вызовы:** серверный runtime не выполняет; браузер вызывает только
   same-origin `client-v1` и `/events` через `edge-gateway`.
 - **Хранилище:** нет.
-- **Секреты:** нет; runtime environment не содержит API/DB/provider credentials.
+- **Секреты:** только собственная service transport identity; runtime environment
+  не содержит API/DB/provider credentials.
 - **Публичность:** public internet через edge/CDN.
 
 ## 3. `customer-service`
@@ -70,7 +74,8 @@ manifests без изменения смысла. Любое отклонени�
 - **Входящие события:** нет в первом срезе.
 - **Исходящие вызовы:** нет синхронных межсервисных вызовов; telemetry only.
 - **Хранилище:** target-БД `coffee_platform_customer`, role `coffee_customer_rw`.
-- **Секреты:** только Customer DB credential и telemetry exporter credential.
+- **Секреты:** только Customer DB credential, service transport identity и
+  telemetry exporter credential.
 - **Публичность:** private owner backend; доступен только через `api-public` и
   `api-internal` по своему route inventory.
 
@@ -116,8 +121,8 @@ manifests без изменения смысла. Любое отклонени�
   `CatalogMappingChanged.v2` только через Outbox после commit.
 - **Хранилище:** `coffee_platform_catalog`, role
   `coffee_catalog_activate_rw`, allowlist staging reads, active writes и Outbox.
-- **Секреты:** Catalog DB, Kafka producer identity и telemetry; provider secrets
-  отсутствуют.
+- **Секреты:** Catalog DB, Kafka producer identity, service transport identity
+  и telemetry; provider secrets отсутствуют.
 - **Публичность:** private worker.
 
 ## 6. `pricing-service`
@@ -163,7 +168,7 @@ manifests без изменения смысла. Любое отклонени�
   `RealtimeInvalidated.v1`; HTTP отсутствует.
 - **Хранилище:** `coffee_platform_orders`, role `coffee_orders_prepare_rw`, allowlist
   Desired/mapping/order_aroma_projections/Inbox/Outbox и необходимые reads.
-- **Секреты:** Orders DB и Kafka credentials.
+- **Секреты:** Orders DB, Kafka credentials и service transport identity.
 - **Публичность:** private worker.
 
 ## 9. `aroma-observer`
@@ -217,7 +222,8 @@ manifests без изменения смысла. Любое отклонени�
 - **Исходящие вызовы:** SSE к actor с permission `orders:read:any`; owner HTTP
   не вызывает, client subject filters не принимает.
 - **Хранилище:** нет business DB и нет `DATABASE_URL`.
-- **Секреты:** Kafka credential и ключ/конфигурация проверки trusted actor context.
+- **Секреты:** Kafka credential, service transport identity и ключ/конфигурация
+  проверки trusted actor context.
 - **Публичность:** browser-visible только через edge; прямой container port private.
 
 ## Проверка полноты

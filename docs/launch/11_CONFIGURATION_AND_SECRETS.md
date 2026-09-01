@@ -110,6 +110,8 @@ environments:
         pricing-service: ENC[...]
         orders-service: ENC[...]
         catalog-supplier-sync: ENC[...]
+        catalog-activation-worker: ENC[...]
+        orders-aroma-preparation: ENC[...]
         aroma-observer: ENC[...]
         aroma-convergence: ENC[...]
         aroma-gateway: ENC[...]
@@ -190,7 +192,8 @@ clock skew `5s`, overlap active/previous key `86400s`. В
 Полный issuance/SAN/TTL/rotation/revocation contract определён в
 [service identity specification](24_SERVICE_IDENTITY_AND_DELEGATION.md).
 
-Delegation context подписывает только `api-internal`; claims:
+Internal delegation context подписывает только `api-internal`; public actor
+delegation подписывает только `api-public` отдельным ключом. Internal claims:
 `iss=api-internal`, `aud=<target-runtime>`, `originalCaller`, `operationId`,
 `iat`, `exp`, `jti`, `correlationId`, `traceparent`, `kid`. TTL не превышает
 request deadline + 5s skew. Target проверяет transport mTLS identity =
