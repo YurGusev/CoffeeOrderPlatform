@@ -142,6 +142,10 @@ committed и уже видна Catalog API. Payload: `supplierRef`, `snapshotRef
 `mappingRevision`, `mappingState`, `availability`, `effectiveAt`. Полные Catalog
 rows в событиях запрещены.
 
+JSON Schema требует: `mappingState=Active` только с non-null `offerRef`;
+`Missing|Stopped` только с `offerRef=null`. Positive/negative fixtures покрывают
+все допустимые и недопустимые сочетания.
+
 ## 6. Catalog HTTP API
 
 ### 6.1 Клиентский поиск
@@ -178,7 +182,8 @@ provider identifiers и session data публично не возвращают�
 ### 6.3. Точная active-модель
 
 Миграции называются `001_catalog_import.sql`, `002_catalog_active.sql`,
-`003_catalog_outbox.sql`, `004_catalog_grants.sql`. Active-таблицы generation-
+`003_catalog_identity.sql`, `004_catalog_outbox.sql`, `005_catalog_grants.sql`.
+Active-таблицы generation-
 scoped и не перезаписываются «на месте»:
 
 - `catalog.catalog_state(id boolean PK CHECK(id), active_snapshot_ref FK,
@@ -192,6 +197,10 @@ scoped и не перезаписываются «на месте»:
   PK(snapshot_ref,variant_ref), UNIQUE(snapshot_ref,offer_ref))`;
 - `catalog.availability(snapshot_ref,variant_ref,state,checked_at,
   PK(snapshot_ref,variant_ref), FK(snapshot_ref,variant_ref))`;
+- `catalog.source_identities(supplier_ref,entity_type,source_identity_scheme,
+  source_identity_hash,stable_ref,semantic_fingerprint,first_seen_snapshot_ref,
+  last_seen_snapshot_ref,state, PRIMARY KEY(supplier_ref,entity_type,
+  source_identity_scheme,source_identity_hash), UNIQUE(entity_type,stable_ref))`;
 - `catalog.outbox_messages(message_id PK,message_type,aggregate_ref,
   aggregate_version,partition_key,schema_version,payload,publish_state,
   attempts,next_attempt_at,occurred_at)`.
@@ -203,6 +212,15 @@ FK/count/hash/enums, переключает pointer и пишет Outbox в од
 `coffee_catalog_activate_rw` — staging read + active/Outbox write,
 `coffee_catalog_api_ro` — SELECT active views, migrator — DDL. Negative grant
 tests обязаны получить PostgreSQL `permission denied` на любой иной путь.
+
+Activation сопоставляет source identity с существующим `stable_ref`; новая
+identity получает новый owner ref. Одинаковая identity с несовместимым semantic
+fingerprint отклоняет generation. Full-snapshot diff выполняется против прежней
+Active generation: отсутствующая identity переводится в `Missing`, явный
+provider stop — `Stopped`, неизменённая identity/ref не публикует событие,
+изменение mapping публикует `CatalogMappingChanged.v2` с прежним product/variant
+и новым/нулевым offer. История identities не удаляется вместе с generation,
+поэтому frozen contribution подтверждённого Order не теряется.
 
 ## 7. Обязательная проверка
 

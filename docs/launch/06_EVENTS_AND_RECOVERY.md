@@ -8,12 +8,12 @@ launch-сообщения нельзя вводить без изменения 
 
 | Сообщение | Вид | Producer | Consumer | Ключ |
 |---|---|---|---|---|
-| `CatalogSnapshotActivated` | event | catalog-activation-worker | Pricing, Orders preparation | supplierRef |
+| `CatalogSnapshotActivated` | event | catalog-activation-worker | audit/operations only | supplierRef |
 | `CatalogMappingChanged` | event | catalog-activation-worker | orders-aroma-preparation | productRef |
 | `OrderConfirmed` | event | orders-service | orders-aroma-preparation | orderRef |
 | `AromaConvergenceRequested` | command | Orders preparation/service | aroma-convergence | cartScopeRef |
 | `AromaObservationChanged` | event | aroma-observer/convergence | Orders projections | cartScopeRef |
-| `AromaConvergenceChanged` | event | aroma-convergence | realtime projection | cartScopeRef |
+| `AromaConvergenceChanged` | event | aroma-convergence | orders-aroma-preparation | cartScopeRef |
 | `RealtimeInvalidated` | event | owners | realtime-gateway | subjectRef |
 
 Every contract has versioned JSON Schema, `messageId`, `occurredAt`, trace,
@@ -23,7 +23,7 @@ causation, correlation and owner-defined aggregate version where applicable.
 
 | Message | Topic | Partitions / retention | Consumer group |
 |---|---|---|---|
-| `CatalogSnapshotActivated.v1` | `coffee.catalog.snapshot.v1` | 12 / 2160h | `pricing-catalog-snapshot-v1` |
+| `CatalogSnapshotActivated.v1` | `coffee.catalog.snapshot.v1` | 12 / 2160h | `catalog-operations-audit-v1` |
 | `CatalogMappingChanged.v2` | `coffee.catalog.mapping.v2` | 12 / 2160h | `orders-catalog-mapping-v2` |
 | `OrderConfirmed.v1` | `coffee.orders.lifecycle.v1` | 12 / 2160h | `orders-aroma-preparation-v1` |
 | `AromaConvergenceRequested.v1` | `coffee.aroma.cart.commands.v1` | 24 / 168h | `aroma-convergence-v1` |

@@ -64,7 +64,7 @@ config hash, encrypted secrets-file hash и run-id resources. Secret values не
 
 | ID | Владелец | Exact command | PASS |
 |---|---|---|---|
-| `G00_PREFLIGHT` | Platform | `pnpm launch:verify:preflight` | clean SHA, handoffs #2–#12/#16–#18 present, no legacy DB target |
+| `G00_PREFLIGHT` | Platform | `pnpm launch:verify:preflight` | clean SHA; accepted GitHub PR/handoffs #14/#19/#2–#12/#16–#18; authority repo exact; no legacy DB target |
 | `G01_INSTALL` | Platform | `pnpm install --frozen-lockfile` | lock unchanged; no lifecycle/network surprise outside allowlist |
 | `G02_GENERATED` | Contracts | `pnpm contracts:check-generated` | generated tree byte-equal, no drift |
 | `G03_STATIC` | Platform | `pnpm format:check && pnpm lint && pnpm typecheck` | все exit 0, warnings budget 0 |
@@ -151,7 +151,7 @@ restore каждой DB <=10m и совокупно <=30m на записанн�
   отказе;
 - OpenMetrics endpoint: request duration/count/errors, DB/Kafka pool/lag,
   Outbox/Inbox backlog, Attempt/UnknownOutcome, SSE connections/drops;
-- один browser correlation id проходит edge→owner→DB log→Outbox→Kafka→worker→SSE→refetch;
+- один browser correlation id проходит edge→api-public→owner→DB log→Outbox→Kafka→projection worker→Realtime→edge→browser→owner refetch;
 - W3C traceparent сохраняется; network/DB spans не содержат body/secrets/PII;
 - alerts с test injection: service not ready 5m, consumer lag 5m,
   Outbox oldest 5m, UnknownOutcome >0 2m, SSE drop rate >5% 5m;
@@ -170,8 +170,8 @@ role `implemented=false` и отсутствует в Compose. Node 26.8.1 ис�
 Исходное состояние: running stack, одна unfinished reservation/UnknownOutcome и
 доступный safe observer. Процедура:
 
-1. изменить только `services.aroma-convergence.mutationsEnabled=false` в
-   versioned config overlay; секреты/DB/schema не менять;
+1. committed/versioned изменением единственного `config/platform.yaml` установить
+   `services.aroma-convergence.mutationsEnabled=false`; overlay запрещён;
 2. restart только `aroma-convergence`; readiness показывает режим read/recovery-only;
 3. новые mutation commands не отправляются, existing operationRef не replay;
 4. `aroma-observer` продолжает safe GET и Observed events;
@@ -187,13 +187,17 @@ owner paths healthy, recovery resumes safely.
 
 ## 10. Defect workflow
 
-Любой FAIL автоматически создаёт отдельный GitHub issue до G19. Issue содержит:
+Любой FAIL всегда создаёт локальный sanitized `defect.json` до G19. Отдельный
+publish step создаёт GitHub issue только при заранее выданном scoped разрешении
+на mutation `YurGusev/CoffeeOrderPlatform`. Issue содержит:
 gate ID/run-id/SHA, severity `P0|P1|P2`, owner area, exact command, expected vs
 actual, sanitized evidence links, deterministic reproduction, impact и
 acceptance test. Labels: `type:bug`, `status:ready`, area, risk, priority.
 
 Verification branch не исправляет defect, не меняет product contracts/pins/
-thresholds и не ослабляет test. `defects.json` содержит issue number и gate.
+thresholds и не ослабляет test. `defects.json` содержит локальный defect id и,
+если публикация разрешена/успешна, GitHub issue number. Отсутствие разрешения не
+скрывает FAIL и не меняет `НЕ ДОПУСТИТЬ`.
 P0/P1 всегда блокирует; любой mandatory FAIL блокирует независимо от severity.
 
 ## 11. Русский отчёт

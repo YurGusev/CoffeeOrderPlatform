@@ -11,6 +11,7 @@
 
 - `POST /api/client-v1/customers`;
 - `GET /api/client-v1/customers`;
+- `GET /api/internal-v1/customers/{customerRef}/order-input`;
 - `GET /health/live` и `GET /health/ready`.
 
 Он не вызывает Catalog, Pricing, Orders или AROMA, не читает Kafka и не
@@ -28,6 +29,7 @@ apps/customer-service/
   src/application/search-customers.ts
   src/http/post-customer.ts
   src/http/get-customers.ts
+  src/http/get-customer-order-input.ts
   src/infrastructure/postgres/customer-repository.ts
   src/infrastructure/postgres/idempotency-repository.ts
   src/infrastructure/logging/customer-redaction.ts
@@ -110,7 +112,7 @@ CHECK требует хотя бы одно из `phone_e164`/`email_normalized`
 
 | Столбец | PostgreSQL type | Правило |
 |---|---|---|
-| `scope`, `idempotency_key` | `varchar(64)`, `uuid` | составной PK; scope `customers:create` |
+| `actor_ref`, `scope`, `idempotency_key` | `varchar(64)`, `varchar(64)`, `uuid` | составной PK; scope `customers:create` |
 | `request_hash` | `char(64)` | SHA-256 канонического нормализованного body |
 | `state` | `varchar(16)` | `Acquired` или `Completed` |
 | `lease_owner` | `uuid` | владелец незавершённой попытки |
@@ -170,11 +172,13 @@ E-mail: Unicode NFC → trim → lowercase всей строки → прове�
 1. Валидировать schema и нормализовать body.
 2. Канонически сериализовать нормализованный body (ключи lexicographic, без
    insignificant whitespace) и вычислить SHA-256 `request_hash`.
-3. Короткой транзакцией выполнить atomic acquire: вставить `Acquired` с новым
+3. Короткой транзакцией по exact key `(actor_ref,scope,idempotency_key)`
+   выполнить atomic acquire: вставить `Acquired` с новым
    `lease_owner` и `lease_until=transaction_timestamp()+30s`. При конфликте:
    другой hash → `409 IDEMPOTENCY_CONFLICT`; `Completed` → byte-for-byte replay;
    активная lease → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`; истёкшую lease с тем
    же hash разрешено забрать условным `UPDATE ... WHERE lease_until<=now()`.
+   Одинаковый UUID другого actor — независимый key и не раскрывает response.
 4. Открыть business transaction `READ COMMITTED`, timeout `1500 ms`; заново
    заблокировать idempotency row и доказать совпадение `lease_owner`, hash и
    неистёкшую lease. Сетевые вызовы внутри неё запрещены.

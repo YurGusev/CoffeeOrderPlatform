@@ -59,7 +59,7 @@ equal+same payload = no-op, lower = stale no-op, equal+different = quarantine.
 Refs в JSON отсортированы; rows сортируются по `offer_ref` для hash.
 
 Blocked contributions хранятся в `cart_desired_blockers`: product/variant/order,
-code `MAPPING_MISSING|MAPPING_STOPPED|PRODUCT_UNAVAILABLE`, mapping revision.
+code `MAPPING_CHANGED|MAPPING_MISSING|MAPPING_STOPPED|PRODUCT_UNAVAILABLE`, mapping revision.
 Они не превращаются в provider line и не удаляют прежний Desired до commit
 полностью вычисленной новой revision.
 
@@ -210,11 +210,14 @@ Order lock, Confirmed/status/version/action check, version +1, History
 Cart result никогда не подменяет Order state напрямую. Orders DB содержит
 `cart_desired_order_facts(cart_scope_ref,desired_revision,order_ref,
 contribution_revision,contribution_hash)` и
-`order_aroma_projections(cart_scope_ref,order_ref,projection_version,
+`order_aroma_projections(order_ref PK/FK,cart_scope_ref,projection_version
+bigint CHECK(projection_version>0),
 desired_revision,desired_hash,observed_revision,observed_cart_fingerprint,
 verified_desired_revision,verified_desired_hash,verified_observed_revision,
-verified_cart_fingerprint,attempt_ref,fence_epoch,state,blocker_codes,
-changed_at,source_message_id)`.
+verified_cart_fingerprint,attempt_ref,verified_attempt_ref,fence_epoch,state,
+blocker_codes jsonb,last_observed_at,updated_at,source_message_id)`. Unique
+`(order_ref,projection_version)` хранится в append-only projection history;
+current row обновляется guarded SQL только при canonical hash change.
 
 Impacted Orders — объединение order refs прежней и новой Desired revision;
 поэтому remap/remove не теряет заказ, исчезнувший из Current. В terminal

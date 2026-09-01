@@ -8,8 +8,9 @@
 `pricing-service` принадлежит bounded context `Pricing`, является единственным
 writer `coffee_platform_pricing` и использует роль `coffee_pricing_rw`.
 
-Он принимает HTTP только от `edge-gateway` и `orders-service`, а исходящий
-business-вызов выполняет только к Catalog API #17:
+Client quote приходит `edge-gateway -> api-public -> pricing-service`; verify —
+`orders-service -> api-internal -> pricing-service`. Исходящий business-вызов
+идёт `pricing-service -> api-internal -> catalog-service` к API #17:
 
 `GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input`.
 

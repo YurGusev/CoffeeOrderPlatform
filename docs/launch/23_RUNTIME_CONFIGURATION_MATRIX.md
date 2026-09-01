@@ -2,7 +2,17 @@
 
 Статус: нормативный input #19/#2/#3. Пустое значение записывается как `null` или
 `[]`; скрытые defaults запрещены. Общие health paths: `/health/live`,
-`/health/ready`, `/metrics`; shutdown grace `30000ms`.
+`/health/ready`, `/metrics`; shutdown grace `30000ms`. Для каждой строки
+`listen.host=0.0.0.0` внутри container, metrics обслуживается на том же port по
+`/metrics`; host publish разрешён только edge/web. Node Permission manifest —
+`config/permissions/<runtime>.json`; отсутствие файла блокирует startup.
+
+Общий outbound HTTP pool для разрешённой пары: max connections 32, pipelining 1,
+connect timeout 1s, idle timeout 30s; Gateway provider pool max 8. Kafka
+partitions/retention берутся только из `06_EVENTS_AND_RECOVERY.md`; строка
+`producer|consumer` обязана перечислять exact topics/groups в `platform.yaml`.
+Mutation capability `true` только у `aroma-convergence` delegation и Gateway
+transport handler; у остальных runtime explicit `false`.
 
 | Runtime | Port | Deadline / concurrency | DB pool | Kafka | Secret refs | Разрешённый outbound |
 |---|---:|---|---:|---|---|---|

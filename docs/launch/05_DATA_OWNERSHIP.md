@@ -12,11 +12,16 @@
 | `coffee_platform_customer` | customer-service | Customer, Address, ChannelLink |
 | `coffee_platform_catalog` | catalog services | Product, Variant, SupplierSnapshot, OfferMapping, Availability |
 | `coffee_platform_pricing` | pricing-service | PricingPolicyVersion, PricingQuote |
-| `coffee_platform_orders` | Orders runtimes | Order, OrderItem, History, Desired, Observed, ConvergenceAttempt, MutationReservation, Outbox, Inbox |
+| `coffee_platform_orders` | Orders runtimes | Order, OrderItem, History, Desired, `cart_desired_order_facts`, Observed, ConvergenceAttempt, MutationReservation, `order_aroma_projections`, Outbox, Inbox |
 | `coffee_platform_integration` | aroma-gateway | encrypted session metadata, provider operation journal |
 
 Ни один сервис не получает права записи в БД другого владельца. Read models
 используют события или явные owner API; межвладельческий SQL запрещён.
+
+Core Order tables пишет только `orders-service`. Cart Desired и
+`order_aroma_projections` пишет только `orders-aroma-preparation`; observer и
+convergence публикуют owner facts, но не per-Order realtime и не обновляют Card
+projection напрямую.
 
 ## Границы транзакций
 

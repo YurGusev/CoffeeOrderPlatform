@@ -19,6 +19,8 @@
 ## В первой вертикали реализуются
 
 - `edge-gateway`;
+- `api-public`;
+- `api-internal`;
 - `web`;
 - `customer-service`;
 - `catalog-service`, `catalog-supplier-sync` и `catalog-activation-worker`;
@@ -29,6 +31,9 @@
 - `aroma-convergence`;
 - `aroma-gateway`;
 - `realtime-gateway`.
+
+Это exact set 15 из runtime catalog. `api-agent` planned/implemented=false и не
+входит в первый запуск; `config-bootstrap` — init role, не runtime.
 
 ## Не входит в первый запуск
 

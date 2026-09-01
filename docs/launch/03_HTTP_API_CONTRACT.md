@@ -37,6 +37,7 @@ current OrderVersion locally.
 {
   "orderRef": "ord_...",
   "version": "7",
+  "projectionVersion": "19",
   "status": "Confirmed",
   "customer": {"customerRef": "cus_...", "displayName": "..."},
   "items": [],

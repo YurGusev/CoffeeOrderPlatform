@@ -46,8 +46,13 @@ PR #15, принятия ADR-0019/ADR-0020, закрытия authority issue #19
 22. [Исполнимая спецификация итогового launch gate](21_LAUNCH_VERIFICATION_SPEC.md)
 23. [AROMA Gateway: журнал mutation](22_AROMA_GATEWAY_OPERATION_JOURNAL.md)
 24. [Матрица конфигурации 15 runtime](23_RUNTIME_CONFIGURATION_MATRIX.md)
+25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 
 ## Сила канонических документов
+
+Operational delivery authority определена
+[ADR-0021](../adr/ADR-0021-github-operational-authority.md): используется только
+GitHub `YurGusev/CoffeeOrderPlatform`; другой forge не входит в workflow.
 
 Пакет является прикладной проекцией новой системы и не изменяет пять
 неизменяемых канонических revision roots. Бизнес-инварианты M06/M07/M11/M12 и

@@ -13,7 +13,7 @@ contracts/
   schemas/common/problem-details.v1.schema.json
   schemas/common/message-envelope.v1.schema.json
   schemas/events/catalog-snapshot-activated.v1.schema.json
-  schemas/events/catalog-mapping-changed.v1.schema.json
+  schemas/events/catalog-mapping-changed.v2.schema.json
   schemas/events/order-confirmed.v1.schema.json
   schemas/events/aroma-convergence-requested.v1.schema.json
   schemas/events/aroma-observation-changed.v1.schema.json
@@ -37,6 +37,9 @@ objects используется `additionalProperties: false`.
 | AuditRef | `^aud_[0-9A-HJKMNP-TV-Z]{26}$` |
 | ProductRef | `^prd_[0-9A-HJKMNP-TV-Z]{26}$` |
 | VariantRef | `^var_[0-9A-HJKMNP-TV-Z]{26}$` |
+| OfferRef | `^off_[0-9A-HJKMNP-TV-Z]{26}$` |
+| SnapshotRef | `^snp_[0-9A-HJKMNP-TV-Z]{26}$` |
+| CartScopeRef | `^cart_[0-9A-HJKMNP-TV-Z]{26}$` |
 | QuoteRef | `^prq_[0-9A-HJKMNP-TV-Z]{26}$` |
 | OrderRef | `^ord_[0-9A-HJKMNP-TV-Z]{26}$` |
 | ItemRef | `^itm_[0-9A-HJKMNP-TV-Z]{26}$` |
@@ -47,7 +50,9 @@ objects используется `additionalProperties: false`.
 | PolicyVersionRef | `^pvr_[0-9A-HJKMNP-TV-Z]{26}$` |
 | version/revision | строка `^(0|[1-9][0-9]*)$` |
 | money minor units | строка `^-?(0|[1-9][0-9]*)$` |
-| quantity | строка `^(0|[1-9][0-9]*)$` |
+| QuantityDecimal | строка `^(?:[1-9][0-9]{0,5})(?:\.[0-9]{1,3})?$|^0\.(?!0{1,3}$)[0-9]{1,3}$` |
+| QuantityMilli | non-negative integer decimal string `^(0|[1-9][0-9]*)$` |
+| ProviderQuantity | typed Gateway contract; scale/range проверяется provider adapter |
 | hash | lowercase SHA-256: `^[a-f0-9]{64}$` |
 | timestamp | RFC 3339 UTC `date-time`, суффикс `Z` |
 | currency | `RUB` в первом срезе |
@@ -55,8 +60,11 @@ objects используется `additionalProperties: false`.
 | X-Correlation-ID | UUID; optional input, always present in response |
 | traceparent | W3C Trace Context pattern |
 
-Actor отсутствует во всех request bodies. `actorRef` создаётся edge из
-проверенной identity и передаётся только trusted internal context.
+Actor отсутствует во всех request bodies. Edge выпускает assertion с
+`aud=api-public`; api-public проверяет его и по mTLS вызывает owner с коротким
+delegated actor assertion `iss=api-public,aud=<owner>,originalIssuer=edge-gateway,
+actorRef,permissions,operationId,correlationId,iat,exp,jti,kid`. Owner проверяет
+transport caller, issuer/audience, route allowlist и permission.
 
 ### Владение и повторное использование schemas
 
@@ -265,7 +273,7 @@ provider response и secret data запрещены.
 
 Общий envelope каждого JSON Schema:
 
-- `schemaVersion: "1"`;
+- `envelopeVersion: "1"`; версия wire envelope независима от версии messageType;
 - `messageId`, `messageType`, `occurredAt`, `producer`;
 - `correlationId` UUID, `causationId` MessageId|null, `traceparent`;
 - `aggregate: {type, ref, version}`;
@@ -286,6 +294,8 @@ provider response и secret data запрещены.
 - `productCount`: JSON integer, minimum `0`;
 - `contentHash` и `cartFingerprint`: lowercase SHA-256;
 - `mappingState`: `Active|Missing|Stopped`;
+- conditional: `Active` требует non-null `offerRef`; `Missing|Stopped` требуют
+  `offerRef=null`; остальные сочетания schema-invalid;
 - convergence reason: `OrderConfirmed|CatalogChanged|OperatorRequested|Recovery`;
 - observation/convergence state использует тот же Aroma state enum, что Order Card;
 - `blockerCodes`: unique string array, maximum 100;

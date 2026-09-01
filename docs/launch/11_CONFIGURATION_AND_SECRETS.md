@@ -69,6 +69,7 @@ environments:
   development:
     bootstrap:
       postgresAdminPassword: ENC[...]
+      internalCaPrivateKey: ENC[...]
     postgres:
       customer: {username: coffee_customer_rw, password: ENC[...]}
       catalogImport: {username: coffee_catalog_import_rw, password: ENC[...]}
@@ -98,6 +99,15 @@ environments:
       apiInternalServicePrivateKey: ENC[...]
       apiInternalDelegationSigningPrivateKey: ENC[...]
       catalogCursorSigningPrivateKey: ENC[...]
+      serviceTransportKeys: # map exact runtime -> own ENC private key/certificate
+        customer-service: ENC[...]
+        catalog-service: ENC[...]
+        pricing-service: ENC[...]
+        orders-service: ENC[...]
+        catalog-supplier-sync: ENC[...]
+        aroma-observer: ENC[...]
+        aroma-convergence: ENC[...]
+        aroma-gateway: ENC[...]
     telemetry:
       exporterToken: ENC[...]
 sops: {}
@@ -170,6 +180,9 @@ clock skew `5s`, overlap active/previous key `86400s`. В
 `platform.yaml`; private keys — только в SOPS. Старый key проверяет подписи лишь
 до конца overlap и никогда не подписывает новые. Actor, cursor, TLS и OIDC keys
 не переиспользуются друг для друга.
+
+Полный issuance/SAN/TTL/rotation/revocation contract определён в
+[service identity specification](24_SERVICE_IDENTITY_AND_DELEGATION.md).
 
 Delegation context подписывает только `api-internal`; claims:
 `iss=api-internal`, `aud=<target-runtime>`, `originalCaller`, `operationId`,

@@ -29,7 +29,7 @@ test не принят следующей задачей. Все outputs объ�
 
 | Issue | Принимает | Публикует | Разблокирует |
 |---|---|---|---|
-| #14 | повторный аудит | launch authority + ADR-0019/ADR-0020 | #2 |
+| #14 | повторный аудит | launch authority + ADR-0019/ADR-0020/ADR-0021 | #19 |
 | #19 | #14 | 15-runtime machine authority, delegation/security closure | #2 |
 | #2 | launch docs | service/DB/interaction/secret ownership manifests + architecture checker | #3, #4 |
 | #3 | manifests #2 | workspace, exact versions, config/secrets bootstrap, DB roles, Compose | #4–#12, #16–#18 |

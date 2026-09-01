@@ -12,28 +12,35 @@
 ```text
 operation_ref varchar(30) PRIMARY KEY; cart_scope_ref varchar(64);
 action SetQuantity|Remove; offer_ref varchar(30); quantity_milli bigint NULL;
-request_hash char(64); correlation_id uuid; traceparent varchar(128);
-state Prepared|Dispatched|Acknowledged|Rejected|UnknownOutcome;
+request_hash char(64); caller_identity varchar(64); correlation_id uuid; traceparent varchar(128);
+state Reserved|Dispatched|Acknowledged|Rejected|UnknownOutcome|Abandoned;
+reservation_owner uuid; lease_until timestamptz;
 provider_status_code integer NULL; outcome_hash char(64) NULL;
-failure_code varchar(64) NULL; created_at/dispatched_at/completed_at/last_seen_at.
+failure_code varchar(64) NULL; response_status smallint NULL;
+response_body_bytes bytea NULL; created_at/dispatched_at/completed_at/last_seen_at.
 ```
 
-`Dispatched` фиксируется отдельной короткой transaction до unsafe HTTP.
+`Dispatched` фиксируется CAS отдельной короткой transaction до unsafe HTTP.
 Timeout, обрыв или невалидный ответ после dispatch дают `UnknownOutcome`.
 Provider body, cookies, credentials, PII и полный cart не сохраняются.
 
 ## Повтор операции
 
 - тот же `operationRef` и другой hash: `409 AROMA_OPERATION_REF_CONFLICT`;
-- тот же hash + `Acknowledged`: сохранённый typed response без HTTP;
+- тот же hash + `Acknowledged`: byte-equivalent сохранённый typed response без HTTP;
 - тот же hash + `Rejected`: сохранённый Problem без HTTP;
-- `Prepared|Dispatched`: `409 AROMA_OPERATION_IN_PROGRESS` без HTTP;
+- active `Reserved`: `409 AROMA_OPERATION_IN_PROGRESS` без HTTP;
+- expired `Reserved`: новый owner CAS-захватывает lease и имеет право на один
+  первый dispatch; loser не вызывает provider;
+- `Dispatched` без terminal outcome после restart переводится в
+  `UnknownOutcome` и никогда не dispatch повторно;
 - `UnknownOutcome`: `409 AROMA_OPERATION_UNKNOWN_OUTCOME` без HTTP.
 
 Gateway никогда повторно не отправляет mutation с тем же `operationRef`.
 Convergence после unknown начинает новую Attempt с fresh GET и сверяет свою
-reservation. Retention terminal rows — 30 дней; удаление разрешено только после
-проверки отсутствия незавершённой Orders reservation.
+reservation. Gateway не читает Orders DB. Terminal retention — 90 дней и
+должен превышать максимальный Orders recovery horizon; cleanup использует
+только Integration-owned state/age. Orders хранит operationRef не менее 90 дней.
 
 ## Обязательные тесты
 

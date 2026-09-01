@@ -37,7 +37,7 @@ The canonical integrity gate remains deterministic and validates the declared
 date exactly; operational acceptance must compare that date with current time
 and require new revalidation evidence after it expires.
 
-It does not cover sessions/cookies, Gitea/CI/API, database, VK, payment,
+It does not cover sessions/cookies, GitHub/CI/API, database, VK, payment,
 AI/model-provider, JWT/signing or any other repository-owned credentials. Those
 classes retain the #1086 completion requirements.
 

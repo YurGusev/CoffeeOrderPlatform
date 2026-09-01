@@ -1,7 +1,7 @@
 # Анализ навыков для новой платформы
 
 Навыки CoffeeOrderSystem `next-*` используются только как источник сведений,
-а не как пакеты для копирования. Они предполагают Project #4, ветку
+а не как пакеты для копирования. Исторически они предполагали старый Project #4, ветку
 `next-generation`, C# parity, передачу владения БД, strangler routing, cutover и
 вывод legacy. Для нового репозитория эти предположения неприменимы. Его
 интеграционная линия — `develop`, а `main` остаётся стабильной линией.
@@ -27,7 +27,8 @@
 | Docker/CI/CD/deployment | `platform-delivery` |
 | parity/reliability/testing | `reliability-verification` (greenfield evidence) |
 
-Исключённые предположения: операции Gitea Project #4, `next-generation`, C#
+Исключённые исторические предположения: операции старого Project #4,
+`next-generation`, C#
 differential parity как критерий приёмки, DB0→DB5, dual writers, legacy
 strangler/decommission и автоматический перенос старых объектов разработки.
 
