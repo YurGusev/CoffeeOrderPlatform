@@ -1,0 +1,154 @@
+name: Переходы status-labels
+
+on:
+  create:
+  issues:
+    types: [closed, reopened]
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft, closed]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: status-labels-${{ github.event.pull_request.number || github.event.issue.number || github.event.ref }}
+  cancel-in-progress: false
+
+jobs:
+  transition:
+    if: >-
+      github.event_name != 'create' ||
+      (github.event.ref_type == 'branch' &&
+       (startsWith(github.event.ref, 'feature/') ||
+        startsWith(github.event.ref, 'fix/') ||
+        startsWith(github.event.ref, 'docs/') ||
+        startsWith(github.event.ref, 'test/')))
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Определить задачи и перевести status-label
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const statusLabels = new Set([
+              'status:blocked',
+              'status:ready',
+              'status:in-progress',
+              'status:review',
+              'status:testing',
+              'status:done',
+            ]);
+
+            const issueNumbers = new Set();
+            let targetStatus;
+
+            function issueFromBranch(branch) {
+              const match = /^(?:feature|fix|docs|test)\/(\d+)-[a-z0-9][a-z0-9-]*$/.exec(branch ?? '');
+              return match ? Number(match[1]) : undefined;
+            }
+
+            async function addPullRequestIssues(pullRequest) {
+              const branchIssue = issueFromBranch(pullRequest.head.ref);
+              if (branchIssue) issueNumbers.add(branchIssue);
+
+              const result = await github.graphql(
+                `query($owner: String!, $repo: String!, $number: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $number) {
+                      closingIssuesReferences(first: 50) {
+                        nodes { number }
+                      }
+                    }
+                  }
+                }`,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  number: pullRequest.number,
+                },
+              );
+
+              for (const issue of result.repository.pullRequest.closingIssuesReferences.nodes) {
+                issueNumbers.add(issue.number);
+              }
+            }
+
+            if (context.eventName === 'create') {
+              const issueNumber = issueFromBranch(context.payload.ref);
+              if (!issueNumber) {
+                core.info(`Ветка ${context.payload.ref} не соответствует формату <type>/<issue>-<slug>.`);
+                return;
+              }
+              issueNumbers.add(issueNumber);
+              targetStatus = 'status:in-progress';
+            } else if (context.eventName === 'issues') {
+              issueNumbers.add(context.payload.issue.number);
+              targetStatus = context.payload.action === 'closed' ? 'status:done' : 'status:ready';
+            } else {
+              const pullRequest = context.payload.pull_request;
+              await addPullRequestIssues(pullRequest);
+
+              if (context.eventName === 'pull_request_review') {
+                const review = await github.graphql(
+                  `query($owner: String!, $repo: String!, $number: Int!) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $number) { reviewDecision }
+                    }
+                  }`,
+                  {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    number: pullRequest.number,
+                  },
+                );
+                targetStatus = review.repository.pullRequest.reviewDecision === 'APPROVED'
+                  ? 'status:testing'
+                  : review.repository.pullRequest.reviewDecision === 'CHANGES_REQUESTED'
+                    ? 'status:in-progress'
+                    : 'status:review';
+              } else if (context.payload.action === 'closed') {
+                targetStatus = pullRequest.merged ? 'status:done' : 'status:in-progress';
+              } else if (pullRequest.draft || context.payload.action === 'converted_to_draft') {
+                targetStatus = 'status:in-progress';
+              } else {
+                targetStatus = 'status:review';
+              }
+            }
+
+            if (issueNumbers.size === 0) {
+              core.warning('PR не связан с issue: добавьте closing reference или номер issue в имя ветки.');
+              return;
+            }
+
+            for (const issueNumber of issueNumbers) {
+              let issue;
+              try {
+                issue = await github.rest.issues.get({ ...context.repo, issue_number: issueNumber });
+              } catch (error) {
+                if (error.status === 404) {
+                  core.warning(`Issue #${issueNumber} не найден; переход пропущен.`);
+                  continue;
+                }
+                throw error;
+              }
+
+              if (issue.data.pull_request) {
+                core.warning(`#${issueNumber} является PR, а не issue; переход пропущен.`);
+                continue;
+              }
+
+              const labels = issue.data.labels
+                .map((label) => typeof label === 'string' ? label : label.name)
+                .filter((label) => label && !statusLabels.has(label));
+              labels.push(targetStatus);
+
+              await github.rest.issues.setLabels({
+                ...context.repo,
+                issue_number: issueNumber,
+                labels,
+              });
+              core.info(`Issue #${issueNumber}: установлен ${targetStatus}.`);
+            }
