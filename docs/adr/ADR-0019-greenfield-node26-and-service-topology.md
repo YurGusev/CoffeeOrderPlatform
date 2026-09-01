@@ -137,8 +137,9 @@ Runtime profile содержит для каждого из 15 имён: `owner`
 `secretRefs`, `implemented`. Совпадение с M20 нельзя выводить по похожему имени.
 До принятого implementation PR значение `implemented=false`.
 
-До их materialization разрешена только документационная работа #14/#2/#3;
-runtime feature branches #5–#18 не начинаются.
+До materialization authority разрешена только последовательная документационная
+работа: сначала #14 и #19; после принятия #19 — #2 и #3. Runtime feature branches
+#5–#18 не начинаются до завершения этой authority-последовательности.
 
 ## Последствия
 

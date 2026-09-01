@@ -181,7 +181,9 @@ manifests без изменения смысла. Любое отклонени�
 - **Исходящие вызовы:** private HTTP
   `POST /api/internal-v1/aroma/cart-snapshots:read` через `api-internal`; Kafka
   только `AromaObservationChanged.v1`. Per-Order realtime публикует projection worker.
-- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_observer_rw`, allowlist Observed/Attempt/Inbox/Outbox.
+- **Хранилище:** `coffee_platform_orders`, role `coffee_orders_observer_rw`,
+  allowlist только Observed/Inbox/Outbox; запись Attempt запрещена и принадлежит
+  только `aroma-convergence`.
 - **Секреты:** Orders DB, Kafka и service-to-service identity; provider secrets отсутствуют.
 - **Публичность:** private worker.
 

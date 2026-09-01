@@ -95,9 +95,7 @@ environments:
       oidcClientSecret: ENC[...]
     security:
       actorContextEdgeSigningPrivateKey: ENC[...]
-      apiPublicServicePrivateKey: ENC[...]
       apiPublicDelegationSigningPrivateKey: ENC[...]
-      apiInternalServicePrivateKey: ENC[...]
       apiInternalDelegationSigningPrivateKey: ENC[...]
       catalogCursorSigningPrivateKey: ENC[...]
       serviceTransportKeys: # map exact runtime -> own ENC private key/certificate
