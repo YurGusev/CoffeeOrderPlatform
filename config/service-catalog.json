@@ -1,0 +1,168 @@
+{
+  "$schema": "./service-catalog.schema.json",
+  "schemaVersion": 1,
+  "authority": {
+    "runtimeProfile": "platform/launch-v1-runtime-profile.json",
+    "runtimeCatalog": "docs/launch/10_RUNTIME_CATALOG.md",
+    "contractCatalog": "docs/launch/12_LAUNCH_CONTRACT_CATALOG.md"
+  },
+  "exactRuntimeCount": 15,
+  "runtimes": [
+    {
+      "name": "edge-gateway", "owner": "platform", "sourceRoot": "apps/edge-gateway",
+      "purpose": "Единственный публичный TLS/auth/routing ingress без бизнес-решений",
+      "contractPackages": ["packages/contracts/edge-v1"],
+      "incomingHttp": ["GET /", "GET /assets/**", "ANY /api/client-v1/**", "GET /events", "GET /health/live"],
+      "incomingEvents": [], "schedules": [],
+      "outgoingHttp": ["web:GET /", "web:GET /assets/**", "api-public:ANY /api/client-v1/**", "realtime-gateway:GET /events"],
+      "outgoingEvents": [], "database": null,
+      "secretRefs": ["edge.tlsPrivateKey", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
+      "publicity": "public-ingress"
+    },
+    {
+      "name": "api-public", "owner": "platform", "sourceRoot": "apps/api-public",
+      "purpose": "Stateless composition root только для client-v1",
+      "contractPackages": ["packages/contracts/client-v1"],
+      "incomingHttp": ["ANY /api/client-v1/**"], "incomingEvents": [], "schedules": [],
+      "outgoingHttp": ["customer-service:delegated client-v1 Customer", "catalog-service:delegated client-v1 Catalog", "pricing-service:delegated client-v1 Pricing", "orders-service:delegated client-v1 Orders"],
+      "outgoingEvents": [], "database": null,
+      "secretRefs": ["security.apiPublicDelegationSigningPrivateKey", "security.serviceTransportKeys.api-public", "telemetry.exporterToken"],
+      "publicity": "private-trust-root"
+    },
+    {
+      "name": "api-internal", "owner": "platform", "sourceRoot": "apps/api-internal",
+      "purpose": "Stateless mTLS/delegation root только для internal-v1",
+      "contractPackages": ["packages/contracts/internal-v1"],
+      "incomingHttp": ["ANY /api/internal-v1/**"], "incomingEvents": [], "schedules": [],
+      "outgoingHttp": ["customer-service:getCustomerOrderInput", "catalog-service:getCatalogPricingInput", "pricing-service:verifyPricingQuote", "aroma-gateway:exportAromaCatalog", "aroma-gateway:readAromaCartSnapshot", "aroma-gateway:setAromaCartLineQuantity", "aroma-gateway:removeAromaCartLine"],
+      "outgoingEvents": [], "database": null,
+      "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
+      "publicity": "private-trust-root"
+    },
+    {
+      "name": "web", "owner": "frontend", "sourceRoot": "apps/web",
+      "purpose": "Раздача immutable React SPA assets",
+      "contractPackages": ["packages/contracts/client-v1"],
+      "incomingHttp": ["GET /", "GET /assets/**", "GET SPA fallback"], "incomingEvents": [], "schedules": [],
+      "outgoingHttp": [], "outgoingEvents": [], "database": null,
+      "secretRefs": ["security.serviceTransportKeys.web"], "publicity": "private-edge-backend"
+    },
+    {
+      "name": "customer-service", "owner": "customer", "sourceRoot": "apps/customer-service",
+      "purpose": "Владелец Customer, identity, contacts, addresses и channel links",
+      "contractPackages": ["packages/contracts/customer-v1"],
+      "incomingHttp": ["POST /api/client-v1/customers", "GET /api/client-v1/customers", "GET /api/internal-v1/customers/{customerRef}/order-input"],
+      "incomingEvents": [], "schedules": [], "outgoingHttp": [], "outgoingEvents": [],
+      "database": {"name": "coffee_platform_customer", "role": "coffee_customer_rw", "access": "readwrite"},
+      "secretRefs": ["postgres.customer", "security.serviceTransportKeys.customer-service", "telemetry.exporterToken"],
+      "publicity": "private-owner-backend"
+    },
+    {
+      "name": "catalog-service", "owner": "catalog", "sourceRoot": "apps/catalog-service",
+      "purpose": "Владелец product/variant/active snapshot/mapping/availability reads",
+      "contractPackages": ["packages/contracts/catalog-v1"],
+      "incomingHttp": ["GET /api/client-v1/catalog/products", "GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input"],
+      "incomingEvents": [], "schedules": [], "outgoingHttp": [], "outgoingEvents": [],
+      "database": {"name": "coffee_platform_catalog", "role": "coffee_catalog_api_ro", "access": "read"},
+      "secretRefs": ["postgres.catalogApi", "security.catalogCursorSigningPrivateKey", "security.serviceTransportKeys.catalog-service", "telemetry.exporterToken"],
+      "publicity": "private-owner-backend"
+    },
+    {
+      "name": "catalog-supplier-sync", "owner": "catalog", "sourceRoot": "apps/catalog-supplier-sync",
+      "purpose": "Полный безопасный импорт supplier catalog в Received generation",
+      "contractPackages": ["packages/contracts/catalog-v1", "packages/contracts/internal-v1"],
+      "incomingHttp": ["GET /health/live", "GET /health/ready"], "incomingEvents": [], "schedules": ["internal supplier catalog schedule"],
+      "outgoingHttp": ["api-internal:exportAromaCatalog"], "outgoingEvents": [],
+      "database": {"name": "coffee_platform_catalog", "role": "coffee_catalog_import_rw", "access": "readwrite-staging"},
+      "secretRefs": ["postgres.catalogImport", "security.serviceTransportKeys.catalog-supplier-sync", "telemetry.exporterToken"],
+      "publicity": "private-worker"
+    },
+    {
+      "name": "catalog-activation-worker", "owner": "catalog", "sourceRoot": "apps/catalog-activation-worker",
+      "purpose": "Атомарная активация Received generation и запись Catalog Outbox",
+      "contractPackages": ["packages/contracts/catalog-v1"],
+      "incomingHttp": [], "incomingEvents": [], "schedules": ["durable Received DB queue"], "outgoingHttp": [],
+      "outgoingEvents": ["CatalogSnapshotActivated.v1", "CatalogMappingChanged.v2"],
+      "database": {"name": "coffee_platform_catalog", "role": "coffee_catalog_activate_rw", "access": "readwrite-activation-outbox"},
+      "secretRefs": ["postgres.catalogActivate", "kafka.catalog", "security.serviceTransportKeys.catalog-activation-worker", "telemetry.exporterToken"],
+      "publicity": "private-worker"
+    },
+    {
+      "name": "pricing-service", "owner": "pricing", "sourceRoot": "apps/pricing-service",
+      "purpose": "Владелец immutable PricingQuote, policy version и canonical hash",
+      "contractPackages": ["packages/contracts/pricing-v1", "packages/contracts/catalog-v1"],
+      "incomingHttp": ["POST /api/client-v1/pricing/quotes", "POST /api/internal-v1/pricing/quotes:verify"],
+      "incomingEvents": [], "schedules": [], "outgoingHttp": ["api-internal:getCatalogPricingInput"], "outgoingEvents": [],
+      "database": {"name": "coffee_platform_pricing", "role": "coffee_pricing_rw", "access": "readwrite"},
+      "secretRefs": ["postgres.pricing", "security.serviceTransportKeys.pricing-service", "telemetry.exporterToken"],
+      "publicity": "private-owner-backend"
+    },
+    {
+      "name": "orders-service", "owner": "orders", "sourceRoot": "apps/orders-service",
+      "purpose": "Владелец Draft, Order, items, Confirm, history и Order Card",
+      "contractPackages": ["packages/contracts/orders-v1", "packages/contracts/customer-v1", "packages/contracts/pricing-v1"],
+      "incomingHttp": ["POST /api/client-v1/orders/drafts", "PUT /api/client-v1/orders/{orderRef}/items/{itemRef}", "DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}", "POST /api/client-v1/orders/{orderRef}/commands/confirm", "POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation", "GET /api/client-v1/orders/{orderRef}"],
+      "incomingEvents": [], "schedules": [],
+      "outgoingHttp": ["api-internal:getCustomerOrderInput", "api-internal:verifyPricingQuote"],
+      "outgoingEvents": ["OrderConfirmed.v1", "AromaConvergenceRequested.v1", "RealtimeInvalidated.v1"],
+      "database": {"name": "coffee_platform_orders", "role": "coffee_orders_service_rw", "access": "readwrite-core-order-outbox"},
+      "secretRefs": ["postgres.ordersService", "kafka.orders", "security.serviceTransportKeys.orders-service", "telemetry.exporterToken"],
+      "publicity": "private-owner-backend"
+    },
+    {
+      "name": "orders-aroma-preparation", "owner": "orders", "sourceRoot": "apps/orders-aroma-preparation",
+      "purpose": "Single writer Desired и per-Order AROMA projection",
+      "contractPackages": ["packages/contracts/orders-v1", "packages/contracts/catalog-v1", "packages/contracts/aroma-v1"],
+      "incomingHttp": ["GET /health/live", "GET /health/ready"],
+      "incomingEvents": ["OrderConfirmed.v1", "CatalogMappingChanged.v2", "AromaObservationChanged.v1", "AromaConvergenceChanged.v1"],
+      "schedules": [], "outgoingHttp": [], "outgoingEvents": ["AromaConvergenceRequested.v1", "RealtimeInvalidated.v1"],
+      "database": {"name": "coffee_platform_orders", "role": "coffee_orders_prepare_rw", "access": "readwrite-desired-projection-inbox-outbox"},
+      "secretRefs": ["postgres.ordersPreparation", "kafka.orders", "security.serviceTransportKeys.orders-aroma-preparation", "telemetry.exporterToken"],
+      "publicity": "private-worker"
+    },
+    {
+      "name": "aroma-observer", "owner": "orders", "sourceRoot": "apps/aroma-observer",
+      "purpose": "Безопасное чтение физической корзины и сохранение Observed",
+      "contractPackages": ["packages/contracts/aroma-v1", "packages/contracts/internal-v1"],
+      "incomingHttp": ["GET /health/live", "GET /health/ready"], "incomingEvents": [], "schedules": ["internal durable observation schedule"],
+      "outgoingHttp": ["api-internal:readAromaCartSnapshot"], "outgoingEvents": ["AromaObservationChanged.v1"],
+      "database": {"name": "coffee_platform_orders", "role": "coffee_orders_observer_rw", "access": "readwrite-observed-inbox-outbox"},
+      "secretRefs": ["postgres.aromaObserver", "kafka.orders", "security.serviceTransportKeys.aroma-observer", "telemetry.exporterToken"],
+      "publicity": "private-worker"
+    },
+    {
+      "name": "aroma-convergence", "owner": "orders", "sourceRoot": "apps/aroma-convergence",
+      "purpose": "Lease/fence/reservation GET-mutate-GET state machine",
+      "contractPackages": ["packages/contracts/aroma-v1", "packages/contracts/internal-v1"],
+      "incomingHttp": ["GET /health/live", "GET /health/ready"], "incomingEvents": ["AromaConvergenceRequested.v1"], "schedules": [],
+      "outgoingHttp": ["api-internal:readAromaCartSnapshot", "api-internal:setAromaCartLineQuantity", "api-internal:removeAromaCartLine"],
+      "outgoingEvents": ["AromaObservationChanged.v1", "AromaConvergenceChanged.v1"],
+      "database": {"name": "coffee_platform_orders", "role": "coffee_orders_convergence_rw", "access": "readwrite-convergence-attempt-reservation-inbox-outbox"},
+      "secretRefs": ["postgres.aromaConvergence", "kafka.orders", "security.serviceTransportKeys.aroma-convergence", "telemetry.exporterToken"],
+      "publicity": "private-mutation-worker"
+    },
+    {
+      "name": "aroma-gateway", "owner": "integration", "sourceRoot": "apps/aroma-gateway",
+      "purpose": "Provider session/protocol, typed AROMA primitives и operation journal",
+      "contractPackages": ["packages/contracts/aroma-v1", "packages/contracts/internal-v1"],
+      "incomingHttp": ["POST /api/internal-v1/aroma/catalog-exports", "POST /api/internal-v1/aroma/cart-snapshots:read", "POST /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity", "POST /api/internal-v1/aroma/cart-lines/{offerRef}:remove"],
+      "incomingEvents": [], "schedules": [], "outgoingHttp": ["provider:allowlisted AROMA HTTPS origin"], "outgoingEvents": [],
+      "database": {"name": "coffee_platform_integration", "role": "coffee_aroma_gateway_rw", "access": "readwrite-session-operation-journal"},
+      "secretRefs": ["postgres.aromaGateway", "aroma.email", "aroma.password", "aroma.sessionEncryptionKey", "aroma.catalogIdentityKeyV1", "security.serviceTransportKeys.aroma-gateway", "telemetry.exporterToken"],
+      "publicity": "private-provider-gateway"
+    },
+    {
+      "name": "realtime-gateway", "owner": "realtime", "sourceRoot": "apps/realtime-gateway",
+      "purpose": "Bounded SSE invalidation fanout без business state",
+      "contractPackages": ["packages/contracts/realtime-v1"],
+      "incomingHttp": ["GET /events"], "incomingEvents": ["RealtimeInvalidated.v1"], "schedules": [],
+      "outgoingHttp": ["browser:SSE sockets"], "outgoingEvents": [], "database": null,
+      "secretRefs": ["kafka.realtime", "security.serviceTransportKeys.realtime-gateway", "telemetry.exporterToken"],
+      "publicity": "edge-only-realtime"
+    }
+  ],
+  "newRuntimeProcedure": {
+    "required": ["accepted ADR", "named data owner", "versioned contracts", "negative boundary tests", "separate issue and branch"],
+    "automaticCatalogExtensionAllowed": false
+  }
+}

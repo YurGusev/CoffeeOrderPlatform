@@ -1,0 +1,5 @@
+{
+  "ruleId": "BOUND-DB-CLAIM",
+  "mutation": "config/database-ownership.json databases[1].owner = customer",
+  "reason": "два owner не могут заявлять одну owner identity"
+}

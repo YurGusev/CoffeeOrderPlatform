@@ -1,0 +1,101 @@
+schemaVersion: 1
+issue: 2
+title: Зафиксировать исполнимый каталог сервисов, владельцев и взаимодействий
+state: implemented-awaiting-review
+operationalAuthority:
+  forge: github
+  repository: YurGusev/CoffeeOrderPlatform
+  baseBranch: develop
+  workingBranch: docs/2-service-catalog
+  baseCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+inputs:
+  - issue: 19
+    pullRequest: 20
+    mergeCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+    artifacts:
+      - platform/launch-v1-runtime-profile.json
+      - platform/launch-v1-connectivity-policy.json
+      - platform/target-layout.json
+      - evidence/handoffs/issue-19.yaml
+outputs:
+  - artifact: config/service-catalog.json
+    sha256: a75b43ae1be1f12440e413083fd7f0271c8c68377881a77d082754dc7ad4ef10
+    consumers: [3, 4]
+  - artifact: config/service-catalog.schema.json
+    sha256: 4a25ebe55f5675c4614a35bbdb54e94547a0b6f0c10697a632ac62d556ce1a68
+    consumers: [3, 4]
+  - artifact: config/database-ownership.json
+    sha256: 0e9a9f4574a0fd3930dc1e6ec9ff37a8ba08615cb50b21000062d011d3ba76b3
+    consumers: [3]
+  - artifact: config/database-ownership.schema.json
+    sha256: f22eb173a55ef7073960acfe9971f1276d29c6ca38202ee3cb148fa944daa093
+    consumers: [3]
+  - artifact: config/service-interactions.json
+    sha256: f2b537e11963a2802b1280d490fe0d0f084d649901aff67ec0de2e3f5a0c35d6
+    consumers: [3, 4]
+  - artifact: config/service-interactions.schema.json
+    sha256: 8aaebc824c579cfaf8269f89adb75ded92ff34fb10e56f97db134b8c6010d5ed
+    consumers: [3, 4]
+  - artifact: .dependency-cruiser.cjs
+    sha256: c1b9c90d656ca8f378d61a69e7068b793039d53ca6fcd9e1b1ce5ea63b3c54d3
+    consumers: [3]
+  - artifact: scripts/check-service-catalog.mjs
+    sha256: a835bbaaecd8e0b84c518b42f320d19490419cf21b33180e704cefe9722f3632
+    consumers: [3, 4]
+  - artifact: scripts/check-database-ownership.mjs
+    sha256: e623be1f67e3108a0d45def03867e75bcf125c3e83612aba567ac96c35e7b185
+    consumers: [3]
+  - artifact: scripts/check-architecture.mjs
+    sha256: ab259ac0c1411b69277785ffe8bdd0cc6b4939032dc3f25b651e6a231c4c77c9
+    consumers: [3]
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: 804ae792843bf80469f4392bd3bd219383b5210c22215b94abe6b661d6a75e75
+    consumers: [3, 4, 13]
+authoritySummary:
+  runtimeCount: 15
+  databaseCount: 5
+  interactionCount: 29
+  defaultInteractionPolicy: deny
+  crossOwnerDatabaseEdgesAllowed: false
+  dependencyCruiser: dependency-cruiser@18.2.0
+  compilerCompatibility:
+    secondTypeScriptLaneAllowed: false
+    nodeNextResolution: project-owned wrapper normalizes AST .js specifiers to .ts sources
+handoff:
+  issue-3:
+    - create workspace and exact Dependency Cruiser manifest/lock pin
+    - wire direct checkers to pnpm architecture:check
+    - materialize Compose/config/secrets/DB roles from exact manifests
+    - prove real PostgreSQL GRANT denial and live import graph
+  issue-4:
+    - materialize exact HTTP operationId and event contracts
+    - compare OpenAPI/event registries with service catalog and interaction matrix
+    - preserve default-deny and data exposure boundaries
+verification:
+  - command: node scripts/check-service-catalog.mjs
+    result: passed
+    summary: exact 15 runtime and 29 interactions match accepted #19 authority
+  - command: node scripts/check-database-ownership.mjs
+    result: passed
+    summary: five owner databases and fifteen explicit runtime claims accepted
+  - command: node scripts/check-architecture.mjs
+    result: passed
+    summary: pre-#3 tree contains no runtime source roots; manifests and checker configuration accepted
+  - command: node --test tests/architecture/checks.test.mjs
+    result: passed
+    summary: 11 tests cover deterministic GREEN and rule-specific RED fixtures
+  - command: Python jsonschema 4.10.3 Draft 2020-12 validation
+    result: passed
+    summary: three schemas and three manifests accepted
+  - command: manual reconciliation with docs/launch/05, 06, 10, 11 and 12
+    result: passed
+    summary: owners, routes, events, DB roles, secretRefs and publicity match authority inputs
+  - command: git diff --check
+    result: passed
+  - command: sha256sum --quiet -c SHA256SUMS.txt for every immutable canonical root
+    result: passed
+limitations:
+  - pnpm architecture:check wiring and package lock belong to issue 3
+  - Compose, CI and platform.yaml do not exist before issue 3 and therefore cannot yet drift-check against these manifests
+  - OpenAPI and event schema materialization belongs to issue 4; issue 2 validates the accepted docs and operation identity handoff
+  - static DB checker does not claim real PostgreSQL GRANT proof; that integration test belongs to issue 3
