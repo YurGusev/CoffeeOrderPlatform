@@ -1,0 +1,49 @@
+{
+  "name": "coffee-order-platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "26.8.1",
+    "npm": "11.19.0",
+    "pnpm": "11.24.0"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "authority:check": "python3 scripts/validate-launch-authority.py && python3 -m unittest discover -s tests/authority -p 'test_*.py'",
+    "architecture:check": "node scripts/check-architecture.mjs",
+    "compatibility:check": "node scripts/check-node26-compatibility.mjs",
+    "config:check": "node scripts/check-platform-config.mjs",
+    "rule-parity:check": "node scripts/check-rule-parity.mjs",
+    "test:compose-smoke": "node tools/compose-smoke.mjs",
+    "db:bootstrap": "node scripts/db-bootstrap.mjs",
+    "db:smoke": "node scripts/db-smoke.mjs",
+    "db:live-proof": "node scripts/db-live-proof.mjs",
+    "image:build": "node tools/docker-build.mjs",
+    "versions:check": "node scripts/check-toolchain-versions.mjs",
+    "profile:check": "node scripts/check-toolchain-profiles.mjs",
+    "clean-clone:check": "node scripts/verify-clean-clone.mjs",
+    "lint": "oxlint --type-aware --deny-warnings apps packages scripts tests",
+    "typecheck": "tsc -b --pretty false",
+    "test": "node --test tests/**/*.test.mjs packages/*/test/**/*.test.mjs",
+    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "@hey-api/openapi-ts": "0.99.0",
+    "@confluentinc/kafka-javascript": "1.10.0",
+    "@fastify/swagger": "9.8.1",
+    "@opentelemetry/api": "1.9.1",
+    "@types/js-yaml": "4.0.9",
+    "@types/node": "26.4.0",
+    "dependency-cruiser": "18.2.0",
+    "js-yaml": "4.2.0",
+    "oxlint": "1.80.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "playwright": "1.62.1",
+    "pg": "8.23.0",
+    "prettier": "3.9.6",
+    "vitest": "4.1.11",
+    "typescript": "7.0.2"
+  }
+}

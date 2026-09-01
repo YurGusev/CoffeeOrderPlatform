@@ -1,0 +1,529 @@
+name: coffee-platform
+
+x-runtime-defaults: &runtime-defaults
+  build:
+    context: .
+    dockerfile: Dockerfile
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 30s
+  read_only: true
+  user: "node"
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev
+    - /run/secrets:rw,noexec,nosuid,nodev
+  environment: &runtime-environment
+    COFFEE_CONFIG_FILE: /app/config/platform.yaml
+    COFFEE_RUNTIME_SECRETS_FILE: /run/secrets/coffee-platform.yaml
+    OTEL_PROPAGATORS: tracecontext,baggage
+    OTEL_RESOURCE_ATTRIBUTES: service.namespace=coffee-platform,deployment.environment=development
+    OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  healthcheck: &runtime-healthcheck
+    test:
+      - CMD-SHELL
+      - >-
+        node -e "fetch('http://127.0.0.1:' + process.env.PORT +
+        '/health/ready').then((response) => {
+        if (!response.ok) process.exit(1);
+        }).catch(() => process.exit(1))"
+    interval: 5s
+    timeout: 1s
+    start_period: 30s
+    retries: 3
+
+services:
+  kafka:
+    image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+    hostname: kafka
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_NUM_PARTITIONS: "3"
+    networks:
+      - coffee_kafka_event
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 12
+
+  edge-gateway:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: edge-gateway
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: edge-gateway
+      PORT: "4000"
+      OTEL_SERVICE_NAME: edge-gateway
+    ports:
+      - target: 4000
+        published: "4000"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    expose:
+      - "4000"
+    networks:
+      - coffee_public_ingress
+      - coffee_edge_backend
+    secrets:
+      - source: runtime-edge-gateway
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  api-public:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: api-public
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: api-public
+      PORT: "4050"
+      OTEL_SERVICE_NAME: api-public
+    expose:
+      - "4050"
+    networks:
+      - coffee_edge_backend
+      - coffee_public_api_backend
+    depends_on:
+      customer-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      pricing-service:
+        condition: service_healthy
+      orders-service:
+        condition: service_healthy
+    secrets:
+      - source: runtime-api-public
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  api-internal:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: api-internal
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: api-internal
+      PORT: "4051"
+      OTEL_SERVICE_NAME: api-internal
+    expose:
+      - "4051"
+    networks:
+      - coffee_internal_api
+    secrets:
+      - source: runtime-api-internal
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  web:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: web
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: web
+      PORT: "3000"
+      OTEL_SERVICE_NAME: web
+    expose:
+      - "3000"
+    networks:
+      - coffee_public_ingress
+    secrets:
+      - source: runtime-web
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  customer-service:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: customer-service
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: customer-service
+      PORT: "4101"
+      OTEL_SERVICE_NAME: customer-service
+    expose:
+      - "4101"
+    networks:
+      - coffee_public_api_backend
+      - coffee_internal_api
+      - coffee_postgres_data
+    secrets:
+      - source: runtime-customer-service
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  catalog-service:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: catalog-service
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: catalog-service
+      PORT: "4102"
+      OTEL_SERVICE_NAME: catalog-service
+    expose:
+      - "4102"
+    networks:
+      - coffee_public_api_backend
+      - coffee_internal_api
+      - coffee_postgres_data
+    secrets:
+      - source: runtime-catalog-service
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  catalog-supplier-sync:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: catalog-supplier-sync
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: catalog-supplier-sync
+      PORT: "4201"
+      OTEL_SERVICE_NAME: catalog-supplier-sync
+    expose:
+      - "4201"
+    networks:
+      - coffee_internal_api
+      - coffee_postgres_data
+    depends_on:
+      api-internal:
+        condition: service_healthy
+    secrets:
+      - source: runtime-catalog-supplier-sync
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  catalog-activation-worker:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: catalog-activation-worker
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: catalog-activation-worker
+      PORT: "4202"
+      OTEL_SERVICE_NAME: catalog-activation-worker
+    expose:
+      - "4202"
+    networks:
+      - coffee_postgres_data
+      - coffee_kafka_event
+    depends_on:
+      kafka:
+        condition: service_healthy
+    secrets:
+      - source: runtime-catalog-activation-worker
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  pricing-service:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: pricing-service
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: pricing-service
+      PORT: "4103"
+      OTEL_SERVICE_NAME: pricing-service
+    expose:
+      - "4103"
+    networks:
+      - coffee_public_api_backend
+      - coffee_internal_api
+      - coffee_postgres_data
+    secrets:
+      - source: runtime-pricing-service
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  orders-service:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: orders-service
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: orders-service
+      PORT: "4104"
+      OTEL_SERVICE_NAME: orders-service
+    expose:
+      - "4104"
+    networks:
+      - coffee_public_api_backend
+      - coffee_internal_api
+      - coffee_postgres_data
+      - coffee_kafka_event
+    depends_on:
+      kafka:
+        condition: service_healthy
+    secrets:
+      - source: runtime-orders-service
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  orders-aroma-preparation:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: orders-aroma-preparation
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: orders-aroma-preparation
+      PORT: "4203"
+      OTEL_SERVICE_NAME: orders-aroma-preparation
+    expose:
+      - "4203"
+    networks:
+      - coffee_postgres_data
+      - coffee_kafka_event
+    depends_on:
+      kafka:
+        condition: service_healthy
+    secrets:
+      - source: runtime-orders-aroma-preparation
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  aroma-observer:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: aroma-observer
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: aroma-observer
+      PORT: "4204"
+      OTEL_SERVICE_NAME: aroma-observer
+    expose:
+      - "4204"
+    networks:
+      - coffee_internal_api
+      - coffee_postgres_data
+      - coffee_kafka_event
+    depends_on:
+      kafka:
+        condition: service_healthy
+    secrets:
+      - source: runtime-aroma-observer
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  aroma-convergence:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: aroma-convergence
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: aroma-convergence
+      PORT: "4205"
+      OTEL_SERVICE_NAME: aroma-convergence
+    expose:
+      - "4205"
+    networks:
+      - coffee_internal_api
+      - coffee_postgres_data
+      - coffee_kafka_event
+    depends_on:
+      kafka:
+        condition: service_healthy
+    secrets:
+      - source: runtime-aroma-convergence
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  aroma-gateway:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: aroma-gateway
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: aroma-gateway
+      PORT: "4301"
+      OTEL_SERVICE_NAME: aroma-gateway
+    expose:
+      - "4301"
+    networks:
+      - coffee_internal_api
+      - coffee_postgres_data
+      - coffee_provider_egress
+    secrets:
+      - source: runtime-aroma-gateway
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+  realtime-gateway:
+    <<: *runtime-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUNTIME: realtime-gateway
+    environment:
+      <<: *runtime-environment
+      RUNTIME_NAME: realtime-gateway
+      PORT: "4401"
+      OTEL_SERVICE_NAME: realtime-gateway
+    expose:
+      - "4401"
+    networks:
+      - coffee_edge_backend
+      - coffee_kafka_event
+    depends_on:
+      kafka:
+        condition: service_healthy
+    secrets:
+      - source: runtime-realtime-gateway
+        target: /run/secrets/coffee-platform.yaml
+        uid: "1000"
+        gid: "1000"
+        mode: 0400
+
+secrets:
+  runtime-edge-gateway:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/edge-gateway.yaml
+  runtime-api-public:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/api-public.yaml
+  runtime-api-internal:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/api-internal.yaml
+  runtime-web:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/web.yaml
+  runtime-customer-service:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/customer-service.yaml
+  runtime-catalog-service:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/catalog-service.yaml
+  runtime-catalog-supplier-sync:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/catalog-supplier-sync.yaml
+  runtime-catalog-activation-worker:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/catalog-activation-worker.yaml
+  runtime-pricing-service:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/pricing-service.yaml
+  runtime-orders-service:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/orders-service.yaml
+  runtime-orders-aroma-preparation:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/orders-aroma-preparation.yaml
+  runtime-aroma-observer:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/aroma-observer.yaml
+  runtime-aroma-convergence:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/aroma-convergence.yaml
+  runtime-aroma-gateway:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/aroma-gateway.yaml
+  runtime-realtime-gateway:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/realtime-gateway.yaml
+
+networks:
+  coffee_public_ingress:
+    name: coffee_public_ingress
+    internal: false
+  coffee_edge_backend:
+    name: coffee_edge_backend
+    internal: true
+  coffee_public_api_backend:
+    name: coffee_public_api_backend
+    internal: true
+  coffee_internal_api:
+    name: coffee_internal_api
+    internal: true
+  coffee_postgres_data:
+    name: coffee_postgres_data
+    external: true
+    internal: true
+  coffee_kafka_event:
+    name: coffee_kafka_event
+    internal: true
+  coffee_provider_egress:
+    name: coffee_provider_egress
+    internal: false

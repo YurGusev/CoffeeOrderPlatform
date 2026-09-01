@@ -15,23 +15,23 @@ partitions/retention берутся только из `06_EVENTS_AND_RECOVERY.md
 Mutation capability `true` только у `aroma-convergence` delegation и Gateway
 transport handler; у остальных runtime explicit `false`.
 
-| Runtime | Port | Deadline / concurrency | DB pool | Kafka | Secret refs | Разрешённые host:port / egress |
-|---|---:|---|---:|---|---|---|
-| edge-gateway | 4000 | 5s / 500 | 0 | none | TLS, OIDC, actor signing, service transport, telemetry | web:3000, api-public:4050, realtime-gateway:4401 |
-| api-public | 4050 | 4.5s / 400 | 0 | none | service identity, actor verify, public delegation signing, telemetry | customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104 |
-| api-internal | 4051 | caller deadline / 300 | 0 | none | service identity, delegation signing/verify, telemetry | customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301; route allowlist обязателен |
-| web | 3000 | 5s / 500 | 0 | none | service transport identity | none |
-| customer-service | 4101 | 2s / 100 | 8 | none | postgres.customer, service identity, telemetry | coffee-postgres:5432 |
-| catalog-service | 4102 | 2s / 150 | 8 | none | postgres.catalogApi, service identity, cursor signing, telemetry | coffee-postgres:5432 |
-| catalog-supplier-sync | 4201 | 15m / 1 export | 4 | none | postgres.catalogImport, service identity, telemetry | coffee-postgres:5432, api-internal:4051 |
-| catalog-activation-worker | 4202 | 5s DB batch / 1 | 4 | producer | postgres.catalogActivate, kafka.catalog, service identity, telemetry | coffee-postgres:5432, kafka:9092 |
-| pricing-service | 4103 | 5s / 100 | 8 | none | postgres.pricing, service identity, telemetry | coffee-postgres:5432, api-internal:4051 |
-| orders-service | 4104 | 5s / 150 | 12 | producer | postgres.ordersService, kafka.orders, service identity, telemetry | coffee-postgres:5432, api-internal:4051, kafka:9092 |
-| orders-aroma-preparation | 4203 | 5s / 16 | 4 | consumer+producer | postgres.ordersPreparation, kafka.orders, service identity, telemetry | coffee-postgres:5432, kafka:9092 |
-| aroma-observer | 4204 | 15s / 4 | 4 | producer; groups `[]` | postgres.aromaObserver, kafka.orders, service identity, telemetry | coffee-postgres:5432, api-internal:4051, kafka:9092 |
-| aroma-convergence | 4205 | 30s / 4 | 4 | consumer+producer | postgres.aromaConvergence, kafka.orders, service identity, telemetry | coffee-postgres:5432, api-internal:4051, kafka:9092 |
-| aroma-gateway | 4301 | read 15m/cart 10s/mutation 10s / 8 | 8 | none | postgres.aromaGateway, AROMA credentials/session/catalog identity, service identity, telemetry | coffee-postgres:5432, exact `aroma.origin.host:443` |
-| realtime-gateway | 4401 | stream / 5000 connections | 0 | consumer | kafka.realtime, actor verify, service identity, telemetry | kafka:9092; SSE является inbound stream |
+| Runtime                   | Port | Deadline / concurrency             | DB pool | Kafka                 | Secret refs                                                                                    | Разрешённые host:port / egress                                                                                    |
+| ------------------------- | ---: | ---------------------------------- | ------: | --------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| edge-gateway              | 4000 | 5s / 500                           |       0 | none                  | TLS, OIDC, actor signing, service transport, telemetry                                         | web:3000, api-public:4050, realtime-gateway:4401                                                                  |
+| api-public                | 4050 | 4.5s / 400                         |       0 | none                  | service identity, actor verify, public delegation signing, telemetry                           | customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104                            |
+| api-internal              | 4051 | caller deadline / 300              |       0 | none                  | service identity, delegation signing/verify, telemetry                                         | customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301; route allowlist обязателен |
+| web                       | 3000 | 5s / 500                           |       0 | none                  | service transport identity                                                                     | none                                                                                                              |
+| customer-service          | 4101 | 2s / 100                           |       8 | none                  | postgres.customer, service identity, telemetry                                                 | coffee-postgres:5432                                                                                              |
+| catalog-service           | 4102 | 2s / 150                           |       8 | none                  | postgres.catalogApi, service identity, cursor signing, telemetry                               | coffee-postgres:5432                                                                                              |
+| catalog-supplier-sync     | 4201 | 15m / 1 export                     |       4 | none                  | postgres.catalogImport, service identity, telemetry                                            | coffee-postgres:5432, api-internal:4051                                                                           |
+| catalog-activation-worker | 4202 | 5s DB batch / 1                    |       4 | producer              | postgres.catalogActivate, kafka.catalog, service identity, telemetry                           | coffee-postgres:5432, kafka:9092                                                                                  |
+| pricing-service           | 4103 | 5s / 100                           |       8 | none                  | postgres.pricing, service identity, telemetry                                                  | coffee-postgres:5432, api-internal:4051                                                                           |
+| orders-service            | 4104 | 5s / 150                           |      12 | producer              | postgres.ordersService, kafka.orders, service identity, telemetry                              | coffee-postgres:5432, api-internal:4051, kafka:9092                                                               |
+| orders-aroma-preparation  | 4203 | 5s / 16                            |       4 | consumer+producer     | postgres.ordersPreparation, kafka.orders, service identity, telemetry                          | coffee-postgres:5432, kafka:9092                                                                                  |
+| aroma-observer            | 4204 | 15s / 4                            |       4 | producer; groups `[]` | postgres.aromaObserver, kafka.orders, service identity, telemetry                              | coffee-postgres:5432, api-internal:4051, kafka:9092                                                               |
+| aroma-convergence         | 4205 | 30s / 4                            |       4 | consumer+producer     | postgres.aromaConvergence, kafka.orders, service identity, telemetry                           | coffee-postgres:5432, api-internal:4051, kafka:9092                                                               |
+| aroma-gateway             | 4301 | read 15m/cart 10s/mutation 10s / 8 |       8 | none                  | postgres.aromaGateway, AROMA credentials/session/catalog identity, service identity, telemetry | coffee-postgres:5432, exact `aroma.origin.host:443`                                                               |
+| realtime-gateway          | 4401 | stream / 5000 connections          |       0 | consumer              | kafka.realtime, actor verify, service identity, telemetry                                      | kafka:9092; SSE является inbound stream                                                                           |
 
 `api-internal` operation allowlist берётся только из runtime catalog. Для
 mutation требуется delegation `originalCaller=aroma-convergence`; Gateway
@@ -45,36 +45,36 @@ Trust zone описывает доверие и route class; Docker network оп
 adjacency. Это разные поля policy. #19 фиксирует следующие exact network names,
 а #3 переносит их в Compose без переименования:
 
-| Docker network | `internal` | Участники / назначение |
-|---|---|---|
-| `coffee_public_ingress` | `true` | `edge-gateway`, `web`; host publish только у Edge |
-| `coffee_edge_backend` | `true` | `edge-gateway`, `api-public`, `realtime-gateway` |
-| `coffee_public_api_backend` | `true` | `api-public`, Customer, Catalog, Pricing и Orders HTTP owners |
-| `coffee_internal_api` | `true` | `api-internal` и только allowlisted callers/targets |
-| `coffee_postgres_data` | `true`, external/pre-created | существующий `coffee_postgres`, разрешённые DB runtime и одноразовые migration/bootstrap jobs |
-| `coffee_kafka_event` | `true` | `kafka`, разрешённые Kafka runtime и одноразовый `kafka-provisioner` |
-| `coffee_provider_egress` | `false` | только `aroma-gateway`; единственный egress к exact AROMA origin |
+| Docker network              | `internal`                   | Участники / назначение                                                                        |
+| --------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------- |
+| `coffee_public_ingress`     | `false`                      | ingress bridge для `edge-gateway` и `web`; host publish только у Edge                         |
+| `coffee_edge_backend`       | `true`                       | `edge-gateway`, `api-public`, `realtime-gateway`                                              |
+| `coffee_public_api_backend` | `true`                       | `api-public`, Customer, Catalog, Pricing и Orders HTTP owners                                 |
+| `coffee_internal_api`       | `true`                       | `api-internal` и только allowlisted callers/targets                                           |
+| `coffee_postgres_data`      | `true`, external/pre-created | существующий `coffee_postgres`, разрешённые DB runtime и одноразовые migration/bootstrap jobs |
+| `coffee_kafka_event`        | `true`                       | `kafka`, разрешённые Kafka runtime и одноразовый `kafka-provisioner`                          |
+| `coffee_provider_egress`    | `false`                      | только `aroma-gateway`; единственный egress к exact AROMA origin                              |
 
 `coffee_network` — legacy network существующих PostgreSQL/n8n. Она не входит в
 platform policy и не указывается ни у одного нового runtime.
 
-| Runtime | Exact Docker network attachments |
-|---|---|
-| `edge-gateway` | `coffee_public_ingress`, `coffee_edge_backend` |
-| `api-public` | `coffee_edge_backend`, `coffee_public_api_backend` |
-| `api-internal` | `coffee_internal_api` |
-| `web` | `coffee_public_ingress` |
-| `customer-service` | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data` |
-| `catalog-service` | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data` |
-| `catalog-supplier-sync` | `coffee_internal_api`, `coffee_postgres_data` |
-| `catalog-activation-worker` | `coffee_postgres_data`, `coffee_kafka_event` |
-| `pricing-service` | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data` |
-| `orders-service` | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data`, `coffee_kafka_event` |
-| `orders-aroma-preparation` | `coffee_postgres_data`, `coffee_kafka_event` |
-| `aroma-observer` | `coffee_internal_api`, `coffee_postgres_data`, `coffee_kafka_event` |
-| `aroma-convergence` | `coffee_internal_api`, `coffee_postgres_data`, `coffee_kafka_event` |
-| `aroma-gateway` | `coffee_internal_api`, `coffee_postgres_data`, `coffee_provider_egress` |
-| `realtime-gateway` | `coffee_edge_backend`, `coffee_kafka_event` |
+| Runtime                     | Exact Docker network attachments                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `edge-gateway`              | `coffee_public_ingress`, `coffee_edge_backend`                                                   |
+| `api-public`                | `coffee_edge_backend`, `coffee_public_api_backend`                                               |
+| `api-internal`              | `coffee_internal_api`                                                                            |
+| `web`                       | `coffee_public_ingress`                                                                          |
+| `customer-service`          | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data`                       |
+| `catalog-service`           | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data`                       |
+| `catalog-supplier-sync`     | `coffee_internal_api`, `coffee_postgres_data`                                                    |
+| `catalog-activation-worker` | `coffee_postgres_data`, `coffee_kafka_event`                                                     |
+| `pricing-service`           | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data`                       |
+| `orders-service`            | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data`, `coffee_kafka_event` |
+| `orders-aroma-preparation`  | `coffee_postgres_data`, `coffee_kafka_event`                                                     |
+| `aroma-observer`            | `coffee_internal_api`, `coffee_postgres_data`, `coffee_kafka_event`                              |
+| `aroma-convergence`         | `coffee_internal_api`, `coffee_postgres_data`, `coffee_kafka_event`                              |
+| `aroma-gateway`             | `coffee_internal_api`, `coffee_postgres_data`, `coffee_provider_egress`                          |
+| `realtime-gateway`          | `coffee_edge_backend`, `coffee_kafka_event`                                                      |
 
 `platform/launch-v1-connectivity-policy.json` материализует таблицы полями
 `dockerNetworks`, `hostPortPolicy.default=deny`, `allowedHostPorts`,

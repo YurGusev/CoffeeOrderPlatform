@@ -1,0 +1,7 @@
+creation_rules:
+  - path_regex: secrets/platform\.secrets\.sops\.yaml$
+    age:
+      - age1grlzhmznlykuc43l8n2tzmepnp8qlqnaw59cjz4y5ln5twcg8pfqmn3wgs
+      - age13qhyqguhndg4vnt8y42a938266ux5cv2u98jncmgvu7swt7g65zsamxfk8
+      - age1kqh4yhxd4w52jgagccvyfjhvdd6c3zhfwm0s8gdaksp9lxwzw35su64jxr
+    unencrypted_regex: '^(schemaVersion|username)$'

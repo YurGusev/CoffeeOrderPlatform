@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/schemas/database-role-map.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "authorityRef", "databases"],
+  "properties": {
+    "$schema": { "const": "./database-role-map.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "authorityRef": { "const": "docs/launch/05_DATA_OWNERSHIP.md" },
+    "databases": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/database" }
+    }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$" },
+    "privilege": { "enum": ["SELECT", "INSERT", "UPDATE", "DELETE"] },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "schema", "migratorRole", "runtimeRoles"],
+      "properties": {
+        "name": {
+          "enum": [
+            "coffee_platform_customer",
+            "coffee_platform_catalog",
+            "coffee_platform_pricing",
+            "coffee_platform_orders",
+            "coffee_platform_integration"
+          ]
+        },
+        "schema": { "$ref": "#/$defs/identifier" },
+        "migratorRole": {
+          "type": "string",
+          "pattern": "^coffee_[a-z]+_migrator$"
+        },
+        "runtimeRoles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/runtimeRole" }
+        }
+      }
+    },
+    "runtimeRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "role", "temporaryTables", "tables"],
+      "properties": {
+        "runtime": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "pattern": "^coffee_[a-z_]+_(?:rw|ro)$" },
+        "temporaryTables": { "const": true },
+        "tables": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/privilege" }
+          }
+        }
+      }
+    }
+  }
+}

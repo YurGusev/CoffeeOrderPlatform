@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffee-platform.invalid/schemas/node26-compatibility-matrix.schema.json",
+  "title": "CoffeeOrderPlatform Node.js 26 compatibility matrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "authorityRef",
+    "runtime",
+    "components",
+    "policy"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "./node26-compatibility-matrix.schema.json"
+    },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "authorityRef": {
+      "type": "string",
+      "const": "docs/launch/09_EXISTING_DATABASE_AND_VERSIONS.md"
+    },
+    "runtime": { "$ref": "#/$defs/runtime" },
+    "components": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/component" }
+    },
+    "policy": { "$ref": "#/$defs/policy" }
+  },
+  "$defs": {
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "platform", "architecture"],
+      "properties": {
+        "node": { "const": "26.8.1" },
+        "platform": { "type": "string", "const": "linux" },
+        "architecture": { "type": "string", "const": "x64" }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "package",
+        "version",
+        "kind",
+        "probe",
+        "required",
+        "authoritative"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "enum": [
+            "fastify",
+            "pg",
+            "confluent-kafka",
+            "opentelemetry-api",
+            "fastify-swagger",
+            "vitest",
+            "playwright",
+            "openapi-codegen"
+          ]
+        },
+        "package": { "type": "string", "minLength": 1 },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "runtime",
+            "runtime-native",
+            "contract",
+            "test",
+            "browser-test",
+            "candidate"
+          ]
+        },
+        "probe": {
+          "type": "string",
+          "enum": [
+            "fastify-factory",
+            "pg-pool",
+            "confluent-kafka-native",
+            "opentelemetry-api",
+            "fastify-swagger-plugin",
+            "vitest-cli",
+            "playwright-module",
+            "openapi-codegen-cli"
+          ]
+        },
+        "required": { "type": "boolean" },
+        "authoritative": { "type": "boolean" },
+        "openapi": { "type": "string", "const": "3.2.0" },
+        "acceptedAfterIssue": { "type": "integer", "const": 4 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exactPackageVersions",
+        "nativeDependencyLoadRequired",
+        "singleCompiler",
+        "candidateCodegen"
+      ],
+      "properties": {
+        "exactPackageVersions": { "type": "boolean", "const": true },
+        "nativeDependencyLoadRequired": { "type": "boolean", "const": true },
+        "singleCompiler": { "type": "string", "const": "typescript@7.0.2" },
+        "candidateCodegen": { "$ref": "#/$defs/candidateCodegen" }
+      }
+    },
+    "candidateCodegen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package",
+        "plugin",
+        "openapi",
+        "typesOnly",
+        "acceptedAfterIssue",
+        "forbiddenOutputs"
+      ],
+      "properties": {
+        "package": { "type": "string", "const": "@hey-api/openapi-ts" },
+        "plugin": { "type": "string", "const": "@hey-api/typescript" },
+        "openapi": { "type": "string", "const": "3.2.0" },
+        "typesOnly": { "type": "boolean", "const": true },
+        "acceptedAfterIssue": { "type": "integer", "const": 4 },
+        "forbiddenOutputs": {
+          "type": "array",
+          "const": [
+            "sdk",
+            "client",
+            "hooks",
+            "zod",
+            "axios",
+            "interceptors",
+            "vite-integration"
+          ]
+        }
+      }
+    }
+  }
+}

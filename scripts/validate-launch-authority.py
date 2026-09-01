@@ -445,7 +445,7 @@ def validate_connectivity(policy: dict[str, Any]) -> None:
     exact_list(policy["logicalZones"], ["public-ingress", "public-api-backend", "internal-api", "provider-egress"], "connectivity.logicalZones")
     require(policy["forbiddenNetworks"] == ["coffee_network"], "connectivity.forbiddenNetworks: legacy coffee_network must remain forbidden")
     expected_networks = {
-        "coffee_public_ingress": (True, False),
+        "coffee_public_ingress": (False, False),
         "coffee_edge_backend": (True, False),
         "coffee_public_api_backend": (True, False),
         "coffee_internal_api": (True, False),

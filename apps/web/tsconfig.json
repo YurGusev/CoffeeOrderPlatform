@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2025",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2025", "DOM", "DOM.Iterable"],
+    "types": ["worker-threads-compat"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}

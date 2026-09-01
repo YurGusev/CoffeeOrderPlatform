@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "authority": {
+    "node": "26.8.1",
+    "typescript": "7.0.2",
+    "compiler": "typescript@7.0.2",
+    "compilerLanes": 1
+  },
+  "profiles": {
+    "parallel": {
+      "command": "pnpm exec tsc -b --pretty false",
+      "exitCode": 0,
+      "diagnosticsSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "declarationsSha256": "0ee19665ca471e8ae826bbd08dcd2287f96055dd2d22d8f6807b4caf5cd7a1f5",
+      "artifactsSha256": "72b00a50cf5e5559efc268a7aee114cfe8d9a4f27a6d95bdba62af7519c43f24",
+      "artifactCount": 56,
+      "declarationCount": 28
+    },
+    "singleThreaded": {
+      "command": "pnpm exec tsc -b --pretty false --singleThreaded",
+      "exitCode": 0,
+      "diagnosticsSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "declarationsSha256": "0ee19665ca471e8ae826bbd08dcd2287f96055dd2d22d8f6807b4caf5cd7a1f5",
+      "artifactsSha256": "72b00a50cf5e5559efc268a7aee114cfe8d9a4f27a6d95bdba62af7519c43f24",
+      "artifactCount": 56,
+      "declarationCount": 28
+    }
+  },
+  "parity": {
+    "exitCode": true,
+    "diagnostics": true,
+    "declarations": true,
+    "artifacts": true
+  },
+  "result": "passed"
+}

@@ -1,0 +1,53 @@
+schemaVersion: 1
+issue: 3
+title: Создать базовую платформу Node.js/Fastify и локальную Compose-топологию
+state: implemented-awaiting-review
+operationalAuthority:
+  forge: github
+  repository: YurGusev/CoffeeOrderPlatform
+  baseBranch: develop
+  workingBranch: feature/3-platform-foundation
+  baseCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
+inputs:
+  - issue: 2
+    pullRequest: 21
+    mergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
+outputs:
+  runtimeCount: 15
+  ownerDatabaseCount: 5
+  runtimeRoleCount: 10
+  dockerHostPorts: [4000]
+  config: config/platform.yaml
+  encryptedSecrets: secrets/platform.secrets.sops.yaml
+  compose: compose.yaml
+  toolchain: config/toolchain-versions.json
+  toolchainProfileParity: evidence/handoffs/issue-3-toolchain-parity.json
+  consumers: [4, 5, 6, 7, 8, 9, 10, 11, 12, 16, 17, 18]
+verification:
+  - command: npx --yes pnpm@11.24.0 check
+    result: passed
+    summary: authority, versions, config, architecture, lint, typecheck and 64 tests
+  - command: docker compose -f compose.yaml config --quiet
+    result: passed
+  - command: docker image build and final-image inspection
+    result: passed
+    summary: non-root UID 1000; compiler, linter and architecture tools absent
+  - command: Kafka KRaft broker API smoke
+    result: passed
+  - command: node scripts/db-bootstrap.mjs --plan and node scripts/db-smoke.mjs --plan
+    result: passed
+    summary: five databases and fifty isolated role cases planned without live mutation
+  - command: pnpm db:live-proof -- --run-id issue3proof --evidence-dir evidence/database/results
+    result: passed
+    summary: disposable PostgreSQL 17.11 proof; first bootstrap created five databases, second run was idempotent, fifteen roles hardened, ten own writes and forty foreign SELECT/INSERT denials passed; legacy sentinels unchanged; container removed
+    evidence: evidence/database/issue-3-live-proof-issue3proof.json
+  - command: node scripts/check-toolchain-profiles.mjs --write-evidence evidence/handoffs/issue-3-toolchain-parity.json
+    result: passed
+    summary: TS7 parallel and --singleThreaded profiles matched exit code, diagnostics, 28 declarations and 56 emitted artifacts
+  - command: node scripts/check-toolchain-versions.mjs
+    result: passed
+    summary: one typescript@7.0.2 compiler, exact lockfile pins and compiler-free final image stage accepted
+limitations:
+  - full 15-runtime Compose smoke requires external coffee_postgres_data and trusted scoped secret materialization
+  - clean-clone:check must be run after the final commit from a clean checkout; it was not run from this shared dirty worktree
+  - production deployment, registry publication and provider mutation were not performed

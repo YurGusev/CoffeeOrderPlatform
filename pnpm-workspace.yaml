@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+allowBuilds:
+  '@confluentinc/kafka-javascript': true
+minimumReleaseAgeExclude:
+  - undici@8.10.1
