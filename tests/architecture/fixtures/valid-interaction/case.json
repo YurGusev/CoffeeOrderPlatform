@@ -1,0 +1,5 @@
+{
+  "ruleId": "GREEN-EVENT-CONTRACT",
+  "interactionId": "catalog-mapping-preparation",
+  "contract": "CatalogMappingChanged.v2"
+}

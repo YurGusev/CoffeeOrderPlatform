@@ -1,0 +1,5 @@
+{
+  "ruleId": "BOUND-INTERACTION",
+  "mutation": "append catalog-service -> orders-service mode=db",
+  "reason": "межвладельческий DB-edge запрещён"
+}

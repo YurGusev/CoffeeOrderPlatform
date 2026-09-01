@@ -1,0 +1,46 @@
+{
+  "$schema": "./service-interactions.schema.json",
+  "schemaVersion": 1,
+  "authority": {
+    "runtimeProfile": "platform/launch-v1-runtime-profile.json",
+    "contractCatalog": "docs/launch/12_LAUNCH_CONTRACT_CATALOG.md",
+    "eventCatalog": "docs/launch/06_EVENTS_AND_RECOVERY.md"
+  },
+  "defaultPolicy": "deny",
+  "databaseEdgesAcrossOwnersAllowed": false,
+  "interactions": [
+    {"id": "edge-web-root", "from": "edge-gateway", "to": "web", "mode": "http", "contract": "edge-v1", "operations": ["GET /", "GET /assets/**"], "timeout": "5s", "retryOwner": "edge-gateway", "dataExposure": "immutable-web-assets"},
+    {"id": "edge-client-api", "from": "edge-gateway", "to": "api-public", "mode": "http", "contract": "client-v1", "operations": ["ANY /api/client-v1/**"], "timeout": "5s", "retryOwner": "edge-gateway", "dataExposure": "validated-actor-and-client-payload"},
+    {"id": "edge-realtime", "from": "edge-gateway", "to": "realtime-gateway", "mode": "http", "contract": "realtime-v1", "operations": ["GET /events"], "timeout": "stream", "retryOwner": "browser", "dataExposure": "bounded-invalidation-only"},
+
+    {"id": "public-customer", "from": "api-public", "to": "customer-service", "mode": "http", "contract": "customer-v1", "operations": ["POST /api/client-v1/customers", "GET /api/client-v1/customers"], "timeout": "4.5s", "retryOwner": "api-public", "dataExposure": "delegated-actor-customer-contract"},
+    {"id": "public-catalog", "from": "api-public", "to": "catalog-service", "mode": "http", "contract": "catalog-v1", "operations": ["GET /api/client-v1/catalog/products"], "timeout": "4.5s", "retryOwner": "api-public", "dataExposure": "delegated-actor-catalog-contract"},
+    {"id": "public-pricing", "from": "api-public", "to": "pricing-service", "mode": "http", "contract": "pricing-v1", "operations": ["POST /api/client-v1/pricing/quotes"], "timeout": "4.5s", "retryOwner": "api-public", "dataExposure": "delegated-actor-pricing-contract"},
+    {"id": "public-orders", "from": "api-public", "to": "orders-service", "mode": "http", "contract": "orders-v1", "operations": ["ANY /api/client-v1/orders/**"], "timeout": "4.5s", "retryOwner": "api-public", "dataExposure": "delegated-actor-orders-contract"},
+
+    {"id": "orders-internal-root", "from": "orders-service", "to": "api-internal", "mode": "http", "contract": "internal-v1", "operations": ["getCustomerOrderInput", "verifyPricingQuote"], "timeout": "caller-deadline", "retryOwner": "orders-service", "dataExposure": "owner-input-and-quote-proof"},
+    {"id": "pricing-internal-root", "from": "pricing-service", "to": "api-internal", "mode": "http", "contract": "internal-v1", "operations": ["getCatalogPricingInput"], "timeout": "caller-deadline", "retryOwner": "pricing-service", "dataExposure": "catalog-pricing-input"},
+    {"id": "catalog-sync-internal-root", "from": "catalog-supplier-sync", "to": "api-internal", "mode": "http", "contract": "internal-v1", "operations": ["exportAromaCatalog"], "timeout": "15m", "retryOwner": "catalog-supplier-sync", "dataExposure": "bounded-ndjson-catalog"},
+    {"id": "observer-internal-root", "from": "aroma-observer", "to": "api-internal", "mode": "http", "contract": "internal-v1", "operations": ["readAromaCartSnapshot"], "timeout": "15s", "retryOwner": "aroma-observer", "dataExposure": "typed-cart-snapshot"},
+    {"id": "convergence-internal-root", "from": "aroma-convergence", "to": "api-internal", "mode": "http", "contract": "internal-v1", "operations": ["readAromaCartSnapshot", "setAromaCartLineQuantity", "removeAromaCartLine"], "timeout": "30s", "retryOwner": "aroma-convergence", "dataExposure": "typed-cart-operation"},
+
+    {"id": "internal-customer-order-input", "from": "api-internal", "to": "customer-service", "mode": "http", "contract": "internal-v1:getCustomerOrderInput", "operations": ["GET /api/internal-v1/customers/{customerRef}/order-input"], "timeout": "caller-deadline", "retryOwner": "original-caller", "dataExposure": "customerRef-version-name-state"},
+    {"id": "internal-catalog-pricing-input", "from": "api-internal", "to": "catalog-service", "mode": "http", "contract": "internal-v1:getCatalogPricingInput", "operations": ["GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input"], "timeout": "caller-deadline", "retryOwner": "original-caller", "dataExposure": "product-variant-pricing-input"},
+    {"id": "internal-pricing-verify", "from": "api-internal", "to": "pricing-service", "mode": "http", "contract": "internal-v1:verifyPricingQuote", "operations": ["POST /api/internal-v1/pricing/quotes:verify"], "timeout": "caller-deadline", "retryOwner": "original-caller", "dataExposure": "immutable-quote-proof"},
+    {"id": "internal-gateway-catalog", "from": "api-internal", "to": "aroma-gateway", "mode": "http", "contract": "internal-v1:exportAromaCatalog", "operations": ["POST /api/internal-v1/aroma/catalog-exports"], "timeout": "15m", "retryOwner": "original-caller", "dataExposure": "bounded-ndjson-catalog"},
+    {"id": "internal-gateway-cart-read", "from": "api-internal", "to": "aroma-gateway", "mode": "http", "contract": "internal-v1:readAromaCartSnapshot", "operations": ["POST /api/internal-v1/aroma/cart-snapshots:read"], "timeout": "15s", "retryOwner": "original-caller", "dataExposure": "typed-cart-snapshot"},
+    {"id": "internal-gateway-cart-set", "from": "api-internal", "to": "aroma-gateway", "mode": "http", "contract": "internal-v1:setAromaCartLineQuantity", "operations": ["POST /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity"], "timeout": "10s", "retryOwner": "aroma-convergence", "dataExposure": "typed-operationRef-offer-quantity"},
+    {"id": "internal-gateway-cart-remove", "from": "api-internal", "to": "aroma-gateway", "mode": "http", "contract": "internal-v1:removeAromaCartLine", "operations": ["POST /api/internal-v1/aroma/cart-lines/{offerRef}:remove"], "timeout": "10s", "retryOwner": "aroma-convergence", "dataExposure": "typed-operationRef-offer"},
+    {"id": "gateway-provider", "from": "aroma-gateway", "to": "external:aroma-origin", "mode": "provider-http", "contract": "aroma-provider-allowlist", "operations": ["allowlisted catalog/cart primitives"], "timeout": "operation-specific", "retryOwner": "aroma-gateway", "dataExposure": "provider-session-and-typed-primitives"},
+
+    {"id": "catalog-mapping-preparation", "from": "catalog-activation-worker", "to": "orders-aroma-preparation", "mode": "event", "contract": "CatalogMappingChanged.v2", "operations": ["coffee.catalog.mapping.v2"], "timeout": "durable", "retryOwner": "orders-aroma-preparation", "dataExposure": "mapping-facts-only"},
+    {"id": "order-confirmed-preparation", "from": "orders-service", "to": "orders-aroma-preparation", "mode": "event", "contract": "OrderConfirmed.v1", "operations": ["coffee.orders.lifecycle.v1"], "timeout": "durable", "retryOwner": "orders-aroma-preparation", "dataExposure": "order-confirmation-facts"},
+    {"id": "orders-convergence-request", "from": "orders-service", "to": "aroma-convergence", "mode": "event", "contract": "AromaConvergenceRequested.v1", "operations": ["coffee.aroma.cart.commands.v1"], "timeout": "durable", "retryOwner": "aroma-convergence", "dataExposure": "desired-revision-reason"},
+    {"id": "preparation-convergence-request", "from": "orders-aroma-preparation", "to": "aroma-convergence", "mode": "event", "contract": "AromaConvergenceRequested.v1", "operations": ["coffee.aroma.cart.commands.v1"], "timeout": "durable", "retryOwner": "aroma-convergence", "dataExposure": "desired-revision-reason"},
+    {"id": "observer-preparation", "from": "aroma-observer", "to": "orders-aroma-preparation", "mode": "event", "contract": "AromaObservationChanged.v1", "operations": ["coffee.aroma.cart.events.v1"], "timeout": "durable", "retryOwner": "orders-aroma-preparation", "dataExposure": "observation-facts"},
+    {"id": "convergence-observation-preparation", "from": "aroma-convergence", "to": "orders-aroma-preparation", "mode": "event", "contract": "AromaObservationChanged.v1", "operations": ["coffee.aroma.cart.events.v1"], "timeout": "durable", "retryOwner": "orders-aroma-preparation", "dataExposure": "observation-facts"},
+    {"id": "convergence-state-preparation", "from": "aroma-convergence", "to": "orders-aroma-preparation", "mode": "event", "contract": "AromaConvergenceChanged.v1", "operations": ["coffee.aroma.cart.events.v1"], "timeout": "durable", "retryOwner": "orders-aroma-preparation", "dataExposure": "convergence-facts"},
+    {"id": "orders-realtime", "from": "orders-service", "to": "realtime-gateway", "mode": "event", "contract": "RealtimeInvalidated.v1", "operations": ["coffee.realtime.invalidate.v1"], "timeout": "durable", "retryOwner": "realtime-gateway", "dataExposure": "order-ref-projection-version-reason"},
+    {"id": "preparation-realtime", "from": "orders-aroma-preparation", "to": "realtime-gateway", "mode": "event", "contract": "RealtimeInvalidated.v1", "operations": ["coffee.realtime.invalidate.v1"], "timeout": "durable", "retryOwner": "realtime-gateway", "dataExposure": "order-ref-projection-version-reason"}
+  ]
+}

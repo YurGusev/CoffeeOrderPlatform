@@ -60,3 +60,29 @@ security, observability, idempotency, outbox, inbox, kafka-runtime, testing
 
 Бизнес-типы не помещаются в общие пакеты. Межсервисные зависимости
 разрешены только через версионированные контракты OpenAPI/JSON Schema.
+
+## Добавление нового runtime
+
+Каталог первого запуска является закрытым exact set. Шестнадцатый runtime не
+добавляется только правкой Compose или созданием каталога. До реализации нужны:
+
+1. отдельный принятый ADR с причиной новой process/trust/failure boundary;
+2. один названный владелец данных, API, событий, retry и восстановления;
+3. versioned HTTP/event contracts без межвладельческого SQL;
+4. обновление service/DB/interaction/secret manifests и их JSON Schema;
+5. RED tests для cross-owner import, DB claim и неизвестного interaction;
+6. отдельный русскоязычный issue, ветка и PR в `develop`.
+
+До создания workspace в #3 проверки #2 запускаются напрямую:
+
+```text
+node scripts/check-service-catalog.mjs
+node scripts/check-database-ownership.mjs
+node scripts/check-architecture.mjs
+node --test tests/architecture/checks.test.mjs
+```
+
+#3 подключает их без изменения semantics к `pnpm architecture:check` и фиксирует
+`dependency-cruiser@18.2.0` в manifest/lockfile. Второй TypeScript compiler для
+Dependency Cruiser не добавляется: project-owned wrapper применяет правила к
+AST dependency graph и нормализует NodeNext `.js` specifier к source `.ts`.

@@ -1,0 +1,6 @@
+{
+  "bindings": [
+    {"runtime": "orders-service", "database": "coffee_platform_orders", "role": "coffee_orders_service_rw"},
+    {"runtime": "catalog-service", "database": "coffee_platform_catalog", "role": "coffee_catalog_api_ro"}
+  ]
+}

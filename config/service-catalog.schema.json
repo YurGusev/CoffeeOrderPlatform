@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/schemas/service-catalog.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "authority", "exactRuntimeCount", "runtimes", "newRuntimeProcedure"],
+  "properties": {
+    "$schema": {"const": "./service-catalog.schema.json"},
+    "schemaVersion": {"const": 1},
+    "authority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runtimeProfile", "runtimeCatalog", "contractCatalog"],
+      "properties": {
+        "runtimeProfile": {"const": "platform/launch-v1-runtime-profile.json"},
+        "runtimeCatalog": {"const": "docs/launch/10_RUNTIME_CATALOG.md"},
+        "contractCatalog": {"const": "docs/launch/12_LAUNCH_CONTRACT_CATALOG.md"}
+      }
+    },
+    "exactRuntimeCount": {"const": 15},
+    "runtimes": {"type": "array", "minItems": 15, "maxItems": 15, "items": {"$ref": "#/$defs/runtime"}},
+    "newRuntimeProcedure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["required", "automaticCatalogExtensionAllowed"],
+      "properties": {
+        "required": {"type": "array", "minItems": 5, "maxItems": 5, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "automaticCatalogExtensionAllowed": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "runtimeName": {"enum": ["edge-gateway", "api-public", "api-internal", "web", "customer-service", "catalog-service", "catalog-supplier-sync", "catalog-activation-worker", "pricing-service", "orders-service", "orders-aroma-preparation", "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"]},
+    "database": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["name", "role", "access"],
+      "properties": {
+        "name": {"enum": ["coffee_platform_customer", "coffee_platform_catalog", "coffee_platform_pricing", "coffee_platform_orders", "coffee_platform_integration"]},
+        "role": {"type": "string", "pattern": "^coffee_[a-z0-9_]+$"},
+        "access": {"type": "string", "minLength": 1}
+      }
+    },
+    "stringArray": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "runtime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "owner", "sourceRoot", "purpose", "contractPackages", "incomingHttp", "incomingEvents", "schedules", "outgoingHttp", "outgoingEvents", "database", "secretRefs", "publicity"],
+      "properties": {
+        "name": {"$ref": "#/$defs/runtimeName"},
+        "owner": {"enum": ["platform", "frontend", "customer", "catalog", "pricing", "orders", "integration", "realtime"]},
+        "sourceRoot": {"type": "string", "pattern": "^apps/[a-z0-9-]+$"},
+        "purpose": {"type": "string", "minLength": 1},
+        "contractPackages": {"$ref": "#/$defs/stringArray"},
+        "incomingHttp": {"$ref": "#/$defs/stringArray"},
+        "incomingEvents": {"$ref": "#/$defs/stringArray"},
+        "schedules": {"$ref": "#/$defs/stringArray"},
+        "outgoingHttp": {"$ref": "#/$defs/stringArray"},
+        "outgoingEvents": {"$ref": "#/$defs/stringArray"},
+        "database": {"$ref": "#/$defs/database"},
+        "secretRefs": {"$ref": "#/$defs/stringArray"},
+        "publicity": {"enum": ["public-ingress", "private-trust-root", "private-edge-backend", "private-owner-backend", "private-worker", "private-mutation-worker", "private-provider-gateway", "edge-only-realtime"]}
+      }
+    }
+  }
+}
