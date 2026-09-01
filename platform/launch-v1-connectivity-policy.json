@@ -9,7 +9,8 @@
     "provider-egress"
   ],
   "dockerNetworks": [
-    { "name": "coffee_public_ingress", "internal": false, "external": false },
+    { "name": "coffee_host_ingress", "internal": false, "external": false },
+    { "name": "coffee_public_ingress", "internal": true, "external": false },
     { "name": "coffee_edge_backend", "internal": true, "external": false },
     {
       "name": "coffee_public_api_backend",
@@ -25,7 +26,7 @@
   "runtimePolicies": [
     {
       "runtime": "edge-gateway",
-      "dockerNetworks": ["coffee_public_ingress", "coffee_edge_backend"],
+      "dockerNetworks": ["coffee_host_ingress", "coffee_public_ingress", "coffee_edge_backend"],
       "hostPortPolicy": {
         "default": "deny",
         "allowedPublishedHostPorts": [4000]
@@ -103,7 +104,7 @@
         "coffee_postgres_data"
       ],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee-postgres:5432"],
+      "allowedHostPorts": ["coffee_postgres:5432"],
       "allowedExternalEgress": [],
       "denyAssertions": ["no-kafka", "no-provider-egress", "own-database-only"]
     },
@@ -115,7 +116,7 @@
         "coffee_postgres_data"
       ],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee-postgres:5432"],
+      "allowedHostPorts": ["coffee_postgres:5432"],
       "allowedExternalEgress": [],
       "denyAssertions": [
         "no-kafka",
@@ -127,7 +128,7 @@
       "runtime": "catalog-supplier-sync",
       "dockerNetworks": ["coffee_internal_api", "coffee_postgres_data"],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee-postgres:5432", "api-internal:4051"],
+      "allowedHostPorts": ["coffee_postgres:5432", "api-internal:4051"],
       "allowedExternalEgress": [],
       "denyAssertions": [
         "no-kafka",
@@ -139,7 +140,7 @@
       "runtime": "catalog-activation-worker",
       "dockerNetworks": ["coffee_postgres_data", "coffee_kafka_event"],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee-postgres:5432", "kafka:9092"],
+      "allowedHostPorts": ["coffee_postgres:5432", "kafka:9092"],
       "allowedExternalEgress": [],
       "denyAssertions": [
         "no-http-business-route",
@@ -155,7 +156,7 @@
         "coffee_postgres_data"
       ],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee-postgres:5432", "api-internal:4051"],
+      "allowedHostPorts": ["coffee_postgres:5432", "api-internal:4051"],
       "allowedExternalEgress": [],
       "denyAssertions": ["no-kafka", "no-provider-egress", "own-database-only"]
     },
@@ -169,7 +170,7 @@
       ],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
       "allowedHostPorts": [
-        "coffee-postgres:5432",
+        "coffee_postgres:5432",
         "api-internal:4051",
         "kafka:9092"
       ],
@@ -184,7 +185,7 @@
       "runtime": "orders-aroma-preparation",
       "dockerNetworks": ["coffee_postgres_data", "coffee_kafka_event"],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee-postgres:5432", "kafka:9092"],
+      "allowedHostPorts": ["coffee_postgres:5432", "kafka:9092"],
       "allowedExternalEgress": [],
       "denyAssertions": [
         "no-http-business-route",
@@ -201,7 +202,7 @@
       ],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
       "allowedHostPorts": [
-        "coffee-postgres:5432",
+        "coffee_postgres:5432",
         "api-internal:4051",
         "kafka:9092"
       ],
@@ -221,7 +222,7 @@
       ],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
       "allowedHostPorts": [
-        "coffee-postgres:5432",
+        "coffee_postgres:5432",
         "api-internal:4051",
         "kafka:9092"
       ],
@@ -240,7 +241,7 @@
         "coffee_provider_egress"
       ],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee-postgres:5432"],
+      "allowedHostPorts": ["coffee_postgres:5432"],
       "allowedExternalEgress": ["${aroma.origin.host}:443"],
       "denyAssertions": [
         "no-kafka",

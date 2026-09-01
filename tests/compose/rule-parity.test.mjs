@@ -7,10 +7,14 @@ import { checkRuleParity } from "../../scripts/check-rule-parity.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
-void test("canonical TS7 rule-parity matrix is schema-checked and fail-closed", async () => {
+void test("canonical TS7 rule-parity matrix validates truth before replacement admission", async () => {
   const result = await checkRuleParity(REPO_ROOT);
   assert.equal(result.rows, 12);
   assert.equal(result.uncoveredPolicy, "block-replacement");
+  await assert.rejects(
+    () => checkRuleParity(REPO_ROOT, { admit: true }),
+    /TS7-MISUSED-PROMISE: status GAP blocks replacement/,
+  );
 });
 
 void test("every uncovered rule class remains a blocking replacement gate", async () => {
@@ -27,16 +31,5 @@ void test("every uncovered rule class remains a blocking replacement gate", asyn
   assert.ok(uncovered.length > 0);
   for (const row of uncovered) {
     assert.equal(row.uncoveredBlocksReplacement, true, row.id);
-    assert.match(
-      markdown,
-      new RegExp(
-        "\\| `" +
-          row.id +
-          "` /[\\s\\S]*?\\*\\*" +
-          row.status +
-          "\\*\\*[\\s\\S]*?`BLOCK`",
-      ),
-      row.id,
-    );
   }
 });

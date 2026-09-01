@@ -27,7 +27,11 @@ const RUNTIMES = [
 ];
 
 const NETWORKS = {
-  "edge-gateway": ["coffee_public_ingress", "coffee_edge_backend"],
+  "edge-gateway": [
+    "coffee_host_ingress",
+    "coffee_public_ingress",
+    "coffee_edge_backend",
+  ],
   "api-public": ["coffee_edge_backend", "coffee_public_api_backend"],
   "api-internal": ["coffee_internal_api"],
   web: ["coffee_public_ingress"],
@@ -208,6 +212,7 @@ void test("Compose networks enforce the launch planes and external PostgreSQL at
   const config = composeConfig();
   assert.deepEqual(Object.keys(config.networks).sort(), [
     "coffee_edge_backend",
+    "coffee_host_ingress",
     "coffee_internal_api",
     "coffee_kafka_event",
     "coffee_postgres_data",
@@ -220,8 +225,11 @@ void test("Compose networks enforce the launch planes and external PostgreSQL at
     config.networks.coffee_postgres_data.name,
     "coffee_postgres_data",
   );
+  assert.equal(config.networks.coffee_postgres_data.internal, undefined);
   assert.notEqual(config.networks.coffee_provider_egress.internal, true);
-  assert.notEqual(config.networks.coffee_public_ingress.internal, true);
+  assert.equal(config.networks.coffee_host_ingress.name, "coffee_host_ingress");
+  assert.notEqual(config.networks.coffee_host_ingress.internal, true);
+  assert.equal(config.networks.coffee_public_ingress.internal, true);
   for (const name of [
     "coffee_edge_backend",
     "coffee_public_api_backend",
@@ -289,6 +297,13 @@ void test("Kafka is pinned and runs as a single-node KRaft broker without host p
   assert.deepEqual(Object.keys(kafka.networks), ["coffee_kafka_event"]);
   assert.equal(kafka.ports, undefined);
   assert.equal(kafka.environment.KAFKA_PROCESS_ROLES, "broker,controller");
+  assert.equal(
+    kafka.environment.KAFKA_LISTENER_SECURITY_PROTOCOL_MAP,
+    "CONTROLLER:PLAINTEXT,SASL_SSL:SASL_SSL",
+  );
+  assert.equal(kafka.environment.KAFKA_LISTENERS, "SASL_SSL://:9092,CONTROLLER://:29093");
+  assert.equal(kafka.environment.KAFKA_ADVERTISED_LISTENERS, "SASL_SSL://kafka:9092");
+  assert.equal(kafka.environment.KAFKA_INTER_BROKER_LISTENER_NAME, "SASL_SSL");
   assert.equal(kafka.environment.KAFKA_AUTO_CREATE_TOPICS_ENABLE, "false");
   assert.match(kafka.healthcheck.test[1], /kafka-broker-api-versions/);
 });
@@ -297,13 +312,16 @@ void test("Node production image is exact, non-root, and keeps build tooling out
   const dockerfile = await readFile(join(REPO_ROOT, "Dockerfile"), "utf8");
   assert.match(
     dockerfile,
-    /node:26\.8\.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e/,
+    /node:26\.8\.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae/,
   );
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS build/);
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS runtime/);
   assert.match(dockerfile, /pnpm --filter .* deploy --prod/);
   assert.match(dockerfile, /USER node/);
   assert.match(dockerfile, /COPY --from=build \/runtime/);
+  assert.match(dockerfile, /COPY platform\/launch-v1-connectivity-policy\.json \.\/platform\/launch-v1-connectivity-policy\.json/);
+  assert.match(dockerfile, /ENTRYPOINT \["node", "scripts\/permission-enforce\.mjs"\]/);
+  assert.match(dockerfile, /CMD \["--entry", "dist\/main\.js"\]/);
 });
 
 void test("Confluent Node 26 addon links dynamically to separately pinned librdkafka", async () => {

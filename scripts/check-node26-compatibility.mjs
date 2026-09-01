@@ -553,6 +553,12 @@ export async function checkNode26Compatibility(root = REPO_ROOT, options = {}) {
     }
     try {
       moduleVersion(info, component);
+      if (options.skipNativeLoad && component.kind === "runtime-native") {
+        result.status = "deferred-to-image-build";
+        result.details = { nativeLoad: "validated-by-Dockerfile-build" };
+        results.push(result);
+        continue;
+      }
       result.details = await probeComponent(resolvedRoot, component, info);
       result.status = component.authoritative
         ? "passed"
@@ -611,6 +617,7 @@ function parseArgs(argv) {
     root: rootIndex >= 0 ? resolve(argv[rootIndex + 1]) : REPO_ROOT,
     json: argv.includes("--json"),
     matrixOnly: argv.includes("--matrix-only"),
+    skipNativeLoad: argv.includes("--skip-native-load"),
     strictCandidate: argv.includes("--strict-candidate"),
   };
 }
@@ -627,6 +634,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       );
     } else {
       const report = await checkNode26Compatibility(args.root, {
+        skipNativeLoad: args.skipNativeLoad,
         strictCandidate: args.strictCandidate,
       });
       console.log(

@@ -72,7 +72,7 @@ async function assertEvidence(root, row) {
   }
 }
 
-export async function checkRuleParity(root = REPO_ROOT) {
+export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) {
   const markdown = await readFile(join(root, MATRIX_PATH), "utf8");
   const { matrix, table } = extractMatrix(markdown);
   assertExact(matrix.schemaVersion, 1, "schemaVersion");
@@ -101,6 +101,9 @@ export async function checkRuleParity(root = REPO_ROOT) {
     if (!row || typeof row !== "object") fail("each row must be an object");
     if (!STATUSES.has(row.status))
       fail((row.id ?? "unknown") + ": invalid status " + row.status);
+    if (admit && matrix.uncoveredPolicy === "block-replacement" && row.status !== "COVERED") {
+      fail(row.id + ": status " + row.status + " blocks replacement");
+    }
     if (row.uncoveredBlocksReplacement !== true) {
       fail(row.id + ": uncoveredBlocksReplacement must be true");
     }
@@ -126,10 +129,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const rootIndex = process.argv.indexOf("--root");
   const root =
     rootIndex >= 0 ? resolve(process.argv[rootIndex + 1]) : REPO_ROOT;
+  const admit = process.argv.includes("--admit");
   try {
-    const result = await checkRuleParity(root);
+    const result = await checkRuleParity(root, { admit });
     console.log(
-      "rule parity: OK (" +
+      (admit ? "rule parity admission: OK (" : "rule parity check: OK (") +
         result.rows +
         " canonical rows; " +
         result.uncoveredPolicy +

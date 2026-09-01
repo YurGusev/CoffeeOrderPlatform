@@ -79,6 +79,9 @@ async function toolchainRoot() {
   await cp(join(REPO_ROOT, "config"), join(root, "config"), {
     recursive: true,
   });
+  await cp(join(REPO_ROOT, "platform"), join(root, "platform"), {
+    recursive: true,
+  });
   return root;
 }
 
@@ -275,6 +278,16 @@ void test("RED ARCH-FORBIDDEN-NATIVE: SQLite/FFI/VFS source import is rejected",
   assert.match(output(result), /ARCH-FORBIDDEN-NATIVE/);
 });
 
+void test("RED BOUND-IMPORT: unallowlisted @coffee-platform namespace is rejected", () => {
+  const result = run(
+    "check-architecture.mjs",
+    join(FIXTURES, "invalid-platform-namespace"),
+  );
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /BOUND-IMPORT/);
+  assert.match(output(result), /@coffee-platform\/customer-shared-business/);
+});
+
 void test("RED TS7 static baseline rules reject non-erasable, CommonJS and extensionless imports", () => {
   const cases = [
     ["invalid-ts7-enum", "TS7-ERASABLE"],
@@ -285,6 +298,7 @@ void test("RED TS7 static baseline rules reject non-erasable, CommonJS and exten
     ["invalid-ts7-switch", "TS7-EXHAUSTIVE-SWITCH"],
     ["invalid-ts7-promise", "TS7-PROMISE"],
     ["invalid-ts7-version-mix", "TS7-VERSION-MIX"],
+    ["invalid-ts7-eval", "TS7-EVAL"],
   ];
   for (const [fixture, rule] of cases) {
     const result = run("check-architecture.mjs", join(FIXTURES, fixture));

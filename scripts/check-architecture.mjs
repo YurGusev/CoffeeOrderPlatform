@@ -8,6 +8,25 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ACCEPTED_DEPENDENCY_CRUISER = '18.2.0';
 const FORBIDDEN_ROOTS = ['packages/domain', 'packages/models', 'packages/shared-business'];
+const ALLOWED_PLATFORM_PACKAGES = new Set([
+  '@coffee-platform/config',
+  '@coffee-platform/database',
+  '@coffee-platform/idempotency',
+  '@coffee-platform/inbox',
+  '@coffee-platform/kafka-runtime',
+  '@coffee-platform/migrations',
+  '@coffee-platform/observability',
+  '@coffee-platform/outbox',
+  '@coffee-platform/platform-http',
+  '@coffee-platform/platform-time',
+  '@coffee-platform/runtime',
+  '@coffee-platform/security',
+  '@coffee-platform/testing',
+]);
+
+function isAllowedPlatformPackage(name) {
+  return ALLOWED_PLATFORM_PACKAGES.has(name) || name.startsWith('@coffee-platform/contracts-');
+}
 
 function fail(rule, message) {
   const error = new Error(`${rule} ${message}`);
@@ -40,7 +59,7 @@ async function checkPackageDependencies(root) {
       if (value.includes('/apps/') || value.startsWith('file:../apps') || value.startsWith('link:../apps')) {
         fail('BOUND-IMPORT', `${path} declares runtime implementation dependency ${name} -> ${value}`);
       }
-      if (name.startsWith('@coffee/') && !name.startsWith('@coffee/contracts/') && !name.startsWith('@coffee/platform-')) {
+      if (name.startsWith('@coffee-platform/') && !isAllowedPlatformPackage(name)) {
         fail('BOUND-IMPORT', `${path} declares forbidden shared business package ${name}`);
       }
       if (name.toLowerCase() === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${path} declares forbidden Axios dependency`);
@@ -94,6 +113,9 @@ function checkStaticSource(path, source) {
   if (/(?:\bas\s+any\b|:\s*any\b|<any>)/m.test(source)) fail('TS7-UNSAFE-ANY', `${label}: explicit any is forbidden`);
   if (/\bas\s+[A-Z][A-Za-z0-9_$]*(?:Ref|Version)\b/m.test(source)) fail('TS7-BRAND-CAST', `${label}: direct identifier brand cast is forbidden; parse and validate at the boundary`);
 
+  if (/\beval\s*\(|\bnew\s+Function\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*["']/m.test(source)) {
+    fail('TS7-EVAL', label + ': dynamic code execution is forbidden');
+  }
   for (const match of source.matchAll(/\bswitch\s*\([^)]*\)\s*\{/g)) {
     const body = findSwitchBody(source, match.index + match[0].lastIndexOf('{'));
     if (!/\bdefault\s*:/.test(body)) fail('TS7-EXHAUSTIVE-SWITCH', `${label}: state switch must have an exhaustive default/never branch`);
@@ -182,10 +204,8 @@ async function runDependencyCruiser(root, configPath) {
     .map((path) => path.slice(root.length + 1));
   if (sourceFiles.length === 0) return { skipped: true, reason: 'no TypeScript sources are materialized' };
 
-  const command = process.env.DEPENDENCY_CRUISER_BIN;
-  const executable = command || 'npx';
-  const prefix = command ? [] : ['--yes', `dependency-cruiser@${ACCEPTED_DEPENDENCY_CRUISER}`];
-  const result = spawnSync(executable, [...prefix, '--config', configPath, '--output-type', 'json', ...sourceFiles], {
+  const executable = resolve(SCRIPT_ROOT, 'node_modules/.bin/depcruise');
+  const result = spawnSync(executable, ['--config', configPath, '--output-type', 'json', ...sourceFiles], {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, NO_UPDATE_NOTIFIER: '1' },
@@ -213,7 +233,7 @@ async function runDependencyCruiser(root, configPath) {
         if (targetRuntime !== sourceRuntime) fail('BOUND-IMPORT', `${module.source} -> ${target}: runtime implementation boundary crossed`);
       }
       if (/^packages\/(domain|models|shared-business)(\/|$)/.test(target)) fail('BOUND-IMPORT', `${module.source} -> ${target}: shared business package forbidden`);
-      if (target.startsWith('@coffee/') && !target.startsWith('@coffee/contracts/') && !target.startsWith('@coffee/platform-')) {
+      if (target.startsWith('@coffee-platform/') && !isAllowedPlatformPackage(target)) {
         fail('BOUND-IMPORT', `${module.source} -> ${target}: only versioned contracts and platform technical packages are allowed`);
       }
     }

@@ -45,8 +45,8 @@ aggregate gate, но сам по себе не является доказате
 - **COVERED** — включённый rule или отдельный checker плюс RED fixture;
 - **PARTIAL** — часть гарантии блокируется, но остаётся названный обход;
 - **GAP** — rule зарегистрирован или требование известно, но release gate его
-  ещё не доказывает. `GAP` блокирует принятие `G03_STATIC`, даже если текущий
-  `pnpm lint` возвращает `0`.
+  ещё не доказывает. `GAP` блокирует admission замены ESLint и принятие
+  `G03_STATIC`, даже если текущий `pnpm lint` возвращает `0`.
 
 ## 3. Rule-parity matrix
 
@@ -58,7 +58,7 @@ aggregate gate, но сам по себе не является доказате
 | `TS7-UNSAFE-ANY` / `any` на assignment/argument/return boundary  | `no-unsafe-assignment`, `no-unsafe-argument`, `no-unsafe-return` | type-aware правила зарегистрированы, но не включены; checker ловит только явные синтаксические формы                         | **PARTIAL**     | `BLOCK`; явный `any` покрыт, type-flow обходы блокируют replacement до negative fixtures                         |
 | `TS7-EXHAUSTIVE-SWITCH` / Exhaustive discriminated-union switch  | `switch-exhaustiveness-check`                                    | правило зарегистрировано, но не включено; checker требует `default`, но не доказывает исчерпывающий `never`                  | **PARTIAL**     | `BLOCK`; пропущенный variant блокирует replacement до negative fixture                                           |
 | `ARCH-SYNC-API` / Запрет sync Node APIs в request/consumer paths | `node/no-sync` и restricted API list                             | Node plugin не включён; permission manifest не анализирует вызовы `fs.*Sync`/`child_process.*Sync`                           | **GAP**         | `BLOCK`; scoped runtime checker обязателен, admin/migration scope должен быть явным                              |
-| `TS7-EVAL` / Запрет eval, implied eval и `new Function`          | `no-eval`, `no-implied-eval`, `no-new-func`                      | `no-eval` и `typescript/no-implied-eval` включены по умолчанию; последний также блокирует `new Function`                     | **PARTIAL**     | `BLOCK`; отдельная RED fixture для `new Function` обязательна до разрешения replacement                          |
+| `TS7-EVAL` / Запрет eval, implied eval и `new Function`          | `no-eval`, `no-implied-eval`, `no-new-func`                      | scoped checker блокирует `eval`, implied eval и `new Function`                                                              | **COVERED**     | `BLOCK`; отдельная RED fixture                                                                                              |
 | `TS7-ESM` / Только ESM и относительные `.js` imports             | `no-require-imports`, import extensions                          | `TS7-ESM` запрещает CommonJS и extensionless relative imports                                                                | **COVERED**     | `BLOCK`; fixtures `invalid-ts7-commonjs`, `invalid-ts7-import`                                                   |
 | `TS7-ERASABLE` / Только erasable TS7 syntax и одна compiler line | parser/project consistency rules                                 | `TS7-ERASABLE`, `TS7-VERSION-MIX`, `check-toolchain-versions.mjs` и `tsc`                                                    | **COVERED**     | `BLOCK`; fixtures `invalid-ts7-enum`, `invalid-ts7-version-mix`, `TS7-SINGLE-COMPILER`                           |
 | `TS7-BRAND-CAST` / Branded IDs нельзя создавать прямым cast      | restricted syntax/custom rule                                    | `TS7-BRAND-CAST`                                                                                                             | **COVERED**     | `BLOCK`; fixture `invalid-ts7-brand`                                                                             |
@@ -67,9 +67,11 @@ aggregate gate, но сам по себе не является доказате
 | Generated drift, contract compatibility и final-image toolchain  | не lint guarantee                                                | отдельные gates `contracts:*`, `versions:check`, image/supply-chain checks                                                   | Вне lint matrix | Нельзя маскировать lint warning или включать второй compiler; owning gate остаётся blocking                      |
 
 Машиночитаемая часть этой таблицы является canonical input для
-`scripts/check-rule-parity.mjs`. Она намеренно оставляет `GAP`/`PARTIAL` в
-матрице: любой такой статус имеет `BLOCK` и запрещает замену ESLint до
-появления scoped enforcement и RED fixture.
+`scripts/check-rule-parity.mjs`. `pnpm rule-parity:check` проверяет достоверность
+матрицы, наличие evidence и blocking-флагов и возвращает `0`, если `GAP` или
+`PARTIAL` обозначены честно. Отдельный `pnpm rule-parity:admit` применяет
+`uncoveredPolicy: block-replacement` и возвращает ненулевой код до тех пор, пока
+все строки не станут `COVERED`.
 
 ```json
 {
@@ -121,7 +123,7 @@ aggregate gate, но сам по себе не является доказате
     },
     {
       "id": "TS7-EVAL",
-      "status": "PARTIAL",
+      "status": "COVERED",
       "uncoveredBlocksReplacement": true,
       "evidence": ["tests/architecture/checks.test.mjs"]
     },
@@ -183,8 +185,10 @@ path/symbol scope, причиной, expiry/removal condition и положит�
 `G03_STATIC` принимается только когда `format:check`, `lint` и `typecheck`
 возвращают `0` при warnings budget `0`. `G06_ARCHITECTURE` отдельно требует, чтобы
 каждый GREEN fixture прошёл, а каждый RED fixture завершился ненулевым кодом с
-source, target и rule id. Поэтому успешный текущий default lint не закрывает
-строки **GAP**.
+source, target и rule id. Поэтому rule parity проверяет не только успешный
+default lint, но и scoped checker/RED fixtures для каждой blocking-гарантии.
+`rule-parity:check` валидирует truth matrix; `rule-parity:admit` отдельно
+подтверждает, что replacement действительно разрешён.
 
 При добавлении или обновлении rule обязательно одновременно изменить:
 

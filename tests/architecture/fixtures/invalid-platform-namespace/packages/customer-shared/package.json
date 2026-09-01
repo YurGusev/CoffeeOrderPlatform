@@ -1,0 +1,8 @@
+{
+  "name": "customer-shared-fixture",
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@coffee-platform/customer-shared-business": "1.0.0"
+  }
+}

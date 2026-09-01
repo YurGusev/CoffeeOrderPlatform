@@ -445,7 +445,8 @@ def validate_connectivity(policy: dict[str, Any]) -> None:
     exact_list(policy["logicalZones"], ["public-ingress", "public-api-backend", "internal-api", "provider-egress"], "connectivity.logicalZones")
     require(policy["forbiddenNetworks"] == ["coffee_network"], "connectivity.forbiddenNetworks: legacy coffee_network must remain forbidden")
     expected_networks = {
-        "coffee_public_ingress": (False, False),
+        "coffee_host_ingress": (False, False),
+        "coffee_public_ingress": (True, False),
         "coffee_edge_backend": (True, False),
         "coffee_public_api_backend": (True, False),
         "coffee_internal_api": (True, False),
@@ -461,7 +462,7 @@ def validate_connectivity(policy: dict[str, Any]) -> None:
         require((item["internal"], item["external"]) == expected_networks[item["name"]], f"connectivity.dockerNetworks.{item['name']}: network flags changed")
 
     expected_attachments = {
-        "edge-gateway": ["coffee_public_ingress", "coffee_edge_backend"],
+        "edge-gateway": ["coffee_host_ingress", "coffee_public_ingress", "coffee_edge_backend"],
         "api-public": ["coffee_edge_backend", "coffee_public_api_backend"],
         "api-internal": ["coffee_internal_api"],
         "web": ["coffee_public_ingress"],

@@ -3,7 +3,7 @@
 # The digest is deliberately repeated for the build and runtime stages.  This
 # keeps the image identity immutable and makes a builder/runtime drift fail in
 # review instead of silently selecting another Node release.
-ARG NODE_IMAGE=node:26.8.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e
+ARG NODE_IMAGE=node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
 
 FROM ${NODE_IMAGE} AS librdkafka-build
 
@@ -103,7 +103,9 @@ ENV RUNTIME_NAME=${RUNTIME}
 # oxlint, Dependency Cruiser nor code-generation tooling.
 COPY --from=build /runtime ./
 COPY --from=build /workspace/config ./config
+COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
 
 USER node
-ENTRYPOINT ["node"]
-CMD ["dist/main.js"]
+ENTRYPOINT ["node", "scripts/permission-enforce.mjs"]
+CMD ["--entry", "dist/main.js"]

@@ -120,6 +120,26 @@ function runDocker(args, options = {}) {
   });
 }
 
+function buildRuntimeImages(projectName) {
+  for (const runtime of RUNTIMES) {
+    execFileSync(
+      process.execPath,
+      [
+        join(ROOT, "tools/docker-build.mjs"),
+        "--build-arg",
+        `RUNTIME=${runtime}`,
+        "--target",
+        "runtime",
+        "--load",
+        "-t",
+        `${projectName}-${runtime}:latest`,
+        ROOT,
+      ],
+      { cwd: ROOT, env: process.env, stdio: "inherit" },
+    );
+  }
+}
+
 async function writeStubSecret(path, runtime, environment, refs) {
   // These placeholders satisfy the scoped-ref contract but are not credentials
   // and cannot prove DB/provider access. No real secret leaves enter the smoke.
@@ -153,6 +173,7 @@ function bootstrapEnvironment(path) {
 
 async function materializeSecrets(secretsDir, options) {
   await mkdir(secretsDir, { recursive: true, mode: 0o700 });
+  await materializeKafkaTls(secretsDir);
   const platformConfig = parseYaml(
     await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
@@ -199,9 +220,104 @@ async function materializeSecrets(secretsDir, options) {
   }
 }
 
+async function materializeKafkaTls(secretsDir) {
+  const kafkaDir = join(secretsDir, "kafka");
+  await mkdir(kafkaDir, { recursive: true, mode: 0o700 });
+  const password = randomUUID();
+  const keystore = join(kafkaDir, "kafka.keystore.p12");
+  const certificate = join(kafkaDir, "kafka.crt");
+  const truststore = join(kafkaDir, "kafka.truststore.p12");
+  execFileSync("keytool", [
+    "-genkeypair",
+    "-alias",
+    "kafka",
+    "-keyalg",
+    "RSA",
+    "-keysize",
+    "2048",
+    "-validity",
+    "1",
+    "-dname",
+    "CN=kafka",
+    "-ext",
+    "SAN=dns:kafka,dns:localhost,ip:127.0.0.1",
+    "-keystore",
+    keystore,
+    "-storetype",
+    "PKCS12",
+    "-storepass",
+    password,
+    "-keypass",
+    password,
+  ], { stdio: "ignore" });
+  execFileSync("keytool", [
+    "-exportcert",
+    "-alias",
+    "kafka",
+    "-keystore",
+    keystore,
+    "-storepass",
+    password,
+    "-rfc",
+    "-file",
+    certificate,
+  ], { stdio: "ignore" });
+  execFileSync("keytool", [
+    "-importcert",
+    "-noprompt",
+    "-alias",
+    "kafka",
+    "-file",
+    certificate,
+    "-keystore",
+    truststore,
+    "-storetype",
+    "PKCS12",
+    "-storepass",
+    password,
+  ], { stdio: "ignore" });
+  await writeFile(join(kafkaDir, "kafka.keystore.password"), `${password}\n`, { encoding: "utf8", mode: 0o400 });
+  await writeFile(join(kafkaDir, "kafka_jaas.conf"), [
+    "KafkaServer {",
+    "  org.apache.kafka.common.security.plain.PlainLoginModule required",
+    `  username=\"kafka\" password=\"${password}\" user_kafka=\"${password}\";`,
+    "};",
+    "",
+  ].join("\n"), { encoding: "utf8", mode: 0o400 });
+  await writeFile(join(kafkaDir, "client.properties"), [
+    "security.protocol=SASL_SSL",
+    "sasl.mechanism=PLAIN",
+    `sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka\" password=\"${password}\";`,
+    "ssl.truststore.type=PKCS12",
+    "ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.p12",
+    `ssl.truststore.password=${password}`,
+    "ssl.endpoint.identification.algorithm=",
+    "",
+  ].join("\n"), { encoding: "utf8", mode: 0o400 });
+  for (const path of [kafkaDir, keystore, certificate, truststore]) {
+    await chown(path, 1000, 1000);
+  }
+  for (const name of ["kafka.keystore.password", "kafka_jaas.conf", "client.properties"]) {
+    const path = join(kafkaDir, name);
+    await chown(path, 1000, 1000);
+    await chmod(path, 0o400);
+  }
+}
+
 function ensureExternalNetwork(options) {
+  const assertInternal = () => {
+    const [network] = JSON.parse(
+      runDocker(["network", "inspect", EXTERNAL_POSTGRES_NETWORK]),
+    );
+    assert.equal(
+      network?.Internal,
+      true,
+      `${EXTERNAL_POSTGRES_NETWORK} must be an existing Internal network`,
+    );
+  };
   try {
     runDocker(["network", "inspect", EXTERNAL_POSTGRES_NETWORK]);
+    assertInternal();
     return false;
   } catch {
     if (!options.provisionNetwork) {
@@ -217,6 +333,7 @@ function ensureExternalNetwork(options) {
       "coffee.platform.compose-smoke=true",
       EXTERNAL_POSTGRES_NETWORK,
     ]);
+    assertInternal();
     return true;
   }
 }
@@ -327,6 +444,29 @@ function assertSecretMounts(projectName, secretsDir, rows) {
   }
 }
 
+function assertKafkaCompatibility(projectName, secretsDir) {
+  const topic = `coffee.compose.smoke.${randomUUID().replaceAll("-", "")}`;
+  const message = randomUUID();
+  const script = [
+    `topic=${topic}`,
+    `message=${message}`,
+    "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --create --if-not-exists --topic \"$topic\" --partitions 1 --replication-factor 1 >/dev/null",
+    "printf '%s\\n' \"$message\" | /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic \"$topic\"",
+    "received=$(/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic \"$topic\" --group \"$topic\" --from-beginning --max-messages 1 --timeout-ms 15000 | tr -d '\\r')",
+    "test \"$received\" = \"$message\"",
+    "printf '%s' \"$received\"",
+  ].join("\n");
+  const output = runCompose(projectName, secretsDir, [
+    "exec",
+    "-T",
+    "kafka",
+    "sh",
+    "-ec",
+    script,
+  ]).trim();
+  assert.equal(output, message, "Kafka SASL_SSL client produce/consume proof failed");
+}
+
 async function assertReadiness(projectName, secretsDir) {
   for (const runtime of RUNTIMES) {
     const output = runCompose(projectName, secretsDir, [
@@ -351,10 +491,23 @@ async function assertReadiness(projectName, secretsDir) {
   }
 }
 
-function assertHostExposure(rows) {
+function assertHostExposure(projectName, secretsDir, rows) {
   const edgeContainer = JSON.parse(
     runDocker(["inspect", rows.get("edge-gateway").ID]),
   )[0];
+  const hostIngress = JSON.parse(
+    runDocker(["network", "inspect", "coffee_host_ingress"]),
+  )[0];
+  assert.deepEqual(
+    Object.keys(hostIngress.Containers ?? {}),
+    [edgeContainer.Id],
+    "coffee_host_ingress must contain only edge-gateway",
+  );
+  assert.equal(
+    runCompose(projectName, secretsDir, ["port", "edge-gateway", "4000"]).trim(),
+    "127.0.0.1:4000",
+    "edge-gateway must expose the actual loopback host mapping",
+  );
   const edgeBindings =
     edgeContainer.HostConfig.PortBindings?.["4000/tcp"] ?? [];
   assert.deepEqual(
@@ -409,15 +562,16 @@ async function main() {
     await materializeSecrets(secretsDir, options);
     runCompose(projectName, secretsDir, ["config", "--quiet"]);
     provisionedNetwork = ensureExternalNetwork(options);
-    const upArguments = ["up", "--detach", "--wait"];
-    if (!options.noBuild) upArguments.splice(1, 0, "--build");
+    if (!options.noBuild) buildRuntimeImages(projectName);
+    const upArguments = ["up", "--detach", "--wait", "--no-build"];
     composeAttempted = true;
     runCompose(projectName, secretsDir, upArguments, { inherit: true });
     const rows = assertHealthy(projectName, secretsDir);
+    assertKafkaCompatibility(projectName, secretsDir);
     assertTelemetryEnvironment(rows);
     assertSecretMounts(projectName, secretsDir, rows);
     await assertReadiness(projectName, secretsDir);
-    assertHostExposure(rows);
+    assertHostExposure(projectName, secretsDir, rows);
     if (!options.keep) {
       runCompose(projectName, secretsDir, ["stop", "--timeout", "30"], {
         inherit: true,
@@ -429,6 +583,7 @@ async function main() {
         project: projectName,
         runtimes: RUNTIMES.length,
         kafka: true,
+        kafkaCompatibility: true,
         telemetry: true,
         healthEndpoints: ["/health/live", "/health/ready", "/metrics"],
         stubSecrets: options.stubSecrets,

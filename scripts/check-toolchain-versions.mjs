@@ -339,11 +339,14 @@ async function checkLockfile(root, manifest) {
 
 async function checkManifest(root) {
   const manifest = await readJson(join(root, "config/toolchain-versions.json"));
+  const foundation = await readJson(
+    join(root, "platform/runtime-foundation-decision.json"),
+  );
   for (const [key, expected] of Object.entries(EXPECTED))
     exact(manifest[key], expected, `config/toolchain-versions.json.${key}`);
   exact(
     manifest.nodeImage,
-    "node:26.8.1-bookworm-slim@sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e",
+    foundation.productionImage?.reference,
     "config/toolchain-versions.json.nodeImage",
   );
   exact(

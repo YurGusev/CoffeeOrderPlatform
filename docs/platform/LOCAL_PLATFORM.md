@@ -85,9 +85,10 @@ Live bootstrap и role denial smoke выполняются только на я�
 
 ```text
 docker network create --internal coffee_postgres_data
-docker compose up --build --wait
+node tools/compose-smoke.mjs --stub-secrets \
+  --provision-empty-postgres-network --project-name coffee-platform-local --keep
 curl --fail http://127.0.0.1:4000/health/ready
-docker compose down
+docker compose --project-name coffee-platform-local down
 ```
 
 На host публикуется только Edge `4000`. Owner services, `api-internal`, web,

@@ -45,3 +45,19 @@ void test("candidate OpenAPI codegen is reported as blocked by its TypeScript 7 
     /sole TypeScript 7 compiler/,
   );
 });
+
+void test("host compatibility gate defers only the Docker-built native addon", () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const result = spawnSync(
+    process.execPath,
+    ["scripts/check-node26-compatibility.mjs", "--skip-native-load", "--json"],
+    { cwd: root, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(
+    report.components.find((component) => component.id === "confluent-kafka")
+      ?.status,
+    "deferred-to-image-build",
+  );
+});

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "runtime": "orders-service",
-  "allowNet": ["coffee-postgres:5432", "api-internal:4051", "kafka:9092"],
+  "allowNet": ["coffee_postgres:5432", "api-internal:4051", "kafka:9092"],
   "allowFsRead": ["/app/config/platform.yaml", "/app/apps", "/app/dist", "/app/node_modules", "/app/packages", "/app/package.json", "/run/secrets/coffee-platform.yaml"],
   "allowFsWrite": [],
   "allowChildProcess": false,
   "allowWorker": false,
-  "allowAddons": false,
+  "allowAddons": true,
   "allowFfi": false
 }

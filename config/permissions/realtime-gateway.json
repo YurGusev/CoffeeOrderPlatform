@@ -6,6 +6,6 @@
   "allowFsWrite": [],
   "allowChildProcess": false,
   "allowWorker": false,
-  "allowAddons": false,
+  "allowAddons": true,
   "allowFfi": false
 }

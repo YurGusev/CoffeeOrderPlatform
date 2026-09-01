@@ -16,6 +16,14 @@ const PERMISSION_FIELDS = new Set([
   "allowAddons",
   "allowFfi",
 ]);
+const KAFKA_RUNTIMES = new Set([
+  "catalog-activation-worker",
+  "orders-service",
+  "orders-aroma-preparation",
+  "aroma-observer",
+  "aroma-convergence",
+  "realtime-gateway",
+]);
 
 function fail(message) {
   const error = new Error(`PERMISSION_POLICY ${message}`);
@@ -79,8 +87,13 @@ export async function validatePermissionManifest(root, runtime) {
   if (JSON.stringify(manifest.allowNet) !== JSON.stringify(expected)) {
     fail(`${runtime}: allowNet differs from launch connectivity policy`);
   }
-  if (manifest.allowChildProcess || manifest.allowWorker || manifest.allowAddons || manifest.allowFfi) {
-    fail(`${runtime}: child process, worker, addon and FFI permissions are deny-by-default in launch-v1`);
+  if (
+    manifest.allowChildProcess ||
+    manifest.allowWorker ||
+    manifest.allowFfi ||
+    manifest.allowAddons !== KAFKA_RUNTIMES.has(runtime)
+  ) {
+    fail(`${runtime}: child process, worker and FFI permissions are deny-by-default; addons are limited to Kafka runtimes`);
   }
   return manifest;
 }
@@ -101,10 +114,14 @@ function localizeReadPath(path, root) {
   return path === "/app" ? root : join(root, path.slice("/app/".length));
 }
 
-export function permissionFlags(manifest, mode, root = "/app") {
+export function permissionFlags(manifest, mode, root = "/app", listenPort) {
   if (mode !== "audit" && mode !== "enforce") fail(`unknown mode ${mode}`);
   const flags = [mode === "audit" ? "--permission-audit" : "--permission"];
-  if (manifest.allowNet.length) flags.push(`--allow-net=${manifest.allowNet.join(",")}`);
+  const allowNet = [
+    ...manifest.allowNet,
+    ...(listenPort ? [`0.0.0.0:${listenPort}`] : []),
+  ];
+  if (allowNet.length) flags.push(`--allow-net=${allowNet.join(",")}`);
   for (const path of manifest.allowFsRead) flags.push(`--allow-fs-read=${localizeReadPath(path, root)}`);
   for (const path of manifest.allowFsWrite) flags.push(`--allow-fs-write=${localizeReadPath(path, root)}`);
   if (manifest.allowChildProcess) flags.push("--allow-child-process");
@@ -117,20 +134,23 @@ export function permissionFlags(manifest, mode, root = "/app") {
 function parseArguments(argv) {
   const runtimeIndex = argv.indexOf("--runtime");
   const entryIndex = argv.indexOf("--entry");
-  if (runtimeIndex === -1 || entryIndex === -1 || !argv[runtimeIndex + 1] || !argv[entryIndex + 1]) {
-    fail("usage: permission-audit.mjs --runtime <runtime> --entry <entry.ts|entry.mjs> [-- <args...>]");
+  const runtime = runtimeIndex === -1 ? process.env.RUNTIME_NAME : argv[runtimeIndex + 1];
+  if (!runtime || entryIndex === -1 || !argv[entryIndex + 1]) {
+    fail("usage: permission-audit.mjs [--runtime <runtime>] --entry <entry.ts|entry.mjs> [-- <args...>]");
   }
   const separator = argv.indexOf("--");
   const scriptArguments = separator === -1 ? [] : argv.slice(separator + 1);
-  return {runtime: argv[runtimeIndex + 1], entry: argv[entryIndex + 1], scriptArguments};
+  return {runtime, entry: argv[entryIndex + 1], scriptArguments};
 }
 
 function resolveEntry(root, runtime, entry) {
   const runtimeRoot = resolve(root, "apps", runtime);
   const path = resolve(root, entry);
-  const relativePath = relative(runtimeRoot, path);
-  if (relativePath === ".." || relativePath.startsWith("../") || relativePath.startsWith("..\\")) {
-    fail(`entry must remain inside apps/${runtime}`);
+  if (path !== resolve(root, "dist/main.js")) {
+    const relativePath = relative(runtimeRoot, path);
+    if (relativePath === ".." || relativePath.startsWith("../") || relativePath.startsWith("..\\")) {
+      fail(`entry must remain inside apps/${runtime}`);
+    }
   }
   return path;
 }
@@ -139,16 +159,32 @@ export async function runPermissionMode(mode, argv, root = SCRIPT_ROOT) {
   const {runtime, entry, scriptArguments} = parseArguments(argv);
   const manifest = await validatePermissionManifest(root, runtime);
   const entryPath = resolveEntry(root, runtime, entry);
-  const flags = permissionFlags(manifest, mode, root);
+  const listenPort = process.env.PORT;
+  if (!/^\d+$/.test(listenPort ?? "")) fail(`${runtime}: PORT is required`);
+  const flags = permissionFlags(manifest, mode, root, listenPort);
   if (mode === "audit") flags.push("--import", join(SCRIPT_ROOT, "scripts/permission-audit-listener.mjs"));
   const child = spawn(process.execPath, [...flags, entryPath, ...scriptArguments], {
     cwd: root,
     env: {...process.env, NODE_NO_WARNINGS: "1"},
     stdio: "inherit",
   });
+  const forwardSigterm = () => child.kill("SIGTERM");
+  const forwardSigint = () => child.kill("SIGINT");
+  const removeSignalHandlers = () => {
+    process.off("SIGTERM", forwardSigterm);
+    process.off("SIGINT", forwardSigint);
+  };
+  process.once("SIGTERM", forwardSigterm);
+  process.once("SIGINT", forwardSigint);
   return await new Promise((resolveResult, reject) => {
-    child.once("error", reject);
-    child.once("exit", (code, signal) => resolveResult({code: code ?? 1, signal}));
+    child.once("error", (error) => {
+      removeSignalHandlers();
+      reject(error);
+    });
+    child.once("exit", (code, signal) => {
+      removeSignalHandlers();
+      resolveResult({code: code ?? 1, signal});
+    });
   });
 }
 

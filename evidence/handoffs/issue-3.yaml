@@ -26,14 +26,15 @@ outputs:
 verification:
   - command: npx --yes pnpm@11.24.0 check
     result: passed
-    summary: authority, versions, config, architecture, lint, typecheck and 64 tests
+    summary: authority, versions, compatibility, config, architecture, rule parity, lint, typecheck and 89 tests
   - command: docker compose -f compose.yaml config --quiet
     result: passed
   - command: docker image build and final-image inspection
     result: passed
     summary: non-root UID 1000; compiler, linter and architecture tools absent
-  - command: Kafka KRaft broker API smoke
+  - command: node tools/compose-smoke.mjs --stub-secrets --provision-empty-postgres-network
     result: passed
+    summary: 15 rebuilt Permission Model runtimes, Kafka SASL_SSL produce/consume, loopback Edge ingress and graceful shutdown
   - command: node scripts/db-bootstrap.mjs --plan and node scripts/db-smoke.mjs --plan
     result: passed
     summary: five databases and fifty isolated role cases planned without live mutation
@@ -48,6 +49,5 @@ verification:
     result: passed
     summary: one typescript@7.0.2 compiler, exact lockfile pins and compiler-free final image stage accepted
 limitations:
-  - full 15-runtime Compose smoke requires external coffee_postgres_data and trusted scoped secret materialization
-  - clean-clone:check must be run after the final commit from a clean checkout; it was not run from this shared dirty worktree
+  - Compose smoke used scoped non-secret stubs and did not repeat the separately recorded live PostgreSQL proof
   - production deployment, registry publication and provider mutation were not performed
