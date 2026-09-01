@@ -193,7 +193,8 @@ scoped и не перезаписываются «на месте»:
 - `catalog.variants(snapshot_ref, variant_ref, product_ref, unit, image_url,
   PK(snapshot_ref,variant_ref), FK(snapshot_ref,product_ref))`;
 - `catalog.offer_mappings(snapshot_ref, variant_ref, offer_ref,
-  mapping_revision bigint, mapping_state, effective_at,
+  mapping_revision bigint, mapping_state, supplier_unit_minor bigint CHECK
+  (supplier_unit_minor>=0), currency char(3) CHECK(currency='RUB'), effective_at,
   PK(snapshot_ref,variant_ref), UNIQUE(snapshot_ref,offer_ref))`;
 - `catalog.availability(snapshot_ref,variant_ref,state,checked_at,
   PK(snapshot_ref,variant_ref), FK(snapshot_ref,variant_ref))`;
@@ -212,6 +213,14 @@ FK/count/hash/enums, переключает pointer и пишет Outbox в од
 `coffee_catalog_activate_rw` — staging read + active/Outbox write,
 `coffee_catalog_api_ro` — SELECT active views, migrator — DDL. Negative grant
 tests обязаны получить PostgreSQL `permission denied` на любой иной путь.
+
+Pricing-input читает `supplier_unit_minor/currency` только из offer mapping
+текущей pointer-selected Active generation; staging fallback запрещён.
+
+`semantic_fingerprint` включает только immutable identity relationships:
+`entityType`, parent source identity и stable unit/category semantics. Цена,
+availability, displayName, imageUrl и effectiveAt mutable и никогда не вызывают
+`SOURCE_IDENTITY_COLLISION`; их изменение создаёт новую generation/revision.
 
 Activation сопоставляет source identity с существующим `stable_ref`; новая
 identity получает новый owner ref. Одинаковая identity с несовместимым semantic

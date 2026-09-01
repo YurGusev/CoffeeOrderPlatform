@@ -4,7 +4,8 @@
 `[]`; скрытые defaults запрещены. Общие health paths: `/health/live`,
 `/health/ready`, `/metrics`; shutdown grace `30000ms`. Для каждой строки
 `listen.host=0.0.0.0` внутри container, metrics обслуживается на том же port по
-`/metrics`; host publish разрешён только edge/web. Node Permission manifest —
+`/metrics`; host publish разрешён только edge, а web доступен через Edge proxy.
+Node Permission manifest —
 `config/permissions/<runtime>.json`; отсутствие файла блокирует startup.
 
 Общий outbound HTTP pool для разрешённой пары: max connections 32, pipelining 1,
@@ -16,10 +17,10 @@ transport handler; у остальных runtime explicit `false`.
 
 | Runtime | Port | Deadline / concurrency | DB pool | Kafka | Secret refs | Разрешённый outbound |
 |---|---:|---|---:|---|---|---|
-| edge-gateway | 4000 | 5s / 500 | 0 | none | TLS, OIDC, actor signing, telemetry | api-public:4050, realtime:4401 |
+| edge-gateway | 4000 | 5s / 500 | 0 | none | TLS, OIDC, actor signing, service transport, telemetry | web:3000, api-public:4050, realtime:4401 |
 | api-public | 4050 | 4.5s / 400 | 0 | none | service identity, actor verify, telemetry | customer:4101, catalog:4102, pricing:4103, orders:4104 |
 | api-internal | 4051 | caller deadline / 300 | 0 | none | service identity, delegation signing/verify, telemetry | exact allowlisted target only |
-| web | 3000 | 5s / 500 | 0 | none | none | none |
+| web | 3000 | 5s / 500 | 0 | none | service transport identity | none |
 | customer-service | 4101 | 2s / 100 | 8 | none | postgres.customer, service identity, telemetry | none |
 | catalog-service | 4102 | 2s / 150 | 8 | none | postgres.catalogApi, service identity, cursor signing, telemetry | none |
 | catalog-supplier-sync | 4201 | 15m / 1 export | 4 | none | postgres.catalogImport, service identity, telemetry | api-internal:4051 |

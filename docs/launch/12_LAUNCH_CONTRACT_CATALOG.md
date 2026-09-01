@@ -12,6 +12,8 @@ contracts/
   openapi/internal-v1.yaml
   schemas/common/problem-details.v1.schema.json
   schemas/common/message-envelope.v1.schema.json
+  schemas/common/identifiers.v1.schema.json
+  schemas/common/money-version-time.v1.schema.json
   schemas/events/catalog-snapshot-activated.v1.schema.json
   schemas/events/catalog-mapping-changed.v2.schema.json
   schemas/events/order-confirmed.v1.schema.json
@@ -39,7 +41,7 @@ objects используется `additionalProperties: false`.
 | VariantRef | `^var_[0-9A-HJKMNP-TV-Z]{26}$` |
 | OfferRef | `^off_[0-9A-HJKMNP-TV-Z]{26}$` |
 | SnapshotRef | `^snp_[0-9A-HJKMNP-TV-Z]{26}$` |
-| CartScopeRef | `^cart_[0-9A-HJKMNP-TV-Z]{26}$` |
+| CartScopeRef | строковая константа `aroma-primary` в первом запуске |
 | QuoteRef | `^prq_[0-9A-HJKMNP-TV-Z]{26}$` |
 | OrderRef | `^ord_[0-9A-HJKMNP-TV-Z]{26}$` |
 | ItemRef | `^itm_[0-9A-HJKMNP-TV-Z]{26}$` |
@@ -195,7 +197,8 @@ model не экспортируется и не используется как 
   - `pricing: {totalMinor, currency, quoteProofs[]}` или `null`, где proof =
     `{quoteRef, hash, expiresAt}`; несколько позиций могут ссылаться на разные
     неизменяемые quotes;
-  - `aroma: {state, projectionVersion, desiredRevision, observedRevision, lastObservedAt,
+  - top-level `projectionVersion` — версия всей Order Card projection;
+  - `aroma: {state, desiredRevision, observedRevision, lastObservedAt,
     blockers[]}`;
   - `allowedActions[]` enum `edit-items|confirm|request-aroma-reconciliation`;
 - Aroma state enum: `NotRequested|PendingObservation|OutOfSync|Converging|InSync|Blocked|UnknownOutcome`;
@@ -285,8 +288,8 @@ provider response и secret data запрещены.
 | `CatalogMappingChanged.v2` | catalog-activation-worker | productRef | `productRef`, `variantRef`, `offerRef|null`, `catalogSnapshotRevision`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `availability`, `effectiveAt` |
 | `OrderConfirmed.v1` | orders-service | orderRef | `orderRef`, `orderVersion`, `customerRef`, `confirmedAt`, `contributionRevision` |
 | `AromaConvergenceRequested.v1` | Orders | cartScopeRef | `cartScopeRef`, `desiredRevision`, `reason: OrderConfirmed|CatalogChanged|OperatorRequested|Recovery`, `orderRef|null` |
-| `AromaObservationChanged.v1` | aroma-observer/aroma-convergence | cartScopeRef | `cartScopeRef`, `observedRevision`, `observedAt`, `state`, `cartFingerprint` |
-| `AromaConvergenceChanged.v1` | aroma-convergence | cartScopeRef | `cartScopeRef`, `desiredRevision`, `observedRevision`, `attemptRef`, `state`, `changedAt`, `blockerCodes[]` |
+| `AromaObservationChanged.v1` | aroma-observer/aroma-convergence | cartScopeRef | `cartScopeRef`, `observedRevision`, `observedAt`, `observationState: Complete`, `cartFingerprint` |
+| `AromaConvergenceChanged.v1` | aroma-convergence | cartScopeRef | `cartScopeRef`, `desiredRevision`, `observedRevision`, `attemptRef`, `attemptState: NoOpInSync|VerifiedInSync|OutOfSync|Blocked|UnknownOutcome|Failed`, `changedAt`, `blockerCodes[]` |
 | `RealtimeInvalidated.v1` | owner services | subjectRef | `subjectType: order`, `subjectRef`, `ownerVersion`, `reason: OrderChanged|AromaStateChanged` |
 
 Дополнительные ограничения payload:
@@ -297,7 +300,8 @@ provider response и secret data запрещены.
 - conditional: `Active` требует non-null `offerRef`; `Missing|Stopped` требуют
   `offerRef=null`; остальные сочетания schema-invalid;
 - convergence reason: `OrderConfirmed|CatalogChanged|OperatorRequested|Recovery`;
-- observation/convergence state использует тот же Aroma state enum, что Order Card;
+- projection worker единолично преобразует `observationState`/`attemptState` в
+  Order Card Aroma state; producer события Card state не вычисляет;
 - `blockerCodes`: unique string array, maximum 100;
 - все refs/version/timestamps используют только общие `$ref`, локальное
   переопределение pattern/type запрещено meta-schema test.

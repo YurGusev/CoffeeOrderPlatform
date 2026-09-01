@@ -13,8 +13,8 @@ manifests без изменения смысла. Любое отклонени�
 - **Владелец:** Platform.
 - **Входящие HTTP:** публичные `/api/client-v1/**`, `/events`, `/health/live`.
 - **Входящие события:** нет.
-- **Исходящие вызовы:** HTTP только к `api-public`; SSE proxy к
-  `realtime-gateway`. Direct owner/API-internal route отсутствует.
+- **Исходящие вызовы:** HTTP к `web` для `/`/`assets`, к `api-public` для
+  client API; SSE proxy к `realtime-gateway`. Direct owner/API-internal route отсутствует.
 - **Хранилище:** нет БД, нет persistent cache.
 - **Секреты:** TLS private key/certificate; OIDC/JWT verification configuration.
 - **Публичность:** public internet; `internal-v1` и `aroma-gateway` не маршрутизирует.
@@ -171,8 +171,8 @@ manifests без изменения смысла. Любое отклонени�
 - **Назначение:** выполнять безопасный полный GET физической корзины и сохранять Observed.
 - **Владелец:** Orders.
 - **Входящие HTTP:** только health.
-- **Входящие события:** `AromaConvergenceRequested.v1` и internal durable schedule;
-  отдельное восьмое launch-сообщение не вводится.
+- **Входящие события:** Kafka отсутствует; запуск только internal durable
+  schedule. `AromaConvergenceRequested.v1` потребляет только convergence.
 - **Исходящие вызовы:** private HTTP
   `POST /api/internal-v1/aroma/cart-snapshots:read` через `api-internal`; Kafka
   только `AromaObservationChanged.v1`. Per-Order realtime публикует projection worker.

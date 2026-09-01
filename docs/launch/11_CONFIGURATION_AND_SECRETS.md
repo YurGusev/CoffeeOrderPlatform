@@ -96,10 +96,15 @@ environments:
     security:
       actorContextEdgeSigningPrivateKey: ENC[...]
       apiPublicServicePrivateKey: ENC[...]
+      apiPublicDelegationSigningPrivateKey: ENC[...]
       apiInternalServicePrivateKey: ENC[...]
       apiInternalDelegationSigningPrivateKey: ENC[...]
       catalogCursorSigningPrivateKey: ENC[...]
       serviceTransportKeys: # map exact runtime -> own ENC private key/certificate
+        edge-gateway: ENC[...]
+        api-public: ENC[...]
+        api-internal: ENC[...]
+        web: ENC[...]
         customer-service: ENC[...]
         catalog-service: ENC[...]
         pricing-service: ENC[...]
@@ -108,6 +113,7 @@ environments:
         aroma-observer: ENC[...]
         aroma-convergence: ENC[...]
         aroma-gateway: ENC[...]
+        realtime-gateway: ENC[...]
     telemetry:
       exporterToken: ENC[...]
 sops: {}
@@ -234,8 +240,10 @@ origin. Edge→owner, api-public→internal/Gateway, api-internal→provider ori
 
 ## 7. Ротация
 
-Ротация меняет только `secrets/platform.secrets.sops.yaml` отдельным русским PR.
-PR показывает изменённые encrypted paths, но не plaintext. Проверяются decrypt,
-schema, старый/new credential overlap, restart order, rollback и audit record.
+Ротация атомарно меняет private material в
+`secrets/platform.secrets.sops.yaml` и соответствующие public keys/trust
+bundle/active `kid` в `config/platform.yaml` одним русским PR. PR показывает
+encrypted paths и public metadata, но не plaintext. Проверяются decrypt, schema,
+overlap, restart всех затронутых runtime, rollback и audit record.
 Компрометация общего файла считается компрометацией всех environments и требует
 полной ротации; это осознанная цена требования «один файл».

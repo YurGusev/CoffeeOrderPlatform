@@ -67,7 +67,9 @@ code `MAPPING_CHANGED|MAPPING_MISSING|MAPPING_STOPPED|PRODUCT_UNAVAILABLE`, mapp
 
 `cart_observed_revisions`: PK `(cart_scope_ref,observed_revision bigint)`,
 `provider_snapshot_ref`, `cart_fingerprint`, `captured_at`, `saved_at`,
-`source_attempt_ref`, `fence_epoch`; один Current. `complete` всегда true:
+`source_kind Observer|Convergence`, nullable `source_attempt_ref`, nullable
+`fence_epoch`; один Current. CHECK: Convergence требует attempt/fence, Observer
+требует оба NULL. `complete` всегда true:
 partial/failed GET вообще не создаёт revision.
 
 `cart_observed_lines`: PK `(cart_scope_ref,observed_revision,offer_ref)`,
@@ -237,6 +239,13 @@ blocker/UnknownOutcome, а contribution revision/hash конкретного Ord
 `AromaConvergenceChanged.v1` публикуется для terminal Attempt. Payload не
 содержит cart lines; только refs/revisions/state/blocker codes/fingerprint.
 `RealtimeInvalidated.v1` лишь инвалидирует Order Card.
+
+Event semantics не используют Card enum: Observation всегда
+`observationState=Complete`; convergence публикует terminal `attemptState`.
+Projection mapping: current verified `NoOpInSync|VerifiedInSync` → `InSync`;
+`OutOfSync` → `OutOfSync`; `Blocked|Failed` → `Blocked` с code;
+`UnknownOutcome` → `UnknownOutcome`. Новая complete Observation без актуального
+terminal proof пересчитывается по Card precedence и сама не объявляет InSync.
 
 Order Card использует precedence и `allowedActions` из Orders specification.
 `InSync` разрешён только для current Desired + complete Current Observed +

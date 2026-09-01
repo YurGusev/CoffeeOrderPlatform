@@ -119,19 +119,18 @@ runtime становится `implemented=true` только когда одно
 
 ### 5. Machine-readable authority
 
-До runtime-кода задача #2 обязана создать новую проверяемую authority:
+До runtime-кода задача #19 обязана создать foundation/topology authority:
 
 - `platform/runtime-foundation-decision.json` и JSON Schema;
 - `platform/launch-v1-runtime-profile.json` и JSON Schema;
 - `platform/target-layout.json` и JSON Schema;
 - validators и negative fixtures в `scripts/`/`tests/authority/`;
 
-- `config/service-catalog.json`;
-- `config/service-interactions.json`;
-- `config/database-ownership.json`;
-- `config/toolchain-versions.json`;
-- `config/platform.yaml`;
-- соответствующие schemas/checkers.
+- соответствующие schemas/validators/negative fixtures.
+
+После принятия #19 задача #2 создаёт `config/service-catalog.json`,
+`config/service-interactions.json`, `config/database-ownership.json` и
+architecture checker. #3 материализует toolchain/platform config/Compose.
 
 Runtime profile содержит для каждого из 15 имён: `owner`, `m20RoleRef` либо
 явное `launch-v1-only`, `networkZone`, `dbPrincipal`, `httpSurfaces`,

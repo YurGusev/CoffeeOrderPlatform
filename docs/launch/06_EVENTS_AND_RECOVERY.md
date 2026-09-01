@@ -8,7 +8,7 @@ launch-сообщения нельзя вводить без изменения 
 
 | Сообщение | Вид | Producer | Consumer | Ключ |
 |---|---|---|---|---|
-| `CatalogSnapshotActivated` | event | catalog-activation-worker | audit/operations only | supplierRef |
+| `CatalogSnapshotActivated` | event | catalog-activation-worker | production consumer отсутствует | supplierRef |
 | `CatalogMappingChanged` | event | catalog-activation-worker | orders-aroma-preparation | productRef |
 | `OrderConfirmed` | event | orders-service | orders-aroma-preparation | orderRef |
 | `AromaConvergenceRequested` | command | Orders preparation/service | aroma-convergence | cartScopeRef |
@@ -23,7 +23,7 @@ causation, correlation and owner-defined aggregate version where applicable.
 
 | Message | Topic | Partitions / retention | Consumer group |
 |---|---|---|---|
-| `CatalogSnapshotActivated.v1` | `coffee.catalog.snapshot.v1` | 12 / 2160h | `catalog-operations-audit-v1` |
+| `CatalogSnapshotActivated.v1` | `coffee.catalog.snapshot.v1` | 12 / 2160h | none; owner/audit fact retained |
 | `CatalogMappingChanged.v2` | `coffee.catalog.mapping.v2` | 12 / 2160h | `orders-catalog-mapping-v2` |
 | `OrderConfirmed.v1` | `coffee.orders.lifecycle.v1` | 12 / 2160h | `orders-aroma-preparation-v1` |
 | `AromaConvergenceRequested.v1` | `coffee.aroma.cart.commands.v1` | 24 / 168h | `aroma-convergence-v1` |
