@@ -14,7 +14,7 @@ test не принят следующей задачей. Все outputs объ�
  └─> #19 Authority closure: topology/contracts/config matrix
       └─> #2 Boundaries
            └─> #3 Foundation/config/secrets/DB/toolchain
-      └─> #4 Unified HTTP/event contracts + generated clients/mocks
+      └─> #4 Unified HTTP/event contracts + generated transport types/mocks
            ├─> #5 Customer ───────────────────────────────┐
            ├─> #10 Gateway ─> #6 staging ─> #16 activation ─> #17 API ─> #18 verification ─> #7 Pricing
            │                                      └───────────────────────────────┤
@@ -42,7 +42,7 @@ test не принят следующей задачей. Все outputs объ�
 | #18 | #10/#6/#16/#17 | Catalog failure/recovery/capacity evidence | #7, #8, #9, #11, #13 |
 | #7 | Pricing contracts + Catalog API/evidence #17/#18 | immutable quote/verify | #8, #9 |
 | #8 | Customer/Catalog/Pricing contracts+providers | Draft/Confirm/Order contribution/Order Card/OrderConfirmed | #9, #11, #12 |
-| #9 | generated client + #5–#8 APIs | React operator flow | #12, #13 |
+| #9 | generated `client-v1` transport types + #5–#8 APIs | project-owned fetch client + React operator flow | #12, #13 |
 | #11 | #10/#16/#18/#8 | observer/convergence/UnknownOutcome events | #12, #13 |
 | #12 | #8/#9/#11 | SSE invalidation/refetch | #13 |
 | #13 | все outputs | единый verified release evidence | завершает #1 |

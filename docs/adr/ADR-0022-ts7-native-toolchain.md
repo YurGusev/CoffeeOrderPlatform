@@ -47,11 +47,15 @@ compiler и два набора diagnostics без продуктовой гар
 
 ```text
 OpenAPI 3.2 -> generated transport types -> tsc 7.0.2
+packages/generated/client-v1/**
+packages/generated/internal-v1/**
 ```
 
 Generated SDK, HTTP client, TanStack Query hooks, Zod, Axios, interceptors и
-Vite integration запрещены. Project-owned client использует native fetch/Undici,
-AbortSignal/deadline, exact typed route и runtime response validation.
+Vite integration запрещены. Project-owned native fetch client использует
+generated `client-v1` transport types; backend internal clients используют
+generated `internal-v1` transport types. Оба выполняют runtime response
+validation, AbortSignal/deadline и exact typed route.
 
 Версия генератора `0.x` не считается доказательством корректности. До принятия
 #4 обязательны golden corpus всех используемых OpenAPI 3.2 constructs,

@@ -73,7 +73,7 @@ transport caller, issuer/audience, route allowlist и permission.
 | Schema | Определяется один раз в | Используют |
 |---|---|---|
 | Ref/Money/Version/Timestamp | `schemas/common/identifiers` и `money-version-time` | все HTTP/events/frontend |
-| ProblemDetails | `schemas/common/problem-details` | все HTTP services и generated client |
+| ProblemDetails | `schemas/common/problem-details` | все HTTP services и project-owned clients |
 | MessageEnvelope | `schemas/common/message-envelope` | все семь event schemas |
 | CustomerResponse/Summary | `client-v1.yaml#/components/schemas` | Customer provider, Orders customer snapshot, React |
 | CatalogProductSummary | `client-v1.yaml#/components/schemas` | Catalog provider, Pricing request UI, React |
@@ -313,9 +313,11 @@ cookies, arbitrary URLs или полную корзину.
 
 - `pnpm contracts:lint`: Redocly/Spectral + JSON Schema validation;
 - `pnpm contracts:generate`: `@hey-api/openapi-ts 0.99.0` только с
-  `@hey-api/typescript`, output `packages/generated/client-v1/**`;
-- SDK/client/hooks/Zod/Axios не генерируются; project-owned client использует
-  native fetch/Undici;
+  `@hey-api/typescript`, outputs `packages/generated/client-v1/**` и
+  `packages/generated/internal-v1/**`;
+- SDK/client/hooks/Zod/Axios не генерируются; project-owned browser native fetch
+  client использует generated `client-v1` transport types, backend Undici clients
+  — generated `internal-v1` transport types; runtime response validation обязательна;
 - генератор принимается только после golden corpus используемых OpenAPI 3.2
   constructs, deterministic double generation, zero diff и `tsc 7.0.2` compile;
 - `pnpm contracts:check-generated`: повторная генерация и zero diff;

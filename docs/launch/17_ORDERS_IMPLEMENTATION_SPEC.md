@@ -124,8 +124,8 @@ idempotency response. Response `201 OrderCardResponse`.
 
 ### `PUT /api/client-v1/orders/{orderRef}/items/{itemRef}`
 
-`itemRef` создаётся клиентским helper generated SDK как ULID и становится
-owner ref после успешной команды. Body:
+`itemRef` создаётся project-owned frontend helper как ULID и становится owner
+ref после успешной команды. Generated SDK/client для этого запрещён. Body:
 
 ```json
 {

@@ -5,13 +5,14 @@ routes, query keys, mutation retry, conflict recovery или UI states зано�
 
 ## 1. Граница приложения
 
-Приложение находится в `apps/web`, является новой React SPA и использует только
-generated `client-v1`. Запрещены server/runtime imports, SQL, provider clients,
-ручные HTTP wrappers и собственные копии request/response DTO.
+Приложение находится в `apps/web` и является новой React SPA. Project-owned
+browser fetch client использует только generated `client-v1` transport types и
+runtime response validation. Generated SDK/client, server/runtime imports, SQL,
+provider clients и собственные копии request/response DTO запрещены.
 
 Разрешённые зависимости и версии берутся только из
 `config/toolchain-versions.json`/lockfile #3: React, React Router, TanStack
-Query, generated client, form/schema adapter и testing stack. Новая state
+Query, generated transport types, form/schema adapter и testing stack. Новая state
 library, design system или API library в #9 не добавляется.
 
 ## 2. Файлы и модули
@@ -34,8 +35,10 @@ apps/web/src/
   shared/ui/{alert,button,dialog,field,spinner}.tsx
 ```
 
-`api/client.ts` только конфигурирует generated client: same-origin base URL,
-credentials, correlation и AbortSignal. В нём нет handwritten endpoint types.
+`api/client.ts` реализует project-owned browser fetch client: same-origin base
+URL, credentials, correlation, AbortSignal и runtime response validation. Он
+использует generated `client-v1` transport types; generated SDK/client и
+handwritten endpoint types запрещены.
 
 ## 3. Маршруты и переходы
 

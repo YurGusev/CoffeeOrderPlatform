@@ -1,13 +1,14 @@
 ---
 name: react-operator-frontend
-description: Создавать или проверять новую React SPA оператора CoffeeOrderPlatform, интеграцию с generated client-v1, server-state workflows, realtime-инвалидацию, доступность и browser tests.
+description: Создавать или проверять новую React SPA оператора CoffeeOrderPlatform, project-owned fetch client на generated client-v1 transport types, server-state workflows, realtime-инвалидацию, доступность и browser tests.
 ---
 
 # React-интерфейс оператора
 
 Создавать новый frontend; legacy React служит только визуальным ориентиром.
-Использовать React Router, TanStack Query, generated OpenAPI clients, доступные
-формы и Playwright.
+Использовать React Router, TanStack Query, project-owned browser fetch client на
+generated `client-v1` transport types, доступные формы и Playwright. Generated
+SDK/client запрещён; runtime response validation обязательна.
 
 - Server owns identity, money, versions, business state, and `allowedActions`.
 - Mutations carry idempotency and expected owner version.
@@ -17,5 +18,6 @@ description: Создавать или проверять новую React SPA �
 - No blind retry for uncertain provider mutation.
 - Preserve accessibility, CSP, deep links, and bundle budgets.
 
-Прочитать `docs/launch/07_FRONTEND_CONTRACT.md`. Проверять generated-client
-drift, types/lint/unit, mocks, Playwright, accessibility, CSP, deep links и SSE.
+Прочитать `docs/launch/07_FRONTEND_CONTRACT.md`. Проверять generated transport
+types drift, project-owned client boundary, types/lint/unit, mocks, Playwright,
+accessibility, CSP, deep links и SSE.

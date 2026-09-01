@@ -43,7 +43,7 @@ calls AROMA directly or synthesizes allowed actions.
 
 - React Router;
 - TanStack Query for server state;
-- generated OpenAPI client;
+- project-owned browser fetch client на generated `client-v1` transport types;
 - accessible forms and keyboard navigation;
 - Playwright critical-path E2E;
 - CSP and immutable static assets;
