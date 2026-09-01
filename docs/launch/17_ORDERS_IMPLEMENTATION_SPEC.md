@@ -187,13 +187,20 @@ sleep. Outbox publisher работает после commit. Любая ошиб�
 `GET /api/client-v1/orders/{orderRef}` выполняет один owner query/projection и
 возвращает:
 
-- Order refs/version/status и customer snapshot;
+- Order refs/command `version`/Card `projectionVersion`/status и customer snapshot;
 - items по `linePosition` с product snapshot, quantity и quote money;
 - pricing: сумма `lineTotalMinor`, `RUB`, уникальные quote refs/hashes;
 - `aroma`: вычисленное состояние, revisions, last observation, blockers;
 - `allowedActions`, вычисленные сервером.
 
 Никакой network call при GET нет.
+
+`version` изменяет только `orders-service` и использует только optimistic
+concurrency. `projectionVersion` — отдельная монотонная версия видимого Card;
+её изменение выполняет единый Orders projection repository при Order command
+или material AROMA projection change. Оба runtime вызывают один guarded SQL
+entry point; прямой UPDATE projection table запрещён grants/checker. SSE
+`ownerVersion` всегда равен `projectionVersion`.
 
 AROMA state precedence:
 

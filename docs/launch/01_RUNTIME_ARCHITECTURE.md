@@ -10,6 +10,8 @@
 | Runtime | Владелец | Назначение | Доступ к данным |
 |---|---|---|---|
 | `edge-gateway` | Platform | TLS, auth handoff, routing, limits | none |
+| `api-public` | Platform | stateless `client-v1` trust/composition root | none |
+| `api-internal` | Platform | stateless `internal-v1` trust/delegation root | none |
 | `web` | Frontend | React static assets | none |
 | `customer-service` | Customer | customer commands/queries | customer DB |
 | `catalog-service` | Catalog | products, mappings, availability | catalog DB |
@@ -31,13 +33,16 @@ replicas, а не `node:cluster` или PM2.
 ## Границы доверия
 
 ```text
-Browser -> edge -> /api/client-v1/* -> owning services
+Browser -> edge -> api-public -> /api/client-v1/* -> owning services
 Browser -> edge -> /events          -> realtime-gateway
-Workers -> /api/internal-v1/*       -> private network only
-Orders convergence -> aroma-gateway -> allowlisted provider origin
+Workers -> api-internal -> /api/internal-v1/* -> owning services/Gateway
+api-internal -> aroma-gateway -> allowlisted provider origin
 ```
 
-Edge не содержит business authorization и не обращается к PostgreSQL.
+Edge не содержит business authorization, не обращается к PostgreSQL и не имеет
+маршрута непосредственно к owner services. `api-public`/`api-internal` не имеют
+business DB, Kafka или provider credentials. Delegation context позволяет
+Gateway проверить transport caller, original caller и operation audience.
 AROMA credentials доступны только `aroma-gateway`.
 
 ## Технические пакеты платформы

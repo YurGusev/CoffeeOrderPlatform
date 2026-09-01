@@ -8,15 +8,44 @@ manifests без изменения смысла. Любое отклонени�
 
 - **Назначение:** единственная публичная точка входа; завершает TLS, проверяет
   пользовательскую сессию/JWT, формирует trusted actor context, применяет
-  request-size/rate/deadline limits и маршрутизирует запрос владельцу.
+  request-size/rate/deadline limits и маршрутизирует `client-v1` только в
+  `api-public`, а `/events` только в `realtime-gateway`.
 - **Владелец:** Platform.
 - **Входящие HTTP:** публичные `/api/client-v1/**`, `/events`, `/health/live`.
 - **Входящие события:** нет.
-- **Исходящие вызовы:** HTTP к `customer-service`, `catalog-service`,
-  `pricing-service`, `orders-service`; SSE proxy к `realtime-gateway`.
+- **Исходящие вызовы:** HTTP только к `api-public`; SSE proxy к
+  `realtime-gateway`. Direct owner/API-internal route отсутствует.
 - **Хранилище:** нет БД, нет persistent cache.
 - **Секреты:** TLS private key/certificate; OIDC/JWT verification configuration.
 - **Публичность:** public internet; `internal-v1` и `aroma-gateway` не маршрутизирует.
+
+## 1.1. `api-public`
+
+- **Назначение:** stateless composition root только для `client-v1`: actor и
+  request/response schema validation, cancellation/deadline/trace propagation,
+  route dispatch и transport Problem normalization.
+- **Владелец:** Platform; business decisions принадлежат owner services.
+- **Входящие HTTP:** полный и только inventory `client-v1.yaml` от edge.
+- **Исходящие:** Customer routes → `customer-service`; Catalog search →
+  `catalog-service`; quote → `pricing-service`; Orders routes → `orders-service`.
+- **Хранилище/события:** DB, persistent cache и Kafka отсутствуют.
+- **Секреты:** service identity, actor verification keys, telemetry.
+- **Публичность:** private backend; browser/host port отсутствует.
+
+## 1.2. `api-internal`
+
+- **Назначение:** stateless composition root только для `internal-v1`; проверяет
+  mTLS caller/operation allowlist и подписывает delegation context.
+- **Владелец:** Platform; business decisions отсутствуют.
+- **Allowlist:** Orders→Customer order-input; Pricing→Catalog pricing-input;
+  Orders→Pricing verify; Catalog sync→Gateway export; Observer→Gateway cart
+  read; Convergence→Gateway cart read/set/remove. Иное →
+  `403 SERVICE_AUDIENCE_FORBIDDEN`.
+- **Исходящие:** только exact target текущей allowlisted operation.
+- **Хранилище/события:** DB, persistent cache и Kafka отсутствуют.
+- **Секреты:** service identity, delegation signing key, verification keys,
+  telemetry; provider credentials отсутствуют.
+- **Публичность:** только private `internal-api` network.
 
 ## 2. `web`
 
@@ -35,12 +64,15 @@ manifests без изменения смысла. Любое отклонени�
 - **Назначение:** создание и поиск Customer, владение identity/contact/address/channel link.
 - **Владелец:** Customer.
 - **Входящие HTTP:** `POST /api/client-v1/customers`,
-  `GET /api/client-v1/customers?query=`; health endpoints.
+  `GET /api/client-v1/customers?query=` через `api-public`; private
+  `GET /api/internal-v1/customers/{customerRef}/order-input` через
+  `api-internal`; health endpoints.
 - **Входящие события:** нет в первом срезе.
 - **Исходящие вызовы:** нет синхронных межсервисных вызовов; telemetry only.
 - **Хранилище:** target-БД `coffee_platform_customer`, role `coffee_customer_rw`.
 - **Секреты:** только Customer DB credential и telemetry exporter credential.
-- **Публичность:** не public; доступен только через edge.
+- **Публичность:** private owner backend; доступен только через `api-public` и
+  `api-internal` по своему route inventory.
 
 ## 4. `catalog-service`
 
@@ -108,12 +140,12 @@ manifests без изменения смысла. Любое отклонени�
 - **Владелец:** Orders.
 - **Входящие HTTP:** draft/item/confirm/reconciliation/Order Card routes из
   `docs/launch/03_HTTP_API_CONTRACT.md`.
-- **Входящие события:** `AromaObservationChanged.v1`,
-  `AromaConvergenceChanged.v1` для owner projection.
+- **Входящие события:** нет; AROMA events принимает projection worker.
 - **Исходящие вызовы:** перед Draft — private Customer order-input; перед
   PUT item — private quote verification у `pricing-service`; Kafka
   `OrderConfirmed.v1`, `AromaConvergenceRequested.v1`,
-  `RealtimeInvalidated.v1`. `Confirm` не выполняет HTTP.
+  `RealtimeInvalidated.v1`. Все private HTTP идут через `api-internal`;
+  `Confirm` не выполняет HTTP.
 - **Хранилище:** `coffee_platform_orders`, role `coffee_orders_service_rw`,
   allowlist core Order/Item/History/Desired/Idempotency/Outbox.
 - **Секреты:** Orders DB, Kafka и service-to-service identity.
@@ -121,15 +153,16 @@ manifests без изменения смысла. Любое отклонени�
 
 ## 8. `orders-aroma-preparation`
 
-- **Назначение:** преобразовать Order/Catalog facts в актуальную Desired revision
-  и запустить convergence, не обращаясь к provider.
+- **Назначение:** single writer cart Desired и per-Order AROMA projection;
+  преобразует Order/Catalog/Observation/Convergence facts и запускает workflow.
 - **Владелец:** Orders.
 - **Входящие HTTP:** только health.
-- **Входящие события:** `OrderConfirmed.v1`, `CatalogMappingChanged.v2`.
+- **Входящие события:** `OrderConfirmed.v1`, `CatalogMappingChanged.v2`,
+  `AromaObservationChanged.v1`, `AromaConvergenceChanged.v1`.
 - **Исходящие вызовы:** Kafka `AromaConvergenceRequested.v1`,
   `RealtimeInvalidated.v1`; HTTP отсутствует.
 - **Хранилище:** `coffee_platform_orders`, role `coffee_orders_prepare_rw`, allowlist
-  Desired/Inbox/Outbox и необходимые order snapshot reads.
+  Desired/mapping/order_aroma_projections/Inbox/Outbox и необходимые reads.
 - **Секреты:** Orders DB и Kafka credentials.
 - **Публичность:** private worker.
 
@@ -141,7 +174,7 @@ manifests без изменения смысла. Любое отклонени�
 - **Входящие события:** `AromaConvergenceRequested.v1` и internal durable schedule;
   отдельное восьмое launch-сообщение не вводится.
 - **Исходящие вызовы:** private HTTP
-  `POST /api/internal-v1/aroma/cart-snapshots:read` к `aroma-gateway`; Kafka
+  `POST /api/internal-v1/aroma/cart-snapshots:read` через `api-internal`; Kafka
   `AromaObservationChanged.v1`, `RealtimeInvalidated.v1`.
 - **Хранилище:** `coffee_platform_orders`, role `coffee_orders_observer_rw`, allowlist Observed/Attempt/Inbox/Outbox.
 - **Секреты:** Orders DB, Kafka и service-to-service identity; provider secrets отсутствуют.
@@ -154,7 +187,7 @@ manifests без изменения смысла. Любое отклонени�
 - **Владелец:** Orders.
 - **Входящие HTTP:** только health.
 - **Входящие события:** `AromaConvergenceRequested.v1`.
-- **Исходящие вызовы:** private typed HTTP к `aroma-gateway` для cart GET,
+- **Исходящие вызовы:** private typed HTTP через `api-internal` к `aroma-gateway` для cart GET,
   set quantity и remove line; Kafka `AromaObservationChanged.v1`,
   `AromaConvergenceChanged.v1`, `RealtimeInvalidated.v1`.
 - **Хранилище:** `coffee_platform_orders`, role `coffee_orders_convergence_rw`, allowlist Desired/Observed/Attempt/Lease/Fence/Reservation/Inbox/Outbox.

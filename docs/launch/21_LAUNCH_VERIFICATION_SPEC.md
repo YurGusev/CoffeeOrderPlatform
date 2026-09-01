@@ -144,7 +144,7 @@ restore каждой DB <=10m и совокупно <=30m на записанн�
 
 ## 8. Observability gate
 
-Для каждого из 13 runtime проверить:
+Для каждого из 15 runtime проверить:
 
 - `/health/live` 200 при живом process;
 - `/health/ready` 200 только при готовых обязательных зависимостях и 503 при их
@@ -157,6 +157,13 @@ restore каждой DB <=10m и совокупно <=30m на записанн�
   Outbox oldest 5m, UnknownOutcome >0 2m, SSE drop rate >5% 5m;
 - canary secret/PII отсутствует в logs, traces, metrics labels, alerts, artifacts
   и browser bundle.
+
+Topology gate отдельно доказывает: `api-public` монтирует только `client-v1`,
+`api-internal` — только `internal-v1`; Edge→owner и Browser→owner запрещены;
+оба API root не имеют DB/Kafka/provider secrets; forged delegation и mutation
+не от original `aroma-convergence` получают 403. `api-agent` остаётся authority
+role `implemented=false` и отсутствует в Compose. Node 26.8.1 используется для
+всех 15 production images и foundation/CI; Node 24 считается version drift.
 
 ## 9. Rollback mutation-disable
 

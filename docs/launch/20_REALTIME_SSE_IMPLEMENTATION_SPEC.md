@@ -133,7 +133,8 @@ Authorization/header actor не создаётся.
 2. принять только `subjectType=order` и valid refs/version;
 3. никогда не записывать payload в Order cache;
 4. вызвать `queryClient.invalidateQueries({queryKey:['orders','detail',subjectRef],exact:true,refetchType:'active'})`;
-5. если cached Order.version >= ownerVersion, duplicate можно пропустить;
+5. если cached `OrderCard.projectionVersion >= ownerVersion`, duplicate можно
+   пропустить; command `Order.version` для dedup запрещён;
 6. refetch response owner GET полностью заменяет cache.
 
 На `stream-reset.v1` инвалидировать только существующие Order detail queries:

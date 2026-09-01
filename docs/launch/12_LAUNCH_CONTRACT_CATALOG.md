@@ -191,7 +191,8 @@ model не экспортируется и не используется как 
     blockers[]}`;
   - `allowedActions[]` enum `edit-items|confirm|request-aroma-reconciliation`;
 - Aroma state enum: `NotRequested|PendingObservation|OutOfSync|Converging|InSync|Blocked|UnknownOutcome`;
-- blocker: `{code, message, productRef?}`;
+- blocker: `{code, message, productRef?}`, где code включает
+  `MAPPING_CHANGED|MAPPING_MISSING|MAPPING_STOPPED|PRODUCT_UNAVAILABLE`;
 - errors: `404 ORDER_NOT_FOUND`.
 
 ### 3.6 SSE
@@ -205,7 +206,8 @@ retry: 3000
 data: {"subjectType":"order","subjectRef":"ord_...","ownerVersion":"7","reason":"AromaStateChanged","correlationId":"..."}
 ```
 
-`reason`: `OrderChanged|AromaStateChanged`. Event не содержит Customer, items,
+`ownerVersion` всегда равен `OrderCard.projectionVersion`, а не command
+`Order.version`. `reason`: `OrderChanged|AromaStateChanged`. Event не содержит Customer, items,
 money, Desired/Observed quantities или `allowedActions`; после него клиент
 выполняет owner GET.
 

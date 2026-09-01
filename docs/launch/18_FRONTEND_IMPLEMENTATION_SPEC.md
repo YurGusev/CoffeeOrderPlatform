@@ -68,7 +68,12 @@ credentials, correlation и AbortSignal. В нём нет handwritten endpoint t
 - result row показывает owner Catalog fields, quantity input и «Добавить»;
 - #9 запрашивает PricingQuote ровно для одной строки;
 - после quote success выполняет PUT item с generated `itemRef`, текущей
-  Order.version и exact quote proof; authoritative money не пересчитывается;
+  command `Order.version` и exact quote proof; authoritative money не пересчитывается;
+
+Frontend хранит две независимые версии: `Order.version` используется только в
+`expectedVersion` команд, `OrderCard.projectionVersion` — только для SSE
+dedup/refetch. Сравнивать их между собой запрещено. `MAPPING_CHANGED` показывает
+blocked state без blind retry и предлагает создать новый Draft/quote.
 - success обновляет Order cache response и показывает ссылку к Order Card;
 - кнопка «К заказу» ведёт на `/app/orders/{orderRef}`.
 

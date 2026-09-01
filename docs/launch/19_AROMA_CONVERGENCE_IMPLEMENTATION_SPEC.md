@@ -104,8 +104,10 @@ recompute и optional Desired/Outbox.
 Алгоритм recompute:
 
 1. прочитать все contributions Confirmed Orders и актуальные mapping facts;
-2. для каждой contribution использовать offer из подтверждённого snapshot,
-   пока mapping Active/Available и revision не объявила его Stopped/Missing;
+2. для каждой contribution использовать только frozen `offerRef` подтверждённого
+   Order. Текущий mapping с тем же offer и Active/Available разрешает строку;
+   другой non-null offer → `MAPPING_CHANGED`; null/Missing → `MAPPING_MISSING`;
+   Stopped → `MAPPING_STOPPED`; Unavailable → `PRODUCT_UNAVAILABLE`;
 3. агрегировать `quantityMilli` по offerRef с bigint overflow guard;
 4. сформировать blockers для недопустимых положительных quantities;
 5. вычислить canonical Desired hash;
@@ -113,6 +115,10 @@ recompute и optional Desired/Outbox.
 7. иначе одной transaction Supersede old, Insert next revision/lines/blockers,
    Outbox `AromaConvergenceRequested.v1(reason=OrderConfirmed|CatalogChanged)`;
 8. commit Kafka offset только после transaction commit.
+
+Confirmed Order никогда автоматически не remap на другой provider offer: quote,
+unit и semantics были подтверждены для frozen mapping. Новый offer требует
+нового Draft/quote либо будущей явной replacement/re-quote command.
 
 ## 5. Safe observer
 

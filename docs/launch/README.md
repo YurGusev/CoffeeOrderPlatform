@@ -1,7 +1,8 @@
 # Пакет первого запуска: React, backend и корзина AROMA
 
 Статус: authority package; runtime-реализация начинается только после merge
-PR #15, принятия ADR-0019 и завершения #2–#4.
+PR #15, принятия ADR-0019/ADR-0020, закрытия authority issue #19 и завершения
+#2–#4.
 
 Этот пакет превращает каноническую архитектуру в короткий исполнимый план. Он
 не описывает миграцию с CoffeeOrderSystem, не требует совместимости с C# и не
@@ -44,6 +45,7 @@ PR #15, принятия ADR-0019 и завершения #2–#4.
 21. [Исполнимая спецификация realtime SSE](20_REALTIME_SSE_IMPLEMENTATION_SPEC.md)
 22. [Исполнимая спецификация итогового launch gate](21_LAUNCH_VERIFICATION_SPEC.md)
 23. [AROMA Gateway: журнал mutation](22_AROMA_GATEWAY_OPERATION_JOURNAL.md)
+24. [Матрица конфигурации 15 runtime](23_RUNTIME_CONFIGURATION_MATRIX.md)
 
 ## Сила канонических документов
 

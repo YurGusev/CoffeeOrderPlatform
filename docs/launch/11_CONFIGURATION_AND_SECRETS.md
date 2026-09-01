@@ -49,7 +49,10 @@ services:
     permissions: {net: [coffee_postgres:5432], fsRead: [], fsWrite: []}
 ```
 
-Файл обязан содержать все 13 runtime из `10_RUNTIME_CATALOG.md`. Для каждого
+Файл обязан содержать точное множество 15 runtime из `10_RUNTIME_CATALOG.md`.
+`api-agent` присутствует только в authority как planned/implemented=false и не
+входит в `services`/Compose. `config-bootstrap` описывается как initialization
+role, а не runtime. Для каждого runtime
 задаются `listen`, health paths, timeouts, pools, database или явное `null`,
 Kafka topics/groups, outbound allowlist, `secretRefs` и Node Permission Model
 allowlist. Отсутствующее значение не берётся из скрытого default: loader
@@ -85,11 +88,15 @@ environments:
       email: ENC[...]
       password: ENC[...]
       sessionEncryptionKey: ENC[...]
+      catalogIdentityKeyV1: ENC[...]
     edge:
       tlsPrivateKey: ENC[...]
       oidcClientSecret: ENC[...]
     security:
       actorContextEdgeSigningPrivateKey: ENC[...]
+      apiPublicServicePrivateKey: ENC[...]
+      apiInternalServicePrivateKey: ENC[...]
+      apiInternalDelegationSigningPrivateKey: ENC[...]
       catalogCursorSigningPrivateKey: ENC[...]
     telemetry:
       exporterToken: ENC[...]
@@ -115,7 +122,8 @@ legacy `postgres/postgres` запрещены.
    stdout, logs, artifacts, crash reports или shell history.
 
 `config-bootstrap` — единственный процесс, имеющий право decrypt общего файла.
-`web`, `edge-gateway` и `realtime-gateway` не получают DB passwords. Bootstrap
+`web`, `edge-gateway`, `api-public`, `api-internal` и `realtime-gateway` не
+получают DB passwords. Bootstrap
 admin password доступен только отдельной одноразовой provisioning-команде и не
 попадает в runtime containers.
 
@@ -132,7 +140,12 @@ admin password доступен только отдельной одноразо
 
 ## 5.1. Обязательный launch-профиль без скрытых defaults
 
-Порты/DB pool: `edge-gateway 4000/0`, `web 3000/0`,
+Полная field-by-field authority находится в
+[матрице 15 runtime](23_RUNTIME_CONFIGURATION_MATRIX.md); `platform.yaml` не
+может заменять её значением «по умолчанию».
+
+Порты/DB pool: `edge-gateway 4000/0`, `api-public 4050/0`,
+`api-internal 4051/0`, `web 3000/0`,
 `customer-service 4101/8`, `catalog-service 4102/8`,
 `catalog-supplier-sync 4201/4`, `catalog-activation-worker 4202/4`,
 `pricing-service 4103/8`, `orders-service 4104/12`,
@@ -158,12 +171,25 @@ clock skew `5s`, overlap active/previous key `86400s`. В
 до конца overlap и никогда не подписывает новые. Actor, cursor, TLS и OIDC keys
 не переиспользуются друг для друга.
 
+Delegation context подписывает только `api-internal`; claims:
+`iss=api-internal`, `aud=<target-runtime>`, `originalCaller`, `operationId`,
+`iat`, `exp`, `jti`, `correlationId`, `traceparent`, `kid`. TTL не превышает
+request deadline + 5s skew. Target проверяет transport mTLS identity =
+`api-internal`, original caller и operation allowlist. Только delegated
+`originalCaller=aroma-convergence` получает mutation audience Gateway.
+
+Network matrix: `public-ingress` содержит edge/web; `public-api-backend` —
+edge→api-public→owner services; `internal-api` — callers→api-internal→targets;
+`provider-egress` разрешает outbound только `aroma-gateway` к allowlisted
+origin. Edge→owner, api-public→internal/Gateway, api-internal→provider origin и
+любой non-Gateway provider egress запрещены.
+
 ## 6. Проверки
 
 Команда `pnpm config:check` обязана:
 
 - валидировать оба YAML по schema;
-- сверять точное множество 13 runtime с service catalog, а не только count;
+- сверять точное множество 15 runtime с service catalog, а не только count;
 - проверять, что каждый `secretRef` существует и разрешён runtime;
 - запрещать plaintext по всем secret leaves;
 - запрещать secret-like keys (`password`, `token`, `privateKey`, `secret`) в
@@ -186,6 +212,12 @@ clock skew `5s`, overlap active/previous key `86400s`. В
 9. `customer-service` имеет Kafka network/topic/group/credential → отказ;
 10. `aroma-gateway` имеет Kafka network/topic/group/credential → отказ;
 11. повторно использован actor/cursor/TLS/OIDC key или неизвестный `kid` → отказ.
+12. Edge напрямую вызывает owner, client route смонтирован в `api-internal` или
+    internal route в `api-public` → отказ;
+13. forged `originalCaller`, неверный target/audience или mutation не от
+    delegated `aroma-convergence` → `403 SERVICE_AUDIENCE_FORBIDDEN`;
+14. `api-public`/`api-internal` имеют DB/Kafka/provider secret или egress → отказ;
+15. `api-agent` попал в Compose либо `config-bootstrap` стал long-running → отказ.
 
 ## 7. Ротация
 

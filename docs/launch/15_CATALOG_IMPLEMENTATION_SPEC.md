@@ -72,6 +72,15 @@ SHA-256 конкатенации бинарных batch hashes в порядке
 `availability`, `imageUrl`. Raw provider identifiers, cookies и session ids не
 передаются. `offerRef` назначается Catalog при активации.
 
+Gateway вычисляет source hashes только как
+`HMAC-SHA256(catalogIdentityKeyV1, "hmac-sha256-v1\\0" + supplierRef + "\\0" +
+entityType + "\\0" + NFC(rawProviderIdentifier))`. Record обязан содержать
+`sourceIdentityScheme="hmac-sha256-v1"`. Key доступен только Gateway, не
+совпадает с session/actor/cursor keys и не ротируется автоматически. Unique
+scope — `(supplierRef,entityType,sourceHash)`; одинаковый hash с различными
+semantic facts отклоняет snapshot как `SOURCE_IDENTITY_COLLISION`. Ротация key
+требует отдельного ADR и alias migration; Catalog никогда не получает raw ID.
+
 ## 4. Staging и пакетный импорт
 
 Миграции создают:

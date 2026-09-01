@@ -1,4 +1,4 @@
-# ADR-0019: Node.js 26 и физическая topology CoffeeOrderPlatform
+# ADR-0019: Node.js 26, trust roots и owner-runtime topology
 
 Decision ID: `ADR-COP-RUNTIME-001`
 Status: `Accepted for CoffeeOrderPlatform greenfield launch`
@@ -16,8 +16,8 @@ Does not modify: неизменяемые канонические revision root
 
 - начинать сразу с owner-oriented микросервисов;
 - использовать Node.js 26 в development, CI и production;
-- не собирать owner-контексты в три общих процесса `api-public`, `api-agent`,
-  `api-internal`.
+- сохранить owner-сервисы владельцами business behavior/DB, а public/internal
+  trust surfaces физически отделить stateless composition roots.
 
 ADR-0018 был перенесён как clean-room evidence из другой delivery topology. Он
 фиксирует Node 24 production, три physical API roots, `implemented=false` и
@@ -42,7 +42,7 @@ Placeholder digest не допускается в materialized #3. Один exac
 используется в development build, CI и production images. `node:24`, floating
 tags и split foundation/production запрещены.
 
-До первого production допуска каждый из 13 runtime обязан пройти на exact
+До первого production допуска каждый из 15 runtime обязан пройти на exact
 image:
 
 - clean install/build/test;
@@ -57,47 +57,55 @@ image:
 Эти проверки материализуются в #3 и блокируются G01/G03/G10/G12/G13/G14 #13.
 Непройденный workload не получает production image.
 
-### 2. Тринадцать физических runtime
+### 2. Пятнадцать физических runtime
 
 Первый запуск содержит ровно следующие самостоятельные Node processes:
 
 1. `edge-gateway`;
-2. `web`;
-3. `customer-service`;
-4. `catalog-service`;
-5. `catalog-supplier-sync`;
-6. `catalog-activation-worker`;
-7. `pricing-service`;
-8. `orders-service`;
-9. `orders-aroma-preparation`;
-10. `aroma-observer`;
-11. `aroma-convergence`;
-12. `aroma-gateway`;
-13. `realtime-gateway`.
+2. `api-public`;
+3. `api-internal`;
+4. `web`;
+5. `customer-service`;
+6. `catalog-service`;
+7. `catalog-supplier-sync`;
+8. `catalog-activation-worker`;
+9. `pricing-service`;
+10. `orders-service`;
+11. `orders-aroma-preparation`;
+12. `aroma-observer`;
+13. `aroma-convergence`;
+14. `aroma-gateway`;
+15. `realtime-gateway`.
 
 Owner services являются отдельными network services/workers, а не модулями
 общего API process. Один container содержит один process role. Масштабирование —
 replicas, не PM2/`node:cluster`.
 
-### 3. Trust surfaces без общих composition roots
+### 3. Stateless trust composition roots
 
 M19 surfaces сохраняются как contract/security classifications:
 
-- `client-v1`: публично только через `edge-gateway`;
-- `internal-v1`: private network + service identity/audience; edge deny-list;
+- `client-v1`: `edge-gateway -> api-public -> owner service`;
+- `internal-v1`: caller -> `api-internal` -> owner/Gateway;
 - `agent-v1`: отсутствует и disabled в первом запуске;
 - provider surface: только `aroma-gateway` → allowlisted AROMA origin;
 - realtime: только `/events` через edge.
 
-Каталоги/processes `api-public`, `api-agent`, `api-internal` не создаются. Их
-изоляционные гарантии реализуются отдельными listeners, route inventories,
-service identities, network policies, secrets scopes и architecture checks.
-Ни один owner service не публикует container port наружу напрямую.
+`api-public` монтирует только `client-v1`, проверяет actor context и transport
+schemas, но не имеет DB/Kafka/provider credentials и business decisions.
+`api-internal` монтирует только `internal-v1`, проверяет mTLS caller allowlist и
+выпускает короткий signed delegation context с original caller/operation/target.
+Он не имеет DB/Kafka/provider credentials и не повторяет mutations.
+
+`api-agent` остаётся deployable role со state `planned`, `implemented=false`,
+`deployedInFirstLaunch=false`; в count 15 и Compose не входит.
+`config-bootstrap` — trusted initialization/provisioning role, не long-running
+runtime. Ни один owner service не публикуется Browser/Edge напрямую.
 
 ### 4. `implemented` transition
 
-ADR-0018 `implemented=false` относится к отсутствующим `platform/apps/api-*`
-roles и не блокирует 13 runtime нового репозитория. Для CoffeeOrderPlatform
+ADR-0018 `implemented=false` для `api-public/api-internal` снимается только их
+принятыми implementation PR; `api-agent` сохраняет false. Для CoffeeOrderPlatform
 runtime становится `implemented=true` только когда одновременно существуют:
 
 - source root и composition root;
@@ -125,7 +133,7 @@ runtime становится `implemented=true` только когда одно
 - `config/platform.yaml`;
 - соответствующие schemas/checkers.
 
-Runtime profile содержит для каждого из 13 имён: `owner`, `m20RoleRef` либо
+Runtime profile содержит для каждого из 15 имён: `owner`, `m20RoleRef` либо
 явное `launch-v1-only`, `networkZone`, `dbPrincipal`, `httpSurfaces`,
 `secretRefs`, `implemented`. Совпадение с M20 нельзя выводить по похожему имени.
 До принятого implementation PR значение `implemented=false`.
@@ -137,10 +145,10 @@ runtime feature branches #5–#18 не начинаются.
 
 - Node 26 становится осознанной production authority, а не случайным
   расхождением с M04.
-- Network/service overhead 13 процессов принимается ради owner isolation.
+- Network/service overhead 15 процессов принимается ради trust/owner isolation.
 - `agent-v1` не реализуется и не получает listener/route/secret.
 - Edge остаётся transport/auth boundary, но не composition root бизнес-кода.
-- Любое добавление четырнадцатого runtime, общего API process или новой trust
+- Любое добавление шестнадцатого runtime, общего business API process или новой trust
   surface требует отдельного ADR.
 
 ## Rollback
@@ -162,7 +170,8 @@ pnpm architecture:check
 pnpm config:check
 ```
 
-`authority:check` сравнивает точное множество 13 runtime, отсутствие
-`api-public/api-agent/api-internal`, disabled `agent-v1`, Node/pnpm identities и
+`authority:check` сравнивает точное множество 15 runtime, наличие
+`api-public/api-internal`, отсутствие `api-agent` в Compose, его
+`implemented=false`, Node/pnpm identities и
 наличие всех machine manifests. Пока #2/#3 не завершены, проверка обязана
 fail-closed, а не считать документы реализацией.
