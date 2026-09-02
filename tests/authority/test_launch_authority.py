@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic positive and negative tests for Effect-native launch authority."""
+"""Deterministic positive and negative tests for issue #19 authority."""
 
 from __future__ import annotations
 
@@ -13,18 +13,16 @@ import sys
 import tempfile
 import unittest
 
+
 TEST_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = TEST_ROOT.parents[1]
 FIXTURE_ROOT = REPO_ROOT
-CASES_PATHS = [
-    TEST_ROOT / "fixtures" / "negative" / "cases.json",
-    TEST_ROOT / "fixtures" / "negative" / "effect-cases.json",
-]
-SCRIPT_PATH = REPO_ROOT / "scripts" / "validate-effect-authority.py"
+CASES_PATH = TEST_ROOT / "fixtures" / "negative" / "cases.json"
+SCRIPT_PATH = TEST_ROOT.parents[1] / "scripts" / "validate-launch-authority.py"
 
 
 def load_validator():
-    spec = importlib.util.spec_from_file_location("effect_launch_authority_validator", SCRIPT_PATH)
+    spec = importlib.util.spec_from_file_location("launch_authority_validator", SCRIPT_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot import validator: {SCRIPT_PATH}")
     module = importlib.util.module_from_spec(spec)
@@ -56,14 +54,27 @@ def set_at(document: object, path: list[object], value: object, operation: str) 
 
 
 def candidate_root(manifest: str, candidate: dict) -> Path:
-    root = Path(tempfile.mkdtemp(prefix="issue25-effect-authority-test-"))
-    shutil.copytree(REPO_ROOT / "platform", root / "platform")
-    shutil.copytree(REPO_ROOT / "scripts", root / "scripts")
-    (root / "platform" / manifest).write_text(json.dumps(candidate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    root = Path(tempfile.mkdtemp(prefix="issue19-authority-test-"))
+    platform = root / "platform"
+    platform.mkdir()
+    for name in (
+        "runtime-foundation-decision.json",
+        "launch-v1-runtime-profile.json",
+        "launch-v1-connectivity-policy.json",
+        "target-layout.json",
+        "runtime-foundation-decision.schema.json",
+        "launch-v1-runtime-profile.schema.json",
+        "launch-v1-connectivity-policy.schema.json",
+        "target-layout.schema.json",
+    ):
+        source = fixture_doc(name)
+        if name == manifest:
+            source = candidate
+        (platform / name).write_text(json.dumps(source, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return root
 
 
-class EffectLaunchAuthorityTests(unittest.TestCase):
+class LaunchAuthorityTests(unittest.TestCase):
     def test_positive_fixture_is_accepted(self) -> None:
         VALIDATOR.validate_root(FIXTURE_ROOT)
 
@@ -75,8 +86,8 @@ class EffectLaunchAuthorityTests(unittest.TestCase):
         self.assertEqual((first.returncode, first.stdout, first.stderr), (second.returncode, second.stdout, second.stderr))
 
     def test_negative_fixtures_are_rejected_without_mutating_sources(self) -> None:
-        cases = [case for path in CASES_PATHS for case in json.loads(path.read_text(encoding="utf-8"))]
-        self.assertGreaterEqual(len(cases), 40)
+        cases = json.loads(CASES_PATH.read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(cases), 15)
         for case in cases:
             with self.subTest(case=case["id"]):
                 self.assertRegex(case["expected"]["ruleId"], r"^[A-Z0-9_]+$")
@@ -94,7 +105,7 @@ class EffectLaunchAuthorityTests(unittest.TestCase):
                 self.assertEqual(before, json.dumps(original, sort_keys=True), case["id"])
 
     def test_duplicate_json_keys_are_rejected(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="effect-authority-duplicate-json-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="issue19-duplicate-json-") as temporary:
             path = Path(temporary) / "duplicate.json"
             path.write_text('{"schemaVersion":1,"schemaVersion":2}\n', encoding="utf-8")
             with self.assertRaises(VALIDATOR.AuthorityError):

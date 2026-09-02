@@ -1,95 +1,127 @@
 # Руководство для агентов CoffeeOrderPlatform
 
-Этот репозиторий содержит новую CoffeeOrderPlatform, строящуюся с нуля. Запрещено переносить из CoffeeOrderSystem runtime-код, модели БД, generated artifacts и внутренние типы.
+Этот репозиторий содержит новую CoffeeOrderPlatform, строящуюся с нуля по
+подходу «сначала микросервисы». Это не рабочая область миграции: запрещено
+переносить из CoffeeOrderSystem runtime-код, модели БД, сгенерированные
+артефакты и внутренние типы.
 
-Перед значимой работой прочитать `docs/launch/README.md`, `docs/adr/ADR-0023-effect-native-platform.md`, `docs/launch/26_EFFECT_NATIVE_FOUNDATION.md`, применимый канонический revision root и `.agents/skills/coffee-platform-router/SKILL.md`.
+Перед значимой работой прочитать `docs/launch/README.md`, применимый неизменяемый
+канонический revision root и `.agents/skills/coffee-platform-router/SKILL.md`.
 
 ## Ветки и язык проекта
 
-- GitHub `YurGusev/CoffeeOrderPlatform` — единственная operational authority.
-- `develop` — единственная постоянная ветка разработки; `main` — стабильная/релизная линия.
-- Ветка создаётся только от `develop`, содержащей accepted predecessor: `feature/<issue>-<slug>`, `fix/<issue>-<slug>`, `docs/<issue>-<slug>` или `test/<issue>-<slug>`.
-- Один issue — одна ветка — один PR только в `develop`.
-- Issue, commits, PR и изменяемая документация ведутся на русском; технические identifiers не переводятся.
-- Каждый issue обязан содержать predecessor, inputs, outputs, downstream consumers, подробный checklist, tests, границы и критерий готовности.
-- `- [x]` ставится только после фактической реализации и evidence; blocked/skipped пункт остаётся `- [ ]`.
-- Документация меняется в том же PR, что и поведение.
+- GitHub `YurGusev/CoffeeOrderPlatform` — единственная operational authority для
+  remote repository, issues, labels, branches, pull requests, checks, reviews,
+  releases и Projects. Другой forge для этого репозитория запрещён.
+- Перед remote mutation проверять `origin` и `gh repo view`; target обязан быть
+  `https://github.com/YurGusev/CoffeeOrderPlatform`.
 
-## Неприкосновенные архитектурные ограничения
+- `develop` — единственная постоянная ветка разработки и база всех рабочих веток.
+- `main` — стабильная/релизная линия; прямую разработку в ней не вести.
+- Ветка задачи создаётся от актуальной `develop`: `feature/<issue>-<slug>`,
+  `fix/<issue>-<slug>`, `docs/<issue>-<slug>` или `test/<issue>-<slug>`.
+- Один issue — одна рабочая ветка и один PR в `develop`.
+- Issue, коммиты, названия и описания PR, а также изменяемая документация ведутся
+  на русском языке. Технические идентификаторы, имена API, типов, событий,
+  файлов и веток не переводятся.
+- Каждый issue обязан содержать прямые ссылки на определяющие документы,
+  конкретный перечень реализации, обязательные тесты, границы и критерии готовности.
+- Документация меняется в той же ветке и том же PR, что и соответствующее поведение.
 
-- Ограниченный контекст владеет своими данными, migrations, commands, events и recovery.
-- Cross-owner SQL, imports внутренних реализаций и shared mutable business entities запрещены.
-- PostgreSQL — business truth; Kafka — transport committed facts/wake-up; Outbox/Inbox защищают эффекты доставки.
-- `edge-gateway`, `api-public`, `api-internal`, realtime и provider trust surfaces разделены.
-- AROMA Gateway владеет transport/credentials/journal; Orders владеет convergence.
-- Frontend использует только `client-v1`, server state и `allowedActions`.
-- Все открытые настройки находятся только в `config/platform.yaml`; secrets — только в encrypted `secrets/platform.secrets.sops.yaml` и runtime-scoped tmpfs materialization.
-- Provider egress разрешён только `aroma-gateway`.
-- Unsafe AROMA mutation никогда не получает automatic retry.
+## Архитектурные ограничения
 
-## Effect-native authority
+- Ограниченный контекст владеет своими данными, миграциями, командами, событиями и восстановлением.
+- Межвладельческий SQL и общие изменяемые бизнес-сущности запрещены.
+- HTTP обслуживает немедленные операции; Kafka переносит долговечные асинхронные сообщения.
+- PostgreSQL остаётся источником бизнес-истины; Outbox/Inbox защищают эффекты доставки.
+- Публичные, agent, internal, webhook, realtime и provider trust surfaces разделены явно.
+- AROMA Gateway владеет только транспортом провайдера; Orders владеет convergence корзины.
+- React использует `client-v1`, серверные состояния и `allowedActions`.
+- Новая технология добавляется только ради названной гарантии, измеренного ограничения или требования провайдера.
+- Все несекретные настройки читаются только из `config/platform.yaml`; все
+  секреты хранятся только в encrypted `secrets/platform.secrets.sops.yaml`.
+  Другие `.env`, service config и password files запрещены.
+- Runtime получает только свою scoped secret materialization в tmpfs; общий
+  secrets-файл может расшифровывать только trusted `config-bootstrap`.
 
-После принятия ADR-0023 любая новая effectful backend-реализация строится только на Effect.
+Работать локально в `/home/yurgusev/CoffeeOrderPlatform` и проверять изменения
+до коммита. GitHub push, создание/изменение issue и PR, deployment, мутации провайдера
+и production-данных требуют явного разрешения пользователя.
 
-- `Effect` — execution model; самостоятельные Promise-workflow в application/infrastructure запрещены.
-- `Context.Service` и owner-local `Layer` — DI/composition. Общий `PlatformLive` нескольких bounded contexts запрещён.
-- `NodeRuntime`, `Layer.launch`, `Scope` — process lifecycle.
-- Effect `Schema` + `HttpApi` — source HTTP contracts и runtime validation.
-- Effect `HttpRouter`/`HttpClient`/`Stream` — HTTP и streaming.
-- `@effect/sql-pg` + Coffee transaction policy — единственный SQL stack.
-- Effect `Clock`/`DateTime`/`Duration`/`TestClock` — time model.
-- Effect logs/spans/metrics + `@effect/opentelemetry` — observability.
-- Vitest + `@effect/vitest` — backend runtime/application tests.
-- `@effect/atom-react` + `AtomHttpApi` — frontend remote-state.
+Канонические revision roots неизменяемы и сохраняют исходный язык и контрольные
+суммы. Новые исполнимые решения оформляются на русском в обычных ADR,
+контрактах и документации сервисов, инфраструктуры или первого запуска.
 
-Запрещено создавать `platform-effect`, `coffee-effect`, `AppEffect` или другую обёртку над Effect.
+## Scope Guard: минимально достаточное изменение
 
-### Production boundaries
+Выполнять текущую задачу минимальным достаточным изменением.
 
-- `Effect.run*` разрешён только в process/browser runtime roots, tests и approved tooling.
-- `Effect.provide` и Layer composition разрешены только в `layer.ts`, `main.ts`, tests и узких platform Layer factories.
-- Application use case получает dependencies через requirements channel и не собирает их самостоятельно.
-- Effect `Ref`, `Queue`, `Cache`, `Fiber` и `Schedule` не являются durable storage.
-- RPC/Workflow/Persistence/EventLog/Cluster модули запрещены без отдельного ADR.
-- Safe GET retry и unsafe mutation no-retry являются разными capability policies.
-- Direct `pg`, Confluent client и browser transport доступны только соответствующим platform adapters.
+### До начала правок
 
-### Правило перехода #25–#32
+- Прочитать непосредственно относящиеся к задаче код, тесты и конфигурацию. Не
+  принимать решения по фрагментам поисковой выдачи или догадкам.
+- Если требование неоднозначно или исходное утверждение не подтверждено,
+  сначала устранить неоднозначность или проверить утверждение.
+- До правок сформулировать минимальный план из четырёх частей:
+  - **Результат (Outcome)** — точное запрошенное поведение;
+  - **Не входит (Non-goals)** — что задача не будет делать;
+  - **Файлы (Files)** — минимальный ожидаемый набор изменяемых файлов;
+  - **Доказательство (Proof)** — проверка, подтверждающая работоспособность.
+- Начать с одного пути реализации. Разделять работу только при наличии
+  действительно независимых частей.
 
-Существующий код PR #22 допускается только как закрытый legacy inventory до owning cutover. Новое использование старого стека запрещено.
+### Во время правок
 
-```text
-старый путь
-→ новый Effect-path и proofs в owning PR
-→ удаление старого пути в том же PR
-→ no feature flag / no fallback / no dual-run
-```
+- Сначала переиспользовать существующие код, helpers, patterns и test setup;
+  добавлять новые только при доказанной необходимости.
+- Исправлять первопричину ошибки, не наслаивать обходные патчи на неверное
+  исходное предположение.
+- Добавлять abstraction, adapter или config layer только при наличии второго
+  реального caller в этой задаче либо прямого требования.
+- Сохранять поведение вне запрошенного изменения.
+- Не проектировать редкие или будущие случаи, которых нет в требованиях.
+- Удалять заменённый путь. Сохранять старую и новую реализации одновременно
+  только при явном требовании совместимости.
 
-#4 и business issues не начинаются до merge #32 и решения `ДОПУСТИТЬ EFFECT FOUNDATION`.
+### Когда требуется пауза и подтверждение пользователя
 
-## Scope Guard
+Read-only исследование разрешено всегда. Если задача явно не дала такое
+разрешение, получить подтверждение пользователя до любого из действий:
 
-До правок сформулировать:
+- существенно расширить scope или изменить несвязанные файлы;
+- добавить dependency, framework, service или новую test infrastructure;
+- изменить public API, schema, storage format или wire format;
+- удалить или перезаписать пользовательские данные, отбросить uncommitted work,
+  переписать git history или удалить данные из хранилища;
+- оставить одновременно две реализации одного поведения.
 
-- **Результат** — точное поведение;
-- **Не входит** — что не делается;
-- **Файлы** — минимальный набор;
-- **Доказательство** — команды и observable result.
+### Тестирование
 
-Во время правок:
+- Запускать самый узкий существующий набор тестов, покрывающий изменённое
+  поведение.
+- Сначала расширять наиболее подходящий существующий test, а не создавать новый
+  test file.
+- Добавлять тест только когда изменяемое наблюдаемое пользователем поведение не
+  покрыто либо пользователь прямо запросил тест.
+- Каждый новый тест обязан защищать конкретный acceptance criterion или
+  regression risk.
+- Не увеличивать несвязанное покрытие и не вводить test infrastructure только
+  ради одной задачи.
+- Успешные тесты не являются основанием для дополнительных abstractions или
+  расширения scope.
 
-- переиспользовать существующие patterns;
-- исправлять первопричину;
-- не расширять capability/owner boundary;
-- не добавлять abstraction «на будущее»;
-- удалять заменённый путь;
-- не менять тест под реализацию, если тест выражает принятую authority;
-- не отмечать checklist раньше проверки.
+### Если план начинает расти
 
-Задача завершена только если acceptance выполнен, tests/evidence относятся к exact SHA, diff не содержит несвязанных изменений и отсутствуют debug/scratch/dead paths.
+Остановиться, если работа начинает добавлять слои «на будущее», цепочки
+workaround, несвязанную очистку или тесты поведения, которого нет в требованиях.
+Сформулировать меньший план и подтвердить новый scope с пользователем.
 
-## Операционные ограничения
+### Условия завершения
 
-Работать локально в `/home/yurgusev/CoffeeOrderPlatform`. GitHub push, issue/PR mutation, deployment, provider mutation и production data write выполняются только по явному разрешению пользователя.
+Задача завершена только когда одновременно выполнены все условия:
 
-Канонические revision roots неизменяемы. Новые решения оформляются русскоязычными ADR, executable contracts, tests и handoffs.
+- запрошенное поведение работает, acceptance criteria выполнены;
+- релевантные проверки прошли, точные команды и результаты сообщены;
+- каждый изменённый файл необходим, diff не содержит несвязанных изменений;
+- отсутствуют debug-код, backup-копии, мёртвые пути и scratch-файлы;
+- assumptions, limitations и непроверенное runtime-поведение указаны прямо.
