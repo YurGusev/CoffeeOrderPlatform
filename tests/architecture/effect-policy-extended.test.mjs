@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -6,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { checkEffectArchitecture } from "../../scripts/effect-architecture-policy.mjs";
+import { checkEffectLegacyInventory } from "../../scripts/check-effect-legacy-inventory.mjs";
 import { checkEffectToolchain } from "../../scripts/check-effect-toolchain.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -102,5 +104,82 @@ void test("RED EFFECT-TOOLCHAIN-DUPLICATE: second Effect core version is rejecte
     );
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+function runGit(root, args) {
+  const result = spawnSync("git", args, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  assert.equal(
+    result.status,
+    0,
+    `git ${args.join(" ")} failed:\n${result.stdout}\n${result.stderr}`,
+  );
+  return result.stdout.trim();
+}
+
+async function copyPath(root, path) {
+  const target = join(root, path);
+  await mkdir(dirname(target), { recursive: true });
+  await cp(join(REPO_ROOT, path), target, { recursive: true });
+}
+
+async function immutableLegacyRoot() {
+  const root = await mkdtemp(join(tmpdir(), "coffee-effect-legacy-immutable-"));
+  const inventoryPath = "config/effect-legacy-inventory.json";
+  const inventory = JSON.parse(await readFile(join(REPO_ROOT, inventoryPath), "utf8"));
+  const manifests = new Set(["package.json"]);
+  for (const entry of inventory.entries) {
+    for (const dependency of entry.dependencies) {
+      for (const manifest of dependency.manifests) manifests.add(manifest);
+    }
+  }
+
+  for (const path of [
+    inventoryPath,
+    "config/effect-legacy-inventory.schema.json",
+    ...manifests,
+    ...inventory.legacyProductionSourceFiles,
+  ]) {
+    await copyPath(root, path);
+  }
+
+  runGit(root, ["init"]);
+  runGit(root, ["config", "user.name", "Effect Policy Test"]);
+  runGit(root, ["config", "user.email", "effect-policy@example.invalid"]);
+  runGit(root, ["add", "."]);
+  runGit(root, ["commit", "-m", "legacy baseline"]);
+  const baselineCommit = runGit(root, ["rev-parse", "HEAD"]);
+
+  inventory.baselineCommit = baselineCommit;
+  await writeFile(
+    join(root, inventoryPath),
+    `${JSON.stringify(inventory, null, 2)}\n`,
+    "utf8",
+  );
+  runGit(root, ["add", inventoryPath]);
+  runGit(root, ["commit", "-m", "record legacy baseline"]);
+
+  return {
+    root,
+    sourcePath: inventory.legacyProductionSourceFiles[0],
+  };
+}
+
+void test("RED ARCH-EFFECT-LEGACY-GROWTH: registered legacy source is byte-for-byte immutable", async () => {
+  const fixture = await immutableLegacyRoot();
+  try {
+    await checkEffectLegacyInventory(fixture.root, { baseRef: "missing-base-ref" });
+    const source = join(fixture.root, fixture.sourcePath);
+    await writeFile(source, `${await readFile(source, "utf8")}\n// forbidden legacy edit\n`, "utf8");
+    await assert.rejects(
+      checkEffectLegacyInventory(fixture.root, { baseRef: "missing-base-ref" }),
+      /ARCH-EFFECT-LEGACY-GROWTH.*registered legacy source differs/s,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
   }
 });
