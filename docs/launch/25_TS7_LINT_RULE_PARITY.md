@@ -266,7 +266,6 @@ Promise/Temporal/in-memory protocol строки foundation:
 | `packages/platform-config/src/index.ts`, `packages/platform-runtime/src/index.ts`, `packages/platform-time/src/index.ts` | #51 |
 | `packages/platform-database/src/index.ts`, `packages/platform-migrations/src/index.ts` | #52 |
 | `packages/platform-idempotency/src/index.ts`, `packages/platform-inbox/src/index.ts`, `packages/platform-kafka-runtime/src/index.ts`, `packages/platform-outbox/src/index.ts` | #53 |
-| `packages/platform-testing/src/index.ts` | #49 |
 
 Каждая запись допускает только перечисленные исходные строки; новая usage в
 известном или неизвестном пути завершается `ARCH-EFFECT-*` с non-zero exit.

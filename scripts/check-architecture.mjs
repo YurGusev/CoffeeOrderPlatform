@@ -103,19 +103,6 @@ const TEMPORARY_LEGACY_INVENTORY = Object.freeze({
       ],
     },
   },
-  'packages/platform-testing/src/index.ts': {
-    owner: 'issue-49',
-    removalIssue: 'issue-49',
-    rules: {
-      'ARCH-EFFECT-PRIMARY': [
-        {line: 34, text: 'new Promise<Result>'},
-        {line: 45, text: 'export async function assertEventually'},
-        {line: 50, text: 'new Promise<void>'},
-        {line: 55, text: 'export async function assertRejectsCode'},
-        {line: 50, text: 'setTimeout(resolve, intervalMs)'},
-      ],
-    },
-  },
   'packages/platform-time/src/index.ts': {
     owner: 'issue-51',
     removalIssue: 'issue-51',

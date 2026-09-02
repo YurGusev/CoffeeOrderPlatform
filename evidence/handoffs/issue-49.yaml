@@ -19,7 +19,7 @@ outputs:
     sha256: e27c7d4460c18ee9d2966c063146b8758a9cf9a8d5be465e25a63dcc822536cf
     consumers: [50]
   - artifact: docs/launch/25_TS7_LINT_RULE_PARITY.md
-    sha256: 97bb660cf9b49ff65e6e096895071317e2258d83f6c8d268ccadefed74bcc6fc
+    sha256: e7c9b7b5aa2e5ce3187ed643fe6a65596e5a843b1cc5fb52e6153dd93697ec06
     consumers: [50]
   - artifact: package.json
     sha256: 13c33c796b9a2f7e42afa0e40272d8278b1e64e644a15c58262fbe89282fd154
@@ -30,8 +30,11 @@ outputs:
   - artifact: pnpm-workspace.yaml
     sha256: 834f8ebe8dc084e4b0e98c33740dd8128a65d7b975260c8ef6bf9a6032836b7b
     consumers: [50]
+  - artifact: packages/platform-testing/src/index.ts
+    sha256: 5325afe083b49553bb001f9c78f03f52bbaf6273d17fb50d48e8d0ce8d810db4
+    consumers: [50]
   - artifact: scripts/check-architecture.mjs
-    sha256: 6e2e55acb7b47a68f42e10fd033f3bc822469a1659304f906ef8a7830ddbb821
+    sha256: 57a4e5e10a6c25bc14543f5fe8f28ddc4eed7966c19d4fef13f904ae8e4e5f4e
     consumers: [50]
   - artifact: scripts/check-rule-parity.mjs
     sha256: a98f8132d8006550de91e39f5e282a79088db6b8fc01902e386bf327d18ffed9
@@ -181,7 +184,7 @@ verification:
     result: passed
 temporaryLegacy:
   allowNewUsage: false
-  entryCount: 10
+  entryCount: 9
   entries:
     - path: packages/platform-config/src/index.ts
       owner: issue-51
@@ -254,21 +257,6 @@ temporaryLegacy:
             text: "export async function startRuntime"
           - line: 327
             text: "export async function startConfiguredRuntime"
-    - path: packages/platform-testing/src/index.ts
-      owner: issue-49
-      removalIssue: issue-49
-      rules:
-        ARCH-EFFECT-PRIMARY:
-          - line: 34
-            text: "new Promise<Result>"
-          - line: 45
-            text: "export async function assertEventually"
-          - line: 50
-            text: "new Promise<void>"
-          - line: 55
-            text: "export async function assertRejectsCode"
-          - line: 50
-            text: "setTimeout(resolve, intervalMs)"
     - path: packages/platform-time/src/index.ts
       owner: issue-51
       removalIssue: issue-51
@@ -279,7 +267,7 @@ temporaryLegacy:
 limitations:
   - "Runtime entrypoints, HTTP server, config decoder, security and observability behavior are unchanged."
   - "Contract packages/artifacts, database migrations, Kafka adapters, browser adapters and business code remain outside #49."
-  - "Existing legacy production paths remain only in the finite inventory above and are owned by #49, #51, #52 or #53 for removal."
+  - "Existing legacy production paths remain only in the finite inventory above and are owned by #51, #52 or #53 for removal."
 protocolReference:
   handoffFormatAppliesStartingWithIssue: 48
   historicalHandoffsUnchanged: [2, 3, 19]
