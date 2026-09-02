@@ -7,6 +7,7 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "tsconfig*.json"
+      - "types/**"
       - "apps/**"
       - "packages/**"
       - "config/toolchain-versions*.json"
@@ -14,11 +15,12 @@ on:
       - "platform/runtime-foundation-decision*.json"
       - "scripts/check-effect-*.mjs"
       - "scripts/effect-architecture-policy.mjs"
-      - "scripts/check-architecture.mjs"
+      - "scripts/check-architecture*.mjs"
       - "scripts/check-rule-parity.mjs"
       - "scripts/check-toolchain-*.mjs"
       - "tests/architecture/**"
       - "tests/effect-policy/**"
+      - "tests/compose/rule-parity.test.mjs"
       - "docs/launch/25_TS7_LINT_RULE_PARITY.md"
       - ".github/workflows/effect-toolchain.yml"
   workflow_dispatch:
@@ -67,10 +69,16 @@ jobs:
       - name: Проверить архитектурные RED/GREEN правила
         run: |
           pnpm architecture:check
-          node --test tests/architecture/checks.test.mjs tests/architecture/effect-policy.test.mjs
+          node --test \
+            tests/architecture/checks.test.mjs \
+            tests/architecture/effect-policy.test.mjs \
+            tests/architecture/effect-policy-extended.test.mjs \
+            tests/architecture/effect-diagnostics.test.mjs
 
       - name: Проверить rule parity
-        run: pnpm rule-parity:check
+        run: |
+          pnpm rule-parity:check
+          node --test tests/compose/rule-parity.test.mjs
 
       - name: Проверить lint и единый TS7/Effect semantic lane
         run: |
