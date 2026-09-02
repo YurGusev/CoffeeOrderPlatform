@@ -98,6 +98,7 @@ const packageJson = {
     "@opentelemetry/sdk-trace-web": "2.10.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
     "@types/node": "26.4.0",
+    "@types/pg": "8.23.1",
     effect: "4.0.0-rc.112",
     pg: "8.23.0",
     react: "19.2.8",
