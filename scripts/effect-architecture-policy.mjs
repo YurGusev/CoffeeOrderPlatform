@@ -5,7 +5,12 @@ import { fileURLToPath } from "node:url";
 
 const POLICY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_FILE_RE = /\.(?:ts|tsx|mts|cts)$/;
-const IMPORT_RE = /\b(?:from\s*|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g;
+const MODULE_PATTERNS = Object.freeze([
+  /\bfrom\s*["']([^"']+)["']/g,
+  /\bimport\s*\(\s*["']([^"']+)["']/g,
+  /\brequire\s*\(\s*["']([^"']+)["']/g,
+  /\bimport\s*["']([^"']+)["']/g,
+]);
 
 const APPROVED_INTEROP_PREFIXES = Object.freeze([
   "packages/platform-runtime/src/interop/",
@@ -69,7 +74,12 @@ function packageRoot(moduleName) {
 }
 
 function importedModules(source) {
-  return [...source.matchAll(IMPORT_RE)].map((match) => match[1]);
+  const modules = new Set();
+  for (const pattern of MODULE_PATTERNS) {
+    pattern.lastIndex = 0;
+    for (const match of source.matchAll(pattern)) modules.add(match[1]);
+  }
+  return [...modules];
 }
 
 function matchesPrefix(moduleName, prefix) {
@@ -157,6 +167,16 @@ function checkProvideBoundary(label, source, legacy) {
   }
 }
 
+function checkScopedLayer(label, source, legacy) {
+  if (legacy || !/\bLayer\.effect\s*\(/m.test(source)) return;
+  if (/\b(?:Effect\.(?:addFinalizer|acquireRelease)|Scope\.Scope)\b/m.test(source)) {
+    fail(
+      "ARCH-EFFECT-SCOPED-LAYER",
+      `${label}: Layer.effect cannot own scoped/finalized resources; use Layer.scoped`,
+    );
+  }
+}
+
 function checkScopedFiber(label, source, legacy) {
   if (legacy) return;
   if (/\b(?:Effect\.)?forkDaemon\b|\bFiber\.unsafeFork\b/m.test(source)) {
@@ -213,6 +233,24 @@ function checkOwnerLayer(label, modules) {
   }
 }
 
+function checkDiagnosticWaivers(label, source) {
+  const directive = /@effect-diagnostics(?:-next-line)?\s+([A-Za-z][A-Za-z0-9]*)(?::[^\s*]+)?/g;
+  for (const match of source.matchAll(directive)) {
+    const rule = match[1];
+    const prefix = source.slice(Math.max(0, match.index - 800), match.index);
+    const lines = prefix.split(/\r?\n/).slice(-5).join("\n");
+    const waiver = new RegExp(
+      `@coffee-effect-waiver\\s+rule=${rule}\\s+owner=(?:#|issue-)[0-9]+\\s+removeAfter=[A-Za-z0-9._-]+\\s+reason=\\S.+`,
+    );
+    if (!waiver.test(lines)) {
+      fail(
+        "ARCH-EFFECT-DIAGNOSTIC-WAIVER",
+        `${label}: @effect-diagnostics ${rule} requires a nearby waiver with exact rule, owner, removeAfter and reason`,
+      );
+    }
+  }
+}
+
 async function legacySources(root) {
   const path = join(root, "config/effect-legacy-inventory.json");
   if (!existsSync(path)) return new Set();
@@ -251,12 +289,14 @@ export async function checkEffectArchitecture(root = POLICY_ROOT, options = {}) 
     checkPrimaryExecution(label, source, isLegacy);
     checkRunBoundary(label, source, isLegacy);
     checkProvideBoundary(label, source, isLegacy);
+    checkScopedLayer(label, source, isLegacy);
     checkScopedFiber(label, source, isLegacy);
     checkDurability(label, source, isLegacy);
     checkUnsafeRetry(label, source, isLegacy);
     checkSqlBoundary(label, modules, isLegacy);
     checkContractBoundary(label, modules, isLegacy);
     checkOwnerLayer(label, modules);
+    checkDiagnosticWaivers(label, source);
     checked += 1;
   }
 
