@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [develop]
     paths:
+      - "Dockerfile"
       - "package.json"
       - "pnpm-lock.yaml"
       - "tsconfig*.json"
@@ -14,10 +15,13 @@ on:
       - "config/effect-legacy-inventory*.json"
       - "platform/runtime-foundation-decision*.json"
       - "scripts/check-effect-*.mjs"
+      - "scripts/check-final-image-tooling.mjs"
       - "scripts/effect-architecture-policy.mjs"
       - "scripts/check-architecture*.mjs"
       - "scripts/check-rule-parity.mjs"
       - "scripts/check-toolchain-*.mjs"
+      - "scripts/verify-clean-clone.mjs"
+      - "tools/docker-build.mjs"
       - "tests/architecture/**"
       - "tests/effect-policy/**"
       - "tests/compose/rule-parity.test.mjs"
@@ -35,7 +39,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Получить exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,6 +93,9 @@ jobs:
       - name: Выполнить полный unit suite
         run: pnpm test
 
+      - name: Доказать воспроизводимость clean clone
+        run: pnpm clean-clone:check
+
       - name: Проверить формат diff
         shell: bash
         run: |
@@ -98,3 +105,40 @@ jobs:
           else
             git diff --check HEAD^...HEAD
           fi
+
+  final-image:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Получить exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Установить Node 26.8.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          check-latest: false
+
+      - name: Собрать representative runtime image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="coffee-platform-effect-tooling:${GITHUB_SHA}"
+          echo "COFFEE_RUNTIME_IMAGE=${image}" >> "$GITHUB_ENV"
+          node tools/docker-build.mjs \
+            --load \
+            --build-arg RUNTIME=edge-gateway \
+            --tag "${image}" \
+            .
+
+      - name: Проверить отсутствие build/test tooling без сети
+        run: node scripts/check-final-image-tooling.mjs --image "${COFFEE_RUNTIME_IMAGE}"
+
+      - name: Удалить локальный test image
+        if: always()
+        shell: bash
+        run: docker image rm --force "${COFFEE_RUNTIME_IMAGE}" >/dev/null 2>&1 || true
