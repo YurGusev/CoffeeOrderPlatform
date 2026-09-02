@@ -1,0 +1,37 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "ignoreEffectSuggestionsInTscExitCode": true,
+        "ignoreEffectWarningsInTscExitCode": false,
+        "ignoreEffectErrorsInTscExitCode": false,
+        "diagnosticSeverity": {
+          "floatingEffect": "error",
+          "floatingEffectInVitest": "error",
+          "missingEffectContext": "error",
+          "missingEffectError": "error",
+          "missingLayerContext": "error",
+          "promiseInEffectSuccess": "error",
+          "anyUnknownInErrorContext": "error",
+          "effectFnImplicitAny": "error",
+          "leakingRequirements": "error",
+          "multipleEffectProvide": "error",
+          "runEffectInsideEffect": "error",
+          "scopeInLayerEffect": "error",
+          "strictEffectProvide": "error",
+          "tryCatchInEffectGen": "error",
+          "unknownInEffectCatch": "error",
+          "globalErrorInEffectCatch": "error",
+          "globalErrorInEffectFailure": "error",
+          "abortControllerInEffect": "error",
+          "asyncFunction": "error",
+          "extendsNativeError": "error",
+          "duplicatePackage": "error",
+          "outdatedApi": "error"
+        }
+      }
+    ]
+  }
+}
