@@ -31,8 +31,14 @@ issues.
 | documents, media, ArtifactRef, scanning | `artifact-processing` |
 | Docker, Compose, images, deployment | `platform-delivery` |
 | failures, recovery, security, SLO | `reliability-verification` |
+| issue authoring, body/checklist, scope, boundaries, acceptance | `issue-authoring` |
+| issue checklist, handoff, commit/push, PR/merge, closure | `issue-delivery-closure` |
 
 При пересечении границ применять несколько владеющих навыков. Повторно проверять
 маршрут после исследования, перед правками, проверкой и отправкой. Остановиться,
 если неоднозначны владелец, доверие, writer данных, побочные эффекты или публичный
 контракт. Внешние записи требуют актуального явного разрешения.
+
+При создании или переписывании issue применять `issue-authoring` после owning
+skill. При завершении issue применять `issue-delivery-closure` после owning skill
+изменённой области; эти навыки не заменяют domain/runtime verification.

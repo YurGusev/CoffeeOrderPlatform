@@ -1,0 +1,4 @@
+interface:
+  display_name: "Закрытие delivery issue"
+  short_description: "Acceptance, handoff и безопасное закрытие issue"
+  default_prompt: "Используй $issue-delivery-closure, чтобы проверить готовность issue и корректно закрыть его через один PR в develop."
