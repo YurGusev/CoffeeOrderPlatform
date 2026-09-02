@@ -1,0 +1,141 @@
+{
+  "$schema": "./effect-legacy-inventory.schema.json",
+  "schemaVersion": 1,
+  "baselineCommit": "8ab79c83674e4e0543663a5ae995710d5814aae5",
+  "introducedBy": "#3/PR#22",
+  "ownerIssue": 26,
+  "finalRemovalTask": "3.8",
+  "allowNewUsage": false,
+  "entries": [
+    {
+      "id": "legacy-fastify-runtime",
+      "category": "http-runtime",
+      "removalTask": "3.4",
+      "dependencies": [
+        {
+          "name": "fastify",
+          "version": "5.12.1",
+          "manifests": ["packages/platform-runtime/package.json"]
+        },
+        {
+          "name": "@fastify/swagger",
+          "version": "9.8.1",
+          "manifests": ["package.json"]
+        }
+      ]
+    },
+    {
+      "id": "legacy-openapi-codegen",
+      "category": "contract-tooling",
+      "removalTask": "3.3",
+      "dependencies": [
+        {
+          "name": "@hey-api/openapi-ts",
+          "version": "0.99.0",
+          "manifests": ["package.json"]
+        }
+      ]
+    },
+    {
+      "id": "legacy-runtime-validation",
+      "category": "runtime-validation",
+      "removalTask": "3.4",
+      "dependencies": [
+        {
+          "name": "ajv",
+          "version": "8.20.0",
+          "manifests": ["package.json"]
+        }
+      ]
+    },
+    {
+      "id": "legacy-native-http",
+      "category": "http-client",
+      "removalTask": "3.4",
+      "dependencies": [
+        {
+          "name": "undici",
+          "version": "8.10.1",
+          "manifests": [
+            "packages/platform-http/package.json",
+            "packages/platform-runtime/package.json"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legacy-temporal-time",
+      "category": "time",
+      "removalTask": "3.4",
+      "dependencies": [
+        {
+          "name": "@js-temporal/polyfill",
+          "version": "0.5.1",
+          "manifests": [
+            "packages/platform-runtime/package.json",
+            "packages/platform-time/package.json"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legacy-opentelemetry-direct-api",
+      "category": "observability",
+      "removalTask": "3.4",
+      "dependencies": [
+        {
+          "name": "@opentelemetry/api",
+          "version": "1.9.1",
+          "manifests": ["package.json"]
+        }
+      ]
+    }
+  ],
+  "legacyProductionSourceFiles": [
+    "apps/edge-gateway/src/main.ts",
+    "apps/api-public/src/main.ts",
+    "apps/api-internal/src/main.ts",
+    "apps/web/src/main.ts",
+    "apps/customer-service/src/main.ts",
+    "apps/catalog-service/src/main.ts",
+    "apps/catalog-supplier-sync/src/main.ts",
+    "apps/catalog-activation-worker/src/main.ts",
+    "apps/pricing-service/src/main.ts",
+    "apps/orders-service/src/main.ts",
+    "apps/orders-aroma-preparation/src/main.ts",
+    "apps/aroma-observer/src/main.ts",
+    "apps/aroma-convergence/src/main.ts",
+    "apps/aroma-gateway/src/main.ts",
+    "apps/realtime-gateway/src/main.ts",
+    "packages/platform-config/src/index.ts",
+    "packages/platform-database/src/index.ts",
+    "packages/platform-http/src/index.ts",
+    "packages/platform-idempotency/src/index.ts",
+    "packages/platform-inbox/src/index.ts",
+    "packages/platform-kafka-runtime/src/index.ts",
+    "packages/platform-migrations/src/index.ts",
+    "packages/platform-observability/src/index.ts",
+    "packages/platform-outbox/src/index.ts",
+    "packages/platform-runtime/src/index.ts",
+    "packages/platform-security/src/index.ts",
+    "packages/platform-testing/src/index.ts",
+    "packages/platform-time/src/index.ts"
+  ],
+  "legacySourceMarkers": [
+    "startConfiguredRuntime",
+    "fastify",
+    "@js-temporal/polyfill",
+    "Temporal.",
+    "from \"undici\"",
+    "from 'undici'",
+    "globalThis.fetch",
+    "AbortController",
+    "AbortSignal.timeout",
+    "new Promise",
+    "Promise.all",
+    "Promise.race",
+    "async function",
+    "setTimeout(",
+    "setInterval("
+  ]
+}
