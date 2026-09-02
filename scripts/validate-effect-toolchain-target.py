@@ -47,7 +47,7 @@ def validate_root(root: Path) -> None:
     registry_schema = load(root / "config" / "toolchain-versions.schema.json")
     decision = load(root / "platform" / "runtime-foundation-decision.json")
 
-    require(registry.get("schemaVersion") == 2, "effect target registry: schemaVersion must be 2")
+    require(registry.get("schemaVersion") == 3, "effect target registry: schemaVersion must be 3")
     target = registry.get("effectTarget")
     require(isinstance(target, dict), "effect target registry: effectTarget object required")
     require(target.get("authorityRef") == decision.get("decisionRef"), "effect target registry: authorityRef differs from runtime decision")
@@ -62,8 +62,24 @@ def validate_root(root: Path) -> None:
     require(isinstance(required, list) and "effectTarget" in required, "effect target schema: effectTarget must be required")
     properties = registry_schema.get("properties")
     require(isinstance(properties, dict), "effect target schema: properties object required")
+    schema_version = properties.get("schemaVersion")
+    require(isinstance(schema_version, dict) and schema_version.get("const") == 3, "effect target schema: schemaVersion const must be 3")
     effect_schema = properties.get("effectTarget")
-    require(isinstance(effect_schema, dict) and effect_schema.get("const") == target, "effect target schema: companion const differs from registry")
+    require(isinstance(effect_schema, dict), "effect target schema: effectTarget schema object required")
+    require(effect_schema.get("type") == "object" and effect_schema.get("additionalProperties") is False, "effect target schema: effectTarget must be a closed object")
+    effect_properties = effect_schema.get("properties")
+    require(isinstance(effect_properties, dict), "effect target schema: effectTarget properties required")
+    require(effect_properties.get("authorityRef", {}).get("const") == target.get("authorityRef"), "effect target schema: authorityRef const differs from registry")
+    require(effect_properties.get("materializationOwner", {}).get("const") == target.get("materializationOwner"), "effect target schema: materializationOwner const differs from registry")
+    require(effect_properties.get("admissionOwner", {}).get("const") == target.get("admissionOwner"), "effect target schema: admissionOwner const differs from registry")
+    require(effect_properties.get("generatedOpenApi", {}).get("const") == target.get("generatedOpenApi"), "effect target schema: generatedOpenApi const differs from registry")
+    require(effect_properties.get("packages", {}).get("const") == target.get("packages"), "effect target schema: package BOM const differs from registry")
+    legacy_inventory = properties.get("temporaryLegacyInventory")
+    require(
+        isinstance(legacy_inventory, dict)
+        and legacy_inventory.get("const") == registry.get("temporaryLegacyInventory"),
+        "effect target schema: temporaryLegacyInventory const differs from registry",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
