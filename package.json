@@ -51,18 +51,5 @@
     "prettier": "3.9.6",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
-  },
-  "pnpm": {
-    "overrides": {
-      "effect": "4.0.0-rc.112",
-      "@effect/platform-node": "4.0.0-rc.112",
-      "@effect/platform-browser": "4.0.0-rc.112",
-      "@effect/sql-pg": "4.0.0-rc.112",
-      "@effect/opentelemetry": "4.0.0-rc.112",
-      "@effect/atom-react": "4.0.0-rc.112",
-      "@effect/vitest": "4.0.0-rc.112",
-      "@effect/tsgo": "0.39.0",
-      "pg-copy-streams": "7.0.0"
-    }
   }
 }
