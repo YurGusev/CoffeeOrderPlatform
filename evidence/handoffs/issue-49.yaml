@@ -1,5 +1,5 @@
 issue: 49
-baseCommit: 35605be487cd84b6dfab2c46fc7b0c34c579ac6d
+baseCommit: 6f1a8af790a3e6b08ba2b5e0c49ecb9278ce59c3
 inputs:
   - issue: 48
     acceptedMergeCommit: 35605be487cd84b6dfab2c46fc7b0c34c579ac6d
@@ -168,14 +168,15 @@ verification:
     summary: TypeScript 7 project-reference build passed
   - command: pnpm test
     result: passed
-    summary: Vitest 1/1 passed; legacy node:test 90 passed and 1 expected live PostgreSQL skip
-  - command: pnpm clean-clone:check
-    result: blocked
-    summary: checker refuses the intentionally dirty working tree; rerun after the scoped commit in a clean clone
+    summary: Vitest 1/1 passed; legacy node:test 91 total (passed=90, skipped=1 expected live PostgreSQL); status-label suite is absent from the accepted base
   - command: >-
-      docker run --rm --entrypoint node coffee-platform-runtime:issue49 -e 'const fs=require("node:fs"),path=require("node:path");const blocked=["typescript","@effect/tsgo","@effect/vitest","vitest","oxlint","oxlint-tsgolint","prettier","dependency-cruiser","@hey-api/openapi-ts"];const found=blocked.filter((n)=>fs.existsSync(path.join("/app/node_modules",n)));const bins=["tsc","effect-tsgo","vitest","oxlint","prettier","depcruise"].filter((n)=>fs.existsSync(path.join("/app/node_modules/.bin",n)));if(found.length||bins.length)process.exit(1);console.log(JSON.stringify({status:"passed",found,bins}))'
+      clean_dir=$(mktemp -d /tmp/coffee-platform-clean-XXXXXX); git worktree add --detach "$clean_dir" HEAD; (cd "$clean_dir" && pnpm clean-clone:check --offline --root "$clean_dir"); git worktree remove --force "$clean_dir"
     result: passed
-    summary: status=passed; all blocked packages and binaries absent from the runtime image
+    summary: offline frozen install passed with 248 packages; pnpm check and profile parity passed; checkout remained clean after verification
+  - command: >-
+      docker run --rm --entrypoint node coffee-platform-runtime:issue49 -e 'const fs=require("node:fs"); const path=require("node:path"); const forbiddenPackages=["typescript","@effect/tsgo","@effect/vitest","vitest","oxlint","oxlint-tsgolint","prettier","dependency-cruiser","@hey-api/openapi-ts","@hey-api/typescript"]; const bins=["tsc","effect-tsgo","vitest","oxlint","depcruise","prettier","openapi-ts"]; const missing=[...forbiddenPackages.map((p)=>path.join("/app/node_modules",p)), ...bins.map((p)=>path.join("/app/node_modules/.bin",p))].filter(fs.existsSync); if(missing.length) throw new Error(`forbidden runtime artifacts: ${missing.join(", ")}`); console.log(`runtime image probe: passed (no ${forbiddenPackages.length} forbidden packages or ${bins.length} forbidden bins)`);'
+    result: passed
+    summary: status=passed; found=[] and bins=[]; no 10 forbidden packages or 7 forbidden binaries in the runtime image
   - command: git diff --check
     result: passed
 temporaryLegacy:
@@ -279,7 +280,6 @@ limitations:
   - "Runtime entrypoints, HTTP server, config decoder, security and observability behavior are unchanged."
   - "Contract packages/artifacts, database migrations, Kafka adapters, browser adapters and business code remain outside #49."
   - "Existing legacy production paths remain only in the finite inventory above and are owned by #49, #51, #52 or #53 for removal."
-  - "pnpm clean-clone:check requires the final scoped commit and clean clone; it was not passable from this uncommitted working tree."
 protocolReference:
   handoffFormatAppliesStartingWithIssue: 48
   historicalHandoffsUnchanged: [2, 3, 19]
