@@ -1,0 +1,64 @@
+name: Сформировать lockfile Effect toolchain
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "config/toolchain-versions*.json"
+      - ".github/workflows/effect-toolchain-lockfile.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: effect-toolchain-lockfile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lockfile:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/26-effect-toolchain-guards'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Получить exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Установить Node 26.8.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          check-latest: false
+
+      - name: Установить exact pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.24.0
+          test "$(pnpm --version)" = "11.24.0"
+
+      - name: Сформировать lockfile без выполнения lifecycle scripts
+        run: pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile
+
+      - name: Проверить наличие новых Effect pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F "effect:" pnpm-lock.yaml >/dev/null
+          grep -F "@effect/tsgo:" pnpm-lock.yaml >/dev/null
+          grep -F "@effect/vitest:" pnpm-lock.yaml >/dev/null
+
+      - name: Опубликовать pnpm-lock.yaml
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: issue-26-pnpm-lock
+          path: pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
