@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MATRIX_PATH = "docs/launch/25_TS7_LINT_RULE_PARITY.md";
 const STATUSES = new Set(["COVERED", "PARTIAL", "GAP"]);
+const compareText = (left, right) => left.localeCompare(right);
 
 const EXPECTED_ROWS = Object.freeze([
   "JS-CORRECTNESS",
@@ -94,8 +95,8 @@ function extractMatrix(markdown) {
 }
 
 function exactSet(actual, expected, label) {
-  const actualSorted = [...actual].sort();
-  const expectedSorted = [...expected].sort();
+  const actualSorted = [...actual].sort(compareText);
+  const expectedSorted = [...expected].sort(compareText);
   if (JSON.stringify(actualSorted) !== JSON.stringify(expectedSorted)) {
     fail(
       "RULE-PARITY-INVENTORY",
