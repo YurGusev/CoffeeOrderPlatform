@@ -4,5 +4,23 @@ packages:
 ignoreScripts: true
 allowBuilds:
   '@confluentinc/kafka-javascript': true
+overrides:
+  effect: 4.0.0-rc.112
+  '@effect/platform-node': 4.0.0-rc.112
+  '@effect/platform-browser': 4.0.0-rc.112
+  '@effect/sql-pg': 4.0.0-rc.112
+  '@effect/opentelemetry': 4.0.0-rc.112
+  '@effect/atom-react': 4.0.0-rc.112
+  '@effect/vitest': 4.0.0-rc.112
+  '@effect/tsgo': 0.39.0
+  pg-copy-streams: 7.0.0
 minimumReleaseAgeExclude:
   - undici@8.10.1
+  - '@effect/tsgo@0.39.0'
+  - '@effect/tsgo-darwin-arm64@0.39.0'
+  - '@effect/tsgo-darwin-x64@0.39.0'
+  - '@effect/tsgo-linux-arm64@0.39.0'
+  - '@effect/tsgo-linux-arm@0.39.0'
+  - '@effect/tsgo-linux-x64@0.39.0'
+  - '@effect/tsgo-win32-arm64@0.39.0'
+  - '@effect/tsgo-win32-x64@0.39.0'
