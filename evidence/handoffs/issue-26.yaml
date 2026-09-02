@@ -1,0 +1,69 @@
+schemaVersion: 1
+issue: 26
+title: "[3.2] Материализовать Effect BOM, diagnostics и архитектурные запреты"
+state: implemented-awaiting-review
+operationalAuthority:
+  forge: github
+  repository: YurGusev/CoffeeOrderPlatform
+  baseBranch: develop
+  workingBranch: feature/26-effect-toolchain-guards
+  baseCommit: 8ab79c83674e4e0543663a5ae995710d5814aae5
+  implementationCommit: 4a0037f89081c092ea6000e685f7175c8a4b6f69
+inputs:
+  - issue: 25
+    pullRequest: 34
+    mergeCommit: 8ab79c83674e4e0543663a5ae995710d5814aae5
+outputs:
+  effectBom:
+    - package.json
+    - pnpm-workspace.yaml
+    - pnpm-lock.yaml
+    - config/toolchain-versions.json
+    - config/toolchain-versions.schema.json
+  semanticLane:
+    - tsconfig.effect.json
+    - scripts/check-effect-toolchain.mjs
+    - scripts/check-toolchain-profiles.mjs
+  legacyInventory:
+    - config/effect-legacy-inventory.json
+    - config/effect-legacy-inventory.schema.json
+    - scripts/check-effect-legacy-inventory.mjs
+  architecture:
+    - scripts/check-architecture.mjs
+    - scripts/check-architecture-core.mjs
+    - scripts/effect-architecture-policy.mjs
+  ruleParity:
+    - docs/launch/25_TS7_LINT_RULE_PARITY.md
+    - scripts/check-rule-parity.mjs
+  evidence:
+    - tests/architecture/effect-diagnostics.test.mjs
+    - tests/architecture/effect-policy.test.mjs
+    - tests/architecture/effect-policy-extended.test.mjs
+    - tests/architecture/fixtures/effect-diagnostics/manifest.json
+  workflow: .github/workflows/effect-toolchain.yml
+verification:
+  - command: GitHub Actions / Проверка Effect authority
+    result: passed
+    evidence: actions/runs/33615867746
+    commit: 4a0037f89081c092ea6000e685f7175c8a4b6f69
+  - command: GitHub Actions / Проверка Effect toolchain и архитектурных границ
+    result: passed
+    evidence: actions/runs/33615867835
+    commit: 4a0037f89081c092ea6000e685f7175c8a4b6f69
+  - command: GitHub Actions / Проверка совместимости Effect authority
+    result: passed
+    evidence: actions/runs/33615867751
+    commit: 4a0037f89081c092ea6000e685f7175c8a4b6f69
+preservedArchitecture:
+  deployableRuntimeCount: 15
+  logicalDatabaseCount: 5
+  providerEgressRuntime: aroma-gateway
+  convergenceOwner: orders
+  durableTruth: postgresql
+  eventTransport: kafka-committed-facts-and-wake-up
+  unsafeProviderMutationRetry: forbidden
+remaining:
+  - Remove temporary export/audit artifacts that are not part of issue 26 outputs.
+  - Complete review and merge pull request 44.
+  - Record accepted merge SHA after merge.
+  - Move issue 27 to status:ready only after accepted merge.
