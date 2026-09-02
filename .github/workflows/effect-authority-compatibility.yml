@@ -52,10 +52,33 @@ jobs:
       - name: Зафиксировать npm 11.19.0
         run: npm install --global --no-audit --no-fund npm@11.19.0
 
+      - name: Собрать канонический librdkafka 2.15.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update
+          sudo apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev
+          work="${RUNNER_TEMP}/librdkafka-2.15.0"
+          mkdir -p "$work"
+          cd "$work"
+          curl --fail --location --retry 3 --output librdkafka.tar.gz https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz
+          echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file librdkafka.tar.gz --strip-components=1
+          ./configure --prefix=/usr/local
+          make -j4
+          sudo make install
+          echo /usr/local/lib | sudo tee /etc/ld.so.conf.d/coffee-librdkafka.conf
+          sudo ldconfig
+          test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+          test -f /usr/local/lib/librdkafka.so
+
       - name: Выполнить Effect compatibility probes
         env:
           DATABASE_URL: postgresql://effect_probe:effect_probe_password@127.0.0.1:5432/effect_probe
           EFFECT_PROBE_EVIDENCE: ${{ runner.temp }}/effect-authority-probe-result.json
+          LIBRARY_PATH: /usr/local/lib
+          LD_LIBRARY_PATH: /usr/local/lib
+          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig
         run: node scripts/run-effect-authority-probes.mjs
 
       - name: Опубликовать сводку evidence

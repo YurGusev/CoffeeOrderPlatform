@@ -26,8 +26,7 @@ function execute(command, args, options = {}) {
     stdio: options.capture ? "pipe" : "inherit",
     timeout: options.timeout || 15 * 60 * 1000,
   });
-  const record = { command: [command, ...args], durationMs: Date.now() - started, status: result.status, signal: result.signal };
-  commands.push(record);
+  commands.push({ command: [command, ...args], durationMs: Date.now() - started, status: result.status, signal: result.signal });
   if (result.error || result.status !== 0) {
     throw new Error(`probe command failed: ${command} ${args.join(" ")}\n${result.stdout || ""}\n${result.stderr || ""}`);
   }
@@ -137,13 +136,29 @@ try {
 
   execute("npm", ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], { timeout: 20 * 60 * 1000 });
   const lockHash = await sha256(join(probeRoot, "package-lock.json"));
-  execute("npm", ["ci", "--no-audit", "--no-fund"], { timeout: 30 * 60 * 1000 });
+  execute("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], { timeout: 30 * 60 * 1000 });
+
+  const nativeDirectory = join(probeRoot, "node_modules", "@confluentinc", "kafka-javascript");
+  const nativeEnvironment = {
+    CKJS_LINKING: "dynamic",
+    BUILD_LIBRDKAFKA: "0",
+    JOBS: "4",
+    MAKEFLAGS: "-j4",
+    LIBRARY_PATH: "/usr/local/lib",
+    LD_LIBRARY_PATH: "/usr/local/lib",
+    PKG_CONFIG_PATH: "/usr/local/lib/pkgconfig"
+  };
+  execute(process.execPath, ["../../@mapbox/node-pre-gyp/bin/node-pre-gyp", "rebuild"], { cwd: nativeDirectory, env: nativeEnvironment, timeout: 20 * 60 * 1000 });
+  const addonPath = join(nativeDirectory, "build", "Release", "confluent-kafka-javascript.node");
+  const linked = execute("ldd", [addonPath], { capture: true, env: nativeEnvironment });
+  if (!linked.stdout.includes("/usr/local/lib/librdkafka.so.1")) throw new Error(`Confluent addon is not linked to pinned /usr/local librdkafka:\n${linked.stdout}`);
+
   execute(join(probeRoot, "node_modules", ".bin", "tsc"), ["-p", "tsconfig.json", "--pretty", "false"]);
   execute(join(probeRoot, "node_modules", ".bin", "effect-tsgo"), ["diagnostics", "--project", "tsconfig.json"], { timeout: 10 * 60 * 1000 });
-  execute(process.execPath, ["dist/probe.js"]);
-  execute(process.execPath, ["dist/db.js"], { env: { DATABASE_URL: process.env.DATABASE_URL || "" } });
+  execute(process.execPath, ["dist/probe.js"], { env: nativeEnvironment });
+  execute(process.execPath, ["dist/db.js"], { env: { ...nativeEnvironment, DATABASE_URL: process.env.DATABASE_URL || "" } });
 
-  const server = spawn(process.execPath, ["dist/server.js"], { cwd: probeRoot, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+  const server = spawn(process.execPath, ["dist/server.js"], { cwd: probeRoot, env: { ...process.env, ...nativeEnvironment }, stdio: ["ignore", "pipe", "pipe"] });
   let serverOutput = ""; server.stdout.on("data", (chunk) => { serverOutput += chunk.toString(); }); server.stderr.on("data", (chunk) => { serverOutput += chunk.toString(); });
   try { await waitForHttp("http://127.0.0.1:37999/health"); } catch (error) { server.kill("SIGKILL"); throw new Error(`${error.message}\n${serverOutput}`); }
   server.kill("SIGTERM");
@@ -155,7 +170,7 @@ try {
   for (const forbidden of ["@effect/platform-node", "@effect/sql-pg", "@confluentinc/kafka-javascript", "node:fs", "node:child_process"]) if (browserText.includes(forbidden)) throw new Error(`browser bundle contains forbidden Node/server import: ${forbidden}`);
 
   const npmVersion = execute("npm", ["--version"], { capture: true }).stdout.trim();
-  const result = { status: "passed", startedAt, finishedAt: new Date().toISOString(), node: process.version, npm: npmVersion, packageLockSha256: lockHash, commands, proofs: { typescript7: true, effectTsgo: true, httpApiNode26: true, openApi31Deterministic: true, jsonSchema202012Deterministic: true, postgres1711QueryAndStream: true, browserViteNoNodeImports: true, opentelemetryScopedLayer: true, effectAndConfluentLoadTogether: true } };
+  const result = { status: "passed", startedAt, finishedAt: new Date().toISOString(), node: process.version, npm: npmVersion, packageLockSha256: lockHash, commands, proofs: { typescript7: true, effectTsgo: true, httpApiNode26: true, openApi31Deterministic: true, jsonSchema202012Deterministic: true, postgres1711QueryAndStream: true, browserViteNoNodeImports: true, opentelemetryScopedLayer: true, effectAndConfluentLoadTogether: true, confluentUsesPinnedDynamicLibrdkafka: true } };
   await writeFile(evidencePath, `${JSON.stringify(result, null, 2)}\n`, "utf8"); console.log(JSON.stringify(result, null, 2));
 } catch (error) {
   const result = { status: "failed", startedAt, finishedAt: new Date().toISOString(), node: process.version, commands, error: error instanceof Error ? error.message : String(error) };
