@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/schemas/effect-contract-platform.v1.schema.json",
+  "title": "CoffeeOrderPlatform Effect contract platform authority v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "issue",
+    "authorityRef",
+    "predecessor",
+    "state",
+    "sourceAuthority",
+    "surfaceIsolation",
+    "legacyReplacement",
+    "preservedArchitecture",
+    "prohibitions"
+  ],
+  "properties": {
+    "$schema": { "const": "./effect-contract-platform.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "issue": { "const": 27 },
+    "authorityRef": { "const": "docs/adr/ADR-0023-effect-native-platform.md" },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "handoff", "baseBranch"],
+      "properties": {
+        "issue": { "const": 26 },
+        "handoff": { "const": "evidence/handoffs/issue-26.yaml" },
+        "baseBranch": { "const": "develop" }
+      }
+    },
+    "state": {
+      "enum": ["in-progress", "implemented-awaiting-review", "accepted"]
+    },
+    "sourceAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "contractRoot",
+        "surfaceRoots",
+        "runtimeDecoder",
+        "typedServerContract",
+        "typedClient",
+        "openApi",
+        "jsonSchema"
+      ],
+      "properties": {
+        "kind": { "const": "effect-schema-httpapi" },
+        "contractRoot": { "const": "packages/contracts/src" },
+        "surfaceRoots": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["client-v1", "internal-v1", "events"],
+          "properties": {
+            "client-v1": { "const": "packages/contracts/src/client-v1" },
+            "internal-v1": { "const": "packages/contracts/src/internal-v1" },
+            "events": { "const": "packages/contracts/src/events" }
+          }
+        },
+        "runtimeDecoder": { "const": "effect-schema" },
+        "typedServerContract": { "const": "effect-httpapi" },
+        "typedClient": { "const": "effect-httpapi-client" },
+        "openApi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "version"],
+          "properties": {
+            "role": { "const": "generated-artifact" },
+            "version": { "const": "3.1.0" }
+          }
+        },
+        "jsonSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "dialect"],
+          "properties": {
+            "role": { "const": "generated-artifact" },
+            "dialect": { "const": "https://json-schema.org/draft/2020-12/schema" }
+          }
+        }
+      }
+    },
+    "surfaceIsolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientAndInternalPhysicallySeparated",
+        "frontendInternalImportsAllowed",
+        "eventSchemasVersioned",
+        "sharedMutableBusinessDtosAllowed"
+      ],
+      "properties": {
+        "clientAndInternalPhysicallySeparated": { "const": true },
+        "frontendInternalImportsAllowed": { "const": false },
+        "eventSchemasVersioned": { "const": true },
+        "sharedMutableBusinessDtosAllowed": { "const": false }
+      }
+    },
+    "legacyReplacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inventory",
+        "ownerIssue",
+        "handwrittenOpenApiSourceAllowedAfterAcceptance",
+        "heyApiGenerationAllowedAfterAcceptance",
+        "duplicatedRuntimeDtoAllowedAfterAcceptance",
+        "ajvRuntimeMirrorAllowedAfterAcceptance"
+      ],
+      "properties": {
+        "inventory": { "const": "config/effect-legacy-inventory.json" },
+        "ownerIssue": { "const": 27 },
+        "handwrittenOpenApiSourceAllowedAfterAcceptance": { "const": false },
+        "heyApiGenerationAllowedAfterAcceptance": { "const": false },
+        "duplicatedRuntimeDtoAllowedAfterAcceptance": { "const": false },
+        "ajvRuntimeMirrorAllowedAfterAcceptance": { "const": false }
+      }
+    },
+    "preservedArchitecture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deployableRuntimeCount",
+        "logicalDatabaseCount",
+        "providerEgressRuntime",
+        "convergenceOwner",
+        "durableTruth",
+        "eventTransport"
+      ],
+      "properties": {
+        "deployableRuntimeCount": { "const": 15 },
+        "logicalDatabaseCount": { "const": 5 },
+        "providerEgressRuntime": { "const": "aroma-gateway" },
+        "convergenceOwner": { "const": "orders" },
+        "durableTruth": { "const": "postgresql" },
+        "eventTransport": { "const": "kafka-committed-facts-and-wake-up" }
+      }
+    },
+    "prohibitions": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "handwritten-openapi-source",
+          "hey-api-transport-authority",
+          "duplicated-contract-dto",
+          "frontend-internal-v1-import",
+          "client-internal-contract-collapse",
+          "unversioned-event-schema",
+          "eighth-launch-message-without-adr"
+        ]
+      }
+    }
+  }
+}
