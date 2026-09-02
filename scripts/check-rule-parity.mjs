@@ -19,7 +19,19 @@ const EXPECTED_IDS = [
   "TS7-BRAND-CAST",
   "BOUNDARIES",
   "ARCH-FORBIDDEN",
+  "ARCH-EFFECT-PRIMARY",
+  "ARCH-EFFECT-RUN-BOUNDARY",
+  "ARCH-EFFECT-PROVIDE-BOUNDARY",
+  "ARCH-EFFECT-MODULE-ALLOWLIST",
+  "ARCH-EFFECT-OWNER-LAYER",
+  "ARCH-EFFECT-DURABILITY",
+  "ARCH-EFFECT-UNSAFE-RETRY",
+  "ARCH-EFFECT-SCOPED-FIBER",
+  "ARCH-EFFECT-CONTRACT-AUTHORITY",
+  "ARCH-EFFECT-SQL-BOUNDARY",
+  "ARCH-EFFECT-PARSER",
 ];
+const EFFECT_ADMISSION = "ARCH-EFFECT-*";
 const STATUSES = new Set(["COVERED", "PARTIAL", "GAP"]);
 
 function fail(message) {
@@ -101,6 +113,7 @@ export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) 
   registryValue(registry, matrix.authority.tsgolintRef, "authority.tsgolintRef");
   assertExact(matrix.replacement, "ESLint", "replacement");
   assertExact(matrix.uncoveredPolicy, "block-replacement", "uncoveredPolicy");
+  assertExact(matrix.effectAdmission, EFFECT_ADMISSION, "effectAdmission");
   if (!Array.isArray(matrix.rows)) fail("rows must be an array");
   assertExact(
     matrix.rows.map((row) => row.id),
@@ -114,7 +127,12 @@ export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) 
     if (!row || typeof row !== "object") fail("each row must be an object");
     if (!STATUSES.has(row.status))
       fail((row.id ?? "unknown") + ": invalid status " + row.status);
-    if (admit && matrix.uncoveredPolicy === "block-replacement" && row.status !== "COVERED") {
+    if (
+      admit &&
+      matrix.uncoveredPolicy === "block-replacement" &&
+      row.id.startsWith("ARCH-EFFECT-") &&
+      row.status !== "COVERED"
+    ) {
       fail(row.id + ": status " + row.status + " blocks replacement");
     }
     if (row.uncoveredBlocksReplacement !== true) {
@@ -134,6 +152,8 @@ export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) 
   return {
     matrixPath: MATRIX_PATH,
     rows: matrix.rows.length,
+    effectRows: matrix.rows.filter((row) => row.id.startsWith("ARCH-EFFECT-")).length,
+    effectAdmission: matrix.effectAdmission,
     uncoveredPolicy: matrix.uncoveredPolicy,
   };
 }
@@ -146,9 +166,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const result = await checkRuleParity(root, { admit });
     console.log(
-      (admit ? "rule parity admission: OK (" : "rule parity check: OK (") +
+      (admit ? "rule parity Effect admission: OK (" : "rule parity check: OK (") +
         result.rows +
         " canonical rows; " +
+        result.effectRows +
+        " Effect rows; " +
         result.uncoveredPolicy +
         ")",
     );

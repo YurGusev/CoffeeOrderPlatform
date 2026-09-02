@@ -18,6 +18,7 @@ const EFFECT_PACKAGES = Object.freeze([
   "@effect/sql-pg", "@effect/opentelemetry", "@effect/atom-react",
   "@effect/vitest", "@effect/tsgo", "pg-copy-streams",
 ]);
+const EFFECT_OVERRIDE_PACKAGES = Object.freeze(EFFECT_PACKAGES.slice(0, 7));
 const SEMVER = /^[0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z.-]+)?$/;
 
 const REGISTRY_FIELDS = Object.freeze([
@@ -27,7 +28,11 @@ const REGISTRY_FIELDS = Object.freeze([
   "tanstackQuery", "vite", "vitest", "playwright", "openapi", "fastifySwagger",
   "heyApiOpenapiTs", "spectralCli", "ajv", "pino", "opentelemetryApi",
   "dependencyCruiser", "oxlint", "oxlintTsgolint", "prettier", "sops", "age",
-  "docker", "compose", "nodeImage", "kafkaImage",
+  "docker", "compose", "nodeImage", "kafkaImage", "scheduler",
+  "opentelemetrySemanticConventions", "opentelemetryResources",
+  "opentelemetrySdkMetrics", "opentelemetrySdkTraceBase",
+  "opentelemetrySdkTraceNode", "opentelemetryApiLogs",
+  "opentelemetrySdkLogs",
 ]);
 
 const ROOT_DEV_DEPENDENCIES = Object.freeze({
@@ -138,6 +143,17 @@ function checkDependencySpec(value, label) {
     );
 }
 
+function registryDependencyVersion(registry, name) {
+  const manifestKey = DEPENDENCY_TO_MANIFEST_KEY[name];
+  if (manifestKey) return registry[manifestKey];
+  if (
+    registry.effectTarget?.packages &&
+    Object.hasOwn(registry.effectTarget.packages, name)
+  )
+    return registry.effectTarget.packages[name];
+  return undefined;
+}
+
 function allDependencies(manifest) {
   return Object.entries({
     ...manifest.dependencies,
@@ -189,9 +205,11 @@ async function checkPackageManifests(root, registry) {
     }
     for (const [name, value] of allDependencies(manifest)) {
       checkDependencySpec(value, `${pathLabel}:${name}`);
-      const manifestKey = DEPENDENCY_TO_MANIFEST_KEY[name];
-      if (manifestKey)
-        exact(value, registry[manifestKey], `${pathLabel}:${name}`);
+      const expectedVersion = registryDependencyVersion(registry, name);
+      if (expectedVersion !== undefined)
+        exact(value, expectedVersion, `${pathLabel}:${name}`);
+      if (name === "redis")
+        fail("TOOLCHAIN-PEER", `${pathLabel}: redis must not be materialized`);
       if (name === "typescript") {
         typescriptManifestCount += 1;
         if (path !== join(root, "package.json"))
@@ -224,6 +242,13 @@ async function checkPackageManifests(root, registry) {
         exact(
           manifest.devDependencies?.[name],
           registry[registryKey],
+          `package.json.devDependencies.${name}`,
+        );
+      }
+      for (const name of ["effect", "@effect/tsgo", "@effect/vitest"]) {
+        exact(
+          manifest.devDependencies?.[name],
+          registryDependencyVersion(registry, name),
           `package.json.devDependencies.${name}`,
         );
       }
@@ -261,6 +286,56 @@ function lockSpecifier(block, name) {
   return match?.[1]?.trim();
 }
 
+function lockResolvedVersion(block, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = block.match(
+    new RegExp(
+      `(?:^|\\n)      ['"]?${escaped}['"]?:\\n(?:        [^\\n]+\\n)*        version: ([^\\n]+)`,
+      "m",
+    ),
+  );
+  return match?.[1]?.trim();
+}
+
+function parseOverrides(document) {
+  const lines = document.split("\n");
+  const start = lines.indexOf("overrides:");
+  if (start === -1) return null;
+  const result = new Map();
+  for (const line of lines.slice(start + 1)) {
+    if (line.trim() === "") continue;
+    if (!line.startsWith("  ")) break;
+    const match = line.match(/^  (?:'([^']+)'|"([^"]+)"|([^:]+)):\s*(\S+)\s*$/);
+    if (match) result.set(match[1] ?? match[2] ?? match[3], match[4]);
+  }
+  return result;
+}
+
+function checkOverrides(overrides, registry, source) {
+  if (
+    !overrides ||
+    overrides.size !== EFFECT_OVERRIDE_PACKAGES.length ||
+    EFFECT_OVERRIDE_PACKAGES.some((name) => !overrides.has(name))
+  )
+    fail("TOOLCHAIN-PEER", `${source} Effect override set changed`);
+  for (const name of EFFECT_OVERRIDE_PACKAGES)
+    exact(
+      overrides.get(name),
+      registry.effectTarget.packages[name],
+      `${source} override ${name}`,
+    );
+}
+
+async function checkWorkspaceOverrides(root, registry) {
+  const path = join(root, "pnpm-workspace.yaml");
+  if (!existsSync(path)) return;
+  checkOverrides(
+    parseOverrides(await readText(path, "TOOLCHAIN-PEER")),
+    registry,
+    "pnpm-workspace.yaml",
+  );
+}
+
 async function checkLockfile(root, manifest, registry) {
   const lockPath = join(root, "pnpm-lock.yaml");
   const lockfile = await readText(lockPath);
@@ -271,8 +346,8 @@ async function checkLockfile(root, manifest, registry) {
     const specifier = lockSpecifier(rootBlock, name);
     if (specifier === undefined)
       fail("TOOLCHAIN-LOCK", `root importer is missing ${name}`);
-    const registryKey = DEPENDENCY_TO_MANIFEST_KEY[name];
-    exact(specifier, registryKey ? registry[registryKey] : version, `pnpm-lock.yaml importer .:${name}`);
+    const expectedVersion = registryDependencyVersion(registry, name);
+    exact(specifier, expectedVersion ?? version, `pnpm-lock.yaml importer .:${name}`);
   }
 
   const workspaceManifests = [
@@ -290,8 +365,8 @@ async function checkLockfile(root, manifest, registry) {
           "TOOLCHAIN-LOCK",
           `pnpm-lock.yaml importer ${importer} is missing ${name}`,
         );
-      const registryKey = DEPENDENCY_TO_MANIFEST_KEY[name];
-      exact(specifier, registryKey ? registry[registryKey] : version, `pnpm-lock.yaml importer ${importer}:${name}`);
+      const expectedVersion = registryDependencyVersion(registry, name);
+      exact(specifier, expectedVersion ?? version, `pnpm-lock.yaml importer ${importer}:${name}`);
     }
   }
 
@@ -316,6 +391,39 @@ async function checkLockfile(root, manifest, registry) {
       "pnpm-lock.yaml contains a forbidden compiler lane",
     );
   }
+
+  checkOverrides(
+    parseOverrides(lockfile),
+    registry,
+    "pnpm-lock.yaml",
+  );
+
+  for (const name of EFFECT_PACKAGES) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const versions = new Set(
+      [...lockfile.matchAll(
+        new RegExp(`^  ['"]?${escaped}@([^'":()\\s]+)['"]?(?::|\\()`, "gm"),
+      )].map((match) => match[1]),
+    );
+    if (versions.size === 0) continue;
+    if (versions.size !== 1 || !versions.has(registry.effectTarget.packages[name]))
+      fail(
+        "TOOLCHAIN-LOCK",
+        `pnpm-lock.yaml ${name} versions must be exactly ${registry.effectTarget.packages[name]}, got ${[...versions].join(", ")}`,
+      );
+  }
+
+  const resolvedEffectVitest = lockResolvedVersion(rootBlock, "@effect/vitest");
+  if (
+    !resolvedEffectVitest?.includes(`effect@${registry.effectTarget.packages.effect}`) ||
+    !resolvedEffectVitest.includes(`vitest@${registry.vitest}`)
+  )
+    fail(
+      "TOOLCHAIN-PEER",
+      "pnpm-lock.yaml @effect/vitest must resolve direct effect and vitest peers",
+    );
+  if (/^  ['"]?redis@/m.test(lockfile))
+    fail("TOOLCHAIN-PEER", "pnpm-lock.yaml must not materialize redis");
 }
 
 async function checkManifest(root) {
@@ -568,12 +676,29 @@ async function checkFinalImages(root) {
   }
 }
 
+async function checkForbiddenNodeRedis(root) {
+  const sourcePaths = [
+    ...(await walk(join(root, "apps"))),
+    ...(await walk(join(root, "packages"))),
+  ].filter((path) => /\.(?:mjs|ts|tsx|js|jsx)$/.test(path));
+  for (const path of sourcePaths) {
+    const source = await readText(path, "TOOLCHAIN-PEER");
+    if (/\bNodeRedis\b/.test(source))
+      fail(
+        "TOOLCHAIN-PEER",
+        `${relative(root, path).replaceAll("\\", "/")}: NodeRedis import is forbidden`,
+      );
+  }
+}
+
 export async function checkToolchainVersions(root = REPO_ROOT) {
   const resolvedRoot = resolve(root);
   const registry = await checkManifest(resolvedRoot);
   await checkPackageManifests(resolvedRoot, registry);
+  await checkWorkspaceOverrides(resolvedRoot, registry);
   const packageJson = await readJson(join(resolvedRoot, "package.json"));
   await checkLockfile(resolvedRoot, packageJson, registry);
+  await checkForbiddenNodeRedis(resolvedRoot);
   exact(
     (
       await readText(join(resolvedRoot, ".node-version"), "TOOLCHAIN-PIN")
