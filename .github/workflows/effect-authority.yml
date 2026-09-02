@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - "platform/runtime-foundation-decision*.json"
+      - "config/toolchain-versions*.json"
       - "scripts/validate-effect-authority.py"
+      - "scripts/validate-effect-toolchain-target.py"
       - "scripts/validate-launch-authority.py"
       - "tests/authority/**"
       - "docs/adr/ADR-0023-effect-native-platform.md"
@@ -34,7 +36,9 @@ jobs:
           fetch-depth: 0
 
       - name: Проверить Effect-native machine authority
-        run: python3 scripts/validate-effect-authority.py
+        run: |
+          python3 scripts/validate-effect-authority.py
+          python3 scripts/validate-effect-toolchain-target.py
 
       - name: Выполнить positive/negative authority tests
         run: python3 -m unittest discover -s tests/authority -p 'test_*.py' -v
