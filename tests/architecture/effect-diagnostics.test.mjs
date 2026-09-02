@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -14,6 +14,7 @@ const MANIFEST = JSON.parse(
   readFileSync(resolve(FIXTURE_ROOT, "manifest.json"), "utf8"),
 );
 const FIXTURE_PROJECT = resolve(REPO_ROOT, MANIFEST.project);
+const compareText = (left, right) => left.localeCompare(right);
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -57,8 +58,8 @@ void test("Effect diagnostic evidence manifest covers all configured mandatory r
   ]);
 
   assert.deepEqual(
-    [...evidenced].sort(),
-    Object.keys(configured).sort(),
+    [...evidenced].sort(compareText),
+    Object.keys(configured).sort(compareText),
     "every mandatory configured diagnostic must have executable or explicitly justified v4 replacement evidence",
   );
 
