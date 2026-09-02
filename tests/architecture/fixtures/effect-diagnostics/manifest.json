@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "project": "tests/architecture/fixtures/effect-diagnostics/tsconfig.json",
+  "languageServiceDiagnostics": [
+    { "name": "floatingEffect", "fixture": "floating-effect.ts" },
+    { "name": "floatingEffectInVitest", "fixture": "vitest.ts" },
+    { "name": "missingEffectContext", "fixture": "missing-effect-context.ts" },
+    { "name": "missingEffectError", "fixture": "missing-effect-error.ts" },
+    { "name": "missingLayerContext", "fixture": "services.ts" },
+    { "name": "promiseInEffectSuccess", "fixture": "promise-in-success.ts" },
+    { "name": "anyUnknownInErrorContext", "fixture": "errors.ts" },
+    { "name": "effectFnImplicitAny", "fixture": "services.ts" },
+    { "name": "leakingRequirements", "fixture": "services.ts" },
+    { "name": "multipleEffectProvide", "fixture": "services.ts" },
+    { "name": "runEffectInsideEffect", "fixture": "control-flow.ts" },
+    { "name": "strictEffectProvide", "fixture": "services.ts" },
+    { "name": "tryCatchInEffectGen", "fixture": "control-flow.ts" },
+    { "name": "unknownInEffectCatch", "fixture": "errors.ts" },
+    { "name": "globalErrorInEffectCatch", "fixture": "errors.ts" },
+    { "name": "globalErrorInEffectFailure", "fixture": "errors.ts" },
+    { "name": "abortControllerInEffect", "fixture": "control-flow.ts" },
+    { "name": "asyncFunction", "fixture": "control-flow.ts" },
+    { "name": "extendsNativeError", "fixture": "errors.ts" },
+    { "name": "outdatedApi", "fixture": "control-flow.ts" }
+  ],
+  "projectLevelDiagnostics": [
+    {
+      "name": "duplicatePackage",
+      "evidence": "scripts/check-effect-toolchain.mjs:EFFECT-TOOLCHAIN-DUPLICATE"
+    }
+  ],
+  "effect4ArchitectureReplacements": [
+    {
+      "name": "scopeInLayerEffect",
+      "reason": "@effect/tsgo 0.39.0 documents this diagnostic for Effect v3 only",
+      "evidence": "scripts/effect-architecture-policy.mjs:ARCH-EFFECT-SCOPED-LAYER"
+    }
+  ]
+}
