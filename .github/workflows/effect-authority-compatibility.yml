@@ -26,7 +26,7 @@ jobs:
         image: postgres:17.11-bookworm
         env:
           POSTGRES_USER: effect_probe
-          POSTGRES_PASSWORD: effect_probe_password
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: effect_probe
         ports:
           - 5432:5432
@@ -74,7 +74,7 @@ jobs:
 
       - name: Выполнить Effect compatibility probes
         env:
-          DATABASE_URL: postgresql://effect_probe:effect_probe_password@127.0.0.1:5432/effect_probe
+          DATABASE_URL: postgresql://effect_probe@127.0.0.1:5432/effect_probe
           EFFECT_PROBE_EVIDENCE: ${{ runner.temp }}/effect-authority-probe-result.json
           LIBRARY_PATH: /usr/local/lib
           LD_LIBRARY_PATH: /usr/local/lib
