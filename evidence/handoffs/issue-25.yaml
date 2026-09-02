@@ -1,0 +1,52 @@
+schemaVersion: 1
+issue: 25
+title: "[3.1] Закрепить Effect-native authority и новую единую линию foundation"
+state: implemented-awaiting-review
+operationalAuthority:
+  forge: github
+  repository: YurGusev/CoffeeOrderPlatform
+  baseBranch: develop
+  workingBranch: docs/25-effect-native-authority
+  baseCommit: 91c6ed927029604c82a25b2208371a98c4b62237
+inputs:
+  - issue: 3
+    pullRequest: 22
+    mergeCommit: 91c6ed927029604c82a25b2208371a98c4b62237
+outputs:
+  adr: docs/adr/ADR-0023-effect-native-platform.md
+  machineAuthority: platform/runtime-foundation-decision.json
+  machineAuthoritySchema: platform/runtime-foundation-decision.schema.json
+  targetToolchainRegistry: config/toolchain-versions.json
+  effectFoundation: docs/launch/26_EFFECT_NATIVE_FOUNDATION.md
+  downstreamExecutionMap: docs/launch/27_EFFECT_DOWNSTREAM_EXECUTION_MAP.md
+  deliveryGraph: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+  agentRules: AGENTS.md
+  validators:
+    - scripts/validate-effect-authority.py
+    - scripts/validate-effect-toolchain-target.py
+  workflow: .github/workflows/effect-authority.yml
+  consumers: [26, 27, 28, 29, 30, 31, 32, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18]
+verification:
+  - command: python3 scripts/validate-effect-authority.py
+    result: passed
+  - command: python3 scripts/validate-effect-toolchain-target.py
+    result: passed
+  - command: python3 -m unittest discover -s tests/authority -p 'test_*.py' -v
+    result: passed
+  - command: git diff --check develop...HEAD
+    result: passed
+  - command: GitHub Actions / Проверка Effect authority
+    result: passed
+    evidence: actions/runs/33596066319
+preservedArchitecture:
+  deployableRuntimeCount: 15
+  logicalDatabaseCount: 5
+  providerEgressRuntime: aroma-gateway
+  convergenceOwner: orders
+  durableTruth: postgresql
+  eventTransport: kafka-committed-facts-and-wake-up
+  unsafeProviderMutationRetry: forbidden
+limitations:
+  - Effect packages and lockfile are materialized only by issue 26.
+  - Runtime/HTTP, SQL, Kafka and frontend cutovers remain owned by issues 28, 29, 30 and 31.
+  - Full executable compatibility and no-legacy admission remain owned by issue 32.
