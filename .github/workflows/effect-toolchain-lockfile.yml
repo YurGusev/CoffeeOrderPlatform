@@ -50,9 +50,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "effect:" pnpm-lock.yaml >/dev/null
-          grep -F "@effect/tsgo:" pnpm-lock.yaml >/dev/null
-          grep -F "@effect/vitest:" pnpm-lock.yaml >/dev/null
+          grep -F "effect" pnpm-lock.yaml >/dev/null
+          grep -F "@effect/tsgo" pnpm-lock.yaml >/dev/null
+          grep -F "@effect/vitest" pnpm-lock.yaml >/dev/null
+          grep -F "4.0.0-rc.112" pnpm-lock.yaml >/dev/null
+          grep -F "0.39.0" pnpm-lock.yaml >/dev/null
 
       - name: Опубликовать pnpm-lock.yaml
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
