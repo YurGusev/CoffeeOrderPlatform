@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Compare the authoritative TypeScript build in its canonical (parallel)
- * mode with the explicit --singleThreaded mode.
+ * Compare the authoritative TypeScript + Effect diagnostics build in its
+ * canonical (parallel) mode with the explicit --singleThreaded mode.
  *
  * Each profile is built in an independent temporary clean workspace. The
  * repository checkout, node_modules, dist and tsbuildinfo are never modified.
@@ -16,6 +16,7 @@ import {fileURLToPath} from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PROFILE_NAMES = Object.freeze({parallel: [], singleThreaded: ['--singleThreaded']});
+const EFFECT_TSGO_VERSION = '0.39.0';
 
 function fail(rule, message) {
   const error = new Error(`${rule} ${message}`);
@@ -46,12 +47,13 @@ async function copyCleanWorkspace(root) {
       return true;
     },
   });
-  // A frozen install is part of the profile, not a dependency on the caller's
-  // checkout. --ignore-scripts keeps a clean clone from executing package
-  // lifecycle hooks while preserving the lockfile-selected package graph.
   const install = run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'], workspace);
   if (install.status !== 0) {
     fail('TOOLCHAIN-PROFILE', `frozen install failed in temporary workspace:\n${install.stdout}\n${install.stderr}`.trim());
+  }
+  const patch = run('pnpm', ['exec', 'effect-tsgo', 'patch', '--typescript', '--no-oxlint'], workspace);
+  if (patch.status !== 0) {
+    fail('TOOLCHAIN-PROFILE', `Effect TS-Go ${EFFECT_TSGO_VERSION} patch failed in temporary workspace:\n${patch.stdout}\n${patch.stderr}`.trim());
   }
   return workspace;
 }
@@ -102,7 +104,7 @@ async function runProfile(root, name, args) {
     if (result.status !== 0) fail('TOOLCHAIN-PROFILE', `${name} compiler profile failed:\n${diagnostics}`.trim());
     const outputs = await snapshotOutputs(workspace);
     return {
-      command: `pnpm exec tsc -b --pretty false${args.length ? ` ${args.join(' ')}` : ''}`,
+      command: `pnpm exec effect-tsgo patch --typescript --no-oxlint && pnpm exec tsc -b --pretty false${args.length ? ` ${args.join(' ')}` : ''}`,
       exitCode: result.status,
       diagnostics,
       diagnosticsSha256: sha256(diagnostics),
@@ -142,12 +144,14 @@ export async function checkToolchainProfiles(root = REPO_ROOT) {
     fail('TOOLCHAIN-PROFILE-PARITY', `parallel and singleThreaded profiles differ: ${JSON.stringify(parity)}`);
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     authority: {
       node: '26.8.1',
       typescript: '7.0.2',
-      compiler: 'typescript@7.0.2',
+      effectTsgo: EFFECT_TSGO_VERSION,
+      compiler: 'typescript@7.0.2-patched-by-effect-tsgo@0.39.0',
       compilerLanes: 1,
+      effectDiagnostics: 'enabled',
     },
     profiles: Object.fromEntries(Object.entries(profiles).map(([name, profile]) => [name, {
       command: profile.command,
@@ -168,7 +172,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const {root, evidence} = parseArguments(process.argv.slice(2));
     const report = await checkToolchainProfiles(root);
     if (evidence) await writeFile(evidence, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-    console.log(`toolchain profiles: passed (parallel == singleThreaded, ${report.profiles.parallel.artifactCount} artifacts)`);
+    console.log(`toolchain profiles: passed (TS7 + Effect diagnostics parallel == singleThreaded, ${report.profiles.parallel.artifactCount} artifacts)`);
   } catch (error) {
     console.error(`toolchain profiles: FAIL: ${error.message}`);
     process.exitCode = 1;
