@@ -62,7 +62,7 @@ function issue(labels = ['type:platform', 'status:ready']) {
   return { labels: labels.map((name) => ({ name })) };
 }
 
-test('workflow has trusted events, least privileges and a pinned action', () => {
+void test('workflow has trusted events, least privileges and a pinned action', () => {
   assert.match(workflow, /^on:\n  create:\n  issues:/m);
   assert.match(workflow, /pull_request_target:/);
   assert.match(workflow, /pull_request_review:/);
@@ -72,7 +72,7 @@ test('workflow has trusted events, least privileges and a pinned action', () => 
   assert.ok(script.length > 1000);
 });
 
-test('branch creation starts work and preserves non-status labels', async () => {
+void test('branch creation starts work and preserves non-status labels', async () => {
   const result = await runScenario({
     eventName: 'create',
     payload: { ref: 'feature/23-status-label-automation', ref_type: 'branch' },
@@ -86,7 +86,7 @@ test('branch creation starts work and preserves non-status labels', async () => 
   }]);
 });
 
-test('an unrelated branch is ignored', async () => {
+void test('an unrelated branch is ignored', async () => {
   const result = await runScenario({
     eventName: 'create',
     payload: { ref: 'release/2026-09', ref_type: 'branch' },
@@ -96,7 +96,7 @@ test('an unrelated branch is ignored', async () => {
   assert.match(result.messages.info[0], /не соответствует формату/);
 });
 
-test('issue close and reopen select done and ready', async () => {
+void test('issue close and reopen select done and ready', async () => {
   for (const [action, expected] of [['closed', 'status:done'], ['reopened', 'status:ready']]) {
     const result = await runScenario({
       eventName: 'issues',
@@ -107,7 +107,7 @@ test('issue close and reopen select done and ready', async () => {
   }
 });
 
-test('PR branch and closing references update every related issue', async () => {
+void test('PR branch and closing references update every related issue', async () => {
   const result = await runScenario({
     eventName: 'pull_request_target',
     payload: {
@@ -123,7 +123,7 @@ test('PR branch and closing references update every related issue', async () => 
   ]);
 });
 
-test('draft, review decision and merge transitions are deterministic', async () => {
+void test('draft, review decision and merge transitions are deterministic', async () => {
   const scenarios = [
     ['pull_request_target', 'converted_to_draft', true, false, undefined, 'status:in-progress'],
     ['pull_request_review', 'submitted', false, false, 'APPROVED', 'status:testing'],
