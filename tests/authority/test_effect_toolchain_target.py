@@ -37,9 +37,18 @@ def candidate(registry: dict, schema: dict | None = None) -> Path:
     root = Path(tempfile.mkdtemp(prefix="effect-target-registry-"))
     (root / "config").mkdir()
     (root / "platform").mkdir()
-    (root / "config" / "toolchain-versions.json").write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (root / "config" / "toolchain-versions.schema.json").write_text(json.dumps(schema or document("config/toolchain-versions.schema.json"), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    shutil.copy2(ROOT / "platform" / "runtime-foundation-decision.json", root / "platform" / "runtime-foundation-decision.json")
+    (root / "config" / "toolchain-versions.json").write_text(
+        json.dumps(registry, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (root / "config" / "toolchain-versions.schema.json").write_text(
+        json.dumps(schema or document("config/toolchain-versions.schema.json"), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    shutil.copy2(
+        ROOT / "platform" / "runtime-foundation-decision.json",
+        root / "platform" / "runtime-foundation-decision.json",
+    )
     return root
 
 
@@ -57,13 +66,34 @@ class EffectToolchainTargetTests(unittest.TestCase):
         finally:
             shutil.rmtree(root)
 
+    def test_schema_version_drift_is_rejected(self) -> None:
+        registry = deepcopy(document("config/toolchain-versions.json"))
+        registry["schemaVersion"] = 2
+        root = candidate(registry)
+        try:
+            with self.assertRaisesRegex(VALIDATOR.TargetError, "schemaVersion must be 3"):
+                VALIDATOR.validate_root(root)
+        finally:
+            shutil.rmtree(root)
+
     def test_schema_drift_is_rejected(self) -> None:
         registry = document("config/toolchain-versions.json")
         schema = deepcopy(document("config/toolchain-versions.schema.json"))
-        schema["properties"]["effectTarget"]["const"]["generatedOpenApi"] = "3.2.0"
+        schema["properties"]["effectTarget"]["properties"]["generatedOpenApi"]["const"] = "3.2.0"
         root = candidate(registry, schema)
         try:
-            with self.assertRaisesRegex(VALIDATOR.TargetError, "companion const differs"):
+            with self.assertRaisesRegex(VALIDATOR.TargetError, "generatedOpenApi const differs"):
+                VALIDATOR.validate_root(root)
+        finally:
+            shutil.rmtree(root)
+
+    def test_temporary_legacy_inventory_schema_drift_is_rejected(self) -> None:
+        registry = document("config/toolchain-versions.json")
+        schema = deepcopy(document("config/toolchain-versions.schema.json"))
+        schema["properties"]["temporaryLegacyInventory"]["const"] = "config/other-inventory.json"
+        root = candidate(registry, schema)
+        try:
+            with self.assertRaisesRegex(VALIDATOR.TargetError, "temporaryLegacyInventory const differs"):
                 VALIDATOR.validate_root(root)
         finally:
             shutil.rmtree(root)
