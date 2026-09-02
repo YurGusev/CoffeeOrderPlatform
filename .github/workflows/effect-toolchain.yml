@@ -1,0 +1,92 @@
+name: Проверка Effect toolchain и архитектурных границ
+
+on:
+  pull_request:
+    branches: [develop]
+    paths:
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "tsconfig*.json"
+      - "apps/**"
+      - "packages/**"
+      - "config/toolchain-versions*.json"
+      - "config/effect-legacy-inventory*.json"
+      - "platform/runtime-foundation-decision*.json"
+      - "scripts/check-effect-*.mjs"
+      - "scripts/effect-architecture-policy.mjs"
+      - "scripts/check-architecture.mjs"
+      - "scripts/check-rule-parity.mjs"
+      - "scripts/check-toolchain-*.mjs"
+      - "tests/architecture/**"
+      - "tests/effect-policy/**"
+      - "docs/launch/25_TS7_LINT_RULE_PARITY.md"
+      - ".github/workflows/effect-toolchain.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: effect-toolchain-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Получить exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Установить Node 26.8.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          check-latest: false
+
+      - name: Установить exact pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack install --global pnpm@11.24.0
+          test "$(pnpm --version)" = "11.24.0"
+
+      - name: Установить frozen dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Проверить machine authority и BOM
+        run: |
+          pnpm authority:check
+          pnpm versions:check
+          pnpm effect:legacy:check
+
+      - name: Проверить архитектурные RED/GREEN правила
+        run: |
+          pnpm architecture:check
+          node --test tests/architecture/checks.test.mjs tests/architecture/effect-policy.test.mjs
+
+      - name: Проверить rule parity
+        run: pnpm rule-parity:check
+
+      - name: Проверить lint и единый TS7/Effect semantic lane
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm profile:check
+
+      - name: Выполнить полный unit suite
+        run: pnpm test
+
+      - name: Проверить формат diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}"...HEAD
+          else
+            git diff --check HEAD^...HEAD
+          fi
