@@ -1,0 +1,182 @@
+{
+  "$schema": "./database-role-map.schema.json",
+  "schemaVersion": 1,
+  "authorityRef": "docs/launch/05_DATA_OWNERSHIP.md",
+  "databases": [
+    {
+      "name": "coffee_platform_customer",
+      "schema": "customer",
+      "migratorRole": "coffee_customer_migrator",
+      "runtimeRoles": [
+        {
+          "runtime": "customer-service",
+          "role": "coffee_customer_rw",
+          "temporaryTables": true,
+          "tables": {
+            "customers": ["SELECT", "INSERT", "UPDATE"],
+            "addresses": ["SELECT", "INSERT", "UPDATE"],
+            "channel_links": ["SELECT", "INSERT", "UPDATE"],
+            "idempotency_records": ["SELECT", "INSERT", "UPDATE"],
+            "audit_log": ["SELECT", "INSERT"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "coffee_platform_catalog",
+      "schema": "catalog",
+      "migratorRole": "coffee_catalog_migrator",
+      "runtimeRoles": [
+        {
+          "runtime": "catalog-service",
+          "role": "coffee_catalog_api_ro",
+          "temporaryTables": true,
+          "tables": {
+            "catalog_state": ["SELECT"],
+            "products": ["SELECT"],
+            "variants": ["SELECT"],
+            "offer_mappings": ["SELECT"],
+            "availability": ["SELECT"]
+          }
+        },
+        {
+          "runtime": "catalog-supplier-sync",
+          "role": "coffee_catalog_import_rw",
+          "temporaryTables": true,
+          "tables": {
+            "snapshot_generations": ["SELECT", "INSERT", "UPDATE"],
+            "snapshot_batches": ["SELECT", "INSERT", "UPDATE"],
+            "snapshot_products": ["SELECT", "INSERT", "UPDATE"],
+            "snapshot_variants": ["SELECT", "INSERT", "UPDATE"],
+            "snapshot_offers": ["SELECT", "INSERT", "UPDATE"],
+            "snapshot_availability": ["SELECT", "INSERT", "UPDATE"]
+          }
+        },
+        {
+          "runtime": "catalog-activation-worker",
+          "role": "coffee_catalog_activate_rw",
+          "temporaryTables": true,
+          "tables": {
+            "snapshot_generations": ["SELECT", "UPDATE"],
+            "snapshot_batches": ["SELECT"],
+            "snapshot_products": ["SELECT"],
+            "snapshot_variants": ["SELECT"],
+            "snapshot_offers": ["SELECT"],
+            "snapshot_availability": ["SELECT"],
+            "source_identities": ["SELECT", "INSERT", "UPDATE"],
+            "catalog_state": ["SELECT", "INSERT", "UPDATE"],
+            "products": ["SELECT", "INSERT", "UPDATE"],
+            "variants": ["SELECT", "INSERT", "UPDATE"],
+            "offer_mappings": ["SELECT", "INSERT", "UPDATE"],
+            "availability": ["SELECT", "INSERT", "UPDATE"],
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "coffee_platform_pricing",
+      "schema": "pricing",
+      "migratorRole": "coffee_pricing_migrator",
+      "runtimeRoles": [
+        {
+          "runtime": "pricing-service",
+          "role": "coffee_pricing_rw",
+          "temporaryTables": true,
+          "tables": {
+            "pricing_policy_versions": ["SELECT"],
+            "pricing_quotes": ["SELECT", "INSERT"],
+            "pricing_quote_lines": ["SELECT", "INSERT"],
+            "pricing_idempotency_records": ["SELECT", "INSERT", "UPDATE"],
+            "pricing_audit_records": ["SELECT", "INSERT"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "coffee_platform_orders",
+      "schema": "orders",
+      "migratorRole": "coffee_orders_migrator",
+      "runtimeRoles": [
+        {
+          "runtime": "orders-service",
+          "role": "coffee_orders_service_rw",
+          "temporaryTables": true,
+          "tables": {
+            "orders": ["SELECT", "INSERT", "UPDATE"],
+            "order_items": ["SELECT", "INSERT", "UPDATE", "DELETE"],
+            "order_history": ["SELECT", "INSERT"],
+            "order_desired_contributions": ["SELECT", "INSERT", "UPDATE"],
+            "order_desired_lines": ["SELECT", "INSERT", "UPDATE"],
+            "idempotency_records": ["SELECT", "INSERT", "UPDATE"],
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+          }
+        },
+        {
+          "runtime": "orders-aroma-preparation",
+          "role": "coffee_orders_prepare_rw",
+          "temporaryTables": true,
+          "tables": {
+            "orders": ["SELECT"],
+            "order_items": ["SELECT"],
+            "order_desired_contributions": ["SELECT"],
+            "catalog_mapping_projection": ["SELECT", "INSERT", "UPDATE"],
+            "cart_desired_revisions": ["SELECT", "INSERT", "UPDATE"],
+            "cart_desired_lines": ["SELECT", "INSERT", "UPDATE"],
+            "cart_desired_blockers": ["SELECT", "INSERT", "UPDATE"],
+            "inbox_messages": ["SELECT", "INSERT", "UPDATE"],
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+          }
+        },
+        {
+          "runtime": "aroma-observer",
+          "role": "coffee_orders_observer_rw",
+          "temporaryTables": true,
+          "tables": {
+            "cart_desired_revisions": ["SELECT"],
+            "cart_desired_lines": ["SELECT"],
+            "catalog_mapping_projection": ["SELECT"],
+            "cart_observed_revisions": ["SELECT", "INSERT", "UPDATE"],
+            "cart_observed_lines": ["SELECT", "INSERT", "UPDATE"],
+            "inbox_messages": ["SELECT", "INSERT", "UPDATE"],
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+          }
+        },
+        {
+          "runtime": "aroma-convergence",
+          "role": "coffee_orders_convergence_rw",
+          "temporaryTables": true,
+          "tables": {
+            "cart_desired_revisions": ["SELECT"],
+            "cart_desired_lines": ["SELECT"],
+            "cart_desired_blockers": ["SELECT"],
+            "catalog_mapping_projection": ["SELECT"],
+            "cart_observed_revisions": ["SELECT", "INSERT", "UPDATE"],
+            "cart_observed_lines": ["SELECT", "INSERT", "UPDATE"],
+            "convergence_attempts": ["SELECT", "INSERT", "UPDATE"],
+            "convergence_leases": ["SELECT", "INSERT", "UPDATE"],
+            "mutation_reservations": ["SELECT", "INSERT", "UPDATE"],
+            "inbox_messages": ["SELECT", "INSERT", "UPDATE"],
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "coffee_platform_integration",
+      "schema": "integration",
+      "migratorRole": "coffee_integration_migrator",
+      "runtimeRoles": [
+        {
+          "runtime": "aroma-gateway",
+          "role": "coffee_aroma_gateway_rw",
+          "temporaryTables": true,
+          "tables": {
+            "provider_sessions": ["SELECT", "INSERT", "UPDATE"],
+            "provider_mutation_journal": ["SELECT", "INSERT", "UPDATE"]
+          }
+        }
+      ]
+    }
+  ]
+}

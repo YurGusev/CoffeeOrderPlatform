@@ -27,7 +27,7 @@ function exactKeys(value, expected, label) {
   const actual = new Set(Object.keys(value));
   const missing = [...expected].filter((key) => !actual.has(key));
   const unknown = [...actual].filter((key) => !expected.has(key));
-  if (missing.length || unknown.length) fail('BOUND-CATALOG', `${label}: missing=[${missing}] unknown=[${unknown}]`);
+  if (missing.length || unknown.length) fail('BOUND-CATALOG', `${label}: missing=[${missing.join(',')}] unknown=[${unknown.join(',')}]`);
 }
 
 function uniqueMap(items, key, rule, label) {
@@ -77,8 +77,8 @@ export async function checkServiceCatalog(root = REPO_ROOT) {
     for (const packageRoot of runtime.contractPackages) {
       if (!/^packages\/contracts\/[a-z0-9-]+-v[0-9]+$/.test(packageRoot)) fail('BOUND-IMPORT', `${name}: unversioned or non-contract package ${packageRoot}`);
     }
-    const actualSecrets = [...runtime.secretRefs].sort();
-    const expectedSecrets = [...profileRuntime.secretRefs].sort();
+    const actualSecrets = [...runtime.secretRefs].sort((left, right) => left.localeCompare(right));
+    const expectedSecrets = [...profileRuntime.secretRefs].sort((left, right) => left.localeCompare(right));
     if (JSON.stringify(actualSecrets) !== JSON.stringify(expectedSecrets)) fail('BOUND-SECRET', `${name}: secretRefs differ from accepted #19 profile`);
     const claim = claimsByName.get(name);
     if (!claim) fail('BOUND-DB-CLAIM', `${name}: database claim missing`);

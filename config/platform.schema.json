@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffee-platform.invalid/schemas/platform.schema.json",
+  "title": "CoffeeOrderPlatform launch configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "environment", "toolchainRef", "platform", "postgres", "kafka", "aroma", "security", "services"],
+  "properties": {
+    "$schema": {"type": "string", "const": "./platform.schema.json"},
+    "schemaVersion": {"type": "integer", "const": 1},
+    "environment": {"type": "string", "enum": ["development", "staging", "production"]},
+    "toolchainRef": {"type": "string", "const": "config/toolchain-versions.json"},
+    "platform": {"$ref": "#/$defs/platform"},
+    "postgres": {"$ref": "#/$defs/postgres"},
+    "kafka": {"$ref": "#/$defs/kafka"},
+    "aroma": {"$ref": "#/$defs/aroma"},
+    "security": {"$ref": "#/$defs/security"},
+    "services": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge-gateway", "api-public", "api-internal", "web", "customer-service",
+        "catalog-service", "catalog-supplier-sync", "catalog-activation-worker",
+        "pricing-service", "orders-service", "orders-aroma-preparation",
+        "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
+      ],
+      "properties": {
+        "edge-gateway": {"$ref": "#/$defs/service"},
+        "api-public": {"$ref": "#/$defs/service"},
+        "api-internal": {"$ref": "#/$defs/service"},
+        "web": {"$ref": "#/$defs/service"},
+        "customer-service": {"$ref": "#/$defs/service"},
+        "catalog-service": {"$ref": "#/$defs/service"},
+        "catalog-supplier-sync": {"$ref": "#/$defs/service"},
+        "catalog-activation-worker": {"$ref": "#/$defs/service"},
+        "pricing-service": {"$ref": "#/$defs/service"},
+        "orders-service": {"$ref": "#/$defs/service"},
+        "orders-aroma-preparation": {"$ref": "#/$defs/service"},
+        "aroma-observer": {"$ref": "#/$defs/service"},
+        "aroma-convergence": {"$ref": "#/$defs/service"},
+        "aroma-gateway": {"$ref": "#/$defs/service"},
+        "realtime-gateway": {"$ref": "#/$defs/service"}
+      }
+    }
+  },
+  "$defs": {
+    "positiveInteger": {"type": "integer", "minimum": 1},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "stringArray": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["livePath", "readyPath", "metricsPath", "intervalMs", "timeoutMs", "startupGraceMs", "failureThreshold", "successThreshold"],
+      "properties": {
+        "livePath": {"type": "string", "const": "/health/live"},
+        "readyPath": {"type": "string", "const": "/health/ready"},
+        "metricsPath": {"type": "string", "const": "/metrics"},
+        "intervalMs": {"type": "integer", "const": 5000},
+        "timeoutMs": {"type": "integer", "const": 1000},
+        "startupGraceMs": {"type": "integer", "const": 30000},
+        "failureThreshold": {"type": "integer", "const": 3},
+        "successThreshold": {"type": "integer", "const": 1}
+      }
+    },
+    "dbPool": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["max", "checkoutTimeoutMs", "lockTimeoutMs", "interactiveStatementTimeoutMs", "backgroundStatementTimeoutMs", "idleTimeoutMs", "maxLifetimeMs"],
+      "properties": {
+        "max": {"type": "integer", "minimum": 0, "maximum": 64},
+        "checkoutTimeoutMs": {"type": "integer", "const": 250},
+        "lockTimeoutMs": {"type": "integer", "const": 250},
+        "interactiveStatementTimeoutMs": {"type": "integer", "const": 1500},
+        "backgroundStatementTimeoutMs": {"type": "integer", "const": 5000},
+        "idleTimeoutMs": {"type": "integer", "const": 30000},
+        "maxLifetimeMs": {"type": "integer", "const": 1800000}
+      }
+    },
+    "kafkaAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "topics", "groups"],
+      "properties": {
+        "mode": {"type": "string", "enum": ["none", "producer", "consumer", "consumer+producer"]},
+        "topics": {"$ref": "#/$defs/stringArray"},
+        "groups": {"$ref": "#/$defs/stringArray"}
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "net", "fsRead", "fsWrite", "childProcess", "workers"],
+      "properties": {
+        "manifest": {"type": "string", "pattern": "^config/permissions/[a-z0-9-]+\\.json$"},
+        "net": {"$ref": "#/$defs/stringArray"},
+        "fsRead": {"$ref": "#/$defs/stringArray"},
+        "fsWrite": {"$ref": "#/$defs/stringArray"},
+        "childProcess": {"type": "boolean", "const": false},
+        "workers": {"type": "boolean", "const": false}
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["listen", "health", "deadlineMs", "deadlineProfiles", "concurrency", "dbPool", "database", "kafka", "outbound", "secretRefs", "permissions", "mutationCapability"],
+      "properties": {
+        "listen": {
+          "type": "object", "additionalProperties": false, "required": ["host", "port"],
+          "properties": {"host": {"type": "string", "const": "0.0.0.0"}, "port": {"type": "integer", "minimum": 1, "maximum": 65535}}
+        },
+        "health": {"$ref": "#/$defs/health"},
+        "deadlineMs": {"type": ["integer", "null"], "minimum": 1},
+        "deadlineProfiles": {
+          "type": "object", "additionalProperties": false, "required": ["defaultMs"],
+          "properties": {
+            "defaultMs": {"type": ["integer", "null"], "minimum": 1},
+            "readMs": {"type": "integer", "minimum": 1},
+            "cartMs": {"type": "integer", "minimum": 1},
+            "mutationMs": {"type": "integer", "minimum": 1}
+          }
+        },
+        "concurrency": {"type": "integer", "minimum": 1},
+        "dbPool": {"$ref": "#/$defs/dbPool"},
+        "database": {"type": ["string", "null"], "pattern": "^[a-z][a-z0-9_]+$"},
+        "kafka": {"$ref": "#/$defs/kafkaAccess"},
+        "outbound": {"$ref": "#/$defs/stringArray"},
+        "secretRefs": {
+          "type": "array", "uniqueItems": true, "minItems": 0,
+          "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
+        },
+        "permissions": {"$ref": "#/$defs/permissions"},
+        "mutationCapability": {"type": "boolean"}
+      }
+    },
+    "platform": {
+      "type": "object", "additionalProperties": false,
+      "required": ["publicBaseUrl", "shutdownGraceMs", "requestDeadlineMs", "bodyLimitBytes", "health", "outbox"],
+      "properties": {
+        "publicBaseUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
+        "shutdownGraceMs": {"type": "integer", "const": 30000},
+        "requestDeadlineMs": {"type": "integer", "const": 5000},
+        "bodyLimitBytes": {"type": "integer", "const": 1048576},
+        "health": {"$ref": "#/$defs/health"},
+        "outbox": {
+          "type": "object", "additionalProperties": false,
+          "required": ["pollIntervalMs", "batchSize", "claimLeaseMs", "maxAttempts", "backoffMs", "publishedRetentionHours", "failedRetentionHours", "invalidSchemaAction"],
+          "properties": {
+            "pollIntervalMs": {"type": "integer", "const": 250},
+            "batchSize": {"type": "integer", "const": 100},
+            "claimLeaseMs": {"type": "integer", "const": 30000},
+            "maxAttempts": {"type": "integer", "const": 12},
+            "backoffMs": {"type": "array", "const": [1000, 5000, 30000, 60000]},
+            "publishedRetentionHours": {"type": "integer", "const": 168},
+            "failedRetentionHours": {"type": "integer", "const": 720},
+            "invalidSchemaAction": {"type": "string", "const": "quarantine"}
+          }
+        }
+      }
+    },
+    "postgres": {
+      "type": "object", "additionalProperties": false,
+      "required": ["host", "port", "sslMode", "maxConnections", "reservedConnections"],
+      "properties": {
+        "host": {"type": "string", "const": "coffee_postgres"},
+        "port": {"type": "integer", "const": 5432},
+        "sslMode": {"type": "string", "enum": ["prefer", "require", "verify-full"]},
+        "maxConnections": {"type": "integer", "minimum": 96},
+        "reservedConnections": {"type": "integer", "const": 32}
+      }
+    },
+    "kafka": {
+      "type": "object", "additionalProperties": false,
+      "required": ["brokers", "clientProtocol", "autoTopicCreation", "topics"],
+      "properties": {
+        "brokers": {"type": "array", "const": ["kafka:9092"]},
+        "clientProtocol": {"type": "string", "const": "SASL_SSL"},
+        "autoTopicCreation": {"type": "boolean", "const": false},
+        "topics": {
+          "type": "object", "additionalProperties": false,
+          "required": ["catalogSnapshot", "catalogMapping", "ordersLifecycle", "aromaCommands", "aromaEvents", "realtimeInvalidate"],
+          "properties": {
+            "catalogSnapshot": {"$ref": "#/$defs/topic"},
+            "catalogMapping": {"$ref": "#/$defs/topic"},
+            "ordersLifecycle": {"$ref": "#/$defs/topic"},
+            "aromaCommands": {"$ref": "#/$defs/topic"},
+            "aromaEvents": {"$ref": "#/$defs/topic"},
+            "realtimeInvalidate": {"$ref": "#/$defs/topic"}
+          }
+        }
+      }
+    },
+    "topic": {
+      "type": "object", "additionalProperties": false, "required": ["name", "partitions", "retentionHours", "dlq"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^coffee\\.[a-z.]+\\.v[0-9]+$"},
+        "partitions": {"type": "integer", "minimum": 1},
+        "retentionHours": {"type": "integer", "minimum": 1},
+        "dlq": {"type": "string", "pattern": "^coffee\\.[a-z.]+\\.v[0-9]+\\.dlq$"}
+      }
+    },
+    "aroma": {
+      "type": "object", "additionalProperties": false, "required": ["origin", "redirectsAllowed"],
+      "properties": {
+        "origin": {
+          "type": "object", "additionalProperties": false, "required": ["scheme", "host", "port"],
+          "properties": {"scheme": {"type": "string", "const": "https"}, "host": {"type": "string", "const": "aroma.origin.host"}, "port": {"type": "integer", "const": 443}}
+        },
+        "redirectsAllowed": {"type": "boolean", "const": false}
+      }
+    },
+    "security": {
+      "type": "object", "additionalProperties": false, "required": ["actorContext", "catalogCursor", "serviceTrustBundles", "delegation"],
+      "properties": {
+        "actorContext": {"$ref": "#/$defs/signingPolicy"},
+        "catalogCursor": {"$ref": "#/$defs/signingPolicy"},
+        "serviceTrustBundles": {
+          "type": "object", "additionalProperties": false, "required": ["activeKid", "previousKid", "overlapHours", "publicKeys"],
+          "properties": {
+            "activeKid": {"type": "string", "const": "transport-v1"},
+            "previousKid": {"type": "string", "const": "transport-v0"},
+            "overlapHours": {"type": "integer", "const": 12},
+            "publicKeys": {
+              "type": "object", "additionalProperties": false, "required": [
+                "edge-gateway", "api-public", "api-internal", "web", "customer-service", "catalog-service",
+                "catalog-supplier-sync", "catalog-activation-worker", "pricing-service", "orders-service",
+                "orders-aroma-preparation", "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
+              ],
+              "properties": {
+                "edge-gateway": {"$ref": "#/$defs/publicKeyPair"}, "api-public": {"$ref": "#/$defs/publicKeyPair"}, "api-internal": {"$ref": "#/$defs/publicKeyPair"}, "web": {"$ref": "#/$defs/publicKeyPair"}, "customer-service": {"$ref": "#/$defs/publicKeyPair"}, "catalog-service": {"$ref": "#/$defs/publicKeyPair"}, "catalog-supplier-sync": {"$ref": "#/$defs/publicKeyPair"}, "catalog-activation-worker": {"$ref": "#/$defs/publicKeyPair"}, "pricing-service": {"$ref": "#/$defs/publicKeyPair"}, "orders-service": {"$ref": "#/$defs/publicKeyPair"}, "orders-aroma-preparation": {"$ref": "#/$defs/publicKeyPair"}, "aroma-observer": {"$ref": "#/$defs/publicKeyPair"}, "aroma-convergence": {"$ref": "#/$defs/publicKeyPair"}, "aroma-gateway": {"$ref": "#/$defs/publicKeyPair"}, "realtime-gateway": {"$ref": "#/$defs/publicKeyPair"}
+              }
+            }
+          }
+        },
+        "delegation": {
+          "type": "object", "additionalProperties": false, "required": ["publicActor", "internalService"],
+          "properties": {
+            "publicActor": {"type": "object", "additionalProperties": false, "required": ["issuer", "audience", "maxTtlSeconds", "clockSkewSeconds"], "properties": {"issuer": {"type": "string", "const": "api-public"}, "audience": {"type": "string", "const": "owner-service"}, "maxTtlSeconds": {"type": "integer", "const": 60}, "clockSkewSeconds": {"type": "integer", "const": 5}}},
+            "internalService": {"type": "object", "additionalProperties": false, "required": ["issuer", "maxTtlRule", "gatewayMutationCaller"], "properties": {"issuer": {"type": "string", "const": "api-internal"}, "maxTtlRule": {"type": "string", "const": "remaining-request-deadline-plus-5s-skew"}, "gatewayMutationCaller": {"type": "string", "const": "aroma-convergence"}}}
+          }
+        }
+      }
+    },
+    "signingPolicy": {
+      "type": "object", "additionalProperties": false, "required": ["algorithm", "activeKid", "previousKid", "maxAgeSeconds", "clockSkewSeconds", "overlapSeconds", "verificationKeys"],
+      "properties": {
+        "algorithm": {"type": "string", "const": "Ed25519"},
+        "activeKid": {"type": "string", "minLength": 1},
+        "previousKid": {"type": "string", "minLength": 1},
+        "maxAgeSeconds": {"type": "integer", "minimum": 1},
+        "clockSkewSeconds": {"type": "integer", "minimum": 0},
+        "overlapSeconds": {"type": "integer", "minimum": 1},
+        "verificationKeys": {"type": "object", "additionalProperties": false, "minProperties": 2, "patternProperties": {"^[a-zA-Z0-9-]+$": {"type": "string", "minLength": 1}}}
+      }
+    },
+    "publicKeyPair": {
+      "type": "object", "additionalProperties": false, "required": ["active", "previous"],
+      "properties": {"active": {"type": "string", "minLength": 1}, "previous": {"type": "string", "minLength": 1}}
+    }
+  }
+}

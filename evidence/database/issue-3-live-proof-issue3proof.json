@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "runId": "issue3proof",
+  "image": "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73",
+  "serverVersion": "17.11",
+  "serverIdentitySha256": "db18fbcef406bd9e7aecb73d7ae4b0ab02878c725ef2aa963a09f9973bbb4ae9",
+  "bootstrap": {
+    "firstCreatedDatabaseCount": 5,
+    "secondExistingDatabaseCount": 5,
+    "idempotent": true
+  },
+  "roles": {
+    "migratorCount": 5,
+    "runtimeCount": 10,
+    "hardenedRoleCount": 15
+  },
+  "permissions": {
+    "ownWriteCount": 10,
+    "foreignSelectDeniedCount": 40,
+    "foreignInsertDeniedCount": 40
+  },
+  "legacy": {
+    "databases": ["coffeeorderdb", "coffeeorder_staging"],
+    "unchanged": true
+  },
+  "cleanup": {
+    "containerName": "coffee-issue3-db-proof-issue3proof",
+    "containerRemoved": true
+  }
+}

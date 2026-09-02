@@ -1,0 +1,12 @@
+{
+  "runtime": "permissioned",
+  "permissions": {
+    "net": [],
+    "fsRead": [],
+    "fsWrite": [],
+    "childProcess": false,
+    "worker": false,
+    "addon": false,
+    "ffi": false
+  }
+}

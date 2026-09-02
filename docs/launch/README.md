@@ -47,6 +47,7 @@ PR #15, принятия ADR-0019/ADR-0020, закрытия authority issue #19
 23. [AROMA Gateway: журнал mutation](22_AROMA_GATEWAY_OPERATION_JOURNAL.md)
 24. [Матрица конфигурации 15 runtime](23_RUNTIME_CONFIGURATION_MATRIX.md)
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
+26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 
 ## Сила канонических документов
 

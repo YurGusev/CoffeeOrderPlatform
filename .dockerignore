@@ -1,0 +1,15 @@
+.git
+.gitignore
+.dockerignore
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+**/*.tsbuildinfo
+coverage
+*.log
+evidence
+tests
+docs
+secrets

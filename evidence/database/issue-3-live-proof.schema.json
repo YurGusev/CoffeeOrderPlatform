@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/evidence/issue-3-live-proof.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "image",
+    "serverVersion",
+    "serverIdentitySha256",
+    "bootstrap",
+    "roles",
+    "permissions",
+    "legacy",
+    "cleanup"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{5,31}$" },
+    "image": {
+      "const": "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73"
+    },
+    "serverVersion": { "const": "17.11" },
+    "serverIdentitySha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "firstCreatedDatabaseCount",
+        "secondExistingDatabaseCount",
+        "idempotent"
+      ],
+      "properties": {
+        "firstCreatedDatabaseCount": { "const": 5 },
+        "secondExistingDatabaseCount": { "const": 5 },
+        "idempotent": { "const": true }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["migratorCount", "runtimeCount", "hardenedRoleCount"],
+      "properties": {
+        "migratorCount": { "const": 5 },
+        "runtimeCount": { "const": 10 },
+        "hardenedRoleCount": { "const": 15 }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownWriteCount",
+        "foreignSelectDeniedCount",
+        "foreignInsertDeniedCount"
+      ],
+      "properties": {
+        "ownWriteCount": { "const": 10 },
+        "foreignSelectDeniedCount": { "const": 40 },
+        "foreignInsertDeniedCount": { "const": 40 }
+      }
+    },
+    "legacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["databases", "unchanged"],
+      "properties": {
+        "databases": { "const": ["coffeeorderdb", "coffeeorder_staging"] },
+        "unchanged": { "const": true }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containerName", "containerRemoved"],
+      "properties": {
+        "containerName": {
+          "type": "string",
+          "pattern": "^coffee-issue3-db-proof-[a-z0-9][a-z0-9_-]{5,31}$"
+        },
+        "containerRemoved": { "const": true }
+      }
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "$schema": "./node26-compatibility-matrix.schema.json",
+  "schemaVersion": 1,
+  "authorityRef": "docs/launch/09_EXISTING_DATABASE_AND_VERSIONS.md",
+  "runtime": {
+    "node": "26.8.1",
+    "platform": "linux",
+    "architecture": "x64"
+  },
+  "components": [
+    {
+      "id": "fastify",
+      "package": "fastify",
+      "version": "5.12.1",
+      "kind": "runtime",
+      "probe": "fastify-factory",
+      "required": true,
+      "authoritative": true
+    },
+    {
+      "id": "pg",
+      "package": "pg",
+      "version": "8.23.0",
+      "kind": "runtime",
+      "probe": "pg-pool",
+      "required": true,
+      "authoritative": true
+    },
+    {
+      "id": "confluent-kafka",
+      "package": "@confluentinc/kafka-javascript",
+      "version": "1.10.0",
+      "kind": "runtime-native",
+      "probe": "confluent-kafka-native",
+      "required": true,
+      "authoritative": true
+    },
+    {
+      "id": "opentelemetry-api",
+      "package": "@opentelemetry/api",
+      "version": "1.9.1",
+      "kind": "runtime",
+      "probe": "opentelemetry-api",
+      "required": true,
+      "authoritative": true
+    },
+    {
+      "id": "fastify-swagger",
+      "package": "@fastify/swagger",
+      "version": "9.8.1",
+      "kind": "contract",
+      "probe": "fastify-swagger-plugin",
+      "required": true,
+      "authoritative": true,
+      "openapi": "3.2.0"
+    },
+    {
+      "id": "vitest",
+      "package": "vitest",
+      "version": "4.1.11",
+      "kind": "test",
+      "probe": "vitest-cli",
+      "required": true,
+      "authoritative": true
+    },
+    {
+      "id": "playwright",
+      "package": "playwright",
+      "version": "1.62.1",
+      "kind": "browser-test",
+      "probe": "playwright-module",
+      "required": true,
+      "authoritative": true
+    },
+    {
+      "id": "openapi-codegen",
+      "package": "@hey-api/openapi-ts",
+      "version": "0.99.0",
+      "kind": "candidate",
+      "probe": "openapi-codegen-cli",
+      "required": false,
+      "authoritative": false,
+      "openapi": "3.2.0",
+      "acceptedAfterIssue": 4
+    }
+  ],
+  "policy": {
+    "exactPackageVersions": true,
+    "nativeDependencyLoadRequired": true,
+    "singleCompiler": "typescript@7.0.2",
+    "candidateCodegen": {
+      "package": "@hey-api/openapi-ts",
+      "plugin": "@hey-api/typescript",
+      "openapi": "3.2.0",
+      "typesOnly": true,
+      "acceptedAfterIssue": 4,
+      "forbiddenOutputs": [
+        "sdk",
+        "client",
+        "hooks",
+        "zod",
+        "axios",
+        "interceptors",
+        "vite-integration"
+      ]
+    }
+  }
+}

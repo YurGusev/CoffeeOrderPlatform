@@ -14,7 +14,7 @@
       "items": { "enum": ["public-ingress", "public-api-backend", "internal-api", "provider-egress"] }
     },
     "dockerNetworks": {
-      "type": "array", "minItems": 7, "maxItems": 7,
+      "type": "array", "minItems": 8, "maxItems": 8,
       "items": { "$ref": "#/$defs/dockerNetwork" }
     },
     "forbiddenNetworks": { "const": ["coffee_network"] },
@@ -38,7 +38,7 @@
     },
     "networkName": {
       "enum": [
-        "coffee_public_ingress", "coffee_edge_backend", "coffee_public_api_backend",
+        "coffee_host_ingress", "coffee_public_ingress", "coffee_edge_backend", "coffee_public_api_backend",
         "coffee_internal_api", "coffee_postgres_data", "coffee_kafka_event",
         "coffee_provider_egress"
       ]
