@@ -80,7 +80,7 @@ RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0 \
 # compilation or the common typecheck when Compose materializes all 15 images.
 ARG RUNTIME=edge-gateway
 RUN pnpm --filter "@coffee-platform/${RUNTIME}" deploy --prod --legacy /runtime \
-  && pnpm --dir /runtime prune --prod --ignore-scripts \
+  && CI=true pnpm --dir /runtime prune --prod --ignore-scripts \
   && test ! -e /runtime/node_modules/dependency-cruiser \
   && test ! -e /runtime/node_modules/playwright \
   && test ! -e /runtime/node_modules/typescript \
