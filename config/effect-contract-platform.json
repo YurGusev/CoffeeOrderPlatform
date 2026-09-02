@@ -1,0 +1,63 @@
+{
+  "$schema": "./effect-contract-platform.schema.json",
+  "schemaVersion": 1,
+  "issue": 27,
+  "authorityRef": "docs/adr/ADR-0023-effect-native-platform.md",
+  "predecessor": {
+    "issue": 26,
+    "handoff": "evidence/handoffs/issue-26.yaml",
+    "baseBranch": "develop"
+  },
+  "state": "in-progress",
+  "sourceAuthority": {
+    "kind": "effect-schema-httpapi",
+    "contractRoot": "packages/contracts/src",
+    "surfaceRoots": {
+      "client-v1": "packages/contracts/src/client-v1",
+      "internal-v1": "packages/contracts/src/internal-v1",
+      "events": "packages/contracts/src/events"
+    },
+    "runtimeDecoder": "effect-schema",
+    "typedServerContract": "effect-httpapi",
+    "typedClient": "effect-httpapi-client",
+    "openApi": {
+      "role": "generated-artifact",
+      "version": "3.1.0"
+    },
+    "jsonSchema": {
+      "role": "generated-artifact",
+      "dialect": "https://json-schema.org/draft/2020-12/schema"
+    }
+  },
+  "surfaceIsolation": {
+    "clientAndInternalPhysicallySeparated": true,
+    "frontendInternalImportsAllowed": false,
+    "eventSchemasVersioned": true,
+    "sharedMutableBusinessDtosAllowed": false
+  },
+  "legacyReplacement": {
+    "inventory": "config/effect-legacy-inventory.json",
+    "ownerIssue": 27,
+    "handwrittenOpenApiSourceAllowedAfterAcceptance": false,
+    "heyApiGenerationAllowedAfterAcceptance": false,
+    "duplicatedRuntimeDtoAllowedAfterAcceptance": false,
+    "ajvRuntimeMirrorAllowedAfterAcceptance": false
+  },
+  "preservedArchitecture": {
+    "deployableRuntimeCount": 15,
+    "logicalDatabaseCount": 5,
+    "providerEgressRuntime": "aroma-gateway",
+    "convergenceOwner": "orders",
+    "durableTruth": "postgresql",
+    "eventTransport": "kafka-committed-facts-and-wake-up"
+  },
+  "prohibitions": [
+    "handwritten-openapi-source",
+    "hey-api-transport-authority",
+    "duplicated-contract-dto",
+    "frontend-internal-v1-import",
+    "client-internal-contract-collapse",
+    "unversioned-event-schema",
+    "eighth-launch-message-without-adr"
+  ]
+}
