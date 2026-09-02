@@ -1,8 +1,12 @@
 # Пакет первого запуска: React, backend и корзина AROMA
 
-Статус: **Effect-native authority migration**. Базовый Node/Compose foundation принят в issue #3 / PR #22. До реализации launch-контрактов и бизнес-сервисов обязательна линейка #25–#32; issue #4 разблокируется только после решения `ДОПУСТИТЬ EFFECT FOUNDATION` в #32.
+Статус: authority package; runtime-реализация начинается только после merge
+PR #15, принятия ADR-0019/ADR-0020, закрытия authority issue #19 и завершения
+#2–#4.
 
-Этот пакет превращает каноническую архитектуру в исполнимую линию. Он не описывает миграцию с CoffeeOrderSystem, не требует совместимости с C# и не разрешает перенос legacy `sendToAromaCart`.
+Этот пакет превращает каноническую архитектуру в короткий исполнимый план. Он
+не описывает миграцию с CoffeeOrderSystem, не требует совместимости с C# и не
+разрешает перенос legacy `sendToAromaCart`.
 
 ## Цель первой версии
 
@@ -12,7 +16,8 @@
 2. найти товар из сохранённого каталога AROMA;
 3. получить актуальную цену;
 4. создать и подтвердить заказ;
-5. наблюдать, как backend приводит физическую корзину AROMA к требуемому состоянию;
+5. наблюдать, как backend приводит физическую корзину AROMA к требуемому
+   состоянию;
 6. увидеть `InSync`, `Blocked` или `UnknownOutcome` без ручной повторной отправки.
 
 ## Состав пакета
@@ -43,24 +48,21 @@
 24. [Матрица конфигурации 15 runtime](23_RUNTIME_CONFIGURATION_MATRIX.md)
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
-27. [Effect-native foundation: единая техническая линия](26_EFFECT_NATIVE_FOUNDATION.md)
-28. [Карта перехода downstream-задач на Effect](27_EFFECT_DOWNSTREAM_EXECUTION_MAP.md)
-
-## Порядок силы документов
-
-Для технической реализации после PR #22 применяется следующий порядок:
-
-1. Machine authority `platform/runtime-foundation-decision.json` и service/DB/interaction manifests.
-2. [ADR-0023](../adr/ADR-0023-effect-native-platform.md).
-3. [Effect-native foundation](26_EFFECT_NATIVE_FOUNDATION.md).
-4. [Единый dependency graph](13_DELIVERY_DEPENDENCY_GRAPH.md).
-5. [Карта downstream-задач](27_EFFECT_DOWNSTREAM_EXECUTION_MAP.md).
-6. Owner-specific business specifications и issue acceptance criteria.
-
-Если старый launch-документ или открытая issue всё ещё упоминает Fastify, handwritten OpenAPI, Hey API, Temporal, Pino, TanStack Query, Promise-owned runtime либо direct `pg` как целевой путь, техническая формулировка считается заменённой ADR-0023 и картой перехода. Бизнес-инварианты, маршруты, ошибки, state machines, ownership, limits и failure semantics при этом сохраняются.
 
 ## Сила канонических документов
 
-Operational delivery authority определена [ADR-0021](../adr/ADR-0021-github-operational-authority.md): используется только GitHub `YurGusev/CoffeeOrderPlatform`; другой forge не входит в workflow.
+Operational delivery authority определена
+[ADR-0021](../adr/ADR-0021-github-operational-authority.md): используется только
+GitHub `YurGusev/CoffeeOrderPlatform`; другой forge не входит в workflow.
 
-Пакет является прикладной проекцией новой системы и не изменяет пять неизменяемых канонических revision roots. Бизнес-инварианты M06/M07/M11/M12 и contract/security guarantees M19/M20 сохраняются. Production Node и physical runtime topology определяет [ADR-0019](../adr/ADR-0019-greenfield-node26-and-service-topology.md). Wire-расхождения первого запуска закрывает [ADR-0020](../adr/ADR-0020-launch-contract-closure.md). TS7 toolchain определяет [ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md). Единственную Effect-native техническую платформу определяет [ADR-0023](../adr/ADR-0023-effect-native-platform.md).
+Пакет является прикладной проекцией новой системы и не изменяет пять
+неизменяемых канонических revision roots. Бизнес-инварианты M06/M07/M11/M12 и
+contract/security guarantees M19/M20 сохраняются. Production Node и physical
+runtime topology для отдельного greenfield-репозитория определяет
+[ADR-0019](../adr/ADR-0019-greenfield-node26-and-service-topology.md), явно
+superseding ADR-0018 только в перечисленной области. Wire-расхождения первого
+запуска закрывает [ADR-0020](../adr/ADR-0020-launch-contract-closure.md), не
+переиспользуя каноническое имя `CatalogMappingChanged.v1` для нового payload.
+Единственную TS7-native compiler/lint/codegen authority определяет
+[ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md); TS5/6 compatibility lane и
+второй compiler для этого greenfield launch запрещены.

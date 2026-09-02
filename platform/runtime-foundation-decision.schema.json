@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://coffeeorderplatform.local/schemas/runtime-foundation-decision.v2.schema.json",
-  "title": "CoffeeOrderPlatform Effect-native runtime foundation decision v2",
+  "$id": "https://coffeeorderplatform.local/schemas/runtime-foundation-decision.v1.schema.json",
+  "title": "CoffeeOrderPlatform runtime foundation decision v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -9,158 +9,96 @@
     "schemaVersion",
     "decisionId",
     "decisionRef",
-    "preserves",
     "runtime",
     "productionImage",
     "registryVerification",
     "toolchainDecision",
-    "effectPlatform",
-    "preservedArchitecture",
     "prohibitions",
-    "foundationMaterializationOwner",
-    "effectAuthorityOwner",
-    "effectMaterializationOwners"
+    "materializationOwner"
   ],
   "properties": {
     "$schema": { "const": "./runtime-foundation-decision.schema.json" },
-    "schemaVersion": { "const": 2 },
-    "decisionId": { "const": "ADR-COP-RUNTIME-002" },
-    "decisionRef": { "const": "docs/adr/ADR-0023-effect-native-platform.md" },
-    "preserves": {
-      "const": [
-        "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
-        "docs/adr/ADR-0020-launch-contract-closure.md",
-        "docs/adr/ADR-0021-github-operational-authority.md",
-        "docs/adr/ADR-0022-ts7-native-toolchain.md"
-      ]
+    "schemaVersion": { "const": 1 },
+    "decisionId": { "const": "ADR-COP-RUNTIME-001" },
+    "decisionRef": { "const": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md" },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "npm", "corepack", "packageManager"],
+      "properties": {
+        "node": { "const": "26.8.1" },
+        "npm": { "const": "11.19.0" },
+        "corepack": { "const": "0.35.0" },
+        "packageManager": { "const": "pnpm@11.24.0" }
+      }
     },
-    "runtime": { "const": { "node": "26.8.1", "npm": "11.19.0", "corepack": "0.35.0", "packageManager": "pnpm@11.24.0" } },
     "productionImage": {
-      "const": {
-        "repository": "docker.io/library/node",
-        "tag": "26.8.1-bookworm-slim",
-        "indexDigest": "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e",
-        "platform": "linux/amd64",
-        "platformManifestDigest": "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
-        "reference": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "indexDigest", "platform", "platformManifestDigest", "reference"],
+      "properties": {
+        "repository": { "const": "docker.io/library/node" },
+        "tag": { "const": "26.8.1-bookworm-slim" },
+        "indexDigest": { "const": "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e" },
+        "platform": { "const": "linux/amd64" },
+        "platformManifestDigest": { "const": "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae" },
+        "reference": { "const": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae" }
       }
     },
     "registryVerification": {
-      "const": {
-        "verifiedAt": "2026-09-01",
-        "command": "docker buildx imagetools inspect node:26.8.1-bookworm-slim",
-        "digestPolicy": "record-index-and-pin-target-platform-manifest"
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verifiedAt", "command", "digestPolicy"],
+      "properties": {
+        "verifiedAt": { "type": "string", "format": "date" },
+        "command": { "const": "docker buildx imagetools inspect node:26.8.1-bookworm-slim" },
+        "digestPolicy": { "const": "record-index-and-pin-target-platform-manifest" }
       }
     },
     "toolchainDecision": {
-      "const": {
-        "decisionId": "ADR-COP-TS7-NATIVE-001",
-        "decisionRef": "docs/adr/ADR-0022-ts7-native-toolchain.md",
-        "typescript": "typescript@7.0.2",
-        "structuralLinter": "oxlint@1.80.0",
-        "typeAwareLinter": "oxlint-tsgolint@7.0.2001",
-        "effectDiagnostics": "@effect/tsgo@0.39.0",
-        "compilerLanes": 1
-      }
-    },
-    "effectPlatform": {
-      "const": {
-        "authorityRef": "docs/adr/ADR-0023-effect-native-platform.md",
-        "status": "target-until-issue-32-admission",
-        "bom": {
-          "effect": "4.0.0-rc.112",
-          "@effect/platform-node": "4.0.0-rc.112",
-          "@effect/platform-browser": "4.0.0-rc.112",
-          "@effect/sql-pg": "4.0.0-rc.112",
-          "@effect/opentelemetry": "4.0.0-rc.112",
-          "@effect/atom-react": "4.0.0-rc.112",
-          "@effect/vitest": "4.0.0-rc.112",
-          "@effect/tsgo": "0.39.0",
-          "pg-copy-streams": "7.0.0"
-        },
-        "authorities": {
-          "execution": "effect",
-          "composition": "context-service-owner-local-layer",
-          "lifecycle": "node-runtime-layer-launch-scope",
-          "contracts": "effect-schema-httpapi",
-          "http": "effect-http-router-httpapi-httpclient",
-          "runtimeValidation": "effect-schema",
-          "sql": "effect-sql-pg-with-coffee-transaction-policy",
-          "time": "effect-clock-datetime-duration-testclock",
-          "observability": "effect-opentelemetry",
-          "frontendRemoteState": "effect-atom-httpapi",
-          "backendTests": "vitest-effect-vitest",
-          "durability": "postgresql-and-kafka"
-        },
-        "modulePolicy": {
-          "stablePackageRoot": "effect",
-          "unstableDefault": "deny",
-          "allowedUnstablePrefixes": [
-            "effect/unstable/http/",
-            "effect/unstable/httpapi/",
-            "effect/unstable/sql/",
-            "effect/unstable/encoding/",
-            "effect/unstable/reactivity/"
-          ],
-          "allowedOfficialPackages": [
-            "@effect/platform-node",
-            "@effect/platform-browser",
-            "@effect/sql-pg",
-            "@effect/opentelemetry",
-            "@effect/atom-react",
-            "@effect/vitest"
-          ],
-          "explicitlyForbiddenUnstablePrefixes": [
-            "effect/unstable/rpc/",
-            "effect/unstable/workflow/",
-            "effect/unstable/cluster/",
-            "effect/unstable/persistence/",
-            "effect/unstable/eventlog/",
-            "effect/unstable/ai/",
-            "effect/unstable/cli/",
-            "effect/unstable/workers/"
-          ]
-        },
-        "cutoverIssues": [25, 26, 27, 28, 29, 30, 31, 32],
-        "businessStartIssue": 4,
-        "upgradePolicy": "separate-platform-only-issue-no-business-changes"
-      }
-    },
-    "preservedArchitecture": {
-      "const": {
-        "deployableRuntimeCount": 15,
-        "boundedContexts": ["customer", "catalog", "pricing", "orders", "integration", "realtime"],
-        "logicalDatabaseCount": 5,
-        "providerEgressRuntime": "aroma-gateway",
-        "convergenceOwner": "orders",
-        "durableTruth": "postgresql",
-        "eventTransport": "kafka-committed-facts-and-wake-up",
-        "unsafeProviderMutationRetry": "forbidden"
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisionId",
+        "decisionRef",
+        "typescript",
+        "structuralLinter",
+        "typeAwareLinter",
+        "openApiGenerator",
+        "openApiGeneratorPlugin",
+        "generatorMode",
+        "compilerLanes"
+      ],
+      "properties": {
+        "decisionId": { "const": "ADR-COP-TS7-NATIVE-001" },
+        "decisionRef": { "const": "docs/adr/ADR-0022-ts7-native-toolchain.md" },
+        "typescript": { "const": "typescript@7.0.2" },
+        "structuralLinter": { "const": "oxlint@1.80.0" },
+        "typeAwareLinter": { "const": "oxlint-tsgolint@7.0.2001" },
+        "openApiGenerator": { "const": "@hey-api/openapi-ts@0.99.0" },
+        "openApiGeneratorPlugin": { "const": "@hey-api/typescript" },
+        "generatorMode": { "const": "types-only" },
+        "compilerLanes": { "const": 1 }
       }
     },
     "prohibitions": {
-      "const": [
-        "node-24",
-        "floating-image-tag",
-        "placeholder-digest",
-        "typescript-5-or-6",
-        "second-typescript-compiler",
-        "nightly-toolchain-pin",
-        "compiler-api",
-        "custom-transformer",
-        "dual-runtime-stack",
-        "shared-platform-live-across-owners",
-        "effect-wrapper-framework",
-        "effect-rpc",
-        "effect-workflow",
-        "effect-persistence",
-        "effect-eventlog",
-        "effect-cluster",
-        "unsafe-aroma-mutation-retry"
-      ]
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "node-24",
+          "floating-image-tag",
+          "placeholder-digest",
+          "typescript-5-or-6",
+          "second-typescript-compiler",
+          "nightly-toolchain-pin",
+          "compiler-api",
+          "custom-transformer"
+        ]
+      }
     },
-    "foundationMaterializationOwner": { "const": "issue-3" },
-    "effectAuthorityOwner": { "const": "issue-25" },
-    "effectMaterializationOwners": { "const": ["issue-26", "issue-27", "issue-28", "issue-29", "issue-30", "issue-31", "issue-32"] }
+    "materializationOwner": { "const": "issue-3" }
   }
 }

@@ -1,14 +1,8 @@
 {
   "$schema": "./runtime-foundation-decision.schema.json",
-  "schemaVersion": 2,
-  "decisionId": "ADR-COP-RUNTIME-002",
-  "decisionRef": "docs/adr/ADR-0023-effect-native-platform.md",
-  "preserves": [
-    "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
-    "docs/adr/ADR-0020-launch-contract-closure.md",
-    "docs/adr/ADR-0021-github-operational-authority.md",
-    "docs/adr/ADR-0022-ts7-native-toolchain.md"
-  ],
+  "schemaVersion": 1,
+  "decisionId": "ADR-COP-RUNTIME-001",
+  "decisionRef": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
   "runtime": {
     "node": "26.8.1",
     "npm": "11.19.0",
@@ -34,79 +28,10 @@
     "typescript": "typescript@7.0.2",
     "structuralLinter": "oxlint@1.80.0",
     "typeAwareLinter": "oxlint-tsgolint@7.0.2001",
-    "effectDiagnostics": "@effect/tsgo@0.39.0",
+    "openApiGenerator": "@hey-api/openapi-ts@0.99.0",
+    "openApiGeneratorPlugin": "@hey-api/typescript",
+    "generatorMode": "types-only",
     "compilerLanes": 1
-  },
-  "effectPlatform": {
-    "authorityRef": "docs/adr/ADR-0023-effect-native-platform.md",
-    "status": "target-until-issue-32-admission",
-    "bom": {
-      "effect": "4.0.0-rc.112",
-      "@effect/platform-node": "4.0.0-rc.112",
-      "@effect/platform-browser": "4.0.0-rc.112",
-      "@effect/sql-pg": "4.0.0-rc.112",
-      "@effect/opentelemetry": "4.0.0-rc.112",
-      "@effect/atom-react": "4.0.0-rc.112",
-      "@effect/vitest": "4.0.0-rc.112",
-      "@effect/tsgo": "0.39.0",
-      "pg-copy-streams": "7.0.0"
-    },
-    "authorities": {
-      "execution": "effect",
-      "composition": "context-service-owner-local-layer",
-      "lifecycle": "node-runtime-layer-launch-scope",
-      "contracts": "effect-schema-httpapi",
-      "http": "effect-http-router-httpapi-httpclient",
-      "runtimeValidation": "effect-schema",
-      "sql": "effect-sql-pg-with-coffee-transaction-policy",
-      "time": "effect-clock-datetime-duration-testclock",
-      "observability": "effect-opentelemetry",
-      "frontendRemoteState": "effect-atom-httpapi",
-      "backendTests": "vitest-effect-vitest",
-      "durability": "postgresql-and-kafka"
-    },
-    "modulePolicy": {
-      "stablePackageRoot": "effect",
-      "unstableDefault": "deny",
-      "allowedUnstablePrefixes": [
-        "effect/unstable/http/",
-        "effect/unstable/httpapi/",
-        "effect/unstable/sql/",
-        "effect/unstable/encoding/",
-        "effect/unstable/reactivity/"
-      ],
-      "allowedOfficialPackages": [
-        "@effect/platform-node",
-        "@effect/platform-browser",
-        "@effect/sql-pg",
-        "@effect/opentelemetry",
-        "@effect/atom-react",
-        "@effect/vitest"
-      ],
-      "explicitlyForbiddenUnstablePrefixes": [
-        "effect/unstable/rpc/",
-        "effect/unstable/workflow/",
-        "effect/unstable/cluster/",
-        "effect/unstable/persistence/",
-        "effect/unstable/eventlog/",
-        "effect/unstable/ai/",
-        "effect/unstable/cli/",
-        "effect/unstable/workers/"
-      ]
-    },
-    "cutoverIssues": [25, 26, 27, 28, 29, 30, 31, 32],
-    "businessStartIssue": 4,
-    "upgradePolicy": "separate-platform-only-issue-no-business-changes"
-  },
-  "preservedArchitecture": {
-    "deployableRuntimeCount": 15,
-    "boundedContexts": ["customer", "catalog", "pricing", "orders", "integration", "realtime"],
-    "logicalDatabaseCount": 5,
-    "providerEgressRuntime": "aroma-gateway",
-    "convergenceOwner": "orders",
-    "durableTruth": "postgresql",
-    "eventTransport": "kafka-committed-facts-and-wake-up",
-    "unsafeProviderMutationRetry": "forbidden"
   },
   "prohibitions": [
     "node-24",
@@ -116,18 +41,7 @@
     "second-typescript-compiler",
     "nightly-toolchain-pin",
     "compiler-api",
-    "custom-transformer",
-    "dual-runtime-stack",
-    "shared-platform-live-across-owners",
-    "effect-wrapper-framework",
-    "effect-rpc",
-    "effect-workflow",
-    "effect-persistence",
-    "effect-eventlog",
-    "effect-cluster",
-    "unsafe-aroma-mutation-retry"
+    "custom-transformer"
   ],
-  "foundationMaterializationOwner": "issue-3",
-  "effectAuthorityOwner": "issue-25",
-  "effectMaterializationOwners": ["issue-26", "issue-27", "issue-28", "issue-29", "issue-30", "issue-31", "issue-32"]
+  "materializationOwner": "issue-3"
 }
