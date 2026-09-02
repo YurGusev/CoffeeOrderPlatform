@@ -10,9 +10,29 @@ const FORBIDDEN_PACKAGE_PATHS = Object.freeze([
   "node_modules/oxlint",
   "node_modules/oxlint-tsgolint",
   "node_modules/playwright",
+  "node_modules/playwright-core",
   "node_modules/prettier",
   "node_modules/typescript",
+  "node_modules/vite",
   "node_modules/vitest",
+]);
+
+const FORBIDDEN_STORE_PREFIXES = Object.freeze([
+  "@effect+tsgo@",
+  "@effect+vitest@",
+  "@hey-api+openapi-ts@",
+  "@oxlint+",
+  "@playwright+",
+  "@typescript+typescript-",
+  "dependency-cruiser@",
+  "oxlint-tsgolint@",
+  "oxlint@",
+  "playwright-core@",
+  "playwright@",
+  "prettier@",
+  "typescript@",
+  "vite@",
+  "vitest@",
 ]);
 
 const FORBIDDEN_BINARIES = Object.freeze([
@@ -45,9 +65,10 @@ import { existsSync, lstatSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 
 const forbiddenPaths = ${JSON.stringify(FORBIDDEN_PACKAGE_PATHS)};
+const forbiddenStorePrefixes = ${JSON.stringify(FORBIDDEN_STORE_PREFIXES)};
 const forbiddenBinaries = new Set(${JSON.stringify(FORBIDDEN_BINARIES)});
 const roots = ["/app", "/usr/local/lib/node_modules"];
-const findings = [];
+const findings = new Set();
 
 function normalized(path) {
   return path.replaceAll("\\\\", "/").replace(/\/+$/, "");
@@ -63,10 +84,20 @@ function inspect(path) {
 
   const label = normalized(path);
   if (forbiddenPaths.some((suffix) => label.endsWith("/" + suffix))) {
-    findings.push(label);
+    findings.add(label);
   }
+
+  const virtualStoreMarker = "/node_modules/.pnpm/";
+  const virtualStoreIndex = label.indexOf(virtualStoreMarker);
+  if (virtualStoreIndex >= 0) {
+    const packageKey = label.slice(virtualStoreIndex + virtualStoreMarker.length).split("/")[0] ?? "";
+    if (forbiddenStorePrefixes.some((prefix) => packageKey.startsWith(prefix))) {
+      findings.add(label.slice(0, virtualStoreIndex + virtualStoreMarker.length) + packageKey);
+    }
+  }
+
   if (label.includes("/node_modules/.bin/") && forbiddenBinaries.has(basename(label))) {
-    findings.push(label);
+    findings.add(label);
   }
 
   if (!entry.isDirectory() || entry.isSymbolicLink()) return;
@@ -78,10 +109,10 @@ for (const root of roots) {
 }
 
 if (!existsSync("/app/dist/main.js")) {
-  findings.push("/app/dist/main.js is missing");
+  findings.add("/app/dist/main.js is missing");
 }
-if (findings.length > 0) {
-  console.error(JSON.stringify({ result: "failed", findings }, null, 2));
+if (findings.size > 0) {
+  console.error(JSON.stringify({ result: "failed", findings: [...findings].sort() }, null, 2));
   process.exit(1);
 }
 console.log(JSON.stringify({
@@ -89,6 +120,7 @@ console.log(JSON.stringify({
   network: "none",
   runtimeEntry: "/app/dist/main.js",
   forbiddenPackageCount: forbiddenPaths.length,
+  forbiddenStorePrefixCount: forbiddenStorePrefixes.length,
   forbiddenBinaryCount: forbiddenBinaries.size
 }));
 `;
