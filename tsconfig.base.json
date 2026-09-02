@@ -5,7 +5,7 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2025"],
     "typeRoots": ["./types", "./node_modules/@types"],
-    "types": ["node", "worker-threads-compat"],
+    "types": ["node", "worker-threads-compat", "web-encoding-compat"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
