@@ -1,0 +1,10 @@
+{
+  "extends": "../../../../tsconfig.effect.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "isolatedDeclarations": false
+  },
+  "include": ["*.ts"]
+}
