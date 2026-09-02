@@ -1,0 +1,58 @@
+[
+  {
+    "id": "openapi-3.2-source",
+    "path": ["sourceAuthority", "openApi", "version"],
+    "operation": "replace",
+    "value": "3.2.0",
+    "expectedRule": "CONTRACT-OPENAPI"
+  },
+  {
+    "id": "handwritten-contract-authority",
+    "path": ["sourceAuthority", "kind"],
+    "operation": "replace",
+    "value": "handwritten-openapi",
+    "expectedRule": "CONTRACT-SOURCE-AUTHORITY"
+  },
+  {
+    "id": "client-internal-collapse",
+    "path": ["sourceAuthority", "surfaceRoots", "internal-v1"],
+    "operation": "replace",
+    "value": "packages/contracts/src/client-v1",
+    "expectedRule": "CONTRACT-SURFACE-ROOTS"
+  },
+  {
+    "id": "frontend-internal-imports",
+    "path": ["surfaceIsolation", "frontendInternalImportsAllowed"],
+    "operation": "replace",
+    "value": true,
+    "expectedRule": "CONTRACT-FRONTEND-INTERNAL"
+  },
+  {
+    "id": "unversioned-events",
+    "path": ["surfaceIsolation", "eventSchemasVersioned"],
+    "operation": "replace",
+    "value": false,
+    "expectedRule": "CONTRACT-EVENT-VERSION"
+  },
+  {
+    "id": "wrong-removal-owner",
+    "path": ["legacyReplacement", "ownerIssue"],
+    "operation": "replace",
+    "value": 28,
+    "expectedRule": "CONTRACT-LEGACY-REPLACEMENT"
+  },
+  {
+    "id": "topology-drift",
+    "path": ["preservedArchitecture", "deployableRuntimeCount"],
+    "operation": "replace",
+    "value": 16,
+    "expectedRule": "CONTRACT-PRESERVED-ARCHITECTURE"
+  },
+  {
+    "id": "unknown-authority-field",
+    "path": ["parallelContractStack"],
+    "operation": "replace",
+    "value": true,
+    "expectedRule": "CONTRACT-AUTHORITY-CLOSED"
+  }
+]
