@@ -1,7 +1,10 @@
 # Исполнимая спецификация realtime SSE
 
+Технический путь: Effect Stream через typed Kafka adapter и AtomHttpApi browser
+invalidation; SSE остаётся transport-only и не становится business state.
+
 Статус: нормативная спецификация issue #12. Исполнитель не выбирает replay,
-authorization, fanout limits, Query invalidation или slow-client policy заново.
+authorization, fanout limits, AtomHttpApi invalidation или slow-client policy заново.
 
 ## 1. Архитектура
 
@@ -13,7 +16,7 @@ owner transaction + Outbox
   -> private GET /events origin
   -> edge authenticated same-origin GET /events
   -> browser EventSource
-  -> TanStack Query invalidate/refetch owner GET
+  -> AtomHttpApi invalidate/refetch owner GET
 ```
 
 `realtime-gateway` не читает owner events напрямую: consumer принимает только
@@ -129,17 +132,17 @@ Authorization/header actor не создаётся.
 
 На `resource-invalidated.v1`:
 
-1. runtime schema validate data;
+1. Effect Schema validates data at runtime;
 2. принять только `subjectType=order` и valid refs/version;
 3. никогда не записывать payload в Order cache;
-4. вызвать `queryClient.invalidateQueries({queryKey:['orders','detail',subjectRef],exact:true,refetchType:'active'})`;
+4. инвалидировать exact `orderDetailAtom(subjectRef)` и запустить активный
+   refetch owner GET;
 5. если cached `OrderCard.projectionVersion >= ownerVersion`, duplicate можно
    пропустить; command `Order.version` для dedup запрещён;
 6. refetch response owner GET полностью заменяет cache.
 
-На `stream-reset.v1` инвалидировать только существующие Order detail queries:
-predicate key prefix `['orders','detail']`, `refetchType:'active'`. Customer,
-Catalog и Pricing queries не затрагиваются.
+На `stream-reset.v1` инвалидировать только существующие Order detail atoms и
+запустить их активный refetch. Customer, Catalog и Pricing atoms не затрагиваются.
 
 UI connection indicator: `Подключено|Переподключение|Обновление состояния`;
 он не изменяет Order/AROMA state. Native reconnect использует server `retry:3000`;
@@ -153,8 +156,8 @@ banner и кнопку owner refetch; commands остаются по своим 
   context и успешный reconnect re-auth;
 - wire: exact headers, frames, UTF-8, heartbeat 15s, no business fields;
 - Last-Event-ID found replay, malformed/missing/evicted/restart -> reset;
-- frontend exact-query invalidation, inactive query no eager fetch, reset prefix
-  invalidation и cache update только owner GET;
+- frontend exact Order atom invalidation, inactive atom no eager fetch, reset
+  invalidation существующих Order detail atoms и cache update только owner GET;
 - duplicates/lower versions не откатывают UI;
 - 5 001 connections, 65 records, >256KiB, stalled 5s, abort/shutdown: bounded
   memory и cleanup;

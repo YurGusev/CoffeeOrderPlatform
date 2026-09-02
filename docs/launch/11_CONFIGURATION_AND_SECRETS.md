@@ -12,6 +12,11 @@ files и секреты в Compose/CI запрещены. Допускаются
 проверяющие эти два файла: `config/platform.schema.json` и
 `secrets/platform-secrets.schema.json`; они не содержат значений.
 
+Exact package/tool/image versions не являются параметрами этого файла: их
+единственный authoring source — `config/toolchain-versions.json`. Fixed
+topology/ownership/network claims остаются в manifests. Effect foundation
+ссылается на BOM через `bomRef`; никакой второй version/config map не создаётся.
+
 SOPS `3.13.3` шифрует YAML через age `1.3.2`. Private age identity никогда не
 попадает в репозиторий или SOPS-файл. `.sops.yaml` содержит только правила
 шифрования и public recipients, поэтому не является третьим файлом настроек.

@@ -8,11 +8,11 @@
 ## Дни 1–2: контракты и каркас
 
 - repository/app/package layout;
-- OpenAPI and event schemas for launch routes/messages;
+- Effect Schema/HttpApi source contracts and generated OpenAPI/JSON Schema artifacts;
 - Docker Compose с подключением к существующему PostgreSQL, а также Kafka и observability;
 - provisioning отдельных БД/ролей новой платформы без изменения `coffeeorderdb`;
-- shared HTTP, DB, Outbox/Inbox, auth and telemetry runtimes;
-- React shell and generated mock client.
+- owner-local Effect Layers, DB/Outbox/Inbox, auth and telemetry adapters;
+- React shell and AtomHttpApi contract test client.
 
 ## Дни 3–5: Customer, Catalog, Pricing
 
@@ -55,14 +55,14 @@
 - duplicate messages and commands have no duplicate business effect;
 - stale fence cannot mutate/persist success;
 - source/export amounts and versions use decimal strings;
-- OpenAPI, event schemas, integration tests and Playwright pass;
+- generated contract artifacts, event schemas, integration tests and Playwright pass;
 - every runtime has health, metrics, trace and graceful shutdown;
 - rollback is disabling convergence mutation while preserving observer and
   all durable Order/attempt state.
 
 ## Параллельная работа
 
-Frontend начинается в первый день на основе OpenAPI mocks. Backend и интеграция
+Frontend начинается в первый день на основе Effect contract mocks. Backend и интеграция
 с провайдером разрабатываются независимо по одним контрактам. Живая мутация
 AROMA остаётся выключенной до успешных safety/failure tests; безопасные чтения
 каталога и корзины можно подключить раньше.

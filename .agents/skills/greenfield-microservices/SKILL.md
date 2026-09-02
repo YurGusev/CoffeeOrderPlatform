@@ -14,8 +14,12 @@ description: Проектировать или менять границы ми�
 - Edge маршрутизирует и аутентифицирует, но не оркестрирует бизнес-состояние.
 - Разделять роли при разных trust, secrets, scaling, I/O или failure profiles.
 - Адаптеры провайдера не получают владение бизнес-состоянием.
-- Базовый стек: Node/Fastify, PostgreSQL, Kafka, Docker и React. Новая
-  инфраструктура требует названной гарантии и доказательства.
+- Базовый стек: Node.js с Effect runtime, PostgreSQL через Effect SQL, Kafka
+  через единый Confluent transport adapter, Docker и React с Effect Atom.
+  Новая инфраструктура требует названной гарантии и доказательства.
+- Сохранять ровно 15 runtime boundaries первого запуска из
+  `config/service-catalog.json`. Новый process или перенос владения требует
+  отдельного ADR и issue, а не локального решения.
 
 Для каждой межсервисной связи фиксировать caller, owner, transport, contract,
 timeout, idempotency, раскрываемые данные, владельца повторов и восстановление.

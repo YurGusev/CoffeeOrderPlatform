@@ -1,11 +1,12 @@
 {
   "$schema": "./toolchain-versions.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "node": "26.8.1",
   "npm": "11.19.0",
   "corepack": "0.35.0",
   "pnpm": "11.24.0",
   "typescript": "7.0.2",
+  "typesNode": "26.4.0",
   "fastify": "5.12.1",
   "postgresql": "17.11",
   "pg": "8.23.0",
@@ -36,5 +37,21 @@
   "docker": "29.7.2",
   "compose": "5.4.0",
   "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
-  "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837"
+  "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+  "effectTarget": {
+    "authorityRef": "docs/adr/ADR-0024-effect-native-platform.md",
+    "materializationOwner": "issue-49",
+    "generatedOpenApi": "3.1.0",
+    "packages": {
+      "effect": "4.0.0-rc.112",
+      "@effect/platform-node": "4.0.0-rc.112",
+      "@effect/platform-browser": "4.0.0-rc.112",
+      "@effect/sql-pg": "4.0.0-rc.112",
+      "@effect/opentelemetry": "4.0.0-rc.112",
+      "@effect/atom-react": "4.0.0-rc.112",
+      "@effect/vitest": "4.0.0-rc.112",
+      "@effect/tsgo": "0.39.0",
+      "pg-copy-streams": "7.0.0"
+    }
+  }
 }

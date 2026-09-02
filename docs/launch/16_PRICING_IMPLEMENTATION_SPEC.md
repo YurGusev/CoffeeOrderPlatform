@@ -1,5 +1,8 @@
 # Исполнимая спецификация PricingQuote
 
+Технический путь: Effect `Schema`/`HttpApi`, typed Effect clients и owner-local
+Store через `@effect/sql-pg`; расчёт и immutable quote semantics не изменяются.
+
 Статус: нормативная спецификация первого запуска. Исполнитель не выбирает
 формулу, таблицы, rounding, TTL, hash, idempotency или verify semantics заново.
 

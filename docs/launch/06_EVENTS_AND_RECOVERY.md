@@ -16,7 +16,8 @@ launch-сообщения нельзя вводить без изменения 
 | `AromaConvergenceChanged` | event | aroma-convergence | orders-aroma-preparation | cartScopeRef |
 | `RealtimeInvalidated` | event | owners | realtime-gateway | subjectRef |
 
-Every contract has versioned JSON Schema, `messageId`, `occurredAt`, trace,
+Every contract has source Effect Schema plus generated versioned JSON Schema,
+`messageId`, `occurredAt`, trace,
 causation, correlation and owner-defined aggregate version where applicable.
 
 ## Kafka registry первого запуска

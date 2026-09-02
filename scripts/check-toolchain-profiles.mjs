@@ -128,6 +128,7 @@ function parseArguments(argv) {
 
 export async function checkToolchainProfiles(root = REPO_ROOT) {
   const resolvedRoot = resolve(root);
+  const registry = JSON.parse(await readFile(join(resolvedRoot, 'config/toolchain-versions.json'), 'utf8'));
   const profiles = {};
   for (const [name, args] of Object.entries(PROFILE_NAMES)) profiles[name] = await runProfile(resolvedRoot, name, args);
   const parallel = profiles.parallel;
@@ -144,9 +145,9 @@ export async function checkToolchainProfiles(root = REPO_ROOT) {
   return {
     schemaVersion: 1,
     authority: {
-      node: '26.8.1',
-      typescript: '7.0.2',
-      compiler: 'typescript@7.0.2',
+      nodeRef: 'config/toolchain-versions.json#/node',
+      typescriptRef: 'config/toolchain-versions.json#/typescript',
+      compiler: `typescript@${registry.typescript}`,
       compilerLanes: 1,
     },
     profiles: Object.fromEntries(Object.entries(profiles).map(([name, profile]) => [name, {

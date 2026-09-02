@@ -42,8 +42,8 @@ calls AROMA directly or synthesizes allowed actions.
 ## Основа frontend
 
 - React Router;
-- TanStack Query for server state;
-- project-owned browser fetch client на generated `client-v1` transport types;
+- один browser Effect runtime с `AtomHttpApi` для server state;
+- source `client-v1` Effect contract и generated OpenAPI/JSON Schema artifacts;
 - accessible forms and keyboard navigation;
 - Playwright critical-path E2E;
 - CSP and immutable static assets;

@@ -1,4 +1,4 @@
 interface:
   display_name: "Runtime сервисов Node.js"
-  short_description: "Production-сервисы Node.js и Fastify"
+  short_description: "Production-сервисы Node.js и Effect"
   default_prompt: "Используй $node-service-runtime для реализации production-сервиса Node.js."

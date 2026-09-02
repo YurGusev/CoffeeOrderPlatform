@@ -2,15 +2,19 @@
 
 Статус: исполнимая проекция [ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md)
 для первого запуска и issue #3. Этот документ не вводит ESLint и не разрешает
-второй TypeScript compiler lane.
+второй TypeScript compiler lane. Exact tool pins читаются из
+`config/toolchain-versions.json`; эта матрица содержит только rule parity и
+evidence, не второй version registry. Effect contract/runtime authority
+определяется ADR-0024.
 
 ## 1. Authority и границы
 
 Единственная toolchain authority состоит из трёх непересекающихся частей:
 
-- `typescript@7.0.2` владеет compiler diagnostics, project references и emit;
-- `oxlint@1.80.0` владеет structural/syntax rules;
-- `oxlint-tsgolint@7.0.2001` владеет type-aware lint rules через
+- `config/toolchain-versions.json#/typescript` владеет compiler diagnostics,
+  project references и emit;
+- `config/toolchain-versions.json#/oxlint` владеет structural/syntax rules;
+- `config/toolchain-versions.json#/oxlintTsgolint` владеет type-aware lint rules через
   `oxlint --type-aware`.
 
 Нормативные CI-команды — `pnpm lint`, `pnpm typecheck` и
@@ -77,9 +81,9 @@ aggregate gate, но сам по себе не является доказате
 {
   "schemaVersion": 1,
   "authority": {
-    "compiler": "typescript@7.0.2",
-    "oxlint": "oxlint@1.80.0",
-    "tsgolint": "oxlint-tsgolint@7.0.2001",
+    "compilerRef": "config/toolchain-versions.json#/typescript",
+    "oxlintRef": "config/toolchain-versions.json#/oxlint",
+    "tsgolintRef": "config/toolchain-versions.json#/oxlintTsgolint",
     "diagnosticParityTest": "tests/architecture/checks.test.mjs"
   },
   "replacement": "ESLint",
