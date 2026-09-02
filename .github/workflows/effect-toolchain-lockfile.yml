@@ -1,32 +1,35 @@
-name: Сформировать lockfile Effect toolchain
+name: Зафиксировать lockfile Effect toolchain
 
 on:
   pull_request:
     branches: [develop]
     paths:
       - "package.json"
+      - "pnpm-workspace.yaml"
       - "pnpm-lock.yaml"
       - "config/toolchain-versions*.json"
       - ".github/workflows/effect-toolchain-lockfile.yml"
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: effect-toolchain-lockfile-${{ github.event.pull_request.number || github.ref }}
+  group: effect-toolchain-lockfile-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   lockfile:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/26-effect-toolchain-guards'
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'feature/26-effect-toolchain-guards'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Получить exact commit
+      - name: Получить exact head branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
           fetch-depth: 0
 
       - name: Установить Node 26.8.1
@@ -43,24 +46,28 @@ jobs:
           corepack install --global pnpm@11.24.0
           test "$(pnpm --version)" = "11.24.0"
 
-      - name: Сформировать lockfile без выполнения lifecycle scripts
-        run: pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile
-
-      - name: Проверить наличие новых Effect pins
+      - name: Сформировать lockfile без lifecycle scripts
         shell: bash
         run: |
           set -euo pipefail
-          grep -F "effect" pnpm-lock.yaml >/dev/null
-          grep -F "@effect/tsgo" pnpm-lock.yaml >/dev/null
-          grep -F "@effect/vitest" pnpm-lock.yaml >/dev/null
-          grep -F "4.0.0-rc.112" pnpm-lock.yaml >/dev/null
-          grep -F "0.39.0" pnpm-lock.yaml >/dev/null
+          before_workspace="$(sha256sum pnpm-workspace.yaml | cut -d' ' -f1)"
+          pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile
+          after_workspace="$(sha256sum pnpm-workspace.yaml | cut -d' ' -f1)"
+          test "$before_workspace" = "$after_workspace"
+          grep -F "effect@4.0.0-rc.112" pnpm-lock.yaml >/dev/null
+          grep -F "@effect/tsgo@0.39.0" pnpm-lock.yaml >/dev/null
+          grep -F "@effect/vitest@4.0.0-rc.112" pnpm-lock.yaml >/dev/null
 
-      - name: Опубликовать pnpm-lock.yaml
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: issue-26-pnpm-lock
-          path: pnpm-lock.yaml
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
+      - name: Закоммитить lockfile и удалить временный workflow
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git rm .github/workflows/effect-toolchain-lockfile.yml
+          git diff --cached --check
+          git commit -m "Зафиксировать lockfile Effect toolchain"
+          git push origin "HEAD:${HEAD_BRANCH}"
