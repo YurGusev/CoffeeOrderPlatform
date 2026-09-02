@@ -136,9 +136,37 @@ async function checkDeclaredDependencies(root, inventoryView) {
   }
 }
 
-async function checkProductionSources(root, inventoryView) {
+function readGitSource(root, ref, path) {
+  const result = spawnSync("git", ["show", `${ref}:${path}`], {
+    cwd: root,
+    encoding: "utf8",
+    maxBuffer: 8 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.error || result.status !== 0) {
+    fail(
+      "ARCH-EFFECT-LEGACY-BASELINE",
+      `${ref}:${path} cannot be read: ${result.error?.message ?? result.stderr.trim() || `git exit ${result.status}`}`,
+    );
+  }
+  return result.stdout;
+}
+
+async function checkProductionSources(root, inventoryView, baselineCommit) {
+  const compareWithGitBaseline = existsSync(join(root, ".git"));
   for (const path of inventoryView.sourceFiles) {
-    if (!existsSync(join(root, path))) fail("ARCH-EFFECT-LEGACY-INVENTORY", `stale source allowance ${path}`);
+    const absolute = join(root, path);
+    if (!existsSync(absolute)) fail("ARCH-EFFECT-LEGACY-INVENTORY", `stale source allowance ${path}`);
+    if (compareWithGitBaseline) {
+      const currentSource = await readFile(absolute, "utf8");
+      const baselineSource = readGitSource(root, baselineCommit, path);
+      if (currentSource !== baselineSource) {
+        fail(
+          "ARCH-EFFECT-LEGACY-GROWTH",
+          `${path}: registered legacy source differs from ${baselineCommit}; an owning cutover must remove the old path from the inventory instead of modifying it`,
+        );
+      }
+    }
   }
 
   const files = [
@@ -211,7 +239,7 @@ export async function checkEffectLegacyInventory(root = REPO_ROOT, options = {})
 
   const view = flattenInventory(inventory);
   await checkDeclaredDependencies(resolvedRoot, view);
-  await checkProductionSources(resolvedRoot, view);
+  await checkProductionSources(resolvedRoot, view, inventory.baselineCommit);
 
   const baseRef = options.baseRef ?? process.env.EFFECT_LEGACY_BASE_REF ?? "origin/develop";
   const baseline = readBaseInventory(resolvedRoot, baseRef);
@@ -221,6 +249,7 @@ export async function checkEffectLegacyInventory(root = REPO_ROOT, options = {})
     entries: inventory.entries.length,
     dependencies: view.dependencies.size,
     sourceFiles: view.sourceFiles.size,
+    sourceBaselineCompared: existsSync(join(resolvedRoot, ".git")),
     baseCompared: baseline !== null,
     baseRef,
   };
@@ -240,7 +269,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const options = parseArguments(process.argv.slice(2));
     const result = await checkEffectLegacyInventory(options.root, { baseRef: options.baseRef });
     console.log(
-      `effect legacy inventory: passed (${result.entries} entries, ${result.dependencies} dependency allowances, ${result.sourceFiles} source files${result.baseCompared ? `, compared with ${result.baseRef}` : ""})`,
+      `effect legacy inventory: passed (${result.entries} entries, ${result.dependencies} dependency allowances, ${result.sourceFiles} source files${result.sourceBaselineCompared ? ", source baseline locked" : ""}${result.baseCompared ? `, compared with ${result.baseRef}` : ""})`,
     );
   } catch (error) {
     console.error(`effect legacy inventory: FAIL: ${error.message}`);
