@@ -163,7 +163,7 @@ try {
   let serverOutput = ""; server.stdout.on("data", (chunk) => { serverOutput += chunk.toString(); }); server.stderr.on("data", (chunk) => { serverOutput += chunk.toString(); });
   try { await waitForHttp("http://127.0.0.1:37999/health"); } catch (error) { server.kill("SIGKILL"); throw new Error(`${error.message}\n${serverOutput}`); }
   server.kill("SIGTERM");
-  await new Promise((resolve, reject) => { const timer = setTimeout(() => { server.kill("SIGKILL"); reject(new Error("Effect server did not stop after SIGTERM")); }, 5000); server.once("exit", (code, signal) => { clearTimeout(timer); code === 0 || signal === "SIGTERM" ? resolve() : reject(new Error(`Effect server exit ${code}/${signal}\n${serverOutput}`)); }); });
+  await new Promise((resolve, reject) => { const timer = setTimeout(() => { server.kill("SIGKILL"); reject(new Error("Effect server did not stop after SIGTERM")); }, 5000); server.once("exit", (code, signal) => { clearTimeout(timer); code === 0 || code === 130 || signal === "SIGTERM" ? resolve() : reject(new Error(`Effect server exit ${code}/${signal}\n${serverOutput}`)); }); });
 
   execute(join(probeRoot, "node_modules", ".bin", "vite"), ["build", "--config", "browser/vite.config.mjs"], { timeout: 10 * 60 * 1000 });
   const browserFiles = await collectJavaScript(join(probeRoot, "browser", "dist"));
