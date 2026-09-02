@@ -121,56 +121,22 @@ function runGit(root, args) {
   return result.stdout.trim();
 }
 
-async function copyPath(root, path) {
-  const target = join(root, path);
-  await mkdir(dirname(target), { recursive: true });
-  await cp(join(REPO_ROOT, path), target, { recursive: true });
-}
-
-async function immutableLegacyRoot() {
-  const root = await mkdtemp(join(tmpdir(), "coffee-effect-legacy-immutable-"));
-  const inventoryPath = "config/effect-legacy-inventory.json";
-  const inventory = JSON.parse(await readFile(join(REPO_ROOT, inventoryPath), "utf8"));
-  const manifests = new Set(["package.json"]);
-  for (const entry of inventory.entries) {
-    for (const dependency of entry.dependencies) {
-      for (const manifest of dependency.manifests) manifests.add(manifest);
-    }
-  }
-
-  for (const path of [
-    inventoryPath,
-    "config/effect-legacy-inventory.schema.json",
-    ...manifests,
-    ...inventory.legacyProductionSourceFiles,
-  ]) {
-    await copyPath(root, path);
-  }
-
-  runGit(root, ["init"]);
-  runGit(root, ["config", "user.name", "Effect Policy Test"]);
-  runGit(root, ["config", "user.email", "effect-policy@example.invalid"]);
-  runGit(root, ["add", "."]);
-  runGit(root, ["commit", "-m", "legacy baseline"]);
-  const baselineCommit = runGit(root, ["rev-parse", "HEAD"]);
-
-  inventory.baselineCommit = baselineCommit;
-  await writeFile(
-    join(root, inventoryPath),
-    `${JSON.stringify(inventory, null, 2)}\n`,
-    "utf8",
+async function immutableLegacyWorktree() {
+  const parent = await mkdtemp(join(tmpdir(), "coffee-effect-legacy-worktree-"));
+  const root = join(parent, "checkout");
+  runGit(REPO_ROOT, ["worktree", "add", "--detach", root, "HEAD"]);
+  const inventory = JSON.parse(
+    await readFile(join(root, "config/effect-legacy-inventory.json"), "utf8"),
   );
-  runGit(root, ["add", inventoryPath]);
-  runGit(root, ["commit", "-m", "record legacy baseline"]);
-
   return {
+    parent,
     root,
     sourcePath: inventory.legacyProductionSourceFiles[0],
   };
 }
 
 void test("RED ARCH-EFFECT-LEGACY-GROWTH: registered legacy source is byte-for-byte immutable", async () => {
-  const fixture = await immutableLegacyRoot();
+  const fixture = await immutableLegacyWorktree();
   try {
     await checkEffectLegacyInventory(fixture.root, { baseRef: "missing-base-ref" });
     const source = join(fixture.root, fixture.sourcePath);
@@ -180,6 +146,7 @@ void test("RED ARCH-EFFECT-LEGACY-GROWTH: registered legacy source is byte-for-b
       /ARCH-EFFECT-LEGACY-GROWTH.*registered legacy source differs/s,
     );
   } finally {
-    await rm(fixture.root, { recursive: true, force: true });
+    runGit(REPO_ROOT, ["worktree", "remove", "--force", fixture.root]);
+    await rm(fixture.parent, { recursive: true, force: true });
   }
 });
