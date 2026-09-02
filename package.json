@@ -10,10 +10,12 @@
   },
   "packageManager": "pnpm@11.24.0",
   "scripts": {
+    "prepare": "effect-tsgo patch --typescript --no-oxlint",
     "authority:check": "python3 scripts/validate-effect-authority.py && python3 scripts/validate-effect-toolchain-target.py && python3 -m unittest discover -s tests/authority -p 'test_*.py'",
     "architecture:check": "node scripts/check-architecture.mjs",
     "compatibility:check": "node scripts/check-node26-compatibility.mjs --skip-native-load",
     "config:check": "node scripts/check-platform-config.mjs",
+    "effect:legacy:check": "node scripts/check-effect-legacy-inventory.mjs",
     "rule-parity:check": "node scripts/check-rule-parity.mjs",
     "rule-parity:admit": "node scripts/check-rule-parity.mjs --admit",
     "test:compose-smoke": "node tools/compose-smoke.mjs",
@@ -21,30 +23,46 @@
     "db:smoke": "node scripts/db-smoke.mjs",
     "db:live-proof": "node scripts/db-live-proof.mjs",
     "image:build": "node tools/docker-build.mjs",
-    "versions:check": "node scripts/check-toolchain-versions.mjs",
+    "versions:check": "node scripts/check-toolchain-versions.mjs && node scripts/check-effect-toolchain.mjs",
     "profile:check": "node scripts/check-toolchain-profiles.mjs",
     "clean-clone:check": "node scripts/verify-clean-clone.mjs",
     "lint": "oxlint --type-aware --deny-warnings --ignore-pattern 'tests/architecture/fixtures/**' apps packages scripts tests",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "effect-tsgo patch --typescript --no-oxlint && tsc -b --pretty false",
     "test": "node --test tests/**/*.test.mjs packages/*/test/**/*.test.mjs",
-    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm effect:legacy:check && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
-    "ajv": "8.20.0",
-    "@hey-api/openapi-ts": "0.99.0",
     "@confluentinc/kafka-javascript": "1.10.0",
+    "@effect/tsgo": "0.39.0",
+    "@effect/vitest": "4.0.0-rc.112",
     "@fastify/swagger": "9.8.1",
+    "@hey-api/openapi-ts": "0.99.0",
     "@opentelemetry/api": "1.9.1",
     "@types/js-yaml": "4.0.9",
     "@types/node": "26.4.0",
+    "ajv": "8.20.0",
     "dependency-cruiser": "18.2.0",
+    "effect": "4.0.0-rc.112",
     "js-yaml": "4.2.0",
     "oxlint": "1.80.0",
     "oxlint-tsgolint": "7.0.2001",
-    "playwright": "1.62.1",
     "pg": "8.23.0",
+    "playwright": "1.62.1",
     "prettier": "3.9.6",
-    "vitest": "4.1.11",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "pnpm": {
+    "overrides": {
+      "effect": "4.0.0-rc.112",
+      "@effect/platform-node": "4.0.0-rc.112",
+      "@effect/platform-browser": "4.0.0-rc.112",
+      "@effect/sql-pg": "4.0.0-rc.112",
+      "@effect/opentelemetry": "4.0.0-rc.112",
+      "@effect/atom-react": "4.0.0-rc.112",
+      "@effect/vitest": "4.0.0-rc.112",
+      "@effect/tsgo": "0.39.0",
+      "pg-copy-streams": "7.0.0"
+    }
   }
 }
