@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Fail-closed validation for the Effect-native runtime foundation decision.
+"""Fail-closed validation for the Effect-native foundation authority.
 
 The canonical source is platform/runtime-foundation-decision.json schema v2.
-The previous issue-19 validator is retained for unchanged topology, connectivity
-and target-layout invariants. It receives only a temporary v1 projection derived
-from the canonical v2 document; no second authority file is stored.
+Unchanged topology/connectivity/layout invariants are validated by the existing
+issue-19 validator against an in-memory-derived temporary v1 projection; no
+second authority manifest is persisted.
 """
 
 from __future__ import annotations
@@ -37,32 +37,6 @@ EFFECT_BOM = {
     "pg-copy-streams": "7.0.0",
 }
 
-ALLOWED_MODULE_PREFIXES = [
-    "effect/",
-    "effect/unstable/http/",
-    "effect/unstable/httpapi/",
-    "effect/unstable/sql/",
-    "effect/unstable/encoding/",
-    "effect/unstable/reactivity/",
-    "@effect/platform-node",
-    "@effect/platform-browser",
-    "@effect/sql-pg",
-    "@effect/opentelemetry",
-    "@effect/atom-react",
-    "@effect/vitest",
-]
-
-FORBIDDEN_MODULE_PREFIXES = [
-    "effect/unstable/rpc/",
-    "effect/unstable/workflow/",
-    "effect/unstable/cluster/",
-    "effect/unstable/persistence/",
-    "effect/unstable/eventlog/",
-    "effect/unstable/ai/",
-    "effect/unstable/cli/",
-    "effect/unstable/workers/",
-]
-
 AUTHORITIES = {
     "execution": "effect",
     "composition": "context-service-owner-local-layer",
@@ -76,6 +50,36 @@ AUTHORITIES = {
     "frontendRemoteState": "effect-atom-httpapi",
     "backendTests": "vitest-effect-vitest",
     "durability": "postgresql-and-kafka",
+}
+
+MODULE_POLICY = {
+    "stablePackageRoot": "effect",
+    "unstableDefault": "deny",
+    "allowedUnstablePrefixes": [
+        "effect/unstable/http/",
+        "effect/unstable/httpapi/",
+        "effect/unstable/sql/",
+        "effect/unstable/encoding/",
+        "effect/unstable/reactivity/",
+    ],
+    "allowedOfficialPackages": [
+        "@effect/platform-node",
+        "@effect/platform-browser",
+        "@effect/sql-pg",
+        "@effect/opentelemetry",
+        "@effect/atom-react",
+        "@effect/vitest",
+    ],
+    "explicitlyForbiddenUnstablePrefixes": [
+        "effect/unstable/rpc/",
+        "effect/unstable/workflow/",
+        "effect/unstable/cluster/",
+        "effect/unstable/persistence/",
+        "effect/unstable/eventlog/",
+        "effect/unstable/ai/",
+        "effect/unstable/cli/",
+        "effect/unstable/workers/",
+    ],
 }
 
 PROHIBITIONS = [
@@ -170,6 +174,18 @@ def validate_schema_companion(schema: dict[str, Any], foundation: dict[str, Any]
         require(entry["const"] == foundation[key], f"foundation.schema.{key}: companion const differs from manifest")
 
 
+def validate_module_policy(policy: Any) -> None:
+    require(isinstance(policy, dict), "foundation.effectPlatform.modulePolicy: object required")
+    require(policy == MODULE_POLICY, "foundation.effectPlatform.modulePolicy: stable/unstable default-deny policy changed")
+    allowed = policy["allowedUnstablePrefixes"]
+    forbidden = policy["explicitlyForbiddenUnstablePrefixes"]
+    require(policy["unstableDefault"] == "deny", "foundation.effectPlatform.modulePolicy: unstable imports must be default-deny")
+    require(all(value.startswith("effect/unstable/") for value in allowed + forbidden), "foundation.effectPlatform.modulePolicy: unstable prefixes required")
+    for allow in allowed:
+        for deny in forbidden:
+            require(not allow.startswith(deny) and not deny.startswith(allow), "foundation.effectPlatform.modulePolicy: allowed and forbidden prefixes overlap")
+
+
 def validate_foundation(foundation: dict[str, Any]) -> None:
     required_keys(foundation, ROOT_KEYS, "foundation")
     require(foundation["$schema"] == "./runtime-foundation-decision.schema.json", "foundation.$schema: wrong companion schema")
@@ -206,23 +222,23 @@ def validate_foundation(foundation: dict[str, Any]) -> None:
 
     toolchain = foundation["toolchainDecision"]
     require(isinstance(toolchain, dict), "foundation.toolchainDecision: object required")
-    require(toolchain.get("decisionId") == "ADR-COP-TS7-NATIVE-001", "foundation.toolchainDecision.decisionId: ADR-0022 identity changed")
-    require(toolchain.get("decisionRef") == "docs/adr/ADR-0022-ts7-native-toolchain.md", "foundation.toolchainDecision.decisionRef: ADR-0022 reference changed")
-    require(toolchain.get("typescript") == "typescript@7.0.2", "foundation.toolchainDecision.typescript: TS7 pin changed")
-    require(toolchain.get("structuralLinter") == "oxlint@1.80.0", "foundation.toolchainDecision.structuralLinter: pin changed")
-    require(toolchain.get("typeAwareLinter") == "oxlint-tsgolint@7.0.2001", "foundation.toolchainDecision.typeAwareLinter: pin changed")
-    require(toolchain.get("effectDiagnostics") == "@effect/tsgo@0.39.0", "foundation.toolchainDecision.effectDiagnostics: pin changed")
-    require(toolchain.get("compilerLanes") == 1, "foundation.toolchainDecision.compilerLanes: second compiler lane is forbidden")
+    require(toolchain == {
+        "decisionId": "ADR-COP-TS7-NATIVE-001",
+        "decisionRef": "docs/adr/ADR-0022-ts7-native-toolchain.md",
+        "typescript": "typescript@7.0.2",
+        "structuralLinter": "oxlint@1.80.0",
+        "typeAwareLinter": "oxlint-tsgolint@7.0.2001",
+        "effectDiagnostics": "@effect/tsgo@0.39.0",
+        "compilerLanes": 1,
+    }, "foundation.toolchainDecision: TS7/Effect diagnostic identity changed")
 
     platform = foundation["effectPlatform"]
-    required_keys(platform, {"authorityRef", "status", "bom", "authorities", "allowedModulePrefixes", "forbiddenModulePrefixes", "cutoverIssues", "businessStartIssue", "upgradePolicy"}, "foundation.effectPlatform")
+    required_keys(platform, {"authorityRef", "status", "bom", "authorities", "modulePolicy", "cutoverIssues", "businessStartIssue", "upgradePolicy"}, "foundation.effectPlatform")
     require(platform["authorityRef"] == "docs/adr/ADR-0023-effect-native-platform.md", "foundation.effectPlatform.authorityRef: wrong authority")
     require(platform["status"] == "target-until-issue-32-admission", "foundation.effectPlatform.status: cutover status changed")
     require(platform["bom"] == EFFECT_BOM, "foundation.effectPlatform.bom: exact Effect BOM changed")
     require(platform["authorities"] == AUTHORITIES, "foundation.effectPlatform.authorities: dual or unknown technical authority")
-    require(platform["allowedModulePrefixes"] == ALLOWED_MODULE_PREFIXES, "foundation.effectPlatform.allowedModulePrefixes: exact allowlist changed")
-    require(platform["forbiddenModulePrefixes"] == FORBIDDEN_MODULE_PREFIXES, "foundation.effectPlatform.forbiddenModulePrefixes: forbidden modules changed")
-    require(set(ALLOWED_MODULE_PREFIXES).isdisjoint(FORBIDDEN_MODULE_PREFIXES), "foundation.effectPlatform: allowed and forbidden module lists overlap")
+    validate_module_policy(platform["modulePolicy"])
     require(platform["cutoverIssues"] == [25, 26, 27, 28, 29, 30, 31, 32], "foundation.effectPlatform.cutoverIssues: linear issue graph changed")
     require(platform["businessStartIssue"] == 4, "foundation.effectPlatform.businessStartIssue: business work must start at #4")
     require(platform["upgradePolicy"] == "separate-platform-only-issue-no-business-changes", "foundation.effectPlatform.upgradePolicy: unsafe dependency upgrade policy")

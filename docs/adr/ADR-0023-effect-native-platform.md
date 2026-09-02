@@ -80,15 +80,19 @@ pg-copy-streams@7.0.0
 
 ## Разрешённая поверхность Effect
 
-Разрешены:
+Stable-модули пакета `effect` разрешены. Любой импорт `effect/unstable/*` по умолчанию запрещён и допускается только при совпадении с точным allowlist:
 
 ```text
-effect/*
 effect/unstable/http/*
 effect/unstable/httpapi/*
 effect/unstable/sql/*
 effect/unstable/encoding/*
 effect/unstable/reactivity/*
+```
+
+Разрешены official packages:
+
+```text
 @effect/platform-node
 @effect/platform-browser
 @effect/sql-pg
@@ -97,7 +101,7 @@ effect/unstable/reactivity/*
 @effect/vitest
 ```
 
-Без отдельного ADR запрещены:
+Явно запрещены и не могут быть разрешены случайным широким префиксом:
 
 ```text
 effect/unstable/rpc/*
@@ -217,7 +221,7 @@ Form state остаётся локальным React state, URL state — React 
 Контроль рисков:
 
 - exact pins и единая версия;
-- точный import allowlist;
+- unstable default-deny и точный allowlist;
 - обязательные RED fixtures;
 - отдельные upgrade PR;
 - E00–E15 admission;

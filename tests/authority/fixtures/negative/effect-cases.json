@@ -1,74 +1,12 @@
 [
-  {
-    "id": "effect-core-version-drift",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["effectPlatform", "bom", "effect"],
-    "operation": "replace",
-    "value": "4.0.0-rc.111",
-    "expected": {"ruleId": "EFFECT_BOM_EXACT", "message": "effectPlatform.bom"}
-  },
-  {
-    "id": "effect-allowed-module-drift",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["effectPlatform", "allowedModulePrefixes", 0],
-    "operation": "replace",
-    "value": "effect/unstable/rpc/",
-    "expected": {"ruleId": "EFFECT_MODULE_ALLOWLIST", "message": "allowedModulePrefixes"}
-  },
-  {
-    "id": "effect-forbidden-module-removed",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["effectPlatform", "forbiddenModulePrefixes"],
-    "operation": "remove-index",
-    "value": 1,
-    "expected": {"ruleId": "EFFECT_MODULE_DENYLIST", "message": "forbiddenModulePrefixes"}
-  },
-  {
-    "id": "effect-cutover-order-changed",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["effectPlatform", "cutoverIssues", 1],
-    "operation": "replace",
-    "value": 27,
-    "expected": {"ruleId": "EFFECT_LINEAR_CUTOVER", "message": "cutoverIssues"}
-  },
-  {
-    "id": "business-start-before-admission",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["effectPlatform", "businessStartIssue"],
-    "operation": "replace",
-    "value": 5,
-    "expected": {"ruleId": "EFFECT_BUSINESS_START", "message": "businessStartIssue"}
-  },
-  {
-    "id": "runtime-count-changed-by-effect",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["preservedArchitecture", "deployableRuntimeCount"],
-    "operation": "replace",
-    "value": 16,
-    "expected": {"ruleId": "EFFECT_PRESERVE_RUNTIME_COUNT", "message": "preservedArchitecture"}
-  },
-  {
-    "id": "provider-egress-owner-changed",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["preservedArchitecture", "providerEgressRuntime"],
-    "operation": "replace",
-    "value": "edge-gateway",
-    "expected": {"ruleId": "EFFECT_PRESERVE_PROVIDER_BOUNDARY", "message": "preservedArchitecture"}
-  },
-  {
-    "id": "unsafe-mutation-retry-enabled",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["preservedArchitecture", "unsafeProviderMutationRetry"],
-    "operation": "replace",
-    "value": "allowed",
-    "expected": {"ruleId": "EFFECT_NO_UNSAFE_RETRY", "message": "preservedArchitecture"}
-  },
-  {
-    "id": "effect-authority-owner-changed",
-    "manifest": "runtime-foundation-decision.json",
-    "path": ["effectAuthorityOwner"],
-    "operation": "replace",
-    "value": "issue-26",
-    "expected": {"ruleId": "EFFECT_AUTHORITY_OWNER", "message": "effectAuthorityOwner"}
-  }
+  {"id":"effect-core-version-drift","manifest":"runtime-foundation-decision.json","path":["effectPlatform","bom","effect"],"operation":"replace","value":"4.0.0-rc.111","expected":{"ruleId":"EFFECT_BOM_EXACT","message":"effectPlatform.bom"}},
+  {"id":"effect-unstable-default-open","manifest":"runtime-foundation-decision.json","path":["effectPlatform","modulePolicy","unstableDefault"],"operation":"replace","value":"allow","expected":{"ruleId":"EFFECT_MODULE_DEFAULT_DENY","message":"modulePolicy"}},
+  {"id":"effect-allowed-unstable-drift","manifest":"runtime-foundation-decision.json","path":["effectPlatform","modulePolicy","allowedUnstablePrefixes",0],"operation":"replace","value":"effect/unstable/rpc/","expected":{"ruleId":"EFFECT_MODULE_ALLOWLIST","message":"modulePolicy"}},
+  {"id":"effect-forbidden-module-removed","manifest":"runtime-foundation-decision.json","path":["effectPlatform","modulePolicy","explicitlyForbiddenUnstablePrefixes"],"operation":"remove-index","value":1,"expected":{"ruleId":"EFFECT_MODULE_DENYLIST","message":"modulePolicy"}},
+  {"id":"effect-cutover-order-changed","manifest":"runtime-foundation-decision.json","path":["effectPlatform","cutoverIssues",1],"operation":"replace","value":27,"expected":{"ruleId":"EFFECT_LINEAR_CUTOVER","message":"cutoverIssues"}},
+  {"id":"business-start-before-admission","manifest":"runtime-foundation-decision.json","path":["effectPlatform","businessStartIssue"],"operation":"replace","value":5,"expected":{"ruleId":"EFFECT_BUSINESS_START","message":"businessStartIssue"}},
+  {"id":"runtime-count-changed-by-effect","manifest":"runtime-foundation-decision.json","path":["preservedArchitecture","deployableRuntimeCount"],"operation":"replace","value":16,"expected":{"ruleId":"EFFECT_PRESERVE_RUNTIME_COUNT","message":"preservedArchitecture"}},
+  {"id":"provider-egress-owner-changed","manifest":"runtime-foundation-decision.json","path":["preservedArchitecture","providerEgressRuntime"],"operation":"replace","value":"edge-gateway","expected":{"ruleId":"EFFECT_PRESERVE_PROVIDER_BOUNDARY","message":"preservedArchitecture"}},
+  {"id":"unsafe-mutation-retry-enabled","manifest":"runtime-foundation-decision.json","path":["preservedArchitecture","unsafeProviderMutationRetry"],"operation":"replace","value":"allowed","expected":{"ruleId":"EFFECT_NO_UNSAFE_RETRY","message":"preservedArchitecture"}},
+  {"id":"effect-authority-owner-changed","manifest":"runtime-foundation-decision.json","path":["effectAuthorityOwner"],"operation":"replace","value":"issue-26","expected":{"ruleId":"EFFECT_AUTHORITY_OWNER","message":"effectAuthorityOwner"}}
 ]

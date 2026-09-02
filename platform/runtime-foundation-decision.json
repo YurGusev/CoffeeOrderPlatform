@@ -65,53 +65,42 @@
       "backendTests": "vitest-effect-vitest",
       "durability": "postgresql-and-kafka"
     },
-    "allowedModulePrefixes": [
-      "effect/",
-      "effect/unstable/http/",
-      "effect/unstable/httpapi/",
-      "effect/unstable/sql/",
-      "effect/unstable/encoding/",
-      "effect/unstable/reactivity/",
-      "@effect/platform-node",
-      "@effect/platform-browser",
-      "@effect/sql-pg",
-      "@effect/opentelemetry",
-      "@effect/atom-react",
-      "@effect/vitest"
-    ],
-    "forbiddenModulePrefixes": [
-      "effect/unstable/rpc/",
-      "effect/unstable/workflow/",
-      "effect/unstable/cluster/",
-      "effect/unstable/persistence/",
-      "effect/unstable/eventlog/",
-      "effect/unstable/ai/",
-      "effect/unstable/cli/",
-      "effect/unstable/workers/"
-    ],
-    "cutoverIssues": [
-      25,
-      26,
-      27,
-      28,
-      29,
-      30,
-      31,
-      32
-    ],
+    "modulePolicy": {
+      "stablePackageRoot": "effect",
+      "unstableDefault": "deny",
+      "allowedUnstablePrefixes": [
+        "effect/unstable/http/",
+        "effect/unstable/httpapi/",
+        "effect/unstable/sql/",
+        "effect/unstable/encoding/",
+        "effect/unstable/reactivity/"
+      ],
+      "allowedOfficialPackages": [
+        "@effect/platform-node",
+        "@effect/platform-browser",
+        "@effect/sql-pg",
+        "@effect/opentelemetry",
+        "@effect/atom-react",
+        "@effect/vitest"
+      ],
+      "explicitlyForbiddenUnstablePrefixes": [
+        "effect/unstable/rpc/",
+        "effect/unstable/workflow/",
+        "effect/unstable/cluster/",
+        "effect/unstable/persistence/",
+        "effect/unstable/eventlog/",
+        "effect/unstable/ai/",
+        "effect/unstable/cli/",
+        "effect/unstable/workers/"
+      ]
+    },
+    "cutoverIssues": [25, 26, 27, 28, 29, 30, 31, 32],
     "businessStartIssue": 4,
     "upgradePolicy": "separate-platform-only-issue-no-business-changes"
   },
   "preservedArchitecture": {
     "deployableRuntimeCount": 15,
-    "boundedContexts": [
-      "customer",
-      "catalog",
-      "pricing",
-      "orders",
-      "integration",
-      "realtime"
-    ],
+    "boundedContexts": ["customer", "catalog", "pricing", "orders", "integration", "realtime"],
     "logicalDatabaseCount": 5,
     "providerEgressRuntime": "aroma-gateway",
     "convergenceOwner": "orders",
@@ -140,13 +129,5 @@
   ],
   "foundationMaterializationOwner": "issue-3",
   "effectAuthorityOwner": "issue-25",
-  "effectMaterializationOwners": [
-    "issue-26",
-    "issue-27",
-    "issue-28",
-    "issue-29",
-    "issue-30",
-    "issue-31",
-    "issue-32"
-  ]
+  "effectMaterializationOwners": ["issue-26", "issue-27", "issue-28", "issue-29", "issue-30", "issue-31", "issue-32"]
 }
