@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffee-platform.local/schemas/effect-legacy-inventory.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "baselineCommit",
+    "introducedBy",
+    "ownerIssue",
+    "finalRemovalTask",
+    "allowNewUsage",
+    "entries",
+    "legacyProductionSourceFiles",
+    "legacySourceMarkers"
+  ],
+  "properties": {
+    "$schema": { "const": "./effect-legacy-inventory.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "baselineCommit": { "const": "8ab79c83674e4e0543663a5ae995710d5814aae5" },
+    "introducedBy": { "const": "#3/PR#22" },
+    "ownerIssue": { "const": 26 },
+    "finalRemovalTask": { "const": "3.8" },
+    "allowNewUsage": { "const": false },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "removalTask", "dependencies"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^legacy-[a-z0-9-]+$" },
+          "category": {
+            "enum": [
+              "http-runtime",
+              "contract-tooling",
+              "runtime-validation",
+              "http-client",
+              "time",
+              "observability",
+              "execution",
+              "testing",
+              "frontend"
+            ]
+          },
+          "removalTask": { "enum": ["3.3", "3.4", "3.5", "3.6", "3.7"] },
+          "dependencies": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "version", "manifests"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+                "manifests": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "type": "string", "pattern": "^(?:package\\.json|(?:apps|packages)/[^/]+/package\\.json)$" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "legacyProductionSourceFiles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^(?:apps|packages)/[^/]+/src/.+\\.(?:ts|tsx|mts|cts)$" }
+    },
+    "legacySourceMarkers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 2 }
+    }
+  }
+}
