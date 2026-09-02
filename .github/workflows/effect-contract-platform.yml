@@ -1,0 +1,67 @@
+name: Проверка Effect contract platform
+
+on:
+  pull_request:
+    paths:
+      - "config/effect-contract-platform*.json"
+      - "scripts/validate-effect-contract-platform.py"
+      - "scripts/run-effect-contract-platform-probe.mjs"
+      - "tests/authority/test_effect_contract_platform.py"
+      - "tests/authority/fixtures/negative/effect-contract-platform-cases.json"
+      - "docs/launch/28_EFFECT_CONTRACT_PLATFORM.md"
+      - ".github/workflows/effect-contract-platform.yml"
+      - "packages/contracts/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: effect-contract-platform-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract-platform:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Получить exact commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Проверить closed machine authority
+        run: |
+          python3 scripts/validate-effect-contract-platform.py
+          python3 -m unittest tests.authority.test_effect_contract_platform -v
+
+      - name: Установить Node 26.8.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6.2.0
+        with:
+          node-version: 26.8.1
+          check-latest: false
+
+      - name: Материализовать frozen workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --no-audit --no-fund corepack@0.35.0
+          corepack enable
+          corepack prepare pnpm@11.24.0 --activate
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Выполнить Effect Schema и HttpApi probe
+        run: node scripts/run-effect-contract-platform-probe.mjs
+
+      - name: Проверить формат diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}"...HEAD
+          else
+            git diff --check HEAD^...HEAD
+          fi
