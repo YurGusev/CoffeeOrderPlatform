@@ -144,9 +144,10 @@ function readGitSource(root, ref, path) {
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (result.error || result.status !== 0) {
+    const details = result.error?.message ?? (result.stderr.trim() || `git exit ${result.status}`);
     fail(
       "ARCH-EFFECT-LEGACY-BASELINE",
-      `${ref}:${path} cannot be read: ${result.error?.message ?? result.stderr.trim() || `git exit ${result.status}`}`,
+      `${ref}:${path} cannot be read: ${details}`,
     );
   }
   return result.stdout;
