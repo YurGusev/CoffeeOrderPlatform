@@ -1,5 +1,5 @@
 import { Effect } from "effect";
 
-export const promiseInSuccess: Effect.Effect<Promise<number>> = Effect.succeed(
-  Promise.resolve(1),
-);
+declare const save: (value: number) => Promise<void>;
+
+export const promiseInSuccess = Effect.succeed(1).pipe(Effect.map(save));
