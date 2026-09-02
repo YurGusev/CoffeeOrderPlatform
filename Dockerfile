@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.9
 
-# The digest is deliberately repeated for the build and runtime stages.  This
-# keeps the image identity immutable and makes a builder/runtime drift fail in
+# The digest is deliberately repeated for the build and runtime stages. This
+# keeps the image identity immutable and makes builder/runtime drift fail in
 # review instead of silently selecting another Node release.
 ARG NODE_IMAGE=node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
 
@@ -51,7 +51,7 @@ COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib
 ENV JOBS=4
 ENV MAKEFLAGS=-j4
 
-# Keep the install reproducible.  The source tree is copied only after the
+# Keep the install reproducible. The source tree is copied only after the
 # frozen install inputs; no host node_modules are ever part of the context.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.base.json ./
 COPY apps ./apps
@@ -79,7 +79,12 @@ RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0 \
 # Runtime selection must not invalidate dependency installation, native addon
 # compilation or the common typecheck when Compose materializes all 15 images.
 ARG RUNTIME=edge-gateway
-RUN pnpm --filter "@coffee-platform/${RUNTIME}" deploy --prod --legacy /runtime
+RUN pnpm --filter "@coffee-platform/${RUNTIME}" deploy --prod --legacy /runtime \
+  && pnpm --dir /runtime prune --prod --ignore-scripts \
+  && test ! -e /runtime/node_modules/dependency-cruiser \
+  && test ! -e /runtime/node_modules/playwright \
+  && test ! -e /runtime/node_modules/typescript \
+  && test ! -e /runtime/node_modules/vitest
 
 FROM ${NODE_IMAGE} AS runtime
 
@@ -98,9 +103,9 @@ COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
 ARG RUNTIME=edge-gateway
 ENV RUNTIME_NAME=${RUNTIME}
 
-# deploy --prod copies only the selected runtime and its production
-# dependencies.  The final stage therefore contains neither TypeScript,
-# oxlint, Dependency Cruiser nor code-generation tooling.
+# deploy --prod plus an explicit prune copies only the selected runtime and its
+# production graph. The final stage therefore contains neither TypeScript,
+# TS-Go, linters, test runners nor contract code-generation tooling.
 COPY --from=build /runtime ./
 COPY --from=build /workspace/config ./config
 COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
