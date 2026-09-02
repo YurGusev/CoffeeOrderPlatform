@@ -3,11 +3,10 @@
  * Read-only Node 26 foundation compatibility smoke.
  *
  * This checker deliberately does not install packages, connect to external
- * services, launch a browser or run OpenAPI generation. It proves that the
+ * services, launch a browser or run contract generation. It proves that the
  * pinned modules are directly declared, resolve from the workspace and load
- * on the exact Node image. The OpenAPI generator is a non-authoritative
- * candidate and is reported separately until issue #4 accepts its golden
- * corpus.
+ * on the exact Node image. Contract generation is owned by Effect
+ * Schema/HttpApi and is not a Node foundation probe.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -21,16 +20,6 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MATRIX_PATH = "config/node26-compatibility-matrix.json";
 const MATRIX_SCHEMA_PATH = "config/node26-compatibility-matrix.schema.json";
 const TOOLCHAIN_PATH = "config/toolchain-versions.json";
-const TOOLCHAIN_KEYS = Object.freeze({
-  fastify: "fastify",
-  pg: "pg",
-  "@confluentinc/kafka-javascript": "confluentKafkaJavaScript",
-  "@opentelemetry/api": "opentelemetryApi",
-  "@fastify/swagger": "fastifySwagger",
-  vitest: "vitest",
-  playwright: "playwright",
-  "@hey-api/openapi-ts": "heyApiOpenapiTs",
-});
 const EXPECTED_IDS = new Set([
   "fastify",
   "pg",
@@ -39,12 +28,10 @@ const EXPECTED_IDS = new Set([
   "fastify-swagger",
   "vitest",
   "playwright",
-  "openapi-codegen",
 ]);
 const EXPECTED_COMPONENTS = Object.freeze({
   fastify: {
     package: "fastify",
-    version: "5.12.1",
     kind: "runtime",
     probe: "fastify-factory",
     required: true,
@@ -52,7 +39,6 @@ const EXPECTED_COMPONENTS = Object.freeze({
   },
   pg: {
     package: "pg",
-    version: "8.23.0",
     kind: "runtime",
     probe: "pg-pool",
     required: true,
@@ -60,7 +46,6 @@ const EXPECTED_COMPONENTS = Object.freeze({
   },
   "confluent-kafka": {
     package: "@confluentinc/kafka-javascript",
-    version: "1.10.0",
     kind: "runtime-native",
     probe: "confluent-kafka-native",
     required: true,
@@ -68,7 +53,6 @@ const EXPECTED_COMPONENTS = Object.freeze({
   },
   "opentelemetry-api": {
     package: "@opentelemetry/api",
-    version: "1.9.1",
     kind: "runtime",
     probe: "opentelemetry-api",
     required: true,
@@ -76,16 +60,13 @@ const EXPECTED_COMPONENTS = Object.freeze({
   },
   "fastify-swagger": {
     package: "@fastify/swagger",
-    version: "9.8.1",
     kind: "contract",
     probe: "fastify-swagger-plugin",
     required: true,
     authoritative: true,
-    openapi: "3.2.0",
   },
   vitest: {
     package: "vitest",
-    version: "4.1.11",
     kind: "test",
     probe: "vitest-cli",
     required: true,
@@ -93,21 +74,10 @@ const EXPECTED_COMPONENTS = Object.freeze({
   },
   playwright: {
     package: "playwright",
-    version: "1.62.1",
     kind: "browser-test",
     probe: "playwright-module",
     required: true,
     authoritative: true,
-  },
-  "openapi-codegen": {
-    package: "@hey-api/openapi-ts",
-    version: "0.99.0",
-    kind: "candidate",
-    probe: "openapi-codegen-cli",
-    required: false,
-    authoritative: false,
-    openapi: "3.2.0",
-    acceptedAfterIssue: 4,
   },
 });
 
@@ -213,9 +183,9 @@ function resolvePackage(manifestPaths, packageName) {
         resolved,
       };
     } catch {
-      // Some CLI-only packages (notably @hey-api/openapi-ts) intentionally do
-      // not expose a package entry through exports. Resolve their package
-      // metadata through the direct workspace link instead.
+      // Some CLI-only packages intentionally do not expose a package entry
+      // through exports. Resolve their package metadata through the direct
+      // workspace link instead.
       const packageJsonPath = join(
         dirname(manifestPath),
         "node_modules",
@@ -241,7 +211,17 @@ function resolvePackage(manifestPaths, packageName) {
   return { declarationPaths };
 }
 
-function validateMatrix(matrix, schema) {
+function registryValue(registry, reference) {
+  const prefix = "config/toolchain-versions.json#/";
+  if (!reference.startsWith(prefix))
+    fail("NODE26-MATRIX-REF", `registry reference is required: ${reference}`);
+  const key = reference.slice(prefix.length);
+  if (!Object.hasOwn(registry, key) || typeof registry[key] !== "string")
+    fail("NODE26-MATRIX-REF", `registry key is missing: ${key}`);
+  return registry[key];
+}
+
+function validateMatrix(matrix, schema, registry) {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);
   if (!validate(matrix)) {
@@ -261,6 +241,10 @@ function validateMatrix(matrix, schema) {
       `component ids must be exactly ${[...EXPECTED_IDS].join(", ")}`,
     );
   }
+  if (registryValue(registry, matrix.runtime.nodeRef) !== registry.node)
+    fail("NODE26-MATRIX-REF", "runtime.nodeRef does not resolve to registry.node");
+  if (matrix.policy.generatedContractSource !== "effect-schema-httpapi" || matrix.policy.generatedOpenApi !== "3.1.0")
+    fail("NODE26-CODEGEN-POLICY", "contract projection must use Effect Schema/HttpApi and OpenAPI 3.1");
   for (const component of matrix.components) {
     const expected = EXPECTED_COMPONENTS[component.id];
     for (const [key, value] of Object.entries(expected)) {
@@ -272,12 +256,6 @@ function validateMatrix(matrix, schema) {
       }
     }
   }
-  if (matrix.policy.candidateCodegen.package !== "@hey-api/openapi-ts") {
-    fail(
-      "NODE26-CODEGEN-POLICY",
-      "candidate generator package must be @hey-api/openapi-ts",
-    );
-  }
   return matrix;
 }
 
@@ -286,7 +264,11 @@ export async function loadCompatibilityMatrix(root = REPO_ROOT) {
     readJson(root, MATRIX_PATH),
     readJson(root, MATRIX_SCHEMA_PATH),
   ]);
-  return validateMatrix(matrix, schema);
+  const registry = await readJson(root, TOOLCHAIN_PATH);
+  const validated = validateMatrix(matrix, schema, registry);
+  for (const component of validated.components)
+    component.version = registryValue(registry, component.registryRef);
+  return validated;
 }
 
 function assertExact(actual, expected, label) {
@@ -425,7 +407,7 @@ async function probeSwagger(info, component) {
   const plugin = module.default ?? module;
   if (typeof plugin !== "function")
     fail("NODE26-PROBE", "@fastify/swagger plugin export is not callable");
-  return { plugin: "callable", openapi: component.openapi };
+  return { plugin: "callable", contract: "effect-schema-httpapi" };
 }
 
 async function probePlaywright(info, component) {
@@ -457,26 +439,6 @@ function probeCli(root, info, component, name) {
   };
 }
 
-function probeOpenApiCandidate(root, info) {
-  const executable = executableCandidates(root, info, "openapi-ts")[0];
-  if (!executable)
-    return { status: "blocked", reason: "candidate CLI is not installed" };
-  const result = runExecutable(executable, ["--help"], root);
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
-  if (result.status === 0) return { status: "candidate-loaded", output };
-  if (/AnyKeyword|SyntaxKind|typescript/i.test(output)) {
-    return {
-      status: "blocked",
-      reason: "candidate does not load with the sole TypeScript 7 compiler",
-      evidence: output.slice(0, 500),
-    };
-  }
-  return {
-    status: "blocked",
-    reason: output.slice(0, 500) || `exit ${result.status ?? "unknown"}`,
-  };
-}
-
 const MODULE_PROBES = Object.freeze({
   "fastify-factory": probeFastify,
   "pg-pool": probePg,
@@ -489,8 +451,6 @@ const MODULE_PROBES = Object.freeze({
 async function probeComponent(root, component, info) {
   if (component.probe === "vitest-cli")
     return probeCli(root, info, component, "vitest");
-  if (component.probe === "openapi-codegen-cli")
-    return probeOpenApiCandidate(root, info);
   const probe = MODULE_PROBES[component.probe];
   if (!probe)
     fail(
@@ -519,7 +479,7 @@ export async function checkNode26Compatibility(root = REPO_ROOT, options = {}) {
   const toolchain = await readJson(resolvedRoot, TOOLCHAIN_PATH);
   assertExact(
     process.versions.node,
-    matrix.runtime.node,
+    registryValue(toolchain, matrix.runtime.nodeRef),
     "running Node version",
   );
   assertExact(process.platform, matrix.runtime.platform, "running platform");
@@ -532,12 +492,7 @@ export async function checkNode26Compatibility(root = REPO_ROOT, options = {}) {
   const results = [];
   const failures = [];
   for (const component of matrix.components) {
-    const key = TOOLCHAIN_KEYS[component.package];
-    assertExact(
-      toolchain[key],
-      component.version,
-      `toolchain ${component.package}`,
-    );
+    assertExact(registryValue(toolchain, component.registryRef), component.version, `toolchain ${component.package}`);
     const info = resolvePackage(manifests, component.package);
     const result = componentRecord(resolvedRoot, component, info);
     if (!info.resolved) {
@@ -560,9 +515,7 @@ export async function checkNode26Compatibility(root = REPO_ROOT, options = {}) {
         continue;
       }
       result.details = await probeComponent(resolvedRoot, component, info);
-      result.status = component.authoritative
-        ? "passed"
-        : (result.details.status ?? "candidate-loaded");
+      result.status = "passed";
       if (
         component.required &&
         result.details.status &&
@@ -583,24 +536,11 @@ export async function checkNode26Compatibility(root = REPO_ROOT, options = {}) {
     platform: `${process.platform}-${process.arch}`,
     matrix: MATRIX_PATH,
     components: results,
-    candidate:
-      results.find((result) => result.id === "openapi-codegen") ?? null,
+    candidate: null,
     status: failures.length === 0 ? "passed" : "failed",
     failures,
   };
-  if (
-    options.strictCandidate &&
-    report.candidate?.status !== "candidate-loaded"
-  ) {
-    report.status = "failed";
-    report.failures.push(
-      `openapi candidate: ${report.candidate?.reason ?? report.candidate?.status ?? "missing"}`,
-    );
-  }
-  if (
-    failures.length > 0 ||
-    (options.strictCandidate && report.status === "failed")
-  ) {
+  if (failures.length > 0) {
     const error = new CompatibilityError(
       "NODE26-COMPATIBILITY",
       failures.join("; ") || "candidate codegen is not accepted",
@@ -640,7 +580,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       console.log(
         args.json
           ? JSON.stringify(report)
-          : `Node 26 compatibility: passed; candidate=${report.candidate?.status ?? "missing"}`,
+          : "Node 26 compatibility: passed; canonical registry projection verified",
       );
     }
   } catch (error) {

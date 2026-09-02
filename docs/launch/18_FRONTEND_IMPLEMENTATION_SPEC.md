@@ -1,26 +1,30 @@
 # Исполнимая спецификация React-интерфейса первого запуска
 
+Технический путь: один browser Effect runtime с `AtomHttpApi` из source
+`client-v1` contract; URL/form state и business semantics ниже не изменяются.
+
 Статус: нормативная спецификация issue #9. Исполнитель не выбирает flow,
-routes, query keys, mutation retry, conflict recovery или UI states заново.
+routes, atom identities, mutation retry, conflict recovery или UI states заново.
 
 ## 1. Граница приложения
 
-Приложение находится в `apps/web` и является новой React SPA. Project-owned
-browser fetch client использует только generated `client-v1` transport types и
-runtime response validation. Generated SDK/client, server/runtime imports, SQL,
+Приложение находится в `apps/web` и является новой React SPA. Browser client
+использует source `client-v1` Effect Schema/HttpApi contract через
+`@effect/atom-react`/`AtomHttpApi`; generated OpenAPI/JSON Schema являются только
+производными artifacts. Generated SDK/client, server/runtime imports, SQL,
 provider clients и собственные копии request/response DTO запрещены.
 
 Разрешённые зависимости и версии берутся только из
-`config/toolchain-versions.json`/lockfile #3: React, React Router, TanStack
-Query, generated transport types, form/schema adapter и testing stack. Новая state
-library, design system или API library в #9 не добавляется.
+`config/toolchain-versions.json`/lockfile #3: React, React Router,
+`@effect/atom-react`/`AtomHttpApi`, form/schema adapter и testing stack. Новая
+state library, design system или API library в #9 не добавляется.
 
 ## 2. Файлы и модули
 
 ```text
 apps/web/src/
   app/router.tsx
-  app/query-client.ts
+  app/atom-runtime.ts
   api/client.ts
   api/problem-details.ts
   api/idempotency.ts
@@ -35,10 +39,10 @@ apps/web/src/
   shared/ui/{alert,button,dialog,field,spinner}.tsx
 ```
 
-`api/client.ts` реализует project-owned browser fetch client: same-origin base
-URL, credentials, correlation, AbortSignal и runtime response validation. Он
-использует generated `client-v1` transport types; generated SDK/client и
-handwritten endpoint types запрещены.
+`api/client.ts` собирает typed `AtomHttpApi` client из source `client-v1` Effect
+Schema/HttpApi contract: same-origin base URL, credentials, correlation,
+AbortSignal и runtime decode/encode. Generated SDK/client и handwritten endpoint
+types запрещены.
 
 ## 3. Маршруты и переходы
 
@@ -92,32 +96,33 @@ blocked state без blind retry и предлагает создать новы
 - после Confirm success `replace` остаётся на Order Card и cache заменяется
   response команды.
 
-## 4. TanStack Query
+## 4. AtomHttpApi server state
 
-Query keys:
+Atom identities:
 
 ```text
-['customers','search',{q,cursor,limit:20}]
-['catalog','search',{q,availability,cursor,limit:20}]
-['orders','detail',orderRef]
+customerSearchAtom({q,cursor,limit:20})
+catalogSearchAtom({q,availability,cursor,limit:20})
+orderDetailAtom(orderRef)
 ```
 
-Keys строятся только helper-функциями. Search input debounce `300 ms`, но API
-запрос выполняется по submit или изменению committed URL state, не на каждый
-keypress. Previous page data не показывается как результат нового query.
+Atom identities строятся только helper-функциями. Search input debounce `300 ms`,
+но API запрос выполняется по submit или изменению committed URL state, не на
+каждый keypress. Previous page data не показывается как результат нового atom.
 
-- Customer/Catalog `staleTime=30_000`, `gcTime=300_000`;
-- Order `staleTime=0`, `gcTime=300_000`;
-- GET retry: максимум 1 только для network/502/503/504, delay 500 ms;
+- Customer/Catalog atoms stale after `30_000 ms`, retained `300_000 ms`;
+- Order atom stale immediately, retained `300_000 ms`;
+- AtomHttpApi GET retry: максимум 1 только для network/502/503/504, delay 500 ms;
 - 4xx не ретраятся;
-- mutations: `retry=false` без исключений;
-- `refetchOnWindowFocus=false` для всех четырёх страниц;
-- #12 позже инвалидирует `['orders','detail',orderRef]` по SSE; #9 не
+- AtomHttpApi mutations не ретраятся без исключений;
+- window focus не запускает автоматическое обновление ни для одной из четырёх страниц;
+- #12 позже инвалидирует exact `orderDetailAtom(orderRef)` по SSE; #9 не
   интерпретирует SSE payload как business state.
 
 #12 добавляет один EventSource на tab. `resource-invalidated.v1` инвалидирует
-только exact Order query; `stream-reset.v1` инвалидирует только существующие
-Order detail queries. Cache изменяется исключительно результатом owner GET.
+только exact `orderDetailAtom(orderRef)`; `stream-reset.v1` инвалидирует только
+существующие Order detail atoms. Cache изменяется исключительно результатом
+owner GET.
 
 ## 5. Idempotency и версия
 
@@ -138,7 +143,7 @@ response. При `ORDER_VERSION_CONFLICT`:
 
 1. mutation не повторяется;
 2. показать modal с server correlation id;
-3. `invalidateQueries` + exact refetch Order;
+3. invalidate exact `orderDetailAtom(orderRef)` + refetch Order;
 4. сохранить только пользовательский quantity/reason как unsent form value;
 5. после refetch пользователь заново нажимает action; создаются новый intent key
    и новая expected version.
@@ -207,7 +212,7 @@ server-provided reconciliation action.
 
 - component tests каждого route: initial/loading/empty/success/all mapped errors;
 - generated MSW fixtures only; handwritten response DTO запрещён lint rule;
-- Query tests exact keys/retry/staleTime и запрет mutation retry;
+- Atom tests exact identities/retry/retention и запрет mutation retry;
 - idempotency tests ambiguous response/same-key retry/new-intent key;
 - conflict test доказывает refetch, сохранение form value и отсутствие auto replay;
 - exhaustive enum/action compile tests;

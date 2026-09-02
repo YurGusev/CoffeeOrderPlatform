@@ -13,52 +13,31 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-const EXPECTED = Object.freeze({
-  node: "26.8.1",
-  npm: "11.19.0",
-  corepack: "0.35.0",
-  pnpm: "11.24.0",
-  typescript: "7.0.2",
-  fastify: "5.12.1",
-  postgresql: "17.11",
-  pg: "8.23.0",
-  kafka: "4.3.1",
-  confluentKafkaJavaScript: "1.10.0",
-  librdkafka: "2.15.0",
-  librdkafkaSourceSha256:
-    "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc",
-  react: "19.2.8",
-  reactDom: "19.2.8",
-  reactRouterDom: "7.18.3",
-  tanstackQuery: "5.102.8",
-  vite: "8.2.2",
-  vitest: "4.1.11",
-  playwright: "1.62.1",
-  openapi: "3.2.0",
-  fastifySwagger: "9.8.1",
-  heyApiOpenapiTs: "0.99.0",
-  spectralCli: "6.16.3",
-  ajv: "8.20.0",
-  pino: "10.3.1",
-  opentelemetryApi: "1.9.1",
-  dependencyCruiser: "18.2.0",
-  oxlint: "1.80.0",
-  oxlintTsgolint: "7.0.2001",
-  prettier: "3.9.6",
-  sops: "3.13.3",
-  age: "1.3.2",
-  docker: "29.7.2",
-  compose: "5.4.0",
-});
+const EFFECT_PACKAGES = Object.freeze([
+  "effect", "@effect/platform-node", "@effect/platform-browser",
+  "@effect/sql-pg", "@effect/opentelemetry", "@effect/atom-react",
+  "@effect/vitest", "@effect/tsgo", "pg-copy-streams",
+]);
+const SEMVER = /^[0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z.-]+)?$/;
+
+const REGISTRY_FIELDS = Object.freeze([
+  "node", "npm", "corepack", "pnpm", "typescript", "typesNode", "fastify",
+  "postgresql", "pg", "kafka", "confluentKafkaJavaScript", "librdkafka",
+  "librdkafkaSourceSha256", "react", "reactDom", "reactRouterDom",
+  "tanstackQuery", "vite", "vitest", "playwright", "openapi", "fastifySwagger",
+  "heyApiOpenapiTs", "spectralCli", "ajv", "pino", "opentelemetryApi",
+  "dependencyCruiser", "oxlint", "oxlintTsgolint", "prettier", "sops", "age",
+  "docker", "compose", "nodeImage", "kafkaImage",
+]);
 
 const ROOT_DEV_DEPENDENCIES = Object.freeze({
-  "@hey-api/openapi-ts": "0.99.0",
-  "@types/node": "26.4.0",
-  "dependency-cruiser": "18.2.0",
-  oxlint: "1.80.0",
-  "oxlint-tsgolint": "7.0.2001",
-  prettier: "3.9.6",
-  typescript: "7.0.2",
+  "@hey-api/openapi-ts": "heyApiOpenapiTs",
+  "@types/node": "typesNode",
+  "dependency-cruiser": "dependencyCruiser",
+  oxlint: "oxlint",
+  "oxlint-tsgolint": "oxlintTsgolint",
+  prettier: "prettier",
+  typescript: "typescript",
 });
 
 const DEPENDENCY_TO_MANIFEST_KEY = Object.freeze({
@@ -168,7 +147,7 @@ function allDependencies(manifest) {
   });
 }
 
-async function checkPackageManifests(root) {
+async function checkPackageManifests(root, registry) {
   const manifestPaths = [
     join(root, "package.json"),
     ...(await walk(join(root, "apps"))),
@@ -212,7 +191,7 @@ async function checkPackageManifests(root) {
       checkDependencySpec(value, `${pathLabel}:${name}`);
       const manifestKey = DEPENDENCY_TO_MANIFEST_KEY[name];
       if (manifestKey)
-        exact(value, EXPECTED[manifestKey], `${pathLabel}:${name}`);
+        exact(value, registry[manifestKey], `${pathLabel}:${name}`);
       if (name === "typescript") {
         typescriptManifestCount += 1;
         if (path !== join(root, "package.json"))
@@ -220,7 +199,7 @@ async function checkPackageManifests(root) {
             "TS7-SINGLE-COMPILER",
             `${pathLabel}: TypeScript may only be declared at repository root`,
           );
-        exact(value, EXPECTED.typescript, `${pathLabel}:${name}`);
+        exact(value, registry.typescript, `${pathLabel}:${name}`);
       }
       if (
         FORBIDDEN_COMPILER_PACKAGES.has(name) ||
@@ -233,18 +212,18 @@ async function checkPackageManifests(root) {
       }
     }
     if (path === join(root, "package.json")) {
-      exact(manifest.engines?.node, EXPECTED.node, "package.json.engines.node");
-      exact(manifest.engines?.npm, EXPECTED.npm, "package.json.engines.npm");
-      exact(manifest.engines?.pnpm, EXPECTED.pnpm, "package.json.engines.pnpm");
+      exact(manifest.engines?.node, registry.node, "package.json.engines.node");
+      exact(manifest.engines?.npm, registry.npm, "package.json.engines.npm");
+      exact(manifest.engines?.pnpm, registry.pnpm, "package.json.engines.pnpm");
       exact(
         manifest.packageManager,
-        `pnpm@${EXPECTED.pnpm}`,
+        `pnpm@${registry.pnpm}`,
         "package.json.packageManager",
       );
-      for (const [name, expected] of Object.entries(ROOT_DEV_DEPENDENCIES)) {
+      for (const [name, registryKey] of Object.entries(ROOT_DEV_DEPENDENCIES)) {
         exact(
           manifest.devDependencies?.[name],
-          expected,
+          registry[registryKey],
           `package.json.devDependencies.${name}`,
         );
       }
@@ -282,7 +261,7 @@ function lockSpecifier(block, name) {
   return match?.[1]?.trim();
 }
 
-async function checkLockfile(root, manifest) {
+async function checkLockfile(root, manifest, registry) {
   const lockPath = join(root, "pnpm-lock.yaml");
   const lockfile = await readText(lockPath);
   if (!/^lockfileVersion:\s*["']9\.0["']\s*$/m.test(lockfile))
@@ -292,7 +271,8 @@ async function checkLockfile(root, manifest) {
     const specifier = lockSpecifier(rootBlock, name);
     if (specifier === undefined)
       fail("TOOLCHAIN-LOCK", `root importer is missing ${name}`);
-    exact(specifier, version, `pnpm-lock.yaml importer .:${name}`);
+    const registryKey = DEPENDENCY_TO_MANIFEST_KEY[name];
+    exact(specifier, registryKey ? registry[registryKey] : version, `pnpm-lock.yaml importer .:${name}`);
   }
 
   const workspaceManifests = [
@@ -310,7 +290,8 @@ async function checkLockfile(root, manifest) {
           "TOOLCHAIN-LOCK",
           `pnpm-lock.yaml importer ${importer} is missing ${name}`,
         );
-      exact(specifier, version, `pnpm-lock.yaml importer ${importer}:${name}`);
+      const registryKey = DEPENDENCY_TO_MANIFEST_KEY[name];
+      exact(specifier, registryKey ? registry[registryKey] : version, `pnpm-lock.yaml importer ${importer}:${name}`);
     }
   }
 
@@ -319,10 +300,10 @@ async function checkLockfile(root, manifest) {
     /^  ['"]?typescript@([^'":()\s]+)['"]?(?::|\()/gm,
   ))
     tsVersions.add(match[1]);
-  if (tsVersions.size !== 1 || !tsVersions.has(EXPECTED.typescript)) {
+  if (tsVersions.size !== 1 || !tsVersions.has(registry.typescript)) {
     fail(
       "TS7-SINGLE-COMPILER",
-      `pnpm-lock.yaml TypeScript packages must be exactly ${EXPECTED.typescript}, got ${[...tsVersions].join(", ") || "none"}`,
+      `pnpm-lock.yaml TypeScript packages must be exactly ${registry.typescript}, got ${[...tsVersions].join(", ") || "none"}`,
     );
   }
   if (
@@ -339,29 +320,51 @@ async function checkLockfile(root, manifest) {
 
 async function checkManifest(root) {
   const manifest = await readJson(join(root, "config/toolchain-versions.json"));
-  const foundation = await readJson(
-    join(root, "platform/runtime-foundation-decision.json"),
-  );
-  for (const [key, expected] of Object.entries(EXPECTED))
-    exact(manifest[key], expected, `config/toolchain-versions.json.${key}`);
-  exact(
-    manifest.nodeImage,
-    foundation.productionImage?.reference,
-    "config/toolchain-versions.json.nodeImage",
-  );
-  exact(
-    manifest.kafkaImage,
-    "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
-    "config/toolchain-versions.json.kafkaImage",
-  );
-  if (
-    !/^node:26\.8\.1-bookworm-slim@sha256:[0-9a-f]{64}$/.test(
-      manifest.nodeImage,
-    )
-  )
-    fail("TOOLCHAIN-IMAGE", "nodeImage must use an exact digest");
-  if (!/^apache\/kafka:4\.3\.1@sha256:[0-9a-f]{64}$/.test(manifest.kafkaImage))
-    fail("TOOLCHAIN-IMAGE", "kafkaImage must use an exact digest");
+  exact(manifest.schemaVersion, 2, "config/toolchain-versions.json.schemaVersion");
+  for (const key of REGISTRY_FIELDS) {
+    if (typeof manifest[key] !== "string" || manifest[key].length === 0)
+      fail("TOOLCHAIN-REGISTRY", `config/toolchain-versions.json.${key}: non-empty registry value required`);
+  }
+  for (const key of ["nodeImage", "kafkaImage"]) {
+    if (!/^[^@\s]+@sha256:[0-9a-f]{64}$/.test(manifest[key]))
+      fail("TOOLCHAIN-IMAGE", `config/toolchain-versions.json.${key}: exact digest required`);
+  }
+  const target = manifest.effectTarget;
+  if (!target || typeof target !== "object") fail("TOOLCHAIN-REGISTRY", "effectTarget: registry target required");
+  if (target.authorityRef !== "docs/adr/ADR-0024-effect-native-platform.md" ||
+      target.materializationOwner !== "issue-49" || target.generatedOpenApi !== "3.1.0")
+    fail("TOOLCHAIN-REGISTRY", "effectTarget: Effect materialization projection changed");
+  if (!target.packages || typeof target.packages !== "object")
+    fail("TOOLCHAIN-REGISTRY", "effectTarget.packages: package set required");
+  if (JSON.stringify(Object.keys(target.packages)) !== JSON.stringify(EFFECT_PACKAGES))
+    fail("TOOLCHAIN-REGISTRY", "effectTarget.packages: exact package set changed");
+  if (!Object.values(target.packages).every((value) => typeof value === "string" && SEMVER.test(value)))
+    fail("TOOLCHAIN-REGISTRY", "effectTarget.packages: exact semver values required");
+  if (new Set(EFFECT_PACKAGES.slice(0, -2).map((name) => target.packages[name])).size !== 1)
+    fail("TOOLCHAIN-REGISTRY", "effectTarget.packages: Effect packages must share one release version");
+  const registrySchema = await readJson(join(root, "config/toolchain-versions.schema.json"));
+  const hasNumericVersionConst = (value) => {
+    if (Array.isArray(value)) return value.some(hasNumericVersionConst);
+    if (!value || typeof value !== "object") return false;
+    return Object.entries(value).some(([key, child]) =>
+      (key === "const" && typeof child === "string" && SEMVER.test(child)) || hasNumericVersionConst(child),
+    );
+  };
+  if (hasNumericVersionConst(registrySchema))
+    fail("TOOLCHAIN-REGISTRY", "toolchain-versions.schema.json must not duplicate exact version pins");
+  const foundation = await readJson(join(root, "platform/runtime-foundation-decision.json"));
+  if (foundation.schemaVersion !== 2)
+    fail("TOOLCHAIN-REGISTRY", "runtime-foundation-decision.json.schemaVersion must be 2");
+  const effectDecision = foundation.effectPlatformDecision;
+  if (!effectDecision || effectDecision.bomRef !== "config/toolchain-versions.json" ||
+      JSON.stringify(effectDecision.packageAuthority) !== JSON.stringify(EFFECT_PACKAGES) ||
+      Object.hasOwn(effectDecision, "bom") || Object.hasOwn(effectDecision, "versions"))
+    fail("TOOLCHAIN-REGISTRY", "runtime foundation must reference the canonical Effect package registry");
+  for (const field of ["openApiGenerator", "openApiGeneratorPlugin", "generatorMode"]) {
+    if (Object.hasOwn(foundation.toolchainDecision ?? {}, field))
+      fail("TOOLCHAIN-REGISTRY", `runtime foundation removed field ${field} is forbidden`);
+  }
+  return manifest;
 }
 
 function checkTsConfigDocument(document, pathLabel) {
@@ -567,20 +570,20 @@ async function checkFinalImages(root) {
 
 export async function checkToolchainVersions(root = REPO_ROOT) {
   const resolvedRoot = resolve(root);
-  await checkManifest(resolvedRoot);
-  await checkPackageManifests(resolvedRoot);
+  const registry = await checkManifest(resolvedRoot);
+  await checkPackageManifests(resolvedRoot, registry);
   const packageJson = await readJson(join(resolvedRoot, "package.json"));
-  await checkLockfile(resolvedRoot, packageJson);
+  await checkLockfile(resolvedRoot, packageJson, registry);
   exact(
     (
       await readText(join(resolvedRoot, ".node-version"), "TOOLCHAIN-PIN")
     ).trim(),
-    EXPECTED.node,
+    registry.node,
     ".node-version",
   );
   await checkTsConfigs(resolvedRoot);
   await checkFinalImages(resolvedRoot);
-  return { typescript: EXPECTED.typescript, node: EXPECTED.node };
+  return { typescript: registry.typescript, node: registry.node };
 }
 
 function parseRoot(argv) {

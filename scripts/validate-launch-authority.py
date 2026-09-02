@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Fail-closed semantic checks for the launch-v1 authority manifests.
+"""Fail-closed semantic checks for the v2 launch authority manifests.
 
 The script intentionally uses only the Python standard library.  JSON Schema
 files describe the wire shape; this module checks the invariants which span
-the foundation, runtime profile, connectivity and target-layout documents.
+the v2 foundation, runtime profile, connectivity and target-layout documents.
 It never writes to the repository and can validate a fixture root with
 ``--root``.
 """
@@ -17,32 +17,6 @@ import re
 import sys
 from typing import Any
 
-
-NODE_VERSION = "26.8.1"
-NPM_VERSION = "11.19.0"
-COREPACK_VERSION = "0.35.0"
-PNPM_VERSION = "11.24.0"
-IMAGE_INDEX_DIGEST = "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e"
-IMAGE_AMD64_DIGEST = "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
-
-TS7_DECISION = "ADR-COP-TS7-NATIVE-001"
-TS7_PINS = {
-    "typescript": "7.0.2",
-    "oxlint": "1.80.0",
-    "oxlint-tsgolint": "7.0.2001",
-    "@hey-api/openapi-ts": "0.99.0",
-}
-
-FOUNDATION_PROHIBITIONS = [
-    "node-24",
-    "floating-image-tag",
-    "placeholder-digest",
-    "typescript-5-or-6",
-    "second-typescript-compiler",
-    "nightly-toolchain-pin",
-    "compiler-api",
-    "custom-transformer",
-]
 
 RUNTIME_NAMES = (
     "edge-gateway",
@@ -210,9 +184,62 @@ def exact_list(value: Any, expected: list[Any], label: str) -> None:
     require(value == expected, f"{label}: exact list changed")
 
 
+V2_FOUNDATION_KEYS = {
+    "$schema", "schemaVersion", "decisionId", "decisionRef", "preserves",
+    "runtime", "productionImage", "registryVerification", "toolchainDecision",
+    "effectPlatformDecision", "preservedArchitecture", "prohibitions",
+    "foundationMaterializationOwner", "effectAuthorityOwner",
+    "effectMaterializationOwners",
+}
+EFFECT_PACKAGES = (
+    "effect", "@effect/platform-node", "@effect/platform-browser",
+    "@effect/sql-pg", "@effect/opentelemetry", "@effect/atom-react",
+    "@effect/vitest", "@effect/tsgo", "pg-copy-streams",
+)
+EFFECT_IMPORT_AUTHORITY = {
+    "execution": "effect",
+    "composition": "context-service-owner-local-layer",
+    "lifecycle": "node-runtime-layer-launch-scope",
+    "contracts": "effect-schema-httpapi",
+    "http": "effect-http-router-httpapi-httpclient",
+    "runtimeValidation": "effect-schema",
+    "sql": "effect-sql-pg-with-coffee-transaction-policy",
+    "time": "effect-clock-datetime-duration-testclock",
+    "observability": "effect-opentelemetry",
+    "frontendRemoteState": "effect-atom-httpapi",
+    "backendTests": "vitest-effect-vitest",
+    "durability": "postgresql-and-kafka",
+}
+EFFECT_ALLOWED_UNSTABLE = [
+    "effect/unstable/http/", "effect/unstable/httpapi/",
+    "effect/unstable/sql/", "effect/unstable/encoding/",
+    "effect/unstable/reactivity/",
+]
+EFFECT_OFFICIAL_PACKAGES = [
+    "@effect/platform-node", "@effect/platform-browser", "@effect/sql-pg",
+    "@effect/opentelemetry", "@effect/atom-react", "@effect/vitest",
+]
+EFFECT_FORBIDDEN_UNSTABLE = [
+    "effect/unstable/rpc/", "effect/unstable/workflow/",
+    "effect/unstable/cluster/", "effect/unstable/persistence/",
+    "effect/unstable/eventlog/", "effect/unstable/ai/",
+    "effect/unstable/cli/", "effect/unstable/workers/",
+]
+V2_PROHIBITIONS = [
+    "node-24", "floating-image-tag", "placeholder-digest",
+    "typescript-5-or-6", "second-typescript-compiler", "nightly-toolchain-pin",
+    "compiler-api", "custom-transformer", "dual-runtime-stack",
+    "shared-platform-live-across-owners", "effect-wrapper-framework", "effect-rpc",
+    "effect-workflow", "effect-persistence", "effect-eventlog", "effect-cluster",
+    "unsafe-aroma-mutation-retry",
+]
+VERSION_RE = re.compile(r"^[0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z.-]+)?$")
+DELIVERY_GRAPH = "#3 → #48 → #49 → #50 → #51 → #52 → #53 → #54 → #55 → #4"
+
+
 def validate_schema_artifacts(platform: Path) -> None:
     schemas = {
-        "runtime-foundation-decision.schema.json": {"$schema", "schemaVersion", "decisionId", "decisionRef", "runtime", "productionImage", "registryVerification", "toolchainDecision", "prohibitions", "materializationOwner"},
+        "runtime-foundation-decision.schema.json": V2_FOUNDATION_KEYS,
         "launch-v1-runtime-profile.schema.json": {"$schema", "schemaVersion", "authority", "exactDeployableRuntimeCount", "runtimes", "specialRoles", "routeMounts", "surfaceIsolation", "internalOperationAllowlist", "delegation", "transportIdentity", "catalogIdentity", "ordersAuthority"},
         "launch-v1-connectivity-policy.schema.json": {"$schema", "schemaVersion", "authorityRef", "logicalZones", "dockerNetworks", "forbiddenNetworks", "runtimePolicies", "globalDenyAssertions"},
         "target-layout.schema.json": {"$schema", "schemaVersion", "authorityRef", "workspaceMaterializationOwner", "runtimeRoots", "plannedRoots", "technicalRoots", "forbiddenRoots", "filesystemCreationAuthorized"},
@@ -224,53 +251,135 @@ def validate_schema_artifacts(platform: Path) -> None:
         require(set(schema.get("required", [])) == expected_required, f"{filename}: root required set does not match its manifest")
 
 
-def validate_foundation(doc: dict[str, Any]) -> None:
-    required_keys(doc, {"$schema", "schemaVersion", "decisionId", "decisionRef", "runtime", "productionImage", "registryVerification", "toolchainDecision", "prohibitions", "materializationOwner"}, "foundation")
+def registry_value(registry: dict[str, Any], reference: Any, label: str) -> Any:
+    prefix = "config/toolchain-versions.json#/"
+    require(isinstance(reference, str) and reference.startswith(prefix), f"{label}: canonical registry reference required")
+    key = reference[len(prefix):]
+    require(key in registry and isinstance(registry[key], (str, int)), f"{label}: registry reference target is missing")
+    return registry[key]
+
+
+def has_numeric_version_const(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any((key == "const" and isinstance(item, str) and VERSION_RE.fullmatch(item)) or has_numeric_version_const(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(has_numeric_version_const(item) for item in value)
+    return False
+
+
+def validate_v2_registry(registry: dict[str, Any], schema: dict[str, Any], decision_ref: str) -> None:
+    require(registry.get("$schema") == "./toolchain-versions.schema.json", "toolchain registry: wrong companion schema")
+    require(registry.get("schemaVersion") == 2, "toolchain registry: schemaVersion must be 2")
+    target = registry.get("effectTarget")
+    require(isinstance(target, dict), "toolchain registry.effectTarget: object required")
+    required_keys(target, {"authorityRef", "materializationOwner", "generatedOpenApi", "packages"}, "toolchain registry.effectTarget")
+    require(target["authorityRef"] == decision_ref, "toolchain registry.effectTarget.authorityRef: ADR reference changed")
+    require(target["materializationOwner"] == "issue-49", "toolchain registry.effectTarget.materializationOwner: owner changed")
+    require(target["generatedOpenApi"] == "3.1.0", "toolchain registry.effectTarget.generatedOpenApi: OpenAPI 3.1 is required")
+    packages = target["packages"]
+    require(isinstance(packages, dict) and tuple(packages) == EFFECT_PACKAGES, "toolchain registry.effectTarget.packages: exact Effect package set changed")
+    require(all(isinstance(value, str) and VERSION_RE.fullmatch(value) for value in packages.values()), "toolchain registry.effectTarget.packages: exact semver values required")
+    require(len({packages[name] for name in EFFECT_PACKAGES[:-2]}) == 1, "toolchain registry.effectTarget.packages: Effect packages must share one release version")
+    require(schema.get("$schema") == "https://json-schema.org/draft/2020-12/schema", "toolchain schema: draft 2020-12 required")
+    require(schema.get("type") == "object" and schema.get("additionalProperties") is False, "toolchain schema: closed object required")
+    require(not has_numeric_version_const(schema), "toolchain schema: exact version const duplicates the registry")
+
+
+def validate_foundation_v2(doc: dict[str, Any], registry: dict[str, Any]) -> None:
+    required_keys(doc, V2_FOUNDATION_KEYS, "foundation")
     require(doc["$schema"] == "./runtime-foundation-decision.schema.json", "foundation.$schema: wrong companion schema")
-    require(doc["schemaVersion"] == 1, "foundation: unsupported schemaVersion")
-    require(doc["decisionId"] == "ADR-COP-RUNTIME-001", "foundation.decisionId: wrong runtime decision")
-    require(doc["decisionRef"] == "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md", "foundation.decisionRef: wrong ADR")
-
-    node = doc["runtime"]
-    require(isinstance(node, dict), "foundation.runtime: object required")
-    required_keys(node, {"node", "npm", "corepack", "packageManager"}, "foundation.runtime")
-    for key, expected in (("node", NODE_VERSION), ("npm", NPM_VERSION), ("corepack", COREPACK_VERSION), ("packageManager", f"pnpm@{PNPM_VERSION}")):
-        require(node[key] == expected, f"foundation.node.{key}: expected {expected}")
-
+    require(doc["schemaVersion"] == 2, "foundation: unsupported schemaVersion")
+    require(doc["decisionId"] == "ADR-COP-RUNTIME-002", "foundation.decisionId: wrong runtime decision")
+    require(doc["decisionRef"] == "docs/adr/ADR-0024-effect-native-platform.md", "foundation.decisionRef: wrong ADR")
+    require(doc["preserves"] == [
+        "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
+        "docs/adr/ADR-0020-launch-contract-closure.md",
+        "docs/adr/ADR-0021-github-operational-authority.md",
+        "docs/adr/ADR-0022-ts7-native-toolchain.md",
+    ], "foundation.preserves: predecessor ADR inventory changed")
+    runtime = doc["runtime"]
+    require(isinstance(runtime, dict), "foundation.runtime: object required")
+    if "node" in runtime:
+        require(False, "foundation.node.node: legacy numeric field is forbidden; use nodeRef")
+    if "packageManager" in runtime:
+        require(False, "foundation.node.packageManager: legacy numeric field is forbidden; use packageManagerRef")
+    required_keys(runtime, {"nodeRef", "npmRef", "corepackRef", "packageManagerRef"}, "foundation.runtime")
+    expected_refs = {
+        "nodeRef": "config/toolchain-versions.json#/node",
+        "npmRef": "config/toolchain-versions.json#/npm",
+        "corepackRef": "config/toolchain-versions.json#/corepack",
+        "packageManagerRef": "config/toolchain-versions.json#/pnpm",
+    }
+    for key, reference in expected_refs.items():
+        require(runtime[key] == reference, f"foundation.runtime.{key}: canonical registry reference changed")
+        registry_value(registry, runtime[key], f"foundation.{key}")
     image = doc["productionImage"]
     require(isinstance(image, dict), "foundation.productionImage: object required")
-    required_keys(image, {"repository", "tag", "indexDigest", "platform", "platformManifestDigest", "reference"}, "foundation.productionImage")
-    require(image["repository"] == "docker.io/library/node", "foundation.productionImage.repository: wrong image")
-    require(image["tag"] == "26.8.1-bookworm-slim", "foundation.productionImage.tag: floating or wrong image")
-    require(image["platform"] == "linux/amd64", "foundation.productionImage.platform: target platform must be linux/amd64")
-    require(image["indexDigest"] == IMAGE_INDEX_DIGEST, "foundation.productionImage.indexDigest: unverified image index digest")
-    require(image["platformManifestDigest"] == IMAGE_AMD64_DIGEST, "foundation.productionImage.platformManifestDigest: unverified target digest")
-    require(image["reference"] == f"node:26.8.1-bookworm-slim@{IMAGE_AMD64_DIGEST}", "foundation.productionImage.reference: image must pin target digest")
-    for field in ("platformManifestDigest", "indexDigest"):
-        require(re.fullmatch(r"sha256:[0-9a-f]{64}", image[field]) is not None, f"foundation.productionImage.{field}: invalid digest")
-    require("latest" not in image["tag"] and "24" not in image["tag"], "foundation.productionImage: forbidden floating/Node24 image")
-
-    registry = doc["registryVerification"]
-    require(registry == {
+    if "tag" in image:
+        require(False, "foundation.productionImage.tag: legacy numeric field is forbidden; use referenceRef")
+    required_keys(image, {"referenceRef", "platform"}, "foundation.productionImage")
+    require(image["referenceRef"] == "config/toolchain-versions.json#/nodeImage", "foundation.productionImage.referenceRef: node image registry reference changed")
+    require(image["platform"] == "linux/amd64", "foundation.productionImage.platform: target platform changed")
+    require(doc["registryVerification"] == {
         "verifiedAt": "2026-09-01",
-        "command": "docker buildx imagetools inspect node:26.8.1-bookworm-slim",
+        "command": "docker buildx imagetools inspect",
         "digestPolicy": "record-index-and-pin-target-platform-manifest",
     }, "foundation.registryVerification: registry evidence changed")
+    toolchain = doc["toolchainDecision"]
+    require(isinstance(toolchain, dict), "foundation.toolchainDecision: object required")
+    if "compilerLanes" in toolchain and toolchain["compilerLanes"] != 1:
+        require(False, "foundation.toolchainDecision.compilerLanes: second compiler lane is forbidden")
+    required_keys(toolchain, {"decisionId", "decisionRef", "contractSource", "generatedOpenApi", "compilerLanes"}, "foundation.toolchainDecision")
+    require(toolchain["decisionId"] == "ADR-COP-TS7-NATIVE-001", "foundation.toolchainDecision.decisionId: ADR-0022 identity changed")
+    require(toolchain["decisionRef"] == "docs/adr/ADR-0022-ts7-native-toolchain.md", "foundation.toolchainDecision.decisionRef: ADR-0022 reference changed")
+    require(toolchain["contractSource"] == "effect-schema-httpapi", "foundation.toolchainDecision.contractSource: Effect Schema/HttpApi required")
+    require(toolchain["generatedOpenApi"] == "3.1.0", "foundation.toolchainDecision.generatedOpenApi: OpenAPI 3.1 is required")
+    for field in ("openApiGenerator", "openApiGeneratorPlugin", "generatorMode"):
+        require(field not in toolchain, f"foundation.toolchainDecision.{field}: removed field is forbidden")
 
-    ts7 = doc["toolchainDecision"]
-    require(isinstance(ts7, dict), "foundation.ts7Authority: object required")
-    required_keys(ts7, {"decisionId", "decisionRef", "typescript", "structuralLinter", "typeAwareLinter", "openApiGenerator", "openApiGeneratorPlugin", "generatorMode", "compilerLanes"}, "foundation.toolchainDecision")
-    require(ts7["decisionId"] == TS7_DECISION, "foundation.toolchainDecision.decisionId: ADR-0022 identity changed")
-    require(ts7["decisionRef"] == "docs/adr/ADR-0022-ts7-native-toolchain.md", "foundation.toolchainDecision.decisionRef: ADR-0022 reference changed")
-    require(ts7["typescript"] == "typescript@7.0.2", "foundation.toolchainDecision.typescript: TS7 pin changed")
-    require(ts7["structuralLinter"] == "oxlint@1.80.0", "foundation.toolchainDecision.structuralLinter: pin changed")
-    require(ts7["typeAwareLinter"] == "oxlint-tsgolint@7.0.2001", "foundation.toolchainDecision.typeAwareLinter: pin changed")
-    require(ts7["openApiGenerator"] == "@hey-api/openapi-ts@0.99.0", "foundation.toolchainDecision.openApiGenerator: pin changed")
-    require(ts7["openApiGeneratorPlugin"] == "@hey-api/typescript", "foundation.toolchainDecision.openApiGeneratorPlugin: plugin changed")
-    require(ts7["generatorMode"] == "types-only", "foundation.ts7Authority.generatorMode: only types-only is allowed")
-    require(ts7["compilerLanes"] == 1, "foundation.toolchainDecision.compilerLanes: second compiler lane is forbidden")
-    exact_list(doc["prohibitions"], FOUNDATION_PROHIBITIONS, "foundation.prohibitions")
-    require(doc["materializationOwner"] == "issue-3", "foundation.materializationOwner: workspace materialization belongs to issue #3")
+
+    effect = doc["effectPlatformDecision"]
+    required_keys(effect, {"decisionId", "decisionRef", "bomRef", "packageAuthority", "importAuthority", "modulePolicy", "materializationOwner", "upgradePolicy"}, "foundation.effectPlatformDecision")
+    require(effect["decisionId"] == "ADR-COP-EFFECT-NATIVE-001", "foundation.effectPlatformDecision.decisionId: wrong Effect decision")
+    require(effect["decisionRef"] == doc["decisionRef"], "foundation.effectPlatformDecision.decisionRef: ADR reference changed")
+    require(effect["bomRef"] == "config/toolchain-versions.json", "foundation.effectPlatformDecision.bomRef: canonical BOM ref required")
+    require(effect["packageAuthority"] == list(EFFECT_PACKAGES), "foundation.effectPlatformDecision.packageAuthority: package set changed")
+    require(effect["importAuthority"] == EFFECT_IMPORT_AUTHORITY, "foundation.effectPlatformDecision.importAuthority: Effect authority changed")
+    require(effect["modulePolicy"] == {
+        "stablePackageRoot": "effect", "unstableDefault": "deny",
+        "allowedUnstablePrefixes": EFFECT_ALLOWED_UNSTABLE,
+        "allowedOfficialPackages": EFFECT_OFFICIAL_PACKAGES,
+        "explicitlyForbiddenUnstablePrefixes": EFFECT_FORBIDDEN_UNSTABLE,
+    }, "foundation.effectPlatformDecision.modulePolicy: unstable module policy changed")
+    require(effect["materializationOwner"] == "issue-49", "foundation.effectPlatformDecision.materializationOwner: next owner must be issue-49")
+    require(effect["upgradePolicy"] == "separate-platform-only-issue-no-business-changes", "foundation.effectPlatformDecision.upgradePolicy: unsafe upgrade policy")
+    require(doc["preservedArchitecture"] == {
+        "deployableRuntimeCount": 15,
+        "boundedContexts": ["customer", "catalog", "pricing", "orders", "integration", "realtime"],
+        "logicalDatabaseCount": 5,
+        "providerEgressRuntime": "aroma-gateway",
+        "convergenceOwner": "orders",
+        "durableTruth": "postgresql",
+        "eventTransport": "kafka-committed-facts-and-wake-up",
+        "unsafeProviderMutationRetry": "forbidden",
+    }, "foundation.preservedArchitecture: business/data/trust boundary changed")
+    require(doc["prohibitions"] == V2_PROHIBITIONS, "foundation.prohibitions: fail-closed prohibition list changed")
+    require(doc["foundationMaterializationOwner"] == "issue-3", "foundation.foundationMaterializationOwner: issue #3 ownership changed")
+    require(doc["effectAuthorityOwner"] == "issue-48", "foundation.effectAuthorityOwner: Effect authority belongs to #48")
+    require(doc["effectMaterializationOwners"] == ["issue-49", "issue-50", "issue-51", "issue-52", "issue-53", "issue-54", "issue-55"], "foundation.effectMaterializationOwners: delivery line changed")
+
+
+def validate_delivery_graph(root: Path) -> None:
+    path = root / "docs" / "launch" / "13_DELIVERY_DEPENDENCY_GRAPH.md"
+    try:
+        document = re.sub(r"\s+", " ", path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as error:
+        raise AuthorityError(f"delivery graph: cannot read {path}: {error}") from error
+    require(DELIVERY_GRAPH in document, "delivery graph: canonical #3→#48→#55→#4 sequence is missing")
+    require("#49 получает `status:ready` только после merge #48" in document, "delivery graph: #49 readiness gate changed")
+    require("#50–#55 остаются `status:blocked`" in document, "delivery graph: blocked downstream gate changed")
+    for line in ("#5..#12 + #16..#18 → #13 Launch gates", "#10 + #16 + #18 + #8 → #11 AROMA convergence", "#8 + #9 + #11 → #12 Realtime"):
+        require(line in document, f"delivery graph: business edge changed: {line}")
 
 
 def runtime_entries(profile: dict[str, Any]) -> list[dict[str, Any]]:
@@ -534,12 +643,21 @@ def validate_target_layout(layout: dict[str, Any]) -> None:
 
 def validate_root(root: Path) -> None:
     platform = root / "platform"
-    validate_schema_artifacts(platform)
     foundation = load_json(platform / "runtime-foundation-decision.json")
+    require(foundation.get("schemaVersion") == 2, "foundation: schemaVersion 2 is required")
+    validate_schema_artifacts(platform)
+    schema = load_json(platform / "runtime-foundation-decision.schema.json")
+    registry = load_json(root / "config" / "toolchain-versions.json")
+    registry_schema = load_json(root / "config" / "toolchain-versions.schema.json")
+    validate_v2_registry(registry, registry_schema, foundation.get("decisionRef", ""))
+    require(schema.get("$schema") == "https://json-schema.org/draft/2020-12/schema", "foundation schema: draft 2020-12 required")
+    require(schema.get("type") == "object" and schema.get("additionalProperties") is False, "foundation schema: closed object required")
+    require(set(schema.get("required", [])) == V2_FOUNDATION_KEYS and set(schema.get("properties", {})) == V2_FOUNDATION_KEYS, "foundation schema: v2 root shape changed")
+    validate_foundation_v2(foundation, registry)
+    validate_delivery_graph(root)
     profile = load_json(platform / "launch-v1-runtime-profile.json")
     connectivity = load_json(platform / "launch-v1-connectivity-policy.json")
     layout = load_json(platform / "target-layout.json")
-    validate_foundation(foundation)
     validate_runtime_profile(profile)
     validate_connectivity(connectivity)
     validate_target_layout(layout)

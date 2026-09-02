@@ -57,6 +57,15 @@ function assertExact(actual, expected, label) {
   }
 }
 
+function registryValue(registry, reference, label) {
+  const prefix = "config/toolchain-versions.json#/";
+  if (!reference.startsWith(prefix)) fail(`${label}: canonical registry reference is required`);
+  const key = reference.slice(prefix.length);
+  if (!Object.hasOwn(registry, key) || typeof registry[key] !== "string" || registry[key].length === 0)
+    fail(`${label}: registry key is missing: ${key}`);
+  return registry[key];
+}
+
 async function assertEvidence(root, row) {
   if (!Array.isArray(row.evidence) || row.evidence.length === 0) {
     fail(row.id + ": evidence must contain at least one repository path");
@@ -74,18 +83,22 @@ async function assertEvidence(root, row) {
 
 export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) {
   const markdown = await readFile(join(root, MATRIX_PATH), "utf8");
+  const registry = JSON.parse(await readFile(join(root, "config/toolchain-versions.json"), "utf8"));
   const { matrix, table } = extractMatrix(markdown);
   assertExact(matrix.schemaVersion, 1, "schemaVersion");
   assertExact(
     matrix.authority,
     {
-      compiler: "typescript@7.0.2",
-      oxlint: "oxlint@1.80.0",
-      tsgolint: "oxlint-tsgolint@7.0.2001",
+      compilerRef: "config/toolchain-versions.json#/typescript",
+      oxlintRef: "config/toolchain-versions.json#/oxlint",
+      tsgolintRef: "config/toolchain-versions.json#/oxlintTsgolint",
       diagnosticParityTest: "tests/architecture/checks.test.mjs",
     },
     "authority",
   );
+  registryValue(registry, matrix.authority.compilerRef, "authority.compilerRef");
+  registryValue(registry, matrix.authority.oxlintRef, "authority.oxlintRef");
+  registryValue(registry, matrix.authority.tsgolintRef, "authority.tsgolintRef");
   assertExact(matrix.replacement, "ESLint", "replacement");
   assertExact(matrix.uncoveredPolicy, "block-replacement", "uncoveredPolicy");
   if (!Array.isArray(matrix.rows)) fail("rows must be an array");

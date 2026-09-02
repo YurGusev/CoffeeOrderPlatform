@@ -1,5 +1,9 @@
 # Исполнимая спецификация Catalog
 
+Технический путь: Effect `Schema`/`Stream`, owner-local `Layer` и
+`@effect/sql-pg`; generated contract artifacts производны и не являются runtime
+source. Business semantics и limits ниже не изменяются.
+
 Статус: нормативная спецификация первого запуска. Исполнитель не выбирает
 транспорт, состояния, лимиты, владельцев или семантику событий заново.
 

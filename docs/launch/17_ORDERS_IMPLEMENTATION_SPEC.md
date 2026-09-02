@@ -1,5 +1,9 @@
 # Исполнимая спецификация Orders Draft и Confirm
 
+Технический путь: Effect use cases, owner-local `Layer`/`Scope` и Store через
+`@effect/sql-pg`; Orders ownership, versions и convergence semantics ниже
+сохраняются без изменений.
+
 Статус: нормативная спецификация issue #8. Исполнитель не выбирает таблицы,
 состояния, транзакции, versioning, snapshots, Desired или `allowedActions` заново.
 

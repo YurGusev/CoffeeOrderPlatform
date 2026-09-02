@@ -3,11 +3,10 @@
 ## Принятый подход
 
 - Новая система строится сразу на микросервисах, без промежуточного модульного монолита.
-- TypeScript strict, Node.js 26 Current, Fastify-first. Статус LTS не является
-  ограничением: проект сознательно использует свежую ветку Node.js.
-- React SPA; project-owned browser fetch client использует generated
-  `client-v1` transport types; generated SDK/client запрещён; server state через
-  TanStack Query.
+- TypeScript strict, Node.js и tooling берутся из canonical registry; execution
+  model — Effect-native.
+- React SPA использует source `client-v1` Effect contract, `AtomHttpApi` и
+  generated OpenAPI/JSON Schema artifacts; generated SDK/client запрещён.
 - Используется уже работающий PostgreSQL 17; второй PostgreSQL не поднимается.
   Legacy-БД `coffeeorderdb` не изменяется. Для новой платформы на существующем
   сервере создаются отдельные логические БД и роли владельцев.
@@ -16,7 +15,7 @@
 - SSE — инвалидация и отображение прогресса в браузере.
 - Docker Compose — первое воспроизводимое окружение; Kubernetes для первой версии не нужен.
 - Точные версии runtime, библиотек и инструментов берутся из
-  [реестра версий](09_EXISTING_DATABASE_AND_VERSIONS.md); диапазоны и `latest` запрещены.
+  `config/toolchain-versions.json`; диапазоны и `latest` запрещены.
 
 ## В первой вертикали реализуются
 

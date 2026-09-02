@@ -1,5 +1,9 @@
 # Исполнимая спецификация итогового launch gate
 
+Технический путь: проверки используют Effect source contracts, owner-local
+Layers/Scopes, typed adapters и canonical registry refs; launch limits и failure
+semantics ниже не изменяются.
+
 Статус: нормативная спецификация issue #13. Задача проверяет принятый scope и
 не исправляет найденные дефекты внутри verification PR.
 
