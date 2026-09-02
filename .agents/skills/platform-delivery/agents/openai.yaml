@@ -1,4 +1,4 @@
 interface:
   display_name: "Поставка платформы"
-  short_description: "Docker, CI/CD и deployment-контракты"
+  short_description: "Docker и deployment-контракты"
   default_prompt: "Используй $platform-delivery для реализации или проверки поставки платформы."

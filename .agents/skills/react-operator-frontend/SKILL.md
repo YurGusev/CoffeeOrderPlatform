@@ -1,14 +1,16 @@
 ---
 name: react-operator-frontend
-description: Создавать или проверять новую React SPA оператора CoffeeOrderPlatform, project-owned fetch client на generated client-v1 transport types, server-state workflows, realtime-инвалидацию, доступность и browser tests.
+description: Создавать или проверять React SPA оператора CoffeeOrderPlatform на Effect Atom/AtomHttpApi, source client-v1 contract, server-state workflows, realtime-инвалидацию, доступность и browser tests.
 ---
 
 # React-интерфейс оператора
 
 Создавать новый frontend; legacy React служит только визуальным ориентиром.
-Использовать React Router, TanStack Query, project-owned browser fetch client на
-generated `client-v1` transport types, доступные формы и Playwright. Generated
-SDK/client запрещён; runtime response validation обязательна.
+Один Effect Runtime на browser tab предоставляет AtomHttpApi client из source
+`client-v1` contract. Не добавлять TanStack Query, handwritten fetch client,
+generated SDK/client или generated transport types. React Router и Playwright
+не добавлять в foundation `#54`; их первый реальный caller — routes/browser
+flow `#9`.
 
 - Server owns identity, money, versions, business state, and `allowedActions`.
 - Mutations carry idempotency and expected owner version.
@@ -18,6 +20,6 @@ SDK/client запрещён; runtime response validation обязательна.
 - No blind retry for uncertain provider mutation.
 - Preserve accessibility, CSP, deep links, and bundle budgets.
 
-Прочитать `docs/launch/07_FRONTEND_CONTRACT.md`. Проверять generated transport
-types drift, project-owned client boundary, types/lint/unit, mocks, Playwright,
-accessibility, CSP, deep links и SSE.
+Прочитать `docs/launch/07_FRONTEND_CONTRACT.md`. Проверять Effect contract/artifact
+drift, AtomHttpApi boundary, types/lint/unit, accessibility, CSP, deep links и
+SSE; browser test обязателен только для существующего flow.
