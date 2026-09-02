@@ -13,7 +13,7 @@ permissions:
 jobs:
   export:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - name: Получить exact commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -21,16 +21,38 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Упаковать рабочую копию
+      - name: Установить Node 26.8.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.8.1
+          check-latest: false
+
+      - name: Материализовать exact toolchain
         shell: bash
         run: |
           set -euo pipefail
-          tar --exclude=.git --exclude=node_modules --create --gzip --file "${RUNNER_TEMP}/coffee-order-platform.tar.gz" .
+          corepack enable
+          corepack install --global pnpm@11.24.0
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm exec effect-tsgo patch --typescript --no-oxlint
+          test "$(node --version)" = "v26.8.1"
+          test "$(pnpm --version)" = "11.24.0"
+
+      - name: Упаковать рабочую копию и toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="${RUNNER_TEMP}/coffee-audit-bundle"
+          mkdir -p "$bundle/repo"
+          tar --exclude=.git --create --file - . | tar --extract --file - --directory "$bundle/repo"
+          node_root="$(dirname "$(dirname "$(command -v node)")")"
+          cp -a "$node_root" "$bundle/node"
+          tar --create --gzip --file "${RUNNER_TEMP}/coffee-order-platform-audit.tar.gz" --directory "$bundle" repo node
 
       - name: Опубликовать временный артефакт
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: coffee-order-platform-${{ github.sha }}
-          path: ${{ runner.temp }}/coffee-order-platform.tar.gz
+          name: coffee-order-platform-audit-${{ github.sha }}
+          path: ${{ runner.temp }}/coffee-order-platform-audit.tar.gz
           if-no-files-found: error
           retention-days: 1
