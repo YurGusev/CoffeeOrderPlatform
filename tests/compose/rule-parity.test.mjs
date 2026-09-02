@@ -6,6 +6,7 @@ import test from "node:test";
 import { checkRuleParity } from "../../scripts/check-rule-parity.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const compareText = (left, right) => left.localeCompare(right);
 
 async function matrix() {
   const markdown = await readFile(
@@ -62,8 +63,8 @@ void test("Effect diagnostic rows use exact configured diagnostic identity", asy
   ).diagnosticSeverity;
 
   assert.deepEqual(
-    document.effectDiagnostics.map((row) => row.diagnostic).sort(),
-    Object.keys(severity).sort(),
+    document.effectDiagnostics.map((row) => row.diagnostic).sort(compareText),
+    Object.keys(severity).sort(compareText),
   );
   for (const row of document.effectDiagnostics) {
     assert.equal(row.id, `EFFECT-DIAG-${row.diagnostic}`);
