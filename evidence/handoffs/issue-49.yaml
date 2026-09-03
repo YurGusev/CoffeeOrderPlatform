@@ -12,6 +12,9 @@ outputs:
   - artifact: Dockerfile
     sha256: 51c8ec82ab3149c4456926c06a65aecb78c2d3c47a72005746a9bd058c803662
     consumers: [50]
+  - artifact: .vscode/settings.json
+    sha256: dea4532800d42f0fcbd9a0daa00364fd11459e8c856bd4cb9675523cefff8e77
+    consumers: [50]
   - artifact: config/toolchain-versions.json
     sha256: aa7194ca7dd001ef989dd9be6b534dd6624e6e82a8ced709f56f4d75a2d19f8c
     consumers: [50]
