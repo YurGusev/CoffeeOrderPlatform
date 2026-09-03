@@ -6,7 +6,6 @@ import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const ACCEPTED_DEPENDENCY_CRUISER = '18.2.0';
 const FORBIDDEN_ROOTS = ['packages/domain', 'packages/models', 'packages/shared-business'];
 const ALLOWED_PLATFORM_PACKAGES = new Set([
   '@coffee-platform/config',
@@ -606,7 +605,7 @@ async function checkPermissionManifests(root) {
   }
 }
 
-async function runDependencyCruiser(root, configPath) {
+async function runDependencyCruiser(root, configPath, dependencyCruiser) {
   const targets = ['apps', 'packages'].filter((path) => existsSync(join(root, path)));
   if (targets.length === 0) return { skipped: true, reason: 'runtime roots are not materialized before issue #3' };
 
@@ -622,7 +621,7 @@ async function runDependencyCruiser(root, configPath) {
     encoding: 'utf8',
     env: { ...process.env, NO_UPDATE_NOTIFIER: '1' },
   });
-  if (result.error) fail('BOUND-IMPORT', `Dependency Cruiser ${ACCEPTED_DEPENDENCY_CRUISER} unavailable: ${result.error.message}`);
+  if (result.error) fail('BOUND-IMPORT', `Dependency Cruiser ${dependencyCruiser} unavailable: ${result.error.message}`);
   let graph;
   try {
     graph = JSON.parse(result.stdout);
@@ -650,7 +649,7 @@ async function runDependencyCruiser(root, configPath) {
       }
     }
   }
-  return { skipped: false };
+  return { skipped: false, dependencyCruiser };
 }
 
 export async function checkArchitecture(root = SCRIPT_ROOT) {
@@ -661,9 +660,10 @@ export async function checkArchitecture(root = SCRIPT_ROOT) {
   await checkPackageDependencies(resolvedRoot);
   await checkStaticSources(resolvedRoot);
   await checkPermissionManifests(resolvedRoot);
+  const { dependencyCruiser } = JSON.parse(await readFile(join(SCRIPT_ROOT, 'config/toolchain-versions.json'), 'utf8'));
   const configPath = resolve(SCRIPT_ROOT, '.dependency-cruiser.cjs');
   if (!existsSync(configPath) || !(await stat(configPath)).isFile()) fail('BOUND-IMPORT', '.dependency-cruiser.cjs is missing');
-  return await runDependencyCruiser(resolvedRoot, configPath);
+  return await runDependencyCruiser(resolvedRoot, configPath, dependencyCruiser);
 }
 
 function parseRoot(argv) {
@@ -674,7 +674,7 @@ function parseRoot(argv) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const result = await checkArchitecture(parseRoot(process.argv.slice(2)));
-    console.log(result.skipped ? `architecture: passed (${result.reason})` : `architecture: passed with Dependency Cruiser ${ACCEPTED_DEPENDENCY_CRUISER}`);
+    console.log(result.skipped ? `architecture: passed (${result.reason})` : `architecture: passed with Dependency Cruiser ${result.dependencyCruiser}`);
   } catch (error) {
     console.error(`architecture: FAIL: ${error.message}`);
     process.exitCode = 1;

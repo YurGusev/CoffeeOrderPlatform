@@ -127,10 +127,16 @@ void test("RED BOUND-IMPORT: Catalog cannot import Orders infrastructure DB", ()
   assert.match(output(result), /catalog-service.*orders-service/s);
 });
 
-void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {
+void test("GREEN: versioned contract import is accepted by the registry-pinned Dependency Cruiser", async () => {
+  const { dependencyCruiser } = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
+  );
   const result = run("check-architecture.mjs", join(FIXTURES, "valid-import"));
   assert.equal(result.status, 0, output(result));
-  assert.match(output(result), /Dependency Cruiser 18\.2\.0/);
+  assert.ok(
+    output(result).includes(`Dependency Cruiser ${dependencyCruiser}`),
+    output(result),
+  );
 });
 
 void test("RED BOUND-DB-CLAIM: Orders cannot receive Customer database URL/role", async () => {

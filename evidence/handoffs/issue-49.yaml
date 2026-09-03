@@ -37,7 +37,7 @@ outputs:
     sha256: 5325afe083b49553bb001f9c78f03f52bbaf6273d17fb50d48e8d0ce8d810db4
     consumers: [50]
   - artifact: scripts/check-architecture.mjs
-    sha256: 57a4e5e10a6c25bc14543f5fe8f28ddc4eed7966c19d4fef13f904ae8e4e5f4e
+    sha256: 185c3d57c7b3879e6b6a78bb8775597aec0d12a502bbff56ec977687d5b6c5bd
     consumers: [50]
   - artifact: scripts/check-rule-parity.mjs
     sha256: a98f8132d8006550de91e39f5e282a79088db6b8fc01902e386bf327d18ffed9
@@ -49,7 +49,7 @@ outputs:
     sha256: 38cb0402fbb37811630236c891d98adaf56112f2f1d2676c753da60c934e531f
     consumers: [50]
   - artifact: tests/architecture/checks.test.mjs
-    sha256: 0da4da11ad9103eef23b72bdf41879789ba539ebd99044ded2249ad5eb33a1b3
+    sha256: 56bd440bdbbbf4dcd5a37efec6345da12e16358cc3cf7aec669e6ecb061beeed
     consumers: [50]
   - artifact: tests/architecture/fixtures/invalid-effect-contract-authority/apps/api-internal/src/internal.ts
     sha256: 12073a8f5b28d90f666782f503dfe6d972eca5810ff6382f9d1732e34a6507b3
