@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Compare the authoritative TypeScript build in its canonical (parallel)
- * mode with the explicit --singleThreaded mode.
+ * Compare the authoritative TypeScript + Effect diagnostics build in its
+ * canonical (parallel) mode with the explicit --singleThreaded mode.
  *
  * Each profile is built in an independent temporary clean workspace. The
  * repository checkout, node_modules, dist and tsbuildinfo are never modified.
@@ -53,6 +53,10 @@ async function copyCleanWorkspace(root) {
   if (install.status !== 0) {
     fail('TOOLCHAIN-PROFILE', `frozen install failed in temporary workspace:\n${install.stdout}\n${install.stderr}`.trim());
   }
+  const patch = run('pnpm', ['exec', 'effect-tsgo', 'patch', '--typescript', '--no-oxlint'], workspace);
+  if (patch.status !== 0) {
+    fail('TOOLCHAIN-PROFILE', `Effect TS-Go patch failed in temporary workspace:\n${patch.stdout}\n${patch.stderr}`.trim());
+  }
   return workspace;
 }
 
@@ -102,7 +106,7 @@ async function runProfile(root, name, args) {
     if (result.status !== 0) fail('TOOLCHAIN-PROFILE', `${name} compiler profile failed:\n${diagnostics}`.trim());
     const outputs = await snapshotOutputs(workspace);
     return {
-      command: `pnpm exec tsc -b --pretty false${args.length ? ` ${args.join(' ')}` : ''}`,
+      command: `pnpm exec effect-tsgo patch --typescript --no-oxlint && pnpm exec tsc -b --pretty false${args.length ? ` ${args.join(' ')}` : ''}`,
       exitCode: result.status,
       diagnostics,
       diagnosticsSha256: sha256(diagnostics),
@@ -129,6 +133,8 @@ function parseArguments(argv) {
 export async function checkToolchainProfiles(root = REPO_ROOT) {
   const resolvedRoot = resolve(root);
   const registry = JSON.parse(await readFile(join(resolvedRoot, 'config/toolchain-versions.json'), 'utf8'));
+  const effectTsgoVersion = registry.effectTarget?.packages?.['@effect/tsgo'];
+  if (typeof effectTsgoVersion !== 'string') fail('TOOLCHAIN-PROFILE', 'Effect TS-Go version is missing from the canonical registry');
   const profiles = {};
   for (const [name, args] of Object.entries(PROFILE_NAMES)) profiles[name] = await runProfile(resolvedRoot, name, args);
   const parallel = profiles.parallel;
@@ -143,12 +149,17 @@ export async function checkToolchainProfiles(root = REPO_ROOT) {
     fail('TOOLCHAIN-PROFILE-PARITY', `parallel and singleThreaded profiles differ: ${JSON.stringify(parity)}`);
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     authority: {
+      node: registry.node,
+      typescript: registry.typescript,
       nodeRef: 'config/toolchain-versions.json#/node',
       typescriptRef: 'config/toolchain-versions.json#/typescript',
-      compiler: `typescript@${registry.typescript}`,
+      compiler: `typescript@${registry.typescript}-patched-by-effect-tsgo@${effectTsgoVersion}`,
+      effectTsgoRef: 'config/toolchain-versions.json#/effectTarget/packages/@effect~1tsgo',
+      effectTsgo: effectTsgoVersion,
       compilerLanes: 1,
+      effectDiagnostics: 'enabled',
     },
     profiles: Object.fromEntries(Object.entries(profiles).map(([name, profile]) => [name, {
       command: profile.command,
@@ -169,7 +180,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const {root, evidence} = parseArguments(process.argv.slice(2));
     const report = await checkToolchainProfiles(root);
     if (evidence) await writeFile(evidence, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-    console.log(`toolchain profiles: passed (parallel == singleThreaded, ${report.profiles.parallel.artifactCount} artifacts)`);
+    console.log(`toolchain profiles: passed (TS7 + Effect diagnostics parallel == singleThreaded, ${report.profiles.parallel.artifactCount} artifacts)`);
   } catch (error) {
     console.error(`toolchain profiles: FAIL: ${error.message}`);
     process.exitCode = 1;

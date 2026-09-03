@@ -49,8 +49,12 @@ aggregate gate, но сам по себе не является доказате
 - **COVERED** — включённый rule или отдельный checker плюс RED fixture;
 - **PARTIAL** — часть гарантии блокируется, но остаётся названный обход;
 - **GAP** — rule зарегистрирован или требование известно, но release gate его
-  ещё не доказывает. `GAP` блокирует admission замены ESLint и принятие
-  `G03_STATIC`, даже если текущий `pnpm lint` возвращает `0`.
+  ещё не доказывает. `GAP` и `PARTIAL` сохраняются в truth matrix и имеют
+  `uncoveredBlocksReplacement: true`: они блокируют полную замену ESLint и
+  принятие `G03_STATIC`, даже если текущий `pnpm lint` возвращает `0`.
+  Admission issue #49 является отдельным scoped gate только для строк
+  `ARCH-EFFECT-*` (включая `ARCH-EFFECT-PARSER`) и не объявляет старые GAP
+  покрытыми.
 
 ## 3. Rule-parity matrix
 
@@ -68,14 +72,27 @@ aggregate gate, но сам по себе не является доказате
 | `TS7-BRAND-CAST` / Branded IDs нельзя создавать прямым cast      | restricted syntax/custom rule                                    | `TS7-BRAND-CAST`                                                                                                             | **COVERED**     | `BLOCK`; fixture `invalid-ts7-brand`                                                                             |
 | `BOUNDARIES` / Cross-owner import, чужая DB/secret и interaction | boundaries/import rules                                          | Dependency Cruiser wrapper и `BOUND-*` checkers                                                                              | **COVERED**     | `BLOCK`; RED fixtures проверяют source, target и rule id                                                         |
 | `ARCH-FORBIDDEN` / Axios, native FFI/SQLite/VFS и mutable `Date` | restricted imports/syntax                                        | `ARCH-FORBIDDEN-HTTP`, `ARCH-FORBIDDEN-NATIVE`, `ARCH-TEMPORAL`                                                              | **COVERED**     | `BLOCK`; отдельные RED fixtures                                                                                  |
+| `ARCH-EFFECT-PRIMARY` / Promise/async/timer/clock escape         | Effect execution model                                          | `check-architecture.mjs` с exact temporary legacy inventory                                                                    | **COVERED**     | `BLOCK`; fixture `invalid-effect-primary`, inventory is finite and `allowNewUsage=false`                       |
+| `ARCH-EFFECT-RUN-BOUNDARY` / Effect execution starts only at roots | restricted runtime entrypoints                                | `check-architecture.mjs`                                                                                                      | **COVERED**     | `BLOCK`; fixture `invalid-effect-run`                                                                            |
+| `ARCH-EFFECT-PROVIDE-BOUNDARY` / Layer composition ownership    | restricted DI composition                                       | `check-architecture.mjs`                                                                                                      | **COVERED**     | `BLOCK`; fixture `invalid-effect-provide`                                                                        |
+| `ARCH-EFFECT-MODULE-ALLOWLIST` / Effect module surface          | restricted imports                                             | ADR-0024 unstable default-deny and `check-architecture.mjs`                                                                    | **COVERED**     | `BLOCK`; fixture `invalid-effect-module`                                                                         |
+| `ARCH-EFFECT-OWNER-LAYER` / Layer cannot cross owner             | import/ownership boundaries                                     | owner-local Layer import guard in `check-architecture.mjs`                                                                      | **COVERED**     | `BLOCK`; fixture `invalid-effect-owner-layer`                                                                    |
+| `ARCH-EFFECT-DURABILITY` / Durable protocol cannot be in-memory | restricted state primitives                                    | PostgreSQL/Kafka durability rule in `check-architecture.mjs`                                                                    | **COVERED**     | `BLOCK`; fixture `invalid-effect-durability`                                                                     |
+| `ARCH-EFFECT-UNSAFE-RETRY` / AROMA mutation has no blind retry   | restricted retry/cancellation                                   | AROMA mutation path guard in `check-architecture.mjs`                                                                          | **COVERED**     | `BLOCK`; fixture `invalid-effect-unsafe-retry`                                                                  |
+| `ARCH-EFFECT-SCOPED-FIBER` / Background effects are Scope-owned | restricted concurrency                                     | `forkScoped` requirement in `check-architecture.mjs`                                                                            | **COVERED**     | `BLOCK`; fixture `invalid-effect-scoped-fiber`                                                                  |
+| `ARCH-EFFECT-CONTRACT-AUTHORITY` / Schema/HttpApi is contract source | restricted generated/handwritten paths                      | web/internal/generated DTO guard in `check-architecture.mjs`                                                                      | **COVERED**     | `BLOCK`; fixture `invalid-effect-contract-authority`                                                            |
+| `ARCH-EFFECT-SQL-BOUNDARY` / SQL uses Effect SQL and Schema     | restricted database APIs                                      | `pg`/transaction/row-cast/identifier guard in `check-architecture.mjs`                                                          | **COVERED**     | `BLOCK`; fixture `invalid-effect-sql-boundary`                                                                  |
+| `ARCH-EFFECT-PARSER` / Unknown source syntax fails closed       | parser safety                                                 | fail-closed source parser and stable source/line diagnostics                                                                       | **COVERED**     | `BLOCK`; fixture `invalid-effect-parser`                                                                        |
 | Generated drift, contract compatibility и final-image toolchain  | не lint guarantee                                                | отдельные gates `contracts:*`, `versions:check`, image/supply-chain checks                                                   | Вне lint matrix | Нельзя маскировать lint warning или включать второй compiler; owning gate остаётся blocking                      |
 
 Машиночитаемая часть этой таблицы является canonical input для
 `scripts/check-rule-parity.mjs`. `pnpm rule-parity:check` проверяет достоверность
 матрицы, наличие evidence и blocking-флагов и возвращает `0`, если `GAP` или
-`PARTIAL` обозначены честно. Отдельный `pnpm rule-parity:admit` применяет
-`uncoveredPolicy: block-replacement` и возвращает ненулевой код до тех пор, пока
-все строки не станут `COVERED`.
+`PARTIAL` обозначены честно. Отдельный `pnpm rule-parity:admit` — admission gate
+issue #49: при `uncoveredPolicy: block-replacement` он проверяет только строки
+`ARCH-EFFECT-*` и возвращает ненулевой код, если любая из них не `COVERED`.
+Статусы non-Effect `GAP`/`PARTIAL` не меняются и по-прежнему блокируют полную
+замену ESLint; этот scoped admission не является доказательством их покрытия.
 
 ```json
 {
@@ -88,6 +105,7 @@ aggregate gate, но сам по себе не является доказате
   },
   "replacement": "ESLint",
   "uncoveredPolicy": "block-replacement",
+  "effectAdmission": "ARCH-EFFECT-*",
   "rows": [
     {
       "id": "JS-CORRECTNESS",
@@ -166,10 +184,93 @@ aggregate gate, но сам по себе не является доказате
       "status": "COVERED",
       "uncoveredBlocksReplacement": true,
       "evidence": ["tests/architecture/checks.test.mjs"]
+    },
+    {
+      "id": "ARCH-EFFECT-PRIMARY",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-primary", "tests/architecture/fixtures/invalid-effect-legacy-inventory"]
+    },
+    {
+      "id": "ARCH-EFFECT-RUN-BOUNDARY",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-run"]
+    },
+    {
+      "id": "ARCH-EFFECT-PROVIDE-BOUNDARY",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-provide"]
+    },
+    {
+      "id": "ARCH-EFFECT-MODULE-ALLOWLIST",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-module"]
+    },
+    {
+      "id": "ARCH-EFFECT-OWNER-LAYER",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-owner-layer", "tests/architecture/fixtures/valid-effect-owner-layer"]
+    },
+    {
+      "id": "ARCH-EFFECT-DURABILITY",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-durability"]
+    },
+    {
+      "id": "ARCH-EFFECT-UNSAFE-RETRY",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-unsafe-retry"]
+    },
+    {
+      "id": "ARCH-EFFECT-SCOPED-FIBER",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-scoped-fiber", "tests/architecture/fixtures/valid-effect-scoped-resource"]
+    },
+    {
+      "id": "ARCH-EFFECT-CONTRACT-AUTHORITY",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-contract-authority", "tests/architecture/fixtures/valid-effect-contract"]
+    },
+    {
+      "id": "ARCH-EFFECT-SQL-BOUNDARY",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-sql-boundary"]
+    },
+    {
+      "id": "ARCH-EFFECT-PARSER",
+      "status": "COVERED",
+      "uncoveredBlocksReplacement": true,
+      "evidence": ["tests/architecture/fixtures/invalid-effect-parser"]
     }
   ]
 }
 ```
+
+## 3.1. Временный legacy inventory Effect
+
+До cutover #50–#54 `scripts/check-architecture.mjs` содержит закрытую exact
+таблицу `path → owner/removalIssue → rule/line`. Она перечисляет только текущие
+Promise/Temporal/in-memory protocol строки foundation:
+
+| Путь | Владелец удаления |
+|---|---|
+| `packages/platform-config/src/index.ts`, `packages/platform-runtime/src/index.ts`, `packages/platform-time/src/index.ts` | #51 |
+| `packages/platform-database/src/index.ts`, `packages/platform-migrations/src/index.ts` | #52 |
+| `packages/platform-idempotency/src/index.ts`, `packages/platform-inbox/src/index.ts`, `packages/platform-kafka-runtime/src/index.ts`, `packages/platform-outbox/src/index.ts` | #53 |
+
+Каждая запись допускает только перечисленные исходные строки; новая usage в
+известном или неизвестном пути завершается `ARCH-EFFECT-*` с non-zero exit.
+После удаления последнего legacy пути #55 удаляет таблицу, сохраняя постоянные
+architecture rules.
 
 ## 4. Architecture bans и waivers
 
@@ -192,7 +293,8 @@ path/symbol scope, причиной, expiry/removal condition и положит�
 source, target и rule id. Поэтому rule parity проверяет не только успешный
 default lint, но и scoped checker/RED fixtures для каждой blocking-гарантии.
 `rule-parity:check` валидирует truth matrix; `rule-parity:admit` отдельно
-подтверждает, что replacement действительно разрешён.
+подтверждает scoped Effect admission issue #49 и не снимает blocking-маркеры
+непокрытых non-Effect строк.
 
 При добавлении или обновлении rule обязательно одновременно изменить:
 
