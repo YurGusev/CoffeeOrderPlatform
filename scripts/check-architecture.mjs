@@ -25,7 +25,7 @@ const ALLOWED_PLATFORM_PACKAGES = new Set([
 ]);
 
 function isAllowedPlatformPackage(name) {
-  return ALLOWED_PLATFORM_PACKAGES.has(name) || name.startsWith('@coffee-platform/contracts-');
+  return ALLOWED_PLATFORM_PACKAGES.has(name) || name.startsWith('@coffee-platform/contracts-') || name.startsWith('@coffee-platform/generated-');
 }
 
 function fail(rule, message) {
@@ -63,6 +63,7 @@ async function checkPackageDependencies(root) {
         fail('BOUND-IMPORT', `${path} declares forbidden shared business package ${name}`);
       }
       if (name.toLowerCase() === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${path} declares forbidden Axios dependency`);
+      if (name === 'zod' || name.startsWith('zod/')) fail('ARCH-FORBIDDEN-SCHEMA', `${path} declares forbidden Zod schema mirror`);
       if (/^(?:@?[^/]+\/)?(?:ffi(?:-napi)?|sqlite3?|better-sqlite3|vfs|virtual-fs|virtual_fs|memfs)$/i.test(name)) {
         fail('ARCH-FORBIDDEN-NATIVE', `${path} declares forbidden FFI/SQLite/VFS dependency ${name}`);
       }
@@ -99,6 +100,13 @@ function checkStaticSource(path, source) {
   }
   for (const match of source.matchAll(FORBIDDEN_MODULE_RE)) {
     const moduleName = match[1];
+    if (/contracts\/fixtures|fixtures\/.*\.json/.test(moduleName)) fail('BOUND-CONTRACT-FIXTURE', `${label}: production source imports contract fixture ${moduleName}`);
+    if (/^apps\/(?:web|api-public)\//.test(label) && /(?:generated|contracts)-internal-v1/.test(moduleName)) {
+      fail('BOUND-CONTRACT-AUDIENCE', `${label}: browser/public graph imports internal contract ${moduleName}`);
+    }
+    if (label.startsWith('apps/') && /^(?:@fastify\/swagger|@scalar\/)/.test(moduleName)) {
+      fail('ARCH-RUNTIME-DOCS', `${label}: runtime Swagger/Scalar route is forbidden for launch`);
+    }
     const databaseFoundation = /(?:^|\/)packages\/platform-database\//.test(label);
     const kafkaFoundation = /(?:^|\/)packages\/platform-kafka-runtime\//.test(label);
     if ((moduleName.startsWith('@confluentinc/kafka-javascript') || /platform-kafka-runtime\/(?:src|dist)\//.test(moduleName)) && !kafkaFoundation)

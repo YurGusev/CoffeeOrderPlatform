@@ -1,0 +1,18 @@
+{
+  "envelopeVersion": "1",
+  "messageId": "msg_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+  "messageType": "AromaObservationChanged.v1",
+  "occurredAt": "2026-09-05T10:04:00Z",
+  "producer": "aroma-observer",
+  "correlationId": "55555555-5555-4555-8555-555555555555",
+  "causationId": null,
+  "traceparent": "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+  "aggregate": { "type": "AromaCart", "ref": "aroma-primary", "version": "3" },
+  "payload": {
+    "cartScopeRef": "aroma-primary",
+    "observedRevision": "3",
+    "observedAt": "2026-09-05T10:04:00Z",
+    "observationState": "Complete",
+    "cartFingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+}

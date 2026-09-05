@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/contracts/schemas/events/aroma-convergence-changed.v1.schema.json",
+  "title": "AromaConvergenceChanged.v1",
+  "allOf": [
+    { "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope" },
+    {
+      "type": "object",
+      "required": ["messageType", "payload"],
+      "properties": {
+        "messageType": { "const": "AromaConvergenceChanged.v1" },
+        "producer": { "const": "aroma-convergence" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cartScopeRef", "desiredRevision", "observedRevision", "attemptRef", "attemptState", "changedAt", "blockerCodes"],
+          "properties": {
+            "cartScopeRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/CartScopeRef" },
+            "desiredRevision": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
+            "observedRevision": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
+            "attemptRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/AttemptRef" },
+            "attemptState": {
+              "type": "string",
+              "enum": ["NoOpInSync", "VerifiedInSync", "OutOfSync", "Blocked", "UnknownOutcome", "Failed"]
+            },
+            "changedAt": { "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp" },
+            "blockerCodes": {
+              "type": "array",
+              "uniqueItems": true,
+              "maxItems": 100,
+              "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

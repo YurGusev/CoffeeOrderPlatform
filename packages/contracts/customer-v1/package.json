@@ -1,0 +1,7 @@
+{
+  "name": "@coffee-platform/contracts-customer-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } }
+}

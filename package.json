@@ -12,6 +12,11 @@
   "scripts": {
     "authority:check": "python3 scripts/validate-launch-authority.py && python3 -m unittest discover -s tests/authority -p 'test_*.py'",
     "architecture:check": "node scripts/check-architecture.mjs",
+    "contracts:lint": "node scripts/contracts-lint.mjs",
+    "contracts:generate": "node scripts/contracts-generate.mjs",
+    "contracts:check-generated": "node scripts/contracts-check-generated.mjs",
+    "contracts:breaking": "node scripts/contracts-breaking.mjs",
+    "contracts:test": "node --experimental-strip-types --test tests/contracts/*.test.mjs",
     "compatibility:check": "node scripts/check-node26-compatibility.mjs --skip-native-load",
     "config:check": "node scripts/check-platform-config.mjs",
     "rule-parity:check": "node scripts/check-rule-parity.mjs",
@@ -24,10 +29,10 @@
     "versions:check": "node scripts/check-toolchain-versions.mjs",
     "profile:check": "node scripts/check-toolchain-profiles.mjs",
     "clean-clone:check": "node scripts/verify-clean-clone.mjs",
-    "lint": "oxlint --type-aware --deny-warnings --ignore-pattern 'tests/architecture/fixtures/**' apps packages scripts tests",
+    "lint": "oxlint --type-aware --deny-warnings --ignore-pattern 'tests/architecture/fixtures/**' --ignore-pattern 'packages/generated/**' apps packages scripts tests",
     "typecheck": "tsc -b --pretty false",
     "test": "node --test tests/**/*.test.mjs packages/*/test/**/*.test.mjs",
-    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm typecheck && pnpm test"
   },
   "devDependencies": {
     "ajv": "8.20.0",

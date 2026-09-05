@@ -1,6 +1,17 @@
 {
   "files": [],
   "references": [
+    { "path": "packages/generated/client-v1" },
+    { "path": "packages/generated/internal-v1" },
+    { "path": "packages/contracts/client-v1" },
+    { "path": "packages/contracts/edge-v1" },
+    { "path": "packages/contracts/internal-v1" },
+    { "path": "packages/contracts/customer-v1" },
+    { "path": "packages/contracts/catalog-v1" },
+    { "path": "packages/contracts/pricing-v1" },
+    { "path": "packages/contracts/orders-v1" },
+    { "path": "packages/contracts/aroma-v1" },
+    { "path": "packages/contracts/realtime-v1" },
     { "path": "packages/platform-runtime" },
     { "path": "packages/platform-config" },
     { "path": "packages/platform-database" },

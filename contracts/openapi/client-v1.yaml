@@ -1,0 +1,1606 @@
+openapi: 3.2.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: CoffeeOrderPlatform Client API
+  version: 1.0.0
+  description: Public first-launch client contract. Actor identity is server-derived.
+servers:
+  - url: /
+tags:
+  - name: customers
+  - name: catalog
+  - name: pricing
+  - name: orders
+  - name: realtime
+paths:
+  /api/client-v1/customers:
+    post:
+      tags: [customers]
+      operationId: createCustomer
+      summary: Create a customer
+      x-owner: customer-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 2s
+      x-side-effects: CustomerCreated
+      x-idempotency:
+        required: true
+        replayOnlyHeader: Idempotency-Replay-Only
+        scope: sha256-uppercase-method-newline-canonical-path
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ReplayOnly'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreateRequest'
+      responses:
+        '201':
+          description: Customer created, or a previously completed result replayed.
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '409':
+          description: Customer conflict or idempotency conflict.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorCustomerPhoneConflict'
+                  - $ref: '#/components/schemas/ErrorCustomerEmailConflict'
+                  - $ref: '#/components/schemas/ErrorIdempotencyConflict'
+                  - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+        '410':
+          $ref: '#/components/responses/IdempotencyResultNotRetained'
+        '500':
+          description: Safe unexpected error or invalid stored terminal response.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorInternalError'
+                  - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
+        '503':
+          description: Customer owner or idempotency lookup is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorCustomerUnavailable'
+                  - $ref: '#/components/schemas/ErrorIdempotencyLookupUnavailable'
+    get:
+      tags: [customers]
+      operationId: searchCustomers
+      summary: Search active customers
+      x-owner: customer-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 1s
+      x-side-effects: none
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CustomerQuery'
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '200':
+          description: Customer search result.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerSearchResponse'
+        '400':
+          description: Invalid query or cursor.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorValidationFailed'
+                  - $ref: '#/components/schemas/ErrorInvalidCursor'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/client-v1/catalog/products:
+    get:
+      tags: [catalog]
+      operationId: searchCatalogProducts
+      summary: Search the active catalog snapshot
+      x-owner: catalog-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 1s
+      x-side-effects: none
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CatalogQuery'
+        - $ref: '#/components/parameters/Availability'
+        - $ref: '#/components/parameters/PageLimit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '200':
+          description: Catalog search result from one active revision.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogSearchResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '503':
+          $ref: '#/components/responses/CatalogSnapshotIncomplete'
+  /api/client-v1/pricing/quotes:
+    post:
+      tags: [pricing]
+      operationId: createPricingQuote
+      summary: Create an immutable pricing quote
+      x-owner: pricing-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 5s
+      x-side-effects: PricingQuoteCreated
+      x-idempotency:
+        required: true
+        replayOnlyHeader: Idempotency-Replay-Only
+        scope: sha256-uppercase-method-newline-canonical-path
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ReplayOnly'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PricingQuoteCreateRequest'
+      responses:
+        '201':
+          description: Immutable quote, or the completed quote replay.
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingQuoteResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '404':
+          $ref: '#/components/responses/CatalogProductNotFound'
+        '409':
+          description: Catalog, idempotency, or quote-input conflict.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorCatalogProductUnavailable'
+                  - $ref: '#/components/schemas/ErrorCatalogRevisionChanged'
+                  - $ref: '#/components/schemas/ErrorIdempotencyConflict'
+                  - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+        '503':
+          description: Catalog owner or idempotency lookup is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorCatalogUnavailable'
+                  - $ref: '#/components/schemas/ErrorIdempotencyLookupUnavailable'
+        '410':
+          $ref: '#/components/responses/IdempotencyResultNotRetained'
+        '500':
+          description: Safe unexpected error or invalid stored terminal response.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorInternalError'
+                  - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
+  /api/client-v1/orders/drafts:
+    post:
+      tags: [orders]
+      operationId: createOrderDraft
+      summary: Create an order draft
+      x-owner: orders-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 2s
+      x-side-effects: OrderDraftCreated
+      x-idempotency:
+        required: true
+        replayOnlyHeader: Idempotency-Replay-Only
+        scope: sha256-uppercase-method-newline-canonical-path
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ReplayOnly'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderDraftCreateRequest'
+      responses:
+        '201':
+          description: Draft order card, or the completed draft replay.
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCardResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '404':
+          $ref: '#/components/responses/CustomerNotFound'
+        '409':
+          description: Customer state or idempotency conflict.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorCustomerNotActive'
+                  - $ref: '#/components/schemas/ErrorIdempotencyConflict'
+                  - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+        '503':
+          description: Customer owner or idempotency lookup is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorCustomerUnavailable'
+                  - $ref: '#/components/schemas/ErrorIdempotencyLookupUnavailable'
+        '410':
+          $ref: '#/components/responses/IdempotencyResultNotRetained'
+        '500':
+          description: Safe unexpected error or invalid stored terminal response.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorInternalError'
+                  - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
+  /api/client-v1/orders/{orderRef}/items/{itemRef}:
+    parameters:
+      - $ref: '#/components/parameters/OrderRef'
+      - $ref: '#/components/parameters/ItemRef'
+    put:
+      tags: [orders]
+      operationId: upsertOrderItem
+      summary: Add or replace one draft order item
+      x-owner: orders-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 5s
+      x-side-effects: OrderItemChanged
+      x-concurrency: Order.version via expectedVersion
+      x-idempotency:
+        required: true
+        replayOnlyHeader: Idempotency-Replay-Only
+        scope: sha256-uppercase-method-newline-canonical-path
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ReplayOnly'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderItemPutRequest'
+      responses:
+        '200':
+          description: Updated order card, or a completed terminal response replay.
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCardResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '404':
+          description: Order or catalog product was not found.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorOrderNotFound'
+                  - $ref: '#/components/schemas/ErrorCatalogProductNotFound'
+        '409':
+          description: Order or idempotency conflict.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorOrderVersionConflict'
+                  - $ref: '#/components/schemas/ErrorOrderQuoteStale'
+                  - $ref: '#/components/schemas/ErrorOrderNotEditable'
+                  - $ref: '#/components/schemas/ErrorIdempotencyConflict'
+                  - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+        '410':
+          $ref: '#/components/responses/IdempotencyResultNotRetained'
+        '500':
+          description: Safe unexpected error or invalid stored terminal response.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorInternalError'
+                  - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
+        '503':
+          $ref: '#/components/responses/IdempotencyLookupUnavailable'
+    delete:
+      tags: [orders]
+      operationId: removeOrderItem
+      summary: Remove one draft order item
+      x-owner: orders-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 2s
+      x-side-effects: OrderItemRemoved
+      x-concurrency: Order.version via If-Match-Version
+      x-idempotency:
+        required: true
+        replayOnlyHeader: Idempotency-Replay-Only
+        scope: sha256-uppercase-method-newline-canonical-path
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatchVersion'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ReplayOnly'
+      responses:
+        '200':
+          description: Updated order card, or a completed terminal response replay.
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCardResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '404':
+          description: Order or order item was not found.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorOrderNotFound'
+                  - $ref: '#/components/schemas/ErrorOrderItemNotFound'
+        '409':
+          description: Order version or editability conflict.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorOrderVersionConflict'
+                  - $ref: '#/components/schemas/ErrorOrderNotEditable'
+                  - $ref: '#/components/schemas/ErrorIdempotencyConflict'
+                  - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+        '410':
+          $ref: '#/components/responses/IdempotencyResultNotRetained'
+        '500':
+          description: Safe unexpected error or invalid stored terminal response.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorInternalError'
+                  - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
+        '503':
+          $ref: '#/components/responses/IdempotencyLookupUnavailable'
+  /api/client-v1/orders/{orderRef}/commands/confirm:
+    parameters:
+      - $ref: '#/components/parameters/OrderRef'
+    post:
+      tags: [orders]
+      operationId: confirmOrder
+      summary: Confirm a draft order
+      x-owner: orders-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 5s
+      x-side-effects: OrderConfirmed
+      x-concurrency: Order.version via expectedVersion
+      x-idempotency:
+        required: true
+        replayOnlyHeader: Idempotency-Replay-Only
+        scope: sha256-uppercase-method-newline-canonical-path
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ReplayOnly'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderConfirmRequest'
+      responses:
+        '200':
+          description: Confirmed order card, or a completed terminal response replay.
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCardResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '409':
+          description: Version, quote, order state, or idempotency conflict.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorOrderVersionConflict'
+                  - $ref: '#/components/schemas/ErrorOrderQuoteStale'
+                  - $ref: '#/components/schemas/ErrorOrderNotEditable'
+                  - $ref: '#/components/schemas/ErrorIdempotencyConflict'
+                  - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+        '422':
+          $ref: '#/components/responses/OrderConfirmationRejected'
+        '410':
+          $ref: '#/components/responses/IdempotencyResultNotRetained'
+        '503':
+          $ref: '#/components/responses/IdempotencyLookupUnavailable'
+        '500':
+          description: Safe unexpected error or invalid stored terminal response.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorInternalError'
+                  - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
+  /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation:
+    parameters:
+      - $ref: '#/components/parameters/OrderRef'
+    post:
+      tags: [orders]
+      operationId: requestAromaReconciliation
+      summary: Request Orders-owned AROMA reconciliation
+      x-owner: orders-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 2s
+      x-side-effects: AromaConvergenceRequested
+      x-concurrency: Order.version via expectedVersion
+      x-idempotency:
+        required: true
+        replayOnlyHeader: Idempotency-Replay-Only
+        scope: sha256-uppercase-method-newline-canonical-path
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ReplayOnly'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationRequest'
+      responses:
+        '202':
+          description: Reconciliation accepted; this does not mean physical cart sync.
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationAcceptedResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '409':
+          description: Version, state, or idempotency conflict.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorOrderVersionConflict'
+                  - $ref: '#/components/schemas/ErrorAromaReconciliationNotAllowed'
+                  - $ref: '#/components/schemas/ErrorIdempotencyConflict'
+                  - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+        '410':
+          $ref: '#/components/responses/IdempotencyResultNotRetained'
+        '503':
+          $ref: '#/components/responses/IdempotencyLookupUnavailable'
+        '500':
+          description: Safe unexpected error or invalid stored terminal response.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorInternalError'
+                  - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
+  /api/client-v1/orders/{orderRef}:
+    parameters:
+      - $ref: '#/components/parameters/OrderRef'
+    get:
+      tags: [orders]
+      operationId: getOrderCard
+      summary: Get the current Order Card
+      x-owner: orders-service
+      x-audience: api-public
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: 1s
+      x-side-effects: none
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '200':
+          description: Current owner projection.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCardResponse'
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /events:
+    get:
+      tags: [realtime]
+      operationId: streamOrderInvalidations
+      summary: Stream order invalidations
+      x-owner: realtime-gateway
+      x-audience: realtime-gateway
+      x-caller: edge-gateway
+      x-exposure: public
+      x-deadline: connection
+      x-side-effects: none
+      x-replay: Last-Event-ID-header-only
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LastEventId'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '200':
+          description: SSE invalidation stream; business state is refetched by the client.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-cache, no-transform
+            X-Accel-Buffering:
+              schema:
+                type: string
+                const: 'no'
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                format: binary
+              examples:
+                ready:
+                  value: "event: stream-ready.v1\ndata: {\"connectionId\":\"...\",\"connectedAt\":\"2026-09-05T12:00:00Z\"}\n\n"
+                invalidated:
+                  value: "id: msg_01ARZ3NDEKTSV4RRFFQ69G5FAV\nevent: resource-invalidated.v1\nretry: 3000\ndata: {\"subjectType\":\"order\",\"subjectRef\":\"ord_01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"ownerVersion\":\"7\",\"reason\":\"OrderChanged\",\"correlationId\":\"00000000-0000-4000-8000-000000000001\"}\n\n"
+        '401':
+          $ref: '#/components/responses/AuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ActorContextInvalid'
+        '503':
+          $ref: '#/components/responses/RealtimeCapacityExceeded'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        $ref: '#/components/schemas/UUID'
+    CorrelationId:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      schema:
+        $ref: '#/components/schemas/UUID'
+    Traceparent:
+      name: traceparent
+      in: header
+      required: false
+      schema:
+        $ref: '#/components/schemas/Traceparent'
+    ReplayOnly:
+      name: Idempotency-Replay-Only
+      in: header
+      required: false
+      description: Exactly true selects owner read-only lookup; any other value is invalid.
+      schema:
+        type: boolean
+        const: true
+    IfMatchVersion:
+      name: If-Match-Version
+      in: header
+      required: false
+      description: Required for a normal DELETE and forbidden in replay-only mode.
+      schema:
+        $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+    CustomerQuery:
+      name: query
+      in: query
+      required: true
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 200
+    CatalogQuery:
+      name: query
+      in: query
+      required: true
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 200
+    Availability:
+      name: availability
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [Available, Unavailable, Stopped]
+    PageLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 512
+        pattern: '^[A-Za-z0-9_-]*$'
+    OrderRef:
+      name: orderRef
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/OrderRef'
+    ItemRef:
+      name: itemRef
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/ItemRef'
+    LastEventId:
+      name: Last-Event-ID
+      in: header
+      required: false
+      schema:
+        $ref: '#/components/schemas/MessageId'
+  headers:
+    IdempotencyReplayed:
+      description: Present only on a schema-valid Completed read-only replay.
+      schema:
+        type: boolean
+        const: true
+    CorrelationResponse:
+      description: Correlation id for this request.
+      schema:
+        $ref: '#/components/schemas/UUID'
+    NoStore:
+      description: Recovery and command responses are never cached.
+      schema:
+        type: string
+        const: no-store
+  responses:
+    ValidationFailed:
+      description: Request, query, or header validation failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorValidationFailed'
+    AuthenticationRequired:
+      description: No valid authenticated actor context was supplied.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorAuthenticationRequired'
+    ActorContextInvalid:
+      description: The trusted actor assertion is invalid or expired.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorActorContextInvalid'
+    InternalError:
+      description: Safe unexpected error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorInternalError'
+    CatalogSnapshotIncomplete:
+      description: No complete active catalog snapshot is available.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorCatalogSnapshotIncomplete'
+    CatalogUnavailable:
+      description: Catalog owner is unavailable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorCatalogUnavailable'
+    CustomerNotFound:
+      description: Customer does not exist.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorCustomerNotFound'
+    CustomerUnavailable:
+      description: Customer owner is unavailable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorCustomerUnavailable'
+    CatalogProductNotFound:
+      description: Catalog product or variant does not exist.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorCatalogProductNotFound'
+    OrderNotFound:
+      description: Order does not exist.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrderNotFound'
+    OrderConfirmationRejected:
+      description: The persisted order cannot be confirmed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrderConfirmationRejected'
+    RealtimeCapacityExceeded:
+      description: Realtime connection capacity is exhausted.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorRealtimeCapacityExceeded'
+    IdempotencyResultNotRetained:
+      description: The completed response is outside retention; no new command was run.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorIdempotencyResultNotRetained'
+    IdempotencyLookupUnavailable:
+      description: Durable idempotency lookup is unavailable or ambiguous.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorIdempotencyLookupUnavailable'
+  schemas:
+    UUID:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/UUID'
+    CustomerRef:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/CustomerRef'
+    AddressRef:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/AddressRef'
+    ProductRef:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/ProductRef'
+    VariantRef:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/VariantRef'
+    QuoteRef:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/QuoteRef'
+    OrderRef:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/OrderRef'
+    ItemRef:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/ItemRef'
+    MessageId:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/MessageId'
+    Version:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+    Revision:
+      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+    QuantityDecimal:
+      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/QuantityDecimal'
+    MoneyMinor:
+      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/MoneyMinor'
+    Currency:
+      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Currency'
+    Timestamp:
+      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Timestamp'
+    Traceparent:
+      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Traceparent'
+    ProblemDetails:
+      $ref: '../schemas/common/problem-details.v1.schema.json#/$defs/ProblemDetails'
+    CustomerAddress:
+      type: object
+      additionalProperties: false
+      required: [line1, city, countryCode]
+      properties:
+        addressRef:
+          $ref: '#/components/schemas/AddressRef'
+        line1:
+          type: string
+          minLength: 1
+          maxLength: 200
+        line2:
+          type: string
+          maxLength: 200
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        postalCode:
+          type: string
+          maxLength: 32
+        countryCode:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          const: RU
+    CustomerCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName]
+      oneOf:
+        - required: [phone]
+        - required: [email]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 64
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        address:
+          $ref: '#/components/schemas/CustomerAddress'
+    CustomerResponse:
+      type: object
+      additionalProperties: false
+      required: [customerRef, version, displayName, createdAt, updatedAt]
+      properties:
+        customerRef:
+          $ref: '#/components/schemas/CustomerRef'
+        version:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        phone:
+          type: string
+          pattern: '^\+[1-9][0-9]{7,14}$'
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        address:
+          $ref: '#/components/schemas/CustomerAddress'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    CustomerSummary:
+      type: object
+      additionalProperties: false
+      required: [customerRef, version, displayName]
+      properties:
+        customerRef:
+          $ref: '#/components/schemas/CustomerRef'
+        version:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        phone:
+          type: string
+          maxLength: 32
+        email:
+          type: string
+          maxLength: 254
+    CustomerSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/CustomerSummary'
+        nextCursor:
+          type: [string, 'null']
+          maxLength: 512
+    CatalogProductSummary:
+      type: object
+      additionalProperties: false
+      required: [productRef, variantRef, displayName, unit, availability, mappingAvailable]
+      properties:
+        productRef:
+          $ref: '#/components/schemas/ProductRef'
+        variantRef:
+          $ref: '#/components/schemas/VariantRef'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        unit:
+          type: string
+          enum: [piece, gram, kilogram]
+        availability:
+          type: string
+          enum: [Available, Unavailable, Stopped]
+        mappingAvailable:
+          type: boolean
+        imageUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+    CatalogSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [snapshotRevision, items, nextCursor]
+      properties:
+        snapshotRevision:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/CatalogProductSummary'
+        nextCursor:
+          type: [string, 'null']
+          maxLength: 512
+    PricingQuoteCreateLine:
+      type: object
+      additionalProperties: false
+      required: [productRef, variantRef, quantity]
+      properties:
+        productRef:
+          $ref: '#/components/schemas/ProductRef'
+        variantRef:
+          $ref: '#/components/schemas/VariantRef'
+        quantity:
+          $ref: '#/components/schemas/QuantityDecimal'
+    PricingQuoteCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [customerRef, lines]
+      properties:
+        customerRef:
+          $ref: '#/components/schemas/CustomerRef'
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/PricingQuoteCreateLine'
+    PricingQuoteLine:
+      type: object
+      additionalProperties: false
+      required: [lineNumber, productRef, variantRef, productDisplayName, quantity, unit, unitMinor, lineTotalMinor]
+      properties:
+        lineNumber:
+          type: integer
+          minimum: 1
+          maximum: 100
+        productRef:
+          $ref: '#/components/schemas/ProductRef'
+        variantRef:
+          $ref: '#/components/schemas/VariantRef'
+        productDisplayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        quantity:
+          $ref: '#/components/schemas/QuantityDecimal'
+        unit:
+          type: string
+          enum: [piece, gram, kilogram]
+        unitMinor:
+          $ref: '#/components/schemas/MoneyMinor'
+        lineTotalMinor:
+          $ref: '#/components/schemas/MoneyMinor'
+    PricingQuoteResponse:
+      type: object
+      additionalProperties: false
+      required: [quoteRef, policyVersionRef, catalogSnapshotRevision, customerRef, createdAt, expiresAt, currency, lines, totalMinor, hash]
+      properties:
+        quoteRef:
+          $ref: '#/components/schemas/QuoteRef'
+        policyVersionRef:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/PolicyVersionRef'
+        catalogSnapshotRevision:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        customerRef:
+          $ref: '#/components/schemas/CustomerRef'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/PricingQuoteLine'
+        totalMinor:
+          $ref: '#/components/schemas/MoneyMinor'
+        hash:
+          $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
+    OrderDraftCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [customerRef]
+      properties:
+        customerRef:
+          $ref: '#/components/schemas/CustomerRef'
+    OrderItemPutRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, productRef, variantRef, quantity, quoteRef, quoteLineNumber, quoteHash]
+      properties:
+        expectedVersion:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        productRef:
+          $ref: '#/components/schemas/ProductRef'
+        variantRef:
+          $ref: '#/components/schemas/VariantRef'
+        quantity:
+          $ref: '#/components/schemas/QuantityDecimal'
+        quoteRef:
+          $ref: '#/components/schemas/QuoteRef'
+        quoteLineNumber:
+          type: integer
+          minimum: 1
+          maximum: 100
+        quoteHash:
+          $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
+    OrderConfirmRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+    ReconciliationRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, reason]
+      properties:
+        expectedVersion:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    OrderCustomerSnapshot:
+      type: object
+      additionalProperties: false
+      required: [customerRef, displayName]
+      properties:
+        customerRef:
+          $ref: '#/components/schemas/CustomerRef'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+    OrderItem:
+      type: object
+      additionalProperties: false
+      required: [itemRef, linePosition, productRef, variantRef, displayName, quantity, unit, quoteRef, quoteLineNumber, unitMinor, lineTotalMinor]
+      properties:
+        itemRef:
+          $ref: '#/components/schemas/ItemRef'
+        linePosition:
+          type: integer
+          minimum: 1
+          maximum: 100
+        productRef:
+          $ref: '#/components/schemas/ProductRef'
+        variantRef:
+          $ref: '#/components/schemas/VariantRef'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        quantity:
+          $ref: '#/components/schemas/QuantityDecimal'
+        unit:
+          type: string
+          enum: [piece, gram, kilogram]
+        quoteRef:
+          $ref: '#/components/schemas/QuoteRef'
+        quoteLineNumber:
+          type: integer
+          minimum: 1
+          maximum: 100
+        unitMinor:
+          $ref: '#/components/schemas/MoneyMinor'
+        lineTotalMinor:
+          $ref: '#/components/schemas/MoneyMinor'
+    QuoteProof:
+      type: object
+      additionalProperties: false
+      required: [quoteRef, hash, expiresAt]
+      properties:
+        quoteRef:
+          $ref: '#/components/schemas/QuoteRef'
+        hash:
+          $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+    OrderPricing:
+      type: object
+      additionalProperties: false
+      required: [totalMinor, currency, quoteProofs]
+      properties:
+        totalMinor:
+          $ref: '#/components/schemas/MoneyMinor'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        quoteProofs:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/QuoteProof'
+    OrderBlocker:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [MAPPING_CHANGED, MAPPING_MISSING, MAPPING_STOPPED, PRODUCT_UNAVAILABLE]
+        message:
+          type: string
+          minLength: 1
+          maxLength: 500
+        productRef:
+          $ref: '#/components/schemas/ProductRef'
+    AromaCard:
+      type: object
+      additionalProperties: false
+      required: [state, desiredRevision, observedRevision, blockers]
+      properties:
+        state:
+          type: string
+          enum: [NotRequested, PendingObservation, OutOfSync, Converging, InSync, Blocked, UnknownOutcome]
+        desiredRevision:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        observedRevision:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        lastObservedAt:
+          type: [string, 'null']
+          format: date-time
+          pattern: 'Z$'
+        blockers:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/OrderBlocker'
+    OrderCardResponse:
+      type: object
+      additionalProperties: false
+      required: [orderRef, version, projectionVersion, status, customer, items, pricing, aroma, allowedActions]
+      properties:
+        orderRef:
+          $ref: '#/components/schemas/OrderRef'
+        version:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        projectionVersion:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        status:
+          type: string
+          enum: [Draft, Confirmed]
+        customer:
+          $ref: '#/components/schemas/OrderCustomerSnapshot'
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        pricing:
+          oneOf:
+            - $ref: '#/components/schemas/OrderPricing'
+            - type: 'null'
+        aroma:
+          $ref: '#/components/schemas/AromaCard'
+        allowedActions:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [edit-items, confirm, request-aroma-reconciliation]
+    ReconciliationAcceptedResponse:
+      type: object
+      additionalProperties: false
+      required: [orderRef, orderVersion, requestedAt, aromaState]
+      properties:
+        orderRef:
+          $ref: '#/components/schemas/OrderRef'
+        orderVersion:
+          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+        requestedAt:
+          $ref: '#/components/schemas/Timestamp'
+        aromaState:
+          type: string
+          enum: [PendingObservation, OutOfSync, Converging, Blocked, UnknownOutcome]
+    SseResourceInvalidated:
+      type: object
+      additionalProperties: false
+      required: [subjectType, subjectRef, ownerVersion, reason, correlationId]
+      properties:
+        subjectType:
+          const: order
+        subjectRef:
+          $ref: '#/components/schemas/OrderRef'
+        ownerVersion:
+          $ref: '#/components/schemas/Version'
+        reason:
+          type: string
+          enum: [OrderChanged, AromaStateChanged]
+        correlationId:
+          $ref: '#/components/schemas/UUID'
+    SseStreamReady:
+      type: object
+      additionalProperties: false
+      required: [connectionId, connectedAt]
+      properties:
+        connectionId:
+          $ref: '#/components/schemas/UUID'
+        connectedAt:
+          $ref: '#/components/schemas/Timestamp'
+    SseStreamReset:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          const: REPLAY_UNAVAILABLE
+    ErrorValidationFailed:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 400 }
+            code: { const: VALIDATION_FAILED }
+    ErrorInvalidCursor:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 400 }
+            code: { const: INVALID_CURSOR }
+    ErrorAuthenticationRequired:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 401 }
+            code: { const: AUTHENTICATION_REQUIRED }
+    ErrorActorContextInvalid:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 403 }
+            code: { const: ACTOR_CONTEXT_INVALID }
+    ErrorCustomerPhoneConflict:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: CUSTOMER_PHONE_CONFLICT }
+    ErrorCustomerEmailConflict:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: CUSTOMER_EMAIL_CONFLICT }
+    ErrorIdempotencyConflict:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: IDEMPOTENCY_CONFLICT }
+    ErrorIdempotencyRequestInProgress:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: IDEMPOTENCY_REQUEST_IN_PROGRESS }
+    ErrorCatalogProductNotFound:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 404 }
+            code: { const: CATALOG_PRODUCT_NOT_FOUND }
+    ErrorCatalogProductUnavailable:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: CATALOG_PRODUCT_UNAVAILABLE }
+    ErrorCatalogRevisionChanged:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: CATALOG_REVISION_CHANGED }
+    ErrorCatalogSnapshotIncomplete:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 503 }
+            code: { const: CATALOG_SNAPSHOT_INCOMPLETE }
+    ErrorCatalogUnavailable:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 503 }
+            code: { const: CATALOG_UNAVAILABLE }
+    ErrorCustomerNotFound:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 404 }
+            code: { const: CUSTOMER_NOT_FOUND }
+    ErrorCustomerNotActive:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: CUSTOMER_NOT_ACTIVE }
+    ErrorCustomerUnavailable:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 503 }
+            code: { const: CUSTOMER_UNAVAILABLE }
+    ErrorOrderNotFound:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 404 }
+            code: { const: ORDER_NOT_FOUND }
+    ErrorOrderItemNotFound:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 404 }
+            code: { const: ORDER_ITEM_NOT_FOUND }
+    ErrorOrderVersionConflict:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: ORDER_VERSION_CONFLICT }
+    ErrorOrderQuoteStale:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: ORDER_QUOTE_STALE }
+    ErrorOrderNotEditable:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: ORDER_NOT_EDITABLE }
+    ErrorOrderConfirmationRejected:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 422 }
+            code: { const: ORDER_CONFIRMATION_REJECTED }
+    ErrorAromaReconciliationNotAllowed:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: AROMA_RECONCILIATION_NOT_ALLOWED }
+    ErrorIdempotencyResultNotRetained:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 410 }
+            code: { const: IDEMPOTENCY_RESULT_NOT_RETAINED }
+    ErrorIdempotencyLookupUnavailable:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 503 }
+            code: { const: IDEMPOTENCY_LOOKUP_UNAVAILABLE }
+    ErrorIdempotencyResultInvalid:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 500 }
+            code: { const: IDEMPOTENCY_RESULT_INVALID }
+    ErrorRealtimeCapacityExceeded:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 503 }
+            code: { const: REALTIME_CAPACITY_EXCEEDED }
+    ErrorInternalError:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 500 }
+            code: { const: INTERNAL_ERROR }

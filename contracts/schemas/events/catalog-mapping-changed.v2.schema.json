@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/contracts/schemas/events/catalog-mapping-changed.v2.schema.json",
+  "title": "CatalogMappingChanged.v2",
+  "allOf": [
+    { "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope" },
+    {
+      "type": "object",
+      "required": ["messageType", "payload"],
+      "properties": {
+        "messageType": { "const": "CatalogMappingChanged.v2" },
+        "producer": { "const": "catalog-activation-worker" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "productRef",
+            "variantRef",
+            "offerRef",
+            "catalogSnapshotRevision",
+            "mappingRevision",
+            "mappingState",
+            "availability",
+            "effectiveAt"
+          ],
+          "properties": {
+            "productRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/ProductRef" },
+            "variantRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/VariantRef" },
+            "offerRef": {
+              "anyOf": [
+                { "$ref": "../common/identifiers.v1.schema.json#/$defs/OfferRef" },
+                { "type": "null" }
+              ]
+            },
+            "catalogSnapshotRevision": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
+            "mappingRevision": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
+            "mappingState": { "type": "string", "enum": ["Active", "Missing", "Stopped"] },
+            "availability": { "type": "string", "enum": ["Available", "Unavailable", "Stopped"] },
+            "effectiveAt": { "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp" }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": { "mappingState": { "const": "Active" } }
+              },
+              "then": {
+                "properties": {
+                  "offerRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/OfferRef" }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": { "mappingState": { "enum": ["Missing", "Stopped"] } }
+              },
+              "then": {
+                "properties": { "offerRef": { "type": "null" } }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

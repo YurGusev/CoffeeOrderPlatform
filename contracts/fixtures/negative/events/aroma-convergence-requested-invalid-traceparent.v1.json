@@ -1,0 +1,17 @@
+{
+  "envelopeVersion": "1",
+  "messageId": "msg_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+  "messageType": "AromaConvergenceRequested.v1",
+  "occurredAt": "2026-09-05T10:03:00Z",
+  "producer": "orders-service",
+  "correlationId": "44444444-4444-4444-8444-444444444444",
+  "causationId": null,
+  "traceparent": "invalid",
+  "aggregate": { "type": "AromaCart", "ref": "aroma-primary", "version": "3" },
+  "payload": {
+    "cartScopeRef": "aroma-primary",
+    "desiredRevision": "3",
+    "reason": "OrderConfirmed",
+    "orderRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+  }
+}

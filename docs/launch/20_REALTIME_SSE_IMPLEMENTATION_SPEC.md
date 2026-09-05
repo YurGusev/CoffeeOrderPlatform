@@ -2,6 +2,10 @@
 
 Статус: нормативная спецификация issue #12. Исполнитель не выбирает replay,
 authorization, fanout limits, Query invalidation или slow-client policy заново.
+Wire definitions `GET /events` и `RealtimeInvalidated.v1` материализованы в
+`contracts/openapi/client-v1.yaml` и
+`contracts/schemas/events/realtime-invalidated.v1.schema.json`; они передают
+только invalidation metadata, не business state.
 
 ## 1. Архитектура
 

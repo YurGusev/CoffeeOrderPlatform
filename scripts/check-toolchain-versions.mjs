@@ -506,8 +506,9 @@ async function checkTsConfigs(root) {
         fail("TS7-BACKEND", `${label}.compilerOptions.composite must be true`);
     }
     if (label.startsWith("packages/")) {
-      if (document.extends !== "../../tsconfig.base.json")
-        fail("TS7-REFERENCES", `${label} must extend ../../tsconfig.base.json`);
+      const base = relative(dirname(path), join(root, "tsconfig.base.json")).replaceAll("\\", "/");
+      if (document.extends !== base)
+        fail("TS7-REFERENCES", `${label} must extend ${base}`);
       for (const key of ["composite", "declaration", "isolatedDeclarations"]) {
         if (options[key] !== true)
           fail(

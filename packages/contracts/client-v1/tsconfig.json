@@ -1,0 +1,6 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "composite": true, "declaration": true, "isolatedDeclarations": true, "rootDir": "src", "outDir": "dist" },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../../generated/client-v1" }]
+}

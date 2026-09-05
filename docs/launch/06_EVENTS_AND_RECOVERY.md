@@ -1,5 +1,9 @@
 # События и восстановление
 
+Исполнимые envelope/payload definitions семи launch messages находятся в
+`contracts/schemas/{common,events}` и перечислены в `contracts/manifest.yaml`.
+Kafka runtime валидирует их до Inbox/business effect; отдельной wire-схемы нет.
+
 ## Контракты первого запуска
 
 Точные envelope и payload schemas семи сообщений определены в

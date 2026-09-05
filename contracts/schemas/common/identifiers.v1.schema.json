@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/contracts/schemas/common/identifiers.v1.schema.json",
+  "title": "CoffeeOrderPlatform common identifiers v1",
+  "$defs": {
+    "CustomerRef": { "type": "string", "pattern": "^cus_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "AddressRef": { "type": "string", "pattern": "^adr_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "ChannelLinkRef": { "type": "string", "pattern": "^chl_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "AuditRef": { "type": "string", "pattern": "^aud_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "ProductRef": { "type": "string", "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "VariantRef": { "type": "string", "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "OfferRef": { "type": "string", "pattern": "^off_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "SnapshotRef": { "type": "string", "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "QuoteRef": { "type": "string", "pattern": "^prq_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "OrderRef": { "type": "string", "pattern": "^ord_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "ItemRef": { "type": "string", "pattern": "^itm_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "MessageId": { "type": "string", "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "OperationRef": { "type": "string", "pattern": "^op_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "SupplierRef": { "type": "string", "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "AttemptRef": { "type": "string", "pattern": "^att_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "PolicyVersionRef": { "type": "string", "pattern": "^pvr_[0-9A-HJKMNP-TV-Z]{26}$" },
+    "CartScopeRef": { "type": "string", "const": "aroma-primary" },
+    "Version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+    "UUID": { "$ref": "#/$defs/Uuid" },
+    "Uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+    }
+  }
+}

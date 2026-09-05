@@ -146,6 +146,40 @@ importers:
         specifier: workspace:*
         version: link:../../packages/platform-runtime
 
+  packages/contracts/aroma-v1: {}
+
+  packages/contracts/catalog-v1: {}
+
+  packages/contracts/client-v1:
+    dependencies:
+      "@coffee-platform/generated-client-v1":
+        specifier: workspace:*
+        version: link:../../generated/client-v1
+
+  packages/contracts/customer-v1: {}
+
+  packages/contracts/edge-v1: {}
+
+  packages/contracts/internal-v1: {}
+
+  packages/contracts/orders-v1: {}
+
+  packages/contracts/pricing-v1: {}
+
+  packages/contracts/realtime-v1: {}
+
+  packages/generated/client-v1:
+    devDependencies:
+      "@types/node":
+        specifier: 26.4.0
+        version: 26.4.0
+
+  packages/generated/internal-v1:
+    devDependencies:
+      "@types/node":
+        specifier: 26.4.0
+        version: 26.4.0
+
   packages/platform-config: {}
 
   packages/platform-database:

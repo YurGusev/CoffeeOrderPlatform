@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/contracts/schemas/events/aroma-convergence-requested.v1.schema.json",
+  "title": "AromaConvergenceRequested.v1",
+  "allOf": [
+    { "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope" },
+    {
+      "type": "object",
+      "required": ["messageType", "payload"],
+      "properties": {
+        "messageType": { "const": "AromaConvergenceRequested.v1" },
+        "producer": { "enum": ["orders-service", "orders-aroma-preparation"] },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cartScopeRef", "desiredRevision", "reason", "orderRef"],
+          "properties": {
+            "cartScopeRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/CartScopeRef" },
+            "desiredRevision": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
+            "reason": { "type": "string", "enum": ["OrderConfirmed", "CatalogChanged", "OperatorRequested", "Recovery"] },
+            "orderRef": {
+              "anyOf": [
+                { "$ref": "../common/identifiers.v1.schema.json#/$defs/OrderRef" },
+                { "type": "null" }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
