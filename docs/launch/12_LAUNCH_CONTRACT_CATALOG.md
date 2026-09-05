@@ -86,6 +86,15 @@ model не экспортируется и не используется как 
 
 ## 3. `client-v1.yaml`
 
+### 3.0 Read-only восстановление command result
+
+[Browser command recovery](26_BROWSER_COMMAND_RECOVERY.md) определяет
+`Idempotency-Replay-Only: true` для семи commands ниже. #4 материализует этот
+режим, header/body/version constraints и typed errors в тех же operations,
+переиспользуя существующие response schemas. Обычная команда без обязательного
+body/version по-прежнему невалидна. GET/SSE/provider/internal paths режим не
+получают; количество бизнес-events не меняется.
+
 ### 3.1 Customer
 
 `POST /api/client-v1/customers`

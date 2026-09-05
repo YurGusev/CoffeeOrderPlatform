@@ -13,7 +13,7 @@ business durability. Техническую authority задаёт
 ```text
 #14 → #19 → #2 → #3
                   ↓
-                 #60 ───────────────→ #4 contracts
+                 #60 → #119 ────────→ #4 contracts
                   ↓
              #61 runtime
                   ↓
@@ -31,9 +31,12 @@ business durability. Техническую authority задаёт
 #5..#12 + #16..#18 + #64 → #13 Launch gates → завершает #1
 ```
 
-#4 начинается после #60 параллельно runtime hardening. Оно не ждёт DB/Kafka
-implementation и использует contract fixtures. После #60 непосредственные ready
-successors — #4 и #61. Остальные остаются blocked до всех своих inputs.
+#119 принимает frontend recovery/deep-link уточнение до #4. Оно использует
+accepted #60; #62 и #63 уже приняты независимо от этого уточнения.
+#4 начинается после #60 и #119 параллельно runtime hardening. Оно не ждёт DB/Kafka
+implementation и использует contract fixtures. Ready определяется всеми текущими
+inputs, а не только историческим #60;
+#4 остаётся blocked до merge/handoff #119. Остальные сохраняют свои prerequisites.
 Observability не блокирует business implementation; Operations принимает реальные
 instrumentation points после #12 и обеспечивает полный G14 до #13.
 
@@ -95,20 +98,21 @@ collector.
 | #61 | #60 | deadlines/cancellation/readiness/shutdown → #62, #63, #64 |
 | #62 | #60, #61 | transaction outcome, durable idempotency, migrations/pool → #5, #10, #63 и DB owners |
 | #63 | #61, #62 | durable Inbox/Outbox, partition drain, broker persistence → #16, #8, #11, #12, #64 |
-| #4 | #2, #3, #60 | OpenAPI/JSON Schema, types-only generation, fixtures → business contract consumers |
-| #5 | #4, #62 | Customer API/migrations → #8, #9, #13 |
+| #119 | #60 | browser recovery, Draft/cache/SSE policy, SPA route authority → #4/#5/#7/#8/#9/#12/#13 |
+| #4 | #2, #3, #60, #119 | OpenAPI/JSON Schema, types-only generation, fixtures → business contract consumers |
+| #5 | #4, #62, #119 | Customer API/migrations → #8, #9, #13 |
 | #10 | #4, #62 | safe NDJSON/cart transport, durable operation journal → #6, #11 |
 | #6 | #10, #62 | Received Catalog staging generation → #16 |
 | #16 | #6, #63 | active revision + owner Outbox events → #17, #18, #8, #11 |
 | #17 | #4, #16 | Catalog search + Pricing input → #18, #7, #8, #9 |
 | #18 | #10, #6, #16, #17 | pipeline recovery/capacity evidence → #7, #8, #9, #11, #13 |
-| #7 | #4, #17, #18, #62 | immutable PricingQuote/verify → #8, #9 |
-| #8 | #4, #5, #7, #17, #18, #63 | Draft/Confirm/contribution/Order Card → #9, #11, #12 |
-| #9 | #4, #5, #7, #8, #17, #18 | project-owned fetch client + React operator flow → #12, #13 |
+| #7 | #4, #17, #18, #62, #119 | immutable PricingQuote/verify → #8, #9 |
+| #8 | #4, #5, #7, #17, #18, #63, #119 | Draft/Confirm/contribution/Order Card → #9, #11, #12 |
+| #9 | #4, #5, #7, #8, #17, #18, #119 | project-owned fetch client + React operator flow → #12, #13 |
 | #11 | #10, #16, #18, #8, #63 | observer/convergence/UnknownOutcome → #12, #13 |
-| #12 | #8, #9, #11, #63 | single-instance SSE invalidation/refetch → #64, #13 |
+| #12 | #8, #9, #11, #63, #119 | single-instance SSE invalidation/refetch → #64, #13 |
 | #64 | #4, #61, #62, #63, #12 | Pino/OTel, Collector/OpenObserve, alerts/storage/redaction → G14 #13 |
-| #13 | все outputs выше | verified release evidence → закрытие #1 |
+| #13 | все outputs выше, #119 | verified release evidence → закрытие #1 |
 
 ## История Effect
 

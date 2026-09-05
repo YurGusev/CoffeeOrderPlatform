@@ -364,6 +364,7 @@ def validate_runtime_profile(profile: dict[str, Any]) -> None:
 def validate_routes(route_mounts: Any, isolation: Any) -> None:
     expected_routes = [
         {"source": "edge-gateway", "method": "GET", "path": "/", "target": "web", "targetPort": 3000},
+        {"source": "edge-gateway", "method": "GET", "path": "/app/**", "target": "web", "targetPort": 3000},
         {"source": "edge-gateway", "method": "GET", "path": "/assets/**", "target": "web", "targetPort": 3000},
         {"source": "edge-gateway", "method": "ANY", "path": "/api/client-v1/**", "target": "api-public", "targetPort": 4050},
         {"source": "edge-gateway", "method": "GET", "path": "/events", "target": "realtime-gateway", "targetPort": 4401},

@@ -1,4 +1,6 @@
 [
+  {"id":"missing-spa-app-route","manifest":"launch-v1-runtime-profile.json","path":["routeMounts"],"operation":"remove-index","value":1,"expected":{"ruleId":"SPA_APP_ROUTE_REQUIRED","message":"routeMounts"}},
+  {"id":"spa-app-route-to-api","manifest":"launch-v1-runtime-profile.json","path":["routeMounts",1,"target"],"operation":"replace","value":"api-public","expected":{"ruleId":"SPA_APP_ROUTE_WEB_ONLY","message":"routeMounts"}},
   {"id":"node-24","manifest":"runtime-foundation-decision.json","path":["runtime","node"],"operation":"replace","value":"24.0.0","expected":{"ruleId":"FOUNDATION_NODE_VERSION","message":"foundation.node.node"}},
   {"id":"floating-production-image","manifest":"runtime-foundation-decision.json","path":["productionImage","tag"],"operation":"replace","value":"26-bookworm-slim","expected":{"ruleId":"FOUNDATION_IMAGE_PIN","message":"foundation.productionImage.tag"}},
   {"id":"wrong-pnpm-pin","manifest":"runtime-foundation-decision.json","path":["runtime","packageManager"],"operation":"replace","value":"pnpm@11.22.0","expected":{"ruleId":"FOUNDATION_PNPM_VERSION","message":"foundation.node.packageManager"}},

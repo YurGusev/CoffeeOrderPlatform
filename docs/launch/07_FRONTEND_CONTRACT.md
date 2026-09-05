@@ -20,7 +20,7 @@
 1. select/create customer;
 2. search persisted Catalog;
 3. add product and request PricingQuote;
-4. edit Draft;
+4. edit Draft: добавить товар, изменить quantity существующей строки, удалить ошибочную строку;
 5. confirm with expected version and idempotency key;
 6. navigate to Order Card;
 7. subscribe to SSE invalidations and refetch the owner resource.
@@ -38,6 +38,11 @@
 
 The browser never calculates authoritative totals, selects actor identity,
 calls AROMA directly or synthesizes allowed actions.
+
+Ambiguous Customer/Draft/Quote восстанавливаются без известного resourceRef по
+[протоколу чтения результата команды](26_BROWSER_COMMAND_RECOVERY.md).
+Поздний GET/replay не откатывает projectionVersion, истёкшая lease не разрешает
+повтор эффекта, а сессии не делят browser cache/pending commands.
 
 ## Основа frontend
 

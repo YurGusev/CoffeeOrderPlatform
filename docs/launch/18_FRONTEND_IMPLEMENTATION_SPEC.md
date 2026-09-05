@@ -2,6 +2,8 @@
 
 Статус: нормативная спецификация issue #9. Исполнитель не выбирает flow,
 routes, query keys, mutation retry, conflict recovery или UI states заново.
+[Восстановление browser commands](26_BROWSER_COMMAND_RECOVERY.md) определяет
+read-only lookup, terminal outcomes и единый порядок принятия Order Card.
 
 ## 1. Граница приложения
 
@@ -77,20 +79,27 @@ Frontend хранит две независимые версии: `Order.version
 `expectedVersion` команд, `OrderCard.projectionVersion` — только для SSE
 dedup/refetch. Сравнивать их между собой запрещено. `MAPPING_CHANGED` показывает
 blocked state без blind retry и предлагает создать новый Draft/quote.
-- success обновляет Order cache response и показывает ссылку к Order Card;
+- success принимает Order response через monotonic projectionVersion guard и показывает ссылку к Order Card;
 - кнопка «К заказу» ведёт на `/app/orders/{orderRef}`.
 
 ### `/app/orders/:orderRef`
 
 - показывает Customer snapshot, items, server totals, Order status, AROMA
   status/blockers и только server `allowedActions`;
-- `edit-items` -> `/app/catalog?orderRef=...`;
+- `edit-items` разрешает управление строками Draft в карточке и переход в каталог;
+- изменение quantity существующей строки сохраняет её `itemRef`, получает новую
+  quote по кнопке и выполняет PUT с последней `Order.version`; соседние строки
+  не меняются. Новая строка получает новый `itemRef` только один раз на intent;
+- удаление строки требует подтверждения, DELETE с прежним `itemRef`,
+  `If-Match-Version` и одним key; после success обновляются server totals;
+- изменение/удаление доступны только при server `edit-items`; conflict сохраняет
+  unsent quantity и требует нового review. Confirmed edits принадлежат W3;
 - `confirm` -> confirm dialog с текущей version, затем command;
 - `request-aroma-reconciliation` -> dialog с reason 1..500;
 - отсутствие action означает отсутствие кнопки; frontend не выводит её по
   собственному status mapping;
-- после Confirm success `replace` остаётся на Order Card и cache заменяется
-  response команды.
+- после Confirm success `replace` остаётся на Order Card; response проходит
+  тот же monotonic guard, что GET и replay. Старый ответ не откатывает карточку.
 
 ## 4. TanStack Query
 
@@ -98,7 +107,7 @@ Query keys:
 
 ```text
 ['customers','search',{q,cursor,limit:20}]
-['catalog','search',{q,availability,cursor,limit:20}]
+['catalog','search',{orderRef,q,availability,cursor,limit:20}]
 ['orders','detail',orderRef]
 ```
 
@@ -117,21 +126,26 @@ keypress. Previous page data не показывается как результ
 
 #12 добавляет один EventSource на tab. `resource-invalidated.v1` инвалидирует
 только exact Order query; `stream-reset.v1` инвалидирует только существующие
-Order detail queries. Cache изменяется исключительно результатом owner GET.
+Order detail queries. Cache принимает только schema-valid owner GET/command response через общий
+monotonic guard; SSE payload никогда не записывается в cache.
 
 ## 5. Idempotency и версия
 
-Для каждого нажатия command создаётся `crypto.randomUUID()` один раз. Запись
-`{intentFingerprint,key,startedAt}` хранится в `sessionStorage` под
-`coffee.command.<route>.<resourceRef>` до определённого результата.
+На один user intent один раз создаётся `crypto.randomUUID()`. Versioned
+sessionStorage хранит только key/method/path/fingerprint/createdAt/state под
+ключом UUID intent; body, PII, credentials, цены и quote payload запрещены.
+Pre-resource Customer/Draft/Quote не требуют неизвестного resourceRef.
 
-- timeout/network/502/503/504 считается ambiguous: кнопка автоматического
-  повтора отсутствует; UI предлагает «Проверить состояние»;
-- проверка делает owner GET; если эффект виден, запись удаляется;
-- если эффект не виден, кнопка «Повторить тот же запрос» использует тот же key;
-- definitive 2xx/4xx удаляет запись;
-- другой intent никогда не использует старый key;
-- secret, Authorization, request/response body и PII в storage не пишутся.
+Ambiguous response, expired lease и `IDEMPOTENCY_REQUEST_IN_PROGRESS` сохраняют
+pending key. «Проверить результат команды» делает bodyless read-only lookup
+по [единому протоколу](26_BROWSER_COMMAND_RECOVERY.md), в том числе после reload.
+Нет автоматического replay, нового key из-за timeout или вывода об исходе по
+похожему состоянию карточки. Terminal classifier учитывает operation mode/code,
+а не весь класс HTTP 4xx. Lookup 410/503/invalid-result не разрешает новый intent.
+
+Каждый GET/command/replay сравнивается по `OrderCard.projectionVersion`; поздний
+старый response не заменяет новый. Completed lookup закрывает intent, после
+чего exact owner GET обновляет карточку; свежесть и результат команды различны.
 
 PUT/DELETE/Confirm берут expected version только из последнего успешного Order
 response. При `ORDER_VERSION_CONFLICT`:
@@ -153,7 +167,9 @@ success (включая empty), recoverable error, route-fatal error. Стары
 |---|---|
 | field `VALIDATION_FAILED` | inline errors по `errors[].pointer`, focus первого поля |
 | `IDEMPOTENCY_CONFLICT` | alert «Этот ключ уже использован для другой команды», без retry |
-| `IDEMPOTENCY_REQUEST_IN_PROGRESS` | alert + «Проверить состояние», без новой команды |
+| `IDEMPOTENCY_REQUEST_IN_PROGRESS` | сохранить pending key; «Проверить результат команды», без новой команды |
+| `IDEMPOTENCY_RESULT_NOT_RETAINED` | unresolved intent; owner recovery, без нового key |
+| `IDEMPOTENCY_LOOKUP_UNAVAILABLE` / `IDEMPOTENCY_RESULT_INVALID` | сохранить pending key, безопасная ошибка и correlation id |
 | `ORDER_VERSION_CONFLICT` | conflict modal и алгоритм раздела 5 |
 | `ORDER_QUOTE_STALE` / `PRICING_QUOTE_EXPIRED` | сохранить product/quantity, вернуть в Catalog, запросить новую quote только по кнопке |
 | `CATALOG_REVISION_CHANGED` | refetch Catalog, снять выбор устаревшей строки |
@@ -203,25 +219,47 @@ server-provided reconciliation action.
 - money форматируется `Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'})`
   только из authoritative minor-unit decimal string через bigint-safe helper.
 
-## 9. Тесты
+## 9. Доставка и граница сессии
+
+#9 материализует `GET /app/** -> web:3000` по runtime profile: Edge передаёт
+SPA document, web возвращает index.html для app deep links. `/` ведёт в Customer
+flow. Отсутствующий `/assets/**` возвращает 404, API/events/internal/provider paths
+никогда не получают HTML fallback. HTML revalidation/no-store и immutable hashed
+assets проверяются в image/Compose; наличие health endpoint не доказывает SPA.
+Node entrypoint и browser entrypoint имеют раздельные build graphs; browser не
+импортирует текущий server `main.ts`/platform-runtime.
+
+При logout/смене пользователя отменить pending reads, очистить query/mutation
+cache, формы и sessionStorage; поздние responses прошлой сессии отбрасываются.
+401 немедленно скрывает защищённые данные. Pending intent не исполняется после
+reauth автоматически; потеря local recovery при выходе явно объясняется согласно
+[recovery policy](26_BROWSER_COMMAND_RECOVERY.md). Login return URL допускает
+только локальный `/app/` path. #12 связывает EventSource с тем же lifecycle.
+
+## 10. Тесты
 
 - component tests каждого route: initial/loading/empty/success/all mapped errors;
 - generated MSW fixtures only; handwritten response DTO запрещён lint rule;
 - Query tests exact keys/retry/staleTime и запрет mutation retry;
-- idempotency tests ambiguous response/same-key retry/new-intent key;
+- idempotency: потерянные Customer/Draft/Quote response, reload до resourceRef,
+  read-only recovery без body/owner writes, non-terminal 409/410/503;
+- Draft item: изменить quantity с прежним itemRef, удалить строку, отменить dialog,
+  conflict/duplicate click/ambiguous delete не теряет intent и соседние строки;
+- late GET/replay не откатывает projectionVersion; stale session response отброшен;
 - conflict test доказывает refetch, сохранение form value и отсутствие auto replay;
 - exhaustive enum/action compile tests;
 - axe: 0 serious/critical violations для каждой страницы/dialog/state;
 - keyboard-only flow Customer -> Draft -> Catalog -> item -> Confirm -> Card;
 - Playwright: happy path, create Customer, empty results, stale quote, version
   conflict, unavailable services, Blocked и UnknownOutcome;
-- deep-link/reload для каждого route;
+- deep-link/reload каждого route через Edge; missing asset/API не возвращает HTML;
+- logout/401/session switch очищает private cache и не повторяет pending commands;
 - bundle/architecture/CSP scan: no secrets, server imports, provider URL,
-  handwritten fetch/axios, DB/Kafka values;
+  fetch вне project-owned api/client.ts, Axios, DB/Kafka values;
 - bundle budgets: initial JS gzip <=250 KiB, route chunk <=150 KiB; превышение
   требует отдельного issue/решения, а не поднятия лимита в #9.
 
-## 10. Не входит
+## 11. Не входит
 
 Design system, global state library, offline mutations, optimistic business
 updates, automatic mutation retry, admin/analytics/Work Center, AROMA calls,

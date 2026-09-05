@@ -355,3 +355,15 @@ owner-local migration contract. Business event schemas, provider semantics,
 HTTP contracts и migrations конкретного owner не считаются реализованными этим
 foundation. `#4` получает отдельный contract handoff и не становится
 циклической зависимостью Kafka delivery.
+
+## 16. Frontend recovery admission #119
+
+G05/G10/G15 принимают outputs #4/#5/#7/#8/#9 по
+[протоколу browser recovery](26_BROWSER_COMMAND_RECOVERY.md): потерянный ответ
+Customer/Draft/Quote, reload до resourceRef, Completed read-only replay без
+повторного эффекта, non-terminal InProgress и lookup unavailable/not-retained.
+Проверяются текущая авторизация, scope concrete path и отсутствие PII в storage.
+G15 также требует изменение/удаление Draft item, старый GET/replay после новой
+карточки, первичный SSE refetch, logout/session switch и deep-link reload через
+Edge. Missing asset/API не возвращает index.html. Fixture evidence #9 дополняется
+интеграционным owner proof #5/#7/#8; один mock не доказывает отсутствие DB writes.

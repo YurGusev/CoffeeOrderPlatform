@@ -31,6 +31,12 @@ GET  /events
 price from the browser. It validates the persisted quote reference/hash and
 current OrderVersion locally.
 
+Для восстановления после потерянного ответа семь client-v1 commands поддерживают
+bodyless `Idempotency-Replay-Only: true` с прежним Idempotency-Key. Owner читает
+сохранённый результат без повторного эффекта по
+[нормативному recovery протоколу](26_BROWSER_COMMAND_RECOVERY.md). Actor/scope
+и текущие permissions проверяются заново; browser body хранить не требуется.
+
 ## Минимальный ответ Order Card
 
 ```json

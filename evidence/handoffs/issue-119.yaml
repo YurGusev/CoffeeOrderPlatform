@@ -1,0 +1,231 @@
+issue: 119
+baseCommit: e1272a22ce6d4c124ec463ad5aefa1997d577a99
+inputs:
+- issue: 60
+  acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+  artifact: evidence/handoffs/issue-60.yaml
+  sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+- issue: 62
+  acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+  artifact: evidence/handoffs/issue-62.yaml
+  sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+- issue: 63
+  acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+  artifact: evidence/handoffs/issue-63.yaml
+  sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+outputs:
+- artifact: docs/launch/03_HTTP_API_CONTRACT.md
+  sha256: 002f1a4b6537553b8a24ca1a847155d2e66327431e868114afbec5cf0a8a1957
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/07_FRONTEND_CONTRACT.md
+  sha256: 30d6221961fc51749b4a5cddb63fb46e40bc82e221184070022fa835fff62828
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/10_RUNTIME_CATALOG.md
+  sha256: b3cedb6a1a4c7783fbe5fd47a05ae0e07084ee6da18eab363fe62fe83167fea9
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md
+  sha256: 2701ae4bcd53a1bdc3dee9ee78fe528e5c679c42fd04d6076e703d82586b4eec
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+  sha256: 05b762f9bca3be4f35457b12d03661d85d93581f7960d15d9f76bb4cf3f2dc59
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/14_CUSTOMER_IMPLEMENTATION_SPEC.md
+  sha256: 0633bacdceb077fc5b484a252bb9db2ec3f2d3c4a6c3aff33a0c91c329d3237d
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md
+  sha256: 9679e8b116b919839a74e251de36906000169ffe98ecc552eb94645585bdc410
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md
+  sha256: ea24a8bdc0bd1493e03593375afebb531ee17c99a782f7b4244222bf2f424c1d
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+  sha256: f08cea0501dc056bcca09dc69ed8985332eaaefbd9b2434f5082c9e3c11381f9
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md
+  sha256: 57f2a06b84cd517258211f527914ab45cae3840928a753d0a76f5d0279a6455a
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+  sha256: 91e7a36f7b1ba334e4c7566993308cb85c9cf58a93e5e0a674815d039b1af5f6
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/README.md
+  sha256: db00590b71ea750c0f43e21458afdbc6a75f6557e8a4c7ad7c3c9b33a66bdc7a
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: platform/launch-v1-runtime-profile.json
+  sha256: 73d33bbdbab0ff722c1e7aad261fde4effffe2b26b102c12ae491a879b9cd062
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: platform/launch-v1-runtime-profile.schema.json
+  sha256: c7cbc23fac430a409910613d1953bc3e6317879de079768773466c330eeceac8
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: scripts/validate-launch-authority.py
+  sha256: 6024007f210817320054fe7b9f87db324381a09758f31388ca8dcdc8873e8460
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: tests/architecture/checks.test.mjs
+  sha256: 1db797a568b92df919dc7de32eea322491f386c628815ffbe12a2b3f60801a42
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: tests/authority/fixtures/negative/cases.json
+  sha256: fcf506a5f2a8b62c9a14668dd494b8ad974451853e2b44543d41c755c4ba854d
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+- artifact: docs/launch/26_BROWSER_COMMAND_RECOVERY.md
+  sha256: 094d6e47dd095299e5190c58f36ce9b7ecaddd87e2f2c81fa17de308bf23eb31
+  consumers:
+  - 4
+  - 5
+  - 7
+  - 8
+  - 9
+  - 12
+  - 13
+verification:
+- command: pnpm authority:check
+  result: passed
+  exitCode: 0
+  detail: 4/4
+- command: pnpm architecture:check
+  result: passed
+  exitCode: 0
+- command: 'node --test --test-name-pattern=''GREEN: accepted manifests|TS7-FRONTEND|TS7-APP-DECLARATIONS|JSON Schema
+    Draft 2020-12|BOUND-DB-CLIENT|BOUND-KAFKA-CLIENT'' tests/architecture/checks.test.mjs'
+  result: passed
+  exitCode: 0
+  detail: 6/6; retained DB/Kafka guards
+- command: node --test --test-name-pattern='JSON Schema Draft 2020-12' tests/architecture/checks.test.mjs
+  result: passed
+  exitCode: 0
+  detail: 1/1
+- command: pnpm exec oxlint --type-aware --deny-warnings tests/architecture/checks.test.mjs
+  result: passed
+  exitCode: 0
+- command: git diff --check; git diff --cached --check
+  result: passed
+  exitCode: 0
+limitations:
+- 'Приняты спецификация и route authority; React, Edge hosting и owner replay-only handlers реализуют #4/#5/#7/#8/#9/#12
+  после prerequisites.'
+- 'Live browser, DB recovery и provider effects здесь не выполнялись; их обязательный admission закреплён в #13.'
+- 'Список заказов, auth-provider implementation и W2/W3 features не входят в #119.'
+relativeLinks:
+  checked: 46
+  missing: 0
+review:
+  agent: luna_worker
+  result: passed
+  scope: recovery, versioning, ownership, route authority, consumer issues, merged DB/Kafka evidence

@@ -78,7 +78,8 @@ money, Desired/Observed, blockers или actions.
 
 ### Service records
 
-- сразу после connect: `event: stream-ready.v1`, data содержит только
+- после auth, replay/reset и установки live delivery: `event: stream-ready.v1`,
+  data содержит только
   `connectionId`, `connectedAt`; `id` отсутствует;
 - если replay невозможен: `event: stream-reset.v1`, data
   `{reason:"REPLAY_UNAVAILABLE"}`; `id` отсутствует;
@@ -91,11 +92,13 @@ money, Desired/Observed, blockers или actions.
 
 При connect:
 
-1. header отсутствует -> `stream-ready`, новые events;
-2. valid ID найден в local ring -> replay subsequent events по порядку, затем live;
-3. ID malformed или не найден (restart/другой replica/eviction) ->
-   `stream-reset.v1`, затем live;
-4. query parameter `lastEventId` запрещён; используется стандартный header.
+1. После auth/admission получить replay boundary и подготовить connection queue;
+   события после boundary не теряются между replay и подключением live.
+2. Header отсутствует -> replay отсутствует; найденный ID -> subsequent replay
+   по порядку; malformed/not found/restart/eviction -> `stream-reset.v1`.
+3. После replay/reset и установки live delivery отправить `stream-ready.v1`,
+   затем live frames. Initial owner refetch браузера начинается после ready.
+4. Query parameter `lastEventId` запрещён; используется стандартный header.
 
 Replay — оптимизация, не гарантия доставки. `stream-reset` требует безопасный
 owner refetch и поэтому не нуждается в sticky session/persistent replay DB.
@@ -141,7 +144,14 @@ Authorization/header actor не создаётся.
 4. вызвать `queryClient.invalidateQueries({queryKey:['orders','detail',subjectRef],exact:true,refetchType:'active'})`;
 5. если cached `OrderCard.projectionVersion >= ownerVersion`, duplicate можно
    пропустить; command `Order.version` для dedup запрещён;
-6. refetch response owner GET полностью заменяет cache.
+6. refetch response проходит общий monotonic projectionVersion guard #9;
+   старый response не заменяет более новую карточку.
+
+На каждом `stream-ready.v1`, включая первое подключение без Last-Event-ID,
+инвалидировать уже существующие Order detail queries и refetch только active.
+Это закрывает окно между первоначальным GET и открытием stream, когда hint мог
+быть потерян. Gateway отправляет ready после replay и установки live delivery.
+Существующий replay path сохраняется; второй reconnect loop не создаётся.
 
 На `stream-reset.v1` инвалидировать только существующие Order detail queries:
 predicate key prefix `['orders','detail']`, `refetchType:'active'`. Customer,
@@ -152,6 +162,10 @@ UI connection indicator: `Подключено|Переподключение|О
 отдельный retry loop запрещён. После 30s disconnected показать non-blocking
 banner и кнопку owner refetch; commands остаются по своим правилам #9.
 
+EventSource закрывается при logout/смене application session. Handlers и refetch
+прошлой сессии не могут заполнить новый cache; authority session и очищение
+принадлежат #9. Сам статус «Подключено» не доказывает свежесть Order Card.
+
 ## 8. Проверки
 
 - event contract/schema/key/version/dedup/out-of-order/quarantine tests;
@@ -161,7 +175,9 @@ banner и кнопку owner refetch; commands остаются по своим 
 - Last-Event-ID found replay, malformed/missing/evicted/restart -> reset;
 - frontend exact-query invalidation, inactive query no eager fetch, reset prefix
   invalidation и cache update только owner GET;
-- duplicates/lower versions не откатывают UI;
+- duplicates/lower versions, late GET и historical command replay не откатывают UI;
+- owner change между initial GET и первым stream-ready перечитывается;
+- logout/session switch удаляет EventSource/listeners и отбрасывает late response;
 - 5 001 connections, 65 records, >256KiB, stalled 5s, abort/shutdown: bounded
   memory и cleanup;
 - soak: 5 000 connections, 100 invalidations/s, 30min; RSS/event-loop/fd budgets
