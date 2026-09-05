@@ -1,0 +1,343 @@
+issue: 61
+baseCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+inputs:
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: evidence/handoffs/issue-60.yaml
+    sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+    sha256: 108de7042b7546cae60e4fe807fe1bb8640d464e37caed1bb5a147f0c1abc141
+outputs:
+  - artifact: packages/platform-runtime/src/index.ts
+    sha256: fee9a7bd0d74eb4cdd7c2b488413d8f4a0ae0c4fde28446bd9c8690f59e1f55b
+    consumers:
+      - 62
+      - 63
+      - 64
+  - artifact: tests/runtime/lifecycle.test.mjs
+    sha256: 2042ae954aacde6003d1eb2619b928870e3c445ae7cdcf5648014785a35deb81
+    consumers:
+      - 62
+      - 63
+      - 64
+  - artifact: docs/launch/01_RUNTIME_ARCHITECTURE.md
+    sha256: e373d7b5f1e058d0133c27fc574d333228a1c97bfae42af55a810ea0cbf12c21
+    consumers:
+      - 62
+      - 63
+      - 64
+  - artifact: docs/launch/06_EVENTS_AND_RECOVERY.md
+    sha256: f0aef3d44070f2237a35ef2f553fac1446821962c8a22a20ac708151eed33d8e
+    consumers:
+      - 62
+      - 63
+      - 64
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: ed6c5bdac80095e0d8b8db6836adebd57efbcbab93da43430d32c163f650481b
+    consumers:
+      - 62
+      - 63
+      - 64
+runtimeContract:
+  import: '@coffee-platform/runtime'
+  entrypoint: startConfiguredRuntime(name, composition?)
+  composition:
+    - configure(app, signal)
+    - 'readinessChecks: {name, check(signal)}[]'
+    - 'resources: {name, start?(signal), stop(signal), destroy()}[]'
+  controller:
+    - start()
+    - phase()
+    - transition(next)
+    - closeRuntime(signal?)
+    - whenStopped
+  phases:
+    - starting
+    - running
+    - draining
+    - stopped
+  signals:
+    - SIGTERM
+    - SIGINT
+  startupGraceMs: 30000
+  readinessTimeoutMs: 1000
+  shutdownGraceMs: 30000
+  failStopExitCode: 1
+  requestContext:
+    - correlationId
+    - traceparent
+    - signal
+    - deadlineUtc
+    - acceptDurable()
+  roots:
+    - runtime: edge-gateway
+      port: 4000
+      requiredDependencies: []
+      deadlineMs: 5000
+      deadlineProfiles:
+        defaultMs: 5000
+      concurrency: 500
+    - runtime: api-public
+      port: 4050
+      requiredDependencies: []
+      deadlineMs: 4500
+      deadlineProfiles:
+        defaultMs: 4500
+      concurrency: 400
+    - runtime: api-internal
+      port: 4051
+      requiredDependencies: []
+      deadlineMs: null
+      deadlineProfiles:
+        defaultMs: null
+      concurrency: 300
+    - runtime: web
+      port: 3000
+      requiredDependencies: []
+      deadlineMs: 5000
+      deadlineProfiles:
+        defaultMs: 5000
+      concurrency: 500
+    - runtime: customer-service
+      port: 4101
+      requiredDependencies:
+        - database
+      deadlineMs: 2000
+      deadlineProfiles:
+        defaultMs: 2000
+      concurrency: 100
+    - runtime: catalog-service
+      port: 4102
+      requiredDependencies:
+        - database
+      deadlineMs: 2000
+      deadlineProfiles:
+        defaultMs: 2000
+      concurrency: 150
+    - runtime: catalog-supplier-sync
+      port: 4201
+      requiredDependencies:
+        - database
+      deadlineMs: 900000
+      deadlineProfiles:
+        defaultMs: 900000
+      concurrency: 1
+    - runtime: catalog-activation-worker
+      port: 4202
+      requiredDependencies:
+        - database
+        - kafka
+      deadlineMs: 5000
+      deadlineProfiles:
+        defaultMs: 5000
+      concurrency: 1
+    - runtime: pricing-service
+      port: 4103
+      requiredDependencies:
+        - database
+      deadlineMs: 5000
+      deadlineProfiles:
+        defaultMs: 5000
+      concurrency: 100
+    - runtime: orders-service
+      port: 4104
+      requiredDependencies:
+        - database
+        - kafka
+      deadlineMs: 5000
+      deadlineProfiles:
+        defaultMs: 5000
+      concurrency: 150
+    - runtime: orders-aroma-preparation
+      port: 4203
+      requiredDependencies:
+        - database
+        - kafka
+      deadlineMs: 5000
+      deadlineProfiles:
+        defaultMs: 5000
+      concurrency: 16
+    - runtime: aroma-observer
+      port: 4204
+      requiredDependencies:
+        - database
+        - kafka
+      deadlineMs: 15000
+      deadlineProfiles:
+        defaultMs: 15000
+      concurrency: 4
+    - runtime: aroma-convergence
+      port: 4205
+      requiredDependencies:
+        - database
+        - kafka
+      deadlineMs: 30000
+      deadlineProfiles:
+        defaultMs: 30000
+      concurrency: 4
+    - runtime: aroma-gateway
+      port: 4301
+      requiredDependencies:
+        - database
+      deadlineMs: 10000
+      deadlineProfiles:
+        defaultMs: 10000
+        readMs: 900000
+        cartMs: 10000
+        mutationMs: 10000
+      concurrency: 8
+    - runtime: realtime-gateway
+      port: 4401
+      requiredDependencies:
+        - kafka
+      deadlineMs: null
+      deadlineProfiles:
+        defaultMs: null
+      concurrency: 5000
+  logEvents:
+    - runtime.phase
+    - runtime.transition.invalid
+    - runtime.readiness.failed
+    - runtime.shutdown.failed
+    - runtime.stop.failed
+    - runtime.destroy.failed
+    - runtime.shutdown
+  metrics:
+    - runtime_admission_rejected_total
+verification:
+  - command: pnpm authority:check
+    result: passed
+    exitCode: 0
+    detail: 4 tests
+  - command: pnpm architecture:check
+    result: passed
+    exitCode: 0
+  - command: pnpm config:check
+    result: passed
+    exitCode: 0
+    detail: 15 runtimes, development
+  - command: node --test tests/runtime/lifecycle.test.mjs
+    result: passed
+    exitCode: 0
+    detail: 24 passed, 0 failed, 0 skipped
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+  - command: pnpm test
+    result: passed
+    exitCode: 0
+    detail: '108 tests: 107 passed, 0 failed, 1 skipped (COFFEE_DB_LIVE_PROOF != 1); 11988.709844 ms'
+  - command: COFFEE_DB_LIVE_PROOF=1 node --test tests/database/live-db-proof.test.mjs
+    result: passed
+    exitCode: 0
+    detail: 2 passed, 0 failed, 0 skipped; disposable PostgreSQL 17.11, cleanup confirmed.
+  - command: git diff --check
+    result: passed
+    exitCode: 0
+limitations:
+  - 'Acceptance после merge ещё не выполнен; #62 не принимает unmerged predecessor.'
+  - >-
+    Полный Compose health gate с stub secrets завершился ошибкой required readiness 503.
+    Diagnostic start созданных контейнеров проверил 15 roots, но не является production admission.
+  - 'Реальные DB/Kafka readiness checks подключают владельцы #62/#63; до этого их roots not-ready.'
+  - >-
+    Owner ledger в lifecycle test — fixture границы cancellation, не durable idempotency.
+    TransactionOutcomeUnknown, restart-safe replay и Inbox/Outbox относятся к #62/#63.
+  - >-
+    Native Promise не отменяется принудительно: незавершённая работа требует fail-stop. Блокировку самого
+    event loop завершает внешний supervisor.
+  - Provider/production mutations не выполнялись. Live PG proof проверяет baseline bootstrap/permissions, а не transaction outcome #62.
+shutdownTiming:
+  sourceCommand: pnpm test
+  fixtureGraceMs: 40
+  assertionUpperBoundMs: 500
+  observations:
+    - runtime: non-cooperative-test
+      status: fail-stop
+      pending:
+        - handlers
+      durationMs: 2.463408999999956
+    - runtime: startup-blackhole-test
+      status: fail-stop
+      pending:
+        - startup
+      durationMs: 0.8312600000001567
+    - runtime: blackhole-test
+      status: fail-stop
+      pending:
+        - server-close
+        - requests
+        - handlers
+      durationMs: 41.28450399999997
+    - runtime: blackhole-resource-test
+      status: fail-stop
+      pending:
+        - server-close
+        - stop:blackhole
+      durationMs: 41.06703300000004
+    - runtime: readiness-blackhole-test
+      status: fail-stop
+      pending:
+        - readiness:database
+      durationMs: 0.4007530000001225
+  detail: >-
+    Замеры shutdown из runtime.shutdown; startup-blackhole дополнительно ждёт startupGraceMs=30 до начала
+    shutdown. Допуск учитывает scheduler; это локальное failure evidence, не production latency SLA.
+liveComposeProof:
+  command: node /tmp/coffee-issue61-proof/tools/compose-smoke.mjs --stub-secrets --provision-empty-postgres-network --project-name coffee-issue61-proof --keep --no-build
+  fullHealthGate: failed
+  exitCode: 1
+  reason: Owner roots без DB/Kafka readiness hooks возвращают 503 до #62/#63.
+  isolation: Временная копия Compose с уникальными coffee_issue61_proof_* сетями; чужой Kafka/PostgreSQL не использовался.
+  build: Все 15 образов собраны из исходников #61 с Dockerfile оптимизации #68.
+  diagnostics:
+    mode: После failed gate созданные контейнеры запущены напрямую через docker start; dependency gate не считается пройденным.
+    liveness200: 15
+    metrics200: 15
+    readiness200: [edge-gateway, api-public, api-internal, web]
+    readiness503: [customer-service, catalog-service, catalog-supplier-sync, catalog-activation-worker, pricing-service, orders-service, orders-aroma-preparation, aroma-observer, aroma-convergence, aroma-gateway, realtime-gateway]
+    kafka:
+      result: passed
+      transport: SASL_SSL
+      proof: kafka-topics.sh create + kafka-console-producer.sh + kafka-console-consumer.sh, один уникальный topic/message, exact round-trip.
+      target: localhost:9092 внутри изолированного Kafka container; клиентские свойства из tmpfs.
+    shutdown:
+      command: docker compose --project-name coffee-issue61-proof stop --timeout 30
+      runtimeExitCode: 0
+      runtimeCount: 15
+    cleanup: Контейнеры, уникальные сети и scoped tmpfs secret directory удалены.
+  limits: Это baseline broker compatibility и runtime lifecycle proof; durable delivery/restart/transaction failure proof остаются #62/#63.
+acceptanceAudit:
+  scenarioResults:
+    - scenario: premature GET response disconnect aborts the request signal
+      result: passed
+    - scenario: partial POST input disconnects before the request is complete
+      result: passed
+    - scenario: normal finished response does not abort and clears the deadline timer
+      result: passed
+    - scenario: durable acceptance survives disconnect and idempotency replay does not repeat the effect
+      result: passed
+    - scenario: startup blackhole times out, cleans acquired resources, and skips later resources
+      result: passed
+    - scenario: blackhole resource stop is bounded and force-destroyed
+      result: passed
+    - scenario: readiness blackhole is bounded and does not start new probes while pending
+      result: passed
+    - scenario: all 15 configured roots use one real listen/controller lifecycle and dependency matrix
+      result: passed
+      proof: Каждый root добавляет ровно один TCPServerWrap и по одному SIGTERM/SIGINT handler; после stop возвращается исходное количество.
+    - scenario: startRuntime removes signal listeners and repeated process signals perform one shutdown in a child
+      result: passed
+      proof: SIGTERM, затем SIGINT запускают один shutdown, один stop и один destroy; fail-stop exit code 1.
+  currentOwnerComposition: Все 15 apps вызывают startConfiguredRuntime без composition; реальные DB/Kafka checks/resources подключают #62/#63, matrix использует явные fixtures.
+  businessOwnership: Runtime не принимает решения о retry или compensation и не повторяет provider effect; TransactionOutcomeUnknown и durable idempotency принадлежат #62, Inbox/Outbox — #63.
+  labels:
+    allowed: [runtime, phase, configured dependency name, configured resource name]
+    nameConstraint: Уникальные имена по шаблону [a-z][a-z0-9-]{0,63}.
+    forbiddenMetricLabels: [correlationId, traceparent, requestId, payload, secrets]
+    requestLogs: correlationId и валидный W3C traceparent; без request body и secrets.

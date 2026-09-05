@@ -224,3 +224,28 @@ decision запрещено schema/checksum check.
 Production deployment, Kubernetes, исправление defect, повышение thresholds,
 новые features/dependencies/services, реальные production AROMA credentials,
 перезапись legacy DB и удаление пользовательских данных не входят в #13.
+
+## 13. Runtime evidence #61 для последующего launch gate
+
+Foundation проверяется существующей командой
+`node --test tests/runtime/lifecycle.test.mjs`. Handoff
+`evidence/handoffs/issue-61.yaml` передаёт #62/#63/#64 общий lifecycle API,
+матрицу 15 roots, configured deadlines и ограничения. Этот suite не заменяет
+G10/G11/G13/G14 на принятом launch SHA.
+
+Обязательные сценарии: реальные TCP disconnect до завершения input и после
+полного GET; normal response без abort; request deadline; known acceptance и
+replay fake owner result; startup partial cleanup в обратном порядке; bounded
+readiness blackhole; live `200`/ready `503` при draining; invalid transition и
+повтор shutdown; неотвечающий hook и owned socket с конечным возвратом;
+process-level fail-stop и снятие единственной пары signal handlers.
+Один harness выполняется для всех 15 configured identities, включая отсутствие,
+успех и отказ обязательных dependency checks.
+
+Бюджеты production берутся только из `config/platform.yaml`:
+`health.startupGraceMs=30000`, `health.timeoutMs=1000`,
+`platform.shutdownGraceMs=30000`; request deadlines и явные `null` сохраняются
+по каждому runtime. Тесты используют уменьшенные in-memory budgets и измеряют
+фактическое завершение с допуском scheduler. Для non-cooperative hooks требуется
+`fail-stop` evidence и принудительное закрытие зарегистрированных ресурсов,
+а не только успешное завершение Promise ожидания.
