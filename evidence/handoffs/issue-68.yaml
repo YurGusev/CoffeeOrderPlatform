@@ -1,0 +1,40 @@
+issue: 68
+baseCommit: 6934221dc1162af706d73e9d3c230bd51c3e4243
+inputs:
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: evidence/handoffs/issue-60.yaml
+    sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+outputs:
+  - artifact: Dockerfile
+    sha256: 6d487d70c7b787789370e354ca175a098d1cc5add633cf0aaf681167736cd151
+    consumers: [61, 62, 63, 64]
+  - artifact: docs/platform/LOCAL_PLATFORM.md
+    sha256: b7d12581fce45668fe8b6c051c74f0b5f7287add3decb3a6ad9ae32281d9e557
+    consumers: [61, 62, 63, 64]
+verification:
+  - command: node --test tests/compose/topology.test.mjs
+    result: passed
+    detail: 6 tests
+  - command: pnpm versions:check
+    result: passed
+  - command: pnpm architecture:check
+    result: passed
+  - command: node tools/docker-build.mjs --target runtime --load --tag coffee-platform-runtime:issue68 --progress plain .
+    result: passed
+  - command: docker run --rm --network none --entrypoint node coffee-platform-runtime:issue68 --input-type=module -e '<assertions>'
+    result: passed
+    detail: Node 26.8.1, uid 1000, runtime import, отсутствие compiler/linter/codegen и системного build tooling.
+  - command: git diff --check
+    result: passed
+cacheProof:
+  beforeSeconds: 75.56
+  afterSourceEditSeconds: 33.74
+  target: build
+  imageExport: false
+  sourceEditRetainsDependencyNativeCache: true
+  workspaceDependencyWithoutLockfile: ERR_PNPM_OUTDATED_LOCKFILE
+limitations:
+  - Один локальный замер с прогретой librdkafka; не доказательство ускорения холодной сборки или экспорта.
+  - Замер кэша выполнен с локальными исходниками #61; отдельный final image этой ветки собран от accepted develop.
+  - Registry publication, deployment и production mutations не выполнялись.

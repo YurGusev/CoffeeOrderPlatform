@@ -26,6 +26,15 @@ RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true upda
   && test -f /usr/local/lib/librdkafka.so \
   && test -f /usr/local/lib/librdkafka++.so
 
+# Сохраняем пути workspace manifests без списка всех сервисов в Dockerfile.
+# Изменение исходников повторяет только этот дешёвый шаг; его выход неизменен.
+FROM ${NODE_IMAGE} AS workspace-manifests
+WORKDIR /workspace
+RUN --mount=type=bind,source=apps,target=apps \
+    --mount=type=bind,source=packages,target=packages \
+    mkdir /manifests \
+    && cp --parents apps/*/package.json packages/*/package.json /manifests/
+
 FROM ${NODE_IMAGE} AS build
 
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -51,28 +60,32 @@ COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib
 ENV JOBS=4
 ENV MAKEFLAGS=-j4
 
-# Keep the install reproducible.  The source tree is copied only after the
-# frozen install inputs; no host node_modules are ever part of the context.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.base.json ./
+RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0 \
+  && corepack enable \
+  && corepack prepare pnpm@11.24.0 --activate
+
+# Только входы установки влияют на кэш зависимостей и native addon.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --from=workspace-manifests /manifests/ ./
+
+# Node 26 has no Confluent 1.10.0 prebuilt addon. Keep pnpm lifecycle scripts
+# disabled and perform the native build as an explicit supply-chain step. The
+# upstream documented flags link only the addon against the separately pinned
+# librdkafka stage, avoiding the bundled static archive and pnpm scoped path.
+RUN --network=host pnpm install --frozen-lockfile --ignore-scripts \
+  && cd node_modules/@confluentinc/kafka-javascript \
+  && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild \
+  && cd /workspace \
+  && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+
+COPY tsconfig.json tsconfig.base.json ./
 COPY apps ./apps
 COPY packages ./packages
 COPY types ./types
 COPY config ./config
 COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
 
-# Node 26 has no Confluent 1.10.0 prebuilt addon. Keep pnpm lifecycle scripts
-# disabled and perform the native build as an explicit supply-chain step. The
-# upstream documented flags link only the addon against the separately pinned
-# librdkafka stage, avoiding the bundled static archive and pnpm scoped path.
-RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0 \
-  && corepack enable \
-  && corepack prepare pnpm@11.24.0 --activate \
-  && pnpm install --frozen-lockfile --ignore-scripts \
-  && cd node_modules/@confluentinc/kafka-javascript \
-  && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild \
-  && cd /workspace \
-  && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1' \
-  && node scripts/check-node26-compatibility.mjs \
+RUN node scripts/check-node26-compatibility.mjs \
   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false \
   && pnpm typecheck
 
