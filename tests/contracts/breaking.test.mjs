@@ -111,7 +111,7 @@ void test('breaking guard rejects event schema, key and envelope changes', async
   assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
 
-for (const [name, mutation] of [
+for (const [name, mutation, expected] of [
   ['response ref change', (document) => { document.paths['/api/client-v1/customers'].post.responses['201'].content['application/json'].schema.$ref = '#/components/schemas/OrderCardResponse'; }],
   ['required idempotency parameter weakening', (document) => { document.components.parameters.IdempotencyKey.required = false; }],
   ['component ref change', (document) => { document.components.schemas.CustomerRef.$ref = '../schemas/common/money-version-time.v1.schema.json#/$defs/MoneyMinor'; }],
@@ -122,13 +122,14 @@ for (const [name, mutation] of [
   ['operation parameter removal', (document) => { document.paths['/api/client-v1/customers'].post.parameters.shift(); }],
   ['enum addition narrowing', (document) => { document.components.schemas.CustomerResponse.properties.displayName.enum = ['Only']; }],
   ['security scheme change', (document) => { document.components.securitySchemes.bearerAuth.scheme = 'basic'; }],
-  ['request body required change', (document) => { document.paths['/api/client-v1/customers'].post.requestBody.required = true; }],
-  ['boolean response schema', (document) => { document.paths['/api/client-v1/customers'].post.responses['201'].content['application/json'].schema = false; }],
+  ['request body required change', (document) => { document.paths['/api/client-v1/customers'].post.requestBody.required = true; }, /createCustomer request body required changed/],
+  ['boolean response schema', (document) => { document.paths['/api/client-v1/customers'].post.responses['201'].content['application/json'].schema = false; }, /createCustomer:201\.content\.application\/json: boolean schema changed/],
 ]) {
   void test(`breaking guard rejects real client ${String(name)}`, async () => {
     const result = await realClientRed(mutation);
     assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
     assert.match(result.stderr, /breaking contract/);
+    if (expected) assert.match(result.stderr, expected);
   });
 }
 
