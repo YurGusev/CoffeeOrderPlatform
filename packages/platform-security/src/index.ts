@@ -15,6 +15,19 @@ export type ActorContextClaims = Readonly<{
   kid: string;
 }>;
 
+export type ServiceDelegationClaims = Readonly<{
+  iss: string;
+  aud: string;
+  originalCaller: string;
+  operationId: string;
+  correlationId: string;
+  traceparent: string;
+  iat: number;
+  exp: number;
+  jti: string;
+  kid: string;
+}>;
+
 export class SecurityValidationError extends Error {
   public readonly code: string;
 
@@ -117,5 +130,58 @@ export function verifyActorContext(token: string, options: VerifyActorContextOpt
   if (claims.iat > options.nowEpochSeconds + options.clockSkewSeconds || claims.exp <= options.nowEpochSeconds - options.clockSkewSeconds) {
     throw new SecurityValidationError("ACTOR_CONTEXT_EXPIRED", "actor context истёк или ещё не действителен");
   }
+  return claims;
+}
+
+function serviceClaimsFromUnknown(value: unknown): ServiceDelegationClaims {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "claims должны быть объектом");
+  const source = value as Record<string, unknown>;
+  const expected = ["iss", "aud", "originalCaller", "operationId", "correlationId", "traceparent", "iat", "exp", "jti", "kid"] as const;
+  for (const key of Object.keys(source)) if (!(expected as readonly string[]).includes(key)) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", `неизвестный claim ${key}`);
+  for (const key of expected) if (!Object.hasOwn(source, key)) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", `отсутствует claim ${key}`);
+  const strings = ["iss", "aud", "originalCaller", "operationId", "correlationId", "traceparent", "jti", "kid"] as const;
+  for (const key of strings) if (typeof source[key] !== "string" || source[key].length === 0) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", `claim ${key} должен быть непустой строкой`);
+  for (const key of ["iat", "exp"] as const) if (typeof source[key] !== "number" || !Number.isSafeInteger(source[key]) || source[key] < 0) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", `claim ${key} должен быть целым числом`);
+  const text = (key: (typeof strings)[number]): string => source[key] as string;
+  const number = (key: "iat" | "exp"): number => source[key] as number;
+  const claims: ServiceDelegationClaims = {
+    iss: text("iss"), aud: text("aud"), originalCaller: text("originalCaller"), operationId: text("operationId"),
+    correlationId: text("correlationId"), traceparent: text("traceparent"), iat: number("iat"), exp: number("exp"),
+    jti: text("jti"), kid: text("kid"),
+  };
+  if (claims.exp <= claims.iat) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "exp должен быть позже iat");
+  return claims;
+}
+
+export function signServiceDelegation(claims: ServiceDelegationClaims, privateKey: KeyObject): string {
+  const checked = serviceClaimsFromUnknown(claims);
+  const payload = Buffer.from(canonical(checked), "utf8");
+  return `${base64url(payload)}.${base64url(sign(null, payload, privateKey))}`;
+}
+
+export type VerifyServiceDelegationOptions = Readonly<{
+  publicKey: KeyObject | string | Buffer;
+  issuer: string;
+  audience: string;
+  nowEpochSeconds: number;
+  clockSkewSeconds: number;
+}>;
+
+export function verifyServiceDelegation(token: string, options: VerifyServiceDelegationOptions): ServiceDelegationClaims {
+  const parts = token.split(".");
+  if (parts.length !== 2 || parts.some((part) => part.length === 0)) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "ожидался compact service delegation");
+  const payloadPart = parts[0];
+  const signaturePart = parts[1];
+  if (payloadPart === undefined || signaturePart === undefined) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "ожидался compact service delegation");
+  const payload = decodeBase64url(payloadPart);
+  const signature = decodeBase64url(signaturePart);
+  let parsed: unknown;
+  try { parsed = JSON.parse(payload.toString("utf8")) as unknown; } catch { throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "claims не являются JSON"); }
+  const claims = serviceClaimsFromUnknown(parsed);
+  const publicKey = options.publicKey instanceof Buffer ? createPublicKey({key: options.publicKey, format: "der", type: "spki"}) : options.publicKey;
+  if (!verify(null, payload, publicKey, signature)) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "подпись delegation недействительна");
+  if (claims.iss !== options.issuer || claims.aud !== options.audience) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "issuer или audience не разрешены");
+  if (!Number.isSafeInteger(options.nowEpochSeconds) || options.clockSkewSeconds < 0) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "некорректные параметры времени");
+  if (claims.iat > options.nowEpochSeconds + options.clockSkewSeconds || claims.exp <= options.nowEpochSeconds - options.clockSkewSeconds) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "delegation истёк или ещё не действителен");
   return claims;
 }

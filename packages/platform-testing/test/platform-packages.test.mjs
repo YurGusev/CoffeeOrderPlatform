@@ -22,6 +22,8 @@ import {
 import {
   signActorContext,
   verifyActorContext,
+  signServiceDelegation,
+  verifyServiceDelegation,
 } from "../../platform-security/src/index.ts";
 import {withTransaction, createDatabase, DatabaseTransactionError} from "../../platform-database/dist/index.js";
 import {defineStatement, defineCopy} from "../../platform-database/dist/owner.js";
@@ -130,6 +132,30 @@ void test("security signs and verifies actor context claims", () => {
       }),
     { code: "SERVICE_AUDIENCE_FORBIDDEN" },
   );
+});
+
+void test("security signs and verifies service delegation claims", () => {
+  const {privateKey, publicKey} = generateKeyPairSync("ed25519");
+  const claims = {
+    iss: "api-internal",
+    aud: "customer-service",
+    originalCaller: "orders-service",
+    operationId: "getCustomerOrderInput",
+    correlationId: "corr",
+    traceparent: "00-abc-def-01",
+    iat: 100,
+    exp: 160,
+    jti: "jti",
+    kid: "active",
+  };
+  const token = signServiceDelegation(claims, privateKey);
+  assert.deepEqual(verifyServiceDelegation(token, {
+    publicKey,
+    issuer: "api-internal",
+    audience: "customer-service",
+    nowEpochSeconds: 120,
+    clockSkewSeconds: 5,
+  }), claims);
 });
 
 const poolConfig = {

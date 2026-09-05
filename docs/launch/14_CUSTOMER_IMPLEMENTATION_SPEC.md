@@ -1,5 +1,32 @@
 # Исполнимая спецификация Customer первого запуска
 
+## 0. Delivery note для issue #5
+
+В ветке `feature/5-customer-service` от `develop`
+`eb34befd76c0654e75d82637251dc4d12d0e0213` реализован Customer owner-path:
+Fastify routes → async application → owner-local PostgreSQL statements и
+idempotency store. `main.ts` подключает Customer adapters и routes, а
+`apps/api-public`/`apps/api-internal` используют реальные stateless HTTP
+forwarding clients с подписанными delegation claims.
+
+Фактический delivery write-set:
+
+- `apps/customer-service/src/domain`, `src/application`, `src/http` и
+  `src/infrastructure/postgres`;
+- `apps/customer-service/migrations/0001_customer_schema.sql` и
+  `0002_customer_indexes.sql`;
+- `apps/api-public/src/index.ts` и `apps/api-internal/src/index.ts`;
+- exact `libphonenumber-js@1.13.12` в registry/manifest/lockfile;
+- `tests/customer/*`, `evidence/issue-5-acceptance.md` и этот inventory.
+
+Статические проверки и локальный unit/full test baseline проходят. Acceptance
+остаётся неполной до запуска настоящего PostgreSQL 17.11, service trust/mTLS и
+scoped delegation verification keys: текущая foundation materialization не
+передаёт эти ключи указанным runtime, поэтому transport adapters намеренно
+fail-closed. Подробная матрица фактических результатов находится в
+[`evidence/issue-5-acceptance.md`](../../evidence/issue-5-acceptance.md);
+`evidence/handoffs/issue-5.yaml` не объявляет handoff принятым.
+
 Статус: нормативная спецификация задачи #5. Разработчик реализует перечисленные
 структуры, алгоритмы и проверки без самостоятельного выбора схемы данных или
 поведения API. Изменение контракта требует отдельного ADR и одновременного
@@ -23,24 +50,18 @@
 ```text
 apps/customer-service/
   src/main.ts
-  src/config.ts
   src/domain/customer.ts
   src/application/create-customer.ts
   src/application/search-customers.ts
-  src/http/post-customer.ts
-  src/http/get-customers.ts
-  src/http/get-customer-order-input.ts
+  src/application/get-customer-order-input.ts
+  src/http/index.ts
   src/infrastructure/postgres/customer-repository.ts
   src/infrastructure/postgres/idempotency-repository.ts
-  src/infrastructure/logging/customer-redaction.ts
   migrations/0001_customer_schema.sql
   migrations/0002_customer_indexes.sql
-  test/unit/customer-normalization.test.ts
-  test/integration/customer-migrations.test.ts
-  test/integration/create-customer.test.ts
-  test/integration/search-customers.test.ts
-  test/integration/customer-db-permissions.test.ts
-  test/security/customer-log-redaction.test.ts
+tests/customer/customer-normalization.test.mjs
+tests/customer/customer-live.test.mjs
+tests/customer/customer-schema.test.mjs
 ```
 
 HTTP DTO импортируются только из сгенерированного

@@ -48,7 +48,14 @@ export type RuntimeComposition = Readonly<{
     signal: AbortSignal,
     database?: Database,
     kafka?: KafkaRuntime,
+    context?: RuntimeCompositionContext,
   ) => Promise<void> | void;
+}>;
+
+/** Runtime-owned configuration and only the scoped secrets for this process. */
+export type RuntimeCompositionContext = Readonly<{
+  config: PlatformConfig;
+  secrets: Readonly<Record<string, unknown>>;
 }>;
 
 export type RuntimeIdentity = RuntimeComposition &
@@ -160,6 +167,7 @@ function appendOwnedComposition(
   composition: RuntimeComposition,
   database?: Database,
   kafka?: KafkaRuntime,
+  context?: RuntimeCompositionContext,
 ): RuntimeComposition {
   const owned = [...(database ? [database] : []), ...(kafka ? [kafka] : [])];
   for (const owner of owned) {
@@ -175,10 +183,10 @@ function appendOwnedComposition(
   }
   return {
     ...composition,
-    configure: (app: FastifyInstance, signal: AbortSignal) => {
+    configure: (app: FastifyInstance, signal: AbortSignal, ownedDatabase?: Database, ownedKafka?: KafkaRuntime, ownedContext?: RuntimeCompositionContext) => {
       if (kafka)
         void kafka.whenFailed.then(() => app.runtimeController.closeRuntime());
-      return composition.configure?.(app, signal, database, kafka);
+      return composition.configure?.(app, signal, database ?? ownedDatabase, kafka ?? ownedKafka, context ?? ownedContext);
     },
     resources: [
       ...owned.map((owner) => owner.resource),
@@ -847,7 +855,10 @@ export async function startConfiguredRuntime(
       configuredRuntimeIdentity(
         config,
         name,
-        appendOwnedComposition(composition, database, kafka),
+        appendOwnedComposition(composition, database, kafka, {
+          config,
+          secrets: (secretDocument as ScopedSecretDocument).secrets,
+        }),
       ),
     );
   } catch (error) {
