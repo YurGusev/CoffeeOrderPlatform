@@ -512,7 +512,9 @@ void test("blackhole resource stop is bounded and force-destroyed", async () => 
       destroy: () => { destroyed += 1; },
     }],
   }));
+  const started = performance.now();
   const result = await stopApp(app);
+  assert.ok(performance.now() - started < 500, "resource stop must return within the bounded shutdown allowance");
   assert.equal(stopStarted, true);
   assert.equal(result.status, "fail-stop");
   assert.deepEqual(result.pending, ["server-close", "stop:blackhole"]);
@@ -535,14 +537,20 @@ void test("readiness blackhole is bounded and does not start new probes while pe
       },
     }],
   }));
+  const started = performance.now();
   const first = await app.inject("/health/ready");
+  assert.ok(performance.now() - started < 500, "readiness blackhole must return within the bounded probe allowance");
   assert.equal(first.statusCode, 503);
   assert.equal(probes, 1);
   assert.equal(checkSignal.aborted, true);
+  assert.equal(checkSignal.reason.code, "RUNTIME_READINESS_DEADLINE");
   const second = await app.inject("/health/ready");
   assert.equal(second.statusCode, 503);
   assert.equal(probes, 1);
-  await stopApp(app);
+  const stopped = await stopApp(app);
+  assert.equal(stopped.status, "fail-stop");
+  assert.deepEqual(stopped.pending, ["readiness:database"]);
+  assert.equal(app.server.listening, false);
 });
 
 void test("concurrency admission cap keeps health endpoints available", async () => {
@@ -611,6 +619,23 @@ void test("startRuntime removes its process signal listeners after normal stop",
 
 void test("all 15 configured roots use one real listen/controller lifecycle and dependency matrix", async () => {
   const config = await loadPlatformConfig(join(root, "config/platform.yaml"), (text) => parseYaml(text, {json: true}));
+  const serverCount = () => process.getActiveResourcesInfo().filter((resource) => resource === "TCPServerWrap").length;
+  await waitFor(() => serverCount() === 0);
+  const serversBefore = serverCount();
+  const signalsBefore = [process.listenerCount("SIGTERM"), process.listenerCount("SIGINT")];
+  const startRoot = async (options) => {
+    const app = await startRuntime({...options, host: "127.0.0.1", port: 0});
+    assert.equal(serverCount(), serversBefore + 1, `${options.name}: exactly one TCP server`);
+    assert.equal(process.listenerCount("SIGTERM"), signalsBefore[0] + 1, options.name);
+    assert.equal(process.listenerCount("SIGINT"), signalsBefore[1] + 1, options.name);
+    return app;
+  };
+  const stopRoot = async (app) => {
+    assert.deepEqual(await stopApp(app), {status: "stopped", pending: []});
+    await waitFor(() => serverCount() === serversBefore);
+    assert.equal(process.listenerCount("SIGTERM"), signalsBefore[0]);
+    assert.equal(process.listenerCount("SIGINT"), signalsBefore[1]);
+  };
   const expectedDependencies = {
     "edge-gateway": [],
     "api-public": [],
@@ -633,20 +658,20 @@ void test("all 15 configured roots use one real listen/controller lifecycle and 
     const base = configuredRuntimeIdentity(config, name);
     const required = expectedDependencies[name];
     assert.deepEqual(base.requiredDependencies, required, name);
-    const missing = await startApp({...base, port: 0});
+    const missing = await startRoot(base);
     const missingReady = await missing.inject("/health/ready");
     assert.equal(missingReady.statusCode, required.length === 0 ? 200 : 503, name);
     const missingLive = await missing.inject("/health/live");
     assert.equal(missingLive.statusCode, 200, name);
-    await stopApp(missing);
+    await stopRoot(missing);
     if (required.length === 0) continue;
     const state = new Map(required.map((dependency) => [dependency, true]));
     const checks = required.map((dependency) => ({name: dependency, check: () => state.get(dependency)}));
-    const healthy = await startApp({...base, port: 0, readinessChecks: checks});
+    const healthy = await startRoot({...base, readinessChecks: checks});
     assert.equal((await healthy.inject("/health/ready")).statusCode, 200, name);
     state.set(required[0], false);
     assert.equal((await healthy.inject("/health/ready")).statusCode, 503, name);
-    await stopApp(healthy);
+    await stopRoot(healthy);
   }
 });
 
@@ -703,7 +728,7 @@ void test("startRuntime removes signal listeners and repeated process signals pe
     });
     child.kill("SIGTERM");
     await new Promise((resolve) => setTimeout(resolve, 10));
-    child.kill("SIGTERM");
+    child.kill("SIGINT");
     const exit = await waitForChildExit(child);
     assert.equal(exit.code, 1, stderr);
     assert.equal((stdout.match(/stop-hook/g) ?? []).length, 1, stdout);

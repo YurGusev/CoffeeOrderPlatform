@@ -17,7 +17,7 @@ outputs:
       - 63
       - 64
   - artifact: tests/runtime/lifecycle.test.mjs
-    sha256: d5b43bdf21ac7e41e8485622b4d3b0f84c16c16906d46b9df9ae0118ccdd8fc3
+    sha256: 2042ae954aacde6003d1eb2619b928870e3c445ae7cdcf5648014785a35deb81
     consumers:
       - 62
       - 63
@@ -231,7 +231,7 @@ verification:
   - command: pnpm test
     result: passed
     exitCode: 0
-    detail: '108 tests: 107 passed, 0 failed, 1 skipped (COFFEE_DB_LIVE_PROOF != 1); 14773.449175 ms'
+    detail: '108 tests: 107 passed, 0 failed, 1 skipped (COFFEE_DB_LIVE_PROOF != 1); 11988.709844 ms'
   - command: COFFEE_DB_LIVE_PROOF=1 node --test tests/database/live-db-proof.test.mjs
     result: passed
     exitCode: 0
@@ -312,3 +312,32 @@ liveComposeProof:
       runtimeCount: 15
     cleanup: Контейнеры, уникальные сети и scoped tmpfs secret directory удалены.
   limits: Это baseline broker compatibility и runtime lifecycle proof; durable delivery/restart/transaction failure proof остаются #62/#63.
+acceptanceAudit:
+  scenarioResults:
+    - scenario: premature GET response disconnect aborts the request signal
+      result: passed
+    - scenario: partial POST input disconnects before the request is complete
+      result: passed
+    - scenario: normal finished response does not abort and clears the deadline timer
+      result: passed
+    - scenario: durable acceptance survives disconnect and idempotency replay does not repeat the effect
+      result: passed
+    - scenario: startup blackhole times out, cleans acquired resources, and skips later resources
+      result: passed
+    - scenario: blackhole resource stop is bounded and force-destroyed
+      result: passed
+    - scenario: readiness blackhole is bounded and does not start new probes while pending
+      result: passed
+    - scenario: all 15 configured roots use one real listen/controller lifecycle and dependency matrix
+      result: passed
+      proof: Каждый root добавляет ровно один TCPServerWrap и по одному SIGTERM/SIGINT handler; после stop возвращается исходное количество.
+    - scenario: startRuntime removes signal listeners and repeated process signals perform one shutdown in a child
+      result: passed
+      proof: SIGTERM, затем SIGINT запускают один shutdown, один stop и один destroy; fail-stop exit code 1.
+  currentOwnerComposition: Все 15 apps вызывают startConfiguredRuntime без composition; реальные DB/Kafka checks/resources подключают #62/#63, matrix использует явные fixtures.
+  businessOwnership: Runtime не принимает решения о retry или compensation и не повторяет provider effect; TransactionOutcomeUnknown и durable idempotency принадлежат #62, Inbox/Outbox — #63.
+  labels:
+    allowed: [runtime, phase, configured dependency name, configured resource name]
+    nameConstraint: Уникальные имена по шаблону [a-z][a-z0-9-]{0,63}.
+    forbiddenMetricLabels: [correlationId, traceparent, requestId, payload, secrets]
+    requestLogs: correlationId и валидный W3C traceparent; без request body и secrets.
