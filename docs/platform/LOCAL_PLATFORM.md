@@ -44,8 +44,11 @@ Wrapper не меняет глобальный Docker daemon и не переп�
 `CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0`; bundled static archive и зависящий от
 pnpm-пути GNU MRI script не используются. Builder проверяет `librdkafka`
 через `pkg-config`, динамическую связь через `ldd` и загружает итоговый addon
-compatibility probe непосредственно под Node `26.8.1`. Final image получает
-только shared libraries и их runtime-зависимости, без compiler toolchain.
+compatibility probe непосредственно под Node `26.8.1`. После `pnpm deploy --prod`
+Dockerfile переносит собранный `.node` в resolved production dependency и
+повторно загружает его из `/runtime`: package store сам этот build output не
+переносит. Final image получает addon, shared libraries и runtime-зависимости
+без compiler toolchain.
 
 ### Кэш повторной сборки
 
@@ -114,6 +117,18 @@ curl --fail http://127.0.0.1:4000/health/ready
 docker compose --project-name coffee-platform-local down
 ```
 
+Kafka хранит журнал в именованном Compose volume `kafka_data`, который Compose
+материализует как `<project>_kafka_data`. У volume нет глобального имени, поэтому
+каждый smoke project получает отдельный журнал брокера. Один брокер использует
+коэффициент репликации `1`; это ограничение среды разработки без обещания
+высокой доступности. Полный smoke публикует запись, фиксирует подтверждение
+брокера, удаляет и пересоздаёт только Kafka container в том же project, ждёт
+готовности и читает запись из сохранённого volume перед очисткой этого project:
+
+```text
+node tools/compose-smoke.mjs --project-name coffee-recovery-foundation
+```
+
 На host публикуется только Edge `4000`. Owner services, `api-internal`, web,
 Kafka и AROMA Gateway host ports не публикуют. Production deployment, registry
 publication и изменение существующего PostgreSQL этой инструкцией не разрешены.
@@ -130,3 +145,18 @@ readiness `200 → 503 → 200` при остановке и восстанов�
 контейнер, сеть и Compose volumes после проверки. Общий compose gate с 15
 runtime и Kafka остаётся отдельной проверкой и включает зависимости,
 реализуемые в #63.
+
+Для полного recovery proof #63 используйте отдельный режим с disposable
+PostgreSQL и сгенерированными scoped credentials для всех пяти owner databases,
+десяти runtime ролей и Kafka TLS:
+
+```text
+node tools/compose-smoke.mjs --recovery-proof --project-name coffee-recovery-foundation
+```
+
+Режим не читает SOPS и не использует `coffee_postgres_data`: disposable
+PostgreSQL подключается к уникальной project-scoped сети и к bridge для
+временного host-порта только на `127.0.0.1`, используемого существующим DB
+bootstrap. Compose явно связывает `KAFKA_LOG_DIRS=/var/lib/kafka/data` с volume Kafka:
+entrypoint image генерирует broker properties из environment. Volume сохраняется между recreate container
+и удаляется вместе с этим project после proof.

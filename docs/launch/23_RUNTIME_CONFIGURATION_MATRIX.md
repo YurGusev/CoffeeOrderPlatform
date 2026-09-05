@@ -10,8 +10,9 @@ Node Permission manifest —
 
 Общий outbound HTTP pool для разрешённой пары: max connections 32, pipelining 1,
 connect timeout 1s, idle timeout 30s; Gateway provider pool max 8. Kafka
-partitions/retention берутся только из `06_EVENTS_AND_RECOVERY.md`; строка
-`producer|consumer` обязана перечислять exact topics/groups в `platform.yaml`.
+partitions/retention берутся только из `06_EVENTS_AND_RECOVERY.md`. Каждый runtime
+имеет directional `kafka.producers` и `kafka.consumers`; legacy `mode/topics/groups`
+не допускаются, а topics и groups обязаны совпадать с таблицей ниже.
 Mutation capability `true` только у `aroma-convergence` delegation и Gateway
 transport handler; у остальных runtime explicit `false`.
 
@@ -24,14 +25,43 @@ transport handler; у остальных runtime explicit `false`.
 | customer-service          | 4101 | 2s / 100                           |       8 | none                  | postgres.customer, service identity, telemetry                                                 | coffee_postgres:5432                                                                                              |
 | catalog-service           | 4102 | 2s / 150                           |       8 | none                  | postgres.catalogApi, service identity, cursor signing, telemetry                               | coffee_postgres:5432                                                                                              |
 | catalog-supplier-sync     | 4201 | 15m / 1 export                     |       4 | none                  | postgres.catalogImport, service identity, telemetry                                            | coffee_postgres:5432, api-internal:4051                                                                           |
-| catalog-activation-worker | 4202 | 5s DB batch / 1                    |       4 | producer              | postgres.catalogActivate, kafka.catalog, service identity, telemetry                           | coffee_postgres:5432, kafka:9092                                                                                  |
+| catalog-activation-worker | 4202 | 5s DB batch / 1                    |       4 | P: snapshot, mapping | postgres.catalogActivate, kafka.catalog, service identity, telemetry                           | coffee_postgres:5432, kafka:9092                                                                                  |
 | pricing-service           | 4103 | 5s / 100                           |       8 | none                  | postgres.pricing, service identity, telemetry                                                  | coffee_postgres:5432, api-internal:4051                                                                           |
-| orders-service            | 4104 | 5s / 150                           |       4 | producer              | postgres.ordersService, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
-| orders-aroma-preparation  | 4203 | 5s / 16                            |       4 | consumer+producer     | postgres.ordersPreparation, kafka.orders, service identity, telemetry                          | coffee_postgres:5432, kafka:9092                                                                                  |
-| aroma-observer            | 4204 | 15s / 4                            |       4 | producer; groups `[]` | postgres.aromaObserver, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
-| aroma-convergence         | 4205 | 30s / 4                            |       4 | consumer+producer     | postgres.aromaConvergence, kafka.orders, service identity, telemetry                           | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
+| orders-service            | 4104 | 5s / 150                           |       4 | P: lifecycle, commands, realtime | postgres.ordersService, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
+| orders-aroma-preparation  | 4203 | 5s / 16                            |       4 | P: commands, realtime; C: mapping, lifecycle, projection | postgres.ordersPreparation, kafka.orders, service identity, telemetry                          | coffee_postgres:5432, kafka:9092                                                                                  |
+| aroma-observer            | 4204 | 15s / 4                            |       4 | P: aroma events | postgres.aromaObserver, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
+| aroma-convergence         | 4205 | 30s / 4                            |       4 | P: aroma events, realtime; C: commands | postgres.aromaConvergence, kafka.orders, service identity, telemetry                           | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
 | aroma-gateway             | 4301 | read 15m/cart 10s/mutation 10s / 8 |       8 | none                  | postgres.aromaGateway, AROMA credentials/session/catalog identity, service identity, telemetry | coffee_postgres:5432, exact `aroma.origin.host:443`                                                               |
-| realtime-gateway          | 4401 | stream / 5000 connections          |       0 | consumer              | kafka.realtime, actor verify, service identity, telemetry                                      | kafka:9092; SSE является inbound stream                                                                           |
+| realtime-gateway          | 4401 | stream / 5000 connections          |       0 | C: realtime invalidation (realtime) | kafka.realtime, actor verify, service identity, telemetry                                      | kafka:9092; SSE является inbound stream                                                                           |
+
+### Kafka directional mapping
+
+`P` — producer topics, `C` — consumer subscriptions. Consumer `groupId` и
+`processing` фиксированы и не выводятся из `mode`:
+
+| Runtime | Producers | Consumers (`groupId`: topics; processing) |
+|---|---|---|
+| `catalog-activation-worker` | `coffee.catalog.snapshot.v1`, `coffee.catalog.mapping.v2` | — |
+| `orders-service` | `coffee.orders.lifecycle.v1`, `coffee.aroma.cart.commands.v1`, `coffee.realtime.invalidate.v1` | — |
+| `orders-aroma-preparation` | `coffee.aroma.cart.commands.v1`, `coffee.realtime.invalidate.v1` | `orders-catalog-mapping-v2`: `coffee.catalog.mapping.v2`; `orders-aroma-preparation-v1`: `coffee.orders.lifecycle.v1`; `orders-aroma-projection-v1`: `coffee.aroma.cart.events.v1` — `durable` |
+| `aroma-observer` | `coffee.aroma.cart.events.v1` | — |
+| `aroma-convergence` | `coffee.aroma.cart.events.v1`, `coffee.realtime.invalidate.v1` | `aroma-convergence-v1`: `coffee.aroma.cart.commands.v1` — `durable` |
+| `realtime-gateway` | — | `realtime-gateway-v1`: `coffee.realtime.invalidate.v1` — `realtime` |
+
+Все остальные runtime имеют пустые `producers` и `consumers`. `processing: realtime`
+разрешён только для указанной строки `realtime-gateway`; он подтверждает offset
+после локального ring/fanout enqueue и не получает DB/Inbox.
+
+### Kafka delivery budgets
+
+Глобальный `kafka.delivery` в `config/platform.yaml` задаёт bounded policy для
+всех Kafka runtime: `maxMessageBytes=1048576`, `maxPartitions=24`,
+`maxInFlight=4`, `queueCapacity=32`, `sendTimeoutMs=2000`,
+`receiveTimeoutMs=1000`, `commitTimeoutMs=2000`, `revokeTimeoutMs=2000`,
+`shutdownTimeoutMs=5000`, `leaseMs=30000`. Retry policy —
+`baseMs=1000`, `maxMs=60000`, `maxAttempts=12`; quarantine destinations —
+`durable=owner-database` и `realtime=topic-dlq`. Скрытые defaults и
+service-local overrides запрещены.
 
 `api-internal` operation allowlist берётся только из runtime catalog. Для
 mutation требуется delegation `originalCaller=aroma-convergence`; Gateway
@@ -129,3 +159,10 @@ admission, а не увеличивает PostgreSQL limits молча.
 всех owners.
 Realtime #12 дополнительно материализует process-wide SSE memory/FD budget и
 проверяет его soak test; per-connection limit сам по себе не доказывает capacity.
+
+`kafka.delivery.producerRetries: 3` явно ограничивает native broker transport retry внутри `sendTimeoutMs=2000`. Producer использует idempotence, `acks=all` и один in-flight request на connection. Это не повтор owner handler/provider effect; durable Outbox retry policy задаётся отдельно.
+
+Kafka scoped secret сохраняет `{username, password}`; необязательный `caPem`
+задаёт частный CA, в том числе для disposable Compose proof. Без `caPem`
+используется системное хранилище доверенных CA. Проверка сертификата и hostname
+не отключается; общий encrypted secrets-файл runtime не получает.

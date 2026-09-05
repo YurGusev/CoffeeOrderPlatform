@@ -87,6 +87,49 @@ void test(
     assert.equal(result.foundation.readiness.activeAfter, 0);
     assert.equal(result.foundation.readiness.readyAfterDestroy, false);
     assert.equal(result.foundation.readiness.transientSaturationSeparate, true);
+    assert.equal(result.delivery.transport, "postgresql-only");
+    assert.equal(result.delivery.realKafka, false);
+    assert.equal(result.delivery.structural.kind, "owner-local-sql-contract");
+    assert.equal(result.delivery.structural.source, "exportedSQLContract");
+    assert.equal(result.delivery.structural.liveDatabase, false);
+    assert.equal(result.delivery.structural.realKafka, false);
+    assert.equal(
+      result.delivery.structural.checks.includes(
+        "outbox-aggregate-sequence-independent-of-message-type",
+      ),
+      true,
+    );
+    assert.equal(result.delivery.brokerAckProof, "not-run");
+    assert.equal(result.delivery.offsetCommitProof, "not-run");
+    assert.equal(result.delivery.atomicity.committedInboxOwnerOutbox, true);
+    assert.equal(result.delivery.atomicity.rollbackCode, "DB_QUERY_FAILED");
+    assert.equal(result.delivery.atomicity.rollbackLeftNoPartialRows, true);
+    assert.equal(result.delivery.atomicity.redeliveryProcessed, true);
+    assert.equal(result.delivery.duplicateConflict.inboxDuplicate, true);
+    assert.equal(result.delivery.duplicateConflict.inboxConflict, true);
+    assert.equal(result.delivery.duplicateConflict.quarantine, "created");
+    assert.equal(result.delivery.duplicateConflict.outboxDuplicate, true);
+    assert.equal(result.delivery.duplicateConflict.outboxConflict, true);
+    assert.equal(result.delivery.payloadHash.inboxValidated, true);
+    assert.equal(result.delivery.payloadHash.outboxValidated, true);
+    assert.equal(result.delivery.payloadHash.conflictQuarantined, true);
+    assert.equal(result.delivery.payloadHash.recoveredClaimValidated, true);
+    assert.equal(result.delivery.differentMessageTypeSequence.concurrent, true);
+    assert.equal(result.delivery.differentMessageTypeSequence.accepted, 1);
+    assert.equal(result.delivery.differentMessageTypeSequence.conflicts, 1);
+    assert.equal(result.delivery.differentMessageTypeSequence.durableRows, 1);
+    assert.deepEqual(result.delivery.aggregateOrdering.sameAggregate, ["1", "2"]);
+    assert.equal(result.delivery.aggregateOrdering.sequenceBarrier, true);
+    assert.equal(result.delivery.aggregateOrdering.otherAggregateIndependent, true);
+    assert.equal(result.delivery.crashAfterClaimBeforeFinalize.stableMessageId, true);
+    assert.equal(result.delivery.crashAfterClaimBeforeFinalize.recovered, true);
+    assert.equal(result.delivery.crashAfterClaimBeforeFinalize.staleFenceCode, "OUTBOX_LEASE_INVALID");
+    assert.equal(result.delivery.crashAfterClaimBeforeFinalize.brokerAckProof, "not-run");
+    assert.equal(result.delivery.dbUnknown.code, "TRANSACTION_OUTCOME_UNKNOWN");
+    assert.equal(result.delivery.dbUnknown.durableInboxState, "Processed");
+    assert.equal(result.delivery.dbUnknown.durableOutboxState, "Pending");
+    assert.equal(result.delivery.dbUnknown.replay, "duplicate");
+    assert.equal(result.delivery.dbUnknown.stableMessageId, true);
     assert.equal(result.cleanup.containerRemoved, true);
   },
 );

@@ -37,6 +37,56 @@ successors — #4 и #61. Остальные остаются blocked до вс�
 Observability не блокирует business implementation; Operations принимает реальные
 instrumentation points после #12 и обеспечивает полный G14 до #13.
 
+## Контракт #63 для downstream
+
+`#63` передаёт consumers четыре связанные границы:
+
+- `createKafkaRuntime({runtime, config, service, credentials})`,
+  `bind(groupId, binding)`, `send(topic, key, envelope, signal)` и
+  `processKafkaRecord` принимают только directional topic/group allowlists;
+  `KafkaSendAck` содержит `kind`, topic, partition и broker offset.
+- Один `PartitionWorkers` serial worker обслуживает один assigned
+  `topic:partition`; общий `maxInFlight` и `queueCapacity` ограничивают active +
+  queued records. Revoke, неизвестный offset commit и shutdown идут через
+  bounded stop/drain/close/reopen; произвольный Promise не считается
+  принудительно отменяемым.
+- Durable consumer выполняет decode/transport validation → owner transaction
+  (`Inbox.begin` → owner state/Outbox → `markProcessed`) → известный DB COMMIT →
+  Kafka offset commit. DB/offset unknown оставляет redelivery. Realtime mode
+  существует только для `realtime-gateway`/`coffee.realtime.invalidate.v1`/
+  `realtime-gateway-v1` и подтверждает offset после local enqueue или DLQ ack.
+- `SqlInboxStore` и `SqlOutboxStore` работают с owner-local tables через opaque
+  `Transaction`; sequence barrier, lease/token fencing, payload hash conflict и
+  quarantine являются частью протокола. Business schema, owner migration и
+  handler остаются у consumer.
+
+Owner migration locations задаёт `config/database-ownership.json`: Customer —
+`apps/customer-service/migrations`, Catalog — `apps/catalog-service/migrations`,
+Pricing — `apps/pricing-service/migrations`, Orders —
+`apps/orders-service/migrations`, Integration — `apps/aroma-gateway/migrations`.
+В текущем delivery map Kafka tables распределены так: Catalog data owner выдаёт
+`catalog-activation-worker` grant на `outbox_messages`; Orders владеет
+`outbox_messages` у
+`orders-service` и `inbox_messages`/`outbox_messages` у
+`orders-aroma-preparation`, `aroma-observer`, `aroma-convergence`.
+`inbox_quarantine` пока не перечислена в `config/database-role-map.json` и
+должна получить owner migration и явный grant до durable malformed-record
+admission. Realtime gateway DB tables не получает. Эти каталоги и пути — contract
+handoff, а не утверждение, что business migrations уже materialized.
+
+`#64` принимает от #63 следующие bounded instrumentation points: consumer lag
+по runtime/group/topic/partition, assigned/active/queued/pending и capacity,
+queue saturation, Inbox lease expiry, quarantine, duplicate/conflict,
+`OFFSET_COMMIT_OUTCOME_UNKNOWN` и recovery counters. Разрешены только
+allowlisted runtime/group/topic/partition и перечисленные machine reasons;
+payload, key, envelope, message body, credentials, SQL и secret material не
+попадают в metric labels или log fields. `correlationId`, `causationId` и
+`traceparent` остаются correlation fields, не labels. Текущий aggregate runtime
+snapshot экспортирует `active`, `queued`, `pending`, `assigned`,
+`saturationTotal`, `unknownCommitTotal`, `recoveryTotal` и `lastCode`; расширенный
+lag/lease/quarantine/duplicate instrumentation поставляет #64 вместе с его
+collector.
+
 ## Контрольные точки
 
 | Issue | Обязательные inputs | Выход и consumer |

@@ -179,9 +179,44 @@ importers:
         specifier: workspace:*
         version: link:../platform-database
 
-  packages/platform-inbox: {}
+  packages/platform-inbox:
+    dependencies:
+      "@coffee-platform/database":
+        specifier: workspace:*
+        version: link:../platform-database
+      "@coffee-platform/idempotency":
+        specifier: workspace:*
+        version: link:../platform-idempotency
+      "@coffee-platform/platform-time":
+        specifier: workspace:*
+        version: link:../platform-time
 
-  packages/platform-kafka-runtime: {}
+  packages/platform-kafka-runtime:
+    dependencies:
+      "@coffee-platform/config":
+        specifier: workspace:*
+        version: link:../platform-config
+      "@coffee-platform/database":
+        specifier: workspace:*
+        version: link:../platform-database
+      "@coffee-platform/idempotency":
+        specifier: workspace:*
+        version: link:../platform-idempotency
+      "@coffee-platform/inbox":
+        specifier: workspace:*
+        version: link:../platform-inbox
+      "@coffee-platform/observability":
+        specifier: workspace:*
+        version: link:../platform-observability
+      "@coffee-platform/outbox":
+        specifier: workspace:*
+        version: link:../platform-outbox
+      "@coffee-platform/platform-time":
+        specifier: workspace:*
+        version: link:../platform-time
+      "@confluentinc/kafka-javascript":
+        specifier: 1.10.0
+        version: 1.10.0(supports-color@7.2.0)
 
   packages/platform-migrations:
     dependencies:
@@ -191,7 +226,17 @@ importers:
 
   packages/platform-observability: {}
 
-  packages/platform-outbox: {}
+  packages/platform-outbox:
+    dependencies:
+      "@coffee-platform/database":
+        specifier: workspace:*
+        version: link:../platform-database
+      "@coffee-platform/idempotency":
+        specifier: workspace:*
+        version: link:../platform-idempotency
+      "@coffee-platform/platform-time":
+        specifier: workspace:*
+        version: link:../platform-time
 
   packages/platform-runtime:
     dependencies:
@@ -201,6 +246,9 @@ importers:
       "@coffee-platform/database":
         specifier: workspace:*
         version: link:../platform-database
+      "@coffee-platform/kafka-runtime":
+        specifier: workspace:*
+        version: link:../platform-kafka-runtime
       "@coffee-platform/observability":
         specifier: workspace:*
         version: link:../platform-observability

@@ -100,6 +100,9 @@ function checkStaticSource(path, source) {
   for (const match of source.matchAll(FORBIDDEN_MODULE_RE)) {
     const moduleName = match[1];
     const databaseFoundation = /(?:^|\/)packages\/platform-database\//.test(label);
+    const kafkaFoundation = /(?:^|\/)packages\/platform-kafka-runtime\//.test(label);
+    if ((moduleName.startsWith('@confluentinc/kafka-javascript') || /platform-kafka-runtime\/(?:src|dist)\//.test(moduleName)) && !kafkaFoundation)
+      fail('BOUND-KAFKA-CLIENT', `${label}: native Kafka client belongs to platform-kafka-runtime`);
     const ownerAdapter = /(?:^|\/)packages\/platform-(?:database|idempotency|migrations|inbox|outbox)\//.test(label) || /(?:^|\/)apps\/[^/]+\/(?:src\/)?(?:infrastructure|repositories)\//.test(label);
     if ((moduleName === 'pg' || moduleName.startsWith('pg/') || moduleName === 'pg-copy-streams') && !databaseFoundation)
       fail('BOUND-DB-CLIENT', `${label}: native PostgreSQL driver belongs to platform-database`);

@@ -18,6 +18,7 @@ import {
 import {
   buildSmokeCases,
   runDatabaseSmoke,
+  validateDeliverySqlContract,
   validateSmokeTarget,
 } from "../../scripts/db-smoke.mjs";
 import {
@@ -301,7 +302,10 @@ void test("GREEN: bootstrap executes an idempotent plan through an injected clie
 
 void test("GREEN: smoke matrix is isolated and checks every own/cross-owner pair", () => {
   const offline = JSON.parse(execFileSync(process.execPath, [join(ROOT, "scripts/db-smoke.mjs")], {encoding: "utf8"}));
-  assert.deepEqual(offline, buildSmokeCases(roleMap, ownership));
+  assert.deepEqual(offline.roleCases, buildSmokeCases(roleMap, ownership));
+  assert.deepEqual(offline.structural, validateDeliverySqlContract());
+  assert.equal(offline.structural.liveDatabase, false);
+  assert.equal(offline.structural.realKafka, false);
   const cases = buildSmokeCases(roleMap, ownership);
   assert.equal(cases.filter((item) => item.kind === "own-write").length, 10);
   assert.equal(
