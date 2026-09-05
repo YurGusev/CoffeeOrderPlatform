@@ -1,8 +1,8 @@
 # Пакет первого запуска: React, backend и корзина AROMA
 
-Статус: authority package; runtime-реализация начинается только после merge
-PR #15, принятия ADR-0019/ADR-0020, закрытия authority issue #19 и завершения
-#2–#4.
+Статус: authority package. Foundation #3 принят; recovery #60 и дальнейшая
+реализация следуют prerequisites из `13_DELIVERY_DEPENDENCY_GRAPH.md`.
+Наличие запускаемых runtime не означает готовность business/durable paths.
 
 Этот пакет превращает каноническую архитектуру в короткий исполнимый план. Он
 не описывает миграцию с CoffeeOrderSystem, не требует совместимости с C# и не
@@ -49,19 +49,6 @@ PR #15, принятия ADR-0019/ADR-0020, закрытия authority issue #19
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 
-## Текущая техническая authority
-
-После foundation #3 применяется линейка `#48 → #49 → #50 → #51 → #52 → #53 →
-#54 → #55 → #4`. ADR-0024 и machine authority v2 фиксируют Effect Schema/HttpApi,
-owner-local Layers, Effect SQL, typed Kafka adapter, AtomHttpApi и canonical BOM
-registry. #49 получает `status:ready` только после merge #48; #50–#55 остаются
-заблокированными непосредственным predecessor.
-
-Открытые документы сохраняют бизнес-семантику и границы; устаревшие технические
-варианты не являются target authority. Exact versions и mutable runtime values
-не дублируются в docs: они читаются из `config/toolchain-versions.json` и
-`config/platform.yaml` соответственно.
-
 ## Сила канонических документов
 
 Operational delivery authority определена
@@ -79,3 +66,11 @@ superseding ADR-0018 только в перечисленной области. 
 Единственную TS7-native compiler/lint/codegen authority определяет
 [ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md); TS5/6 compatibility lane и
 второй compiler для этого greenfield launch запрещены.
+
+## Текущая техническая authority
+
+[ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md) восстанавливает Fastify
+foundation #3 и supersede-ит историческую Effect-линейку #48–#55. Recovery #60
+не означает завершение durable runtime. Необходимые foundation handoffs и
+владелец observability до #13 указаны в
+[единой dependency graph](13_DELIVERY_DEPENDENCY_GRAPH.md).

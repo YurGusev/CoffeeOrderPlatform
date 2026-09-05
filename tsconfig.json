@@ -29,7 +29,6 @@
     { "path": "apps/aroma-observer" },
     { "path": "apps/aroma-convergence" },
     { "path": "apps/aroma-gateway" },
-    { "path": "apps/realtime-gateway" },
-    { "path": "tests/effect-policy" }
+    { "path": "apps/realtime-gateway" }
   ]
 }

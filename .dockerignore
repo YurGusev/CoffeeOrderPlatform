@@ -11,7 +11,5 @@ coverage
 *.log
 evidence
 tests
-!tests/effect-policy/
-!tests/effect-policy/**
 docs
 secrets

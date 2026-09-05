@@ -1,0 +1,110 @@
+{
+  "capturedAt": "2026-09-05T03:35:12.736730+00:00",
+  "scope": "Recovery #60: тела issues в момент согласования; состояния/checkboxes могут изменяться при дальнейшей delivery",
+  "issues": [
+    {
+      "issue": 1,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/1",
+      "originalBodySha256": "68e45fa821830c72df9be3946f1441a419ad43fbdd592802291b5eaaf84706b6",
+      "bodySha256": "7a137e16c3848fda353c55900481e2dd46ab97dcbc87474465400a5b234dc138"
+    },
+    {
+      "issue": 4,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/4",
+      "originalBodySha256": "ffa0e8496d6baaf37f37af51f40c0418f0f58d98502abdec34c473935f374cec",
+      "bodySha256": "329f1a6f8f4dd14e0916269a8e7d63af43c88356750b759aac5b85bcf442506c"
+    },
+    {
+      "issue": 5,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/5",
+      "originalBodySha256": "626ae16b72da4736d5ad01c4e1ce6925e3d897c7350a2a14e82c593c9c53b280",
+      "bodySha256": "2145139be2cad56105348412f5ffe8ef4fb2bbc036a5d34e1ff296f74d61ed82"
+    },
+    {
+      "issue": 6,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/6",
+      "originalBodySha256": "f74deb6e94493cb4ebc3d29f886f747c8b1e4e1235b7a7d614ce4fbd40ad4f72",
+      "bodySha256": "8c2d193260466c3948ab553ae7c6be9d398796f41f0f929af74cfd7961e1c6a7"
+    },
+    {
+      "issue": 7,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/7",
+      "originalBodySha256": "bf5d18a6332c4ecef64f032a8a2b97f09ed162e13f6d502ed5913e8f97a5f7db",
+      "bodySha256": "fab2f530cc756414a433df5691e9d2f5597307da78c909f755ef01321b05c135"
+    },
+    {
+      "issue": 8,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/8",
+      "originalBodySha256": "82ded976fc78d8c7a4db7b1eb422e7aaff05559583f8573aae82e2d28d1797dc",
+      "bodySha256": "98b80f86638208917f3c1563c3f216b77667cea3743b77b5e2edc5995262cd52"
+    },
+    {
+      "issue": 9,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/9",
+      "originalBodySha256": "2e364d65ab0638a23b1424dad250ca9db1e58b24c2cd77605468298d5bf8abf0",
+      "bodySha256": "a7237c26dc68b0f36125812d9168b806b5cdee3274fa5cc9d0a288b5bbd55858"
+    },
+    {
+      "issue": 10,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/10",
+      "originalBodySha256": "8dd3399575e0fcb8e52279d2ba0ef51784d2cb07fcff16b4884eb4c4cd72a3f3",
+      "bodySha256": "8d458902bc3b89dc23eec4891af5ac227a67af286201f367f2d280a9cf6ae54f"
+    },
+    {
+      "issue": 11,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/11",
+      "originalBodySha256": "7ec5ca7abac3240754b2a4e4c0871d80366f4e8228dc99f7f0a1f2a843809aa3",
+      "bodySha256": "1818374a8f6b01725c03d3efacf13a63c23455f519f8fa72db3d3e0f75fcdd0b"
+    },
+    {
+      "issue": 12,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/12",
+      "originalBodySha256": "d1c0793af00755f10aa701e918e2c312a35214c4b7a39b144018ec72d2d6cc86",
+      "bodySha256": "fa10e14b13d9029c200b2c60e9ccadb08fa2dc2d2a6e89823dee157d27201952"
+    },
+    {
+      "issue": 13,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/13",
+      "originalBodySha256": "a7d5e8428d5653f2b1ce7cbf1e5aab33f720d4192dc6f15d2e323f8262e9864a",
+      "bodySha256": "4e6ea367acfca8f94432b7b542f7964c0eb3bdbb2e60f4f49b67786ae0446c81"
+    },
+    {
+      "issue": 16,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/16",
+      "originalBodySha256": "d3eeebd37b658ffd09c9b6465ee8f14fd6d88b8139de76895668563a534aa0cd",
+      "bodySha256": "39c231aa6e43848a240adc72535bd1949c1514e2dd1f3a73f5c411c1fce0bc44"
+    },
+    {
+      "issue": 17,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/17",
+      "originalBodySha256": "9b67da3bbbb377bc135e91f3c753fd35551d6395c0b6222abc9774d22e7c3c81",
+      "bodySha256": "ec696b5e3a2e15995ad2eb3763c3c747a971365fd0141dcdaa1315984bb44d0e"
+    },
+    {
+      "issue": 18,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/18",
+      "originalBodySha256": "7b614a18d10df0085665100a2b493500bcfb75357553f0a493aced5001b32cb3",
+      "bodySha256": "dceb2b370e8ad73f3f1e9f425146f33f052b572bfbe93a7b143c7538ef4c0c42"
+    },
+    {
+      "issue": 61,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/61",
+      "bodySha256": "20a3f0e582cb3a72d02d6f2008bc00d081e1ac97ddeccc4650cd45515eb70ec3"
+    },
+    {
+      "issue": 62,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/62",
+      "bodySha256": "56214285536f203a01fe5abed53db6092eb09c88d3c1a4d82b9dac33a896fb07"
+    },
+    {
+      "issue": 63,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/63",
+      "bodySha256": "45ede677b3452d7a68f3835521710d554fa6f272711607cedb766f25546b09af"
+    },
+    {
+      "issue": 64,
+      "url": "https://github.com/YurGusev/CoffeeOrderPlatform/issues/64",
+      "bodySha256": "a9c703eb6156f0fb12b1c61f2ea63b3568d3144a5c24b664725f28426c800d71"
+    }
+  ]
+}

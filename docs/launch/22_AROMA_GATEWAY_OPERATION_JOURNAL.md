@@ -6,19 +6,25 @@
 
 ## Хранилище
 
-`001_provider_sessions.sql` и `002_provider_mutation_journal.sql` создают в
+`0001_provider_sessions.sql` и `0002_provider_mutation_journal.sql` создают в
 `coffee_platform_integration` таблицу `provider_mutation_journal`:
 
 ```text
 operation_ref varchar(30) PRIMARY KEY; cart_scope_ref varchar(64);
-action SetQuantity|Remove; offer_ref varchar(30); quantity_milli bigint NULL;
-request_hash char(64); caller_identity varchar(64); correlation_id uuid; traceparent varchar(128);
-state Reserved|Dispatched|Acknowledged|Rejected|UnknownOutcome|Abandoned;
+operation_kind SetLineQuantity|RemoveLine; offer_ref varchar(30); quantity_milli bigint NULL;
+request_hash char(64); caller_identity varchar(64); original_caller varchar(64);
+operation_id varchar(128); correlation_id uuid; traceparent varchar(128);
+state Reserved|Dispatched|Acknowledged|Rejected|UnknownOutcome;
 reservation_owner uuid; lease_until timestamptz;
 provider_status_code integer NULL; outcome_hash char(64) NULL;
 failure_code varchar(64) NULL; response_status smallint NULL;
-response_body_bytes bytea NULL; created_at/dispatched_at/completed_at/last_seen_at.
+response_body_bytes bytea NULL; created_at/started_at/dispatched_at/completed_at/last_seen_at.
 ```
+
+`operation_kind` — транспортная операция Gateway: Orders `SetQuantity` отображается
+в `SetLineQuantity`, `Remove` — в `RemoveLine`. Canonical request hash включает
+operation/offer/quantity и trusted caller; `original_caller`/`operation_id`
+проверяются из signed delegation до reserve/replay.
 
 `Dispatched` фиксируется CAS отдельной короткой transaction до unsafe HTTP.
 Timeout, обрыв или невалидный ответ после dispatch дают `UnknownOutcome`.
@@ -26,7 +32,7 @@ Provider body, cookies, credentials, PII и полный cart не сохран�
 
 ## Повтор операции
 
-- тот же `operationRef` и другой hash: `409 AROMA_OPERATION_REF_CONFLICT`;
+- тот же `operationRef` и другой hash/caller/operation: `409 AROMA_OPERATION_REF_CONFLICT`;
 - тот же hash + `Acknowledged`: byte-equivalent сохранённый typed response без HTTP;
 - тот же hash + `Rejected`: сохранённый Problem без HTTP;
 - active `Reserved`: `409 AROMA_OPERATION_IN_PROGRESS` без HTTP;

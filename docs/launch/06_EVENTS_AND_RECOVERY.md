@@ -16,8 +16,7 @@ launch-сообщения нельзя вводить без изменения 
 | `AromaConvergenceChanged` | event | aroma-convergence | orders-aroma-preparation | cartScopeRef |
 | `RealtimeInvalidated` | event | owners | realtime-gateway | subjectRef |
 
-Every contract has source Effect Schema plus generated versioned JSON Schema,
-`messageId`, `occurredAt`, trace,
+Every contract has versioned JSON Schema, `messageId`, `occurredAt`, trace,
 causation, correlation and owner-defined aggregate version where applicable.
 
 ## Kafka registry первого запуска
@@ -30,14 +29,15 @@ causation, correlation and owner-defined aggregate version where applicable.
 | `AromaConvergenceRequested.v1` | `coffee.aroma.cart.commands.v1` | 24 / 168h | `aroma-convergence-v1` |
 | `AromaObservationChanged.v1` | `coffee.aroma.cart.events.v1` | 24 / 720h | `orders-aroma-projection-v1` |
 | `AromaConvergenceChanged.v1` | `coffee.aroma.cart.events.v1` | 24 / 720h | `orders-aroma-projection-v1` |
-| `RealtimeInvalidated.v1` | `coffee.realtime.invalidate.v1` | 24 / 1h | `realtime-gateway-<replica-id>` |
+| `RealtimeInvalidated.v1` | `coffee.realtime.invalidate.v1` | 24 / 1h | `realtime-gateway-v1` (один instance) |
 
 Topic creation выполняет только #3. Key берётся из таблицы контрактов выше;
 ordering гарантируется только внутри key. Для каждого topic создаётся
 `<topic>.dlq`, invalid schema отправляется туда один раз с original envelope и
 sanitized validation result. Business retry выполняется через Inbox/durable
-state, не через бесконечный Kafka redelivery. Realtime group уникальна на
-replica, иначе invalidation не попадёт в процесс с нужным SSE connection.
+state, не через бесконечный Kafka redelivery. Первый запуск использует один realtime instance. Несколько replicas требуют
+отдельного решения с fan-out каждому instance; общий group распределяет сообщения
+между replicas и не обеспечивает доставку всем SSE connections.
 
 ## Семантика доставки
 

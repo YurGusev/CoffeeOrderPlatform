@@ -19,19 +19,7 @@ const EXPECTED_IDS = [
   "TS7-BRAND-CAST",
   "BOUNDARIES",
   "ARCH-FORBIDDEN",
-  "ARCH-EFFECT-PRIMARY",
-  "ARCH-EFFECT-RUN-BOUNDARY",
-  "ARCH-EFFECT-PROVIDE-BOUNDARY",
-  "ARCH-EFFECT-MODULE-ALLOWLIST",
-  "ARCH-EFFECT-OWNER-LAYER",
-  "ARCH-EFFECT-DURABILITY",
-  "ARCH-EFFECT-UNSAFE-RETRY",
-  "ARCH-EFFECT-SCOPED-FIBER",
-  "ARCH-EFFECT-CONTRACT-AUTHORITY",
-  "ARCH-EFFECT-SQL-BOUNDARY",
-  "ARCH-EFFECT-PARSER",
 ];
-const EFFECT_ADMISSION = "ARCH-EFFECT-*";
 const STATUSES = new Set(["COVERED", "PARTIAL", "GAP"]);
 
 function fail(message) {
@@ -69,15 +57,6 @@ function assertExact(actual, expected, label) {
   }
 }
 
-function registryValue(registry, reference, label) {
-  const prefix = "config/toolchain-versions.json#/";
-  if (!reference.startsWith(prefix)) fail(`${label}: canonical registry reference is required`);
-  const key = reference.slice(prefix.length);
-  if (!Object.hasOwn(registry, key) || typeof registry[key] !== "string" || registry[key].length === 0)
-    fail(`${label}: registry key is missing: ${key}`);
-  return registry[key];
-}
-
 async function assertEvidence(root, row) {
   if (!Array.isArray(row.evidence) || row.evidence.length === 0) {
     fail(row.id + ": evidence must contain at least one repository path");
@@ -95,25 +74,20 @@ async function assertEvidence(root, row) {
 
 export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) {
   const markdown = await readFile(join(root, MATRIX_PATH), "utf8");
-  const registry = JSON.parse(await readFile(join(root, "config/toolchain-versions.json"), "utf8"));
   const { matrix, table } = extractMatrix(markdown);
   assertExact(matrix.schemaVersion, 1, "schemaVersion");
   assertExact(
     matrix.authority,
     {
-      compilerRef: "config/toolchain-versions.json#/typescript",
-      oxlintRef: "config/toolchain-versions.json#/oxlint",
-      tsgolintRef: "config/toolchain-versions.json#/oxlintTsgolint",
+      compiler: "typescript@7.0.2",
+      oxlint: "oxlint@1.80.0",
+      tsgolint: "oxlint-tsgolint@7.0.2001",
       diagnosticParityTest: "tests/architecture/checks.test.mjs",
     },
     "authority",
   );
-  registryValue(registry, matrix.authority.compilerRef, "authority.compilerRef");
-  registryValue(registry, matrix.authority.oxlintRef, "authority.oxlintRef");
-  registryValue(registry, matrix.authority.tsgolintRef, "authority.tsgolintRef");
   assertExact(matrix.replacement, "ESLint", "replacement");
   assertExact(matrix.uncoveredPolicy, "block-replacement", "uncoveredPolicy");
-  assertExact(matrix.effectAdmission, EFFECT_ADMISSION, "effectAdmission");
   if (!Array.isArray(matrix.rows)) fail("rows must be an array");
   assertExact(
     matrix.rows.map((row) => row.id),
@@ -127,12 +101,7 @@ export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) 
     if (!row || typeof row !== "object") fail("each row must be an object");
     if (!STATUSES.has(row.status))
       fail((row.id ?? "unknown") + ": invalid status " + row.status);
-    if (
-      admit &&
-      matrix.uncoveredPolicy === "block-replacement" &&
-      row.id.startsWith("ARCH-EFFECT-") &&
-      row.status !== "COVERED"
-    ) {
+    if (admit && matrix.uncoveredPolicy === "block-replacement" && row.status !== "COVERED") {
       fail(row.id + ": status " + row.status + " blocks replacement");
     }
     if (row.uncoveredBlocksReplacement !== true) {
@@ -152,8 +121,6 @@ export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) 
   return {
     matrixPath: MATRIX_PATH,
     rows: matrix.rows.length,
-    effectRows: matrix.rows.filter((row) => row.id.startsWith("ARCH-EFFECT-")).length,
-    effectAdmission: matrix.effectAdmission,
     uncoveredPolicy: matrix.uncoveredPolicy,
   };
 }
@@ -166,11 +133,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const result = await checkRuleParity(root, { admit });
     console.log(
-      (admit ? "rule parity Effect admission: OK (" : "rule parity check: OK (") +
+      (admit ? "rule parity admission: OK (" : "rule parity check: OK (") +
         result.rows +
         " canonical rows; " +
-        result.effectRows +
-        " Effect rows; " +
         result.uncoveredPolicy +
         ")",
     );

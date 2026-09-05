@@ -53,10 +53,9 @@ ENV MAKEFLAGS=-j4
 
 # Keep the install reproducible.  The source tree is copied only after the
 # frozen install inputs; no host node_modules are ever part of the context.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.base.json tsconfig.effect.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json tsconfig.base.json ./
 COPY apps ./apps
 COPY packages ./packages
-COPY tests/effect-policy ./tests/effect-policy
 COPY types ./types
 COPY config ./config
 COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs

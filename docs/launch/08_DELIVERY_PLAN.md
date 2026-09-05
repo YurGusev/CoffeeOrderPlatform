@@ -5,47 +5,18 @@
 Быстро получить демонстрируемый вертикальный срез, построенный по production-
 принципам, при этом любое небезопасное поведение провайдера закрывается отказом.
 
-## Дни 1–2: контракты и каркас
+## Порядок поставки
 
-- repository/app/package layout;
-- Effect Schema/HttpApi source contracts and generated OpenAPI/JSON Schema artifacts;
-- Docker Compose с подключением к существующему PostgreSQL, а также Kafka и observability;
-- provisioning отдельных БД/ролей новой платформы без изменения `coffeeorderdb`;
-- owner-local Effect Layers, DB/Outbox/Inbox, auth and telemetry adapters;
-- React shell and AtomHttpApi contract test client.
+Точные prerequisites и владельцы заданы в
+[delivery graph](13_DELIVERY_DEPENDENCY_GRAPH.md). Календарные оценки не являются
+критерием готовности или основанием пропускать gates.
 
-## Дни 3–5: Customer, Catalog, Pricing
-
-- Customer create/search;
-- safe full AROMA catalog snapshot through Gateway;
-- persisted product/mapping/availability search;
-- PricingQuote creation and validation;
-- frontend customer/catalog/order-draft screens.
-
-## Дни 6–8: Orders
-
-- Draft/items/version/history;
-- quote/product snapshots;
-- atomic Confirm + Order contribution + Outbox; preparation строит cart Desired;
-- Order Card and SSE invalidation;
-- lifecycle, idempotency and concurrency tests.
-
-## Дни 9–11: корзина AROMA
-
-- Gateway session and typed operations;
-- observer;
-- preparation and convergence workers;
-- lease/fencing/reservation/UnknownOutcome;
-- GET-mutate-GET verification and recovery tests.
-
-## Дни 12–14: усиление надёжности и демонстрация
-
-- E2E browser flow;
-- duplicate/crash/restart/provider-timeout tests;
-- dashboards and alerts;
-- backup/restore smoke;
-- security review of credentials and public routes;
-- operator demo with a controlled provider sandbox/account.
+1. Recovery #60, затем контракты #4 и независимое runtime/database hardening.
+2. Durable delivery foundation до первого owner Outbox/Inbox; Customer и Gateway
+   используют принятые HTTP/DB handoffs.
+3. Catalog staging → activation → API → capacity evidence → Pricing.
+4. Orders Draft/Confirm → React → fenced convergence → Realtime.
+5. Operations материализует observability до полного launch verification #13.
 
 ## Условия допуска к запуску
 
@@ -55,14 +26,14 @@
 - duplicate messages and commands have no duplicate business effect;
 - stale fence cannot mutate/persist success;
 - source/export amounts and versions use decimal strings;
-- generated contract artifacts, event schemas, integration tests and Playwright pass;
+- OpenAPI, event schemas, integration tests and Playwright pass;
 - every runtime has health, metrics, trace and graceful shutdown;
 - rollback is disabling convergence mutation while preserving observer and
   all durable Order/attempt state.
 
 ## Параллельная работа
 
-Frontend начинается в первый день на основе Effect contract mocks. Backend и интеграция
-с провайдером разрабатываются независимо по одним контрактам. Живая мутация
+Frontend #9 использует принятые contracts/mocks #4 и provider handoffs по graph.
+Contract-only работа может идти параллельно runtime hardening после #60. Живая мутация
 AROMA остаётся выключенной до успешных safety/failure tests; безопасные чтения
 каталога и корзины можно подключить раньше.

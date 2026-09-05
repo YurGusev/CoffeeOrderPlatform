@@ -94,63 +94,111 @@ app-role каждого runtime: запись в свою БД должна бы
 Негативный fixture выдаёт `orders-service` URL Customer DB; CI обязан завершить
 проверку ошибкой с текстом, содержащим runtime и запрещённую БД.
 
-## 3. Canonical toolchain registry
+## 3. Реестр версий первого запуска
 
-Exact runtime, package, image and tool pins имеют единственный authoring source:
-`config/toolchain-versions.json`. Этот документ и compatibility matrix содержат
-только проверяемые refs/projections; manifests, lockfile и images обязаны
-materialize registry без собственных choices. Foundation ссылается на registry
-через `runtime.*Ref`, `productionImage.referenceRef` и
-`effectPlatformDecision.bomRef`.
+Ниже приняты точные версии первого запуска. Задача #3 обязана материализовать
+их в `config/toolchain-versions.json`, manifests и lockfile и доказать
+совместимость. Используется самая свежая доступная версия на дату решения;
+Node.js 26 выбран осознанно, хотя ещё имеет статус Current. В manifests
+запрещены `latest`, `*`, `^` и `~`; images фиксируются также по digest.
 
-Registry включает сохранённые Node/TypeScript/Oxlint/PostgreSQL/Kafka/React/Vite/
-Vitest/Playwright pins и Effect package BOM. Диапазоны и `latest` запрещены.
-OpenAPI generated artifact имеет версию 3.1; его source — Effect Schema/HttpApi.
-Effect upgrades выполняются отдельным platform-only issue/PR без business changes.
+| Компонент | Принятая версия | Примечание |
+|---|---|---|
+| Node.js | `26.8.1` Current | production/dev/CI, без fallback на Node 24 |
+| npm | `11.19.0` | версия из Node 26.8.1 distribution |
+| pnpm | `11.24.0` | точный `packageManager` pin |
+| TypeScript | `7.0.2` | единственный native Go `tsc`; TS5/6 и compiler API запрещены |
+| Fastify | `5.12.1` | полный JSON Schema request/response |
+| PostgreSQL server | существующий `17.11` | временное исключение: общий legacy server; upgrade не входит в этот PR |
+| `pg` | `8.23.0` | прямой driver baseline |
+| Apache Kafka broker | `4.3.1` KRaft | `apache/kafka:4.3.1@sha256:<digest>` |
+| `@confluentinc/kafka-javascript` | `1.10.0` | провести Node 26 compatibility test |
+| React / React DOM | `19.2.8` | новый frontend |
+| React Router DOM | `7.18.3` | data/router APIs только по frontend ADR |
+| TanStack Query | `5.102.8` | server state |
+| Vite | `8.2.2` | build/dev server |
+| Vitest | `4.1.11` | unit/component tests |
+| Playwright | `1.62.1` | browser E2E |
+| OpenAPI Specification | `3.2.0` | проверить поддержку всем toolchain; downgrade требует ADR |
+| `@fastify/swagger` | `9.8.1` | contract publication |
+| `@hey-api/openapi-ts` | `0.99.0` | кандидат types-only codegen; принятие только после OpenAPI 3.2 golden gates #4 |
+| Spectral CLI | `6.16.3` | contract lint |
+| AJV | `8.20.0` | runtime JSON Schema validation |
+| Pino | `10.3.1` | structured logging |
+| `libphonenumber-js` | `1.13.12` | Customer phone parsing, region RU, output E.164 |
+| OpenTelemetry API | `1.9.1` | tracing/metrics API |
+| Dependency Cruiser | `18.2.0` | architecture boundaries |
+| Oxlint | `1.80.0` | structural/syntax linting |
+| `oxlint-tsgolint` | `7.0.2001` | type-aware linting, exact line TypeScript 7.0.2 |
+| Prettier | `3.9.6` | formatting |
+| SOPS | `3.13.3` | единый encrypted secrets file |
+| age | `1.3.2` | recipients/identity для SOPS |
+| Docker Engine | `29.7.2` | подтверждённая версия host |
+| Docker Compose plugin | `5.4.0` | подтверждённая версия host |
 
-`config/node26-compatibility-matrix.json` проверяет platform/runtime probes и
-каждый package через `registryRef`; numeric version map в matrix запрещён.
-`config/toolchain-versions.schema.json` проверяет структуру и формат, а не
-дублирует exact pins.
+## 4. Обязательное использование возможностей Node.js 26
 
-## 4. Effect-native runtime baseline
+- **Temporal:** новые domain timestamps, deadlines, expiry и duration реализуются
+  через `Temporal.Instant`, `Temporal.Duration` и `Temporal.ZonedDateTime`.
+  Создание нового business-кода на mutable `Date` запрещено architecture/lint rule.
+- **Permission Model:** каждый runtime имеет декларацию разрешённых network/file/
+  child-process/worker ресурсов. В dev сначала запускается `--permission-audit`,
+  в integration/production — `--permission` с минимальными `--allow-*`.
+- **Native TypeScript:** однофайловые repository/admin scripts без стороннего
+  runtime runner могут запускаться встроенной поддержкой TypeScript. Application
+  build остаётся через `tsc`; decorators/transform-dependent syntax запрещены.
+- **Встроенный `node:test`:** permission, process lifecycle, AbortSignal,
+  graceful shutdown и low-level HTTP tests пишутся на `node:test`; Vitest
+  остаётся для domain/frontend suites.
+- **Native fetch / Undici 8:** технический HTTP client строится на `fetch`,
+  `AbortSignal.timeout/any`, connection pooling и diagnostics; Axios не добавляется.
+- **V8 14.6:** разрешены `Map.getOrInsert`, `Map.getOrInsertComputed` и
+  `Iterator.concat`, когда они уменьшают ручной mutable boilerplate. Для browser-
+  кода обязательна проверка target compatibility.
+- Экспериментальные FFI, Virtual File System и SQLite не применяются в production
+  без отдельного ADR, threat model и failure tests.
 
-- Backend использует ESM/erasable TypeScript и owner-local Effect composition.
-- Process roots запускают `NodeRuntime`, `Layer.launch` и `Scope`; resources
-  освобождаются scope finalizers.
-- Request/event/config/provider data декодируются Effect Schema.
-- HTTP строится на `HttpApi`/`HttpRouter`/`HttpClient`; events и SSE используют
-  bounded Effect Streams.
-- PostgreSQL application access идёт через `@effect/sql-pg` и Coffee
-  transaction policy; durable state не заменяется process-local memory.
-- Kafka driver скрыт в `platform-kafka-runtime`; offsets подтверждаются после
-  durable DB outcome.
-- Browser remote state использует `@effect/atom-react`/`AtomHttpApi`; frames
-  SSE только инвалидируют resource и запускают refetch.
-- Permission Model, scoped tmpfs secrets, network segmentation и non-root
-  containers сохраняются.
+## 5. Возможности других свежих версий
 
-## 5. Parameter authority
+- OpenAPI 3.2 используется для `$self`, современных security/webhook описаний и
+  строгой обработки external references; toolchain обязан доказать поддержку 3.2.
+- Kafka 4.3.1 запускается только в KRaft; auto-topic creation выключен, новый
+  consumer protocol включается только после compatibility/rebalance tests.
+- TypeScript 7 используется по [ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md):
+  строгие ESM/erasable boundaries, Oxlint+tsgolint, без TS5/6 compatibility lane.
+- `@hey-api/openapi-ts` не считается доказанно совместимым с используемым
+  OpenAPI 3.2 corpus до golden/negative/deterministic generation gates #4.
+- React 19 использует Actions/transition APIs только для UI orchestration;
+  server state остаётся в TanStack Query, authoritative business state — на backend.
+- Fastify 5 получает полные JSON Schema для params/query/body/response и
+  `diagnostics_channel`/OpenTelemetry instrumentation.
+- PostgreSQL 18.6 является свежей доступной версией, но общий существующий server
+  остаётся 17.11. Его upgrade — отдельное infrastructure issue с проверкой legacy;
+  разработчик сервиса не обновляет общий сервер сам.
 
-- Fixed topology, ownership, trust и network claims принадлежат service/DB/
-  interaction/connectivity manifests.
-- Mutable non-secret runtime values принадлежат только `config/platform.yaml`,
-  валидируемому `config/platform.schema.json`.
-- Secret values принадлежат только encrypted
-  `secrets/platform.secrets.sops.yaml`; runtime получает scoped `secretRefs`.
-- Exact versions принадлежат только `config/toolchain-versions.json`; manifests,
-  overrides, lockfile и compatibility matrix — materialized projections.
-- `docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md` ссылается на config и
-  registry и не создаёт скрытых defaults.
-- `.env`, service-local config и скрытые runtime defaults запрещены.
-- Effect peer policy: Redis не устанавливается и `NodeRedis` не импортируется;
-  accepted non-optional peer остаётся единственным documented exception.
-- Contract/API/event payloads и DB schemas/roles не изменяются этой authority task.
+Node фиксируется в `.node-version`, `package.json#engines` и Dockerfile. pnpm —
+в `package.json#packageManager`. NPM-зависимости фиксируются точными версиями в
+`package.json` и `pnpm-lock.yaml`. Docker/Kafka/PostgreSQL images фиксируются в
+`config/toolchain-versions.json` и Compose.
 
-## 6. Проверяемые источники
+Обновление любой версии выполняется отдельной веткой `chore/<issue>-upgrade-*`
+от `develop`, отдельным русскоязычным issue и PR. В PR обязательны ссылки на
+release notes, regenerated lockfile/SBOM, clean install, typecheck, tests,
+Compose smoke и rollback на прежний pin.
 
-- [ADR-0024 Effect-native platform](../adr/ADR-0024-effect-native-platform.md)
-- [ADR-0019 runtime/topology](../adr/ADR-0019-greenfield-node26-and-service-topology.md)
-- [ADR-0022 TS7-native toolchain](../adr/ADR-0022-ts7-native-toolchain.md)
-- [toolchain registry](../../config/toolchain-versions.json)
-- [compatibility matrix](../../config/node26-compatibility-matrix.json)
+## 6. Первичные источники версии
+
+- [Релизы Node.js](https://nodejs.org/en/blog/release)
+- [Node.js 26.0.0 и новые возможности](https://nodejs.org/en/blog/release/v26.0.0)
+- [Permission Model Node.js 26](https://nodejs.org/api/permissions.html)
+- [Документация Fastify 5](https://fastify.dev/docs/v5.7.x/)
+- [Версии React](https://react.dev/versions)
+- [Apache Kafka 4.3](https://kafka.apache.org/43/)
+- [Загрузки Apache Kafka](https://kafka.apache.org/community/downloads/)
+- [Документация PostgreSQL 17.11](https://www.postgresql.org/docs/17/)
+- [OpenAPI 3.2.0](https://spec.openapis.org/oas/v3.2.0.html)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Oxlint type-aware linting](https://oxc.rs/docs/guide/usage/linter/type-aware.html)
+- [Hey API OpenAPI TypeScript](https://heyapi.dev/docs/openapi/typescript/get-started)
+- [SOPS releases](https://github.com/getsops/sops/releases)
+- [age releases](https://github.com/FiloSottile/age/releases)

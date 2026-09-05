@@ -1,115 +1,104 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://coffeeorderplatform.local/schemas/runtime-foundation-decision.v2.schema.json",
-  "title": "CoffeeOrderPlatform Effect-native runtime foundation decision v2",
+  "$id": "https://coffeeorderplatform.local/schemas/runtime-foundation-decision.v1.schema.json",
+  "title": "CoffeeOrderPlatform runtime foundation decision v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "schemaVersion", "decisionId", "decisionRef", "preserves", "runtime", "productionImage", "registryVerification", "toolchainDecision", "effectPlatformDecision", "preservedArchitecture", "prohibitions", "foundationMaterializationOwner", "effectAuthorityOwner", "effectMaterializationOwners"],
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "decisionId",
+    "decisionRef",
+    "runtime",
+    "productionImage",
+    "registryVerification",
+    "toolchainDecision",
+    "prohibitions",
+    "materializationOwner"
+  ],
   "properties": {
-    "$schema": {"const": "./runtime-foundation-decision.schema.json"},
-    "schemaVersion": {"const": 2},
-    "decisionId": {"type": "string", "pattern": "^ADR-COP-RUNTIME-[0-9]{3}$"},
-    "decisionRef": {"const": "docs/adr/ADR-0024-effect-native-platform.md"},
-    "preserves": {"type": "array", "minItems": 4, "uniqueItems": true, "items": {"type": "string", "pattern": "^docs/adr/ADR-[0-9]{4}-[a-z0-9-]+\\.md$"}},
+    "$schema": { "const": "./runtime-foundation-decision.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "decisionId": { "const": "ADR-COP-RUNTIME-001" },
+    "decisionRef": { "const": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md" },
     "runtime": {
-      "type": "object", "additionalProperties": false,
-      "required": ["nodeRef", "npmRef", "corepackRef", "packageManagerRef"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "npm", "corepack", "packageManager"],
       "properties": {
-        "nodeRef": {"$ref": "#/$defs/registryRef"},
-        "npmRef": {"$ref": "#/$defs/registryRef"},
-        "corepackRef": {"$ref": "#/$defs/registryRef"},
-        "packageManagerRef": {"$ref": "#/$defs/registryRef"}
+        "node": { "const": "26.8.1" },
+        "npm": { "const": "11.19.0" },
+        "corepack": { "const": "0.35.0" },
+        "packageManager": { "const": "pnpm@11.24.0" }
       }
     },
     "productionImage": {
-      "type": "object", "additionalProperties": false,
-      "required": ["referenceRef", "platform"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "indexDigest", "platform", "platformManifestDigest", "reference"],
       "properties": {
-        "referenceRef": {"$ref": "#/$defs/registryRef"},
-        "platform": {"const": "linux/amd64"}
+        "repository": { "const": "docker.io/library/node" },
+        "tag": { "const": "26.8.1-bookworm-slim" },
+        "indexDigest": { "const": "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e" },
+        "platform": { "const": "linux/amd64" },
+        "platformManifestDigest": { "const": "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae" },
+        "reference": { "const": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae" }
       }
     },
     "registryVerification": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["verifiedAt", "command", "digestPolicy"],
       "properties": {
-        "verifiedAt": {"type": "string", "format": "date"},
-        "command": {"type": "string", "minLength": 1},
-        "digestPolicy": {"const": "record-index-and-pin-target-platform-manifest"}
+        "verifiedAt": { "type": "string", "format": "date" },
+        "command": { "const": "docker buildx imagetools inspect node:26.8.1-bookworm-slim" },
+        "digestPolicy": { "const": "record-index-and-pin-target-platform-manifest" }
       }
     },
     "toolchainDecision": {
-      "type": "object", "additionalProperties": false,
-      "required": ["decisionId", "decisionRef", "contractSource", "generatedOpenApi", "compilerLanes"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisionId",
+        "decisionRef",
+        "typescript",
+        "structuralLinter",
+        "typeAwareLinter",
+        "openApiGenerator",
+        "openApiGeneratorPlugin",
+        "generatorMode",
+        "compilerLanes"
+      ],
       "properties": {
-        "decisionId": {"const": "ADR-COP-TS7-NATIVE-001"},
-        "decisionRef": {"const": "docs/adr/ADR-0022-ts7-native-toolchain.md"},
-        "contractSource": {"const": "effect-schema-httpapi"},
-        "generatedOpenApi": {"type": "string", "pattern": "^3\\.1\\.0$"},
-        "compilerLanes": {"const": 1}
+        "decisionId": { "const": "ADR-COP-TS7-NATIVE-001" },
+        "decisionRef": { "const": "docs/adr/ADR-0022-ts7-native-toolchain.md" },
+        "typescript": { "const": "typescript@7.0.2" },
+        "structuralLinter": { "const": "oxlint@1.80.0" },
+        "typeAwareLinter": { "const": "oxlint-tsgolint@7.0.2001" },
+        "openApiGenerator": { "const": "@hey-api/openapi-ts@0.99.0" },
+        "openApiGeneratorPlugin": { "const": "@hey-api/typescript" },
+        "generatorMode": { "const": "types-only" },
+        "compilerLanes": { "const": 1 }
       }
     },
-    "effectPlatformDecision": {
-      "type": "object", "additionalProperties": false,
-      "required": ["decisionId", "decisionRef", "bomRef", "packageAuthority", "importAuthority", "modulePolicy", "materializationOwner", "upgradePolicy"],
-      "properties": {
-        "decisionId": {"const": "ADR-COP-EFFECT-NATIVE-001"},
-        "decisionRef": {"const": "docs/adr/ADR-0024-effect-native-platform.md"},
-        "bomRef": {"const": "config/toolchain-versions.json"},
-        "packageAuthority": {"type": "array", "minItems": 9, "uniqueItems": true, "items": {"type": "string", "pattern": "^(?:effect|@effect/[a-z-]+|pg-copy-streams)$"}},
-        "importAuthority": {
-          "type": "object", "additionalProperties": false,
-          "required": ["execution", "composition", "lifecycle", "contracts", "http", "runtimeValidation", "sql", "time", "observability", "frontendRemoteState", "backendTests", "durability"],
-          "properties": {
-            "execution": {"const": "effect"},
-            "composition": {"type": "string", "minLength": 1},
-            "lifecycle": {"type": "string", "minLength": 1},
-            "contracts": {"const": "effect-schema-httpapi"},
-            "http": {"type": "string", "minLength": 1},
-            "runtimeValidation": {"const": "effect-schema"},
-            "sql": {"type": "string", "minLength": 1},
-            "time": {"type": "string", "minLength": 1},
-            "observability": {"type": "string", "minLength": 1},
-            "frontendRemoteState": {"type": "string", "minLength": 1},
-            "backendTests": {"type": "string", "minLength": 1},
-            "durability": {"type": "string", "minLength": 1}
-          }
-        },
-        "modulePolicy": {
-          "type": "object", "additionalProperties": false,
-          "required": ["stablePackageRoot", "unstableDefault", "allowedUnstablePrefixes", "allowedOfficialPackages", "explicitlyForbiddenUnstablePrefixes"],
-          "properties": {
-            "stablePackageRoot": {"const": "effect"},
-            "unstableDefault": {"const": "deny"},
-            "allowedUnstablePrefixes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^effect/unstable/[a-z]+/$"}},
-            "allowedOfficialPackages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^@effect/[a-z-]+$"}},
-            "explicitlyForbiddenUnstablePrefixes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^effect/unstable/[a-z]+/$"}}
-          }
-        },
-        "materializationOwner": {"const": "issue-49"},
-        "upgradePolicy": {"const": "separate-platform-only-issue-no-business-changes"}
+    "prohibitions": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "node-24",
+          "floating-image-tag",
+          "placeholder-digest",
+          "typescript-5-or-6",
+          "second-typescript-compiler",
+          "nightly-toolchain-pin",
+          "compiler-api",
+          "custom-transformer"
+        ]
       }
     },
-    "preservedArchitecture": {
-      "type": "object", "additionalProperties": false,
-      "required": ["deployableRuntimeCount", "boundedContexts", "logicalDatabaseCount", "providerEgressRuntime", "convergenceOwner", "durableTruth", "eventTransport", "unsafeProviderMutationRetry"],
-      "properties": {
-        "deployableRuntimeCount": {"const": 15},
-        "boundedContexts": {"const": ["customer", "catalog", "pricing", "orders", "integration", "realtime"]},
-        "logicalDatabaseCount": {"const": 5},
-        "providerEgressRuntime": {"const": "aroma-gateway"},
-        "convergenceOwner": {"const": "orders"},
-        "durableTruth": {"const": "postgresql"},
-        "eventTransport": {"const": "kafka-committed-facts-and-wake-up"},
-        "unsafeProviderMutationRetry": {"const": "forbidden"}
-      }
-    },
-    "prohibitions": {"type": "array", "minItems": 17, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
-    "foundationMaterializationOwner": {"const": "issue-3"},
-    "effectAuthorityOwner": {"const": "issue-48"},
-    "effectMaterializationOwners": {"const": ["issue-49", "issue-50", "issue-51", "issue-52", "issue-53", "issue-54", "issue-55"]}
-  },
-  "$defs": {
-    "registryRef": {"type": "string", "pattern": "^config/toolchain-versions\\.json#/[A-Za-z][A-Za-z0-9]*$"}
+    "materializationOwner": { "const": "issue-3" }
   }
 }

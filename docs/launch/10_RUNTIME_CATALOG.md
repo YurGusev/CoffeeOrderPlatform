@@ -1,7 +1,7 @@
 # Нормативный каталог runtime первого запуска
 
 Исполнитель не выбирает значения этого каталога. Он переносит их в
-`config/service-catalog.json`, Compose, Effect Schema/HttpApi contracts, event schemas и ownership
+`config/service-catalog.json`, Compose, OpenAPI, event schemas и ownership
 manifests без изменения смысла. Любое отклонение требует отдельного ADR и issue.
 
 ## 1. `edge-gateway`
@@ -231,7 +231,7 @@ manifests без изменения смысла. Любое отклонени�
 ## Проверка полноты
 
 `scripts/check-service-catalog.mjs` должен сравнивать этот каталог с
-`config/service-catalog.json`, Effect contracts, event registry, Compose, DB ownership и
+`config/service-catalog.json`, OpenAPI, event registry, Compose, DB ownership и
 secret manifests. Отсутствующее поле, лишний runtime, неизвестный route/event,
 неописанный outgoing call, DB credential у runtime с `Хранилище: нет` или
 публичный private endpoint завершают `pnpm architecture:check` ошибкой.

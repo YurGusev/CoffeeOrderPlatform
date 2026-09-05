@@ -1,8 +1,5 @@
 # Исполнимая спецификация Orders-owned AROMA convergence
 
-Технический путь: Effect `Layer`/`Scope`/`Clock`/`Stream` и typed Gateway client;
-Orders-owned Desired/Observed/Attempt/Lease/Fence semantics ниже не изменяются.
-
 Статус: нормативная спецификация issue #11. Исполнитель не выбирает scope,
 таблицы, lease/fence, порядок внешних вызовов или recovery semantics заново.
 

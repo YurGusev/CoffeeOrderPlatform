@@ -1,9 +1,5 @@
 # Контракт HTTP API
 
-Источник request/response/error contracts — Effect `Schema` и `HttpApi`. Generated
-OpenAPI 3.1 и JSON Schema служат документацией и compatibility artifacts, но не
-являются runtime source of truth и не импортируются production-кодом.
-
 ## Клиентские маршруты первого запуска
 
 ```http

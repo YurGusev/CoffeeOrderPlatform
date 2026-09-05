@@ -1,9 +1,5 @@
 # Исполнимая спецификация Customer первого запуска
 
-Технический путь: owner-local Effect `Layer`/`Schema`/`HttpApi` и Store через
-`@effect/sql-pg`; точные pins берутся из canonical registry. Business semantics
-ниже не изменяются.
-
 Статус: нормативная спецификация задачи #5. Разработчик реализует перечисленные
 структуры, алгоритмы и проверки без самостоятельного выбора схемы данных или
 поведения API. Изменение контракта требует отдельного ADR и одновременного
@@ -47,10 +43,9 @@ apps/customer-service/
   test/security/customer-log-redaction.test.ts
 ```
 
-HTTP contracts определяются в Effect `Schema`/`HttpApi` source и используются
-обработчиками как typed contract; generated OpenAPI/JSON Schema — только
-производные artifacts, не runtime source of truth. Сервисные domain и
-persistence-типы наружу не экспортируются.
+HTTP DTO импортируются только из сгенерированного
+`packages/contracts/customer-v1`. Сервисные domain и persistence-типы наружу
+не экспортируются.
 
 ## 3. База данных и роли
 
@@ -149,7 +144,8 @@ PII и HTTP body в audit log не записываются.
 `displayName`: Unicode NFC → trim → последовательность Unicode whitespace
 заменить одним ASCII space. После преобразования длина 1–200.
 
-Телефон нормализуется `libphonenumber-js@1.13.12` с default region `RU`:
+Телефон нормализуется `libphonenumber-js` (exact pin материализует #5 в
+    `config/toolchain-versions.json` до реализации нормализации) с default region `RU`:
 
 1. принять строку длиной не более 64 символов;
 2. разобрать библиотекой, проверить `isValid()`;
@@ -254,8 +250,7 @@ Draft принимает Orders. Browser/edge route к этому endpoint от�
 Логи содержат route, status, duration, `customerRef` после создания,
 `correlationId`, trace id и actorRef. Запрещены body, address, raw query,
 phone/e-mail, Authorization, actor signature, DB URL/password и полный
-Idempotency-Key. Для диагностики ключа разрешён только SHA-256. Effect logging
-redaction policy
+Idempotency-Key. Для диагностики ключа разрешён только SHA-256. Pino redact
 paths и serializers закрывают request headers/body и error cause; stack/SQL
 не попадают в публичный Problem Details.
 

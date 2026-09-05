@@ -1,10 +1,7 @@
 # Исполнимая спецификация realtime SSE
 
-Технический путь: Effect Stream через typed Kafka adapter и AtomHttpApi browser
-invalidation; SSE остаётся transport-only и не становится business state.
-
 Статус: нормативная спецификация issue #12. Исполнитель не выбирает replay,
-authorization, fanout limits, AtomHttpApi invalidation или slow-client policy заново.
+authorization, fanout limits, Query invalidation или slow-client policy заново.
 
 ## 1. Архитектура
 
@@ -16,7 +13,7 @@ owner transaction + Outbox
   -> private GET /events origin
   -> edge authenticated same-origin GET /events
   -> browser EventSource
-  -> AtomHttpApi invalidate/refetch owner GET
+  -> TanStack Query invalidate/refetch owner GET
 ```
 
 `realtime-gateway` не читает owner events напрямую: consumer принимает только
@@ -25,7 +22,8 @@ owner transaction + Outbox
 ## 2. Kafka consumer
 
 - topic `coffee.realtime.invalidate.v1`, key=`subjectRef`;
-- group `realtime-gateway-<replica-id>`;
+- один instance, group `realtime-gateway-v1`; второй instance запрещён до
+  отдельного решения о fan-out и проверки multi-replica delivery;
 - auto topic creation/auto commit запрещены;
 - validate JSON Schema/envelope before use;
 - поддерживается только `subjectType=order` в первом запуске;
@@ -104,7 +102,7 @@ owner refetch и поэтому не нуждается в sticky session/persis
 
 ## 6. Fanout и backpressure
 
-Лимиты одного instance:
+Лимиты одного instance (materialization и capacity proof принадлежат #12):
 
 - максимум 5 000 active connections; следующая получает `503
   REALTIME_CAPACITY_EXCEEDED` до SSE headers;
@@ -115,6 +113,11 @@ owner refetch и поэтому не нуждается в sticky session/persis
 - heartbeat 15s; edge idle timeout минимум 45s;
 - graceful shutdown 20s: перестать принимать connections, отправить
   `stream-reset`, закрыть sockets, затем consumer.
+
+Дополнительно #12 фиксирует process-wide queue budget, RSS/FD/container memory
+и admission limits в `config/platform.yaml` с проверкой schema. Per-client maxima
+не заменяют совокупный бюджет: при его исчерпании slow connections закрываются,
+новые получают 503 до headers. Значения подтверждаются указанным ниже soak test.
 
 Для одного connection события одного subject coalesce в окне 250ms: оставить
 наибольшую ownerVersion, а при равной — последнее по Kafka order. Coalescing не
@@ -132,17 +135,17 @@ Authorization/header actor не создаётся.
 
 На `resource-invalidated.v1`:
 
-1. Effect Schema validates data at runtime;
+1. runtime schema validate data;
 2. принять только `subjectType=order` и valid refs/version;
 3. никогда не записывать payload в Order cache;
-4. инвалидировать exact `orderDetailAtom(subjectRef)` и запустить активный
-   refetch owner GET;
+4. вызвать `queryClient.invalidateQueries({queryKey:['orders','detail',subjectRef],exact:true,refetchType:'active'})`;
 5. если cached `OrderCard.projectionVersion >= ownerVersion`, duplicate можно
    пропустить; command `Order.version` для dedup запрещён;
 6. refetch response owner GET полностью заменяет cache.
 
-На `stream-reset.v1` инвалидировать только существующие Order detail atoms и
-запустить их активный refetch. Customer, Catalog и Pricing atoms не затрагиваются.
+На `stream-reset.v1` инвалидировать только существующие Order detail queries:
+predicate key prefix `['orders','detail']`, `refetchType:'active'`. Customer,
+Catalog и Pricing queries не затрагиваются.
 
 UI connection indicator: `Подключено|Переподключение|Обновление состояния`;
 он не изменяет Order/AROMA state. Native reconnect использует server `retry:3000`;
@@ -156,8 +159,8 @@ banner и кнопку owner refetch; commands остаются по своим 
   context и успешный reconnect re-auth;
 - wire: exact headers, frames, UTF-8, heartbeat 15s, no business fields;
 - Last-Event-ID found replay, malformed/missing/evicted/restart -> reset;
-- frontend exact Order atom invalidation, inactive atom no eager fetch, reset
-  invalidation существующих Order detail atoms и cache update только owner GET;
+- frontend exact-query invalidation, inactive query no eager fetch, reset prefix
+  invalidation и cache update только owner GET;
 - duplicates/lower versions не откатывают UI;
 - 5 001 connections, 65 records, >256KiB, stalled 5s, abort/shutdown: bounded
   memory и cleanup;

@@ -1,9 +1,5 @@
 # Исполнимая спецификация итогового launch gate
 
-Технический путь: проверки используют Effect source contracts, owner-local
-Layers/Scopes, typed adapters и canonical registry refs; launch limits и failure
-semantics ниже не изменяются.
-
 Статус: нормативная спецификация issue #13. Задача проверяет принятый scope и
 не исправляет найденные дефекты внутри verification PR.
 
@@ -68,12 +64,12 @@ config hash, encrypted secrets-file hash и run-id resources. Secret values не
 
 | ID | Владелец | Exact command | PASS |
 |---|---|---|---|
-| `G00_PREFLIGHT` | Platform | `pnpm launch:verify:preflight` | clean SHA; accepted GitHub PR/handoffs #14/#19/#2–#12/#16–#18; authority repo exact; no legacy DB target |
+| `G00_PREFLIGHT` | Platform | `pnpm launch:verify:preflight` | clean SHA; accepted GitHub PR/handoffs #14/#19/#2–#12/#16–#18/#60/#61/#62/#63/#64; authority repo exact; no legacy DB target |
 | `G01_INSTALL` | Platform | `pnpm install --frozen-lockfile` | lock unchanged; no lifecycle/network surprise outside allowlist |
 | `G02_GENERATED` | Contracts | `pnpm contracts:check-generated` | generated tree byte-equal, no drift |
 | `G03_STATIC` | Platform | `pnpm format:check && pnpm lint && pnpm typecheck` | все exit 0, warnings budget 0 |
 | `G04_UNIT` | Domain owners | `pnpm test:unit -- --coverage` | exit 0; changed critical modules meet declared thresholds |
-| `G05_CONTRACTS` | Contracts | `pnpm contracts:check && pnpm contracts:breaking` | positive/negative fixtures pass, no unapproved breaking change |
+| `G05_CONTRACTS` | Contracts | `pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test` | positive/negative fixtures pass, no unapproved breaking change |
 | `G06_ARCHITECTURE` | Architecture | `pnpm architecture:check` | all GREEN pass; every RED fails with source/target/rule |
 | `G07_CONFIG_SECURITY` | Security | `pnpm versions:check && pnpm config:check && pnpm security:secrets` | exact pins/SOPS/scopes/redaction; zero plaintext/canary leak |
 | `G08_MIGRATIONS` | DB owners | `pnpm test:migrations:clean && pnpm test:migrations:forward` | five empty DBs reach exact schema; rerun no-op; legacy unchanged |
@@ -90,7 +86,8 @@ config hash, encrypted secrets-file hash и run-id resources. Secret values не
 | `G19_REPORT` | Release owner | `pnpm launch:verify:report` | Russian report, checksums, defects and deterministic decision valid |
 
 Порядок обязателен: G00→G01→G02→G03; затем G04–G12; G13; G14–G18; G19.
-Gate не запускается при failed predecessor.
+Gate не запускается при failed predecessor, кроме G19: отчёт с решением
+`НЕ ДОПУСТИТЬ` формируется и при отказе предыдущих gates.
 
 ## 5. Общие правила команд
 
@@ -109,7 +106,9 @@ G16 не запускается обычным PR CI. Требуются одн�
 
 - encrypted/scoped sandbox credentials;
 - allowlisted provider origin и account fingerprint;
-- `AROMA_MUTATIONS_ENABLED=true` только для convergence container;
+- `services.aroma-convergence.mutationsEnabled=true` в единственном versioned
+  `config/platform.yaml` verification run, materialized только convergence; env
+  override и config overlay запрещены;
 - approval JSON: run-id, commit SHA, account fingerprint, expiresAt <=2h,
   approver, allowed offerRef и maximum quantity; detached signature;
 - исходная complete cart observation и план восстановления.
@@ -147,6 +146,13 @@ restore каждой DB <=10m и совокупно <=30m на записанн�
 успешного restore не является доказательством.
 
 ## 8. Observability gate
+
+Владелец реализации — #64 (Operations), обязательный accepted
+predecessor #13. Он поставляет Collector/OpenObserve, exporters, alert evaluation
+и `pnpm test:observability`; #13 проверяет этот результат, а не создаёт backend.
+Сквозной сценарий использует ограниченные по времени spans и W3C context/links;
+`orderRef` и correlation связывают долгоживущий order с несколькими traces.
+Бесконечный span на весь lifecycle заказа не требуется.
 
 Для каждого из 15 runtime проверить:
 

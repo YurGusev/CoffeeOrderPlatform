@@ -127,16 +127,10 @@ void test("RED BOUND-IMPORT: Catalog cannot import Orders infrastructure DB", ()
   assert.match(output(result), /catalog-service.*orders-service/s);
 });
 
-void test("GREEN: versioned contract import is accepted by the registry-pinned Dependency Cruiser", async () => {
-  const { dependencyCruiser } = JSON.parse(
-    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
-  );
+void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {
   const result = run("check-architecture.mjs", join(FIXTURES, "valid-import"));
   assert.equal(result.status, 0, output(result));
-  assert.ok(
-    output(result).includes(`Dependency Cruiser ${dependencyCruiser}`),
-    output(result),
-  );
+  assert.match(output(result), /Dependency Cruiser 18\.2\.0/);
 });
 
 void test("RED BOUND-DB-CLAIM: Orders cannot receive Customer database URL/role", async () => {
@@ -321,41 +315,6 @@ void test("RED ARCH-PERMISSION: every materialized runtime must declare all perm
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-PERMISSION/);
   assert.match(output(result), /missing/);
-});
-
-void test("RED ARCH-EFFECT: every mandatory Effect guard rejects its scoped RED fixture with a stable file and line", () => {
-  const cases = [
-    ["invalid-effect-primary", "ARCH-EFFECT-PRIMARY", "apps/example-service/src/bad.ts:1"],
-    ["invalid-effect-run", "ARCH-EFFECT-RUN-BOUNDARY", "apps/example-service/src/use-case.ts:3"],
-    ["invalid-effect-provide", "ARCH-EFFECT-PROVIDE-BOUNDARY", "apps/example-service/src/use-case.ts:3"],
-    ["invalid-effect-module", "ARCH-EFFECT-MODULE-ALLOWLIST", "apps/example-service/src/bad.ts:1"],
-    ["invalid-effect-owner-layer", "ARCH-EFFECT-OWNER-LAYER", "apps/orders-service/src/layer.ts:1"],
-    ["invalid-effect-durability", "ARCH-EFFECT-DURABILITY", "apps/orders-service/src/outbox.ts:1"],
-    ["invalid-effect-unsafe-retry", "ARCH-EFFECT-UNSAFE-RETRY", "apps/aroma-gateway/src/mutation.ts:3"],
-    ["invalid-effect-scoped-fiber", "ARCH-EFFECT-SCOPED-FIBER", "apps/orders-service/src/background.ts:3"],
-    ["invalid-effect-contract-authority", "ARCH-EFFECT-CONTRACT-AUTHORITY", "apps/web/src/client.ts:1"],
-    ["invalid-effect-sql-boundary", "ARCH-EFFECT-SQL-BOUNDARY", "apps/orders-service/src/store.ts:1"],
-    ["invalid-effect-legacy-inventory", "ARCH-EFFECT-PRIMARY", "packages/platform-testing/src/index.ts:1"],
-    ["invalid-effect-parser", "ARCH-EFFECT-PARSER", "apps/example-service/src/bad.ts:1"],
-  ];
-  for (const [fixture, rule, location] of cases) {
-    const result = run("check-architecture.mjs", join(FIXTURES, fixture));
-    assert.notEqual(result.status, 0, `${fixture}: ${output(result)}`);
-    assert.match(output(result), new RegExp(`${rule} ${location.replaceAll("/", "\\/")}`), fixture);
-  }
-});
-
-void test("GREEN ARCH-EFFECT: owner-local layers, scoped resources, test layers and versioned contracts pass", () => {
-  for (const fixture of [
-    "valid-effect-owner-layer",
-    "valid-effect-scoped-resource",
-    "valid-effect-yielded-service",
-    "valid-effect-test-layer",
-    "valid-effect-contract",
-  ]) {
-    const result = run("check-architecture.mjs", join(FIXTURES, fixture));
-    assert.equal(result.status, 0, `${fixture}: ${output(result)}`);
-  }
 });
 
 void test("GREEN: exact TS7 toolchain manifest, lockfile and config baseline passes", () => {

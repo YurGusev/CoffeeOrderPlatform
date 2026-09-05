@@ -1,106 +1,37 @@
 {
   "$schema": "./runtime-foundation-decision.schema.json",
-  "schemaVersion": 2,
-  "decisionId": "ADR-COP-RUNTIME-002",
-  "decisionRef": "docs/adr/ADR-0024-effect-native-platform.md",
-  "preserves": [
-    "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
-    "docs/adr/ADR-0020-launch-contract-closure.md",
-    "docs/adr/ADR-0021-github-operational-authority.md",
-    "docs/adr/ADR-0022-ts7-native-toolchain.md"
-  ],
+  "schemaVersion": 1,
+  "decisionId": "ADR-COP-RUNTIME-001",
+  "decisionRef": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
   "runtime": {
-    "nodeRef": "config/toolchain-versions.json#/node",
-    "npmRef": "config/toolchain-versions.json#/npm",
-    "corepackRef": "config/toolchain-versions.json#/corepack",
-    "packageManagerRef": "config/toolchain-versions.json#/pnpm"
+    "node": "26.8.1",
+    "npm": "11.19.0",
+    "corepack": "0.35.0",
+    "packageManager": "pnpm@11.24.0"
   },
   "productionImage": {
-    "referenceRef": "config/toolchain-versions.json#/nodeImage",
-    "platform": "linux/amd64"
+    "repository": "docker.io/library/node",
+    "tag": "26.8.1-bookworm-slim",
+    "indexDigest": "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e",
+    "platform": "linux/amd64",
+    "platformManifestDigest": "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+    "reference": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
   },
   "registryVerification": {
     "verifiedAt": "2026-09-01",
-    "command": "docker buildx imagetools inspect",
+    "command": "docker buildx imagetools inspect node:26.8.1-bookworm-slim",
     "digestPolicy": "record-index-and-pin-target-platform-manifest"
   },
   "toolchainDecision": {
     "decisionId": "ADR-COP-TS7-NATIVE-001",
     "decisionRef": "docs/adr/ADR-0022-ts7-native-toolchain.md",
-    "contractSource": "effect-schema-httpapi",
-    "generatedOpenApi": "3.1.0",
+    "typescript": "typescript@7.0.2",
+    "structuralLinter": "oxlint@1.80.0",
+    "typeAwareLinter": "oxlint-tsgolint@7.0.2001",
+    "openApiGenerator": "@hey-api/openapi-ts@0.99.0",
+    "openApiGeneratorPlugin": "@hey-api/typescript",
+    "generatorMode": "types-only",
     "compilerLanes": 1
-  },
-  "effectPlatformDecision": {
-    "decisionId": "ADR-COP-EFFECT-NATIVE-001",
-    "decisionRef": "docs/adr/ADR-0024-effect-native-platform.md",
-    "bomRef": "config/toolchain-versions.json",
-    "packageAuthority": [
-      "effect",
-      "@effect/platform-node",
-      "@effect/platform-browser",
-      "@effect/sql-pg",
-      "@effect/opentelemetry",
-      "@effect/atom-react",
-      "@effect/vitest",
-      "@effect/tsgo",
-      "pg-copy-streams"
-    ],
-    "importAuthority": {
-      "execution": "effect",
-      "composition": "context-service-owner-local-layer",
-      "lifecycle": "node-runtime-layer-launch-scope",
-      "contracts": "effect-schema-httpapi",
-      "http": "effect-http-router-httpapi-httpclient",
-      "runtimeValidation": "effect-schema",
-      "sql": "effect-sql-pg-with-coffee-transaction-policy",
-      "time": "effect-clock-datetime-duration-testclock",
-      "observability": "effect-opentelemetry",
-      "frontendRemoteState": "effect-atom-httpapi",
-      "backendTests": "vitest-effect-vitest",
-      "durability": "postgresql-and-kafka"
-    },
-    "modulePolicy": {
-      "stablePackageRoot": "effect",
-      "unstableDefault": "deny",
-      "allowedUnstablePrefixes": [
-        "effect/unstable/http/",
-        "effect/unstable/httpapi/",
-        "effect/unstable/sql/",
-        "effect/unstable/encoding/",
-        "effect/unstable/reactivity/"
-      ],
-      "allowedOfficialPackages": [
-        "@effect/platform-node",
-        "@effect/platform-browser",
-        "@effect/sql-pg",
-        "@effect/opentelemetry",
-        "@effect/atom-react",
-        "@effect/vitest"
-      ],
-      "explicitlyForbiddenUnstablePrefixes": [
-        "effect/unstable/rpc/",
-        "effect/unstable/workflow/",
-        "effect/unstable/cluster/",
-        "effect/unstable/persistence/",
-        "effect/unstable/eventlog/",
-        "effect/unstable/ai/",
-        "effect/unstable/cli/",
-        "effect/unstable/workers/"
-      ]
-    },
-    "materializationOwner": "issue-49",
-    "upgradePolicy": "separate-platform-only-issue-no-business-changes"
-  },
-  "preservedArchitecture": {
-    "deployableRuntimeCount": 15,
-    "boundedContexts": ["customer", "catalog", "pricing", "orders", "integration", "realtime"],
-    "logicalDatabaseCount": 5,
-    "providerEgressRuntime": "aroma-gateway",
-    "convergenceOwner": "orders",
-    "durableTruth": "postgresql",
-    "eventTransport": "kafka-committed-facts-and-wake-up",
-    "unsafeProviderMutationRetry": "forbidden"
   },
   "prohibitions": [
     "node-24",
@@ -110,18 +41,7 @@
     "second-typescript-compiler",
     "nightly-toolchain-pin",
     "compiler-api",
-    "custom-transformer",
-    "dual-runtime-stack",
-    "shared-platform-live-across-owners",
-    "effect-wrapper-framework",
-    "effect-rpc",
-    "effect-workflow",
-    "effect-persistence",
-    "effect-eventlog",
-    "effect-cluster",
-    "unsafe-aroma-mutation-retry"
+    "custom-transformer"
   ],
-  "foundationMaterializationOwner": "issue-3",
-  "effectAuthorityOwner": "issue-48",
-  "effectMaterializationOwners": ["issue-49", "issue-50", "issue-51", "issue-52", "issue-53", "issue-54", "issue-55"]
+  "materializationOwner": "issue-3"
 }

@@ -44,21 +44,14 @@
 - Runtime получает только свою scoped secret materialization в tmpfs; общий
   secrets-файл может расшифровывать только trusted `config-bootstrap`.
 
-## Effect-native authority
+## Техническая authority первого запуска
 
-- Issue #48 фиксирует ADR-0024 и единственную техническую линию до business #4:
-  `#3 → #48 → #49 → #50 → #51 → #52 → #53 → #54 → #55 → #4`.
-- Effect `Schema`/`HttpApi`, owner-local `Layer`/`Scope`, `@effect/sql-pg`,
-  typed Kafka adapter и `@effect/atom-react` являются target authority.
-- Exact package pins редактируются только в `config/toolchain-versions.json`;
-  runtime values — только в `config/platform.yaml`; secrets — только в SOPS.
-  Machine foundation использует `bomRef`, а не повторяет numeric BOM.
-- Сохраняются ровно 15 runtime, пять DB, владельцы Customer/Catalog/Pricing/
-  Orders/Integration/Realtime, trust/network segmentation и запрет blind retry
-  unsafe AROMA mutation.
-- `effect/unstable/*` default-deny; разрешения и forbidden families записаны в
-  `platform/runtime-foundation-decision.json`. Новый модуль/peer/version требует
-  отдельного platform-only ADR/issue.
+- ADR-0025 и issue #60 supersede-ят Effect authority ADR-0024; #48/#49 — история.
+- Fastify/async-await/AbortSignal, pg, OpenAPI/JSON Schema, Pino/OpenTelemetry,
+  React Router/TanStack Query и types-only generation по ADR-0022 — единый путь.
+- Business delivery следует `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`;
+  восстановленный #3 не подменяет незавершённые durable foundation guarantees.
+- Exact pins редактируются только в `config/toolchain-versions.json`.
 
 Работать локально в `/home/yurgusev/CoffeeOrderPlatform` и проверять изменения
 до коммита. GitHub push, создание/изменение issue и PR, deployment, мутации провайдера
