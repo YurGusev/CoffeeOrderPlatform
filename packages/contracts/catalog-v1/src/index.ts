@@ -1,3 +1,6 @@
+export type { CatalogProductSummary, CatalogSearchResponse } from '@coffee-platform/generated-client-v1';
+export type { CatalogPricingInput } from '@coffee-platform/generated-internal-v1';
+
 export const contractPackage = {
   id: '@coffee-platform/contracts-catalog-v1',
   source: {

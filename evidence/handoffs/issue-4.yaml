@@ -15,19 +15,19 @@ inputs:
     sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
 outputs:
   - artifact: contracts/openapi/client-v1.yaml
-    sha256: d74d994786a4b7c6fc29589e91a5e193ef8c363d113528da72ccf73dc84a5218
+    sha256: 4a7cb1ee79e4443ddc04cac2dbd28df9e713750f5f2db4d939ca9039a05b36ca
     consumers: [5, 7, 8, 9, 12, 13, 17, 18]
   - artifact: contracts/openapi/internal-v1.yaml
-    sha256: b8745739c2c4232f265d5c8059a35480f0faa92957a1d791706560f64105cd9f
+    sha256: d8fa8ddce4578ee843677b177c705e8675b99c30e8d323cc597ac4454ad1a2b0
     consumers: [5, 6, 7, 8, 10, 11, 13, 16, 17, 18]
   - artifact: contracts/manifest.yaml
-    sha256: 85d03be3726f25be7a0d8961e096b44d305b7d729dae4356f1ae675ac9e9f4a5
+    sha256: 47bf5c8227a0c45619ca759cf2cca1661729f0aff188bd12f8b3bba503c1a994
     consumers: [5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18]
   - artifact: contracts/schemas/common/identifiers.v1.schema.json
     sha256: 50173e30c98cdcfd53417b4b56743d3b45ad037ede096528eaa9b5c6c78752ab
     consumers: [5, 6, 7, 8, 9, 10, 11, 12, 16, 17, 18]
   - artifact: contracts/schemas/common/money-version-time.v1.schema.json
-    sha256: febb3ce67a116fc2551fd5ede210bbdb182088f76082040e742192ee31f5aa41
+    sha256: ea10dd04fe588ea95531c246bffca933b7487dc977e19aa4c6297590c444eeaf
     consumers: [5, 6, 7, 8, 9, 10, 11, 12, 16, 17, 18]
   - artifact: contracts/schemas/common/problem-details.v1.schema.json
     sha256: 3bf55934887b3b8ed1f084536d03291902d093b6985193a0c66e535e51ac2ccb
@@ -57,14 +57,38 @@ outputs:
     sha256: c2bc7c6d441c7ad48e8414ec13260dc0dd8ad5845b316a3fb108c3bb93a5dbf0
     consumers: [8, 9, 12, 13]
   - artifact: packages/generated/client-v1/src/types.gen.ts
-    sha256: 5a4337e019d8da8b4f620377301e040132be4756bc7f992cdbd4135db9477647
+    sha256: 57d2fa17c8dc6704d7fbd03804b2157926a79e83284334a66f5fed5f40e131c0
     consumers: [5, 7, 8, 9, 12, 17, 18]
   - artifact: packages/generated/internal-v1/src/types.gen.ts
-    sha256: 55781579d067a57c3eef634d44e82765c63489fbc601bed97efbf3531f4d7cf5
+    sha256: 3e8cf4066f5df2d4f73a42ba0edc195fede9fed24bf719166d926f9e75b789a1
     consumers: [5, 6, 7, 8, 10, 11, 16, 17, 18]
   - artifact: packages/contracts/client-v1/src/index.ts
-    sha256: eb8087f3cbb155260c5aaca7396136949823b426bcc657d9996d80c9d6ed215f
+    sha256: 4238272e4a2a9097d891d57dc64981e75c17805f1abdd6876ea8b9b16177ccf2
     consumers: [5, 7, 8, 9]
+  - artifact: packages/contracts/edge-v1/src/index.ts
+    sha256: 7a226e3606caeba7553ea2095f5af5016e43903aad8b217174d0ffa2647b9662
+    consumers: [5, 9]
+  - artifact: packages/contracts/internal-v1/src/index.ts
+    sha256: b5a6c09ab289d2f7680901f5989715d5d8ae079fb7a4e14bd2b76a25bbc99774
+    consumers: [5, 6, 7, 8, 10, 11, 16, 17, 18]
+  - artifact: packages/contracts/customer-v1/src/index.ts
+    sha256: d7c4554e391fcd03f276b713f21c50233f190fc0eebce8bf9abb39db6bb1391f
+    consumers: [5, 7]
+  - artifact: packages/contracts/catalog-v1/src/index.ts
+    sha256: 298512ac2a2906cd6ba21e97157cfe216a50adb905fe9aaf6d1fe5208cba6598
+    consumers: [6, 8, 13, 16, 17]
+  - artifact: packages/contracts/pricing-v1/src/index.ts
+    sha256: aff23a008ffbfecb43faa860a4a4410219ad8144d81691e97d00ab6b4ee04911
+    consumers: [7, 8]
+  - artifact: packages/contracts/orders-v1/src/index.ts
+    sha256: 1fd45874040d9ed3a0424b06b149542a7a356bc7e9032263aa22cbab77987c0b
+    consumers: [8, 10, 11, 12, 13]
+  - artifact: packages/contracts/aroma-v1/src/index.ts
+    sha256: 5ffa23a2306aaf9920a42c5ae08d9f5864dde3c139b250f356cdbbc1039104de
+    consumers: [8, 11, 13]
+  - artifact: packages/contracts/realtime-v1/src/index.ts
+    sha256: c6d86064895ecf41529b43754d8385a372eb0634c6e182af24b0fe6ec8e87b99
+    consumers: [9, 12, 13]
   - artifact: Dockerfile
     sha256: 3420448e3562802e164cf09e319cd331edafa8554f247cc4281a830fd2c49ca0
     consumers: [13, 64]
@@ -78,14 +102,14 @@ verification:
   - command: pnpm contracts:check-generated
     result: passed
     exitCode: 0
-    detail: byte-identical sha256 68e117f1e5cf11e1e007831542bba3ed52dcf2927eb22aff89e59d3b6d33bf87
+    detail: byte-identical sha256 18c6265182f92ab7ca2dbcf27ae7e3f0c1e8cb365ee8147f9d55e72fba2d1176
   - command: pnpm contracts:breaking
     result: passed
     exitCode: 0
   - command: pnpm contracts:test
     result: passed
     exitCode: 0
-    detail: 16 tests; HTTP success/Problem, encode/decode round-trip, seven events, SSE, NDJSON, recovery and RED breaking fixtures
+    detail: 27 tests; source-schema HTTP/Problem/recovery, TS7 generated types, SSE/NDJSON runtime codecs, seven events and RED breaking fixtures
   - command: pnpm image:build --load --tag coffee-platform-issue4:check .
     result: passed
     exitCode: 0

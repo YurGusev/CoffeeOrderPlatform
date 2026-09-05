@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, normalize, resolve } from "node:path";
+import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import Ajv2020 from "ajv/dist/2020.js";
 import test from "node:test";
 import yaml from "js-yaml";
+import { contractAjv } from "../../scripts/contracts-ajv.mjs";
+import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const OPENAPI_ROOT = join(ROOT, "contracts/openapi");
@@ -91,12 +93,35 @@ function loadValidator(ajv, documentName, schemaName) {
   return ajv.compile(componentSchema(documentName, schemaName));
 }
 
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
 function assertRoundTrip(value, label) {
   assert.deepEqual(JSON.parse(JSON.stringify(value)), value, `${label}: JSON encode/decode changed value`);
+}
+
+function encodeSseFrame(frame) {
+  if (frame.comment) {
+    if (frame.comment !== "heartbeat" || frame.intervalSeconds !== 15 || Object.keys(frame).some((key) => !["comment", "intervalSeconds"].includes(key))) throw new Error("invalid heartbeat frame");
+    return ": heartbeat\n\n";
+  }
+  if (!["stream-ready.v1", "resource-invalidated.v1", "stream-reset.v1"].includes(frame.event)) throw new Error("invalid SSE event");
+  if (frame.event !== "resource-invalidated.v1" && "id" in frame) throw new Error("SSE id is forbidden");
+  if (frame.event === "resource-invalidated.v1" && frame.retry !== 3000) throw new Error("invalid SSE retry");
+  return `${frame.event ? `event: ${frame.event}\n` : ""}${frame.id ? `id: ${frame.id}\n` : ""}${frame.retry ? `retry: ${frame.retry}\n` : ""}data: ${JSON.stringify(frame.data)}\n\n`;
+}
+
+function decodeSse(wire) {
+  return wire.trimEnd().split("\n\n").map((block) => {
+    if (block === ": heartbeat") return {comment: "heartbeat", intervalSeconds: 15};
+    const frame = {};
+    for (const line of block.split("\n")) {
+      const [field, ...parts] = line.split(":");
+      const value = parts.join(":").trimStart();
+      if (field === "data") frame.data = JSON.parse(value);
+      else if (field === "retry") frame.retry = Number(value);
+      else if (["event", "id"].includes(field)) frame[field] = value;
+      else throw new Error(`unsupported SSE field ${field}`);
+    }
+    return frame;
+  });
 }
 
 function setPath(value, path, next) {
@@ -110,7 +135,7 @@ function deletePath(value, path) {
 }
 
 function applyMutations(value, fixture) {
-  const result = clone(value);
+  const result = structuredClone(value);
   for (const path of fixture.delete ?? []) deletePath(result, path);
   for (const [path, next] of fixture.set ?? []) setPath(result, path, next);
   for (const [path, next] of fixture.add ?? []) setPath(result, path, next);
@@ -131,7 +156,7 @@ async function loadCorpus() {
       DOCUMENTS.set(path, JSON.parse(await readFile(path, "utf8")));
     }
   }
-  const ajv = new Ajv2020({allErrors: true, strict: true, strictRequired: false, validateFormats: false});
+  const ajv = contractAjv({strictRequired: false});
   return {ajv, success: await jsonFixture(join(POSITIVE_ROOT, "http/success.json")), problems: await jsonFixture(join(POSITIVE_ROOT, "http/problems.json"))};
 }
 
@@ -164,6 +189,17 @@ void test("HTTP success fixtures cover every OpenAPI success representation", as
     assert.equal(validate(fixture.body), true, `${key}: ${JSON.stringify(validate.errors)}`);
   }
   assert.equal(byKey.size, successOperations().length, "unmapped success fixture");
+});
+
+void test("CustomerCreateRequest requires at least one contact from the source schema", async () => {
+  const {ajv} = await loadCorpus();
+  const validate = loadValidator(ajv, "client-v1", "CustomerCreateRequest");
+  for (const body of [
+    {displayName: "Клиент", phone: "+79991234567"},
+    {displayName: "Клиент", email: "client@example.test"},
+    {displayName: "Клиент", phone: "+79991234567", email: "client@example.test"},
+  ]) assert.equal(validate(body), true, JSON.stringify(validate.errors));
+  assert.equal(validate({displayName: "Клиент"}), false);
 });
 
 void test("Problem fixtures cover every operation response variant and exact status/code", async () => {
@@ -207,6 +243,7 @@ void test("SSE fixtures enforce ready/reset/invalidation/heartbeat wire rules", 
   assert.equal(frames[1].id.startsWith("msg_"), true);
   assert.equal(frames[1].retry, 3000);
   assert.equal(frames[3].intervalSeconds, 15);
+  assert.deepEqual(decodeSse(frames.map(encodeSseFrame).join("")), frames);
 });
 
 void test("NDJSON success stream validates every record and terminal ordering", async () => {
@@ -219,6 +256,16 @@ void test("NDJSON success stream validates every record and terminal ordering", 
   assert.equal(lines[1].batchNumber, 0);
   assert.equal(lines[1].previousBatchHash, null);
   assert.equal(lines.at(-1).recordType, "snapshot-completed");
+
+  const app = await createRuntime({name: "contracts-ndjson-test", host: "127.0.0.1", port: 0, shutdownGraceMs: 500});
+  app.get("/stream", async (_request, reply) => reply.type("application/x-ndjson").send(Readable.from(lines.map((line) => `${JSON.stringify(line)}\n`))));
+  await app.runtimeController.start();
+  const response = await app.inject("/stream");
+  assert.equal(response.headers["content-type"], "application/x-ndjson");
+  const decoded = response.payload.trim().split("\n").map((line) => JSON.parse(line));
+  for (const line of decoded) assert.equal(validate(line), true, JSON.stringify(validate.errors));
+  assert.deepEqual(decoded, lines);
+  await app.runtimeController.closeRuntime("test");
 });
 
 void test("negative HTTP fixtures fail closed across trust and representation boundaries", async () => {
@@ -226,7 +273,7 @@ void test("negative HTTP fixtures fail closed across trust and representation bo
   const negatives = await jsonFixture(join(NEGATIVE_ROOT, "http/rejections.json"));
   const successByKey = new Map(success.map((fixture) => [`${fixture.document}|${fixture.operationId}|${fixture.status}|${fixture.schema}`, fixture]));
   const problemByKey = new Map(problems.map((fixture) => [`${fixture.document}|${fixture.operationId}|${fixture.status}|${fixture.schema}`, fixture]));
-  const requiredCases = new Set(["missing-field", "additional-field", "invalid-ref-ulid", "invalid-uuid", "invalid-hash", "invalid-traceparent", "invalid-timestamp", "numeric-version", "numeric-money", "numeric-quantity", "noncanonical-decimal", "invalid-enum", "invalid-cross-field", "actor-provider-credentials-public", "wrong-problem-status", "wrong-problem-code", "unsupported-representation", "pii-secret-provider-body-sse"]);
+  const requiredCases = new Set(["missing-field", "additional-field", "invalid-ref-ulid", "invalid-uuid", "invalid-hash", "invalid-traceparent", "invalid-timestamp", "invalid-calendar-timestamp", "numeric-version", "numeric-money", "numeric-quantity", "noncanonical-decimal", "invalid-enum", "invalid-cross-field", "actor-provider-credentials-public", "wrong-problem-status", "wrong-problem-code", "unsupported-representation", "pii-secret-provider-body-sse"]);
   assert.deepEqual(new Set(negatives.map((fixture) => fixture.case)), requiredCases);
   for (const fixture of negatives) {
     if (fixture.case === "unsupported-representation") {
@@ -256,6 +303,7 @@ void test("negative HTTP fixtures fail closed across trust and representation bo
     }
     const validate = loadValidator(ajv, fixture.document, fixture.schema);
     assert.equal(validate(applyMutations(body, fixture)), false, `${fixture.case}: unexpectedly valid`);
+    if (fixture.expectedKeyword) assert.ok(validate.errors?.some((error) => error.keyword === fixture.expectedKeyword && error.instancePath === fixture.expectedPath), `${fixture.case}: ${JSON.stringify(validate.errors)}`);
   }
 });
 
@@ -265,9 +313,7 @@ void test("negative SSE and NDJSON fixtures reject unsafe wire shapes and order"
   const negatives = await jsonFixture(join(NEGATIVE_ROOT, "sse/rejections.json"));
   for (const fixture of negatives) {
     const frame = applyMutations(frames[fixture.streamIndex], fixture);
-    if (fixture.heartbeat) assert.notEqual(frame.intervalSeconds, 15, fixture.case);
-    else if (fixture.case === "invalidation-wrong-retry") assert.notEqual(frame.retry, 3000, fixture.case);
-    else assert.equal("id" in frame, true, fixture.case);
+    assert.throws(() => encodeSseFrame(frame), /invalid|forbidden/, fixture.case);
   }
   const lines = (await readFile(join(NEGATIVE_ROOT, "ndjson/aroma-catalog-invalid.ndjson"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
   const validate = loadValidator(ajv, "internal-v1", "AromaCatalogExportRecord");

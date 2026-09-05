@@ -146,9 +146,20 @@ importers:
         specifier: workspace:*
         version: link:../../packages/platform-runtime
 
-  packages/contracts/aroma-v1: {}
+  packages/contracts/aroma-v1:
+    dependencies:
+      "@coffee-platform/generated-internal-v1":
+        specifier: workspace:*
+        version: link:../../generated/internal-v1
 
-  packages/contracts/catalog-v1: {}
+  packages/contracts/catalog-v1:
+    dependencies:
+      "@coffee-platform/generated-client-v1":
+        specifier: workspace:*
+        version: link:../../generated/client-v1
+      "@coffee-platform/generated-internal-v1":
+        specifier: workspace:*
+        version: link:../../generated/internal-v1
 
   packages/contracts/client-v1:
     dependencies:
@@ -156,17 +167,47 @@ importers:
         specifier: workspace:*
         version: link:../../generated/client-v1
 
-  packages/contracts/customer-v1: {}
+  packages/contracts/customer-v1:
+    dependencies:
+      "@coffee-platform/generated-client-v1":
+        specifier: workspace:*
+        version: link:../../generated/client-v1
+      "@coffee-platform/generated-internal-v1":
+        specifier: workspace:*
+        version: link:../../generated/internal-v1
 
-  packages/contracts/edge-v1: {}
+  packages/contracts/edge-v1:
+    dependencies:
+      "@coffee-platform/generated-client-v1":
+        specifier: workspace:*
+        version: link:../../generated/client-v1
 
-  packages/contracts/internal-v1: {}
+  packages/contracts/internal-v1:
+    dependencies:
+      "@coffee-platform/generated-internal-v1":
+        specifier: workspace:*
+        version: link:../../generated/internal-v1
 
-  packages/contracts/orders-v1: {}
+  packages/contracts/orders-v1:
+    dependencies:
+      "@coffee-platform/generated-client-v1":
+        specifier: workspace:*
+        version: link:../../generated/client-v1
 
-  packages/contracts/pricing-v1: {}
+  packages/contracts/pricing-v1:
+    dependencies:
+      "@coffee-platform/generated-client-v1":
+        specifier: workspace:*
+        version: link:../../generated/client-v1
+      "@coffee-platform/generated-internal-v1":
+        specifier: workspace:*
+        version: link:../../generated/internal-v1
 
-  packages/contracts/realtime-v1: {}
+  packages/contracts/realtime-v1:
+    dependencies:
+      "@coffee-platform/generated-client-v1":
+        specifier: workspace:*
+        version: link:../../generated/client-v1
 
   packages/generated/client-v1:
     devDependencies:

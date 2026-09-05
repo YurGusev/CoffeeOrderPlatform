@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -27,6 +27,21 @@ async function red(mutator, withOptionalEvidence = false) {
     await writeFile(join(current, 'contracts/fixtures/positive/http/optional-note.json'), JSON.stringify({ id: '1', note: 'evidence' }));
     await writeFile(join(current, 'contracts/compatibility-evidence.yaml'), yaml.dump({ optionalExpansions: [{ schemaPath: 'contracts/openapi/client-v1.yaml', location: 'contracts/openapi/client-v1.yaml#Item', property: 'note', fixture: 'contracts/fixtures/positive/http/optional-note.json' }] }));
   }
+  const result = spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], { cwd: root, encoding: 'utf8' });
+  await rm(directory, { recursive: true, force: true });
+  return result;
+}
+
+async function realClientRed(mutator) {
+  const source = yaml.load(await readFile(join(root, 'contracts/openapi/client-v1.yaml'), 'utf8'));
+  const directory = await mkdtemp(join(tmpdir(), 'contracts-breaking-real-'));
+  const base = join(directory, 'base');
+  const current = join(directory, 'current');
+  for (const path of [base, current]) await mkdir(join(path, 'contracts/openapi'), { recursive: true });
+  const changed = structuredClone(source);
+  mutator(changed);
+  await writeFile(join(base, 'contracts/openapi/client-v1.yaml'), yaml.dump(source));
+  await writeFile(join(current, 'contracts/openapi/client-v1.yaml'), yaml.dump(changed));
   const result = spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], { cwd: root, encoding: 'utf8' });
   await rm(directory, { recursive: true, force: true });
   return result;
@@ -91,3 +106,17 @@ void test('breaking guard rejects event schema, key and envelope changes', async
   await rm(directory, { recursive: true, force: true });
   assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
+
+for (const [name, mutation] of [
+  ['response ref change', (document) => { document.paths['/api/client-v1/customers'].post.responses['201'].content['application/json'].schema.$ref = '#/components/schemas/OrderCardResponse'; }],
+  ['required idempotency parameter weakening', (document) => { document.components.parameters.IdempotencyKey.required = false; }],
+  ['component ref change', (document) => { document.components.schemas.CustomerRef.$ref = '../schemas/common/money-version-time.v1.schema.json#/$defs/MoneyMinor'; }],
+  ['security removal', (document) => { document.paths['/api/client-v1/customers'].post.security = []; }],
+  ['array bound narrowing', (document) => { document.components.schemas.PricingQuoteCreateRequest.properties.lines.maxItems = 1; }],
+]) {
+  void test(`breaking guard rejects real client ${String(name)}`, async () => {
+    const result = await realClientRed(mutation);
+    assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.match(result.stderr, /breaking contract/);
+  });
+}

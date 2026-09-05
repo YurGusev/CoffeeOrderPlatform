@@ -12,6 +12,21 @@ tags:
   - name: pricing
   - name: orders
   - name: realtime
+x-command-recovery:
+  replayMarker: {name: Idempotency-Replayed, value: true, completedOnly: true}
+  cacheControl: {name: Cache-Control, value: no-store, allLookups: true}
+  responseHeaders: &command-recovery-response-headers
+    Idempotency-Replayed: {$ref: '#/components/headers/IdempotencyReplayed'}
+    Cache-Control: {$ref: '#/components/headers/NoStore'}
+  lookupErrorSchemas: [ErrorIdempotencyConflict, ErrorIdempotencyRequestInProgress, ErrorIdempotencyResultNotRetained, ErrorIdempotencyResultInvalid, ErrorIdempotencyLookupUnavailable]
+  terminalSchemas:
+    createCustomer: [CustomerResponse, ErrorCustomerPhoneConflict, ErrorCustomerEmailConflict]
+    createPricingQuote: [PricingQuoteResponse, ErrorCatalogProductNotFound, ErrorCatalogProductUnavailable, ErrorCatalogRevisionChanged]
+    createOrderDraft: [OrderCardResponse, ErrorCustomerNotFound, ErrorCustomerNotActive]
+    upsertOrderItem: [OrderCardResponse, ErrorOrderNotFound, ErrorCatalogProductNotFound, ErrorOrderVersionConflict, ErrorOrderQuoteStale, ErrorOrderNotEditable]
+    removeOrderItem: [OrderCardResponse, ErrorOrderNotFound, ErrorOrderItemNotFound, ErrorOrderVersionConflict, ErrorOrderNotEditable]
+    confirmOrder: [OrderCardResponse, ErrorOrderNotFound, ErrorOrderVersionConflict, ErrorOrderQuoteStale, ErrorOrderNotEditable, ErrorOrderConfirmationRejected]
+    requestAromaReconciliation: [ReconciliationAcceptedResponse, ErrorOrderNotFound, ErrorOrderVersionConflict, ErrorAromaReconciliationNotAllowed]
 paths:
   /api/client-v1/customers:
     post:
@@ -63,6 +78,7 @@ paths:
           $ref: '#/components/responses/ActorContextInvalid'
         '409':
           description: Customer conflict or idempotency conflict.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -75,6 +91,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -83,6 +100,7 @@ paths:
                   - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
         '503':
           description: Customer owner or idempotency lookup is unavailable.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -221,6 +239,7 @@ paths:
           $ref: '#/components/responses/CatalogProductNotFound'
         '409':
           description: Catalog, idempotency, or quote-input conflict.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -231,6 +250,7 @@ paths:
                   - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
         '503':
           description: Catalog owner or idempotency lookup is unavailable.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -241,6 +261,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -299,6 +320,7 @@ paths:
           $ref: '#/components/responses/CustomerNotFound'
         '409':
           description: Customer state or idempotency conflict.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -308,6 +330,7 @@ paths:
                   - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
         '503':
           description: Customer owner or idempotency lookup is unavailable.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -318,6 +341,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -378,6 +402,7 @@ paths:
           $ref: '#/components/responses/ActorContextInvalid'
         '404':
           description: Order or catalog product was not found.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -386,6 +411,7 @@ paths:
                   - $ref: '#/components/schemas/ErrorCatalogProductNotFound'
         '409':
           description: Order or idempotency conflict.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -399,6 +425,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -452,6 +479,7 @@ paths:
           $ref: '#/components/responses/ActorContextInvalid'
         '404':
           description: Order or order item was not found.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -460,6 +488,7 @@ paths:
                   - $ref: '#/components/schemas/ErrorOrderItemNotFound'
         '409':
           description: Order version or editability conflict.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -472,6 +501,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -535,6 +565,7 @@ paths:
           $ref: '#/components/responses/OrderNotFound'
         '409':
           description: Version, quote, order state, or idempotency conflict.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -552,6 +583,7 @@ paths:
           $ref: '#/components/responses/IdempotencyLookupUnavailable'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -613,6 +645,7 @@ paths:
           $ref: '#/components/responses/OrderNotFound'
         '409':
           description: Version, state, or idempotency conflict.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -627,6 +660,7 @@ paths:
           $ref: '#/components/responses/IdempotencyLookupUnavailable'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
+          headers: *command-recovery-response-headers
           content:
             application/problem+json:
               schema:
@@ -980,27 +1014,19 @@ components:
           pattern: '^[A-Z]{2}$'
           const: RU
     CustomerCreateRequest:
-      type: object
-      additionalProperties: false
-      required: [displayName]
-      oneOf:
-        - required: [phone]
-        - required: [email]
-      properties:
-        displayName:
-          type: string
-          minLength: 1
-          maxLength: 200
-        phone:
-          type: string
-          minLength: 1
-          maxLength: 64
-        email:
-          type: string
-          format: email
-          maxLength: 254
-        address:
-          $ref: '#/components/schemas/CustomerAddress'
+      anyOf:
+        - type: object
+          additionalProperties: false
+          required: [displayName, phone]
+          properties: &customer-create-properties
+            displayName: {type: string, minLength: 1, maxLength: 200}
+            phone: {type: string, minLength: 1, maxLength: 64}
+            email: {type: string, format: email, maxLength: 254}
+            address: {$ref: '#/components/schemas/CustomerAddress'}
+        - type: object
+          additionalProperties: false
+          required: [displayName, email]
+          properties: *customer-create-properties
     CustomerResponse:
       type: object
       additionalProperties: false

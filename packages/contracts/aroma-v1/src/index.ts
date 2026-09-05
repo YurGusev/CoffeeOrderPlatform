@@ -1,3 +1,5 @@
+export type { AromaCartSnapshot, AromaCatalogExportRecord, AromaCatalogExportRequest } from '@coffee-platform/generated-internal-v1';
+
 export const contractPackage = {
   id: '@coffee-platform/contracts-aroma-v1',
   source: {

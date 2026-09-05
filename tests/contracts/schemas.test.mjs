@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import Ajv2020 from "ajv/dist/2020.js";
 import test from "node:test";
+import { contractAjv } from "../../scripts/contracts-ajv.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const SCHEMA_ROOT = join(ROOT, "contracts/schemas");
@@ -18,7 +18,7 @@ async function loadSchemas() {
   const schemas = await Promise.all(
     files.map(async (path) => JSON.parse(await readFile(path, "utf8"))),
   );
-  const ajv = new Ajv2020({ allErrors: true, strict: true, validateFormats: false });
+  const ajv = contractAjv();
   for (const schema of schemas) ajv.addSchema(schema);
   for (const schema of schemas) ajv.getSchema(schema.$id);
   return { ajv, schemas };
@@ -46,6 +46,18 @@ void test("common and event schemas compile as strict JSON Schema 2020-12", asyn
   assert.equal(schemas.length, 11);
   assert.equal(schemas.filter((schema) => schema.$id.includes("/events/")).length, 7);
   for (const schema of schemas) assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
+});
+
+void test("event schemas reference common definitions instead of copying them", async () => {
+  const {schemas} = await loadSchemas();
+  const common = schemas.filter((schema) => schema.$id.includes("/common/"));
+  const fingerprints = new Set(common.flatMap((schema) => Object.values(schema.$defs ?? {}).map((definition) => JSON.stringify(definition))));
+  const visit = (value, path) => {
+    if (!value || typeof value !== "object") return;
+    assert.equal(fingerprints.has(JSON.stringify(value)), false, `${path}: local copy of common definition`);
+    for (const [name, child] of Object.entries(value)) visit(child, `${path}/${name}`);
+  };
+  for (const schema of schemas.filter((item) => item.$id.includes("/events/"))) visit(schema, schema.$id);
 });
 
 void test("all seven launch event positive fixtures validate", async () => {
@@ -86,6 +98,7 @@ void test("shared numeric, identity, hash, timestamp and traceparent definitions
   assert.equal(check("money-version-time.v1.schema.json", "HashSha256", "A".repeat(64)), false);
   assert.equal(check("money-version-time.v1.schema.json", "Timestamp", "2026-09-05T10:00:00Z"), true);
   assert.equal(check("money-version-time.v1.schema.json", "Timestamp", "2026-09-05T10:00:00+05:00"), false);
+  assert.equal(check("money-version-time.v1.schema.json", "Timestamp", "2026-02-31T00:00:00Z"), false);
   assert.equal(check("money-version-time.v1.schema.json", "Traceparent", "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01"), true);
   assert.equal(check("money-version-time.v1.schema.json", "Traceparent", "00-00000000000000000000000000000000-bbbbbbbbbbbbbbbb-01"), false);
 });

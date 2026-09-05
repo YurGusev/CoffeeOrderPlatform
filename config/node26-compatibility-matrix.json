@@ -76,10 +76,10 @@
       "id": "openapi-codegen",
       "package": "@hey-api/openapi-ts",
       "version": "0.0.0-next-20260824173136",
-      "kind": "candidate",
+      "kind": "contract",
       "probe": "openapi-codegen-cli",
-      "required": false,
-      "authoritative": false,
+      "required": true,
+      "authoritative": true,
       "openapi": "3.2.0",
       "acceptedAfterIssue": 4
     }

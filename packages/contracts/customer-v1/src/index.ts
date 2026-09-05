@@ -1,3 +1,6 @@
+export type { CustomerCreateRequest, CustomerResponse, CustomerSearchResponse, CustomerSummary } from '@coffee-platform/generated-client-v1';
+export type { CustomerOrderInput } from '@coffee-platform/generated-internal-v1';
+
 export const contractPackage = {
   id: '@coffee-platform/contracts-customer-v1',
   source: {

@@ -15,7 +15,7 @@ const commands = [
 export type ClientCommandRequestShape = Readonly<{
   method: string;
   path: string;
-  replayOnly?: string;
+  replayOnly?: boolean;
   hasBody: boolean;
   ifMatchVersion?: string;
 }>;
@@ -25,7 +25,7 @@ export function validateClientCommandRequest(input: ClientCommandRequestShape): 
   if (!command) throw new Error('VALIDATION_FAILED: unsupported command method/path');
   const [, , bodyRequired, versionHeaderRequired] = command;
   if (input.replayOnly !== undefined) {
-    if (input.replayOnly !== 'true' || input.hasBody || input.ifMatchVersion !== undefined) {
+    if (input.replayOnly !== true || input.hasBody || input.ifMatchVersion !== undefined) {
       throw new Error('VALIDATION_FAILED: replay-only requires exactly true and no body/version');
     }
     return 'replay';

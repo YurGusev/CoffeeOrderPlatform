@@ -47,10 +47,15 @@ export type CustomerAddress = {
   countryCode: 'RU';
 };
 
-export type CustomerCreateRequest = unknown & {
+export type CustomerCreateRequest = {
+  displayName: string;
+  phone: string;
+  email?: string;
+  address?: CustomerAddress;
+} | {
   displayName: string;
   phone?: string;
-  email?: string;
+  email: string;
   address?: CustomerAddress;
 };
 

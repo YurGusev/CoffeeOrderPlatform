@@ -1,3 +1,5 @@
+export type { OrderCardResponse, OrderConfirmRequest, OrderDraftCreateRequest, OrderItemPutRequest, ReconciliationRequest } from '@coffee-platform/generated-client-v1';
+
 export const contractPackage = {
   id: '@coffee-platform/contracts-orders-v1',
   source: {

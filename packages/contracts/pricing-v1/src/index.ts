@@ -1,3 +1,6 @@
+export type { PricingQuoteCreateRequest, PricingQuoteResponse } from '@coffee-platform/generated-client-v1';
+export type { PricingQuoteVerifyRequest, PricingQuoteVerificationResponse } from '@coffee-platform/generated-internal-v1';
+
 export const contractPackage = {
   id: '@coffee-platform/contracts-pricing-v1',
   source: {

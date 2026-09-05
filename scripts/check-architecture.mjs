@@ -101,7 +101,7 @@ function checkStaticSource(path, source) {
   for (const match of source.matchAll(FORBIDDEN_MODULE_RE)) {
     const moduleName = match[1];
     if (/contracts\/fixtures|fixtures\/.*\.json/.test(moduleName)) fail('BOUND-CONTRACT-FIXTURE', `${label}: production source imports contract fixture ${moduleName}`);
-    if (/^apps\/(?:web|api-public)\//.test(label) && /(?:generated|contracts)-internal-v1/.test(moduleName)) {
+    if (/(?:^|\/)apps\/(?:web|api-public)\//.test(label) && /(?:generated|contracts)-internal-v1|@coffee-platform\/contracts-(?:customer|catalog|pricing|orders|aroma)-v1/.test(moduleName)) {
       fail('BOUND-CONTRACT-AUDIENCE', `${label}: browser/public graph imports internal contract ${moduleName}`);
     }
     if (label.startsWith('apps/') && /^(?:@fastify\/swagger|@scalar\/)/.test(moduleName)) {

@@ -1,3 +1,5 @@
+export type * from '@coffee-platform/generated-internal-v1';
+
 export const contractPackage = {
   id: '@coffee-platform/contracts-internal-v1',
   source: {

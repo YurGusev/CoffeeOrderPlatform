@@ -164,15 +164,7 @@ export type AromaCatalogFailed = {
   failedAt: MoneyVersionTimeV1SchemaTimestamp;
 };
 
-export type AromaCatalogExportRecord = ({
-  recordType: 'AromaCatalogStarted';
-} & AromaCatalogStarted) | ({
-  recordType: 'AromaCatalogBatch';
-} & AromaCatalogBatch) | ({
-  recordType: 'AromaCatalogCompleted';
-} & AromaCatalogCompleted) | ({
-  recordType: 'AromaCatalogFailed';
-} & AromaCatalogFailed);
+export type AromaCatalogExportRecord = AromaCatalogStarted | AromaCatalogBatch | AromaCatalogCompleted | AromaCatalogFailed;
 
 export type AromaCartSnapshotReadRequest = {
   cartScopeRef: 'aroma-primary';

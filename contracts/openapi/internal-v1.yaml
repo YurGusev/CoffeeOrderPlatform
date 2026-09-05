@@ -768,8 +768,6 @@ components:
         - $ref: '#/components/schemas/AromaCatalogBatch'
         - $ref: '#/components/schemas/AromaCatalogCompleted'
         - $ref: '#/components/schemas/AromaCatalogFailed'
-      discriminator:
-        propertyName: recordType
     AromaCartSnapshotReadRequest:
       type: object
       additionalProperties: false

@@ -133,6 +133,12 @@ void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18
   assert.match(output(result), /Dependency Cruiser 18\.2\.0/);
 });
 
+void test("RED BOUND-CONTRACT-AUDIENCE: browser cannot reach internal types through a domain re-export", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-browser-transitive-internal"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /BOUND-CONTRACT-AUDIENCE/);
+});
+
 void test("RED BOUND-DB-CLAIM: Orders cannot receive Customer database URL/role", async () => {
   const root = await authorityRoot();
   try {

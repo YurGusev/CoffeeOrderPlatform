@@ -1,6 +1,6 @@
 # ADR-0026: точный prerelease генератора контрактов для TS7
 
-- Статус: принято пользователем 2026-09-05; полный admission генератора остаётся в #4.
+- Статус: принято; полный golden admission материализован в #4.
 - Область: исключение к [ADR-0022](ADR-0022-ts7-native-toolchain.md).
 - Владелец реализации: [issue #4](https://github.com/YurGusev/CoffeeOrderPlatform/issues/4).
 
@@ -44,10 +44,10 @@ compile включает оба generated `index.ts` и type import через e
 не полагаясь на обнаружение tsconfig по расположению output. Exact pin и sole-compiler dependency graph
 проверяются существующими `versions:check` и `authority:check`.
 
-Compatibility matrix сохраняет `required=false`, `authoritative=false`,
-`acceptedAfterIssue=4`. Успешный `--strict-candidate` доказывает загрузку;
-полный golden corpus всех используемых constructs, runtime contract fixtures,
-generated drift и остальные acceptance #4 остаются обязательными.
+Compatibility matrix переводит генератор в `required=true`, `authoritative=true`
+после golden corpus реальных constructs #4. `acceptedAfterIssue=4` сохраняет
+происхождение допуска; deterministic generation и contract fixtures остаются
+обязательными блокирующими gates.
 Supply-chain/image gates и SBOM/provenance поставляемых images сохраняются;
 смена build-time кандидата не подтверждает их прохождение.
 

@@ -1,3 +1,5 @@
+export type * from '@coffee-platform/generated-client-v1';
+
 export const contractPackage = {
   id: '@coffee-platform/contracts-edge-v1',
   source: {

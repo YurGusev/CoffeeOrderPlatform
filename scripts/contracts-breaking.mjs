@@ -26,7 +26,8 @@ async function schemaSources(directory, prefix = 'contracts/schemas') {
 function baseSchemaSources() {
   if (baseRoot) return schemaSources(baseRoot);
   const result = spawnSync('git', ['ls-tree', '-r', '--name-only', 'origin/develop', 'contracts/schemas'], { cwd: root, encoding: 'utf8' });
-  return result.status === 0 ? result.stdout.trim().split('\n').filter((path) => path.endsWith('.json')) : [];
+  if (result.error || result.status !== 0) throw new Error(`cannot read baseline origin/develop: ${result.error?.message ?? result.stderr.trim()}`);
+  return result.stdout.trim().split('\n').filter((path) => path.endsWith('.json'));
 }
 
 const evidencePath = resolve(root, 'contracts/compatibility-evidence.yaml');
@@ -38,7 +39,9 @@ function fromBase(path) {
     return existsSync(source) ? yaml.load(readFileSync(source, 'utf8')) : null;
   }
   const result = spawnSync('git', ['show', `origin/develop:${path}`], { cwd: root, encoding: 'utf8' });
-  return result.status === 0 ? yaml.load(result.stdout) : null;
+  if (result.status === 0) return yaml.load(result.stdout);
+  if (/exists on disk, but not in|does not exist in/.test(result.stderr)) return null;
+  throw new Error(`cannot read baseline origin/develop:${path}: ${result.error?.message ?? result.stderr.trim()}`);
 }
 
 function fail(message) { throw new Error(`breaking contract: ${message}`); }
@@ -51,10 +54,15 @@ function requireOptionalEvidence(sourcePath, at, property) {
 
 function compareSchema(before, after, at, sourcePath) {
   if (!before || !after) return;
-  if (Object.hasOwn(before, 'const') && before.const !== after.const) fail(`${at}: const changed`);
-  if (before.pattern && before.pattern !== after.pattern) fail(`${at}: pattern changed`);
-  if (before.minimum !== undefined && (after.minimum ?? -Infinity) > before.minimum) fail(`${at}: minimum narrowed`);
-  if (before.maximum !== undefined && (after.maximum ?? Infinity) < before.maximum) fail(`${at}: maximum narrowed`);
+  if (before.$ref !== after.$ref) fail(`${at}: $ref changed`);
+  if (after.const !== undefined && before.const !== after.const) fail(`${at}: const narrowed`);
+  if (after.pattern !== undefined && before.pattern !== after.pattern) fail(`${at}: pattern narrowed`);
+  for (const keyword of ['minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties']) {
+    if (after[keyword] !== undefined && (before[keyword] === undefined || after[keyword] > before[keyword])) fail(`${at}: ${keyword} narrowed`);
+  }
+  for (const keyword of ['maximum', 'exclusiveMaximum', 'maxItems', 'maxLength', 'maxProperties']) {
+    if (after[keyword] !== undefined && (before[keyword] === undefined || after[keyword] < before[keyword])) fail(`${at}: ${keyword} narrowed`);
+  }
   if (before.additionalProperties !== false && after.additionalProperties === false) fail(`${at}: unknown fields narrowed`);
   const beforeTypes = new Set(Array.isArray(before.type) ? before.type : [before.type].filter(Boolean));
   const afterTypes = new Set(Array.isArray(after.type) ? after.type : [after.type].filter(Boolean));
@@ -84,9 +92,29 @@ function compareSchema(before, after, at, sourcePath) {
     if (!Object.hasOwn(after.$defs ?? {}, name)) fail(`${at}: definition ${name} removed`);
     compareSchema(schema, after.$defs[name], `${at}.$defs.${name}`, sourcePath);
   }
+  const structural = new Set(['$ref', 'const', 'pattern', 'type', 'enum', 'required', 'properties', '$defs', 'items', 'allOf', 'anyOf', 'oneOf', 'prefixItems', 'additionalProperties', 'minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties', 'maximum', 'exclusiveMaximum', 'maxItems', 'maxLength', 'maxProperties', 'title', 'description', 'examples', 'example', 'default', 'deprecated', 'readOnly', 'writeOnly']);
+  for (const [keyword, value] of Object.entries(before)) if (!structural.has(keyword) && JSON.stringify(value) !== JSON.stringify(after[keyword])) fail(`${at}: unsupported keyword ${keyword} changed`);
+  for (const [keyword] of Object.entries(after)) if (!structural.has(keyword) && !Object.hasOwn(before, keyword)) fail(`${at}: unsupported keyword ${keyword} added`);
+}
+
+function compareMedia(before, after, at, sourcePath) {
+  for (const [mediaType, media] of Object.entries(before ?? {})) {
+    if (!after?.[mediaType]) fail(`${at}: media type ${mediaType} removed`);
+    compareSchema(media.schema, after[mediaType].schema, `${at}.${mediaType}`, sourcePath);
+  }
+}
+
+function compareResponse(before, after, at, sourcePath) {
+  if (before.$ref !== after.$ref) fail(`${at}: response $ref changed`);
+  compareMedia(before.content, after.content, `${at}.content`, sourcePath);
+  for (const [name, header] of Object.entries(before.headers ?? {})) {
+    if (!after.headers?.[name]) fail(`${at}: response header ${name} removed`);
+    compareSchema(header, after.headers[name], `${at}.headers.${name}`, sourcePath);
+  }
 }
 
 function compareOpenApi(before, after, path) {
+  if (JSON.stringify(before['x-command-recovery'] ?? null) !== JSON.stringify(after['x-command-recovery'] ?? null)) fail(`${path}: command recovery protocol changed`);
   for (const [route, pathItem] of Object.entries(before.paths ?? {})) {
     if (!after.paths?.[route]) fail(`${path}: route ${route} removed`);
     for (const [method, operation] of Object.entries(pathItem)) {
@@ -94,14 +122,26 @@ function compareOpenApi(before, after, path) {
       const next = after.paths[route][method];
       if (!next) fail(`${path}: ${method.toUpperCase()} ${route} removed`);
       if (operation.operationId !== next.operationId) fail(`${path}: ${method.toUpperCase()} ${route} operationId changed`);
-      if (operation['x-audience'] !== next['x-audience']) fail(`${path}: ${operation.operationId} audience changed`);
-      if (operation['x-callers'] && JSON.stringify(operation['x-callers']) !== JSON.stringify(next['x-callers'])) fail(`${path}: ${operation.operationId} caller allowlist changed`);
-      for (const status of Object.keys(operation.responses ?? {})) if (!next.responses?.[status]) fail(`${path}: ${operation.operationId} status ${status} removed`);
+      if (JSON.stringify(operation.security ?? null) !== JSON.stringify(next.security ?? null)) fail(`${path}: ${operation.operationId} security changed`);
+      for (const field of ['x-owner', 'x-audience', 'x-caller', 'x-callers', 'x-exposure', 'x-auth', 'x-idempotency']) {
+        if (JSON.stringify(operation[field]) !== JSON.stringify(next[field])) fail(`${path}: ${operation.operationId} ${field} changed`);
+      }
+      for (const [status, response] of Object.entries(operation.responses ?? {})) {
+        if (!next.responses?.[status]) fail(`${path}: ${operation.operationId} status ${status} removed`);
+        compareResponse(response, next.responses[status], `${path}:${operation.operationId}:${status}`, path);
+      }
+      compareMedia(operation.requestBody?.content, next.requestBody?.content, `${path}:${operation.operationId}:request`, path);
     }
   }
   for (const [name, schema] of Object.entries(before.components?.schemas ?? {})) {
     if (!after.components?.schemas?.[name]) fail(`${path}: schema ${name} removed`);
     compareSchema(schema, after.components.schemas[name], `${path}#${name}`, path);
+  }
+  for (const [name, parameter] of Object.entries(before.components?.parameters ?? {})) {
+    const next = after.components?.parameters?.[name];
+    if (!next) fail(`${path}: parameter ${name} removed`);
+    for (const field of ['name', 'in', 'required', '$ref']) if (parameter[field] !== next[field]) fail(`${path}: parameter ${name} ${field} changed`);
+    compareSchema(parameter.schema, next.schema, `${path}:parameter:${name}`, path);
   }
 }
 

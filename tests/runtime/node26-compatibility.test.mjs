@@ -19,12 +19,12 @@ void test("Node 26 compatibility matrix has one exact, schema-validated baseline
   );
   assert.equal(
     matrix.components.filter((component) => component.required).length,
-    7,
+    8,
   );
   assert.equal(
     matrix.components.find((component) => component.id === "openapi-codegen")
       ?.authoritative,
-    false,
+    true,
   );
 });
 
@@ -48,7 +48,7 @@ void test("точный кандидат OpenAPI codegen загружается 
   assert.notEqual(output, "", result.stderr);
   const report = JSON.parse(output);
   assert.equal(report.candidate?.id, "openapi-codegen");
-  assert.equal(report.candidate?.status, "candidate-loaded");
+  assert.equal(report.candidate?.status, "passed");
 });
 
 void test("кандидат генерирует повторяемые transport types, компилируемые строгим TS7", async (t) => {

@@ -1,3 +1,5 @@
+export type { SseResourceInvalidated, SseStreamReady, SseStreamReset } from '@coffee-platform/generated-client-v1';
+
 export const contractPackage = {
   id: '@coffee-platform/contracts-realtime-v1',
   source: {

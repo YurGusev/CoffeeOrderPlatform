@@ -2,7 +2,7 @@
 
 Статус: пользователь разрешил exact prerelease по
 [ADR-0026](../adr/ADR-0026-ts7-codegen-prerelease-admission.md).
-Реализация контрактов #4 и golden corpus не завершены.
+Golden corpus реальных контрактов #4 завершён; admission является блокирующим.
 
 ## Исходная несовместимость (до ADR-0026)
 
@@ -62,13 +62,14 @@ external refs, compatibility fixtures и production image admission этой
 `0.0.0-next-20260824173136` в workspace как единственный кандидат #4.
 Обновлены `config/toolchain-versions.json`, его package/schema/matrix/checker
 проекции и lockfile. TS7 остаётся единственным compiler; матрица сохраняет
-`authoritative=false`, `acceptedAfterIssue=4` до полного golden corpus.
+`required=true`, `authoritative=true`; `acceptedAfterIssue=4` сохраняет происхождение допуска.
 
-Регрессионный тест `tests/runtime/node26-compatibility.test.mjs` использует
+Регрессионные тесты `tests/runtime/node26-compatibility.test.mjs` и
+`tests/contracts/generated-types.test.mjs` используют
 установленный workspace generator, проверяет strict candidate loading,
 двойную types-only генерацию и компиляцию outputs строгим TS7 с негативными
-fixtures. Временные outputs удаляются после теста. Это проверка исправления
-несовместимости, а не полный admission #4.
+fixtures. Временные outputs удаляются после теста. Golden corpus дополнительно
+проверяет composition/required, nullable, refs и discriminated unions реальных sources.
 
 При расширении исходного probe обнаружена неполнота доказательства:
 компилировался `types.gen.ts`, но не generated `index.ts`. Без найденного
@@ -93,8 +94,8 @@ git diff --check
 ```
 
 Результат: exit `0`; 4 compatibility-теста (включая strict candidate,
-byte-identical double generation и TS7 compile), 30 architecture-тестов,
-4 authority-теста. Frozen offline install успешен; sole compiler — TS7 7.0.2.
-Native Kafka load отложен существующим host gate до image build.
-Docker/Compose, SBOM/provenance images и полный clean-clone gate здесь
-не запускались; этот отчёт не заменяет их acceptance и полный corpus #4.
+byte-identical double generation и TS7 compile), 31 architecture-тест,
+27 contract-тестов и 4 authority-теста. Полный `pnpm check` успешен; sole
+compiler — TS7 7.0.2. Production image собран, native Kafka addon загружен,
+а final stage проверен на отсутствие TypeScript, OpenAPI generator, Oxlint,
+generated sources и contract sources. Clean-clone gate зафиксирован в handoff #4.
