@@ -49,6 +49,8 @@
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 
+Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
+
 ## Сила канонических документов
 
 Operational delivery authority определена

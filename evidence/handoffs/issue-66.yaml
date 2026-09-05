@@ -1,0 +1,96 @@
+issue: 66
+baseCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+inputs:
+- issue: 60
+  acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+  artifact: evidence/handoffs/issue-60.yaml
+  sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+- issue: 60
+  acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+  artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+  sha256: 108de7042b7546cae60e4fe807fe1bb8640d464e37caed1bb5a147f0c1abc141
+- issue: 60
+  acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+  artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+  sha256: 94b71ef8a9b032f4f4b83a880abaf49259160d4d8da19efb37af412bcf72053c
+outputs:
+- artifact: docs/wave-2/README.md
+  sha256: ae6dbc47654420556a5312dc830d24f70929283e3ab258c8a01b190afb0d4b7a
+  consumers:
+  - 8
+  - 10
+  - 11
+  - W2-contracts
+  - W2-artifacts
+  - W2-checkout
+  - W2-invoices
+  - W2-payment-requirement
+  - W2-payments
+  - W2-pricing
+  - W2-work-center
+  - W2-acceptance
+- artifact: docs/wave-2/01_AROMA_SUPPLIER_INVOICES.md
+  sha256: 7f4264a949dda418ef76cf86b0bebb904bc8608ff4e2d852317b7928baf8e163
+  consumers:
+  - W2-contracts
+  - W2-checkout
+  - W2-invoices
+  - W2-work-center
+- artifact: docs/launch/README.md
+  sha256: c3b1a8676969b3b83470f326bb0d3bc45930a3957fc38013a851c15fbdae654c
+  consumers:
+  - W2-contracts
+verification:
+- command: pnpm authority:check
+  result: passed
+  exitCode: 0
+  detail: launch authority positive acceptance; 4 tests passed
+- command: |-
+    python3 - <<'PY'
+    import hashlib,subprocess,yaml
+    sha='69cc341b6d9507f27c5e115aef519d0b96923bfc'
+    read=lambda p:subprocess.check_output(['git','show',sha+':'+p])
+    h=yaml.safe_load(read('evidence/handoffs/issue-60.yaml'))
+    for o in h['outputs']:
+        assert hashlib.sha256(read(o['artifact'])).hexdigest()==o['sha256'],o['artifact']
+    print(f"PASS: {len(h['outputs'])} predecessor output hashes at accepted #60 merge")
+    PY
+  result: passed
+  exitCode: 0
+  detail: '26 output hashes predecessor #60 checked at accepted merge commit'
+- command: |-
+    python3 - <<'PY'
+    from pathlib import Path
+    import re
+    files=[Path('docs/launch/README.md'),Path('docs/wave-2/README.md'),Path('docs/wave-2/01_AROMA_SUPPLIER_INVOICES.md')]
+    count=0
+    for p in files:
+        for href in re.findall(r'\]\(([^)]+)\)',p.read_text()):
+            if '://' in href or href.startswith('#'): continue
+            assert (p.parent/href.split('#')[0]).is_file(),(str(p),href)
+            count+=1
+        assert not any(line.rstrip()!=line for line in p.read_text().splitlines()),str(p)
+    print(f'PASS: {count} relative links across {len(files)} documents; no trailing whitespace')
+    PY
+  result: passed
+  exitCode: 0
+  detail: 58 relative links across 3 documents; no trailing whitespace
+- command: git diff --check
+  result: passed
+  exitCode: 0
+- command: git diff --name-only origin/develop...HEAD
+  result: passed
+  exitCode: 0
+  detail: 'После локального commit: ровно три документа и evidence/handoffs/issue-66.yaml;
+    canonical roots, runtime/config и файлы #61 отсутствуют в diff.'
+limitations:
+- 'Документационная поставка: invoice polling, provider submit/read API, payment integration, storage/scanner
+  и deployment не реализованы и не проверены.'
+- 19 invoice acceptance scenarios проверены как документальный контракт; runnable business tests относятся
+  к будущим owner implementation issues.
+- Provider read/identity, PSP и monetary allocation inputs остаются блокерами соответствующих runtime
+  stages; текущие 15 runtime и 5 DB не расширены.
+- 'W2-* в consumers обозначают этапы docs/wave-2/README.md, а не существующие GitHub issue IDs; #8/#10/#11
+  получают требования совместимости без изменения prerequisites/statuses.'
+- 'Работа #61 в отдельном checkout не использована как baseline и не включена в diff; этот handoff не
+  подтверждает её приёмку.'
