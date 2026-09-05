@@ -42,8 +42,10 @@ compiler и два набора diagnostics без продуктовой гар
 
 ### 2. Contract codegen
 
-`@hey-api/openapi-ts@0.99.0` с единственным plugin `@hey-api/typescript`
-принимается как кандидат на types-only генерацию:
+Первоначальный кандидат `@hey-api/openapi-ts@0.99.0` заменён точным prerelease
+`0.0.0-next-20260824173136` по
+[ADR-0026](ADR-0026-ts7-codegen-prerelease-admission.md). Единственный plugin —
+`@hey-api/typescript`; режим — types-only:
 
 ```text
 OpenAPI 3.2 -> generated transport types -> tsc 7.0.2
@@ -175,6 +177,8 @@ builder SBOM и отсутствие build tools в final images. Go toolchain �
 
 Каждый stable patch проверяется отдельным русскоязычным issue/PR и меняет pin,
 lockfile, SBOM и evidence атомарно. `next` допустим только в non-authoritative
-probe; nightly не становится authority. Rollback возвращает предыдущие exact
+probe, кроме точного исключения [ADR-0026](ADR-0026-ts7-codegen-prerelease-admission.md)
+для кандидата #4; другие prerelease/nightly не становятся authority.
+Rollback возвращает предыдущие exact
 pins и lockfile одним согласованным изменением. Две compiler lanes одновременно
 не поддерживаются.

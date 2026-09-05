@@ -75,7 +75,7 @@
         "typescript": { "const": "typescript@7.0.2" },
         "structuralLinter": { "const": "oxlint@1.80.0" },
         "typeAwareLinter": { "const": "oxlint-tsgolint@7.0.2001" },
-        "openApiGenerator": { "const": "@hey-api/openapi-ts@0.99.0" },
+        "openApiGenerator": { "const": "@hey-api/openapi-ts@0.0.0-next-20260824173136" },
         "openApiGeneratorPlugin": { "const": "@hey-api/typescript" },
         "generatorMode": { "const": "types-only" },
         "compilerLanes": { "const": 1 }

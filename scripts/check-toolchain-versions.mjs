@@ -39,7 +39,7 @@ const EXPECTED = Object.freeze({
   playwright: "1.62.1",
   openapi: "3.2.0",
   fastifySwagger: "9.8.1",
-  heyApiOpenapiTs: "0.99.0",
+  heyApiOpenapiTs: "0.0.0-next-20260824173136",
   spectralCli: "6.16.3",
   ajv: "8.20.0",
   pino: "10.3.1",
@@ -55,7 +55,7 @@ const EXPECTED = Object.freeze({
 });
 
 const ROOT_DEV_DEPENDENCIES = Object.freeze({
-  "@hey-api/openapi-ts": "0.99.0",
+  "@hey-api/openapi-ts": "0.0.0-next-20260824173136",
   "@types/node": "26.4.0",
   "dependency-cruiser": "18.2.0",
   oxlint: "1.80.0",

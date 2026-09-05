@@ -323,9 +323,12 @@ cookies, arbitrary URLs или полную корзину.
 
 - #4 создаёт `pnpm contracts:lint`: проверка OpenAPI structure/refs и JSON Schema
   существующим AJV; второй linter/framework не требуется;
-- `pnpm contracts:generate`: `@hey-api/openapi-ts 0.99.0` только с
+- `pnpm contracts:generate`: `@hey-api/openapi-ts 0.0.0-next-20260824173136` только с
   `@hey-api/typescript`, outputs `packages/generated/client-v1/**` и
-  `packages/generated/internal-v1/**`;
+  `packages/generated/internal-v1/**`; exact prerelease разрешён
+  [ADR-0026](../adr/ADR-0026-ts7-codegen-prerelease-admission.md);
+- `output.module.extension: ".js"` задаётся явно для NodeNext; compile проверяет
+  все generated-файлы, включая `index.ts`, и импорт типов через него;
 - SDK/client/hooks/Zod/Axios не генерируются; project-owned browser native fetch
   client использует generated `client-v1` transport types, backend Undici clients
   — generated `internal-v1` transport types; runtime response validation обязательна;

@@ -121,7 +121,7 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
 | Playwright | `1.62.1` | browser E2E |
 | OpenAPI Specification | `3.2.0` | проверить поддержку всем toolchain; downgrade требует ADR |
 | `@fastify/swagger` | `9.8.1` | contract publication |
-| `@hey-api/openapi-ts` | `0.99.0` | кандидат types-only codegen; принятие только после OpenAPI 3.2 golden gates #4 |
+| `@hey-api/openapi-ts` | `0.0.0-next-20260824173136` | кандидат types-only codegen; принятие только после OpenAPI 3.2 golden gates #4 |
 | Spectral CLI | `6.16.3` | contract lint |
 | AJV | `8.20.0` | runtime JSON Schema validation |
 | Pino | `10.3.1` | structured logging |

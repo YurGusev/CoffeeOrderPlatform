@@ -101,7 +101,7 @@ const EXPECTED_COMPONENTS = Object.freeze({
   },
   "openapi-codegen": {
     package: "@hey-api/openapi-ts",
-    version: "0.99.0",
+    version: "0.0.0-next-20260824173136",
     kind: "candidate",
     probe: "openapi-codegen-cli",
     required: false,
