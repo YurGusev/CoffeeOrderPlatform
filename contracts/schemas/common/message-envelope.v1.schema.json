@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffeeorderplatform.local/contracts/schemas/common/message-envelope.v1.schema.json",
+  "title": "CoffeeOrderPlatform message envelope v1",
+  "$defs": {
+    "Aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref", "version"],
+      "properties": {
+        "type": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" },
+        "ref": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "version": {
+          "$ref": "identifiers.v1.schema.json#/$defs/Version"
+        }
+      }
+    },
+    "MessageEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "envelopeVersion",
+        "messageId",
+        "messageType",
+        "occurredAt",
+        "producer",
+        "correlationId",
+        "causationId",
+        "traceparent",
+        "aggregate",
+        "payload"
+      ],
+      "properties": {
+        "envelopeVersion": { "type": "string", "const": "1" },
+        "messageId": {
+          "$ref": "identifiers.v1.schema.json#/$defs/MessageId"
+        },
+        "messageType": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9]+\\.v[1-9][0-9]*$"
+        },
+        "occurredAt": {
+          "$ref": "money-version-time.v1.schema.json#/$defs/Timestamp"
+        },
+        "producer": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "correlationId": {
+          "$ref": "identifiers.v1.schema.json#/$defs/Uuid"
+        },
+        "causationId": {
+          "anyOf": [
+            { "$ref": "identifiers.v1.schema.json#/$defs/MessageId" },
+            { "type": "null" }
+          ]
+        },
+        "traceparent": {
+          "$ref": "money-version-time.v1.schema.json#/$defs/Traceparent"
+        },
+        "aggregate": {
+          "$ref": "#/$defs/Aggregate"
+        },
+        "payload": {}
+      }
+    }
+  }
+}

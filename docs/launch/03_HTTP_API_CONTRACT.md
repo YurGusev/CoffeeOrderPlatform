@@ -1,5 +1,10 @@
 # Контракт HTTP API
 
+Исполнимые нормативные definitions находятся в
+`contracts/openapi/client-v1.yaml` и `contracts/openapi/internal-v1.yaml`.
+Types-only artifacts материализуются в `packages/generated/{client,internal}-v1`;
+handlers и transport adapters остаются за владельцами downstream issues.
+
 ## Клиентские маршруты первого запуска
 
 ```http

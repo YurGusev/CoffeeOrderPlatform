@@ -1,0 +1,21 @@
+{
+  "envelopeVersion": "1",
+  "messageId": "msg_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  "messageType": "CatalogMappingChanged.v2",
+  "occurredAt": "2026-09-05T10:01:00Z",
+  "producer": "catalog-activation-worker",
+  "correlationId": "22222222-2222-4222-8222-222222222222",
+  "causationId": "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "traceparent": "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+  "aggregate": { "type": "CatalogMapping", "ref": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX", "version": "2" },
+  "payload": {
+    "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+    "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+    "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+    "catalogSnapshotRevision": "1",
+    "mappingRevision": "2",
+    "mappingState": "Active",
+    "availability": "Available",
+    "effectiveAt": "2026-09-05T10:01:00Z"
+  }
+}

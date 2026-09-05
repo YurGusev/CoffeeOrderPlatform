@@ -1,0 +1,6 @@
+[
+  {"case":"completed-success","operationId":"createCustomer","status":201,"schema":"CustomerResponse","headers":{"idempotency-replayed":"true","cache-control":"no-store"},"completed":true},
+  {"case":"completed-referenced-rejection","operationId":"createPricingQuote","status":404,"schema":"ErrorCatalogProductNotFound","headers":{"idempotency-replayed":"true","cache-control":"no-store"},"completed":true},
+  {"case":"lookup-error","operationId":"createPricingQuote","status":503,"schema":"ErrorIdempotencyLookupUnavailable","headers":{"cache-control":"no-store"},"completed":false},
+  {"case":"ordinary-terminal-without-marker","operationId":"createCustomer","status":201,"schema":"CustomerResponse","headers":{},"completed":false}
+]

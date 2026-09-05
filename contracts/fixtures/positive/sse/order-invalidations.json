@@ -1,0 +1,23 @@
+[
+  {
+    "event": "stream-ready.v1",
+    "data": {"connectionId": "88888888-8888-4888-8888-888888888888", "connectedAt": "2026-09-05T10:00:00Z"}
+  },
+  {
+    "event": "resource-invalidated.v1",
+    "id": "msg_01ARZ3NDEKTSV4RRFFQ69G5FB1",
+    "retry": 3000,
+    "data": {
+      "subjectType": "order",
+      "subjectRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "ownerVersion": "7",
+      "reason": "AromaStateChanged",
+      "correlationId": "77777777-7777-4777-8777-777777777777"
+    }
+  },
+  {
+    "event": "stream-reset.v1",
+    "data": {"reason": "REPLAY_UNAVAILABLE"}
+  },
+  {"comment": "heartbeat", "intervalSeconds": 15}
+]

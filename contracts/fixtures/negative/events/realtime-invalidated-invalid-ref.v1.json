@@ -1,0 +1,17 @@
+{
+  "envelopeVersion": "1",
+  "messageId": "msg_01ARZ3NDEKTSV4RRFFQ69G5FB1",
+  "messageType": "RealtimeInvalidated.v1",
+  "occurredAt": "2026-09-05T10:06:00Z",
+  "producer": "orders-service",
+  "correlationId": "77777777-7777-4777-8777-777777777777",
+  "causationId": null,
+  "traceparent": "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+  "aggregate": { "type": "OrderCard", "ref": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV", "version": "19" },
+  "payload": {
+    "subjectType": "order",
+    "subjectRef": "ord_not-a-ulid",
+    "ownerVersion": "19",
+    "reason": "AromaStateChanged"
+  }
+}

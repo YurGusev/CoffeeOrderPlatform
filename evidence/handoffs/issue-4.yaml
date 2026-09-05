@@ -1,0 +1,142 @@
+issue: 4
+baseCommit: 53753257b22021023f887050669fc964a7998909
+inputs:
+  - issue: 3
+    acceptedMergeCommit: 91c6ed927029604c82a25b2208371a98c4b62237
+    artifact: evidence/handoffs/issue-3.yaml
+    sha256: 890fa7da030702bab6c858d8069e0d50336e41d16ce1b628b96ecc2816ec09e2
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: evidence/handoffs/issue-60.yaml
+    sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+outputs:
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: 0f9698cfbd3de2b3960be33a12afdd77671da4b6021c7644704ca57bc77f2f97
+    consumers: [5, 7, 8, 9, 12, 13, 17, 18]
+  - artifact: contracts/openapi/internal-v1.yaml
+    sha256: d8fa8ddce4578ee843677b177c705e8675b99c30e8d323cc597ac4454ad1a2b0
+    consumers: [5, 6, 7, 8, 10, 11, 13, 16, 17, 18]
+  - artifact: contracts/manifest.yaml
+    sha256: 47bf5c8227a0c45619ca759cf2cca1661729f0aff188bd12f8b3bba503c1a994
+    consumers: [5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18]
+  - artifact: contracts/schemas/common/identifiers.v1.schema.json
+    sha256: 50173e30c98cdcfd53417b4b56743d3b45ad037ede096528eaa9b5c6c78752ab
+    consumers: [5, 6, 7, 8, 9, 10, 11, 12, 16, 17, 18]
+  - artifact: contracts/schemas/common/money-version-time.v1.schema.json
+    sha256: ea10dd04fe588ea95531c246bffca933b7487dc977e19aa4c6297590c444eeaf
+    consumers: [5, 6, 7, 8, 9, 10, 11, 12, 16, 17, 18]
+  - artifact: contracts/schemas/common/problem-details.v1.schema.json
+    sha256: 3bf55934887b3b8ed1f084536d03291902d093b6985193a0c66e535e51ac2ccb
+    consumers: [5, 7, 8, 9, 10, 12, 17]
+  - artifact: contracts/schemas/common/message-envelope.v1.schema.json
+    sha256: 326e082a6c09af8c8214bda4274a7d6e93a152c0eebf4708fc911529c1c9e50b
+    consumers: [8, 11, 12, 13, 16, 17]
+  - artifact: contracts/schemas/events/catalog-snapshot-activated.v1.schema.json
+    sha256: 0b3eca2ba4f6985dbb3ab67f7dfdfa3ac2a6c67cb0bf72a97200989986bb3c30
+    consumers: [6, 13, 16, 17]
+  - artifact: contracts/schemas/events/catalog-mapping-changed.v2.schema.json
+    sha256: 0d49726f73b1ff20df2ff77b09bc5c5ee0d2712d6f317402e05af1c2c2cb5be4
+    consumers: [8, 11, 13, 16, 17]
+  - artifact: contracts/schemas/events/order-confirmed.v1.schema.json
+    sha256: c3c8a973d084d28545a0ff0239d4b4e968fa6da84b9d64a0e828f0d42977bce5
+    consumers: [8, 11, 13]
+  - artifact: contracts/schemas/events/aroma-convergence-requested.v1.schema.json
+    sha256: 281589f87483d5a9b772ae0c2fba15e3bb278e9d8fd054fe0d761bd6de71fb19
+    consumers: [8, 11, 13]
+  - artifact: contracts/schemas/events/aroma-observation-changed.v1.schema.json
+    sha256: ef4de23f7489870ec49c5ed9dcc243f281af732b5214407fb7a01f8e4a087869
+    consumers: [8, 11, 13]
+  - artifact: contracts/schemas/events/aroma-convergence-changed.v1.schema.json
+    sha256: a37f79e576dcc8bfb22dbd2cc20e0dd974340effad36c3a35de47c6072e895e9
+    consumers: [8, 11, 13]
+  - artifact: contracts/schemas/events/realtime-invalidated.v1.schema.json
+    sha256: c2bc7c6d441c7ad48e8414ec13260dc0dd8ad5845b316a3fb108c3bb93a5dbf0
+    consumers: [8, 9, 12, 13]
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: aa2f64b275da8789c9c5e41908d96b2b49aa4d73810309934d784c30bb5aeb2c
+    consumers: [5, 7, 8, 9, 12, 17, 18]
+  - artifact: packages/generated/internal-v1/src/types.gen.ts
+    sha256: 3e8cf4066f5df2d4f73a42ba0edc195fede9fed24bf719166d926f9e75b789a1
+    consumers: [5, 6, 7, 8, 10, 11, 16, 17, 18]
+  - artifact: packages/contracts/client-v1/src/index.ts
+    sha256: 4238272e4a2a9097d891d57dc64981e75c17805f1abdd6876ea8b9b16177ccf2
+    consumers: [5, 7, 8, 9]
+  - artifact: packages/contracts/edge-v1/src/index.ts
+    sha256: 7a226e3606caeba7553ea2095f5af5016e43903aad8b217174d0ffa2647b9662
+    consumers: [5, 9]
+  - artifact: packages/contracts/internal-v1/src/index.ts
+    sha256: b5a6c09ab289d2f7680901f5989715d5d8ae079fb7a4e14bd2b76a25bbc99774
+    consumers: [5, 6, 7, 8, 10, 11, 16, 17, 18]
+  - artifact: packages/contracts/customer-v1/src/index.ts
+    sha256: d7c4554e391fcd03f276b713f21c50233f190fc0eebce8bf9abb39db6bb1391f
+    consumers: [5, 7]
+  - artifact: packages/contracts/catalog-v1/src/index.ts
+    sha256: 298512ac2a2906cd6ba21e97157cfe216a50adb905fe9aaf6d1fe5208cba6598
+    consumers: [6, 8, 13, 16, 17]
+  - artifact: packages/contracts/pricing-v1/src/index.ts
+    sha256: aff23a008ffbfecb43faa860a4a4410219ad8144d81691e97d00ab6b4ee04911
+    consumers: [7, 8]
+  - artifact: packages/contracts/orders-v1/src/index.ts
+    sha256: 1fd45874040d9ed3a0424b06b149542a7a356bc7e9032263aa22cbab77987c0b
+    consumers: [8, 10, 11, 12, 13]
+  - artifact: packages/contracts/aroma-v1/src/index.ts
+    sha256: 5ffa23a2306aaf9920a42c5ae08d9f5864dde3c139b250f356cdbbc1039104de
+    consumers: [8, 11, 13]
+  - artifact: packages/contracts/realtime-v1/src/index.ts
+    sha256: c6d86064895ecf41529b43754d8385a372eb0634c6e182af24b0fe6ec8e87b99
+    consumers: [9, 12, 13]
+  - artifact: Dockerfile
+    sha256: 3420448e3562802e164cf09e319cd331edafa8554f247cc4281a830fd2c49ca0
+    consumers: [13, 64]
+verification:
+  - command: pnpm contracts:lint
+    result: passed
+    exitCode: 0
+  - command: pnpm contracts:generate
+    result: passed
+    exitCode: 0
+  - command: pnpm contracts:check-generated
+    result: passed
+    exitCode: 0
+    detail: byte-identical sha256 7e9ee4e0780e17e211275d736442e165d6ee5df4b7f5ff33b0ddbbe4f8656efd
+  - command: pnpm contracts:breaking
+    result: passed
+    exitCode: 0
+  - command: pnpm contracts:test
+    result: passed
+    exitCode: 0
+    detail: 32 tests; source-schema HTTP/Problem/recovery, TS7 generated types, pre-EOF SSE/NDJSON runtime codecs, seven events and RED breaking fixtures
+  - command: pnpm image:build --load --tag coffee-platform-issue4:check .
+    result: passed
+    exitCode: 0
+    detail: nested contract/generated workspace manifests materialized in builder
+  - command: docker run --rm --entrypoint /bin/sh coffee-platform-issue4:check -c 'test ! -e /app/node_modules/typescript && test ! -e /app/node_modules/@hey-api/openapi-ts && test ! -e /app/node_modules/oxlint && test ! -e /app/packages/generated && test ! -e /app/contracts'
+    result: passed
+    exitCode: 0
+    detail: final non-root runtime image excludes contract-generation tooling and sources
+  - command: pnpm architecture:check
+    result: passed
+    exitCode: 0
+  - command: pnpm versions:check
+    result: passed
+    exitCode: 0
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+  - command: pnpm check
+    result: passed
+    exitCode: 0
+  - command: pnpm clean-clone:check
+    result: passed
+    exitCode: 0
+    detail: frozen install, pnpm check, profile parity; checkout clean after verification
+limitations:
+  - Business handlers, owner persistence, Kafka delivery, SSE fanout и provider adapter принадлежат downstream issues и здесь не выполнялись.
+  - Production deployment, registry publication, live AROMA и production data mutations не выполнялись.

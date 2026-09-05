@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+  - packages/contracts/*
+  - packages/generated/*
 ignoreScripts: true
 allowBuilds:
   '@confluentinc/kafka-javascript': true

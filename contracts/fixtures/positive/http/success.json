@@ -1,0 +1,338 @@
+[
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 201,
+    "mediaType": "application/json",
+    "schema": "CustomerResponse",
+    "body": {
+      "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "version": "1",
+      "displayName": "Иван Петров",
+      "phone": "+79991234567",
+      "email": "ivan@example.test",
+      "address": {
+        "addressRef": "adr_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+        "line1": "ул. Пушкина, 1",
+        "city": "Екатеринбург",
+        "postalCode": "620000",
+        "countryCode": "RU"
+      },
+      "createdAt": "2026-09-05T10:00:00Z",
+      "updatedAt": "2026-09-05T10:00:00Z"
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "searchCustomers",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "CustomerSearchResponse",
+    "body": {
+      "items": [
+        {
+          "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+          "version": "1",
+          "displayName": "Иван Петров",
+          "phone": "+79991234567",
+          "email": "ivan@example.test"
+        }
+      ],
+      "nextCursor": null
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "searchCatalogProducts",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "CatalogSearchResponse",
+    "body": {
+      "snapshotRevision": "1",
+      "items": [
+        {
+          "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+          "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+          "displayName": "Кофе зерновой",
+          "unit": "kilogram",
+          "availability": "Available",
+          "mappingAvailable": true,
+          "imageUrl": "https://catalog.example.test/coffee.png"
+        }
+      ],
+      "nextCursor": null
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "status": 201,
+    "mediaType": "application/json",
+    "schema": "PricingQuoteResponse",
+    "body": {
+      "quoteRef": "prq_01ARZ3NDEKTSV4RRFFQ69G5FB0",
+      "policyVersionRef": "pvr_01ARZ3NDEKTSV4RRFFQ69G5FB1",
+      "catalogSnapshotRevision": "1",
+      "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "createdAt": "2026-09-05T10:00:00Z",
+      "expiresAt": "2026-09-05T10:30:00Z",
+      "currency": "RUB",
+      "lines": [
+        {
+          "lineNumber": 1,
+          "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+          "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+          "productDisplayName": "Кофе зерновой",
+          "quantity": "1.5",
+          "unit": "kilogram",
+          "unitMinor": "1200",
+          "lineTotalMinor": "1800"
+        }
+      ],
+      "totalMinor": "1800",
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createOrderDraft",
+    "status": 201,
+    "mediaType": "application/json",
+    "schema": "OrderCardResponse",
+    "body": {
+      "orderRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "version": "2",
+      "projectionVersion": "4",
+      "status": "Draft",
+      "customer": {
+        "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+        "displayName": "Иван Петров"
+      },
+      "items": [
+        {
+          "itemRef": "itm_01BX5ZZKBKACTAV9WEVGEMMVRY",
+          "linePosition": 1,
+          "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+          "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+          "displayName": "Кофе зерновой",
+          "quantity": "1",
+          "unit": "kilogram",
+          "quoteRef": "prq_01ARZ3NDEKTSV4RRFFQ69G5FB0",
+          "quoteLineNumber": 1,
+          "unitMinor": "1200",
+          "lineTotalMinor": "1200"
+        }
+      ],
+      "pricing": {
+        "totalMinor": "1200",
+        "currency": "RUB",
+        "quoteProofs": [
+          {
+            "quoteRef": "prq_01ARZ3NDEKTSV4RRFFQ69G5FB0",
+            "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "expiresAt": "2026-09-05T10:30:00Z"
+          }
+        ]
+      },
+      "aroma": {
+        "state": "NotRequested",
+        "desiredRevision": "0",
+        "observedRevision": "0",
+        "lastObservedAt": null,
+        "blockers": []
+      },
+      "allowedActions": ["edit-items", "confirm"]
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "upsertOrderItem",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "OrderCardResponse",
+    "body": {
+      "orderRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "version": "3",
+      "projectionVersion": "5",
+      "status": "Draft",
+      "customer": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "displayName": "Иван Петров"},
+      "items": [],
+      "pricing": null,
+      "aroma": {"state": "NotRequested", "desiredRevision": "0", "observedRevision": "0", "lastObservedAt": null, "blockers": []},
+      "allowedActions": ["edit-items", "confirm"]
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "removeOrderItem",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "OrderCardResponse",
+    "body": {
+      "orderRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "version": "4",
+      "projectionVersion": "6",
+      "status": "Draft",
+      "customer": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "displayName": "Иван Петров"},
+      "items": [],
+      "pricing": null,
+      "aroma": {"state": "NotRequested", "desiredRevision": "0", "observedRevision": "0", "lastObservedAt": null, "blockers": []},
+      "allowedActions": ["edit-items", "confirm"]
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "confirmOrder",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "OrderCardResponse",
+    "body": {
+      "orderRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "version": "5",
+      "projectionVersion": "7",
+      "status": "Confirmed",
+      "customer": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "displayName": "Иван Петров"},
+      "items": [],
+      "pricing": null,
+      "aroma": {"state": "PendingObservation", "desiredRevision": "1", "observedRevision": "0", "lastObservedAt": null, "blockers": []},
+      "allowedActions": ["request-aroma-reconciliation"]
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "requestAromaReconciliation",
+    "status": 202,
+    "mediaType": "application/json",
+    "schema": "ReconciliationAcceptedResponse",
+    "body": {
+      "orderRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "orderVersion": "6",
+      "requestedAt": "2026-09-05T10:05:00Z",
+      "aromaState": "Converging"
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "getOrderCard",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "OrderCardResponse",
+    "body": {
+      "orderRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      "version": "5",
+      "projectionVersion": "7",
+      "status": "Confirmed",
+      "customer": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "displayName": "Иван Петров"},
+      "items": [],
+      "pricing": null,
+      "aroma": {"state": "PendingObservation", "desiredRevision": "1", "observedRevision": "0", "lastObservedAt": null, "blockers": []},
+      "allowedActions": ["request-aroma-reconciliation"]
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "getCustomerOrderInput",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "CustomerOrderInput",
+    "body": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "customerVersion": "1", "displayName": "Иван Петров", "state": "Active"}
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "getCatalogPricingInput",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "CatalogPricingInput",
+    "body": {
+      "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+      "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+      "snapshotRevision": "1",
+      "supplierUnitMinor": "900",
+      "currency": "RUB",
+      "unit": "kilogram",
+      "availability": "Available",
+      "mappingRevision": "2",
+      "displayName": "Кофе зерновой"
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "verifyPricingQuote",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "PricingQuoteVerificationResponse",
+    "body": {
+      "valid": true,
+      "quoteRef": "prq_01ARZ3NDEKTSV4RRFFQ69G5FB0",
+      "policyVersionRef": "pvr_01ARZ3NDEKTSV4RRFFQ69G5FB1",
+      "catalogSnapshotRevision": "1",
+      "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "expiresAt": "2026-09-05T10:30:00Z",
+      "currency": "RUB",
+      "lines": [
+        {
+          "lineNumber": 1,
+          "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+          "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+          "productDisplayName": "Кофе зерновой",
+          "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+          "mappingRevision": "2",
+          "quantity": "1.5",
+          "unit": "kilogram",
+          "supplierUnitMinor": "900",
+          "unitMinor": "1200",
+          "lineTotalMinor": "1800",
+          "currency": "RUB",
+          "internalProofHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      ],
+      "totalMinor": "1800"
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "readAromaCartSnapshot",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "AromaCartSnapshot",
+    "body": {
+      "cartScopeRef": "aroma-primary",
+      "providerSnapshotRef": "provider-snapshot-1",
+      "capturedAt": "2026-09-05T10:04:00Z",
+      "cartFingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "lines": [{"offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "quantity": "1"}]
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "AromaMutationResponse",
+    "body": {"operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2", "cartScopeRef": "aroma-primary", "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "state": "Acknowledged"}
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "removeAromaCartLine",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "AromaMutationResponse",
+    "body": {"operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2", "cartScopeRef": "aroma-primary", "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "state": "Acknowledged"}
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "exportAromaCatalog",
+    "status": 200,
+    "mediaType": "application/x-ndjson",
+    "schema": "AromaCatalogExportRecord",
+    "streamFixture": "aroma-catalog-success.ndjson"
+  },
+  {
+    "document": "client-v1",
+    "operationId": "streamOrderInvalidations",
+    "status": 200,
+    "mediaType": "text/event-stream",
+    "streamFixture": "order-invalidations.json"
+  }
+]

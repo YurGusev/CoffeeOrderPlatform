@@ -1,0 +1,8 @@
+{
+  "name": "@coffee-platform/generated-internal-v1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts" } },
+  "devDependencies": { "@types/node": "26.4.0" }
+}

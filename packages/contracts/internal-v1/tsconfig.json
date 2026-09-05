@@ -1,0 +1,6 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": { "composite": true, "declaration": true, "isolatedDeclarations": true, "rootDir": "src", "outDir": "dist" },
+  "references": [{ "path": "../../generated/internal-v1" }],
+  "include": ["src/**/*.ts"]
+}

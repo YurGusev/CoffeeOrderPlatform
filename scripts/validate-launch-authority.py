@@ -30,7 +30,7 @@ TS7_PINS = {
     "typescript": "7.0.2",
     "oxlint": "1.80.0",
     "oxlint-tsgolint": "7.0.2001",
-    "@hey-api/openapi-ts": "0.99.0",
+    "@hey-api/openapi-ts": "0.0.0-next-20260824173136",
 }
 
 FOUNDATION_PROHIBITIONS = [
@@ -265,7 +265,7 @@ def validate_foundation(doc: dict[str, Any]) -> None:
     require(ts7["typescript"] == "typescript@7.0.2", "foundation.toolchainDecision.typescript: TS7 pin changed")
     require(ts7["structuralLinter"] == "oxlint@1.80.0", "foundation.toolchainDecision.structuralLinter: pin changed")
     require(ts7["typeAwareLinter"] == "oxlint-tsgolint@7.0.2001", "foundation.toolchainDecision.typeAwareLinter: pin changed")
-    require(ts7["openApiGenerator"] == "@hey-api/openapi-ts@0.99.0", "foundation.toolchainDecision.openApiGenerator: pin changed")
+    require(ts7["openApiGenerator"] == "@hey-api/openapi-ts@0.0.0-next-20260824173136", "foundation.toolchainDecision.openApiGenerator: pin changed")
     require(ts7["openApiGeneratorPlugin"] == "@hey-api/typescript", "foundation.toolchainDecision.openApiGeneratorPlugin: plugin changed")
     require(ts7["generatorMode"] == "types-only", "foundation.ts7Authority.generatorMode: only types-only is allowed")
     require(ts7["compilerLanes"] == 1, "foundation.toolchainDecision.compilerLanes: second compiler lane is forbidden")

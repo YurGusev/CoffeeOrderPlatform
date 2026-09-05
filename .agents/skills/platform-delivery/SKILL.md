@@ -13,9 +13,9 @@ health/readiness, resource limits, graceful stop, provenance и rollback path.
   только в SOPS-encrypted `secrets/platform.secrets.sops.yaml`. Runtime получает
   scoped tmpfs materialization, а не общий secrets-файл.
 - Pin runtime/dependency/action versions and produce lockfiles, SBOM, and image digest.
-- TS7 supply-chain authority по ADR-0022 требует ровно один
+- TS7 supply-chain authority по ADR-0022 с точным исключением ADR-0026 требует ровно один
   `typescript@7.0.2`, exact `oxlint@1.80.0`, `oxlint-tsgolint@7.0.2001` и
-  `@hey-api/openapi-ts@0.99.0`; TS5/6 и floating pins запрещены. Compiler,
+  `@hey-api/openapi-ts@0.0.0-next-20260824173136`; TS5/6 и floating pins запрещены. Compiler,
   linter и codegen присутствуют только в builder и отсутствуют в final images.
 - CI validates contracts before builds, then types/lint/tests/integration/security.
 - Deploy immutable digests; configuration and migrations are explicit stages.

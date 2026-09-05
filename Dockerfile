@@ -33,7 +33,7 @@ WORKDIR /workspace
 RUN --mount=type=bind,source=apps,target=apps \
     --mount=type=bind,source=packages,target=packages \
     mkdir /manifests \
-    && cp --parents apps/*/package.json packages/*/package.json /manifests/
+    && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
 
 FROM ${NODE_IMAGE} AS build
 

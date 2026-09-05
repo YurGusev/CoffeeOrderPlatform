@@ -101,11 +101,11 @@ const EXPECTED_COMPONENTS = Object.freeze({
   },
   "openapi-codegen": {
     package: "@hey-api/openapi-ts",
-    version: "0.99.0",
-    kind: "candidate",
+    version: "0.0.0-next-20260824173136",
+    kind: "contract",
     probe: "openapi-codegen-cli",
-    required: false,
-    authoritative: false,
+    required: true,
+    authoritative: true,
     openapi: "3.2.0",
     acceptedAfterIssue: 4,
   },
@@ -463,7 +463,7 @@ function probeOpenApiCandidate(root, info) {
     return { status: "blocked", reason: "candidate CLI is not installed" };
   const result = runExecutable(executable, ["--help"], root);
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
-  if (result.status === 0) return { status: "candidate-loaded", output };
+  if (result.status === 0) return { status: "passed", output };
   if (/AnyKeyword|SyntaxKind|typescript/i.test(output)) {
     return {
       status: "blocked",
@@ -590,7 +590,7 @@ export async function checkNode26Compatibility(root = REPO_ROOT, options = {}) {
   };
   if (
     options.strictCandidate &&
-    report.candidate?.status !== "candidate-loaded"
+    report.candidate?.status !== "passed"
   ) {
     report.status = "failed";
     report.failures.push(

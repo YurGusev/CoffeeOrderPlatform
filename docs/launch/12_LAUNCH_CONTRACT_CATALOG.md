@@ -28,6 +28,8 @@ contracts/
 
 OpenAPI version — `3.2.0`. JSON Schema dialect — draft 2020-12. Во всех
 objects используется `additionalProperties: false`.
+Эти файлы являются source authority; `packages/generated/{client,internal}-v1`
+содержат только детерминированные types-only artifacts.
 
 ## 2. Общие типы
 
@@ -321,20 +323,23 @@ cookies, arbitrary URLs или полную корзину.
 
 ## 7. Генерация и fixtures
 
-- #4 создаёт `pnpm contracts:lint`: проверка OpenAPI structure/refs и JSON Schema
+- `pnpm contracts:lint` проверяет OpenAPI structure/refs и JSON Schema
   существующим AJV; второй linter/framework не требуется;
-- `pnpm contracts:generate`: `@hey-api/openapi-ts 0.99.0` только с
+- `pnpm contracts:generate` использует `@hey-api/openapi-ts 0.0.0-next-20260824173136` только с
   `@hey-api/typescript`, outputs `packages/generated/client-v1/**` и
-  `packages/generated/internal-v1/**`;
+  `packages/generated/internal-v1/**`; exact prerelease разрешён
+  [ADR-0026](../adr/ADR-0026-ts7-codegen-prerelease-admission.md);
+- `output.module.extension: ".js"` задаётся явно для NodeNext; compile проверяет
+  все generated-файлы, включая `index.ts`, и импорт типов через него;
 - SDK/client/hooks/Zod/Axios не генерируются; project-owned browser native fetch
   client использует generated `client-v1` transport types, backend Undici clients
   — generated `internal-v1` transport types; runtime response validation обязательна;
 - генератор принимается только после golden corpus используемых OpenAPI 3.2
   constructs, deterministic double generation, zero diff и `tsc 7.0.2` compile;
-- `pnpm contracts:check-generated`: повторная генерация и zero diff;
-- `pnpm contracts:test`: positive/negative contract fixtures и проверка runtime
-  request/response validation; команда создаётся в #4;
-- `pnpm contracts:breaking`: сравнение с `origin/develop`; удаление/rename/
+- `pnpm contracts:check-generated` выполняет повторную генерацию и zero diff;
+- `pnpm contracts:test` проверяет positive/negative fixtures и runtime
+  cross-field validation;
+- `pnpm contracts:breaking` сравнивает с `origin/develop`; удаление/rename/
   required-field/type/enum narrowing/status removal блокирует PR;
 - по одному positive fixture на route/status и messageType;
 - negative fixtures: missing required field, additional field, invalid ref,
