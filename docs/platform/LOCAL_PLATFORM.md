@@ -47,6 +47,29 @@ pnpm-пути GNU MRI script не используются. Builder провер
 compatibility probe непосредственно под Node `26.8.1`. Final image получает
 только shared libraries и их runtime-зависимости, без compiler toolchain.
 
+### Кэш повторной сборки
+
+Corepack/pnpm устанавливаются до копирования проекта. Установка с frozen
+lockfile и компиляция Kafka addon зависят только от корневых package-файлов и
+`apps/*/package.json`, `packages/*/package.json`. Stage `workspace-manifests`
+сохраняет эти пути автоматически; добавлять новый сервис в Dockerfile не нужно.
+Исходники, TypeScript-конфигурация и runtime-конфигурация копируются после
+зависимостей. Их изменение повторяет compatibility probe, typecheck и упаковку
+выбранного runtime, сохраняя кэш установки и native build.
+
+Для проверки использовать один и тот же builder: выполнить команду сборки выше,
+изменить исходник и повторить её с `--progress plain`. Шаг установки зависимостей
+и native addon должен показать `CACHED`, а typecheck — выполниться заново.
+Изменение зависимости в workspace manifest без обновления lockfile должно
+завершить сборку ошибкой frozen lockfile. Первая сборка с пустым кэшем по-прежнему
+компилирует native зависимости; `--no-cache` отключает это ускорение.
+
+Локальный замер 2026-09-05: `node tools/docker-build.mjs --target build
+--progress plain <context>` без экспорта образа занял 75,56 с до изменения
+Dockerfile и 33,74 с после прогрева новых слоёв и правки исходника. Это один
+замер на том же builder с уже собранной `librdkafka`, около 2,2 раза быстрее;
+холодная сборка и время загрузки образа в Docker этим сравнением не измеряются.
+
 ## Подготовка конфигурации и секретов
 
 В Git хранятся только `config/platform.yaml` и SOPS-encrypted
