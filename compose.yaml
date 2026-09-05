@@ -71,8 +71,10 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_NUM_PARTITIONS: "3"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
     volumes:
       - ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/kafka:/etc/kafka/secrets:ro
+      - kafka_data:/var/lib/kafka/data
     networks:
       - coffee_kafka_event
     healthcheck:
@@ -543,3 +545,6 @@ networks:
   coffee_provider_egress:
     name: coffee_provider_egress
     internal: false
+
+volumes:
+  kafka_data:

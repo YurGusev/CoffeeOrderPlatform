@@ -3,6 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": {".": "./dist/index.js"},
-  "types": "./dist/index.d.ts"
+  "exports": {
+    ".": "./dist/index.js",
+    "./owner": "./dist/owner.js"
+  },
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "pg": "8.23.0",
+    "pg-copy-streams": "7.0.0",
+    "@coffee-platform/config": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1",
+    "@types/pg-copy-streams": "1.2.5"
+  }
 }

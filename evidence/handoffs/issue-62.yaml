@@ -1,0 +1,770 @@
+issue: 62
+baseCommit: e1272a22ce6d4c124ec463ad5aefa1997d577a99
+inputs:
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: evidence/handoffs/issue-60.yaml
+    sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+    sha256: 108de7042b7546cae60e4fe807fe1bb8640d464e37caed1bb5a147f0c1abc141
+  - issue: 61
+    acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+outputs:
+  - artifact: config/platform.schema.json
+    sha256: 045b67771ce82f961e912f41dededc8bc030d8b8a873286e23ef8677f2a100b4
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: config/platform.yaml
+    sha256: 31ffc550b502c1c76661e9853260d9b611808a9d7c53d4483c375bb54eea576d
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: config/toolchain-versions.json
+    sha256: 3c7bebe14009e1ec59eedbd4b54ee90b18c346d5fcf5a1471352fd78a153eb48
+    consumers:
+      - 63
+  - artifact: config/toolchain-versions.schema.json
+    sha256: daaf723820cbdf9cc89c46195e0da40c5ae958fc64f4f4c5de3dd5b855bf4548
+    consumers:
+      - 63
+  - artifact: docs/launch/05_DATA_OWNERSHIP.md
+    sha256: 22efaeddc8d46a8e06d63913cbf61bbfd41877138c7d48054811e24148c6b8f9
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: docs/launch/06_EVENTS_AND_RECOVERY.md
+    sha256: 1b3ad044333fe3a86931cec71e456f8d5c525ccfc3f89ac4b515ddf76b3d8863
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: e8b11e4f5da1b02d16488fe34f42fe394be215f59e6633da28eb053b4ae465ef
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: f10461a37b4925e9e08fedc5448c7642f036f92dd3efe50bda933b931807177f
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: docs/platform/LOCAL_PLATFORM.md
+    sha256: b2dde49a3e9c40f56ba40b179d6af9d6db17f2dafe2f85c36c1265c453baa88f
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: packages/platform-config/src/index.ts
+    sha256: e5ea692a815b66f865653f405d5a1b0fa49ca806913668c71f57b7decd5be8d1
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: packages/platform-database/src/index.ts
+    sha256: 7d4cb1125efac363bcff6244f364a82a6dbe200ddac172e8355dbde5d6c0655e
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: packages/platform-idempotency/src/index.ts
+    sha256: 79d15bba99d679e8dd2aa095a02735b017a5f7a1db9ff129433c9729b98e67ca
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: packages/platform-migrations/src/index.ts
+    sha256: d40b74bf3f06b3111ba3f19b64fc48f0d05a27b5122f1fd641171a181e0ec656
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: packages/platform-runtime/src/index.ts
+    sha256: e936117b45f6e9d5e8c79c931cdd005f64483f21846d397ffda642448ad4a319
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: packages/platform-testing/test/platform-packages.test.mjs
+    sha256: 6dff08c9e533c87e51cb41ca375d7373decbd12674f3c8a0b8dd8e221fa233f4
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: scripts/check-architecture.mjs
+    sha256: 3be0f609984e956801466955babd0334ba097d07785af0dac5edbebfdd7cadc3
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: 82e28002b896751d95d513ee1d6c97eee712483ffb42f96b225db58522f6ad79
+    consumers:
+      - 63
+  - artifact: scripts/config-lib.mjs
+    sha256: 6d65feb00a8e3bb5fdc5f6067d54abb0d1134b3258df77e57fa92faa26acb969
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: scripts/db-live-proof.mjs
+    sha256: 2484733d9cd4a2f2d4b0bee183130f0a9f62fab35471b0be6eba35ccf48f5644
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: scripts/db-smoke.mjs
+    sha256: 5839d2031df6661b70afc1137edfab387eeebe2fff2f68b3466b3184fa6f71b4
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: 759b6746d65f7f62db097f86680f4a610c159025d7b83f33fb938bb7500ccb77
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: tests/database/db-bootstrap.test.mjs
+    sha256: fd8afb80c85262b896629fde0c7da4df95958b24aecd2a7831f1db11d9e70878
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: tests/database/live-db-proof.test.mjs
+    sha256: 054720800e39599fa44b92ea537c004a5f8bc6f2695b6eee236d0ba1714ad8c8
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: tests/runtime/lifecycle.test.mjs
+    sha256: ad874d60b1fcfbc83580dae7dbff85697581d39ee3b8c07180635c473484ff89
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: tools/compose-smoke.mjs
+    sha256: e1eece7984f061da43c732dc4b45555a167c6c245e1a65da8632daadc9acc3f0
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: packages/platform-database/src/internal.ts
+    sha256: 5d6a8c6a27a4d835d68f776c1e861c6afa9facabced2f30b6e2512cdd84fab93
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+  - artifact: packages/platform-database/src/owner.ts
+    sha256: c9b8b059ff8b3fb810b9ce6389e2110e26fa7587b62bde19d2a33a26fd9d5bd7
+    consumers:
+      - 5
+      - 6
+      - 7
+      - 8
+      - 10
+      - 63
+      - 64
+transactionContract:
+  entrypoint: withTransaction(database, {mode, signal?, correlationId?, causationId?, traceparent?}, callback)
+  opaqueBoundary: >-
+    Database предоставляет resource/readiness/metrics; Transaction — только state(). Native client не экспортируется.
+    Fixed parameterized statements и COPY доступны owner infrastructure/repositories через database/owner; DDL —
+    checksum runner.
+  runtimeComposition: >-
+    configure(app, signal, database?) получает тот же единственный owner pool. Startup failure уничтожает созданный
+    pool.
+  states:
+    - NotStarted
+    - Active
+    - Committing
+    - Committed
+    - RollingBack
+    - RolledBack
+    - Unknown
+  outcomeTable:
+    - observation: Checkout failure/abort до BEGIN
+      result: Typed DB error; callback не запущен
+      release: Late acquired connection уничтожается
+    - observation: Ответный command tag COMMIT
+      result: Committed; callback result; разрешён acceptDurable()
+      release: Release здорового connection
+    - observation: Typed failure до COMMIT + подтверждённый ROLLBACK
+      result: RolledBack; исходная typed failure
+      release: Release, broken/pending connection уничтожается
+    - observation: Abort до COMMIT + подтверждённый ROLLBACK
+      result: RolledBack; DB_INTERRUPTED
+      release: Release, broken/pending connection уничтожается
+    - observation: Потерянный/blackhole ответ COMMIT, неизвестный tag
+      result: Unknown; TRANSACTION_OUTCOME_UNKNOWN
+      release: Destroy; без ROLLBACK, retry или reacquire
+    - observation: ROLLBACK без подтверждения после failure/abort
+      result: Unknown; DB_ROLLBACK_FAILED; previousCode сохраняется
+      release: Destroy; отдельная owner reconciliation
+    - observation: Перехваченная SQL error; tag ROLLBACK на COMMIT
+      result: RolledBack; DB_TRANSACTION_ROLLED_BACK; owner/Completed откатились, ложного Replay нет
+      release: Release здорового connection
+    - observation: Использование terminal/foreign transaction, незавершённые statement wrappers
+      result: DB_INVALID_TRANSITION
+      release: SQL через terminal context не отправляется
+  deadlinesMs:
+    checkout: 250
+    transaction: 10000
+    terminal: 2000
+    interactiveStatement: 1500
+    backgroundStatement: 5000
+    lock: 250
+    idleTransaction: 30000
+    shutdownGrace: 30000
+  budgetProof: >-
+    250 + 10000 + 2 × 2000 = 14250 < 30000. Request/shutdown abort действует до COMMIT; начатый COMMIT использует свой
+    terminal budget.
+  admission:
+    steady: 56
+    oneRollout: 8
+    reserved: 32
+    total: 96
+    maxConnections: 96
+    rolloutReplicas: 1
+    ordersPoolMax: 4
+    proof: >-
+      Declared replicas сверены с database-role-map; превышение блокирует parse/startup. Нет автоматического увеличения
+      server/pools.
+  recovery: >-
+    Никакого automatic SQL retry после unknown. Новый process/store читает durable owner truth отдельной transaction.
+    Deadline сам по себе не доказывает rollback.
+  ssl: >-
+    prefer: TLS сначала, plaintext fallback только при явном отказе SSL negotiation до authentication/BEGIN. Ошибка
+    certificate не повторяется.
+idempotencyContract:
+  identity:
+    - actorRef
+    - scope
+    - key
+  sqlIdentity:
+    - actor_ref
+    - scope
+    - idempotency_key
+  hash: SHA-256 canonical JSON; stable object keys; array order сохраняется; non-JSON значения запрещены
+  decisions:
+    - Acquired
+    - Replay
+    - Conflict
+    - InProgress
+  atomicity: >-
+    acquire + owner writes + complete выполняются в одной opaque transaction. complete разрешён только после acquire тем
+    же store в том же context.
+  lease: >-
+    Активный и expired Acquired остаются InProgress; expired не даёт takeover unknown effect. Completed возвращает
+    сохранённый terminal response, включая JSON null/string.
+  sql: |-
+    CREATE TABLE <owner_schema>.idempotency_records (
+      actor_ref text NOT NULL,
+      scope text NOT NULL,
+      idempotency_key text NOT NULL,
+      request_hash char(64) NOT NULL CHECK (request_hash ~ '^[0-9a-f]{64}$'),
+      state text NOT NULL CHECK (state IN ('Acquired', 'Completed')),
+      lease_owner text NOT NULL,
+      lease_until timestamptz NOT NULL,
+      created_at timestamptz NOT NULL,
+      expires_at timestamptz NOT NULL,
+      completed_at timestamptz,
+      response_status integer,
+      response_body jsonb,
+      resource_ref text,
+      PRIMARY KEY (actor_ref, scope, idempotency_key),
+      CHECK (expires_at >= lease_until AND lease_until > created_at),
+      CHECK ((state = 'Acquired' AND response_status IS NULL AND completed_at IS NULL)
+        OR (state = 'Completed' AND response_status BETWEEN 100 AND 599
+          AND response_body IS NOT NULL AND completed_at IS NOT NULL))
+    );
+  ownerMigrations:
+    - issue: 5
+      owner: Customer
+      table: idempotency_records
+    - issue: 7
+      owner: Pricing
+      table: pricing_idempotency_records
+    - issue: 8
+      owner: Orders
+      table: idempotency_records
+    - issue: 10
+      owner: Integration
+      detail: Owner operation journal; idempotency table только вместе с требующим её command и grants.
+  migrationContract: >-
+    applyMigrations: owner schema ledger, advisory xact lock, immutable checksum и точный applied prefix. Drift/missing
+    checksum/orphan/non-prefix/DDL failure останавливают запуск. Ledger+DDL+checksum атомарны; отдельная migrator role.
+  copyContract: >-
+    Fixed owner schema/table/columns, Node pipeline/backpressure + AbortSignal/budget. Source уничтожается, raw
+    stream/client не выходит наружу.
+consumers:
+  '63': >-
+    Inbox/Outbox tables, relay и Kafka delivery здесь не реализованы. Использовать opaque Transaction и durable SQL
+    IdempotencyStore в owner transaction; добавить свои lifecycle/readiness hooks.
+  '64':
+    codes:
+      - DB_POOL_EXHAUSTED
+      - DB_INVALID_CONFIGURATION
+      - DB_CONNECTION_LOST
+      - DB_QUERY_TIMEOUT
+      - DB_QUERY_FAILED
+      - DB_INTERRUPTED
+      - DB_ROLLBACK_FAILED
+      - TRANSACTION_OUTCOME_UNKNOWN
+      - DB_INVALID_TRANSITION
+      - DB_TRANSACTION_ROLLED_BACK
+      - DB_STOPPED
+    gauges:
+      - active
+      - idle
+      - waiting
+      - pending
+    counter: saturationTotal
+    boundedLabels:
+      - configured runtime
+      - listed machine code
+    correlationFields:
+      - correlationId
+      - causationId
+      - traceparent
+    redaction: >-
+      Не включать SQL, parameters, credentials, payload или correlation identifiers в metric labels. Error message равен
+      machine code; sqlState и previousCode безопасны.
+verification:
+  - command: pnpm authority:check
+    result: passed
+    exitCode: 0
+    invokedBy: pnpm check
+  - command: pnpm versions:check
+    result: passed
+    exitCode: 0
+    invokedBy: pnpm check
+  - command: pnpm architecture:check
+    result: passed
+    exitCode: 0
+    invokedBy: pnpm check
+  - command: pnpm config:check
+    result: passed
+    exitCode: 0
+    invokedBy: pnpm check
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    invokedBy: pnpm check
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+    invokedBy: pnpm check
+  - command: pnpm test
+    result: passed
+    exitCode: 0
+    invokedBy: pnpm check
+    detail: '123 tests: 122 passed, 0 failed, 1 skipped (live opt-in); 13008.118459 ms'
+  - command: pnpm db:smoke
+    result: passed
+    exitCode: 0
+    detail: 50 structural checks; не live failure proof
+  - command: COFFEE_DB_LIVE_PROOF=1 node --test tests/database/live-db-proof.test.mjs
+    result: passed
+    exitCode: 0
+    detail: 2 passed, 0 failed, 0 skipped; 9098.398101 ms
+  - command: node scripts/db-live-proof.mjs
+    result: passed
+    exitCode: 0
+    detail: Disposable pinned PostgreSQL 17.11; evidence ниже
+  - command: git diff --check
+    result: passed
+    exitCode: 0
+  - command: pnpm test:compose-smoke --database-proof
+    result: passed
+    exitCode: 0
+    detail: >-
+      Полная сборка текущих source, customer-service: ready 200 → 503 → 200, live/metrics 200, limited owner role,
+      graceful exit 0; cleanup подтверждён.
+  - command: pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs
+    result: passed
+    exitCode: 0
+livePostgresProof:
+  schemaVersion: 1
+  runId: mto000fj677bc2ff7857
+  image: postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+  serverVersion: '17.11'
+  serverIdentitySha256: 7eb52735d2ba3766837253f07461f32943a6175fb88863bb79288406bfb74821
+  bootstrap:
+    firstCreatedDatabaseCount: 5
+    secondExistingDatabaseCount: 5
+    idempotent: true
+  roles:
+    migratorCount: 5
+    runtimeCount: 10
+    hardenedRoleCount: 15
+  permissions:
+    ownWriteCount: 10
+    foreignSelectDeniedCount: 40
+    foreignInsertDeniedCount: 40
+  legacy:
+    databases:
+      - coffeeorderdb
+      - coffeeorder_staging
+    unchanged: true
+  foundation:
+    transaction:
+      code: TRANSACTION_OUTCOME_UNKNOWN
+      durableCommit: true
+      durableReplayAfterRestart: true
+      rollbackAfterCommit: false
+      wallClockMs: 426
+      boundedByMs: 3000
+      metricsBeforeStop:
+        active: 0
+        idle: 0
+        waiting: 0
+        saturationTotal: 0
+        pending: 0
+      closedPeers: 1
+      closedPeersBeforeStop: 1
+      commands:
+        - SELECT 1
+        - BEGIN
+        - SET LOCAL LOCK_TIMEOUT = '250MS'
+        - SET LOCAL STATEMENT_TIMEOUT = '1000MS'
+        - SET LOCAL IDLE_IN_TRANSACTION_SESSION_TIMEOUT = '30000MS'
+        - COMMIT
+    rollback:
+      code: DB_ROLLBACK_FAILED
+      destroyed: true
+      wallClockMs: 376
+      boundedByMs: 3000
+      metricsBeforeStop:
+        active: 0
+        idle: 0
+        waiting: 0
+        saturationTotal: 0
+        pending: 0
+      closedPeers: 1
+      closedPeersBeforeStop: 1
+      commands:
+        - SELECT 1
+        - BEGIN
+        - SET LOCAL LOCK_TIMEOUT = '250MS'
+        - SET LOCAL STATEMENT_TIMEOUT = '1000MS'
+        - SET LOCAL IDLE_IN_TRANSACTION_SESSION_TIMEOUT = '30000MS'
+        - ROLLBACK
+    caughtSqlRollback:
+      code: DB_TRANSACTION_ROLLED_BACK
+      nextCall: acquired
+      falseReplay: false
+    idempotency:
+      decisions:
+        - acquired
+        - replay
+      acquiredCount: 1
+      replayable: true
+      conflict: true
+      expiredLeaseRequiresRecovery: true
+      atomicOwnerMutation: true
+      terminalReplayBodies:
+        - null
+        - plain-string
+    migration:
+      driftRejected: true
+      applied: 0001_issue62_live
+    copy:
+      code: DB_INTERRUPTED
+      rowsAfterRollback: 0
+      sourceDestroyed: true
+      sourceYielded: 9
+    readiness:
+      readyBefore: true
+      readyDuring: true
+      readyAfter: true
+      secondCode: DB_POOL_EXHAUSTED
+      saturationTotal: 1
+      activeAfter: 0
+      readyAfterDestroy: false
+      transientSaturationSeparate: true
+  cleanup:
+    containerName: coffee-issue3-db-proof-mto000fj677bc2ff7857
+    containerRemoved: true
+nonCooperativeProof:
+  test: database non-cooperative callback remains owned for runtime fail-stop
+  command: pnpm test
+  fixtureShutdownGraceMs: 40
+  observedShutdownMs: 41.97993100000008
+  status: fail-stop
+  pending:
+    - server-close
+    - stop:database
+  detail: >-
+    Transaction завершается bounded, но native callback остаётся tracked до settlement. Runtime фиксирует fail-stop и
+    exit code 1; произвольный Promise не отменяется принудительно.
+limitations:
+  - >-
+    Полный Compose gate 15 roots с required Kafka hooks не пройден: Kafka foundation принадлежит #63. Owner-local
+    Compose proof фиксируется отдельно.
+  - >-
+    Business schemas/migrations, HTTP/provider effects, Inbox/Outbox delivery и production data не менялись. SQL tables
+    в live proof — удаляемые fixtures.
+  - >-
+    При блокировке самого event loop fail-stop обеспечивает внешний supervisor. Локальные wall-clock результаты не
+    являются production SLA.
+  - >-
+    require/verify-full fail closed с проверкой certificate; scoped Compose использует prefer и PostgreSQL без TLS. TLS
+    certificate refusal покрыт unit test, отдельный live TLS PG не запускался.
+acceptanceAudit:
+  - items:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 6
+      - 9
+    proof:
+      - 'inputs: accepted #60/#61'
+      - docs/adr/ADR-0025-fastify-launch-recovery.md
+      - docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    detail: 'Effect #52 superseded; #4 не prerequisite; Inbox/Outbox остаются #63.'
+  - items:
+      - 7
+      - 10
+      - 12
+      - 13
+      - 14
+      - 15
+      - 16
+      - 17
+      - 18
+      - 19
+      - 20
+      - 21
+      - 28
+      - 30
+      - 31
+      - 37
+      - 38
+      - 39
+    proof:
+      - packages/platform-database/src/index.ts
+      - packages/platform-database/src/internal.ts
+      - packages/platform-database/src/owner.ts
+      - packages/platform-testing/test/platform-packages.test.mjs
+      - scripts/check-architecture.mjs
+      - tests/architecture/checks.test.mjs
+      - packages/platform-runtime/src/index.ts
+      - tests/runtime/lifecycle.test.mjs
+    detail: >-
+      Opaque context, finite terminal operations, destruction, safe codes, readiness, COPY, caught SQL ROLLBACK и
+      non-cooperative fail-stop.
+  - items:
+      - 8
+      - 23
+      - 24
+      - 25
+      - 26
+      - 29
+      - 35
+      - 36
+    proof:
+      - packages/platform-idempotency/src/index.ts
+      - packages/platform-testing/test/platform-packages.test.mjs
+      - docs/launch/05_DATA_OWNERSHIP.md
+      - scripts/db-live-proof.mjs
+      - tests/database/live-db-proof.test.mjs
+    detail: >-
+      Unique actor/scope/key, canonical hash, durable decisions, tx-bound Complete, no expired takeover. Production
+      InMemory удалён.
+  - items:
+      - 11
+    proof:
+      - config/toolchain-versions.json
+      - config/toolchain-versions.schema.json
+      - packages/platform-database/package.json
+      - pnpm-lock.yaml
+      - scripts/check-toolchain-versions.mjs
+    detail: pg 8.23.0 сохранён; scoped pg-copy-streams 7.0.0 и exact types pins проверены versions:check.
+  - items:
+      - 22
+      - 33
+    proof:
+      - config/platform.yaml
+      - packages/platform-config/src/index.ts
+      - scripts/config-lib.mjs
+      - tests/database/db-bootstrap.test.mjs
+    detail: 'Реальные role-map DB claims сверены тестом; 56 + 8 + 32 = 96. Role map не переписан: роли не менялись.'
+  - items:
+      - 27
+      - 32
+      - 40
+    proof:
+      - packages/platform-migrations/src/index.ts
+      - scripts/db-live-proof.mjs
+      - tests/database/live-db-proof.test.mjs
+      - packages/platform-testing/test/platform-packages.test.mjs
+    detail: >-
+      Checksum prefix и migration atomicity, native concurrent acquire, restart reconciliation, COPY abort; только
+      disposable fixtures.
+  - items:
+      - 34
+      - 51
+      - 52
+      - 53
+      - 54
+    proof:
+      - docs/launch/05_DATA_OWNERSHIP.md
+      - docs/launch/06_EVENTS_AND_RECOVERY.md
+      - docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+      - docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    detail: 'Контракты и текущий handoff содержат outcome matrix, deadlines, owner migrations, #63/#64 и live measurements.'
+  - items:
+      - 41
+      - 42
+      - 43
+      - 44
+      - 45
+      - 46
+      - 47
+      - 48
+      - 50
+    proof:
+      - verification
+    detail: Точные реально выполненные команды и отдельное live evidence выше.
+  - items:
+      - 55
+      - 56
+      - 57
+      - 58
+    proof:
+      - git diff относительно baseCommit
+      - scripts/check-architecture.mjs
+    detail: >-
+      Нет production business tables/routes/provider effects/Kafka delivery, cross-owner SQL, blind retry или Effect
+      implementation.
+  - items:
+      - 59
+    proof:
+      - baseCommit
+    detail: Рабочая ветка feature/62-postgres-idempotency создана от accepted develop e1272a2.
+  - items:
+      - 49
+    proof:
+      - tools/compose-smoke.mjs
+      - liveComposeProof
+    detail: '--database-proof выбирает owner-local DB path. Полная сборка текущего source + PASS; Kafka gate не заявлен.'
+liveComposeProof:
+  command: pnpm test:compose-smoke --database-proof
+  project: coffee-compose-smoke-516722-ce2d0bf4
+  imageId: sha256:be4b61b4de83314ef12d182a7a372aaecd0fdaf5e60497312db79b86d456580c
+  imageCreated: '2026-09-05T06:32:37.234171947Z'
+  freshSourceBuild: true
+  runtime: customer-service
+  readiness:
+    - 200
+    - 503
+    - 200
+  live: 200
+  metrics: 200
+  limitedOwnerRole: true
+  gracefulExitCode: 0
+  cleanup: Созданные контейнеры, volumes, project-scoped сети и tmpfs удалены; docker ps/network ls по project prefix пусты.
+  fullKafkaGate: false

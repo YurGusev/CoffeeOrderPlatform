@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -496,4 +496,32 @@ Draft202012Validator(profile_schema).validate(profile)
     encoding: "utf8",
   });
   assert.equal(result.status, 0, output(result));
+});
+
+void test("RED BOUND-DB-CLIENT: handlers cannot import raw pg or SQL capabilities", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-db-boundary-"));
+  const directory = join(root, "apps/orders-service/src");
+  try {
+    await mkdir(directory, {recursive: true});
+    for (const moduleName of ["pg", "pg-copy-streams", "@coffee-platform/database/owner", "../../../packages/platform-database/dist/internal.js", "@effect/sql-pg"]) {
+      await writeFile(join(directory, "handler.ts"), `import * as forbidden from ${JSON.stringify(moduleName)};\nvoid forbidden;\n`);
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(output(result), /BOUND-DB-CLIENT/);
+    }
+  } finally {await rm(root, {recursive: true, force: true});}
+});
+
+void test("RED BOUND-KAFKA-CLIENT: handlers cannot bypass bounded delivery", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-kafka-boundary-"));
+  const directory = join(root, "apps/orders-service/src");
+  try {
+    await mkdir(directory, {recursive: true});
+    for (const moduleName of ["@confluentinc/kafka-javascript", "@confluentinc/kafka-javascript/promisified", "../../../packages/platform-kafka-runtime/dist/native.js"]) {
+      await writeFile(join(directory, "handler.ts"), `import * as forbidden from ${JSON.stringify(moduleName)};\nvoid forbidden;\n`);
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(output(result), /BOUND-KAFKA-CLIENT/);
+    }
+  } finally {await rm(root, {recursive: true, force: true});}
 });

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import {execFileSync} from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { load as parseYaml } from "js-yaml";
 
 import {
   assertBootstrapInputs,
@@ -16,8 +18,15 @@ import {
 import {
   buildSmokeCases,
   runDatabaseSmoke,
+  validateDeliverySqlContract,
   validateSmokeTarget,
 } from "../../scripts/db-smoke.mjs";
+import {
+  assertDatabaseAdmissionBudget,
+  loadPlatformConfig,
+  parsePlatformConfig,
+  PlatformConfigError,
+} from "../../packages/platform-config/src/index.ts";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const OWNERSHIP_PATH = join(ROOT, "config/database-ownership.json");
@@ -47,6 +56,81 @@ void test("GREEN: роль-карта совпадает с ownership и сод�
   assert.equal(plan.length, 5);
   assert.equal(JSON.stringify(plan).includes("coffeeorderdb"), false);
   assert.equal(JSON.stringify(plan).includes("PASSWORD"), false);
+});
+
+void test("GREEN/RED: DB admission reserves one serial rollout without changing pool or server limits", async () => {
+  const config = await loadPlatformConfig(
+    join(ROOT, "config/platform.yaml"),
+    (text) => parseYaml(text, { json: true }),
+  );
+  const declaredOwners = roleMap.databases.flatMap(database => database.runtimeRoles.map(role => ({runtime: role.runtime, database: database.name})));
+  assert.deepEqual(declaredOwners.map(owner => owner.runtime).sort(), Object.entries(config.services).filter(([, service]) => service.database !== null).map(([runtime]) => runtime).sort());
+  for (const owner of declaredOwners) assert.equal(config.services[owner.runtime].database, owner.database);
+  const budget = assertDatabaseAdmissionBudget({
+    services: config.services,
+    postgres: config.postgres,
+  });
+  assert.deepEqual(budget, {
+    steadyConnections: 56,
+    rolloutConnections: 8,
+    reservedConnections: 32,
+    requiredConnections: 96,
+    maxConnections: 96,
+    largestPool: 8,
+  });
+  const originalMaxConnections = config.postgres.maxConnections;
+  const originalPoolMax = Object.fromEntries(
+    Object.entries(config.services).map(([runtime, service]) => [
+      runtime,
+      service.dbPool?.max ?? null,
+    ]),
+  );
+  assert.throws(
+    () =>
+      assertDatabaseAdmissionBudget({
+        services: config.services,
+        postgres: {...config.postgres, rolloutReplicas: 2},
+      }),
+    (error) =>
+      error instanceof PlatformConfigError &&
+      /DB admission budget 104 exceeds maxConnections 96/u.test(error.message),
+  );
+  assert.equal(config.postgres.maxConnections, originalMaxConnections);
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(config.services).map(([runtime, service]) => [
+        runtime,
+        service.dbPool?.max ?? null,
+      ]),
+    ),
+    originalPoolMax,
+  );
+  assert.equal(config.services["orders-service"].dbPool.max, 4);
+  assert.equal(config.services["orders-service"].dbPool.terminalTimeoutMs, 2000);
+  assert.equal(config.services["orders-service"].dbPool.transactionTimeoutMs, 10000);
+  const source = parseYaml(
+    await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
+    {json: true},
+  );
+  assert.throws(
+    () =>
+      parsePlatformConfig({
+        ...source,
+        services: {
+          ...source.services,
+          "orders-service": {
+            ...source.services["orders-service"],
+            dbPool: {
+              ...source.services["orders-service"].dbPool,
+              transactionTimeoutMs: source.platform.shutdownGraceMs,
+            },
+          },
+        },
+      }),
+    (error) =>
+      error instanceof PlatformConfigError &&
+      /DB timeout должен быть меньше platform\.shutdownGraceMs/u.test(error.message),
+  );
 });
 
 void test("RED: bootstrap требует admin URL, точную identity и полный secret bundle", () => {
@@ -217,6 +301,11 @@ void test("GREEN: bootstrap executes an idempotent plan through an injected clie
 });
 
 void test("GREEN: smoke matrix is isolated and checks every own/cross-owner pair", () => {
+  const offline = JSON.parse(execFileSync(process.execPath, [join(ROOT, "scripts/db-smoke.mjs")], {encoding: "utf8"}));
+  assert.deepEqual(offline.roleCases, buildSmokeCases(roleMap, ownership));
+  assert.deepEqual(offline.structural, validateDeliverySqlContract());
+  assert.equal(offline.structural.liveDatabase, false);
+  assert.equal(offline.structural.realKafka, false);
   const cases = buildSmokeCases(roleMap, ownership);
   assert.equal(cases.filter((item) => item.kind === "own-write").length, 10);
   assert.equal(

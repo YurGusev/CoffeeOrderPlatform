@@ -57,6 +57,78 @@ void test("GREEN: canonical config and encrypted secrets pass the foundation che
   assert.match(result.stdout, /15 runtimes/);
 });
 
+void test("GREEN: Kafka access is directional and uses the launch group mapping", async () => {
+  const document = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+    {json: true},
+  );
+  assert.deepEqual(document.services["orders-aroma-preparation"].kafka.producers, [
+    "coffee.aroma.cart.commands.v1",
+    "coffee.realtime.invalidate.v1",
+  ]);
+  assert.deepEqual(document.services["orders-aroma-preparation"].kafka.consumers, [
+    {groupId: "orders-catalog-mapping-v2", topics: ["coffee.catalog.mapping.v2"], processing: "durable"},
+    {groupId: "orders-aroma-preparation-v1", topics: ["coffee.orders.lifecycle.v1"], processing: "durable"},
+    {groupId: "orders-aroma-projection-v1", topics: ["coffee.aroma.cart.events.v1"], processing: "durable"},
+  ]);
+  assert.deepEqual(document.services["realtime-gateway"].kafka.consumers, [
+    {groupId: "realtime-gateway-v1", topics: ["coffee.realtime.invalidate.v1"], processing: "realtime"},
+  ]);
+});
+
+void test("RED: legacy Kafka mode/topics/groups path is rejected", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), {json: true});
+    document.services["realtime-gateway"].kafka = {
+      mode: "consumer",
+      topics: ["coffee.realtime.invalidate.v1"],
+      groups: ["realtime-gateway-v1"],
+    };
+    await writeFile(path, dumpYaml(document), "utf8");
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-SCHEMA/);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+void test("RED: realtime processing is restricted to realtime-gateway", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), {json: true});
+    document.services["orders-service"].kafka.consumers = [{
+      groupId: "realtime-gateway-v1",
+      topics: ["coffee.realtime.invalidate.v1"],
+      processing: "realtime",
+    }];
+    await writeFile(path, dumpYaml(document), "utf8");
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-KAFKA-REALTIME|CONFIG-KAFKA-DIRECTION/);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+void test("RED: realtime consumer must use the launch group id", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), {json: true});
+    document.services["realtime-gateway"].kafka.consumers[0].groupId = "realtime-gateway-replica";
+    await writeFile(path, dumpYaml(document), "utf8");
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-KAFKA-(REALTIME|DIRECTION)/);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
 void test("RED: unknown platform key fails closed before runtime startup", async () => {
   const root = await configRoot();
   try {

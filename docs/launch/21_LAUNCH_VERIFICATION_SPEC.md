@@ -250,7 +250,113 @@ process-level fail-stop и снятие единственной пары signal
 `fail-stop` evidence и принудительное закрытие зарегистрированных ресурсов,
 а не только успешное завершение Promise ожидания.
 
-## Frontend recovery admission #119
+## 14. PostgreSQL foundation evidence #62
+
+Unit state-machine и fake-driver failures выполняются в существующем
+`packages/platform-testing/test/platform-packages.test.mjs`; они не заменяют
+реальный PostgreSQL. `tests/database/db-bootstrap.test.mjs` проверяет fleet
+budget с резервом/rollout и отсутствие автоматического изменения лимитов.
+
+Live commands: `COFFEE_DB_LIVE_PROOF=1 node --test
+ tests/database/live-db-proof.test.mjs` и `node scripts/db-live-proof.mjs`.
+Harness создаёт disposable PostgreSQL фиксированной версии, временные owner
+fixtures и credentials в памяти, затем удаляет созданный контейнер.
+Обязательные сценарии: concurrent acquire/replay/conflict, rollback при
+перехваченной SQL-ошибке, потерянный ответ COMMIT при фактически записанном owner
+state и восстановление durable response после reconnect, потерянный ответ
+ROLLBACK, checksum drift, COPY interruption и pool/health recovery.
+
+TCP proxy направляет terminal command настоящему серверу и удерживает ответ;
+измеряются wall-clock bound, destroy и отсутствие ROLLBACK после COMMIT.
+Timeout не считается доказательством rollback. Отдельный unit scenario
+не cooperative callback требует `fail-stop` с `stop:database` в pending.
+
+`pnpm test:compose-smoke --database-proof` проверяет owner-local pool/readiness
+в изолированном Compose окружении с disposable PG. Общий Kafka readiness gate
+не подменяется этим scoped proof и остаётся зависимым от #63. Structural
+`pnpm db:smoke` доказывает bootstrap/grants contract, не blackhole recovery.
+Итоговые команды, измерения и SHA-256 передаются в
+`evidence/handoffs/issue-62.yaml`; они не заменяют launch G10/G11/G13/G14.
+
+## 15. Kafka/Inbox/Outbox foundation evidence #63
+
+Эта секция определяет evidence для bounded delivery foundation. Машинные
+результаты выполненных DB/Compose проверок, команды и ограничения опубликованы
+в `evidence/handoffs/issue-63.yaml`; принятие подтверждается merge в GitHub.
+Пропущенный live/Compose сценарий не является PASS.
+
+### 15.1 Structural protocol checks
+
+На одном commit SHA должны пройти `pnpm authority:check`,
+`pnpm architecture:check`, `pnpm config:check`, `pnpm lint`,
+`pnpm typecheck`, `pnpm test` и `git diff --check`. Architecture/config checks
+должны отвергать Effect Kafka imports, legacy `mode`/`groups`, неизвестный
+topic/group и любой `processing: realtime`, кроме тройки
+`realtime-gateway`/`coffee.realtime.invalidate.v1`/`realtime-gateway-v1`.
+
+Детерминированный suite обязан зафиксировать:
+
+1. Один assigned partition обрабатывает записи в offset order с одним owner
+   handler in flight; несколько partitions используют общий `maxInFlight`, а
+   queued + active не превышают `queueCapacity`.
+2. Decode и transport validation выполняются до Inbox. Невалидная durable
+   запись попадает в owner quarantine и получает offset commit только после
+   известного quarantine COMMIT; ошибка quarantine оставляет redelivery.
+3. `Inbox.begin` → owner state/Outbox → `markProcessed` — одна transaction;
+   duplicate и hash conflict не вызывают handler. DB rollback или
+   `TransactionOutcomeUnknown` не вызывают offset commit.
+4. Broker offset commit выполняется после known DB COMMIT. Неизвестный commit
+   даёт `OFFSET_COMMIT_OUTCOME_UNKNOWN`, останавливает affected partition,
+   вызывает bounded revoke/restart/reassignment и не пропускает следующий
+   unsafe record в том же worker.
+5. Revoke и SIGTERM прекращают intake, boundedly завершают текущую
+   transaction/ack, закрывают consumer/producer и уничтожают зависший client;
+   non-cooperative Promise завершается process-level fail-stop, а не обещанием
+   принудительной отмены.
+6. Outbox сохраняет исходный `messageId` и payload hash, sequence одного
+   aggregate публикуется через barrier `n → n+1`, разные aggregates не блокируют
+   друг друга; crash после broker ack до finalize восстанавливает lease без
+   потери строки или blind retry unsafe effect.
+
+### 15.2 Live DB/Kafka and retention proof
+
+Структурная команда `pnpm db:smoke` проверяет owner-local bootstrap/grants и не
+заменяет PostgreSQL failure proof. Обязательные disposable DB сценарии
+запускаются командами `COFFEE_DB_LIVE_PROOF=1 node --test
+tests/database/live-db-proof.test.mjs` и `node scripts/db-live-proof.mjs`:
+atomic Inbox/owner/Outbox result, duplicate/conflict, DB unknown, expired lease,
+rollback и pool recovery. Evidence обязана показывать owner schema и role; raw
+credentials, payload и SQL parameters запрещены.
+
+Compose failure proof запускается через `pnpm test:compose-smoke --recovery-proof`
+и `node tools/compose-smoke.mjs --recovery-proof --project-name coffee-recovery-foundation`.
+Этот флаг включает disposable DB и native failure scenarios; обычный режим с
+SOPS сам по себе их не подтверждает. Повтор использует `--no-build` только для
+образов с теми же production sources. После
+broker acknowledgement контейнер Kafka пересоздаётся с тем же project name,
+record читается после health recovery, а named volume сохраняет только этот
+Compose project scope. Один broker и RF=1 — development limit; это не HA claim.
+Broker ack без recreate/retention evidence не считается durable delivery.
+
+### 15.3 Handoff наблюдаемости
+
+`#63` передаёт `#64` следующие bounded fields: lag по
+`runtime/groupId/topic/partition`, `assigned`, `active`, `queued`, `pending`,
+capacity, queue saturation, Inbox lease expiry, quarantine,
+duplicate/conflict, `unknownCommitTotal`, recovery и last machine code.
+Разрешённые labels ограничены config allowlists и конечными machine reasons;
+payload, envelope, message body, key, SQL, credentials, secret material и
+correlation identifiers не являются metric labels. `correlationId`,
+`causationId`, `traceparent` можно передавать как correlation fields в log/trace.
+`#64` добавляет collector/exporter и alert evaluation; #63 не подменяет G14.
+
+`#63` также передаёт business consumers typed decoder/handler boundary и
+owner-local migration contract. Business event schemas, provider semantics,
+HTTP contracts и migrations конкретного owner не считаются реализованными этим
+foundation. `#4` получает отдельный contract handoff и не становится
+циклической зависимостью Kafka delivery.
+
+## 16. Frontend recovery admission #119
 
 G05/G10/G15 принимают outputs #4/#5/#7/#8/#9 по
 [протоколу browser recovery](26_BROWSER_COMMAND_RECOVERY.md): потерянный ответ

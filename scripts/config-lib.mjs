@@ -4,6 +4,10 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { load as parseYaml } from "js-yaml";
+import {
+  assertDatabaseAdmissionBudget,
+  PlatformConfigError,
+} from "../packages/platform-config/src/index.ts";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIMES = [
@@ -23,6 +27,43 @@ const RUNTIMES = [
   "aroma-gateway",
   "realtime-gateway",
 ];
+const KAFKA_TOPICS = [
+  "coffee.catalog.snapshot.v1",
+  "coffee.catalog.mapping.v2",
+  "coffee.orders.lifecycle.v1",
+  "coffee.aroma.cart.commands.v1",
+  "coffee.aroma.cart.events.v1",
+  "coffee.realtime.invalidate.v1",
+];
+const EXPECTED_KAFKA_PRODUCERS = {
+  "edge-gateway": [], "api-public": [], "api-internal": [], web: [],
+  "customer-service": [], "catalog-service": [], "catalog-supplier-sync": [],
+  "catalog-activation-worker": ["coffee.catalog.snapshot.v1", "coffee.catalog.mapping.v2"],
+  "pricing-service": [],
+  "orders-service": ["coffee.orders.lifecycle.v1", "coffee.aroma.cart.commands.v1", "coffee.realtime.invalidate.v1"],
+  "orders-aroma-preparation": ["coffee.aroma.cart.commands.v1", "coffee.realtime.invalidate.v1"],
+  "aroma-observer": ["coffee.aroma.cart.events.v1"],
+  "aroma-convergence": ["coffee.aroma.cart.events.v1", "coffee.realtime.invalidate.v1"],
+  "aroma-gateway": [], "realtime-gateway": [],
+};
+const EXPECTED_KAFKA_CONSUMERS = {
+  "edge-gateway": [], "api-public": [], "api-internal": [], web: [],
+  "customer-service": [], "catalog-service": [], "catalog-supplier-sync": [],
+  "catalog-activation-worker": [], "pricing-service": [], "orders-service": [],
+  "orders-aroma-preparation": [
+    {groupId: "orders-catalog-mapping-v2", topics: ["coffee.catalog.mapping.v2"], processing: "durable"},
+    {groupId: "orders-aroma-preparation-v1", topics: ["coffee.orders.lifecycle.v1"], processing: "durable"},
+    {groupId: "orders-aroma-projection-v1", topics: ["coffee.aroma.cart.events.v1"], processing: "durable"},
+  ],
+  "aroma-observer": [],
+  "aroma-convergence": [
+    {groupId: "aroma-convergence-v1", topics: ["coffee.aroma.cart.commands.v1"], processing: "durable"},
+  ],
+  "aroma-gateway": [],
+  "realtime-gateway": [
+    {groupId: "realtime-gateway-v1", topics: ["coffee.realtime.invalidate.v1"], processing: "realtime"},
+  ],
+};
 const ALLOWED_SOPS_FILES = new Set([
   "secrets/platform.secrets.sops.yaml",
   "secrets/platform-secrets.schema.json",
@@ -45,108 +86,153 @@ const ALLOWED_LOCATOR_ENV_KEYS = new Set([
 const SERVICE_BASELINE = {
   "edge-gateway": {
     port: 4000,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 500,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
   "api-public": {
     port: 4050,
+    replicas: 1,
     deadlineMs: 4500,
     concurrency: 400,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
   "api-internal": {
     port: 4051,
+    replicas: 1,
     deadlineMs: null,
     concurrency: 300,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
   web: {
     port: 3000,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 500,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
   "customer-service": {
     port: 4101,
+    replicas: 1,
     deadlineMs: 2000,
     concurrency: 100,
     database: "coffee_platform_customer",
     pool: 8,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "catalog-service": {
     port: 4102,
+    replicas: 1,
     deadlineMs: 2000,
     concurrency: 150,
     database: "coffee_platform_catalog",
     pool: 8,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "catalog-supplier-sync": {
     port: 4201,
+    replicas: 1,
     deadlineMs: 900000,
     concurrency: 1,
     database: "coffee_platform_catalog",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "catalog-activation-worker": {
     port: 4202,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 1,
     database: "coffee_platform_catalog",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "pricing-service": {
     port: 4103,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 100,
     database: "coffee_platform_pricing",
     pool: 8,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "orders-service": {
     port: 4104,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 150,
     database: "coffee_platform_orders",
-    pool: 12,
+    pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "orders-aroma-preparation": {
     port: 4203,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 16,
     database: "coffee_platform_orders",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "aroma-observer": {
     port: 4204,
+    replicas: 1,
     deadlineMs: 15000,
     concurrency: 4,
     database: "coffee_platform_orders",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "aroma-convergence": {
     port: 4205,
+    replicas: 1,
     deadlineMs: 30000,
     concurrency: 4,
     database: "coffee_platform_orders",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "aroma-gateway": {
     port: 4301,
+    replicas: 1,
     deadlineMs: 10000,
     concurrency: 8,
     database: "coffee_platform_integration",
     pool: 8,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "realtime-gateway": {
     port: 4401,
+    replicas: 1,
     deadlineMs: null,
     concurrency: 5000,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
 };
 
@@ -227,6 +313,31 @@ function checkConfigKeys(document) {
       );
     }
   });
+}
+
+function checkKafkaConfiguration(config) {
+  const configuredTopics = Object.values(config.kafka.topics).map((topic) => topic.name);
+  if (JSON.stringify(sorted(configuredTopics)) !== JSON.stringify(sorted(KAFKA_TOPICS)))
+    fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", "Kafka topic registry differs from launch allowlist");
+  for (const runtime of RUNTIMES) {
+    const access = config.services[runtime].kafka;
+    const expectedProducers = EXPECTED_KAFKA_PRODUCERS[runtime];
+    if (JSON.stringify(access.producers) !== JSON.stringify(expectedProducers))
+      fail("CONFIG-KAFKA-DIRECTION", `${runtime}.kafka.producers differs from launch mapping`);
+    for (const topic of access.producers) {
+      if (!KAFKA_TOPICS.includes(topic)) fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", `${runtime}.kafka.producers contains ${topic}`);
+    }
+    for (const consumer of access.consumers) {
+      if (!consumer.topics.every((topic) => KAFKA_TOPICS.includes(topic)))
+        fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", `${runtime}.kafka consumer contains an unknown topic`);
+      if (consumer.processing === "realtime" &&
+          (runtime !== "realtime-gateway" || consumer.groupId !== "realtime-gateway-v1" ||
+            JSON.stringify(consumer.topics) !== JSON.stringify(["coffee.realtime.invalidate.v1"])))
+        fail("CONFIG-KAFKA-REALTIME", `${runtime}.kafka.realtime is outside the sole realtime exception`);
+    }
+    if (JSON.stringify(access.consumers) !== JSON.stringify(EXPECTED_KAFKA_CONSUMERS[runtime]))
+      fail("CONFIG-KAFKA-DIRECTION", `${runtime}.kafka.consumers differs from launch mapping`);
+  }
 }
 
 function isSecretLikeKey(key) {
@@ -410,6 +521,13 @@ export async function loadPlatformConfig(
   validate(schema, config, path);
   checkConfigKeys(config);
   exactSet(config.services, RUNTIMES, "platform.yaml services");
+  checkKafkaConfiguration(config);
+  try {
+    assertDatabaseAdmissionBudget({services: config.services, postgres: config.postgres});
+  } catch (error) {
+    if (error instanceof PlatformConfigError) fail("CONFIG-DB-ADMISSION", error.message);
+    throw error;
+  }
 
   const catalog = await readJson(join(root, "config/service-catalog.json"));
   const profile = await readJson(
@@ -467,8 +585,11 @@ export async function loadPlatformConfig(
       configured.listen.port !== baseline.port ||
       configured.deadlineMs !== baseline.deadlineMs ||
       configured.concurrency !== baseline.concurrency ||
+      configured.replicas !== baseline.replicas ||
       configured.database !== baseline.database ||
-      (configured.dbPool?.max ?? null) !== baseline.pool
+      (configured.dbPool?.max ?? null) !== baseline.pool ||
+      (configured.dbPool?.terminalTimeoutMs ?? null) !== baseline.terminalTimeoutMs ||
+      (configured.dbPool?.transactionTimeoutMs ?? null) !== baseline.transactionTimeoutMs
     ) {
       fail(
         "CONFIG-RUNTIME-POLICY",

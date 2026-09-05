@@ -8,8 +8,18 @@
     "outDir": "dist"
   },
   "references": [
-    { "path": "../platform-config" },
-    { "path": "../platform-observability" }
+    {
+      "path": "../platform-config"
+    },
+    {
+      "path": "../platform-database"
+    },
+    {
+      "path": "../platform-observability"
+    },
+    {
+      "path": "../platform-kafka-runtime"
+    }
   ],
   "include": ["src/**/*.ts"]
 }

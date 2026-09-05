@@ -7,6 +7,12 @@ import {
   type PlatformConfig,
   type RuntimeName,
 } from "@coffee-platform/config";
+import { createDatabase, type Database } from "@coffee-platform/database";
+import {
+  createKafkaRuntime,
+  type KafkaRuntime,
+  type KafkaCredentials,
+} from "@coffee-platform/kafka-runtime";
 import {
   createCorrelationContext,
   isTraceparent,
@@ -36,9 +42,12 @@ export type RuntimeResource = Readonly<{
 export type RuntimeComposition = Readonly<{
   readinessChecks?: readonly RuntimeReadinessCheck[];
   resources?: readonly RuntimeResource[];
+  /** Configured database owners receive their one opaque Database as `database`. */
   configure?: (
     app: FastifyInstance,
     signal: AbortSignal,
+    database?: Database,
+    kafka?: KafkaRuntime,
   ) => Promise<void> | void;
 }>;
 
@@ -83,6 +92,103 @@ export class RuntimeError extends Error {
     this.name = "RuntimeError";
     this.code = code;
   }
+}
+
+type ScopedSecretDocument = Readonly<{
+  secrets: Readonly<Record<string, unknown>>;
+}>;
+
+function secretRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function ownDatabaseCredential(
+  document: ScopedSecretDocument,
+  runtime: RuntimeName,
+  refs: readonly string[],
+): Readonly<{ username: string; password: string }> {
+  const databaseRefs = refs.filter((ref) => ref.startsWith("postgres."));
+  const databaseRef = databaseRefs[0];
+  if (databaseRefs.length !== 1 || databaseRef === undefined)
+    throw new RuntimeError("RUNTIME_DATABASE_SECRET_SCOPE");
+  let value: unknown = document.secrets;
+  for (const segment of databaseRef.split(".")) {
+    value = secretRecord(value) ? value[segment] : undefined;
+  }
+  const credential = secretRecord(value) ? value : undefined;
+  if (
+    credential === undefined ||
+    Object.keys(credential).sort().join(",") !== "password,username" ||
+    typeof credential["username"] !== "string" ||
+    credential["username"].length === 0 ||
+    typeof credential["password"] !== "string" ||
+    credential["password"].length === 0
+  )
+    throw new RuntimeError(`RUNTIME_DATABASE_SECRET_INVALID:${runtime}`);
+  return {
+    username: credential["username"],
+    password: credential["password"],
+  };
+}
+
+function ownKafkaCredential(
+  document: ScopedSecretDocument,
+  refs: readonly string[],
+): KafkaCredentials {
+  const kafkaRefs = refs.filter((ref) => ref.startsWith("kafka."));
+  if (kafkaRefs.length !== 1)
+    throw new RuntimeError("RUNTIME_KAFKA_SECRET_SCOPE");
+  let value: unknown = document.secrets;
+  for (const segment of (kafkaRefs[0] ?? "").split("."))
+    value = secretRecord(value) ? value[segment] : undefined;
+  if (
+    !secretRecord(value) ||
+    !["password,username", "caPem,password,username"].includes(Object.keys(value).sort().join(",")) ||
+    [value["username"], value["password"]].some(
+      (field) => typeof field !== "string" || field.length === 0,
+    ) || (value["caPem"] !== undefined && (typeof value["caPem"] !== "string" || value["caPem"].length === 0))
+  )
+    throw new RuntimeError("RUNTIME_KAFKA_SECRET_INVALID");
+  return {
+    username: value["username"] as string,
+    password: value["password"] as string,
+    ...(value["caPem"] === undefined ? {} : {caPem: value["caPem"] as string}),
+  };
+}
+
+function appendOwnedComposition(
+  composition: RuntimeComposition,
+  database?: Database,
+  kafka?: KafkaRuntime,
+): RuntimeComposition {
+  const owned = [...(database ? [database] : []), ...(kafka ? [kafka] : [])];
+  for (const owner of owned) {
+    if (
+      composition.resources?.some(
+        (resource) => resource.name === owner.resource.name,
+      ) ||
+      composition.readinessChecks?.some(
+        (check) => check.name === owner.readiness.name,
+      )
+    )
+      throw new RuntimeError("RUNTIME_DUPLICATE_COMPOSITION");
+  }
+  return {
+    ...composition,
+    configure: (app: FastifyInstance, signal: AbortSignal) => {
+      if (kafka)
+        void kafka.whenFailed.then(() => app.runtimeController.closeRuntime());
+      return composition.configure?.(app, signal, database, kafka);
+    },
+    resources: [
+      ...owned.map((owner) => owner.resource),
+      ...(composition.resources ?? []),
+    ],
+    readinessChecks: [
+      ...owned.map((owner) => owner.readiness),
+      ...(composition.readinessChecks ?? []),
+    ],
+  };
 }
 
 declare module "fastify" {
@@ -653,7 +759,10 @@ export function configuredRuntimeIdentity(
     bodyLimitBytes,
     requiredDependencies: [
       ...(runtime.database === null ? [] : ["database"]),
-      ...(runtime.kafka.mode === "none" ? [] : ["kafka"]),
+      ...(runtime.kafka.producers.length === 0 &&
+      runtime.kafka.consumers.length === 0
+        ? []
+        : ["kafka"]),
     ],
   };
 }
@@ -692,7 +801,60 @@ export async function startConfiguredRuntime(
     config.environment,
     config.services[name].secretRefs,
   );
-  return startRuntime(configuredRuntimeIdentity(config, name, composition));
+  const service = config.services[name];
+  const shutdownGraceMs = config.platform["shutdownGraceMs"];
+  if (typeof shutdownGraceMs !== "number")
+    throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
+  let database: Database | undefined;
+  let kafka: KafkaRuntime | undefined;
+  try {
+    if (service.database !== null) {
+      if (service.dbPool === null)
+        throw new RuntimeError("RUNTIME_DATABASE_CONFIG_MISMATCH");
+      const credential = ownDatabaseCredential(
+        secretDocument as ScopedSecretDocument,
+        name,
+        service.secretRefs,
+      );
+      database = createDatabase({
+        owner: name,
+        database: service.database,
+        allowedDatabase: service.database,
+        host: config.postgres.host,
+        port: config.postgres.port,
+        user: credential.username,
+        password: credential.password,
+        ssl: config.postgres.sslMode === "prefer" ? "prefer" : true,
+        pool: service.dbPool,
+        shutdownGraceMs,
+      });
+    }
+    if (
+      service.kafka.producers.length > 0 ||
+      service.kafka.consumers.length > 0
+    ) {
+      kafka = createKafkaRuntime({
+        runtime: name,
+        config: config.kafka,
+        service: service.kafka,
+        credentials: ownKafkaCredential(
+          secretDocument as ScopedSecretDocument,
+          service.secretRefs,
+        ),
+      });
+    }
+    return await startRuntime(
+      configuredRuntimeIdentity(
+        config,
+        name,
+        appendOwnedComposition(composition, database, kafka),
+      ),
+    );
+  } catch (error) {
+    kafka?.resource.destroy();
+    database?.resource.destroy();
+    throw error;
+  }
 }
 
 export function assertScopedSecrets(

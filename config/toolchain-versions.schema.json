@@ -20,7 +20,10 @@
     "docker",
     "compose",
     "nodeImage",
-    "kafkaImage"
+    "kafkaImage",
+    "pgCopyStreams",
+    "typesPg",
+    "typesPgCopyStreams"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -33,6 +36,9 @@
     "fastify": { "const": "5.12.1" },
     "postgresql": { "const": "17.11" },
     "pg": { "type": "string" },
+    "pgCopyStreams": { "const": "7.0.0" },
+    "typesPg": { "const": "8.23.1" },
+    "typesPgCopyStreams": { "const": "1.2.5" },
     "kafka": { "const": "4.3.1" },
     "confluentKafkaJavaScript": { "type": "string" },
     "librdkafka": { "const": "2.15.0" },
