@@ -22,6 +22,9 @@ const EXPECTED = Object.freeze({
   fastify: "5.12.1",
   postgresql: "17.11",
   pg: "8.23.0",
+  pgCopyStreams: "7.0.0",
+  typesPg: "8.23.1",
+  typesPgCopyStreams: "1.2.5",
   kafka: "4.3.1",
   confluentKafkaJavaScript: "1.10.0",
   librdkafka: "2.15.0",
@@ -71,6 +74,9 @@ const DEPENDENCY_TO_MANIFEST_KEY = Object.freeze({
   oxlint: "oxlint",
   "oxlint-tsgolint": "oxlintTsgolint",
   pg: "pg",
+  "pg-copy-streams": "pgCopyStreams",
+  "@types/pg": "typesPg",
+  "@types/pg-copy-streams": "typesPgCopyStreams",
   playwright: "playwright",
   prettier: "prettier",
   react: "react",
@@ -213,6 +219,8 @@ async function checkPackageManifests(root) {
       const manifestKey = DEPENDENCY_TO_MANIFEST_KEY[name];
       if (manifestKey)
         exact(value, EXPECTED[manifestKey], `${pathLabel}:${name}`);
+      if (name === "pg-copy-streams" && pathLabel !== "packages/platform-database/package.json")
+        fail("DATABASE-COPY-SCOPE", `${pathLabel}: COPY driver belongs to platform-database`);
       if (name === "typescript") {
         typescriptManifestCount += 1;
         if (path !== join(root, "package.json"))
@@ -231,6 +239,12 @@ async function checkPackageManifests(root) {
           `${pathLabel}: forbidden compiler lane package ${name}`,
         );
       }
+    }
+    if (pathLabel === "packages/platform-database/package.json") {
+      exact(manifest.dependencies?.pg, EXPECTED.pg, `${pathLabel}:pg`);
+      exact(manifest.dependencies?.["pg-copy-streams"], EXPECTED.pgCopyStreams, `${pathLabel}:pg-copy-streams`);
+      exact(manifest.devDependencies?.["@types/pg"], EXPECTED.typesPg, `${pathLabel}:@types/pg`);
+      exact(manifest.devDependencies?.["@types/pg-copy-streams"], EXPECTED.typesPgCopyStreams, `${pathLabel}:@types/pg-copy-streams`);
     }
     if (path === join(root, "package.json")) {
       exact(manifest.engines?.node, EXPECTED.node, "package.json.engines.node");

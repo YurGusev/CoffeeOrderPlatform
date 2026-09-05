@@ -4,6 +4,10 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import { load as parseYaml } from "js-yaml";
+import {
+  assertDatabaseAdmissionBudget,
+  PlatformConfigError,
+} from "../packages/platform-config/src/index.ts";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIMES = [
@@ -45,108 +49,153 @@ const ALLOWED_LOCATOR_ENV_KEYS = new Set([
 const SERVICE_BASELINE = {
   "edge-gateway": {
     port: 4000,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 500,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
   "api-public": {
     port: 4050,
+    replicas: 1,
     deadlineMs: 4500,
     concurrency: 400,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
   "api-internal": {
     port: 4051,
+    replicas: 1,
     deadlineMs: null,
     concurrency: 300,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
   web: {
     port: 3000,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 500,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
   "customer-service": {
     port: 4101,
+    replicas: 1,
     deadlineMs: 2000,
     concurrency: 100,
     database: "coffee_platform_customer",
     pool: 8,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "catalog-service": {
     port: 4102,
+    replicas: 1,
     deadlineMs: 2000,
     concurrency: 150,
     database: "coffee_platform_catalog",
     pool: 8,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "catalog-supplier-sync": {
     port: 4201,
+    replicas: 1,
     deadlineMs: 900000,
     concurrency: 1,
     database: "coffee_platform_catalog",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "catalog-activation-worker": {
     port: 4202,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 1,
     database: "coffee_platform_catalog",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "pricing-service": {
     port: 4103,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 100,
     database: "coffee_platform_pricing",
     pool: 8,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "orders-service": {
     port: 4104,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 150,
     database: "coffee_platform_orders",
-    pool: 12,
+    pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "orders-aroma-preparation": {
     port: 4203,
+    replicas: 1,
     deadlineMs: 5000,
     concurrency: 16,
     database: "coffee_platform_orders",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "aroma-observer": {
     port: 4204,
+    replicas: 1,
     deadlineMs: 15000,
     concurrency: 4,
     database: "coffee_platform_orders",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "aroma-convergence": {
     port: 4205,
+    replicas: 1,
     deadlineMs: 30000,
     concurrency: 4,
     database: "coffee_platform_orders",
     pool: 4,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "aroma-gateway": {
     port: 4301,
+    replicas: 1,
     deadlineMs: 10000,
     concurrency: 8,
     database: "coffee_platform_integration",
     pool: 8,
+    terminalTimeoutMs: 2000,
+    transactionTimeoutMs: 10000,
   },
   "realtime-gateway": {
     port: 4401,
+    replicas: 1,
     deadlineMs: null,
     concurrency: 5000,
     database: null,
     pool: null,
+    terminalTimeoutMs: null,
+    transactionTimeoutMs: null,
   },
 };
 
@@ -410,6 +459,12 @@ export async function loadPlatformConfig(
   validate(schema, config, path);
   checkConfigKeys(config);
   exactSet(config.services, RUNTIMES, "platform.yaml services");
+  try {
+    assertDatabaseAdmissionBudget({services: config.services, postgres: config.postgres});
+  } catch (error) {
+    if (error instanceof PlatformConfigError) fail("CONFIG-DB-ADMISSION", error.message);
+    throw error;
+  }
 
   const catalog = await readJson(join(root, "config/service-catalog.json"));
   const profile = await readJson(
@@ -467,8 +522,11 @@ export async function loadPlatformConfig(
       configured.listen.port !== baseline.port ||
       configured.deadlineMs !== baseline.deadlineMs ||
       configured.concurrency !== baseline.concurrency ||
+      configured.replicas !== baseline.replicas ||
       configured.database !== baseline.database ||
-      (configured.dbPool?.max ?? null) !== baseline.pool
+      (configured.dbPool?.max ?? null) !== baseline.pool ||
+      (configured.dbPool?.terminalTimeoutMs ?? null) !== baseline.terminalTimeoutMs ||
+      (configured.dbPool?.transactionTimeoutMs ?? null) !== baseline.transactionTimeoutMs
     ) {
       fail(
         "CONFIG-RUNTIME-POLICY",

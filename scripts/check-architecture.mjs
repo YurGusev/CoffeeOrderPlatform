@@ -99,6 +99,16 @@ function checkStaticSource(path, source) {
   }
   for (const match of source.matchAll(FORBIDDEN_MODULE_RE)) {
     const moduleName = match[1];
+    const databaseFoundation = /(?:^|\/)packages\/platform-database\//.test(label);
+    const ownerAdapter = /(?:^|\/)packages\/platform-(?:database|idempotency|migrations|inbox|outbox)\//.test(label) || /(?:^|\/)apps\/[^/]+\/(?:src\/)?(?:infrastructure|repositories)\//.test(label);
+    if ((moduleName === 'pg' || moduleName.startsWith('pg/') || moduleName === 'pg-copy-streams') && !databaseFoundation)
+      fail('BOUND-DB-CLIENT', `${label}: native PostgreSQL driver belongs to platform-database`);
+    if (moduleName === '@coffee-platform/database/owner' && !ownerAdapter)
+      fail('BOUND-DB-CLIENT', `${label}: SQL capabilities belong to owner infrastructure/repositories`);
+    if (/platform-database\/(?:src|dist)\//.test(moduleName) && !databaseFoundation)
+      fail('BOUND-DB-CLIENT', `${label}: private database implementation import is forbidden`);
+    if (/^(?:effect|@effect\/)/.test(moduleName))
+      fail('BOUND-DB-CLIENT', `${label}: Effect runtime is superseded by ADR-0025`);
     const kind = forbiddenModuleKind(moduleName);
     if (kind === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${label}: Axios import ${moduleName} is forbidden; use native fetch/Undici`);
     if (kind === 'native') fail('ARCH-FORBIDDEN-NATIVE', `${label}: experimental FFI/SQLite/VFS import ${moduleName} is forbidden without an ADR allowlist`);

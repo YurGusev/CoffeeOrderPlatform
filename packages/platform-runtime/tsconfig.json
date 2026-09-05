@@ -9,6 +9,7 @@
   },
   "references": [
     { "path": "../platform-config" },
+    { "path": "../platform-database" },
     { "path": "../platform-observability" }
   ],
   "include": ["src/**/*.ts"]

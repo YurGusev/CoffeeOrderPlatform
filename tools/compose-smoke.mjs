@@ -22,6 +22,19 @@ const COMPOSE_FILE = join(ROOT, "compose.yaml");
 const BOOTSTRAP = join(ROOT, "tools/config-bootstrap/index.mjs");
 const SECRETS_TMPFS_ROOT = "/dev/shm";
 const EXTERNAL_POSTGRES_NETWORK = "coffee_postgres_data";
+const DATABASE_PROOF_RUNTIME = "customer-service";
+const COMPOSE_NETWORKS = [
+  "coffee_host_ingress",
+  "coffee_public_ingress",
+  "coffee_edge_backend",
+  "coffee_public_api_backend",
+  "coffee_internal_api",
+  "coffee_postgres_data",
+  "coffee_kafka_event",
+  "coffee_provider_egress",
+];
+const DATABASE_PROOF_IMAGE =
+  "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73";
 const RUNTIMES = [
   "edge-gateway",
   "api-public",
@@ -45,6 +58,7 @@ function usage() {
     "",
     "Options:",
     "  --stub-secrets                     use empty, non-secret scoped stubs for topology-only smoke",
+    "  --database-proof                  run the isolated customer PostgreSQL readiness proof",
     "  --provision-empty-postgres-network create coffee_postgres_data only when absent; never starts PostgreSQL",
     "  --no-build                         use already-built runtime images",
     "  --project-name <name>              explicit isolated Compose project name",
@@ -58,6 +72,7 @@ function parseArguments(argv) {
     provisionNetwork: false,
     noBuild: false,
     keep: false,
+    databaseProof: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -65,6 +80,7 @@ function parseArguments(argv) {
     else if (argument === "--provision-empty-postgres-network")
       options.provisionNetwork = true;
     else if (argument === "--no-build") options.noBuild = true;
+    else if (argument === "--database-proof") options.databaseProof = true;
     else if (argument === "--keep") options.keep = true;
     else if (argument === "--project-name") {
       const value = argv[++index];
@@ -80,7 +96,7 @@ function parseArguments(argv) {
       throw new Error(`unknown option ${argument}\n\n${usage()}`);
     }
   }
-  if (!options.stubSecrets && !process.env.SOPS_AGE_KEY_FILE) {
+  if (!options.stubSecrets && !options.databaseProof && !process.env.SOPS_AGE_KEY_FILE) {
     throw new Error(
       "SOPS_AGE_KEY_FILE is required for decrypted scoped secrets; use --stub-secrets only for topology smoke without DB/provider proof",
     );
@@ -88,13 +104,14 @@ function parseArguments(argv) {
   return options;
 }
 
-function composeArgs(projectName, args) {
+function composeArgs(projectName, args, composeFile = COMPOSE_FILE) {
   return [
     "compose",
     "--project-name",
     projectName,
     "-f",
     COMPOSE_FILE,
+    ...(composeFile === COMPOSE_FILE ? [] : ["-f", composeFile]),
     ...args,
   ];
 }
@@ -104,7 +121,7 @@ function runCompose(projectName, secretsDir, args, options = {}) {
     ...process.env,
     COFFEE_COMPOSE_SECRETS_DIR: secretsDir,
   };
-  return execFileSync("docker", composeArgs(projectName, args), {
+  return execFileSync("docker", composeArgs(projectName, args, options.composeFile), {
     cwd: ROOT,
     env,
     encoding: "utf8",
@@ -116,12 +133,15 @@ function runDocker(args, options = {}) {
   return execFileSync("docker", args, {
     cwd: ROOT,
     encoding: "utf8",
-    stdio: options.inherit ? "inherit" : ["ignore", "pipe", "pipe"],
+    stdio: options.inherit
+      ? "inherit"
+      : [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+    input: options.input,
   });
 }
 
-function buildRuntimeImages(projectName) {
-  for (const runtime of RUNTIMES) {
+function buildRuntimeImages(projectName, runtimes = RUNTIMES) {
+  for (const runtime of runtimes) {
     execFileSync(
       process.execPath,
       [
@@ -140,7 +160,7 @@ function buildRuntimeImages(projectName) {
   }
 }
 
-async function writeStubSecret(path, runtime, environment, refs) {
+async function writeStubSecret(path, runtime, environment, refs, databaseCredential) {
   // These placeholders satisfy the scoped-ref contract but are not credentials
   // and cannot prove DB/provider access. No real secret leaves enter the smoke.
   const secrets = {};
@@ -151,11 +171,41 @@ async function writeStubSecret(path, runtime, environment, refs) {
       if (!Object.hasOwn(current, segment)) current[segment] = {};
       current = current[segment];
     }
-    current[segments.at(-1)] = "compose-smoke-placeholder";
+    current[segments.at(-1)] =
+      ref.startsWith("postgres.") && databaseCredential !== undefined
+        ? databaseCredential
+        : ref.startsWith("postgres.")
+          ? {
+              username: `compose_${runtime.replaceAll("-", "_")}`,
+              password: "compose-smoke-placeholder",
+            }
+          : "compose-smoke-placeholder";
   }
   const content = `${JSON.stringify({ schemaVersion: 1, environment, runtime, secrets })}\n`;
   await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
   await chmod(path, 0o400);
+}
+
+async function readDatabaseProofCredentials() {
+  const ownership = JSON.parse(
+    await readFile(join(ROOT, "config/database-ownership.json"), "utf8"),
+  );
+  const owner = ownership.runtimeClaims.find(
+    (candidate) => candidate.runtime === DATABASE_PROOF_RUNTIME,
+  );
+  assert.ok(owner, `${DATABASE_PROOF_RUNTIME} database ownership is missing`);
+  assert.ok(owner.role, `${DATABASE_PROOF_RUNTIME} database role is missing`);
+  assert.match(owner.role, /^[a-z][a-z0-9_]*$/);
+  return {
+    owner: {
+      username: owner.role,
+      password: `compose-proof-${randomUUID()}`,
+    },
+    admin: {
+      username: `compose_admin_${randomUUID().replaceAll("-", "")}`,
+      password: `compose-admin-${randomUUID()}`,
+    },
+  };
 }
 
 function bootstrapEnvironment(path) {
@@ -180,13 +230,14 @@ async function materializeSecrets(secretsDir, options) {
   );
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
-    if (options.stubSecrets) {
+    if (options.stubSecrets || options.databaseProof) {
       const service = platformConfig.services[runtime];
       await writeStubSecret(
         path,
         runtime,
         platformConfig.environment,
         service.secretRefs,
+        options.databaseProofCredentials?.[runtime],
       );
     } else {
       execFileSync(process.execPath, [BOOTSTRAP, "--runtime", runtime], {
@@ -280,14 +331,14 @@ async function materializeKafkaTls(secretsDir) {
   await writeFile(join(kafkaDir, "kafka_jaas.conf"), [
     "KafkaServer {",
     "  org.apache.kafka.common.security.plain.PlainLoginModule required",
-    `  username=\"kafka\" password=\"${password}\" user_kafka=\"${password}\";`,
+    `  username="kafka" password="${password}" user_kafka="${password}";`,
     "};",
     "",
   ].join("\n"), { encoding: "utf8", mode: 0o400 });
   await writeFile(join(kafkaDir, "client.properties"), [
     "security.protocol=SASL_SSL",
     "sasl.mechanism=PLAIN",
-    `sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username=\"kafka\" password=\"${password}\";`,
+    `sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka" password="${password}";`,
     "ssl.truststore.type=PKCS12",
     "ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.p12",
     `ssl.truststore.password=${password}`,
@@ -338,6 +389,184 @@ function ensureExternalNetwork(options) {
   }
 }
 
+async function writeDatabaseProofComposeOverride(projectName) {
+  const path = join(
+    SECRETS_TMPFS_ROOT,
+    `coffee-platform-compose-${projectName}-${randomUUID().slice(0, 8)}.yaml`,
+  );
+  const content = [
+    "networks:",
+    ...COMPOSE_NETWORKS.flatMap((network) => [
+      `  ${network}:`,
+      `    name: ${projectName}_${network}`,
+      `    external: ${network === EXTERNAL_POSTGRES_NETWORK ? "true" : "false"}`,
+    ]),
+    "",
+  ].join("\n");
+  await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
+  await chmod(path, 0o400);
+  return path;
+}
+
+function databaseProofNetworkNames(projectName) {
+  return COMPOSE_NETWORKS.map((network) => `${projectName}_${network}`);
+}
+
+function createDatabaseProofNetwork(networkName) {
+  try {
+    runDocker(["network", "inspect", networkName]);
+  } catch {
+    runDocker(["network", "create", "--internal", networkName]);
+    return true;
+  }
+  throw new Error(`database proof network already exists: ${networkName}`);
+}
+
+function startDatabaseProofContainer(projectName, networkName, credential) {
+  const container = `${projectName}-postgres-proof`;
+  runDocker([
+    "run",
+    "--detach",
+    "--name",
+    container,
+    "--network",
+    networkName,
+    "--network-alias",
+    "coffee_postgres",
+    "--env",
+    `POSTGRES_USER=${credential.username}`,
+    "--env",
+    `POSTGRES_PASSWORD=${credential.password}`,
+    "--env",
+    "POSTGRES_DB=coffee_platform_customer",
+    "--health-cmd",
+    `pg_isready -U ${credential.username} -d coffee_platform_customer`,
+    "--health-interval",
+    "1s",
+    "--health-timeout",
+    "1s",
+    "--health-retries",
+    "30",
+    DATABASE_PROOF_IMAGE,
+  ]);
+  return container;
+}
+
+function bootstrapDatabaseProofRole(container, admin, owner) {
+  runDocker(
+    [
+      "exec",
+      "--interactive",
+      container,
+      "psql",
+      "--username",
+      admin.username,
+      "--dbname",
+      "coffee_platform_customer",
+      "--no-psqlrc",
+    ],
+    {
+      input: [
+        `CREATE ROLE "${owner.username}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${owner.password}';`,
+        `REVOKE ALL ON DATABASE "coffee_platform_customer" FROM PUBLIC;`,
+        `GRANT CONNECT ON DATABASE "coffee_platform_customer" TO "${owner.username}";`,
+        "",
+      ].join("\n"),
+    },
+  );
+}
+
+function assertDatabaseProofRole(container, admin, owner) {
+  const output = runDocker(
+    [
+      "exec",
+      "--interactive",
+      container,
+      "psql",
+      "--username",
+      admin.username,
+      "--dbname",
+      "coffee_platform_customer",
+      "--tuples-only",
+      "--no-align",
+      "--no-psqlrc",
+      "--command",
+      `SELECT json_build_object('isSuperuser', rolsuper, 'canCreateDb', rolcreatedb, 'canCreateRole', rolcreaterole, 'bypassRls', rolbypassrls, 'connect', has_database_privilege('${owner.username}', 'coffee_platform_customer', 'CONNECT'), 'create', has_database_privilege('${owner.username}', 'coffee_platform_customer', 'CREATE')) FROM pg_roles WHERE rolname = '${owner.username}'`,
+    ],
+    {input: ""},
+  ).trim();
+  const role = JSON.parse(output.split("\n").at(-1));
+  assert.deepEqual(
+    role,
+    {
+      isSuperuser: false,
+      canCreateDb: false,
+      canCreateRole: false,
+      bypassRls: false,
+      connect: true,
+      create: false,
+    },
+    "database proof owner role is over-privileged",
+  );
+}
+
+async function waitForDockerHealthy(container, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  let status = "unknown";
+  while (Date.now() < deadline) {
+    try {
+      status = runDocker([
+        "inspect",
+        "--format",
+        "{{.State.Health.Status}}",
+        container,
+      ]).trim();
+    } catch {
+      status = "unknown";
+    }
+    if (status === "healthy") return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`${container} did not become healthy: ${status}`);
+}
+
+async function waitForDatabaseProofReady(container, admin, timeoutMs = 60_000) {
+  const deadline = Date.now() + timeoutMs;
+  let postmasterStart;
+  while (Date.now() < deadline) {
+    try {
+      const output = runDocker(
+        [
+          "exec",
+          "--interactive",
+          container,
+          "psql",
+          "--username",
+          admin.username,
+          "--dbname",
+          "coffee_platform_customer",
+          "--host",
+          "127.0.0.1",
+          "--tuples-only",
+          "--no-align",
+          "--no-psqlrc",
+          "--command",
+          "SELECT pg_postmaster_start_time()",
+        ],
+        {input: ""},
+      ).trim();
+      const currentStart = output.split("\n").at(-1);
+      if (currentStart !== undefined && currentStart === postmasterStart)
+        return;
+      postmasterStart = currentStart;
+    } catch {
+      postmasterStart = undefined;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error(`${container} database did not become queryable`);
+}
+
 function parseComposePs(output) {
   const trimmed = output.trim();
   if (!trimmed) return [];
@@ -352,14 +581,16 @@ function parseComposePs(output) {
   }
 }
 
-function serviceRows(projectName, secretsDir) {
+function serviceRows(projectName, secretsDir, composeFile = COMPOSE_FILE) {
   return parseComposePs(
-    runCompose(projectName, secretsDir, ["ps", "--all", "--format", "json"]),
+    runCompose(projectName, secretsDir, ["ps", "--all", "--format", "json"], {
+      composeFile,
+    }),
   );
 }
 
-function assertHealthy(projectName, secretsDir) {
-  const rows = serviceRows(projectName, secretsDir);
+function assertHealthy(projectName, secretsDir, composeFile = COMPOSE_FILE) {
+  const rows = serviceRows(projectName, secretsDir, composeFile);
   const byService = new Map(rows.map((row) => [row.Service, row]));
   for (const service of [...RUNTIMES, "kafka"]) {
     const row = byService.get(service);
@@ -403,7 +634,12 @@ function assertTelemetryEnvironment(rows) {
   }
 }
 
-function assertSecretMounts(projectName, secretsDir, rows) {
+function assertSecretMounts(
+  projectName,
+  secretsDir,
+  rows,
+  composeFile = COMPOSE_FILE,
+) {
   for (const runtime of RUNTIMES) {
     const row = rows.get(runtime);
     const container = JSON.parse(runDocker(["inspect", row.ID]))[0];
@@ -427,14 +663,19 @@ function assertSecretMounts(projectName, secretsDir, rows) {
       "node",
       `${runtime} image must run as node`,
     );
-    const modeOutput = runCompose(projectName, secretsDir, [
-      "exec",
-      "-T",
-      runtime,
-      "node",
-      "-e",
-      "const fs=require('node:fs'); const {execFileSync}=require('node:child_process'); const s=fs.statSync(process.env.COFFEE_RUNTIME_SECRETS_FILE); const df=execFileSync('df',['-T','/run/secrets'],{encoding:'utf8'}); console.log(JSON.stringify({mode:s.mode & 0o777,uid:process.getuid(),tmpfs:df.includes('tmpfs')}));",
-    ]).trim();
+    const modeOutput = runCompose(
+      projectName,
+      secretsDir,
+      [
+        "exec",
+        "-T",
+        runtime,
+        "node",
+        "-e",
+        "const fs=require('node:fs'); const {execFileSync}=require('node:child_process'); const s=fs.statSync(process.env.COFFEE_RUNTIME_SECRETS_FILE); const df=execFileSync('df',['-T','/run/secrets'],{encoding:'utf8'}); console.log(JSON.stringify({mode:s.mode & 0o777,uid:process.getuid(),tmpfs:df.includes('tmpfs')}));",
+      ],
+      {composeFile},
+    ).trim();
     const mode = JSON.parse(modeOutput.split("\n").at(-1));
     assert.deepEqual(
       mode,
@@ -444,7 +685,11 @@ function assertSecretMounts(projectName, secretsDir, rows) {
   }
 }
 
-function assertKafkaCompatibility(projectName, secretsDir) {
+function assertKafkaCompatibility(
+  projectName,
+  secretsDir,
+  composeFile = COMPOSE_FILE,
+) {
   const topic = `coffee.compose.smoke.${randomUUID().replaceAll("-", "")}`;
   const message = randomUUID();
   const script = [
@@ -456,27 +701,34 @@ function assertKafkaCompatibility(projectName, secretsDir) {
     "test \"$received\" = \"$message\"",
     "printf '%s' \"$received\"",
   ].join("\n");
-  const output = runCompose(projectName, secretsDir, [
-    "exec",
-    "-T",
-    "kafka",
-    "sh",
-    "-ec",
-    script,
-  ]).trim();
+  const output = runCompose(
+    projectName,
+    secretsDir,
+    ["exec", "-T", "kafka", "sh", "-ec", script],
+    {composeFile},
+  ).trim();
   assert.equal(output, message, "Kafka SASL_SSL client produce/consume proof failed");
 }
 
-async function assertReadiness(projectName, secretsDir) {
+async function assertReadiness(
+  projectName,
+  secretsDir,
+  composeFile = COMPOSE_FILE,
+) {
   for (const runtime of RUNTIMES) {
-    const output = runCompose(projectName, secretsDir, [
-      "exec",
-      "-T",
-      runtime,
-      "node",
-      "-e",
-      "Promise.all(['/health/live', '/health/ready', '/metrics'].map(async (path) => { const response = await fetch('http://127.0.0.1:' + process.env.PORT + path); if (!response.ok) throw new Error(path + ':' + response.status); })).catch(() => process.exit(1));",
-    ]).trim();
+    const output = runCompose(
+      projectName,
+      secretsDir,
+      [
+        "exec",
+        "-T",
+        runtime,
+        "node",
+        "-e",
+        "Promise.all(['/health/live', '/health/ready', '/metrics'].map(async (path) => { const response = await fetch('http://127.0.0.1:' + process.env.PORT + path); if (!response.ok) throw new Error(path + ':' + response.status); })).catch(() => process.exit(1));",
+      ],
+      {composeFile},
+    ).trim();
     void output;
   }
   for (const path of ["/health/live", "/health/ready", "/metrics"]) {
@@ -491,7 +743,133 @@ async function assertReadiness(projectName, secretsDir) {
   }
 }
 
-function assertHostExposure(projectName, secretsDir, rows) {
+function runtimeHealthStatus(
+  projectName,
+  secretsDir,
+  runtime,
+  path,
+  composeFile = COMPOSE_FILE,
+) {
+  const output = runCompose(
+    projectName,
+    secretsDir,
+    [
+      "exec",
+      "-T",
+      runtime,
+      "node",
+      "-e",
+      `fetch('http://127.0.0.1:' + process.env.PORT + '${path}').then((response) => console.log(response.status)).catch(() => console.log('0'))`,
+    ],
+    {composeFile},
+  ).trim();
+  return Number(output.split("\n").at(-1));
+}
+
+function runtimeReadinessStatus(
+  projectName,
+  secretsDir,
+  runtime,
+  composeFile = COMPOSE_FILE,
+) {
+  return runtimeHealthStatus(
+    projectName,
+    secretsDir,
+    runtime,
+    "/health/ready",
+    composeFile,
+  );
+}
+
+async function waitForRuntimeReadiness(
+  projectName,
+  secretsDir,
+  runtime,
+  expected,
+  timeoutMs = 10_000,
+  composeFile = COMPOSE_FILE,
+) {
+  const deadline = Date.now() + timeoutMs;
+  let status = 0;
+  while (Date.now() < deadline) {
+    status = runtimeReadinessStatus(projectName, secretsDir, runtime, composeFile);
+    if (status === expected) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(
+    `${runtime} readiness did not reach ${expected}; last status was ${status}`,
+  );
+}
+
+async function assertDatabaseProof(
+  projectName,
+  secretsDir,
+  container,
+  composeFile = COMPOSE_FILE,
+) {
+  assert.equal(
+    runtimeReadinessStatus(
+      projectName,
+      secretsDir,
+      DATABASE_PROOF_RUNTIME,
+      composeFile,
+    ),
+    200,
+    "customer-service database readiness did not start healthy",
+  );
+  for (const path of ["/health/live", "/metrics"]) {
+    assert.equal(
+      runtimeHealthStatus(
+        projectName,
+        secretsDir,
+        DATABASE_PROOF_RUNTIME,
+        path,
+        composeFile,
+      ),
+      200,
+      `customer-service ${path} did not start healthy`,
+    );
+  }
+  runDocker(["stop", container]);
+  await waitForRuntimeReadiness(
+    projectName,
+    secretsDir,
+    DATABASE_PROOF_RUNTIME,
+    503,
+    10_000,
+    composeFile,
+  );
+  runDocker(["start", container]);
+  await waitForDockerHealthy(container);
+  await waitForRuntimeReadiness(
+    projectName,
+    secretsDir,
+    DATABASE_PROOF_RUNTIME,
+    200,
+    10_000,
+    composeFile,
+  );
+  for (const path of ["/health/live", "/metrics"]) {
+    assert.equal(
+      runtimeHealthStatus(
+        projectName,
+        secretsDir,
+        DATABASE_PROOF_RUNTIME,
+        path,
+        composeFile,
+      ),
+      200,
+      `customer-service ${path} did not recover`,
+    );
+  }
+}
+
+function assertHostExposure(
+  projectName,
+  secretsDir,
+  rows,
+  composeFile = COMPOSE_FILE,
+) {
   const edgeContainer = JSON.parse(
     runDocker(["inspect", rows.get("edge-gateway").ID]),
   )[0];
@@ -504,7 +882,12 @@ function assertHostExposure(projectName, secretsDir, rows) {
     "coffee_host_ingress must contain only edge-gateway",
   );
   assert.equal(
-    runCompose(projectName, secretsDir, ["port", "edge-gateway", "4000"]).trim(),
+    runCompose(
+      projectName,
+      secretsDir,
+      ["port", "edge-gateway", "4000"],
+      {composeFile},
+    ).trim(),
     "127.0.0.1:4000",
     "edge-gateway must expose the actual loopback host mapping",
   );
@@ -532,8 +915,8 @@ function assertHostExposure(projectName, secretsDir, rows) {
   }
 }
 
-function assertStopped(projectName, secretsDir) {
-  for (const row of serviceRows(projectName, secretsDir)) {
+function assertStopped(projectName, secretsDir, composeFile = COMPOSE_FILE) {
+  for (const row of serviceRows(projectName, secretsDir, composeFile)) {
     const container = JSON.parse(runDocker(["inspect", row.ID]))[0];
     assert.equal(
       container.State.Running,
@@ -557,45 +940,146 @@ async function main() {
     join(SECRETS_TMPFS_ROOT, "coffee-platform-secrets-"),
   );
   let provisionedNetwork = false;
+  let databaseProofNetwork;
+  let composeFile = COMPOSE_FILE;
   let composeAttempted = false;
+  let databaseProofContainer;
   try {
-    await materializeSecrets(secretsDir, options);
-    runCompose(projectName, secretsDir, ["config", "--quiet"]);
-    provisionedNetwork = ensureExternalNetwork(options);
-    if (!options.noBuild) buildRuntimeImages(projectName);
-    const upArguments = ["up", "--detach", "--wait", "--no-build"];
+    const databaseProofCredentials = options.databaseProof
+      ? await readDatabaseProofCredentials()
+      : undefined;
+    if (options.databaseProof) {
+      composeFile = await writeDatabaseProofComposeOverride(projectName);
+      const networkNames = databaseProofNetworkNames(projectName);
+      for (const networkName of networkNames) {
+        try {
+          runDocker(["network", "inspect", networkName]);
+        } catch {
+          continue;
+        }
+        throw new Error(`database proof network already exists: ${networkName}`);
+      }
+      databaseProofNetwork = `${projectName}_${EXTERNAL_POSTGRES_NETWORK}`;
+      createDatabaseProofNetwork(databaseProofNetwork);
+    }
+    await materializeSecrets(secretsDir, {
+      ...options,
+      databaseProofCredentials: databaseProofCredentials === undefined
+        ? undefined
+        : {[DATABASE_PROOF_RUNTIME]: databaseProofCredentials.owner},
+    });
+    runCompose(projectName, secretsDir, ["config", "--quiet"], {composeFile});
+    if (!options.databaseProof)
+      provisionedNetwork = ensureExternalNetwork(options);
+    if (options.databaseProof) {
+      databaseProofContainer = startDatabaseProofContainer(
+        projectName,
+        databaseProofNetwork,
+        databaseProofCredentials.admin,
+      );
+      await waitForDockerHealthy(databaseProofContainer);
+      await waitForDatabaseProofReady(
+        databaseProofContainer,
+        databaseProofCredentials.admin,
+      );
+      bootstrapDatabaseProofRole(
+        databaseProofContainer,
+        databaseProofCredentials.admin,
+        databaseProofCredentials.owner,
+      );
+      assertDatabaseProofRole(
+        databaseProofContainer,
+        databaseProofCredentials.admin,
+        databaseProofCredentials.owner,
+      );
+    }
+    if (!options.noBuild)
+      buildRuntimeImages(
+        projectName,
+        options.databaseProof ? [DATABASE_PROOF_RUNTIME] : RUNTIMES,
+      );
+    const upArguments = options.databaseProof
+      ? [
+          "up",
+          "--detach",
+          "--wait",
+          "--no-build",
+          DATABASE_PROOF_RUNTIME,
+        ]
+      : ["up", "--detach", "--wait", "--no-build"];
     composeAttempted = true;
-    runCompose(projectName, secretsDir, upArguments, { inherit: true });
-    const rows = assertHealthy(projectName, secretsDir);
-    assertKafkaCompatibility(projectName, secretsDir);
-    assertTelemetryEnvironment(rows);
-    assertSecretMounts(projectName, secretsDir, rows);
-    await assertReadiness(projectName, secretsDir);
-    assertHostExposure(projectName, secretsDir, rows);
+    runCompose(projectName, secretsDir, upArguments, {composeFile, inherit: true});
+    const rows = options.databaseProof
+      ? new Map(
+          serviceRows(projectName, secretsDir, composeFile).map((row) => [row.Service, row]),
+        )
+      : assertHealthy(projectName, secretsDir, composeFile);
+    if (options.databaseProof) {
+      const row = rows.get(DATABASE_PROOF_RUNTIME);
+      assert.ok(row, `${DATABASE_PROOF_RUNTIME} is absent from Compose ps`);
+      assert.equal(row.State, "running");
+      assert.equal(row.Health, "healthy");
+      await assertDatabaseProof(
+        projectName,
+        secretsDir,
+        databaseProofContainer,
+        composeFile,
+      );
+    } else {
+      assertKafkaCompatibility(projectName, secretsDir, composeFile);
+      assertTelemetryEnvironment(rows);
+      assertSecretMounts(projectName, secretsDir, rows, composeFile);
+      await assertReadiness(projectName, secretsDir, composeFile);
+      assertHostExposure(projectName, secretsDir, rows, composeFile);
+    }
     if (!options.keep) {
-      runCompose(projectName, secretsDir, ["stop", "--timeout", "30"], {
-        inherit: true,
-      });
-      assertStopped(projectName, secretsDir);
+      runCompose(
+        projectName,
+        secretsDir,
+        ["stop", "--timeout", "30"],
+        {composeFile, inherit: true},
+      );
+      assertStopped(projectName, secretsDir, composeFile);
     }
     console.log(
       JSON.stringify({
         project: projectName,
-        runtimes: RUNTIMES.length,
-        kafka: true,
-        kafkaCompatibility: true,
-        telemetry: true,
+        runtimes: options.databaseProof ? 1 : RUNTIMES.length,
+        kafka: !options.databaseProof,
+        kafkaCompatibility: !options.databaseProof,
+        telemetry: !options.databaseProof,
         healthEndpoints: ["/health/live", "/health/ready", "/metrics"],
-        stubSecrets: options.stubSecrets,
-        dbIntegrationProof: false,
-        hostPublish: ["4000:4000"],
+        stubSecrets: options.stubSecrets || options.databaseProof,
+        dbIntegrationProof: options.databaseProof,
+        hostPublish: options.databaseProof ? [] : ["4000:4000"],
         gracefulShutdown: true,
       }),
     );
   } finally {
     if (composeAttempted && !options.keep) {
       try {
-        runCompose(projectName, secretsDir, ["down", "--remove-orphans"]);
+        runCompose(
+          projectName,
+          secretsDir,
+          options.databaseProof
+            ? ["down", "--volumes", "--remove-orphans"]
+            : ["down", "--remove-orphans"],
+          {composeFile},
+        );
+      } catch {
+        /* preserve original smoke failure */
+      }
+    }
+    if (databaseProofContainer && !options.keep) {
+      try {
+        runDocker(["rm", "--force", "--volumes", databaseProofContainer]);
+      } catch {
+        /* preserve original smoke failure */
+      }
+    }
+    if (databaseProofNetwork && !options.keep) {
+      try {
+        runDocker(["network", "rm", databaseProofNetwork]);
       } catch {
         /* preserve original smoke failure */
       }
@@ -607,6 +1091,8 @@ async function main() {
         /* never remove a network adopted by another workload */
       }
     }
+    if (composeFile !== COMPOSE_FILE && !options.keep)
+      await rm(composeFile, {force: true});
     if (!options.keep) await rm(secretsDir, { recursive: true, force: true });
     else
       console.log(

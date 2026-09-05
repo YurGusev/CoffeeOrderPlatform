@@ -249,3 +249,31 @@ process-level fail-stop и снятие единственной пары signal
 фактическое завершение с допуском scheduler. Для non-cooperative hooks требуется
 `fail-stop` evidence и принудительное закрытие зарегистрированных ресурсов,
 а не только успешное завершение Promise ожидания.
+
+## 14. PostgreSQL foundation evidence #62
+
+Unit state-machine и fake-driver failures выполняются в существующем
+`packages/platform-testing/test/platform-packages.test.mjs`; они не заменяют
+реальный PostgreSQL. `tests/database/db-bootstrap.test.mjs` проверяет fleet
+budget с резервом/rollout и отсутствие автоматического изменения лимитов.
+
+Live commands: `COFFEE_DB_LIVE_PROOF=1 node --test
+ tests/database/live-db-proof.test.mjs` и `node scripts/db-live-proof.mjs`.
+Harness создаёт disposable PostgreSQL фиксированной версии, временные owner
+fixtures и credentials в памяти, затем удаляет созданный контейнер.
+Обязательные сценарии: concurrent acquire/replay/conflict, rollback при
+перехваченной SQL-ошибке, потерянный ответ COMMIT при фактически записанном owner
+state и восстановление durable response после reconnect, потерянный ответ
+ROLLBACK, checksum drift, COPY interruption и pool/health recovery.
+
+TCP proxy направляет terminal command настоящему серверу и удерживает ответ;
+измеряются wall-clock bound, destroy и отсутствие ROLLBACK после COMMIT.
+Timeout не считается доказательством rollback. Отдельный unit scenario
+не cooperative callback требует `fail-stop` с `stop:database` в pending.
+
+`pnpm test:compose-smoke --database-proof` проверяет owner-local pool/readiness
+в изолированном Compose окружении с disposable PG. Общий Kafka readiness gate
+не подменяется этим scoped proof и остаётся зависимым от #63. Structural
+`pnpm db:smoke` доказывает bootstrap/grants contract, не blackhole recovery.
+Итоговые команды, измерения и SHA-256 передаются в
+`evidence/handoffs/issue-62.yaml`; они не заменяют launch G10/G11/G13/G14.

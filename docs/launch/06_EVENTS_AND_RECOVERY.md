@@ -91,3 +91,45 @@ blind retry, compensation или повторный provider вызов.
 Lifecycle fixture с owner ledger проверяет только границу disconnect/acceptance
 и отсутствие повторного вызова fake effect. Это не доказательство durability
 после restart: такой admission требует PostgreSQL/Kafka handoffs #62/#63.
+
+## PostgreSQL terminal outcome и idempotency (#62)
+
+`withTransaction(database, {mode, signal, correlationId, causationId, traceparent},
+callback)` — единственная transaction boundary. `callback` получает opaque
+`Transaction`, не connection. Owner repository заранее определяет
+параметризованные statements через `@coffee-platform/database/owner`.
+После terminal state, при другом owner database или после cancellation они
+отклоняются. Внутри callback нет HTTP/provider effects; #63 добавляет owner-local
+Inbox/Outbox writes в тот же context.
+
+| Наблюдение | State / результат | Connection / recovery |
+|---|---|---|
+| Ответный command tag `COMMIT` | `Committed`, вернуть callback result | Release; теперь допустим `acceptDurable()` |
+| Callback/query failure до COMMIT, подтверждённый `ROLLBACK` | `RolledBack`, исходная typed failure | Release; новый запуск только по owner policy |
+| Abort до COMMIT, подтверждённый `ROLLBACK` | `RolledBack`, `DB_INTERRUPTED` | Release; client timeout сам по себе не доказывает rollback |
+| Потеря/blackhole ответа COMMIT или неизвестный command tag | `Unknown`, `TRANSACTION_OUTCOME_UNKNOWN` | Destroy; **никакого ROLLBACK и automatic retry** |
+| Abort/failure и ROLLBACK без подтверждения | `Unknown`, `DB_ROLLBACK_FAILED` | Destroy; `previousCode` сохраняет безопасный код исходного отказа |
+| Перехваченная SQL-ошибка и ответный tag `ROLLBACK` на COMMIT | `RolledBack`, `DB_TRANSACTION_ROLLED_BACK` | Нет acceptance/Replay; owner state и Completed откатились |
+| Повторное использование context после terminal operation | `DB_INVALID_TRANSITION` | SQL не отправляется |
+
+Production budgets: checkout `250ms`, transaction `10000ms`, каждый terminal
+operation `2000ms`; interactive/background statement timeout `1500/5000ms`,
+lock timeout `250ms`. Их сумма с двумя terminal operations меньше shutdown
+`30000ms`. Request/shutdown signal действует до начала COMMIT; после начала
+COMMIT ожидается только его собственный конечный budget. Broken/ambiguous
+соединение никогда не возвращается пригодным в pool.
+
+Нативные pending операции учитываются до фактического settlement. При закрытии
+socket драйвер завершает pending I/O. Произвольный callback Promise может не
+реагировать на abort: transaction вернёт управление, но DB resource останется
+pending. Runtime #61 фиксирует `fail-stop` и завершает процесс с кодом 1;
+это не обещание принудительной отмены произвольного JavaScript.
+
+Acquired, owner mutation и terminal response/Completed записываются одной
+транзакцией. Unique identity — `(actor_ref, scope, idempotency_key)`, где
+`idempotency_key` хранит protocol field `key`. Повтор с тем же canonical SHA-256
+возвращает только durable Completed response; другой hash — Conflict. Active
+или expired Acquired остаётся InProgress. Истечение lease/retention не даёт
+права повторить неизвестный эффект: owner recovery читает durable truth в новой
+транзакции после reconnect/restart и отдельно принимает решение. Локального
+кэша Completed и production InMemory store нет.

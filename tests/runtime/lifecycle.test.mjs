@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {chmod, mkdtemp, rm, writeFile} from "node:fs/promises";
 import {request as httpRequest} from "node:http";
 import {spawn} from "node:child_process";
 import {fileURLToPath} from "node:url";
@@ -11,6 +12,7 @@ import {
   configuredRuntimeIdentity,
   createRuntime,
   RuntimeError,
+  startConfiguredRuntime,
   startRuntime,
 } from "../../packages/platform-runtime/src/index.ts";
 
@@ -686,6 +688,71 @@ void test("configured roots preserve null deadlines for api-internal and realtim
     const app = await startApp({...base, port: 0});
     assert.deepEqual((await app.inject("/context")).json(), {deadlineUtc: null});
     await stopApp(app);
+  }
+});
+
+void test("configured owner receives the runtime's single opaque database resource", async () => {
+  const config = await loadPlatformConfig(join(root, "config/platform.yaml"), (text) => parseYaml(text, {json: true}));
+  const runtime = "customer-service";
+  const secrets = {};
+  for (const ref of config.services[runtime].secretRefs) {
+    const segments = ref.split(".");
+    let current = secrets;
+    for (const segment of segments.slice(0, -1)) {
+      current[segment] ??= {};
+      current = current[segment];
+    }
+    current[segments.at(-1)] = ref.startsWith("postgres.")
+      ? {username: "coffee_customer_rw", password: "test-password"}
+      : "test-secret";
+  }
+  const tempDir = await mkdtemp(join("/tmp", "coffee-runtime-owner-test-"));
+  const secretPath = join(tempDir, "customer-service.yaml");
+  await writeFile(secretPath, `${JSON.stringify({
+    schemaVersion: 1,
+    environment: config.environment,
+    runtime,
+    secrets,
+  })}\n`);
+  await chmod(secretPath, 0o400);
+  const previousConfig = process.env.COFFEE_CONFIG_FILE;
+  const previousSecrets = process.env.COFFEE_RUNTIME_SECRETS_FILE;
+  process.env.COFFEE_CONFIG_FILE = join(root, "config/platform.yaml");
+  process.env.COFFEE_RUNTIME_SECRETS_FILE = secretPath;
+  let received;
+  let destroyed = false;
+  try {
+    await assert.rejects(
+      startConfiguredRuntime(runtime, {
+        configure: (_app, _signal, database) => {
+          received = database;
+          const destroy = database.resource.destroy;
+          database.resource.destroy = () => {
+            destroyed = true;
+            destroy();
+          };
+          throw new Error("stop before resource start");
+        },
+      }),
+      /stop before resource start/,
+    );
+    assert.ok(received);
+    assert.equal(received.resource.name, "database");
+    assert.equal(received.readiness.name, "database");
+    assert.equal(destroyed, true);
+    assert.deepEqual(received.metrics(), {
+      active: 0,
+      idle: 0,
+      waiting: 0,
+      saturationTotal: 0,
+      pending: 0,
+    });
+  } finally {
+    if (previousConfig === undefined) delete process.env.COFFEE_CONFIG_FILE;
+    else process.env.COFFEE_CONFIG_FILE = previousConfig;
+    if (previousSecrets === undefined) delete process.env.COFFEE_RUNTIME_SECRETS_FILE;
+    else process.env.COFFEE_RUNTIME_SECRETS_FILE = previousSecrets;
+    await rm(tempDir, {recursive: true, force: true});
   }
 });
 
