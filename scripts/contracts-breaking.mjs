@@ -69,6 +69,7 @@ function compareSchema(before, after, at, sourcePath) {
   for (const type of beforeTypes) if (!afterTypes.has(type)) fail(`${at}: type ${type} removed`);
   const beforeEnum = new Set(before.enum ?? []);
   const afterEnum = new Set(after.enum ?? []);
+  if (before.enum === undefined && after.enum !== undefined) fail(`${at}: enum narrowed`);
   for (const value of beforeEnum) if (!afterEnum.has(value)) fail(`${at}: enum value ${JSON.stringify(value)} removed`);
   const oldRequired = new Set(before.required ?? []);
   for (const value of after.required ?? []) if (!oldRequired.has(value)) fail(`${at}: required field ${value} added`);
@@ -113,10 +114,34 @@ function compareResponse(before, after, at, sourcePath) {
   }
 }
 
+function compareParameter(before, after, at, sourcePath) {
+  if (!after) fail(`${at}: parameter removed`);
+  for (const field of ['name', 'in', 'required', '$ref']) if (before[field] !== after[field]) fail(`${at}: parameter ${field} changed`);
+  compareSchema(before.schema, after.schema, `${at}.schema`, sourcePath);
+}
+
+function parameterKey(parameter) {
+  return parameter.$ref ?? `${parameter.in}:${parameter.name}`;
+}
+
+function compareParameters(before, after, at, sourcePath, afterDocument) {
+  const next = new Map((after ?? []).map((parameter) => [parameterKey(parameter), parameter]));
+  const previous = new Set((before ?? []).map(parameterKey));
+  for (const parameter of before ?? []) compareParameter(parameter, next.get(parameterKey(parameter)), `${at}:${parameterKey(parameter)}`, sourcePath);
+  for (const parameter of after ?? []) {
+    if (previous.has(parameterKey(parameter))) continue;
+    const resolved = parameter.$ref?.startsWith('#/components/parameters/')
+      ? afterDocument.components.parameters[parameter.$ref.split('/').at(-1)]
+      : parameter;
+    if (resolved?.required) fail(`${at}: required parameter ${parameterKey(parameter)} added`);
+  }
+}
+
 function compareOpenApi(before, after, path) {
   if (JSON.stringify(before['x-command-recovery'] ?? null) !== JSON.stringify(after['x-command-recovery'] ?? null)) fail(`${path}: command recovery protocol changed`);
   for (const [route, pathItem] of Object.entries(before.paths ?? {})) {
     if (!after.paths?.[route]) fail(`${path}: route ${route} removed`);
+    compareParameters(pathItem.parameters, after.paths[route].parameters, `${path}:${route}:parameters`, path, after);
     for (const [method, operation] of Object.entries(pathItem)) {
       if (!['get', 'post', 'put', 'delete'].includes(method)) continue;
       const next = after.paths[route][method];
@@ -126,6 +151,7 @@ function compareOpenApi(before, after, path) {
       for (const field of ['x-owner', 'x-audience', 'x-caller', 'x-callers', 'x-exposure', 'x-auth', 'x-idempotency']) {
         if (JSON.stringify(operation[field]) !== JSON.stringify(next[field])) fail(`${path}: ${operation.operationId} ${field} changed`);
       }
+      compareParameters(operation.parameters, next.parameters, `${path}:${operation.operationId}:parameters`, path, after);
       for (const [status, response] of Object.entries(operation.responses ?? {})) {
         if (!next.responses?.[status]) fail(`${path}: ${operation.operationId} status ${status} removed`);
         compareResponse(response, next.responses[status], `${path}:${operation.operationId}:${status}`, path);
@@ -138,10 +164,23 @@ function compareOpenApi(before, after, path) {
     compareSchema(schema, after.components.schemas[name], `${path}#${name}`, path);
   }
   for (const [name, parameter] of Object.entries(before.components?.parameters ?? {})) {
-    const next = after.components?.parameters?.[name];
-    if (!next) fail(`${path}: parameter ${name} removed`);
-    for (const field of ['name', 'in', 'required', '$ref']) if (parameter[field] !== next[field]) fail(`${path}: parameter ${name} ${field} changed`);
-    compareSchema(parameter.schema, next.schema, `${path}:parameter:${name}`, path);
+    compareParameter(parameter, after.components?.parameters?.[name], `${path}:parameter:${name}`, path);
+  }
+  for (const [name, response] of Object.entries(before.components?.responses ?? {})) {
+    const next = after.components?.responses?.[name];
+    if (!next) fail(`${path}: response ${name} removed`);
+    compareResponse(response, next, `${path}:response:${name}`, path);
+  }
+  for (const [name, header] of Object.entries(before.components?.headers ?? {})) {
+    const next = after.components?.headers?.[name];
+    if (!next) fail(`${path}: header ${name} removed`);
+    if (header.$ref !== next.$ref) fail(`${path}: header ${name} $ref changed`);
+    compareSchema(header.schema, next.schema, `${path}:header:${name}`, path);
+  }
+  for (const [name, scheme] of Object.entries(before.components?.securitySchemes ?? {})) {
+    const next = after.components?.securitySchemes?.[name];
+    if (!next) fail(`${path}: security scheme ${name} removed`);
+    if (JSON.stringify(scheme) !== JSON.stringify(next)) fail(`${path}: security scheme ${name} changed`);
   }
 }
 

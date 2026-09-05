@@ -640,7 +640,7 @@ export type CreatePricingQuoteErrors = {
    */
   403: ErrorActorContextInvalid;
   /**
-   * Catalog product or variant does not exist.
+   * Catalog product or variant does not exist, or the completed rejection is replayed.
    */
   404: ErrorCatalogProductNotFound;
   /**
@@ -702,7 +702,7 @@ export type CreateOrderDraftErrors = {
    */
   403: ErrorActorContextInvalid;
   /**
-   * Customer does not exist.
+   * Customer does not exist, or the completed rejection is replayed.
    */
   404: ErrorCustomerNotFound;
   /**
@@ -900,7 +900,7 @@ export type ConfirmOrderErrors = {
    */
   403: ErrorActorContextInvalid;
   /**
-   * Order does not exist.
+   * Order does not exist, or the completed rejection is replayed.
    */
   404: ErrorOrderNotFound;
   /**
@@ -912,7 +912,7 @@ export type ConfirmOrderErrors = {
    */
   410: ErrorIdempotencyResultNotRetained;
   /**
-   * The persisted order cannot be confirmed.
+   * Confirmation is rejected, or the completed rejection is replayed.
    */
   422: ErrorOrderConfirmationRejected;
   /**
@@ -968,7 +968,7 @@ export type RequestAromaReconciliationErrors = {
    */
   403: ErrorActorContextInvalid;
   /**
-   * Order does not exist.
+   * Order does not exist, or the completed rejection is replayed.
    */
   404: ErrorOrderNotFound;
   /**

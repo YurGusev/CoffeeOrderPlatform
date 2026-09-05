@@ -18,6 +18,8 @@ x-command-recovery:
   responseHeaders: &command-recovery-response-headers
     Idempotency-Replayed: {$ref: '#/components/headers/IdempotencyReplayed'}
     Cache-Control: {$ref: '#/components/headers/NoStore'}
+  lookupResponseHeaders: &command-recovery-lookup-response-headers
+    Cache-Control: {$ref: '#/components/headers/NoStore'}
   lookupErrorSchemas: [ErrorIdempotencyConflict, ErrorIdempotencyRequestInProgress, ErrorIdempotencyResultNotRetained, ErrorIdempotencyResultInvalid, ErrorIdempotencyLookupUnavailable]
   terminalSchemas:
     createCustomer: [CustomerResponse, ErrorCustomerPhoneConflict, ErrorCustomerEmailConflict]
@@ -91,7 +93,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -100,7 +102,7 @@ paths:
                   - $ref: '#/components/schemas/ErrorIdempotencyResultInvalid'
         '503':
           description: Customer owner or idempotency lookup is unavailable.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -236,7 +238,7 @@ paths:
         '403':
           $ref: '#/components/responses/ActorContextInvalid'
         '404':
-          $ref: '#/components/responses/CatalogProductNotFound'
+          $ref: '#/components/responses/RecoveryCatalogProductNotFound'
         '409':
           description: Catalog, idempotency, or quote-input conflict.
           headers: *command-recovery-response-headers
@@ -250,7 +252,7 @@ paths:
                   - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
         '503':
           description: Catalog owner or idempotency lookup is unavailable.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -261,7 +263,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -317,7 +319,7 @@ paths:
         '403':
           $ref: '#/components/responses/ActorContextInvalid'
         '404':
-          $ref: '#/components/responses/CustomerNotFound'
+          $ref: '#/components/responses/RecoveryCustomerNotFound'
         '409':
           description: Customer state or idempotency conflict.
           headers: *command-recovery-response-headers
@@ -330,7 +332,7 @@ paths:
                   - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
         '503':
           description: Customer owner or idempotency lookup is unavailable.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -341,7 +343,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -425,7 +427,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -501,7 +503,7 @@ paths:
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -562,7 +564,7 @@ paths:
         '403':
           $ref: '#/components/responses/ActorContextInvalid'
         '404':
-          $ref: '#/components/responses/OrderNotFound'
+          $ref: '#/components/responses/RecoveryOrderNotFound'
         '409':
           description: Version, quote, order state, or idempotency conflict.
           headers: *command-recovery-response-headers
@@ -576,14 +578,14 @@ paths:
                   - $ref: '#/components/schemas/ErrorIdempotencyConflict'
                   - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
         '422':
-          $ref: '#/components/responses/OrderConfirmationRejected'
+          $ref: '#/components/responses/RecoveryOrderConfirmationRejected'
         '410':
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '503':
           $ref: '#/components/responses/IdempotencyLookupUnavailable'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -642,7 +644,7 @@ paths:
         '403':
           $ref: '#/components/responses/ActorContextInvalid'
         '404':
-          $ref: '#/components/responses/OrderNotFound'
+          $ref: '#/components/responses/RecoveryOrderNotFound'
         '409':
           description: Version, state, or idempotency conflict.
           headers: *command-recovery-response-headers
@@ -660,7 +662,7 @@ paths:
           $ref: '#/components/responses/IdempotencyLookupUnavailable'
         '500':
           description: Safe unexpected error or invalid stored terminal response.
-          headers: *command-recovery-response-headers
+          headers: *command-recovery-lookup-response-headers
           content:
             application/problem+json:
               schema:
@@ -925,6 +927,34 @@ components:
             $ref: '#/components/schemas/ErrorOrderNotFound'
     OrderConfirmationRejected:
       description: The persisted order cannot be confirmed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrderConfirmationRejected'
+    RecoveryCatalogProductNotFound:
+      description: Catalog product or variant does not exist, or the completed rejection is replayed.
+      headers: *command-recovery-response-headers
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorCatalogProductNotFound'
+    RecoveryCustomerNotFound:
+      description: Customer does not exist, or the completed rejection is replayed.
+      headers: *command-recovery-response-headers
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorCustomerNotFound'
+    RecoveryOrderNotFound:
+      description: Order does not exist, or the completed rejection is replayed.
+      headers: *command-recovery-response-headers
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ErrorOrderNotFound'
+    RecoveryOrderConfirmationRejected:
+      description: Confirmation is rejected, or the completed rejection is replayed.
+      headers: *command-recovery-response-headers
       content:
         application/problem+json:
           schema:

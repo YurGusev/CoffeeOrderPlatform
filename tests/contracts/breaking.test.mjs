@@ -113,6 +113,11 @@ for (const [name, mutation] of [
   ['component ref change', (document) => { document.components.schemas.CustomerRef.$ref = '../schemas/common/money-version-time.v1.schema.json#/$defs/MoneyMinor'; }],
   ['security removal', (document) => { document.paths['/api/client-v1/customers'].post.security = []; }],
   ['array bound narrowing', (document) => { document.components.schemas.PricingQuoteCreateRequest.properties.lines.maxItems = 1; }],
+  ['shared response schema ref change', (document) => { document.components.responses.ValidationFailed.content['application/problem+json'].schema.$ref = '#/components/schemas/OrderCardResponse'; }],
+  ['shared header const change', (document) => { document.components.headers.IdempotencyReplayed.schema.const = false; }],
+  ['operation parameter removal', (document) => { document.paths['/api/client-v1/customers'].post.parameters.shift(); }],
+  ['enum addition narrowing', (document) => { document.components.schemas.CustomerResponse.properties.displayName.enum = ['Only']; }],
+  ['security scheme change', (document) => { document.components.securitySchemes.bearerAuth.scheme = 'basic'; }],
 ]) {
   void test(`breaking guard rejects real client ${String(name)}`, async () => {
     const result = await realClientRed(mutation);

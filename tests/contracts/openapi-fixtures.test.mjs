@@ -257,15 +257,45 @@ void test("NDJSON success stream validates every record and terminal ordering", 
   assert.equal(lines[1].previousBatchHash, null);
   assert.equal(lines.at(-1).recordType, "snapshot-completed");
 
+  let releaseProducer;
+  const producerMayFinish = new Promise((resolve) => { releaseProducer = resolve; });
+  async function* records() {
+    yield `${JSON.stringify(lines[0])}\n`;
+    await producerMayFinish;
+    for (const line of lines.slice(1)) yield `${JSON.stringify(line)}\n`;
+  }
   const app = await createRuntime({name: "contracts-ndjson-test", host: "127.0.0.1", port: 0, shutdownGraceMs: 500});
-  app.get("/stream", async (_request, reply) => reply.type("application/x-ndjson").send(Readable.from(lines.map((line) => `${JSON.stringify(line)}\n`))));
-  await app.runtimeController.start();
-  const response = await app.inject("/stream");
-  assert.equal(response.headers["content-type"], "application/x-ndjson");
-  const decoded = response.payload.trim().split("\n").map((line) => JSON.parse(line));
-  for (const line of decoded) assert.equal(validate(line), true, JSON.stringify(validate.errors));
-  assert.deepEqual(decoded, lines);
-  await app.runtimeController.closeRuntime("test");
+  app.get("/stream", async (_request, reply) => reply.type("application/x-ndjson").send(Readable.from(records())));
+  const abort = new AbortController();
+  let reader;
+  try {
+    await app.runtimeController.start();
+    const address = app.server.address();
+    assert.equal(typeof address, "object");
+    const response = await fetch(`http://127.0.0.1:${address.port}/stream`, {signal: AbortSignal.any([abort.signal, AbortSignal.timeout(2000)])});
+    assert.equal(response.headers.get("content-type"), "application/x-ndjson");
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let wire = "";
+    while (!wire.includes("\n")) {
+      const first = await reader.read();
+      assert.equal(first.done, false, "producer EOF arrived before the first record");
+      wire += decoder.decode(first.value, {stream: true});
+    }
+    assert.equal(JSON.parse(wire.slice(0, wire.indexOf("\n"))).recordType, "snapshot-started", "first record was buffered until producer EOF");
+    assert.equal(wire, `${JSON.stringify(lines[0])}\n`, "client received records produced only after the release gate");
+    releaseProducer();
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) wire += decoder.decode(chunk.value, {stream: true});
+    wire += decoder.decode();
+    const decoded = wire.trim().split("\n").map((line) => JSON.parse(line));
+    for (const line of decoded) assert.equal(validate(line), true, JSON.stringify(validate.errors));
+    assert.deepEqual(decoded, lines);
+  } finally {
+    releaseProducer();
+    abort.abort();
+    await reader?.cancel();
+    await app.runtimeController.closeRuntime("test");
+  }
 });
 
 void test("negative HTTP fixtures fail closed across trust and representation boundaries", async () => {

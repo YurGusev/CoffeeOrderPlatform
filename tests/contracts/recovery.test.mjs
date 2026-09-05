@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import yaml from 'js-yaml';
+import { contractAjv } from '../../scripts/contracts-ajv.mjs';
 import { clientCommandScope, validateClientCommandRequest } from '../../packages/contracts/client-v1/src/index.ts';
 import { createRuntime } from '../../packages/platform-runtime/src/index.ts';
 
@@ -62,22 +63,46 @@ void test('recovery contract classifies completed variants and lookup errors by 
     for (const child of Object.values(value)) schemaRefs(child, seen);
     return seen;
   };
+  const resolveResponse = (response) => response.$ref ? document.components.responses[response.$ref.split('/').at(-1)] : response;
+  const resolveHeader = (header) => header.$ref ? document.components.headers[header.$ref.split('/').at(-1)] : header;
   for (const [operationId, terminal] of Object.entries(protocol.terminalSchemas)) {
     const operation = Object.values(document.paths).flatMap(Object.values).find((item) => item?.operationId === operationId);
     const allowed = schemaRefs(operation.responses);
     for (const schema of [...terminal, ...protocol.lookupErrorSchemas]) assert.ok(allowed.has(schema), `${operationId}: ${schema} is not a response variant`);
-    for (const response of Object.values(operation.responses)) {
-      if (response.$ref) continue;
+    for (const source of Object.values(operation.responses)) {
+      const response = resolveResponse(source);
       const variants = schemaRefs(response);
-      if ([...terminal, ...protocol.lookupErrorSchemas].some((schema) => variants.has(schema))) {
+      if ([...terminal].some((schema) => variants.has(schema))) {
         for (const [name, header] of Object.entries(protocol.responseHeaders)) assert.deepEqual(response.headers?.[name], header, `${operationId}: ${name} recovery header drift`);
+      } else if (protocol.lookupErrorSchemas.some((schema) => variants.has(schema))) {
+        assert.deepEqual(response.headers?.['Cache-Control'], protocol.responseHeaders['Cache-Control'], `${operationId}: lookup Cache-Control drift`);
+        assert.equal(response.headers?.['Idempotency-Replayed'], undefined, `${operationId}: lookup response declares replay marker`);
       }
     }
   }
   const fixtures = JSON.parse(await readFile(new URL('../../contracts/fixtures/positive/http/recovery.json', import.meta.url), 'utf8'));
-  for (const fixture of fixtures) {
+  const headerAjv = contractAjv({coerceTypes: true});
+  const validate = (fixture) => {
+    const operation = commands.find((item) => item.operationId === fixture.operationId);
+    const response = resolveResponse(operation.responses[String(fixture.status)]);
+    assert.ok(schemaRefs(response).has(fixture.schema), `${fixture.case}: schema is not allowed by the response`);
+    for (const [wireName, value] of Object.entries(fixture.headers)) {
+      const name = Object.keys(response.headers ?? {}).find((candidate) => candidate.toLowerCase() === wireName);
+      assert.ok(name, `${fixture.case}: undeclared response header ${wireName}`);
+      const check = headerAjv.compile(resolveHeader(response.headers[name]).schema);
+      assert.equal(check(value), true, `${fixture.case}: ${wireName} ${JSON.stringify(check.errors)}`);
+    }
     const marker = fixture.headers['idempotency-replayed'] === 'true';
-    assert.equal(marker && fixture.headers['cache-control'] === 'no-store', fixture.completed, fixture.case);
-    if (protocol.lookupErrorSchemas.includes(fixture.schema)) assert.equal(marker, false, fixture.case);
+    const lookupError = protocol.lookupErrorSchemas.includes(fixture.schema);
+    if (marker && !protocol.terminalSchemas[fixture.operationId].includes(fixture.schema)) throw new Error(`${fixture.case}: replay marker on non-terminal schema`);
+    if ((marker || lookupError) && fixture.headers['cache-control'] !== 'no-store') throw new Error(`${fixture.case}: recovery lookup is cacheable`);
+    return marker && !lookupError;
+  };
+  for (const fixture of fixtures) {
+    assert.equal(validate(fixture), fixture.completed, fixture.case);
   }
+  assert.throws(() => validate({...fixtures[1], case: 'wrong-marker-value', headers: {...fixtures[1].headers, 'idempotency-replayed': 'false'}}));
+  assert.throws(() => validate({...fixtures[1], case: 'missing-no-store', headers: {'idempotency-replayed': 'true'}}), /cacheable/);
+  assert.throws(() => validate({...fixtures[2], case: 'lookup-with-marker', headers: {...fixtures[2].headers, 'idempotency-replayed': 'true'}}), /undeclared|non-terminal/);
+  assert.throws(() => validate({...fixtures[1], case: 'wrong-response-schema', schema: 'ErrorOrderNotFound'}), /not allowed/);
 });

@@ -15,7 +15,7 @@ inputs:
     sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
 outputs:
   - artifact: contracts/openapi/client-v1.yaml
-    sha256: 4a7cb1ee79e4443ddc04cac2dbd28df9e713750f5f2db4d939ca9039a05b36ca
+    sha256: 0f9698cfbd3de2b3960be33a12afdd77671da4b6021c7644704ca57bc77f2f97
     consumers: [5, 7, 8, 9, 12, 13, 17, 18]
   - artifact: contracts/openapi/internal-v1.yaml
     sha256: d8fa8ddce4578ee843677b177c705e8675b99c30e8d323cc597ac4454ad1a2b0
@@ -57,7 +57,7 @@ outputs:
     sha256: c2bc7c6d441c7ad48e8414ec13260dc0dd8ad5845b316a3fb108c3bb93a5dbf0
     consumers: [8, 9, 12, 13]
   - artifact: packages/generated/client-v1/src/types.gen.ts
-    sha256: 57d2fa17c8dc6704d7fbd03804b2157926a79e83284334a66f5fed5f40e131c0
+    sha256: aa2f64b275da8789c9c5e41908d96b2b49aa4d73810309934d784c30bb5aeb2c
     consumers: [5, 7, 8, 9, 12, 17, 18]
   - artifact: packages/generated/internal-v1/src/types.gen.ts
     sha256: 3e8cf4066f5df2d4f73a42ba0edc195fede9fed24bf719166d926f9e75b789a1
@@ -102,14 +102,14 @@ verification:
   - command: pnpm contracts:check-generated
     result: passed
     exitCode: 0
-    detail: byte-identical sha256 18c6265182f92ab7ca2dbcf27ae7e3f0c1e8cb365ee8147f9d55e72fba2d1176
+    detail: byte-identical sha256 7e9ee4e0780e17e211275d736442e165d6ee5df4b7f5ff33b0ddbbe4f8656efd
   - command: pnpm contracts:breaking
     result: passed
     exitCode: 0
   - command: pnpm contracts:test
     result: passed
     exitCode: 0
-    detail: 27 tests; source-schema HTTP/Problem/recovery, TS7 generated types, SSE/NDJSON runtime codecs, seven events and RED breaking fixtures
+    detail: 32 tests; source-schema HTTP/Problem/recovery, TS7 generated types, pre-EOF SSE/NDJSON runtime codecs, seven events and RED breaking fixtures
   - command: pnpm image:build --load --tag coffee-platform-issue4:check .
     result: passed
     exitCode: 0
