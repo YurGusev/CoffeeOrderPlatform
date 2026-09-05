@@ -49,19 +49,6 @@ PR #15, принятия ADR-0019/ADR-0020, закрытия authority issue #19
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 
-## Текущая техническая authority
-
-После foundation #3 применяется линейка `#48 → #49 → #50 → #51 → #52 → #53 →
-#54 → #55 → #4`. ADR-0024 и machine authority v2 фиксируют Effect Schema/HttpApi,
-owner-local Layers, Effect SQL, typed Kafka adapter, AtomHttpApi и canonical BOM
-registry. #49 получает `status:ready` только после merge #48; #50–#55 остаются
-заблокированными непосредственным predecessor.
-
-Открытые документы сохраняют бизнес-семантику и границы; устаревшие технические
-варианты не являются target authority. Exact versions и mutable runtime values
-не дублируются в docs: они читаются из `config/toolchain-versions.json` и
-`config/platform.yaml` соответственно.
-
 ## Сила канонических документов
 
 Operational delivery authority определена

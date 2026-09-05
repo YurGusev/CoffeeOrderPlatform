@@ -1,22 +1,20 @@
 ---
 name: http-api-contracts
-description: Проектировать или реализовывать Effect HttpApi/OpenAPI, webhook, SSE, authentication, idempotency, concurrency и error-контракты CoffeeOrderPlatform для client, agent, internal и provider trust surfaces.
+description: Проектировать или реализовывать REST/OpenAPI, webhook, SSE, authentication, idempotency, concurrency и error-контракты CoffeeOrderPlatform для client, agent, internal и provider trust surfaces.
 ---
 
 # Контракты HTTP API
 
-Источник контрактов — Effect Schema и Effect HttpApi. Разделять
-`/api/client-v1`, `/api/agent-v1`, `/api/internal-v1`, provider ingress и
-`/events` по trust surface. В `#50` создавать только
-`packages/contracts/common-v1` и `packages/contracts/runtime-v1`; `client-v1`,
-`internal-v1` и `events-v1` создаёт `#4` вместе с первыми реальными contracts.
-Пустые artifacts заранее не scaffolding-ить.
+Использовать OpenAPI 3.2 и runtime JSON Schema. Разделять `/api/client-v1`,
+`/api/agent-v1`, `/api/internal-v1`, provider ingress, and `/events` trust
+модели доверия.
 
-OpenAPI 3.1, JSON Schema 2020-12 и manifest генерируются детерминированно из
-Effect source и являются проверяемыми артефактами, не runtime source of truth.
-Production-код не импортирует generated JSON. Не добавлять Hey API, generated
-SDK/client/hooks, параллельные DTO, Zod/AJV mirrors или handwritten transport
-типы. Browser client строится из того же `client-v1` Effect contract.
+Contract codegen по ADR-0022 — только types-only
+`@hey-api/openapi-ts@0.99.0` с `@hey-api/typescript`. Generated SDK/client/hooks,
+Zod и Axios запрещены; native fetch client использует generated transport types.
+Generator принимается только после golden corpus всех используемых OpenAPI 3.2
+constructs, deterministic generation, zero diff и `tsc 7.0.2` compile; silent
+field loss или unsupported construct блокирует контракт.
 
 Браузер и модели не выбирают actor identity, credentials, произвольные URL или
 авторитетные денежные значения. Команды выражают намерение, требуют

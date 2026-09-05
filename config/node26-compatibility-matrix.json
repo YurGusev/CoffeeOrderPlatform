@@ -1,9 +1,9 @@
 {
   "$schema": "./node26-compatibility-matrix.schema.json",
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "authorityRef": "docs/launch/09_EXISTING_DATABASE_AND_VERSIONS.md",
   "runtime": {
-    "nodeRef": "config/toolchain-versions.json#/node",
+    "node": "26.8.1",
     "platform": "linux",
     "architecture": "x64"
   },
@@ -11,7 +11,7 @@
     {
       "id": "fastify",
       "package": "fastify",
-      "registryRef": "config/toolchain-versions.json#/fastify",
+      "version": "5.12.1",
       "kind": "runtime",
       "probe": "fastify-factory",
       "required": true,
@@ -20,7 +20,7 @@
     {
       "id": "pg",
       "package": "pg",
-      "registryRef": "config/toolchain-versions.json#/pg",
+      "version": "8.23.0",
       "kind": "runtime",
       "probe": "pg-pool",
       "required": true,
@@ -29,7 +29,7 @@
     {
       "id": "confluent-kafka",
       "package": "@confluentinc/kafka-javascript",
-      "registryRef": "config/toolchain-versions.json#/confluentKafkaJavaScript",
+      "version": "1.10.0",
       "kind": "runtime-native",
       "probe": "confluent-kafka-native",
       "required": true,
@@ -38,7 +38,7 @@
     {
       "id": "opentelemetry-api",
       "package": "@opentelemetry/api",
-      "registryRef": "config/toolchain-versions.json#/opentelemetryApi",
+      "version": "1.9.1",
       "kind": "runtime",
       "probe": "opentelemetry-api",
       "required": true,
@@ -47,16 +47,17 @@
     {
       "id": "fastify-swagger",
       "package": "@fastify/swagger",
-      "registryRef": "config/toolchain-versions.json#/fastifySwagger",
+      "version": "9.8.1",
       "kind": "contract",
       "probe": "fastify-swagger-plugin",
       "required": true,
-      "authoritative": true
+      "authoritative": true,
+      "openapi": "3.2.0"
     },
     {
       "id": "vitest",
       "package": "vitest",
-      "registryRef": "config/toolchain-versions.json#/vitest",
+      "version": "4.1.11",
       "kind": "test",
       "probe": "vitest-cli",
       "required": true,
@@ -65,18 +66,43 @@
     {
       "id": "playwright",
       "package": "playwright",
-      "registryRef": "config/toolchain-versions.json#/playwright",
+      "version": "1.62.1",
       "kind": "browser-test",
       "probe": "playwright-module",
       "required": true,
       "authoritative": true
+    },
+    {
+      "id": "openapi-codegen",
+      "package": "@hey-api/openapi-ts",
+      "version": "0.99.0",
+      "kind": "candidate",
+      "probe": "openapi-codegen-cli",
+      "required": false,
+      "authoritative": false,
+      "openapi": "3.2.0",
+      "acceptedAfterIssue": 4
     }
   ],
   "policy": {
     "exactPackageVersions": true,
     "nativeDependencyLoadRequired": true,
-    "singleCompilerRef": "config/toolchain-versions.json#/typescript",
-    "generatedContractSource": "effect-schema-httpapi",
-    "generatedOpenApi": "3.1.0"
+    "singleCompiler": "typescript@7.0.2",
+    "candidateCodegen": {
+      "package": "@hey-api/openapi-ts",
+      "plugin": "@hey-api/typescript",
+      "openapi": "3.2.0",
+      "typesOnly": true,
+      "acceptedAfterIssue": 4,
+      "forbiddenOutputs": [
+        "sdk",
+        "client",
+        "hooks",
+        "zod",
+        "axios",
+        "interceptors",
+        "vite-integration"
+      ]
+    }
   }
 }

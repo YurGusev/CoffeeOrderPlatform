@@ -1,8 +1,6 @@
 # Матрица конфигурации 15 runtime
 
-Статус: нормативный input #19/#2/#3. Fixed topology/trust/network claims здесь
-являются authority; mutable values принадлежат `config/platform.yaml`, а exact
-versions — `config/toolchain-versions.json`. Пустое значение записывается как `null` или
+Статус: нормативный input #19/#2/#3. Пустое значение записывается как `null` или
 `[]`; скрытые defaults запрещены. Общие health paths: `/health/live`,
 `/health/ready`, `/metrics`; shutdown grace `30000ms`. Для каждой строки
 `listen.host=0.0.0.0` внутри container, metrics обслуживается на том же port по
@@ -16,10 +14,6 @@ partitions/retention берутся только из `06_EVENTS_AND_RECOVERY.md
 `producer|consumer` обязана перечислять exact topics/groups в `platform.yaml`.
 Mutation capability `true` только у `aroma-convergence` delegation и Gateway
 transport handler; у остальных runtime explicit `false`.
-
-Effect process/runtime/contract policy определяется ADR-0024 и
-`platform/runtime-foundation-decision.json`; эта матрица не выбирает версии,
-DI/lifecycle framework или второй config path.
 
 | Runtime                   | Port | Deadline / concurrency             | DB pool | Kafka                 | Secret refs                                                                                    | Разрешённые host:port / egress                                                                                    |
 | ------------------------- | ---: | ---------------------------------- | ------: | --------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |

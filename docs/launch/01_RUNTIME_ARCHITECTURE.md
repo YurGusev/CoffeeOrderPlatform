@@ -58,9 +58,8 @@ contracts, config, database, migrations, http-runtime, http-client,
 security, observability, idempotency, outbox, inbox, kafka-runtime, testing
 ```
 
-Бизнес-типы не помещаются в общие пакеты. Межсервисные зависимости разрешены
-только через versioned Effect Schema/HttpApi contracts и их generated
-OpenAPI/JSON Schema artifacts.
+Бизнес-типы не помещаются в общие пакеты. Межсервисные зависимости
+разрешены только через версионированные контракты OpenAPI/JSON Schema.
 
 ## Добавление нового runtime
 

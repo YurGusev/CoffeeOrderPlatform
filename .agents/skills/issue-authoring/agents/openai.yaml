@@ -1,4 +1,0 @@
-interface:
-  display_name: "Оформление delivery issue"
-  short_description: "Однозначные задачи с проверяемыми границами"
-  default_prompt: "Используй $issue-authoring, чтобы оформить однозначное delivery issue CoffeeOrderPlatform."

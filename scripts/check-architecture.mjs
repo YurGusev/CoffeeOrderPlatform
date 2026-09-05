@@ -6,6 +6,7 @@ import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ACCEPTED_DEPENDENCY_CRUISER = '18.2.0';
 const FORBIDDEN_ROOTS = ['packages/domain', 'packages/models', 'packages/shared-business'];
 const ALLOWED_PLATFORM_PACKAGES = new Set([
   '@coffee-platform/config',
@@ -23,113 +24,6 @@ const ALLOWED_PLATFORM_PACKAGES = new Set([
   '@coffee-platform/testing',
 ]);
 
-const EFFECT_UNSTABLE_ALLOWLIST = [
-  'effect/unstable/http/',
-  'effect/unstable/httpapi/',
-  'effect/unstable/sql/',
-  'effect/unstable/encoding/',
-  'effect/unstable/reactivity/',
-];
-
-const EFFECT_OFFICIAL_PACKAGES = new Set([
-  '@effect/platform-node',
-  '@effect/platform-browser',
-  '@effect/sql-pg',
-  '@effect/opentelemetry',
-  '@effect/atom-react',
-  '@effect/vitest',
-]);
-
-const TEMPORARY_LEGACY_ALLOW_NEW_USAGE = false;
-
-// This table is intentionally local and finite. Each entry is removed by its
-// owner during #50-#54; an exact source line keeps allowNewUsage=false.
-const TEMPORARY_LEGACY_INVENTORY = Object.freeze({
-  'packages/platform-config/src/index.ts': {
-    owner: 'issue-51',
-    removalIssue: 'issue-51',
-    rules: {'ARCH-EFFECT-PRIMARY': [{line: 256, text: 'export async function loadPlatformConfig'}]},
-  },
-  'packages/platform-database/src/index.ts': {
-    owner: 'issue-52',
-    removalIssue: 'issue-52',
-    rules: {'ARCH-EFFECT-PRIMARY': [{line: 31, text: 'export async function withTransaction'}]},
-  },
-  'packages/platform-idempotency/src/index.ts': {
-    owner: 'issue-53',
-    removalIssue: 'issue-53',
-    rules: {'ARCH-EFFECT-DURABILITY': [{line: 55, text: 'new Map<string, IdempotencyRecord<Response>>()'}]},
-  },
-  'packages/platform-inbox/src/index.ts': {
-    owner: 'issue-53',
-    removalIssue: 'issue-53',
-    rules: {
-      'ARCH-EFFECT-PRIMARY': [{line: 54, text: 'export async function consumeOnce'}],
-      'ARCH-EFFECT-DURABILITY': [{line: 84, text: 'new Map<string, StoredInboxRecord>()'}],
-    },
-  },
-  'packages/platform-kafka-runtime/src/index.ts': {
-    owner: 'issue-53',
-    removalIssue: 'issue-53',
-    rules: {'ARCH-EFFECT-PRIMARY': [{line: 97, text: 'export async function processKafkaRecord'}]},
-  },
-  'packages/platform-migrations/src/index.ts': {
-    owner: 'issue-52',
-    removalIssue: 'issue-52',
-    rules: {'ARCH-EFFECT-PRIMARY': [{line: 52, text: 'export async function applyMigrations'}]},
-  },
-  'packages/platform-outbox/src/index.ts': {
-    owner: 'issue-53',
-    removalIssue: 'issue-53',
-    rules: {
-      'ARCH-EFFECT-DURABILITY': [
-        {line: 52, text: 'new Map<string, Stored>()'},
-        {line: 53, text: 'new Map<string, string>()'},
-      ],
-    },
-  },
-  'packages/platform-runtime/src/index.ts': {
-    owner: 'issue-51',
-    removalIssue: 'issue-51',
-    rules: {
-      'ARCH-EFFECT-PRIMARY': [
-        {line: 134, text: 'export async function createRuntime'},
-        {line: 226, text: 'Promise.all('},
-        {line: 285, text: 'Promise.race('},
-        {line: 287, text: 'new Promise<never>'},
-        {line: 307, text: 'export async function startRuntime'},
-        {line: 327, text: 'export async function startConfiguredRuntime'},
-      ],
-    },
-  },
-  'packages/platform-time/src/index.ts': {
-    owner: 'issue-51',
-    removalIssue: 'issue-51',
-    rules: {'ARCH-EFFECT-PRIMARY': [{line: 15, text: 'Temporal.Now.instant()'}]},
-  },
-});
-
-const EFFECT_PRIMARY_CHECKS = [
-  {rule: 'ARCH-EFFECT-PRIMARY', pattern: /\basync\s+function\b/g, message: 'async function is forbidden; use Effect.gen'},
-  {rule: 'ARCH-EFFECT-PRIMARY', pattern: /\bnew\s+Promise\b/g, message: 'new Promise is forbidden; use Effect'},
-  {rule: 'ARCH-EFFECT-PRIMARY', pattern: /\bPromise\.(?:all|race|allSettled)\s*\(/g, message: 'Promise combinators are forbidden; use Effect'},
-  {rule: 'ARCH-EFFECT-PRIMARY', pattern: /\b(?:setTimeout|setInterval)\s*\(/g, message: 'timers are forbidden; use Effect Schedule/Clock'},
-  {rule: 'ARCH-EFFECT-PRIMARY', pattern: /\b(?:new\s+)?AbortController\b/g, message: 'AbortController is forbidden; use Effect cancellation'},
-  {rule: 'ARCH-EFFECT-PRIMARY', pattern: /\bDate\.now\s*\(/g, message: 'Date.now is forbidden; use Effect Clock'},
-  {rule: 'ARCH-EFFECT-PRIMARY', pattern: /\bTemporal\.Now\b/g, message: 'Temporal.Now is forbidden; use Effect Clock'},
-];
-
-const EFFECT_RUN_PATTERN = /\b(?:Effect\.run[A-Za-z0-9_$]*|Layer\.launch|ManagedRuntime\.make)\s*\(/g;
-const EFFECT_PROVIDE_PATTERN = /\b(?:Effect\.provide|Layer\.[A-Za-z_$][\w$]*)\s*\(/g;
-const EFFECT_FIBER_PATTERN = /\bEffect\.fork(?:Daemon)?\s*\(/g;
-const EFFECT_DURABILITY_PATTERN = /\b(?:new\s+(?:Map|WeakMap|Ref|Queue|Cache)(?:<[^>\n]+>)?|(?:Ref|Queue|Cache)\.(?:make|unsafeMake|unbounded|bounded))\s*\(/g;
-const EFFECT_RETRY_PATTERN = /\b(?:Effect\.(?:retry|repeat)|Schedule\.[A-Za-z_$][\w$]*|(?:retry|withRetry|retryMiddleware)\s*\()/g;
-const IMPORT_SPECIFIER_PATTERN = /\b(?:from|import(?:\s*\()?)\s*["']([^"']+)["']/g;
-const GENERATED_CONTRACT_PATTERN = /(?:^|[\\/])(?:dto|openapi|generated|sdk)(?:[.\\/]|$)/i;
-const SQL_IMPORT_PATTERN = /^(?:node:)?pg(?:\/|$)/i;
-const SENSITIVE_LAYER_PATH_PATTERN = /(?:^|[\\/])(?:domain|repository|repositories|db|database|infrastructure)(?:[\\/]|$)/i;
-const DURABLE_SOURCE_PATTERN = /(?:idempotency|inbox|outbox|attempt|lease|fence|reservation|journal|durable|processed)/i;
-
 function isAllowedPlatformPackage(name) {
   return ALLOWED_PLATFORM_PACKAGES.has(name) || name.startsWith('@coffee-platform/contracts-');
 }
@@ -138,309 +32,6 @@ function fail(rule, message) {
   const error = new Error(`${rule} ${message}`);
   error.ruleId = rule;
   throw error;
-}
-
-function lineNumber(source, index) {
-  return source.slice(0, Math.max(0, index)).split('\n').length;
-}
-
-function failAt(rule, label, source, index, message) {
-  fail(rule, `${label}:${lineNumber(source, index)} ${message}`);
-}
-
-function lineText(source, index) {
-  const start = source.lastIndexOf('\n', Math.max(0, index - 1)) + 1;
-  const end = source.indexOf('\n', index);
-  return source.slice(start, end === -1 ? source.length : end).trim();
-}
-
-function isLegacyUsage(label, rule, source, index) {
-  const entry = TEMPORARY_LEGACY_INVENTORY[label];
-  if (entry === undefined) return false;
-  const allowed = entry.rules[rule] ?? [];
-  if (TEMPORARY_LEGACY_ALLOW_NEW_USAGE) return allowed.length > 0;
-  const line = lineNumber(source, index);
-  const text = lineText(source, index);
-  return allowed.some((candidate) => {
-    if (candidate.line !== line || !text.includes(candidate.text)) return false;
-    const lineStart = source.lastIndexOf('\n', Math.max(0, index - 1)) + 1;
-    const first = source.indexOf(candidate.text, lineStart);
-    return first >= lineStart && first <= index && source.lastIndexOf(candidate.text, index) === first;
-  });
-}
-
-function effectViolation(rule, label, source, index, message) {
-  if (isLegacyUsage(label, rule, source, index)) return;
-  failAt(rule, label, source, index, message);
-}
-
-function relativeLabel(root, path) {
-  return posix.relative(resolve(root), resolve(path)).replaceAll('\\', '/');
-}
-
-function isProductionSource(label) {
-  return /^(?:apps|packages)\/[^/]+\/src\//.test(label);
-}
-
-function isRunBoundaryAllowed(label) {
-  return label.startsWith('tests/')
-    || label.startsWith('tools/')
-    || label.startsWith('scripts/')
-    || /^apps\/[^/]+\/src\/main\.tsx?$/.test(label)
-    || /^apps\/web\/src\/(?:main|runtime)\.tsx?$/.test(label);
-}
-
-function isProvideBoundaryAllowed(label) {
-  return label.startsWith('tests/')
-    || label.startsWith('tools/')
-    || label.startsWith('scripts/')
-    || /^apps\/[^/]+\/src\/main\.tsx?$/.test(label)
-    || /^apps\/[^/]+\/src\/(?:.*\/)?layer\.tsx?$/.test(label)
-    || /^packages\/platform-[^/]+\/src\/(?:.*\/)?layer\.tsx?$/.test(label);
-}
-
-function isAllowedEffectModule(moduleName) {
-  if (moduleName === 'effect' || moduleName.startsWith('effect/')) {
-    return !moduleName.startsWith('effect/unstable/')
-      || EFFECT_UNSTABLE_ALLOWLIST.some((prefix) => moduleName.startsWith(prefix));
-  }
-  if ([...EFFECT_OFFICIAL_PACKAGES].some((name) => moduleName === name || moduleName.startsWith(`${name}/`))) return true;
-  return !moduleName.startsWith('@effect/');
-}
-
-function isVersionedContractImport(moduleName) {
-  return /^@coffee-platform\/contracts-[\w-]+-v\d+(?:\/|$)/.test(moduleName)
-    || /^@coffee\/contracts\/[\w-]+-v\d+(?:\/|$)/.test(moduleName);
-}
-
-function importMatches(source) {
-  return [...source.matchAll(IMPORT_SPECIFIER_PATTERN)];
-}
-
-function resolvedRelativeImport(label, moduleName) {
-  if (!moduleName.startsWith('.')) return null;
-  return posix.normalize(posix.join(posix.dirname(label), moduleName)).replace(/\.(?:[cm]?js|tsx?)$/, '');
-}
-
-function checkSourceSyntax(label, source) {
-  const delimiters = new Map([['{', '}'], ['(', ')'], ['[', ']']]);
-  const closing = new Set(delimiters.values());
-  const stack = [];
-  let mode = 'code';
-  let quote = '';
-  let escaped = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    const next = source[index + 1];
-    if (mode === 'line-comment') {
-      if (char === '\n') mode = 'code';
-      continue;
-    }
-    if (mode === 'block-comment') {
-      if (char === '*' && next === '/') {
-        mode = 'code';
-        index += 1;
-      }
-      continue;
-    }
-    if (mode === 'template') {
-      if (escaped) escaped = false;
-      else if (char === '\\') escaped = true;
-      else if (char === '`') mode = 'code';
-      continue;
-    }
-    if (mode === 'string') {
-      if (escaped) escaped = false;
-      else if (char === '\\') escaped = true;
-      else if (char === quote) mode = 'code';
-      else if (char === '\n' || char === '\r') failAt('ARCH-EFFECT-PARSER', label, source, index, 'unterminated string literal');
-      continue;
-    }
-    if (char === '/' && next === '/') {
-      mode = 'line-comment';
-      index += 1;
-      continue;
-    }
-    if (char === '/' && next === '*') {
-      mode = 'block-comment';
-      index += 1;
-      continue;
-    }
-    if (char === "'" || char === '"') {
-      mode = 'string';
-      quote = char;
-      escaped = false;
-      continue;
-    }
-    if (char === '`') {
-      mode = 'template';
-      escaped = false;
-      continue;
-    }
-    if (delimiters.has(char)) stack.push({expected: delimiters.get(char), index});
-    else if (closing.has(char)) {
-      const opening = stack.pop();
-      if (opening === undefined || opening.expected !== char) failAt('ARCH-EFFECT-PARSER', label, source, index, 'unbalanced delimiter');
-    }
-  }
-  if (mode !== 'code') failAt('ARCH-EFFECT-PARSER', label, source, source.length, 'unterminated comment or string literal');
-  if (stack.length > 0) failAt('ARCH-EFFECT-PARSER', label, source, stack.at(-1).index, 'unbalanced delimiter');
-}
-
-function checkEffectPrimary(label, source) {
-  if (!isProductionSource(label)) return;
-  for (const {rule, pattern, message} of EFFECT_PRIMARY_CHECKS) {
-    pattern.lastIndex = 0;
-    for (const match of source.matchAll(pattern)) {
-      effectViolation(rule, label, source, match.index, message);
-    }
-  }
-}
-
-function checkEffectRunBoundary(label, source) {
-  EFFECT_RUN_PATTERN.lastIndex = 0;
-  for (const match of source.matchAll(EFFECT_RUN_PATTERN)) {
-    if (!isRunBoundaryAllowed(label)) {
-      effectViolation('ARCH-EFFECT-RUN-BOUNDARY', label, source, match.index, 'Effect execution may start only at a runtime/test/approved CLI boundary');
-    }
-  }
-}
-
-function checkEffectProvideBoundary(label, source) {
-  EFFECT_PROVIDE_PATTERN.lastIndex = 0;
-  for (const match of source.matchAll(EFFECT_PROVIDE_PATTERN)) {
-    if (!isProvideBoundaryAllowed(label)) {
-      effectViolation('ARCH-EFFECT-PROVIDE-BOUNDARY', label, source, match.index, 'Layer composition may occur only in layer/main/test boundaries');
-    }
-  }
-}
-
-function checkEffectModuleAllowlist(label, source) {
-  for (const match of importMatches(source)) {
-    const moduleName = match[1];
-    if (moduleName.startsWith('effect/') || moduleName.startsWith('@effect/')) {
-      if (!isAllowedEffectModule(moduleName)) {
-        effectViolation('ARCH-EFFECT-MODULE-ALLOWLIST', label, source, match.index, `Effect module ${moduleName} is not in ADR-0024 allowlist`);
-      }
-    }
-  }
-}
-
-function checkEffectOwnerLayer(label, source) {
-  if (!/(?:^|\/)layer\.tsx?$/.test(label) && !/\bLayer\s*\./.test(source)) return;
-  const sourceParts = label.split('/');
-  const sourceRuntime = sourceParts[0] === 'apps' ? sourceParts[1] : undefined;
-  for (const match of importMatches(source)) {
-    const moduleName = match[1];
-    const target = resolvedRelativeImport(label, moduleName);
-    if (target !== null) {
-      const targetParts = target.split('/');
-      if (targetParts[0] === 'apps' && (sourceRuntime === undefined || targetParts[1] !== sourceRuntime)) {
-        effectViolation('ARCH-EFFECT-OWNER-LAYER', label, source, match.index, `owner Layer crosses runtime boundary to ${target}`);
-      }
-      if (targetParts[0] === 'packages' && SENSITIVE_LAYER_PATH_PATTERN.test(target)) {
-        effectViolation('ARCH-EFFECT-OWNER-LAYER', label, source, match.index, `owner Layer imports implementation path ${target}`);
-      }
-      if (targetParts[0] === 'packages'
-        && !target.startsWith('packages/platform-')
-        && !/packages\/contracts\/[^/]+-v\d+(?:\/|$)/.test(target)) {
-        effectViolation('ARCH-EFFECT-OWNER-LAYER', label, source, match.index, `owner Layer import ${target} is not an approved contract/platform dependency`);
-      }
-      continue;
-    }
-    if (moduleName.startsWith('.') || moduleName.startsWith('node:')) {
-      effectViolation('ARCH-EFFECT-OWNER-LAYER', label, source, match.index, `owner Layer import ${moduleName} is not an approved contract/platform dependency`);
-      continue;
-    }
-    if (!isAllowedEffectModule(moduleName) && !isVersionedContractImport(moduleName) && !ALLOWED_PLATFORM_PACKAGES.has(moduleName)) {
-      effectViolation('ARCH-EFFECT-OWNER-LAYER', label, source, match.index, `owner Layer import ${moduleName} is not an approved contract/platform dependency`);
-    }
-  }
-}
-
-function checkEffectDurability(label, source) {
-  if (!isProductionSource(label) || !DURABLE_SOURCE_PATTERN.test(`${label}\n${source}`)) return;
-  EFFECT_DURABILITY_PATTERN.lastIndex = 0;
-  for (const match of source.matchAll(EFFECT_DURABILITY_PATTERN)) {
-    effectViolation('ARCH-EFFECT-DURABILITY', label, source, match.index, 'durable protocol state must use PostgreSQL/Kafka, not in-memory Effect state');
-  }
-}
-
-function checkEffectUnsafeRetry(label, source) {
-  if (!isProductionSource(label) || !/aroma/i.test(`${label}\n${source}`) || !/(?:gateway|convergence|cart|mutation|preparation)/i.test(`${label}\n${source}`)) return;
-  EFFECT_RETRY_PATTERN.lastIndex = 0;
-  for (const match of source.matchAll(EFFECT_RETRY_PATTERN)) {
-    effectViolation('ARCH-EFFECT-UNSAFE-RETRY', label, source, match.index, 'unsafe AROMA mutation must not use generic retry/repeat/Schedule');
-  }
-}
-
-function checkEffectScopedFiber(label, source) {
-  if (!isProductionSource(label)) return;
-  EFFECT_FIBER_PATTERN.lastIndex = 0;
-  for (const match of source.matchAll(EFFECT_FIBER_PATTERN)) {
-    effectViolation('ARCH-EFFECT-SCOPED-FIBER', label, source, match.index, 'background effects must use a Scope-owned forkScoped');
-  }
-}
-
-function checkEffectContractAuthority(label, source) {
-  if (!isProductionSource(label)) return;
-  if (GENERATED_CONTRACT_PATTERN.test(label) || /\b(?:interface|type|class)\s+[A-Za-z_$][\w$]*(?:Dto|DTO|OpenApi|OpenAPI)\b/.test(source)) {
-    effectViolation('ARCH-EFFECT-CONTRACT-AUTHORITY', label, source, 0, 'handwritten DTO/OpenAPI/generated source is not contract authority');
-  }
-  for (const match of importMatches(source)) {
-    const moduleName = match[1];
-    const target = resolvedRelativeImport(label, moduleName);
-    if (label.startsWith('apps/web/') && target?.startsWith('apps/') && target.split('/')[1] !== 'web') {
-      effectViolation('ARCH-EFFECT-CONTRACT-AUTHORITY', label, source, match.index, `web cannot import internal runtime source ${target}`);
-    }
-    if (label.startsWith('apps/web/') && /(?:internal|generated|openapi|dto|sdk)|^@hey-api(?:\/|$)|^openapi-(?:fetch|typescript)(?:\/|$)/i.test(moduleName)) {
-      effectViolation('ARCH-EFFECT-CONTRACT-AUTHORITY', label, source, match.index, `web import ${moduleName} is not an Effect Schema/HttpApi contract`);
-    }
-    if (label.startsWith('apps/web/') && isVersionedContractImport(moduleName) && /internal/i.test(moduleName)) {
-      effectViolation('ARCH-EFFECT-CONTRACT-AUTHORITY', label, source, match.index, `web cannot import internal contract ${moduleName}`);
-    }
-  }
-}
-
-function checkEffectSqlBoundary(label, source) {
-  if (!isProductionSource(label)) return;
-  for (const match of importMatches(source)) {
-    const moduleName = match[1];
-    if (SQL_IMPORT_PATTERN.test(moduleName) && !label.startsWith('packages/platform-database/src/')) {
-      effectViolation('ARCH-EFFECT-SQL-BOUNDARY', label, source, match.index, `direct pg import ${moduleName} is allowed only in platform-database`);
-    }
-  }
-  for (const pattern of [
-    /\bSqlClient\.withTransaction\s*\(/g,
-    /\b(?:row|record|result)\s+as\s+[A-Z][A-Za-z0-9_$]*(?:Row|Record)\b/g,
-  ]) {
-    pattern.lastIndex = 0;
-    for (const match of source.matchAll(pattern)) {
-      if (!label.startsWith('packages/platform-database/src/')) {
-        effectViolation('ARCH-EFFECT-SQL-BOUNDARY', label, source, match.index, 'SQL row/transaction boundary requires Effect SQL and Schema decoding');
-      }
-    }
-  }
-  const dynamicSql = /`[^`]*(?:select|insert|update|delete|from|into|join|table)\b[^`]*\$\{[^}]+\}[^`]*`/gis;
-  for (const match of source.matchAll(dynamicSql)) {
-    if (!label.startsWith('packages/platform-database/src/')) {
-      effectViolation('ARCH-EFFECT-SQL-BOUNDARY', label, source, match.index, 'SQL identifiers must be validated by the platform adapter');
-    }
-  }
-}
-
-function checkEffectRules(label, source) {
-  checkSourceSyntax(label, source);
-  checkEffectPrimary(label, source);
-  checkEffectRunBoundary(label, source);
-  checkEffectProvideBoundary(label, source);
-  checkEffectModuleAllowlist(label, source);
-  checkEffectOwnerLayer(label, source);
-  checkEffectDurability(label, source);
-  checkEffectUnsafeRetry(label, source);
-  checkEffectScopedFiber(label, source);
-  checkEffectContractAuthority(label, source);
-  checkEffectSqlBoundary(label, source);
 }
 
 async function walk(root) {
@@ -535,15 +126,13 @@ function checkStaticSource(path, source) {
   if (/\bOrderVersion\b/.test(source) && /\bProjectionVersion\b/.test(source) && /===|!==|<=|>=|<|>/.test(source)) {
     fail('TS7-VERSION-MIX', `${label}: OrderVersion and ProjectionVersion cannot be compared or mixed`);
   }
-  checkEffectRules(label, source);
 }
 
 async function checkStaticSources(root) {
-  const sourceFiles = (await Promise.all(['apps', 'packages', 'scripts', 'tests'].map((target) => walk(join(root, target)))))
+  const sourceFiles = (await Promise.all(['apps', 'packages'].map((target) => walk(join(root, target)))))
     .flat()
-    .filter((path) => /\.(?:ts|tsx|mts|cts)$/.test(path))
-    .filter((path) => !relativeLabel(root, path).startsWith('tests/architecture/fixtures/'));
-  for (const path of sourceFiles) checkStaticSource(relativeLabel(root, path), await readFile(path, 'utf8'));
+    .filter((path) => /\.(?:ts|tsx|mts|cts)$/.test(path));
+  for (const path of sourceFiles) checkStaticSource(path, await readFile(path, 'utf8'));
 }
 
 async function checkPermissionManifests(root) {
@@ -605,7 +194,7 @@ async function checkPermissionManifests(root) {
   }
 }
 
-async function runDependencyCruiser(root, configPath, dependencyCruiser) {
+async function runDependencyCruiser(root, configPath) {
   const targets = ['apps', 'packages'].filter((path) => existsSync(join(root, path)));
   if (targets.length === 0) return { skipped: true, reason: 'runtime roots are not materialized before issue #3' };
 
@@ -621,7 +210,7 @@ async function runDependencyCruiser(root, configPath, dependencyCruiser) {
     encoding: 'utf8',
     env: { ...process.env, NO_UPDATE_NOTIFIER: '1' },
   });
-  if (result.error) fail('BOUND-IMPORT', `Dependency Cruiser ${dependencyCruiser} unavailable: ${result.error.message}`);
+  if (result.error) fail('BOUND-IMPORT', `Dependency Cruiser ${ACCEPTED_DEPENDENCY_CRUISER} unavailable: ${result.error.message}`);
   let graph;
   try {
     graph = JSON.parse(result.stdout);
@@ -649,7 +238,7 @@ async function runDependencyCruiser(root, configPath, dependencyCruiser) {
       }
     }
   }
-  return { skipped: false, dependencyCruiser };
+  return { skipped: false };
 }
 
 export async function checkArchitecture(root = SCRIPT_ROOT) {
@@ -660,10 +249,9 @@ export async function checkArchitecture(root = SCRIPT_ROOT) {
   await checkPackageDependencies(resolvedRoot);
   await checkStaticSources(resolvedRoot);
   await checkPermissionManifests(resolvedRoot);
-  const { dependencyCruiser } = JSON.parse(await readFile(join(SCRIPT_ROOT, 'config/toolchain-versions.json'), 'utf8'));
   const configPath = resolve(SCRIPT_ROOT, '.dependency-cruiser.cjs');
   if (!existsSync(configPath) || !(await stat(configPath)).isFile()) fail('BOUND-IMPORT', '.dependency-cruiser.cjs is missing');
-  return await runDependencyCruiser(resolvedRoot, configPath, dependencyCruiser);
+  return await runDependencyCruiser(resolvedRoot, configPath);
 }
 
 function parseRoot(argv) {
@@ -674,7 +262,7 @@ function parseRoot(argv) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const result = await checkArchitecture(parseRoot(process.argv.slice(2)));
-    console.log(result.skipped ? `architecture: passed (${result.reason})` : `architecture: passed with Dependency Cruiser ${result.dependencyCruiser}`);
+    console.log(result.skipped ? `architecture: passed (${result.reason})` : `architecture: passed with Dependency Cruiser ${ACCEPTED_DEPENDENCY_CRUISER}`);
   } catch (error) {
     console.error(`architecture: FAIL: ${error.message}`);
     process.exitCode = 1;

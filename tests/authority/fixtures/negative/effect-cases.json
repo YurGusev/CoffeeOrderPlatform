@@ -1,7 +1,0 @@
-[
-  {"id":"mixed-effect-version","manifest":"toolchain-versions.json","path":["effectTarget","packages","effect"],"operation":"replace","value":"4.0.0-rc.111","expected":{"message":"Effect packages"}},
-  {"id":"forbidden-unstable-module","manifest":"runtime-foundation-decision.json","path":["effectPlatformDecision","modulePolicy","allowedUnstablePrefixes"],"operation":"replace","value":["effect/unstable/http/","effect/unstable/httpapi/","effect/unstable/sql/","effect/unstable/encoding/","effect/unstable/reactivity/","effect/unstable/rpc/"],"expected":{"message":"modulePolicy"}},
-  {"id":"second-config-authority","manifest":"runtime-foundation-decision.json","path":["effectPlatformDecision","configRef"],"operation":"add","value":"config/effect-authority.json","expected":{"message":"effectPlatformDecision"}},
-  {"id":"runtime-count-changed","manifest":"runtime-foundation-decision.json","path":["preservedArchitecture","deployableRuntimeCount"],"operation":"replace","value":14,"expected":{"message":"preservedArchitecture"}},
-  {"id":"database-count-changed","manifest":"runtime-foundation-decision.json","path":["preservedArchitecture","logicalDatabaseCount"],"operation":"replace","value":4,"expected":{"message":"preservedArchitecture"}}
-]
