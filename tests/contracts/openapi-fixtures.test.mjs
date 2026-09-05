@@ -95,6 +95,10 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function assertRoundTrip(value, label) {
+  assert.deepEqual(JSON.parse(JSON.stringify(value)), value, `${label}: JSON encode/decode changed value`);
+}
+
 function setPath(value, path, next) {
   const parent = path.slice(0, -1).reduce((current, part) => current[part], value);
   parent[path.at(-1)] = next;
@@ -179,6 +183,13 @@ void test("Problem fixtures cover every operation response variant and exact sta
     assert.equal(fixture.body.status, fixture.status);
   }
   assert.deepEqual(seen, expectedKeys, "missing Problem variant fixture");
+});
+
+void test("positive wire fixtures survive encode/decode round-trip", async () => {
+  const {success, problems} = await loadCorpus();
+  for (const fixture of [...success, ...problems]) if (fixture.body) assertRoundTrip(fixture.body, `${fixture.document}:${fixture.operationId}:${fixture.status}`);
+  for (const frame of await jsonFixture(join(POSITIVE_ROOT, "sse/order-invalidations.json"))) assertRoundTrip(frame, `SSE:${frame.event ?? "heartbeat"}`);
+  for (const [index, line] of (await readFile(join(POSITIVE_ROOT, "ndjson/aroma-catalog-success.ndjson"), "utf8")).trim().split("\n").entries()) assertRoundTrip(JSON.parse(line), `NDJSON:${index + 1}`);
 });
 
 void test("SSE fixtures enforce ready/reset/invalidation/heartbeat wire rules", async () => {

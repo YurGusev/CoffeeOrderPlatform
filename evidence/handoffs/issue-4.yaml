@@ -21,7 +21,7 @@ outputs:
     sha256: b8745739c2c4232f265d5c8059a35480f0faa92957a1d791706560f64105cd9f
     consumers: [5, 6, 7, 8, 10, 11, 13, 16, 17, 18]
   - artifact: contracts/manifest.yaml
-    sha256: 5f0c2ba349de058b302a62f3ae2c8cccd8e3fe661e085dc10749100a35c1c4b3
+    sha256: 85d03be3726f25be7a0d8961e096b44d305b7d729dae4356f1ae675ac9e9f4a5
     consumers: [5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18]
   - artifact: contracts/schemas/common/identifiers.v1.schema.json
     sha256: 50173e30c98cdcfd53417b4b56743d3b45ad037ede096528eaa9b5c6c78752ab
@@ -65,6 +65,9 @@ outputs:
   - artifact: packages/contracts/client-v1/src/index.ts
     sha256: eb8087f3cbb155260c5aaca7396136949823b426bcc657d9996d80c9d6ed215f
     consumers: [5, 7, 8, 9]
+  - artifact: Dockerfile
+    sha256: 3420448e3562802e164cf09e319cd331edafa8554f247cc4281a830fd2c49ca0
+    consumers: [13, 64]
 verification:
   - command: pnpm contracts:lint
     result: passed
@@ -82,7 +85,15 @@ verification:
   - command: pnpm contracts:test
     result: passed
     exitCode: 0
-    detail: 13 tests; HTTP success/Problem, seven events, SSE, NDJSON, recovery and RED breaking fixtures
+    detail: 16 tests; HTTP success/Problem, encode/decode round-trip, seven events, SSE, NDJSON, recovery and RED breaking fixtures
+  - command: pnpm image:build --load --tag coffee-platform-issue4:check .
+    result: passed
+    exitCode: 0
+    detail: nested contract/generated workspace manifests materialized in builder
+  - command: docker run --rm --entrypoint /bin/sh coffee-platform-issue4:check -c 'test ! -e /app/node_modules/typescript && test ! -e /app/node_modules/@hey-api/openapi-ts && test ! -e /app/node_modules/oxlint && test ! -e /app/packages/generated && test ! -e /app/contracts'
+    result: passed
+    exitCode: 0
+    detail: final non-root runtime image excludes contract-generation tooling and sources
   - command: pnpm architecture:check
     result: passed
     exitCode: 0
