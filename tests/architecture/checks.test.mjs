@@ -506,3 +506,17 @@ void test("RED BOUND-DB-CLIENT: handlers cannot import raw pg or SQL capabilitie
     }
   } finally {await rm(root, {recursive: true, force: true});}
 });
+
+void test("RED BOUND-KAFKA-CLIENT: handlers cannot bypass bounded delivery", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-kafka-boundary-"));
+  const directory = join(root, "apps/orders-service/src");
+  try {
+    await mkdir(directory, {recursive: true});
+    for (const moduleName of ["@confluentinc/kafka-javascript", "@confluentinc/kafka-javascript/promisified", "../../../packages/platform-kafka-runtime/dist/native.js"]) {
+      await writeFile(join(directory, "handler.ts"), `import * as forbidden from ${JSON.stringify(moduleName)};\nvoid forbidden;\n`);
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(output(result), /BOUND-KAFKA-CLIENT/);
+    }
+  } finally {await rm(root, {recursive: true, force: true});}
+});

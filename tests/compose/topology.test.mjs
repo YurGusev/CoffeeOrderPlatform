@@ -79,10 +79,18 @@ const NETWORKS = {
 
 const SCOPED_SECRET_NAMES = RUNTIMES.map((runtime) => `runtime-${runtime}`);
 
-function composeConfig() {
+function composeConfig(projectName) {
   const result = spawnSync(
     "docker",
-    ["compose", "-f", COMPOSE_FILE, "config", "--format", "json"],
+    [
+      "compose",
+      ...(projectName === undefined ? [] : ["--project-name", projectName]),
+      "-f",
+      COMPOSE_FILE,
+      "config",
+      "--format",
+      "json",
+    ],
     {
       cwd: REPO_ROOT,
       encoding: "utf8",
@@ -306,6 +314,33 @@ void test("Kafka is pinned and runs as a single-node KRaft broker without host p
   assert.equal(kafka.environment.KAFKA_INTER_BROKER_LISTENER_NAME, "SASL_SSL");
   assert.equal(kafka.environment.KAFKA_AUTO_CREATE_TOPICS_ENABLE, "false");
   assert.match(kafka.healthcheck.test[1], /kafka-broker-api-versions/);
+});
+
+void test("Kafka data uses a project-scoped named volume", async () => {
+  const config = composeConfig();
+  const scopedConfig = composeConfig("coffee-topology-volume-scope");
+  const kafkaData = config.volumes?.kafka_data;
+  assert.equal(config.services.kafka.environment.KAFKA_LOG_DIRS, "/var/lib/kafka/data");
+  assert.deepEqual(kafkaData, { name: "coffee-platform_kafka_data" });
+  assert.equal(
+    scopedConfig.volumes?.kafka_data?.name,
+    "coffee-topology-volume-scope_kafka_data",
+  );
+  assert.deepEqual(
+    config.services.kafka.volumes.filter(({ target }) =>
+      target === "/var/lib/kafka/data",
+    ),
+    [
+      {
+        type: "volume",
+        source: "kafka_data",
+        target: "/var/lib/kafka/data",
+        volume: {},
+      },
+    ],
+  );
+  const source = await readFile(COMPOSE_FILE, "utf8");
+  assert.doesNotMatch(source, /(^|\n)  kafka_data:\n(?:    .*\n)*    name:/);
 });
 
 void test("Node production image is exact, non-root, and keeps build tooling out of final stage", async () => {

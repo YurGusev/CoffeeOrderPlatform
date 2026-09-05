@@ -94,6 +94,21 @@ RUN node scripts/check-node26-compatibility.mjs \
 ARG RUNTIME=edge-gateway
 RUN pnpm --filter "@coffee-platform/${RUNTIME}" deploy --prod --legacy /runtime
 
+# pnpm deploy copies package-store files, so carry the explicitly built addon
+# into the deployed dependency and verify that the production tree loads it.
+RUN node --input-type=commonjs <<'NODE'
+const {createRequire} = require('node:module');
+const {dirname, join} = require('node:path');
+const {mkdirSync, copyFileSync} = require('node:fs');
+const runtime = createRequire('/runtime/package.json');
+const foundation = createRequire(runtime.resolve('@coffee-platform/runtime'));
+const kafka = createRequire(foundation.resolve('@coffee-platform/kafka-runtime'));
+const destination = join(dirname(kafka.resolve('@confluentinc/kafka-javascript/package.json')), 'build/Release');
+mkdirSync(destination, {recursive: true});
+copyFileSync('node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node', join(destination, 'confluent-kafka-javascript.node'));
+if (typeof kafka('@confluentinc/kafka-javascript').RdKafka.Producer !== 'function') throw new Error('Deployed Kafka native addon is missing');
+NODE
+
 FROM ${NODE_IMAGE} AS runtime
 
 ENV NODE_ENV=production

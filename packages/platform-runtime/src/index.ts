@@ -9,6 +9,11 @@ import {
 } from "@coffee-platform/config";
 import { createDatabase, type Database } from "@coffee-platform/database";
 import {
+  createKafkaRuntime,
+  type KafkaRuntime,
+  type KafkaCredentials,
+} from "@coffee-platform/kafka-runtime";
+import {
   createCorrelationContext,
   isTraceparent,
   withCorrelationFields,
@@ -42,6 +47,7 @@ export type RuntimeComposition = Readonly<{
     app: FastifyInstance,
     signal: AbortSignal,
     database?: Database,
+    kafka?: KafkaRuntime,
   ) => Promise<void> | void;
 }>;
 
@@ -125,25 +131,63 @@ function ownDatabaseCredential(
   };
 }
 
-function appendDatabaseComposition(
-  composition: RuntimeComposition,
-  database: Database,
-): RuntimeComposition {
+function ownKafkaCredential(
+  document: ScopedSecretDocument,
+  refs: readonly string[],
+): KafkaCredentials {
+  const kafkaRefs = refs.filter((ref) => ref.startsWith("kafka."));
+  if (kafkaRefs.length !== 1)
+    throw new RuntimeError("RUNTIME_KAFKA_SECRET_SCOPE");
+  let value: unknown = document.secrets;
+  for (const segment of (kafkaRefs[0] ?? "").split("."))
+    value = secretRecord(value) ? value[segment] : undefined;
   if (
-    composition.resources?.some((resource) => resource.name === "database") ||
-    composition.readinessChecks?.some((check) => check.name === "database")
+    !secretRecord(value) ||
+    !["password,username", "caPem,password,username"].includes(Object.keys(value).sort().join(",")) ||
+    [value["username"], value["password"]].some(
+      (field) => typeof field !== "string" || field.length === 0,
+    ) || (value["caPem"] !== undefined && (typeof value["caPem"] !== "string" || value["caPem"].length === 0))
   )
-    throw new RuntimeError("RUNTIME_DATABASE_DUPLICATE_COMPOSITION");
+    throw new RuntimeError("RUNTIME_KAFKA_SECRET_INVALID");
+  return {
+    username: value["username"] as string,
+    password: value["password"] as string,
+    ...(value["caPem"] === undefined ? {} : {caPem: value["caPem"] as string}),
+  };
+}
+
+function appendOwnedComposition(
+  composition: RuntimeComposition,
+  database?: Database,
+  kafka?: KafkaRuntime,
+): RuntimeComposition {
+  const owned = [...(database ? [database] : []), ...(kafka ? [kafka] : [])];
+  for (const owner of owned) {
+    if (
+      composition.resources?.some(
+        (resource) => resource.name === owner.resource.name,
+      ) ||
+      composition.readinessChecks?.some(
+        (check) => check.name === owner.readiness.name,
+      )
+    )
+      throw new RuntimeError("RUNTIME_DUPLICATE_COMPOSITION");
+  }
   return {
     ...composition,
-    ...(composition.configure === undefined
-      ? {}
-      : {
-          configure: (app: FastifyInstance, signal: AbortSignal) =>
-            composition.configure?.(app, signal, database),
-        }),
-    resources: [database.resource, ...(composition.resources ?? [])],
-    readinessChecks: [database.readiness, ...(composition.readinessChecks ?? [])],
+    configure: (app: FastifyInstance, signal: AbortSignal) => {
+      if (kafka)
+        void kafka.whenFailed.then(() => app.runtimeController.closeRuntime());
+      return composition.configure?.(app, signal, database, kafka);
+    },
+    resources: [
+      ...owned.map((owner) => owner.resource),
+      ...(composition.resources ?? []),
+    ],
+    readinessChecks: [
+      ...owned.map((owner) => owner.readiness),
+      ...(composition.readinessChecks ?? []),
+    ],
   };
 }
 
@@ -715,7 +759,10 @@ export function configuredRuntimeIdentity(
     bodyLimitBytes,
     requiredDependencies: [
       ...(runtime.database === null ? [] : ["database"]),
-      ...(runtime.kafka.mode === "none" ? [] : ["kafka"]),
+      ...(runtime.kafka.producers.length === 0 &&
+      runtime.kafka.consumers.length === 0
+        ? []
+        : ["kafka"]),
     ],
   };
 }
@@ -758,8 +805,8 @@ export async function startConfiguredRuntime(
   const shutdownGraceMs = config.platform["shutdownGraceMs"];
   if (typeof shutdownGraceMs !== "number")
     throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
-  let configuredComposition = composition;
   let database: Database | undefined;
+  let kafka: KafkaRuntime | undefined;
   try {
     if (service.database !== null) {
       if (service.dbPool === null)
@@ -781,12 +828,30 @@ export async function startConfiguredRuntime(
         pool: service.dbPool,
         shutdownGraceMs,
       });
-      configuredComposition = appendDatabaseComposition(composition, database);
+    }
+    if (
+      service.kafka.producers.length > 0 ||
+      service.kafka.consumers.length > 0
+    ) {
+      kafka = createKafkaRuntime({
+        runtime: name,
+        config: config.kafka,
+        service: service.kafka,
+        credentials: ownKafkaCredential(
+          secretDocument as ScopedSecretDocument,
+          service.secretRefs,
+        ),
+      });
     }
     return await startRuntime(
-      configuredRuntimeIdentity(config, name, configuredComposition),
+      configuredRuntimeIdentity(
+        config,
+        name,
+        appendOwnedComposition(composition, database, kafka),
+      ),
     );
   } catch (error) {
+    kafka?.resource.destroy();
     database?.resource.destroy();
     throw error;
   }

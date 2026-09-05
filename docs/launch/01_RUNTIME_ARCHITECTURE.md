@@ -134,7 +134,7 @@ shutdown budget. Повторный signal получает тот же резу
 ### Readiness matrix
 
 `configuredRuntimeIdentity(config, name, composition)` выводит обязательные
-имена checks из `services[name].database` и `kafka.mode`, без второго реестра.
+имена checks из `services[name].database` и directional `kafka.producers/consumers`, без второго реестра.
 
 | Checks | Runtime |
 |---|---|

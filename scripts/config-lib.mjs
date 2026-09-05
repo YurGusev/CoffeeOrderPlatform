@@ -27,6 +27,43 @@ const RUNTIMES = [
   "aroma-gateway",
   "realtime-gateway",
 ];
+const KAFKA_TOPICS = [
+  "coffee.catalog.snapshot.v1",
+  "coffee.catalog.mapping.v2",
+  "coffee.orders.lifecycle.v1",
+  "coffee.aroma.cart.commands.v1",
+  "coffee.aroma.cart.events.v1",
+  "coffee.realtime.invalidate.v1",
+];
+const EXPECTED_KAFKA_PRODUCERS = {
+  "edge-gateway": [], "api-public": [], "api-internal": [], web: [],
+  "customer-service": [], "catalog-service": [], "catalog-supplier-sync": [],
+  "catalog-activation-worker": ["coffee.catalog.snapshot.v1", "coffee.catalog.mapping.v2"],
+  "pricing-service": [],
+  "orders-service": ["coffee.orders.lifecycle.v1", "coffee.aroma.cart.commands.v1", "coffee.realtime.invalidate.v1"],
+  "orders-aroma-preparation": ["coffee.aroma.cart.commands.v1", "coffee.realtime.invalidate.v1"],
+  "aroma-observer": ["coffee.aroma.cart.events.v1"],
+  "aroma-convergence": ["coffee.aroma.cart.events.v1", "coffee.realtime.invalidate.v1"],
+  "aroma-gateway": [], "realtime-gateway": [],
+};
+const EXPECTED_KAFKA_CONSUMERS = {
+  "edge-gateway": [], "api-public": [], "api-internal": [], web: [],
+  "customer-service": [], "catalog-service": [], "catalog-supplier-sync": [],
+  "catalog-activation-worker": [], "pricing-service": [], "orders-service": [],
+  "orders-aroma-preparation": [
+    {groupId: "orders-catalog-mapping-v2", topics: ["coffee.catalog.mapping.v2"], processing: "durable"},
+    {groupId: "orders-aroma-preparation-v1", topics: ["coffee.orders.lifecycle.v1"], processing: "durable"},
+    {groupId: "orders-aroma-projection-v1", topics: ["coffee.aroma.cart.events.v1"], processing: "durable"},
+  ],
+  "aroma-observer": [],
+  "aroma-convergence": [
+    {groupId: "aroma-convergence-v1", topics: ["coffee.aroma.cart.commands.v1"], processing: "durable"},
+  ],
+  "aroma-gateway": [],
+  "realtime-gateway": [
+    {groupId: "realtime-gateway-v1", topics: ["coffee.realtime.invalidate.v1"], processing: "realtime"},
+  ],
+};
 const ALLOWED_SOPS_FILES = new Set([
   "secrets/platform.secrets.sops.yaml",
   "secrets/platform-secrets.schema.json",
@@ -278,6 +315,31 @@ function checkConfigKeys(document) {
   });
 }
 
+function checkKafkaConfiguration(config) {
+  const configuredTopics = Object.values(config.kafka.topics).map((topic) => topic.name);
+  if (JSON.stringify(sorted(configuredTopics)) !== JSON.stringify(sorted(KAFKA_TOPICS)))
+    fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", "Kafka topic registry differs from launch allowlist");
+  for (const runtime of RUNTIMES) {
+    const access = config.services[runtime].kafka;
+    const expectedProducers = EXPECTED_KAFKA_PRODUCERS[runtime];
+    if (JSON.stringify(access.producers) !== JSON.stringify(expectedProducers))
+      fail("CONFIG-KAFKA-DIRECTION", `${runtime}.kafka.producers differs from launch mapping`);
+    for (const topic of access.producers) {
+      if (!KAFKA_TOPICS.includes(topic)) fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", `${runtime}.kafka.producers contains ${topic}`);
+    }
+    for (const consumer of access.consumers) {
+      if (!consumer.topics.every((topic) => KAFKA_TOPICS.includes(topic)))
+        fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", `${runtime}.kafka consumer contains an unknown topic`);
+      if (consumer.processing === "realtime" &&
+          (runtime !== "realtime-gateway" || consumer.groupId !== "realtime-gateway-v1" ||
+            JSON.stringify(consumer.topics) !== JSON.stringify(["coffee.realtime.invalidate.v1"])))
+        fail("CONFIG-KAFKA-REALTIME", `${runtime}.kafka.realtime is outside the sole realtime exception`);
+    }
+    if (JSON.stringify(access.consumers) !== JSON.stringify(EXPECTED_KAFKA_CONSUMERS[runtime]))
+      fail("CONFIG-KAFKA-DIRECTION", `${runtime}.kafka.consumers differs from launch mapping`);
+  }
+}
+
 function isSecretLikeKey(key) {
   return (
     typeof key === "string" &&
@@ -459,6 +521,7 @@ export async function loadPlatformConfig(
   validate(schema, config, path);
   checkConfigKeys(config);
   exactSet(config.services, RUNTIMES, "platform.yaml services");
+  checkKafkaConfiguration(config);
   try {
     assertDatabaseAdmissionBudget({services: config.services, postgres: config.postgres});
   } catch (error) {

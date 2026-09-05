@@ -1,0 +1,949 @@
+issue: 63
+baseCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+status: verified
+inputs:
+- issue: 60
+  acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+  artifact: evidence/handoffs/issue-60.yaml
+  sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+- issue: 60
+  acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+  artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+  sha256: 108de7042b7546cae60e4fe807fe1bb8640d464e37caed1bb5a147f0c1abc141
+- issue: 61
+  acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+  artifact: evidence/handoffs/issue-61.yaml
+  sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+- issue: 62
+  acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+  artifact: evidence/handoffs/issue-62.yaml
+  sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+outputs:
+- artifact: Dockerfile
+  sha256: bb24056c35e791570088b8da8b2d0ddef628911cd85862e82cd24bc29f837de6
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: compose.yaml
+  sha256: 8edf8d0641861033b8329fe7c2b091b0c88070be495138900d59804ba98c4f62
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: config/platform.schema.json
+  sha256: 6c81b9850afb13dc7930386e39927f9c74e3b6191b7636d7f282d79257fd9f49
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: config/platform.yaml
+  sha256: c939a4e1042f8f82ba0343c28c5eae347461b4577c47eec06f400fbf816d2a7d
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: docs/launch/01_RUNTIME_ARCHITECTURE.md
+  sha256: 2f17f279c1ab63b6446932c354320ed8d8f61c1ff4bc65d292cf3de5b03be02a
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: docs/launch/06_EVENTS_AND_RECOVERY.md
+  sha256: 2f65df0998c12e8102a6bf750da5c2fd119b03047c3dce3bc05fbcc3cd403873
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+  sha256: ef57c32e57a6fe509f82ad2466107cedf636c04c4e7ac1d3918527ff1daa2b3f
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+  sha256: 75e7691a19e6ff116eea5caeff1318a6b12282149f37f5293d6557052a66d22a
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+  sha256: fd0746a386dde889f58530c2dd6c02fe868b77660dd619b83a7e1c8e7de9c309
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: docs/platform/LOCAL_PLATFORM.md
+  sha256: c783f17660f746624e7da25f620d3db5aad0d4f64f27cf44935288ae39e8d1f5
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-config/src/index.ts
+  sha256: 43b97ce92244673ee79ca63d70d67d39bd7bc926a05782be15b71b4f51bc19c1
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-inbox/package.json
+  sha256: bf5c93c555b571dd065332145a0088c11d2c5774e3e85ea4cf2f9b3630f90b86
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-inbox/src/index.ts
+  sha256: bd4d42c2876ce1ee88d23508b4a6fa6e88d43736d2aa3ef2f00089dfa5f00d2b
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-inbox/tsconfig.json
+  sha256: 1d77f9bd6a76c7cbd319ae6396fc14dc671fc7246a3711d0fe3c2e230d116a56
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-kafka-runtime/package.json
+  sha256: 6e38feb5a69ce433136471e34c3ef93e72462f1660fdbb74b7c8228e35fdd052
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-kafka-runtime/src/index.ts
+  sha256: d3d6b4f1229d0a792ed2d2c2981bf06adaf2dd87414d0dac47a841354f61fc95
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-kafka-runtime/tsconfig.json
+  sha256: 6e2488524805d6846bc5987ba60bfb3dc11103f9f50291dc821878337aedc133
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-outbox/package.json
+  sha256: be3ed227bb7679b273645f6f885b52b5067e6594a7d64fa215bdb7a328e39c55
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-outbox/src/index.ts
+  sha256: ee2fdc08653d7cdae09cbaefa51f8ce0f4a45917f596d7e3c38e388c6331c71d
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-outbox/tsconfig.json
+  sha256: 1d77f9bd6a76c7cbd319ae6396fc14dc671fc7246a3711d0fe3c2e230d116a56
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-runtime/package.json
+  sha256: f05a36eaced5c81510e22c1f6d53125ad92683fc5d2b6d5888ba6b72f5e17f0d
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-runtime/src/index.ts
+  sha256: 36f29555922044627e6570641ec20f16ce460e787b38826d919e5c8e35a7ae6f
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-runtime/tsconfig.json
+  sha256: 372ea81ec96db4ffa421524c00f729cf486104e788bcac0508a5cfaff8ee4d33
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-testing/test/platform-packages.test.mjs
+  sha256: be9e614f4ff3caf6aa26edc293862d216669d0431da9b66cfa0888319895d668
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: pnpm-lock.yaml
+  sha256: 30b45917528e7cac43eab48ec49e6e164cdae612dbf189cd02a6d9b32fd69eed
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: scripts/check-architecture.mjs
+  sha256: 468f5c948d4702f30fd955c0cff551d7f3b56650ad3d56124845656ea7b174b8
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: scripts/config-lib.mjs
+  sha256: 8695ca69e04ab10705d547e28b15c33c5f3a2a039edb89427492f51496bca4c7
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: scripts/db-live-proof.mjs
+  sha256: bc3ee62cbd936e141ebaca5e0d1d04729e84445ea40c750fa10d6fa27db7e991
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: scripts/db-smoke.mjs
+  sha256: bae42391ca7f708d9cf2305167b4d55ce1d2bd3092b7b830442f8060c162e224
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: tests/architecture/checks.test.mjs
+  sha256: 7133b871fde831f8166055900ece833b915b3c29175bd6d5a8a5e509a6dbbf89
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: tests/compose/topology.test.mjs
+  sha256: dd193e43dfbb732a8593985cfdb505aac7bdf936d0e4a6d639a1831d43963a15
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: tests/config/platform-config.test.mjs
+  sha256: 4b839403ac9cc4a948b5dd0abf1636b880c9b51a7c274ca61b0bec744276de3e
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: tests/database/db-bootstrap.test.mjs
+  sha256: 5d2465000735ce6b07ad12a0601336b09123ccbfa8ed76256491e5db80297038
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: tests/database/live-db-proof.test.mjs
+  sha256: 11911784cd627ade877b31c81aa3e8e25e415bff54862b3b7a01dcaae72be3aa
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: tools/compose-smoke.mjs
+  sha256: 8d14623796b2a0653424598bd972049eb3101e927d1e1f5465bb5bc607120bb2
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+- artifact: packages/platform-kafka-runtime/src/native.ts
+  sha256: d20b59a5b62cb6a7016d77365a348b22d6eb7b97d8f4694e86172076df14cf66
+  consumers:
+  - 16
+  - 8
+  - 11
+  - 12
+  - 64
+deliveryContract:
+  protocol: docs/launch/06_EVENTS_AND_RECOVERY.md
+  ownerMigrationMap: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+  configuration: config/platform.yaml
+  offsetOrder:
+  - decode/transport validation
+  - 'owner transaction: Inbox + owner writes + Outbox + Processed'
+  - known DB COMMIT
+  - Kafka offset commit
+  realtimeException: Только realtime-gateway / realtime-gateway-v1 / coffee.realtime.invalidate.v1; validated local
+    enqueue до offset, restart reset/refetch.
+  stableIdentity: messageId неизменен; canonical SHA-256 полного envelope; unique Outbox aggregate_ref + aggregate_sequence
+    независимо от messageType/ownerVersion.
+  directionalExample:
+    runtime: orders-aroma-preparation
+    kafka:
+      producers:
+      - coffee.aroma.cart.commands.v1
+      - coffee.realtime.invalidate.v1
+      consumers:
+      - groupId: orders-catalog-mapping-v2
+        topics:
+        - coffee.catalog.mapping.v2
+        processing: durable
+      - groupId: orders-aroma-preparation-v1
+        topics:
+        - coffee.orders.lifecycle.v1
+        processing: durable
+      - groupId: orders-aroma-projection-v1
+        topics:
+        - coffee.aroma.cart.events.v1
+        processing: durable
+  limits:
+    producerRetries: 3
+    maxMessageBytes: 1048576
+    maxPartitions: 24
+    maxInFlight: 4
+    queueCapacity: 32
+    sendTimeoutMs: 2000
+    receiveTimeoutMs: 1000
+    commitTimeoutMs: 2000
+    revokeTimeoutMs: 2000
+    shutdownTimeoutMs: 5000
+    leaseMs: 30000
+    retry:
+      baseMs: 1000
+      maxMs: 60000
+      maxAttempts: 12
+    quarantine:
+      durable: owner-database
+      realtime: topic-dlq
+    scope: maxPartitions на consumer group; maxInFlight и queueCapacity совместно на runtime; один active handler
+      на topic/partition
+  unknownOutcomes:
+    database: 'TRANSACTION_OUTCOME_UNKNOWN: offset не подтверждён; новая delivery через Inbox'
+    offset: 'OFFSET_COMMIT_OUTCOME_UNKNOWN: stop intake, drain/revoke, bounded reconnect/reassignment; duplicate
+      пропускает handler'
+    producer: 'KAFKA_SEND_OUTCOME_UNKNOWN: Outbox остаётся leased до recovery, исходный messageId сохранён'
+  ownerSql:
+    access: Только owner-local opaque Transaction; cross-owner SQL запрещён
+    protocol: SqlInboxStore/SqlOutboxStore; DDL fixture exportedSQLContract не является общей business migration
+    migrationMap: config/database-ownership.json
+    catalog: 'apps/catalog-service/migrations: grant catalog-activation-worker на outbox_messages'
+    orders: 'apps/orders-service/migrations: inbox_messages, inbox_quarantine и outbox_messages; явные grants каждому
+      runtime до admission'
+    realtime: БД и Inbox отсутствуют
+    protocolFields:
+      inbox_messages:
+      - message_id
+      - message_type
+      - received_at
+      - payload
+      - payload_hash
+      - state
+      - lease_owner
+      - lease_until
+      - attempt
+      - processed_at
+      - quarantine_reason
+      - quarantined_at
+      inbox_quarantine:
+      - topic
+      - partition
+      - offset
+      - message_id
+      - message_type
+      - payload_hash
+      - envelope
+      - reason
+      - quarantined_at
+      outbox_messages:
+      - message_id
+      - message_type
+      - topic
+      - aggregate_ref
+      - aggregate_sequence
+      - owner_version
+      - partition_key
+      - schema_version
+      - envelope
+      - payload
+      - payload_hash
+      - occurred_at
+      - correlation_id
+      - causation_id
+      - traceparent
+      - state
+      - lease_owner
+      - lease_token
+      - lease_until
+      - attempt
+      - next_attempt_at
+      - last_error
+      - published_at
+      - quarantined_at
+    constraints:
+    - Inbox PRIMARY KEY(message_id)
+    - Quarantine PRIMARY KEY(topic, partition, offset)
+    - Outbox PRIMARY KEY(message_id), UNIQUE(aggregate_ref, aggregate_sequence)
+    - Outbox claim lease_owner + lease_token + live lease fencing
+  observabilityHandoff:
+    consumer: 64
+    availableRuntimeSnapshot:
+    - active
+    - queued
+    - pending
+    - assigned
+    - saturationTotal
+    - unknownCommitTotal
+    - recoveryTotal
+    - lastCode
+    downstreamInstrumentation:
+    - consumer lag
+    - capacity
+    - Inbox lease expiry
+    - quarantine
+    - duplicate/conflict
+    labels:
+    - allowlisted runtime
+    - groupId
+    - topic
+    - partition
+    - finite machine reason
+    correlationFields:
+    - correlationId
+    - causationId
+    - traceparent
+    forbidden: payload, key, envelope, SQL, credentials и secret material
+  consumerBoundary: 'bind(groupId, {processing, database, inbox, decode, handle}); decoder/handler и canonical business
+    schemas принадлежат downstream owner. Foundation не реализует семь business messages, HTTP contracts или provider
+    semantics; #4 независим от Kafka delivery.'
+  commonEnvelope:
+    authority: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md#6-семь-событий
+    envelopeVersion: '1'
+    required:
+    - messageId
+    - messageType
+    - occurredAt
+    - producer
+    - correlationId
+    - causationId
+    - traceparent
+    - aggregate
+    - payload
+    aggregate:
+    - type
+    - ref
+    - version
+    causationId: string | null
+    payload: 'generic; business schemas поставляет #4'
+    flatAlternative: false
+verification:
+- command: pnpm check
+  result: passed
+  exitCode: 0
+  detail: 'authority 4; versions/compatibility/config/architecture/rule-parity/lint/typecheck; tests 134: 133 passed,
+    1 opt-in live PG skipped (отдельный запуск ниже)'
+- command: pnpm db:smoke
+  result: passed
+  exitCode: 0
+  detail: 50 role cases; 6 structural checks, не live proof
+- command: pnpm exec oxlint --deny-warnings tools/compose-smoke.mjs
+  result: passed
+  exitCode: 0
+- command: node scripts/db-live-proof.mjs --run-id issue63canonicalhash --evidence-dir /tmp/coffee63-evidence
+  result: passed
+  exitCode: 0
+  detail: disposable PostgreSQL; результаты livePostgresProof/liveDatabaseFoundationProof ниже; cleanup passed
+- command: COFFEE_DB_LIVE_PROOF=1 node --test tests/database/live-db-proof.test.mjs
+  result: passed
+  exitCode: 0
+  detail: 2 passed; canonical envelope; disposable PostgreSQL
+- command: pnpm test:compose-smoke --recovery-proof --no-build --project-name coffee-recovery-foundation
+  result: passed
+  exitCode: 0
+  detail: 15 runtime; real PostgreSQL/Kafka/TLS; retention, ordering, rebalance, quarantine, SIGTERM, crash windows,
+    paused-broker blackhole
+- command: node tools/compose-smoke.mjs --recovery-proof --no-build --project-name coffee-recovery-foundation
+  result: passed
+  exitCode: 0
+  detail: повторный полный recovery proof; project cleanup verified
+- command: node --test packages/platform-testing/test/platform-packages.test.mjs
+  result: passed
+  exitCode: 0
+  detail: 28/28 после финального Inbox full-envelope hash assertion
+- command: pnpm exec oxlint --type-aware --deny-warnings scripts/db-live-proof.mjs packages/platform-testing/test/platform-packages.test.mjs
+  result: passed
+  exitCode: 0
+- command: git diff --check
+  result: passed
+  exitCode: 0
+limitations:
+- 'Single-broker RF=1 development scope: не production HA, replication/failover или host power-loss proof.'
+- Recovery mode использует disposable PostgreSQL и generated scoped credentials/TLS; штатные SOPS credentials, внешний
+  PostgreSQL и provider mutations не проверялись.
+- Business schemas/handlers, owner migrations и grants, включая inbox_quarantine, принадлежат downstream issues;
+  live DDL является disposable fixture.
+- 'Расширенные lag/lease/quarantine/duplicate metrics, Collector и alerts поставляет #64.'
+livePostgresProof:
+  schemaVersion: 1
+  runId: issue63canonicalhash
+  delivery:
+    transport: postgresql-only
+    realKafka: false
+    structural:
+      kind: owner-local-sql-contract
+      source: exportedSQLContract
+      liveDatabase: false
+      realKafka: false
+      tables:
+        inbox: '"orders"."issue63_live_inbox_messages"'
+        quarantine: '"orders"."issue63_live_inbox_quarantine"'
+        outbox: '"orders"."issue63_live_outbox_messages"'
+        owner: '"orders"."issue63_live_owner_effects"'
+      checks:
+      - inbox-message-hash-state-lease
+      - quarantine-topic-partition-offset-hash
+      - outbox-stable-id-hash-lease-order
+      - outbox-aggregate-sequence-independent-of-message-type
+      - owner-effect-identity
+      - owner-local-no-cross-table-reference
+    brokerAckProof: not-run
+    offsetCommitProof: not-run
+    atomicity:
+      committedInboxOwnerOutbox: true
+      rollbackCode: DB_QUERY_FAILED
+      rollbackLeftNoPartialRows: true
+      redeliveryProcessed: true
+    duplicateConflict:
+      inboxDuplicate: true
+      inboxConflict: true
+      quarantine: created
+      outboxDuplicate: true
+      outboxConflict: true
+    payloadHash:
+      inboxValidated: true
+      outboxValidated: true
+      conflictQuarantined: true
+      recoveredClaimValidated: true
+    differentMessageTypeSequence:
+      concurrent: true
+      accepted: 1
+      conflicts: 1
+      durableRows: 1
+    aggregateOrdering:
+      sameAggregate:
+      - '1'
+      - '2'
+      sequenceBarrier: true
+      otherAggregateIndependent: true
+    crashAfterClaimBeforeFinalize:
+      stableMessageId: true
+      recovered: true
+      staleFenceCode: OUTBOX_LEASE_INVALID
+      brokerAckProof: not-run
+    dbUnknown:
+      code: TRANSACTION_OUTCOME_UNKNOWN
+      durableInboxState: Processed
+      durableOutboxState: Pending
+      replay: duplicate
+      stableMessageId: true
+liveDatabaseFoundationProof:
+  schemaVersion: 1
+  runId: issue63canonicalhash
+  foundation:
+    transaction:
+      code: TRANSACTION_OUTCOME_UNKNOWN
+      durableCommit: true
+      durableReplayAfterRestart: true
+      rollbackAfterCommit: false
+      wallClockMs: 455
+      boundedByMs: 3000
+      metricsBeforeStop:
+        active: 0
+        idle: 0
+        waiting: 0
+        saturationTotal: 0
+        pending: 0
+      closedPeers: 1
+      closedPeersBeforeStop: 1
+      commands:
+      - SELECT 1
+      - BEGIN
+      - SET LOCAL LOCK_TIMEOUT = '250MS'
+      - SET LOCAL STATEMENT_TIMEOUT = '1000MS'
+      - SET LOCAL IDLE_IN_TRANSACTION_SESSION_TIMEOUT = '30000MS'
+      - COMMIT
+    rollback:
+      code: DB_ROLLBACK_FAILED
+      destroyed: true
+      wallClockMs: 377
+      boundedByMs: 3000
+      metricsBeforeStop:
+        active: 0
+        idle: 0
+        waiting: 0
+        saturationTotal: 0
+        pending: 0
+      closedPeers: 1
+      closedPeersBeforeStop: 1
+      commands:
+      - SELECT 1
+      - BEGIN
+      - SET LOCAL LOCK_TIMEOUT = '250MS'
+      - SET LOCAL STATEMENT_TIMEOUT = '1000MS'
+      - SET LOCAL IDLE_IN_TRANSACTION_SESSION_TIMEOUT = '30000MS'
+      - ROLLBACK
+    caughtSqlRollback:
+      code: DB_TRANSACTION_ROLLED_BACK
+      nextCall: acquired
+      falseReplay: false
+    idempotency:
+      decisions:
+      - acquired
+      - replay
+      acquiredCount: 1
+      replayable: true
+      conflict: true
+      expiredLeaseRequiresRecovery: true
+      atomicOwnerMutation: true
+      terminalReplayBodies:
+      - null
+      - plain-string
+    migration:
+      driftRejected: true
+      applied: 0001_issue62_live
+    copy:
+      code: DB_INTERRUPTED
+      rowsAfterRollback: 0
+      sourceDestroyed: true
+      sourceYielded: 9
+    readiness:
+      readyBefore: true
+      readyDuring: true
+      readyAfter: true
+      secondCode: DB_POOL_EXHAUSTED
+      saturationTotal: 1
+      activeAfter: 0
+      readyAfterDestroy: false
+      transientSaturationSeparate: true
+liveComposeProof:
+- command: pnpm test:compose-smoke --recovery-proof --no-build --project-name coffee-recovery-foundation
+  result:
+    project: coffee-recovery-foundation
+    runtimes: 15
+    kafka: true
+    kafkaCompatibility: true
+    kafkaRetention:
+      brokerAcknowledged: true
+      logDirectory: /var/lib/kafka/data
+      volume: coffee-recovery-foundation_kafka_data
+      containerRecreated: true
+      sameComposeProject: true
+      recoveredHealthy: true
+      retainedRecord: true
+      replicationFactor: 1
+    recoveryProof:
+      postgres:
+        port: 32833
+        databases:
+        - name: coffee_platform_customer
+          state: created
+        - name: coffee_platform_catalog
+          state: created
+        - name: coffee_platform_pricing
+          state: created
+        - name: coffee_platform_orders
+          state: created
+        - name: coffee_platform_integration
+          state: created
+        runtimeRoleCount: 10
+        idempotent: true
+      kafka:
+        brokerAcknowledged: true
+        logDirectory: /var/lib/kafka/data
+        volume: coffee-recovery-foundation_kafka_data
+        containerRecreated: true
+        sameComposeProject: true
+        recoveredHealthy: true
+        retainedRecord: true
+        replicationFactor: 1
+      native:
+        ordered:
+          acknowledged: true
+          records: 3
+          partition: 3
+          offsets:
+          - '0'
+          - '1'
+          - '2'
+          maxActive: 1
+        rebalance:
+          twoConsumersAssigned: true
+          bounded: true
+          recoveryTotal:
+          - 0
+          - 0
+        quarantine:
+          malformed: true
+          malformedHeader: known-header-empty-value
+          conflict: true
+        sigterm:
+          received: true
+          gateEntered: true
+          activeAtSignal:
+            consumerA:
+              active: 1
+              queued: 0
+              pending: 2
+              assigned: 6
+              saturationTotal: 0
+              unknownCommitTotal: 0
+              recoveryTotal: 0
+              lastCode: null
+            consumerB:
+              active: 0
+              queued: 0
+              pending: 2
+              assigned: 6
+              saturationTotal: 0
+              unknownCommitTotal: 0
+              recoveryTotal: 0
+              lastCode: null
+            total: 1
+          closedMetrics:
+            consumerA:
+              active: 0
+              queued: 0
+              pending: 0
+              assigned: 0
+              saturationTotal: 0
+              unknownCommitTotal: 0
+              recoveryTotal: 0
+              lastCode: null
+            consumerB:
+              active: 0
+              queued: 0
+              pending: 0
+              assigned: 0
+              saturationTotal: 0
+              unknownCommitTotal: 0
+              recoveryTotal: 0
+              lastCode: null
+          ownerCount: 1
+        dbCommitBeforeOffset:
+          code: OFFSET_COMMIT_OUTCOME_UNKNOWN
+          redelivered: true
+          handlerCalls: 1
+        outboxAckBeforeFinalize:
+          brokerAcked: true
+          recovered: true
+          stableMessageId: true
+        blackhole:
+          kind: paused-broker
+          commitOutcome: OFFSET_COMMIT_OUTCOME_UNKNOWN
+          bounded: true
+          commitElapsedMs: 2334
+          redelivered: false
+          recoveryObservation: offset-committed
+          recovered: true
+          recordMessageId: coffee-recovery-foundation-broker-blackhole
+          recordPartition: 7
+          recordOffset: '0'
+    telemetry: true
+    healthEndpoints:
+    - /health/live
+    - /health/ready
+    - /metrics
+    stubSecrets: false
+    dbIntegrationProof: true
+    hostPublish:
+    - 4000:4000
+    gracefulShutdown: true
+  exitCode: 0
+  cleanupObserved:
+    containers: 0
+    networks: 0
+    volumes: 0
+- command: node tools/compose-smoke.mjs --recovery-proof --no-build --project-name coffee-recovery-foundation
+  result:
+    project: coffee-recovery-foundation
+    runtimes: 15
+    kafka: true
+    kafkaCompatibility: true
+    kafkaRetention:
+      brokerAcknowledged: true
+      logDirectory: /var/lib/kafka/data
+      volume: coffee-recovery-foundation_kafka_data
+      containerRecreated: true
+      sameComposeProject: true
+      recoveredHealthy: true
+      retainedRecord: true
+      replicationFactor: 1
+    recoveryProof:
+      postgres:
+        port: 32834
+        databases:
+        - name: coffee_platform_customer
+          state: created
+        - name: coffee_platform_catalog
+          state: created
+        - name: coffee_platform_pricing
+          state: created
+        - name: coffee_platform_orders
+          state: created
+        - name: coffee_platform_integration
+          state: created
+        runtimeRoleCount: 10
+        idempotent: true
+      kafka:
+        brokerAcknowledged: true
+        logDirectory: /var/lib/kafka/data
+        volume: coffee-recovery-foundation_kafka_data
+        containerRecreated: true
+        sameComposeProject: true
+        recoveredHealthy: true
+        retainedRecord: true
+        replicationFactor: 1
+      native:
+        ordered:
+          acknowledged: true
+          records: 3
+          partition: 3
+          offsets:
+          - '0'
+          - '1'
+          - '2'
+          maxActive: 1
+        rebalance:
+          twoConsumersAssigned: true
+          bounded: true
+          recoveryTotal:
+          - 0
+          - 0
+        quarantine:
+          malformed: true
+          malformedHeader: known-header-empty-value
+          conflict: true
+        sigterm:
+          received: true
+          gateEntered: true
+          activeAtSignal:
+            consumerA:
+              active: 1
+              queued: 0
+              pending: 2
+              assigned: 6
+              saturationTotal: 0
+              unknownCommitTotal: 0
+              recoveryTotal: 0
+              lastCode: null
+            consumerB:
+              active: 0
+              queued: 0
+              pending: 2
+              assigned: 6
+              saturationTotal: 0
+              unknownCommitTotal: 0
+              recoveryTotal: 0
+              lastCode: null
+            total: 1
+          closedMetrics:
+            consumerA:
+              active: 0
+              queued: 0
+              pending: 0
+              assigned: 0
+              saturationTotal: 0
+              unknownCommitTotal: 0
+              recoveryTotal: 0
+              lastCode: null
+            consumerB:
+              active: 0
+              queued: 0
+              pending: 0
+              assigned: 0
+              saturationTotal: 0
+              unknownCommitTotal: 0
+              recoveryTotal: 0
+              lastCode: null
+          ownerCount: 1
+        dbCommitBeforeOffset:
+          code: OFFSET_COMMIT_OUTCOME_UNKNOWN
+          redelivered: true
+          handlerCalls: 1
+        outboxAckBeforeFinalize:
+          brokerAcked: true
+          recovered: true
+          stableMessageId: true
+        blackhole:
+          kind: paused-broker
+          commitOutcome: OFFSET_COMMIT_OUTCOME_UNKNOWN
+          bounded: true
+          commitElapsedMs: 2275
+          redelivered: false
+          recoveryObservation: offset-committed
+          recovered: true
+          recordMessageId: coffee-recovery-foundation-broker-blackhole
+          recordPartition: 7
+          recordOffset: '0'
+    telemetry: true
+    healthEndpoints:
+    - /health/live
+    - /health/ready
+    - /metrics
+    stubSecrets: false
+    dbIntegrationProof: true
+    hostPublish:
+    - 4000:4000
+    gracefulShutdown: true
+  exitCode: 0
+  cleanupObserved:
+    containers: 0
+    networks: 0
+    volumes: 0
+review:
+  agent: luna_worker
+  result: после узкого review production blocker отсутствует; найденный fixture hash gap исправлен и проверен unit/live
+    PG
+  scope: canonical envelope, Inbox/offset order, Outbox hash/lease/sequence barrier

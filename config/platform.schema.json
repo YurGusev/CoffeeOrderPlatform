@@ -71,25 +71,42 @@
       "additionalProperties": false,
       "required": ["max", "checkoutTimeoutMs", "lockTimeoutMs", "interactiveStatementTimeoutMs", "backgroundStatementTimeoutMs", "terminalTimeoutMs", "transactionTimeoutMs", "idleTimeoutMs", "maxLifetimeMs"],
       "properties": {
-        "max": {"type": "integer", "minimum": 0, "maximum": 64},
-        "checkoutTimeoutMs": {"type": "integer", "const": 250},
-        "lockTimeoutMs": {"type": "integer", "const": 250},
-        "interactiveStatementTimeoutMs": {"type": "integer", "const": 1500},
-        "backgroundStatementTimeoutMs": {"type": "integer", "const": 5000},
-        "terminalTimeoutMs": {"type": "integer", "const": 2000},
-        "transactionTimeoutMs": {"type": "integer", "const": 10000},
-        "idleTimeoutMs": {"type": "integer", "const": 30000},
-        "maxLifetimeMs": {"type": "integer", "const": 1800000}
+        "max": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "checkoutTimeoutMs": { "type": "integer", "const": 250 },
+        "lockTimeoutMs": { "type": "integer", "const": 250 },
+        "interactiveStatementTimeoutMs": { "type": "integer", "const": 1500 },
+        "backgroundStatementTimeoutMs": { "type": "integer", "const": 5000 },
+        "terminalTimeoutMs": { "type": "integer", "const": 2000 },
+        "transactionTimeoutMs": { "type": "integer", "const": 10000 },
+        "idleTimeoutMs": { "type": "integer", "const": 30000 },
+        "maxLifetimeMs": { "type": "integer", "const": 1800000 }
+      }
+    },
+    "kafkaConsumer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["groupId", "topics", "processing"],
+      "properties": {
+        "groupId": { "type": "string", "pattern": "^[a-z][a-z0-9-]+$" },
+        "topics": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "minItems": 1
+        },
+        "processing": { "type": "string", "enum": ["durable", "realtime"] }
       }
     },
     "kafkaAccess": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mode", "topics", "groups"],
+      "required": ["producers", "consumers"],
       "properties": {
-        "mode": {"type": "string", "enum": ["none", "producer", "consumer", "consumer+producer"]},
-        "topics": {"$ref": "#/$defs/stringArray"},
-        "groups": {"$ref": "#/$defs/stringArray"}
+        "producers": { "$ref": "#/$defs/stringArray" },
+        "consumers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/kafkaConsumer" }
+        }
       }
     },
     "permissions": {
@@ -111,26 +128,36 @@
       "required": ["listen", "health", "deadlineMs", "deadlineProfiles", "concurrency", "replicas", "dbPool", "database", "kafka", "outbound", "secretRefs", "permissions", "mutationCapability"],
       "properties": {
         "listen": {
-          "type": "object", "additionalProperties": false, "required": ["host", "port"],
-          "properties": {"host": {"type": "string", "const": "0.0.0.0"}, "port": {"type": "integer", "minimum": 1, "maximum": 65535}}
-        },
-        "health": {"$ref": "#/$defs/health"},
-        "deadlineMs": {"type": ["integer", "null"], "minimum": 1},
-        "deadlineProfiles": {
-          "type": "object", "additionalProperties": false, "required": ["defaultMs"],
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["host", "port"],
           "properties": {
-            "defaultMs": {"type": ["integer", "null"], "minimum": 1},
-            "readMs": {"type": "integer", "minimum": 1},
-            "cartMs": {"type": "integer", "minimum": 1},
-            "mutationMs": {"type": "integer", "minimum": 1}
+            "host": { "type": "string", "const": "0.0.0.0" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
           }
         },
-        "concurrency": {"type": "integer", "minimum": 1},
-        "replicas": {"type": "integer", "minimum": 1},
-        "dbPool": {"$ref": "#/$defs/dbPool"},
-        "database": {"type": ["string", "null"], "pattern": "^[a-z][a-z0-9_]+$"},
-        "kafka": {"$ref": "#/$defs/kafkaAccess"},
-        "outbound": {"$ref": "#/$defs/stringArray"},
+        "health": { "$ref": "#/$defs/health" },
+        "deadlineMs": { "type": ["integer", "null"], "minimum": 1 },
+        "deadlineProfiles": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["defaultMs"],
+          "properties": {
+            "defaultMs": { "type": ["integer", "null"], "minimum": 1 },
+            "readMs": { "type": "integer", "minimum": 1 },
+            "cartMs": { "type": "integer", "minimum": 1 },
+            "mutationMs": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "concurrency": { "type": "integer", "minimum": 1 },
+        "replicas": { "type": "integer", "minimum": 1 },
+        "dbPool": { "$ref": "#/$defs/dbPool" },
+        "database": {
+          "type": ["string", "null"],
+          "pattern": "^[a-z][a-z0-9_]+$"
+        },
+        "kafka": { "$ref": "#/$defs/kafkaAccess" },
+        "outbound": { "$ref": "#/$defs/stringArray" },
         "secretRefs": {
           "type": "array", "uniqueItems": true, "minItems": 0,
           "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
@@ -177,8 +204,15 @@
       }
     },
     "kafka": {
-      "type": "object", "additionalProperties": false,
-      "required": ["brokers", "clientProtocol", "autoTopicCreation", "topics"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "brokers",
+        "clientProtocol",
+        "autoTopicCreation",
+        "topics",
+        "delivery"
+      ],
       "properties": {
         "brokers": {"type": "array", "const": ["kafka:9092"]},
         "clientProtocol": {"type": "string", "const": "SASL_SSL"},
@@ -187,12 +221,63 @@
           "type": "object", "additionalProperties": false,
           "required": ["catalogSnapshot", "catalogMapping", "ordersLifecycle", "aromaCommands", "aromaEvents", "realtimeInvalidate"],
           "properties": {
-            "catalogSnapshot": {"$ref": "#/$defs/topic"},
-            "catalogMapping": {"$ref": "#/$defs/topic"},
-            "ordersLifecycle": {"$ref": "#/$defs/topic"},
-            "aromaCommands": {"$ref": "#/$defs/topic"},
-            "aromaEvents": {"$ref": "#/$defs/topic"},
-            "realtimeInvalidate": {"$ref": "#/$defs/topic"}
+            "catalogSnapshot": { "$ref": "#/$defs/topic" },
+            "catalogMapping": { "$ref": "#/$defs/topic" },
+            "ordersLifecycle": { "$ref": "#/$defs/topic" },
+            "aromaCommands": { "$ref": "#/$defs/topic" },
+            "aromaEvents": { "$ref": "#/$defs/topic" },
+            "realtimeInvalidate": { "$ref": "#/$defs/topic" }
+          }
+        },
+        "delivery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "producerRetries",
+            "maxMessageBytes",
+            "maxPartitions",
+            "maxInFlight",
+            "queueCapacity",
+            "sendTimeoutMs",
+            "receiveTimeoutMs",
+            "commitTimeoutMs",
+            "revokeTimeoutMs",
+            "shutdownTimeoutMs",
+            "leaseMs",
+            "retry",
+            "quarantine"
+          ],
+          "properties": {
+            "producerRetries": { "type": "integer", "const": 3 },
+            "maxMessageBytes": { "type": "integer", "const": 1048576 },
+            "maxPartitions": { "type": "integer", "const": 24 },
+            "maxInFlight": { "type": "integer", "const": 4 },
+            "queueCapacity": { "type": "integer", "const": 32 },
+            "sendTimeoutMs": { "type": "integer", "const": 2000 },
+            "receiveTimeoutMs": { "type": "integer", "const": 1000 },
+            "commitTimeoutMs": { "type": "integer", "const": 2000 },
+            "revokeTimeoutMs": { "type": "integer", "const": 2000 },
+            "shutdownTimeoutMs": { "type": "integer", "const": 5000 },
+            "leaseMs": { "type": "integer", "const": 30000 },
+            "retry": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["baseMs", "maxMs", "maxAttempts"],
+              "properties": {
+                "baseMs": { "type": "integer", "const": 1000 },
+                "maxMs": { "type": "integer", "const": 60000 },
+                "maxAttempts": { "type": "integer", "const": 12 }
+              }
+            },
+            "quarantine": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["durable", "realtime"],
+              "properties": {
+                "durable": { "type": "string", "const": "owner-database" },
+                "realtime": { "type": "string", "const": "topic-dlq" }
+              }
+            }
           }
         }
       }
