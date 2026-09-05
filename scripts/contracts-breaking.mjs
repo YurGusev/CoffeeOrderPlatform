@@ -53,9 +53,17 @@ function requireOptionalEvidence(sourcePath, at, property) {
 }
 
 function compareSchema(before, after, at, sourcePath) {
-  if (!before || !after) return;
+  if (before === undefined || before === null) {
+    if (after !== undefined && after !== null) fail(`${at}: schema constraint added`);
+    return;
+  }
+  if (after === undefined || after === null) fail(`${at}: schema removed`);
+  if (typeof before === 'boolean' || typeof after === 'boolean') {
+    if (before !== after) fail(`${at}: boolean schema changed`);
+    return;
+  }
   if (before.$ref !== after.$ref) fail(`${at}: $ref changed`);
-  if (after.const !== undefined && before.const !== after.const) fail(`${at}: const narrowed`);
+  if ((Object.hasOwn(before, 'const') || Object.hasOwn(after, 'const')) && before.const !== after.const) fail(`${at}: const changed`);
   if (after.pattern !== undefined && before.pattern !== after.pattern) fail(`${at}: pattern narrowed`);
   for (const keyword of ['minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties']) {
     if (after[keyword] !== undefined && (before[keyword] === undefined || after[keyword] > before[keyword])) fail(`${at}: ${keyword} narrowed`);
@@ -152,6 +160,7 @@ function compareOpenApi(before, after, path) {
         if (JSON.stringify(operation[field]) !== JSON.stringify(next[field])) fail(`${path}: ${operation.operationId} ${field} changed`);
       }
       compareParameters(operation.parameters, next.parameters, `${path}:${operation.operationId}:parameters`, path, after);
+      if (Boolean(operation.requestBody?.required) !== Boolean(next.requestBody?.required)) fail(`${path}: ${operation.operationId} request body required changed`);
       for (const [status, response] of Object.entries(operation.responses ?? {})) {
         if (!next.responses?.[status]) fail(`${path}: ${operation.operationId} status ${status} removed`);
         compareResponse(response, next.responses[status], `${path}:${operation.operationId}:${status}`, path);

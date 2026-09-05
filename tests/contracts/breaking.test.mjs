@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import yaml from 'js-yaml';
 
@@ -32,20 +32,24 @@ async function red(mutator, withOptionalEvidence = false) {
   return result;
 }
 
-async function realClientRed(mutator) {
-  const source = yaml.load(await readFile(join(root, 'contracts/openapi/client-v1.yaml'), 'utf8'));
+async function realSourceRed(sourcePath, mutator) {
+  const text = await readFile(join(root, sourcePath), 'utf8');
+  const source = sourcePath.endsWith('.json') ? JSON.parse(text) : yaml.load(text);
   const directory = await mkdtemp(join(tmpdir(), 'contracts-breaking-real-'));
   const base = join(directory, 'base');
   const current = join(directory, 'current');
-  for (const path of [base, current]) await mkdir(join(path, 'contracts/openapi'), { recursive: true });
+  for (const path of [base, current]) await mkdir(join(path, dirname(sourcePath)), { recursive: true });
   const changed = structuredClone(source);
   mutator(changed);
-  await writeFile(join(base, 'contracts/openapi/client-v1.yaml'), yaml.dump(source));
-  await writeFile(join(current, 'contracts/openapi/client-v1.yaml'), yaml.dump(changed));
+  const encode = sourcePath.endsWith('.json') ? (value) => JSON.stringify(value) : (value) => yaml.dump(value);
+  await writeFile(join(base, sourcePath), encode(source));
+  await writeFile(join(current, sourcePath), encode(changed));
   const result = spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], { cwd: root, encoding: 'utf8' });
   await rm(directory, { recursive: true, force: true });
   return result;
 }
+
+const realClientRed = (mutator) => realSourceRed('contracts/openapi/client-v1.yaml', mutator);
 
 void test('breaking guard rejects endpoint/schema/status/operation rename and schema narrowing', async () => {
   for (const mutation of [
@@ -118,6 +122,8 @@ for (const [name, mutation] of [
   ['operation parameter removal', (document) => { document.paths['/api/client-v1/customers'].post.parameters.shift(); }],
   ['enum addition narrowing', (document) => { document.components.schemas.CustomerResponse.properties.displayName.enum = ['Only']; }],
   ['security scheme change', (document) => { document.components.securitySchemes.bearerAuth.scheme = 'basic'; }],
+  ['request body required change', (document) => { document.paths['/api/client-v1/customers'].post.requestBody.required = true; }],
+  ['boolean response schema', (document) => { document.paths['/api/client-v1/customers'].post.responses['201'].content['application/json'].schema = false; }],
 ]) {
   void test(`breaking guard rejects real client ${String(name)}`, async () => {
     const result = await realClientRed(mutation);
@@ -125,3 +131,11 @@ for (const [name, mutation] of [
     assert.match(result.stderr, /breaking contract/);
   });
 }
+
+void test('breaking guard rejects removing the real envelope version const', async () => {
+  const result = await realSourceRed('contracts/schemas/common/message-envelope.v1.schema.json', (document) => {
+    delete document.$defs.MessageEnvelope.properties.envelopeVersion.const;
+  });
+  assert.notEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /MessageEnvelope\.envelopeVersion: const changed/);
+});
