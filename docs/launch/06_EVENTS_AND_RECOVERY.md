@@ -66,3 +66,28 @@ state, не через бесконечный Kafka redelivery. Первый з�
 6. provider accepted mutation but response was lost;
 7. failed verification GET;
 8. service restart with unfinished MutationReservation;
+
+## Request cancellation и durable acceptance (#61)
+
+До known durable commit owner передаёт `request.runtimeContext.signal`
+поддерживаемым HTTP/DB операциям и scoped children. Разрыв input либо response
+connection и deadline отменяют эту request operation. Normal response finish
+снимает таймер, не отменяя handler. Произвольный Promise не получает гарантию
+принудительной отмены.
+
+После подтверждённого durable commit owner вызывает
+`request.runtimeContext.acceptDurable()`. Последующий disconnect не отменяет
+его signal; remaining request deadline и конечный shutdown budget сохраняются.
+Эта отметка не совершает commit, не хранит idempotency и не отменяет уже
+произошедший abort. Её нельзя ставить до COMMIT или при неизвестном исходе I/O.
+Завершение HTTP transport не меняет принятый intent и не запускает повтор эффекта.
+
+При потерянном ответе client повторяет команду с тем же idempotency key, а owner
+возвращает durable result или восстанавливает неизвестный исход. Реализацию
+`TransactionOutcomeUnknown`, canonical hash/replay и owner transaction поставляет
+#62; атомарные Inbox/Outbox и offset ordering — #63. Runtime #61 не выполняет
+blind retry, compensation или повторный provider вызов.
+
+Lifecycle fixture с owner ledger проверяет только границу disconnect/acceptance
+и отсутствие повторного вызова fake effect. Это не доказательство durability
+после restart: такой admission требует PostgreSQL/Kafka handoffs #62/#63.

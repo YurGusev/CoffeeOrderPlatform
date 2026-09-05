@@ -1,7 +1,10 @@
 import { readFile, stat } from "node:fs/promises";
+import type { Socket } from "node:net";
+import { Temporal } from "@js-temporal/polyfill";
 import {
   loadPlatformConfig,
   type HealthConfig,
+  type PlatformConfig,
   type RuntimeName,
 } from "@coffee-platform/config";
 import {
@@ -22,37 +25,76 @@ export type RuntimeReadinessCheck = Readonly<{
   check: (signal: AbortSignal) => Promise<boolean | void> | boolean | void;
 }>;
 
-export type RuntimeShutdownHook = (
-  signal: NodeJS.Signals,
-) => Promise<void> | void;
-
-export type RuntimeIdentity = Readonly<{
+// Владение регистрируется до start: destroy обязан закрыть и частично созданный ресурс.
+export type RuntimeResource = Readonly<{
   name: string;
-  host: string;
-  port: number;
-  shutdownGraceMs: number;
-  health?: HealthConfig;
-  readinessChecks?: readonly RuntimeReadinessCheck[];
-  shutdownHooks?: readonly RuntimeShutdownHook[];
+  start?: (signal: AbortSignal) => Promise<void> | void;
+  stop: (signal: AbortSignal) => Promise<void> | void;
+  destroy: () => void;
 }>;
 
-export type RuntimePhase = "starting" | "ready" | "stopping" | "stopped";
+export type RuntimeComposition = Readonly<{
+  readinessChecks?: readonly RuntimeReadinessCheck[];
+  resources?: readonly RuntimeResource[];
+  configure?: (
+    app: FastifyInstance,
+    signal: AbortSignal,
+  ) => Promise<void> | void;
+}>;
 
+export type RuntimeIdentity = RuntimeComposition &
+  Readonly<{
+    name: string;
+    host: string;
+    port: number;
+    shutdownGraceMs: number;
+    health?: HealthConfig;
+    deadlineMs?: number | null;
+    deadlineProfiles?: Readonly<Record<string, number | null>>;
+    concurrency?: number;
+    bodyLimitBytes?: number;
+    requiredDependencies?: readonly string[];
+  }>;
+
+export type RuntimePhase = "starting" | "running" | "draining" | "stopped";
+export type RuntimeShutdownResult = Readonly<{
+  status: "stopped" | "fail-stop";
+  pending: readonly string[];
+}>;
 export type RuntimeController = Readonly<{
   phase: () => RuntimePhase;
-  markStarting: () => void;
-  markReady: () => void;
-  markStopping: () => void;
-  markNotReady: () => void;
+  whenStopped: Promise<RuntimeShutdownResult>;
+  transition: (next: RuntimePhase) => void;
+  start: () => Promise<void>;
+  closeRuntime: (signal?: NodeJS.Signals) => Promise<RuntimeShutdownResult>;
 }>;
+export type RuntimeRequestContext = CorrelationContext &
+  Readonly<{
+    signal: AbortSignal;
+    deadlineUtc: string | null;
+    // Вызывается владельцем только ПОСЛЕ известного durable commit, не перед COMMIT.
+    acceptDurable: () => void;
+  }>;
+
+export class RuntimeError extends Error {
+  public readonly code: string;
+  public constructor(code: string) {
+    super(code);
+    this.name = "RuntimeError";
+    this.code = code;
+  }
+}
 
 declare module "fastify" {
   interface FastifyRequest {
     correlationContext: CorrelationContext | null;
+    runtimeContext: RuntimeRequestContext | null;
   }
-
   interface FastifyInstance {
     runtimeController: RuntimeController;
+  }
+  interface FastifyContextConfig {
+    runtimeDeadlineProfile?: string;
   }
 }
 
@@ -66,7 +108,6 @@ const DEFAULT_HEALTH: HealthConfig = Object.freeze({
   failureThreshold: 3,
   successThreshold: 1,
 });
-
 const HEALTH_RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -80,42 +121,13 @@ const HEALTH_RESPONSE_SCHEMA = {
   },
 } as const;
 
-const METRICS_RESPONSE_SCHEMA = { type: "string" } as const;
-
 function errorName(value: unknown): string {
   return value instanceof Error ? value.name : "UnknownError";
 }
-
-function requestHeaders(
-  request: FastifyRequest,
-): Record<string, string | readonly string[] | undefined> {
-  return request.headers as Record<
-    string,
-    string | readonly string[] | undefined
-  >;
-}
-
-function healthPath(path: string): string {
-  if (!path.startsWith("/"))
-    throw new RangeError("health path must be absolute");
-  return path;
-}
-
 function positiveInteger(value: number, field: string): void {
   if (!Number.isSafeInteger(value) || value <= 0)
     throw new RangeError(`${field} must be a positive integer`);
 }
-
-function runtimeHealth(identity: RuntimeIdentity): HealthConfig {
-  const health = identity.health ?? DEFAULT_HEALTH;
-  healthPath(health.livePath);
-  healthPath(health.readyPath);
-  healthPath(health.metricsPath);
-  positiveInteger(health.timeoutMs, "health.timeoutMs");
-  positiveInteger(identity.shutdownGraceMs, "shutdownGraceMs");
-  return health;
-}
-
 function setCorrelationResponseHeaders(
   reply: FastifyReply,
   context: CorrelationContext,
@@ -125,55 +137,91 @@ function setCorrelationResponseHeaders(
     reply.header("traceparent", context.traceparent);
 }
 
-function requestContext(request: FastifyRequest): CorrelationContext {
-  const context = createCorrelationContext(requestHeaders(request), request.id);
-  request.correlationContext = context;
-  return context;
+// Ограничивает ожидание, но не объявляет native Promise отменённым.
+// Незавершённая работа остаётся в pending до settlement и требует fail-stop при shutdown.
+function observeUntil<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = (): void => {
+      signal.removeEventListener("abort", abort);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    void work
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort));
+    if (signal.aborted) abort();
+  });
 }
 
 export async function createRuntime(
   identity: RuntimeIdentity,
 ): Promise<FastifyInstance> {
-  const health = runtimeHealth(identity);
-  const readinessChecks = identity.readinessChecks ?? [];
-  let currentPhase: RuntimePhase = "ready";
-  let explicitlyNotReady = false;
-
-  const controller: RuntimeController = {
-    phase: () => currentPhase,
-    markStarting: () => {
-      currentPhase = "starting";
-      explicitlyNotReady = true;
-    },
-    markReady: () => {
-      currentPhase = "ready";
-      explicitlyNotReady = false;
-    },
-    markStopping: () => {
-      currentPhase = "stopping";
-      explicitlyNotReady = true;
-    },
-    markNotReady: () => {
-      explicitlyNotReady = true;
-    },
-  };
-
+  const health = identity.health ?? DEFAULT_HEALTH;
+  for (const path of [health.livePath, health.readyPath, health.metricsPath]) {
+    if (!path.startsWith("/"))
+      throw new RangeError("health path must be absolute");
+  }
+  positiveInteger(health.timeoutMs, "health.timeoutMs");
+  positiveInteger(health.startupGraceMs, "health.startupGraceMs");
+  positiveInteger(identity.shutdownGraceMs, "shutdownGraceMs");
+  const deadlineMs =
+    identity.deadlineMs === undefined ? 5_000 : identity.deadlineMs;
+  if (deadlineMs !== null) positiveInteger(deadlineMs, "deadlineMs");
+  for (const value of Object.values(identity.deadlineProfiles ?? {})) {
+    if (value !== null) positiveInteger(value, "deadlineProfiles");
+  }
+  if (identity.concurrency !== undefined)
+    positiveInteger(identity.concurrency, "concurrency");
+  if (identity.bodyLimitBytes !== undefined)
+    positiveInteger(identity.bodyLimitBytes, "bodyLimitBytes");
+  const checks = identity.readinessChecks ?? [];
+  const resources = identity.resources ?? [];
+  for (const names of [
+    checks.map((check) => check.name),
+    resources.map((resource) => resource.name),
+  ]) {
+    if (
+      names.some((name) => !/^[a-z][a-z0-9-]{0,63}$/.test(name)) ||
+      new Set(names).size !== names.length
+    )
+      throw new RuntimeError("RUNTIME_INVALID_RESOURCE_NAMES");
+  }
+  let phase: RuntimePhase = "starting";
+  let startPromise: Promise<void> | undefined;
+  let stopPromise: Promise<RuntimeShutdownResult> | undefined;
+  let admissionRejected = 0;
+  const lifetime = new AbortController();
+  const closing = new AbortController();
+  const sockets = new Set<Socket>();
+  const requests = new Set<AbortController>();
+  const handlers = new Set<Promise<unknown>>();
+  const requestCleanup = new WeakMap<FastifyRequest, () => void>();
+  const pending = new Set<string>();
+  const acquired: RuntimeResource[] = [];
+  const runningChecks = new Map<string, Promise<boolean>>();
+  const stopped = Promise.withResolvers<RuntimeShutdownResult>();
   const app = Fastify({
+    // Admission ниже сохраняет live/ready для уже принятого transport во время drain.
+    return503OnClosing: false,
+    ...(identity.bodyLimitBytes === undefined
+      ? {}
+      : { bodyLimit: identity.bodyLimitBytes }),
     logger: {
       base: { runtime: identity.name },
       serializers: {
         req: (request: FastifyRequest) => {
           const context = request.correlationContext;
-          const incomingTraceparent = request.headers["traceparent"];
+          const incoming = request.headers["traceparent"];
           const traceparent =
             context?.traceparent ??
-            (typeof incomingTraceparent === "string" &&
-            isTraceparent(incomingTraceparent)
-              ? incomingTraceparent
+            (typeof incoming === "string" && isTraceparent(incoming)
+              ? incoming
               : undefined);
           return {
             method: request.method,
-            url: request.url,
+            ...(request.routeOptions?.url === undefined
+              ? {}
+              : { url: request.routeOptions.url }),
             correlationId: context?.correlationId ?? request.id,
             ...(traceparent === undefined ? {} : { traceparent }),
           };
@@ -181,160 +229,448 @@ export async function createRuntime(
       },
     },
     genReqId: (request) =>
-      createCorrelationContext(
-        request.headers as Record<string, string | string[] | undefined>,
-      ).correlationId,
+      createCorrelationContext(request.headers).correlationId,
   });
-  app.decorate("runtimeController", controller);
+  const transition = (next: RuntimePhase): void => {
+    if (phase === next) return;
+    const valid =
+      (phase === "starting" && (next === "running" || next === "draining")) ||
+      (phase === "running" && next === "draining") ||
+      (phase === "draining" && next === "stopped");
+    if (!valid) {
+      app.log.error(
+        { event: "runtime.transition.invalid", from: phase, to: next },
+        "invalid runtime transition",
+      );
+      throw new RuntimeError("RUNTIME_INVALID_TRANSITION");
+    }
+    app.log.info(
+      { event: "runtime.phase", from: phase, to: next },
+      "runtime phase changed",
+    );
+    phase = next;
+  };
+  const track = <T>(name: string, work: () => Promise<T> | T): Promise<T> => {
+    pending.add(name);
+    return Promise.resolve()
+      .then(work)
+      .finally(() => pending.delete(name));
+  };
+  const destroy = (): void => {
+    for (const request of requests)
+      request.abort(new RuntimeError("RUNTIME_SHUTDOWN_DEADLINE"));
+    for (const socket of sockets) socket.destroy();
+    app.server.close();
+    for (const resource of [...acquired].reverse()) {
+      try {
+        resource.destroy();
+      } catch (error) {
+        app.log.error(
+          {
+            event: "runtime.destroy.failed",
+            resource: resource.name,
+            reason: errorName(error),
+          },
+          "resource destroy failed",
+        );
+      }
+    }
+  };
+  const closeRuntime = (
+    signal?: NodeJS.Signals,
+  ): Promise<RuntimeShutdownResult> => {
+    if (stopPromise !== undefined) return stopPromise;
+    stopPromise = Promise.resolve().then(async () => {
+      const started = performance.now();
+      const timer = setTimeout(
+        () => closing.abort(new RuntimeError("RUNTIME_SHUTDOWN_DEADLINE")),
+        identity.shutdownGraceMs,
+      );
+      let failed = false;
+      try {
+        await observeUntil(
+          track("server-close", () => app.close()),
+          closing.signal,
+        );
+        if (pending.size > 0 || requests.size > 0 || handlers.size > 0)
+          failed = true;
+      } catch (error) {
+        failed = true;
+        app.log.error(
+          { event: "runtime.shutdown.failed", reason: errorName(error) },
+          "runtime shutdown failed",
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+      const unfinished = [
+        ...pending,
+        ...(requests.size > 0 ? ["requests"] : []),
+        ...(handlers.size > 0 ? ["handlers"] : []),
+      ];
+      if (failed) {
+        closing.abort(new RuntimeError("RUNTIME_FAIL_STOP"));
+        destroy();
+      }
+      transition("stopped");
+      const status = failed ? "fail-stop" : "stopped";
+      app.log.info(
+        {
+          event: "runtime.shutdown",
+          signal,
+          status,
+          pending: unfinished,
+          durationMs: performance.now() - started,
+        },
+        "runtime shutdown finished",
+      );
+      const result: RuntimeShutdownResult = { status, pending: unfinished };
+      stopped.resolve(result);
+      return result;
+    });
+    transition("draining");
+    lifetime.abort(new RuntimeError("RUNTIME_DRAINING"));
+    return stopPromise;
+  };
+  const start = (): Promise<void> => {
+    if (phase === "draining" || phase === "stopped") transition("starting");
+    if (startPromise !== undefined) return startPromise;
+    if (phase !== "starting")
+      throw new RuntimeError("RUNTIME_INVALID_TRANSITION");
+    startPromise = (async () => {
+      const startup = new AbortController();
+      const signal = AbortSignal.any([startup.signal, lifetime.signal]);
+      const timer = setTimeout(
+        () => startup.abort(new RuntimeError("RUNTIME_STARTUP_DEADLINE")),
+        health.startupGraceMs,
+      );
+      try {
+        await observeUntil(
+          track("startup", async () => {
+            signal.throwIfAborted();
+            await identity.configure?.(app, signal);
+            signal.throwIfAborted();
+            await app.listen({ host: identity.host, port: identity.port });
+            signal.throwIfAborted();
+            for (const resource of resources) {
+              acquired.push(resource);
+              await resource.start?.(signal);
+              signal.throwIfAborted();
+            }
+            transition("running");
+          }),
+          signal,
+        );
+      } catch (error) {
+        await closeRuntime();
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+    })();
+    return startPromise;
+  };
+  app.decorate("runtimeController", {
+    phase: () => phase,
+    whenStopped: stopped.promise,
+    transition,
+    start,
+    closeRuntime,
+  });
   app.decorateRequest("correlationContext", null);
-
+  app.decorateRequest("runtimeContext", null);
+  app.server.on("connection", (socket: Socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+    if (phase === "draining" || phase === "stopped") socket.destroy();
+  });
+  app.server.on("listening", () => {
+    if (phase === "draining" || phase === "stopped") destroy();
+  });
+  app.addHook("onRoute", (route) => {
+    const profile = route.config?.runtimeDeadlineProfile;
+    if (
+      profile !== undefined &&
+      !Object.hasOwn(identity.deadlineProfiles ?? {}, profile)
+    )
+      throw new RuntimeError("RUNTIME_UNKNOWN_DEADLINE_PROFILE");
+    const handler = route.handler;
+    route.handler = function (request, reply) {
+      const work = Promise.resolve().then(() =>
+        handler.call(this, request, reply),
+      );
+      handlers.add(work);
+      return work.finally(() => {
+        handlers.delete(work);
+        if (reply.raw.destroyed) requestCleanup.get(request)?.();
+      });
+    };
+  });
   app.addHook("onRequest", (request, reply, done) => {
-    const context = requestContext(request);
-    setCorrelationResponseHeaders(reply, context);
-    request.log = request.log.child(withCorrelationFields(context));
+    const correlation = createCorrelationContext(request.headers, request.id);
+    request.correlationContext = correlation;
+    setCorrelationResponseHeaders(reply, correlation);
+    request.log = request.log.child(withCorrelationFields(correlation));
+    const isHealth = [
+      health.livePath,
+      health.readyPath,
+      health.metricsPath,
+    ].includes(request.routeOptions.url ?? "");
+    if (
+      !isHealth &&
+      (phase !== "running" ||
+        requests.size >= (identity.concurrency ?? Infinity))
+    ) {
+      admissionRejected += 1;
+      void reply.code(503).send();
+      return;
+    }
+    const abort = new AbortController();
+    if (!isHealth) requests.add(abort);
+    const profile = request.routeOptions.config.runtimeDeadlineProfile;
+    const budget = isHealth
+      ? null
+      : profile === undefined
+        ? deadlineMs
+        : (identity.deadlineProfiles?.[profile] ?? null);
+    let accepted = false;
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      requests.delete(abort);
+      requestCleanup.delete(request);
+      request.raw.removeListener("aborted", inputClosed);
+      request.raw.removeListener("close", inputClosed);
+      reply.raw.removeListener("close", responseClosed);
+      reply.raw.removeListener("finish", cleanup);
+    };
+    const inputClosed = (): void => {
+      if (!request.raw.complete && !accepted) {
+        abort.abort(new RuntimeError("RUNTIME_CLIENT_DISCONNECTED"));
+        cleanup();
+      }
+    };
+    const responseClosed = (): void => {
+      if (reply.raw.writableFinished) cleanup();
+      else if (!accepted) {
+        abort.abort(new RuntimeError("RUNTIME_CLIENT_DISCONNECTED"));
+        cleanup();
+      }
+    };
+    const timer =
+      budget === null
+        ? undefined
+        : setTimeout(() => {
+            abort.abort(new RuntimeError("RUNTIME_REQUEST_DEADLINE"));
+            reply.raw.destroy();
+            cleanup();
+          }, budget);
+    timer?.unref();
+    request.runtimeContext = {
+      ...correlation,
+      signal: abort.signal,
+      deadlineUtc:
+        budget === null
+          ? null
+          : Temporal.Now.instant().add({ milliseconds: budget }).toString(),
+      acceptDurable: () => {
+        accepted = true;
+      },
+    };
+    requestCleanup.set(request, cleanup);
+    request.raw.once("aborted", inputClosed);
+    request.raw.once("close", inputClosed);
+    reply.raw.once("close", responseClosed);
+    reply.raw.once("finish", cleanup);
     done();
   });
-
+  app.addHook("onSend", async (request, reply, payload) => {
+    if (reply.raw.destroyed) requestCleanup.get(request)?.();
+    return payload;
+  });
+  const checkDependency = (
+    dependency: RuntimeReadinessCheck,
+  ): Promise<boolean> => {
+    const existing = runningChecks.get(dependency.name);
+    if (existing !== undefined) return existing;
+    const timeout = new AbortController();
+    const signal = AbortSignal.any([timeout.signal, lifetime.signal]);
+    const timer = setTimeout(
+      () => timeout.abort(new RuntimeError("RUNTIME_READINESS_DEADLINE")),
+      health.timeoutMs,
+    );
+    const work = track(`readiness:${dependency.name}`, () =>
+      dependency.check(signal),
+    );
+    const result = observeUntil(work, signal)
+      .then(
+        (value) => value !== false,
+        (error: unknown) => {
+          app.log.warn(
+            {
+              event: "runtime.readiness.failed",
+              dependency: dependency.name,
+              reason: errorName(error),
+            },
+            "runtime readiness failed",
+          );
+          return false;
+        },
+      )
+      .finally(() => clearTimeout(timer));
+    runningChecks.set(dependency.name, result);
+    // Не создавать новые blackhole promises на каждом probe; разрешить новый check только после settlement.
+    void work.then(
+      () => runningChecks.delete(dependency.name),
+      () => runningChecks.delete(dependency.name),
+    );
+    return result;
+  };
   app.get(
-    healthPath(health.livePath),
-    {
-      schema: { response: { 200: HEALTH_RESPONSE_SCHEMA } },
-    },
+    health.livePath,
+    { schema: { response: { 200: HEALTH_RESPONSE_SCHEMA } } },
     async () => ({ status: "live", runtime: identity.name }),
   );
-
   app.get(
-    healthPath(health.readyPath),
+    health.readyPath,
     {
       schema: {
         response: { 200: HEALTH_RESPONSE_SCHEMA, 503: HEALTH_RESPONSE_SCHEMA },
       },
     },
-    async (request, reply) => {
-      const context = request.correlationContext;
-      if (context !== null) setCorrelationResponseHeaders(reply, context);
-      if (currentPhase === "stopping" || currentPhase === "stopped") {
-        return reply
-          .code(503)
-          .send({ status: "stopping", runtime: identity.name });
-      }
-      if (explicitlyNotReady)
-        return reply
-          .code(503)
-          .send({ status: "not-ready", runtime: identity.name });
-
-      const checks = await Promise.all(
-        readinessChecks.map(async (dependency) => {
-          try {
-            const result = await dependency.check(
-              AbortSignal.timeout(health.timeoutMs),
-            );
-            return result !== false;
-          } catch (error) {
-            request.log.warn(
-              { dependency: dependency.name, reason: errorName(error) },
-              "runtime readiness check failed",
-            );
-            return false;
-          }
-        }),
-      );
-      const ready = checks.every(Boolean);
+    async (_request, reply) => {
+      let ready =
+        phase === "running" &&
+        app.server.listening &&
+        (identity.requiredDependencies ?? []).every((name) =>
+          checks.some((check) => check.name === name),
+        );
+      if (ready)
+        ready =
+          (await Promise.all(checks.map(checkDependency))).every(Boolean) &&
+          phase === "running" &&
+          app.server.listening;
       return ready
         ? { status: "ready", runtime: identity.name }
-        : reply.code(503).send({ status: "not-ready", runtime: identity.name });
+        : reply.code(503).send({
+            status:
+              phase === "draining" || phase === "stopped"
+                ? "stopping"
+                : "not-ready",
+            runtime: identity.name,
+          });
     },
   );
-
   app.get(
-    healthPath(health.metricsPath),
-    {
-      schema: { response: { 200: METRICS_RESPONSE_SCHEMA } },
-    },
+    health.metricsPath,
+    { schema: { response: { 200: { type: "string" } } } },
     async (_request, reply) =>
-      reply.type("text/plain; version=0.0.4").send("# platform foundation\n"),
+      reply
+        .type("text/plain; version=0.0.4")
+        .send(
+          `# platform foundation\nruntime_admission_rejected_total ${admissionRejected}\n`,
+        ),
   );
-
+  app.addHook("preClose", async () => {
+    if (phase !== "stopped") transition("draining");
+    lifetime.abort(new RuntimeError("RUNTIME_DRAINING"));
+  });
   app.addHook("onClose", async () => {
-    currentPhase = "stopped";
-    explicitlyNotReady = true;
+    let stopFailed = false;
+    for (const resource of [...acquired].reverse()) {
+      closing.signal.throwIfAborted();
+      try {
+        await observeUntil(
+          track(`stop:${resource.name}`, () => resource.stop(closing.signal)),
+          closing.signal,
+        );
+      } catch (error) {
+        stopFailed = true;
+        app.log.error(
+          {
+            event: "runtime.stop.failed",
+            resource: resource.name,
+            reason: errorName(error),
+          },
+          "resource stop failed",
+        );
+      }
+    }
+    if (stopFailed) throw new RuntimeError("RUNTIME_RESOURCE_STOP_FAILED");
   });
   return app;
 }
 
-export function createShutdownController(
-  app: FastifyInstance,
+export async function startRuntime(
   identity: RuntimeIdentity,
-): Readonly<{
-  stop: (signal: NodeJS.Signals) => Promise<void>;
-}> {
-  positiveInteger(identity.shutdownGraceMs, "shutdownGraceMs");
-  let stopPromise: Promise<void> | undefined;
-  return {
-    stop: (signal) => {
-      if (stopPromise !== undefined) return stopPromise;
-      app.runtimeController.markStopping();
-      stopPromise = (async () => {
-        app.log.info({ signal }, "runtime shutdown requested");
-        const timeout = AbortSignal.timeout(identity.shutdownGraceMs);
-        const closeRuntime = async (): Promise<void> => {
-          await app.close();
-          for (const hook of identity.shutdownHooks ?? []) await hook(signal);
-        };
-        try {
-          await Promise.race([
-            closeRuntime(),
-            new Promise<never>((_resolve, reject) =>
-              timeout.addEventListener("abort", () => reject(timeout.reason), {
-                once: true,
-              }),
-            ),
-          ]);
-          app.log.info({ signal }, "runtime shutdown complete");
-        } catch (error) {
-          app.log.error(
-            { signal, reason: errorName(error) },
-            "runtime shutdown exceeded grace period",
-          );
-          throw error;
-        }
-      })();
-      return stopPromise;
-    },
-  };
-}
-
-export async function startRuntime(identity: RuntimeIdentity): Promise<void> {
+): Promise<FastifyInstance> {
   const app = await createRuntime(identity);
-  app.runtimeController.markStarting();
-  const shutdown = createShutdownController(app, identity);
-  const handleSignal = (signal: NodeJS.Signals): void => {
-    void shutdown.stop(signal).catch(() => {
-      process.exitCode = 1;
-    });
+  const terminate = (): void => {
+    void app.runtimeController.closeRuntime("SIGTERM");
   };
-  process.once("SIGTERM", () => handleSignal("SIGTERM"));
-  process.once("SIGINT", () => handleSignal("SIGINT"));
+  const interrupt = (): void => {
+    void app.runtimeController.closeRuntime("SIGINT");
+  };
+  const removeSignals = (): void => {
+    process.removeListener("SIGTERM", terminate);
+    process.removeListener("SIGINT", interrupt);
+  };
+  process.on("SIGTERM", terminate);
+  process.on("SIGINT", interrupt);
+  void app.runtimeController.whenStopped.then((result) => {
+    removeSignals();
+    if (result.status === "fail-stop") process.exit(1);
+  });
   try {
-    await app.listen({ host: identity.host, port: identity.port });
-    app.runtimeController.markReady();
+    await app.runtimeController.start();
   } catch (error) {
-    app.log.error({ reason: errorName(error) }, "runtime listener failed");
+    removeSignals();
+    await app.runtimeController.closeRuntime();
     throw error;
   }
+  return app;
 }
 
-export async function startConfiguredRuntime(name: RuntimeName): Promise<void> {
+export function configuredRuntimeIdentity(
+  config: PlatformConfig,
+  name: RuntimeName,
+  composition: RuntimeComposition = {},
+): RuntimeIdentity {
+  const runtime = config.services[name];
+  const shutdownGraceMs = config.platform["shutdownGraceMs"];
+  const bodyLimitBytes = config.platform["bodyLimitBytes"];
+  if (typeof shutdownGraceMs !== "number" || typeof bodyLimitBytes !== "number")
+    throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
+  return {
+    ...composition,
+    name,
+    host: runtime.listen.host,
+    port: runtime.listen.port,
+    shutdownGraceMs,
+    health: runtime.health,
+    deadlineMs: runtime.deadlineMs,
+    deadlineProfiles: runtime.deadlineProfiles,
+    concurrency: runtime.concurrency,
+    bodyLimitBytes,
+    requiredDependencies: [
+      ...(runtime.database === null ? [] : ["database"]),
+      ...(runtime.kafka.mode === "none" ? [] : ["kafka"]),
+    ],
+  };
+}
+
+export async function startConfiguredRuntime(
+  name: RuntimeName,
+  composition: RuntimeComposition = {},
+): Promise<FastifyInstance> {
   for (const key of Object.keys(process.env)) {
     if (
       (key.startsWith("COFFEE_") || key.startsWith("SOPS_")) &&
       key !== "COFFEE_CONFIG_FILE" &&
       key !== "COFFEE_RUNTIME_SECRETS_FILE"
-    ) {
+    )
       throw new Error(
         `${key}: runtime accepts only configuration locator variables`,
       );
-    }
   }
   const configPath = process.env["COFFEE_CONFIG_FILE"];
   const secretsPath = process.env["COFFEE_RUNTIME_SECRETS_FILE"];
@@ -347,7 +683,6 @@ export async function startConfiguredRuntime(name: RuntimeName): Promise<void> {
   const secretStat = await stat(secretsPath);
   if ((secretStat.mode & 0o777) !== 0o400)
     throw new Error(`${secretsPath}: scoped secrets mode must be 0400`);
-  const runtime = config.services[name];
   const secretDocument = parseYaml(await readFile(secretsPath, "utf8"), {
     json: true,
   });
@@ -355,25 +690,9 @@ export async function startConfiguredRuntime(name: RuntimeName): Promise<void> {
     secretDocument,
     name,
     config.environment,
-    runtime.secretRefs,
+    config.services[name].secretRefs,
   );
-  const shutdownGraceMs = config.platform["shutdownGraceMs"];
-  if (
-    typeof shutdownGraceMs !== "number" ||
-    !Number.isSafeInteger(shutdownGraceMs) ||
-    shutdownGraceMs <= 0
-  ) {
-    throw new Error(
-      "config.platform.shutdownGraceMs: positive integer is required",
-    );
-  }
-  await startRuntime({
-    name,
-    host: runtime.listen.host,
-    port: runtime.listen.port,
-    shutdownGraceMs,
-    health: runtime.health,
-  });
+  return startRuntime(configuredRuntimeIdentity(config, name, composition));
 }
 
 export function assertScopedSecrets(
