@@ -6,7 +6,9 @@ description: Маршрутизировать значимую работу Coff
 # Маршрутизатор CoffeeOrderPlatform
 
 Прочитать `AGENTS.md` и `docs/launch/README.md`. Канонические roots определяют
-бизнес-инварианты, но не процесс миграции.
+бизнес-инварианты, но не процесс миграции. Техническую authority задаёт
+ADR-0025, prerequisites — `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`.
+Историческая Effect-линия #48–#55 больше не является планом реализации.
 
 | Сигнал | Навыки |
 |---|---|
@@ -26,6 +28,8 @@ description: Маршрутизировать значимую работу Coff
 | documents, media, ArtifactRef, scanning | `artifact-processing` |
 | Docker, Compose, CI/CD, images, deployment | `platform-delivery` |
 | failures, recovery, security, SLO | `reliability-verification` |
+| issue authoring/audit | `issue-authoring` |
+| handoff, PR, merge, closure | `issue-delivery-closure` |
 
 При пересечении границ применять несколько владеющих навыков. Повторно проверять
 маршрут после исследования, перед правками, проверкой и отправкой. Остановиться,

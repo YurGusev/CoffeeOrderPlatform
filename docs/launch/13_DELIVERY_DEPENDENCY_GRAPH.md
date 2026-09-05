@@ -2,69 +2,95 @@
 
 ## Правило
 
-Каждое issue обязано назвать predecessor, входные артефакты, выходные артефакты
-и downstream consumers. Задача не считается готовой, пока её consumer contract
-test не принят следующей задачей. Все outputs объединяются в `develop`; следующая
-ветка создаётся от `develop`, содержащей принятые prerequisites.
+Каждая задача принимает merged prerequisites из `develop` и публикует handoff
+для конкретных consumers. Ветка создаётся от accepted `develop`, без stacked
+или unmerged predecessor. Выполненный scaffold не считается доказательством
+business durability. Техническую authority задаёт
+[ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md).
 
-## Граф
+## Граф после recovery
 
 ```text
-#14 Governance/docs package
- └─> #19 Authority closure: topology/contracts/config matrix
-      └─> #2 Boundaries
-           └─> #3 Foundation/config/secrets/DB/toolchain
-      └─> #4 Unified HTTP/event contracts + generated transport types/mocks
-           ├─> #5 Customer ───────────────────────────────┐
-           ├─> #10 Gateway ─> #6 staging ─> #16 activation ─> #17 API ─> #18 verification ─> #7 Pricing
-           │                                      └───────────────────────────────┤
-           └─────────────────────────────────────> #8 Orders
-                                                       ├─> #9 React
-                    #10 + #16 + #18 + #8 ─────────> #11 AROMA convergence
-                    #8 + #9 + #11 ────────────────> #12 Realtime
-                    #5..#12 + #16..#18 ───────────> #13 Launch gates
+#14 → #19 → #2 → #3
+                  ↓
+                 #60 ───────────────→ #4 contracts
+                  ↓
+             #61 runtime
+                  ↓
+             #62 PostgreSQL/idempotency
+                  ↓
+             #63 Kafka/Inbox/Outbox
+
+#4 + #62 → #5 Customer
+#4 + #62 → #10 Gateway → #6 staging
+#6 + #63 → #16 activation → #17 Catalog API → #18 capacity → #7 Pricing
+#5 + #7 + #17 + #18 + #63 → #8 Orders → #9 React
+#10 + #16 + #18 + #8 + #63 → #11 convergence
+#8 + #9 + #11 + #63 → #12 Realtime
+#12 + #63 → #64 Operations/observability
+#5..#12 + #16..#18 + #64 → #13 Launch gates → завершает #1
 ```
+
+#4 начинается после #60 параллельно runtime hardening. Оно не ждёт DB/Kafka
+implementation и использует contract fixtures. После #60 непосредственные ready
+successors — #4 и #61. Остальные остаются blocked до всех своих inputs.
+Observability не блокирует business implementation; Operations принимает реальные
+instrumentation points после #12 и обеспечивает полный G14 до #13.
 
 ## Контрольные точки
 
-| Issue | Принимает | Публикует | Разблокирует |
-|---|---|---|---|
-| #14 | повторный аудит | launch authority + ADR-0019/ADR-0020/ADR-0021 | #19 |
-| #19 | #14 | 15-runtime machine authority + TS7 decision/pin identity, delegation/security closure | #2 |
-| #2 | launch docs | service/DB/interaction/secret ownership manifests + architecture checker | #3, #4 |
-| #3 | manifests #2/#19 | workspace, TS7-only manifests/lockfile/tsconfig graph/Oxlint, config/secrets bootstrap, DB roles, Compose | #4–#12, #16–#18 |
-| #4 | #2–#3 | OpenAPI/JSON Schema authority, доказанный TS7 types-only codegen, generated types/mocks | #5–#12, #16–#18 |
-| #5 | Customer contracts | работающий Customer API + DB migrations | #8, #9, #13 |
-| #10 | private AROMA contracts | NDJSON Catalog export + typed cart primitives | #6, #11 |
-| #6 | NDJSON contract/fixtures #10 | batch manifests + `Received` staging generation | #16 |
-| #16 | `Received` generation #6 | atomic active revision + owner Outbox events | #17, #18, #8, #11 |
-| #17 | active projection #16 | client Catalog search + private Pricing input | #18, #7, #8, #9 |
-| #18 | #10/#6/#16/#17 | Catalog failure/recovery/capacity evidence | #7, #8, #9, #11, #13 |
-| #7 | Pricing contracts + Catalog API/evidence #17/#18 | immutable quote/verify | #8, #9 |
-| #8 | Customer/Catalog/Pricing contracts+providers | Draft/Confirm/Order contribution/Order Card/OrderConfirmed | #9, #11, #12 |
-| #9 | generated `client-v1` transport types + #5–#8 APIs | project-owned fetch client + React operator flow | #12, #13 |
-| #11 | #10/#16/#18/#8 | observer/convergence/UnknownOutcome events | #12, #13 |
-| #12 | #8/#9/#11 | SSE invalidation/refetch | #13 |
-| #13 | все outputs | единый verified release evidence | завершает #1 |
+| Issue | Обязательные inputs | Выход и consumer |
+|---|---|---|
+| #60 | accepted #49 / PR #59; baseline #3 / PR #22 и #47 | Fastify recovery, ADR-0025, graph → #4, #61 |
+| #61 | #60 | deadlines/cancellation/readiness/shutdown → #62, #63, #64 |
+| #62 | #60, #61 | transaction outcome, durable idempotency, migrations/pool → #5, #10, #63 и DB owners |
+| #63 | #61, #62 | durable Inbox/Outbox, partition drain, broker persistence → #16, #8, #11, #12, #64 |
+| #4 | #2, #3, #60 | OpenAPI/JSON Schema, types-only generation, fixtures → business contract consumers |
+| #5 | #4, #62 | Customer API/migrations → #8, #9, #13 |
+| #10 | #4, #62 | safe NDJSON/cart transport, durable operation journal → #6, #11 |
+| #6 | #10, #62 | Received Catalog staging generation → #16 |
+| #16 | #6, #63 | active revision + owner Outbox events → #17, #18, #8, #11 |
+| #17 | #4, #16 | Catalog search + Pricing input → #18, #7, #8, #9 |
+| #18 | #10, #6, #16, #17 | pipeline recovery/capacity evidence → #7, #8, #9, #11, #13 |
+| #7 | #4, #17, #18, #62 | immutable PricingQuote/verify → #8, #9 |
+| #8 | #4, #5, #7, #17, #18, #63 | Draft/Confirm/contribution/Order Card → #9, #11, #12 |
+| #9 | #4, #5, #7, #8, #17, #18 | project-owned fetch client + React operator flow → #12, #13 |
+| #11 | #10, #16, #18, #8, #63 | observer/convergence/UnknownOutcome → #12, #13 |
+| #12 | #8, #9, #11, #63 | single-instance SSE invalidation/refetch → #64, #13 |
+| #64 | #4, #61, #62, #63, #12 | Pino/OTel, Collector/OpenObserve, alerts/storage/redaction → G14 #13 |
+| #13 | все outputs выше | verified release evidence → закрытие #1 |
 
-## Контракт передачи
+## История Effect
 
-Каждый PR обязан приложить `evidence/handoffs/issue-<N>.yaml`:
+#48 / PR #56 и #49 / PR #59 остаются завершённой историей. Их ADR/handoff
+сохраняются без переписывания hashes. #50–#55 superseded решением #60 и закрываются
+как not planned только после merge recovery; они не считаются выполненными.
+Ни один business issue больше не принимает Effect admission #55.
+
+## Handoff protocol
+
+Каждый handoff хранится в `evidence/handoffs/issue-<N>.yaml`:
 
 ```yaml
 issue: 4
-commit: <sha>
+baseCommit: <accepted-develop-before-work>
 inputs:
-  - issue: 3
-    artifact: config/toolchain-versions.json
+  - issue: 60
+    acceptedMergeCommit: <accepted-predecessor-merge-sha>
+    artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+    sha256: <digest-at-that-commit>
 outputs:
   - artifact: contracts/openapi/client-v1.yaml
+    sha256: <current-artifact-digest>
     consumers: [5, 7, 8, 9]
 verification:
   - command: pnpm contracts:check-generated
     result: passed
+limitations: []
 ```
 
-Checker запрещает закрыть issue, если predecessor commit отсутствует в base,
-output отсутствует, downstream consumer не указан или evidence ссылается на
-непринятый PR.
+Self commit SHA не записывается. Consumer проверяет accepted predecessor через
+Git/GitHub; historical hashes проверяются на соответствующем commit, не текущем
+workspace. Outputs содержат только реальные изменённые artifacts. Команды и
+ограничения описывают фактически выполненные проверки; live skip не является PASS.
+Historical handoffs не переписываются под новый protocol.

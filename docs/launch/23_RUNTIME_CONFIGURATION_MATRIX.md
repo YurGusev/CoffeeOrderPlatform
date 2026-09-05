@@ -101,3 +101,19 @@ non-Gateway→AROMA origin и любого нового runtime→`coffee_networ
 
 `pnpm config:check` сравнивает эту таблицу с `platform.yaml`, service catalog,
 Compose, Permission manifests и SOPS secretRef allowlists поле-в-поле.
+
+## Бюджет replicas первого запуска
+
+Первый запуск использует один instance каждой роли. Перед увеличением числа
+replicas или rollout с overlap обязательна проверка:
+
+```text
+sum((steady replicas + temporary rollout replicas) × owner pool.max)
+  + reservedConnections <= maxConnections
+```
+
+Текущая сумма maxima исчерпывает application budget; автоматическое удвоение
+replicas запрещено без пересчёта. Database foundation по ADR-0025 проверяет
+бюджет и ограничивает admission, а не увеличивает PostgreSQL limits молча.
+Realtime #12 дополнительно материализует process-wide SSE memory/FD budget и
+проверяет его soak test; per-connection limit сам по себе не доказывает capacity.

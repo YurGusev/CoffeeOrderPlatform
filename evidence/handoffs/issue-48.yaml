@@ -1,0 +1,99 @@
+issue: 48
+baseCommit: 2eb1b2690a420d0ff214cad0969f1bcdcc1fcfb4
+inputs:
+  - issue: 2
+    acceptedMergeCommit: 327638d4494269a151ee7c0ac945ac0053c3e0d4
+    artifact: config/service-catalog.json
+    sha256: a75b43ae1be1f12440e413083fd7f0271c8c68377881a77d082754dc7ad4ef10
+  - issue: 3
+    acceptedMergeCommit: 91c6ed927029604c82a25b2208371a98c4b62237
+    artifact: config/toolchain-versions.json
+    sha256: 317ba88e1414996441e3332219bb9b84705c7ddd608c91cc370f87c1fb149667
+  - issue: 19
+    acceptedMergeCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+    artifact: platform/launch-v1-runtime-profile.json
+    sha256: 5b5019dfb2d88912f8854b16fb2d97accb8301fd1bdecc1f8b6f7767384e1671
+outputs:
+  - artifact: docs/adr/ADR-0024-effect-native-platform.md
+    sha256: bf9c504c0cf2785b86ab28a3aef3e54bb4ec74776ae137db195261d41f8cfcbf
+    consumers: [49, 4]
+  - artifact: platform/runtime-foundation-decision.json
+    sha256: ed9b6da78ec75b2fd7433a2494f5377e68ad245ef12cdb7ed90d6f63ead19756
+    consumers: [49, 50, 51, 52, 53, 54, 55, 4]
+  - artifact: platform/runtime-foundation-decision.schema.json
+    sha256: 9ddbc5b89a383fe54d0fc550340eab42ef126050525cff02287a3f36d62a4da8
+    consumers: [49, 55]
+  - artifact: config/toolchain-versions.json
+    sha256: aaa261e414d73c20deb210c6e8c239f030d333409529289aeda1a667c935bec9
+    consumers: [49, 50, 51, 52, 53, 54, 55]
+  - artifact: config/node26-compatibility-matrix.json
+    sha256: 4c6ac121450ab7c8c3ee6f3df8749fec658d0b1c9021f0357d1d30fb1a31494e
+    consumers: [49, 55]
+  - artifact: config/toolchain-versions.schema.json
+    sha256: 02f6123f7e58f162020dd882fd59932f56e44e12ed21d838433c59b8a85af678
+    consumers: [49, 55]
+  - artifact: config/node26-compatibility-matrix.schema.json
+    sha256: 45edd986370494119d0f6ebe7765af9602428e4aa5a6e4964abad5d982a32ec6
+    consumers: [49, 55]
+  - artifact: scripts/validate-launch-authority.py
+    sha256: e8fc9935a57f2ccb2ca9010f956e9403a429e6f2f8f05c82cf05d965cea62307
+    consumers: [49, 55]
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: 047416761d6e649973b920a9bd4ed7269f26fd9c7acbe034b69b3c2c1db0d8ca
+    consumers: [49, 55]
+  - artifact: scripts/check-node26-compatibility.mjs
+    sha256: 7c5485f1be0c2d4c1af753ca0de5a234f3173df0323a6f8c44102000450dd4c2
+    consumers: [49, 55]
+  - artifact: scripts/check-toolchain-profiles.mjs
+    sha256: 9781876481dac5dde03e374da3935653db98919d76d34c37f3bbc62fade2e0ed
+    consumers: [49, 55]
+  - artifact: scripts/check-rule-parity.mjs
+    sha256: 39e011ffaaf0e659e8a590ad36fe425ac438a5f613e8cbd09d8491651b857ae6
+    consumers: [49, 55]
+  - artifact: tests/authority/fixtures/negative/effect-cases.json
+    sha256: 7daed02523edd491a2c8ed09930b66c25b58f70bc2e3aa80e58473360d702b76
+    consumers: [49, 55]
+  - artifact: tests/authority/test_launch_authority.py
+    sha256: db24c4b0bb1bacaca1885b50b68165d92b7ccde007385fe3217c79c632714c27
+    consumers: [49, 55]
+  - artifact: tests/runtime/node26-compatibility.test.mjs
+    sha256: 9d59f7b3ed10b4ee4bcdbe1fbe3049d0310c2f1e7f68dce2b5bc849ee4b46962
+    consumers: [49, 55]
+  - artifact: docs/launch/README.md
+    sha256: cc236ebc66c0dfe969a4bad2a1680cd07925c648c1398d268c845cdd71b50d02
+    consumers: [49, 4]
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: 178c311104ff9e47f53e5165ec4353da7e55f0892d49e6f759b90411e1dfd3d2
+    consumers: [49, 50, 51, 52, 53, 54, 55, 4]
+  - artifact: docs/launch/25_TS7_LINT_RULE_PARITY.md
+    sha256: 2c5fe3359df17f3c6b2f199fce49c9265d8a1ef4759736217c7843a7159992ac
+    consumers: [49, 55]
+  - artifact: AGENTS.md
+    sha256: 07030d645605f7d7212b23d5bcfa97a73ac9df62caaba2e382ca19db5f90ec0e
+    consumers: [49, 50, 51, 52, 53, 54, 55, 4]
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 91a605107db5dc016d521cf46cd969f0fe0c05b18944486920d94b2083f0d94d
+    consumers: [49, 4]
+verification:
+  - command: pnpm authority:check
+    result: passed
+  - command: pnpm config:check
+    result: passed
+  - command: pnpm architecture:check
+    result: passed
+  - command: pnpm versions:check
+    result: passed
+  - command: pnpm compatibility:check
+    result: passed
+  - command: pnpm rule-parity:check
+    result: passed
+  - command: pnpm profile:check
+    result: passed
+  - command: pnpm check
+    result: passed
+  - command: git diff --check
+    result: passed
+limitations:
+  - Runtime source, dependencies, lockfile, Compose workloads/images, public contracts, DB schemas/roles and UI are unchanged.
+  - Exact Effect packages are materialized by #49; runtime cutovers remain #50–#54 and final admission remains #55.
+  - This handoff format applies starting with #48 and does not rewrite historical handoffs #2, #3 or #19.

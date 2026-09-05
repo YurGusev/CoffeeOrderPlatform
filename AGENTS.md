@@ -44,6 +44,15 @@
 - Runtime получает только свою scoped secret materialization в tmpfs; общий
   secrets-файл может расшифровывать только trusted `config-bootstrap`.
 
+## Техническая authority первого запуска
+
+- ADR-0025 и issue #60 supersede-ят Effect authority ADR-0024; #48/#49 — история.
+- Fastify/async-await/AbortSignal, pg, OpenAPI/JSON Schema, Pino/OpenTelemetry,
+  React Router/TanStack Query и types-only generation по ADR-0022 — единый путь.
+- Business delivery следует `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`;
+  восстановленный #3 не подменяет незавершённые durable foundation guarantees.
+- Exact pins редактируются только в `config/toolchain-versions.json`.
+
 Работать локально в `/home/yurgusev/CoffeeOrderPlatform` и проверять изменения
 до коммита. GitHub push, создание/изменение issue и PR, deployment, мутации провайдера
 и production-данных требуют явного разрешения пользователя.

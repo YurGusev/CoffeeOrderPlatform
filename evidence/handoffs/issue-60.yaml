@@ -1,0 +1,235 @@
+issue: 60
+baseCommit: 2f13f4ef06e6cb8e8221a9f92ecdc38b5541725c
+inputs:
+  - issue: 49
+    acceptedMergeCommit: 2f13f4ef06e6cb8e8221a9f92ecdc38b5541725c
+    artifact: evidence/handoffs/issue-49.yaml
+    sha256: 6a13ac86d3d6bbbc74083c22d0153bb900efec4a8d0f7e477b95659ea32b3502
+  - issue: 3
+    acceptedMergeCommit: 91c6ed927029604c82a25b2208371a98c4b62237
+    artifact: package.json
+    sha256: 03df35b7a5526119b240916cdff9bdbaa6b88dea7ce379ddca31fb7ed51370db
+outputs:
+  - artifact: AGENTS.md
+    sha256: 7dfa33ed7edc7cb9099f2b6a12f7f081020775ccc4f223c6e515bd0044507ac1
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: .agents/skills/coffee-platform-router/SKILL.md
+    sha256: f5b754b3f8b18cc90cc35ce772e892aebe1668dc55f714297467ba942f81a78c
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+    sha256: 108de7042b7546cae60e4fe807fe1bb8640d464e37caed1bb5a147f0c1abc141
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: docs/launch/README.md
+    sha256: 19b4abb0e17f269fe89de28f524e1267f61c4f2d5982ad359d953ee376daa249
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: docs/launch/03_HTTP_API_CONTRACT.md
+    sha256: 9b5e818cda00f6094817b947c67f5e87e0960166fd07f6b406d4d6cc03ae70ba
+    consumers:
+      - 4
+      - 5
+      - 7
+      - 8
+      - 9
+      - 10
+      - 17
+  - artifact: docs/launch/06_EVENTS_AND_RECOVERY.md
+    sha256: 53453f30d45e858197a8629a694433ec61694d53a7781a788a790c10ab4f27b5
+    consumers:
+      - 63
+      - 8
+      - 11
+      - 12
+      - 16
+  - artifact: docs/launch/08_DELIVERY_PLAN.md
+    sha256: e5c2f6fda9d75e7a4be47bc59cd4f31901c08396e4396176b2be2ceb81a7772f
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md
+    sha256: 53a068f185e5a6147d5e6bcf6006ae7567f0ac2a80b54b82b2bcfc6eca8de643
+    consumers:
+      - 4
+      - 5
+      - 7
+      - 8
+      - 9
+      - 10
+      - 12
+      - 16
+      - 17
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 94b71ef8a9b032f4f4b83a880abaf49259160d4d8da19efb37af412bcf72053c
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: docs/launch/14_CUSTOMER_IMPLEMENTATION_SPEC.md
+    sha256: db671568ce7c3f71aa1c62c8a844abaf28f4cdd30692573a67f83dc487e76c01
+    consumers:
+      - 5
+  - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: 1b3e5d83ffb2384edc07f234c4a666013363480109faaa1a2b0688dfc1440a53
+    consumers:
+      - 9
+  - artifact: docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md
+    sha256: 65f142553dd55da2a7e8871ae1db3a3fccd598f3fa30bdfb9a847e97a0495d29
+    consumers:
+      - 9
+      - 12
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: 5be323008dc6748c1676d01a4214829ed806d125915fd014912be820b6b997ce
+    consumers:
+      - 13
+      - 64
+  - artifact: docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md
+    sha256: ccff771a1d013fd4a097b3e07927d73450ce6d49cea57d16f8a5dd7cb9867f6c
+    consumers:
+      - 10
+      - 11
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: 8dbce50b2677875d53b27e31e0e7c6cce901f5f3719d373d583c70e593fbdc09
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: config/toolchain-versions.json
+    sha256: 317ba88e1414996441e3332219bb9b84705c7ddd608c91cc370f87c1fb149667
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: config/toolchain-versions.schema.json
+    sha256: edce7d6f6aad837ae2f7b140c4e3225161d4c80a5dbe3e2c1ef63ce9a40a1f20
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: platform/runtime-foundation-decision.json
+    sha256: 6a60486a87c6eaf680db3d450590610ec34f4c276456521373490ca6ad6570f8
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: platform/runtime-foundation-decision.schema.json
+    sha256: 7acde4408acc9e0128f1067da33bec11bef796eafa2493fce4f78cf5e56ddb5f
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: package.json
+    sha256: 03df35b7a5526119b240916cdff9bdbaa6b88dea7ce379ddca31fb7ed51370db
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: pnpm-lock.yaml
+    sha256: a620d3d2ce320d946b6a4fc0f6a24a43e93dd5eaf430c8ee9db01f48bff122fb
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: pnpm-workspace.yaml
+    sha256: e17b19b99138a8fd60acce96918eae67a7401c86b35027bc83ef57822eda7f19
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: scripts/check-architecture.mjs
+    sha256: deeb6542654e365a801097d55c52658978762f6bb7de5d6858f5db83e2fadd48
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: scripts/validate-launch-authority.py
+    sha256: a25722ae09b896beaff11b996257f45754dc8c3ebec9d89c05c2bbba1dfdcf17
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: evidence/recovery/issue-60.md
+    sha256: 3fa11034e521c6d470395f115080ea286fdf4a413a8f3bc2ac42f36fc117d854
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+  - artifact: evidence/recovery/issue-60-backlog.json
+    sha256: 03745d5be899935f834f69c56a2cdc5a950012e766168c49d4c5824452dc74d0
+    consumers:
+      - 4
+      - 61
+      - 62
+      - 63
+      - 64
+verification:
+  - command: pnpm install --frozen-lockfile
+    result: passed
+    exitCode: 0
+  - command: pnpm check
+    result: passed
+    exitCode: 0
+    detail: 'authority: 4 tests; application suite: 88 passed, 1 live-DB skip, 0 failed'
+  - command: pnpm profile:check
+    result: passed
+    exitCode: 0
+    detail: parallel == singleThreaded, 56 artifacts
+  - command: pnpm authority:check
+    result: passed
+    exitCode: 0
+    detail: повторно после окончательной редакции документов
+  - command: git diff --check
+    result: passed
+    exitCode: 0
+limitations:
+  - Production/native/Compose admission не выполнялся; compatibility candidate остаётся blocked.
+  - Live PostgreSQL proof пропущен без disposable target; production/provider mutations отсутствуют.
+  - '#61–#64 не реализованы recovery: это обязательные будущие handoffs по graph.'
+  - >-
+    Исторические outputs #48/#49 проверены на accepted commits; текущий workspace не является их
+    historical hash source.

@@ -22,7 +22,8 @@ owner transaction + Outbox
 ## 2. Kafka consumer
 
 - topic `coffee.realtime.invalidate.v1`, key=`subjectRef`;
-- group `realtime-gateway-<replica-id>`;
+- один instance, group `realtime-gateway-v1`; второй instance запрещён до
+  отдельного решения о fan-out и проверки multi-replica delivery;
 - auto topic creation/auto commit запрещены;
 - validate JSON Schema/envelope before use;
 - поддерживается только `subjectType=order` в первом запуске;
@@ -101,7 +102,7 @@ owner refetch и поэтому не нуждается в sticky session/persis
 
 ## 6. Fanout и backpressure
 
-Лимиты одного instance:
+Лимиты одного instance (materialization и capacity proof принадлежат #12):
 
 - максимум 5 000 active connections; следующая получает `503
   REALTIME_CAPACITY_EXCEEDED` до SSE headers;
@@ -112,6 +113,11 @@ owner refetch и поэтому не нуждается в sticky session/persis
 - heartbeat 15s; edge idle timeout минимум 45s;
 - graceful shutdown 20s: перестать принимать connections, отправить
   `stream-reset`, закрыть sockets, затем consumer.
+
+Дополнительно #12 фиксирует process-wide queue budget, RSS/FD/container memory
+и admission limits в `config/platform.yaml` с проверкой schema. Per-client maxima
+не заменяют совокупный бюджет: при его исчерпании slow connections закрываются,
+новые получают 503 до headers. Значения подтверждаются указанным ниже soak test.
 
 Для одного connection события одного subject coalesce в окне 250ms: оставить
 наибольшую ownerVersion, а при равной — последнее по Kafka order. Coalescing не

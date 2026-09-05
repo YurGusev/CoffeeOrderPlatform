@@ -94,7 +94,8 @@ model не экспортируется и не используется как 
 - body `CustomerCreateRequest`:
   - `displayName`: required, trimmed string, 1–200;
   - `phone`: optional raw user input, string 1–64; Customer нормализует его
-    `libphonenumber-js@1.13.12` с region `RU` и возвращает E.164;
+    `libphonenumber-js` (exact pin материализует #5 в
+    `config/toolchain-versions.json` до реализации нормализации) с region `RU` и возвращает E.164;
   - `email`: optional email, max 254;
   - `address`: optional object `{line1, line2?, city, postalCode?, countryCode}`;
   - как минимум одно из `phone`/`email` обязательно;
@@ -311,7 +312,8 @@ cookies, arbitrary URLs или полную корзину.
 
 ## 7. Генерация и fixtures
 
-- `pnpm contracts:lint`: Redocly/Spectral + JSON Schema validation;
+- #4 создаёт `pnpm contracts:lint`: проверка OpenAPI structure/refs и JSON Schema
+  существующим AJV; второй linter/framework не требуется;
 - `pnpm contracts:generate`: `@hey-api/openapi-ts 0.99.0` только с
   `@hey-api/typescript`, outputs `packages/generated/client-v1/**` и
   `packages/generated/internal-v1/**`;
@@ -321,6 +323,8 @@ cookies, arbitrary URLs или полную корзину.
 - генератор принимается только после golden corpus используемых OpenAPI 3.2
   constructs, deterministic double generation, zero diff и `tsc 7.0.2` compile;
 - `pnpm contracts:check-generated`: повторная генерация и zero diff;
+- `pnpm contracts:test`: positive/negative contract fixtures и проверка runtime
+  request/response validation; команда создаётся в #4;
 - `pnpm contracts:breaking`: сравнение с `origin/develop`; удаление/rename/
   required-field/type/enum narrowing/status removal блокирует PR;
 - по одному positive fixture на route/status и messageType;

@@ -144,7 +144,8 @@ PII и HTTP body в audit log не записываются.
 `displayName`: Unicode NFC → trim → последовательность Unicode whitespace
 заменить одним ASCII space. После преобразования длина 1–200.
 
-Телефон нормализуется `libphonenumber-js@1.13.12` с default region `RU`:
+Телефон нормализуется `libphonenumber-js` (exact pin материализует #5 в
+    `config/toolchain-versions.json` до реализации нормализации) с default region `RU`:
 
 1. принять строку длиной не более 64 символов;
 2. разобрать библиотекой, проверить `isValid()`;
