@@ -26,7 +26,7 @@ transport handler; у остальных runtime explicit `false`.
 | catalog-supplier-sync     | 4201 | 15m / 1 export                     |       4 | none                  | postgres.catalogImport, service identity, telemetry                                            | coffee_postgres:5432, api-internal:4051                                                                           |
 | catalog-activation-worker | 4202 | 5s DB batch / 1                    |       4 | producer              | postgres.catalogActivate, kafka.catalog, service identity, telemetry                           | coffee_postgres:5432, kafka:9092                                                                                  |
 | pricing-service           | 4103 | 5s / 100                           |       8 | none                  | postgres.pricing, service identity, telemetry                                                  | coffee_postgres:5432, api-internal:4051                                                                           |
-| orders-service            | 4104 | 5s / 150                           |      12 | producer              | postgres.ordersService, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
+| orders-service            | 4104 | 5s / 150                           |       4 | producer              | postgres.ordersService, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
 | orders-aroma-preparation  | 4203 | 5s / 16                            |       4 | consumer+producer     | postgres.ordersPreparation, kafka.orders, service identity, telemetry                          | coffee_postgres:5432, kafka:9092                                                                                  |
 | aroma-observer            | 4204 | 15s / 4                            |       4 | producer; groups `[]` | postgres.aromaObserver, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
 | aroma-convergence         | 4205 | 30s / 4                            |       4 | consumer+producer     | postgres.aromaConvergence, kafka.orders, service identity, telemetry                           | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
@@ -104,16 +104,28 @@ Compose, Permission manifests и SOPS secretRef allowlists поле-в-поле.
 
 ## Бюджет replicas первого запуска
 
-Первый запуск использует один instance каждой роли. Перед увеличением числа
-replicas или rollout с overlap обязательна проверка:
+Первый запуск использует `replicas: 1` для каждого из 15 deployable runtime.
+`postgres.rolloutReplicas: 1` разрешает только один дополнительный DB-backed
+instance одновременно; rollout выполняется последовательно: следующая новая replica
+запускается после остановки предыдущей. Это не увеличивает `maxConnections` или
+owner pool автоматически. Для каждого DB pool `terminalTimeoutMs=2000` и
+`transactionTimeoutMs=10000`; оба значения меньше `platform.shutdownGraceMs=30000`.
+Перед увеличением числа replicas или rollout с overlap обязательна проверка:
 
 ```text
 sum((steady replicas + temporary rollout replicas) × owner pool.max)
   + reservedConnections <= maxConnections
 ```
 
-Текущая сумма maxima исчерпывает application budget; автоматическое удвоение
-replicas запрещено без пересчёта. Database foundation по ADR-0025 проверяет
-бюджет и ограничивает admission, а не увеличивает PostgreSQL limits молча.
+Текущая сумма steady pool maxima равна 56; с reserve 32 и одним крупнейшим
+rollout pool 8 получается ровно 96. Превышение блокирует startup/admission
+typed configuration error. Автоматическое удвоение replicas запрещено без
+пересчёта. Database foundation по ADR-0025 проверяет бюджет и ограничивает
+admission, а не увеличивает PostgreSQL limits молча.
+
+При зафиксированном serial rollout временная часть формулы применяется к одному
+выбранному DB-backed runtime; admission проверяет худший вариант
+`max(owner pool.max) × postgres.rolloutReplicas`, а не одновременный rollout
+всех owners.
 Realtime #12 дополнительно материализует process-wide SSE memory/FD budget и
 проверяет его soak test; per-connection limit сам по себе не доказывает capacity.

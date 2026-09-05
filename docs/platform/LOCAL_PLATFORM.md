@@ -117,3 +117,16 @@ docker compose --project-name coffee-platform-local down
 На host публикуется только Edge `4000`. Owner services, `api-internal`, web,
 Kafka и AROMA Gateway host ports не публикуют. Production deployment, registry
 publication и изменение существующего PostgreSQL этой инструкцией не разрешены.
+
+Для проверки DB foundation используйте отдельный изолированный режим:
+
+```text
+pnpm test:compose-smoke --database-proof
+```
+
+Он поднимает только `customer-service` и одноразовый PostgreSQL на уникальной
+project-scoped сети `<project>_coffee_postgres_data`, проверяет переход
+readiness `200 → 503 → 200` при остановке и восстановлении DB и удаляет
+контейнер, сеть и Compose volumes после проверки. Общий compose gate с 15
+runtime и Kafka остаётся отдельной проверкой и включает зависимости,
+реализуемые в #63.

@@ -9,6 +9,7 @@
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@coffee-platform/config": "workspace:*",
+    "@coffee-platform/database": "workspace:*",
     "@coffee-platform/observability": "workspace:*",
     "@js-temporal/polyfill": "0.5.1",
     "fastify": "5.12.1",

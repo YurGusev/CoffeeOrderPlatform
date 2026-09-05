@@ -33,6 +33,7 @@ postgres:
   sslMode: prefer
   maxConnections: 96
   reservedConnections: 32
+  rolloutReplicas: 1
 
 kafka:
   brokers: [kafka:9092]
@@ -144,6 +145,7 @@ services:
     deadlineMs: 5000
     deadlineProfiles: {defaultMs: 5000}
     concurrency: 500
+    replicas: 1
     dbPool: null
     database: null
     kafka: {mode: none, topics: [], groups: []}
@@ -158,6 +160,7 @@ services:
     deadlineMs: 4500
     deadlineProfiles: {defaultMs: 4500}
     concurrency: 400
+    replicas: 1
     dbPool: null
     database: null
     kafka: {mode: none, topics: [], groups: []}
@@ -172,6 +175,7 @@ services:
     deadlineMs: null
     deadlineProfiles: {defaultMs: null}
     concurrency: 300
+    replicas: 1
     dbPool: null
     database: null
     kafka: {mode: none, topics: [], groups: []}
@@ -186,6 +190,7 @@ services:
     deadlineMs: 5000
     deadlineProfiles: {defaultMs: 5000}
     concurrency: 500
+    replicas: 1
     dbPool: null
     database: null
     kafka: {mode: none, topics: [], groups: []}
@@ -200,7 +205,8 @@ services:
     deadlineMs: 2000
     deadlineProfiles: {defaultMs: 2000}
     concurrency: 100
-    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_customer
     kafka: {mode: none, topics: [], groups: []}
     outbound: []
@@ -214,7 +220,8 @@ services:
     deadlineMs: 2000
     deadlineProfiles: {defaultMs: 2000}
     concurrency: 150
-    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_catalog
     kafka: {mode: none, topics: [], groups: []}
     outbound: []
@@ -228,7 +235,8 @@ services:
     deadlineMs: 900000
     deadlineProfiles: {defaultMs: 900000}
     concurrency: 1
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_catalog
     kafka: {mode: none, topics: [], groups: []}
     outbound: [api-internal:4051]
@@ -242,7 +250,8 @@ services:
     deadlineMs: 5000
     deadlineProfiles: {defaultMs: 5000}
     concurrency: 1
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_catalog
     kafka: {mode: producer, topics: [coffee.catalog.snapshot.v1, coffee.catalog.mapping.v2], groups: []}
     outbound: []
@@ -256,7 +265,8 @@ services:
     deadlineMs: 5000
     deadlineProfiles: {defaultMs: 5000}
     concurrency: 100
-    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_pricing
     kafka: {mode: none, topics: [], groups: []}
     outbound: [api-internal:4051]
@@ -270,7 +280,8 @@ services:
     deadlineMs: 5000
     deadlineProfiles: {defaultMs: 5000}
     concurrency: 150
-    dbPool: {max: 12, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_orders
     kafka: {mode: producer, topics: [coffee.orders.lifecycle.v1, coffee.aroma.cart.commands.v1, coffee.realtime.invalidate.v1], groups: []}
     outbound: [api-internal:4051]
@@ -284,7 +295,8 @@ services:
     deadlineMs: 5000
     deadlineProfiles: {defaultMs: 5000}
     concurrency: 16
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_orders
     kafka: {mode: consumer+producer, topics: [coffee.orders.lifecycle.v1, coffee.catalog.mapping.v2, coffee.aroma.cart.events.v1, coffee.aroma.cart.commands.v1, coffee.realtime.invalidate.v1], groups: [orders-aroma-preparation-v1]}
     outbound: []
@@ -298,7 +310,8 @@ services:
     deadlineMs: 15000
     deadlineProfiles: {defaultMs: 15000}
     concurrency: 4
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_orders
     kafka: {mode: producer, topics: [coffee.aroma.cart.events.v1], groups: []}
     outbound: [api-internal:4051]
@@ -312,7 +325,8 @@ services:
     deadlineMs: 30000
     deadlineProfiles: {defaultMs: 30000}
     concurrency: 4
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_orders
     kafka: {mode: consumer+producer, topics: [coffee.aroma.cart.commands.v1, coffee.aroma.cart.events.v1], groups: [aroma-convergence-v1]}
     outbound: [api-internal:4051]
@@ -326,7 +340,8 @@ services:
     deadlineMs: 10000
     deadlineProfiles: {defaultMs: 10000, readMs: 900000, cartMs: 10000, mutationMs: 10000}
     concurrency: 8
-    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    replicas: 1
+    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_integration
     kafka: {mode: none, topics: [], groups: []}
     outbound: [aroma.origin.host:443]
@@ -340,6 +355,7 @@ services:
     deadlineMs: null
     deadlineProfiles: {defaultMs: null}
     concurrency: 5000
+    replicas: 1
     dbPool: null
     database: null
     kafka: {mode: consumer, topics: [coffee.realtime.invalidate.v1], groups: [realtime-gateway-replica]}

@@ -7,6 +7,7 @@ import {
   type PlatformConfig,
   type RuntimeName,
 } from "@coffee-platform/config";
+import { createDatabase, type Database } from "@coffee-platform/database";
 import {
   createCorrelationContext,
   isTraceparent,
@@ -36,9 +37,11 @@ export type RuntimeResource = Readonly<{
 export type RuntimeComposition = Readonly<{
   readinessChecks?: readonly RuntimeReadinessCheck[];
   resources?: readonly RuntimeResource[];
+  /** Configured database owners receive their one opaque Database as `database`. */
   configure?: (
     app: FastifyInstance,
     signal: AbortSignal,
+    database?: Database,
   ) => Promise<void> | void;
 }>;
 
@@ -83,6 +86,65 @@ export class RuntimeError extends Error {
     this.name = "RuntimeError";
     this.code = code;
   }
+}
+
+type ScopedSecretDocument = Readonly<{
+  secrets: Readonly<Record<string, unknown>>;
+}>;
+
+function secretRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function ownDatabaseCredential(
+  document: ScopedSecretDocument,
+  runtime: RuntimeName,
+  refs: readonly string[],
+): Readonly<{ username: string; password: string }> {
+  const databaseRefs = refs.filter((ref) => ref.startsWith("postgres."));
+  const databaseRef = databaseRefs[0];
+  if (databaseRefs.length !== 1 || databaseRef === undefined)
+    throw new RuntimeError("RUNTIME_DATABASE_SECRET_SCOPE");
+  let value: unknown = document.secrets;
+  for (const segment of databaseRef.split(".")) {
+    value = secretRecord(value) ? value[segment] : undefined;
+  }
+  const credential = secretRecord(value) ? value : undefined;
+  if (
+    credential === undefined ||
+    Object.keys(credential).sort().join(",") !== "password,username" ||
+    typeof credential["username"] !== "string" ||
+    credential["username"].length === 0 ||
+    typeof credential["password"] !== "string" ||
+    credential["password"].length === 0
+  )
+    throw new RuntimeError(`RUNTIME_DATABASE_SECRET_INVALID:${runtime}`);
+  return {
+    username: credential["username"],
+    password: credential["password"],
+  };
+}
+
+function appendDatabaseComposition(
+  composition: RuntimeComposition,
+  database: Database,
+): RuntimeComposition {
+  if (
+    composition.resources?.some((resource) => resource.name === "database") ||
+    composition.readinessChecks?.some((check) => check.name === "database")
+  )
+    throw new RuntimeError("RUNTIME_DATABASE_DUPLICATE_COMPOSITION");
+  return {
+    ...composition,
+    ...(composition.configure === undefined
+      ? {}
+      : {
+          configure: (app: FastifyInstance, signal: AbortSignal) =>
+            composition.configure?.(app, signal, database),
+        }),
+    resources: [database.resource, ...(composition.resources ?? [])],
+    readinessChecks: [database.readiness, ...(composition.readinessChecks ?? [])],
+  };
 }
 
 declare module "fastify" {
@@ -692,7 +754,42 @@ export async function startConfiguredRuntime(
     config.environment,
     config.services[name].secretRefs,
   );
-  return startRuntime(configuredRuntimeIdentity(config, name, composition));
+  const service = config.services[name];
+  const shutdownGraceMs = config.platform["shutdownGraceMs"];
+  if (typeof shutdownGraceMs !== "number")
+    throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
+  let configuredComposition = composition;
+  let database: Database | undefined;
+  try {
+    if (service.database !== null) {
+      if (service.dbPool === null)
+        throw new RuntimeError("RUNTIME_DATABASE_CONFIG_MISMATCH");
+      const credential = ownDatabaseCredential(
+        secretDocument as ScopedSecretDocument,
+        name,
+        service.secretRefs,
+      );
+      database = createDatabase({
+        owner: name,
+        database: service.database,
+        allowedDatabase: service.database,
+        host: config.postgres.host,
+        port: config.postgres.port,
+        user: credential.username,
+        password: credential.password,
+        ssl: config.postgres.sslMode === "prefer" ? "prefer" : true,
+        pool: service.dbPool,
+        shutdownGraceMs,
+      });
+      configuredComposition = appendDatabaseComposition(composition, database);
+    }
+    return await startRuntime(
+      configuredRuntimeIdentity(config, name, configuredComposition),
+    );
+  } catch (error) {
+    database?.resource.destroy();
+    throw error;
+  }
 }
 
 export function assertScopedSecrets(

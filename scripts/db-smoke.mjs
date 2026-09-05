@@ -179,7 +179,7 @@ export async function runDatabaseSmoke({
 async function main(argv) {
   const roleMap = await readJson(DEFAULT_ROLE_MAP);
   const ownership = await readJson(DEFAULT_OWNERSHIP);
-  if (argv.includes("--plan")) {
+  if (argv.length === 0 || argv.includes("--plan")) {
     console.log(JSON.stringify(buildSmokeCases(roleMap, ownership), null, 2));
     return;
   }

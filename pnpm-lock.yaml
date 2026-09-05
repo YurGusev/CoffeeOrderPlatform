@@ -148,7 +148,24 @@ importers:
 
   packages/platform-config: {}
 
-  packages/platform-database: {}
+  packages/platform-database:
+    dependencies:
+      "@coffee-platform/config":
+        specifier: workspace:*
+        version: link:../platform-config
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
+      pg-copy-streams:
+        specifier: 7.0.0
+        version: 7.0.0
+    devDependencies:
+      "@types/pg":
+        specifier: 8.23.1
+        version: 8.23.1
+      "@types/pg-copy-streams":
+        specifier: 1.2.5
+        version: 1.2.5
 
   packages/platform-http:
     dependencies:
@@ -156,13 +173,21 @@ importers:
         specifier: 8.10.1
         version: 8.10.1
 
-  packages/platform-idempotency: {}
+  packages/platform-idempotency:
+    dependencies:
+      "@coffee-platform/database":
+        specifier: workspace:*
+        version: link:../platform-database
 
   packages/platform-inbox: {}
 
   packages/platform-kafka-runtime: {}
 
-  packages/platform-migrations: {}
+  packages/platform-migrations:
+    dependencies:
+      "@coffee-platform/database":
+        specifier: workspace:*
+        version: link:../platform-database
 
   packages/platform-observability: {}
 
@@ -173,6 +198,9 @@ importers:
       "@coffee-platform/config":
         specifier: workspace:*
         version: link:../platform-config
+      "@coffee-platform/database":
+        specifier: workspace:*
+        version: link:../platform-database
       "@coffee-platform/observability":
         specifier: workspace:*
         version: link:../platform-observability
@@ -766,6 +794,18 @@ packages:
     resolution:
       {
         integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==,
+      }
+
+  "@types/pg-copy-streams@1.2.5":
+    resolution:
+      {
+        integrity: sha512-7D6/GYW2uHIaVU6S/5omI+6RZnwlZBpLQDZAH83xX1rjxAOK0f6/deKyyUTewxqts145VIGn6XWYz1YGf50G5g==,
+      }
+
+  "@types/pg@8.23.1":
+    resolution:
+      {
+        integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==,
       }
 
   "@typescript/typescript-aix-ppc64@7.0.2":
@@ -1898,6 +1938,12 @@ packages:
         integrity: sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==,
       }
 
+  pg-copy-streams@7.0.0:
+    resolution:
+      {
+        integrity: sha512-zBvnY6wtaBRE2ae2xXWOOGMaNVPkXh1vhypAkNSKgMdciJeTyIQAHZaEeRAxUjs/p1El5jgzYmwG5u871Zj3dQ==,
+      }
+
   pg-int8@1.0.1:
     resolution:
       {
@@ -2816,6 +2862,17 @@ snapshots:
     dependencies:
       undici-types: 8.3.0
 
+  "@types/pg-copy-streams@1.2.5":
+    dependencies:
+      "@types/node": 26.4.0
+      "@types/pg": 8.23.1
+
+  "@types/pg@8.23.1":
+    dependencies:
+      "@types/node": 26.4.0
+      pg-protocol: 1.16.0
+      pg-types: 2.2.0
+
   "@typescript/typescript-aix-ppc64@7.0.2":
     optional: true
 
@@ -3381,6 +3438,8 @@ snapshots:
     optional: true
 
   pg-connection-string@2.14.0: {}
+
+  pg-copy-streams@7.0.0: {}
 
   pg-int8@1.0.1: {}
 
