@@ -11,10 +11,10 @@ manifests без изменения смысла. Любое отклонени�
   request-size/rate/deadline limits и маршрутизирует `client-v1` только в
   `api-public`, а `/events` только в `realtime-gateway`.
 - **Владелец:** Platform.
-- **Входящие HTTP:** публичные `GET /`, `GET /assets/**`,
+- **Входящие HTTP:** публичные `GET /`, `GET /app/**`, `GET /assets/**`,
   `/api/client-v1/**`, `/events`, `/health/live`.
 - **Входящие события:** нет.
-- **Исходящие вызовы:** HTTP к `web` для `/`/`assets`, к `api-public` для
+- **Исходящие вызовы:** HTTP к `web` для `/`/`app/**`/`assets/**`, к `api-public` для
   client API; SSE proxy к `realtime-gateway`. Direct owner/API-internal route отсутствует.
 - **Хранилище:** нет БД, нет persistent cache.
 - **Секреты:** TLS private key/certificate, OIDC/JWT verification configuration
@@ -54,7 +54,7 @@ manifests без изменения смысла. Любое отклонени�
 
 - **Назначение:** раздача immutable assets нового React SPA.
 - **Владелец:** Frontend.
-- **Входящие HTTP:** публичные `GET /`, `/assets/**`, SPA fallback.
+- **Входящие HTTP:** публичные `GET /`, `/app/**`, `/assets/**`; SPA fallback только для app paths.
 - **Входящие события:** нет.
 - **Исходящие вызовы:** серверный runtime не выполняет; браузер вызывает только
   same-origin `client-v1` и `/events` через `edge-gateway`.

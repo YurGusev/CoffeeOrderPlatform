@@ -472,7 +472,7 @@ void test("RED TOOLCHAIN-FINAL-IMAGE: build dependencies cannot enter final imag
   }
 });
 
-void test("JSON Schema Draft 2020-12 accepts all three authority manifests", () => {
+void test("JSON Schema Draft 2020-12 accepts configuration and SPA runtime profile", () => {
   const code = String.raw`
 from pathlib import Path
 import json
@@ -485,6 +485,11 @@ for path in sorted(Path('config').glob('*.json')):
     doc=json.loads(path.read_text())
     schema=json.loads(path.with_name(doc['$schema'][2:]).read_text())
     Draft202012Validator(schema).validate(doc)
+profile_path = Path('platform/launch-v1-runtime-profile.json')
+profile = json.loads(profile_path.read_text())
+profile_schema = json.loads(profile_path.with_name(profile['$schema'][2:]).read_text())
+Draft202012Validator.check_schema(profile_schema)
+Draft202012Validator(profile_schema).validate(profile)
 `;
   const result = spawnSync("python3", ["-c", code], {
     cwd: REPO_ROOT,

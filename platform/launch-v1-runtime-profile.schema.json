@@ -64,8 +64,8 @@
     },
     "routeMounts": {
       "type": "array",
-      "minItems": 4,
-      "maxItems": 4,
+      "minItems": 5,
+      "maxItems": 5,
       "items": { "$ref": "#/$defs/routeMount" }
     },
     "surfaceIsolation": {
@@ -216,7 +216,7 @@
       "properties": {
         "source": { "const": "edge-gateway" },
         "method": { "enum": ["GET", "ANY"] },
-        "path": { "enum": ["/", "/assets/**", "/api/client-v1/**", "/events"] },
+        "path": { "enum": ["/", "/app/**", "/assets/**", "/api/client-v1/**", "/events"] },
         "target": { "enum": ["web", "api-public", "realtime-gateway"] },
         "targetPort": { "enum": [3000, 4050, 4401] }
       }

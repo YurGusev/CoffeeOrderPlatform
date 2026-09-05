@@ -112,7 +112,7 @@ CHECK требует хотя бы одно из `phone_e164`/`email_normalized`
 
 | Столбец | PostgreSQL type | Правило |
 |---|---|---|
-| `actor_ref`, `scope`, `idempotency_key` | `varchar(64)`, `varchar(64)`, `uuid` | составной PK; scope `customers:create` |
+| `actor_ref`, `scope`, `idempotency_key` | `varchar(64)`, `varchar(64)`, `uuid` | составной PK; 64-символьный command scope по `26_BROWSER_COMMAND_RECOVERY.md` |
 | `request_hash` | `char(64)` | SHA-256 канонического нормализованного body |
 | `state` | `varchar(16)` | `Acquired` или `Completed` |
 | `lease_owner` | `uuid` | владелец незавершённой попытки |
@@ -173,27 +173,27 @@ E-mail: Unicode NFC → trim → lowercase всей строки → прове�
 1. Валидировать schema и нормализовать body.
 2. Канонически сериализовать нормализованный body (ключи lexicographic, без
    insignificant whitespace) и вычислить SHA-256 `request_hash`.
-3. Короткой транзакцией по exact key `(actor_ref,scope,idempotency_key)`
-   выполнить atomic acquire: вставить `Acquired` с новым
-   `lease_owner` и `lease_until=transaction_timestamp()+30s`. При конфликте:
-   другой hash → `409 IDEMPOTENCY_CONFLICT`; `Completed` → byte-for-byte replay;
-   активная lease → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`; истёкшую lease с тем
-   же hash разрешено забрать условным `UPDATE ... WHERE lease_until<=now()`.
-   Одинаковый UUID другого actor — независимый key и не раскрывает response.
-4. Открыть business transaction `READ COMMITTED`, timeout `1500 ms`; заново
-   заблокировать idempotency row и доказать совпадение `lease_owner`, hash и
-   неистёкшую lease. Сетевые вызовы внутри неё запрещены.
-5. Сервером сгенерировать monotonic ULID и `customerRef = cus_<ULID>`; при
-   наличии address создать `adr_<ULID>`.
-6. Вставить Customer, optional Address и audit row.
-7. Сформировать `201 CustomerResponse`, записать status/body/resource в
-   idempotency row как `Completed` и commit.
-8. Нарушение phone unique index вернуть как `409 CUSTOMER_PHONE_CONFLICT`,
-   e-mail index — `409 CUSTOMER_EMAIL_CONFLICT`; не выполнять предварительный
-   `SELECT` как доказательство уникальности.
-9. Ошибка business transaction откатывает Customer, Address и audit, но
-   оставляет durable `Acquired` до истечения lease; повтор безопасно продолжает
-   с тем же hash. Cleanup удаляет только незавершённые записи старше 24 часов.
+3. В одной owner transaction по exact `(actor_ref,scope,idempotency_key)`
+   выполнить acquire через accepted #62. Другой hash →
+   `409 IDEMPOTENCY_CONFLICT`; Completed → сохранённый response; Acquired,
+   включая expired lease → `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`, без takeover.
+4. В этой же транзакции READ COMMITTED с budget accepted #62 из platform.yaml
+   сгенерировать monotonic ULID: `customerRef = cus_<ULID>`, для optional Address
+   `addressRef = adr_<ULID>`. Вставить Customer, Address и audit row; network I/O
+   внутри неё отсутствует.
+5. Сохранить `201 CustomerResponse`, resourceRef и Completed в той же transaction
+   и commit. Нарушение phone/email unique constraint возвращает соответствующий
+   typed conflict; предварительный SELECT не является доказательством уникальности.
+6. Unknown commit не означает rollback и не разрешает повтор эффекта. Owner
+   recovery после reconnect читает durable truth по принятому #62 протоколу.
+   Cleanup Completed действует по retention; unresolved Acquired автоматически
+   не удаляется и не переигрывается из-за возраста записи.
+
+Bodyless `Idempotency-Replay-Only: true` выбирает до нормализации body отдельную
+read-only ветку по [browser recovery](26_BROWSER_COMMAND_RECOVERY.md): только
+owner lookup после текущей авторизации, без acquire/Customer write. Completed
+возвращает первоначальный CustomerResponse/resourceRef; malformed stored response
+не раскрывается. Обычный POST без body остаётся невалидным.
 
 `version` начинается с PostgreSQL `bigint 1`, но в HTTP возвращается строкой
 `"1"`. Timestamp возвращается в UTC с `Z`.

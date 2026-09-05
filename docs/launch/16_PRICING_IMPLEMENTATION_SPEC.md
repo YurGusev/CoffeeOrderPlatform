@@ -93,7 +93,8 @@ Catalog tables.
 
 ### `pricing_idempotency_records`
 
-PK `(actor_ref,idempotency_key)`, `request_hash`, `state` check
+PK `(actor_ref,scope,idempotency_key)`, где scope — 64-символьный command scope
+по `26_BROWSER_COMMAND_RECOVERY.md`; `request_hash`, `state` check
 `Acquired|Completed`, `lease_until`, `quote_ref`, `response_status`,
 `response_body jsonb`, `created_at`, `completed_at`. Completed response хранится
 24 часа; cleanup не удаляет `pricing_quotes`.
@@ -133,17 +134,24 @@ mapping существует, currency `RUB`, decimal strings/refs валидн�
 одного quote должны иметь одну `snapshotRevision`; иначе один bounded повтор
 всего Catalog read, затем `409 CATALOG_REVISION_CHANGED`.
 
-Idempotency algorithm:
+Алгоритм Idempotency:
 
-1. нормализовать quantity в canonical decimal без trailing zeros и вычислить
-   request SHA-256;
-2. атомарно acquire `(actorRef,Idempotency-Key)` на 30 секунд;
-3. другой request hash -> `409 IDEMPOTENCY_CONFLICT`;
-4. completed -> вернуть сохранённый status/body byte-equivalent;
-5. активная lease -> `409 IDEMPOTENCY_REQUEST_IN_PROGRESS`;
-6. истёкшая lease с тем же hash может быть захвачена повторно;
-7. после Catalog reads в одной транзакции вставить quote/lines/audit и обновить
-   idempotency record в `Completed`.
+1. Нормализовать quantity в canonical decimal без trailing zeros и вычислить
+   request hash; read-only precheck
+   Completed возвращает replay до Catalog reads, а mismatch hash — Conflict.
+   Все Catalog reads для нового intent выполняются до owner transaction и не
+   входят в read-only recovery branch. Precheck не заменяет atomic acquire.
+2. В одной owner transaction выполнить acquire `(actorRef,scope,key)` через #62:
+   другой hash → Conflict, Completed → сохранённый response, Acquired (включая
+   expired lease) → InProgress без automatic takeover.
+3. Для нового intent вставить quote/lines/audit и Completed response атомарно;
+   сохранить quoteRef как resourceRef. Unknown commit проверяется owner recovery,
+   а не новым запуском quote effect. Unresolved Acquired не удаляется по возрасту.
+
+Bodyless `Idempotency-Replay-Only: true` использует только owner lookup по
+[browser recovery](26_BROWSER_COMMAND_RECOVERY.md), без Catalog read, acquire
+или новой quote. Истёкший quote replay остаётся фактом старого результата;
+новая quote требует отдельного явного intent. Обычный POST без body невалиден.
 
 Response `201 PricingQuoteResponse`: `quoteRef`, `policyVersionRef`,
 `catalogSnapshotRevision`, `customerRef`, `createdAt`, `expiresAt`, `currency`,

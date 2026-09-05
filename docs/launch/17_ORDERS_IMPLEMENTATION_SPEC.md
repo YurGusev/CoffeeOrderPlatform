@@ -77,7 +77,8 @@ Initial `contributionRevision="1"` создаётся только при Confir
 
 ### Idempotency и Outbox
 
-`orders.idempotency_records`: PK `(actor_ref,route_key,idempotency_key)`, exact
+`orders.idempotency_records`: PK `(actor_ref,scope,idempotency_key)`, где scope —
+64-символьный command scope по `26_BROWSER_COMMAND_RECOVERY.md`; exact
 request hash, `Acquired|Completed`, lease 30s, response status/body, timestamps.
 Completed хранится 24 часа; Order/history не удаляются cleanup.
 
@@ -121,6 +122,14 @@ idempotency response. Response `201 OrderCardResponse`.
 
 Ошибки: `CUSTOMER_NOT_FOUND`, `CUSTOMER_NOT_ACTIVE`, `CUSTOMER_UNAVAILABLE`,
 общие auth/validation/idempotency codes.
+
+Для пяти Orders commands действует bodyless `Idempotency-Replay-Only: true`
+по [browser recovery](26_BROWSER_COMMAND_RECOVERY.md). Эта ветка выполняет
+только owner lookup с теми же actor/scope/key после текущей авторизации,
+до expectedVersion/quote checks; не вызывает Customer/Pricing, acquire,
+Order write, History, Outbox или reconciliation enqueue. Command identity
+включает concrete orderRef/itemRef через scope. Все сохраняемые terminal
+OrderCard/ReconciliationAccepted responses содержат исходный orderRef.
 
 ### `PUT /api/client-v1/orders/{orderRef}/items/{itemRef}`
 
