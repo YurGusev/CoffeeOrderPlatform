@@ -42,7 +42,7 @@
     "stringArray": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
     "runtime": {
       "type": "object", "additionalProperties": false,
-      "required": ["name", "owner", "sourceRoot", "purpose", "contractPackages", "incomingHttp", "incomingEvents", "schedules", "outgoingHttp", "outgoingEvents", "database", "secretRefs", "publicity"],
+      "required": ["name", "owner", "sourceRoot", "purpose", "contractPackages", "incomingHttp", "incomingEvents", "schedules", "outgoingHttp", "outgoingEvents", "database", "secretRefs", "publicity", "transportMode"],
       "properties": {
         "name": {"$ref": "#/$defs/runtimeName"},
         "owner": {"enum": ["platform", "frontend", "customer", "catalog", "pricing", "orders", "integration", "realtime"]},
@@ -56,7 +56,8 @@
         "outgoingEvents": {"$ref": "#/$defs/stringArray"},
         "database": {"$ref": "#/$defs/database"},
         "secretRefs": {"$ref": "#/$defs/stringArray"},
-        "publicity": {"enum": ["public-ingress", "private-trust-root", "private-edge-backend", "private-owner-backend", "private-worker", "private-mutation-worker", "private-provider-gateway", "edge-only-realtime"]}
+        "publicity": {"enum": ["public-ingress", "private-trust-root", "private-edge-backend", "private-owner-backend", "private-worker", "private-mutation-worker", "private-provider-gateway", "edge-only-realtime"]},
+        "transportMode": {"enum": ["public-tls", "mtls"]}
       }
     }
   }

@@ -25,6 +25,7 @@ import {
   signServiceDelegation,
   verifyServiceDelegation,
   createMutualTlsServerOptions,
+  createPublicTlsServerOptions,
   parseServiceTransportMaterial,
 } from "../../platform-security/src/index.ts";
 import {withTransaction, createDatabase, DatabaseTransactionError} from "../../platform-database/dist/index.js";
@@ -149,6 +150,15 @@ void test("security transport rejects plaintext and requires mutual TLS", () => 
       identity: {environment: "development", runtime: "api-public", san: "spiffe://coffee-platform/development/api-public"},
     }),
     {key: "key", cert: "cert", ca: "ca", requestCert: true, rejectUnauthorized: true, minVersion: "TLSv1.3"},
+  );
+  assert.deepEqual(
+    createPublicTlsServerOptions({
+      keyPem: "key",
+      certPem: "cert",
+      caPem: "ca",
+      identity: {environment: "development", runtime: "edge-gateway", san: "spiffe://coffee-platform/development/edge-gateway"},
+    }),
+    {key: "key", cert: "cert", requestCert: false, rejectUnauthorized: false, minVersion: "TLSv1.3"},
   );
 });
 

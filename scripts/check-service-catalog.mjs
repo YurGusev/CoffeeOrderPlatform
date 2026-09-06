@@ -5,8 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const RUNTIME_FIELDS = new Set(['name', 'owner', 'sourceRoot', 'purpose', 'contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'database', 'secretRefs', 'publicity']);
-const CATALOG_DIGEST = '72250e8aa0cce70898ff9018329b100dd65d1b61b1d6b0fab57bc44559005543';
+const RUNTIME_FIELDS = new Set(['name', 'owner', 'sourceRoot', 'purpose', 'contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'database', 'secretRefs', 'publicity', 'transportMode']);
+const CATALOG_DIGEST = '9b1b202aa978d4e844898a3f0a5c0812e50652f3140f1b369bc72ede4e157c29';
 const INTERACTIONS_DIGEST = 'ad869ee1028882c0a0eebf3376c330960e2156d250d60607be95917a83e470e1';
 
 function fail(rule, message) {
@@ -72,6 +72,7 @@ export async function checkServiceCatalog(root = REPO_ROOT) {
     exactKeys(runtime, RUNTIME_FIELDS, `runtime ${name}`);
     const profileRuntime = profileByName.get(name);
     if (runtime.owner !== profileRuntime.owner) fail('BOUND-CATALOG', `${name}: owner ${runtime.owner} differs from #19 ${profileRuntime.owner}`);
+    if (runtime.transportMode !== profileRuntime.transportMode) fail('BOUND-CATALOG', `${name}: transportMode differs from #19 profile`);
     if (runtime.sourceRoot !== `apps/${name}`) fail('BOUND-CATALOG', `${name}: sourceRoot must be apps/${name}`);
     for (const field of ['contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'secretRefs']) stringArray(runtime[field], `${name}.${field}`);
     for (const packageRoot of runtime.contractPackages) {

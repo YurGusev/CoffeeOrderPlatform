@@ -5,9 +5,10 @@
 2026-09-06. Merge, auto-merge, закрытие issue #5 и deployment не выполнялись.
 
 В этом продолжении добавлены общий mTLS foundation с TLS 1.3, SPIFFE SAN и
-fail-closed peer verification, production wiring `api-public`, `api-internal` и
+fail-closed peer verification, явный `public-tls` Edge listener и `mtls` для
+внутренних runtime, production wiring `api-public`, `api-internal` и
 `customer-service`, scoped delegation verification key sets, отдельный
-Customer cursor key, authority/schema/inventory updates и test-only
+Customer cursor key/policy, production-safe runtime healthcheck и test-only
 unknown-COMMIT/restart harness. Production secret source намеренно не изменён:
 SOPS credentials и age key в окружении отсутствуют.
 
@@ -29,11 +30,11 @@ SOPS credentials и age key в окружении отсутствуют.
 |---|---|---|
 | Customer owner boundary и schema | Owner-local `CustomerStore`, migrations, grants и database ownership без межвладельческого SQL | **PASS static; live grants pending** |
 | Runtime wiring | Реальный owner и routes Customer; HTTPS/mTLS clients в двух API roots; shared runtime materialization | **PASS code/static; live trust pending** |
-| Transport trust | TLS 1.3, client certificate required, CA verification, environment/runtime SPIFFE SAN, certificate validity и fail-closed setup | **PASS static; blocked live** — scoped certificates не materialized |
+| Transport trust | TLS 1.3, explicit `public-tls` Edge listener, internal `mtls` listener/client, CA verification, environment/runtime SPIFFE SAN, certificate validity и fail-closed setup | **PASS static/unit; blocked live** — scoped certificates не materialized |
 | Delegation trust | Active/previous scoped Ed25519 verification sets для edge actor context, API public/internal delegation и Orders caller; no plaintext fallback | **PASS static; blocked live** — encrypted key inventory не provisioned |
-| Customer cursor | Ed25519 signer wired from a Customer-only private key and active/previous public keys; canonical tuple, query binding and 2048-character bound preserved | **PASS static/unit; blocked live** — keys absent in SOPS source |
+| Customer cursor | Ed25519 signer wired from a Customer-only private key and active/previous public keys; `kid`/`iat`/`exp`, max-age, clock-skew, previous-key overlap, unknown-kid, query binding and 2048-character bound enforced | **PASS static/unit; blocked live** — keys absent in SOPS source |
 | Customer URL/body limits | Customer cursor 2048, URL budget 8 KiB, body limit 16 KiB; Catalog shared cursor remains 512 | **PASS static/unit** |
-| Idempotency/recovery | Transactional owner path, replay-only validation, lost-response path and test-only unknown-COMMIT/restart harness | **PARTIAL** — mandatory PostgreSQL and restart environment absent |
+| Idempotency/recovery | Transactional owner path, replay-only validation, lost-response path and test-only unknown-COMMIT/restart harness with internal classification log plus protocol `ROLLBACK` assertion | **PARTIAL** — mandatory PostgreSQL and restart environment absent |
 | PII/errors | Allowlisted Problem Details and fail-closed invalid-owner responses | **PASS unit/static; live log proof pending** |
 | Generated contracts/authority | Generated artifacts unchanged and authority/catalog/profile/schema/inventory synchronized | **PASS static** |
 
@@ -51,10 +52,14 @@ SOPS credentials и age key в окружении отсутствуют.
 | `pnpm contracts:test` | **PASS** — 36 pass, 0 fail |
 | `pnpm architecture:check` | **PASS** |
 | `node scripts/check-service-catalog.mjs` | **PASS** — 15 runtimes, 29 interactions |
+| `node --test --test-name-pattern 'public Edge TLS' tests/runtime/lifecycle.test.mjs` | **PASS** — public Edge accepts a client without service certificate; internal mTLS rejects it |
+| `node --test tests/customer/customer-http.test.mjs` | **PASS** — 8 pass, including expiry, previous-key overlap and unknown-`kid` cursor checks |
+| `node --test packages/platform-testing/test/platform-packages.test.mjs` | **PASS** — 30 pass, including public/internal TLS option split |
+| isolated `pnpm --filter @coffee-platform/edge-gateway deploy --prod --legacy` import check | **PASS** — deployed tree resolves `@coffee-platform/runtime/healthcheck` without root-only imports |
 | `pnpm authority:check` | **PASS** |
 | `pnpm versions:check` | **PASS** |
 | `pnpm db:smoke` | **PASS structural only** — `liveDatabase:false`, `realKafka:false` |
-| `pnpm test` | **BLOCKED** — 197 tests: 180 pass, 2 fail из-за canonical SOPS inventory и 15 skipped |
+| `pnpm test` | **BLOCKED** — 198 tests: 181 pass, 2 fail из-за canonical SOPS inventory и 15 skipped |
 | `pnpm config:check` | **BLOCKED** — `CONFIG-SCHEMA`: encrypted source lacks new required key paths |
 | `pnpm security:secrets` | **BLOCKED** — same missing encrypted inventory |
 | `pnpm test:customer-integration` | **BLOCKED / exit 1 by design** — 15 tests: 1 pass, 14 explicit blockers, 0 skipped |

@@ -154,6 +154,11 @@ Inventory authority — это encrypted paths в `secrets/platform.secrets.sops
 | `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
 | `customer-service` | `postgres.customer`, `security.customerCursorSigningPrivateKey`, `security.customerCursorVerificationPublicKeys`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.customer-service`, `telemetry.exporterToken` |
 
+`edge-gateway` использует `public-tls`: его публичный listener предъявляет
+серверный сертификат, но не требует service certificate от браузера. Все
+остальные HTTP runtime используют `mtls`; их listener и outbound client
+проверяют service identity по scoped CA и SPIFFE SAN.
+
 `security.customerCursorSigningPrivateKey` — отдельный Customer-scoped ключ;
 он не переиспользуется для Catalog cursor, actor context, delegation или mTLS.
 Public verification metadata Customer cursor находится в
@@ -236,10 +241,12 @@ clock skew `5s`, overlap active/previous key `86400s`. В
 не переиспользуются друг для друга.
 
 `security.customerCursor` — отдельная Customer-scoped Ed25519 policy с max age
-`86400s`, clock skew `5s` и overlap `172800s`. Новый token подписывается только
-active key; previous key принимается только до конца overlap, после чего
-неизвестный/старый `kid` отвергается. Customer cursor key не совпадает с Catalog
-cursor, actor context, delegation или transport key.
+`86400s`, clock skew `5s` и overlap `172800s`. Envelope содержит `kid`, `iat` и
+`exp`; новый token подписывается только active key, `exp` не может превышать
+`iat + maxAgeSeconds`, а previous key принимается только пока возраст token не
+выходит за overlap с учётом clock skew. Неизвестный/старый `kid`, просроченный
+token и token с будущим `iat` отвергаются. Customer cursor key не совпадает с
+Catalog cursor, actor context, delegation или transport key.
 
 Полный issuance/SAN/TTL/rotation/revocation contract определён в
 [service identity specification](24_SERVICE_IDENTITY_AND_DELEGATION.md).

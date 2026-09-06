@@ -353,18 +353,30 @@ function spawnCustomerHarness(options) {
   environment.COFFEE_CONFIG_FILE = options.configPath;
   environment.COFFEE_RUNTIME_SECRETS_FILE = options.secretsPath;
   const child = spawn(process.execPath, [options.entry], {cwd: REPOSITORY_ROOT, env: environment, stdio: ["ignore", "pipe", "pipe"]});
-  let stderr = "";
+  let output = "";
+  const append = (chunk) => { output = `${output}${chunk}`.slice(-8_192); };
+  child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-4_096); });
+  child.stdout.on("data", append);
+  child.stderr.on("data", append);
   const exit = new Promise((resolve) => child.once("exit", (code, signal) => resolve({code, signal})));
-  return {child, exit, get stderr() { return stderr; }};
+  return {child, exit, get output() { return output; }};
+}
+
+async function waitForHarnessLog(processHandle, pattern, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (pattern.test(processHandle.output)) return;
+    await delay(25);
+  }
+  throw new Error(`Customer harness log did not contain ${pattern}: ${processHandle.output}`);
 }
 
 async function waitForHarnessReady(options, processHandle, timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
   let lastError;
   while (Date.now() < deadline) {
-    if (processHandle.child.exitCode !== null) throw new Error(`Customer harness exited before readiness: ${processHandle.child.exitCode} ${processHandle.stderr}`);
+    if (processHandle.child.exitCode !== null) throw new Error(`Customer harness exited before readiness: ${processHandle.child.exitCode} ${processHandle.output}`);
     try {
       const result = await harnessRequest(options, "/health/ready");
       if (result.status === 200) return;
@@ -384,7 +396,7 @@ async function stopHarnessProcess(processHandle) {
     processHandle.exit,
     delay(5_000).then(() => {
       processHandle.child.kill("SIGKILL");
-      throw new Error(`Customer harness did not stop: ${processHandle.stderr}`);
+      throw new Error(`Customer harness did not stop: ${processHandle.output}`);
     }),
   ]);
 }
@@ -744,12 +756,15 @@ void test("Customer classifies an unacknowledged COMMIT and replays it after a r
     await proxy.waitForCommand("COMMIT");
     const dropped = await proxy.waitForReplyDropped();
     assert.equal(dropped.tag, "COMMIT", "the harness must observe successful PostgreSQL CommandComplete(COMMIT)");
+    assert.equal(proxy.observed.includes("ROLLBACK"), false, `protocol log contained ROLLBACK: ${proxy.observed.join(",")}`);
     proxy.closeConnections();
     const first = await createRequest;
     assert.equal(first.status, 503);
     assert.equal(first.body?.code, "CUSTOMER_UNAVAILABLE");
     assert.equal(first.text.includes("DB_QUERY_FAILED"), false);
     assert.equal(first.text.includes("TRANSACTION_OUTCOME_UNKNOWN"), false);
+    await waitForHarnessLog(firstProcess, /customer\.transaction_outcome_unknown/u);
+    assert.match(firstProcess.output, /TRANSACTION_OUTCOME_UNKNOWN/u);
 
     const completed = await waitForCompletedIdempotency(observer, service, key);
     assert.equal(completed.response_status, 201);

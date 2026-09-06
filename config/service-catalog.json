@@ -17,7 +17,7 @@
       "outgoingHttp": ["web:GET /", "web:GET /assets/**", "api-public:ANY /api/client-v1/**", "realtime-gateway:GET /events"],
       "outgoingEvents": [], "database": null,
       "secretRefs": ["edge.tlsPrivateKey", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
-      "publicity": "public-ingress"
+      "publicity": "public-ingress", "transportMode": "public-tls"
     },
     {
       "name": "api-public", "owner": "platform", "sourceRoot": "apps/api-public",
@@ -27,7 +27,7 @@
       "outgoingHttp": ["customer-service:delegated client-v1 Customer", "catalog-service:delegated client-v1 Catalog", "pricing-service:delegated client-v1 Pricing", "orders-service:delegated client-v1 Orders"],
       "outgoingEvents": [], "database": null,
       "secretRefs": ["security.apiPublicDelegationSigningPrivateKey", "security.actorContextEdgeVerificationPublicKeys", "security.serviceTransportKeys.api-public", "telemetry.exporterToken"],
-      "publicity": "private-trust-root"
+      "publicity": "private-trust-root", "transportMode": "mtls"
     },
     {
       "name": "api-internal", "owner": "platform", "sourceRoot": "apps/api-internal",
@@ -37,7 +37,7 @@
       "outgoingHttp": ["customer-service:getCustomerOrderInput", "catalog-service:getCatalogPricingInput", "pricing-service:verifyPricingQuote", "aroma-gateway:exportAromaCatalog", "aroma-gateway:readAromaCartSnapshot", "aroma-gateway:setAromaCartLineQuantity", "aroma-gateway:removeAromaCartLine"],
       "outgoingEvents": [], "database": null,
       "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceVerificationKeys.orders-service", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
-      "publicity": "private-trust-root"
+      "publicity": "private-trust-root", "transportMode": "mtls"
     },
     {
       "name": "web", "owner": "frontend", "sourceRoot": "apps/web",
@@ -45,7 +45,7 @@
       "contractPackages": ["packages/contracts/client-v1"],
       "incomingHttp": ["GET /", "GET /assets/**", "GET SPA fallback"], "incomingEvents": [], "schedules": [],
       "outgoingHttp": [], "outgoingEvents": [], "database": null,
-      "secretRefs": ["security.serviceTransportKeys.web"], "publicity": "private-edge-backend"
+      "secretRefs": ["security.serviceTransportKeys.web"], "publicity": "private-edge-backend", "transportMode": "mtls"
     },
     {
       "name": "customer-service", "owner": "customer", "sourceRoot": "apps/customer-service",
@@ -55,7 +55,7 @@
       "incomingEvents": [], "schedules": [], "outgoingHttp": [], "outgoingEvents": [],
       "database": {"name": "coffee_platform_customer", "role": "coffee_customer_rw", "access": "readwrite"},
       "secretRefs": ["postgres.customer", "security.customerCursorSigningPrivateKey", "security.customerCursorVerificationPublicKeys", "security.delegationVerificationKeys.api-public", "security.delegationVerificationKeys.api-internal", "security.serviceTransportKeys.customer-service", "telemetry.exporterToken"],
-      "publicity": "private-owner-backend"
+      "publicity": "private-owner-backend", "transportMode": "mtls"
     },
     {
       "name": "catalog-service", "owner": "catalog", "sourceRoot": "apps/catalog-service",
@@ -65,7 +65,7 @@
       "incomingEvents": [], "schedules": [], "outgoingHttp": [], "outgoingEvents": [],
       "database": {"name": "coffee_platform_catalog", "role": "coffee_catalog_api_ro", "access": "read"},
       "secretRefs": ["postgres.catalogApi", "security.catalogCursorSigningPrivateKey", "security.serviceTransportKeys.catalog-service", "telemetry.exporterToken"],
-      "publicity": "private-owner-backend"
+      "publicity": "private-owner-backend", "transportMode": "mtls"
     },
     {
       "name": "catalog-supplier-sync", "owner": "catalog", "sourceRoot": "apps/catalog-supplier-sync",
@@ -75,7 +75,7 @@
       "outgoingHttp": ["api-internal:exportAromaCatalog"], "outgoingEvents": [],
       "database": {"name": "coffee_platform_catalog", "role": "coffee_catalog_import_rw", "access": "readwrite-staging"},
       "secretRefs": ["postgres.catalogImport", "security.serviceTransportKeys.catalog-supplier-sync", "telemetry.exporterToken"],
-      "publicity": "private-worker"
+      "publicity": "private-worker", "transportMode": "mtls"
     },
     {
       "name": "catalog-activation-worker", "owner": "catalog", "sourceRoot": "apps/catalog-activation-worker",
@@ -85,7 +85,7 @@
       "outgoingEvents": ["CatalogSnapshotActivated.v1", "CatalogMappingChanged.v2"],
       "database": {"name": "coffee_platform_catalog", "role": "coffee_catalog_activate_rw", "access": "readwrite-activation-outbox"},
       "secretRefs": ["postgres.catalogActivate", "kafka.catalog", "security.serviceTransportKeys.catalog-activation-worker", "telemetry.exporterToken"],
-      "publicity": "private-worker"
+      "publicity": "private-worker", "transportMode": "mtls"
     },
     {
       "name": "pricing-service", "owner": "pricing", "sourceRoot": "apps/pricing-service",
@@ -95,7 +95,7 @@
       "incomingEvents": [], "schedules": [], "outgoingHttp": ["api-internal:getCatalogPricingInput"], "outgoingEvents": [],
       "database": {"name": "coffee_platform_pricing", "role": "coffee_pricing_rw", "access": "readwrite"},
       "secretRefs": ["postgres.pricing", "security.serviceTransportKeys.pricing-service", "telemetry.exporterToken"],
-      "publicity": "private-owner-backend"
+      "publicity": "private-owner-backend", "transportMode": "mtls"
     },
     {
       "name": "orders-service", "owner": "orders", "sourceRoot": "apps/orders-service",
@@ -107,7 +107,7 @@
       "outgoingEvents": ["OrderConfirmed.v1", "AromaConvergenceRequested.v1", "RealtimeInvalidated.v1"],
       "database": {"name": "coffee_platform_orders", "role": "coffee_orders_service_rw", "access": "readwrite-core-order-outbox"},
       "secretRefs": ["postgres.ordersService", "kafka.orders", "security.serviceTransportKeys.orders-service", "telemetry.exporterToken"],
-      "publicity": "private-owner-backend"
+      "publicity": "private-owner-backend", "transportMode": "mtls"
     },
     {
       "name": "orders-aroma-preparation", "owner": "orders", "sourceRoot": "apps/orders-aroma-preparation",
@@ -118,7 +118,7 @@
       "schedules": [], "outgoingHttp": [], "outgoingEvents": ["AromaConvergenceRequested.v1", "RealtimeInvalidated.v1"],
       "database": {"name": "coffee_platform_orders", "role": "coffee_orders_prepare_rw", "access": "readwrite-desired-projection-inbox-outbox"},
       "secretRefs": ["postgres.ordersPreparation", "kafka.orders", "security.serviceTransportKeys.orders-aroma-preparation", "telemetry.exporterToken"],
-      "publicity": "private-worker"
+      "publicity": "private-worker", "transportMode": "mtls"
     },
     {
       "name": "aroma-observer", "owner": "orders", "sourceRoot": "apps/aroma-observer",
@@ -128,7 +128,7 @@
       "outgoingHttp": ["api-internal:readAromaCartSnapshot"], "outgoingEvents": ["AromaObservationChanged.v1"],
       "database": {"name": "coffee_platform_orders", "role": "coffee_orders_observer_rw", "access": "readwrite-observed-inbox-outbox"},
       "secretRefs": ["postgres.aromaObserver", "kafka.orders", "security.serviceTransportKeys.aroma-observer", "telemetry.exporterToken"],
-      "publicity": "private-worker"
+      "publicity": "private-worker", "transportMode": "mtls"
     },
     {
       "name": "aroma-convergence", "owner": "orders", "sourceRoot": "apps/aroma-convergence",
@@ -139,7 +139,7 @@
       "outgoingEvents": ["AromaObservationChanged.v1", "AromaConvergenceChanged.v1"],
       "database": {"name": "coffee_platform_orders", "role": "coffee_orders_convergence_rw", "access": "readwrite-convergence-attempt-reservation-inbox-outbox"},
       "secretRefs": ["postgres.aromaConvergence", "kafka.orders", "security.serviceTransportKeys.aroma-convergence", "telemetry.exporterToken"],
-      "publicity": "private-mutation-worker"
+      "publicity": "private-mutation-worker", "transportMode": "mtls"
     },
     {
       "name": "aroma-gateway", "owner": "integration", "sourceRoot": "apps/aroma-gateway",
@@ -149,7 +149,7 @@
       "incomingEvents": [], "schedules": [], "outgoingHttp": ["provider:allowlisted AROMA HTTPS origin"], "outgoingEvents": [],
       "database": {"name": "coffee_platform_integration", "role": "coffee_aroma_gateway_rw", "access": "readwrite-session-operation-journal"},
       "secretRefs": ["postgres.aromaGateway", "aroma.email", "aroma.password", "aroma.sessionEncryptionKey", "aroma.catalogIdentityKeyV1", "security.serviceTransportKeys.aroma-gateway", "telemetry.exporterToken"],
-      "publicity": "private-provider-gateway"
+      "publicity": "private-provider-gateway", "transportMode": "mtls"
     },
     {
       "name": "realtime-gateway", "owner": "realtime", "sourceRoot": "apps/realtime-gateway",
@@ -158,7 +158,7 @@
       "incomingHttp": ["GET /events"], "incomingEvents": ["RealtimeInvalidated.v1"], "schedules": [],
       "outgoingHttp": ["browser:SSE sockets"], "outgoingEvents": [], "database": null,
       "secretRefs": ["kafka.realtime", "security.serviceTransportKeys.realtime-gateway", "telemetry.exporterToken"],
-      "publicity": "edge-only-realtime"
+      "publicity": "edge-only-realtime", "transportMode": "mtls"
     }
   ],
   "newRuntimeProcedure": {

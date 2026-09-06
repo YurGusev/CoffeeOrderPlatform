@@ -298,8 +298,10 @@ def validate_runtime_profile(profile: dict[str, Any]) -> None:
 
     for entry in entries:
         name = string(entry.get("name"), "profile.runtime.name")
-        required_keys(entry, {"name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented"}, f"profile.runtimes.{name}")
+        required_keys(entry, {"name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented", "transportMode"}, f"profile.runtimes.{name}")
         require(entry["owner"] == OWNERS[name], f"profile.runtimes.{name}.owner: owner changed")
+        expected_transport = "public-tls" if name == "edge-gateway" else "mtls"
+        require(entry["transportMode"] == expected_transport, f"profile.runtimes.{name}.transportMode: expected {expected_transport}")
         trace = entry["m20Traceability"]
         require(isinstance(trace, dict), f"profile.runtimes.{name}.m20Traceability: object required")
         required_keys(trace, {"classification", "roleRef"}, f"profile.runtimes.{name}.m20Traceability")

@@ -22,11 +22,13 @@ import {
 } from "@coffee-platform/observability";
 import {
   createMutualTlsServerOptions,
+  createPublicTlsServerOptions,
   parseServiceTransportMaterial,
   verifyTransportPeer,
   type ServiceTransportMaterial,
   type TransportIdentity,
 } from "@coffee-platform/security";
+import type {TransportMode} from "@coffee-platform/config";
 import Fastify, {
   type FastifyInstance,
   type FastifyReply,
@@ -69,6 +71,7 @@ export type RuntimeCompositionContext = Readonly<{
 export type RuntimeTransport = Readonly<{
   environment: string;
   runtime: string;
+  mode: TransportMode;
   material?: ServiceTransportMaterial;
   setupError?: string;
 }>;
@@ -132,14 +135,14 @@ function secretAt(document: ScopedSecretDocument, ref: string): unknown {
   return value;
 }
 
-function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], environment: string, runtime: RuntimeName): RuntimeTransport {
+function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], environment: string, runtime: RuntimeName, mode: TransportMode): RuntimeTransport {
   const refsForTransport = refs.filter((ref) => ref === `security.serviceTransportKeys.${runtime}`);
   const ref = refsForTransport[0];
-  if (refsForTransport.length !== 1 || ref === undefined) return {environment, runtime, setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE"};
+  if (refsForTransport.length !== 1 || ref === undefined) return {environment, runtime, mode, setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE"};
   try {
-    return {environment, runtime, material: parseServiceTransportMaterial(secretAt(document, ref), environment, runtime)};
+    return {environment, runtime, mode, material: parseServiceTransportMaterial(secretAt(document, ref), environment, runtime)};
   } catch (error) {
-    return {environment, runtime, setupError: error instanceof Error ? error.name : "TransportValidationError"};
+    return {environment, runtime, mode, setupError: error instanceof Error ? error.name : "TransportValidationError"};
   }
 }
 
@@ -359,7 +362,11 @@ export async function createRuntime(
       : { bodyLimit: identity.bodyLimitBytes }),
     ...(identity.transport?.material === undefined
       ? {}
-      : {https: createMutualTlsServerOptions(identity.transport.material)}),
+      : {
+          https: identity.transport.mode === "mtls"
+            ? createMutualTlsServerOptions(identity.transport.material)
+            : createPublicTlsServerOptions(identity.transport.material),
+        }),
     logger: {
       base: { runtime: identity.name },
       serializers: {
@@ -567,7 +574,7 @@ export async function createRuntime(
     setCorrelationResponseHeaders(reply, correlation);
     request.log = request.log.child(withCorrelationFields(correlation));
     let transportIdentity: TransportIdentity | null = null;
-    if (identity.transport?.material !== undefined) {
+    if (identity.transport?.mode === "mtls" && identity.transport.material !== undefined) {
       const socket = request.raw.socket;
       try {
         if (!(socket instanceof TLSSocket) || !socket.authorized) throw new Error("unauthorized TLS peer");
@@ -870,7 +877,7 @@ export async function startConfiguredRuntime(
   let kafka: KafkaRuntime | undefined;
   let transport: RuntimeTransport | undefined;
   try {
-    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, config.environment, name);
+    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, config.environment, name, service.transportMode);
     if (service.database !== null) {
       if (service.dbPool === null)
         throw new RuntimeError("RUNTIME_DATABASE_CONFIG_MISMATCH");

@@ -70,8 +70,11 @@ function assertProblem(result, status, code) {
 
 void test("Customer cursors require a signer and reject payload tampering", () => {
   const search = normalizeSearchQuery("test");
-  const {privateKey, publicKey} = generateKeyPairSync("ed25519");
-  const signer = createEd25519CustomerCursorSigner(privateKey, publicKey);
+  const active = generateKeyPairSync("ed25519");
+  const previous = generateKeyPairSync("ed25519");
+  let now = 1_000;
+  const policy = {activeKid: "active", previousKid: "previous", maxAgeSeconds: 300, clockSkewSeconds: 5, overlapSeconds: 60, nowEpochSeconds: () => now};
+  const signer = createEd25519CustomerCursorSigner(active.privateKey, [active.publicKey, previous.publicKey], policy);
   const cursor = {v: 1, queryHash: search.queryHash, name: "test customer", customerRef};
   const encoded = encodeCustomerCursor(cursor, signer);
   assert.deepEqual(decodeCustomerCursor(encoded, search, signer), cursor);
@@ -84,6 +87,18 @@ void test("Customer cursors require a signer and reject payload tampering", () =
   const forged = `${forgedPayload}${signature}`;
   assert.match(forged, /^[A-Za-z0-9_-]+$/u);
   assert.throws(() => decodeCustomerCursor(forged, search, signer), /cursor is invalid/);
+
+  now = 1_306;
+  assert.throws(() => decodeCustomerCursor(encoded, search, signer), /cursor is invalid/);
+  now = 1_000;
+  const previousSigner = createEd25519CustomerCursorSigner(previous.privateKey, [previous.publicKey, active.publicKey], {...policy, activeKid: "previous", previousKid: "active"});
+  const previousCursor = encodeCustomerCursor(cursor, previousSigner);
+  assert.deepEqual(decodeCustomerCursor(previousCursor, search, signer), cursor);
+  now = 1_066;
+  assert.throws(() => decodeCustomerCursor(previousCursor, search, signer), /cursor is invalid/);
+  now = 1_000;
+  const unknownSigner = createEd25519CustomerCursorSigner(active.privateKey, active.publicKey, {...policy, activeKid: "unknown"});
+  assert.throws(() => decodeCustomerCursor(encodeCustomerCursor(cursor, unknownSigner), search, signer), /cursor is invalid/);
 });
 
 void test("Customer search decodes limits and paginates a Unicode cursor through real Ed25519 HTTP", async (t) => {

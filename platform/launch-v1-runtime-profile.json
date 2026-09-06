@@ -11,6 +11,7 @@
   "runtimes": [
     {
       "name": "edge-gateway",
+      "transportMode": "public-tls",
       "owner": "platform",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "public-ingress",
@@ -21,6 +22,7 @@
     },
     {
       "name": "api-public",
+      "transportMode": "mtls",
       "owner": "platform",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "api-public" },
       "networkZone": "public-api-backend",
@@ -31,6 +33,7 @@
     },
     {
       "name": "api-internal",
+      "transportMode": "mtls",
       "owner": "platform",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "api-internal" },
       "networkZone": "internal-api",
@@ -41,6 +44,7 @@
     },
     {
       "name": "web",
+      "transportMode": "mtls",
       "owner": "frontend",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "public-ingress",
@@ -51,6 +55,7 @@
     },
     {
       "name": "customer-service",
+      "transportMode": "mtls",
       "owner": "customer",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -61,6 +66,7 @@
     },
     {
       "name": "catalog-service",
+      "transportMode": "mtls",
       "owner": "catalog",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -71,6 +77,7 @@
     },
     {
       "name": "catalog-supplier-sync",
+      "transportMode": "mtls",
       "owner": "catalog",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "catalog-supplier-sync" },
       "networkZone": "internal-api",
@@ -81,6 +88,7 @@
     },
     {
       "name": "catalog-activation-worker",
+      "transportMode": "mtls",
       "owner": "catalog",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -91,6 +99,7 @@
     },
     {
       "name": "pricing-service",
+      "transportMode": "mtls",
       "owner": "pricing",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -101,6 +110,7 @@
     },
     {
       "name": "orders-service",
+      "transportMode": "mtls",
       "owner": "orders",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -111,6 +121,7 @@
     },
     {
       "name": "orders-aroma-preparation",
+      "transportMode": "mtls",
       "owner": "orders",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "orders-aroma-preparation" },
       "networkZone": "internal-api",
@@ -121,6 +132,7 @@
     },
     {
       "name": "aroma-observer",
+      "transportMode": "mtls",
       "owner": "orders",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-observer" },
       "networkZone": "internal-api",
@@ -131,6 +143,7 @@
     },
     {
       "name": "aroma-convergence",
+      "transportMode": "mtls",
       "owner": "orders",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-convergence" },
       "networkZone": "internal-api",
@@ -141,6 +154,7 @@
     },
     {
       "name": "aroma-gateway",
+      "transportMode": "mtls",
       "owner": "integration",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-gateway" },
       "networkZone": "provider-egress",
@@ -151,6 +165,7 @@
     },
     {
       "name": "realtime-gateway",
+      "transportMode": "mtls",
       "owner": "realtime",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "realtime-gateway" },
       "networkZone": "public-ingress",

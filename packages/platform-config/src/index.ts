@@ -20,6 +20,7 @@ export const RUNTIME_NAMES = [
 
 export type RuntimeName = (typeof RUNTIME_NAMES)[number];
 export type EnvironmentName = "development" | "staging" | "production";
+export type TransportMode = "public-tls" | "mtls";
 
 export const KAFKA_TOPIC_NAMES: readonly KafkaTopicName[] = [
   "coffee.catalog.snapshot.v1",
@@ -156,6 +157,7 @@ export type PermissionConfig = Readonly<{
   workers: boolean;
 }>;
 export type RuntimeConfig = Readonly<{
+  transportMode: TransportMode;
   listen: ListenConfig;
   health: HealthConfig;
   deadlineMs: number | null;
@@ -752,6 +754,7 @@ function runtimeConfig(
   exactKeys(
     source,
     [
+      "transportMode",
       "listen",
       "health",
       "deadlineMs",
@@ -770,6 +773,9 @@ function runtimeConfig(
   );
   const listen = record(source["listen"], `${path}.listen`);
   exactKeys(listen, ["host", "port"], `${path}.listen`);
+  const transportMode = source["transportMode"];
+  if (transportMode !== "public-tls" && transportMode !== "mtls")
+    throw new PlatformConfigError(`${path}.transportMode`, "неизвестный режим TLS");
   const database = source["database"] === null ? null : stringValue(source["database"], `${path}.database`);
 
   const kafka = validateKafkaServiceConfig(
@@ -800,6 +806,7 @@ function runtimeConfig(
       "ожидался boolean",
     );
   return Object.freeze({
+    transportMode,
     listen: Object.freeze({
       host: stringValue(listen["host"], `${path}.listen.host`),
       port: integerValue(listen["port"], `${path}.listen.port`),

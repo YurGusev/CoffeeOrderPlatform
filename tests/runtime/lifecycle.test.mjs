@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import {chmod, mkdtemp, rm, writeFile} from "node:fs/promises";
+import {chmod, mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
 import {request as httpRequest} from "node:http";
-import {spawn} from "node:child_process";
+import {request as httpsRequest} from "node:https";
+import {execFileSync, spawn} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {join} from "node:path";
+import {tmpdir} from "node:os";
 import test from "node:test";
 import {load as parseYaml} from "js-yaml";
 import {RUNTIME_NAMES, loadPlatformConfig} from "../../packages/platform-config/src/index.ts";
@@ -69,6 +71,48 @@ function closeClientRequest(request) {
     request.destroy();
   });
 }
+
+async function tlsMaterial(t) {
+  const directory = await mkdtemp(join(tmpdir(), "coffee-runtime-tls-"));
+  t.after(() => rm(directory, {recursive: true, force: true}));
+  const keyPath = join(directory, "server.key");
+  const certPath = join(directory, "server.crt");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", certPath, "-subj", "/CN=localhost", "-days", "1", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1"], {stdio: "ignore"});
+  const [keyPem, certPem] = await Promise.all([readFile(keyPath, "utf8"), readFile(certPath, "utf8")]);
+  return {keyPem, certPem, caPem: certPem, identity: {environment: "development", runtime: "edge-gateway", san: "spiffe://coffee-platform/development/edge-gateway"}};
+}
+
+function requestHttps(port, options = {}) {
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest({host: "127.0.0.1", port, path: "/public", ...options}, (response) => {
+      response.resume();
+      response.once("end", () => resolve(response.statusCode));
+    });
+    request.once("error", reject);
+    request.end();
+  });
+}
+
+void test("public Edge TLS accepts a browser client while internal TLS rejects a client without service identity", async (t) => {
+  const material = await tlsMaterial(t);
+  const publicApp = await createRuntime(identity("edge-public-test", {
+    transport: {environment: "development", runtime: "edge-gateway", mode: "public-tls", material},
+  }));
+  publicApp.get("/public", async () => ({status: "ok"}));
+  await publicApp.runtimeController.start();
+  const publicPort = addressOf(publicApp).port;
+  assert.equal(await requestHttps(publicPort, {rejectUnauthorized: false}), 200);
+  await stopApp(publicApp);
+
+  const internalApp = await createRuntime(identity("edge-internal-test", {
+    transport: {environment: "development", runtime: "edge-gateway", mode: "mtls", material},
+  }));
+  internalApp.get("/public", async () => ({status: "ok"}));
+  await internalApp.runtimeController.start();
+  const internalPort = addressOf(internalApp).port;
+  await assert.rejects(requestHttps(internalPort, {rejectUnauthorized: false}));
+  await stopApp(internalApp);
+});
 
 async function requestJson(port, path, options = {}) {
   return new Promise((resolve, reject) => {

@@ -25,7 +25,7 @@ x-runtime-defaults: &runtime-defaults
   healthcheck: &runtime-healthcheck
     test:
       - CMD-SHELL
-      - node scripts/runtime-healthcheck.mjs /health/ready
+      - node -e "import('@coffee-platform/runtime/healthcheck').then(({main}) => main(process.argv.slice(1)))" /health/ready
     interval: 5s
     timeout: 1s
     start_period: 30s

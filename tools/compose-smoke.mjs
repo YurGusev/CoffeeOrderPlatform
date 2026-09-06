@@ -69,6 +69,11 @@ const RUNTIMES = [
   "aroma-gateway",
   "realtime-gateway",
 ];
+const RUNTIME_HEALTHCHECK = [
+  "node",
+  "-e",
+  "import('@coffee-platform/runtime/healthcheck').then(({main}) => main(process.argv.slice(1)))",
+];
 function usage() {
   return [
     "Usage: node tools/compose-smoke.mjs [options]",
@@ -1824,8 +1829,7 @@ async function assertReadiness(
         "exec",
         "-T",
         runtime,
-        "node",
-        "scripts/runtime-healthcheck.mjs",
+        ...RUNTIME_HEALTHCHECK,
         "/health/live",
         "/health/ready",
         "/metrics",
@@ -1904,8 +1908,7 @@ function runtimeHealthStatus(
       "exec",
       "-T",
       runtime,
-      "node",
-      "scripts/runtime-healthcheck.mjs",
+      ...RUNTIME_HEALTHCHECK,
       path,
     ],
     {composeFile},

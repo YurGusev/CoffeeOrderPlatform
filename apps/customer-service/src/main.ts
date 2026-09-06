@@ -1,7 +1,7 @@
 import {createPrivateKey, createPublicKey} from "node:crypto";
 import {verifyActorContextWithKeySet, verifyServiceDelegationWithKeySet} from "@coffee-platform/security";
 import {startConfiguredRuntime, type RuntimeCompositionContext} from "@coffee-platform/runtime";
-import {createEd25519CustomerCursorSigner} from "./application/search-customers.js";
+import {createEd25519CustomerCursorSigner, type CustomerCursorPolicy} from "./application/search-customers.js";
 import {createCustomerAdapters, registerCustomerRoutes} from "./http/index.js";
 
 function secretAt(context: RuntimeCompositionContext, path: string): unknown {
@@ -29,15 +29,37 @@ function verificationKeys(context: RuntimeCompositionContext, path: string) {
   return [createPublicKey(active), createPublicKey(previous)];
 }
 
+function customerCursorPolicy(context: RuntimeCompositionContext): CustomerCursorPolicy {
+  const value = context.config.security["customerCursor"];
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("SECURITY_CUSTOMER_CURSOR_POLICY_NOT_CONFIGURED");
+  const source = value as Record<string, unknown>;
+  const activeKid = source["activeKid"];
+  const previousKid = source["previousKid"];
+  const maxAgeSeconds = source["maxAgeSeconds"];
+  const clockSkewSeconds = source["clockSkewSeconds"];
+  const overlapSeconds = source["overlapSeconds"];
+  if (
+    typeof activeKid !== "string" || activeKid.length === 0 ||
+    typeof previousKid !== "string" || previousKid.length === 0 ||
+    typeof maxAgeSeconds !== "number" || !Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 1 ||
+    typeof clockSkewSeconds !== "number" || !Number.isSafeInteger(clockSkewSeconds) || clockSkewSeconds < 0 ||
+    typeof overlapSeconds !== "number" || !Number.isSafeInteger(overlapSeconds) || overlapSeconds < 1
+  ) throw new Error("SECURITY_CUSTOMER_CURSOR_POLICY_INVALID");
+  return {activeKid, previousKid, maxAgeSeconds, clockSkewSeconds, overlapSeconds};
+}
+
 await startConfiguredRuntime("customer-service", {
   configure: (app, _signal, database, _kafka, context) => {
     if (database === undefined) throw new Error("customer-service database is required");
     if (context === undefined) throw new Error("customer-service runtime context is required");
     const publicDelegationKeys = verificationKeys(context, "security.delegationVerificationKeys.api-public");
     const internalDelegationKeys = verificationKeys(context, "security.delegationVerificationKeys.api-internal");
+    const cursorPolicy = customerCursorPolicy(context);
+    const cursorVerificationKeys = verificationKeys(context, "security.customerCursorVerificationPublicKeys");
     const cursorSigner = createEd25519CustomerCursorSigner(
       privateKey(context, "security.customerCursorSigningPrivateKey"),
-      verificationKeys(context, "security.customerCursorVerificationPublicKeys"),
+      cursorVerificationKeys,
+      cursorPolicy,
     );
     registerCustomerRoutes(app, createCustomerAdapters(database, {
       verifyTransport: (request, expectedCaller) => request.runtimeContext?.transportIdentity?.runtime === expectedCaller,

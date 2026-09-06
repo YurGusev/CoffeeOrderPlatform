@@ -97,6 +97,10 @@ export function createMutualTlsServerOptions(material: ServiceTransportMaterial)
   return {key: material.keyPem, cert: material.certPem, ca: material.caPem, requestCert: true, rejectUnauthorized: true, minVersion: "TLSv1.3"};
 }
 
+export function createPublicTlsServerOptions(material: ServiceTransportMaterial): ServerOptions {
+  return {key: material.keyPem, cert: material.certPem, requestCert: false, rejectUnauthorized: false, minVersion: "TLSv1.3"};
+}
+
 export function verifyTransportPeer(certificate: PeerCertificate, environment: string, expectedRuntime?: string): TransportIdentity {
   if (certificate.subjectaltname === undefined) throw new TransportValidationError("peer service SAN is required");
   const san = certificate.subjectaltname.split(",").map((value) => value.trim()).find((value) => value.startsWith("URI:"))?.slice(4);

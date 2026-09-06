@@ -29,6 +29,7 @@ type Request = Readonly<{
   body: unknown;
   query: unknown;
   params: unknown;
+  log?: Readonly<{warn: (fields: Readonly<Record<string, unknown>>, message: string) => void}>;
 }>;
 type Reply = {
   header: (name: string, value: string) => Reply;
@@ -223,6 +224,12 @@ function sendOwnerResult(request: Request, reply: Reply, result: OwnerResult, ki
 }
 
 function sendOwnerFailure(request: Request, reply: Reply, error: unknown): Reply {
+  if (ownerErrorCode(error) === "TRANSACTION_OUTCOME_UNKNOWN") {
+    request.log?.warn(
+      {event: "customer.transaction_outcome_unknown", errorCode: "TRANSACTION_OUTCOME_UNKNOWN"},
+      "customer transaction outcome is unknown",
+    );
+  }
   return sendProblem(reply, safeOwnerProblem(request, error));
 }
 

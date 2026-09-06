@@ -19,6 +19,8 @@ manifests без изменения смысла. Любое отклонени�
 - **Хранилище:** нет БД, нет persistent cache.
 - **Секреты:** TLS private key/certificate, OIDC/JWT verification configuration
   и собственная service transport identity.
+- **Transport:** `public-tls`; браузерный ingress не предъявляет service
+  certificate, а внутренние outbound соединения используют mTLS.
 - **Публичность:** public internet; `internal-v1` и `aroma-gateway` не маршрутизирует.
 
 ## 1.1. `api-public`

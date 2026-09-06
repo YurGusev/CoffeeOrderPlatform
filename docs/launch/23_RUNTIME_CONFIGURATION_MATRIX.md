@@ -15,6 +15,9 @@ partitions/retention берутся только из `06_EVENTS_AND_RECOVERY.md
 не допускаются, а topics и groups обязаны совпадать с таблицей ниже.
 Mutation capability `true` только у `aroma-convergence` delegation и Gateway
 transport handler; у остальных runtime explicit `false`.
+Transport mode задан явно: только `edge-gateway` использует `public-tls` для
+браузерного ingress; остальные 14 runtime используют `mtls` для внутренних
+listener/client соединений.
 
 | Runtime                   | Port | Deadline / concurrency             | DB pool | Kafka                 | Secret refs                                                                                    | Разрешённые host:port / egress                                                                                    |
 | ------------------------- | ---: | ---------------------------------- | ------: | --------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |

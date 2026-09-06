@@ -156,6 +156,7 @@ security:
 
 services:
   edge-gateway:
+    transportMode: public-tls
     listen: {host: 0.0.0.0, port: 4000}
     health: &health
       livePath: /health/live
@@ -179,6 +180,7 @@ services:
     mutationCapability: false
 
   api-public:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4050}
     health: *health
     deadlineMs: 4500
@@ -194,6 +196,7 @@ services:
     mutationCapability: false
 
   api-internal:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4051}
     health: *health
     deadlineMs: null
@@ -209,6 +212,7 @@ services:
     mutationCapability: false
 
   web:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 3000}
     health: *health
     deadlineMs: 5000
@@ -224,6 +228,7 @@ services:
     mutationCapability: false
 
   customer-service:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4101}
     health: *health
     deadlineMs: 2000
@@ -239,6 +244,7 @@ services:
     mutationCapability: false
 
   catalog-service:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4102}
     health: *health
     deadlineMs: 2000
@@ -254,6 +260,7 @@ services:
     mutationCapability: false
 
   catalog-supplier-sync:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4201}
     health: *health
     deadlineMs: 900000
@@ -269,6 +276,7 @@ services:
     mutationCapability: false
 
   catalog-activation-worker:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4202}
     health: *health
     deadlineMs: 5000
@@ -288,6 +296,7 @@ services:
     mutationCapability: false
 
   pricing-service:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4103}
     health: *health
     deadlineMs: 5000
@@ -303,6 +312,7 @@ services:
     mutationCapability: false
 
   orders-service:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4104}
     health: *health
     deadlineMs: 5000
@@ -327,6 +337,7 @@ services:
     mutationCapability: false
 
   orders-aroma-preparation:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4203}
     health: *health
     deadlineMs: 5000
@@ -359,6 +370,7 @@ services:
     mutationCapability: false
 
   aroma-observer:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4204}
     health: *health
     deadlineMs: 15000
@@ -374,6 +386,7 @@ services:
     mutationCapability: false
 
   aroma-convergence:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4205}
     health: *health
     deadlineMs: 30000
@@ -396,6 +409,7 @@ services:
     mutationCapability: true
 
   aroma-gateway:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4301}
     health: *health
     deadlineMs: 10000
@@ -411,6 +425,7 @@ services:
     mutationCapability: true
 
   realtime-gateway:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4401}
     health: *health
     deadlineMs: null

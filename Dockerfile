@@ -132,7 +132,7 @@ ENV RUNTIME_NAME=${RUNTIME}
 COPY --from=build /runtime ./
 COPY --from=build /workspace/config ./config
 COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
-COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs scripts/runtime-healthcheck.mjs ./scripts/
+COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
 
 USER node
 ENTRYPOINT ["node", "scripts/permission-enforce.mjs"]
