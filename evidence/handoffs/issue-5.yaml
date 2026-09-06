@@ -165,9 +165,6 @@ outputs:
   - artifact: tests/contracts/breaking.test.mjs
     sha256: 5c05e8728615941951a6bf1722f1053de73e3b832887831049168d0811d17d37
     consumers: [5]
-  - artifact: Dockerfile
-    sha256: 3420448e3562802e164cf09e319cd331edafa8554f247cc4281a830fd2c49ca0
-    consumers: [5]
   - artifact: compose.yaml
     sha256: 3390999fb98420ff5f00e615c6fe71877c35dbf6094c101cb345684912b2496f
     consumers: [5]
