@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./healthcheck": "./dist/healthcheck.js"
   },
   "types": "./dist/index.d.ts",
   "dependencies": {
@@ -15,6 +16,7 @@
     "fastify": "5.12.1",
     "js-yaml": "4.2.0",
     "undici": "8.10.1",
-    "@coffee-platform/kafka-runtime": "workspace:*"
+    "@coffee-platform/kafka-runtime": "workspace:*",
+    "@coffee-platform/security": "workspace:*"
   }
 }

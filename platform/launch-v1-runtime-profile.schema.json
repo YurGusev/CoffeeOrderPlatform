@@ -168,9 +168,10 @@
     "runtime": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented"],
+      "required": ["name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented", "transportMode"],
       "properties": {
         "name": { "$ref": "#/$defs/runtimeName" },
+        "transportMode": { "enum": ["public-tls", "mtls"] },
         "owner": { "enum": ["platform", "frontend", "customer", "catalog", "pricing", "orders", "integration", "realtime"] },
         "m20Traceability": {
           "oneOf": [
@@ -202,6 +203,11 @@
           "items": { "enum": ["public-edge", "client-v1", "internal-v1", "web-assets", "client-v1-owner", "internal-v1-owner", "health-only", "provider-outbound", "events"] }
         },
         "secretRefs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "optionalSecretRefs": {
           "type": "array",
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }

@@ -5,8 +5,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const RUNTIME_FIELDS = new Set(['name', 'owner', 'sourceRoot', 'purpose', 'contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'database', 'secretRefs', 'publicity']);
-const CATALOG_DIGEST = 'cb20f8b84d3e82dc4832946799d07a7882bc890bd0921f578dc93ab1cd70f1c2';
+const RUNTIME_FIELDS = new Set(['name', 'owner', 'sourceRoot', 'purpose', 'contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'database', 'secretRefs', 'publicity', 'transportMode']);
+const CATALOG_DIGEST = 'ae10fe6fa11ae369afce27b01edef23e54b7134c21ebb27083b173ed1b849965';
 const INTERACTIONS_DIGEST = 'ad869ee1028882c0a0eebf3376c330960e2156d250d60607be95917a83e470e1';
 
 function fail(rule, message) {
@@ -23,10 +23,11 @@ async function readJson(path) {
   }
 }
 
-function exactKeys(value, expected, label) {
+function exactKeys(value, expected, label, optional = []) {
   const actual = new Set(Object.keys(value));
   const missing = [...expected].filter((key) => !actual.has(key));
-  const unknown = [...actual].filter((key) => !expected.has(key));
+  const allowed = new Set([...expected, ...optional]);
+  const unknown = [...actual].filter((key) => !allowed.has(key));
   if (missing.length || unknown.length) fail('BOUND-CATALOG', `${label}: missing=[${missing.join(',')}] unknown=[${unknown.join(',')}]`);
 }
 
@@ -69,17 +70,22 @@ export async function checkServiceCatalog(root = REPO_ROOT) {
   if (catalogByName.size !== expectedNames.size || [...expectedNames].some((name) => !catalogByName.has(name))) fail('BOUND-CATALOG', 'runtime set differs from #19 profile');
 
   for (const [name, runtime] of catalogByName) {
-    exactKeys(runtime, RUNTIME_FIELDS, `runtime ${name}`);
+    exactKeys(runtime, RUNTIME_FIELDS, `runtime ${name}`, ['optionalSecretRefs']);
     const profileRuntime = profileByName.get(name);
     if (runtime.owner !== profileRuntime.owner) fail('BOUND-CATALOG', `${name}: owner ${runtime.owner} differs from #19 ${profileRuntime.owner}`);
+    if (runtime.transportMode !== profileRuntime.transportMode) fail('BOUND-CATALOG', `${name}: transportMode differs from #19 profile`);
     if (runtime.sourceRoot !== `apps/${name}`) fail('BOUND-CATALOG', `${name}: sourceRoot must be apps/${name}`);
     for (const field of ['contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'secretRefs']) stringArray(runtime[field], `${name}.${field}`);
+    stringArray(runtime.optionalSecretRefs ?? [], `${name}.optionalSecretRefs`);
     for (const packageRoot of runtime.contractPackages) {
       if (!/^packages\/contracts\/[a-z0-9-]+-v[0-9]+$/.test(packageRoot)) fail('BOUND-IMPORT', `${name}: unversioned or non-contract package ${packageRoot}`);
     }
     const actualSecrets = [...runtime.secretRefs].sort((left, right) => left.localeCompare(right));
     const expectedSecrets = [...profileRuntime.secretRefs].sort((left, right) => left.localeCompare(right));
     if (JSON.stringify(actualSecrets) !== JSON.stringify(expectedSecrets)) fail('BOUND-SECRET', `${name}: secretRefs differ from accepted #19 profile`);
+    const actualOptionalSecrets = [...(runtime.optionalSecretRefs ?? [])].sort((left, right) => left.localeCompare(right));
+    const expectedOptionalSecrets = [...(profileRuntime.optionalSecretRefs ?? [])].sort((left, right) => left.localeCompare(right));
+    if (JSON.stringify(actualOptionalSecrets) !== JSON.stringify(expectedOptionalSecrets)) fail('BOUND-SECRET', `${name}: optionalSecretRefs differ from accepted #19 profile`);
     const claim = claimsByName.get(name);
     if (!claim) fail('BOUND-DB-CLAIM', `${name}: database claim missing`);
     if (runtime.database === null) {

@@ -125,8 +125,9 @@
     "service": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["listen", "health", "deadlineMs", "deadlineProfiles", "concurrency", "replicas", "dbPool", "database", "kafka", "outbound", "secretRefs", "permissions", "mutationCapability"],
+      "required": ["transportMode", "listen", "health", "deadlineMs", "deadlineProfiles", "concurrency", "replicas", "dbPool", "database", "kafka", "outbound", "secretRefs", "permissions", "mutationCapability"],
       "properties": {
+        "transportMode": { "type": "string", "enum": ["public-tls", "mtls"] },
         "listen": {
           "type": "object",
           "additionalProperties": false,
@@ -159,6 +160,10 @@
         "kafka": { "$ref": "#/$defs/kafkaAccess" },
         "outbound": { "$ref": "#/$defs/stringArray" },
         "secretRefs": {
+          "type": "array", "uniqueItems": true, "minItems": 0,
+          "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
+        },
+        "optionalSecretRefs": {
           "type": "array", "uniqueItems": true, "minItems": 0,
           "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
         },
@@ -302,10 +307,11 @@
       }
     },
     "security": {
-      "type": "object", "additionalProperties": false, "required": ["actorContext", "catalogCursor", "serviceTrustBundles", "delegation"],
+      "type": "object", "additionalProperties": false, "required": ["actorContext", "catalogCursor", "customerCursor", "serviceTrustBundles", "delegation"],
       "properties": {
         "actorContext": {"$ref": "#/$defs/signingPolicy"},
         "catalogCursor": {"$ref": "#/$defs/signingPolicy"},
+        "customerCursor": {"allOf": [{"$ref": "#/$defs/signingPolicy"}, {"type": "object", "required": ["previousKeyTrustUntilEpochSeconds"]}]},
         "serviceTrustBundles": {
           "type": "object", "additionalProperties": false, "required": ["activeKid", "previousKid", "overlapHours", "publicKeys"],
           "properties": {
@@ -342,6 +348,7 @@
         "maxAgeSeconds": {"type": "integer", "minimum": 1},
         "clockSkewSeconds": {"type": "integer", "minimum": 0},
         "overlapSeconds": {"type": "integer", "minimum": 1},
+        "previousKeyTrustUntilEpochSeconds": {"type": "integer", "minimum": 0},
         "verificationKeys": {"type": "object", "additionalProperties": false, "minProperties": 2, "patternProperties": {"^[a-zA-Z0-9-]+$": {"type": "string", "minLength": 1}}}
       }
     },

@@ -74,6 +74,40 @@ void test('breaking guard admits optional expansion only with fixture and policy
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
 
+void test('breaking guard admits a same-wire parameter ref replacement with a wider schema', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'contracts-breaking-parameter-ref-'));
+  const base = join(directory, 'base');
+  const current = join(directory, 'current');
+  const document = {
+    openapi: '3.2.0',
+    info: { title: 'fixture', version: '1' },
+    paths: {
+      '/items': {
+        get: {
+          operationId: 'getItems',
+          parameters: [{ $ref: '#/components/parameters/Cursor' }],
+          responses: { 200: { description: 'ok' } },
+        },
+      },
+    },
+    components: {
+      parameters: {
+        Cursor: { name: 'cursor', in: 'query', required: false, schema: { type: 'string', maxLength: 512 } },
+      },
+    },
+  };
+  const changed = structuredClone(document);
+  changed.paths['/items'].get.parameters[0].$ref = '#/components/parameters/CustomerCursor';
+  changed.components.parameters.CustomerCursor = { name: 'cursor', in: 'query', required: false, schema: { type: 'string', maxLength: 2048 } };
+  for (const [root, value] of [[base, document], [current, changed]]) {
+    await mkdir(join(root, 'contracts/openapi'), { recursive: true });
+    await writeFile(join(root, 'contracts/openapi/client-v1.yaml'), yaml.dump(value));
+  }
+  const result = spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], { cwd: root, encoding: 'utf8' });
+  await rm(directory, { recursive: true, force: true });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
+
 void test('breaking guard rejects event schema, key and envelope changes', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'contracts-breaking-event-'));
   const base = join(directory, 'base');

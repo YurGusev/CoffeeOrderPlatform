@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import type { Socket } from "node:net";
+import {TLSSocket} from "node:tls";
 import { Temporal } from "@js-temporal/polyfill";
 import {
   loadPlatformConfig,
@@ -19,6 +20,18 @@ import {
   withCorrelationFields,
   type CorrelationContext,
 } from "@coffee-platform/observability";
+import {
+  createMutualTlsServerOptions,
+  createPublicTlsServerOptions,
+  parsePublicTlsMaterial,
+  parsePublicTlsHostname,
+  parseServiceTransportMaterial,
+  verifyTransportPeer,
+  type PublicTlsMaterial,
+  type ServiceTransportMaterial,
+  type TransportIdentity,
+} from "@coffee-platform/security";
+import type {TransportMode} from "@coffee-platform/config";
 import Fastify, {
   type FastifyInstance,
   type FastifyReply,
@@ -48,7 +61,23 @@ export type RuntimeComposition = Readonly<{
     signal: AbortSignal,
     database?: Database,
     kafka?: KafkaRuntime,
+    context?: RuntimeCompositionContext,
   ) => Promise<void> | void;
+}>;
+
+/** Runtime-owned configuration and only the scoped secrets for this process. */
+export type RuntimeCompositionContext = Readonly<{
+  config: PlatformConfig;
+  secrets: Readonly<Record<string, unknown>>;
+}>;
+
+export type RuntimeTransport = Readonly<{
+  environment: string;
+  runtime: string;
+  mode: TransportMode;
+  material?: ServiceTransportMaterial;
+  publicTls?: PublicTlsMaterial;
+  setupError?: string;
 }>;
 
 export type RuntimeIdentity = RuntimeComposition &
@@ -63,6 +92,7 @@ export type RuntimeIdentity = RuntimeComposition &
     concurrency?: number;
     bodyLimitBytes?: number;
     requiredDependencies?: readonly string[];
+    transport?: RuntimeTransport;
   }>;
 
 export type RuntimePhase = "starting" | "running" | "draining" | "stopped";
@@ -81,6 +111,7 @@ export type RuntimeRequestContext = CorrelationContext &
   Readonly<{
     signal: AbortSignal;
     deadlineUtc: string | null;
+    transportIdentity: TransportIdentity | null;
     // Вызывается владельцем только ПОСЛЕ известного durable commit, не перед COMMIT.
     acceptDurable: () => void;
   }>;
@@ -100,6 +131,44 @@ type ScopedSecretDocument = Readonly<{
 
 function secretRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function secretAt(document: ScopedSecretDocument, ref: string): unknown {
+  let value: unknown = document.secrets;
+  for (const segment of ref.split(".")) value = secretRecord(value) ? value[segment] : undefined;
+  return value;
+}
+
+function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], optionalRefs: readonly string[], environment: string, runtime: RuntimeName, mode: TransportMode, publicHostname?: string): RuntimeTransport {
+  const refsForTransport = refs.filter((ref) => ref === `security.serviceTransportKeys.${runtime}`);
+  const ref = refsForTransport[0];
+  if (refsForTransport.length !== 1 || ref === undefined) return {environment, runtime, mode, setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE"};
+  try {
+    const material = parseServiceTransportMaterial(secretAt(document, ref), environment, runtime);
+    if (mode !== "public-tls") return {environment, runtime, mode, material};
+    if (publicHostname === undefined || refs.filter((value) => value === "edge.tlsPrivateKey").length !== 1 || refs.filter((value) => value === "edge.tlsCertificate").length !== 1) {
+      return {environment, runtime, mode, material, setupError: "RUNTIME_PUBLIC_TLS_SECRET_SCOPE"};
+    }
+    const publicCaPem = optionalRefs.includes("edge.tlsCaBundle") ? secretAt(document, "edge.tlsCaBundle") : undefined;
+    return {
+      environment,
+      runtime,
+      mode,
+      material,
+      publicTls: parsePublicTlsMaterial(secretAt(document, "edge.tlsPrivateKey"), secretAt(document, "edge.tlsCertificate"), publicHostname, publicCaPem),
+    };
+  } catch (error) {
+    return {environment, runtime, mode, setupError: error instanceof Error ? error.name : "TransportValidationError"};
+  }
+}
+
+function publicHostname(config: PlatformConfig): string {
+  const value = config.platform["publicBaseUrl"];
+  try {
+    return parsePublicTlsHostname(value);
+  } catch {
+    throw new RuntimeError("RUNTIME_PUBLIC_BASE_URL_INVALID");
+  }
 }
 
 function ownDatabaseCredential(
@@ -160,6 +229,7 @@ function appendOwnedComposition(
   composition: RuntimeComposition,
   database?: Database,
   kafka?: KafkaRuntime,
+  context?: RuntimeCompositionContext,
 ): RuntimeComposition {
   const owned = [...(database ? [database] : []), ...(kafka ? [kafka] : [])];
   for (const owner of owned) {
@@ -175,10 +245,10 @@ function appendOwnedComposition(
   }
   return {
     ...composition,
-    configure: (app: FastifyInstance, signal: AbortSignal) => {
+    configure: (app: FastifyInstance, signal: AbortSignal, ownedDatabase?: Database, ownedKafka?: KafkaRuntime, ownedContext?: RuntimeCompositionContext) => {
       if (kafka)
         void kafka.whenFailed.then(() => app.runtimeController.closeRuntime());
-      return composition.configure?.(app, signal, database, kafka);
+      return composition.configure?.(app, signal, database ?? ownedDatabase, kafka ?? ownedKafka, context ?? ownedContext);
     },
     resources: [
       ...owned.map((owner) => owner.resource),
@@ -306,12 +376,26 @@ export async function createRuntime(
   const acquired: RuntimeResource[] = [];
   const runningChecks = new Map<string, Promise<boolean>>();
   const stopped = Promise.withResolvers<RuntimeShutdownResult>();
+  let transportError: string | undefined;
+  if (identity.transport !== undefined) {
+    transportError = identity.transport.setupError;
+    if (transportError === undefined && identity.transport.material === undefined) transportError = "RUNTIME_TRANSPORT_MATERIAL_MISSING";
+    if (transportError === undefined && identity.transport.mode === "public-tls" && identity.transport.publicTls === undefined) transportError = "RUNTIME_PUBLIC_TLS_MATERIAL_MISSING";
+  }
+  const httpsOptions = identity.transport?.mode === "mtls"
+    ? identity.transport.material === undefined ? undefined : createMutualTlsServerOptions(identity.transport.material)
+    : identity.transport?.mode === "public-tls"
+      ? identity.transport.publicTls === undefined ? undefined : createPublicTlsServerOptions(identity.transport.publicTls)
+      : undefined;
   const app = Fastify({
     // Admission ниже сохраняет live/ready для уже принятого transport во время drain.
     return503OnClosing: false,
     ...(identity.bodyLimitBytes === undefined
       ? {}
       : { bodyLimit: identity.bodyLimitBytes }),
+    ...(httpsOptions === undefined
+      ? {}
+      : {https: httpsOptions}),
     logger: {
       base: { runtime: identity.name },
       serializers: {
@@ -456,6 +540,7 @@ export async function createRuntime(
             signal.throwIfAborted();
             await identity.configure?.(app, signal);
             signal.throwIfAborted();
+            if (transportError !== undefined) throw new RuntimeError(`RUNTIME_TRANSPORT_NOT_CONFIGURED:${transportError}`);
             await app.listen({ host: identity.host, port: identity.port });
             signal.throwIfAborted();
             for (const resource of resources) {
@@ -517,6 +602,17 @@ export async function createRuntime(
     request.correlationContext = correlation;
     setCorrelationResponseHeaders(reply, correlation);
     request.log = request.log.child(withCorrelationFields(correlation));
+    let transportIdentity: TransportIdentity | null = null;
+    if (identity.transport?.mode === "mtls" && identity.transport.material !== undefined) {
+      const socket = request.raw.socket;
+      try {
+        if (!(socket instanceof TLSSocket) || !socket.authorized) throw new Error("unauthorized TLS peer");
+        transportIdentity = verifyTransportPeer(socket.getPeerCertificate(), identity.transport.environment);
+      } catch {
+        void reply.code(401).send();
+        return;
+      }
+    }
     const isHealth = [
       health.livePath,
       health.readyPath,
@@ -574,6 +670,7 @@ export async function createRuntime(
     request.runtimeContext = {
       ...correlation,
       signal: abort.signal,
+      transportIdentity,
       deadlineUtc:
         budget === null
           ? null
@@ -807,7 +904,9 @@ export async function startConfiguredRuntime(
     throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
   let database: Database | undefined;
   let kafka: KafkaRuntime | undefined;
+  let transport: RuntimeTransport | undefined;
   try {
+    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, service.optionalSecretRefs, config.environment, name, service.transportMode, service.transportMode === "public-tls" ? publicHostname(config) : undefined);
     if (service.database !== null) {
       if (service.dbPool === null)
         throw new RuntimeError("RUNTIME_DATABASE_CONFIG_MISMATCH");
@@ -844,11 +943,17 @@ export async function startConfiguredRuntime(
       });
     }
     return await startRuntime(
-      configuredRuntimeIdentity(
-        config,
-        name,
-        appendOwnedComposition(composition, database, kafka),
-      ),
+      {
+        ...configuredRuntimeIdentity(
+          config,
+          name,
+          appendOwnedComposition(composition, database, kafka, {
+            config,
+            secrets: (secretDocument as ScopedSecretDocument).secrets,
+          }),
+        ),
+        transport,
+      },
     );
   } catch (error) {
     kafka?.resource.destroy();

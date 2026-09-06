@@ -1,1 +1,1 @@
-{"extends":"../../tsconfig.base.json","compilerOptions":{"composite":true,"rootDir":"src","outDir":"dist"},"references":[{"path":"../../packages/platform-runtime"}],"include":["src/**/*.ts"]}
+{"extends":"../../tsconfig.base.json","compilerOptions":{"composite":true,"rootDir":"src","outDir":"dist"},"references":[{"path":"../../packages/platform-runtime"},{"path":"../../packages/platform-http"},{"path":"../../packages/platform-security"},{"path":"../../packages/contracts/customer-v1"}],"include":["src/**/*.ts"]}

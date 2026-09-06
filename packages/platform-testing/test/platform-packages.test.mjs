@@ -22,6 +22,12 @@ import {
 import {
   signActorContext,
   verifyActorContext,
+  signServiceDelegation,
+  verifyServiceDelegation,
+  createMutualTlsServerOptions,
+  createPublicTlsServerOptions,
+  parsePublicTlsCaBundle,
+  parseServiceTransportMaterial,
 } from "../../platform-security/src/index.ts";
 import {withTransaction, createDatabase, DatabaseTransactionError} from "../../platform-database/dist/index.js";
 import {defineStatement, defineCopy} from "../../platform-database/dist/owner.js";
@@ -37,6 +43,8 @@ import { createTestClock } from "../src/index.ts";
 void test("config rejects unknown keys and requires the exact runtime set", () => {
   const parsed = parsePlatformConfig(parseYaml(readFileSync(new URL("../../../config/platform.yaml", import.meta.url), "utf8")));
   assert.equal(Object.keys(parsed.services).length, 15);
+  assert.deepEqual(parsed.services["edge-gateway"].optionalSecretRefs, ["edge.tlsCaBundle"]);
+  assert.deepEqual(parsed.services.web.optionalSecretRefs, []);
   assert.throws(() => parsePlatformConfig({...parsed, unknown: true}), PlatformConfigError);
 });
 
@@ -130,6 +138,55 @@ void test("security signs and verifies actor context claims", () => {
       }),
     { code: "SERVICE_AUDIENCE_FORBIDDEN" },
   );
+});
+
+void test("security transport rejects plaintext and requires mutual TLS", () => {
+  assert.throws(
+    () => parseServiceTransportMaterial("compose-smoke-placeholder", "development", "api-public"),
+    {code: "TRANSPORT_IDENTITY_INVALID"},
+  );
+  assert.deepEqual(
+    createMutualTlsServerOptions({
+      keyPem: "key",
+      certPem: "cert",
+      caPem: "ca",
+      identity: {environment: "development", runtime: "api-public", san: "spiffe://coffee-platform/development/api-public"},
+    }),
+    {key: "key", cert: "cert", ca: "ca", requestCert: true, rejectUnauthorized: true, minVersion: "TLSv1.3"},
+  );
+  assert.deepEqual(
+    createPublicTlsServerOptions({
+      keyPem: "key",
+      certPem: "cert",
+      hostname: "edge.example.test",
+    }),
+    {key: "key", cert: "cert", requestCert: false, minVersion: "TLSv1.3"},
+  );
+  assert.throws(() => parsePublicTlsCaBundle("not-a-certificate"), {code: "TRANSPORT_IDENTITY_INVALID"});
+});
+
+void test("security signs and verifies service delegation claims", () => {
+  const {privateKey, publicKey} = generateKeyPairSync("ed25519");
+  const claims = {
+    iss: "api-internal",
+    aud: "customer-service",
+    originalCaller: "orders-service",
+    operationId: "getCustomerOrderInput",
+    correlationId: "corr",
+    traceparent: "00-abc-def-01",
+    iat: 100,
+    exp: 160,
+    jti: "jti",
+    kid: "active",
+  };
+  const token = signServiceDelegation(claims, privateKey);
+  assert.deepEqual(verifyServiceDelegation(token, {
+    publicKey,
+    issuer: "api-internal",
+    audience: "customer-service",
+    nowEpochSeconds: 120,
+    clockSkewSeconds: 5,
+  }), claims);
 });
 
 const poolConfig = {

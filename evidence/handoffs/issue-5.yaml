@@ -1,0 +1,344 @@
+issue: 5
+baseCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+status: ready
+inputs:
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: evidence/handoffs/issue-62.yaml
+    sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+outputs:
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: 0768184f0d0c3a84fa3602e830b09b910554867651b48395eceab10a91090e06
+    consumers: [5]
+  - artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md
+    sha256: 7f31b1ec3fbeab01ce942dcbe38b8e3c4e388b36383ba5ed28c98829d068dc01
+    consumers: [5]
+  - artifact: docs/launch/14_CUSTOMER_IMPLEMENTATION_SPEC.md
+    sha256: 3d122d932092714cf9809fd4a99171b732b3697119800491ce3d5c958b860800
+    consumers: [5, 8, 9, 13]
+  - artifact: evidence/issue-5-acceptance.md
+    sha256: 9297f464bc9080f96077549182064884d19d3fc2864c86965bfde17e94a8cacb
+    consumers: [5, 8, 9, 13]
+  - artifact: apps/customer-service/migrations/0001_customer_schema.sql
+    sha256: 2b8b0a818c4305b34ed853f7f7cc72743741bcb2dbce8513f8376bc4cd8d86e8
+    consumers: [5]
+  - artifact: apps/customer-service/migrations/0002_customer_indexes.sql
+    sha256: 00968f5ed219d9384646e2ea2888aab0d2b5a8ad2c22d1a823e35279feb6e723
+    consumers: [5]
+  - artifact: apps/customer-service/src/main.ts
+    sha256: d111b06cda4ccff477aa5f165729c47f74b8e34d2f9acfc1ebbdf77655814ba9
+    consumers: [5]
+  - artifact: apps/customer-service/src/domain/customer.ts
+    sha256: febc5dd87e913e9e204e1d22544ee30d3f245211895574df61cac7521e9d84a6
+    consumers: [5]
+  - artifact: apps/customer-service/src/application/create-customer.ts
+    sha256: 1f0f7ee6aef753f714fd3b545a0ccdfd35b40632a89a19b1105468e18307e884
+    consumers: [5]
+  - artifact: apps/customer-service/src/application/search-customers.ts
+    sha256: 42c64e8bec5fb4361f3443fa01b9299bcbfcb538ed2d02953a61df22b331c9e9
+    consumers: [5]
+  - artifact: apps/customer-service/src/application/get-customer-order-input.ts
+    sha256: 3146e2a6e371284b82044181bc5fb38ac1bb7fbd697c0f5bf60c0875d4f369b4
+    consumers: [5]
+  - artifact: apps/customer-service/src/http/index.ts
+    sha256: 37ad14e994e687e903bd40213f1c715ac26ac6d9ab09c727e6e1451557791f65
+    consumers: [5, 8, 9]
+  - artifact: apps/customer-service/src/infrastructure/postgres/customer-repository.ts
+    sha256: d4587c5ed8bdc63d7af00e516ce7f1daf2241901b8d0f11ae03507ac7789cfab
+    consumers: [5]
+  - artifact: apps/customer-service/src/infrastructure/postgres/idempotency-repository.ts
+    sha256: fb5dd156d3ff593a06fe010b0565bc023809e806da59cf08ba4c4571450e1883
+    consumers: [5]
+  - artifact: apps/customer-service/package.json
+    sha256: 8861608f94ae15826e9f3044d2a2118541324a3ab612455391f07d7fddfcccc5
+    consumers: [5]
+  - artifact: apps/customer-service/tsconfig.json
+    sha256: df6d8d93b6b193617db898047caceb4b7207e73a5cdd07f21357ac67f88eb96a
+    consumers: [5]
+  - artifact: apps/api-public/src/index.ts
+    sha256: 71665234e9a3101abec9507e364f51d752656628d4bf23f5648e185f9a1c09cb
+    consumers: [5]
+  - artifact: apps/api-public/src/main.ts
+    sha256: 161592983cead8d62b1cfe0eeda5240c16fcca46a1bc39ca8915c0fb6e506af4
+    consumers: [5]
+  - artifact: apps/api-public/package.json
+    sha256: 7c923c8d08caed5146f7f398bfe830b65807a178e891d18efd238e6812e0b0c8
+    consumers: [5]
+  - artifact: apps/api-internal/src/index.ts
+    sha256: 6263fcf0a4e676b66fb94724bf5728fd7e629a4eec1ecb0a837304d211070900
+    consumers: [5]
+  - artifact: apps/api-internal/src/main.ts
+    sha256: 30de1ea40a79c6c26cf159d3cb1423c121938549b55b84e70b0365c6380e1fd9
+    consumers: [5]
+  - artifact: apps/api-internal/package.json
+    sha256: b1a84d4f31a543e4a082fe513d3cf7a0c04d30e9a76b886b84049c8b37ec7d3e
+    consumers: [5]
+  - artifact: config/toolchain-versions.json
+    sha256: 77c01dc7a2e01fbf2d501cf84bf6ce1859f591d30b9309bd4c8409c26eb18aae
+    consumers: [5, 63]
+  - artifact: config/toolchain-versions.schema.json
+    sha256: aa221dbda37cd1ac1f1098633f3c5a30043bed7b98915093a9b9492c081ca5c8
+    consumers: [5, 63]
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: 3acaaa5560cc60d207326b7f4ca456d24f078e0366bca79ae1ad435c2762024a
+    consumers: [5, 63]
+  - artifact: scripts/check-security-material.mjs
+    sha256: 55817806d0462bd3f6bb70df6037a22d129e12193d19df045de2932b1c8a50c9
+    consumers: [5, 63]
+  - artifact: packages/platform-runtime/src/index.ts
+    sha256: 164a07bbae0a2d1e9fb3317adb5c956c6b9a83492219b1b97b926452b578cf75
+    consumers: [5, 8, 9]
+  - artifact: packages/platform-security/src/index.ts
+    sha256: b46a35896568e03cefaa07268ddb02088c13418d5f961a0b0e58af797938ee09
+    consumers: [5, 8, 9]
+  - artifact: packages/platform-testing/test/platform-packages.test.mjs
+    sha256: 1c8d77311e1795c7f12d45421393aa318cb85a8b2f7e0d47da05ebcd33465e5a
+    consumers: [5, 8, 9]
+  - artifact: package.json
+    sha256: 9d3a3f32b5950216dc0ec77afc2ad42ae84e67832d41e8985f79fad2848f786a
+    consumers: [5]
+  - artifact: pnpm-lock.yaml
+    sha256: 81476ae13ef2d603c1344529e395686f434cfffdb60de4ab1cab3cc3483b719b
+    consumers: [5]
+  - artifact: tests/customer/customer-normalization.test.mjs
+    sha256: 878fb276709333cae074ff812b3cacef243d5b716ac82c9b46b6108cb03721ed
+    consumers: [5]
+  - artifact: tests/customer/customer-live.test.mjs
+    sha256: 3dac035e341189b4222fdd3a1add7a627ef25d0d6037648ef6c6b18819c624f7
+    consumers: [5]
+  - artifact: tests/customer/fixtures/db-adapter-command-observer.mjs
+    sha256: 7cacf35f43fbcab5b493bace12622a6524486a8cdbbe560cd231a4aa45648891
+    consumers: [5]
+  - artifact: tests/customer/customer-schema.test.mjs
+    sha256: 99eced09c67c115da0480499c0c8162c2d02980c21c2d50557782987412e9de4
+    consumers: [5]
+  - artifact: tests/customer/fixtures/customer-testkit.mjs
+    sha256: b80280a67b929b18eeed6a1a59f9487cdab17b881b1a64b84d0307591ac9cc05
+    consumers: [5]
+  - artifact: apps/customer-service/src/infrastructure/postgres/customer-row-schema.ts
+    sha256: 74bc94b2aa4a15c2979a1eda441fb087ba0184c6fd6331929b33ab2c541a6077
+    consumers: [5]
+  - artifact: apps/customer-service/src/infrastructure/postgres/customer-store.ts
+    sha256: 1d1fb4f98b5d5b97c77498fb1b0812d102a677929bf698ef0710bc5d3e48d627
+    consumers: [5]
+  - artifact: packages/contracts/customer-v1/package.json
+    sha256: 5b3b79d6e18ff2184d76854fd87b4ec51ffa976d36ae5779bc96c7d692b353fb
+    consumers: [5]
+  - artifact: packages/contracts/customer-v1/src/index.ts
+    sha256: f58f0943f6a69f124fe6563b4b318554376d24a5d5bce500be8b941b2450ab19
+    consumers: [5]
+  - artifact: packages/generated/client-v1/package.json
+    sha256: b9c0081223ef91d7d026940224a0f675b4355bd9ce6df2f5dab9dd08687d38d5
+    consumers: [5]
+  - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
+    sha256: 3d3b7745732f9a1353c51183653738f450f3dce64210d91d7227565564c39c54
+    consumers: [5]
+  - artifact: packages/generated/client-v1/src/index.ts
+    sha256: e9be0eebd83f951f874fd641be38f860bee879e19acdab29649fc90efd338b9f
+    consumers: [5]
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: 6c6e48d596818ddaf07bff23f799be90f43814c04f3938df6080fe3947ac447b
+    consumers: [5]
+  - artifact: packages/generated/internal-v1/package.json
+    sha256: 7d2a866dfd847eadc290abbfa85e98137259f14477c6d928c11f20fb350730df
+    consumers: [5]
+  - artifact: packages/generated/internal-v1/src/runtime-schemas.gen.ts
+    sha256: 77e14ac293f144c5a617fbb3e5ce52fabf428a7161a1da087f4abf3d0b6d7d41
+    consumers: [5]
+  - artifact: scripts/contracts-generate.mjs
+    sha256: fa58d879206685a4818ab4cd9466bfe82bc7b801566fb31372554726c8c7939e
+    consumers: [5]
+  - artifact: tests/customer/customer-http.test.mjs
+    sha256: 306d4c06ddcf4adbe37d7b24d8defe0b2796b6fb2827d41263629328fecbf985
+    consumers: [5]
+  - artifact: scripts/contracts-breaking.mjs
+    sha256: 5fa593ce5cd15bcd8ce1b03fd663033b96e578588655c25beb5c253b57152d92
+    consumers: [5]
+  - artifact: tests/contracts/breaking.test.mjs
+    sha256: 5c05e8728615941951a6bf1722f1053de73e3b832887831049168d0811d17d37
+    consumers: [5]
+  - artifact: compose.yaml
+    sha256: 3390999fb98420ff5f00e615c6fe71877c35dbf6094c101cb345684912b2496f
+    consumers: [5]
+  - artifact: config/platform.yaml
+    sha256: 064f088205adb557c601070463e24cffbf310eaedccbd2342e6e9ba1ae5ecbda
+    consumers: [5]
+  - artifact: config/platform.schema.json
+    sha256: e89f15d0890638ec4d6c0020a5e62c925fb26e4ff988c940e10b17a11224c83a
+    consumers: [5]
+  - artifact: config/service-catalog.json
+    sha256: ad45a56b3eaf597f7e17b74ebd9970aaa24ef3c4192baea5a27b7a10109eb46f
+    consumers: [5]
+  - artifact: platform/launch-v1-runtime-profile.json
+    sha256: 981a82600c156f093da00240a702d21b623135c259ebc9d11282a53e7bc537dd
+    consumers: [5]
+  - artifact: secrets/platform-secrets.schema.json
+    sha256: 1e784a5afc21b00bc7600039c02de3e359574492c78009670f10861902c77c33
+    consumers: [5]
+  - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
+    sha256: 91e79f2e28c2bf7230e0aa9bb6ed2fe71e4ba07c44eec1ca307cb1b89ee7101b
+    consumers: [5]
+  - artifact: packages/platform-security/package.json
+    sha256: 0446b13390b06d80141c1f727fe394bc39a80deddd5253563bacf2750defd018
+    consumers: [5]
+  - artifact: packages/platform-http/package.json
+    sha256: a1b38713108021236d9f425edbb6b1a0deebcc54bf5f8e6f19ce14737a042fe3
+    consumers: [5]
+  - artifact: packages/platform-http/src/index.ts
+    sha256: 87e051317779c4156e0ea1f8dc817502d2f51d31911a09a95b7144b5dbdb5d74
+    consumers: [5]
+  - artifact: packages/platform-runtime/package.json
+    sha256: 5c054551e0af10191e833f25ac7495a438a5a87ebc6a6f5b22761828cba24d78
+    consumers: [5]
+  - artifact: packages/platform-runtime/tsconfig.json
+    sha256: caa62d5ff610ca0dbbcb69a18ac09c3f7c409446b8d960feab361c85b344064a
+    consumers: [5]
+  - artifact: scripts/check-service-catalog.mjs
+    sha256: 1f2fab97276302c092656e7505fad5546c4ac35569f36ac1ff5c526784ea2f10
+    consumers: [5]
+  - artifact: scripts/config-lib.mjs
+    sha256: bdb2edf1b618461f2346694f4cd2176f21dbafd0832666ed72384e9b2dd5ea5f
+    consumers: [5]
+  - artifact: tools/config-bootstrap/index.mjs
+    sha256: 3d82a3e927946a2b7eb58f1c93e6f1d75db07e13249f2a28e6f997f55800b22a
+    consumers: [5]
+  - artifact: scripts/db-live-proof.mjs
+    sha256: f038df6586e12c4b279bc87ab84eae8b822c22bd45d6ca8b0c7ff423aa38e8b8
+    consumers: [5]
+  - artifact: packages/platform-runtime/src/healthcheck.ts
+    sha256: 16c2c91657c9cd7c233a3ee8ce1fa52a068bc87fc77a869d47f102a1d8784766
+    consumers: [5]
+  - artifact: tools/compose-smoke.mjs
+    sha256: e6184602112fda14a8d7d0d2f787a492161feead9a5841a2072b12fe64e0cf37
+    consumers: [5]
+  - artifact: config/service-catalog.schema.json
+    sha256: b12c6a3c4de5ee6fbad33624583836213d758972ae8cac799252005bd5524063
+    consumers: [5]
+  - artifact: platform/launch-v1-runtime-profile.schema.json
+    sha256: c15731ac9aaf7174b1224d8998521eb22078ac6e2d13a0c3dac94c846fc5069b
+    consumers: [5]
+  - artifact: docs/launch/10_RUNTIME_CATALOG.md
+    sha256: 36094ed25ce2181e479431c17ffad30190113bd16c29b38b2379b11cbe2026a3
+    consumers: [5]
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: 95e9d3bdc643a4101aabc45d5071c67be036f4c3f35691fbcd8db8f47beff7ae
+    consumers: [5]
+  - artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
+    sha256: f9ce3346e728c5a1f375b252de9073583dcdf97c844b71f763eeb5b4db114ce5
+    consumers: [5]
+  - artifact: packages/platform-config/src/index.ts
+    sha256: c9fd9cd0b8f3ec74d93bb5aa3831d74af2681dd179e281e7898e6a85d8ba8b69
+    consumers: [5]
+  - artifact: scripts/validate-launch-authority.py
+    sha256: d3fafba05547a95eca6fd63e6db4e2b56839f2991361d3f3c453ddfb9d0b67ae
+    consumers: [5]
+  - artifact: tests/runtime/lifecycle.test.mjs
+    sha256: 59bdfda9b98b44863211fe155ee566f334b870ec38008f4e3468f7b3f6e9cf84
+    consumers: [5]
+  - artifact: .sops.yaml
+    sha256: 99b8087607070c409b8eba14e270a3957ae73f361e3232d0d824c3788eba02b9
+    consumers: [5, 8, 9, 13]
+  - artifact: secrets/platform.secrets.sops.yaml
+    sha256: b6357d910f3195ed9a29b75eb58201422e0c65355ab705ca44b68d858e8e616a
+    consumers: [5, 8, 9, 13]
+  - artifact: docs/platform/LOCAL_PLATFORM.md
+    sha256: 221f1e320c2d29b563bb65eaa1df78c3ed642c9658d929292ac9f6a1446f241a
+    consumers: [5, 8, 9, 13]
+  - artifact: apps/api-internal/tsconfig.json
+    sha256: d90d404130b71e89cf7b5744683ca7c9d8ec56e4c7f0d8282530728377cbcefb
+    consumers: [5]
+  - artifact: apps/api-public/tsconfig.json
+    sha256: d90d404130b71e89cf7b5744683ca7c9d8ec56e4c7f0d8282530728377cbcefb
+    consumers: [5]
+verification:
+- command: gh repo view --json nameWithOwner,url
+  result: passed
+  detail: origin и GitHub operational authority подтверждены
+- command: pnpm contracts:check-generated
+  result: passed
+  detail: byte-identical sha256 78981da1f7e141913c35fef51d4e5280c3281efcdc3b39423761566f49b67651
+- command: pnpm typecheck
+  result: passed
+- command: pnpm lint
+  result: passed
+- command: pnpm test
+  result: passed
+  detail: 199 total; 184 pass, 0 fail, 15 opt-in skipped; все обязательные opt-in сценарии выполнены отдельными live gates ниже
+- command: pnpm test:customer-unit
+  result: passed
+  detail: 9/9, без пропусков
+- command: pnpm contracts:test
+  result: passed
+  detail: 36/36
+- command: pnpm contracts:lint
+  result: passed
+  detail: 11 JSON Schemas, 2 OpenAPI
+- command: pnpm contracts:breaking
+  result: passed
+- command: pnpm architecture:check
+  result: passed
+- command: pnpm authority:check
+  result: passed
+- command: pnpm versions:check
+  result: passed
+- command: node scripts/check-service-catalog.mjs
+  result: passed
+  detail: 15 runtimes, 29 interactions
+- command: pnpm db:smoke
+  result: passed
+  detail: structural mode; liveDatabase false, realKafka false; live proof ниже
+- command: COFFEE_DB_LIVE_PROOF=1 node --test tests/database/live-db-proof.test.mjs
+  result: passed
+  detail: 2/2, 0 skipped; disposable PostgreSQL transaction/idempotency/bootstrap/role isolation; cleanup выполнен
+- command: SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm config:check
+  result: passed
+  detail: SOPS MAC; 15 runtimes
+- command: SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm security:secrets
+  result: passed
+  detail: полный encrypted inventory и exact scoped refs
+- command: SOPS_AGE_KEY_FILE=/home/yurgusev/.local/share/coffee-platform/recovery/2026-09-06-initial-provision/age-identities.txt sops --decrypt --output
+    /dev/null secrets/platform.secrets.sops.yaml
+  result: passed
+  detail: backup independently decrypts/MAC verifies; 3 recipients, modes 0600/0700
+- command: node --test tests/runtime/lifecycle.test.mjs
+  result: passed
+  detail: 27/27; public CA/leaf/hostname, optional CA/system trust; internal mTLS/raw503/strict rejection
+- command: node --test tests/runtime/platform-http.test.mjs
+  result: passed
+  detail: 4/4; loopback IP-SNI дополнительно проверен lifecycle regression
+- command: node tools/compose-smoke.mjs --database-proof --project-name coffee-compose-smoke-3080870-a53ae048
+  result: passed
+  detail: production image; PostgreSQL readiness 200→503→200, mTLS/live/metrics/graceful stop
+- command: node tools/compose-smoke.mjs --recovery-proof --no-build --keep --project-name coffee-pr129-full-proof
+  result: passed
+  detail: 15 runtime, 5 PostgreSQL DB, 10 roles; Kafka retention/recreate; native ordered/rebalance/quarantine/SIGTERM, DB commit-before-offset, outbox
+    ack-before-finalize, bounded blackhole recovery; предыдущая полная сборка прошла, первый recovery имел transient Kafka health timeout
+- command: docker compose --project-name coffee-pr129-full-proof … stop --timeout 30
+  result: passed
+  detail: все 15 runtime exit 0; Kafka exit 0/143; затем удалены containers/volumes/network/tmpfs
+- command: node tools/compose-smoke.mjs --customer-proof --project-name coffee-customer-proof-129n
+  result: passed
+  detail: 'production Customer image built; existing test:customer-integration suite: normalization 1/1, schema/grants 3/3, live 11/11; 0 skipped'
+- command: node tools/compose-smoke.mjs --customer-proof --no-build --project-name coffee-customer-proof-129n
+  result: passed
+  detail: финальный 15/15, 0 skipped; unsigned DB barrier, completion-correlated logs, fresh COMMIT replay после TTL+skew; cleanup выполнен
+- command: git diff --check
+  result: passed
+limitations:
+- Production deployment и реальные внешние AROMA/OIDC/telemetry credentials не provisioned; сохранённые исходные fixture значения не доказывают доступ к
+  провайдерам. Localhost TLS leaf действует до 2026-12-05; production требует сертификат реального hostname.
+- Исходный SOPS ciphertext/rules сохранены вне Git; новые identities и backup находятся вне репозитория (см. LOCAL_PLATFORM). Копия на том же диске не защищает
+  от потери диска.
+- Full Compose использует ephemeral scoped credentials и отдельный PostgreSQL/Kafka project; SOPS проверен отдельно trusted bootstrap для всех15runtime.
+  Customer business/live proof выполняется отдельным customer-proof.
+- 'Default pnpm test содержит15opt-in skips; ни один обязательный сценарий не оставлен непроверенным: Customer15/15 и PostgreSQL2/2 выполнены отдельно без
+  skips.'
+- Accepted merge и готовность successors определяются GitHub/develop и всеми их входными handoffs; self commit SHA отсутствует.

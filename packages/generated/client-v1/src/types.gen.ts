@@ -453,6 +453,8 @@ export type Availability = 'Available' | 'Unavailable' | 'Stopped';
 
 export type PageLimit = number;
 
+export type CustomerCursor = string;
+
 export type Cursor = string;
 
 export type OrderRef2 = IdentifiersV1SchemaOrderRef;

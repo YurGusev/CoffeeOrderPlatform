@@ -951,13 +951,79 @@ function packetQueries(buffer, queries) {
   return buffer.subarray(offset);
 }
 
-async function openBlackholeProxy(targetPort, commandToDrop) {
+function packetCommandTags(buffer, tags) {
+  let offset = 0;
+  while (buffer.length - offset >= 5) {
+    const type = buffer[offset];
+    const length = buffer.readUInt32BE(offset + 1);
+    if (length < 4 || buffer.length - offset < length + 1) break;
+    if (type === 0x43) {
+      const body = buffer.subarray(offset + 5, offset + length + 1);
+      const terminator = body.indexOf(0);
+      if (terminator >= 0) tags.push(body.subarray(0, terminator).toString("utf8"));
+    }
+    offset += length + 1;
+  }
+  return buffer.subarray(offset);
+}
+
+export async function openBlackholeProxy(
+  targetPort,
+  commandToDrop,
+  { targetHost = "127.0.0.1", listenHost = "127.0.0.1", listenPort = 0, dropOnce = false } = {},
+) {
   const observed = [];
   const sockets = new Set();
+  const commandWaiters = new Map();
+  const replyDropWaiters = new Set();
   let closedPeers = 0;
+  let replyDropped;
+  let droppedReplyBytes = 0;
+  let dropArmed = true;
+  const rejectBarriers = (error) => {
+    for (const waiters of commandWaiters.values()) {
+      for (const waiter of waiters) waiter.reject(error);
+    }
+    commandWaiters.clear();
+    for (const waiter of replyDropWaiters) waiter.reject(error);
+    replyDropWaiters.clear();
+  };
+  const signalCommand = (command) => {
+    for (const waiter of commandWaiters.get(command) ?? []) waiter.resolve({ command });
+    commandWaiters.delete(command);
+  };
+  const signalReplyDropped = (value) => {
+    replyDropped = value;
+    for (const waiter of replyDropWaiters) waiter.resolve(value);
+    replyDropWaiters.clear();
+  };
+  const waitFor = (waiters, predicate, timeoutMs, description) => {
+    if (predicate()) return Promise.resolve(predicate());
+    return new Promise((resolvePromise, reject) => {
+      const waiter = {
+        resolve: (value) => {
+          clearTimeout(timer);
+          waiters.delete?.(waiter);
+          resolvePromise(value);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          waiters.delete?.(waiter);
+          reject(error);
+        },
+      };
+      const timer = setTimeout(() => {
+        waiters.delete?.(waiter);
+        reject(new Error(`blackhole protocol barrier timed out: ${description}`));
+      }, timeoutMs);
+      if (waiters.add) waiters.add(waiter);
+      else waiters.push(waiter);
+    });
+  };
   const server = net.createServer((client) => {
     sockets.add(client);
     let commandBuffer = Buffer.alloc(0);
+    let replyBuffer = Buffer.alloc(0);
     let upstream;
     let dropResponses = false;
     let peerClosed = false;
@@ -970,23 +1036,39 @@ async function openBlackholeProxy(targetPort, commandToDrop) {
     };
     client.once("error", close);
     client.once("close", close);
-    upstream = net.createConnection({ host: "127.0.0.1", port: targetPort });
+    upstream = net.createConnection({ host: targetHost, port: targetPort });
     upstream.once("error", () => client.destroy());
     upstream.once("close", () => client.destroy());
     client.on("data", (chunk) => {
       commandBuffer = Buffer.concat([commandBuffer, chunk]);
       const before = observed.length;
       commandBuffer = packetQueries(commandBuffer, observed);
-      if (observed.slice(before).includes(commandToDrop)) dropResponses = true;
+      for (const command of observed.slice(before)) {
+        signalCommand(command);
+        if (command === commandToDrop && (!dropOnce || dropArmed)) {
+          dropResponses = true;
+          dropArmed = false;
+        }
+      }
       upstream.write(chunk);
     });
     upstream.on("data", (chunk) => {
-      if (!dropResponses) client.write(chunk);
+      if (!dropResponses) {
+        client.write(chunk);
+        return;
+      }
+      droppedReplyBytes += chunk.length;
+      const before = [];
+      replyBuffer = Buffer.concat([replyBuffer, chunk]);
+      replyBuffer = packetCommandTags(replyBuffer, before);
+      if (replyDropped === undefined && before.includes(commandToDrop)) {
+        signalReplyDropped({command: commandToDrop, tag: commandToDrop, bytes: droppedReplyBytes});
+      }
     });
   });
   await new Promise((resolvePromise, reject) => {
     server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolvePromise);
+    server.listen(listenPort, listenHost, resolvePromise);
   });
   const address = server.address();
   if (!address || typeof address === "string") {
@@ -999,7 +1081,31 @@ async function openBlackholeProxy(targetPort, commandToDrop) {
     get closedPeers() {
       return closedPeers;
     },
+    waitForCommand(command, timeoutMs = 5_000) {
+      if (observed.includes(command)) return Promise.resolve({ command });
+      const waiters = commandWaiters.get(command) ?? new Set();
+      commandWaiters.set(command, waiters);
+      return waitFor(
+        waiters,
+        () => observed.includes(command),
+        timeoutMs,
+        `${command} observed`,
+      );
+    },
+    waitForReplyDropped(timeoutMs = 5_000) {
+      if (replyDropped !== undefined) return Promise.resolve(replyDropped);
+      return waitFor(
+        replyDropWaiters,
+        () => replyDropped !== undefined,
+        timeoutMs,
+        `${commandToDrop} reply dropped`,
+      );
+    },
+    closeConnections() {
+      for (const socket of sockets) socket.destroy();
+    },
     async close() {
+      rejectBarriers(new Error("blackhole proxy closed before protocol barrier"));
       for (const socket of sockets) socket.destroy();
       await new Promise((resolvePromise) => server.close(resolvePromise));
     },

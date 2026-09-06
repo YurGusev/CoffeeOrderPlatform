@@ -75,6 +75,7 @@ const ALLOWED_OPEN_SECRET_KEYS = new Set([
   "secrets",
   "secretRef",
   "secretRefs",
+  "optionalSecretRefs",
   "caPrivateKeyRuntimeAccess",
 ]);
 const ALLOWED_LOCATOR_ENV_KEYS = new Set([
@@ -562,6 +563,11 @@ export async function loadPlatformConfig(
         `${runtime}: secretRefs differ from service catalog`,
       );
     }
+    const configuredOptionalRefs = configured.optionalSecretRefs ?? [];
+    const acceptedOptionalRefs = accepted.optionalSecretRefs ?? [];
+    if (JSON.stringify(sorted(configuredOptionalRefs)) !== JSON.stringify(sorted(acceptedOptionalRefs))) {
+      fail("CONFIG-SECRET-ALLOWLIST", `${runtime}: optionalSecretRefs differ from service catalog`);
+    }
     if (
       configured.database === null &&
       configured.secretRefs.some((ref) => ref.startsWith("postgres."))
@@ -579,6 +585,10 @@ export async function loadPlatformConfig(
         "CONFIG-SECRET-ALLOWLIST",
         `${runtime}: secretRefs differ from launch-v1 profile`,
       );
+    }
+    const authorityOptionalRefs = authority.optionalSecretRefs ?? [];
+    if (JSON.stringify(sorted(configuredOptionalRefs)) !== JSON.stringify(sorted(authorityOptionalRefs))) {
+      fail("CONFIG-SECRET-ALLOWLIST", `${runtime}: optionalSecretRefs differ from launch-v1 profile`);
     }
     const baseline = SERVICE_BASELINE[runtime];
     if (

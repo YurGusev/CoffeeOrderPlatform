@@ -11,36 +11,41 @@
   "runtimes": [
     {
       "name": "edge-gateway",
+      "transportMode": "public-tls",
       "owner": "platform",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "public-ingress",
       "dbPrincipal": null,
       "httpSurfaces": ["public-edge"],
-      "secretRefs": ["edge.tlsPrivateKey", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
+      "secretRefs": ["edge.tlsPrivateKey", "edge.tlsCertificate", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
+      "optionalSecretRefs": ["edge.tlsCaBundle"],
       "implemented": false
     },
     {
       "name": "api-public",
+      "transportMode": "mtls",
       "owner": "platform",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "api-public" },
       "networkZone": "public-api-backend",
       "dbPrincipal": null,
       "httpSurfaces": ["client-v1"],
-      "secretRefs": ["security.apiPublicDelegationSigningPrivateKey", "security.serviceTransportKeys.api-public", "telemetry.exporterToken"],
+      "secretRefs": ["security.apiPublicDelegationSigningPrivateKey", "security.actorContextEdgeVerificationPublicKeys", "security.serviceTransportKeys.api-public", "telemetry.exporterToken"],
       "implemented": false
     },
     {
       "name": "api-internal",
+      "transportMode": "mtls",
       "owner": "platform",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "api-internal" },
       "networkZone": "internal-api",
       "dbPrincipal": null,
       "httpSurfaces": ["internal-v1"],
-      "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
+      "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceVerificationKeys.orders-service", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
       "implemented": false
     },
     {
       "name": "web",
+      "transportMode": "mtls",
       "owner": "frontend",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "public-ingress",
@@ -51,16 +56,18 @@
     },
     {
       "name": "customer-service",
+      "transportMode": "mtls",
       "owner": "customer",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_customer_rw",
       "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
-      "secretRefs": ["postgres.customer", "security.serviceTransportKeys.customer-service", "telemetry.exporterToken"],
+      "secretRefs": ["postgres.customer", "security.customerCursorSigningPrivateKey", "security.customerCursorVerificationPublicKeys", "security.delegationVerificationKeys.api-public", "security.delegationVerificationKeys.api-internal", "security.serviceTransportKeys.customer-service", "telemetry.exporterToken"],
       "implemented": false
     },
     {
       "name": "catalog-service",
+      "transportMode": "mtls",
       "owner": "catalog",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -71,6 +78,7 @@
     },
     {
       "name": "catalog-supplier-sync",
+      "transportMode": "mtls",
       "owner": "catalog",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "catalog-supplier-sync" },
       "networkZone": "internal-api",
@@ -81,6 +89,7 @@
     },
     {
       "name": "catalog-activation-worker",
+      "transportMode": "mtls",
       "owner": "catalog",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -91,6 +100,7 @@
     },
     {
       "name": "pricing-service",
+      "transportMode": "mtls",
       "owner": "pricing",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -101,6 +111,7 @@
     },
     {
       "name": "orders-service",
+      "transportMode": "mtls",
       "owner": "orders",
       "m20Traceability": { "classification": "launch-v1-only", "roleRef": null },
       "networkZone": "internal-api",
@@ -111,6 +122,7 @@
     },
     {
       "name": "orders-aroma-preparation",
+      "transportMode": "mtls",
       "owner": "orders",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "orders-aroma-preparation" },
       "networkZone": "internal-api",
@@ -121,6 +133,7 @@
     },
     {
       "name": "aroma-observer",
+      "transportMode": "mtls",
       "owner": "orders",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-observer" },
       "networkZone": "internal-api",
@@ -131,6 +144,7 @@
     },
     {
       "name": "aroma-convergence",
+      "transportMode": "mtls",
       "owner": "orders",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-convergence" },
       "networkZone": "internal-api",
@@ -141,6 +155,7 @@
     },
     {
       "name": "aroma-gateway",
+      "transportMode": "mtls",
       "owner": "integration",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "aroma-gateway" },
       "networkZone": "provider-egress",
@@ -151,6 +166,7 @@
     },
     {
       "name": "realtime-gateway",
+      "transportMode": "mtls",
       "owner": "realtime",
       "m20Traceability": { "classification": "exact-role-ref", "roleRef": "realtime-gateway" },
       "networkZone": "public-ingress",

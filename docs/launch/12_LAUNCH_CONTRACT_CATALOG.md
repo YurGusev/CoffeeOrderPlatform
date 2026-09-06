@@ -120,7 +120,7 @@ body/version по-прежнему невалидна. GET/SSE/provider/internal
 `GET /api/client-v1/customers`
 
 - query: `query` required 2–200; `limit` integer 1–50 default 20;
-  `cursor` optional opaque string max 512;
+  `cursor` optional Customer-scoped opaque string max 2048;
 - `200 CustomerSearchResponse`: `{items: CustomerSummary[], nextCursor: string|null}`;
 - `CustomerSummary`: `customerRef`, `version`, `displayName`, masked `phone?`, masked `email?`;
 - errors: `400 VALIDATION_FAILED`, `400 INVALID_CURSOR`,
@@ -131,7 +131,8 @@ body/version по-прежнему невалидна. GET/SSE/provider/internal
 `GET /api/client-v1/catalog/products`
 
 - query: `query` required 2–200; `availability` optional enum
-  `Available|Unavailable|Stopped`; `limit` 1–50 default 20; `cursor` optional;
+  `Available|Unavailable|Stopped`; `limit` 1–50 default 20; `cursor` optional
+  opaque string max 512;
 - `200 CatalogSearchResponse`: `{snapshotRevision, items, nextCursor}`;
 - item: `productRef`, `variantRef`, `displayName`, `unit` enum
   `piece|gram|kilogram`, `availability`, `mappingAvailable` boolean,

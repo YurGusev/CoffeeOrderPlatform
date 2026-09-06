@@ -15,10 +15,13 @@ partitions/retention берутся только из `06_EVENTS_AND_RECOVERY.md
 не допускаются, а topics и groups обязаны совпадать с таблицей ниже.
 Mutation capability `true` только у `aroma-convergence` delegation и Gateway
 transport handler; у остальных runtime explicit `false`.
+Transport mode задан явно: только `edge-gateway` использует `public-tls` для
+браузерного ingress; остальные 14 runtime используют `mtls` для внутренних
+listener/client соединений.
 
 | Runtime                   | Port | Deadline / concurrency             | DB pool | Kafka                 | Secret refs                                                                                    | Разрешённые host:port / egress                                                                                    |
 | ------------------------- | ---: | ---------------------------------- | ------: | --------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| edge-gateway              | 4000 | 5s / 500                           |       0 | none                  | TLS, OIDC, actor signing, service transport, telemetry                                         | web:3000, api-public:4050, realtime-gateway:4401                                                                  |
+| edge-gateway              | 4000 | 5s / 500                           |       0 | none                  | public TLS key/certificate, optional public CA bundle, OIDC, actor signing, service transport, telemetry | web:3000, api-public:4050, realtime-gateway:4401                                                                  |
 | api-public                | 4050 | 4.5s / 400                         |       0 | none                  | service identity, actor verify, public delegation signing, telemetry                           | customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104                            |
 | api-internal              | 4051 | caller deadline / 300              |       0 | none                  | service identity, delegation signing/verify, telemetry                                         | customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301; route allowlist обязателен |
 | web                       | 3000 | 5s / 500                           |       0 | none                  | service transport identity                                                                     | none                                                                                                              |

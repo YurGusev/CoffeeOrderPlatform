@@ -1,5 +1,32 @@
 # Исполнимая спецификация Customer первого запуска
 
+## 0. Delivery note для issue #5
+
+В ветке `feature/5-customer-service` от `develop`
+`eb34befd76c0654e75d82637251dc4d12d0e0213` реализован Customer owner-path:
+Fastify routes → async application → owner-local PostgreSQL statements и
+idempotency store. `main.ts` подключает Customer adapters и routes, а
+`apps/api-public`/`apps/api-internal` используют реальные stateless HTTP
+forwarding clients с подписанными delegation claims.
+
+Фактический delivery write-set:
+
+- `apps/customer-service/src/domain`, `src/application`, `src/http` и
+  `src/infrastructure/postgres`;
+- `apps/customer-service/migrations/0001_customer_schema.sql` и
+  `0002_customer_indexes.sql`;
+- `apps/api-public/src/index.ts` и `apps/api-internal/src/index.ts`;
+- exact `libphonenumber-js@1.13.12` в registry/manifest/lockfile;
+- `tests/customer/*`, `evidence/issue-5-acceptance.md` и этот inventory.
+
+Статические проверки и локальный unit/full test baseline проходят. Acceptance
+остаётся неполной до запуска настоящего PostgreSQL 17.11, service trust/mTLS и
+scoped delegation verification keys: текущая foundation materialization не
+передаёт эти ключи указанным runtime, поэтому transport adapters намеренно
+fail-closed. Подробная матрица фактических результатов находится в
+[`evidence/issue-5-acceptance.md`](../../evidence/issue-5-acceptance.md);
+`evidence/handoffs/issue-5.yaml` не объявляет handoff принятым.
+
 Статус: нормативная спецификация задачи #5. Разработчик реализует перечисленные
 структуры, алгоритмы и проверки без самостоятельного выбора схемы данных или
 поведения API. Изменение контракта требует отдельного ADR и одновременного
@@ -23,24 +50,18 @@
 ```text
 apps/customer-service/
   src/main.ts
-  src/config.ts
   src/domain/customer.ts
   src/application/create-customer.ts
   src/application/search-customers.ts
-  src/http/post-customer.ts
-  src/http/get-customers.ts
-  src/http/get-customer-order-input.ts
+  src/application/get-customer-order-input.ts
+  src/http/index.ts
   src/infrastructure/postgres/customer-repository.ts
   src/infrastructure/postgres/idempotency-repository.ts
-  src/infrastructure/logging/customer-redaction.ts
   migrations/0001_customer_schema.sql
   migrations/0002_customer_indexes.sql
-  test/unit/customer-normalization.test.ts
-  test/integration/customer-migrations.test.ts
-  test/integration/create-customer.test.ts
-  test/integration/search-customers.test.ts
-  test/integration/customer-db-permissions.test.ts
-  test/security/customer-log-redaction.test.ts
+tests/customer/customer-normalization.test.mjs
+tests/customer/customer-live.test.mjs
+tests/customer/customer-schema.test.mjs
 ```
 
 HTTP DTO импортируются только из сгенерированного
@@ -200,7 +221,7 @@ owner lookup после текущей авторизации, без acquire/Cu
 
 ## 6. `GET /api/client-v1/customers`
 
-Максимальный URL — `2 KiB`, deadline — `1 s`, `limit` default `20`, диапазон
+Максимальный URL — `8 KiB`, deadline — `1 s`, `limit` default `20`, диапазон
 `1..50`. Нормализованный `query` имеет длину `2..200`. Режим определяется
 детерминированно:
 
@@ -210,13 +231,24 @@ owner lookup после текущей авторизации, без acquire/Cu
   `%`, `_` и `\\`; full-text/fuzzy/substring поиск в #5 запрещён.
 
 Выбираются только `Active`, порядок всегда
-`(display_name_search ASC, customer_ref ASC)`. Cursor — base64url без padding
-от canonical JSON
-`{"v":1,"queryHash":"64-hex","name":"...","customerRef":"cus_..."}`.
+`(display_name_search ASC, customer_ref ASC)`. Cursor — подписанный Customer-scoped
+opaque token `base64url(canonical-payload) || base64url(Ed25519 signature)` с compact
+canonical JSON payload `{"c":"cus_...","e":exp,"i":iat,"k":"kid","n":"...","q":"base64url(sha256)","v":1}`.
+Подпись проверяется до разбора payload; полный sort tuple не сокращается и не
+заменяется lookup-состоянием.
+`q` декодируется обратно в 64-hex `queryHash`, а весь token остаётся не длиннее
+2048 символов без обрезания sort tuple. `iat`/`exp` проверяются по
+`maxAgeSeconds=86400` и `clockSkewSeconds=5`, active `kid` подписывает новые
+cursor, а previous `kid` принимается только до абсолютного
+`previousKeyTrustUntilEpochSeconds=1798761600`; `overlapSeconds=172800` остаётся
+rotation metadata и не продлевает доверие previous key по возрасту token.
+Лимит `8 KiB` действует только для
+Customer endpoints; Catalog сохраняет общий cursor limit `512`.
 Следующая страница использует tuple `>` и запрашивает `limit + 1`; offset
-pagination запрещена. Повреждённый cursor, неизвестная версия или cursor от
-другого нормализованного query дают `400 INVALID_CURSOR`. `queryHash` —
-SHA-256 нормализованного query.
+pagination запрещена. Повреждённый, неподписанный cursor, неизвестная версия или
+cursor от другого нормализованного query дают `400 INVALID_CURSOR`. При отсутствии
+согласованной Customer cursor key capability поиск fail-closed и не выдаёт unsigned
+cursor. `queryHash` — SHA-256 нормализованного query.
 
 Ответ `CustomerSummary` возвращает имя, `customerRef`, string version и только
 masked контакты: телефон `+7******1234`, e-mail `a***@example.com`.
@@ -246,6 +278,7 @@ Draft принимает Orders. Browser/edge route к этому endpoint от�
 | 409 | `IDEMPOTENCY_CONFLICT` | ключ уже использован с другим body |
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | тот же запрос ещё выполняется |
 | 500 | `INTERNAL_ERROR` | безопасная неожиданная ошибка |
+| 503 | `CUSTOMER_UNAVAILABLE` | owner database/storage или transaction failure недоступны |
 
 Логи содержат route, status, duration, `customerRef` после создания,
 `correlationId`, trace id и actorRef. Запрещены body, address, raw query,

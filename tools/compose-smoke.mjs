@@ -11,12 +11,15 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
+import {createWriteStream} from "node:fs";
 import { Buffer } from "node:buffer";
 import { execFileSync, spawn } from "node:child_process";
+import {request as httpsRequest} from "node:https";
 import { join, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
+import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../packages/platform-security/src/index.ts";
 import pg from "pg";
 import {
   SERVER_IDENTITY_SQL,
@@ -50,6 +53,8 @@ const COMPOSE_NETWORKS = [
 ];
 const DATABASE_PROOF_IMAGE =
   "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73";
+const CUSTOMER_TEST_IMAGE =
+  "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae";
 const RUNTIMES = [
   "edge-gateway",
   "api-public",
@@ -67,6 +72,16 @@ const RUNTIMES = [
   "aroma-gateway",
   "realtime-gateway",
 ];
+const RUNTIME_HEALTHCHECK = [
+  "node",
+  "-e",
+  "import('@coffee-platform/runtime/healthcheck').then(({main}) => main(process.argv.slice(1)))",
+];
+const RUNTIME_HEALTH_STATUSES = [
+  "node",
+  "-e",
+  "import('@coffee-platform/runtime/healthcheck').then(async ({readRuntimeHealthStatuses}) => { for (const status of await readRuntimeHealthStatuses(process.argv.slice(1))) console.log(status); }).catch((error) => { console.error(error instanceof Error ? error.message : 'runtime healthcheck failed'); process.exitCode = 1; })",
+];
 function usage() {
   return [
     "Usage: node tools/compose-smoke.mjs [options]",
@@ -74,6 +89,7 @@ function usage() {
     "Options:",
     "  --stub-secrets                     use empty, non-secret scoped stubs for topology-only smoke",
     "  --database-proof                  run the isolated customer PostgreSQL readiness proof",
+    "  --customer-proof                 run the isolated Customer integration suite",
     "  --recovery-proof                  run the isolated full 15-runtime PostgreSQL/Kafka recovery proof",
     "  --provision-empty-postgres-network create coffee_postgres_data only when absent; never starts PostgreSQL",
     "  --no-build                         use already-built runtime images",
@@ -89,6 +105,7 @@ function parseArguments(argv) {
     noBuild: false,
     keep: false,
     databaseProof: false,
+    customerProof: false,
     recoveryProof: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -98,6 +115,7 @@ function parseArguments(argv) {
       options.provisionNetwork = true;
     else if (argument === "--no-build") options.noBuild = true;
     else if (argument === "--database-proof") options.databaseProof = true;
+    else if (argument === "--customer-proof") options.customerProof = true;
     else if (argument === "--recovery-proof") options.recoveryProof = true;
     else if (argument === "--keep") options.keep = true;
     else if (argument === "--project-name") {
@@ -114,11 +132,11 @@ function parseArguments(argv) {
       throw new Error(`unknown option ${argument}\n\n${usage()}`);
     }
   }
-  if (options.databaseProof && options.recoveryProof)
-    throw new Error("--database-proof and --recovery-proof are mutually exclusive");
+  if ([options.databaseProof, options.customerProof, options.recoveryProof].filter(Boolean).length > 1)
+    throw new Error("--database-proof, --customer-proof and --recovery-proof are mutually exclusive");
   if (options.recoveryProof && options.stubSecrets)
     throw new Error("--recovery-proof requires generated fixture credentials, not --stub-secrets");
-  if (!options.stubSecrets && !options.databaseProof && !options.recoveryProof && !process.env.SOPS_AGE_KEY_FILE) {
+  if (!options.stubSecrets && !options.databaseProof && !options.customerProof && !options.recoveryProof && !process.env.SOPS_AGE_KEY_FILE) {
     throw new Error(
       "SOPS_AGE_KEY_FILE is required for decrypted scoped secrets; use --stub-secrets only for topology smoke without DB/provider proof",
     );
@@ -185,10 +203,31 @@ function runDocker(args, options = {}) {
   return execFileSync("docker", args, {
     cwd: ROOT,
     encoding: "utf8",
+    env: options.env === undefined ? process.env : {...process.env, ...options.env},
     stdio: options.inherit
       ? "inherit"
       : [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     input: options.input,
+  });
+}
+
+function runDockerAsync(args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", args, {
+      cwd: ROOT,
+      env: options.env === undefined ? process.env : {...process.env, ...options.env},
+      stdio: options.inherit ? "inherit" : ["ignore", "pipe", "pipe"],
+    });
+    let errorOutput = "";
+    if (!options.inherit) {
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk) => { errorOutput += chunk; });
+    }
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`docker exited ${code ?? signal}: ${errorOutput.trim()}`));
+    });
   });
 }
 
@@ -217,11 +256,15 @@ async function writeStubSecret(
   runtime,
   environment,
   refs,
+  optionalRefs,
   databaseCredential,
   kafkaCredential,
+  transportMaterial,
+  publicTlsMaterial,
+  securityMaterial,
 ) {
-  // These placeholders satisfy the scoped-ref contract but are not credentials
-  // and cannot prove DB/provider access. No real secret leaves enter the smoke.
+  // Ephemeral credentials belong only to this isolated run; placeholders do
+  // not establish provider access or canonical SOPS provisioning.
   const secrets = {};
   for (const ref of refs) {
     const segments = ref.split(".");
@@ -230,8 +273,13 @@ async function writeStubSecret(
       if (!Object.hasOwn(current, segment)) current[segment] = {};
       current = current[segment];
     }
-    current[segments.at(-1)] =
-      ref.startsWith("postgres.") && databaseCredential !== undefined
+    current[segments.at(-1)] = securityMaterial?.[ref] ?? (ref === `security.serviceTransportKeys.${runtime}`
+      ? transportMaterial
+      : ref === "edge.tlsPrivateKey" && publicTlsMaterial !== undefined
+        ? publicTlsMaterial.keyPem
+        : ref === "edge.tlsCertificate" && publicTlsMaterial !== undefined
+          ? publicTlsMaterial.certPem
+      : ref.startsWith("postgres.") && databaseCredential !== undefined
         ? databaseCredential
         : ref.startsWith("kafka.") && kafkaCredential !== undefined
           ? kafkaCredential
@@ -240,11 +288,144 @@ async function writeStubSecret(
               username: `compose_${runtime.replaceAll("-", "_")}`,
               password: "compose-smoke-placeholder",
             }
-          : "compose-smoke-placeholder";
+          : "compose-smoke-placeholder");
+  }
+  for (const ref of optionalRefs) {
+    const value = ref === "edge.tlsCaBundle" ? publicTlsMaterial?.caPem : undefined;
+    if (value === undefined) continue;
+    const segments = ref.split(".");
+    let current = secrets;
+    for (const segment of segments.slice(0, -1)) {
+      if (!Object.hasOwn(current, segment)) current[segment] = {};
+      current = current[segment];
+    }
+    current[segments.at(-1)] = value;
   }
   const content = `${JSON.stringify({ schemaVersion: 1, environment, runtime, secrets })}\n`;
   await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
   await chmod(path, 0o400);
+}
+
+function createEd25519KeySet() {
+  const keyPair = () => generateKeyPairSync("ed25519");
+  const active = keyPair();
+  const previous = keyPair();
+  const publicPem = (key) => key.export({type: "spki", format: "pem"});
+  return {
+    privateKey: active.privateKey.export({type: "pkcs8", format: "pem"}),
+    verificationKeys: {active: publicPem(active.publicKey), previous: publicPem(previous.publicKey)},
+  };
+}
+
+function createStubSecurityMaterial() {
+  const actor = createEd25519KeySet();
+  const apiPublicDelegation = createEd25519KeySet();
+  const apiInternalDelegation = createEd25519KeySet();
+  const ordersService = createEd25519KeySet();
+  const customerCursor = createEd25519KeySet();
+  return {
+    "security.actorContextEdgeSigningPrivateKey": actor.privateKey,
+    "security.actorContextEdgeVerificationPublicKeys": actor.verificationKeys,
+    "security.apiPublicDelegationSigningPrivateKey": apiPublicDelegation.privateKey,
+    "security.apiInternalDelegationSigningPrivateKey": apiInternalDelegation.privateKey,
+    "security.serviceVerificationKeys.orders-service": ordersService.verificationKeys,
+    "security.customerCursorSigningPrivateKey": customerCursor.privateKey,
+    "security.customerCursorVerificationPublicKeys": customerCursor.verificationKeys,
+    "security.delegationVerificationKeys.api-public": apiPublicDelegation.verificationKeys,
+    "security.delegationVerificationKeys.api-internal": apiInternalDelegation.verificationKeys,
+  };
+}
+
+async function writeCustomerProofFixtures(secretsDir, securityMaterial, transportMaterials) {
+  const fixtures = {
+    signing: join(secretsDir, "customer-test-signing.json"),
+    publicTransport: join(secretsDir, "customer-test-api-public.json"),
+    internalTransport: join(secretsDir, "customer-test-api-internal.json"),
+  };
+  await writeFile(fixtures.signing, JSON.stringify({
+    public: securityMaterial["security.apiPublicDelegationSigningPrivateKey"],
+    internal: securityMaterial["security.apiInternalDelegationSigningPrivateKey"],
+  }) + "\n", {encoding: "utf8", mode: 0o400});
+  await writeFile(fixtures.publicTransport, transportMaterials.service.get("api-public"), {encoding: "utf8", mode: 0o400});
+  await writeFile(fixtures.internalTransport, transportMaterials.service.get("api-internal"), {encoding: "utf8", mode: 0o400});
+  for (const path of Object.values(fixtures)) await chmod(path, 0o400);
+  return fixtures;
+}
+
+async function createStubTransportMaterials(secretsDir, environment, publicHostname) {
+  const directory = join(secretsDir, "transport-ca");
+  await mkdir(directory, {recursive: true, mode: 0o700});
+  const caKey = join(directory, "ca.key");
+  const caCert = join(directory, "ca.crt");
+  const serial = join(directory, "ca.srl");
+  execFileSync("openssl", [
+    "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", caKey, "-out", caCert, "-days", "1",
+    "-subj", "/CN=coffee-platform-compose-smoke-ca",
+  ], {stdio: "ignore"});
+  const caPem = await readFile(caCert, "utf8");
+  const materials = new Map();
+  for (const [index, runtime] of RUNTIMES.entries()) {
+    const prefix = join(directory, runtime);
+    const key = `${prefix}.key`;
+    const csr = `${prefix}.csr`;
+    const cert = `${prefix}.crt`;
+    const ext = `${prefix}.ext`;
+    await writeFile(ext, [
+      `subjectAltName=URI:spiffe://coffee-platform/${environment}/${runtime}`,
+      "extendedKeyUsage=serverAuth,clientAuth",
+      "",
+    ].join("\n"), {encoding: "utf8", mode: 0o400});
+    execFileSync("openssl", [
+      "req", "-new", "-newkey", "rsa:2048", "-nodes",
+      "-keyout", key, "-out", csr, "-subj", `/CN=${runtime}`,
+    ], {stdio: "ignore"});
+    execFileSync("openssl", [
+      "x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey,
+      ...(index === 0 ? ["-CAcreateserial"] : ["-CAserial", serial]),
+      "-out", cert, "-days", "1", "-sha256", "-extfile", ext,
+    ], {stdio: "ignore"});
+    materials.set(runtime, JSON.stringify({
+      caPem,
+      certPem: await readFile(cert, "utf8"),
+      keyPem: await readFile(key, "utf8"),
+    }));
+  }
+  const publicCaKey = join(directory, "edge-public-ca.key");
+  const publicCaCert = join(directory, "edge-public-ca.crt");
+  execFileSync("openssl", [
+    "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", publicCaKey, "-out", publicCaCert, "-days", "1",
+    "-subj", "/CN=coffee-platform-compose-public-ca",
+    "-addext", "basicConstraints=critical,CA:TRUE",
+    "-addext", "keyUsage=critical,keyCertSign,cRLSign",
+  ], {stdio: "ignore"});
+  const publicCaPem = await readFile(publicCaCert, "utf8");
+  const publicKey = join(directory, "edge-public.key");
+  const publicCsr = join(directory, "edge-public.csr");
+  const publicCert = join(directory, "edge-public.crt");
+  const publicExt = join(directory, "edge-public.ext");
+  await writeFile(publicExt, [
+    `subjectAltName=DNS:${publicHostname}`,
+    "extendedKeyUsage=serverAuth",
+    "",
+  ].join("\n"), {encoding: "utf8", mode: 0o400});
+  execFileSync("openssl", [
+    "req", "-new", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", publicKey, "-out", publicCsr, "-subj", `/CN=${publicHostname}`,
+  ], {stdio: "ignore"});
+  execFileSync("openssl", [
+    "x509", "-req", "-in", publicCsr, "-CA", publicCaCert, "-CAkey", publicCaKey,
+    "-CAcreateserial", "-out", publicCert, "-days", "1", "-sha256", "-extfile", publicExt,
+  ], {stdio: "ignore"});
+  return {
+    service: materials,
+    publicTls: {
+      keyPem: await readFile(publicKey, "utf8"),
+      certPem: await readFile(publicCert, "utf8"),
+      caPem: publicCaPem,
+    },
+  };
 }
 
 async function readDatabaseProofCredentials() {
@@ -330,18 +511,27 @@ async function materializeSecrets(secretsDir, options) {
     await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
   );
+  const publicHostname = parsePublicTlsHostname(platformConfig.platform?.publicBaseUrl);
+  const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof
+    ? await createStubTransportMaterials(secretsDir, platformConfig.environment, publicHostname)
+    : undefined;
+  const stubSecurityMaterial = stubTransportMaterials === undefined ? undefined : createStubSecurityMaterial();
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
-    if (options.stubSecrets || options.databaseProof || options.recoveryProof) {
+    if (options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof) {
       const service = platformConfig.services[runtime];
       await writeStubSecret(
         path,
         runtime,
         platformConfig.environment,
         service.secretRefs,
+        service.optionalSecretRefs ?? [],
         options.databaseProofCredentials?.[runtime] ??
           options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[runtime],
         options.recoveryProof ? kafkaCredential : undefined,
+        stubTransportMaterials?.service.get(runtime),
+        runtime === "edge-gateway" ? stubTransportMaterials?.publicTls : undefined,
+        stubSecurityMaterial,
       );
     } else {
       execFileSync(process.execPath, [BOOTSTRAP, "--runtime", runtime], {
@@ -373,7 +563,7 @@ async function materializeSecrets(secretsDir, options) {
       `${runtime} scoped secret group must be GID 1000`,
     );
   }
-  return { kafkaCredential };
+  return {kafkaCredential, securityMaterial: stubSecurityMaterial, transportMaterials: stubTransportMaterials};
 }
 
 async function materializeKafkaTls(secretsDir) {
@@ -545,7 +735,7 @@ function startDatabaseProofContainer(
     "--name",
     container,
     "--network",
-    ...(publishHost ? ["bridge"] : [networkName, "--network-alias", "coffee_postgres"]),
+    ...(publishHost ? ["bridge"] : [networkName, "--network-alias", "coffee_postgres", "--network-alias", "customer_db"]),
     "--env",
     `POSTGRES_USER=${credential.username}`,
     "--env",
@@ -565,7 +755,7 @@ function startDatabaseProofContainer(
   ];
   runDocker(args);
   if (publishHost) {
-    runDocker(["network", "connect", "--alias", "coffee_postgres", networkName, container]);
+    runDocker(["network", "connect", "--alias", "coffee_postgres", "--alias", "customer_db", networkName, container]);
   }
   return container;
 }
@@ -626,6 +816,79 @@ function assertDatabaseProofRole(container, admin, owner) {
     },
     "database proof owner role is over-privileged",
   );
+}
+
+function bootstrapCustomerProofRoles(container, admin) {
+  const migrator = {username: "coffee_customer_migrator", password: `compose-migrator-${randomUUID()}`};
+  runDocker(["exec", "--interactive", container, "psql", "--username", admin.username, "--dbname", "coffee_platform_customer", "--no-psqlrc"], {
+    input: [
+      `CREATE ROLE "${migrator.username}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${migrator.password}';`,
+      `GRANT CONNECT, CREATE ON DATABASE "coffee_platform_customer" TO "${migrator.username}";`,
+      `CREATE DATABASE "coffee_platform_customer_foreign";`,
+      `REVOKE ALL ON DATABASE "coffee_platform_customer_foreign" FROM PUBLIC;`,
+      "",
+    ].join("\n"),
+  });
+  return {migrator, foreignDatabase: "coffee_platform_customer_foreign"};
+}
+
+async function runCustomerIntegrationProof(projectName, secretsDir, credentials, roles, composeFile) {
+  const databaseUrl = (username, password, database, host = "customer_db") => `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:5432/${database}`;
+  const environment = [
+    "run", "--rm", "--add-host", "customer-harness:127.0.0.1", "--add-host", "coffee_postgres:127.0.0.1", "--network", `${projectName}_coffee_public_api_backend`, "--network", `${projectName}_coffee_postgres_data`,
+    "--volume", `${ROOT}:/workspace:ro`,
+    "--volume", `${secretsDir}:/run/customer-secrets:ro`,
+    "--volume", `${secretsDir}/customer-logs:/run/customer-logs:rw`,
+    "--workdir", "/workspace",
+    "--env", "CUSTOMER_INTEGRATION_REQUIRED=1",
+    "--env", "CUSTOMER_TEST_ENVIRONMENT=development",
+    "--env", "CUSTOMER_SERVICE_ORIGIN=https://customer-service:4101",
+    "--env", "CUSTOMER_TEST_SIGNING_KEY_FILE=/run/customer-secrets/customer-test-signing.json",
+    "--env", "CUSTOMER_TEST_CLIENT_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-public.json",
+    "--env", "CUSTOMER_TEST_INTERNAL_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-internal.json",
+    "--env", "CUSTOMER_DATABASE_URL",
+    "--env", "CUSTOMER_RUNTIME_DATABASE_URL",
+    "--env", "CUSTOMER_MIGRATOR_DATABASE_URL",
+    "--env", "CUSTOMER_FOREIGN_DATABASE_URL",
+    "--env", "CUSTOMER_TEST_LOG_FILE=/run/customer-logs/customer-service.log",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_CONFIG_FILE=/workspace/config/platform.yaml",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_SECRETS_FILE=/run/customer-secrets/customer-service.yaml",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_HOST=customer_db",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_PORT=5432",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_CLIENT_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-public.json",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON={}",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_ACTOR_REF=actor_customer_test",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_SERVICE_ORIGIN=https://customer-harness:4101",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_DB_ADAPTER_LOG_FILE=/run/customer-logs/db-adapter.log",
+    "--env", "CUSTOMER_UNKNOWN_COMMIT_ENTRY=/workspace/apps/customer-service/dist/main.js",
+    CUSTOMER_TEST_IMAGE,
+    "sh", "-lc",
+    "node --experimental-strip-types --test --test-concurrency=1 tests/customer/customer-normalization.test.mjs && node --experimental-strip-types --test --test-concurrency=1 tests/customer/customer-schema.test.mjs && node --experimental-strip-types --test --test-concurrency=1 tests/customer/customer-live.test.mjs",
+  ];
+  await mkdir(join(secretsDir, "customer-logs"), {recursive: true, mode: 0o700});
+  await writeFile(join(secretsDir, "customer-logs/customer-service.log"), "", {encoding: "utf8", mode: 0o600});
+  await writeFile(join(secretsDir, "customer-logs/db-adapter.log"), "", {encoding: "utf8", mode: 0o600});
+  const logPath = join(secretsDir, "customer-logs/customer-service.log");
+  const log = createWriteStream(logPath, {flags: "w", mode: 0o600});
+  const logProcess = spawnCompose(projectName, secretsDir, ["logs", "--no-log-prefix", "--follow", "customer-service"], {composeFile});
+  void logProcess.done.catch(() => {});
+  logProcess.child.stdout.pipe(log);
+  logProcess.child.stderr.pipe(log);
+  try {
+  await runDockerAsync(environment, {inherit: true, env: {
+    CUSTOMER_DATABASE_URL: databaseUrl(credentials.owner.username, credentials.owner.password, "coffee_platform_customer"),
+    CUSTOMER_RUNTIME_DATABASE_URL: databaseUrl(credentials.owner.username, credentials.owner.password, "coffee_platform_customer"),
+    CUSTOMER_MIGRATOR_DATABASE_URL: databaseUrl(roles.migrator.username, roles.migrator.password, "coffee_platform_customer"),
+    CUSTOMER_FOREIGN_DATABASE_URL: databaseUrl(credentials.owner.username, credentials.owner.password, roles.foreignDatabase),
+    CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL: `postgresql://${encodeURIComponent(credentials.owner.username)}:${encodeURIComponent(credentials.owner.password)}@127.0.0.1:5432/coffee_platform_customer`,
+    CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL: databaseUrl(credentials.owner.username, credentials.owner.password, "coffee_platform_customer", "customer_db"),
+  }});
+  } finally {
+    logProcess.child.kill("SIGTERM");
+    log.end();
+  }
 }
 
 async function waitForDockerHealthy(container, timeoutMs = 30_000) {
@@ -1766,6 +2029,7 @@ async function assertReadiness(
   secretsDir,
   composeFile = COMPOSE_FILE,
 ) {
+  const publicTlsConfig = await readPublicTlsConfig();
   for (const runtime of RUNTIMES) {
     const output = runCompose(
       projectName,
@@ -1774,24 +2038,91 @@ async function assertReadiness(
         "exec",
         "-T",
         runtime,
-        "node",
-        "-e",
-        "Promise.all(['/health/live', '/health/ready', '/metrics'].map(async (path) => { const response = await fetch('http://127.0.0.1:' + process.env.PORT + path); if (!response.ok) throw new Error(path + ':' + response.status); })).catch(() => process.exit(1));",
+        ...RUNTIME_HEALTHCHECK,
+        "/health/live",
+        "/health/ready",
+        "/metrics",
       ],
       {composeFile},
     ).trim();
     void output;
   }
   for (const path of ["/health/live", "/health/ready", "/metrics"]) {
-    const response = await fetch(`http://127.0.0.1:4000${path}`, {
-      signal: AbortSignal.timeout(5000),
-    });
     assert.equal(
-      response.status,
+      await hostRuntimeHealthStatus(secretsDir, "edge-gateway", path, 4000, publicTlsConfig),
       200,
       `edge host endpoint ${path} is not available`,
     );
   }
+}
+
+async function readPublicTlsConfig() {
+  const config = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const hostname = parsePublicTlsHostname(config.platform?.publicBaseUrl);
+  const optionalRefs = config.services?.["edge-gateway"]?.optionalSecretRefs;
+  if (optionalRefs !== undefined && (!Array.isArray(optionalRefs) || optionalRefs.some((ref) => typeof ref !== "string"))) {
+    throw new Error("edge-gateway optional public TLS refs are invalid");
+  }
+  return {hostname, hasCaBundle: optionalRefs?.includes("edge.tlsCaBundle") === true};
+}
+
+async function hostRuntimeTransport(secretsDir, runtime, publicTlsConfig) {
+  const document = parseYaml(
+    await readFile(join(secretsDir, `${runtime}.yaml`), "utf8"),
+    {json: true},
+  );
+  const material = parseServiceTransportMaterial(
+    document.secrets?.security?.serviceTransportKeys?.[runtime],
+    document.environment,
+    runtime,
+  );
+  const publicTls = runtime === "edge-gateway"
+    ? parsePublicTlsMaterial(
+      document.secrets?.edge?.tlsPrivateKey,
+      document.secrets?.edge?.tlsCertificate,
+      publicTlsConfig.hostname,
+      publicTlsConfig.hasCaBundle ? document.secrets?.edge?.tlsCaBundle : undefined,
+    )
+    : undefined;
+  return {
+    environment: document.environment,
+    material,
+    publicTls,
+  };
+}
+
+function hostRuntimeHealthStatus(secretsDir, runtime, path, port, publicTlsConfig) {
+  return hostRuntimeTransport(secretsDir, runtime, publicTlsConfig).then(({environment, material, publicTls}) => new Promise((resolvePromise, reject) => {
+    const isPublic = runtime === "edge-gateway";
+    const publicTrust = isPublic && publicTls?.caPem !== undefined ? {ca: publicTls.caPem} : {};
+    const request = httpsRequest({
+      host: "127.0.0.1",
+      port,
+      path,
+      method: "GET",
+      ...(isPublic ? publicTrust : {ca: material.caPem}),
+      ...(isPublic ? {} : {cert: material.certPem, key: material.keyPem}),
+      minVersion: "TLSv1.3",
+      rejectUnauthorized: true,
+      ...(isPublic ? {servername: publicTls.hostname} : {}),
+      timeout: 5_000,
+      ...(isPublic ? {} : {checkServerIdentity: (_hostname, certificate) => {
+        try {
+          verifyTransportPeer(certificate, environment, runtime);
+          return undefined;
+        } catch (error) {
+          return error instanceof Error ? error : new Error("transport peer identity is invalid");
+        }
+      },
+      }),
+    }, (response) => {
+      response.resume();
+      response.once("end", () => resolvePromise(response.statusCode ?? 0));
+    });
+    request.once("timeout", () => request.destroy(new Error("host healthcheck timed out")));
+    request.once("error", reject);
+    request.end();
+  }));
 }
 
 function runtimeHealthStatus(
@@ -1808,9 +2139,8 @@ function runtimeHealthStatus(
       "exec",
       "-T",
       runtime,
-      "node",
-      "-e",
-      `fetch('http://127.0.0.1:' + process.env.PORT + '${path}').then((response) => console.log(response.status)).catch(() => console.log('0'))`,
+      ...RUNTIME_HEALTH_STATUSES,
+      path,
     ],
     {composeFile},
   ).trim();
@@ -2001,14 +2331,15 @@ async function main() {
   let recoveryAdminUrl;
   let recoveryDeliveryDatabase;
   let recoveryDeliveryTables = false;
+  let customerProofRoles;
   try {
-    const databaseProofCredentials = options.databaseProof
+    const databaseProofCredentials = options.databaseProof || options.customerProof
       ? await readDatabaseProofCredentials()
       : undefined;
     recoveryProofCredentials = options.recoveryProof
       ? await readRecoveryProofCredentials()
       : undefined;
-    if (options.databaseProof || options.recoveryProof) {
+    if (options.databaseProof || options.customerProof || options.recoveryProof) {
       composeFile = await writeScopedComposeOverride(projectName);
       const networkNames = databaseProofNetworkNames(projectName);
       for (const networkName of networkNames) {
@@ -2022,7 +2353,7 @@ async function main() {
       databaseProofNetwork = `${projectName}_${EXTERNAL_POSTGRES_NETWORK}`;
       createDatabaseProofNetwork(databaseProofNetwork);
     }
-    await materializeSecrets(secretsDir, {
+    const materialized = await materializeSecrets(secretsDir, {
       ...options,
       databaseProofCredentials: databaseProofCredentials === undefined
         ? undefined
@@ -2030,10 +2361,10 @@ async function main() {
       recoveryProofCredentials,
     });
     runCompose(projectName, secretsDir, ["config", "--quiet"], {composeFile});
-    if (!options.databaseProof && !options.recoveryProof)
+    if (!options.databaseProof && !options.customerProof && !options.recoveryProof)
       provisionedNetwork = ensureExternalNetwork(options);
-    if (options.databaseProof || options.recoveryProof) {
-      const postgresCredentials = options.databaseProof
+    if (options.databaseProof || options.customerProof || options.recoveryProof) {
+      const postgresCredentials = options.databaseProof || options.customerProof
         ? databaseProofCredentials
         : recoveryProofCredentials;
       assert.ok(postgresCredentials, "PostgreSQL proof credentials are missing");
@@ -2054,7 +2385,7 @@ async function main() {
         postgresCredentials.admin,
         options.recoveryProof ? "postgres" : "coffee_platform_customer",
       );
-      if (options.databaseProof) {
+      if (options.databaseProof || options.customerProof) {
         bootstrapDatabaseProofRole(
           databaseProofContainer,
           postgresCredentials.admin,
@@ -2065,6 +2396,7 @@ async function main() {
           postgresCredentials.admin,
           postgresCredentials.owner,
         );
+        if (options.customerProof) customerProofRoles = bootstrapCustomerProofRoles(databaseProofContainer, postgresCredentials.admin);
       } else {
         recoveryDatabaseProof = await bootstrapRecoveryDatabases(
           databaseProofContainer,
@@ -2092,9 +2424,10 @@ async function main() {
     if (!options.noBuild)
       buildRuntimeImages(
         projectName,
-        options.databaseProof ? [DATABASE_PROOF_RUNTIME] : RUNTIMES,
+        options.databaseProof || options.customerProof ? [DATABASE_PROOF_RUNTIME] : RUNTIMES,
       );
-    const upArguments = options.databaseProof
+    if (options.customerProof) await writeCustomerProofFixtures(secretsDir, materialized.securityMaterial, materialized.transportMaterials);
+    const upArguments = options.databaseProof || options.customerProof
       ? [
           "up",
           "--detach",
@@ -2105,7 +2438,7 @@ async function main() {
       : ["up", "--detach", "--wait", "--no-build"];
     composeAttempted = true;
     runCompose(projectName, secretsDir, upArguments, {composeFile, inherit: true});
-    const rows = options.databaseProof
+    const rows = options.databaseProof || options.customerProof
       ? new Map(
           serviceRows(projectName, secretsDir, composeFile).map((row) => [row.Service, row]),
         )
@@ -2123,6 +2456,9 @@ async function main() {
         databaseProofContainer,
         composeFile,
       );
+    } else if (options.customerProof) {
+      assert.ok(customerProofRoles, "customer proof roles are missing");
+      await runCustomerIntegrationProof(projectName, secretsDir, databaseProofCredentials, customerProofRoles, composeFile);
     } else {
       kafkaRetention = assertKafkaDurableRetention(
         projectName,
@@ -2210,18 +2546,19 @@ async function main() {
     console.log(
       JSON.stringify({
         project: projectName,
-        runtimes: options.databaseProof ? 1 : RUNTIMES.length,
-        kafka: !options.databaseProof,
-        kafkaCompatibility: !options.databaseProof,
-        kafkaRetention: options.databaseProof ? undefined : kafkaRetention,
+        runtimes: options.databaseProof || options.customerProof ? 1 : RUNTIMES.length,
+        kafka: !(options.databaseProof || options.customerProof),
+        kafkaCompatibility: !(options.databaseProof || options.customerProof),
+        kafkaRetention: options.databaseProof || options.customerProof ? undefined : kafkaRetention,
         recoveryProof: options.recoveryProof
           ? {postgres: recoveryDatabaseProof, kafka: kafkaRetention, native: nativeFoundation}
           : undefined,
-        telemetry: !options.databaseProof,
-        healthEndpoints: ["/health/live", "/health/ready", "/metrics"],
-        stubSecrets: options.stubSecrets || options.databaseProof,
-        dbIntegrationProof: options.databaseProof || options.recoveryProof,
-        hostPublish: options.databaseProof ? [] : ["4000:4000"],
+        telemetry: !(options.databaseProof || options.customerProof),
+        healthEndpoints: options.customerProof ? [] : ["/health/live", "/health/ready", "/metrics"],
+        stubSecrets: options.stubSecrets || options.databaseProof || options.customerProof,
+        dbIntegrationProof: options.databaseProof || options.customerProof || options.recoveryProof,
+        customerIntegrationProof: options.customerProof,
+        hostPublish: options.databaseProof || options.customerProof ? [] : ["4000:4000"],
         gracefulShutdown: true,
       }),
     );

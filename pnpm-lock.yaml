@@ -58,15 +58,33 @@ importers:
 
   apps/api-internal:
     dependencies:
+      "@coffee-platform/contracts-customer-v1":
+        specifier: workspace:*
+        version: link:../../packages/contracts/customer-v1
+      "@coffee-platform/platform-http":
+        specifier: workspace:*
+        version: link:../../packages/platform-http
       "@coffee-platform/runtime":
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      "@coffee-platform/security":
+        specifier: workspace:*
+        version: link:../../packages/platform-security
 
   apps/api-public:
     dependencies:
+      "@coffee-platform/contracts-customer-v1":
+        specifier: workspace:*
+        version: link:../../packages/contracts/customer-v1
+      "@coffee-platform/platform-http":
+        specifier: workspace:*
+        version: link:../../packages/platform-http
       "@coffee-platform/runtime":
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      "@coffee-platform/security":
+        specifier: workspace:*
+        version: link:../../packages/platform-security
 
   apps/aroma-convergence:
     dependencies:
@@ -106,9 +124,27 @@ importers:
 
   apps/customer-service:
     dependencies:
+      "@coffee-platform/contracts-customer-v1":
+        specifier: workspace:*
+        version: link:../../packages/contracts/customer-v1
+      "@coffee-platform/database":
+        specifier: workspace:*
+        version: link:../../packages/platform-database
+      "@coffee-platform/idempotency":
+        specifier: workspace:*
+        version: link:../../packages/platform-idempotency
       "@coffee-platform/runtime":
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      "@coffee-platform/security":
+        specifier: workspace:*
+        version: link:../../packages/platform-security
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      libphonenumber-js:
+        specifier: 1.13.12
+        version: 1.13.12
 
   apps/edge-gateway:
     dependencies:
@@ -175,6 +211,9 @@ importers:
       "@coffee-platform/generated-internal-v1":
         specifier: workspace:*
         version: link:../../generated/internal-v1
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
 
   packages/contracts/edge-v1:
     dependencies:
@@ -244,6 +283,9 @@ importers:
 
   packages/platform-http:
     dependencies:
+      "@coffee-platform/security":
+        specifier: workspace:*
+        version: link:../platform-security
       undici:
         specifier: 8.10.1
         version: 8.10.1
@@ -327,6 +369,9 @@ importers:
       "@coffee-platform/observability":
         specifier: workspace:*
         version: link:../platform-observability
+      "@coffee-platform/security":
+        specifier: workspace:*
+        version: link:../platform-security
       "@js-temporal/polyfill":
         specifier: 0.5.1
         version: 0.5.1
@@ -340,7 +385,11 @@ importers:
         specifier: 8.10.1
         version: 8.10.1
 
-  packages/platform-security: {}
+  packages/platform-security:
+    dependencies:
+      "@js-temporal/polyfill":
+        specifier: 0.5.1
+        version: 0.5.1
 
   packages/platform-testing: {}
 
@@ -1781,6 +1830,12 @@ packages:
     resolution:
       {
         integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==,
+      }
+
+  libphonenumber-js@1.13.12:
+    resolution:
+      {
+        integrity: sha512-uLVeV1c9OTk6qkdqnj+mpMD+ZdnZ0szVyWu58HwMmpwkHA1gCEkyjd3veZQXDnuw9KEwSRjcc9B1pS9XKIN1fA==,
       }
 
   lightningcss-android-arm64@1.33.0:
@@ -3384,6 +3439,8 @@ snapshots:
       cookie: 1.1.1
       process-warning: 4.0.1
       set-cookie-parser: 2.7.2
+
+  libphonenumber-js@1.13.12: {}
 
   lightningcss-android-arm64@1.33.0:
     optional: true

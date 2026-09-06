@@ -8,6 +8,7 @@
   },
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "undici": "8.10.1"
+    "undici": "8.10.1",
+    "@coffee-platform/security": "workspace:*"
   }
 }

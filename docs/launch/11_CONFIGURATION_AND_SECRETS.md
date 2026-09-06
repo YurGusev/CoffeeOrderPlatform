@@ -58,6 +58,11 @@ Kafka topics/groups, outbound allowlist, `secretRefs` и Node Permission Model
 allowlist. Отсутствующее значение не берётся из скрытого default: loader
 завершает запуск ошибкой с полным YAML path.
 
+Постоянные локальные пути age identity, резервной копии и проверка восстановления
+зафиксированы в [LOCAL_PLATFORM](../platform/LOCAL_PLATFORM.md#постоянные-age-identities-и-резервная-копия-на-этом-сервере).
+Перед provisioning и ротацией следовать этому порядку; единственный ключ в `/tmp`
+не является постоянным хранилищем.
+
 ## 3. Структура `secrets/platform.secrets.sops.yaml`
 
 До шифрования логическая схема имеет следующий вид; в Git каждое значение
@@ -92,13 +97,33 @@ environments:
       catalogIdentityKeyV1: ENC[...]
     edge:
       tlsPrivateKey: ENC[...]
+      tlsCertificate: ENC[...]
+      tlsCaBundle: ENC[...] # optional; public trust override for dedicated test environment
       oidcClientSecret: ENC[...]
     security:
       actorContextEdgeSigningPrivateKey: ENC[...]
+      actorContextEdgeVerificationPublicKeys:
+        active: ENC[...]
+        previous: ENC[...]
       apiPublicDelegationSigningPrivateKey: ENC[...]
       apiInternalDelegationSigningPrivateKey: ENC[...]
       catalogCursorSigningPrivateKey: ENC[...]
-      serviceTransportKeys: # map exact runtime -> own ENC private key/certificate
+      customerCursorSigningPrivateKey: ENC[...]
+      customerCursorVerificationPublicKeys:
+        active: ENC[...]
+        previous: ENC[...]
+      delegationVerificationKeys:
+        api-public:
+          active: ENC[...]
+          previous: ENC[...]
+        api-internal:
+          active: ENC[...]
+          previous: ENC[...]
+      serviceVerificationKeys:
+        orders-service:
+          active: ENC[...]
+          previous: ENC[...]
+      serviceTransportKeys: # each value decrypts to a JSON transport envelope
         edge-gateway: ENC[...]
         api-public: ENC[...]
         api-internal: ENC[...]
@@ -123,13 +148,47 @@ sops: {}
 recipients. Пустые строки, plaintext, reusable default password и ссылки на
 legacy `postgres/postgres` запрещены.
 
+### Secret inventory и runtime refs
+
+Inventory authority — это encrypted paths в `secrets/platform.secrets.sops.yaml`,
+а runtime получает только refs, перечисленные одновременно в
+`config/platform.yaml`, `config/service-catalog.json` и
+`platform/launch-v1-runtime-profile.json`. Production wiring для трёх runtime:
+
+| Runtime | Secret refs |
+|---|---|
+| `edge-gateway` | `edge.tlsPrivateKey`, `edge.tlsCertificate`, `edge.oidcClientSecret`, `security.actorContextEdgeSigningPrivateKey`, `security.serviceTransportKeys.edge-gateway`, `telemetry.exporterToken` |
+| `api-public` | `security.apiPublicDelegationSigningPrivateKey`, `security.actorContextEdgeVerificationPublicKeys`, `security.serviceTransportKeys.api-public`, `telemetry.exporterToken` |
+| `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
+| `customer-service` | `postgres.customer`, `security.customerCursorSigningPrivateKey`, `security.customerCursorVerificationPublicKeys`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.customer-service`, `telemetry.exporterToken` |
+
+`edge-gateway` использует `public-tls`: его публичный listener предъявляет
+`edge.tlsCertificate` с парой `edge.tlsPrivateKey`, проверяет срок и hostname
+`platform.publicBaseUrl`, но не требует service certificate от браузера. Его
+`security.serviceTransportKeys.edge-gateway` — отдельная service identity для
+внутренних outbound соединений и не может использоваться публичным listener. Все
+остальные HTTP runtime используют `mtls`; их listener и outbound client
+проверяют service identity по scoped CA и SPIFFE SAN.
+`edge.tlsCaBundle` является optional scoped ref, а не обязательным
+`secretRefs`: при его отсутствии healthcheck и host smoke используют системное
+доверие Node.js; при наличии проверяют только этот PEM bundle. `edge.tlsCertificate`
+не используется как trust store, а internal service CA не является fallback.
+
+`security.customerCursorSigningPrivateKey` — отдельный Customer-scoped ключ;
+он не переиспользуется для Catalog cursor, actor context, delegation или mTLS.
+Public verification metadata Customer cursor находится в
+`security.customerCursor` в `config/platform.yaml`; active/previous public
+material остаётся в SOPS inventory и materializes только для Customer.
+
 ## 4. Runtime-доступ без раскрытия общего файла
 
 Один source-файл секретов не означает, что каждый сервис получает все секреты.
 
 1. Trusted `config-bootstrap` читает `config/platform.yaml`, проверяет schema и
    decrypts `secrets/platform.secrets.sops.yaml` в памяти.
-2. Он сверяет `services.<runtime>.secretRefs` с allowlist из service catalog.
+2. Он сверяет `services.<runtime>.secretRefs` и `optionalSecretRefs` с allowlist
+   из service catalog. Optional ref materializes только если значение есть в
+   encrypted inventory; его отсутствие не блокирует scoped file.
 3. Для runtime создаётся только scoped ephemeral YAML в tmpfs
    `/run/secrets/coffee-platform.yaml`, mode `0400`, owner UID runtime.
 4. Процесс получает только `COFFEE_CONFIG_FILE=/app/config/platform.yaml` и
@@ -142,6 +201,17 @@ legacy `postgres/postgres` запрещены.
 получают DB passwords. Bootstrap
 admin password доступен только отдельной одноразовой provisioning-команде и не
 попадает в runtime containers.
+
+Для transport identity scoped materialization содержит только собственный
+runtime material: leaf certificate, matching Ed25519 private key и certificate
+chain/trust metadata, необходимую для проверки peer. CA private key туда не
+входит. Общий trust metadata остаётся открытым в
+`security.serviceTrustBundles`: `activeKid`, `previousKid`, 12-часовое overlap,
+SAN binding из service identity contract и текущий environment. Runtime не
+читает общий SOPS-файл и не получает чужой transport material.
+Значение `security.serviceTransportKeys.<runtime>` после decrypt — строго JSON
+строка с полями `keyPem`, `certPem`, `caPem`; runtime отклоняет неизвестные
+поля, plaintext fallback и certificate с неправильным environment/runtime SAN.
 
 ## 5. Загрузка и приоритеты
 
@@ -186,6 +256,16 @@ clock skew `5s`, overlap active/previous key `86400s`. В
 `platform.yaml`; private keys — только в SOPS. Старый key проверяет подписи лишь
 до конца overlap и никогда не подписывает новые. Actor, cursor, TLS и OIDC keys
 не переиспользуются друг для друга.
+
+`security.customerCursor` — отдельная Customer-scoped Ed25519 policy с max age
+`86400s`, clock skew `5s`, overlap metadata `172800s` и явным
+`previousKeyTrustUntilEpochSeconds`. Envelope содержит `kid`, `iat` и `exp`;
+новый token подписывается только active key, `exp` не может превышать
+`iat + maxAgeSeconds`, а previous key принимается только до абсолютного
+`previousKeyTrustUntilEpochSeconds`, независимо от возраста token. Неизвестный/
+старый `kid`, просроченный token и token с будущим `iat` отвергаются. Customer
+cursor key не совпадает с Catalog cursor, actor context, delegation или
+transport key.
 
 Полный issuance/SAN/TTL/rotation/revocation contract определён в
 [service identity specification](24_SERVICE_IDENTITY_AND_DELEGATION.md).

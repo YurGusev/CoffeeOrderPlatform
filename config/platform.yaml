@@ -113,6 +113,17 @@ security:
     verificationKeys:
       cursor-v1: ed25519-public-cursor-v1
       cursor-v0: ed25519-public-cursor-v0
+  customerCursor:
+    algorithm: Ed25519
+    activeKid: customer-cursor-v1
+    previousKid: customer-cursor-v0
+    maxAgeSeconds: 86400
+    clockSkewSeconds: 5
+    overlapSeconds: 172800
+    previousKeyTrustUntilEpochSeconds: 1798761600
+    verificationKeys:
+      customer-cursor-v1: ed25519-public-customer-cursor-v1
+      customer-cursor-v0: ed25519-public-customer-cursor-v0
   serviceTrustBundles:
     activeKid: transport-v1
     previousKid: transport-v0
@@ -146,6 +157,7 @@ security:
 
 services:
   edge-gateway:
+    transportMode: public-tls
     listen: {host: 0.0.0.0, port: 4000}
     health: &health
       livePath: /health/live
@@ -164,11 +176,13 @@ services:
     database: null
     kafka: { producers: [], consumers: [] }
     outbound: [web:3000, api-public:4050, realtime-gateway:4401]
-    secretRefs: [edge.tlsPrivateKey, edge.oidcClientSecret, security.actorContextEdgeSigningPrivateKey, security.serviceTransportKeys.edge-gateway, telemetry.exporterToken]
+    secretRefs: [edge.tlsPrivateKey, edge.tlsCertificate, edge.oidcClientSecret, security.actorContextEdgeSigningPrivateKey, security.serviceTransportKeys.edge-gateway, telemetry.exporterToken]
+    optionalSecretRefs: [edge.tlsCaBundle]
     permissions: {manifest: config/permissions/edge-gateway.json, net: [web:3000, api-public:4050, realtime-gateway:4401], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
   api-public:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4050}
     health: *health
     deadlineMs: 4500
@@ -179,11 +193,12 @@ services:
     database: null
     kafka: { producers: [], consumers: [] }
     outbound: [customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104]
-    secretRefs: [security.apiPublicDelegationSigningPrivateKey, security.serviceTransportKeys.api-public, telemetry.exporterToken]
+    secretRefs: [security.apiPublicDelegationSigningPrivateKey, security.actorContextEdgeVerificationPublicKeys, security.serviceTransportKeys.api-public, telemetry.exporterToken]
     permissions: {manifest: config/permissions/api-public.json, net: [customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
   api-internal:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4051}
     health: *health
     deadlineMs: null
@@ -194,11 +209,12 @@ services:
     database: null
     kafka: { producers: [], consumers: [] }
     outbound: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301]
-    secretRefs: [security.apiInternalDelegationSigningPrivateKey, security.serviceTransportKeys.api-internal, telemetry.exporterToken]
+    secretRefs: [security.apiInternalDelegationSigningPrivateKey, security.serviceVerificationKeys.orders-service, security.serviceTransportKeys.api-internal, telemetry.exporterToken]
     permissions: {manifest: config/permissions/api-internal.json, net: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
   web:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 3000}
     health: *health
     deadlineMs: 5000
@@ -214,6 +230,7 @@ services:
     mutationCapability: false
 
   customer-service:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4101}
     health: *health
     deadlineMs: 2000
@@ -224,11 +241,12 @@ services:
     database: coffee_platform_customer
     kafka: { producers: [], consumers: [] }
     outbound: []
-    secretRefs: [postgres.customer, security.serviceTransportKeys.customer-service, telemetry.exporterToken]
+    secretRefs: [postgres.customer, security.customerCursorSigningPrivateKey, security.customerCursorVerificationPublicKeys, security.delegationVerificationKeys.api-public, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.customer-service, telemetry.exporterToken]
     permissions: {manifest: config/permissions/customer-service.json, net: [coffee_postgres:5432], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
   catalog-service:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4102}
     health: *health
     deadlineMs: 2000
@@ -244,6 +262,7 @@ services:
     mutationCapability: false
 
   catalog-supplier-sync:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4201}
     health: *health
     deadlineMs: 900000
@@ -259,6 +278,7 @@ services:
     mutationCapability: false
 
   catalog-activation-worker:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4202}
     health: *health
     deadlineMs: 5000
@@ -278,6 +298,7 @@ services:
     mutationCapability: false
 
   pricing-service:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4103}
     health: *health
     deadlineMs: 5000
@@ -293,6 +314,7 @@ services:
     mutationCapability: false
 
   orders-service:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4104}
     health: *health
     deadlineMs: 5000
@@ -317,6 +339,7 @@ services:
     mutationCapability: false
 
   orders-aroma-preparation:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4203}
     health: *health
     deadlineMs: 5000
@@ -349,6 +372,7 @@ services:
     mutationCapability: false
 
   aroma-observer:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4204}
     health: *health
     deadlineMs: 15000
@@ -364,6 +388,7 @@ services:
     mutationCapability: false
 
   aroma-convergence:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4205}
     health: *health
     deadlineMs: 30000
@@ -386,6 +411,7 @@ services:
     mutationCapability: true
 
   aroma-gateway:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4301}
     health: *health
     deadlineMs: 10000
@@ -401,6 +427,7 @@ services:
     mutationCapability: true
 
   realtime-gateway:
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4401}
     health: *health
     deadlineMs: null
