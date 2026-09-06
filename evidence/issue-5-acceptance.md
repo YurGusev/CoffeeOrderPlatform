@@ -117,6 +117,6 @@ canonical PostgreSQL port `5432`. Harness также требует test-only
 
 ## Remote state
 
-Issue #5 остаётся `OPEN`; PR #129 остаётся open/blocked. Commit и push этого
-продолжения разрешены, но merge, auto-merge, issue checkbox mutation и closure
-запрещены.
+Issue #5 остаётся `OPEN`; PR #129 остаётся open/blocked. Продолжение зафиксировано
+коммитом `0b37ad4` и отправлено в `feature/5-customer-service`; merge, auto-merge,
+issue checkbox mutation и closure не выполнялись.

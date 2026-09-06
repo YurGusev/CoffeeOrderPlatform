@@ -25,7 +25,7 @@ outputs:
     sha256: 3d122d932092714cf9809fd4a99171b732b3697119800491ce3d5c958b860800
     consumers: [5, 8, 9, 13]
   - artifact: evidence/issue-5-acceptance.md
-    sha256: d5575905be6ed656b3ab48791e744804cc89d77be09b125d32906993bf8f9d90
+    sha256: eaee976dcf729333d7d66fb27209af8e2ec25898a86b12cc3be122d7153e9fe7
     consumers: [5, 8, 9, 13]
   - artifact: apps/customer-service/migrations/0001_customer_schema.sql
     sha256: 2b8b0a818c4305b34ed853f7f7cc72743741bcb2dbce8513f8376bc4cd8d86e8
@@ -326,4 +326,4 @@ limitations:
   - Default compose smoke was not proven because SOPS_AGE_KEY_FILE and sops are absent. The topology-only stub path now generates ephemeral public and internal mTLS certificates but could not start because local runtime images are absent.
   - The canonical encrypted source lacks `edge.tlsCertificate`, Customer cursor, edge actor and delegation/service verification key paths. Production runtime wiring fails closed until an authorized SOPS provisioning action materializes these values and valid scoped transport envelopes.
   - customer-integration is intentionally non-zero when live prerequisites are absent; this prevents a false process PASS with skipped acceptance tests.
-  - No self commit SHA is recorded here. Merge, issue checkbox mutation and issue closure were not performed.
+  - This continuation was committed as `0b37ad4` and pushed to `feature/5-customer-service`. Merge, issue checkbox mutation and issue closure were not performed.
