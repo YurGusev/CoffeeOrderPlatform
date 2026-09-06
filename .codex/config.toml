@@ -1,0 +1,34 @@
+# Настройки Codex только для CoffeeOrderPlatform; экономичный режим по умолчанию.
+model = "gpt-6-astra"
+model_reasoning_effort = "low"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 4
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "medium"
+
+[agents.explorer]
+description = "Исследование кода без изменений."
+config_file = "agents/explorer.toml"
+
+[agents.worker]
+description = "Реализация ограниченной подзадачи."
+config_file = "agents/worker.toml"
+
+[agents.tester]
+description = "Проверка поведения и воспроизведение ошибок."
+config_file = "agents/tester.toml"
+
+[agents.reviewer]
+description = "Независимая проверка корректности изменений."
+config_file = "agents/reviewer.toml"
+
+[agents.researcher]
+description = "Проверка технических фактов по первичным источникам."
+config_file = "agents/researcher.toml"
+
+# Перекрывает глобальную роль с фиксированным xhigh только в этом проекте.
+[agents.luna_worker]
+description = "Реализация ограниченной подзадачи на Luna."
+config_file = "agents/luna-worker.toml"

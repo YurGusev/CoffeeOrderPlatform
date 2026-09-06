@@ -1,0 +1,81 @@
+issue: 132
+baseCommit: 7db7bc97b41962c0592b82853ebd7dc9bc43c290
+inputs:
+- issue: 130
+  acceptedMergeCommit: d80190e50e894bc543a0dca9611c5ba8dc66f6aa
+  artifact: AGENTS.md
+  sha256: 94c2d912d46514c25cb36ecf1fe5e925dfacab25f9bb4657bf11bdc56e2d0c64
+outputs:
+- artifact: .codex/README.md
+  sha256: e9e5eb669c992743a44afd29071ad0f8b54c5749c8bd8dd846961629ac1e3736
+  consumers:
+  - 132
+- artifact: .codex/agents/explorer.toml
+  sha256: e1d8e1060a854063703a762a7c3877fe01243b69b06e7cab90e1981131552839
+  consumers:
+  - 132
+- artifact: .codex/agents/luna-worker.toml
+  sha256: 1e0d7b1f75cb12e53155c308b8a31f91b2c0d757ae581db97cddac913b986868
+  consumers:
+  - 132
+- artifact: .codex/agents/researcher.toml
+  sha256: 156a7e82bf7824cf02f842ff56230b56e3ef44bb330c93911a4ea8733e94dfe0
+  consumers:
+  - 132
+- artifact: .codex/agents/reviewer.toml
+  sha256: bbaeb820213fd0e279a271de5e0316f55bba01a8b68a409a118fb1c53129427c
+  consumers:
+  - 132
+- artifact: .codex/agents/tester.toml
+  sha256: f49899a93ee729c44bac05c1142791180a8a4d396a5794c2e7f6dc5625ea6d78
+  consumers:
+  - 132
+- artifact: .codex/agents/worker.toml
+  sha256: cd1d977a7774dba415953df234b8354be77ec67f1baa421a3fe52a940dd887c0
+  consumers:
+  - 132
+- artifact: .codex/config.toml
+  sha256: 6c432efbca3cabeb466b3f590948551927bc5829d0d33765a4b98f8fdbe36e7d
+  consumers:
+  - 132
+- artifact: .codex/large-reviewer.toml
+  sha256: b7251310d62462f9f0f9f39d1bdf34f8c74b15fdc503f095e98c27482399e56a
+  consumers:
+  - 132
+- artifact: .codex/large.sh
+  sha256: aac673414e0d0379289cec79be362002d1e1e562f1a9a2b39a83554fad3e7ff3
+  consumers:
+  - 132
+- artifact: .agents/skills/astra-orchestrator/SKILL.md
+  sha256: ea896decdf0c0be120af3ea157787027bd4703525785abb61959c137f98928d7
+  consumers:
+  - 132
+verification:
+- command: git diff --cached --check
+  result: passed
+- command: bash -n .codex/large.sh
+  result: passed
+- command: python3 -c 'import pathlib,tomllib; [tomllib.loads(p.read_text()) for p in pathlib.Path(".codex").rglob("*.toml")]'
+  result: passed
+  detail: 8 TOML; все config_file и локальные Markdown-ссылки существуют
+- command: codex app-server --strict-config
+  result: passed
+  detail: Codex CLI 0.153.2; JSON-RPC initialize, config/read с cwd репозитория. Astra low, Luna medium, лимит4;
+    reviewer config_file=agents/reviewer.toml, parsed reasoning low
+- command: bash .codex/large.sh app-server --strict-config
+  result: passed
+  detail: 'JSON-RPC config/read: Astra medium, Luna high, лимит8; reviewer config_file=large-reviewer.toml, parsed
+    reasoning medium'
+- command: large.sh с временным PATH/codex, печатающим argv
+  result: passed
+  detail: Запуск из другого cwd; -C указывает корень checkout, overrides и аргумент с пробелами сохранены, явный
+    --model передан без изменений; модель не запускалась
+- command: Независимое read-only ревью инструкций и конфигурации
+  result: passed
+  detail: Существенных замечаний нет; несоответствие large reviewer low/medium исправлено
+limitations:
+- Реальная новая model session и Desktop-наследование не запускались; проверены конфигурация установленного CLI
+  и wrapper.
+- Runtime/API/DB/secrets, глобальная конфигурация Codex и business dependency graph не изменены.
+- 'Восемь прежних локальных tracked изменений уже побайтно присутствуют в develop через PR #131 / issue #130 и не
+  входят в этот diff.'
