@@ -25,7 +25,7 @@ outputs:
     sha256: 3d122d932092714cf9809fd4a99171b732b3697119800491ce3d5c958b860800
     consumers: [5, 8, 9, 13]
   - artifact: evidence/issue-5-acceptance.md
-    sha256: eaee976dcf729333d7d66fb27209af8e2ec25898a86b12cc3be122d7154e9fe7
+    sha256: aac25403e5ef0bf7b02dd2067358ab2f275d9e7d822ee00c19535b54ee248297
     consumers: [5, 8, 9, 13]
   - artifact: apps/customer-service/migrations/0001_customer_schema.sql
     sha256: 2b8b0a818c4305b34ed853f7f7cc72743741bcb2dbce8513f8376bc4cd8d86e8
@@ -94,13 +94,13 @@ outputs:
     sha256: 55817806d0462bd3f6bb70df6037a22d129e12193d19df045de2932b1c8a50c9
     consumers: [5, 63]
   - artifact: packages/platform-runtime/src/index.ts
-    sha256: 448be4dba076b527694e503285dc1485bbda9fb3f779ff48c3cdb3255da54051
+    sha256: 164a07bbae0a2d1e9fb3317adb5c956c6b9a83492219b1b97b926452b578cf75
     consumers: [5, 8, 9]
   - artifact: packages/platform-security/src/index.ts
-    sha256: f724c69af289caa8a18c506f48bbed966dfd0979aaa7841a79304a4dc5a3417b
+    sha256: b46a35896568e03cefaa07268ddb02088c13418d5f961a0b0e58af797938ee09
     consumers: [5, 8, 9]
   - artifact: packages/platform-testing/test/platform-packages.test.mjs
-    sha256: e1b85dbafe7bd0e8903a67e9e1170ade6707365691739a4039f1203035ed4716
+    sha256: 1c8d77311e1795c7f12d45421393aa318cb85a8b2f7e0d47da05ebcd33465e5a
     consumers: [5, 8, 9]
   - artifact: package.json
     sha256: 9d3a3f32b5950216dc0ec77afc2ad42ae84e67832d41e8985f79fad2848f786a
@@ -172,22 +172,22 @@ outputs:
     sha256: 3390999fb98420ff5f00e615c6fe71877c35dbf6094c101cb345684912b2496f
     consumers: [5]
   - artifact: config/platform.yaml
-    sha256: 7bebd2d013167f3c7ef63d6b4176490dc6d9ec5e8c6a87b4ed1e0e496e94f417
+    sha256: 064f088205adb557c601070463e24cffbf310eaedccbd2342e6e9ba1ae5ecbda
     consumers: [5]
   - artifact: config/platform.schema.json
-    sha256: 724d4eb0d87ecc0f7a50b978b7b1ccc576c68e48c4b9c016dd845f65e4441e50
+    sha256: e89f15d0890638ec4d6c0020a5e62c925fb26e4ff988c940e10b17a11224c83a
     consumers: [5]
   - artifact: config/service-catalog.json
-    sha256: 4fc0d081a4d0f6c96473d33001b99302b5e6f0aaf52cbff9a4e8f49456297839
+    sha256: ad45a56b3eaf597f7e17b74ebd9970aaa24ef3c4192baea5a27b7a10109eb46f
     consumers: [5]
   - artifact: platform/launch-v1-runtime-profile.json
-    sha256: 49404e40d7db55cb13dd73a21e15453dab58c8770b03b00812774fcae21b30a7
+    sha256: 981a82600c156f093da00240a702d21b623135c259ebc9d11282a53e7bc537dd
     consumers: [5]
   - artifact: secrets/platform-secrets.schema.json
-    sha256: f02272ff284cd092a13d283dc747ade3cddd9df5e2683e4d1dc7da88f7cc7e67
+    sha256: 1e784a5afc21b00bc7600039c02de3e359574492c78009670f10861902c77c33
     consumers: [5]
   - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
-    sha256: daef8b4a78ebd9b254e9f63032c7d1d9efd6dd14fe9dc6c70cf48b169de27f08
+    sha256: 2798498973b16ef6ba8520d2ffa7f27b92e14f61fc1cdc47f333c4e6f6158083
     consumers: [5]
   - artifact: packages/platform-security/package.json
     sha256: 0446b13390b06d80141c1f727fe394bc39a80deddd5253563bacf2750defd018
@@ -205,40 +205,46 @@ outputs:
     sha256: caa62d5ff610ca0dbbcb69a18ac09c3f7c409446b8d960feab361c85b344064a
     consumers: [5]
   - artifact: scripts/check-service-catalog.mjs
-    sha256: 0bfea70962f5a39ebd76902b6e43ab2716ef5ccc68ce585423594df67f91a701
+    sha256: 1f2fab97276302c092656e7505fad5546c4ac35569f36ac1ff5c526784ea2f10
+    consumers: [5]
+  - artifact: scripts/config-lib.mjs
+    sha256: bdb2edf1b618461f2346694f4cd2176f21dbafd0832666ed72384e9b2dd5ea5f
+    consumers: [5]
+  - artifact: tools/config-bootstrap/index.mjs
+    sha256: 3d82a3e927946a2b7eb58f1c93e6f1d75db07e13249f2a28e6f997f55800b22a
     consumers: [5]
   - artifact: scripts/db-live-proof.mjs
     sha256: f038df6586e12c4b279bc87ab84eae8b822c22bd45d6ca8b0c7ff423aa38e8b8
     consumers: [5]
   - artifact: packages/platform-runtime/src/healthcheck.ts
-    sha256: 68f366f2910040eda3f258104de136a7ad436d82e19a121d77e602afaeed5a18
+    sha256: b5ea06821b681b8da6a44788e77a8751ceade1e1929d357a8d17fc7a973d0e58
     consumers: [5]
   - artifact: tools/compose-smoke.mjs
-    sha256: 4e981ca8df7f831713bab9e1faad926d080acc8d62b83a80e7cb82a14f8061d3
+    sha256: 85c17c8add7d142cf087f3489781bbe5afd6c95ea78a929f2615f67fdbd1537d
     consumers: [5]
   - artifact: config/service-catalog.schema.json
-    sha256: 25f4f8e35f54ac0d48d2f62849f049701afbe2cb16c65e4b9e66325f63c4f458
+    sha256: b12c6a3c4de5ee6fbad33624583836213d758972ae8cac799252005bd5524063
     consumers: [5]
   - artifact: platform/launch-v1-runtime-profile.schema.json
-    sha256: 5c4e8c62d9c50a65429b36bafe4f249acf70b3af98f0ffe8104fe1a4f8895d63
+    sha256: c15731ac9aaf7174b1224d8998521eb22078ac6e2d13a0c3dac94c846fc5069b
     consumers: [5]
   - artifact: docs/launch/10_RUNTIME_CATALOG.md
-    sha256: 4d973a6f68b55b61f5af097c095c49d9b6639eafce6cbce4a3ed01259f038c49
+    sha256: 36094ed25ce2181e479431c17ffad30190113bd16c29b38b2379b11cbe2026a3
     consumers: [5]
   - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
-    sha256: 84eb77a7b144d26184f08f1e77cc2a5d668ecfc39d644f615b6b9313ff7ad3bf
+    sha256: 95e9d3bdc643a4101aabc45d5071c67be036f4c3f35691fbcd8db8f47beff7ae
     consumers: [5]
   - artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
-    sha256: 599d7971b8fed94817f307e2061d80dfd2b4b4906e7f2cd4528f5e4bf5776fea
+    sha256: f9ce3346e728c5a1f375b252de9073583dcdf97c844b71f763eeb5b4db114ce5
     consumers: [5]
   - artifact: packages/platform-config/src/index.ts
-    sha256: 213f77397a42f95328c3ffeffb0a57df4887d7644fe55c4b2d0c9e766a67801f
+    sha256: c9fd9cd0b8f3ec74d93bb5aa3831d74af2681dd179e281e7898e6a85d8ba8b69
     consumers: [5]
   - artifact: scripts/validate-launch-authority.py
-    sha256: fa5d8b47ed9ae9341c45ec0169561ee7330fc613e4fe8e31fe6e80e802bd9af4
+    sha256: d3fafba05547a95eca6fd63e6db4e2b56839f2991361d3f3c453ddfb9d0b67ae
     consumers: [5]
   - artifact: tests/runtime/lifecycle.test.mjs
-    sha256: c66ef0b51b9badf976be4221d91c1ecf98e2bb4131a5a5b8bb640efcf882b263
+    sha256: ab24068a5ddd4a23d77413fbd454291e8cf6f51a329608e65ed817bc8aeb012e
     consumers: [5]
 verification:
   - command: gh repo view YurGusev/CoffeeOrderPlatform --json nameWithOwner
@@ -259,7 +265,7 @@ verification:
     result: passed
   - command: pnpm test
     result: blocked
-    detail: 199 tests, 182 passed, 2 failed because the canonical encrypted SOPS inventory lacks the newly required paths; 15 skipped
+    detail: 199 tests, 182 passed, 2 failed, 15 skipped; both failures are the known canonical encrypted SOPS inventory schema gate (missing edge.tlsCertificate and verification/cursor key paths; the MAC-negative fixture reaches the same gate)
   - command: pnpm test:customer-unit
     result: passed
     detail: 9 tests, 9 passed, 0 failed
@@ -289,32 +295,41 @@ verification:
     detail: liveDatabase=false and realKafka=false
   - command: pnpm security:secrets
     result: blocked
-    detail: CONFIG-SCHEMA because platform.secrets.sops.yaml lacks the new required verification and Customer cursor key inventory; no SOPS key is available
+    detail: exit 1; CONFIG-SCHEMA on platform.secrets.sops.yaml because required edge.tlsCertificate and verification/Customer cursor key paths are absent; no SOPS key is available
   - command: pnpm test:compose-smoke
     result: blocked
-    detail: SOPS_AGE_KEY_FILE is absent; command exited 1 before decrypted scoped-secret topology proof
+    detail: exit 1; SOPS_AGE_KEY_FILE is required for decrypted scoped secrets, so no live topology proof ran
   - command: pnpm authority:check
     result: passed
   - command: pnpm versions:check
     result: passed
   - command: pnpm config:check
     result: blocked
-    detail: CONFIG-SCHEMA because platform.secrets.sops.yaml lacks the new required verification and Customer cursor key inventory
+    detail: exit 1; CONFIG-SCHEMA on platform.secrets.sops.yaml because required edge.tlsCertificate and verification/Customer cursor key paths are absent
   - command: node scripts/check-service-catalog.mjs
     result: passed
     detail: 15 runtimes and 29 interactions; accepted digest updated for explicit public-tls/mtls modes
   - command: node --test --test-name-pattern 'public Edge TLS|configured Edge startup' tests/runtime/lifecycle.test.mjs
     result: passed
-    detail: configured public Edge and runtime healthcheck use separate trusted public material and reject wrong hostname; internal mTLS rejects a client without service certificate
+    detail: 2 tests passed; separate public CA/leaf, wrong CA/leaf/hostname rejection, loopback TCP with edge.test, no client service certificate, internal mTLS isolation, configured healthcheck and system-trust path without optional CA
+  - command: node --test packages/platform-testing/test/platform-packages.test.mjs
+    result: passed
+    detail: 30 tests passed; optional config ref and invalid public CA bundle are covered
+  - command: CI=true node tools/docker-build.mjs --build-arg RUNTIME=edge-gateway --target runtime --load -t coffee-platform-edge-healthcheck:verify .
+    result: passed
+    detail: final runtime image build, typecheck, pnpm deploy and native addon stage passed
+  - command: docker run --rm --entrypoint node coffee-platform-edge-healthcheck:verify --input-type=module -e "import('@coffee-platform/runtime/healthcheck')"
+    result: passed
+    detail: final image resolves the packaged healthcheck entrypoint without workspace node_modules; temporary image removed
   - command: node --test tests/customer/customer-http.test.mjs
     result: passed
     detail: 8 tests passed, including TTL, absolute previous-key trust cutoff, late previous-key signing and unknown-kid rejection
   - command: isolated production deploy import check
     result: passed
-    detail: pnpm deploy --prod --legacy tree resolves @coffee-platform/runtime/healthcheck without root-only imports
+    detail: pnpm --filter @coffee-platform/runtime deploy --prod --legacy tree resolves @coffee-platform/runtime/healthcheck without root-only imports
   - command: node tools/compose-smoke.mjs --stub-secrets --no-build
     result: blocked
-    detail: ephemeral public/mTLS materialization completed, but required local runtime images are absent; no live evidence claimed
+    detail: exit 1 after ephemeral separate public/internal CA materialization; local image coffee-compose-smoke-...-api-internal:latest is absent; no live evidence claimed
   - command: pnpm install --frozen-lockfile --offline --ignore-scripts
     result: passed
     detail: lockfile up to date
@@ -323,7 +338,7 @@ verification:
 limitations:
   - Public Customer cursor contract was explicitly approved for this scope at 2048 characters with an 8 KiB Customer URL budget; Catalog keeps the shared Cursor contract at 512 and no stateful cursor was introduced.
   - Live Customer PostgreSQL 17.11 migration, grants, concurrency, rollback fault injection after each required write, durable-commit lost-response recovery, DB abort after Customer INSERT, unknown COMMIT/restart reconciliation, PII log canary and foreign-database CONNECT denial were not proven because required CUSTOMER_* URLs, mTLS fixtures and runtime are absent.
-  - Default compose smoke was not proven because SOPS_AGE_KEY_FILE and sops are absent. The topology-only stub path now generates ephemeral public and internal mTLS certificates but could not start because local runtime images are absent.
-  - The canonical encrypted source lacks `edge.tlsCertificate`, Customer cursor, edge actor and delegation/service verification key paths. Production runtime wiring fails closed until an authorized SOPS provisioning action materializes these values and valid scoped transport envelopes.
+  - Default compose smoke was not proven because SOPS_AGE_KEY_FILE and sops are absent. The topology-only stub path now generates ephemeral, separate public and internal mTLS certificates but could not start because local runtime images are absent.
+  - The canonical encrypted source lacks `edge.tlsCertificate`, Customer cursor, edge actor and delegation/service verification key paths. `edge.tlsCaBundle` is optional and its absence selects Node system trust; production runtime wiring still fails closed until an authorized SOPS provisioning action materializes the required values and valid scoped transport envelopes.
   - customer-integration is intentionally non-zero when live prerequisites are absent; this prevents a false process PASS with skipped acceptance tests.
-  - This continuation was committed as `0b37ad4` and pushed to `feature/5-customer-service`. Merge, issue checkbox mutation and issue closure were not performed.
+  - Issue/PR text was not mutated; prepared issue correction is `Customer cursor — 2048 символов; Customer URL budget — 8 KiB; Catalog cursor — 512 символов.` Remote head remains `b847280`; this continuation is local-only until the separately authorized commit is created. Merge, issue checkbox mutation and issue closure were not performed.

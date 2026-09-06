@@ -177,6 +177,7 @@ services:
     kafka: { producers: [], consumers: [] }
     outbound: [web:3000, api-public:4050, realtime-gateway:4401]
     secretRefs: [edge.tlsPrivateKey, edge.tlsCertificate, edge.oidcClientSecret, security.actorContextEdgeSigningPrivateKey, security.serviceTransportKeys.edge-gateway, telemetry.exporterToken]
+    optionalSecretRefs: [edge.tlsCaBundle]
     permissions: {manifest: config/permissions/edge-gateway.json, net: [web:3000, api-public:4050, realtime-gateway:4401], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 

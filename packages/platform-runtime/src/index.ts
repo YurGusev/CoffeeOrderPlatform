@@ -24,6 +24,7 @@ import {
   createMutualTlsServerOptions,
   createPublicTlsServerOptions,
   parsePublicTlsMaterial,
+  parsePublicTlsHostname,
   parseServiceTransportMaterial,
   verifyTransportPeer,
   type PublicTlsMaterial,
@@ -138,7 +139,7 @@ function secretAt(document: ScopedSecretDocument, ref: string): unknown {
   return value;
 }
 
-function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], environment: string, runtime: RuntimeName, mode: TransportMode, publicHostname?: string): RuntimeTransport {
+function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], optionalRefs: readonly string[], environment: string, runtime: RuntimeName, mode: TransportMode, publicHostname?: string): RuntimeTransport {
   const refsForTransport = refs.filter((ref) => ref === `security.serviceTransportKeys.${runtime}`);
   const ref = refsForTransport[0];
   if (refsForTransport.length !== 1 || ref === undefined) return {environment, runtime, mode, setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE"};
@@ -148,12 +149,13 @@ function transportMaterial(document: ScopedSecretDocument, refs: readonly string
     if (publicHostname === undefined || refs.filter((value) => value === "edge.tlsPrivateKey").length !== 1 || refs.filter((value) => value === "edge.tlsCertificate").length !== 1) {
       return {environment, runtime, mode, material, setupError: "RUNTIME_PUBLIC_TLS_SECRET_SCOPE"};
     }
+    const publicCaPem = optionalRefs.includes("edge.tlsCaBundle") ? secretAt(document, "edge.tlsCaBundle") : undefined;
     return {
       environment,
       runtime,
       mode,
       material,
-      publicTls: parsePublicTlsMaterial(secretAt(document, "edge.tlsPrivateKey"), secretAt(document, "edge.tlsCertificate"), publicHostname),
+      publicTls: parsePublicTlsMaterial(secretAt(document, "edge.tlsPrivateKey"), secretAt(document, "edge.tlsCertificate"), publicHostname, publicCaPem),
     };
   } catch (error) {
     return {environment, runtime, mode, setupError: error instanceof Error ? error.name : "TransportValidationError"};
@@ -162,11 +164,8 @@ function transportMaterial(document: ScopedSecretDocument, refs: readonly string
 
 function publicHostname(config: PlatformConfig): string {
   const value = config.platform["publicBaseUrl"];
-  if (typeof value !== "string") throw new RuntimeError("RUNTIME_PUBLIC_BASE_URL_INVALID");
   try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" || url.hostname.length === 0) throw new Error("invalid public URL");
-    return url.hostname;
+    return parsePublicTlsHostname(value);
   } catch {
     throw new RuntimeError("RUNTIME_PUBLIC_BASE_URL_INVALID");
   }
@@ -907,7 +906,7 @@ export async function startConfiguredRuntime(
   let kafka: KafkaRuntime | undefined;
   let transport: RuntimeTransport | undefined;
   try {
-    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, config.environment, name, service.transportMode, service.transportMode === "public-tls" ? publicHostname(config) : undefined);
+    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, service.optionalSecretRefs, config.environment, name, service.transportMode, service.transportMode === "public-tls" ? publicHostname(config) : undefined);
     if (service.database !== null) {
       if (service.dbPool === null)
         throw new RuntimeError("RUNTIME_DATABASE_CONFIG_MISMATCH");

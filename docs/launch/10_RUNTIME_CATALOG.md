@@ -18,8 +18,9 @@ manifests без изменения смысла. Любое отклонени�
   client API; SSE proxy к `realtime-gateway`. Direct owner/API-internal route отсутствует.
 - **Хранилище:** нет БД, нет persistent cache.
 - **Секреты:** отдельные public TLS private key/certificate, matching
-  `platform.publicBaseUrl`, OIDC/JWT verification configuration и собственная
-  service transport identity для внутренних outbound соединений.
+  `platform.publicBaseUrl`, optional public CA bundle для выделенного test
+  environment, OIDC/JWT verification configuration и собственная service
+  transport identity для внутренних outbound соединений.
 - **Transport:** `public-tls`; браузерный ingress не предъявляет service
   certificate, а внутренние outbound соединения используют mTLS.
 - **Публичность:** public internet; `internal-v1` и `aroma-gateway` не маршрутизирует.

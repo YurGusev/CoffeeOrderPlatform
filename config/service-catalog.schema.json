@@ -56,6 +56,7 @@
         "outgoingEvents": {"$ref": "#/$defs/stringArray"},
         "database": {"$ref": "#/$defs/database"},
         "secretRefs": {"$ref": "#/$defs/stringArray"},
+        "optionalSecretRefs": {"$ref": "#/$defs/stringArray"},
         "publicity": {"enum": ["public-ingress", "private-trust-root", "private-edge-backend", "private-owner-backend", "private-worker", "private-mutation-worker", "private-provider-gateway", "edge-only-realtime"]},
         "transportMode": {"enum": ["public-tls", "mtls"]}
       }

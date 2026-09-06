@@ -163,6 +163,10 @@
           "type": "array", "uniqueItems": true, "minItems": 0,
           "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
         },
+        "optionalSecretRefs": {
+          "type": "array", "uniqueItems": true, "minItems": 0,
+          "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
+        },
         "permissions": {"$ref": "#/$defs/permissions"},
         "mutationCapability": {"type": "boolean"}
       }

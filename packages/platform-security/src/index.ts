@@ -1,6 +1,6 @@
 import {createPrivateKey, createPublicKey, sign, verify, X509Certificate, type KeyObject} from "node:crypto";
 import type {ServerOptions} from "node:https";
-import type {PeerCertificate} from "node:tls";
+import {createSecureContext, type PeerCertificate} from "node:tls";
 import {Temporal} from "@js-temporal/polyfill";
 
 const TRANSPORT_SAN_PREFIX = "spiffe://coffee-platform/";
@@ -25,6 +25,7 @@ export type PublicTlsMaterial = Readonly<{
   keyPem: string;
   certPem: string;
   hostname: string;
+  caPem?: string;
 }>;
 
 export class TransportValidationError extends Error {
@@ -103,10 +104,36 @@ export function createMutualTlsServerOptions(material: ServiceTransportMaterial)
   return {key: material.keyPem, cert: material.certPem, ca: material.caPem, requestCert: true, rejectUnauthorized: true, minVersion: "TLSv1.3"};
 }
 
-export function parsePublicTlsMaterial(keyPem: unknown, certPem: unknown, hostname: string): PublicTlsMaterial {
+export function parsePublicTlsCaBundle(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim().length === 0) throw new TransportValidationError("public TLS CA bundle is incomplete");
+  try {
+    const certificates = [...value.matchAll(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/gu)].map((match) => match[0]);
+    if (certificates.length === 0 || value.replaceAll(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/gu, "").trim().length > 0) throw new Error("public TLS CA bundle must contain only certificates");
+    for (const certificate of certificates) new X509Certificate(certificate);
+    createSecureContext({ca: value});
+  } catch {
+    throw new TransportValidationError("public TLS CA bundle is invalid");
+  }
+  return value;
+}
+
+export function parsePublicTlsHostname(value: unknown): string {
+  if (typeof value !== "string") throw new TransportValidationError("public TLS base URL is invalid");
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.hostname.length === 0) throw new Error("invalid public TLS base URL");
+    return url.hostname;
+  } catch {
+    throw new TransportValidationError("public TLS base URL is invalid");
+  }
+}
+
+export function parsePublicTlsMaterial(keyPem: unknown, certPem: unknown, hostname: string, caPem?: unknown): PublicTlsMaterial {
   if (typeof keyPem !== "string" || keyPem.length === 0 || typeof certPem !== "string" || certPem.length === 0 || hostname.length === 0) {
     throw new TransportValidationError("public TLS material is incomplete");
   }
+  const publicCaPem = parsePublicTlsCaBundle(caPem);
   let certificate: X509Certificate;
   try {
     certificate = new X509Certificate(certPem);
@@ -118,7 +145,7 @@ export function parsePublicTlsMaterial(keyPem: unknown, certPem: unknown, hostna
   if (now < certificateTime(certificate.validFrom, "validFrom") || now > certificateTime(certificate.validTo, "validTo")) {
     throw new TransportValidationError("public TLS certificate is expired or not yet valid");
   }
-  return {keyPem, certPem, hostname};
+  return publicCaPem === undefined ? {keyPem, certPem, hostname} : {keyPem, certPem, hostname, caPem: publicCaPem};
 }
 
 export function createPublicTlsServerOptions(material: PublicTlsMaterial): ServerOptions {

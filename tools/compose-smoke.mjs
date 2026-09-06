@@ -18,7 +18,7 @@ import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
-import {parseServiceTransportMaterial, verifyTransportPeer} from "../packages/platform-security/src/index.ts";
+import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../packages/platform-security/src/index.ts";
 import pg from "pg";
 import {
   SERVER_IDENTITY_SQL,
@@ -224,6 +224,7 @@ async function writeStubSecret(
   runtime,
   environment,
   refs,
+  optionalRefs,
   databaseCredential,
   kafkaCredential,
   transportMaterial,
@@ -256,12 +257,23 @@ async function writeStubSecret(
             }
           : "compose-smoke-placeholder";
   }
+  for (const ref of optionalRefs) {
+    const value = ref === "edge.tlsCaBundle" ? publicTlsMaterial?.caPem : undefined;
+    if (value === undefined) continue;
+    const segments = ref.split(".");
+    let current = secrets;
+    for (const segment of segments.slice(0, -1)) {
+      if (!Object.hasOwn(current, segment)) current[segment] = {};
+      current = current[segment];
+    }
+    current[segments.at(-1)] = value;
+  }
   const content = `${JSON.stringify({ schemaVersion: 1, environment, runtime, secrets })}\n`;
   await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
   await chmod(path, 0o400);
 }
 
-async function createStubTransportMaterials(secretsDir, environment) {
+async function createStubTransportMaterials(secretsDir, environment, publicHostname) {
   const directory = join(secretsDir, "transport-ca");
   await mkdir(directory, {recursive: true, mode: 0o700});
   const caKey = join(directory, "ca.key");
@@ -300,28 +312,39 @@ async function createStubTransportMaterials(secretsDir, environment) {
       keyPem: await readFile(key, "utf8"),
     }));
   }
+  const publicCaKey = join(directory, "edge-public-ca.key");
+  const publicCaCert = join(directory, "edge-public-ca.crt");
+  execFileSync("openssl", [
+    "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", publicCaKey, "-out", publicCaCert, "-days", "1",
+    "-subj", "/CN=coffee-platform-compose-public-ca",
+    "-addext", "basicConstraints=critical,CA:TRUE",
+    "-addext", "keyUsage=critical,keyCertSign,cRLSign",
+  ], {stdio: "ignore"});
+  const publicCaPem = await readFile(publicCaCert, "utf8");
   const publicKey = join(directory, "edge-public.key");
   const publicCsr = join(directory, "edge-public.csr");
   const publicCert = join(directory, "edge-public.crt");
   const publicExt = join(directory, "edge-public.ext");
   await writeFile(publicExt, [
-    "subjectAltName=DNS:localhost,IP:127.0.0.1",
+    `subjectAltName=DNS:${publicHostname}`,
     "extendedKeyUsage=serverAuth",
     "",
   ].join("\n"), {encoding: "utf8", mode: 0o400});
   execFileSync("openssl", [
     "req", "-new", "-newkey", "rsa:2048", "-nodes",
-    "-keyout", publicKey, "-out", publicCsr, "-subj", "/CN=localhost",
+    "-keyout", publicKey, "-out", publicCsr, "-subj", `/CN=${publicHostname}`,
   ], {stdio: "ignore"});
   execFileSync("openssl", [
-    "x509", "-req", "-in", publicCsr, "-CA", caCert, "-CAkey", caKey,
-    "-CAserial", serial, "-out", publicCert, "-days", "1", "-sha256", "-extfile", publicExt,
+    "x509", "-req", "-in", publicCsr, "-CA", publicCaCert, "-CAkey", publicCaKey,
+    "-CAcreateserial", "-out", publicCert, "-days", "1", "-sha256", "-extfile", publicExt,
   ], {stdio: "ignore"});
   return {
     service: materials,
     publicTls: {
       keyPem: await readFile(publicKey, "utf8"),
       certPem: await readFile(publicCert, "utf8"),
+      caPem: publicCaPem,
     },
   };
 }
@@ -409,8 +432,9 @@ async function materializeSecrets(secretsDir, options) {
     await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
   );
+  const publicHostname = parsePublicTlsHostname(platformConfig.platform?.publicBaseUrl);
   const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.recoveryProof
-    ? await createStubTransportMaterials(secretsDir, platformConfig.environment)
+    ? await createStubTransportMaterials(secretsDir, platformConfig.environment, publicHostname)
     : undefined;
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
@@ -421,6 +445,7 @@ async function materializeSecrets(secretsDir, options) {
         runtime,
         platformConfig.environment,
         service.secretRefs,
+        service.optionalSecretRefs ?? [],
         options.databaseProofCredentials?.[runtime] ??
           options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[runtime],
         options.recoveryProof ? kafkaCredential : undefined,
@@ -1850,6 +1875,7 @@ async function assertReadiness(
   secretsDir,
   composeFile = COMPOSE_FILE,
 ) {
+  const publicTlsConfig = await readPublicTlsConfig();
   for (const runtime of RUNTIMES) {
     const output = runCompose(
       projectName,
@@ -1869,14 +1895,24 @@ async function assertReadiness(
   }
   for (const path of ["/health/live", "/health/ready", "/metrics"]) {
     assert.equal(
-      await hostRuntimeHealthStatus(secretsDir, "edge-gateway", path, 4000),
+      await hostRuntimeHealthStatus(secretsDir, "edge-gateway", path, 4000, publicTlsConfig),
       200,
       `edge host endpoint ${path} is not available`,
     );
   }
 }
 
-async function hostRuntimeTransport(secretsDir, runtime) {
+async function readPublicTlsConfig() {
+  const config = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const hostname = parsePublicTlsHostname(config.platform?.publicBaseUrl);
+  const optionalRefs = config.services?.["edge-gateway"]?.optionalSecretRefs;
+  if (optionalRefs !== undefined && (!Array.isArray(optionalRefs) || optionalRefs.some((ref) => typeof ref !== "string"))) {
+    throw new Error("edge-gateway optional public TLS refs are invalid");
+  }
+  return {hostname, hasCaBundle: optionalRefs?.includes("edge.tlsCaBundle") === true};
+}
+
+async function hostRuntimeTransport(secretsDir, runtime, publicTlsConfig) {
   const document = parseYaml(
     await readFile(join(secretsDir, `${runtime}.yaml`), "utf8"),
     {json: true},
@@ -1886,30 +1922,35 @@ async function hostRuntimeTransport(secretsDir, runtime) {
     document.environment,
     runtime,
   );
-  const publicCertificate = document.secrets?.edge?.tlsCertificate;
-  if (runtime === "edge-gateway" && typeof publicCertificate !== "string") {
-    throw new Error("edge-gateway public TLS certificate is missing from scoped secrets");
-  }
+  const publicTls = runtime === "edge-gateway"
+    ? parsePublicTlsMaterial(
+      document.secrets?.edge?.tlsPrivateKey,
+      document.secrets?.edge?.tlsCertificate,
+      publicTlsConfig.hostname,
+      publicTlsConfig.hasCaBundle ? document.secrets?.edge?.tlsCaBundle : undefined,
+    )
+    : undefined;
   return {
     environment: document.environment,
     material,
-    publicCertificate,
+    publicTls,
   };
 }
 
-function hostRuntimeHealthStatus(secretsDir, runtime, path, port) {
-  return hostRuntimeTransport(secretsDir, runtime).then(({environment, material, publicCertificate}) => new Promise((resolvePromise, reject) => {
+function hostRuntimeHealthStatus(secretsDir, runtime, path, port, publicTlsConfig) {
+  return hostRuntimeTransport(secretsDir, runtime, publicTlsConfig).then(({environment, material, publicTls}) => new Promise((resolvePromise, reject) => {
     const isPublic = runtime === "edge-gateway";
+    const publicTrust = isPublic && publicTls?.caPem !== undefined ? {ca: publicTls.caPem} : {};
     const request = httpsRequest({
       host: "127.0.0.1",
       port,
       path,
       method: "GET",
-      ca: isPublic ? publicCertificate : material.caPem,
+      ...(isPublic ? publicTrust : {ca: material.caPem}),
       ...(isPublic ? {} : {cert: material.certPem, key: material.keyPem}),
       minVersion: "TLSv1.3",
       rejectUnauthorized: true,
-      servername: isPublic ? "localhost" : "127.0.0.1",
+      servername: isPublic ? publicTls.hostname : "127.0.0.1",
       timeout: 5_000,
       ...(isPublic ? {} : {checkServerIdentity: (_hostname, certificate) => {
         try {

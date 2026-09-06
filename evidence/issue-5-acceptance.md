@@ -9,8 +9,13 @@ fail-closed peer verification, явный `public-tls` Edge listener и `mtls` �
 внутренних runtime, production wiring `api-public`, `api-internal` и
 `customer-service`, scoped delegation verification key sets, отдельный
 Customer cursor key/policy, production-safe runtime healthcheck и test-only
-unknown-COMMIT/restart harness. Production secret source намеренно не изменён:
-SOPS credentials и age key в окружении отсутствуют.
+unknown-COMMIT/restart harness. Исправлен public TLS trust path: server leaf
+больше не используется как CA, `edge.tlsCaBundle` — optional scoped public CA
+bundle для выделенного test environment, без bundle используется системное
+доверие Node.js, а host smoke и runtime healthcheck получают hostname из
+`platform.publicBaseUrl`. Test-only provisioning создаёт отдельную public CA;
+её private key не materializes в runtime. Production secret source намеренно не
+изменён: SOPS credentials и age key в окружении отсутствуют.
 
 ## Authority и predecessors
 
@@ -30,7 +35,7 @@ SOPS credentials и age key в окружении отсутствуют.
 |---|---|---|
 | Customer owner boundary и schema | Owner-local `CustomerStore`, migrations, grants и database ownership без межвладельческого SQL | **PASS static; live grants pending** |
 | Runtime wiring | Реальный owner и routes Customer; HTTPS/mTLS clients в двух API roots; shared runtime materialization | **PASS code/static; live trust pending** |
-| Transport trust | TLS 1.3, separate public Edge key/certificate with CA+hostname validation, internal `mtls` listener/client, environment/runtime SPIFFE SAN, certificate validity и fail-closed setup | **PASS static/unit; blocked live** — scoped certificates не materialized |
+| Transport trust | TLS 1.3, separate public Edge key/certificate with optional public CA bundle and hostname validation, internal `mtls` listener/client, environment/runtime SPIFFE SAN, certificate validity и fail-closed setup | **PASS static/unit/image; blocked live** — scoped certificates не materialized |
 | Delegation trust | Active/previous scoped Ed25519 verification sets для edge actor context, API public/internal delegation и Orders caller; no plaintext fallback | **PASS static; blocked live** — encrypted key inventory не provisioned |
 | Customer cursor | Ed25519 signer wired from a Customer-only private key and active/previous public keys; `kid`/`iat`/`exp`, max-age, clock-skew, absolute previous-key trust cutoff, unknown-kid, query binding and 2048-character bound enforced | **PASS static/unit; blocked live** — keys absent in SOPS source |
 | Customer URL/body limits | Customer cursor 2048, URL budget 8 KiB, body limit 16 KiB; Catalog shared cursor remains 512 | **PASS static/unit** |
@@ -52,19 +57,21 @@ SOPS credentials и age key в окружении отсутствуют.
 | `pnpm contracts:test` | **PASS** — 36 pass, 0 fail |
 | `pnpm architecture:check` | **PASS** |
 | `node scripts/check-service-catalog.mjs` | **PASS** — 15 runtimes, 29 interactions |
-| `node --test --test-name-pattern 'public Edge TLS|configured Edge startup' tests/runtime/lifecycle.test.mjs` | **PASS** — configured Edge startup and production healthcheck use separate public material with hostname validation |
+| `node --test --test-name-pattern 'public Edge TLS|configured Edge startup' tests/runtime/lifecycle.test.mjs` | **PASS** — 2 pass, 0 fail; separate public CA/leaf, leaf/wrong-CA/hostname rejection, loopback TCP with `edge.test`, no client service certificate, internal mTLS isolation, configured healthcheck and system-trust path without optional CA |
 | `node --test tests/customer/customer-http.test.mjs` | **PASS** — 8 pass, including TTL, absolute previous-key trust cutoff, late previous-key signing and unknown-`kid` cursor checks |
 | `node --test packages/platform-testing/test/platform-packages.test.mjs` | **PASS** — 30 pass, including public/internal TLS option split |
-| isolated `pnpm --filter @coffee-platform/edge-gateway deploy --prod --legacy` import check | **PASS** — deployed tree resolves `@coffee-platform/runtime/healthcheck` without root-only imports |
+| isolated `pnpm --filter @coffee-platform/runtime deploy --prod --legacy` import check | **PASS** — deployed tree resolves `@coffee-platform/runtime/healthcheck` without root-only imports |
+| `CI=true node tools/docker-build.mjs --build-arg RUNTIME=edge-gateway --target runtime --load -t coffee-platform-edge-healthcheck:verify .` | **PASS** — final runtime image built; build typecheck/deploy stages passed |
+| `docker run --rm --entrypoint node coffee-platform-edge-healthcheck:verify ... import('@coffee-platform/runtime/healthcheck')` | **PASS** — final image healthcheck entrypoint imports; temporary image removed |
 | `pnpm authority:check` | **PASS** |
 | `pnpm versions:check` | **PASS** |
 | `pnpm db:smoke` | **PASS structural only** — `liveDatabase:false`, `realKafka:false` |
-| `pnpm test` | **BLOCKED** — 199 tests: 182 pass, 2 fail из-за canonical SOPS inventory и 15 skipped |
-| `pnpm config:check` | **BLOCKED** — `CONFIG-SCHEMA`: encrypted source lacks new required key paths |
-| `pnpm security:secrets` | **BLOCKED** — same missing encrypted inventory |
+| `pnpm test` | **BLOCKED / exit 1** — 199 tests: 182 pass, 2 fail, 15 skipped; оба failure относятся к известному canonical encrypted SOPS inventory: foundation schema не содержит required `edge.tlsCertificate` и verification/cursor key paths, а MAC-negative fixture останавливается на той же schema gate |
+| `pnpm config:check` | **BLOCKED / exit 1** — `CONFIG-SCHEMA ... secrets/platform.secrets.sops.yaml: No errors`; фактические missing required paths перечислены ниже |
+| `pnpm security:secrets` | **BLOCKED / exit 1** — тот же missing encrypted inventory |
 | `pnpm test:customer-integration` | **BLOCKED / exit 1 by design** — 15 tests: 1 pass, 14 explicit blockers, 0 skipped |
-| `pnpm test:compose-smoke` | **BLOCKED** — `SOPS_AGE_KEY_FILE` and `sops` unavailable |
-| `node tools/compose-smoke.mjs --stub-secrets --no-build` | **BLOCKED** — ephemeral public/mTLS materialization reached Compose, but required local runtime images are absent; no live evidence claimed |
+| `pnpm test:compose-smoke` | **BLOCKED / exit 1** — `SOPS_AGE_KEY_FILE` is required for decrypted scoped secrets; real SOPS materialization не выполнялась |
+| `node tools/compose-smoke.mjs --stub-secrets --no-build` | **BLOCKED / exit 1** — ephemeral separate public/internal CA materialization reached Compose, but required local runtime image `coffee-compose-smoke-...-api-internal:latest` is absent; no live evidence claimed |
 | `git diff --check` | **PASS** |
 
 ## Exact blockers and required action
@@ -109,14 +116,25 @@ canonical PostgreSQL port `5432`. Harness также требует test-only
 
 Для Edge дополнительно нужен encrypted `edge.tlsCertificate`, matching
 `edge.tlsPrivateKey` и hostname `platform.publicBaseUrl`; он не заменяется
-внутренним `security.serviceTransportKeys.edge-gateway`.
+внутренним `security.serviceTransportKeys.edge-gateway`. `edge.tlsCaBundle`
+остаётся optional: отсутствие означает системное доверие Node.js, наличие
+означает явное доверие только указанному public CA bundle; leaf certificate и
+internal service CA fallback запрещены.
 
 Эти prerequisites не подменялись фиктивными credentials или live evidence.
-Восемь пользовательских файлов и их uncommitted изменения сохраняются и не
-входят в commit.
+Восемь пользовательских instruction-файлов, а также появившиеся untracked
+`.agents/skills/astra-orchestrator/` и `.codex/` сохраняются и не входят в
+commit.
+
+## Неприменённая правка issue #5
+
+Issue/PR в этом продолжении не изменялись. Точная подготовленная замена строки:
+`Customer cursor — 2048 символов; Customer URL budget — 8 KiB; Catalog cursor —
+512 символов.` Остальные acceptance criteria issue не меняются.
 
 ## Remote state
 
-Issue #5 остаётся `OPEN`; PR #129 остаётся open/blocked. Продолжение зафиксировано
-коммитом `0b37ad4` и отправлено в `feature/5-customer-service`; merge, auto-merge,
-issue checkbox mutation и closure не выполнялись.
+Issue #5 остаётся `OPEN`; PR #129 остаётся open/blocked. Предыдущий remote head
+остаётся `b847280`; текущая continuation подготавливается локально в
+`feature/5-customer-service` и не отправляется в remote в рамках этого шага.
+Merge, auto-merge, issue checkbox mutation и closure не выполнялись.

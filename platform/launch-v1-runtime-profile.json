@@ -18,6 +18,7 @@
       "dbPrincipal": null,
       "httpSurfaces": ["public-edge"],
       "secretRefs": ["edge.tlsPrivateKey", "edge.tlsCertificate", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
+      "optionalSecretRefs": ["edge.tlsCaBundle"],
       "implemented": false
     },
     {

@@ -167,6 +167,7 @@ export type RuntimeConfig = Readonly<{
   dbPool: DatabasePoolConfig | null;
   database: string | null;
   secretRefs: readonly string[];
+  optionalSecretRefs: readonly string[];
   outbound: readonly string[];
   kafka: KafkaServiceConfig;
   permissions: PermissionConfig;
@@ -208,8 +209,9 @@ function exactKeys(
   value: UnknownRecord,
   expected: readonly string[],
   path: string,
+  optional: readonly string[] = [],
 ): void {
-  const expectedSet = new Set(expected);
+  const expectedSet = new Set([...expected, ...optional]);
   for (const key of Object.keys(value)) {
     if (!expectedSet.has(key)) throw new PlatformConfigError(`${path}.${key}`, "неизвестный ключ");
   }
@@ -770,6 +772,7 @@ function runtimeConfig(
       "mutationCapability",
     ],
     path,
+    ["optionalSecretRefs"],
   );
   const listen = record(source["listen"], `${path}.listen`);
   exactKeys(listen, ["host", "port"], `${path}.listen`);
@@ -829,6 +832,7 @@ function runtimeConfig(
     ),
     database,
     secretRefs: stringArray(source["secretRefs"], `${path}.secretRefs`),
+    optionalSecretRefs: stringArray(source["optionalSecretRefs"] ?? [], `${path}.optionalSecretRefs`),
     outbound: stringArray(source["outbound"], `${path}.outbound`),
     kafka,
     permissions: Object.freeze({

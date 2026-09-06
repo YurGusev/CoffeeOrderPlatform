@@ -1,7 +1,7 @@
 import {readFile} from "node:fs/promises";
 import {request} from "node:https";
 import {load as parseYaml} from "js-yaml";
-import {parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "@coffee-platform/security";
+import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "@coffee-platform/security";
 
 type RuntimeEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -25,12 +25,13 @@ function requestHealth(
 ): Promise<number> {
   return new Promise((resolve, reject) => {
     const isPublic = publicTls !== undefined;
+    const publicTrust = isPublic && publicTls.caPem !== undefined ? {ca: publicTls.caPem} : {};
     const client = request({
       host: "127.0.0.1",
       port,
       path,
       method: "GET",
-      ca: isPublic ? publicTls.certPem : material.caPem,
+      ...(isPublic ? publicTrust : {ca: material.caPem}),
       ...(isPublic ? {} : {cert: material.certPem, key: material.keyPem}),
       minVersion: "TLSv1.3",
       rejectUnauthorized: true,
@@ -89,13 +90,15 @@ export async function runRuntimeHealthcheck(
   );
   let publicTls: ReturnType<typeof parsePublicTlsMaterial> | undefined;
   if (runtime === "edge-gateway") {
-    const config = parseYaml(await readFile(configPath, "utf8"), {json: true}) as {platform?: {publicBaseUrl?: unknown}};
+    const config = parseYaml(await readFile(configPath, "utf8"), {json: true}) as {platform?: {publicBaseUrl?: unknown}; services?: Record<string, {optionalSecretRefs?: unknown}>};
     const baseUrl = config?.platform?.publicBaseUrl;
     if (typeof baseUrl !== "string") throw new Error("runtime healthcheck public base URL is invalid");
-    const url = new URL(baseUrl);
-    if (url.protocol !== "https:" || url.hostname.length === 0) throw new Error("runtime healthcheck public base URL is invalid");
-    const hostname = url.hostname;
-    publicTls = parsePublicTlsMaterial(secretAt(document, "secrets.edge.tlsPrivateKey"), secretAt(document, "secrets.edge.tlsCertificate"), hostname);
+    const hostname = parsePublicTlsHostname(baseUrl);
+    const service = config?.services?.[runtime];
+    const optionalRefs = service?.optionalSecretRefs;
+    if (optionalRefs !== undefined && (!Array.isArray(optionalRefs) || optionalRefs.some((ref) => typeof ref !== "string"))) throw new Error("runtime healthcheck optional secret refs are invalid");
+    const publicCaPem = optionalRefs?.includes("edge.tlsCaBundle") ? secretAt(document, "secrets.edge.tlsCaBundle") : undefined;
+    publicTls = parsePublicTlsMaterial(secretAt(document, "secrets.edge.tlsPrivateKey"), secretAt(document, "secrets.edge.tlsCertificate"), hostname, publicCaPem);
   }
   const statuses = await Promise.all(paths.map((path) => requestHealth(path, port, material, environmentName, runtime, publicTls)));
   if (statuses.some((status) => status < 200 || status >= 300)) {

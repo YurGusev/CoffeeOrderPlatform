@@ -193,10 +193,11 @@ def require(condition: bool, message: str) -> None:
         raise AuthorityError(message)
 
 
-def required_keys(value: dict[str, Any], keys: set[str], label: str) -> None:
+def required_keys(value: dict[str, Any], keys: set[str], label: str, optional: set[str] | None = None) -> None:
+    optional = optional or set()
     missing = keys - value.keys()
     require(not missing, f"{label}: missing required fields: {', '.join(sorted(missing))}")
-    unknown = value.keys() - keys
+    unknown = value.keys() - keys - optional
     require(not unknown, f"{label}: unknown fields are forbidden: {', '.join(sorted(unknown))}")
 
 
@@ -298,7 +299,7 @@ def validate_runtime_profile(profile: dict[str, Any]) -> None:
 
     for entry in entries:
         name = string(entry.get("name"), "profile.runtime.name")
-        required_keys(entry, {"name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented", "transportMode"}, f"profile.runtimes.{name}")
+        required_keys(entry, {"name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented", "transportMode"}, f"profile.runtimes.{name}", {"optionalSecretRefs"})
         require(entry["owner"] == OWNERS[name], f"profile.runtimes.{name}.owner: owner changed")
         expected_transport = "public-tls" if name == "edge-gateway" else "mtls"
         require(entry["transportMode"] == expected_transport, f"profile.runtimes.{name}.transportMode: expected {expected_transport}")
@@ -313,6 +314,9 @@ def validate_runtime_profile(profile: dict[str, Any]) -> None:
         require(entry["dbPrincipal"] == DB_PRINCIPALS[name], f"profile.runtimes.{name}.dbPrincipal: owner DB principal changed")
         exact_list(entry["httpSurfaces"], SURFACES[name], f"profile.runtimes.{name}.httpSurfaces")
         require(isinstance(entry["secretRefs"], list) and all(isinstance(ref, str) and ref for ref in entry["secretRefs"]), f"profile.runtimes.{name}.secretRefs: non-empty refs required")
+        optional_refs = entry.get("optionalSecretRefs", [])
+        require(isinstance(optional_refs, list) and all(isinstance(ref, str) and ref for ref in optional_refs), f"profile.runtimes.{name}.optionalSecretRefs: string array required")
+        require(optional_refs == (["edge.tlsCaBundle"] if name == "edge-gateway" else []), f"profile.runtimes.{name}.optionalSecretRefs: unexpected optional refs")
         require(entry["implemented"] is False, f"profile.runtimes.{name}.implemented: authority profile cannot claim implementation")
 
         if name in {"edge-gateway", "api-public", "api-internal"}:

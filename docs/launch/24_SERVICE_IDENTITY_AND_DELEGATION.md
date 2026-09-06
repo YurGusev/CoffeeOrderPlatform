@@ -12,7 +12,9 @@ bundle — 12h. Runtime получает только свой key/cert в scope
 bundle находится в `platform.yaml`. `edge-gateway` использует public TLS
 listener без требования client certificate: его `edge.tlsPrivateKey` и
 `edge.tlsCertificate` — отдельная серверная пара с hostname из
-`platform.publicBaseUrl`. `security.serviceTransportKeys.edge-gateway` остаётся
+`platform.publicBaseUrl`; optional `edge.tlsCaBundle` применяется только как
+явный trust override для dedicated test environment, иначе используется
+системное доверие Node.js. `security.serviceTransportKeys.edge-gateway` остаётся
 внутренней service identity для outbound mTLS. Остальные runtime используют
 mTLS listener и client. Expired/unknown SAN делает readiness 503 на internal
 trust surface.

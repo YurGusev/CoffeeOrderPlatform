@@ -88,11 +88,16 @@ export async function materializeRuntimeSecrets({root = REPO_ROOT, runtime, outp
   const decrypted = assertPlainSecretDocument(encrypted, decryptInMemory(secretPath, env));
   const environment = decrypted.environments[config.environment];
   const refs = config.services[runtime].secretRefs;
+  const optionalRefs = config.services[runtime].optionalSecretRefs ?? [];
   const scoped = {};
   for (const ref of refs) {
     const value = secretValueAt(environment, ref);
     if (value === undefined) fail('CONFIG-SECRET-REF', `${runtime}.${ref}: secret does not exist`);
     setSecretAt(scoped, ref, value);
+  }
+  for (const ref of optionalRefs) {
+    const value = secretValueAt(environment, ref);
+    if (value !== undefined) setSecretAt(scoped, ref, value);
   }
   const destination = env.COFFEE_RUNTIME_SECRETS_FILE ?? join(outputDir, 'coffee-platform.yaml');
   await mkdir(dirname(destination), {recursive: true, mode: 0o700});

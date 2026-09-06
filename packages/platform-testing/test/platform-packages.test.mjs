@@ -26,6 +26,7 @@ import {
   verifyServiceDelegation,
   createMutualTlsServerOptions,
   createPublicTlsServerOptions,
+  parsePublicTlsCaBundle,
   parseServiceTransportMaterial,
 } from "../../platform-security/src/index.ts";
 import {withTransaction, createDatabase, DatabaseTransactionError} from "../../platform-database/dist/index.js";
@@ -42,6 +43,8 @@ import { createTestClock } from "../src/index.ts";
 void test("config rejects unknown keys and requires the exact runtime set", () => {
   const parsed = parsePlatformConfig(parseYaml(readFileSync(new URL("../../../config/platform.yaml", import.meta.url), "utf8")));
   assert.equal(Object.keys(parsed.services).length, 15);
+  assert.deepEqual(parsed.services["edge-gateway"].optionalSecretRefs, ["edge.tlsCaBundle"]);
+  assert.deepEqual(parsed.services.web.optionalSecretRefs, []);
   assert.throws(() => parsePlatformConfig({...parsed, unknown: true}), PlatformConfigError);
 });
 
@@ -159,6 +162,7 @@ void test("security transport rejects plaintext and requires mutual TLS", () => 
     }),
     {key: "key", cert: "cert", requestCert: false, minVersion: "TLSv1.3"},
   );
+  assert.throws(() => parsePublicTlsCaBundle("not-a-certificate"), {code: "TRANSPORT_IDENTITY_INVALID"});
 });
 
 void test("security signs and verifies service delegation claims", () => {

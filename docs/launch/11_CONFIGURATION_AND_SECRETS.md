@@ -93,6 +93,7 @@ environments:
     edge:
       tlsPrivateKey: ENC[...]
       tlsCertificate: ENC[...]
+      tlsCaBundle: ENC[...] # optional; public trust override for dedicated test environment
       oidcClientSecret: ENC[...]
     security:
       actorContextEdgeSigningPrivateKey: ENC[...]
@@ -163,6 +164,10 @@ Inventory authority — это encrypted paths в `secrets/platform.secrets.sops
 внутренних outbound соединений и не может использоваться публичным listener. Все
 остальные HTTP runtime используют `mtls`; их listener и outbound client
 проверяют service identity по scoped CA и SPIFFE SAN.
+`edge.tlsCaBundle` является optional scoped ref, а не обязательным
+`secretRefs`: при его отсутствии healthcheck и host smoke используют системное
+доверие Node.js; при наличии проверяют только этот PEM bundle. `edge.tlsCertificate`
+не используется как trust store, а internal service CA не является fallback.
 
 `security.customerCursorSigningPrivateKey` — отдельный Customer-scoped ключ;
 он не переиспользуется для Catalog cursor, actor context, delegation или mTLS.
@@ -176,7 +181,9 @@ material остаётся в SOPS inventory и materializes только для 
 
 1. Trusted `config-bootstrap` читает `config/platform.yaml`, проверяет schema и
    decrypts `secrets/platform.secrets.sops.yaml` в памяти.
-2. Он сверяет `services.<runtime>.secretRefs` с allowlist из service catalog.
+2. Он сверяет `services.<runtime>.secretRefs` и `optionalSecretRefs` с allowlist
+   из service catalog. Optional ref materializes только если значение есть в
+   encrypted inventory; его отсутствие не блокирует scoped file.
 3. Для runtime создаётся только scoped ephemeral YAML в tmpfs
    `/run/secrets/coffee-platform.yaml`, mode `0400`, owner UID runtime.
 4. Процесс получает только `COFFEE_CONFIG_FILE=/app/config/platform.yaml` и
