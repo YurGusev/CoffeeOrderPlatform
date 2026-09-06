@@ -8,6 +8,7 @@ import {
   type CustomerSearchMode,
   type NormalizedCustomerCreate,
 } from "../../domain/customer.js";
+import {assertCustomerRow} from "./customer-row-schema.js";
 
 type CustomerRow = Readonly<{
   customer_ref: unknown;
@@ -62,28 +63,6 @@ export class CustomerStorageError extends Error {
   }
 }
 
-function stringValue(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) throw new CustomerStorageError(`invalid customer row: ${field}`);
-  return value;
-}
-
-function refValue(value: unknown, field: string, pattern: RegExp): string {
-  const result = stringValue(value, field);
-  if (!pattern.test(result)) throw new CustomerStorageError(`invalid customer row: ${field}`);
-  return result;
-}
-
-function versionValue(value: unknown, field: string): string {
-  const result = stringValue(value, field);
-  if (!/^[1-9][0-9]*$/u.test(result)) throw new CustomerStorageError(`invalid customer row: ${field}`);
-  return result;
-}
-
-function nullableStringValue(value: unknown, field: string): string | null {
-  if (value === null) return null;
-  return stringValue(value, field);
-}
-
 function customerRow(row: CustomerRow): Readonly<{
   customerRef: string;
   version: string;
@@ -93,25 +72,44 @@ function customerRow(row: CustomerRow): Readonly<{
   createdAt: string;
   updatedAt: string;
 }> {
+  assertCustomerRow(row, "customer");
+  const value = row as Readonly<{
+    customer_ref: string;
+    version: string;
+    display_name: string;
+    phone_e164: string | null;
+    email_normalized: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
   return {
-    customerRef: refValue(row.customer_ref, "customer_ref", /^cus_[0-9A-HJKMNP-TV-Z]{26}$/u),
-    version: versionValue(row.version, "version"),
-    displayName: stringValue(row.display_name, "display_name"),
-    phoneE164: nullableStringValue(row.phone_e164, "phone_e164"),
-    emailNormalized: nullableStringValue(row.email_normalized, "email_normalized"),
-    createdAt: stringValue(row.created_at, "created_at"),
-    updatedAt: stringValue(row.updated_at, "updated_at"),
+    customerRef: value.customer_ref,
+    version: value.version,
+    displayName: value.display_name,
+    phoneE164: value.phone_e164,
+    emailNormalized: value.email_normalized,
+    createdAt: value.created_at,
+    updatedAt: value.updated_at,
   };
 }
 
 function searchRow(row: SearchRow): CustomerSearchRow {
+  assertCustomerRow(row, "search");
+  const value = row as Readonly<{
+    customer_ref: string;
+    version: string;
+    display_name: string;
+    display_name_search: string;
+    phone_e164: string | null;
+    email_normalized: string | null;
+  }>;
   return {
-    customerRef: refValue(row.customer_ref, "customer_ref", /^cus_[0-9A-HJKMNP-TV-Z]{26}$/u),
-    version: versionValue(row.version, "version"),
-    displayName: stringValue(row.display_name, "display_name"),
-    name: stringValue(row.display_name_search, "display_name_search"),
-    phoneE164: nullableStringValue(row.phone_e164, "phone_e164"),
-    emailNormalized: nullableStringValue(row.email_normalized, "email_normalized"),
+    customerRef: value.customer_ref,
+    version: value.version,
+    displayName: value.display_name,
+    name: value.display_name_search,
+    phoneE164: value.phone_e164,
+    emailNormalized: value.email_normalized,
   };
 }
 
@@ -201,11 +199,19 @@ export class CustomerRepository {
       write.actorRef,
     ]);
     if (inserted.rowCount !== 1) {
-      if (write.input.phoneE164 !== null && (await this.findPhoneConflict(transaction, [write.input.phoneE164])).rowCount === 1) {
-        throw new CustomerDomainError("CUSTOMER_PHONE_CONFLICT", "active customer already owns this phone");
+      if (write.input.phoneE164 !== null) {
+        const conflict = await this.findPhoneConflict(transaction, [write.input.phoneE164]);
+        if (conflict.rowCount === 1) {
+          assertCustomerRow(conflict.rows[0], "conflict");
+          throw new CustomerDomainError("CUSTOMER_PHONE_CONFLICT", "active customer already owns this phone");
+        }
       }
-      if (write.input.emailNormalized !== null && (await this.findEmailConflict(transaction, [write.input.emailNormalized])).rowCount === 1) {
-        throw new CustomerDomainError("CUSTOMER_EMAIL_CONFLICT", "active customer already owns this email");
+      if (write.input.emailNormalized !== null) {
+        const conflict = await this.findEmailConflict(transaction, [write.input.emailNormalized]);
+        if (conflict.rowCount === 1) {
+          assertCustomerRow(conflict.rows[0], "conflict");
+          throw new CustomerDomainError("CUSTOMER_EMAIL_CONFLICT", "active customer already owns this email");
+        }
       }
       throw new CustomerStorageError("customer insert was ignored without a contact conflict");
     }
@@ -273,13 +279,13 @@ export class CustomerRepository {
     const result = await this.readOrderInput(transaction, [customerRef]);
     const row = result.rows[0];
     if (row === undefined) return null;
-    const status = stringValue(row.status, "status");
-    if (status !== "Active" && status !== "Inactive") throw new CustomerStorageError("invalid customer status");
+    assertCustomerRow(row, "orderInput");
+    const value = row as Readonly<{customer_ref: string; version: string; display_name: string; status: "Active" | "Inactive"}>;
     return {
-      customerRef: refValue(row.customer_ref, "customer_ref", /^cus_[0-9A-HJKMNP-TV-Z]{26}$/u),
-      customerVersion: versionValue(row.version, "version"),
-      displayName: stringValue(row.display_name, "display_name"),
-      state: status,
+      customerRef: value.customer_ref,
+      customerVersion: value.version,
+      displayName: value.display_name,
+      state: value.status,
     };
   }
 }

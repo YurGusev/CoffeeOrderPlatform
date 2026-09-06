@@ -5,6 +5,7 @@ export const CUSTOMER_ORIGIN = process.env.CUSTOMER_SERVICE_ORIGIN ?? "http://12
 export const CUSTOMER_DATABASE_URL = process.env.CUSTOMER_DATABASE_URL ?? process.env.COFFEE_CUSTOMER_DATABASE_URL;
 
 export function blocker(testContext, message) {
+  if (process.env.CUSTOMER_INTEGRATION_REQUIRED === "1") throw new Error(`BLOCKER: ${message}`);
   testContext.skip(`BLOCKER: ${message}`);
   return undefined;
 }

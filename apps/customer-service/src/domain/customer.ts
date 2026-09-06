@@ -96,7 +96,8 @@ export class CustomerDomainError extends Error {
     | "CUSTOMER_EMAIL_CONFLICT"
     | "IDEMPOTENCY_CONFLICT"
     | "IDEMPOTENCY_REQUEST_IN_PROGRESS"
-    | "IDEMPOTENCY_RESULT_INVALID";
+    | "IDEMPOTENCY_RESULT_INVALID"
+    | "CUSTOMER_UNAVAILABLE";
 
   public constructor(code: CustomerDomainError["code"], message: string) {
     super(message);

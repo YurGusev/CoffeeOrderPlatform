@@ -122,26 +122,37 @@ function compareResponse(before, after, at, sourcePath) {
   }
 }
 
-function compareParameter(before, after, at, sourcePath) {
+function resolveParameter(document, parameter) {
+  const reference = parameter?.$ref;
+  if (typeof reference !== 'string' || !reference.startsWith('#/components/parameters/')) return parameter;
+  return document.components?.parameters?.[reference.split('/').at(-1)] ?? parameter;
+}
+
+function compareParameter(before, after, at, sourcePath, beforeDocument, afterDocument) {
   if (!after) fail(`${at}: parameter removed`);
-  for (const field of ['name', 'in', 'required', '$ref']) if (before[field] !== after[field]) fail(`${at}: parameter ${field} changed`);
-  compareSchema(before.schema, after.schema, `${at}.schema`, sourcePath);
+  const previous = resolveParameter(beforeDocument, before);
+  const next = resolveParameter(afterDocument, after);
+  for (const field of ['name', 'in', 'required']) if (previous[field] !== next[field]) fail(`${at}: parameter ${field} changed`);
+  compareSchema(previous.schema, next.schema, `${at}.schema`, sourcePath);
 }
 
-function parameterKey(parameter) {
-  return parameter.$ref ?? `${parameter.in}:${parameter.name}`;
+function parameterKey(document, parameter) {
+  const resolved = resolveParameter(document, parameter);
+  return `${resolved.in}:${resolved.name}`;
 }
 
-function compareParameters(before, after, at, sourcePath, afterDocument) {
-  const next = new Map((after ?? []).map((parameter) => [parameterKey(parameter), parameter]));
-  const previous = new Set((before ?? []).map(parameterKey));
-  for (const parameter of before ?? []) compareParameter(parameter, next.get(parameterKey(parameter)), `${at}:${parameterKey(parameter)}`, sourcePath);
+function compareParameters(before, after, at, sourcePath, beforeDocument, afterDocument) {
+  const next = new Map((after ?? []).map((parameter) => [parameterKey(afterDocument, parameter), parameter]));
+  const previous = new Set((before ?? []).map((parameter) => parameterKey(beforeDocument, parameter)));
+  for (const parameter of before ?? []) {
+    const key = parameterKey(beforeDocument, parameter);
+    compareParameter(parameter, next.get(key), `${at}:${key}`, sourcePath, beforeDocument, afterDocument);
+  }
   for (const parameter of after ?? []) {
-    if (previous.has(parameterKey(parameter))) continue;
-    const resolved = parameter.$ref?.startsWith('#/components/parameters/')
-      ? afterDocument.components.parameters[parameter.$ref.split('/').at(-1)]
-      : parameter;
-    if (resolved?.required) fail(`${at}: required parameter ${parameterKey(parameter)} added`);
+    const key = parameterKey(afterDocument, parameter);
+    if (previous.has(key)) continue;
+    const resolved = resolveParameter(afterDocument, parameter);
+    if (resolved?.required) fail(`${at}: required parameter ${key} added`);
   }
 }
 
@@ -149,7 +160,7 @@ function compareOpenApi(before, after, path) {
   if (JSON.stringify(before['x-command-recovery'] ?? null) !== JSON.stringify(after['x-command-recovery'] ?? null)) fail(`${path}: command recovery protocol changed`);
   for (const [route, pathItem] of Object.entries(before.paths ?? {})) {
     if (!after.paths?.[route]) fail(`${path}: route ${route} removed`);
-    compareParameters(pathItem.parameters, after.paths[route].parameters, `${path}:${route}:parameters`, path, after);
+    compareParameters(pathItem.parameters, after.paths[route].parameters, `${path}:${route}:parameters`, path, before, after);
     for (const [method, operation] of Object.entries(pathItem)) {
       if (!['get', 'post', 'put', 'delete'].includes(method)) continue;
       const next = after.paths[route][method];
@@ -159,7 +170,7 @@ function compareOpenApi(before, after, path) {
       for (const field of ['x-owner', 'x-audience', 'x-caller', 'x-callers', 'x-exposure', 'x-auth', 'x-idempotency']) {
         if (JSON.stringify(operation[field]) !== JSON.stringify(next[field])) fail(`${path}: ${operation.operationId} ${field} changed`);
       }
-      compareParameters(operation.parameters, next.parameters, `${path}:${operation.operationId}:parameters`, path, after);
+      compareParameters(operation.parameters, next.parameters, `${path}:${operation.operationId}:parameters`, path, before, after);
       if (Boolean(operation.requestBody?.required) !== Boolean(next.requestBody?.required)) fail(`${path}: ${operation.operationId} request body required changed`);
       for (const [status, response] of Object.entries(operation.responses ?? {})) {
         if (!next.responses?.[status]) fail(`${path}: ${operation.operationId} status ${status} removed`);
@@ -173,7 +184,7 @@ function compareOpenApi(before, after, path) {
     compareSchema(schema, after.components.schemas[name], `${path}#${name}`, path);
   }
   for (const [name, parameter] of Object.entries(before.components?.parameters ?? {})) {
-    compareParameter(parameter, after.components?.parameters?.[name], `${path}:parameter:${name}`, path);
+    compareParameter(parameter, after.components?.parameters?.[name], `${path}:parameter:${name}`, path, before, after);
   }
   for (const [name, response] of Object.entries(before.components?.responses ?? {})) {
     const next = after.components?.responses?.[name];

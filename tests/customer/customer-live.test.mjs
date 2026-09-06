@@ -48,11 +48,11 @@ void test("Customer create is atomic and exact replay is byte-identical", async 
   assert.equal(first.body.version, "1");
   assert.match(first.body.customerRef, /^cus_[0-9A-HJKMNP-TV-Z]{26}$/);
   assert.equal(first.body.displayName, "Иван Петров");
-  assert.equal(first.body.phone, "+79991234567");
+  assert.equal(first.body.phone, payload.phone);
   assert.equal(first.body.email, payload.email.toLowerCase());
   assert.match(first.body.address.addressRef, /^adr_[0-9A-HJKMNP-TV-Z]{26}$/);
-  assert.equal(first.body.address.line2, null);
-  assert.equal(first.body.address.postalCode, null);
+  assert.equal(Object.hasOwn(first.body.address, "line2"), false);
+  assert.equal(Object.hasOwn(first.body.address, "postalCode"), false);
   assert.equal(first.body.address.countryCode, "RU");
   assertTimestamp(first.body.createdAt);
   assertTimestamp(first.body.updatedAt);
@@ -62,7 +62,7 @@ void test("Customer create is atomic and exact replay is byte-identical", async 
   assert.equal(row.version, "1");
   assert.equal(row.display_name, "Иван Петров");
   assert.equal(row.display_name_search, "иван петров");
-  assert.equal(row.phone_e164, "+79991234567");
+  assert.equal(row.phone_e164, payload.phone);
   assert.equal(row.email_normalized, payload.email.toLowerCase());
   assert.equal(row.status, "Active");
   assert.ok(row.created_by_actor_ref);
@@ -251,7 +251,7 @@ void test("Customer private order snapshot is minimal and service-authorized", a
   assert.equal(browserAttempt.body.code, "SERVICE_AUTHENTICATION_REQUIRED");
 });
 
-void test("Customer rejects missing and forged actor context, ignores spoofed actor headers, and honors abort", async (t) => {
+void test("Customer rejects missing, forged and spoofed actor context, and honors abort", async (t) => {
   const service = await liveService(t);
   if (!service) return;
   const payload = customerPayload(`${Date.now()}-${randomUUID().slice(0, 8)}`);
@@ -263,13 +263,7 @@ void test("Customer rejects missing and forged actor context, ignores spoofed ac
   const spoofed = await postCustomer(service, customerPayload(`${Date.now()}-${randomUUID().slice(0, 8)}`), randomUUID(), {
     headers: {"X-Actor-Ref": "spoofed-actor", "X-Actor-Permissions": "customer:admin"},
   });
-  assert.equal(spoofed.response.status, 201);
-  const client = await liveDatabase(t);
-  if (client) {
-    const row = await customerRow(client, spoofed.body.customerRef);
-    assert.ok(row?.created_by_actor_ref);
-    assert.notEqual(row.created_by_actor_ref, "spoofed-actor");
-  }
+  assertProblem(assert, spoofed, 403, "ACTOR_CONTEXT_INVALID");
 
   const controller = new AbortController();
   controller.abort(new Error("test cancellation"));

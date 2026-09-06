@@ -1,9 +1,8 @@
 import {createPrivateKey, createPublicKey, randomUUID} from "node:crypto";
+import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, isCustomerOrderInput, isCustomerProblem, isCustomerRef} from "@coffee-platform/contracts-customer-v1";
 import type {CustomerOrderInput} from "@coffee-platform/contracts-customer-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
 import {signServiceDelegation, verifyServiceDelegation} from "@coffee-platform/security";
-
-const CUSTOMER_REF = /^cus_[0-9A-HJKMNP-TV-Z]{26}$/;
 
 type HeaderValue = string | string[] | undefined;
 type RuntimeApp = Parameters<NonNullable<RuntimeComposition["configure"]>>[0];
@@ -90,20 +89,17 @@ function sendProblem(reply: Reply, body: Problem): Reply {
   return reply.header("cache-control", "no-store").code(body.status).type("application/problem+json").send(body);
 }
 
-function sendForward(reply: Reply, result: ForwardResult): Reply {
+function sendForward(request: Request, reply: Reply, result: ForwardResult): Reply {
   reply.header("cache-control", "no-store");
-  if (result.status >= 400 && isProblem(result.body)) return reply.code(result.status).type("application/problem+json").send(result.body);
+  if (result.status >= 400) {
+    if (!isCustomerProblem(result.body)) return sendProblem(reply, problem(request, 503, "CUSTOMER_UNAVAILABLE", customerErrorPolicy.CUSTOMER_UNAVAILABLE.detail));
+    const policy = customerErrorPolicyEntry(result.body.code);
+    return sendProblem(reply, policy !== undefined && policy.status === result.body.status
+      ? problem(request, policy.status, result.body.code, policy.detail)
+      : problem(request, 503, "CUSTOMER_UNAVAILABLE", customerErrorPolicy.CUSTOMER_UNAVAILABLE.detail));
+  }
+  if (!isCustomerOrderInput(result.body)) return sendProblem(reply, problem(request, 503, "CUSTOMER_UNAVAILABLE", customerErrorPolicy.CUSTOMER_UNAVAILABLE.detail));
   return reply.code(result.status).send(result.body);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isProblem(value: unknown): value is Problem {
-  return isRecord(value) && value["type"] === "about:blank" && typeof value["title"] === "string" && typeof value["status"] === "number" &&
-    typeof value["code"] === "string" && typeof value["detail"] === "string" && typeof value["instance"] === "string" &&
-    typeof value["correlationId"] === "string" && Array.isArray(value["errors"]);
 }
 
 function spoofed(request: Request): boolean {
@@ -111,32 +107,10 @@ function spoofed(request: Request): boolean {
   return blocked.some((name) => header(request, name) !== undefined) || Object.keys(request.headers).some((name) => name.toLowerCase().startsWith("x-actor-"));
 }
 
-const CUSTOMER_ORDER_INPUT_SCHEMA = {
-  type: "object", additionalProperties: false, required: ["customerRef", "customerVersion", "displayName", "state"],
-  properties: {
-    customerRef: {type: "string", pattern: "^cus_[0-9A-HJKMNP-TV-Z]{26}$"}, customerVersion: {type: "string", pattern: "^(0|[1-9][0-9]*)$"},
-    displayName: {type: "string", minLength: 1, maxLength: 200}, state: {type: "string", enum: ["Active", "Inactive"]},
-  },
-};
-
-const PROBLEM_SCHEMA = {
-  type: "object", additionalProperties: false, required: ["type", "title", "status", "code", "detail", "instance", "correlationId", "errors"],
-  properties: {
-    type: {type: "string", minLength: 1, maxLength: 2048}, title: {type: "string", minLength: 1, maxLength: 200}, status: {type: "integer", minimum: 400, maximum: 599},
-    code: {type: "string", pattern: "^[A-Z][A-Z0-9_]{0,63}$"}, detail: {type: "string", minLength: 1, maxLength: 2000}, instance: {type: "string", minLength: 1, maxLength: 2048},
-    correlationId: {type: "string", pattern: "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"}, errors: {type: "array", maxItems: 100, items: {type: "object", additionalProperties: false, required: ["code", "message"], properties: {
-      code: {type: "string", pattern: "^[A-Z][A-Z0-9_]{0,63}$"}, message: {type: "string", minLength: 1, maxLength: 500}, field: {type: "string", minLength: 1, maxLength: 200},
-    }}},
-  },
-};
-
 export function registerInternalRoutes(app: RuntimeApp, adapters: InternalApiAdapters): void {
   app.get("/api/internal-v1/customers/:customerRef/order-input", {
     config: {runtimeDeadlineProfile: "defaultMs"},
-    schema: {
-      params: {type: "object", required: ["customerRef"], additionalProperties: false, properties: {customerRef: {type: "string", pattern: "^cus_[0-9A-HJKMNP-TV-Z]{26}$"}}},
-      response: Object.fromEntries([[200, CUSTOMER_ORDER_INPUT_SCHEMA], ...[400, 401, 403, 404, 500, 503].map((status) => [status, PROBLEM_SCHEMA])]),
-    },
+    schema: {response: customerResponseSchema(customerContractSchemas.orderInput, 200, [400, 401, 403, 404, 500, 503])},
     handler: async (request, reply) => {
       if (spoofed(request) || !adapters.verifyTransport(request, "orders-service")) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "service identity is required"));
       const token = oneHeader(header(request, "x-service-delegation"));
@@ -146,13 +120,13 @@ export function registerInternalRoutes(app: RuntimeApp, adapters: InternalApiAda
       try { claims = await adapters.verifyCallerDelegation(token, request, "getCustomerOrderInput", requestContext.signal); }
       catch { return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed")); }
       if (claims.iss !== "orders-service" || claims.aud !== "api-internal" || claims.originalCaller !== "orders-service" || claims.operationId !== "getCustomerOrderInput") return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed"));
-      const params = isRecord(request.params) ? request.params : {};
+      const params = request.params !== null && typeof request.params === "object" && !Array.isArray(request.params) ? request.params as Record<string, unknown> : {};
       const customerRef = params["customerRef"];
-      if (typeof customerRef !== "string" || !CUSTOMER_REF.test(customerRef)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "customerRef is invalid"));
+      if (!isCustomerRef(customerRef)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
       const delegation = adapters.signDelegation({originalCaller: "orders-service", operationId: "getCustomerOrderInput", context: requestContext});
       try {
         const result = await adapters.customer.orderInput(customerRef, requestContext, delegation);
-        return sendForward(reply, result);
+        return sendForward(request, reply, result);
       } catch {
         return sendProblem(reply, problem(request, 503, "CUSTOMER_UNAVAILABLE", "customer service is unavailable"));
       }

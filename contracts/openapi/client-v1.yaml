@@ -124,7 +124,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/CustomerQuery'
         - $ref: '#/components/parameters/PageLimit'
-        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/CustomerCursor'
         - $ref: '#/components/parameters/CorrelationId'
         - $ref: '#/components/parameters/Traceparent'
       responses:
@@ -823,6 +823,14 @@ components:
         minimum: 1
         maximum: 50
         default: 20
+    CustomerCursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 2048
+        pattern: '^[A-Za-z0-9_-]*$'
     Cursor:
       name: cursor
       in: query
@@ -1114,7 +1122,7 @@ components:
             $ref: '#/components/schemas/CustomerSummary'
         nextCursor:
           type: [string, 'null']
-          maxLength: 512
+          maxLength: 2048
     CatalogProductSummary:
       type: object
       additionalProperties: false

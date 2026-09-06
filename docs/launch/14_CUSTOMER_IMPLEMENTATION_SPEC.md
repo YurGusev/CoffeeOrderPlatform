@@ -221,7 +221,7 @@ owner lookup после текущей авторизации, без acquire/Cu
 
 ## 6. `GET /api/client-v1/customers`
 
-Максимальный URL — `2 KiB`, deadline — `1 s`, `limit` default `20`, диапазон
+Максимальный URL — `8 KiB`, deadline — `1 s`, `limit` default `20`, диапазон
 `1..50`. Нормализованный `query` имеет длину `2..200`. Режим определяется
 детерминированно:
 
@@ -231,13 +231,19 @@ owner lookup после текущей авторизации, без acquire/Cu
   `%`, `_` и `\\`; full-text/fuzzy/substring поиск в #5 запрещён.
 
 Выбираются только `Active`, порядок всегда
-`(display_name_search ASC, customer_ref ASC)`. Cursor — base64url без padding
-от canonical JSON
-`{"v":1,"queryHash":"64-hex","name":"...","customerRef":"cus_..."}`.
+`(display_name_search ASC, customer_ref ASC)`. Cursor — подписанный Customer-scoped
+opaque token `base64url(canonical-payload) || base64url(Ed25519 signature)` с compact
+canonical JSON payload `{"c":"cus_...","n":"...","q":"base64url(sha256)","v":1}`.
+Подпись проверяется до разбора payload; полный sort tuple не сокращается и не
+заменяется lookup-состоянием.
+`q` декодируется обратно в 64-hex `queryHash`, а весь token остаётся не длиннее
+2048 символов без обрезания sort tuple. Лимит `8 KiB` действует только для
+Customer endpoints; Catalog сохраняет общий cursor limit `512`.
 Следующая страница использует tuple `>` и запрашивает `limit + 1`; offset
-pagination запрещена. Повреждённый cursor, неизвестная версия или cursor от
-другого нормализованного query дают `400 INVALID_CURSOR`. `queryHash` —
-SHA-256 нормализованного query.
+pagination запрещена. Повреждённый, неподписанный cursor, неизвестная версия или
+cursor от другого нормализованного query дают `400 INVALID_CURSOR`. При отсутствии
+согласованной Customer cursor key capability поиск fail-closed и не выдаёт unsigned
+cursor. `queryHash` — SHA-256 нормализованного query.
 
 Ответ `CustomerSummary` возвращает имя, `customerRef`, string version и только
 masked контакты: телефон `+7******1234`, e-mail `a***@example.com`.
