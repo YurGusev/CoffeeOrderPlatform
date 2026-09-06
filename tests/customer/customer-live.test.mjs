@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
-import {readFile} from "node:fs/promises";
+import {readFile, stat} from "node:fs/promises";
 import {randomUUID} from "node:crypto";
-import {createConnection} from "node:net";
+import {request as httpsRequest} from "node:https";
+import {spawn} from "node:child_process";
+import {fileURLToPath} from "node:url";
+import {connect as tlsConnect} from "node:tls";
 import test from "node:test";
 import {canonicalRequestHash} from "../../packages/platform-idempotency/dist/index.js";
+import {parseServiceTransportMaterial, verifyTransportPeer} from "../../packages/platform-security/src/index.ts";
+import {openBlackholeProxy} from "../../scripts/db-live-proof.mjs";
 import {
   actorRef,
   assertProblem,
@@ -19,6 +24,8 @@ import {
   searchCustomers,
   blocker,
 } from "./fixtures/customer-testkit.mjs";
+
+const REPOSITORY_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,12 +79,13 @@ async function waitForAdvisoryTransactionEnd(client, barrierName, waiter, timeou
 
 async function waitForCompletedIdempotency(client, service, key, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
+  const owner = service.actorRef ?? actorRef(service);
   while (Date.now() < deadline) {
     const result = await client.query(
-      `SELECT state, response_status, response_body
+      `SELECT state, resource_ref, response_status, response_body
          FROM customer.idempotency_records
         WHERE actor_ref = $1 AND scope = $2 AND idempotency_key = $3`,
-      [actorRef(service), customerScope(), key],
+      [owner, customerScope(), key],
     );
     const row = result.rows[0];
     if (row?.state === "Completed") return row;
@@ -166,7 +174,7 @@ async function withFaultTrigger(migrator, {table, event, predicate}, callback) {
 
 async function openLostResponseRequest(service, payload, key, correlationId) {
   const origin = new URL(service.origin);
-  assert.equal(origin.protocol, "http:", "lost-response live proof requires an HTTP origin");
+  assert.equal(origin.protocol, "https:", "lost-response live proof requires an HTTPS origin");
   const body = JSON.stringify(payload);
   const headers = new Map(Object.entries(service.headers));
   headers.set("Idempotency-Key", key);
@@ -182,9 +190,26 @@ async function openLostResponseRequest(service, payload, key, correlationId) {
     body,
   ].join("\r\n");
   return new Promise((resolve, reject) => {
-    const socket = createConnection({host: origin.hostname, port: Number(origin.port || 80)});
+    const socket = tlsConnect({
+      host: origin.hostname,
+      port: Number(origin.port || 443),
+      servername: origin.hostname,
+      ca: service.material.caPem,
+      cert: service.material.certPem,
+      key: service.material.keyPem,
+      minVersion: "TLSv1.3",
+      rejectUnauthorized: true,
+      checkServerIdentity: (_hostname, certificate) => {
+        try {
+          verifyTransportPeer(certificate, service.environment, "customer-service");
+          return undefined;
+        } catch (error) {
+          return error instanceof Error ? error : new Error("transport peer identity is invalid");
+        }
+      },
+    });
     socket.once("error", (error) => reject(error));
-    socket.once("connect", () => socket.write(request, () => {
+    socket.once("secureConnect", () => socket.write(request, () => {
       socket.pause();
       resolve(socket);
     }));
@@ -203,6 +228,165 @@ function actorHeader(service) {
 
 function scopedHeaders(service, headers = {}) {
   return {...service, headers};
+}
+
+function parseHarnessHeaders(name) {
+  let value;
+  try {
+    value = JSON.parse(process.env[name] ?? "");
+  } catch {
+    throw new Error(`${name} must be valid JSON`);
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error(`${name} must be a JSON object`);
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, String(entry)]));
+}
+
+async function unknownCommitHarnessOptions(t) {
+  const required = [
+    "CUSTOMER_UNKNOWN_COMMIT_CONFIG_FILE",
+    "CUSTOMER_UNKNOWN_COMMIT_SECRETS_FILE",
+    "CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL",
+    "CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_HOST",
+    "CUSTOMER_UNKNOWN_COMMIT_CLIENT_TRANSPORT_FILE",
+    "CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON",
+    "CUSTOMER_UNKNOWN_COMMIT_ACTOR_REF",
+    "CUSTOMER_UNKNOWN_COMMIT_SERVICE_ORIGIN",
+  ];
+  const missing = required.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    blocker(t, `unknown COMMIT/restart harness prerequisites are missing: ${missing.join(", ")}; provide the dedicated test network, scoped 0400 secrets and observer URL`);
+    return undefined;
+  }
+  const origin = new URL(process.env.CUSTOMER_UNKNOWN_COMMIT_SERVICE_ORIGIN);
+  if (origin.protocol !== "https:") {
+    blocker(t, "unknown COMMIT/restart harness requires an HTTPS Customer origin");
+    return undefined;
+  }
+  const proxyPort = Number(process.env.CUSTOMER_UNKNOWN_COMMIT_PROXY_LISTEN_PORT ?? "5432");
+  if (proxyPort !== 5432) {
+    blocker(t, "unknown COMMIT/restart proxy must bind the canonical PostgreSQL port 5432; use a dedicated network alias instead of changing production config");
+    return undefined;
+  }
+  const secretsStat = await stat(process.env.CUSTOMER_UNKNOWN_COMMIT_SECRETS_FILE).catch(() => undefined);
+  if (secretsStat === undefined || (secretsStat.mode & 0o777) !== 0o400) {
+    blocker(t, "CUSTOMER_UNKNOWN_COMMIT_SECRETS_FILE must be an existing scoped tmpfs file with mode 0400");
+    return undefined;
+  }
+  let material;
+  try {
+    const environment = process.env.CUSTOMER_UNKNOWN_COMMIT_ENVIRONMENT ?? "development";
+    const clientRuntime = process.env.CUSTOMER_UNKNOWN_COMMIT_CLIENT_RUNTIME ?? "api-public";
+    material = parseServiceTransportMaterial(
+      await readFile(process.env.CUSTOMER_UNKNOWN_COMMIT_CLIENT_TRANSPORT_FILE, "utf8"),
+      environment,
+      clientRuntime,
+    );
+  } catch (error) {
+    blocker(t, `CUSTOMER_UNKNOWN_COMMIT_CLIENT_TRANSPORT_FILE is invalid (${error?.message ?? "transport validation failed"})`);
+    return undefined;
+  }
+  return {
+    configPath: process.env.CUSTOMER_UNKNOWN_COMMIT_CONFIG_FILE,
+    secretsPath: process.env.CUSTOMER_UNKNOWN_COMMIT_SECRETS_FILE,
+    databaseUrl: process.env.CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL,
+    targetHost: process.env.CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_HOST,
+    targetPort: Number(process.env.CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_PORT ?? "5432"),
+    proxyHost: process.env.CUSTOMER_UNKNOWN_COMMIT_PROXY_LISTEN_HOST ?? "127.0.0.1",
+    proxyPort,
+    origin: process.env.CUSTOMER_UNKNOWN_COMMIT_SERVICE_ORIGIN,
+    environment: process.env.CUSTOMER_UNKNOWN_COMMIT_ENVIRONMENT ?? "development",
+    clientRuntime: process.env.CUSTOMER_UNKNOWN_COMMIT_CLIENT_RUNTIME ?? "api-public",
+    material,
+    headers: parseHarnessHeaders("CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON"),
+    actorRef: process.env.CUSTOMER_UNKNOWN_COMMIT_ACTOR_REF,
+    entry: process.env.CUSTOMER_UNKNOWN_COMMIT_ENTRY ?? `${REPOSITORY_ROOT}/apps/customer-service/dist/main.js`,
+  };
+}
+
+function harnessRequest(options, path, {method = "GET", headers = {}, body} = {}) {
+  const target = new URL(path, options.origin);
+  const requestHeaders = {...headers, connection: "close"};
+  if (body !== undefined) {
+    requestHeaders["content-type"] ??= "application/json";
+    requestHeaders["content-length"] = String(Buffer.byteLength(body));
+  }
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest({
+      hostname: target.hostname,
+      port: Number(target.port || 443),
+      path: `${target.pathname}${target.search}`,
+      method,
+      headers: requestHeaders,
+      ca: options.material.caPem,
+      cert: options.material.certPem,
+      key: options.material.keyPem,
+      minVersion: "TLSv1.3",
+      rejectUnauthorized: true,
+      servername: target.hostname,
+      timeout: 10_000,
+      checkServerIdentity: (_hostname, certificate) => {
+        try {
+          verifyTransportPeer(certificate, options.environment, "customer-service");
+          return undefined;
+        } catch (error) {
+          return error instanceof Error ? error : new Error("transport peer identity is invalid");
+        }
+      },
+    }, (response) => {
+      let text = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk) => { text += chunk; });
+      response.on("end", () => {
+        let parsed;
+        try { parsed = text.length === 0 ? undefined : JSON.parse(text); } catch { parsed = undefined; }
+        resolve({response, status: response.statusCode, text, body: parsed});
+      });
+    });
+    request.once("timeout", () => request.destroy(new Error("Customer harness HTTP request timed out")));
+    request.once("error", reject);
+    request.end(body);
+  });
+}
+
+function spawnCustomerHarness(options) {
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("COFFEE_") && !key.startsWith("SOPS_")));
+  environment.COFFEE_CONFIG_FILE = options.configPath;
+  environment.COFFEE_RUNTIME_SECRETS_FILE = options.secretsPath;
+  const child = spawn(process.execPath, [options.entry], {cwd: REPOSITORY_ROOT, env: environment, stdio: ["ignore", "pipe", "pipe"]});
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => { stderr = `${stderr}${chunk}`.slice(-4_096); });
+  const exit = new Promise((resolve) => child.once("exit", (code, signal) => resolve({code, signal})));
+  return {child, exit, get stderr() { return stderr; }};
+}
+
+async function waitForHarnessReady(options, processHandle, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+  while (Date.now() < deadline) {
+    if (processHandle.child.exitCode !== null) throw new Error(`Customer harness exited before readiness: ${processHandle.child.exitCode} ${processHandle.stderr}`);
+    try {
+      const result = await harnessRequest(options, "/health/ready");
+      if (result.status === 200) return;
+      lastError = new Error(`health status ${result.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(100);
+  }
+  throw new Error(`Customer harness did not become ready: ${lastError?.message ?? "timeout"}`);
+}
+
+async function stopHarnessProcess(processHandle) {
+  if (processHandle === undefined) return;
+  processHandle.child.kill("SIGTERM");
+  await Promise.race([
+    processHandle.exit,
+    delay(5_000).then(() => {
+      processHandle.child.kill("SIGKILL");
+      throw new Error(`Customer harness did not stop: ${processHandle.stderr}`);
+    }),
+  ]);
 }
 
 void test("Customer create is atomic and exact replay is byte-identical", async (t) => {
@@ -401,18 +585,8 @@ void test("Customer search uses exact contact modes, escaped prefix and cursor p
 void test("Customer private order snapshot is minimal and service-authorized", async (t) => {
   const publicService = await liveService(t);
   if (!publicService) return;
-  const internalHeadersRaw = process.env.CUSTOMER_TEST_INTERNAL_HEADERS_JSON;
-  if (!internalHeadersRaw) {
-    blocker(t, "CUSTOMER_TEST_INTERNAL_HEADERS_JSON is missing; signed Orders delegation is required");
-    return;
-  }
-  let internalHeaders;
-  try {
-    internalHeaders = JSON.parse(internalHeadersRaw);
-  } catch {
-    throw new Error("CUSTOMER_TEST_INTERNAL_HEADERS_JSON must be valid JSON");
-  }
-  const internalService = scopedHeaders(publicService, internalHeaders);
+  const internalService = await liveService(t, "CUSTOMER_TEST_INTERNAL_HEADERS_JSON", "CUSTOMER_TEST_INTERNAL_TRANSPORT_FILE", "api-internal");
+  if (!internalService) return;
   const payload = customerPayload(`${Date.now()}-${randomUUID().slice(0, 8)}`);
   const created = await postCustomer(publicService, payload);
   assert.equal(created.response.status, 201);
@@ -535,4 +709,76 @@ void test("Customer problem details and configured logs do not contain PII canar
   await new Promise((resolve) => setImmediate(resolve));
   const logText = await readFile(logPath, "utf8");
   for (const canary of canaries) assert.equal(logText.includes(canary), false);
+});
+
+void test("Customer classifies an unacknowledged COMMIT and replays it after a real restart", async (t) => {
+  const options = await unknownCommitHarnessOptions(t);
+  if (!options) return;
+  const observer = await liveDatabase(t, options.databaseUrl);
+  if (!observer) return;
+  const service = {origin: options.origin, headers: options.headers, actorRef: options.actorRef};
+  const proxy = await openBlackholeProxy(options.targetPort, "COMMIT", {
+    targetHost: options.targetHost,
+    listenHost: options.proxyHost,
+    listenPort: options.proxyPort,
+    dropOnce: true,
+  });
+  let firstProcess;
+  let restartedProcess;
+  const payload = customerPayload(`unknown-commit-${randomUUID()}`, {
+    address: {line1: "Unknown commit address", city: "Екатеринбург", countryCode: "RU"},
+  });
+  const key = randomUUID();
+  try {
+    firstProcess = spawnCustomerHarness(options);
+    await waitForHarnessReady(options, firstProcess);
+    const createRequest = harnessRequest(options, "/api/client-v1/customers", {
+      method: "POST",
+      headers: {
+        ...options.headers,
+        "idempotency-key": key,
+        "x-correlation-id": randomUUID(),
+      },
+      body: JSON.stringify(payload),
+    });
+    await proxy.waitForCommand("COMMIT");
+    const dropped = await proxy.waitForReplyDropped();
+    assert.equal(dropped.tag, "COMMIT", "the harness must observe successful PostgreSQL CommandComplete(COMMIT)");
+    proxy.closeConnections();
+    const first = await createRequest;
+    assert.equal(first.status, 503);
+    assert.equal(first.body?.code, "CUSTOMER_UNAVAILABLE");
+    assert.equal(first.text.includes("DB_QUERY_FAILED"), false);
+    assert.equal(first.text.includes("TRANSACTION_OUTCOME_UNKNOWN"), false);
+
+    const completed = await waitForCompletedIdempotency(observer, service, key);
+    assert.equal(completed.response_status, 201);
+    assert.equal(completed.response_body.customerRef, completed.resource_ref);
+    assert.equal(Number((await observer.query("SELECT count(*)::integer AS count FROM customer.customers WHERE email_normalized = $1", [payload.email])).rows[0].count), 1);
+    assert.equal(Number((await observer.query("SELECT count(*)::integer AS count FROM customer.addresses WHERE customer_ref = $1", [completed.resource_ref])).rows[0].count), 1);
+    assert.equal(Number((await observer.query("SELECT count(*)::integer AS count FROM customer.audit_log WHERE customer_ref = $1", [completed.resource_ref])).rows[0].count), 1);
+
+    await stopHarnessProcess(firstProcess);
+    firstProcess = undefined;
+    restartedProcess = spawnCustomerHarness(options);
+    await waitForHarnessReady(options, restartedProcess);
+    const replay = await harnessRequest(options, "/api/client-v1/customers", {
+      method: "POST",
+      headers: {
+        ...options.headers,
+        "idempotency-key": key,
+        "idempotency-replay-only": "true",
+        "x-correlation-id": randomUUID(),
+      },
+    });
+    assert.equal(replay.status, 201);
+    assert.deepEqual(replay.body, completed.response_body);
+    assert.equal(replay.response.headers.get("idempotency-replayed"), "true");
+    assert.equal(replay.response.headers.get("cache-control"), "no-store");
+    assert.equal(Number((await observer.query("SELECT count(*)::integer AS count FROM customer.customers WHERE email_normalized = $1", [payload.email])).rows[0].count), 1);
+  } finally {
+    await stopHarnessProcess(restartedProcess).catch(() => {});
+    await stopHarnessProcess(firstProcess).catch(() => {});
+    await proxy.close();
+  }
 });

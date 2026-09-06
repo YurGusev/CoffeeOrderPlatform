@@ -2,7 +2,7 @@ import {createPrivateKey, createPublicKey, randomUUID} from "node:crypto";
 import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, decodeCustomerSearchQuery, hasCustomerPermission, isCustomerCreateRequest, isCustomerIdempotencyKey, isCustomerProblem, isCustomerReplayOnly, isCustomerResponse, isCustomerSearchResponse} from "@coffee-platform/contracts-customer-v1";
 import type {CustomerCreateRequest, CustomerResponse, CustomerSearchResponse} from "@coffee-platform/contracts-customer-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
-import {signActorContext, verifyActorContext, type ActorContextClaims} from "@coffee-platform/security";
+import {parseServiceTransportMaterial, signActorContext, verifyActorContextWithKeySet, type ActorContextClaims, type ServiceTransportMaterial} from "@coffee-platform/security";
 
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_URL_BYTES = 8 * 1024;
@@ -240,9 +240,14 @@ function privateKey(context: RuntimeCompositionContext, path: string) {
   return createPrivateKey(value);
 }
 
-function publicKey(context: RuntimeCompositionContext, path: string) {
+function verificationKeys(context: RuntimeCompositionContext, path: string) {
   const value = secretAt(context, path);
-  return typeof value === "string" && value.length > 0 ? createPublicKey(value) : undefined;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("PUBLIC_API_ACTOR_VERIFICATION_KEYS_NOT_CONFIGURED");
+  const source = value as Record<string, unknown>;
+  const active = source["active"];
+  const previous = source["previous"];
+  if (typeof active !== "string" || active.length === 0 || typeof previous !== "string" || previous.length === 0) throw new Error("PUBLIC_API_ACTOR_VERIFICATION_KEYS_NOT_CONFIGURED");
+  return [createPublicKey(active), createPublicKey(previous)];
 }
 
 function epochSeconds(): number {
@@ -252,12 +257,12 @@ function epochSeconds(): number {
 function customerOrigin(context: RuntimeCompositionContext): string {
   const target = context.config.services["api-public"].outbound.find((entry) => entry.startsWith("customer-service:"));
   if (target === undefined) throw new Error("PUBLIC_API_CUSTOMER_ORIGIN_NOT_CONFIGURED");
-  return `http://${target}`;
+  return `https://${target}`;
 }
 
 export function createConfiguredPublicAdapters(context: RuntimeCompositionContext, client: HttpClient): PublicApiAdapters {
   const signingKey = privateKey(context, "security.apiPublicDelegationSigningPrivateKey");
-  const actorVerificationKey = publicKey(context, "security.actorContextEdgeVerificationPublicKey");
+  const actorVerificationKeys = verificationKeys(context, "security.actorContextEdgeVerificationPublicKeys");
   const sign = (actor: ActorContextClaims, owner: string, operationId: string, requestContext: Context): string => {
     const iat = epochSeconds();
     return signActorContext({
@@ -276,16 +281,28 @@ export function createConfiguredPublicAdapters(context: RuntimeCompositionContex
     }, signingKey);
   };
   return {
-    verifyTransport: () => false,
+    verifyTransport: (request, expectedCaller) => request.runtimeContext?.transportIdentity?.runtime === expectedCaller,
     verifyActor: (token, operationId, signal) => {
       signal.throwIfAborted();
-      if (actorVerificationKey === undefined) throw new Error("PUBLIC_API_ACTOR_VERIFICATION_KEY_NOT_CONFIGURED");
-      const claims = verifyActorContext(token, {publicKey: actorVerificationKey, issuer: "edge-gateway", audience: "api-public", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5});
+      const claims = verifyActorContextWithKeySet(token, {publicKeys: actorVerificationKeys, issuer: "edge-gateway", audience: "api-public", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5});
       if (claims.operationId !== operationId) throw new Error("ACTOR_CONTEXT_INVALID");
       return claims;
     },
     customer: createHttpCustomerClient({fetch: (path, options) => client.fetch(path, options)}, sign),
   };
+}
+
+export function configuredTransportMaterial(context: RuntimeCompositionContext): ServiceTransportMaterial {
+  let value: unknown = context.secrets;
+  for (const part of "security.serviceTransportKeys.api-public".split(".")) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("PUBLIC_API_TRANSPORT_NOT_CONFIGURED");
+    value = (value as Record<string, unknown>)[part];
+  }
+  return parseServiceTransportMaterial(value, context.config.environment, "api-public");
+}
+
+export function configuredCustomerTls(context: RuntimeCompositionContext) {
+  return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "customer-service"};
 }
 
 export function configuredCustomerOrigin(context: RuntimeCompositionContext): string {

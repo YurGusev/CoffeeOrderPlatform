@@ -95,10 +95,28 @@ environments:
       oidcClientSecret: ENC[...]
     security:
       actorContextEdgeSigningPrivateKey: ENC[...]
+      actorContextEdgeVerificationPublicKeys:
+        active: ENC[...]
+        previous: ENC[...]
       apiPublicDelegationSigningPrivateKey: ENC[...]
       apiInternalDelegationSigningPrivateKey: ENC[...]
       catalogCursorSigningPrivateKey: ENC[...]
-      serviceTransportKeys: # map exact runtime -> own ENC private key/certificate
+      customerCursorSigningPrivateKey: ENC[...]
+      customerCursorVerificationPublicKeys:
+        active: ENC[...]
+        previous: ENC[...]
+      delegationVerificationKeys:
+        api-public:
+          active: ENC[...]
+          previous: ENC[...]
+        api-internal:
+          active: ENC[...]
+          previous: ENC[...]
+      serviceVerificationKeys:
+        orders-service:
+          active: ENC[...]
+          previous: ENC[...]
+      serviceTransportKeys: # each value decrypts to a JSON transport envelope
         edge-gateway: ENC[...]
         api-public: ENC[...]
         api-internal: ENC[...]
@@ -123,6 +141,25 @@ sops: {}
 recipients. Пустые строки, plaintext, reusable default password и ссылки на
 legacy `postgres/postgres` запрещены.
 
+### Secret inventory и runtime refs
+
+Inventory authority — это encrypted paths в `secrets/platform.secrets.sops.yaml`,
+а runtime получает только refs, перечисленные одновременно в
+`config/platform.yaml`, `config/service-catalog.json` и
+`platform/launch-v1-runtime-profile.json`. Production wiring для трёх runtime:
+
+| Runtime | Secret refs |
+|---|---|
+| `api-public` | `security.apiPublicDelegationSigningPrivateKey`, `security.actorContextEdgeVerificationPublicKeys`, `security.serviceTransportKeys.api-public`, `telemetry.exporterToken` |
+| `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
+| `customer-service` | `postgres.customer`, `security.customerCursorSigningPrivateKey`, `security.customerCursorVerificationPublicKeys`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.customer-service`, `telemetry.exporterToken` |
+
+`security.customerCursorSigningPrivateKey` — отдельный Customer-scoped ключ;
+он не переиспользуется для Catalog cursor, actor context, delegation или mTLS.
+Public verification metadata Customer cursor находится в
+`security.customerCursor` в `config/platform.yaml`; active/previous public
+material остаётся в SOPS inventory и materializes только для Customer.
+
 ## 4. Runtime-доступ без раскрытия общего файла
 
 Один source-файл секретов не означает, что каждый сервис получает все секреты.
@@ -142,6 +179,17 @@ legacy `postgres/postgres` запрещены.
 получают DB passwords. Bootstrap
 admin password доступен только отдельной одноразовой provisioning-команде и не
 попадает в runtime containers.
+
+Для transport identity scoped materialization содержит только собственный
+runtime material: leaf certificate, matching Ed25519 private key и certificate
+chain/trust metadata, необходимую для проверки peer. CA private key туда не
+входит. Общий trust metadata остаётся открытым в
+`security.serviceTrustBundles`: `activeKid`, `previousKid`, 12-часовое overlap,
+SAN binding из service identity contract и текущий environment. Runtime не
+читает общий SOPS-файл и не получает чужой transport material.
+Значение `security.serviceTransportKeys.<runtime>` после decrypt — строго JSON
+строка с полями `keyPem`, `certPem`, `caPem`; runtime отклоняет неизвестные
+поля, plaintext fallback и certificate с неправильным environment/runtime SAN.
 
 ## 5. Загрузка и приоритеты
 
@@ -186,6 +234,12 @@ clock skew `5s`, overlap active/previous key `86400s`. В
 `platform.yaml`; private keys — только в SOPS. Старый key проверяет подписи лишь
 до конца overlap и никогда не подписывает новые. Actor, cursor, TLS и OIDC keys
 не переиспользуются друг для друга.
+
+`security.customerCursor` — отдельная Customer-scoped Ed25519 policy с max age
+`86400s`, clock skew `5s` и overlap `172800s`. Новый token подписывается только
+active key; previous key принимается только до конца overlap, после чего
+неизвестный/старый `kid` отвергается. Customer cursor key не совпадает с Catalog
+cursor, actor context, delegation или transport key.
 
 Полный issuance/SAN/TTL/rotation/revocation contract определён в
 [service identity specification](24_SERVICE_IDENTITY_AND_DELEGATION.md).

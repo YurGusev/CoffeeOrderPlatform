@@ -1,6 +1,7 @@
-import {createPublicKey} from "node:crypto";
-import {verifyActorContext, verifyServiceDelegation} from "@coffee-platform/security";
+import {createPrivateKey, createPublicKey} from "node:crypto";
+import {verifyActorContextWithKeySet, verifyServiceDelegationWithKeySet} from "@coffee-platform/security";
 import {startConfiguredRuntime, type RuntimeCompositionContext} from "@coffee-platform/runtime";
+import {createEd25519CustomerCursorSigner} from "./application/search-customers.js";
 import {createCustomerAdapters, registerCustomerRoutes} from "./http/index.js";
 
 function secretAt(context: RuntimeCompositionContext, path: string): unknown {
@@ -12,33 +13,46 @@ function secretAt(context: RuntimeCompositionContext, path: string): unknown {
   return value;
 }
 
-function publicKey(context: RuntimeCompositionContext, path: string) {
+function privateKey(context: RuntimeCompositionContext, path: string) {
   const value = secretAt(context, path);
-  return typeof value === "string" && value.length > 0 ? createPublicKey(value) : undefined;
+  if (typeof value !== "string" || value.length === 0) throw new Error(`${path.toUpperCase().replaceAll(".", "_")}_NOT_CONFIGURED`);
+  return createPrivateKey(value);
+}
+
+function verificationKeys(context: RuntimeCompositionContext, path: string) {
+  const value = secretAt(context, path);
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error(`${path.toUpperCase().replaceAll(".", "_")}_NOT_CONFIGURED`);
+  const source = value as Record<string, unknown>;
+  const active = source["active"];
+  const previous = source["previous"];
+  if (typeof active !== "string" || active.length === 0 || typeof previous !== "string" || previous.length === 0) throw new Error(`${path.toUpperCase().replaceAll(".", "_")}_NOT_CONFIGURED`);
+  return [createPublicKey(active), createPublicKey(previous)];
 }
 
 await startConfiguredRuntime("customer-service", {
   configure: (app, _signal, database, _kafka, context) => {
     if (database === undefined) throw new Error("customer-service database is required");
     if (context === undefined) throw new Error("customer-service runtime context is required");
-    const publicDelegationKey = publicKey(context, "security.delegationVerificationKeys.api-public");
-    const internalDelegationKey = publicKey(context, "security.delegationVerificationKeys.api-internal");
+    const publicDelegationKeys = verificationKeys(context, "security.delegationVerificationKeys.api-public");
+    const internalDelegationKeys = verificationKeys(context, "security.delegationVerificationKeys.api-internal");
+    const cursorSigner = createEd25519CustomerCursorSigner(
+      privateKey(context, "security.customerCursorSigningPrivateKey"),
+      verificationKeys(context, "security.customerCursorVerificationPublicKeys"),
+    );
     registerCustomerRoutes(app, createCustomerAdapters(database, {
-      verifyTransport: () => false,
+      verifyTransport: (request, expectedCaller) => request.runtimeContext?.transportIdentity?.runtime === expectedCaller,
       verifyPublicDelegation: (token, operationId, signal) => {
         signal.throwIfAborted();
-        if (publicDelegationKey === undefined) throw new Error("CUSTOMER_PUBLIC_DELEGATION_KEY_NOT_CONFIGURED");
-        const claims = verifyActorContext(token, {publicKey: publicDelegationKey, issuer: "api-public", audience: "customer-service", nowEpochSeconds: Math.floor((performance.timeOrigin + performance.now()) / 1_000), clockSkewSeconds: 5});
+        const claims = verifyActorContextWithKeySet(token, {publicKeys: publicDelegationKeys, issuer: "api-public", audience: "customer-service", nowEpochSeconds: Math.floor((performance.timeOrigin + performance.now()) / 1_000), clockSkewSeconds: 5});
         if (claims.operationId !== operationId) throw new Error("SERVICE_DELEGATION_INVALID");
         return claims;
       },
       verifyInternalDelegation: (token, operationId, signal) => {
         signal.throwIfAborted();
-        if (internalDelegationKey === undefined) throw new Error("CUSTOMER_INTERNAL_DELEGATION_KEY_NOT_CONFIGURED");
-        const claims = verifyServiceDelegation(token, {publicKey: internalDelegationKey, issuer: "api-internal", audience: "customer-service", nowEpochSeconds: Math.floor((performance.timeOrigin + performance.now()) / 1_000), clockSkewSeconds: 5});
+        const claims = verifyServiceDelegationWithKeySet(token, {publicKeys: internalDelegationKeys, issuer: "api-internal", audience: "customer-service", nowEpochSeconds: Math.floor((performance.timeOrigin + performance.now()) / 1_000), clockSkewSeconds: 5});
         if (claims.operationId !== operationId) throw new Error("SERVICE_DELEGATION_INVALID");
         return claims;
       },
-    }));
+    }, cursorSigner));
   },
 });

@@ -113,6 +113,16 @@ security:
     verificationKeys:
       cursor-v1: ed25519-public-cursor-v1
       cursor-v0: ed25519-public-cursor-v0
+  customerCursor:
+    algorithm: Ed25519
+    activeKid: customer-cursor-v1
+    previousKid: customer-cursor-v0
+    maxAgeSeconds: 86400
+    clockSkewSeconds: 5
+    overlapSeconds: 172800
+    verificationKeys:
+      customer-cursor-v1: ed25519-public-customer-cursor-v1
+      customer-cursor-v0: ed25519-public-customer-cursor-v0
   serviceTrustBundles:
     activeKid: transport-v1
     previousKid: transport-v0
@@ -179,7 +189,7 @@ services:
     database: null
     kafka: { producers: [], consumers: [] }
     outbound: [customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104]
-    secretRefs: [security.apiPublicDelegationSigningPrivateKey, security.serviceTransportKeys.api-public, telemetry.exporterToken]
+    secretRefs: [security.apiPublicDelegationSigningPrivateKey, security.actorContextEdgeVerificationPublicKeys, security.serviceTransportKeys.api-public, telemetry.exporterToken]
     permissions: {manifest: config/permissions/api-public.json, net: [customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
@@ -194,7 +204,7 @@ services:
     database: null
     kafka: { producers: [], consumers: [] }
     outbound: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301]
-    secretRefs: [security.apiInternalDelegationSigningPrivateKey, security.serviceTransportKeys.api-internal, telemetry.exporterToken]
+    secretRefs: [security.apiInternalDelegationSigningPrivateKey, security.serviceVerificationKeys.orders-service, security.serviceTransportKeys.api-internal, telemetry.exporterToken]
     permissions: {manifest: config/permissions/api-internal.json, net: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
@@ -224,7 +234,7 @@ services:
     database: coffee_platform_customer
     kafka: { producers: [], consumers: [] }
     outbound: []
-    secretRefs: [postgres.customer, security.serviceTransportKeys.customer-service, telemetry.exporterToken]
+    secretRefs: [postgres.customer, security.customerCursorSigningPrivateKey, security.customerCursorVerificationPublicKeys, security.delegationVerificationKeys.api-public, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.customer-service, telemetry.exporterToken]
     permissions: {manifest: config/permissions/customer-service.json, net: [coffee_postgres:5432], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 

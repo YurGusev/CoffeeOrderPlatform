@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import type { Socket } from "node:net";
+import {TLSSocket} from "node:tls";
 import { Temporal } from "@js-temporal/polyfill";
 import {
   loadPlatformConfig,
@@ -19,6 +20,13 @@ import {
   withCorrelationFields,
   type CorrelationContext,
 } from "@coffee-platform/observability";
+import {
+  createMutualTlsServerOptions,
+  parseServiceTransportMaterial,
+  verifyTransportPeer,
+  type ServiceTransportMaterial,
+  type TransportIdentity,
+} from "@coffee-platform/security";
 import Fastify, {
   type FastifyInstance,
   type FastifyReply,
@@ -58,6 +66,13 @@ export type RuntimeCompositionContext = Readonly<{
   secrets: Readonly<Record<string, unknown>>;
 }>;
 
+export type RuntimeTransport = Readonly<{
+  environment: string;
+  runtime: string;
+  material?: ServiceTransportMaterial;
+  setupError?: string;
+}>;
+
 export type RuntimeIdentity = RuntimeComposition &
   Readonly<{
     name: string;
@@ -70,6 +85,7 @@ export type RuntimeIdentity = RuntimeComposition &
     concurrency?: number;
     bodyLimitBytes?: number;
     requiredDependencies?: readonly string[];
+    transport?: RuntimeTransport;
   }>;
 
 export type RuntimePhase = "starting" | "running" | "draining" | "stopped";
@@ -88,6 +104,7 @@ export type RuntimeRequestContext = CorrelationContext &
   Readonly<{
     signal: AbortSignal;
     deadlineUtc: string | null;
+    transportIdentity: TransportIdentity | null;
     // Вызывается владельцем только ПОСЛЕ известного durable commit, не перед COMMIT.
     acceptDurable: () => void;
   }>;
@@ -107,6 +124,23 @@ type ScopedSecretDocument = Readonly<{
 
 function secretRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function secretAt(document: ScopedSecretDocument, ref: string): unknown {
+  let value: unknown = document.secrets;
+  for (const segment of ref.split(".")) value = secretRecord(value) ? value[segment] : undefined;
+  return value;
+}
+
+function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], environment: string, runtime: RuntimeName): RuntimeTransport {
+  const refsForTransport = refs.filter((ref) => ref === `security.serviceTransportKeys.${runtime}`);
+  const ref = refsForTransport[0];
+  if (refsForTransport.length !== 1 || ref === undefined) return {environment, runtime, setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE"};
+  try {
+    return {environment, runtime, material: parseServiceTransportMaterial(secretAt(document, ref), environment, runtime)};
+  } catch (error) {
+    return {environment, runtime, setupError: error instanceof Error ? error.name : "TransportValidationError"};
+  }
 }
 
 function ownDatabaseCredential(
@@ -314,12 +348,18 @@ export async function createRuntime(
   const acquired: RuntimeResource[] = [];
   const runningChecks = new Map<string, Promise<boolean>>();
   const stopped = Promise.withResolvers<RuntimeShutdownResult>();
+  const transportError = identity.transport === undefined
+    ? undefined
+    : identity.transport.setupError ?? (identity.transport.material === undefined ? "RUNTIME_TRANSPORT_MATERIAL_MISSING" : undefined);
   const app = Fastify({
     // Admission ниже сохраняет live/ready для уже принятого transport во время drain.
     return503OnClosing: false,
     ...(identity.bodyLimitBytes === undefined
       ? {}
       : { bodyLimit: identity.bodyLimitBytes }),
+    ...(identity.transport?.material === undefined
+      ? {}
+      : {https: createMutualTlsServerOptions(identity.transport.material)}),
     logger: {
       base: { runtime: identity.name },
       serializers: {
@@ -464,6 +504,7 @@ export async function createRuntime(
             signal.throwIfAborted();
             await identity.configure?.(app, signal);
             signal.throwIfAborted();
+            if (transportError !== undefined) throw new RuntimeError(`RUNTIME_TRANSPORT_NOT_CONFIGURED:${transportError}`);
             await app.listen({ host: identity.host, port: identity.port });
             signal.throwIfAborted();
             for (const resource of resources) {
@@ -525,6 +566,17 @@ export async function createRuntime(
     request.correlationContext = correlation;
     setCorrelationResponseHeaders(reply, correlation);
     request.log = request.log.child(withCorrelationFields(correlation));
+    let transportIdentity: TransportIdentity | null = null;
+    if (identity.transport?.material !== undefined) {
+      const socket = request.raw.socket;
+      try {
+        if (!(socket instanceof TLSSocket) || !socket.authorized) throw new Error("unauthorized TLS peer");
+        transportIdentity = verifyTransportPeer(socket.getPeerCertificate(), identity.transport.environment);
+      } catch {
+        void reply.code(401).send();
+        return;
+      }
+    }
     const isHealth = [
       health.livePath,
       health.readyPath,
@@ -582,6 +634,7 @@ export async function createRuntime(
     request.runtimeContext = {
       ...correlation,
       signal: abort.signal,
+      transportIdentity,
       deadlineUtc:
         budget === null
           ? null
@@ -815,7 +868,9 @@ export async function startConfiguredRuntime(
     throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
   let database: Database | undefined;
   let kafka: KafkaRuntime | undefined;
+  let transport: RuntimeTransport | undefined;
   try {
+    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, config.environment, name);
     if (service.database !== null) {
       if (service.dbPool === null)
         throw new RuntimeError("RUNTIME_DATABASE_CONFIG_MISMATCH");
@@ -852,14 +907,17 @@ export async function startConfiguredRuntime(
       });
     }
     return await startRuntime(
-      configuredRuntimeIdentity(
-        config,
-        name,
-        appendOwnedComposition(composition, database, kafka, {
+      {
+        ...configuredRuntimeIdentity(
           config,
-          secrets: (secretDocument as ScopedSecretDocument).secrets,
-        }),
-      ),
+          name,
+          appendOwnedComposition(composition, database, kafka, {
+            config,
+            secrets: (secretDocument as ScopedSecretDocument).secrets,
+          }),
+        ),
+        transport,
+      },
     );
   } catch (error) {
     kafka?.resource.destroy();

@@ -13,10 +13,12 @@ import {
 } from "node:fs/promises";
 import { Buffer } from "node:buffer";
 import { execFileSync, spawn } from "node:child_process";
+import {request as httpsRequest} from "node:https";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
+import {parseServiceTransportMaterial, verifyTransportPeer} from "../packages/platform-security/src/index.ts";
 import pg from "pg";
 import {
   SERVER_IDENTITY_SQL,
@@ -219,9 +221,10 @@ async function writeStubSecret(
   refs,
   databaseCredential,
   kafkaCredential,
+  transportMaterial,
 ) {
-  // These placeholders satisfy the scoped-ref contract but are not credentials
-  // and cannot prove DB/provider access. No real secret leaves enter the smoke.
+  // These placeholders and ephemeral test certificates satisfy topology-only
+  // wiring; they are not credentials and cannot prove DB/provider access.
   const secrets = {};
   for (const ref of refs) {
     const segments = ref.split(".");
@@ -230,8 +233,9 @@ async function writeStubSecret(
       if (!Object.hasOwn(current, segment)) current[segment] = {};
       current = current[segment];
     }
-    current[segments.at(-1)] =
-      ref.startsWith("postgres.") && databaseCredential !== undefined
+    current[segments.at(-1)] = ref === `security.serviceTransportKeys.${runtime}`
+      ? transportMaterial
+      : ref.startsWith("postgres.") && databaseCredential !== undefined
         ? databaseCredential
         : ref.startsWith("kafka.") && kafkaCredential !== undefined
           ? kafkaCredential
@@ -245,6 +249,48 @@ async function writeStubSecret(
   const content = `${JSON.stringify({ schemaVersion: 1, environment, runtime, secrets })}\n`;
   await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
   await chmod(path, 0o400);
+}
+
+async function createStubTransportMaterials(secretsDir, environment) {
+  const directory = join(secretsDir, "transport-ca");
+  await mkdir(directory, {recursive: true, mode: 0o700});
+  const caKey = join(directory, "ca.key");
+  const caCert = join(directory, "ca.crt");
+  const serial = join(directory, "ca.srl");
+  execFileSync("openssl", [
+    "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", caKey, "-out", caCert, "-days", "1",
+    "-subj", "/CN=coffee-platform-compose-smoke-ca",
+  ], {stdio: "ignore"});
+  const caPem = await readFile(caCert, "utf8");
+  const materials = new Map();
+  for (const [index, runtime] of RUNTIMES.entries()) {
+    const prefix = join(directory, runtime);
+    const key = `${prefix}.key`;
+    const csr = `${prefix}.csr`;
+    const cert = `${prefix}.crt`;
+    const ext = `${prefix}.ext`;
+    await writeFile(ext, [
+      `subjectAltName=URI:spiffe://coffee-platform/${environment}/${runtime}`,
+      "extendedKeyUsage=serverAuth,clientAuth",
+      "",
+    ].join("\n"), {encoding: "utf8", mode: 0o400});
+    execFileSync("openssl", [
+      "req", "-new", "-newkey", "rsa:2048", "-nodes",
+      "-keyout", key, "-out", csr, "-subj", `/CN=${runtime}`,
+    ], {stdio: "ignore"});
+    execFileSync("openssl", [
+      "x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey,
+      ...(index === 0 ? ["-CAcreateserial"] : ["-CAserial", serial]),
+      "-out", cert, "-days", "1", "-sha256", "-extfile", ext,
+    ], {stdio: "ignore"});
+    materials.set(runtime, JSON.stringify({
+      caPem,
+      certPem: await readFile(cert, "utf8"),
+      keyPem: await readFile(key, "utf8"),
+    }));
+  }
+  return materials;
 }
 
 async function readDatabaseProofCredentials() {
@@ -330,6 +376,9 @@ async function materializeSecrets(secretsDir, options) {
     await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
   );
+  const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.recoveryProof
+    ? await createStubTransportMaterials(secretsDir, platformConfig.environment)
+    : undefined;
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
     if (options.stubSecrets || options.databaseProof || options.recoveryProof) {
@@ -342,6 +391,7 @@ async function materializeSecrets(secretsDir, options) {
         options.databaseProofCredentials?.[runtime] ??
           options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[runtime],
         options.recoveryProof ? kafkaCredential : undefined,
+        stubTransportMaterials?.get(runtime),
       );
     } else {
       execFileSync(process.execPath, [BOOTSTRAP, "--runtime", runtime], {
@@ -1775,23 +1825,69 @@ async function assertReadiness(
         "-T",
         runtime,
         "node",
-        "-e",
-        "Promise.all(['/health/live', '/health/ready', '/metrics'].map(async (path) => { const response = await fetch('http://127.0.0.1:' + process.env.PORT + path); if (!response.ok) throw new Error(path + ':' + response.status); })).catch(() => process.exit(1));",
+        "scripts/runtime-healthcheck.mjs",
+        "/health/live",
+        "/health/ready",
+        "/metrics",
       ],
       {composeFile},
     ).trim();
     void output;
   }
   for (const path of ["/health/live", "/health/ready", "/metrics"]) {
-    const response = await fetch(`http://127.0.0.1:4000${path}`, {
-      signal: AbortSignal.timeout(5000),
-    });
     assert.equal(
-      response.status,
+      await hostRuntimeHealthStatus(secretsDir, "edge-gateway", path, 4000),
       200,
       `edge host endpoint ${path} is not available`,
     );
   }
+}
+
+async function hostRuntimeTransport(secretsDir, runtime) {
+  const document = parseYaml(
+    await readFile(join(secretsDir, `${runtime}.yaml`), "utf8"),
+    {json: true},
+  );
+  return {
+    environment: document.environment,
+    material: parseServiceTransportMaterial(
+      document.secrets?.security?.serviceTransportKeys?.[runtime],
+      document.environment,
+      runtime,
+    ),
+  };
+}
+
+function hostRuntimeHealthStatus(secretsDir, runtime, path, port) {
+  return hostRuntimeTransport(secretsDir, runtime).then(({environment, material}) => new Promise((resolvePromise, reject) => {
+    const request = httpsRequest({
+      host: "127.0.0.1",
+      port,
+      path,
+      method: "GET",
+      ca: material.caPem,
+      cert: material.certPem,
+      key: material.keyPem,
+      minVersion: "TLSv1.3",
+      rejectUnauthorized: true,
+      servername: "127.0.0.1",
+      timeout: 5_000,
+      checkServerIdentity: (_hostname, certificate) => {
+        try {
+          verifyTransportPeer(certificate, environment, runtime);
+          return undefined;
+        } catch (error) {
+          return error instanceof Error ? error : new Error("transport peer identity is invalid");
+        }
+      },
+    }, (response) => {
+      response.resume();
+      response.once("end", () => resolvePromise(response.statusCode ?? 0));
+    });
+    request.once("timeout", () => request.destroy(new Error("host healthcheck timed out")));
+    request.once("error", reject);
+    request.end();
+  }));
 }
 
 function runtimeHealthStatus(
@@ -1809,8 +1905,8 @@ function runtimeHealthStatus(
       "-T",
       runtime,
       "node",
-      "-e",
-      `fetch('http://127.0.0.1:' + process.env.PORT + '${path}').then((response) => console.log(response.status)).catch(() => console.log('0'))`,
+      "scripts/runtime-healthcheck.mjs",
+      path,
     ],
     {composeFile},
   ).trim();

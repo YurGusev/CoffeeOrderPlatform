@@ -1,4 +1,5 @@
 import {Agent} from "undici";
+import {verifyTransportPeer, type ServiceTransportMaterial} from "@coffee-platform/security";
 
 const DEFAULT_CONNECTIONS = 32;
 const DEFAULT_CONNECT_TIMEOUT_MS = 1_000;
@@ -10,6 +11,11 @@ export type HttpClientOptions = Readonly<{
   pipelining?: 1;
   connectTimeoutMs?: number;
   idleTimeoutMs?: number;
+  tls?: Readonly<{
+    material: ServiceTransportMaterial;
+    targetEnvironment: string;
+    targetRuntime: string;
+  }>;
 }>;
 
 export type HttpRequestOptions = RequestInit & Readonly<{
@@ -64,6 +70,7 @@ export class HttpClient {
 
   public constructor(options: HttpClientOptions) {
     this.#origin = resolveOrigin(options.origin);
+    if ((this.#origin.protocol === "https:") !== (options.tls !== undefined)) throw new RangeError("HTTPS service clients require scoped mTLS material");
     const connections = options.connections ?? DEFAULT_CONNECTIONS;
     const pipelining = options.pipelining ?? 1;
     const connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
@@ -72,10 +79,30 @@ export class HttpClient {
     if (pipelining !== 1) throw new RangeError("pipelining must be 1");
     positiveInteger(connectTimeoutMs, "connectTimeoutMs");
     positiveInteger(idleTimeoutMs, "idleTimeoutMs");
+    const tls = options.tls;
+    const connect = tls === undefined
+      ? {timeout: connectTimeoutMs}
+      : {
+          timeout: connectTimeoutMs,
+          ca: tls.material.caPem,
+          cert: tls.material.certPem,
+          key: tls.material.keyPem,
+          minVersion: "TLSv1.3" as const,
+          rejectUnauthorized: true,
+          servername: this.#origin.hostname,
+          checkServerIdentity: (_hostname: string, certificate: Parameters<typeof verifyTransportPeer>[0]) => {
+            try {
+              verifyTransportPeer(certificate, tls.targetEnvironment, tls.targetRuntime);
+              return undefined;
+            } catch (error) {
+              return error instanceof Error ? error : new Error("transport peer identity is invalid");
+            }
+          },
+        };
     this.#dispatcher = new Agent({
       connections,
       pipelining,
-      connect: {timeout: connectTimeoutMs},
+      connect,
       keepAliveTimeout: idleTimeoutMs,
     });
   }

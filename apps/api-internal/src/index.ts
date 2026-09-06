@@ -2,7 +2,7 @@ import {createPrivateKey, createPublicKey, randomUUID} from "node:crypto";
 import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, isCustomerOrderInput, isCustomerProblem, isCustomerRef} from "@coffee-platform/contracts-customer-v1";
 import type {CustomerOrderInput} from "@coffee-platform/contracts-customer-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
-import {signServiceDelegation, verifyServiceDelegation} from "@coffee-platform/security";
+import {parseServiceTransportMaterial, signServiceDelegation, verifyServiceDelegationWithKeySet, type ServiceTransportMaterial} from "@coffee-platform/security";
 
 type HeaderValue = string | string[] | undefined;
 type RuntimeApp = Parameters<NonNullable<RuntimeComposition["configure"]>>[0];
@@ -162,9 +162,14 @@ function privateKey(context: RuntimeCompositionContext, path: string) {
   return createPrivateKey(value);
 }
 
-function publicKey(context: RuntimeCompositionContext, path: string) {
+function verificationKeys(context: RuntimeCompositionContext, path: string) {
   const value = secretAt(context, path);
-  return typeof value === "string" && value.length > 0 ? createPublicKey(value) : undefined;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("INTERNAL_API_CALLER_VERIFICATION_KEYS_NOT_CONFIGURED");
+  const source = value as Record<string, unknown>;
+  const active = source["active"];
+  const previous = source["previous"];
+  if (typeof active !== "string" || active.length === 0 || typeof previous !== "string" || previous.length === 0) throw new Error("INTERNAL_API_CALLER_VERIFICATION_KEYS_NOT_CONFIGURED");
+  return [createPublicKey(active), createPublicKey(previous)];
 }
 
 function epochSeconds(): number {
@@ -174,18 +179,17 @@ function epochSeconds(): number {
 function customerOrigin(context: RuntimeCompositionContext): string {
   const target = context.config.services["api-internal"].outbound.find((entry) => entry.startsWith("customer-service:"));
   if (target === undefined) throw new Error("INTERNAL_API_CUSTOMER_ORIGIN_NOT_CONFIGURED");
-  return `http://${target}`;
+  return `https://${target}`;
 }
 
 export function createConfiguredInternalAdapters(context: RuntimeCompositionContext, client: HttpClient): InternalApiAdapters {
   const signingKey = privateKey(context, "security.apiInternalDelegationSigningPrivateKey");
-  const callerVerificationKey = publicKey(context, "security.serviceVerificationKeys.orders-service");
+  const callerVerificationKeys = verificationKeys(context, "security.serviceVerificationKeys.orders-service");
   return {
-    verifyTransport: () => false,
+    verifyTransport: (request, expectedCaller) => request.runtimeContext?.transportIdentity?.runtime === expectedCaller,
     verifyCallerDelegation: (token, _request, operationId, signal) => {
       signal.throwIfAborted();
-      if (callerVerificationKey === undefined) throw new Error("INTERNAL_API_CALLER_VERIFICATION_KEY_NOT_CONFIGURED");
-      return verifyServiceDelegation(token, {publicKey: callerVerificationKey, issuer: "orders-service", audience: "api-internal", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5});
+      return verifyServiceDelegationWithKeySet(token, {publicKeys: callerVerificationKeys, issuer: "orders-service", audience: "api-internal", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5});
     },
     signDelegation: ({originalCaller, operationId, context: requestContext}) => {
       const iat = epochSeconds();
@@ -204,6 +208,19 @@ export function createConfiguredInternalAdapters(context: RuntimeCompositionCont
     },
     customer: createHttpCustomerClient({fetch: (path, options) => client.fetch(path, options)}),
   };
+}
+
+export function configuredTransportMaterial(context: RuntimeCompositionContext): ServiceTransportMaterial {
+  let value: unknown = context.secrets;
+  for (const part of "security.serviceTransportKeys.api-internal".split(".")) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("INTERNAL_API_TRANSPORT_NOT_CONFIGURED");
+    value = (value as Record<string, unknown>)[part];
+  }
+  return parseServiceTransportMaterial(value, context.config.environment, "api-internal");
+}
+
+export function configuredCustomerTls(context: RuntimeCompositionContext) {
+  return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "customer-service"};
 }
 
 export function configuredCustomerOrigin(context: RuntimeCompositionContext): string {

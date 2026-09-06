@@ -302,10 +302,11 @@
       }
     },
     "security": {
-      "type": "object", "additionalProperties": false, "required": ["actorContext", "catalogCursor", "serviceTrustBundles", "delegation"],
+      "type": "object", "additionalProperties": false, "required": ["actorContext", "catalogCursor", "customerCursor", "serviceTrustBundles", "delegation"],
       "properties": {
         "actorContext": {"$ref": "#/$defs/signingPolicy"},
         "catalogCursor": {"$ref": "#/$defs/signingPolicy"},
+        "customerCursor": {"$ref": "#/$defs/signingPolicy"},
         "serviceTrustBundles": {
           "type": "object", "additionalProperties": false, "required": ["activeKid", "previousKid", "overlapHours", "publicKeys"],
           "properties": {

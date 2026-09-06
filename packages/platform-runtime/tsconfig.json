@@ -19,6 +19,9 @@
     },
     {
       "path": "../platform-kafka-runtime"
+    },
+    {
+      "path": "../platform-security"
     }
   ],
   "include": ["src/**/*.ts"]

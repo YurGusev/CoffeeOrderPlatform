@@ -26,7 +26,7 @@
       "networkZone": "public-api-backend",
       "dbPrincipal": null,
       "httpSurfaces": ["client-v1"],
-      "secretRefs": ["security.apiPublicDelegationSigningPrivateKey", "security.serviceTransportKeys.api-public", "telemetry.exporterToken"],
+      "secretRefs": ["security.apiPublicDelegationSigningPrivateKey", "security.actorContextEdgeVerificationPublicKeys", "security.serviceTransportKeys.api-public", "telemetry.exporterToken"],
       "implemented": false
     },
     {
@@ -36,7 +36,7 @@
       "networkZone": "internal-api",
       "dbPrincipal": null,
       "httpSurfaces": ["internal-v1"],
-      "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
+      "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceVerificationKeys.orders-service", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
       "implemented": false
     },
     {
@@ -56,7 +56,7 @@
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_customer_rw",
       "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
-      "secretRefs": ["postgres.customer", "security.serviceTransportKeys.customer-service", "telemetry.exporterToken"],
+      "secretRefs": ["postgres.customer", "security.customerCursorSigningPrivateKey", "security.customerCursorVerificationPublicKeys", "security.delegationVerificationKeys.api-public", "security.delegationVerificationKeys.api-internal", "security.serviceTransportKeys.customer-service", "telemetry.exporterToken"],
       "implemented": false
     },
     {

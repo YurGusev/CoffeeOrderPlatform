@@ -1,7 +1,10 @@
 import {createHash, randomUUID} from "node:crypto";
+import {readFile} from "node:fs/promises";
 import {Client} from "pg";
+import {createHttpClient} from "../../../packages/platform-http/src/index.ts";
+import {parseServiceTransportMaterial} from "../../../packages/platform-security/src/index.ts";
 
-export const CUSTOMER_ORIGIN = process.env.CUSTOMER_SERVICE_ORIGIN ?? "http://127.0.0.1:4101";
+export const CUSTOMER_ORIGIN = process.env.CUSTOMER_SERVICE_ORIGIN ?? "https://127.0.0.1:4101";
 export const CUSTOMER_DATABASE_URL = process.env.CUSTOMER_DATABASE_URL ?? process.env.COFFEE_CUSTOMER_DATABASE_URL;
 
 export function blocker(testContext, message) {
@@ -25,17 +28,49 @@ function parseHeaders(name) {
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, String(entry)]));
 }
 
-export async function liveService(testContext, headerEnv = "CUSTOMER_TEST_HEADERS_JSON") {
+export async function liveService(
+  testContext,
+  headerEnv = "CUSTOMER_TEST_HEADERS_JSON",
+  transportEnv = "CUSTOMER_TEST_CLIENT_TRANSPORT_FILE",
+  clientRuntime = process.env.CUSTOMER_TEST_CLIENT_RUNTIME ?? "api-public",
+) {
+  const origin = new URL(CUSTOMER_ORIGIN);
+  if (origin.protocol !== "https:") {
+    return blocker(testContext, "customer-service must use HTTPS with mTLS; plaintext live origins are forbidden");
+  }
+  const transportPath = process.env[transportEnv];
+  if (!transportPath) {
+    return blocker(testContext, `${transportEnv} is missing; a scoped mTLS client material fixture is required`);
+  }
+  let material;
+  try {
+    material = parseServiceTransportMaterial(
+      await readFile(transportPath, "utf8"),
+      process.env.CUSTOMER_TEST_ENVIRONMENT ?? "development",
+      clientRuntime,
+    );
+  } catch (error) {
+    return blocker(testContext, `${transportEnv} is invalid (${error?.message ?? "transport validation failed"})`);
+  }
+  const client = createHttpClient({
+    origin: CUSTOMER_ORIGIN,
+    tls: {
+      material,
+      targetEnvironment: process.env.CUSTOMER_TEST_ENVIRONMENT ?? "development",
+      targetRuntime: "customer-service",
+    },
+  });
+  testContext.after(async () => client.close());
   let health;
   try {
-    health = await fetch(new URL("/health/ready", CUSTOMER_ORIGIN));
+    health = await client.fetch("/health/ready");
   } catch (error) {
     return blocker(testContext, `customer-service is not reachable at configured origin (${error?.code ?? error?.message ?? "connection failed"})`);
   }
   if (!health.ok) return blocker(testContext, `customer-service is not ready (${health.status})`);
   const headers = parseHeaders(headerEnv);
   if (!headers) return blocker(testContext, `${headerEnv} is missing; a real signed trust-context fixture is required`);
-  return {origin: CUSTOMER_ORIGIN, headers};
+  return {origin: CUSTOMER_ORIGIN, headers, client, material, environment: process.env.CUSTOMER_TEST_ENVIRONMENT ?? "development", clientRuntime};
 }
 
 export async function liveDatabase(testContext, url = CUSTOMER_DATABASE_URL) {
@@ -60,7 +95,9 @@ export async function jsonRequest(service, path, {method = "GET", body, headers 
     signal,
   };
   if (body !== undefined) request.body = JSON.stringify(body);
-  const response = await fetch(new URL(path, service.origin), request);
+  const response = service.client === undefined
+    ? await fetch(new URL(path, service.origin), request)
+    : await service.client.fetch(path, request);
   const text = await response.text();
   let parsed;
   try {

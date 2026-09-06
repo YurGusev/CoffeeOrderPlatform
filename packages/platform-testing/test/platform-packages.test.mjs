@@ -24,6 +24,8 @@ import {
   verifyActorContext,
   signServiceDelegation,
   verifyServiceDelegation,
+  createMutualTlsServerOptions,
+  parseServiceTransportMaterial,
 } from "../../platform-security/src/index.ts";
 import {withTransaction, createDatabase, DatabaseTransactionError} from "../../platform-database/dist/index.js";
 import {defineStatement, defineCopy} from "../../platform-database/dist/owner.js";
@@ -131,6 +133,22 @@ void test("security signs and verifies actor context claims", () => {
         clockSkewSeconds: 5,
       }),
     { code: "SERVICE_AUDIENCE_FORBIDDEN" },
+  );
+});
+
+void test("security transport rejects plaintext and requires mutual TLS", () => {
+  assert.throws(
+    () => parseServiceTransportMaterial("compose-smoke-placeholder", "development", "api-public"),
+    {code: "TRANSPORT_IDENTITY_INVALID"},
+  );
+  assert.deepEqual(
+    createMutualTlsServerOptions({
+      keyPem: "key",
+      certPem: "cert",
+      caPem: "ca",
+      identity: {environment: "development", runtime: "api-public", san: "spiffe://coffee-platform/development/api-public"},
+    }),
+    {key: "key", cert: "cert", ca: "ca", requestCert: true, rejectUnauthorized: true, minVersion: "TLSv1.3"},
   );
 });
 

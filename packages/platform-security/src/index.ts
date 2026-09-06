@@ -1,4 +1,111 @@
-import {createPublicKey, sign, verify, type KeyObject} from "node:crypto";
+import {createPublicKey, sign, verify, X509Certificate, type KeyObject} from "node:crypto";
+import type {ServerOptions} from "node:https";
+import type {PeerCertificate} from "node:tls";
+import {Temporal} from "@js-temporal/polyfill";
+
+const TRANSPORT_SAN_PREFIX = "spiffe://coffee-platform/";
+const TRANSPORT_SAN_RE = /^spiffe:\/\/coffee-platform\/([a-z0-9-]+)\/([a-z0-9-]+)$/u;
+const CERTIFICATE_DATE_RE = /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{2}):(\d{2}):(\d{2})\s+(\d{4}) GMT$/u;
+const MONTHS = Object.freeze({Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11} as const);
+
+export type TransportIdentity = Readonly<{
+  environment: string;
+  runtime: string;
+  san: string;
+}>;
+
+export type ServiceTransportMaterial = Readonly<{
+  keyPem: string;
+  certPem: string;
+  caPem: string;
+  identity: TransportIdentity;
+}>;
+
+export class TransportValidationError extends Error {
+  public readonly code = "TRANSPORT_IDENTITY_INVALID";
+
+  public constructor(message: string) {
+    super(message);
+    this.name = "TransportValidationError";
+  }
+}
+
+function certificateTime(value: string, field: string): number {
+  const match = CERTIFICATE_DATE_RE.exec(value);
+  if (match === null) throw new TransportValidationError(`${field} is invalid`);
+  const month = MONTHS[match[1] as keyof typeof MONTHS];
+  const [, , dayText, hourText, minuteText, secondText, yearText] = match;
+  if (month === undefined || dayText === undefined || hourText === undefined || minuteText === undefined || secondText === undefined || yearText === undefined) throw new TransportValidationError(`${field} is invalid`);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText);
+  const year = Number(yearText);
+  try {
+    return Temporal.PlainDateTime.from({year, month: month + 1, day, hour, minute, second})
+      .toZonedDateTime("UTC")
+      .toInstant()
+      .epochMilliseconds;
+  } catch {
+    throw new TransportValidationError(`${field} is invalid`);
+  }
+}
+
+function identityFromSan(san: string, environment: string, expectedRuntime?: string): TransportIdentity {
+  const match = TRANSPORT_SAN_RE.exec(san);
+  if (match === null || match[1] !== environment || (expectedRuntime !== undefined && match[2] !== expectedRuntime)) {
+    throw new TransportValidationError("service SAN is not allowed");
+  }
+  const [, matchedEnvironment, matchedRuntime] = match;
+  if (matchedEnvironment === undefined || matchedRuntime === undefined) throw new TransportValidationError("service SAN is not allowed");
+  return {environment: matchedEnvironment, runtime: matchedRuntime, san};
+}
+
+function certificateIdentity(certificate: X509Certificate, environment: string, expectedRuntime?: string): TransportIdentity {
+  const san = certificate.subjectAltName?.split(",").map((value) => value.trim()).find((value) => value.startsWith("URI:"))?.slice(4);
+  if (san === undefined || !san.startsWith(TRANSPORT_SAN_PREFIX)) throw new TransportValidationError("service SAN is required");
+  const identity = identityFromSan(san, environment, expectedRuntime);
+  const now = Temporal.Now.instant().epochMilliseconds;
+  if (now < certificateTime(certificate.validFrom, "validFrom") || now > certificateTime(certificate.validTo, "validTo")) {
+    throw new TransportValidationError("service certificate is expired or not yet valid");
+  }
+  return identity;
+}
+
+function stringField(source: Record<string, unknown>, key: string): string {
+  const value = source[key];
+  if (typeof value !== "string" || value.length === 0) throw new TransportValidationError(`transport material ${key} is required`);
+  return value;
+}
+
+export function parseServiceTransportMaterial(value: unknown, environment: string, runtime: string): ServiceTransportMaterial {
+  if (typeof value !== "string" || value.length === 0) throw new TransportValidationError("scoped service transport material is required");
+  let parsed: unknown;
+  try { parsed = JSON.parse(value) as unknown; } catch { throw new TransportValidationError("scoped service transport material must be JSON"); }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new TransportValidationError("scoped service transport material must be an object");
+  const source = parsed as Record<string, unknown>;
+  if (Object.keys(source).sort().join(",") !== "caPem,certPem,keyPem") throw new TransportValidationError("transport material has unknown fields");
+  const keyPem = stringField(source, "keyPem");
+  const certPem = stringField(source, "certPem");
+  const caPem = stringField(source, "caPem");
+  let certificate: X509Certificate;
+  try { certificate = new X509Certificate(certPem); } catch { throw new TransportValidationError("service certificate is invalid"); }
+  return {keyPem, certPem, caPem, identity: certificateIdentity(certificate, environment, runtime)};
+}
+
+export function createMutualTlsServerOptions(material: ServiceTransportMaterial): ServerOptions {
+  return {key: material.keyPem, cert: material.certPem, ca: material.caPem, requestCert: true, rejectUnauthorized: true, minVersion: "TLSv1.3"};
+}
+
+export function verifyTransportPeer(certificate: PeerCertificate, environment: string, expectedRuntime?: string): TransportIdentity {
+  if (certificate.subjectaltname === undefined) throw new TransportValidationError("peer service SAN is required");
+  const san = certificate.subjectaltname.split(",").map((value) => value.trim()).find((value) => value.startsWith("URI:"))?.slice(4);
+  if (san === undefined) throw new TransportValidationError("peer service SAN is required");
+  const identity = identityFromSan(san, environment, expectedRuntime);
+  const now = Temporal.Now.instant().epochMilliseconds;
+  if (now < certificateTime(certificate.valid_from, "valid_from") || now > certificateTime(certificate.valid_to, "valid_to")) throw new TransportValidationError("peer service certificate is expired or not yet valid");
+  return identity;
+}
 
 export type ActorContextClaims = Readonly<{
   iss: string;
@@ -133,6 +240,21 @@ export function verifyActorContext(token: string, options: VerifyActorContextOpt
   return claims;
 }
 
+export type VerifyActorContextKeySetOptions = Omit<VerifyActorContextOptions, "publicKey"> & Readonly<{publicKeys: readonly KeyObject[]}>;
+
+export function verifyActorContextWithKeySet(token: string, options: VerifyActorContextKeySetOptions): ActorContextClaims {
+  if (options.publicKeys.length === 0) throw new SecurityValidationError("ACTOR_CONTEXT_INVALID", "verification key set is empty");
+  let lastError: unknown;
+  for (const publicKey of options.publicKeys) {
+    try {
+      return verifyActorContext(token, {...options, publicKey});
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof SecurityValidationError ? lastError : new SecurityValidationError("ACTOR_CONTEXT_INVALID", "actor context подпись недействительна");
+}
+
 function serviceClaimsFromUnknown(value: unknown): ServiceDelegationClaims {
   if (value === null || typeof value !== "object" || Array.isArray(value)) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "claims должны быть объектом");
   const source = value as Record<string, unknown>;
@@ -184,4 +306,19 @@ export function verifyServiceDelegation(token: string, options: VerifyServiceDel
   if (!Number.isSafeInteger(options.nowEpochSeconds) || options.clockSkewSeconds < 0) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "некорректные параметры времени");
   if (claims.iat > options.nowEpochSeconds + options.clockSkewSeconds || claims.exp <= options.nowEpochSeconds - options.clockSkewSeconds) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "delegation истёк или ещё не действителен");
   return claims;
+}
+
+export type VerifyServiceDelegationKeySetOptions = Omit<VerifyServiceDelegationOptions, "publicKey"> & Readonly<{publicKeys: readonly KeyObject[]}>;
+
+export function verifyServiceDelegationWithKeySet(token: string, options: VerifyServiceDelegationKeySetOptions): ServiceDelegationClaims {
+  if (options.publicKeys.length === 0) throw new SecurityValidationError("SERVICE_DELEGATION_INVALID", "verification key set is empty");
+  let lastError: unknown;
+  for (const publicKey of options.publicKeys) {
+    try {
+      return verifyServiceDelegation(token, {...options, publicKey});
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof SecurityValidationError ? lastError : new SecurityValidationError("SERVICE_DELEGATION_INVALID", "delegation подпись недействительна");
 }

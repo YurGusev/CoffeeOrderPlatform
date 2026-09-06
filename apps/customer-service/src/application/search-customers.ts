@@ -100,10 +100,12 @@ export function decodeCustomerCursor(value: string, search: CustomerSearch, sign
   return cursor;
 }
 
-export function createEd25519CustomerCursorSigner(privateKey: KeyObject, publicKey: KeyObject): CustomerCursorSigner {
+export function createEd25519CustomerCursorSigner(privateKey: KeyObject, publicKey: KeyObject | readonly KeyObject[]): CustomerCursorSigner {
+  const verificationKeys = Array.isArray(publicKey) ? publicKey : [publicKey];
+  if (verificationKeys.length === 0) throw new CustomerDomainError("CUSTOMER_UNAVAILABLE", "customer cursor verification is unavailable");
   return {
     sign: (payload) => Buffer.from(sign(null, Buffer.from(payload, "utf8"), privateKey)).toString("base64url"),
-    verify: (payload, signature) => verify(null, Buffer.from(payload, "utf8"), publicKey, Buffer.from(signature, "base64url")),
+    verify: (payload, signature) => verificationKeys.some((key) => verify(null, Buffer.from(payload, "utf8"), key, Buffer.from(signature, "base64url"))),
   };
 }
 
