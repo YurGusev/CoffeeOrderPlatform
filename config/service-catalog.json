@@ -16,7 +16,7 @@
       "incomingEvents": [], "schedules": [],
       "outgoingHttp": ["web:GET /", "web:GET /assets/**", "api-public:ANY /api/client-v1/**", "realtime-gateway:GET /events"],
       "outgoingEvents": [], "database": null,
-      "secretRefs": ["edge.tlsPrivateKey", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
+      "secretRefs": ["edge.tlsPrivateKey", "edge.tlsCertificate", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
       "publicity": "public-ingress", "transportMode": "public-tls"
     },
     {

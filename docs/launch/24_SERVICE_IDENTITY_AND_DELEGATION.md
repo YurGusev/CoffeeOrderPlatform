@@ -10,9 +10,12 @@ certificate с SPIFFE-like SAN `spiffe://coffee-platform/<environment>/<runtime>
 Certificate TTL — 24h, rotation начинается за 6h, overlap active/previous trust
 bundle — 12h. Runtime получает только свой key/cert в scoped tmpfs; public trust
 bundle находится в `platform.yaml`. `edge-gateway` использует public TLS
-listener без требования client certificate, остальные runtime используют mTLS
-listener и client. Expired/unknown SAN делает readiness 503 на internal trust
-surface.
+listener без требования client certificate: его `edge.tlsPrivateKey` и
+`edge.tlsCertificate` — отдельная серверная пара с hostname из
+`platform.publicBaseUrl`. `security.serviceTransportKeys.edge-gateway` остаётся
+внутренней service identity для outbound mTLS. Остальные runtime используют
+mTLS listener и client. Expired/unknown SAN делает readiness 503 на internal
+trust surface.
 Для первого Compose launch rotation/revocation применяется повторным
 config-bootstrap и restart всех затронутых runtime; отдельная PKI-служба не нужна.
 

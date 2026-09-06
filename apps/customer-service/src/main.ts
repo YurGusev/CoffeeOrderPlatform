@@ -38,14 +38,16 @@ function customerCursorPolicy(context: RuntimeCompositionContext): CustomerCurso
   const maxAgeSeconds = source["maxAgeSeconds"];
   const clockSkewSeconds = source["clockSkewSeconds"];
   const overlapSeconds = source["overlapSeconds"];
+  const previousKeyTrustUntilEpochSeconds = source["previousKeyTrustUntilEpochSeconds"];
   if (
     typeof activeKid !== "string" || activeKid.length === 0 ||
     typeof previousKid !== "string" || previousKid.length === 0 ||
     typeof maxAgeSeconds !== "number" || !Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 1 ||
     typeof clockSkewSeconds !== "number" || !Number.isSafeInteger(clockSkewSeconds) || clockSkewSeconds < 0 ||
-    typeof overlapSeconds !== "number" || !Number.isSafeInteger(overlapSeconds) || overlapSeconds < 1
+    typeof overlapSeconds !== "number" || !Number.isSafeInteger(overlapSeconds) || overlapSeconds < 1 ||
+    typeof previousKeyTrustUntilEpochSeconds !== "number" || !Number.isSafeInteger(previousKeyTrustUntilEpochSeconds) || previousKeyTrustUntilEpochSeconds < 0
   ) throw new Error("SECURITY_CUSTOMER_CURSOR_POLICY_INVALID");
-  return {activeKid, previousKid, maxAgeSeconds, clockSkewSeconds, overlapSeconds};
+  return {activeKid, previousKid, maxAgeSeconds, clockSkewSeconds, overlapSeconds, previousKeyTrustUntilEpochSeconds};
 }
 
 await startConfiguredRuntime("customer-service", {

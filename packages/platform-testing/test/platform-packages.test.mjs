@@ -155,10 +155,9 @@ void test("security transport rejects plaintext and requires mutual TLS", () => 
     createPublicTlsServerOptions({
       keyPem: "key",
       certPem: "cert",
-      caPem: "ca",
-      identity: {environment: "development", runtime: "edge-gateway", san: "spiffe://coffee-platform/development/edge-gateway"},
+      hostname: "edge.example.test",
     }),
-    {key: "key", cert: "cert", requestCert: false, rejectUnauthorized: false, minVersion: "TLSv1.3"},
+    {key: "key", cert: "cert", requestCert: false, minVersion: "TLSv1.3"},
   );
 });
 

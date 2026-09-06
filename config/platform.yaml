@@ -120,6 +120,7 @@ security:
     maxAgeSeconds: 86400
     clockSkewSeconds: 5
     overlapSeconds: 172800
+    previousKeyTrustUntilEpochSeconds: 1798761600
     verificationKeys:
       customer-cursor-v1: ed25519-public-customer-cursor-v1
       customer-cursor-v0: ed25519-public-customer-cursor-v0
@@ -175,7 +176,7 @@ services:
     database: null
     kafka: { producers: [], consumers: [] }
     outbound: [web:3000, api-public:4050, realtime-gateway:4401]
-    secretRefs: [edge.tlsPrivateKey, edge.oidcClientSecret, security.actorContextEdgeSigningPrivateKey, security.serviceTransportKeys.edge-gateway, telemetry.exporterToken]
+    secretRefs: [edge.tlsPrivateKey, edge.tlsCertificate, edge.oidcClientSecret, security.actorContextEdgeSigningPrivateKey, security.serviceTransportKeys.edge-gateway, telemetry.exporterToken]
     permissions: {manifest: config/permissions/edge-gateway.json, net: [web:3000, api-public:4050, realtime-gateway:4401], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 

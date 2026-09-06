@@ -19,6 +19,7 @@ const DEFAULT_CURSOR_POLICY = Object.freeze({
   maxAgeSeconds: 86_400,
   clockSkewSeconds: 5,
   overlapSeconds: 172_800,
+  previousKeyTrustUntilEpochSeconds: 4_102_444_800,
 });
 
 export type CustomerSearchResult = Readonly<{
@@ -39,6 +40,7 @@ export type CustomerCursorPolicy = Readonly<{
   maxAgeSeconds: number;
   clockSkewSeconds: number;
   overlapSeconds: number;
+  previousKeyTrustUntilEpochSeconds: number;
   nowEpochSeconds?: () => number;
 }>;
 
@@ -147,13 +149,12 @@ export function decodeCustomerCursor(value: string, search: CustomerSearch, sign
     invalidCursor();
   }
   const now = nowEpochSeconds(signer.policy);
-  const age = now - envelope.issuedAt;
   if (
     envelope.expiresAt <= envelope.issuedAt ||
     envelope.expiresAt - envelope.issuedAt > signer.policy.maxAgeSeconds ||
     envelope.issuedAt > now + signer.policy.clockSkewSeconds ||
     envelope.expiresAt < now - signer.policy.clockSkewSeconds ||
-    (envelope.kid === signer.policy.previousKid && age > signer.policy.overlapSeconds + signer.policy.clockSkewSeconds) ||
+    (envelope.kid === signer.policy.previousKid && now >= signer.policy.previousKeyTrustUntilEpochSeconds) ||
     (envelope.kid !== signer.policy.activeKid && envelope.kid !== signer.policy.previousKid) ||
     cursorPayload(envelope) !== decoded ||
     envelope.queryHash !== search.queryHash
@@ -177,7 +178,8 @@ export function createEd25519CustomerCursorSigner(
     policy.activeKid === policy.previousKid ||
     !Number.isSafeInteger(policy.maxAgeSeconds) || policy.maxAgeSeconds < 1 ||
     !Number.isSafeInteger(policy.clockSkewSeconds) || policy.clockSkewSeconds < 0 ||
-    !Number.isSafeInteger(policy.overlapSeconds) || policy.overlapSeconds < 1
+    !Number.isSafeInteger(policy.overlapSeconds) || policy.overlapSeconds < 1 ||
+    !Number.isSafeInteger(policy.previousKeyTrustUntilEpochSeconds) || policy.previousKeyTrustUntilEpochSeconds < 0
   ) throw new CustomerDomainError("CUSTOMER_UNAVAILABLE", "customer cursor policy is invalid");
   const verificationKeys = Array.isArray(publicKey) ? publicKey : [publicKey];
   if (verificationKeys.length === 0) throw new CustomerDomainError("CUSTOMER_UNAVAILABLE", "customer cursor verification is unavailable");

@@ -17,7 +17,7 @@
       "networkZone": "public-ingress",
       "dbPrincipal": null,
       "httpSurfaces": ["public-edge"],
-      "secretRefs": ["edge.tlsPrivateKey", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
+      "secretRefs": ["edge.tlsPrivateKey", "edge.tlsCertificate", "edge.oidcClientSecret", "security.actorContextEdgeSigningPrivateKey", "security.serviceTransportKeys.edge-gateway", "telemetry.exporterToken"],
       "implemented": false
     },
     {

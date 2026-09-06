@@ -227,6 +227,7 @@ async function writeStubSecret(
   databaseCredential,
   kafkaCredential,
   transportMaterial,
+  publicTlsMaterial,
 ) {
   // These placeholders and ephemeral test certificates satisfy topology-only
   // wiring; they are not credentials and cannot prove DB/provider access.
@@ -240,6 +241,10 @@ async function writeStubSecret(
     }
     current[segments.at(-1)] = ref === `security.serviceTransportKeys.${runtime}`
       ? transportMaterial
+      : ref === "edge.tlsPrivateKey" && publicTlsMaterial !== undefined
+        ? publicTlsMaterial.keyPem
+        : ref === "edge.tlsCertificate" && publicTlsMaterial !== undefined
+          ? publicTlsMaterial.certPem
       : ref.startsWith("postgres.") && databaseCredential !== undefined
         ? databaseCredential
         : ref.startsWith("kafka.") && kafkaCredential !== undefined
@@ -295,7 +300,30 @@ async function createStubTransportMaterials(secretsDir, environment) {
       keyPem: await readFile(key, "utf8"),
     }));
   }
-  return materials;
+  const publicKey = join(directory, "edge-public.key");
+  const publicCsr = join(directory, "edge-public.csr");
+  const publicCert = join(directory, "edge-public.crt");
+  const publicExt = join(directory, "edge-public.ext");
+  await writeFile(publicExt, [
+    "subjectAltName=DNS:localhost,IP:127.0.0.1",
+    "extendedKeyUsage=serverAuth",
+    "",
+  ].join("\n"), {encoding: "utf8", mode: 0o400});
+  execFileSync("openssl", [
+    "req", "-new", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", publicKey, "-out", publicCsr, "-subj", "/CN=localhost",
+  ], {stdio: "ignore"});
+  execFileSync("openssl", [
+    "x509", "-req", "-in", publicCsr, "-CA", caCert, "-CAkey", caKey,
+    "-CAserial", serial, "-out", publicCert, "-days", "1", "-sha256", "-extfile", publicExt,
+  ], {stdio: "ignore"});
+  return {
+    service: materials,
+    publicTls: {
+      keyPem: await readFile(publicKey, "utf8"),
+      certPem: await readFile(publicCert, "utf8"),
+    },
+  };
 }
 
 async function readDatabaseProofCredentials() {
@@ -396,7 +424,8 @@ async function materializeSecrets(secretsDir, options) {
         options.databaseProofCredentials?.[runtime] ??
           options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[runtime],
         options.recoveryProof ? kafkaCredential : undefined,
-        stubTransportMaterials?.get(runtime),
+        stubTransportMaterials?.service.get(runtime),
+        runtime === "edge-gateway" ? stubTransportMaterials?.publicTls : undefined,
       );
     } else {
       execFileSync(process.execPath, [BOOTSTRAP, "--runtime", runtime], {
@@ -1852,31 +1881,37 @@ async function hostRuntimeTransport(secretsDir, runtime) {
     await readFile(join(secretsDir, `${runtime}.yaml`), "utf8"),
     {json: true},
   );
+  const material = parseServiceTransportMaterial(
+    document.secrets?.security?.serviceTransportKeys?.[runtime],
+    document.environment,
+    runtime,
+  );
+  const publicCertificate = document.secrets?.edge?.tlsCertificate;
+  if (runtime === "edge-gateway" && typeof publicCertificate !== "string") {
+    throw new Error("edge-gateway public TLS certificate is missing from scoped secrets");
+  }
   return {
     environment: document.environment,
-    material: parseServiceTransportMaterial(
-      document.secrets?.security?.serviceTransportKeys?.[runtime],
-      document.environment,
-      runtime,
-    ),
+    material,
+    publicCertificate,
   };
 }
 
 function hostRuntimeHealthStatus(secretsDir, runtime, path, port) {
-  return hostRuntimeTransport(secretsDir, runtime).then(({environment, material}) => new Promise((resolvePromise, reject) => {
+  return hostRuntimeTransport(secretsDir, runtime).then(({environment, material, publicCertificate}) => new Promise((resolvePromise, reject) => {
+    const isPublic = runtime === "edge-gateway";
     const request = httpsRequest({
       host: "127.0.0.1",
       port,
       path,
       method: "GET",
-      ca: material.caPem,
-      cert: material.certPem,
-      key: material.keyPem,
+      ca: isPublic ? publicCertificate : material.caPem,
+      ...(isPublic ? {} : {cert: material.certPem, key: material.keyPem}),
       minVersion: "TLSv1.3",
       rejectUnauthorized: true,
-      servername: "127.0.0.1",
+      servername: isPublic ? "localhost" : "127.0.0.1",
       timeout: 5_000,
-      checkServerIdentity: (_hostname, certificate) => {
+      ...(isPublic ? {} : {checkServerIdentity: (_hostname, certificate) => {
         try {
           verifyTransportPeer(certificate, environment, runtime);
           return undefined;
@@ -1884,6 +1919,7 @@ function hostRuntimeHealthStatus(secretsDir, runtime, path, port) {
           return error instanceof Error ? error : new Error("transport peer identity is invalid");
         }
       },
+      }),
     }, (response) => {
       response.resume();
       response.once("end", () => resolvePromise(response.statusCode ?? 0));

@@ -23,8 +23,10 @@ import {
 import {
   createMutualTlsServerOptions,
   createPublicTlsServerOptions,
+  parsePublicTlsMaterial,
   parseServiceTransportMaterial,
   verifyTransportPeer,
+  type PublicTlsMaterial,
   type ServiceTransportMaterial,
   type TransportIdentity,
 } from "@coffee-platform/security";
@@ -73,6 +75,7 @@ export type RuntimeTransport = Readonly<{
   runtime: string;
   mode: TransportMode;
   material?: ServiceTransportMaterial;
+  publicTls?: PublicTlsMaterial;
   setupError?: string;
 }>;
 
@@ -135,14 +138,37 @@ function secretAt(document: ScopedSecretDocument, ref: string): unknown {
   return value;
 }
 
-function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], environment: string, runtime: RuntimeName, mode: TransportMode): RuntimeTransport {
+function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], environment: string, runtime: RuntimeName, mode: TransportMode, publicHostname?: string): RuntimeTransport {
   const refsForTransport = refs.filter((ref) => ref === `security.serviceTransportKeys.${runtime}`);
   const ref = refsForTransport[0];
   if (refsForTransport.length !== 1 || ref === undefined) return {environment, runtime, mode, setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE"};
   try {
-    return {environment, runtime, mode, material: parseServiceTransportMaterial(secretAt(document, ref), environment, runtime)};
+    const material = parseServiceTransportMaterial(secretAt(document, ref), environment, runtime);
+    if (mode !== "public-tls") return {environment, runtime, mode, material};
+    if (publicHostname === undefined || refs.filter((value) => value === "edge.tlsPrivateKey").length !== 1 || refs.filter((value) => value === "edge.tlsCertificate").length !== 1) {
+      return {environment, runtime, mode, material, setupError: "RUNTIME_PUBLIC_TLS_SECRET_SCOPE"};
+    }
+    return {
+      environment,
+      runtime,
+      mode,
+      material,
+      publicTls: parsePublicTlsMaterial(secretAt(document, "edge.tlsPrivateKey"), secretAt(document, "edge.tlsCertificate"), publicHostname),
+    };
   } catch (error) {
     return {environment, runtime, mode, setupError: error instanceof Error ? error.name : "TransportValidationError"};
+  }
+}
+
+function publicHostname(config: PlatformConfig): string {
+  const value = config.platform["publicBaseUrl"];
+  if (typeof value !== "string") throw new RuntimeError("RUNTIME_PUBLIC_BASE_URL_INVALID");
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.hostname.length === 0) throw new Error("invalid public URL");
+    return url.hostname;
+  } catch {
+    throw new RuntimeError("RUNTIME_PUBLIC_BASE_URL_INVALID");
   }
 }
 
@@ -351,22 +377,26 @@ export async function createRuntime(
   const acquired: RuntimeResource[] = [];
   const runningChecks = new Map<string, Promise<boolean>>();
   const stopped = Promise.withResolvers<RuntimeShutdownResult>();
-  const transportError = identity.transport === undefined
-    ? undefined
-    : identity.transport.setupError ?? (identity.transport.material === undefined ? "RUNTIME_TRANSPORT_MATERIAL_MISSING" : undefined);
+  let transportError: string | undefined;
+  if (identity.transport !== undefined) {
+    transportError = identity.transport.setupError;
+    if (transportError === undefined && identity.transport.material === undefined) transportError = "RUNTIME_TRANSPORT_MATERIAL_MISSING";
+    if (transportError === undefined && identity.transport.mode === "public-tls" && identity.transport.publicTls === undefined) transportError = "RUNTIME_PUBLIC_TLS_MATERIAL_MISSING";
+  }
+  const httpsOptions = identity.transport?.mode === "mtls"
+    ? identity.transport.material === undefined ? undefined : createMutualTlsServerOptions(identity.transport.material)
+    : identity.transport?.mode === "public-tls"
+      ? identity.transport.publicTls === undefined ? undefined : createPublicTlsServerOptions(identity.transport.publicTls)
+      : undefined;
   const app = Fastify({
     // Admission ниже сохраняет live/ready для уже принятого transport во время drain.
     return503OnClosing: false,
     ...(identity.bodyLimitBytes === undefined
       ? {}
       : { bodyLimit: identity.bodyLimitBytes }),
-    ...(identity.transport?.material === undefined
+    ...(httpsOptions === undefined
       ? {}
-      : {
-          https: identity.transport.mode === "mtls"
-            ? createMutualTlsServerOptions(identity.transport.material)
-            : createPublicTlsServerOptions(identity.transport.material),
-        }),
+      : {https: httpsOptions}),
     logger: {
       base: { runtime: identity.name },
       serializers: {
@@ -877,7 +907,7 @@ export async function startConfiguredRuntime(
   let kafka: KafkaRuntime | undefined;
   let transport: RuntimeTransport | undefined;
   try {
-    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, config.environment, name, service.transportMode);
+    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, config.environment, name, service.transportMode, service.transportMode === "public-tls" ? publicHostname(config) : undefined);
     if (service.database !== null) {
       if (service.dbPool === null)
         throw new RuntimeError("RUNTIME_DATABASE_CONFIG_MISMATCH");

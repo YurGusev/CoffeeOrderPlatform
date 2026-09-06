@@ -92,6 +92,7 @@ environments:
       catalogIdentityKeyV1: ENC[...]
     edge:
       tlsPrivateKey: ENC[...]
+      tlsCertificate: ENC[...]
       oidcClientSecret: ENC[...]
     security:
       actorContextEdgeSigningPrivateKey: ENC[...]
@@ -150,12 +151,16 @@ Inventory authority — это encrypted paths в `secrets/platform.secrets.sops
 
 | Runtime | Secret refs |
 |---|---|
+| `edge-gateway` | `edge.tlsPrivateKey`, `edge.tlsCertificate`, `edge.oidcClientSecret`, `security.actorContextEdgeSigningPrivateKey`, `security.serviceTransportKeys.edge-gateway`, `telemetry.exporterToken` |
 | `api-public` | `security.apiPublicDelegationSigningPrivateKey`, `security.actorContextEdgeVerificationPublicKeys`, `security.serviceTransportKeys.api-public`, `telemetry.exporterToken` |
 | `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
 | `customer-service` | `postgres.customer`, `security.customerCursorSigningPrivateKey`, `security.customerCursorVerificationPublicKeys`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.customer-service`, `telemetry.exporterToken` |
 
 `edge-gateway` использует `public-tls`: его публичный listener предъявляет
-серверный сертификат, но не требует service certificate от браузера. Все
+`edge.tlsCertificate` с парой `edge.tlsPrivateKey`, проверяет срок и hostname
+`platform.publicBaseUrl`, но не требует service certificate от браузера. Его
+`security.serviceTransportKeys.edge-gateway` — отдельная service identity для
+внутренних outbound соединений и не может использоваться публичным listener. Все
 остальные HTTP runtime используют `mtls`; их listener и outbound client
 проверяют service identity по scoped CA и SPIFFE SAN.
 
@@ -241,12 +246,14 @@ clock skew `5s`, overlap active/previous key `86400s`. В
 не переиспользуются друг для друга.
 
 `security.customerCursor` — отдельная Customer-scoped Ed25519 policy с max age
-`86400s`, clock skew `5s` и overlap `172800s`. Envelope содержит `kid`, `iat` и
-`exp`; новый token подписывается только active key, `exp` не может превышать
-`iat + maxAgeSeconds`, а previous key принимается только пока возраст token не
-выходит за overlap с учётом clock skew. Неизвестный/старый `kid`, просроченный
-token и token с будущим `iat` отвергаются. Customer cursor key не совпадает с
-Catalog cursor, actor context, delegation или transport key.
+`86400s`, clock skew `5s`, overlap metadata `172800s` и явным
+`previousKeyTrustUntilEpochSeconds`. Envelope содержит `kid`, `iat` и `exp`;
+новый token подписывается только active key, `exp` не может превышать
+`iat + maxAgeSeconds`, а previous key принимается только до абсолютного
+`previousKeyTrustUntilEpochSeconds`, независимо от возраста token. Неизвестный/
+старый `kid`, просроченный token и token с будущим `iat` отвергаются. Customer
+cursor key не совпадает с Catalog cursor, actor context, delegation или
+transport key.
 
 Полный issuance/SAN/TTL/rotation/revocation contract определён в
 [service identity specification](24_SERVICE_IDENTITY_AND_DELEGATION.md).

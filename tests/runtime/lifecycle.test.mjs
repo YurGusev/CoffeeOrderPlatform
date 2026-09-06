@@ -3,6 +3,7 @@ import {chmod, mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
 import {request as httpRequest} from "node:http";
 import {request as httpsRequest} from "node:https";
 import {execFileSync, spawn} from "node:child_process";
+import {createServer} from "node:net";
 import {fileURLToPath} from "node:url";
 import {join} from "node:path";
 import {tmpdir} from "node:os";
@@ -17,6 +18,8 @@ import {
   startConfiguredRuntime,
   startRuntime,
 } from "../../packages/platform-runtime/src/index.ts";
+import {runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
+import {parsePublicTlsMaterial, parseServiceTransportMaterial} from "../../packages/platform-security/src/index.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const health = {
@@ -72,14 +75,23 @@ function closeClientRequest(request) {
   });
 }
 
+async function certificateMaterial(directory, name, subject, subjectAltName) {
+  const keyPath = join(directory, `${name}.key`);
+  const certPath = join(directory, `${name}.crt`);
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", certPath, "-subj", subject, "-days", "1", "-addext", `subjectAltName=${subjectAltName}`], {stdio: "ignore"});
+  const [keyPem, certPem] = await Promise.all([readFile(keyPath, "utf8"), readFile(certPath, "utf8")]);
+  return {keyPem, certPem};
+}
+
 async function tlsMaterial(t) {
   const directory = await mkdtemp(join(tmpdir(), "coffee-runtime-tls-"));
   t.after(() => rm(directory, {recursive: true, force: true}));
-  const keyPath = join(directory, "server.key");
-  const certPath = join(directory, "server.crt");
-  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", certPath, "-subj", "/CN=localhost", "-days", "1", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1"], {stdio: "ignore"});
-  const [keyPem, certPem] = await Promise.all([readFile(keyPath, "utf8"), readFile(certPath, "utf8")]);
-  return {keyPem, certPem, caPem: certPem, identity: {environment: "development", runtime: "edge-gateway", san: "spiffe://coffee-platform/development/edge-gateway"}};
+  const publicKey = await certificateMaterial(directory, "public", "/CN=localhost", "DNS:localhost,IP:127.0.0.1");
+  const serviceKey = await certificateMaterial(directory, "service", "/CN=edge-gateway", "URI:spiffe://coffee-platform/development/edge-gateway,DNS:edge-gateway");
+  return {
+    publicTls: parsePublicTlsMaterial(publicKey.keyPem, publicKey.certPem, "localhost"),
+    serviceTls: parseServiceTransportMaterial(JSON.stringify({...serviceKey, caPem: serviceKey.certPem}), "development", "edge-gateway"),
+  };
 }
 
 function requestHttps(port, options = {}) {
@@ -95,23 +107,95 @@ function requestHttps(port, options = {}) {
 
 void test("public Edge TLS accepts a browser client while internal TLS rejects a client without service identity", async (t) => {
   const material = await tlsMaterial(t);
+  assert.notEqual(material.publicTls.certPem, material.serviceTls.certPem);
+  assert.notEqual(material.publicTls.keyPem, material.serviceTls.keyPem);
   const publicApp = await createRuntime(identity("edge-public-test", {
-    transport: {environment: "development", runtime: "edge-gateway", mode: "public-tls", material},
+    transport: {environment: "development", runtime: "edge-gateway", mode: "public-tls", material: material.serviceTls, publicTls: material.publicTls},
   }));
   publicApp.get("/public", async () => ({status: "ok"}));
-  await publicApp.runtimeController.start();
-  const publicPort = addressOf(publicApp).port;
-  assert.equal(await requestHttps(publicPort, {rejectUnauthorized: false}), 200);
-  await stopApp(publicApp);
+  try {
+    await publicApp.runtimeController.start();
+    const publicPort = addressOf(publicApp).port;
+    assert.equal(await requestHttps(publicPort, {ca: material.publicTls.certPem, servername: "localhost"}), 200);
+    await assert.rejects(requestHttps(publicPort, {ca: material.publicTls.certPem, servername: "wrong.edge.test"}));
+  } finally {
+    await stopApp(publicApp);
+  }
 
   const internalApp = await createRuntime(identity("edge-internal-test", {
-    transport: {environment: "development", runtime: "edge-gateway", mode: "mtls", material},
+    transport: {environment: "development", runtime: "edge-gateway", mode: "mtls", material: material.serviceTls},
   }));
   internalApp.get("/public", async () => ({status: "ok"}));
-  await internalApp.runtimeController.start();
-  const internalPort = addressOf(internalApp).port;
-  await assert.rejects(requestHttps(internalPort, {rejectUnauthorized: false}));
-  await stopApp(internalApp);
+  try {
+    await internalApp.runtimeController.start();
+    const internalPort = addressOf(internalApp).port;
+    await assert.rejects(requestHttps(internalPort, {ca: material.serviceTls.certPem, servername: "edge-gateway"}));
+  } finally {
+    await stopApp(internalApp);
+  }
+});
+
+async function freePort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const port = server.address().port;
+  await new Promise((resolve, reject) => server.close((error) => error === undefined ? resolve() : reject(error)));
+  return port;
+}
+
+void test("configured Edge startup uses public TLS material and validates hostname", async (t) => {
+  const material = await tlsMaterial(t);
+  const directory = await mkdtemp(join(tmpdir(), "coffee-configured-edge-"));
+  t.after(() => rm(directory, {recursive: true, force: true}));
+  const port = await freePort();
+  const source = await readFile(join(root, "config/platform.yaml"), "utf8");
+  const configPath = join(directory, "platform.yaml");
+  await writeFile(configPath, source.replace("listen: {host: 0.0.0.0, port: 4000}", `listen: {host: 0.0.0.0, port: ${port}}`));
+  const config = await loadPlatformConfig(configPath, (text) => parseYaml(text, {json: true}));
+  const secrets = {};
+  for (const ref of config.services["edge-gateway"].secretRefs) {
+    const segments = ref.split(".");
+    let current = secrets;
+    for (const segment of segments.slice(0, -1)) {
+      current[segment] ??= {};
+      current = current[segment];
+    }
+    current[segments.at(-1)] = ref === "edge.tlsPrivateKey"
+      ? material.publicTls.keyPem
+      : ref === "edge.tlsCertificate"
+        ? material.publicTls.certPem
+        : ref === "security.serviceTransportKeys.edge-gateway"
+          ? JSON.stringify({keyPem: material.serviceTls.keyPem, certPem: material.serviceTls.certPem, caPem: material.serviceTls.caPem})
+          : "test-secret";
+  }
+  const secretsPath = join(directory, "edge-gateway.yaml");
+  await writeFile(secretsPath, `${JSON.stringify({schemaVersion: 1, environment: config.environment, runtime: "edge-gateway", secrets})}\n`);
+  await chmod(secretsPath, 0o400);
+  const previousConfig = process.env.COFFEE_CONFIG_FILE;
+  const previousSecrets = process.env.COFFEE_RUNTIME_SECRETS_FILE;
+  let app;
+  process.env.COFFEE_CONFIG_FILE = configPath;
+  process.env.COFFEE_RUNTIME_SECRETS_FILE = secretsPath;
+  try {
+    app = await startConfiguredRuntime("edge-gateway");
+    assert.equal(await requestHttps(port, {path: "/health/live", ca: material.publicTls.certPem, servername: "localhost"}), 200);
+    await assert.rejects(requestHttps(port, {path: "/health/live", ca: material.publicTls.certPem, servername: "wrong.edge.test"}));
+    assert.deepEqual(await runRuntimeHealthcheck(["/health/live"], {
+      COFFEE_CONFIG_FILE: configPath,
+      COFFEE_RUNTIME_SECRETS_FILE: secretsPath,
+      RUNTIME_NAME: "edge-gateway",
+      PORT: String(port),
+    }), [200]);
+  } finally {
+    await app?.runtimeController.closeRuntime("SIGTERM").catch(() => {});
+    if (previousConfig === undefined) delete process.env.COFFEE_CONFIG_FILE;
+    else process.env.COFFEE_CONFIG_FILE = previousConfig;
+    if (previousSecrets === undefined) delete process.env.COFFEE_RUNTIME_SECRETS_FILE;
+    else process.env.COFFEE_RUNTIME_SECRETS_FILE = previousSecrets;
+  }
 });
 
 async function requestJson(port, path, options = {}) {

@@ -1,4 +1,4 @@
-import {createPublicKey, sign, verify, X509Certificate, type KeyObject} from "node:crypto";
+import {createPrivateKey, createPublicKey, sign, verify, X509Certificate, type KeyObject} from "node:crypto";
 import type {ServerOptions} from "node:https";
 import type {PeerCertificate} from "node:tls";
 import {Temporal} from "@js-temporal/polyfill";
@@ -19,6 +19,12 @@ export type ServiceTransportMaterial = Readonly<{
   certPem: string;
   caPem: string;
   identity: TransportIdentity;
+}>;
+
+export type PublicTlsMaterial = Readonly<{
+  keyPem: string;
+  certPem: string;
+  hostname: string;
 }>;
 
 export class TransportValidationError extends Error {
@@ -97,8 +103,26 @@ export function createMutualTlsServerOptions(material: ServiceTransportMaterial)
   return {key: material.keyPem, cert: material.certPem, ca: material.caPem, requestCert: true, rejectUnauthorized: true, minVersion: "TLSv1.3"};
 }
 
-export function createPublicTlsServerOptions(material: ServiceTransportMaterial): ServerOptions {
-  return {key: material.keyPem, cert: material.certPem, requestCert: false, rejectUnauthorized: false, minVersion: "TLSv1.3"};
+export function parsePublicTlsMaterial(keyPem: unknown, certPem: unknown, hostname: string): PublicTlsMaterial {
+  if (typeof keyPem !== "string" || keyPem.length === 0 || typeof certPem !== "string" || certPem.length === 0 || hostname.length === 0) {
+    throw new TransportValidationError("public TLS material is incomplete");
+  }
+  let certificate: X509Certificate;
+  try {
+    certificate = new X509Certificate(certPem);
+    if (certificate.checkHost(hostname) === undefined || !certificate.checkPrivateKey(createPrivateKey(keyPem))) throw new Error("public certificate does not match key or hostname");
+  } catch {
+    throw new TransportValidationError("public TLS certificate is invalid for configured hostname");
+  }
+  const now = Temporal.Now.instant().epochMilliseconds;
+  if (now < certificateTime(certificate.validFrom, "validFrom") || now > certificateTime(certificate.validTo, "validTo")) {
+    throw new TransportValidationError("public TLS certificate is expired or not yet valid");
+  }
+  return {keyPem, certPem, hostname};
+}
+
+export function createPublicTlsServerOptions(material: PublicTlsMaterial): ServerOptions {
+  return {key: material.keyPem, cert: material.certPem, requestCert: false, minVersion: "TLSv1.3"};
 }
 
 export function verifyTransportPeer(certificate: PeerCertificate, environment: string, expectedRuntime?: string): TransportIdentity {

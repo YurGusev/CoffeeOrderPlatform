@@ -239,7 +239,9 @@ canonical JSON payload `{"c":"cus_...","e":exp,"i":iat,"k":"kid","n":"...","q":"
 `q` декодируется обратно в 64-hex `queryHash`, а весь token остаётся не длиннее
 2048 символов без обрезания sort tuple. `iat`/`exp` проверяются по
 `maxAgeSeconds=86400` и `clockSkewSeconds=5`, active `kid` подписывает новые
-cursor, а previous `kid` принимается только в `overlapSeconds=172800`.
+cursor, а previous `kid` принимается только до абсолютного
+`previousKeyTrustUntilEpochSeconds=1798761600`; `overlapSeconds=172800` остаётся
+rotation metadata и не продлевает доверие previous key по возрасту token.
 Лимит `8 KiB` действует только для
 Customer endpoints; Catalog сохраняет общий cursor limit `512`.
 Следующая страница использует tuple `>` и запрашивает `limit + 1`; offset

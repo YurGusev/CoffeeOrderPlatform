@@ -307,7 +307,7 @@
       "properties": {
         "actorContext": {"$ref": "#/$defs/signingPolicy"},
         "catalogCursor": {"$ref": "#/$defs/signingPolicy"},
-        "customerCursor": {"$ref": "#/$defs/signingPolicy"},
+        "customerCursor": {"allOf": [{"$ref": "#/$defs/signingPolicy"}, {"type": "object", "required": ["previousKeyTrustUntilEpochSeconds"]}]},
         "serviceTrustBundles": {
           "type": "object", "additionalProperties": false, "required": ["activeKid", "previousKid", "overlapHours", "publicKeys"],
           "properties": {
@@ -344,6 +344,7 @@
         "maxAgeSeconds": {"type": "integer", "minimum": 1},
         "clockSkewSeconds": {"type": "integer", "minimum": 0},
         "overlapSeconds": {"type": "integer", "minimum": 1},
+        "previousKeyTrustUntilEpochSeconds": {"type": "integer", "minimum": 0},
         "verificationKeys": {"type": "object", "additionalProperties": false, "minProperties": 2, "patternProperties": {"^[a-zA-Z0-9-]+$": {"type": "string", "minLength": 1}}}
       }
     },

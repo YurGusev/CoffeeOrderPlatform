@@ -1,7 +1,7 @@
 import {readFile} from "node:fs/promises";
 import {request} from "node:https";
 import {load as parseYaml} from "js-yaml";
-import {parseServiceTransportMaterial, verifyTransportPeer} from "@coffee-platform/security";
+import {parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "@coffee-platform/security";
 
 type RuntimeEnvironment = Readonly<Record<string, string | undefined>>;
 
@@ -21,21 +21,22 @@ function requestHealth(
   material: ReturnType<typeof parseServiceTransportMaterial>,
   environment: string,
   runtime: string,
+  publicTls?: ReturnType<typeof parsePublicTlsMaterial>,
 ): Promise<number> {
   return new Promise((resolve, reject) => {
+    const isPublic = publicTls !== undefined;
     const client = request({
       host: "127.0.0.1",
       port,
       path,
       method: "GET",
-      ca: material.caPem,
-      cert: material.certPem,
-      key: material.keyPem,
+      ca: isPublic ? publicTls.certPem : material.caPem,
+      ...(isPublic ? {} : {cert: material.certPem, key: material.keyPem}),
       minVersion: "TLSv1.3",
       rejectUnauthorized: true,
-      servername: "127.0.0.1",
+      servername: isPublic ? publicTls.hostname : "127.0.0.1",
       timeout: 900,
-      checkServerIdentity: (_hostname, certificate) => {
+      ...(isPublic ? {} : {checkServerIdentity: (_hostname, certificate) => {
         try {
           verifyTransportPeer(certificate, environment, runtime);
           return undefined;
@@ -43,6 +44,7 @@ function requestHealth(
           return error instanceof Error ? error : new Error("transport peer identity is invalid");
         }
       },
+      }),
     }, (response) => {
       response.resume();
       response.once("end", () => resolve(response.statusCode ?? 0));
@@ -58,11 +60,13 @@ export async function runRuntimeHealthcheck(
   environment: RuntimeEnvironment = process.env,
 ): Promise<readonly number[]> {
   const secretsPath = environment["COFFEE_RUNTIME_SECRETS_FILE"];
+  const configPath = environment["COFFEE_CONFIG_FILE"];
   const runtime = environment["RUNTIME_NAME"];
   const port = Number(environment["PORT"]);
   if (
     paths.length === 0 ||
     secretsPath === undefined ||
+    configPath === undefined ||
     runtime === undefined ||
     !/^[a-z0-9-]+$/u.test(runtime) ||
     !Number.isInteger(port) ||
@@ -83,7 +87,17 @@ export async function runRuntimeHealthcheck(
     environmentName,
     runtime,
   );
-  const statuses = await Promise.all(paths.map((path) => requestHealth(path, port, material, environmentName, runtime)));
+  let publicTls: ReturnType<typeof parsePublicTlsMaterial> | undefined;
+  if (runtime === "edge-gateway") {
+    const config = parseYaml(await readFile(configPath, "utf8"), {json: true}) as {platform?: {publicBaseUrl?: unknown}};
+    const baseUrl = config?.platform?.publicBaseUrl;
+    if (typeof baseUrl !== "string") throw new Error("runtime healthcheck public base URL is invalid");
+    const url = new URL(baseUrl);
+    if (url.protocol !== "https:" || url.hostname.length === 0) throw new Error("runtime healthcheck public base URL is invalid");
+    const hostname = url.hostname;
+    publicTls = parsePublicTlsMaterial(secretAt(document, "secrets.edge.tlsPrivateKey"), secretAt(document, "secrets.edge.tlsCertificate"), hostname);
+  }
+  const statuses = await Promise.all(paths.map((path) => requestHealth(path, port, material, environmentName, runtime, publicTls)));
   if (statuses.some((status) => status < 200 || status >= 300)) {
     throw new Error(`runtime healthcheck failed: ${statuses.join(",")}`);
   }

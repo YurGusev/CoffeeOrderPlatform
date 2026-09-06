@@ -73,7 +73,7 @@ void test("Customer cursors require a signer and reject payload tampering", () =
   const active = generateKeyPairSync("ed25519");
   const previous = generateKeyPairSync("ed25519");
   let now = 1_000;
-  const policy = {activeKid: "active", previousKid: "previous", maxAgeSeconds: 300, clockSkewSeconds: 5, overlapSeconds: 60, nowEpochSeconds: () => now};
+  const policy = {activeKid: "active", previousKid: "previous", maxAgeSeconds: 300, clockSkewSeconds: 5, overlapSeconds: 60, previousKeyTrustUntilEpochSeconds: 1_060, nowEpochSeconds: () => now};
   const signer = createEd25519CustomerCursorSigner(active.privateKey, [active.publicKey, previous.publicKey], policy);
   const cursor = {v: 1, queryHash: search.queryHash, name: "test customer", customerRef};
   const encoded = encodeCustomerCursor(cursor, signer);
@@ -94,8 +94,11 @@ void test("Customer cursors require a signer and reject payload tampering", () =
   const previousSigner = createEd25519CustomerCursorSigner(previous.privateKey, [previous.publicKey, active.publicKey], {...policy, activeKid: "previous", previousKid: "active"});
   const previousCursor = encodeCustomerCursor(cursor, previousSigner);
   assert.deepEqual(decodeCustomerCursor(previousCursor, search, signer), cursor);
-  now = 1_066;
+  now = 1_060;
   assert.throws(() => decodeCustomerCursor(previousCursor, search, signer), /cursor is invalid/);
+  now = 1_061;
+  const latePreviousCursor = encodeCustomerCursor(cursor, previousSigner);
+  assert.throws(() => decodeCustomerCursor(latePreviousCursor, search, signer), /cursor is invalid/);
   now = 1_000;
   const unknownSigner = createEd25519CustomerCursorSigner(active.privateKey, active.publicKey, {...policy, activeKid: "unknown"});
   assert.throws(() => decodeCustomerCursor(encodeCustomerCursor(cursor, unknownSigner), search, signer), /cursor is invalid/);

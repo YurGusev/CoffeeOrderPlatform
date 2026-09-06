@@ -22,10 +22,10 @@ outputs:
     sha256: 7f31b1ec3fbeab01ce942dcbe38b8e3c4e388b36383ba5ed28c98829d068dc01
     consumers: [5]
   - artifact: docs/launch/14_CUSTOMER_IMPLEMENTATION_SPEC.md
-    sha256: 4195c104616cf2055812feac0eceb100b0a807bcc7feac78127386ac30163db7
+    sha256: 3d122d932092714cf9809fd4a99171b732b3697119800491ce3d5c958b860800
     consumers: [5, 8, 9, 13]
   - artifact: evidence/issue-5-acceptance.md
-    sha256: 224e00ff42af049b3eec38240dcb831365ce6aee7a4148b9c2189d7a8144cc6c
+    sha256: d5575905be6ed656b3ab48791e744804cc89d77be09b125d32906993bf8f9d90
     consumers: [5, 8, 9, 13]
   - artifact: apps/customer-service/migrations/0001_customer_schema.sql
     sha256: 2b8b0a818c4305b34ed853f7f7cc72743741bcb2dbce8513f8376bc4cd8d86e8
@@ -34,7 +34,7 @@ outputs:
     sha256: 00968f5ed219d9384646e2ea2888aab0d2b5a8ad2c22d1a823e35279feb6e723
     consumers: [5]
   - artifact: apps/customer-service/src/main.ts
-    sha256: c726204ab62875835243c4c32d2edd80d211cfc0fcc815a1db0c576b0efef7fe
+    sha256: d111b06cda4ccff477aa5f165729c47f74b8e34d2f9acfc1ebbdf77655814ba9
     consumers: [5]
   - artifact: apps/customer-service/src/domain/customer.ts
     sha256: 6ef3f389ca8580f944f26db745075554daff00779f55b58941e90ad0fa23b80e
@@ -43,7 +43,7 @@ outputs:
     sha256: 1f0f7ee6aef753f714fd3b545a0ccdfd35b40632a89a19b1105468e18307e884
     consumers: [5]
   - artifact: apps/customer-service/src/application/search-customers.ts
-    sha256: 2ec538149765a82c50dacd9b824c65630ec657f4d7ccc91f42e38afd454a67c5
+    sha256: 42c64e8bec5fb4361f3443fa01b9299bcbfcb538ed2d02953a61df22b331c9e9
     consumers: [5]
   - artifact: apps/customer-service/src/application/get-customer-order-input.ts
     sha256: 3146e2a6e371284b82044181bc5fb38ac1bb7fbd697c0f5bf60c0875d4f369b4
@@ -94,13 +94,13 @@ outputs:
     sha256: 55817806d0462bd3f6bb70df6037a22d129e12193d19df045de2932b1c8a50c9
     consumers: [5, 63]
   - artifact: packages/platform-runtime/src/index.ts
-    sha256: 45c5798e151826fbedbdcd54e410773acf6ef0ceea0e81ccb67652115d9502f3
+    sha256: 448be4dba076b527694e503285dc1485bbda9fb3f779ff48c3cdb3255da54051
     consumers: [5, 8, 9]
   - artifact: packages/platform-security/src/index.ts
-    sha256: c3eafa51c98a9b355eb7b584fe0ca862efbd2fd9d210b22ba12c65d400559260
+    sha256: f724c69af289caa8a18c506f48bbed966dfd0979aaa7841a79304a4dc5a3417b
     consumers: [5, 8, 9]
   - artifact: packages/platform-testing/test/platform-packages.test.mjs
-    sha256: 24a40c240f33fdd7a04d22bb29a9b89588f9ee93a3590537d20e1a63711dd1c2
+    sha256: e1b85dbafe7bd0e8903a67e9e1170ade6707365691739a4039f1203035ed4716
     consumers: [5, 8, 9]
   - artifact: package.json
     sha256: 9d3a3f32b5950216dc0ec77afc2ad42ae84e67832d41e8985f79fad2848f786a
@@ -112,7 +112,10 @@ outputs:
     sha256: 4bef7965381984678b9a14151ef6a09b6bffbe26f1a5095e607ce6a2f4b34389
     consumers: [5]
   - artifact: tests/customer/customer-live.test.mjs
-    sha256: f6c8f30efca64486ff256886f085614a3fdb9256f40e8415901cb660c31db9bb
+    sha256: 78309002e31f38886a15d99117083dba524135391f694820a0f47d729760b108
+    consumers: [5]
+  - artifact: tests/customer/fixtures/db-adapter-command-observer.mjs
+    sha256: 7cacf35f43fbcab5b493bace12622a6524486a8cdbbe560cd231a4aa45648891
     consumers: [5]
   - artifact: tests/customer/customer-schema.test.mjs
     sha256: e3e68d26fb0b8cb06f4719fee4c55e2e16d1b2fc12afcdb9894ccbb6bb732025
@@ -154,7 +157,7 @@ outputs:
     sha256: fa58d879206685a4818ab4cd9466bfe82bc7b801566fb31372554726c8c7939e
     consumers: [5]
   - artifact: tests/customer/customer-http.test.mjs
-    sha256: 86d81f5298d664f16ccd02c35ad2db292d869676798c33fad0381a934c20abf3
+    sha256: 2dc141893ab5b3968eeb8a9c6da7439f2cf2b4d1852979a2e874c537450e2b43
     consumers: [5]
   - artifact: scripts/contracts-breaking.mjs
     sha256: 5fa593ce5cd15bcd8ce1b03fd663033b96e578588655c25beb5c253b57152d92
@@ -169,22 +172,22 @@ outputs:
     sha256: 3390999fb98420ff5f00e615c6fe71877c35dbf6094c101cb345684912b2496f
     consumers: [5]
   - artifact: config/platform.yaml
-    sha256: 56d855c29cfeeb9d2b3d5bb4f6f34e518126b6086a731c97bad2cf4660435a53
+    sha256: 7bebd2d013167f3c7ef63d6b4176490dc6d9ec5e8c6a87b4ed1e0e496e94f417
     consumers: [5]
   - artifact: config/platform.schema.json
-    sha256: e193d7155061690c215492c21a6619408bf3a6a74a31c58c866d9196048a5f94
+    sha256: 724d4eb0d87ecc0f7a50b978b7b1ccc576c68e48c4b9c016dd845f65e4441e50
     consumers: [5]
   - artifact: config/service-catalog.json
-    sha256: 40ede1ed0c1622e549c40683abc941baf6a5a1d7194f3c20ac596cf0cfc123c4
+    sha256: 4fc0d081a4d0f6c96473d33001b99302b5e6f0aaf52cbff9a4e8f49456297839
     consumers: [5]
   - artifact: platform/launch-v1-runtime-profile.json
-    sha256: 9ecc66abe27a25be6dea7f08962c6856ea1660b813d14d1ce1ccbbdbccbe8e61
+    sha256: 49404e40d7db55cb13dd73a21e15453dab58c8770b03b00812774fcae21b30a7
     consumers: [5]
   - artifact: secrets/platform-secrets.schema.json
-    sha256: 7d79003d09603520d135e95cf1b428f1197a162d8bac199d1094c16de2108eb0
+    sha256: f02272ff284cd092a13d283dc747ade3cddd9df5e2683e4d1dc7da88f7cc7e67
     consumers: [5]
   - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
-    sha256: dd388373ba9c4ae3733a12ffe2332a7f2ad279fbe05032149f5cd637a5fdc614
+    sha256: daef8b4a78ebd9b254e9f63032c7d1d9efd6dd14fe9dc6c70cf48b169de27f08
     consumers: [5]
   - artifact: packages/platform-security/package.json
     sha256: 0446b13390b06d80141c1f727fe394bc39a80deddd5253563bacf2750defd018
@@ -202,16 +205,16 @@ outputs:
     sha256: caa62d5ff610ca0dbbcb69a18ac09c3f7c409446b8d960feab361c85b344064a
     consumers: [5]
   - artifact: scripts/check-service-catalog.mjs
-    sha256: 6b371edabe8e4860def5f805b2ec322b77d420cb1349703ca499ccf645eb3571
+    sha256: 0bfea70962f5a39ebd76902b6e43ab2716ef5ccc68ce585423594df67f91a701
     consumers: [5]
   - artifact: scripts/db-live-proof.mjs
     sha256: f038df6586e12c4b279bc87ab84eae8b822c22bd45d6ca8b0c7ff423aa38e8b8
     consumers: [5]
   - artifact: packages/platform-runtime/src/healthcheck.ts
-    sha256: c259fa9085bbb88b5353104d752f9e58c8bdd56e1bf55cd669c54e370832c1ca
+    sha256: 68f366f2910040eda3f258104de136a7ad436d82e19a121d77e602afaeed5a18
     consumers: [5]
   - artifact: tools/compose-smoke.mjs
-    sha256: cf5adacf29c333bcd3205082b7bceadd9c1846656594380d26707a88708baf4c
+    sha256: 4e981ca8df7f831713bab9e1faad926d080acc8d62b83a80e7cb82a14f8061d3
     consumers: [5]
   - artifact: config/service-catalog.schema.json
     sha256: 25f4f8e35f54ac0d48d2f62849f049701afbe2cb16c65e4b9e66325f63c4f458
@@ -220,13 +223,13 @@ outputs:
     sha256: 5c4e8c62d9c50a65429b36bafe4f249acf70b3af98f0ffe8104fe1a4f8895d63
     consumers: [5]
   - artifact: docs/launch/10_RUNTIME_CATALOG.md
-    sha256: d8b851e44a50d10e4b0e03928f0941349dc20c404efa4d65cf17135daca294f3
+    sha256: 4d973a6f68b55b61f5af097c095c49d9b6639eafce6cbce4a3ed01259f038c49
     consumers: [5]
   - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
-    sha256: bc82e3f7dc8737854b7f90d052d310610f5cfb03d57b0dcad83b5d6df904faa6
+    sha256: 84eb77a7b144d26184f08f1e77cc2a5d668ecfc39d644f615b6b9313ff7ad3bf
     consumers: [5]
   - artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
-    sha256: 2587a313dc7d29d831a4ff966401248a7d9cbd84352eaf90b5d2401a8447ce39
+    sha256: 599d7971b8fed94817f307e2061d80dfd2b4b4906e7f2cd4528f5e4bf5776fea
     consumers: [5]
   - artifact: packages/platform-config/src/index.ts
     sha256: 213f77397a42f95328c3ffeffb0a57df4887d7644fe55c4b2d0c9e766a67801f
@@ -235,7 +238,7 @@ outputs:
     sha256: fa5d8b47ed9ae9341c45ec0169561ee7330fc613e4fe8e31fe6e80e802bd9af4
     consumers: [5]
   - artifact: tests/runtime/lifecycle.test.mjs
-    sha256: b1d3c6a15454692c36470a96506f93f78cd2736a78af42898e2b2017d9db0cfa
+    sha256: c66ef0b51b9badf976be4221d91c1ecf98e2bb4131a5a5b8bb640efcf882b263
     consumers: [5]
 verification:
   - command: gh repo view YurGusev/CoffeeOrderPlatform --json nameWithOwner
@@ -256,20 +259,20 @@ verification:
     result: passed
   - command: pnpm test
     result: blocked
-    detail: 198 tests, 181 passed, 2 failed because the canonical encrypted SOPS inventory lacks the newly required paths; 15 skipped
+    detail: 199 tests, 182 passed, 2 failed because the canonical encrypted SOPS inventory lacks the newly required paths; 15 skipped
   - command: pnpm test:customer-unit
     result: passed
     detail: 9 tests, 9 passed, 0 failed
   - command: pnpm test:customer-integration
     result: blocked
     detail: exit 1 by design; 15 tests, 1 passed, 14 explicit prerequisite blockers, 0 skipped because live PostgreSQL/service/log/mTLS environment is absent
-  - command: node --check tests/customer/customer-live.test.mjs && node --check tests/customer/customer-schema.test.mjs
+  - command: node --check tests/customer/customer-live.test.mjs && node --check tests/customer/customer-schema.test.mjs && node --check tests/customer/fixtures/db-adapter-command-observer.mjs
     result: passed
-  - command: pnpm exec oxlint --deny-warnings tests/customer/customer-live.test.mjs tests/customer/customer-schema.test.mjs
+  - command: pnpm exec oxlint --deny-warnings tests/customer/customer-live.test.mjs tests/customer/customer-schema.test.mjs tests/customer/fixtures/db-adapter-command-observer.mjs
     result: passed
   - command: node --check tools/compose-smoke.mjs && node --check tests/customer/customer-live.test.mjs
     result: passed
-  - command: pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/customer/customer-live.test.mjs
+  - command: pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/customer/customer-live.test.mjs tests/customer/fixtures/db-adapter-command-observer.mjs
     result: passed
   - command: pnpm contracts:lint
     result: passed
@@ -300,18 +303,18 @@ verification:
   - command: node scripts/check-service-catalog.mjs
     result: passed
     detail: 15 runtimes and 29 interactions; accepted digest updated for explicit public-tls/mtls modes
-  - command: node --test --test-name-pattern 'public Edge TLS' tests/runtime/lifecycle.test.mjs
+  - command: node --test --test-name-pattern 'public Edge TLS|configured Edge startup' tests/runtime/lifecycle.test.mjs
     result: passed
-    detail: public Edge accepts a client without service certificate; internal mTLS rejects it
+    detail: configured public Edge and runtime healthcheck use separate trusted public material and reject wrong hostname; internal mTLS rejects a client without service certificate
   - command: node --test tests/customer/customer-http.test.mjs
     result: passed
-    detail: 8 tests passed, including cursor expiry, previous-key overlap and unknown-kid rejection
+    detail: 8 tests passed, including TTL, absolute previous-key trust cutoff, late previous-key signing and unknown-kid rejection
   - command: isolated production deploy import check
     result: passed
     detail: pnpm deploy --prod --legacy tree resolves @coffee-platform/runtime/healthcheck without root-only imports
   - command: node tools/compose-smoke.mjs --stub-secrets --no-build
     result: blocked
-    detail: ephemeral mTLS materialization completed, but required local runtime images are absent; no live evidence claimed
+    detail: ephemeral public/mTLS materialization completed, but required local runtime images are absent; no live evidence claimed
   - command: pnpm install --frozen-lockfile --offline --ignore-scripts
     result: passed
     detail: lockfile up to date
@@ -320,7 +323,7 @@ verification:
 limitations:
   - Public Customer cursor contract was explicitly approved for this scope at 2048 characters with an 8 KiB Customer URL budget; Catalog keeps the shared Cursor contract at 512 and no stateful cursor was introduced.
   - Live Customer PostgreSQL 17.11 migration, grants, concurrency, rollback fault injection after each required write, durable-commit lost-response recovery, DB abort after Customer INSERT, unknown COMMIT/restart reconciliation, PII log canary and foreign-database CONNECT denial were not proven because required CUSTOMER_* URLs, mTLS fixtures and runtime are absent.
-  - Default compose smoke was not proven because SOPS_AGE_KEY_FILE and sops are absent. The topology-only stub path now generates ephemeral mTLS certificates but could not start because local runtime images are absent.
-  - The canonical encrypted source lacks Customer cursor, edge actor and delegation/service verification key paths. Production runtime wiring fails closed until an authorized SOPS provisioning action materializes these values and valid scoped transport envelopes.
+  - Default compose smoke was not proven because SOPS_AGE_KEY_FILE and sops are absent. The topology-only stub path now generates ephemeral public and internal mTLS certificates but could not start because local runtime images are absent.
+  - The canonical encrypted source lacks `edge.tlsCertificate`, Customer cursor, edge actor and delegation/service verification key paths. Production runtime wiring fails closed until an authorized SOPS provisioning action materializes these values and valid scoped transport envelopes.
   - customer-integration is intentionally non-zero when live prerequisites are absent; this prevents a false process PASS with skipped acceptance tests.
   - No self commit SHA is recorded here. Merge, issue checkbox mutation and issue closure were not performed.

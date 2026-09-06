@@ -251,6 +251,7 @@ async function unknownCommitHarnessOptions(t) {
     "CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON",
     "CUSTOMER_UNKNOWN_COMMIT_ACTOR_REF",
     "CUSTOMER_UNKNOWN_COMMIT_SERVICE_ORIGIN",
+    "CUSTOMER_UNKNOWN_COMMIT_DB_ADAPTER_LOG_FILE",
   ];
   const missing = required.filter((name) => !process.env[name]);
   if (missing.length > 0) {
@@ -299,6 +300,7 @@ async function unknownCommitHarnessOptions(t) {
     material,
     headers: parseHarnessHeaders("CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON"),
     actorRef: process.env.CUSTOMER_UNKNOWN_COMMIT_ACTOR_REF,
+    dbAdapterLogPath: process.env.CUSTOMER_UNKNOWN_COMMIT_DB_ADAPTER_LOG_FILE,
     entry: process.env.CUSTOMER_UNKNOWN_COMMIT_ENTRY ?? `${REPOSITORY_ROOT}/apps/customer-service/dist/main.js`,
   };
 }
@@ -352,6 +354,9 @@ function spawnCustomerHarness(options) {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("COFFEE_") && !key.startsWith("SOPS_")));
   environment.COFFEE_CONFIG_FILE = options.configPath;
   environment.COFFEE_RUNTIME_SECRETS_FILE = options.secretsPath;
+  environment.CUSTOMER_TEST_DB_ADAPTER_LOG_FILE = options.dbAdapterLogPath;
+  const observer = fileURLToPath(new URL("./fixtures/db-adapter-command-observer.mjs", import.meta.url));
+  environment.NODE_OPTIONS = [process.env.NODE_OPTIONS, `--import=${observer}`].filter(Boolean).join(" ");
   const child = spawn(process.execPath, [options.entry], {cwd: REPOSITORY_ROOT, env: environment, stdio: ["ignore", "pipe", "pipe"]});
   let output = "";
   const append = (chunk) => { output = `${output}${chunk}`.slice(-8_192); };
@@ -370,6 +375,17 @@ async function waitForHarnessLog(processHandle, pattern, timeoutMs = 5_000) {
     await delay(25);
   }
   throw new Error(`Customer harness log did not contain ${pattern}: ${processHandle.output}`);
+}
+
+async function waitForFilePattern(path, pattern, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  let content = "";
+  while (Date.now() < deadline) {
+    content = await readFile(path, "utf8").catch(() => "");
+    if (pattern.test(content)) return content;
+    await delay(25);
+  }
+  throw new Error(`test log did not contain ${pattern}: ${content}`);
 }
 
 async function waitForHarnessReady(options, processHandle, timeoutMs = 15_000) {
@@ -756,7 +772,6 @@ void test("Customer classifies an unacknowledged COMMIT and replays it after a r
     await proxy.waitForCommand("COMMIT");
     const dropped = await proxy.waitForReplyDropped();
     assert.equal(dropped.tag, "COMMIT", "the harness must observe successful PostgreSQL CommandComplete(COMMIT)");
-    assert.equal(proxy.observed.includes("ROLLBACK"), false, `protocol log contained ROLLBACK: ${proxy.observed.join(",")}`);
     proxy.closeConnections();
     const first = await createRequest;
     assert.equal(first.status, 503);
@@ -765,6 +780,9 @@ void test("Customer classifies an unacknowledged COMMIT and replays it after a r
     assert.equal(first.text.includes("TRANSACTION_OUTCOME_UNKNOWN"), false);
     await waitForHarnessLog(firstProcess, /customer\.transaction_outcome_unknown/u);
     assert.match(firstProcess.output, /TRANSACTION_OUTCOME_UNKNOWN/u);
+    const adapterCommands = await waitForFilePattern(options.dbAdapterLogPath, /COMMIT/u);
+    assert.doesNotMatch(adapterCommands, /ROLLBACK/u, `DB adapter attempted ROLLBACK: ${String(adapterCommands)}`);
+    assert.equal(proxy.observed.includes("ROLLBACK"), false, `protocol log contained ROLLBACK: ${proxy.observed.join(",")}`);
 
     const completed = await waitForCompletedIdempotency(observer, service, key);
     assert.equal(completed.response_status, 201);
