@@ -18,7 +18,7 @@ import {
   startConfiguredRuntime,
   startRuntime,
 } from "../../packages/platform-runtime/src/index.ts";
-import {runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
+import {readRuntimeHealthStatuses, runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
 import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial} from "../../packages/platform-security/src/index.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -82,7 +82,7 @@ async function certificateAuthority(directory, name, subject) {
   return {keyPath, certPath, certPem: await readFile(certPath, "utf8")};
 }
 
-async function signedCertificate(directory, name, subject, subjectAltName, authority) {
+async function signedCertificate(directory, name, subject, subjectAltName, authority, extendedKeyUsage = "serverAuth") {
   const keyPath = join(directory, `${name}.key`);
   const csrPath = join(directory, `${name}.csr`);
   const certPath = join(directory, `${name}.crt`);
@@ -91,27 +91,27 @@ async function signedCertificate(directory, name, subject, subjectAltName, autho
     const separator = value.indexOf(":");
     return `${value.slice(0, separator)}.${index + 1} = ${value.slice(separator + 1)}`;
   });
-  await writeFile(extensionPath, ["[extensions]", "subjectAltName=@san", "extendedKeyUsage=serverAuth", "[san]", ...sanEntries, ""].join("\n"), {encoding: "utf8", mode: 0o400});
+  await writeFile(extensionPath, ["[extensions]", "subjectAltName=@san", `extendedKeyUsage=${extendedKeyUsage}`, "[san]", ...sanEntries, ""].join("\n"), {encoding: "utf8", mode: 0o400});
   execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", csrPath, "-subj", subject], {stdio: "ignore"});
   execFileSync("openssl", ["x509", "-req", "-in", csrPath, "-CA", authority.certPath, "-CAkey", authority.keyPath, "-CAcreateserial", "-out", certPath, "-days", "1", "-sha256", "-extfile", extensionPath, "-extensions", "extensions"], {stdio: "ignore"});
   const [keyPem, certPem] = await Promise.all([readFile(keyPath, "utf8"), readFile(certPath, "utf8")]);
   return {keyPem, certPem};
 }
 
-async function tlsMaterial(t, hostname = "edge.test") {
+async function tlsMaterial(t, hostname = "edge.test", serviceRuntime = "edge-gateway") {
   const directory = await mkdtemp(join(tmpdir(), "coffee-runtime-tls-"));
   t.after(() => rm(directory, {recursive: true, force: true}));
   const publicAuthority = await certificateAuthority(directory, "public-ca", "/CN=coffee-runtime-public-ca");
   const serviceAuthority = await certificateAuthority(directory, "service-ca", "/CN=coffee-runtime-service-ca");
   const wrongAuthority = await certificateAuthority(directory, "wrong-ca", "/CN=coffee-runtime-wrong-ca");
   const publicKey = await signedCertificate(directory, "public", `/CN=${hostname}`, `DNS:${hostname}`, publicAuthority);
-  const serviceKey = await signedCertificate(directory, "service", "/CN=edge-gateway", "URI:spiffe://coffee-platform/development/edge-gateway,DNS=edge-gateway", serviceAuthority);
+  const serviceKey = await signedCertificate(directory, "service", `/CN=${serviceRuntime}`, `URI:spiffe://coffee-platform/development/${serviceRuntime},DNS=${serviceRuntime}`, serviceAuthority, "serverAuth,clientAuth");
   return {
     publicTls: parsePublicTlsMaterial(publicKey.keyPem, publicKey.certPem, hostname, publicAuthority.certPem),
     publicCaPath: publicAuthority.certPath,
     publicLeafCaPem: publicKey.certPem,
     wrongCaPem: wrongAuthority.certPem,
-    serviceTls: parseServiceTransportMaterial(JSON.stringify({...serviceKey, caPem: serviceAuthority.certPem}), "development", "edge-gateway"),
+    serviceTls: parseServiceTransportMaterial(JSON.stringify({...serviceKey, caPem: serviceAuthority.certPem}), "development", serviceRuntime),
   };
 }
 
@@ -166,6 +166,40 @@ void test("public Edge TLS accepts a browser client while internal TLS rejects a
     await assert.rejects(requestHttps(internalPort, {ca: material.serviceTls.certPem, servername: "edge-gateway"}));
   } finally {
     await stopApp(internalApp);
+  }
+
+  const apiPublicMaterial = await tlsMaterial(t, "edge.test", "api-public");
+  const healthcheckSecretsDirectory = await mkdtemp(join(tmpdir(), "coffee-healthcheck-secrets-"));
+  t.after(() => rm(healthcheckSecretsDirectory, {recursive: true, force: true}));
+  const healthcheckSecretsPath = join(healthcheckSecretsDirectory, "api-public.yaml");
+  await writeFile(healthcheckSecretsPath, `${JSON.stringify({
+    schemaVersion: 1,
+    environment: "development",
+    runtime: "api-public",
+    secrets: {security: {serviceTransportKeys: {"api-public": JSON.stringify({
+      keyPem: apiPublicMaterial.serviceTls.keyPem,
+      certPem: apiPublicMaterial.serviceTls.certPem,
+      caPem: apiPublicMaterial.serviceTls.caPem,
+    })}}},
+  })}\n`);
+  await chmod(healthcheckSecretsPath, 0o400);
+  const apiPublicApp = await createRuntime(identity("api-public-healthcheck", {
+    transport: {environment: "development", runtime: "api-public", mode: "mtls", material: apiPublicMaterial.serviceTls},
+    requiredDependencies: ["database"],
+    readinessChecks: [{name: "database", check: async () => false}],
+  }));
+  try {
+    await apiPublicApp.runtimeController.start();
+    const healthcheckEnvironment = {
+      COFFEE_CONFIG_FILE: join(root, "config/platform.yaml"),
+      COFFEE_RUNTIME_SECRETS_FILE: healthcheckSecretsPath,
+      RUNTIME_NAME: "api-public",
+      PORT: String(addressOf(apiPublicApp).port),
+    };
+    assert.deepEqual(await readRuntimeHealthStatuses(["/health/ready"], healthcheckEnvironment), [503]);
+    await assert.rejects(runRuntimeHealthcheck(["/health/ready"], healthcheckEnvironment), /runtime healthcheck failed: 503/);
+  } finally {
+    await stopApp(apiPublicApp);
   }
 });
 

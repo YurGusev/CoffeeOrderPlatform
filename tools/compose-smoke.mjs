@@ -15,7 +15,7 @@ import { Buffer } from "node:buffer";
 import { execFileSync, spawn } from "node:child_process";
 import {request as httpsRequest} from "node:https";
 import { join, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../packages/platform-security/src/index.ts";
@@ -73,6 +73,11 @@ const RUNTIME_HEALTHCHECK = [
   "node",
   "-e",
   "import('@coffee-platform/runtime/healthcheck').then(({main}) => main(process.argv.slice(1)))",
+];
+const RUNTIME_HEALTH_STATUSES = [
+  "node",
+  "-e",
+  "import('@coffee-platform/runtime/healthcheck').then(async ({readRuntimeHealthStatuses}) => { for (const status of await readRuntimeHealthStatuses(process.argv.slice(1))) console.log(status); }).catch((error) => { console.error(error instanceof Error ? error.message : 'runtime healthcheck failed'); process.exitCode = 1; })",
 ];
 function usage() {
   return [
@@ -229,9 +234,10 @@ async function writeStubSecret(
   kafkaCredential,
   transportMaterial,
   publicTlsMaterial,
+  securityMaterial,
 ) {
-  // These placeholders and ephemeral test certificates satisfy topology-only
-  // wiring; they are not credentials and cannot prove DB/provider access.
+  // Ephemeral credentials belong only to this isolated run; placeholders do
+  // not establish provider access or canonical SOPS provisioning.
   const secrets = {};
   for (const ref of refs) {
     const segments = ref.split(".");
@@ -240,7 +246,7 @@ async function writeStubSecret(
       if (!Object.hasOwn(current, segment)) current[segment] = {};
       current = current[segment];
     }
-    current[segments.at(-1)] = ref === `security.serviceTransportKeys.${runtime}`
+    current[segments.at(-1)] = securityMaterial?.[ref] ?? (ref === `security.serviceTransportKeys.${runtime}`
       ? transportMaterial
       : ref === "edge.tlsPrivateKey" && publicTlsMaterial !== undefined
         ? publicTlsMaterial.keyPem
@@ -255,7 +261,7 @@ async function writeStubSecret(
               username: `compose_${runtime.replaceAll("-", "_")}`,
               password: "compose-smoke-placeholder",
             }
-          : "compose-smoke-placeholder";
+          : "compose-smoke-placeholder");
   }
   for (const ref of optionalRefs) {
     const value = ref === "edge.tlsCaBundle" ? publicTlsMaterial?.caPem : undefined;
@@ -271,6 +277,36 @@ async function writeStubSecret(
   const content = `${JSON.stringify({ schemaVersion: 1, environment, runtime, secrets })}\n`;
   await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
   await chmod(path, 0o400);
+}
+
+function createEd25519KeySet() {
+  const keyPair = () => generateKeyPairSync("ed25519");
+  const active = keyPair();
+  const previous = keyPair();
+  const publicPem = (key) => key.export({type: "spki", format: "pem"});
+  return {
+    privateKey: active.privateKey.export({type: "pkcs8", format: "pem"}),
+    verificationKeys: {active: publicPem(active.publicKey), previous: publicPem(previous.publicKey)},
+  };
+}
+
+function createStubSecurityMaterial() {
+  const actor = createEd25519KeySet();
+  const apiPublicDelegation = createEd25519KeySet();
+  const apiInternalDelegation = createEd25519KeySet();
+  const ordersService = createEd25519KeySet();
+  const customerCursor = createEd25519KeySet();
+  return {
+    "security.actorContextEdgeSigningPrivateKey": actor.privateKey,
+    "security.actorContextEdgeVerificationPublicKeys": actor.verificationKeys,
+    "security.apiPublicDelegationSigningPrivateKey": apiPublicDelegation.privateKey,
+    "security.apiInternalDelegationSigningPrivateKey": apiInternalDelegation.privateKey,
+    "security.serviceVerificationKeys.orders-service": ordersService.verificationKeys,
+    "security.customerCursorSigningPrivateKey": customerCursor.privateKey,
+    "security.customerCursorVerificationPublicKeys": customerCursor.verificationKeys,
+    "security.delegationVerificationKeys.api-public": apiPublicDelegation.verificationKeys,
+    "security.delegationVerificationKeys.api-internal": apiInternalDelegation.verificationKeys,
+  };
 }
 
 async function createStubTransportMaterials(secretsDir, environment, publicHostname) {
@@ -436,6 +472,7 @@ async function materializeSecrets(secretsDir, options) {
   const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.recoveryProof
     ? await createStubTransportMaterials(secretsDir, platformConfig.environment, publicHostname)
     : undefined;
+  const stubSecurityMaterial = stubTransportMaterials === undefined ? undefined : createStubSecurityMaterial();
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
     if (options.stubSecrets || options.databaseProof || options.recoveryProof) {
@@ -451,6 +488,7 @@ async function materializeSecrets(secretsDir, options) {
         options.recoveryProof ? kafkaCredential : undefined,
         stubTransportMaterials?.service.get(runtime),
         runtime === "edge-gateway" ? stubTransportMaterials?.publicTls : undefined,
+        stubSecurityMaterial,
       );
     } else {
       execFileSync(process.execPath, [BOOTSTRAP, "--runtime", runtime], {
@@ -1950,7 +1988,7 @@ function hostRuntimeHealthStatus(secretsDir, runtime, path, port, publicTlsConfi
       ...(isPublic ? {} : {cert: material.certPem, key: material.keyPem}),
       minVersion: "TLSv1.3",
       rejectUnauthorized: true,
-      servername: isPublic ? publicTls.hostname : "127.0.0.1",
+      ...(isPublic ? {servername: publicTls.hostname} : {}),
       timeout: 5_000,
       ...(isPublic ? {} : {checkServerIdentity: (_hostname, certificate) => {
         try {
@@ -1985,7 +2023,7 @@ function runtimeHealthStatus(
       "exec",
       "-T",
       runtime,
-      ...RUNTIME_HEALTHCHECK,
+      ...RUNTIME_HEALTH_STATUSES,
       path,
     ],
     {composeFile},

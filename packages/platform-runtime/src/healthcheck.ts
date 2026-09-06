@@ -35,7 +35,7 @@ function requestHealth(
       ...(isPublic ? {} : {cert: material.certPem, key: material.keyPem}),
       minVersion: "TLSv1.3",
       rejectUnauthorized: true,
-      servername: isPublic ? publicTls.hostname : "127.0.0.1",
+      ...(isPublic ? {servername: publicTls.hostname} : {}),
       timeout: 900,
       ...(isPublic ? {} : {checkServerIdentity: (_hostname, certificate) => {
         try {
@@ -56,7 +56,7 @@ function requestHealth(
   });
 }
 
-export async function runRuntimeHealthcheck(
+export async function readRuntimeHealthStatuses(
   paths: readonly string[],
   environment: RuntimeEnvironment = process.env,
 ): Promise<readonly number[]> {
@@ -101,6 +101,14 @@ export async function runRuntimeHealthcheck(
     publicTls = parsePublicTlsMaterial(secretAt(document, "secrets.edge.tlsPrivateKey"), secretAt(document, "secrets.edge.tlsCertificate"), hostname, publicCaPem);
   }
   const statuses = await Promise.all(paths.map((path) => requestHealth(path, port, material, environmentName, runtime, publicTls)));
+  return statuses;
+}
+
+export async function runRuntimeHealthcheck(
+  paths: readonly string[],
+  environment: RuntimeEnvironment = process.env,
+): Promise<readonly number[]> {
+  const statuses = await readRuntimeHealthStatuses(paths, environment);
   if (statuses.some((status) => status < 200 || status >= 300)) {
     throw new Error(`runtime healthcheck failed: ${statuses.join(",")}`);
   }

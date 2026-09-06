@@ -14,8 +14,8 @@ unknown-COMMIT/restart harness. Исправлен public TLS trust path: server
 bundle для выделенного test environment, без bundle используется системное
 доверие Node.js, а host smoke и runtime healthcheck получают hostname из
 `platform.publicBaseUrl`. Test-only provisioning создаёт отдельную public CA;
-её private key не materializes в runtime. Production secret source намеренно не
-изменён: SOPS credentials и age key в окружении отсутствуют.
+её private key не materializes в runtime. Production secret source не изменён по прямому указанию пользователя.
+Расследование исходного provisioning приведено ниже.
 
 ## Authority и predecessors
 
@@ -35,13 +35,30 @@ bundle для выделенного test environment, без bundle испол�
 |---|---|---|
 | Customer owner boundary и schema | Owner-local `CustomerStore`, migrations, grants и database ownership без межвладельческого SQL | **PASS static; live grants pending** |
 | Runtime wiring | Реальный owner и routes Customer; HTTPS/mTLS clients в двух API roots; shared runtime materialization | **PASS code/static; live trust pending** |
-| Transport trust | TLS 1.3, separate public Edge key/certificate with optional public CA bundle and hostname validation, internal `mtls` listener/client, environment/runtime SPIFFE SAN, certificate validity и fail-closed setup | **PASS static/unit/image; blocked live** — scoped certificates не materialized |
+| Transport trust | TLS 1.3, separate public Edge key/certificate with optional public CA bundle and hostname validation, internal `mtls` listener/client, environment/runtime SPIFFE SAN, certificate validity и fail-closed setup | **PASS static/unit/image и isolated readiness mTLS; business live pending** |
 | Delegation trust | Active/previous scoped Ed25519 verification sets для edge actor context, API public/internal delegation и Orders caller; no plaintext fallback | **PASS static; blocked live** — encrypted key inventory не provisioned |
 | Customer cursor | Ed25519 signer wired from a Customer-only private key and active/previous public keys; `kid`/`iat`/`exp`, max-age, clock-skew, absolute previous-key trust cutoff, unknown-kid, query binding and 2048-character bound enforced | **PASS static/unit; blocked live** — keys absent in SOPS source |
 | Customer URL/body limits | Customer cursor 2048, URL budget 8 KiB, body limit 16 KiB; Catalog shared cursor remains 512 | **PASS static/unit** |
 | Idempotency/recovery | Transactional owner path, replay-only validation, lost-response path and test-only unknown-COMMIT/restart harness with internal classification log, DB-adapter command evidence and post-error protocol `ROLLBACK` assertion | **PARTIAL** — mandatory PostgreSQL and restart environment absent |
 | PII/errors | Allowlisted Problem Details and fail-closed invalid-owner responses | **PASS unit/static; live log proof pending** |
 | Generated contracts/authority | Generated artifacts unchanged and authority/catalog/profile/schema/inventory synchronized | **PASS static** |
+
+## Исправления изолированного production proof
+
+Запуск `--database-proof` воспроизвёл и после исправлений закрыл три дефекта:
+
+1. Вместо строковых placeholders smoke создаёт ephemeral Ed25519 signing keys
+   и согласованные active/previous verification sets в scoped tmpfs material.
+2. Internal mTLS healthcheck не передаёт IP в TLS SNI, запрещённый Node.js
+   26.8.1; CA и SPIFFE verification сохраняются. Public Edge использует hostname.
+3. Smoke читает raw HTTP statuses, включая ожидаемый `503`, через
+   `readRuntimeHealthStatuses`; production `runRuntimeHealthcheck` по-прежнему
+   завершается ошибкой на non-2xx и не скрывает transport/config errors.
+
+Финальный production image собран и запущен. Disposable PostgreSQL 17.11:
+readiness `200 → 503 → 200`, `/health/live`, `/metrics` и graceful shutdown
+проверены. Это foundation readiness proof, а не Customer migration/concurrency/
+COMMIT-restart acceptance. Изолированные контейнеры, сети и scoped tmpfs удалены.
 
 ## Commands
 
@@ -72,6 +89,9 @@ bundle для выделенного test environment, без bundle испол�
 | `pnpm test:customer-integration` | **BLOCKED / exit 1 by design** — 15 tests: 1 pass, 14 explicit blockers, 0 skipped |
 | `pnpm test:compose-smoke` | **BLOCKED / exit 1** — `SOPS_AGE_KEY_FILE` is required for decrypted scoped secrets; real SOPS materialization не выполнялась |
 | `node tools/compose-smoke.mjs --stub-secrets --no-build` | **BLOCKED / exit 1** — ephemeral separate public/internal CA materialization reached Compose, but required local runtime image `coffee-compose-smoke-...-api-internal:latest` is absent; no live evidence claimed |
+| `node --test tests/runtime/lifecycle.test.mjs` | **PASS** — 27/27, включая internal mTLS loopback, raw `503` и strict production rejection |
+| `pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/runtime/lifecycle.test.mjs packages/platform-runtime/src/healthcheck.ts` | **PASS** |
+| `node tools/compose-smoke.mjs --database-proof --project-name coffee-compose-smoke-3080870-a53ae048` | **PASS / exit 0** — production image build, PostgreSQL readiness `200 → 503 → 200`, internal mTLS, live/metrics и graceful shutdown; 1 runtime, Kafka/telemetry/business proof отсутствуют |
 | `git diff --check` | **PASS** |
 
 ## Exact blockers and required action
@@ -121,20 +141,47 @@ canonical PostgreSQL port `5432`. Harness также требует test-only
 означает явное доверие только указанному public CA bundle; leaf certificate и
 internal service CA fallback запрещены.
 
-Эти prerequisites не подменялись фиктивными credentials или live evidence.
+Canonical SOPS inventory не подменялся. Изолированный Compose использует
+собственные ephemeral credentials; этот proof не подтверждает business acceptance.
 Восемь пользовательских instruction-файлов, а также появившиеся untracked
 `.agents/skills/astra-orchestrator/` и `.codex/` сохраняются и не входят в
 commit.
 
-## Неприменённая правка issue #5
+## Расследование SOPS inventory из foundation #3
 
-Issue/PR в этом продолжении не изменялись. Точная подготовленная замена строки:
+Источник: локальная история исходной задачи, журнал
+`rollout-2026-09-01T14-15-56-01a05c40-f65b-7ea1-b1a9-ac58bbbaa156.jsonl`.
+В репозиторий не копируются журнал, plaintext или приватные ключи.
+
+- Строка 234: три age identity созданы в `/tmp/coffee-age-development.key`,
+  `/tmp/coffee-age-staging.key`, `/tmp/coffee-age-production.key`.
+- Строка 242: все значения трёх окружений заданы статическим тестовым fixture;
+  импорта credentials внешних систем в этой команде нет.
+- Строки 257/263: fixture зашифрован SOPS и перемещён в canonical inventory;
+  commit `7ce3e23d03e3db444e0f92903cc98fd0ea2c4646` добавил 124 encrypted leaves.
+- Строки 275/281 и 371–382 подтверждают расшифровку и scoped materialization
+  во время исходной реализации, но не постоянное хранение age identity.
+- Проверка известных путей 2026-09-06: все три identity отсутствуют, как и
+  временный plaintext. В четырёх проверенных implementation/review журналах
+  нет `AGE-SECRET-KEY-`; приватные ключи были направлены в файлы.
+
+Найденная история подтверждает тестовое происхождение inventory. Она не
+подтверждает резервную копию age keys; восстановление из проверенных журналов
+невозможно. Отсутствие иных резервных копий не доказано. Пользователь запретил
+перезаписывать ciphertext до расследования; файл сохранён без изменений.
+Для нового provisioning требуется отдельное решение о постоянном хранении и
+резервной копии identity, а также о замене тестового inventory. Реальные
+credentials внешних систем эта история не предоставляет.
+
+## Оставшееся уточнение issue #5
+
+Точная подготовленная замена устаревшей строки:
 `Customer cursor — 2048 символов; Customer URL budget — 8 KiB; Catalog cursor —
 512 символов.` Остальные acceptance criteria issue не меняются.
 
 ## Remote state
 
-Issue #5 остаётся `OPEN`; PR #129 остаётся open/blocked. Предыдущий remote head
-остаётся `b847280`; текущая continuation подготавливается локально в
-`feature/5-customer-service` и не отправляется в remote в рамках этого шага.
-Merge, auto-merge, issue checkbox mutation и closure не выполнялись.
+Issue #5 и PR #129 остаются открытыми; handoff сохраняет `blocked`.
+Исправления публикуются в существующей `feature/5-customer-service`.
+Merge, auto-merge и issue closure не выполняются до обязательного acceptance.
+Self commit SHA в handoff не записывается.

@@ -25,7 +25,7 @@ outputs:
     sha256: 3d122d932092714cf9809fd4a99171b732b3697119800491ce3d5c958b860800
     consumers: [5, 8, 9, 13]
   - artifact: evidence/issue-5-acceptance.md
-    sha256: aac25403e5ef0bf7b02dd2067358ab2f275d9e7d822ee00c19535b54ee248297
+    sha256: a33acfcd7f6acd9a1725c35fb2b2263abbdff04940ef300e1a4c6e7e22234f8a
     consumers: [5, 8, 9, 13]
   - artifact: apps/customer-service/migrations/0001_customer_schema.sql
     sha256: 2b8b0a818c4305b34ed853f7f7cc72743741bcb2dbce8513f8376bc4cd8d86e8
@@ -217,10 +217,10 @@ outputs:
     sha256: f038df6586e12c4b279bc87ab84eae8b822c22bd45d6ca8b0c7ff423aa38e8b8
     consumers: [5]
   - artifact: packages/platform-runtime/src/healthcheck.ts
-    sha256: b5ea06821b681b8da6a44788e77a8751ceade1e1929d357a8d17fc7a973d0e58
+    sha256: 16c2c91657c9cd7c233a3ee8ce1fa52a068bc87fc77a869d47f102a1d8784766
     consumers: [5]
   - artifact: tools/compose-smoke.mjs
-    sha256: 85c17c8add7d142cf087f3489781bbe5afd6c95ea78a929f2615f67fdbd1537d
+    sha256: 394cb552a727b4217d558ca4a4430723c525c9dc9e9f7de2913f24d7c2cadabd
     consumers: [5]
   - artifact: config/service-catalog.schema.json
     sha256: b12c6a3c4de5ee6fbad33624583836213d758972ae8cac799252005bd5524063
@@ -244,7 +244,7 @@ outputs:
     sha256: d3fafba05547a95eca6fd63e6db4e2b56839f2991361d3f3c453ddfb9d0b67ae
     consumers: [5]
   - artifact: tests/runtime/lifecycle.test.mjs
-    sha256: ab24068a5ddd4a23d77413fbd454291e8cf6f51a329608e65ed817bc8aeb012e
+    sha256: c674a8ec975e377c7052d729455758f67b72ee0e2474e3541fd2e68d3ec6e0b5
     consumers: [5]
 verification:
   - command: gh repo view YurGusev/CoffeeOrderPlatform --json nameWithOwner
@@ -335,10 +335,18 @@ verification:
     detail: lockfile up to date
   - command: git diff --check
     result: passed
+  - command: node --test tests/runtime/lifecycle.test.mjs
+    result: passed
+    detail: 27/27; internal mTLS loopback, raw 503 and strict production healthcheck rejection
+  - command: pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/runtime/lifecycle.test.mjs packages/platform-runtime/src/healthcheck.ts
+    result: passed
+  - command: node tools/compose-smoke.mjs --database-proof --project-name coffee-compose-smoke-3080870-a53ae048
+    result: passed
+    detail: Production image built; isolated PostgreSQL 17.11 readiness 200 to 503 to 200, internal mTLS, live/metrics and graceful shutdown passed. No Customer business/COMMIT-restart acceptance claimed; temporary containers/networks/tmpfs removed.
 limitations:
   - Public Customer cursor contract was explicitly approved for this scope at 2048 characters with an 8 KiB Customer URL budget; Catalog keeps the shared Cursor contract at 512 and no stateful cursor was introduced.
   - Live Customer PostgreSQL 17.11 migration, grants, concurrency, rollback fault injection after each required write, durable-commit lost-response recovery, DB abort after Customer INSERT, unknown COMMIT/restart reconciliation, PII log canary and foreign-database CONNECT denial were not proven because required CUSTOMER_* URLs, mTLS fixtures and runtime are absent.
-  - Default compose smoke was not proven because SOPS_AGE_KEY_FILE and sops are absent. The topology-only stub path now generates ephemeral, separate public and internal mTLS certificates but could not start because local runtime images are absent.
+  - Default SOPS-backed compose smoke remains blocked. The isolated database-proof mode now passes with generated ephemeral signing/TLS credentials and a built production Customer image; this does not establish full topology or Customer business acceptance.
   - The canonical encrypted source lacks `edge.tlsCertificate`, Customer cursor, edge actor and delegation/service verification key paths. `edge.tlsCaBundle` is optional and its absence selects Node system trust; production runtime wiring still fails closed until an authorized SOPS provisioning action materializes the required values and valid scoped transport envelopes.
   - customer-integration is intentionally non-zero when live prerequisites are absent; this prevents a false process PASS with skipped acceptance tests.
-  - Issue/PR text was not mutated; prepared issue correction is `Customer cursor — 2048 символов; Customer URL budget — 8 KiB; Catalog cursor — 512 символов.` Remote head remains `b847280`; this continuation is local-only until the separately authorized commit is created. Merge, issue checkbox mutation and issue closure were not performed.
+  - Исходный SOPS inventory создан в foundation #3 из статического тестового fixture; три age identity создавались в /tmp и сейчас отсутствуют. Проверенные журналы не содержат private keys или evidence backup. Ciphertext сохранён по указанию пользователя; новый provisioning требует отдельного решения. Merge и закрытие issue не выполнялись.
