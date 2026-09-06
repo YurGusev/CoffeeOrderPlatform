@@ -14,8 +14,8 @@ health/readiness, resource limits, graceful stop, provenance и rollback path.
   scoped tmpfs materialization, а не общий secrets-файл.
 - Pin runtime/dependency/action versions and produce lockfiles, SBOM, and image digest.
 - TS7 supply-chain authority по ADR-0022 с точным исключением ADR-0026 требует ровно один
-  `typescript@7.0.2`, exact `oxlint@1.80.0`, `oxlint-tsgolint@7.0.2001` и
-  `@hey-api/openapi-ts@0.0.0-next-20260824173136`; TS5/6 и floating pins запрещены. Compiler,
+  TypeScript 7 compiler, `oxlint`, `oxlint-tsgolint` и `@hey-api/openapi-ts` с точными
+  версиями из `config/toolchain-versions.json`; TS5/6 и floating pins запрещены. Compiler,
   linter и codegen присутствуют только в builder и отсутствуют в final images.
 - CI validates contracts before builds, then types/lint/tests/integration/security.
 - Deploy immutable digests; configuration and migrations are explicit stages.
@@ -24,5 +24,6 @@ health/readiness, resource limits, graceful stop, provenance и rollback path.
 - Kubernetes follows a proven process/container split; do not invent it to fill structure.
 - Repository push does not authorize deployment, registry publication, or secret mutation.
 
-Проверять чистую сборку, запуск Compose, отказ зависимости, graceful shutdown,
-ошибку миграции, image scan, config validation, rollback и restore smoke.
+По изменению и риску выбирать проверки чистой сборки, запуска Compose, отказа
+зависимости, graceful shutdown, ошибки миграции, image scan, config validation,
+rollback и restore smoke.

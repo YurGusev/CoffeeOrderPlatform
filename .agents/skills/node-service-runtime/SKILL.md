@@ -8,7 +8,8 @@ description: "Создавать или проверять production-серви
 Основа: зафиксированный Node.js 26 Current, строгий TypeScript, Fastify-first, один
 процесс на контейнер, ограниченная конкурентность, отмена и OpenTelemetry.
 
-Compiler authority по ADR-0022: только `typescript@7.0.2` native Go `tsc`.
+Compiler authority по ADR-0022: только TypeScript 7 native Go `tsc`.
+Точные версии toolchain брать из `config/toolchain-versions.json`.
 TS5/6 compatibility lane, compiler API, custom transforms, CommonJS и
 non-erasable syntax запрещены. Backend — ESM/NodeNext/ES2025 с `.js` runtime
 imports; Node native TypeScript допустим только для малых repository/admin scripts.
@@ -27,5 +28,5 @@ native fetch/Undici 8, `node:test` для runtime seams и встроенный 
 - Не выполнять синхронную/CPU-heavy работу в request или consumer path.
 - Корректно останавливать зависимости и публиковать health/readiness/telemetry.
 
-Проверять typecheck/lint/tests, отмену, давление на pool, остановку под нагрузкой,
-event-loop delay и здоровье контейнера.
+По изменению и риску выбирать проверки typecheck/lint/tests, отмены, давления
+на pool, остановки под нагрузкой, event-loop delay и здоровья контейнера.
