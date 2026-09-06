@@ -91,6 +91,48 @@ node tools/config-bootstrap/index.mjs --runtime customer-service
 secretRef или неверным mode завершается до открытия listener. Общий plaintext
 secret bundle не создаётся.
 
+### Постоянные age identities и резервная копия на этом сервере
+
+Для локального CoffeeOrderPlatform используются три age identities:
+
+- основной файл: `/home/yurgusev/.config/sops/age/keys.txt` — стандартный путь
+  обнаружения SOPS;
+- резервная копия: `/home/yurgusev/.local/share/coffee-platform/recovery/2026-09-06-initial-provision/age-identities.txt`;
+- в том же recovery-каталоге сохранены исходный ciphertext до provisioning,
+  исходные SOPS rules, новый encrypted inventory и публичные recipients.
+
+Каталоги имеют mode `0700`, identities и recovery-файлы — `0600`. Private age
+identity и её копия никогда не добавляются в Git, tmpfs runtime scopes или
+контейнеры сервисов. Общий plaintext inventory на диске не сохраняется.
+Копия на этом диске защищает от удаления основного файла, но не от потери диска.
+
+Перед provisioning/ротацией прочитать этот раздел. После каждого изменения
+recipients обновить резервную копию и проверить восстановление ею. Перед
+удалением ключа убедиться, что сохранённые ciphertext больше не требуют его.
+Нельзя хранить единственную identity в `/tmp`.
+
+Проверка MAC основным файлом:
+
+```bash
+SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm config:check
+SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm security:secrets
+```
+
+Проверка восстановления без вывода plaintext:
+
+```bash
+SOPS_AGE_KEY_FILE=/home/yurgusev/.local/share/coffee-platform/recovery/2026-09-06-initial-provision/age-identities.txt \
+sops --decrypt --output /dev/null secrets/platform.secrets.sops.yaml
+```
+
+Первоначальный provisioning 2026-09-06 заменил утраченные временные age keys,
+создал криптографические signing/TLS keys и локальные DB/Kafka credentials.
+Certificates для `localhost` относятся к локальному запуску; production TLS
+требует сертификат для реального публичного hostname. Сохранённые из исходного
+fixture `aroma.email`, `aroma.password`, `edge.oidcClientSecret` и
+`telemetry.exporterToken` остаются **не provisioned для внешних систем**;
+наличие encrypted поля не доказывает доступ к провайдеру.
+
 ## PostgreSQL
 
 Безопасный offline plan не подключается к серверу:
@@ -160,3 +202,18 @@ PostgreSQL подключается к уникальной project-scoped се�
 bootstrap. Compose явно связывает `KAFKA_LOG_DIRS=/var/lib/kafka/data` с volume Kafka:
 entrypoint image генерирует broker properties из environment. Volume сохраняется между recreate container
 и удаляется вместе с этим project после proof.
+
+Customer acceptance запускается отдельно на disposable PostgreSQL 17.11:
+
+```text
+node tools/compose-smoke.mjs --customer-proof --project-name coffee-customer-acceptance
+```
+
+Режим собирает production Customer image, создаёт временные mTLS/signing
+fixtures в tmpfs, применяет миграции ролью `coffee_customer_migrator` и
+последовательно выполняет существующие Customer integration tests без
+пропусков. Проверяются grants, concurrency, rollback, lost response и
+неподтверждённый COMMIT с реальным restart/replay. Отдельный observer идёт
+напрямую в БД, а дочерний Customer — через fault proxy. Контейнеры, сети,
+volumes и временные secrets удаляются после проверки. Этот режим не читает
+SOPS и не подтверждает credentials внешних провайдеров.

@@ -1,5 +1,5 @@
 import {createPrivateKey, createPublicKey, randomUUID} from "node:crypto";
-import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, decodeCustomerSearchQuery, hasCustomerPermission, isCustomerCreateRequest, isCustomerIdempotencyKey, isCustomerProblem, isCustomerReplayOnly, isCustomerResponse, isCustomerSearchResponse} from "@coffee-platform/contracts-customer-v1";
+import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, customerSearchQueryError, decodeCustomerSearchQuery, hasCustomerPermission, isCustomerCreateRequest, isCustomerIdempotencyKey, isCustomerProblem, isCustomerReplayOnly, isCustomerResponse, isCustomerSearchResponse} from "@coffee-platform/contracts-customer-v1";
 import type {CustomerCreateRequest, CustomerResponse, CustomerSearchResponse} from "@coffee-platform/contracts-customer-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
 import {parseServiceTransportMaterial, signActorContext, verifyActorContextWithKeySet, type ActorContextClaims, type ServiceTransportMaterial} from "@coffee-platform/security";
@@ -191,7 +191,7 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
       }
       if (exceedsUrlLimit(request)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
       const decodedQuery = decodeCustomerSearchQuery(request.query);
-      if (decodedQuery === undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+      if (decodedQuery === undefined) return sendProblem(reply, problem(request, 400, customerSearchQueryError(request.query), "Request validation failed"));
       const query = decodedQuery.query;
       const limit = decodedQuery.limit ?? 20;
       const cursor = decodedQuery.cursor;

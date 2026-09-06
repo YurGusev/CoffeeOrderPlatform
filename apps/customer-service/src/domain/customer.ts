@@ -197,7 +197,7 @@ export function maskPhone(value: string): string {
 
 export function maskEmail(value: string): string {
   const at = value.indexOf("@");
-  return `${value.slice(0, Math.max(1, at))}***${value.slice(at)}`;
+  return `${value.slice(0, 1)}***${value.slice(at)}`;
 }
 
 export function toCustomerSummary(row: Readonly<{

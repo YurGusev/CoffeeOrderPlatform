@@ -104,6 +104,14 @@ export function decodeCustomerSearchQuery(value: unknown): Readonly<{query: stri
   return isCustomerSearchQuery(decoded) ? decoded : undefined;
 }
 
+export function customerSearchQueryError(value: unknown): "INVALID_CURSOR" | "VALIDATION_FAILED" {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const {cursor, ...query} = value as Record<string, unknown>;
+    if (typeof cursor === "string" && decodeCustomerSearchQuery(query) !== undefined) return "INVALID_CURSOR";
+  }
+  return "VALIDATION_FAILED";
+}
+
 export function isCustomerOrderInput(value: unknown): value is CustomerOrderInput {
   return validateOrderInput(value) as boolean;
 }

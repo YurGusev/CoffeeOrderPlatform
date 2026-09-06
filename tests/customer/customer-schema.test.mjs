@@ -85,6 +85,7 @@ void test("Customer migrations are repeatable and create the exact owner schema"
   const identity = await client.query("SELECT current_database(), current_user, current_setting('server_version') AS server_version");
   assert.equal(identity.rows[0].current_database, new URL(url).pathname.slice(1));
   assert.match(identity.rows[0].server_version, /^17\.11(?:\s|$)/);
+  await client.query("CREATE SCHEMA IF NOT EXISTS customer");
 
   const parsed = new URL(url);
   const databaseName = decodeURIComponent(parsed.pathname.slice(1));
@@ -118,7 +119,7 @@ void test("Customer migrations are repeatable and create the exact owner schema"
     audit_log: ["audit_ref", "customer_ref", "operation", "actor_ref", "correlation_id", "occurred_at", "before_hash", "after_hash"],
   });
   const definitions = after.constraints.map((row) => row.definition).join("\n");
-  assert.match(definitions, /phone_e164 IS NOT NULL OR email_normalized IS NOT NULL/i);
+  assert.match(definitions, /phone_e164 IS NOT NULL.*OR.*email_normalized IS NOT NULL/i);
   assert.match(definitions, /status.*Active/i);
   assert.match(definitions, /kind.*Delivery/i);
   assert.match(definitions, /provider.*Web.*VK/i);

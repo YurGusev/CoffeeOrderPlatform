@@ -18,6 +18,7 @@ import {
   startConfiguredRuntime,
   startRuntime,
 } from "../../packages/platform-runtime/src/index.ts";
+import {createHttpClient} from "../../packages/platform-http/src/index.ts";
 import {readRuntimeHealthStatuses, runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
 import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial} from "../../packages/platform-security/src/index.ts";
 
@@ -196,6 +197,17 @@ void test("public Edge TLS accepts a browser client while internal TLS rejects a
       RUNTIME_NAME: "api-public",
       PORT: String(addressOf(apiPublicApp).port),
     };
+    const client = createHttpClient({
+      origin: `https://127.0.0.1:${addressOf(apiPublicApp).port}`,
+      tls: {material: apiPublicMaterial.serviceTls, targetEnvironment: "development", targetRuntime: "api-public"},
+    });
+    try {
+      const response = await client.fetch("/health/live");
+      assert.equal(response.status, 200);
+      await response.arrayBuffer();
+    } finally {
+      await client.close();
+    }
     assert.deepEqual(await readRuntimeHealthStatuses(["/health/ready"], healthcheckEnvironment), [503]);
     await assert.rejects(runRuntimeHealthcheck(["/health/ready"], healthcheckEnvironment), /runtime healthcheck failed: 503/);
   } finally {

@@ -1,6 +1,6 @@
 import {createHash} from "node:crypto";
 import type {Database} from "@coffee-platform/database";
-import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, decodeCustomerSearchQuery, hasCustomerPermission, isCustomerCreateRequest, isCustomerIdempotencyKey, isCustomerOrderInput, isCustomerProblem, isCustomerRef, isCustomerResponse, isCustomerSearchResponse, isCustomerReplayOnly} from "@coffee-platform/contracts-customer-v1";
+import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, customerSearchQueryError, decodeCustomerSearchQuery, hasCustomerPermission, isCustomerCreateRequest, isCustomerIdempotencyKey, isCustomerOrderInput, isCustomerProblem, isCustomerRef, isCustomerResponse, isCustomerSearchResponse, isCustomerReplayOnly} from "@coffee-platform/contracts-customer-v1";
 import type {CustomerCreateRequest, CustomerOrderInput, CustomerResponse, CustomerSearchResponse, CustomerSummary} from "@coffee-platform/contracts-customer-v1";
 import type {RuntimeComposition, RuntimeRequestContext} from "@coffee-platform/runtime";
 import {createCustomer} from "../application/create-customer.js";
@@ -342,7 +342,7 @@ export function registerCustomerRoutes(app: RuntimeApp, adapters: CustomerHttpAd
       }
       if (exceedsUrlLimit(request)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
       const decodedQuery = decodeCustomerSearchQuery(request.query);
-      if (decodedQuery === undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+      if (decodedQuery === undefined) return sendProblem(reply, problem(request, 400, customerSearchQueryError(request.query), "Request validation failed"));
       const query = decodedQuery.query;
       const limit = decodedQuery.limit ?? 20;
       const cursor = decodedQuery.cursor;

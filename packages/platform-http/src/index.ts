@@ -1,3 +1,4 @@
+import {isIP} from "node:net";
 import {Agent} from "undici";
 import {verifyTransportPeer, type ServiceTransportMaterial} from "@coffee-platform/security";
 
@@ -89,7 +90,7 @@ export class HttpClient {
           key: tls.material.keyPem,
           minVersion: "TLSv1.3" as const,
           rejectUnauthorized: true,
-          servername: this.#origin.hostname,
+          servername: isIP(this.#origin.hostname) || this.#origin.hostname.startsWith("[") ? "" : this.#origin.hostname,
           checkServerIdentity: (_hostname: string, certificate: Parameters<typeof verifyTransportPeer>[0]) => {
             try {
               verifyTransportPeer(certificate, tls.targetEnvironment, tls.targetRuntime);

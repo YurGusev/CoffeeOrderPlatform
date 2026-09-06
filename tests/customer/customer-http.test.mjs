@@ -168,6 +168,10 @@ void test("Customer and api-public decode default/explicit limits and reject dup
   assertProblem(await customerApp.inject({method: "GET", url: "/api/client-v1/customers?query=test&limit=51", headers: {"x-actor-context": "signed-test"}}), 400, "VALIDATION_FAILED");
   assertProblem(await customerApp.inject({method: "GET", url: `/api/client-v1/customers?query=test&cursor=${"a".repeat(8 * 1024)}`, headers: {"x-actor-context": "signed-test"}}), 400, "VALIDATION_FAILED");
 
+  for (const cursor of ["invalid!", "a".repeat(2_049)]) {
+    assertProblem(await customerApp.inject({method: "GET", url: `/api/client-v1/customers?query=test&cursor=${encodeURIComponent(cursor)}`, headers: {"x-actor-context": "signed-test"}}), 400, "INVALID_CURSOR");
+  }
+
   const forwarded = [];
   const client = createHttpCustomerClient({
     fetch: async (path) => {
@@ -185,6 +189,9 @@ void test("Customer and api-public decode default/explicit limits and reject dup
   assert.deepEqual(forwarded, ["/api/client-v1/customers?query=test&limit=20", "/api/client-v1/customers?query=test&limit=20"]);
   assertProblem(await publicApp.inject({method: "GET", url: "/api/client-v1/customers?query=test&limit=20&limit=21", headers: {"x-actor-context": "signed-edge-context"}}), 400, "VALIDATION_FAILED");
   assertProblem(await publicApp.inject({method: "GET", url: `/api/client-v1/customers?query=test&cursor=${"a".repeat(8 * 1024)}`, headers: {"x-actor-context": "signed-edge-context"}}), 400, "VALIDATION_FAILED");
+  for (const cursor of ["invalid!", "a".repeat(2_049)]) {
+    assertProblem(await publicApp.inject({method: "GET", url: `/api/client-v1/customers?query=test&cursor=${encodeURIComponent(cursor)}`, headers: {"x-actor-context": "signed-edge-context"}}), 400, "INVALID_CURSOR");
+  }
 });
 
 void test("Customer and api-public map JSON parser and body-limit failures to Problem Details", async (t) => {

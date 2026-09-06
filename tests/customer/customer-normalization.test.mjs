@@ -38,6 +38,7 @@ void test("Customer normalization uses the owner domain implementation", async (
   assert.equal(value.displayNameSearch, "café bar");
   assert.equal(value.phoneE164, "+79991234567");
   assert.equal(value.emailNormalized, "alice@xn--r8jz45g.xn--zckzah");
+  assert.equal(domain.maskEmail(value.emailNormalized), "a***@xn--r8jz45g.xn--zckzah");
   assert.deepEqual(value.address, {
     kind: "Delivery",
     line1: "ул. Тестовая 1",

@@ -1,6 +1,6 @@
 issue: 5
 baseCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
-status: blocked
+status: ready
 inputs:
   - issue: 4
     acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
@@ -25,7 +25,7 @@ outputs:
     sha256: 3d122d932092714cf9809fd4a99171b732b3697119800491ce3d5c958b860800
     consumers: [5, 8, 9, 13]
   - artifact: evidence/issue-5-acceptance.md
-    sha256: a33acfcd7f6acd9a1725c35fb2b2263abbdff04940ef300e1a4c6e7e22234f8a
+    sha256: 9297f464bc9080f96077549182064884d19d3fc2864c86965bfde17e94a8cacb
     consumers: [5, 8, 9, 13]
   - artifact: apps/customer-service/migrations/0001_customer_schema.sql
     sha256: 2b8b0a818c4305b34ed853f7f7cc72743741bcb2dbce8513f8376bc4cd8d86e8
@@ -37,7 +37,7 @@ outputs:
     sha256: d111b06cda4ccff477aa5f165729c47f74b8e34d2f9acfc1ebbdf77655814ba9
     consumers: [5]
   - artifact: apps/customer-service/src/domain/customer.ts
-    sha256: 6ef3f389ca8580f944f26db745075554daff00779f55b58941e90ad0fa23b80e
+    sha256: febc5dd87e913e9e204e1d22544ee30d3f245211895574df61cac7521e9d84a6
     consumers: [5]
   - artifact: apps/customer-service/src/application/create-customer.ts
     sha256: 1f0f7ee6aef753f714fd3b545a0ccdfd35b40632a89a19b1105468e18307e884
@@ -49,7 +49,7 @@ outputs:
     sha256: 3146e2a6e371284b82044181bc5fb38ac1bb7fbd697c0f5bf60c0875d4f369b4
     consumers: [5]
   - artifact: apps/customer-service/src/http/index.ts
-    sha256: f51a5312a7ebfa04bb31e11e5b163f16c9f98b70dcf4640bdf8a1e626a17cce8
+    sha256: 37ad14e994e687e903bd40213f1c715ac26ac6d9ab09c727e6e1451557791f65
     consumers: [5, 8, 9]
   - artifact: apps/customer-service/src/infrastructure/postgres/customer-repository.ts
     sha256: d4587c5ed8bdc63d7af00e516ce7f1daf2241901b8d0f11ae03507ac7789cfab
@@ -64,7 +64,7 @@ outputs:
     sha256: df6d8d93b6b193617db898047caceb4b7207e73a5cdd07f21357ac67f88eb96a
     consumers: [5]
   - artifact: apps/api-public/src/index.ts
-    sha256: 3f9d68133cfc8d639b29a1762f82fb680a717db2d99b8574065efba3d249e1f4
+    sha256: 71665234e9a3101abec9507e364f51d752656628d4bf23f5648e185f9a1c09cb
     consumers: [5]
   - artifact: apps/api-public/src/main.ts
     sha256: 161592983cead8d62b1cfe0eeda5240c16fcca46a1bc39ca8915c0fb6e506af4
@@ -109,19 +109,19 @@ outputs:
     sha256: 81476ae13ef2d603c1344529e395686f434cfffdb60de4ab1cab3cc3483b719b
     consumers: [5]
   - artifact: tests/customer/customer-normalization.test.mjs
-    sha256: 4bef7965381984678b9a14151ef6a09b6bffbe26f1a5095e607ce6a2f4b34389
+    sha256: 878fb276709333cae074ff812b3cacef243d5b716ac82c9b46b6108cb03721ed
     consumers: [5]
   - artifact: tests/customer/customer-live.test.mjs
-    sha256: 78309002e31f38886a15d99117083dba524135391f694820a0f47d729760b108
+    sha256: 3dac035e341189b4222fdd3a1add7a627ef25d0d6037648ef6c6b18819c624f7
     consumers: [5]
   - artifact: tests/customer/fixtures/db-adapter-command-observer.mjs
     sha256: 7cacf35f43fbcab5b493bace12622a6524486a8cdbbe560cd231a4aa45648891
     consumers: [5]
   - artifact: tests/customer/customer-schema.test.mjs
-    sha256: e3e68d26fb0b8cb06f4719fee4c55e2e16d1b2fc12afcdb9894ccbb6bb732025
+    sha256: 99eced09c67c115da0480499c0c8162c2d02980c21c2d50557782987412e9de4
     consumers: [5]
   - artifact: tests/customer/fixtures/customer-testkit.mjs
-    sha256: da69854cb645a1f4c5575751a2b29b1102a25f18480e899a02e6b289b0581a66
+    sha256: b80280a67b929b18eeed6a1a59f9487cdab17b881b1a64b84d0307591ac9cc05
     consumers: [5]
   - artifact: apps/customer-service/src/infrastructure/postgres/customer-row-schema.ts
     sha256: 74bc94b2aa4a15c2979a1eda441fb087ba0184c6fd6331929b33ab2c541a6077
@@ -133,7 +133,7 @@ outputs:
     sha256: 5b3b79d6e18ff2184d76854fd87b4ec51ffa976d36ae5779bc96c7d692b353fb
     consumers: [5]
   - artifact: packages/contracts/customer-v1/src/index.ts
-    sha256: 4dcfd9ffbd6fcef2f2adb328c84d7f0a0daa9c240643c16ed8ebf1157b86f0ec
+    sha256: f58f0943f6a69f124fe6563b4b318554376d24a5d5bce500be8b941b2450ab19
     consumers: [5]
   - artifact: packages/generated/client-v1/package.json
     sha256: b9c0081223ef91d7d026940224a0f675b4355bd9ce6df2f5dab9dd08687d38d5
@@ -157,7 +157,7 @@ outputs:
     sha256: fa58d879206685a4818ab4cd9466bfe82bc7b801566fb31372554726c8c7939e
     consumers: [5]
   - artifact: tests/customer/customer-http.test.mjs
-    sha256: 2dc141893ab5b3968eeb8a9c6da7439f2cf2b4d1852979a2e874c537450e2b43
+    sha256: 306d4c06ddcf4adbe37d7b24d8defe0b2796b6fb2827d41263629328fecbf985
     consumers: [5]
   - artifact: scripts/contracts-breaking.mjs
     sha256: 5fa593ce5cd15bcd8ce1b03fd663033b96e578588655c25beb5c253b57152d92
@@ -187,7 +187,7 @@ outputs:
     sha256: 1e784a5afc21b00bc7600039c02de3e359574492c78009670f10861902c77c33
     consumers: [5]
   - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
-    sha256: 2798498973b16ef6ba8520d2ffa7f27b92e14f61fc1cdc47f333c4e6f6158083
+    sha256: 91e79f2e28c2bf7230e0aa9bb6ed2fe71e4ba07c44eec1ca307cb1b89ee7101b
     consumers: [5]
   - artifact: packages/platform-security/package.json
     sha256: 0446b13390b06d80141c1f727fe394bc39a80deddd5253563bacf2750defd018
@@ -196,7 +196,7 @@ outputs:
     sha256: a1b38713108021236d9f425edbb6b1a0deebcc54bf5f8e6f19ce14737a042fe3
     consumers: [5]
   - artifact: packages/platform-http/src/index.ts
-    sha256: 9d495de837716820d7f1b944210670215a52a155a1ab12ba7ed6356e70530c33
+    sha256: 87e051317779c4156e0ea1f8dc817502d2f51d31911a09a95b7144b5dbdb5d74
     consumers: [5]
   - artifact: packages/platform-runtime/package.json
     sha256: 5c054551e0af10191e833f25ac7495a438a5a87ebc6a6f5b22761828cba24d78
@@ -220,7 +220,7 @@ outputs:
     sha256: 16c2c91657c9cd7c233a3ee8ce1fa52a068bc87fc77a869d47f102a1d8784766
     consumers: [5]
   - artifact: tools/compose-smoke.mjs
-    sha256: 394cb552a727b4217d558ca4a4430723c525c9dc9e9f7de2913f24d7c2cadabd
+    sha256: e6184602112fda14a8d7d0d2f787a492161feead9a5841a2072b12fe64e0cf37
     consumers: [5]
   - artifact: config/service-catalog.schema.json
     sha256: b12c6a3c4de5ee6fbad33624583836213d758972ae8cac799252005bd5524063
@@ -244,109 +244,104 @@ outputs:
     sha256: d3fafba05547a95eca6fd63e6db4e2b56839f2991361d3f3c453ddfb9d0b67ae
     consumers: [5]
   - artifact: tests/runtime/lifecycle.test.mjs
-    sha256: c674a8ec975e377c7052d729455758f67b72ee0e2474e3541fd2e68d3ec6e0b5
+    sha256: 59bdfda9b98b44863211fe155ee566f334b870ec38008f4e3468f7b3f6e9cf84
+    consumers: [5]
+  - artifact: .sops.yaml
+    sha256: 99b8087607070c409b8eba14e270a3957ae73f361e3232d0d824c3788eba02b9
+    consumers: [5, 8, 9, 13]
+  - artifact: secrets/platform.secrets.sops.yaml
+    sha256: b6357d910f3195ed9a29b75eb58201422e0c65355ab705ca44b68d858e8e616a
+    consumers: [5, 8, 9, 13]
+  - artifact: docs/platform/LOCAL_PLATFORM.md
+    sha256: 221f1e320c2d29b563bb65eaa1df78c3ed642c9658d929292ac9f6a1446f241a
+    consumers: [5, 8, 9, 13]
+  - artifact: apps/api-internal/tsconfig.json
+    sha256: d90d404130b71e89cf7b5744683ca7c9d8ec56e4c7f0d8282530728377cbcefb
+    consumers: [5]
+  - artifact: apps/api-public/tsconfig.json
+    sha256: d90d404130b71e89cf7b5744683ca7c9d8ec56e4c7f0d8282530728377cbcefb
     consumers: [5]
 verification:
-  - command: gh repo view YurGusev/CoffeeOrderPlatform --json nameWithOwner
-    result: passed
-    detail: origin and operational authority verified; no remote mutation
-  - command: git merge-base --is-ancestor eb34befd76c0654e75d82637251dc4d12d0e0213 develop
-    result: passed
-  - command: git merge-base --is-ancestor 56b0e99275573b6bdc2461703b3221c5c678cfa6 develop
-    result: passed
-  - command: git merge-base --is-ancestor 53753257b22021023f887050669fc964a7998909 develop
-    result: passed
-  - command: pnpm contracts:check-generated
-    result: passed
-    detail: byte-identical sha256 78981da1f7e141913c35fef51d4e5280c3281efcdc3b39423761566f49b67651
-  - command: pnpm typecheck
-    result: passed
-  - command: pnpm lint
-    result: passed
-  - command: pnpm test
-    result: blocked
-    detail: 199 tests, 182 passed, 2 failed, 15 skipped; both failures are the known canonical encrypted SOPS inventory schema gate (missing edge.tlsCertificate and verification/cursor key paths; the MAC-negative fixture reaches the same gate)
-  - command: pnpm test:customer-unit
-    result: passed
-    detail: 9 tests, 9 passed, 0 failed
-  - command: pnpm test:customer-integration
-    result: blocked
-    detail: exit 1 by design; 15 tests, 1 passed, 14 explicit prerequisite blockers, 0 skipped because live PostgreSQL/service/log/mTLS environment is absent
-  - command: node --check tests/customer/customer-live.test.mjs && node --check tests/customer/customer-schema.test.mjs && node --check tests/customer/fixtures/db-adapter-command-observer.mjs
-    result: passed
-  - command: pnpm exec oxlint --deny-warnings tests/customer/customer-live.test.mjs tests/customer/customer-schema.test.mjs tests/customer/fixtures/db-adapter-command-observer.mjs
-    result: passed
-  - command: node --check tools/compose-smoke.mjs && node --check tests/customer/customer-live.test.mjs
-    result: passed
-  - command: pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/customer/customer-live.test.mjs tests/customer/fixtures/db-adapter-command-observer.mjs
-    result: passed
-  - command: pnpm contracts:lint
-    result: passed
-    detail: 11 JSON Schemas and 2 OpenAPI documents
-  - command: pnpm contracts:breaking
-    result: passed
-  - command: pnpm contracts:test
-    result: passed
-    detail: 36 tests passed, 0 failed
-  - command: pnpm architecture:check
-    result: passed
-  - command: pnpm db:smoke
-    result: passed_structural_only
-    detail: liveDatabase=false and realKafka=false
-  - command: pnpm security:secrets
-    result: blocked
-    detail: exit 1; CONFIG-SCHEMA on platform.secrets.sops.yaml because required edge.tlsCertificate and verification/Customer cursor key paths are absent; no SOPS key is available
-  - command: pnpm test:compose-smoke
-    result: blocked
-    detail: exit 1; SOPS_AGE_KEY_FILE is required for decrypted scoped secrets, so no live topology proof ran
-  - command: pnpm authority:check
-    result: passed
-  - command: pnpm versions:check
-    result: passed
-  - command: pnpm config:check
-    result: blocked
-    detail: exit 1; CONFIG-SCHEMA on platform.secrets.sops.yaml because required edge.tlsCertificate and verification/Customer cursor key paths are absent
-  - command: node scripts/check-service-catalog.mjs
-    result: passed
-    detail: 15 runtimes and 29 interactions; accepted digest updated for explicit public-tls/mtls modes
-  - command: node --test --test-name-pattern 'public Edge TLS|configured Edge startup' tests/runtime/lifecycle.test.mjs
-    result: passed
-    detail: 2 tests passed; separate public CA/leaf, wrong CA/leaf/hostname rejection, loopback TCP with edge.test, no client service certificate, internal mTLS isolation, configured healthcheck and system-trust path without optional CA
-  - command: node --test packages/platform-testing/test/platform-packages.test.mjs
-    result: passed
-    detail: 30 tests passed; optional config ref and invalid public CA bundle are covered
-  - command: CI=true node tools/docker-build.mjs --build-arg RUNTIME=edge-gateway --target runtime --load -t coffee-platform-edge-healthcheck:verify .
-    result: passed
-    detail: final runtime image build, typecheck, pnpm deploy and native addon stage passed
-  - command: docker run --rm --entrypoint node coffee-platform-edge-healthcheck:verify --input-type=module -e "import('@coffee-platform/runtime/healthcheck')"
-    result: passed
-    detail: final image resolves the packaged healthcheck entrypoint without workspace node_modules; temporary image removed
-  - command: node --test tests/customer/customer-http.test.mjs
-    result: passed
-    detail: 8 tests passed, including TTL, absolute previous-key trust cutoff, late previous-key signing and unknown-kid rejection
-  - command: isolated production deploy import check
-    result: passed
-    detail: pnpm --filter @coffee-platform/runtime deploy --prod --legacy tree resolves @coffee-platform/runtime/healthcheck without root-only imports
-  - command: node tools/compose-smoke.mjs --stub-secrets --no-build
-    result: blocked
-    detail: exit 1 after ephemeral separate public/internal CA materialization; local image coffee-compose-smoke-...-api-internal:latest is absent; no live evidence claimed
-  - command: pnpm install --frozen-lockfile --offline --ignore-scripts
-    result: passed
-    detail: lockfile up to date
-  - command: git diff --check
-    result: passed
-  - command: node --test tests/runtime/lifecycle.test.mjs
-    result: passed
-    detail: 27/27; internal mTLS loopback, raw 503 and strict production healthcheck rejection
-  - command: pnpm exec oxlint --type-aware --deny-warnings tools/compose-smoke.mjs tests/runtime/lifecycle.test.mjs packages/platform-runtime/src/healthcheck.ts
-    result: passed
-  - command: node tools/compose-smoke.mjs --database-proof --project-name coffee-compose-smoke-3080870-a53ae048
-    result: passed
-    detail: Production image built; isolated PostgreSQL 17.11 readiness 200 to 503 to 200, internal mTLS, live/metrics and graceful shutdown passed. No Customer business/COMMIT-restart acceptance claimed; temporary containers/networks/tmpfs removed.
+- command: gh repo view --json nameWithOwner,url
+  result: passed
+  detail: origin и GitHub operational authority подтверждены
+- command: pnpm contracts:check-generated
+  result: passed
+  detail: byte-identical sha256 78981da1f7e141913c35fef51d4e5280c3281efcdc3b39423761566f49b67651
+- command: pnpm typecheck
+  result: passed
+- command: pnpm lint
+  result: passed
+- command: pnpm test
+  result: passed
+  detail: 199 total; 184 pass, 0 fail, 15 opt-in skipped; все обязательные opt-in сценарии выполнены отдельными live gates ниже
+- command: pnpm test:customer-unit
+  result: passed
+  detail: 9/9, без пропусков
+- command: pnpm contracts:test
+  result: passed
+  detail: 36/36
+- command: pnpm contracts:lint
+  result: passed
+  detail: 11 JSON Schemas, 2 OpenAPI
+- command: pnpm contracts:breaking
+  result: passed
+- command: pnpm architecture:check
+  result: passed
+- command: pnpm authority:check
+  result: passed
+- command: pnpm versions:check
+  result: passed
+- command: node scripts/check-service-catalog.mjs
+  result: passed
+  detail: 15 runtimes, 29 interactions
+- command: pnpm db:smoke
+  result: passed
+  detail: structural mode; liveDatabase false, realKafka false; live proof ниже
+- command: COFFEE_DB_LIVE_PROOF=1 node --test tests/database/live-db-proof.test.mjs
+  result: passed
+  detail: 2/2, 0 skipped; disposable PostgreSQL transaction/idempotency/bootstrap/role isolation; cleanup выполнен
+- command: SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm config:check
+  result: passed
+  detail: SOPS MAC; 15 runtimes
+- command: SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm security:secrets
+  result: passed
+  detail: полный encrypted inventory и exact scoped refs
+- command: SOPS_AGE_KEY_FILE=/home/yurgusev/.local/share/coffee-platform/recovery/2026-09-06-initial-provision/age-identities.txt sops --decrypt --output
+    /dev/null secrets/platform.secrets.sops.yaml
+  result: passed
+  detail: backup independently decrypts/MAC verifies; 3 recipients, modes 0600/0700
+- command: node --test tests/runtime/lifecycle.test.mjs
+  result: passed
+  detail: 27/27; public CA/leaf/hostname, optional CA/system trust; internal mTLS/raw503/strict rejection
+- command: node --test tests/runtime/platform-http.test.mjs
+  result: passed
+  detail: 4/4; loopback IP-SNI дополнительно проверен lifecycle regression
+- command: node tools/compose-smoke.mjs --database-proof --project-name coffee-compose-smoke-3080870-a53ae048
+  result: passed
+  detail: production image; PostgreSQL readiness 200→503→200, mTLS/live/metrics/graceful stop
+- command: node tools/compose-smoke.mjs --recovery-proof --no-build --keep --project-name coffee-pr129-full-proof
+  result: passed
+  detail: 15 runtime, 5 PostgreSQL DB, 10 roles; Kafka retention/recreate; native ordered/rebalance/quarantine/SIGTERM, DB commit-before-offset, outbox
+    ack-before-finalize, bounded blackhole recovery; предыдущая полная сборка прошла, первый recovery имел transient Kafka health timeout
+- command: docker compose --project-name coffee-pr129-full-proof … stop --timeout 30
+  result: passed
+  detail: все 15 runtime exit 0; Kafka exit 0/143; затем удалены containers/volumes/network/tmpfs
+- command: node tools/compose-smoke.mjs --customer-proof --project-name coffee-customer-proof-129n
+  result: passed
+  detail: 'production Customer image built; existing test:customer-integration suite: normalization 1/1, schema/grants 3/3, live 11/11; 0 skipped'
+- command: node tools/compose-smoke.mjs --customer-proof --no-build --project-name coffee-customer-proof-129n
+  result: passed
+  detail: финальный 15/15, 0 skipped; unsigned DB barrier, completion-correlated logs, fresh COMMIT replay после TTL+skew; cleanup выполнен
+- command: git diff --check
+  result: passed
 limitations:
-  - Public Customer cursor contract was explicitly approved for this scope at 2048 characters with an 8 KiB Customer URL budget; Catalog keeps the shared Cursor contract at 512 and no stateful cursor was introduced.
-  - Live Customer PostgreSQL 17.11 migration, grants, concurrency, rollback fault injection after each required write, durable-commit lost-response recovery, DB abort after Customer INSERT, unknown COMMIT/restart reconciliation, PII log canary and foreign-database CONNECT denial were not proven because required CUSTOMER_* URLs, mTLS fixtures and runtime are absent.
-  - Default SOPS-backed compose smoke remains blocked. The isolated database-proof mode now passes with generated ephemeral signing/TLS credentials and a built production Customer image; this does not establish full topology or Customer business acceptance.
-  - The canonical encrypted source lacks `edge.tlsCertificate`, Customer cursor, edge actor and delegation/service verification key paths. `edge.tlsCaBundle` is optional and its absence selects Node system trust; production runtime wiring still fails closed until an authorized SOPS provisioning action materializes the required values and valid scoped transport envelopes.
-  - customer-integration is intentionally non-zero when live prerequisites are absent; this prevents a false process PASS with skipped acceptance tests.
-  - Исходный SOPS inventory создан в foundation #3 из статического тестового fixture; три age identity создавались в /tmp и сейчас отсутствуют. Проверенные журналы не содержат private keys или evidence backup. Ciphertext сохранён по указанию пользователя; новый provisioning требует отдельного решения. Merge и закрытие issue не выполнялись.
+- Production deployment и реальные внешние AROMA/OIDC/telemetry credentials не provisioned; сохранённые исходные fixture значения не доказывают доступ к
+  провайдерам. Localhost TLS leaf действует до 2026-12-05; production требует сертификат реального hostname.
+- Исходный SOPS ciphertext/rules сохранены вне Git; новые identities и backup находятся вне репозитория (см. LOCAL_PLATFORM). Копия на том же диске не защищает
+  от потери диска.
+- Full Compose использует ephemeral scoped credentials и отдельный PostgreSQL/Kafka project; SOPS проверен отдельно trusted bootstrap для всех15runtime.
+  Customer business/live proof выполняется отдельным customer-proof.
+- 'Default pnpm test содержит15opt-in skips; ни один обязательный сценарий не оставлен непроверенным: Customer15/15 и PostgreSQL2/2 выполнены отдельно без
+  skips.'
+- Accepted merge и готовность successors определяются GitHub/develop и всеми их входными handoffs; self commit SHA отсутствует.

@@ -5,6 +5,7 @@ import {request as httpsRequest} from "node:https";
 import {spawn} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {connect as tlsConnect} from "node:tls";
+import {isIP} from "node:net";
 import test from "node:test";
 import {canonicalRequestHash} from "../../packages/platform-idempotency/dist/index.js";
 import {parseServiceTransportMaterial, verifyTransportPeer} from "../../packages/platform-security/src/index.ts";
@@ -22,6 +23,7 @@ import {
   liveService,
   postCustomer,
   searchCustomers,
+  signedTestHeaders,
   blocker,
 } from "./fixtures/customer-testkit.mjs";
 
@@ -41,8 +43,8 @@ async function waitForAdvisoryBarrier(client, barrierName, timeoutMs = 5_000) {
            JOIN pg_stat_activity AS activity ON activity.pid = locks.pid
            CROSS JOIN lock_key
           WHERE locks.locktype = 'advisory' AND locks.granted = false AND locks.pid <> pg_backend_pid()
-            AND locks.classid = (lock_key.value >> 32)::oid
-            AND locks.objid = (lock_key.value & 4294967295)::oid
+            AND locks.classid::bigint = ((lock_key.value >> 32) & 4294967295)
+            AND locks.objid::bigint = (lock_key.value & 4294967295)
           LIMIT 1`,
       [barrierName],
     );
@@ -60,8 +62,8 @@ async function waitForAdvisoryTransactionEnd(client, barrierName, waiter, timeou
          SELECT granted
            FROM pg_locks, lock_key
           WHERE pid = $2 AND virtualtransaction = $3 AND locktype = 'advisory'
-            AND classid = (lock_key.value >> 32)::oid
-            AND objid = (lock_key.value & 4294967295)::oid
+            AND classid::bigint = ((lock_key.value >> 32) & 4294967295)
+            AND objid::bigint = (lock_key.value & 4294967295)
           LIMIT 1`,
       [barrierName, waiter.pid, waiter.virtualtransaction],
     );
@@ -176,7 +178,8 @@ async function openLostResponseRequest(service, payload, key, correlationId) {
   const origin = new URL(service.origin);
   assert.equal(origin.protocol, "https:", "lost-response live proof requires an HTTPS origin");
   const body = JSON.stringify(payload);
-  const headers = new Map(Object.entries(service.headers));
+  const dynamic = service.signingKeys === undefined ? {} : await signedTestHeaders("createCustomer", service.actorRef);
+  const headers = new Map(Object.entries({...service.headers, ...dynamic}));
   headers.set("Idempotency-Key", key);
   headers.set("X-Correlation-ID", correlationId);
   headers.set("Content-Type", "application/json");
@@ -193,7 +196,7 @@ async function openLostResponseRequest(service, payload, key, correlationId) {
     const socket = tlsConnect({
       host: origin.hostname,
       port: Number(origin.port || 443),
-      servername: origin.hostname,
+      ...(isIP(origin.hostname) === 0 ? {servername: origin.hostname} : {}),
       ca: service.material.caPem,
       cert: service.material.certPem,
       key: service.material.keyPem,
@@ -227,7 +230,7 @@ function actorHeader(service) {
 }
 
 function scopedHeaders(service, headers = {}) {
-  return {...service, headers};
+  return {...service, headers, dynamicAuth: false};
 }
 
 function parseHarnessHeaders(name) {
@@ -246,6 +249,7 @@ async function unknownCommitHarnessOptions(t) {
     "CUSTOMER_UNKNOWN_COMMIT_CONFIG_FILE",
     "CUSTOMER_UNKNOWN_COMMIT_SECRETS_FILE",
     "CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL",
+    "CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL",
     "CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_HOST",
     "CUSTOMER_UNKNOWN_COMMIT_CLIENT_TRANSPORT_FILE",
     "CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON",
@@ -298,16 +302,21 @@ async function unknownCommitHarnessOptions(t) {
     environment: process.env.CUSTOMER_UNKNOWN_COMMIT_ENVIRONMENT ?? "development",
     clientRuntime: process.env.CUSTOMER_UNKNOWN_COMMIT_CLIENT_RUNTIME ?? "api-public",
     material,
-    headers: parseHarnessHeaders("CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON"),
+    headers: {...parseHarnessHeaders("CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON"), ...(process.env.CUSTOMER_TEST_SIGNING_KEY_FILE ? await signedTestHeaders() : {})},
+    observerDatabaseUrl: process.env.CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL,
     actorRef: process.env.CUSTOMER_UNKNOWN_COMMIT_ACTOR_REF,
     dbAdapterLogPath: process.env.CUSTOMER_UNKNOWN_COMMIT_DB_ADAPTER_LOG_FILE,
     entry: process.env.CUSTOMER_UNKNOWN_COMMIT_ENTRY ?? `${REPOSITORY_ROOT}/apps/customer-service/dist/main.js`,
   };
 }
 
-function harnessRequest(options, path, {method = "GET", headers = {}, body} = {}) {
+async function harnessRequest(options, path, {method = "GET", headers = {}, body} = {}) {
   const target = new URL(path, options.origin);
-  const requestHeaders = {...headers, connection: "close"};
+  const dynamicAuth = process.env.CUSTOMER_TEST_SIGNING_KEY_FILE && method !== "GET";
+  const dynamicHeaders = dynamicAuth
+    ? await signedTestHeaders(method === "GET" ? "searchCustomers" : "createCustomer", options.actorRef)
+    : {};
+  const requestHeaders = {...(dynamicAuth ? {} : options.headers), ...dynamicHeaders, ...headers, connection: "close"};
   if (body !== undefined) {
     requestHeaders["content-type"] ??= "application/json";
     requestHeaders["content-length"] = String(Buffer.byteLength(body));
@@ -324,7 +333,7 @@ function harnessRequest(options, path, {method = "GET", headers = {}, body} = {}
       key: options.material.keyPem,
       minVersion: "TLSv1.3",
       rejectUnauthorized: true,
-      servername: target.hostname,
+      ...(isIP(target.hostname) === 0 ? {servername: target.hostname} : {}),
       timeout: 10_000,
       checkServerIdentity: (_hostname, certificate) => {
         try {
@@ -724,14 +733,16 @@ void test("Customer problem details and configured logs do not contain PII canar
   const service = await liveService(t);
   if (!service) return;
   const canaries = ["pii-phone-79991230001", "pii@example.test", "pii-address-unique", "pii-password", "pii-token", randomUUID()];
+  const correlationId = randomUUID();
   const result = await postCustomer(service, {
     displayName: canaries[0],
     phone: "not-a-phone",
     email: canaries[1],
     address: {line1: canaries[2], city: canaries[3], countryCode: "RU"},
     token: canaries[4],
-  });
+  }, randomUUID(), {headers: {"X-Correlation-ID": correlationId}});
   assert.equal(result.response.status, 400);
+  await waitForFilePattern(logPath, new RegExp(`"reqId":"${correlationId}".*"msg":"request completed"`, "u"));
   for (const canary of canaries) assert.equal(result.text.includes(canary), false);
 
   await new Promise((resolve) => setImmediate(resolve));
@@ -742,7 +753,7 @@ void test("Customer problem details and configured logs do not contain PII canar
 void test("Customer classifies an unacknowledged COMMIT and replays it after a real restart", async (t) => {
   const options = await unknownCommitHarnessOptions(t);
   if (!options) return;
-  const observer = await liveDatabase(t, options.databaseUrl);
+  const observer = await liveDatabase(t, options.observerDatabaseUrl);
   if (!observer) return;
   const service = {origin: options.origin, headers: options.headers, actorRef: options.actorRef};
   const proxy = await openBlackholeProxy(options.targetPort, "COMMIT", {
@@ -763,7 +774,6 @@ void test("Customer classifies an unacknowledged COMMIT and replays it after a r
     const createRequest = harnessRequest(options, "/api/client-v1/customers", {
       method: "POST",
       headers: {
-        ...options.headers,
         "idempotency-key": key,
         "x-correlation-id": randomUUID(),
       },
@@ -795,10 +805,11 @@ void test("Customer classifies an unacknowledged COMMIT and replays it after a r
     firstProcess = undefined;
     restartedProcess = spawnCustomerHarness(options);
     await waitForHarnessReady(options, restartedProcess);
+    // Six-second claims plus the runtime's five-second clock skew must both expire.
+    if (process.env.CUSTOMER_TEST_SIGNING_KEY_FILE) await delay(12_000);
     const replay = await harnessRequest(options, "/api/client-v1/customers", {
       method: "POST",
       headers: {
-        ...options.headers,
         "idempotency-key": key,
         "idempotency-replay-only": "true",
         "x-correlation-id": randomUUID(),
@@ -806,8 +817,8 @@ void test("Customer classifies an unacknowledged COMMIT and replays it after a r
     });
     assert.equal(replay.status, 201);
     assert.deepEqual(replay.body, completed.response_body);
-    assert.equal(replay.response.headers.get("idempotency-replayed"), "true");
-    assert.equal(replay.response.headers.get("cache-control"), "no-store");
+    assert.equal(replay.response.headers["idempotency-replayed"], "true");
+    assert.equal(replay.response.headers["cache-control"], "no-store");
     assert.equal(Number((await observer.query("SELECT count(*)::integer AS count FROM customer.customers WHERE email_normalized = $1", [payload.email])).rows[0].count), 1);
   } finally {
     await stopHarnessProcess(restartedProcess).catch(() => {});

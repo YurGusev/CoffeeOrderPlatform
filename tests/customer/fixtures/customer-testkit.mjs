@@ -1,11 +1,38 @@
-import {createHash, randomUUID} from "node:crypto";
+import {createHash, createPrivateKey, randomUUID} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import {Client} from "pg";
 import {createHttpClient} from "../../../packages/platform-http/src/index.ts";
-import {parseServiceTransportMaterial} from "../../../packages/platform-security/src/index.ts";
+import {parseServiceTransportMaterial, signActorContext, signServiceDelegation} from "../../../packages/platform-security/src/index.ts";
 
 export const CUSTOMER_ORIGIN = process.env.CUSTOMER_SERVICE_ORIGIN ?? "https://127.0.0.1:4101";
 export const CUSTOMER_DATABASE_URL = process.env.CUSTOMER_DATABASE_URL ?? process.env.COFFEE_CUSTOMER_DATABASE_URL;
+
+async function testSigningKeys() {
+  const path = process.env.CUSTOMER_TEST_SIGNING_KEY_FILE;
+  if (!path) return undefined;
+  const value = JSON.parse(await readFile(path, "utf8"));
+  if (typeof value?.public !== "string" || typeof value?.internal !== "string") throw new Error("CUSTOMER_TEST_SIGNING_KEY_FILE is invalid");
+  return {public: createPrivateKey(value.public), internal: createPrivateKey(value.internal)};
+}
+
+function delegation(service, path, method, correlationId) {
+  if (service.signingKeys === undefined || service.dynamicAuth === false) return undefined;
+  const iat = Math.floor(Date.now() / 1_000);
+  const operationId = path.startsWith("/api/internal-v1/")
+    ? "getCustomerOrderInput"
+    : method === "GET" ? "searchCustomers" : "createCustomer";
+  if (operationId === "getCustomerOrderInput") {
+    return ["x-service-delegation", signServiceDelegation({iss: "api-internal", aud: "customer-service", originalCaller: "orders-service", operationId, correlationId, traceparent: "00-00000000000000000000000000000000-0000000000000000-00", iat, exp: iat + 5, jti: randomUUID(), kid: "api-internal-delegation-v1"}, service.signingKeys.internal)];
+  }
+  return ["x-actor-context", signActorContext({iss: "api-public", aud: "customer-service", originalIssuer: "edge-gateway", sub: service.actorRef ?? "actor_customer_test", permissions: [operationId === "createCustomer" ? "customer:create" : "customer:read"], operationId, correlationId, traceparent: "00-00000000000000000000000000000000-0000000000000000-00", iat, exp: iat + 6, jti: randomUUID(), kid: "api-public-delegation-v1"}, service.signingKeys.public)];
+}
+
+export async function signedTestHeaders(operationId = "createCustomer", actor = process.env.CUSTOMER_TEST_ACTOR_REF ?? "actor_customer_test") {
+  const keys = await testSigningKeys();
+  if (keys === undefined) throw new Error("CUSTOMER_TEST_SIGNING_KEY_FILE is missing");
+  const iat = Math.floor(Date.now() / 1_000);
+  return {"x-actor-context": signActorContext({iss: "api-public", aud: "customer-service", originalIssuer: "edge-gateway", sub: actor, permissions: [operationId === "createCustomer" ? "customer:create" : "customer:read"], operationId, correlationId: randomUUID(), traceparent: "00-00000000000000000000000000000000-0000000000000000-00", iat, exp: iat + 6, jti: randomUUID(), kid: "api-public-delegation-v1"}, keys.public)};
+}
 
 export function blocker(testContext, message) {
   if (process.env.CUSTOMER_INTEGRATION_REQUIRED === "1") throw new Error(`BLOCKER: ${message}`);
@@ -68,9 +95,10 @@ export async function liveService(
     return blocker(testContext, `customer-service is not reachable at configured origin (${error?.code ?? error?.message ?? "connection failed"})`);
   }
   if (!health.ok) return blocker(testContext, `customer-service is not ready (${health.status})`);
+  const signingKeys = await testSigningKeys();
   const headers = parseHeaders(headerEnv);
-  if (!headers) return blocker(testContext, `${headerEnv} is missing; a real signed trust-context fixture is required`);
-  return {origin: CUSTOMER_ORIGIN, headers, client, material, environment: process.env.CUSTOMER_TEST_ENVIRONMENT ?? "development", clientRuntime};
+  if (!headers && signingKeys === undefined) return blocker(testContext, `${headerEnv} is missing; a real signed trust-context fixture is required`);
+  return {origin: CUSTOMER_ORIGIN, headers: headers ?? {}, client, material, environment: process.env.CUSTOMER_TEST_ENVIRONMENT ?? "development", clientRuntime, signingKeys, actorRef: process.env.CUSTOMER_TEST_ACTOR_REF};
 }
 
 export async function liveDatabase(testContext, url = CUSTOMER_DATABASE_URL) {
@@ -87,6 +115,9 @@ export async function liveDatabase(testContext, url = CUSTOMER_DATABASE_URL) {
 
 export async function jsonRequest(service, path, {method = "GET", body, headers = {}, signal} = {}) {
   const requestHeaders = new Headers(service.headers);
+  const correlationId = requestHeaders.get("x-correlation-id") ?? randomUUID();
+  const generated = delegation(service, path, method, correlationId);
+  if (generated !== undefined && !Object.keys(headers).some((key) => key.toLowerCase() === generated[0])) requestHeaders.set(generated[0], generated[1]);
   for (const [key, value] of Object.entries(headers)) requestHeaders.set(key, value);
   if (body !== undefined) requestHeaders.set("content-type", "application/json");
   const request = {

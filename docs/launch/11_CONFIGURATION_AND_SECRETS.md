@@ -58,6 +58,11 @@ Kafka topics/groups, outbound allowlist, `secretRefs` и Node Permission Model
 allowlist. Отсутствующее значение не берётся из скрытого default: loader
 завершает запуск ошибкой с полным YAML path.
 
+Постоянные локальные пути age identity, резервной копии и проверка восстановления
+зафиксированы в [LOCAL_PLATFORM](../platform/LOCAL_PLATFORM.md#постоянные-age-identities-и-резервная-копия-на-этом-сервере).
+Перед provisioning и ротацией следовать этому порядку; единственный ключ в `/tmp`
+не является постоянным хранилищем.
+
 ## 3. Структура `secrets/platform.secrets.sops.yaml`
 
 До шифрования логическая схема имеет следующий вид; в Git каждое значение
