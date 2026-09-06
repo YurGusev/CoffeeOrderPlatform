@@ -273,6 +273,7 @@ Draft принимает Orders. Browser/edge route к этому endpoint от�
 | 409 | `IDEMPOTENCY_CONFLICT` | ключ уже использован с другим body |
 | 409 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | тот же запрос ещё выполняется |
 | 500 | `INTERNAL_ERROR` | безопасная неожиданная ошибка |
+| 503 | `CUSTOMER_UNAVAILABLE` | owner database/storage или transaction failure недоступны |
 
 Логи содержат route, status, duration, `customerRef` после создания,
 `correlationId`, trace id и actorRef. Запрещены body, address, raw query,

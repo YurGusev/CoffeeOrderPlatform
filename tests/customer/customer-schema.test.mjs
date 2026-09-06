@@ -160,12 +160,17 @@ void test("coffee_customer_rw cannot connect to a foreign owner database", async
     return;
   }
   const client = new Client(url);
+  let connectionError;
   try {
-    await assert.rejects(
-      client.connect(),
-      (error) => error?.code === "42501" || error?.code === "3D000",
-    );
+    await client.connect();
+  } catch (error) {
+    connectionError = error;
   } finally {
     await client.end().catch(() => {});
   }
+  if (connectionError?.code === "3D000") {
+    blocker(t, "CUSTOMER_FOREIGN_DATABASE_URL points to a missing database; an existing foreign target is required");
+    return;
+  }
+  assert.equal(connectionError?.code, "42501", "foreign owner database must deny CONNECT for coffee_customer_rw");
 });

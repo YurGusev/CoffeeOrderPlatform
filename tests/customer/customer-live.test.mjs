@@ -29,18 +29,45 @@ async function waitForAdvisoryBarrier(client, barrierName, timeoutMs = 5_000) {
   while (Date.now() < deadline) {
     const result = await client.query(
       `WITH lock_key AS (SELECT hashtextextended($1, 0)::bigint AS value)
-         SELECT 1
-           FROM pg_locks, lock_key
-          WHERE locktype = 'advisory' AND granted = false AND pid <> pg_backend_pid()
-            AND classid = (lock_key.value >> 32)::oid
-            AND objid = (lock_key.value & 4294967295)::oid
+         SELECT locks.pid, locks.virtualtransaction, activity.backend_start
+           FROM pg_locks AS locks
+           JOIN pg_stat_activity AS activity ON activity.pid = locks.pid
+           CROSS JOIN lock_key
+          WHERE locks.locktype = 'advisory' AND locks.granted = false AND locks.pid <> pg_backend_pid()
+            AND locks.classid = (lock_key.value >> 32)::oid
+            AND locks.objid = (lock_key.value & 4294967295)::oid
           LIMIT 1`,
       [barrierName],
     );
-    if (result.rowCount === 1) return;
+    if (result.rowCount === 1) return result.rows[0];
     await delay(25);
   }
   throw new Error("customer DB barrier was not reached");
+}
+
+async function waitForAdvisoryTransactionEnd(client, barrierName, waiter, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const lock = await client.query(
+      `WITH lock_key AS (SELECT hashtextextended($1, 0)::bigint AS value)
+         SELECT granted
+           FROM pg_locks, lock_key
+          WHERE pid = $2 AND virtualtransaction = $3 AND locktype = 'advisory'
+            AND classid = (lock_key.value >> 32)::oid
+            AND objid = (lock_key.value & 4294967295)::oid
+          LIMIT 1`,
+      [barrierName, waiter.pid, waiter.virtualtransaction],
+    );
+    const activity = await client.query(
+      "SELECT backend_start, xact_start FROM pg_stat_activity WHERE pid = $1",
+      [waiter.pid],
+    );
+    if (activity.rows[0] === undefined) return;
+    const sameBackend = String(activity.rows[0].backend_start) === String(waiter.backend_start);
+    if (!sameBackend || (lock.rowCount === 0 && activity.rows[0].xact_start === null)) return;
+    await delay(25);
+  }
+  throw new Error("aborted customer transaction did not finish after barrier release");
 }
 
 async function waitForCompletedIdempotency(client, service, key, timeoutMs = 10_000) {
@@ -72,13 +99,20 @@ async function waitForNoCustomer(client, service, payload, key, timeoutMs = 10_0
       "SELECT count(*)::integer AS count FROM customer.customers WHERE email_normalized = $1",
       [payload.email],
     );
-    if (Number(result.rows[0].count) === 0 && Number(customer.rows[0].count) === 0) return;
+    const related = await client.query(
+      `SELECT
+         (SELECT count(*) FROM customer.addresses WHERE customer_ref IN (SELECT customer_ref FROM customer.customers WHERE email_normalized = $1))::integer AS addresses,
+         (SELECT count(*) FROM customer.audit_log WHERE customer_ref IN (SELECT customer_ref FROM customer.customers WHERE email_normalized = $1))::integer AS audits`,
+      [payload.email],
+    );
+    if (Number(result.rows[0].count) === 0 && Number(customer.rows[0].count) === 0 &&
+        Number(related.rows[0].addresses) === 0 && Number(related.rows[0].audits) === 0) return;
     await delay(25);
   }
   throw new Error("aborted customer transaction did not roll back");
 }
 
-async function withInsertBarrier(migrator, {table, predicate, deferred = false}, callback) {
+async function withInsertBarrier(migrator, {table, predicate, deferred = false, timing = "BEFORE"}, callback) {
   const suffix = randomUUID().replaceAll("-", "");
   const functionName = `customer_test_barrier_${suffix}`;
   const triggerName = `${functionName}_trigger`;
@@ -96,7 +130,7 @@ async function withInsertBarrier(migrator, {table, predicate, deferred = false},
     ? `CREATE CONSTRAINT TRIGGER ${triggerName} AFTER INSERT ON ${table}
          DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
          EXECUTE FUNCTION customer.${functionName}()`
-    : `CREATE TRIGGER ${triggerName} BEFORE INSERT ON ${table}
+    : `CREATE TRIGGER ${triggerName} ${timing} INSERT ON ${table}
          FOR EACH ROW EXECUTE FUNCTION customer.${functionName}()`);
   await migrator.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [barrierName]);
   try {
@@ -257,8 +291,7 @@ void test("A PostgreSQL fault after every required Customer write rolls back the
             : {table: "customer.idempotency_records", event: "AFTER UPDATE OF state", predicate: `NEW.idempotency_key = '${key}'::uuid AND NEW.state = 'Completed'`};
     await withFaultTrigger(migrator, trigger, async () => {
       const failed = await postCustomer(service, payload, key, {headers: {"X-Correlation-ID": correlationId}});
-      assert.equal(failed.response.status, 500, stage);
-      assert.equal(failed.body?.code, "INTERNAL_ERROR", stage);
+      assertProblem(assert, failed, 503, "CUSTOMER_UNAVAILABLE");
       const customer = await client.query("SELECT count(*)::integer AS count FROM customer.customers WHERE email_normalized = $1", [payload.email]);
       assert.equal(Number(customer.rows[0].count), 0, stage);
       const address = await client.query("SELECT count(*)::integer AS count FROM customer.addresses WHERE line1 = $1", [line1]);
@@ -441,14 +474,15 @@ void test("Customer abort after DB work starts rolls back and releases the servi
   const key = randomUUID();
   await withInsertBarrier(
     migrator,
-    {table: "customer.customers", predicate: `NEW.email_normalized = '${payload.email}'`},
+    {table: "customer.customers", predicate: `NEW.email_normalized = '${payload.email}'`, timing: "AFTER"},
     async ({barrierName, release}) => {
       const controller = new AbortController();
       const request = postCustomer(service, payload, key, {signal: controller.signal});
-      await waitForAdvisoryBarrier(migrator, barrierName);
+      const waiter = await waitForAdvisoryBarrier(migrator, barrierName);
       controller.abort(new DOMException("customer DB timeout", "TimeoutError"));
       await assert.rejects(request, (error) => error?.name === "AbortError" || error?.name === "TimeoutError");
       await release();
+      await waitForAdvisoryTransactionEnd(migrator, barrierName, waiter);
       await waitForNoCustomer(client, service, payload, key);
     },
   );

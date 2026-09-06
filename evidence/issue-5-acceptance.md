@@ -2,7 +2,8 @@
 
 Статус: **не принято / blocked**. Это фактическая матрица локальной ветки, а
 не merge/accepted handoff. Проверка выполнена 2026-09-06 в
-`feature/5-customer-service`; GitHub issue/PR не изменялись.
+`feature/5-customer-service`; issue checkboxes, merge и closure не изменялись,
+PR #129 обновлён.
 
 После review r1 добавлены общий generated runtime-schema путь, безопасная
 нормализация owner errors, Customer Store boundary и fail-closed signed cursor.
@@ -20,7 +21,9 @@ mapping, compact Ed25519 cursor representation и передача replay marker
 По acceptance review PR #129 обязательные live-gates усилены: missing trust/log
 fixtures теперь дают mandatory blocker, foreign-database check проверяет отказ
 на CONNECT, а live fixtures покрывают fault после каждой required DB write,
-lost response во время COMMIT и abort после начала Customer INSERT. Эти сценарии
+durable commit с потерянным HTTP response и abort после начала Customer INSERT.
+Unknown COMMIT между Customer и PostgreSQL с последующим service restart пока не
+покрыт: текущий сценарий lost response не заменяет этот proof. Эти сценарии
 добавлены, но не исполнены без approved live environment.
 
 ## Authority и predecessors
@@ -45,7 +48,7 @@ lost response во время COMMIT и abort после начала Customer I
 | Transport trust | Delegation signatures/claims проверяются; transport functions fail-closed | code review; no scoped mTLS certificate/trust callback in foundation | **BLOCKED** — без foundation materialization нельзя доказать requests |
 | Normalization | NFC/whitespace/name, `libphonenumber-js@1.13.12` RU parsing, E.164, IDN email, normalized address | `tests/customer/customer-normalization.test.mjs`; `pnpm versions:check` | **PASS local unit** |
 | `POST /api/client-v1/customers` | Generated OpenAPI runtime schemas, cross-field recovery validation, 16 KiB body limit, owner transaction, Customer/Address/audit/Completed path | `pnpm test:customer-unit`; live create/fault tests | **PARTIAL** — live PostgreSQL blocked |
-| Idempotency/recovery | `(actor, scope, key)`, normalized hash, 30s lease, no expired takeover, read-only replay-only, no replay marker on lookup errors; live fixtures cover every write fault and lost response during COMMIT with bodyless same-key recovery | `pnpm test`; live Customer tests | **PARTIAL** — live PostgreSQL proof blocked |
+| Idempotency/recovery | `(actor, scope, key)`, normalized hash, 30s lease, no expired takeover, read-only replay-only, no replay marker on lookup errors; live fixtures cover every write fault and durable-commit lost HTTP response with bodyless same-key recovery | `pnpm test`; live Customer tests | **PARTIAL** — live PostgreSQL proof blocked; unknown COMMIT/restart remains unproven |
 | Search | exact phone/email, escaped name prefix, keyset cursor, bounded limit, decoded HTTP limit, full canonical signed cursor, masked contacts | signed/tamper, 2049-character rejection, adversarial two-page 200-character Unicode Ed25519 HTTP regression and 8 KiB URL guard in `pnpm test:customer-unit`; live search test | **PARTIAL** — Customer cursor contract is 2048/8 KiB; Customer-scoped signing key/adapter is absent from accepted scoped config; Catalog remains on shared 512 cursor |
 | Private order-input | Minimal `customerRef/customerVersion/displayName/state`; no contacts/address | code/schema; live internal delegation test | **PARTIAL** — live trust/database blocked |
 | API-root adapters | Typed Customer operations only; API public signs actor delegation, API internal signs service delegation and forwards via HTTP; bodyless recovery, decoded limits, parser/body-limit, permission and error tests use real Fastify | `pnpm test:customer-unit`, `pnpm typecheck`, `pnpm architecture:check`; live route test | **PARTIAL** — mTLS transport remains fail-closed |
@@ -80,8 +83,8 @@ lost response во время COMMIT и abort после начала Customer I
 - Не доступны `CUSTOMER_DATABASE_URL`, `CUSTOMER_MIGRATOR_DATABASE_URL`,
   `CUSTOMER_FOREIGN_DATABASE_URL` и запущенный `customer-service`; поэтому не
   доказаны реальные PostgreSQL 17.11 migrations/GRANT, concurrency,
-  fault-injection rollback после каждой write, lost response/COMMIT recovery,
-  abort после начала DB work и PII log canary.
+  fault-injection rollback после каждой write, durable-commit lost-response
+  recovery, abort после начала DB work, unknown COMMIT/restart и PII log canary.
 - `SOPS_AGE_KEY_FILE` и команда `sops` отсутствуют в окружении; compose smoke
   с реальными scoped secrets не выполнен.
 - В принятом config/service-catalog нет Customer-scoped cursor signing key и
@@ -105,5 +108,5 @@ lost response во время COMMIT и abort после начала Customer I
 
 ## Remote state
 
-Issue #5 оставлена `OPEN`. Push, PR, GitHub checkbox mutation, merge и closure
-не выполнялись.
+Issue #5 оставлена `OPEN`. Push и обновление PR #129 выполнены; GitHub
+checkbox mutation, merge и closure не выполнялись.
