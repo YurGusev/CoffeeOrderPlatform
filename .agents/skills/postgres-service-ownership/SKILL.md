@@ -17,5 +17,5 @@ description: Проектировать или менять PostgreSQL schemas, 
 - Prefer visible raw SQL for locks, fencing, CTEs, and queues.
 - Budget pools fleet-wide with operational headroom.
 
-Проверять чистую миграцию, constraints, concurrency, deadlocks/timeouts, планы,
-backup и restore на настоящем PostgreSQL.
+По изменению и риску выбирать проверки чистой миграции, constraints, concurrency,
+deadlocks/timeouts, планов, backup и restore; выполнять их на настоящем PostgreSQL.

@@ -55,9 +55,12 @@ Handoff создаётся по текущему protocol и только из �
 3. Проверить base/head, соответствие номера branch issue и единственную
    `closingIssuesReferences` на это issue.
 4. Merge выполнять только для полного diff и при наличии разрешения пользователя.
-5. После merge подтвердить merge commit и закрытое issue. Только непосредственный
-   successor из delivery graph переводить в `status:ready`; остальные сохранять
-   `status:blocked`.
+5. После merge подтвердить merge commit и закрытое issue. Для каждого
+   непосредственного successor проверить все обязательные inputs по
+   `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`: accepted merge в `develop` и
+   требуемый handoff. Переводить successor из `status:blocked` в `status:ready`
+   только после подтверждения всех inputs и при разрешении на изменение labels.
+   Иначе сохранять его статус; статусы остальных issues не менять.
 
 Не создавать для closure новые dependencies, status automation, verification
 framework или второй handoff format.
