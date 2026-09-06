@@ -25,7 +25,7 @@ outputs:
     sha256: 028e7bc6e1be0b644878e88104aee2259a6476ebb377b34ca23adcdf17a49a8a
     consumers: [5, 8, 9, 13]
   - artifact: evidence/issue-5-acceptance.md
-    sha256: 9d463103458566bc77cf731cbfd1700e865f6fc712aeaa562be04b43210da964
+    sha256: f27fb83ddaea12099b69abfb010bc40009a31ee9b06b32efc11a59aac308f179
     consumers: [5, 8, 9, 13]
   - artifact: apps/customer-service/migrations/0001_customer_schema.sql
     sha256: 2b8b0a818c4305b34ed853f7f7cc72743741bcb2dbce8513f8376bc4cd8d86e8
@@ -112,10 +112,10 @@ outputs:
     sha256: 4bef7965381984678b9a14151ef6a09b6bffbe26f1a5095e607ce6a2f4b34389
     consumers: [5]
   - artifact: tests/customer/customer-live.test.mjs
-    sha256: ebbfcd215306d4d11ca8bd35f4a017378b0888fcae37827593d3da492d100f1a
+    sha256: f52546a3e513ca3ea96725c8534db838b3817eea31c9bf5ef02a47ba68123819
     consumers: [5]
   - artifact: tests/customer/customer-schema.test.mjs
-    sha256: 6fc762ca9a193d76d2b2ce378e8409d3994944cc9bbd0d9dc8d728f9e3b6153c
+    sha256: 441612e700c73aa31441f1cf8880799b78976fc929646450271d538db54553c3
     consumers: [5]
   - artifact: tests/customer/fixtures/customer-testkit.mjs
     sha256: 9009de97a4e5a678a68374a6da02f12e3195d6f342676f779b6b94c605cbd317
@@ -181,13 +181,17 @@ verification:
     result: passed
   - command: pnpm test
     result: passed
-    detail: 193 tests, 181 passed, 0 failed, 12 skipped
+    detail: 195 tests, 181 passed, 0 failed, 14 skipped
   - command: pnpm test:customer-unit
     result: passed
     detail: 9 tests, 9 passed, 0 failed
   - command: pnpm test:customer-integration
     result: blocked
-    detail: exit 1 by design; 12 tests, 1 passed, 11 prerequisite blockers, 0 skipped because live PostgreSQL/service/role environment is absent
+    detail: exit 1 by design; 14 tests, 1 passed, 13 explicit prerequisite blockers, 0 skipped because live PostgreSQL/service/log environment is absent
+  - command: node --check tests/customer/customer-live.test.mjs && node --check tests/customer/customer-schema.test.mjs
+    result: passed
+  - command: pnpm exec oxlint --deny-warnings tests/customer/customer-live.test.mjs tests/customer/customer-schema.test.mjs
+    result: passed
   - command: pnpm contracts:lint
     result: passed
     detail: 11 JSON Schemas and 2 OpenAPI documents
@@ -220,8 +224,8 @@ verification:
     result: passed
 limitations:
   - Public Customer cursor contract was explicitly approved for this scope at 2048 characters with an 8 KiB Customer URL budget; Catalog keeps the shared Cursor contract at 512 and no stateful cursor was introduced.
-  - Live Customer PostgreSQL 17.11 migration, grants, concurrency, rollback fault injection, unknown commit, DB abort and foreign-database denial were not proven because required CUSTOMER_* URLs and runtime are absent.
+  - Live Customer PostgreSQL 17.11 migration, grants, concurrency, rollback fault injection after each required write, lost response during COMMIT, DB abort after Customer INSERT and foreign-database CONNECT denial were not proven because required CUSTOMER_* URLs and runtime are absent.
   - Default compose smoke was not proven because SOPS_AGE_KEY_FILE and sops are absent.
   - Accepted scoped config has no Customer cursor-signing key or mTLS transport verifier; required delegation verification refs are not materialized for these runtimes. The implementation fails closed instead of creating replacement capabilities.
   - customer-integration is intentionally non-zero when live prerequisites are absent; this prevents a false process PASS with skipped acceptance tests.
-  - No self commit SHA is recorded here. Push, PR creation/update, merge, issue checkbox mutation and issue closure were not performed.
+  - No self commit SHA is recorded here. Merge, issue checkbox mutation and issue closure were not performed.

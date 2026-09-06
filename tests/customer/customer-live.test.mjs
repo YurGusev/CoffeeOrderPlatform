@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import {randomUUID} from "node:crypto";
+import {createConnection} from "node:net";
 import test from "node:test";
 import {canonicalRequestHash} from "../../packages/platform-idempotency/dist/index.js";
 import {
@@ -16,7 +17,145 @@ import {
   liveService,
   postCustomer,
   searchCustomers,
+  blocker,
 } from "./fixtures/customer-testkit.mjs";
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForAdvisoryBarrier(client, barrierName, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await client.query(
+      `WITH lock_key AS (SELECT hashtextextended($1, 0)::bigint AS value)
+         SELECT 1
+           FROM pg_locks, lock_key
+          WHERE locktype = 'advisory' AND granted = false AND pid <> pg_backend_pid()
+            AND classid = (lock_key.value >> 32)::oid
+            AND objid = (lock_key.value & 4294967295)::oid
+          LIMIT 1`,
+      [barrierName],
+    );
+    if (result.rowCount === 1) return;
+    await delay(25);
+  }
+  throw new Error("customer DB barrier was not reached");
+}
+
+async function waitForCompletedIdempotency(client, service, key, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await client.query(
+      `SELECT state, response_status, response_body
+         FROM customer.idempotency_records
+        WHERE actor_ref = $1 AND scope = $2 AND idempotency_key = $3`,
+      [actorRef(service), customerScope(), key],
+    );
+    const row = result.rows[0];
+    if (row?.state === "Completed") return row;
+    await delay(25);
+  }
+  throw new Error("customer idempotency record did not reach Completed");
+}
+
+async function waitForNoCustomer(client, service, payload, key, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await client.query(
+      `SELECT count(*)::integer AS count
+         FROM customer.idempotency_records
+        WHERE actor_ref = $1 AND scope = $2 AND idempotency_key = $3`,
+      [actorRef(service), customerScope(), key],
+    );
+    const customer = await client.query(
+      "SELECT count(*)::integer AS count FROM customer.customers WHERE email_normalized = $1",
+      [payload.email],
+    );
+    if (Number(result.rows[0].count) === 0 && Number(customer.rows[0].count) === 0) return;
+    await delay(25);
+  }
+  throw new Error("aborted customer transaction did not roll back");
+}
+
+async function withInsertBarrier(migrator, {table, predicate, deferred = false}, callback) {
+  const suffix = randomUUID().replaceAll("-", "");
+  const functionName = `customer_test_barrier_${suffix}`;
+  const triggerName = `${functionName}_trigger`;
+  const barrierName = `customer-test-barrier-${suffix}`;
+  await migrator.query(`CREATE FUNCTION customer.${functionName}() RETURNS trigger LANGUAGE plpgsql AS $barrier$
+    BEGIN
+      IF NOT (${predicate}) THEN
+        RETURN NEW;
+      END IF;
+      PERFORM pg_advisory_xact_lock(hashtextextended('${barrierName}', 0));
+      RETURN NEW;
+    END;
+  $barrier$`);
+  await migrator.query(deferred
+    ? `CREATE CONSTRAINT TRIGGER ${triggerName} AFTER INSERT ON ${table}
+         DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+         EXECUTE FUNCTION customer.${functionName}()`
+    : `CREATE TRIGGER ${triggerName} BEFORE INSERT ON ${table}
+         FOR EACH ROW EXECUTE FUNCTION customer.${functionName}()`);
+  await migrator.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [barrierName]);
+  try {
+    return await callback({
+      barrierName,
+      release: () => migrator.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [barrierName]),
+    });
+  } finally {
+    await migrator.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [barrierName]).catch(() => {});
+    await migrator.query(`DROP TRIGGER IF EXISTS ${triggerName} ON ${table}`).catch(() => {});
+    await migrator.query(`DROP FUNCTION IF EXISTS customer.${functionName}()`).catch(() => {});
+  }
+}
+
+async function withFaultTrigger(migrator, {table, event, predicate}, callback) {
+  const suffix = randomUUID().replaceAll("-", "");
+  const functionName = `customer_test_fault_${suffix}`;
+  const triggerName = `${functionName}_trigger`;
+  await migrator.query(`CREATE FUNCTION customer.${functionName}() RETURNS trigger LANGUAGE plpgsql AS $fault$
+    BEGIN
+      RAISE EXCEPTION 'customer test fault';
+    END;
+  $fault$`);
+  await migrator.query(`CREATE TRIGGER ${triggerName} ${event} ON ${table}
+    FOR EACH ROW WHEN (${predicate}) EXECUTE FUNCTION customer.${functionName}()`);
+  try {
+    return await callback();
+  } finally {
+    await migrator.query(`DROP TRIGGER IF EXISTS ${triggerName} ON ${table}`).catch(() => {});
+    await migrator.query(`DROP FUNCTION IF EXISTS customer.${functionName}()`).catch(() => {});
+  }
+}
+
+async function openLostResponseRequest(service, payload, key, correlationId) {
+  const origin = new URL(service.origin);
+  assert.equal(origin.protocol, "http:", "lost-response live proof requires an HTTP origin");
+  const body = JSON.stringify(payload);
+  const headers = new Map(Object.entries(service.headers));
+  headers.set("Idempotency-Key", key);
+  headers.set("X-Correlation-ID", correlationId);
+  headers.set("Content-Type", "application/json");
+  headers.set("Content-Length", String(Buffer.byteLength(body)));
+  headers.set("Connection", "close");
+  const request = [
+    "POST /api/client-v1/customers HTTP/1.1",
+    `Host: ${origin.host}`,
+    ...[...headers].map(([name, value]) => `${name}: ${value}`),
+    "",
+    body,
+  ].join("\r\n");
+  return new Promise((resolve, reject) => {
+    const socket = createConnection({host: origin.hostname, port: Number(origin.port || 80)});
+    socket.once("error", (error) => reject(error));
+    socket.once("connect", () => socket.write(request, () => {
+      socket.pause();
+      resolve(socket);
+    }));
+  });
+}
 
 function assertTimestamp(value) {
   assert.match(value, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/);
@@ -95,30 +234,40 @@ void test("Customer create is atomic and exact replay is byte-identical", async 
   assert.equal(await countRows(client, "audit_log", "customer_ref", first.body.customerRef), 1);
 });
 
-void test("A PostgreSQL fault after the customer write rolls back Customer, address, audit and idempotency together", async (t) => {
+void test("A PostgreSQL fault after every required Customer write rolls back the aggregate and idempotency", async (t) => {
   const service = await liveService(t);
   const client = await liveDatabase(t);
   const migrator = await liveDatabase(t, process.env.CUSTOMER_MIGRATOR_DATABASE_URL);
   if (!service || !client || !migrator) return;
 
-  const suffix = randomUUID().replaceAll("-", "");
-  const functionName = `customer_test_fault_${suffix}`;
-  const triggerName = `${functionName}_trigger`;
-  const payload = customerPayload(`fault-${suffix}`, {address: {line1: "Fault address", city: "Fault city", countryCode: "RU"}});
-  const key = randomUUID();
-  await migrator.query(`CREATE FUNCTION customer.${functionName}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'customer test fault'; END; $$`);
-  await migrator.query(`CREATE TRIGGER ${triggerName} AFTER INSERT ON customer.customers FOR EACH ROW EXECUTE FUNCTION customer.${functionName}()`);
-  try {
-    const failed = await postCustomer(service, payload, key);
-    assert.equal(failed.response.status, 500);
-    assert.equal(failed.body?.code, "INTERNAL_ERROR");
-    const customer = await client.query("SELECT count(*)::integer AS count FROM customer.customers WHERE email_normalized = $1", [payload.email]);
-    assert.equal(Number(customer.rows[0].count), 0);
-    const idempotency = await client.query("SELECT count(*)::integer AS count FROM customer.idempotency_records WHERE idempotency_key = $1", [key]);
-    assert.equal(Number(idempotency.rows[0].count), 0);
-  } finally {
-    await migrator.query(`DROP TRIGGER IF EXISTS ${triggerName} ON customer.customers`);
-    await migrator.query(`DROP FUNCTION IF EXISTS customer.${functionName}()`);
+  for (const stage of ["acquire", "customer", "address", "audit", "complete"]) {
+    const suffix = `${stage}-${randomUUID().replaceAll("-", "")}`;
+    const line1 = `Fault address ${suffix}`;
+    const payload = customerPayload(`fault-${suffix}`, {address: {line1, city: "Fault city", countryCode: "RU"}});
+    const key = randomUUID();
+    const correlationId = randomUUID();
+    const trigger = stage === "acquire"
+      ? {table: "customer.idempotency_records", event: "AFTER INSERT", predicate: `NEW.idempotency_key = '${key}'::uuid`}
+      : stage === "customer"
+        ? {table: "customer.customers", event: "AFTER INSERT", predicate: `NEW.email_normalized = '${payload.email}'`}
+        : stage === "address"
+          ? {table: "customer.addresses", event: "AFTER INSERT", predicate: `NEW.line1 = '${line1}'`}
+          : stage === "audit"
+            ? {table: "customer.audit_log", event: "AFTER INSERT", predicate: `NEW.correlation_id = '${correlationId}'::uuid`}
+            : {table: "customer.idempotency_records", event: "AFTER UPDATE OF state", predicate: `NEW.idempotency_key = '${key}'::uuid AND NEW.state = 'Completed'`};
+    await withFaultTrigger(migrator, trigger, async () => {
+      const failed = await postCustomer(service, payload, key, {headers: {"X-Correlation-ID": correlationId}});
+      assert.equal(failed.response.status, 500, stage);
+      assert.equal(failed.body?.code, "INTERNAL_ERROR", stage);
+      const customer = await client.query("SELECT count(*)::integer AS count FROM customer.customers WHERE email_normalized = $1", [payload.email]);
+      assert.equal(Number(customer.rows[0].count), 0, stage);
+      const address = await client.query("SELECT count(*)::integer AS count FROM customer.addresses WHERE line1 = $1", [line1]);
+      assert.equal(Number(address.rows[0].count), 0, stage);
+      const audit = await client.query("SELECT count(*)::integer AS count FROM customer.audit_log WHERE correlation_id = $1", [correlationId]);
+      assert.equal(Number(audit.rows[0].count), 0, stage);
+      const idempotency = await client.query("SELECT count(*)::integer AS count FROM customer.idempotency_records WHERE idempotency_key = $1", [key]);
+      assert.equal(Number(idempotency.rows[0].count), 0, stage);
+    });
   }
 });
 
@@ -221,7 +370,7 @@ void test("Customer private order snapshot is minimal and service-authorized", a
   if (!publicService) return;
   const internalHeadersRaw = process.env.CUSTOMER_TEST_INTERNAL_HEADERS_JSON;
   if (!internalHeadersRaw) {
-    t.skip("BLOCKER: CUSTOMER_TEST_INTERNAL_HEADERS_JSON is missing; signed Orders delegation is required");
+    blocker(t, "CUSTOMER_TEST_INTERNAL_HEADERS_JSON is missing; signed Orders delegation is required");
     return;
   }
   let internalHeaders;
@@ -251,6 +400,63 @@ void test("Customer private order snapshot is minimal and service-authorized", a
   assert.equal(browserAttempt.body.code, "SERVICE_AUTHENTICATION_REQUIRED");
 });
 
+void test("Customer lost response after durable DB commit is recovered by same-key bodyless replay", async (t) => {
+  const service = await liveService(t);
+  const client = await liveDatabase(t);
+  const migrator = await liveDatabase(t, process.env.CUSTOMER_MIGRATOR_DATABASE_URL);
+  if (!service || !client || !migrator) return;
+
+  const payload = customerPayload(`lost-response-${randomUUID()}`);
+  const key = randomUUID();
+  const correlationId = randomUUID();
+  await withInsertBarrier(
+    migrator,
+    {table: "customer.audit_log", predicate: `NEW.correlation_id = '${correlationId}'::uuid`, deferred: true},
+    async ({barrierName, release}) => {
+      const socket = await openLostResponseRequest(service, payload, key, correlationId);
+      await waitForAdvisoryBarrier(migrator, barrierName);
+      socket.destroy();
+      await release();
+      const stored = await waitForCompletedIdempotency(client, service, key);
+
+      const replay = await jsonRequest(service, "/api/client-v1/customers", {
+        method: "POST",
+        headers: {"Idempotency-Key": key, "Idempotency-Replay-Only": "true", "X-Correlation-ID": randomUUID()},
+      });
+      assert.equal(replay.response.status, 201);
+      assert.equal(replay.response.headers.get("idempotency-replayed"), "true");
+      assert.deepEqual(replay.body, stored.response_body);
+      assert.equal(await countRows(client, "customers", "email_normalized", payload.email), 1);
+    },
+  );
+});
+
+void test("Customer abort after DB work starts rolls back and releases the service pool", async (t) => {
+  const service = await liveService(t);
+  const client = await liveDatabase(t);
+  const migrator = await liveDatabase(t, process.env.CUSTOMER_MIGRATOR_DATABASE_URL);
+  if (!service || !client || !migrator) return;
+
+  const payload = customerPayload(`abort-${randomUUID()}`);
+  const key = randomUUID();
+  await withInsertBarrier(
+    migrator,
+    {table: "customer.customers", predicate: `NEW.email_normalized = '${payload.email}'`},
+    async ({barrierName, release}) => {
+      const controller = new AbortController();
+      const request = postCustomer(service, payload, key, {signal: controller.signal});
+      await waitForAdvisoryBarrier(migrator, barrierName);
+      controller.abort(new DOMException("customer DB timeout", "TimeoutError"));
+      await assert.rejects(request, (error) => error?.name === "AbortError" || error?.name === "TimeoutError");
+      await release();
+      await waitForNoCustomer(client, service, payload, key);
+    },
+  );
+
+  const recovered = await postCustomer(service, customerPayload(`pool-release-${randomUUID()}`));
+  assert.equal(recovered.response.status, 201);
+});
+
 void test("Customer rejects missing, forged and spoofed actor context, and honors abort", async (t) => {
   const service = await liveService(t);
   if (!service) return;
@@ -274,6 +480,11 @@ void test("Customer rejects missing, forged and spoofed actor context, and honor
 });
 
 void test("Customer problem details and configured logs do not contain PII canaries", async (t) => {
+  const logPath = process.env.CUSTOMER_TEST_LOG_FILE;
+  if (!logPath) {
+    blocker(t, "CUSTOMER_TEST_LOG_FILE is missing; PII log proof requires the real service log file");
+    return;
+  }
   const service = await liveService(t);
   if (!service) return;
   const canaries = ["pii-phone-79991230001", "pii@example.test", "pii-address-unique", "pii-password", "pii-token", randomUUID()];
@@ -287,10 +498,7 @@ void test("Customer problem details and configured logs do not contain PII canar
   assert.equal(result.response.status, 400);
   for (const canary of canaries) assert.equal(result.text.includes(canary), false);
 
-  const logPath = process.env.CUSTOMER_TEST_LOG_FILE;
-  if (logPath) {
-    await new Promise((resolve) => setImmediate(resolve));
-    const logText = await readFile(logPath, "utf8");
-    for (const canary of canaries) assert.equal(logText.includes(canary), false);
-  }
+  await new Promise((resolve) => setImmediate(resolve));
+  const logText = await readFile(logPath, "utf8");
+  for (const canary of canaries) assert.equal(logText.includes(canary), false);
 });

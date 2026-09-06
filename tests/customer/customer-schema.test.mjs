@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {readdir, readFile} from "node:fs/promises";
 import {randomUUID} from "node:crypto";
 import test from "node:test";
+import {Client} from "pg";
 import {createDatabase} from "../../packages/platform-database/dist/index.js";
 import {applyMigrations, migrationChecksum} from "../../packages/platform-migrations/dist/index.js";
 import {CUSTOMER_DATABASE_URL, blocker, liveDatabase} from "./fixtures/customer-testkit.mjs";
@@ -158,10 +159,13 @@ void test("coffee_customer_rw cannot connect to a foreign owner database", async
     blocker(t, "CUSTOMER_FOREIGN_DATABASE_URL is missing; cross-owner permission proof needs the real foreign target");
     return;
   }
-  const client = await liveDatabase(t, url);
-  if (!client) return;
-  await assert.rejects(
-    client.query("SELECT 1 FROM customer.customers LIMIT 1"),
-    (error) => error?.code === "42501" || error?.code === "3D000",
-  );
+  const client = new Client(url);
+  try {
+    await assert.rejects(
+      client.connect(),
+      (error) => error?.code === "42501" || error?.code === "3D000",
+    );
+  } finally {
+    await client.end().catch(() => {});
+  }
 });
