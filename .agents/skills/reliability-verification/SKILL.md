@@ -1,6 +1,6 @@
 ---
 name: reliability-verification
-description: Выбирать и выполнять проверки CoffeeOrderPlatform для контрактов, сервисов, БД, Kafka, отказов провайдера, browser flows, security, capacity, recovery и SLO.
+description: Проверять отказы, восстановление, security и SLO.
 ---
 
 # Проверка надёжности

@@ -1,6 +1,6 @@
 ---
 name: customer-catalog-pricing
-description: Реализовывать или проверять Customer, Catalog, supplier snapshot, product mapping, availability, search и PricingQuote в CoffeeOrderPlatform.
+description: Менять Customer, Catalog и расчёт PricingQuote.
 ---
 
 # Customer, Catalog и Pricing

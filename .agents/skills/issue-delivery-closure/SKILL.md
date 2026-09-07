@@ -1,6 +1,6 @@
 ---
 name: issue-delivery-closure
-description: Проверять готовность и завершать delivery issue CoffeeOrderPlatform по фактическому acceptance, чистому scope, handoff и принятому merge. Использовать при аудите галочек, commit/push, создании или merge PR и закрытии issue.
+description: Проверять acceptance, handoff, PR и закрытие issue.
 ---
 
 # Завершение delivery issue

@@ -1,6 +1,6 @@
 ---
 name: channel-hermes-platform
-description: Реализовывать или проверять channel ingress, identity, media, Hermes dispatch/runtime, agent capabilities, ordering, dedupe и безопасную доставку ответов CoffeeOrderPlatform.
+description: Менять production VK/Hermes-каналы приложения.
 ---
 
 # Канальная платформа Hermes

@@ -1,6 +1,6 @@
 ---
 name: invoices-service
-description: Реализовывать или проверять приём invoices, allocation, materialization, document proof, применение цен, reconciliation и compensation в CoffeeOrderPlatform.
+description: Менять invoices, allocation и сверку документов.
 ---
 
 # Сервис счетов

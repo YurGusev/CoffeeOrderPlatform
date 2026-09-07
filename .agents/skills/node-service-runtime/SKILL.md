@@ -1,6 +1,6 @@
 ---
 name: node-service-runtime
-description: "Создавать или проверять production-сервисы Node.js/Fastify CoffeeOrderPlatform: границы процессов, deadlines, pools, validation, observability и graceful lifecycle."
+description: Менять Node/Fastify runtime, deadlines и lifecycle.
 ---
 
 # Runtime сервисов Node.js

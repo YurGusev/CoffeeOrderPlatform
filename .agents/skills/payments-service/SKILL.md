@@ -1,6 +1,6 @@
 ---
 name: payments-service
-description: Реализовывать или проверять payment intents, provider webhooks, reconciliation, refunds, idempotency, proof и Orders handoffs CoffeeOrderPlatform.
+description: Менять платежи, provider proof, сверку и refunds.
 ---
 
 # Сервис платежей

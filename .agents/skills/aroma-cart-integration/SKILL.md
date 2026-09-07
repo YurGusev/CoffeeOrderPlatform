@@ -1,6 +1,6 @@
 ---
 name: aroma-cart-integration
-description: Реализовывать или проверять AROMA Gateway, безопасные чтения каталога/корзины, Orders-owned Desired/Observed convergence, fencing, UnknownOutcome и восстановление провайдера.
+description: Менять AROMA Gateway и безопасную сходимость корзины.
 ---
 
 # Интеграция с корзиной AROMA

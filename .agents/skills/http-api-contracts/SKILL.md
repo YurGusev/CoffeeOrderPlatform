@@ -1,6 +1,6 @@
 ---
 name: http-api-contracts
-description: Проектировать или реализовывать REST/OpenAPI, webhook, SSE, authentication, idempotency, concurrency и error-контракты CoffeeOrderPlatform для client, agent, internal и provider trust surfaces.
+description: Менять HTTP/OpenAPI, webhook, SSE и trust surfaces.
 ---
 
 # Контракты HTTP API

@@ -1,6 +1,6 @@
 ---
 name: orders-lifecycle
-description: Реализовывать или проверять lifecycle Orders, versioning, snapshots, confirmation, Desired/Observed корзины, checkout handoffs и защищённые команды CoffeeOrderPlatform.
+description: Менять Orders Draft/Confirm и Desired/Observed.
 ---
 
 # Жизненный цикл Orders
