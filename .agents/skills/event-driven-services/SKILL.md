@@ -1,6 +1,6 @@
 ---
 name: event-driven-services
-description: Проектировать или реализовывать Kafka-команды/события, schemas, Outbox, Inbox, ordering, retries, replay, DLQ и восстановление consumers в CoffeeOrderPlatform.
+description: Менять Kafka-сообщения, Outbox/Inbox и replay.
 ---
 
 # Событийные сервисы

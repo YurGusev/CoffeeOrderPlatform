@@ -1,6 +1,6 @@
 ---
 name: postgres-service-ownership
-description: Проектировать или менять PostgreSQL schemas, migrations, transactions, locks, indexes и границы «БД на владельца» в CoffeeOrderPlatform.
+description: Менять PostgreSQL-схемы, миграции и транзакции.
 ---
 
 # Владение PostgreSQL в сервисах

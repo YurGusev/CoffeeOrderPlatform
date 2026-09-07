@@ -1,6 +1,6 @@
 ---
 name: react-operator-frontend
-description: Создавать или проверять новую React SPA оператора CoffeeOrderPlatform, project-owned fetch client на generated client-v1 transport types, server-state workflows, realtime-инвалидацию, доступность и browser tests.
+description: Менять React UI оператора, client-v1 и server state.
 ---
 
 # React-интерфейс оператора

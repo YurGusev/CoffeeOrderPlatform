@@ -1,6 +1,6 @@
 ---
 name: work-center-operations
-description: "Реализовывать или проверять Work Center оператора: projections, очереди, typed owner commands, audit, acknowledgement, snooze и resolution semantics."
+description: Менять Work Center, очереди и операторское recovery.
 ---
 
 # Операции Work Center

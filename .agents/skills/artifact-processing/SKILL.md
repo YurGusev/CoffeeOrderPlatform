@@ -1,6 +1,6 @@
 ---
 name: artifact-processing
-description: Реализовывать или проверять хранение, upload, scanning, обработку PDF/Excel/media, неизменяемые ссылки, retention и восстановление workers CoffeeOrderPlatform.
+description: Менять загрузку, хранение и обработку документов/media.
 ---
 
 # Обработка артефактов

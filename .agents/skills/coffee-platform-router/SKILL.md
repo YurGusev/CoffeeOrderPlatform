@@ -1,6 +1,6 @@
 ---
 name: coffee-platform-router
-description: Маршрутизировать значимую работу CoffeeOrderPlatform к минимальному набору навыков архитектуры, runtime, контрактов, данных, доменов, frontend и проверки. Использовать в начале задачи и при изменении затронутой области.
+description: Выбрать навыки для задачи CoffeeOrderPlatform.
 ---
 
 # Маршрутизатор CoffeeOrderPlatform
@@ -10,6 +10,11 @@ description: Маршрутизировать значимую работу Coff
 миграции; читать в них только применимые документы. Техническую authority задаёт
 ADR-0025, prerequisites — `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`.
 Историческая Effect-линия #48–#55 больше не является планом реализации.
+
+В Hermes загружать выбранный навык через `skill_view(name="<имя>")`, а не
+копировать его в глобальную библиотеку. Загружать только навыки текущей области;
+ссылки на проектные документы читать через `read_file` от корня репозитория.
+Вложенные `AGENT_SKILLS_NEW_ARCHITECTURE` — исторические источники, не активные навыки.
 
 | Сигнал | Навыки |
 |---|---|
@@ -22,15 +27,16 @@ ADR-0025, prerequisites — `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`.
 | Draft, Confirm, Order, Desired/Observed | `orders-lifecycle` |
 | AROMA Gateway, convergence, unsafe mutation | `aroma-cart-integration` |
 | React/operator UI/client-v1 | `react-operator-frontend` |
-| invoice, allocation, PDF, reconciliation | `invoices-service`, `artifact-processing` |
+| invoice, allocation, reconciliation | `invoices-service`; `artifact-processing` при изменении документов |
 | payment intent, webhook, refund, provider proof | `payments-service` |
-| VK/channel identity/media/Hermes | `channel-hermes-platform` |
+| VK/channel identity/media, production Hermes-channel | `channel-hermes-platform` |
 | operator queues, projections, typed recovery | `work-center-operations` |
 | documents, media, ArtifactRef, scanning | `artifact-processing` |
 | Docker, Compose, CI/CD, images, deployment | `platform-delivery` |
 | failures, recovery, security, SLO | `reliability-verification` |
 | issue authoring/audit | `issue-authoring` |
 | handoff, PR, merge, closure | `issue-delivery-closure` |
+| независимые сложные подзадачи, запрос делегирования | `astra-orchestrator` с разделом текущего runtime |
 
 При пересечении границ применять несколько владеющих навыков. Пересматривать
 маршрут только при обнаружении новой области задачи. Неоднозначность владельца,

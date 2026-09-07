@@ -1,6 +1,6 @@
 ---
 name: platform-delivery
-description: Создавать или проверять Docker images, Compose-топологию, CI/CD, supply-chain controls, configuration, deployment, health gates и rollback CoffeeOrderPlatform.
+description: Менять Docker/Compose, CI/CD, deployment и rollback.
 ---
 
 # Поставка платформы
