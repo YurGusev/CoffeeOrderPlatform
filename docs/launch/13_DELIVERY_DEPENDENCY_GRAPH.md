@@ -6,7 +6,8 @@
 для конкретных consumers. Ветка создаётся от accepted `develop`, без stacked
 или unmerged predecessor. Выполненный scaffold не считается доказательством
 business durability. Техническую authority задаёт
-[ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md).
+[ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md), а frontend presentation
+foundation — [ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md).
 
 ## Граф после recovery
 
@@ -24,7 +25,9 @@ business durability. Техническую authority задаёт
 #4 + #62 → #5 Customer
 #4 + #62 → #10 Gateway → #6 staging
 #6 + #63 → #16 activation → #17 Catalog API → #18 capacity → #7 Pricing
-#5 + #7 + #17 + #18 + #63 → #8 Orders → #9 React
+#136 UX/ADR → #137 UI foundation ───────────────┐
+#5 + #7 + #17 + #18 + #63 → #8 Orders ────────┼→ #9 React
+#4 + #5 + #7 + #8 + #17 + #18 + #119 ─────────┘
 #10 + #16 + #18 + #8 + #63 → #11 convergence
 #8 + #9 + #11 + #63 → #12 Realtime
 #12 + #63 → #64 Operations/observability
@@ -39,6 +42,13 @@ inputs, а не только историческим #60;
 #4 остаётся blocked до merge/handoff #119. Остальные сохраняют свои prerequisites.
 Observability не блокирует business implementation; Operations принимает реальные
 instrumentation points после #12 и обеспечивает полный G14 до #13.
+
+#136 поставляет только ADR, UX-макеты и согласованные нормативные документы.
+#137 после принятого #136 materialize-ит `packages/platform-ui` /
+`@coffee-platform/ui`, browser shell и разделённые browser/Node build graphs.
+#9 не теряет ни одного прямого prerequisite: #4/#5/#7/#8/#17/#18/#119 остаются
+обязательными вместе с принятым foundation #137. #136/#137 не означают
+реализацию #9, #12 или #13.
 
 ## Контракт #63 для downstream
 
@@ -108,7 +118,9 @@ collector.
 | #18 | #10, #6, #16, #17 | pipeline recovery/capacity evidence → #7, #8, #9, #11, #13 |
 | #7 | #4, #17, #18, #62, #119 | immutable PricingQuote/verify → #8, #9 |
 | #8 | #4, #5, #7, #17, #18, #63, #119 | Draft/Confirm/contribution/Order Card → #9, #11, #12 |
-| #9 | #4, #5, #7, #8, #17, #18, #119 | project-owned fetch client + React operator flow → #12, #13 |
+| #136 | accepted #4, #119 | ADR-0027, editable UX mockups и нормативное frontend-согласование → #137, #9, #12, #13 |
+| #137 | #136 | `@coffee-platform/ui`, React/Vite/Tailwind/React Aria foundation, browser/Node graphs → #9 |
+| #9 | #4, #5, #7, #8, #17, #18, #119, #137 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13 |
 | #11 | #10, #16, #18, #8, #63 | observer/convergence/UnknownOutcome → #12, #13 |
 | #12 | #8, #9, #11, #63, #119 | single-instance SSE invalidation/refetch → #64, #13 |
 | #64 | #4, #61, #62, #63, #12 | Pino/OTel, Collector/OpenObserve, alerts/storage/redaction → G14 #13 |
