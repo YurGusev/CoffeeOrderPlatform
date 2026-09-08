@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1840" role="img" aria-labelledby="title desc">
+  <title id="title">Макет карточки заказа и диалогов действий</title>
+  <desc id="desc">Карточка черновика заказа с редактированием позиций и подтверждением, а также пример проверки синхронизации подтверждённого заказа и диалоги действий.</desc>
+  <defs>
+    <style>
+      text { font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif; fill: #1A1D23; }
+      .body { font-size: 14px; } .label { font-size: 12px; font-weight: 500; } .muted { fill: #5B6472; }
+      .heading { font-size: 20px; font-weight: 600; } .section { font-size: 16px; font-weight: 600; }
+      .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+      .panel { fill: #FFFFFF; stroke: #DDE1E7; } .surface { fill: #F7F8FA; }
+      .primary { fill: #3355D1; } .primaryText { fill: #FFFFFF; font-weight: 600; }
+      .success { fill: #ECFDF3; stroke: #86EFAC; } .successText { fill: #166534; }
+      .warning { fill: #FFFBEB; stroke: #F59E0B; } .warningText { fill: #92400E; }
+      .danger { fill: #FEF2F2; stroke: #FCA5A5; } .dangerText { fill: #B91C1C; }
+      .focus { fill: none; stroke: #1D4ED8; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1840" fill="#FFFFFF"/>
+  <text x="32" y="48" class="heading">Карточка заказа</text>
+  <text x="32" y="74" class="body muted">Заказ от 08 сентября 2026</text>
+  <rect x="1380" y="24" width="188" height="44" rx="6" class="panel"/>
+  <text x="1414" y="51" class="body">Обновить заказ</text>
+
+  <rect x="32" y="100" width="1536" height="92" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="56" y="132" class="label muted">СТАТУС</text>
+  <rect x="56" y="146" width="108" height="28" rx="14" class="warning"/>
+  <text x="76" y="165" class="label warningText">Черновик</text>
+  <text x="240" y="132" class="label muted">КЛИЕНТ</text>
+  <text x="240" y="162" class="body">Марина Соколова</text>
+  <text x="700" y="132" class="label muted">ОБНОВЛЕНО</text>
+  <text x="700" y="162" class="body">08.09.2026, 14:32</text>
+  <text x="1120" y="132" class="label muted">СИНХРОНИЗАЦИЯ</text>
+  <text x="1120" y="162" class="body">Не запрошена</text>
+
+  <rect x="32" y="216" width="1036" height="456" rx="6" class="panel"/>
+  <text x="56" y="252" class="section">Позиции</text>
+  <rect x="800" y="232" width="240" height="40" rx="6" class="primary"/>
+  <text x="824" y="257" class="body primaryText">Добавить из каталога</text>
+  <line x1="32" y1="288" x2="1068" y2="288" stroke="#DDE1E7"/>
+  <text x="56" y="316" class="label muted">ТОВАР</text>
+  <text x="514" y="316" class="label muted">КОЛИЧЕСТВО</text>
+  <text x="724" y="316" class="label muted">СУММА</text>
+  <text x="910" y="316" class="label muted">ДЕЙСТВИЯ</text>
+
+  <text x="56" y="360" class="body" font-weight="600">Зёрна «Северный склон»</text>
+  <text x="56" y="386" class="body muted">Фасовка: килограмм</text>
+  <rect x="514" y="338" width="144" height="40" rx="6" class="panel"/>
+  <text x="532" y="363" class="body">1.000</text>
+  <rect x="512" y="336" width="148" height="44" rx="7" class="focus"/>
+  <text x="724" y="364" class="body">1 290,00 ₽</text>
+  <rect x="892" y="338" width="96" height="40" rx="6" class="panel"/>
+  <text x="915" y="363" class="body">Удалить</text>
+  <line x1="56" y1="416" x2="1044" y2="416" stroke="#DDE1E7"/>
+
+  <text x="56" y="460" class="body" font-weight="600">Фильтр «Бумажный 02»</text>
+  <text x="56" y="486" class="body muted">Фасовка: штука</text>
+  <rect x="514" y="438" width="144" height="40" rx="6" class="panel"/>
+  <text x="532" y="463" class="body">2</text>
+  <text x="724" y="464" class="body">360,00 ₽</text>
+  <rect x="892" y="438" width="96" height="40" rx="6" class="panel"/>
+  <text x="915" y="463" class="body">Удалить</text>
+
+  <rect x="56" y="526" width="988" height="112" rx="6" class="warning"/>
+  <text x="80" y="558" class="body warningText" font-weight="600">Количество изменено</text>
+  <text x="80" y="584" class="body warningText">Новая цена и сохранение выполняются одной командой.</text>
+  <rect x="80" y="596" width="260" height="36" rx="6" fill="#FFFFFF" stroke="#92400E"/>
+  <text x="104" y="619" class="body warningText">Получить цену и сохранить</text>
+
+  <rect x="1092" y="216" width="476" height="456" rx="6" class="panel"/>
+  <text x="1116" y="252" class="section">Итог заказа</text>
+  <text x="1116" y="292" class="body muted">Итог заказа обновлён</text>
+  <text x="1116" y="336" class="heading">1 650,00 ₽</text>
+  <line x1="1116" y1="366" x2="1544" y2="366" stroke="#DDE1E7"/>
+  <text x="1116" y="402" class="label muted">ДЕЙСТВИЯ</text>
+  <rect x="1116" y="422" width="428" height="48" rx="6" class="primary"/>
+  <text x="1252" y="452" class="body primaryText">Подтвердить заказ</text>
+  <text x="1116" y="520" class="body muted">Действия зависят от статуса заказа.</text>
+  <rect x="1116" y="612" width="172" height="36" rx="6" class="panel"/>
+  <text x="1154" y="635" class="body">Обновить</text>
+
+  <text x="32" y="724" class="section">Диалоги действий</text>
+
+  <rect x="32" y="748" width="496" height="346" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="56" y="784" class="label muted">ПОДТВЕРЖДЕНИЕ ЗАКАЗА</text>
+  <rect x="72" y="808" width="416" height="250" rx="6" class="panel"/>
+  <text x="96" y="844" class="section">Подтвердить заказ?</text>
+  <text x="96" y="876" class="body">После подтверждения обычное</text>
+  <text x="96" y="900" class="body">редактирование позиций будет недоступно.</text>
+  <rect x="96" y="928" width="136" height="44" rx="6" class="panel"/>
+  <text x="135" y="955" class="body">Отмена</text>
+  <rect x="94" y="926" width="140" height="48" rx="7" class="focus"/>
+  <rect x="248" y="928" width="208" height="44" rx="6" class="primary"/>
+  <text x="286" y="955" class="body primaryText">Подтвердить заказ</text>
+  <text x="96" y="1010" class="body muted">Проверьте итог: 1 650,00 ₽</text>
+
+  <rect x="552" y="748" width="496" height="346" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="576" y="784" class="label muted">УДАЛЕНИЕ ПОЗИЦИИ</text>
+  <rect x="592" y="808" width="416" height="250" rx="6" class="panel"/>
+  <text x="616" y="844" class="section">Удалить позицию?</text>
+  <text x="616" y="876" class="body">Зёрна «Северный склон»</text>
+  <text x="616" y="900" class="body muted">Действие изменит состав и итог заказа.</text>
+  <rect x="616" y="928" width="136" height="44" rx="6" class="panel"/>
+  <text x="655" y="955" class="body">Отмена</text>
+  <rect x="614" y="926" width="140" height="48" rx="7" class="focus"/>
+  <rect x="768" y="928" width="208" height="44" rx="6" class="danger"/>
+  <text x="811" y="955" class="body dangerText" font-weight="600">Удалить позицию</text>
+  <text x="616" y="1010" class="body muted">Отмена сохраняет позицию без изменений.</text>
+
+  <rect x="1072" y="748" width="496" height="346" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="1096" y="784" class="label muted">ПРОВЕРКА СИНХРОНИЗАЦИИ · ПОДТВЕРЖДЁННЫЙ ЗАКАЗ</text>
+  <rect x="1112" y="808" width="416" height="250" rx="6" class="panel"/>
+  <text x="1136" y="844" class="section">Укажите причину</text>
+  <text x="1136" y="876" class="label">Причина проверки *</text>
+  <rect x="1136" y="888" width="368" height="72" rx="6" class="danger"/>
+  <rect x="1134" y="886" width="372" height="76" rx="7" class="focus"/>
+  <text x="1152" y="916" class="body muted">Опишите расхождение</text>
+  <text x="1136" y="982" class="label dangerText">Введите от 1 до 500 символов</text>
+  <rect x="1136" y="998" width="112" height="44" rx="6" class="panel"/>
+  <text x="1168" y="1025" class="body">Отмена</text>
+  <rect x="1276" y="998" width="228" height="44" rx="6" class="primary"/>
+  <text x="1315" y="1025" class="body primaryText">Начать проверку</text>
+
+  <text x="32" y="1146" class="section">Состояния синхронизации</text>
+  <rect x="32" y="1170" width="496" height="220" rx="6" class="danger"/>
+  <text x="56" y="1204" class="label dangerText">ПОДТВЕРЖДЁННЫЙ ЗАКАЗ · ЗАБЛОКИРОВАНО</text>
+  <text x="56" y="1240" class="section dangerText">Синхронизация заблокирована</text>
+  <text x="56" y="1272" class="body dangerText">Сопоставление товара отсутствует.</text>
+  <text x="56" y="1298" class="body dangerText">Причина указана сервисом каталога.</text>
+  <rect x="56" y="1322" width="260" height="44" rx="6" fill="#FFFFFF" stroke="#B91C1C"/>
+  <text x="87" y="1349" class="body dangerText">Проверить синхронизацию</text>
+
+  <rect x="552" y="1170" width="496" height="220" rx="6" class="warning"/>
+  <text x="576" y="1204" class="label warningText">РЕЗУЛЬТАТ ИЗМЕНЕНИЯ НЕИЗВЕСТЕН</text>
+  <text x="576" y="1240" class="section warningText">Изменение могло выполниться</text>
+  <text x="576" y="1272" class="body warningText">Не запускайте его повторно.</text>
+  <text x="576" y="1298" class="body warningText">Сообщите код: b44e…</text>
+  <rect x="576" y="1322" width="236" height="44" rx="6" fill="#FFFFFF" stroke="#92400E"/>
+  <text x="607" y="1349" class="body warningText">Проверить синхронизацию</text>
+
+  <rect x="1072" y="1170" width="496" height="220" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="1096" y="1204" class="label muted">ДРУГИЕ СОСТОЯНИЯ</text>
+  <text x="1096" y="1240" class="body">Ожидается чтение корзины</text>
+  <text x="1096" y="1268" class="body">Корзина отличается</text>
+  <text x="1096" y="1296" class="body">Корзина синхронизируется</text>
+  <text x="1096" y="1324" class="body">Корзина синхронизирована</text>
+  <text x="1096" y="1360" class="body dangerText">Сервис синхронизации недоступен</text>
+
+  <rect x="32" y="1434" width="1536" height="178" rx="6" class="warning"/>
+  <text x="56" y="1470" class="section warningText">Ответ на действие потерян</text>
+  <text x="56" y="1502" class="body warningText">Не повторяйте действие, пока результат неизвестен.</text>
+  <text x="56" y="1528" class="body warningText">Сначала проверьте результат, затем обновите карточку заказа.</text>
+  <rect x="56" y="1552" width="200" height="44" rx="6" fill="#FFFFFF" stroke="#92400E"/>
+  <text x="82" y="1579" class="body warningText">Проверить результат</text>
+  <rect x="1352" y="1552" width="192" height="44" rx="6" class="primary"/>
+  <text x="1386" y="1579" class="body primaryText">Обновить заказ</text>
+
+  <rect x="32" y="1656" width="1536" height="132" rx="6" class="success"/>
+  <text x="56" y="1692" class="label successText">ПОДТВЕРЖДЁННЫЙ ЗАКАЗ</text>
+  <text x="56" y="1728" class="section successText">Заказ подтверждён</text>
+  <text x="56" y="1758" class="body successText">Редактирование недоступно; доступны действия для этого статуса.</text>
+  <text x="1284" y="1723" class="body successText">Ожидается чтение корзины</text>
+
+  <text x="32" y="1820" class="label muted">ПРИМЕР СОСТОЯНИЙ · ДАННЫЕ ВЫМЫШЛЕНЫ · ИТОГ ОБНОВЛЯЕТСЯ ПОСЛЕ ДЕЙСТВИЯ</text>
+</svg>

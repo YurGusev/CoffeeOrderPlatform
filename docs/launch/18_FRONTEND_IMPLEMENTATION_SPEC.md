@@ -4,6 +4,9 @@
 routes, query keys, mutation retry, conflict recovery или UI states заново.
 [Восстановление browser commands](26_BROWSER_COMMAND_RECOVERY.md) определяет
 read-only lookup, terminal outcomes и единый порядок принятия Order Card.
+[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет foundation,
+границу `@coffee-platform/ui` и dependency ownership; визуальные tokens и
+editable mockups находятся в [UX-контракте](../frontend/ux/README.md).
 
 ## 1. Граница приложения
 
@@ -12,10 +15,18 @@ browser fetch client использует только generated `client-v1` tra
 runtime response validation. Generated SDK/client, server/runtime imports, SQL,
 provider clients и собственные копии request/response DTO запрещены.
 
-Разрешённые зависимости и версии берутся только из
-`config/toolchain-versions.json`/lockfile #3: React, React Router, TanStack
-Query, generated transport types, form/schema adapter и testing stack. Новая state
-library, design system или API library в #9 не добавляется.
+#137 материализует `packages/platform-ui` / `@coffee-platform/ui`, browser shell,
+раздельные browser/Node build graphs и прямые dependencies `react`, `react-dom`,
+`@types/react`, `@types/react-dom`, `vite`, `react-aria-components`, `tailwindcss`,
+`@tailwindcss/vite`, `clsx`, `tailwind-merge`. Exact pins и compatibility checks
+остаются #137 work.
+
+#9 принимает все прямые prerequisites #4/#5/#7/#8/#17/#18/#119 и владеет только
+application dependencies `react-router-dom`, `@tanstack/react-query` и
+project-owned `client-v1` transport/runtime validation. Icon runtime, RHF, Zod,
+Radix, Base UI, второй `QueryClient`, второй transport path, generated SDK/client,
+новая global state или API library запрещены. Input forms используют local React
+state; React Aria задаёт behavior, а не второй contract/schema owner.
 
 ## 2. Файлы и модули
 
@@ -34,13 +45,18 @@ apps/web/src/
   features/catalog/**
   features/pricing/**
   features/orders/**
-  shared/ui/{alert,button,dialog,field,spinner}.tsx
 ```
 
 `api/client.ts` реализует project-owned browser fetch client: same-origin base
 URL, credentials, correlation, AbortSignal и runtime response validation. Он
 использует generated `client-v1` transport types; generated SDK/client и
 handwritten endpoint types запрещены.
+
+Feature application импортирует business-neutral primitives из
+`@coffee-platform/ui`; локальный второй каталог UI primitives запрещён. Package
+не импортирует feature models, contracts/generated DTO, Router/Query, `fetch`,
+Node runtime или provider code. Package-owned inline SVG icons ограничены
+`search|add|chevron|close|warning|refresh`.
 
 ## 3. Маршруты и переходы
 
@@ -87,15 +103,19 @@ blocked state без blind retry и предлагает создать новы
 - показывает Customer snapshot, items, server totals, Order status, AROMA
   status/blockers и только server `allowedActions`;
 - `edit-items` разрешает управление строками Draft в карточке и переход в каталог;
-- изменение quantity существующей строки сохраняет её `itemRef`, получает новую
-  quote по кнопке и выполняет PUT с последней `Order.version`; соседние строки
-  не меняются. Новая строка получает новый `itemRef` только один раз на intent;
+- изменение quantity существующей строки сохраняет её `itemRef`; кнопка
+  «Получить цену и сохранить» сначала получает новую quote, а только после
+  успешной quote выполняет PUT с последней `Order.version` и exact proof;
+  соседние строки не меняются. При stale/failed quote PUT не выполняется.
+  Новая строка получает новый `itemRef` только один раз на intent;
 - удаление строки требует подтверждения, DELETE с прежним `itemRef`,
   `If-Match-Version` и одним key; после success обновляются server totals;
 - изменение/удаление доступны только при server `edit-items`; conflict сохраняет
   unsent quantity и требует нового review. Confirmed edits принадлежат W3;
 - `confirm` -> confirm dialog с текущей version, затем command;
-- `request-aroma-reconciliation` -> dialog с reason 1..500;
+- `request-aroma-reconciliation` -> только для Confirmed +
+  `OutOfSync|Blocked|UnknownOutcome`: dialog с reason 1..500; Draft и
+  Confirmed `PendingObservation|Converging|InSync` не показывают control;
 - отсутствие action означает отсутствие кнопки; frontend не выводит её по
   собственному status mapping;
 - после Confirm success `replace` остаётся на Order Card; response проходит
@@ -202,22 +222,65 @@ server-provided reconciliation action.
 логируется как contract violation, но не создаёт кнопку. Статус Order/AROMA не
 используется для самостоятельного разрешения action.
 
-## 8. Формы и доступность
+## 8. Формы, primitives, focus и narrow layout
 
+Public props/events/ref/composition, validation, pending, dismissal и focus для
+`Button`, `Link`, `Dialog`, `Field/Input`, `Alert`, `Badge`, `Loading`, `Empty`
+зафиксированы в таблице [UX-контракта](../frontend/ux/README.md). #137 реализует
+этот API без второго локального набора primitives; #9 композирует business forms,
+Router и Query поверх него.
+
+- visual contract один: operational/restrained console, IBM Plex Sans с
+  Russian/Cyrillic, self-hosted будущим #137 WOFF2 через
+  `@font-face`/`font-display: swap` и OFL/source revision/SHA-256 evidence;
+  remote font CDN запрещён;
+- colors, 4px spacing scale, 36/40/44px control sizes, 6px radius, 1px border и
+  2px `#1D4ED8` focus ring берутся без переопределения из UX-контракта; status не
+  передаётся только цветом;
 - каждый input имеет visible `<label>` и связанный error через
   `aria-describedby`;
-- submit доступен Enter, cancel Escape только когда не теряет committed state;
-- dialog: focus trap, initial focus на heading/первое поле, возврат focus на
-  trigger, `aria-modal=true`;
+- после failed submit field `VALIDATION_FAILED` фокус получает первое invalid
+  поле в DOM order; summary объявляется, но получает programmatic focus только
+  если `errors[].pointer` не даёт focusable field target;
+- Customer create dialog: initial focus на первом пустом required поле; return на
+  «Создать клиента», а после success route focus переходит на `<h1>` New Order;
+- Confirm dialog: initial focus на «Отмена»; return на «Подтвердить заказ»;
+- delete-item dialog: initial focus на «Отмена»; return на trigger «Удалить», а
+  после удаления строки — на heading «Позиции»;
+- reconciliation dialog: initial focus на поле reason; его validation 1..500
+  фокусирует это поле; return на «Проверить синхронизацию»;
+- conflict dialog: initial focus на heading, unsent input сохраняется; после exact
+  refetch focus возвращается к исходному action для явного нового intent;
+- dialog использует focus trap и `aria-modal=true`; Escape/outside close допустим
+  только без pending command и без потери unsent input, иначе требуется explicit
+  cancel/stay action;
 - loading после действия использует `aria-busy`; кнопка блокируется только для
-  текущей mutation;
-- результат/ошибка объявляется `role=status`/`role=alert`, без повторяющегося
-  screen-reader spam;
-- порядок Tab соответствует DOM; drag-only/hover-only controls запрещены;
-- focus после route navigation переходит на `<h1>`;
-- WCAG 2.2 AA contrast, target size и visible focus;
+  текущей mutation; результат/ошибка объявляется `role=status`/`role=alert` без
+  повторяющегося screen-reader spam;
+- порядок Tab соответствует DOM; drag-only/hover-only controls запрещены; focus
+  после route navigation переходит на `<h1>`;
+- motion ограничен state/causality, 150ms ease-out и отключается через
+  `prefers-reduced-motion`;
 - money форматируется `Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'})`
   только из authoritative minor-unit decimal string через bigint-safe helper.
+
+Responsive contract имеет ровно три диапазона, подробно определённые в
+UX-контракте и обязательные для #137/#9:
+
+- `375–767px`: верхняя modal navigation вместо sidebar; Customers/Catalog/Order
+  tables становятся карточками без изменения DOM order; dialog имеет
+  `width:calc(100vw - 32px)` и внутренний vertical scroll; action bar sticky и
+  складывается в одну колонку; page horizontal overflow запрещён;
+- `768–1279px`: compact top navigation; secondary cell metadata переносится, но
+  quantity/actions не скрываются; dialog не шире `min(640px, calc(100vw - 48px))`;
+  action bars wrap; только table wrapper может иметь keyboard-accessible
+  horizontal scroll;
+- `>=1280px`: постоянная sidebar, полные columns, inline action bars; command
+  dialogs не шире 640px, Customer dialog — 1000px; обязательный action text не
+  обрезается и не заменяется ellipsis.
+
+Widths 375, 768 и 1280, а также 400% zoom/reflow наблюдает #13. Эти требования не
+являются заявлением WCAG/browser PASS до materialized UI и фактических проверок.
 
 ## 9. Доставка и граница сессии
 
@@ -261,6 +324,8 @@ reauth автоматически; потеря local recovery при выход
 
 ## 11. Не входит
 
-Design system, global state library, offline mutations, optimistic business
-updates, automatic mutation retry, admin/analytics/Work Center, AROMA calls,
-client-side price/action calculation и перенос legacy API/state кода не входят.
+Создание второго design system вне принадлежащего #137 `@coffee-platform/ui`,
+global state library, offline mutations, optimistic business updates, automatic
+mutation retry, admin/analytics/Work Center, AROMA calls, client-side
+price/action calculation и перенос legacy API/state кода не входят. Эта
+спецификация не означает, что #9, #12 или #13 уже реализованы.

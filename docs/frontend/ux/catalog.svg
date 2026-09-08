@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1040" role="img" aria-labelledby="title desc">
+  <title id="title">Макет каталога для черновика заказа</title>
+  <desc id="desc">Поиск товаров в контексте черновика заказа с количеством, добавлением, постраничной навигацией, возвратом к карточке и состояниями загрузки, пустого результата и ошибки.</desc>
+  <defs>
+    <style>
+      text { font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif; fill: #1A1D23; }
+      .body { font-size: 14px; } .label { font-size: 12px; font-weight: 500; } .muted { fill: #5B6472; }
+      .heading { font-size: 20px; font-weight: 600; } .section { font-size: 16px; font-weight: 600; }
+      .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+      .panel { fill: #FFFFFF; stroke: #DDE1E7; } .surface { fill: #F7F8FA; }
+      .primary { fill: #3355D1; } .primaryText { fill: #FFFFFF; font-weight: 600; }
+      .success { fill: #ECFDF3; stroke: #86EFAC; } .successText { fill: #166534; }
+      .warning { fill: #FFFBEB; stroke: #F59E0B; } .warningText { fill: #92400E; }
+      .danger { fill: #FEF2F2; stroke: #FCA5A5; } .dangerText { fill: #B91C1C; }
+      .focus { fill: none; stroke: #1D4ED8; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1040" fill="#FFFFFF"/>
+  <text x="32" y="48" class="heading">Каталог</text>
+  <text x="32" y="74" class="body muted">Добавление товара в выбранный черновик</text>
+  <rect x="1404" y="24" width="164" height="44" rx="6" class="panel"/>
+  <text x="1434" y="51" class="body">← К заказу</text>
+
+  <rect x="32" y="100" width="1536" height="76" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="56" y="130" class="label muted">ЗАКАЗ</text>
+  <text x="56" y="156" class="body" font-weight="600">Заказ от 08.09.2026 · Черновик</text>
+  <text x="420" y="130" class="label muted">КЛИЕНТ</text>
+  <text x="420" y="156" class="body">Марина Соколова</text>
+  <text x="1020" y="130" class="label muted">КОНТЕКСТ</text>
+  <text x="1020" y="156" class="body">Товар будет добавлен именно в этот заказ</text>
+
+  <rect x="32" y="200" width="1536" height="104" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="56" y="230" class="label">Название товара</text>
+  <rect x="56" y="242" width="640" height="40" rx="6" class="panel"/>
+  <circle cx="80" cy="262" r="7" fill="none" stroke="#5B6472" stroke-width="2"/>
+  <path d="M85 267l6 6" stroke="#5B6472" stroke-width="2"/>
+  <text x="104" y="267" class="body">кофе</text>
+  <rect x="54" y="240" width="644" height="44" rx="7" class="focus"/>
+  <text x="724" y="230" class="label">Наличие</text>
+  <rect x="724" y="242" width="220" height="40" rx="6" class="panel"/>
+  <text x="748" y="267" class="body">Только доступные</text>
+  <path d="M916 258l6 6 6-6" fill="none" stroke="#5B6472" stroke-width="2"/>
+  <rect x="968" y="242" width="112" height="40" rx="6" class="primary"/>
+  <text x="994" y="267" class="body primaryText">Найти</text>
+
+  <text x="32" y="348" class="section">Результаты</text>
+  <text x="1456" y="348" class="label muted">Показано 1–3</text>
+  <rect x="32" y="368" width="1536" height="396" rx="6" class="panel"/>
+  <line x1="32" y1="420" x2="1568" y2="420" stroke="#DDE1E7"/>
+  <text x="56" y="400" class="label muted">ТОВАР</text>
+  <text x="740" y="400" class="label muted">СТАТУС</text>
+  <text x="1020" y="400" class="label muted">КОЛИЧЕСТВО</text>
+  <text x="1380" y="400" class="label muted">ДЕЙСТВИЕ</text>
+
+  <text x="56" y="458" class="body" font-weight="600">Зёрна «Северный склон»</text>
+  <text x="56" y="484" class="body muted">Фасовка: килограмм</text>
+  <rect x="740" y="442" width="112" height="28" rx="14" class="success"/>
+  <text x="761" y="461" class="label successText">Доступен</text>
+  <text x="1020" y="438" class="label">Количество, кг</text>
+  <rect x="1020" y="450" width="176" height="40" rx="6" class="panel"/>
+  <text x="1038" y="475" class="body">1.000</text>
+  <rect x="1018" y="448" width="180" height="44" rx="7" class="focus"/>
+  <rect x="1372" y="444" width="164" height="40" rx="6" class="primary"/>
+  <text x="1408" y="469" class="body primaryText">Добавить</text>
+  <line x1="56" y1="514" x2="1544" y2="514" stroke="#DDE1E7"/>
+
+  <text x="56" y="552" class="body" font-weight="600">Кофе «Утренний»</text>
+  <text x="56" y="578" class="body muted">Фасовка: штука</text>
+  <rect x="740" y="536" width="132" height="28" rx="14" class="warning"/>
+  <text x="758" y="555" class="label warningText">Нет в наличии</text>
+  <text x="1020" y="532" class="label">Количество, шт.</text>
+  <rect x="1020" y="544" width="176" height="40" rx="6" fill="#F7F8FA" stroke="#DDE1E7"/>
+  <text x="1038" y="569" class="body muted">1</text>
+  <rect x="1372" y="538" width="164" height="40" rx="6" fill="#DDE1E7"/>
+  <text x="1408" y="563" class="body muted">Добавить</text>
+  <line x1="56" y1="608" x2="1544" y2="608" stroke="#DDE1E7"/>
+
+  <text x="56" y="646" class="body" font-weight="600">Кофе «Резерв»</text>
+  <text x="56" y="672" class="body muted">Фасовка: грамм</text>
+  <rect x="740" y="630" width="156" height="28" rx="14" class="danger"/>
+  <text x="758" y="649" class="label dangerText">Продажа остановлена</text>
+  <text x="1020" y="626" class="label">Количество, г</text>
+  <rect x="1020" y="638" width="176" height="40" rx="6" fill="#F7F8FA" stroke="#DDE1E7"/>
+  <text x="1038" y="663" class="body muted">100</text>
+  <rect x="1372" y="632" width="164" height="40" rx="6" fill="#DDE1E7"/>
+  <text x="1408" y="657" class="body muted">Добавить</text>
+
+  <line x1="32" y1="700" x2="1568" y2="700" stroke="#DDE1E7"/>
+  <rect x="56" y="716" width="144" height="36" rx="6" class="panel"/>
+  <text x="75" y="739" class="body">← Предыдущие</text>
+  <text x="724" y="739" class="body muted">Результаты 1–20</text>
+  <rect x="1396" y="716" width="148" height="36" rx="6" class="panel"/>
+  <text x="1420" y="739" class="body">Следующие →</text>
+
+  <text x="32" y="814" class="section">Состояния результатов</text>
+  <rect x="32" y="834" width="480" height="154" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="56" y="868" class="label muted">ЗАГРУЗКА</text>
+  <circle cx="74" cy="910" r="10" fill="none" stroke="#3355D1" stroke-width="3" stroke-dasharray="16 8"/>
+  <text x="100" y="915" class="section">Загружаем каталог…</text>
+  <text x="56" y="952" class="body muted">Контекст заказа остаётся видимым.</text>
+
+  <rect x="536" y="834" width="480" height="154" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="560" y="868" class="label muted">ПУСТО</text>
+  <text x="560" y="908" class="section">Товары не найдены</text>
+  <text x="560" y="936" class="body muted">Измените запрос или фильтр наличия.</text>
+  <text x="560" y="964" class="body muted">Можно вернуться к карточке заказа.</text>
+
+  <rect x="1040" y="834" width="528" height="154" rx="6" class="danger"/>
+  <text x="1064" y="868" class="label dangerText">ОШИБКА</text>
+  <text x="1064" y="904" class="section dangerText">Не удалось загрузить каталог</text>
+  <text x="1064" y="932" class="body dangerText">Сообщите код: a9d1…</text>
+  <rect x="1368" y="928" width="172" height="44" rx="6" fill="#FFFFFF" stroke="#B91C1C"/>
+  <text x="1424" y="955" class="body dangerText">Обновить</text>
+
+  <text x="32" y="1022" class="label muted">ПРИМЕР СОСТОЯНИЙ · ДАННЫЕ ВЫМЫШЛЕНЫ · ЦЕНА ПОДТВЕРЖДАЕТСЯ ПЕРЕД ДОБАВЛЕНИЕМ</text>
+</svg>

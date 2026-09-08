@@ -1,10 +1,24 @@
 # Контракт frontend
 
-## Рекомендация
+## Authority и ownership
 
-Создать новое React-приложение поверх `client-v1`. React из CoffeeOrderSystem
-используется только как источник UX-решений. После проверки зависимостей можно
-брать визуально независимые компоненты, но не его API/state слой.
+Первый запуск использует новую React SPA поверх `client-v1`; legacy
+CoffeeOrderSystem остаётся только источником UX-наблюдений, не API/state слоя.
+Foundation и визуальное решение задают
+[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) и
+[редактируемые UX-макеты](../frontend/ux/README.md). SVG не являются executable
+frontend или browser/accessibility evidence.
+
+- #137 владеет `packages/platform-ui` / `@coffee-platform/ui`, browser shell,
+  разделением browser/Node graphs, React Aria behavior, Tailwind v4 styling,
+  self-hosted IBM Plex Sans WOFF2 и package-owned inline SVG icons.
+- #9 владеет Router, одним `QueryClient`, project-owned `client-v1` transport с
+  runtime response validation, forms/routes/recovery UX и static serving.
+- #12 владеет одним `EventSource` на tab и invalidation/refetch lifecycle.
+- #13 владеет итоговыми browser, accessibility, CSP, deep-link и release gates.
+
+Прямые prerequisites #9 сохраняются без сокращения: #4, #5, #7, #8, #17, #18
+и #119. Документы #136 не означают реализацию #9, #12 или #13.
 
 ## Маршруты первого запуска
 
@@ -15,41 +29,91 @@
 /app/orders/:orderRef
 ```
 
+Новые route не вводятся. Query parameters, exact page behavior и deep-link
+semantics определяет [implementation spec](18_FRONTEND_IMPLEMENTATION_SPEC.md).
+
 ## Сценарий создания заказа
 
-1. select/create customer;
-2. search persisted Catalog;
-3. add product and request PricingQuote;
-4. edit Draft: добавить товар, изменить quantity существующей строки, удалить ошибочную строку;
+1. select/create customer и перейти на New Order с выбранным `customerRef`;
+2. явно создать Draft и открыть его Order Card;
+3. из Draft открыть persisted Catalog, выбрать quantity, получить PricingQuote и
+   добавить товар;
+4. в Order Card изменить quantity существующей строки или удалить ошибочную
+   строку;
 5. confirm with expected version and idempotency key;
-6. navigate to Order Card;
+6. остаться на Order Card и наблюдать server state;
 7. subscribe to SSE invalidations and refetch the owner resource.
 
 ## Обязательные состояния UI
 
-- loading, empty, validation and Problem Details;
-- stale quote;
-- optimistic concurrency conflict with explicit refresh;
-- Draft state `NotRequested` и Confirmed state `PendingObservation`;
-- AROMA OutOfSync/Converging/InSync;
-- Blocked with owner-provided reason;
-- UnknownOutcome with no blind retry button;
-- provider unavailable while local Order remains durable.
+- initial/loading, empty, validation и RFC 9457 Problem Details;
+- stale quote с явным запросом нового quote;
+- optimistic concurrency conflict с сохранением form input и explicit refresh;
+- Draft и Confirmed, AROMA
+  `NotRequested|PendingObservation|OutOfSync|Converging|InSync|Blocked|UnknownOutcome`;
+- `Blocked` только с owner-provided reason;
+- `UnknownOutcome` без blind retry button;
+- provider unavailable, пока local Order остаётся durable;
+- ambiguous Customer/Draft/Quote и pending intent after reload по
+  [recovery protocol](26_BROWSER_COMMAND_RECOVERY.md).
 
-The browser never calculates authoritative totals, selects actor identity,
-calls AROMA directly or synthesizes allowed actions.
+Поздний GET/command/replay не откатывает `projectionVersion`; исторический
+replay не заменяет current owner GET. Истёкшая lease/410 не разрешает повтор
+эффекта или новый idempotency key. Сессии не делят cache, forms, pending commands
+или `EventSource`.
 
-Ambiguous Customer/Draft/Quote восстанавливаются без известного resourceRef по
-[протоколу чтения результата команды](26_BROWSER_COMMAND_RECOVERY.md).
-Поздний GET/replay не откатывает projectionVersion, истёкшая lease не разрешает
-повтор эффекта, а сессии не делят browser cache/pending commands.
+## Server truth и client boundaries
 
-## Основа frontend
+Browser никогда не:
 
-- React Router;
-- TanStack Query for server state;
-- project-owned browser fetch client на generated `client-v1` transport types;
-- accessible forms and keyboard navigation;
-- Playwright critical-path E2E;
-- CSP and immutable static assets;
-- API mocks generated from the same contracts for parallel frontend work.
+- вычисляет authoritative totals/money, выбирает actor identity или синтезирует
+  business state/`allowedActions`;
+- обращается к AROMA напрямую, использует provider URL/session/offer identifiers
+  или принимает ownership writer-а;
+- интерпретирует SSE payload как business truth;
+- делает automatic mutation retry или выводит outcome по похожему resource.
+
+`Order.version` используется только как expected version команд.
+`OrderCard.projectionVersion` используется только для monotonic acceptance
+GET/command/replay и SSE refetch; сравнивать их между собой запрещено.
+
+## Foundation contract
+
+`@coffee-platform/ui` — business-neutral presentation package. Он не импортирует
+contracts/generated DTO, feature models, `fetch`, Router, Query, server/runtime,
+SQL/Kafka или provider code. Browser graph не импортирует Node `main.ts` и
+`@coffee-platform/runtime`; Node graph не импортирует browser entrypoint.
+
+Точное владение прямыми dependencies:
+
+- #137: `react`, `react-dom`, `@types/react`, `@types/react-dom`, `vite`,
+  `react-aria-components`, `tailwindcss`, `@tailwindcss/vite`, `clsx`,
+  `tailwind-merge`;
+- #9: `react-router-dom`, `@tanstack/react-query`, project-owned `client-v1`
+  transport/runtime validation.
+
+Exact pins и compatibility checks остаются работой #137. Icon runtime, RHF,
+Zod, Radix, Base UI, второй `QueryClient`, второй transport path и generated
+SDK/client запрещены. Формы используют local React state; server validation
+связывается по `errors[].pointer`.
+
+React Aria владеет semantic/keyboard/focus behavior; Tailwind v4 и tokens —
+styling. Иконки `search`, `add`, `chevron`, `close`, `warning`, `refresh`
+принадлежат package и встраиваются inline SVG. Typography — IBM Plex Sans с
+Cyrillic, будущие self-hosted WOFF2 через `@font-face`/`font-display: swap`,
+OFL/source revision/SHA-256 evidence; remote font CDN запрещён;
+
+Visual tokens, component states, keyboard/focus/reduced-motion rules и размеры
+controls нормативно перечислены в [UX-контракте](../frontend/ux/README.md).
+Status не передаётся только цветом; motion отключается через
+`prefers-reduced-motion`; DOM/focus order совпадает с visual order.
+
+## Проверки реализации
+
+#137 materialize-ит package/build boundary, pins, font/license evidence,
+component behavior и architecture checks. #9 проверяет generated transport drift,
+one-client boundary, runtime validation, routes/forms/Problem Details, one
+`QueryClient`, mocks и bundle budgets. #12 проверяет EventSource/session
+lifecycle. #13 наблюдает Playwright critical path, keyboard, screen reader,
+contrast/target/reflow, reduced motion, CSP, immutable assets и deep links.
+До этих проверок никакой WCAG/browser PASS не заявляется.
