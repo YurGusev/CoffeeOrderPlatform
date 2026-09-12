@@ -282,6 +282,23 @@ UX-контракте и обязательные для #137/#9:
 Widths 375, 768 и 1280, а также 400% zoom/reflow наблюдает #13. Эти требования не
 являются заявлением WCAG/browser PASS до materialized UI и фактических проверок.
 
+### #137 package/build handoff for #9
+
+`#9` imports presentation primitives only from `@coffee-platform/ui` and imports
+the package stylesheet as `@coffee-platform/ui/styles.css`; it does not create a
+second `apps/web/src/shared/ui` implementation. The supported foundation API and
+native ref contracts are documented in `packages/platform-ui/README.md`.
+
+The local browser workflow is `pnpm dev:browser`; the deterministic production
+workflow is `pnpm web:build`, which first builds `@coffee-platform/ui` and then
+emits `apps/web/dist/browser`. The existing Node entry remains a separate
+`apps/web/dist/main.js` artifact. Generated `dist` output is verification-only.
+Scenario-only invalid/disabled/dirty/pending Dialog states belong to the
+test-only Vite harness under `apps/web/test`; production `App` remains neutral.
+`pnpm browser:bundle:check` measures and fails on the summed gzip size of the
+production initial JS files at the `250 KiB` budget; the observed baseline is
+recorded in handoff #137.
+
 ## 9. Доставка и граница сессии
 
 #9 материализует `GET /app/** -> web:3000` по runtime profile: Edge передаёт

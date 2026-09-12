@@ -1,6 +1,6 @@
 # ADR-0027: foundation операторского frontend и UI package
 
-- Статус: предложено для содержательного решения владельца.
+- Статус: принято владельцем для реализации issue #137; технический review v4 — PASS.
 - Область: browser foundation первого запуска и presentation boundary.
 - Владельцы реализации: [issue #137](https://github.com/YurGusev/CoffeeOrderPlatform/issues/137), [issue #9](https://github.com/YurGusev/CoffeeOrderPlatform/issues/9) и [issue #12](https://github.com/YurGusev/CoffeeOrderPlatform/issues/12).
 - Нормативный UX-контракт: [docs/frontend/ux/README.md](../frontend/ux/README.md).
@@ -38,8 +38,8 @@ provider code.
    secret/config materialization. Browser build не стирает Node output.
 
 Проверки boundary и разрешение `@coffee-platform/ui` в architecture rules
-материализует #137. Наличие этого ADR не утверждает, что package или build уже
-существуют.
+материализуют #137. Реализация package/build и локальная acceptance evidence
+фиксируются в handoff #137; этот ADR остаётся authority для границ и API.
 
 ### Поведение, styling, формы и иконки
 
@@ -90,6 +90,22 @@ Icon runtime, React Hook Form/RHF, Zod, Radix, Base UI, второй `QueryClien
 Exact pins, запись в manifest/lockfile/toolchain registry и compatibility checks
 с Node 26, React, Vite и TS7 принадлежат #137; этот ADR версии не фиксирует.
 
+#### Узкое исключение совместимости TypeScript 7
+
+Для #137 явно разрешено одно type-only исключение: pnpm patch для
+`@react-types/shared@3.36.1`, транзитивной declaration-зависимости
+`react-aria-components@1.21.1`. Исключение ограничено шестью optional
+ARIA/DOM properties, не меняет runtime/framework behavior, public API, schema,
+wire format или application code и не является разрешением патчить React Aria
+или другой framework source.
+
+Исключение действительно только при одновременных условиях: upstream revision,
+license, patch hash и rationale зафиксированы в
+`packages/platform-ui/THIRD_PARTY_NOTICES.md`; `skipLibCheck` остаётся `false`;
+UI и browser graphs проходят отдельный `tsc --noEmit`; patch удаляется после
+появления совместимого upstream declaration. Любое другое framework patch,
+runtime patch или suppression type errors требует отдельного ADR/issue.
+
 ### Владение по issues
 
 - #137: `packages/platform-ui`, browser shell/entrypoint, React/Vite/Tailwind
@@ -111,7 +127,7 @@ Typography:
 
 - `IBM Plex Sans` с Cyrillic; fallback
   `system-ui, -apple-system, "Segoe UI", Arial, sans-serif`;
-- будущий #137 self-host-ит проверенные WOFF2 assets в `packages/platform-ui` и
+- #137 self-host-ит проверенные WOFF2 assets в `packages/platform-ui` и
   объявляет их через `@font-face` с `font-display: swap`;
 - #137 фиксирует source URL/revision, SIL OFL 1.1 notice и SHA-256 font assets;
   remote font CDN запрещён;

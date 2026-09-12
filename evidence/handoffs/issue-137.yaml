@@ -1,0 +1,568 @@
+issue: 137
+baseCommit: 7ef4b94e16b7cf68e45861f75be4de477e24c8a7
+branch: feature/137-frontend-ui-foundation
+status: verified
+delivery: local-only
+changedFiles:
+- .dependency-cruiser.cjs
+- .gitattributes
+- apps/web/index.html
+- apps/web/package.json
+- apps/web/src/browser/App.tsx
+- apps/web/src/browser/main.tsx
+- apps/web/src/browser/styles.css
+- apps/web/src/vite-env.d.ts
+- apps/web/test/ui-foundation.fixture.html
+- apps/web/test/ui-foundation.fixture.tsx
+- apps/web/test/ui-foundation.spec.ts
+- apps/web/tsconfig.json
+- apps/web/vite.config.ts
+- config/toolchain-versions.json
+- config/toolchain-versions.schema.json
+- docs/adr/ADR-0027-frontend-ui-foundation.md
+- docs/frontend/ux/README.md
+- docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+- evidence/handoffs/issue-136.yaml
+- evidence/handoffs/issue-137.yaml
+- package.json
+- packages/platform-ui/README.md
+- packages/platform-ui/THIRD_PARTY_NOTICES.md
+- packages/platform-ui/package.json
+- packages/platform-ui/provenance/shadcn/README.md
+- packages/platform-ui/provenance/shadcn/aria/button.tsx
+- packages/platform-ui/provenance/shadcn/aria/dialog.tsx
+- packages/platform-ui/provenance/shadcn/aria/field.tsx
+- packages/platform-ui/provenance/shadcn/aria/input.tsx
+- packages/platform-ui/src/cn.ts
+- packages/platform-ui/src/components/alert.tsx
+- packages/platform-ui/src/components/badge.tsx
+- packages/platform-ui/src/components/button.tsx
+- packages/platform-ui/src/components/dialog.tsx
+- packages/platform-ui/src/components/empty.tsx
+- packages/platform-ui/src/components/field.tsx
+- packages/platform-ui/src/components/input.tsx
+- packages/platform-ui/src/components/link.tsx
+- packages/platform-ui/src/components/loading.tsx
+- packages/platform-ui/src/icons.tsx
+- packages/platform-ui/src/index.ts
+- packages/platform-ui/src/styles/fonts/IBMPlexSans-Medium.woff2
+- packages/platform-ui/src/styles/fonts/IBMPlexSans-Regular.woff2
+- packages/platform-ui/src/styles/fonts/IBMPlexSans-SemiBold.woff2
+- packages/platform-ui/src/styles/fonts/license.txt
+- packages/platform-ui/src/styles/index.css
+- packages/platform-ui/test/components.test.tsx
+- packages/platform-ui/tsconfig.json
+- packages/platform-ui/vitest.config.ts
+- patches/@react-types__shared@3.36.1.patch
+- pnpm-lock.yaml
+- pnpm-workspace.yaml
+- scripts/check-architecture.mjs
+- scripts/check-browser-bundle.mjs
+- scripts/check-toolchain-versions.mjs
+- tests/architecture/fixtures/negative/frontend/browser-console-node-helper.ts
+- tests/architecture/fixtures/negative/frontend/browser-console-node-root.ts
+- tests/architecture/fixtures/negative/frontend/browser-node.ts
+- tests/architecture/fixtures/negative/frontend/browser-transitive-helper.ts
+- tests/architecture/fixtures/negative/frontend/browser-transitive-root.ts
+- tests/architecture/fixtures/negative/frontend/node-browser.ts
+- tests/architecture/fixtures/negative/frontend/server-ui-relative-root.ts
+- tests/architecture/fixtures/negative/frontend/server-ui-relative-target.ts
+- tests/architecture/fixtures/negative/frontend/server-ui.ts
+- tests/architecture/fixtures/negative/frontend/ui-network.ts
+- tests/architecture/fixtures/negative/frontend/ui-node-transitive-helper.ts
+- tests/architecture/fixtures/negative/frontend/ui-node-transitive-root.ts
+- tests/architecture/fixtures/negative/frontend/ui-query-transitive-helper.ts
+- tests/architecture/fixtures/negative/frontend/ui-query-transitive-root.ts
+- tests/architecture/frontend-boundary.test.mjs
+- tsconfig.json
+
+inputs:
+- issue: 136
+  acceptedMergeCommit: 7ef4b94e16b7cf68e45861f75be4de477e24c8a7
+  artifact: evidence/handoffs/issue-136.yaml
+  sha256: d0bbb5ca4317b2ebe73df1908e191d05ad831b797e954729dbf53105db65b806
+- issue: 136
+  acceptedMergeCommit: 7ef4b94e16b7cf68e45861f75be4de477e24c8a7
+  artifact: docs/adr/ADR-0027-frontend-ui-foundation.md
+  sha256: 50f9d1dafe5d9598ac302325486a16746ee757531937e015f73fb336bf83d9a0
+- issue: 136
+  acceptedMergeCommit: 7ef4b94e16b7cf68e45861f75be4de477e24c8a7
+  artifact: docs/frontend/ux/README.md
+  sha256: 7858c358141126f55424896322dff84c358bbacacf5e08e691c47f3176c26c0b
+outputs:
+- artifact: .dependency-cruiser.cjs
+  sha256: 8bdb79b49bd9a053190f972a169a820c33feecebead786a9b7f9e640d284995f
+  generated: false
+  consumers:
+  - 137
+- artifact: .gitattributes
+  sha256: 04f707af67d27517d81b8537af477df129e5c618492654732565663adcefdaba
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/index.html
+  sha256: e68a96745839bc85dd2530459b8b8572875d3e9670e2b07e57207c2f62e102df
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/package.json
+  sha256: 02a52967232836723fdd0ee241b3202838950efa57b61cd82e0aaacd4e245d7c
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/src/browser/App.tsx
+  sha256: 4ec8baf4639fcdf462f82db7b00b9a1bd7d434e6b77a7add23ad2a232b61f9e0
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/src/browser/main.tsx
+  sha256: e6ce003fee39080e535604a440bbd5cb22b789cbace22662ac46d2a7084e1e71
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/src/browser/styles.css
+  sha256: 81f9d29bdd93556ba978b0316bdec72c81f36fe4e3cd2cebb5e605a9cfbce0ef
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/src/vite-env.d.ts
+  sha256: 65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/test/ui-foundation.fixture.html
+  sha256: 386d28a59f2da679dc3195b847c5cfd61a392755e3bb087222ec5be5d633c747
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/test/ui-foundation.fixture.tsx
+  sha256: 76572ccd099d1a768dc7a25cf16f5a5480d3ff3dad418d53e88863fbefb882eb
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/test/ui-foundation.spec.ts
+  sha256: 11e7879476a045f83f0caeb7108868b095c4028af6b74d56f885b1a00b516d27
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/tsconfig.json
+  sha256: 0d833bf0637c9ad8924434403fb15c6dec9575558512ad20f405136bfd1803ca
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/vite.config.ts
+  sha256: 6c20a1f9ce00ad74b7fe6bb00a5a96ce6a11007cd4c6b6845b60a117fde050b8
+  generated: false
+  consumers:
+  - 137
+- artifact: config/toolchain-versions.json
+  sha256: 09a1be80cafa6976b935c746424427d67499d4adc30e5ac9f4b61614364a2984
+  generated: false
+  consumers:
+  - 137
+- artifact: config/toolchain-versions.schema.json
+  sha256: 61ed58a34376cc72d97e59db2a3190ff34f8481633860a5a73a5740c74c42d8f
+  generated: false
+  consumers:
+  - 137
+- artifact: docs/adr/ADR-0027-frontend-ui-foundation.md
+  sha256: 41465e1a9c85ba1c3b20fe2e09a339ed927e7f2116017693bf9b598edf9fbe80
+  generated: false
+  consumers:
+  - 137
+- artifact: docs/frontend/ux/README.md
+  sha256: 4c283d03ca19975af49e288f7561e037ad0f981c89c143b54f6802c736a6f4ed
+  generated: false
+  consumers:
+  - 137
+- artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+  sha256: 6170f9a07097b53ea9e539513a55241116d1ca54b11dc6d8ba4d723eb60d09d8
+  generated: false
+  consumers:
+  - 137
+- artifact: evidence/handoffs/issue-136.yaml
+  sha256: 38203ea34750874660b2cd1dd69828c194176633e4c1b6caabd878a6d8d0b2ae
+  generated: false
+  consumers:
+  - 137
+- artifact: package.json
+  sha256: 49b21a0c10d693be164d896675aed5dd1b1d37d489224b692ff9df275663ed28
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/README.md
+  sha256: 740ad778c8f5fc39d9f145edf3453cc8dfcd6245593174e4547b3ef6f321f46c
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/THIRD_PARTY_NOTICES.md
+  sha256: a49fa58c8c0e7f59f1c364a7fbf356b02ed40997ecab8b0865674bc8b0415380
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/package.json
+  sha256: 121468a1ba73fe8a4eea8cbd88b586c1fb05ed28b3c68f8acac5598992105121
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/provenance/shadcn/README.md
+  sha256: 965b5af4a897a718aae6b8b2ceebf39d8086e7de670b80b13380af1ab8a730a1
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/provenance/shadcn/aria/button.tsx
+  sha256: 8bcff6f70522e6e6cb0ff67f050830ea1a93596403d2d9b035f3b543c7a42e2c
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/provenance/shadcn/aria/dialog.tsx
+  sha256: ff8a8e6b372e7eb06c931975d8ac1ea59d9271051ac178a62c95f6acae20bb35
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/provenance/shadcn/aria/field.tsx
+  sha256: 1019104c41eaef8ffae109e2ece95be87a7a637e3a9bac049d7a9fb54bfb7275
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/provenance/shadcn/aria/input.tsx
+  sha256: b9596748b7238b5605f558474e9d50afc1535c5832c57134055e4bbde5fa804f
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/cn.ts
+  sha256: 53f3d3d070f0a9082934da25b875f9499855c2b0693868dd28be8c23d8730f68
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/alert.tsx
+  sha256: ed7faf72541e37f914f0d57fc48f0345a9cffdfb0cbc72b5e92cca6d3224d17a
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/badge.tsx
+  sha256: 2eceb2a8976166bf7a4d8e0a21be373a6fea9c55f38fac546b2600a8b5b5d29e
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/button.tsx
+  sha256: 8278417d0c2f504952dc60230dcea270db460db49e3a9025070de9731a52562a
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/dialog.tsx
+  sha256: e45ed0a628200b4210f2485d12cf38e492db7255fc8ce874169c47081f4d7f75
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/empty.tsx
+  sha256: 5beeef27b68812e036e6b5a7fc8f76e1113f8b3c239467e6fcbe8765a458ab7b
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/field.tsx
+  sha256: f2ff4ac617547b954e9347f80e268576203e8503580baa495873e4b343ea4b7e
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/input.tsx
+  sha256: da6dc390ef8eda69ff7469e20d2601f15af77d05b9409ffb89528415be141cf5
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/link.tsx
+  sha256: de33aeec757681be2ee129ea172845d54d8d90ba2ed87de43a9d1a2a2f4ecc50
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/components/loading.tsx
+  sha256: 10472c4409a5e6834cd081937fa0ee9a7f84b0fd530d509eeab26797ec4500a3
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/icons.tsx
+  sha256: bfd3848ca26d1ef541c95e3d88d734cd2ee77d19df58fefdb7fc773187c10aa4
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/index.ts
+  sha256: 31d7e6cf107611ccf4589b7bb2ea7f7a16ba17754c67e88394a189b2fe3c79e2
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/styles/fonts/IBMPlexSans-Medium.woff2
+  sha256: 5660f8a658f8bb50dbc005232f885eadffd2bc1c235c4f6fbb63469d1f9cde6d
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/styles/fonts/IBMPlexSans-Regular.woff2
+  sha256: ba711a3085ff9f27440b6b9c4550cfc47c97bf36591d5da958b975bb3add8c1a
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/styles/fonts/IBMPlexSans-SemiBold.woff2
+  sha256: f78048030eab62e860efa39a0df79e2e5581bf122eb95b9bc42c0b8a4988d205
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/styles/fonts/license.txt
+  sha256: 91c25c350d3cac39da2736d74f7ba37ef648f5237a4e330a240615bc8d8c4360
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/src/styles/index.css
+  sha256: a0fd04e2a2e1084c15bd8672d749ee08511a18e437720f92d7ffe6c9a221bee5
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/test/components.test.tsx
+  sha256: 41a15e6351db15e3de2f443a2dbde1cee024fdb17ce9e956a91cad00d927b9f0
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/tsconfig.json
+  sha256: b6dc802898b956141b7ccbc5f3e6f539ebec441937eacbc38ed7ddd893b753b5
+  generated: false
+  consumers:
+  - 137
+- artifact: packages/platform-ui/vitest.config.ts
+  sha256: dd14d2bfad983677474a1d413672da4131374d16af172fba205139cd4d83f07d
+  generated: false
+  consumers:
+  - 137
+- artifact: patches/@react-types__shared@3.36.1.patch
+  sha256: 6d2be2fb416b65bc3a4aafe22d74cefc9b9b51cbb486031b96d70cd089a5bcfd
+  generated: false
+  consumers:
+  - 137
+- artifact: pnpm-lock.yaml
+  sha256: 5838d2208748ea684ec932a36f91a864bf5e2962e74de5afa9a3ce7d9b2bc62e
+  generated: false
+  consumers:
+  - 137
+- artifact: pnpm-workspace.yaml
+  sha256: 16be206f84f819ea2075fc154d88f41660e98db812165838b1393aedf1b2a769
+  generated: false
+  consumers:
+  - 137
+- artifact: scripts/check-architecture.mjs
+  sha256: ec2c86e0be23d31a7a1a311c9d46cc3857e90d72c85bb9669c8e191a2093d40a
+  generated: false
+  consumers:
+  - 137
+- artifact: scripts/check-browser-bundle.mjs
+  sha256: e3b061e4aaa89bab106f8a981757812fb3d7dbd2cb87cb8d869188c0bef21987
+  generated: false
+  consumers:
+  - 137
+- artifact: scripts/check-toolchain-versions.mjs
+  sha256: 0bd9cc8d20c42dfafd705863defcaae5ad19c3e8231df34d467791c14bb44547
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/browser-console-node-helper.ts
+  sha256: 71b33d37ec9d648de1446edae678702ddd7862fd7107e93b4cd4b96b46a7fd0f
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/browser-console-node-root.ts
+  sha256: 51dd53c717c19127a66b274573003e384938bee9f2493df7ceabf2425ebc18e6
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/browser-node.ts
+  sha256: 0c6a5d0ef13a925e0fd5f4748146832f28f840e6b96defb8260c63553c90e09d
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/browser-transitive-helper.ts
+  sha256: 495eee5ed074f607574953ec4a9a61f9dd474fb49ffccf8805e3a1538c776a97
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/browser-transitive-root.ts
+  sha256: 32dbe5f1b9bd2e2ae6a2d183e1b254ece1a10f81dda70393bb12a7eb55b5b637
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/node-browser.ts
+  sha256: 662d0c5a00aab56abee9162baf2d0abce75b0afd8ff306dd9615de015fe75a63
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/server-ui-relative-root.ts
+  sha256: 8a4feac0436b2928ce95d7ce328db841d345a3834060fbe38f74edb92803944e
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/server-ui-relative-target.ts
+  sha256: 8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/server-ui.ts
+  sha256: 8617d641ce9e8f92c3ab19f2879c350e1f5b86ee7f798e745ebd2d9b22b4a619
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/ui-network.ts
+  sha256: eb2a1412ac8e6b01ad5eeaf5b519dc85c55caa34e8006ff55417ad59ca188732
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/ui-node-transitive-helper.ts
+  sha256: 495eee5ed074f607574953ec4a9a61f9dd474fb49ffccf8805e3a1538c776a97
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/ui-node-transitive-root.ts
+  sha256: b468ff4ba752b5f03674c128052dc0643c6c4d49ed43d3f0741faa7d01236c07
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/ui-query-transitive-helper.ts
+  sha256: 7d1e9f562a2ca6d459699bb11b7245a33015953eefe9fd764d7d8559c7dfa3e5
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/fixtures/negative/frontend/ui-query-transitive-root.ts
+  sha256: 8bcff5ae7f4a0e4371a4460a449c458574828e52945577f9e770e9f864be27c7
+  generated: false
+  consumers:
+  - 137
+- artifact: tests/architecture/frontend-boundary.test.mjs
+  sha256: ca90923f29014faeb649506e9a2aee91a4359bb6b960be90aafc6a30905a10f6
+  generated: false
+  consumers:
+  - 137
+- artifact: tsconfig.json
+  sha256: ab7e804ea0ef53820fc1cf1adcfc6f3d1bc4e07151932d718272b688302b247b
+  generated: false
+  consumers:
+  - 137
+- artifact: apps/web/dist/browser/assets/IBMPlexSans-Medium-BQLKo0ot.woff2
+  sha256: 5660f8a658f8bb50dbc005232f885eadffd2bc1c235c4f6fbb63469d1f9cde6d
+  generated: true
+  consumers:
+  - 137
+- artifact: apps/web/dist/browser/assets/IBMPlexSans-Regular-BiEB_oxT.woff2
+  sha256: ba711a3085ff9f27440b6b9c4550cfc47c97bf36591d5da958b975bb3add8c1a
+  generated: true
+  consumers:
+  - 137
+- artifact: apps/web/dist/browser/assets/IBMPlexSans-SemiBold-KfaJl9PC.woff2
+  sha256: f78048030eab62e860efa39a0df79e2e5581bf122eb95b9bc42c0b8a4988d205
+  generated: true
+  consumers:
+  - 137
+- artifact: apps/web/dist/browser/assets/index-Cwi33c_3.js
+  sha256: 6a6f9971838b1343b47e3b89e15bc9956b64ab3151cc2a93ef11bc12ab87858d
+  generated: true
+  consumers:
+  - 137
+- artifact: apps/web/dist/browser/assets/index-DHNqsTYT.css
+  sha256: 4c121e8a94291cf2d66796433258579a503c5066f7cc8f4a4c68b490b191fd34
+  generated: true
+  consumers:
+  - 137
+- artifact: apps/web/dist/browser/index.html
+  sha256: 21626d1195a7b315253372489cd259b395a6d7fab433ed95cb1a7c82180fd0a3
+  generated: true
+  consumers:
+  - 137
+
+budget:
+  productionInitialJavaScriptGzip:
+    baselineBytes: 86637
+    maxBytes: 256000
+    command: pnpm browser:bundle:check
+    method: gzipSync UTF-8 bytes summed over apps/web/dist/browser/**/*.js
+verification:
+- command: pnpm install --frozen-lockfile
+  result: passed
+  exitCode: 0
+  detail: workspace installation is reproducible with exact pins and the recorded @react-types/shared pnpm patch
+- command: pnpm versions:check
+  result: passed
+  exitCode: 0
+  detail: Node 26.8.1, TypeScript 7.0.2 and all registered UI/accessibility pins match config/toolchain-versions.json
+- command: pnpm architecture:check
+  result: passed
+  exitCode: 0
+  detail: Dependency Cruiser plus the transitive TypeScript source graph reject browser/helper/Node, server/UI-relative, UI/node:fs
+    and UI/Query paths
+- command: node --test tests/architecture/frontend-boundary.test.mjs
+  result: passed
+  exitCode: 0
+  detail: eight direct/transitive fixture cases plus full checkArchitecture browser/helper/Node console.log regression passed
+- command: pnpm lint
+  result: passed
+  exitCode: 0
+  detail: provenance snapshots are excluded from runtime lint without modifying their upstream hashes
+- command: pnpm exec tsc --noEmit -p packages/platform-ui/tsconfig.json --pretty false && pnpm exec tsc --noEmit -p apps/web/tsconfig.json
+    --pretty false
+  result: passed
+  exitCode: 0
+  detail: both UI/browser graphs pass with skipLibCheck=false and exactOptionalPropertyTypes=true
+- command: pnpm typecheck
+  result: passed
+  exitCode: 0
+  detail: repository TypeScript build graph passes without skipLibCheck overrides
+- command: pnpm web:build
+  result: passed
+  exitCode: 0
+  detail: UI package plus Vite browser shell built; existing apps/web/dist/main.js remains preserved
+- command: pnpm browser:bundle:check
+  result: passed
+  exitCode: 0
+  detail: glob("**/*.js") matched the current production JS; boundary scan and gzip budget passed at 86637B/256000B
+- command: gh api repos/YurGusev/CoffeeOrderPlatform/issues/137 --jq .body
+  result: passed
+  exitCode: 0
+  detail: issue body readback matches synchronized exception text; SHA-256 94655384ff2673723f4c1555fcc5fda7315d7bd88fa8d737a0cea26fa712cf05
+- command: pnpm test:ui
+  result: passed
+  exitCode: 0
+  detail: component semantics passed, including isInvalid without errorMessage and package-owned Input export
+- command: pnpm test:web-foundation
+  result: passed
+  exitCode: 0
+  detail: production shell is neutral; a temporary Vite-built test-only fixture passed 375/768/1280 widths, invalid/disabled/first-invalid,
+    dirty reopen→Escape/outside guards, pending, initial/return focus, bounded scrolling, typography/radius, fonts/network and axe scans with 0 serious/critical violations
+- command: pnpm dev:browser --host 127.0.0.1 --port 5173 --strictPort
+  result: passed
+  exitCode: 0
+  detail: Vite dev shell served HTTP 200 and CoffeeOrderPlatform HTML; process proc_c530b43aa14b was terminated after the
+    probe
+- command: pnpm --filter @coffee-platform/ui pack --dry-run --pack-destination /tmp/coffee-platform-ui-pack-final-review
+  result: passed
+  exitCode: 0
+  detail: tarball contains Input JS/declarations, four shadcn provenance snapshots, CSS/fonts/notices and no Stack source/export/output
+- command: pnpm check
+  result: passed
+  exitCode: 0
+  detail: canonical full project gate passed after review remediation
+- command: served-surface Playwright capture at 375x844 and 1440x900
+  result: passed
+  exitCode: 0
+  detail: no horizontal overflow, local fonts, initial focus, dirty Escape retention, return focus, zero console errors and
+    failed requests; temporary script and preview were removed
+- command: git diff --check
+  result: passed
+  exitCode: 0
+  detail: no whitespace errors
+limitations:
+- No commit, push, GitHub issue/PR mutation, review request or merge was performed; delivery remains local-only.
+- The prior independent review result was REVISE; remediation is locally verified, but a follow-up independent review and
+  CI/PR evidence are not observed.
+- Formal scored visual-QA baseline comparison was not performed; observed served-surface render/interaction evidence was captured
+  at 375x844 and 1440x900.
+- ADR-0027 records the explicit #137 exception for the narrow type-only @react-types/shared declaration patch; runtime React Aria behavior is unchanged.
+- Remote #137 body now records the narrow type-only exception and links ADR-0027; readback was verified before delivery.
+- Generated browser/package dist and the Playwright Chromium cache are local verification artifacts and are not tracked.
+review:
+  agent: independent-code-review
+  result: REVISE_FOLLOWUP_FINDINGS_REMEDIATED_LOCAL_REVIEW_PENDING
+  contentAcceptance: ACCEPTED
+  detail: 'Follow-up findings were addressed locally: Dependency Cruiser AST reachability plus console.log regression, transient Dialog reason reset and current-reason guard, 16px rem baseline with body typography, test-only state fixture, measured initial JS gzip budget and explicit ADR-0027 type-only compatibility exception.'
+  limitations: No follow-up independent review, commit, push, PR, CI or merge evidence is claimed.

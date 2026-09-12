@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@source "../**/*.{ts,tsx}";
+
+@theme {
+  --color-background: #ffffff;
+  --color-border: #dde1e7;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: #fca5a5;
+  --color-danger-text: #b91c1c;
+  --color-focus: #1d4ed8;
+  --color-ink: #1a1d23;
+  --color-muted: #5b6472;
+  --color-on-accent: #ffffff;
+  --color-on-primary: #ffffff;
+  --color-primary: #3355d1;
+  --color-accent: #c2277a;
+  --color-success-bg: #ecfdf3;
+  --color-success-border: #86efac;
+  --color-success-text: #166534;
+  --color-surface: #f7f8fa;
+  --color-surface-muted: #f7f8fa;
+  --color-warning-bg: #fffbeb;
+  --color-warning-border: #f59e0b;
+  --color-warning-text: #92400e;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --radius-control: 0.375rem;
+  --radius-panel: 0.375rem;
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  src: url("./fonts/IBMPlexSans-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  src: url("./fonts/IBMPlexSans-Medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-display: swap;
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 600;
+  src: url("./fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+}
+
+@layer base {
+  :root {
+    color: var(--color-ink);
+    background: var(--color-background);
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    font-size: 16px;
+    line-height: normal;
+    text-rendering: optimizeLegibility;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-size: 14px;
+    line-height: 20px;
+    margin: 0;
+    min-width: 320px;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0ms !important;
+  }
+}

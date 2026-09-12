@@ -1,0 +1,264 @@
+import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { build, preview, type PreviewServer } from "vite";
+import tailwindcss from "@tailwindcss/vite";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { AxeBuilder } from "@axe-core/playwright";
+
+const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+const appRoot = resolve(repoRoot, "apps/web");
+const browserRoot = resolve(repoRoot, "apps/web/dist/browser");
+const productionPort = Number(process.env.WEB_FOUNDATION_PORT ?? "4173");
+const fixturePort = Number(process.env.WEB_FOUNDATION_FIXTURE_PORT ?? String(productionPort + 1));
+const fixturePath = "/test/ui-foundation.fixture.html";
+
+type PageSignals = {
+  consoleErrors: string[];
+  externalRequests: string[];
+  failedResponses: string[];
+  fontRequests: string[];
+};
+
+function observePage(page: Page): PageSignals {
+  const signals: PageSignals = {
+    consoleErrors: [],
+    externalRequests: [],
+    failedResponses: [],
+    fontRequests: [],
+  };
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.hostname !== "127.0.0.1") signals.externalRequests.push(request.url());
+    if (url.pathname.endsWith(".woff2")) signals.fontRequests.push(request.url());
+  });
+  page.on("response", (response) => {
+    if (response.status() >= 400) signals.failedResponses.push(`${response.status()} ${response.url()}`);
+  });
+  page.on("console", (message) => {
+    if (message.type() === "error") signals.consoleErrors.push(message.text());
+  });
+  return signals;
+}
+
+async function startPreviewServer(root: string, port: number, configFile: string | false, healthPath = "/"): Promise<PreviewServer> {
+  const server = await preview({
+    configFile,
+    preview: { host: "127.0.0.1", port, strictPort: true },
+    root,
+  });
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}${healthPath}`);
+    if (!response.ok) throw new Error(`Vite preview returned HTTP ${response.status}`);
+    return server;
+  } catch (error) {
+    await server.close();
+    throw error;
+  }
+}
+
+async function buildFixture(outDir: string): Promise<void> {
+  await build({
+    configFile: false,
+    root: appRoot,
+    plugins: [tailwindcss()],
+    mode: "test",
+    build: {
+      emptyOutDir: true,
+      outDir: relative(appRoot, outDir),
+      rollupOptions: {
+        input: resolve(appRoot, "test/ui-foundation.fixture.html"),
+      },
+    },
+  });
+}
+
+async function assertNoCriticalA11y(page: Page, state: string): Promise<void> {
+  const result = await new AxeBuilder({ page }).analyze();
+  const violations = result.violations.filter((violation) =>
+    violation.impact === "serious" || violation.impact === "critical",
+  );
+  assert.deepEqual(
+    violations,
+    [],
+    `${state} has serious/critical accessibility violations: ${JSON.stringify(violations)}`,
+  );
+}
+
+async function assertNoOverflow(page: Page, width: number): Promise<void> {
+  await page.setViewportSize({ width, height: 900 });
+  const dimensions = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  assert.ok(
+    dimensions.scrollWidth <= dimensions.clientWidth + 1,
+    `${width}px layout overflows: ${JSON.stringify(dimensions)}`,
+  );
+}
+
+async function assertFoundationTokens(page: Page): Promise<void> {
+  const tokens = await page.evaluate(() => {
+    const button = document.querySelector<HTMLElement>('[data-slot="button"]');
+    if (!button) throw new Error("foundation button is missing");
+    const rootStyles = getComputedStyle(document.documentElement);
+    const bodyStyles = getComputedStyle(document.body);
+    const buttonStyles = getComputedStyle(button);
+    return {
+      bodyFontSize: bodyStyles.fontSize,
+      buttonFontSize: buttonStyles.fontSize,
+      buttonRadius: buttonStyles.borderRadius,
+      rootFontSize: rootStyles.fontSize,
+    };
+  });
+  assert.equal(tokens.rootFontSize, "16px", `unexpected root rem baseline: ${JSON.stringify(tokens)}`);
+  assert.equal(tokens.bodyFontSize, "14px", `unexpected body typography: ${JSON.stringify(tokens)}`);
+  assert.equal(tokens.buttonFontSize, "14px", `unexpected standard button typography: ${JSON.stringify(tokens)}`);
+  assert.equal(tokens.buttonRadius, "6px", `unexpected control radius: ${JSON.stringify(tokens)}`);
+}
+
+function assertPageSignals(signals: PageSignals, label: string): void {
+  assert.deepEqual(signals.externalRequests, [], `${label} made an external request`);
+  assert.deepEqual(signals.failedResponses, [], `${label} returned failed HTTP responses: ${signals.failedResponses.join(" | ")}`);
+  assert.deepEqual(signals.consoleErrors, [], `${label} console errors: ${signals.consoleErrors.join(" | ")}`);
+}
+
+async function testProductionShell(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const signals = observePage(page);
+  await page.goto(`http://127.0.0.1:${productionPort}/`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Операторская foundation для CoffeeOrderPlatform" }).waitFor();
+  assert.equal(await page.title(), "CoffeeOrderPlatform — UI foundation");
+  assert.equal(await page.getByText("Фокусировать первое invalid поле").count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Открыть диалог" }).count(), 0);
+  await page.getByRole("link", { name: "К состояниям foundation" }).click();
+  await page.getByRole("status").first().waitFor();
+  await assertNoCriticalA11y(page, "production initial foundation");
+  await assertFoundationTokens(page);
+
+  const fontState = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return {
+      hasFamily: getComputedStyle(document.body).fontFamily.includes("IBM Plex Sans"),
+      loadedRegular: document.fonts.check('16px "IBM Plex Sans"'),
+    };
+  });
+  assert.equal(fontState.hasFamily, true, "IBM Plex Sans is not the active document family");
+  assert.equal(fontState.loadedRegular, true, "IBM Plex Sans regular face did not load");
+  assert.ok(signals.fontRequests.length >= 1, "production shell did not request a local WOFF2 font");
+  for (const width of [375, 768, 1280]) await assertNoOverflow(page, width);
+  assertPageSignals(signals, "production shell");
+  await page.close();
+}
+
+async function testScenarioFixture(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const signals = observePage(page);
+  await page.setViewportSize({ width: 375, height: 844 });
+  await page.goto(`http://127.0.0.1:${fixturePort}${fixturePath}`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Проверяемая browser surface CoffeeOrderPlatform" }).waitFor();
+  await assertNoCriticalA11y(page, "fixture initial foundation");
+  await assertFoundationTokens(page);
+  const fontState = await page.evaluate(async () => {
+    await document.fonts.ready;
+    return {
+      hasFamily: getComputedStyle(document.body).fontFamily.includes("IBM Plex Sans"),
+      loadedRegular: document.fonts.check('16px "IBM Plex Sans"'),
+    };
+  });
+  assert.equal(fontState.hasFamily, true, "fixture did not activate IBM Plex Sans");
+  assert.equal(fontState.loadedRegular, true, "fixture IBM Plex Sans regular face did not load");
+  assert.ok(signals.fontRequests.length >= 1, "fixture did not request a local WOFF2 font");
+
+  const invalidField = page.getByRole("textbox", { name: "Email оператора" });
+  const disabledField = page.getByRole("textbox", { name: "Disabled field" });
+  assert.equal(await disabledField.isDisabled(), true);
+  await page.getByRole("button", { name: "Фокусировать первое invalid поле" }).click();
+  assert.equal(await invalidField.getAttribute("aria-invalid"), "true");
+  assert.equal(await invalidField.evaluate((element) => document.activeElement === element), true);
+  await assertNoCriticalA11y(page, "fixture invalid and disabled fields");
+
+  const trigger = page.getByRole("button", { name: "Открыть диалог" });
+  await trigger.focus();
+  await trigger.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Foundation dialog test fixture" });
+  await dialog.waitFor();
+  const dialogInput = dialog.getByRole("textbox", { name: "Данные dialog" });
+  assert.equal(await dialogInput.evaluate((element) => document.activeElement === element), true);
+  const dialogSurface = await dialog.evaluate((element) => {
+    const surface = element.parentElement;
+    if (!surface) return { clientHeight: 0, maxHeight: "none", overflowY: "visible", scrollHeight: 0 };
+    const styles = getComputedStyle(surface);
+    return { clientHeight: surface.clientHeight, maxHeight: styles.maxHeight, overflowY: styles.overflowY, scrollHeight: surface.scrollHeight };
+  });
+  assert.notEqual(dialogSurface.maxHeight, "none");
+  assert.equal(dialogSurface.overflowY, "auto");
+  assert.ok(dialogSurface.scrollHeight > dialogSurface.clientHeight, `long dialog did not scroll: ${JSON.stringify(dialogSurface)}`);
+  await assertNoCriticalA11y(page, "fixture open dialog");
+
+  await dialog.getByRole("button", { name: "Закрыть" }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await trigger.click();
+  await dialog.waitFor();
+  await dialogInput.fill("изменено");
+  await page.keyboard.press("Escape");
+  assert.equal(await dialog.isVisible(), true, "dirty dialog closed on Escape after reopen");
+  await page.mouse.click(2, 2);
+  assert.equal(await dialog.isVisible(), true, "dirty dialog closed on outside interaction");
+  assert.equal(await dialogInput.getAttribute("aria-invalid"), "true");
+  await assertNoCriticalA11y(page, "fixture dirty dialog after reopen");
+  await dialog.getByRole("button", { name: "Сбросить изменения" }).click();
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+
+  await trigger.click();
+  await dialog.waitFor();
+  await dialog.getByRole("button", { name: "Включить pending" }).click();
+  assert.equal(await dialog.getByRole("button", { name: "Операция выполняется" }).getAttribute("aria-disabled"), "true");
+  await assertNoCriticalA11y(page, "fixture pending dialog");
+  await page.keyboard.press("Escape");
+  assert.equal(await dialog.isVisible(), true, "pending dialog closed on Escape");
+  await dialog.getByRole("button", { name: "Снять pending" }).click();
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const transitionDuration = await trigger.evaluate((element) => getComputedStyle(element).transitionDuration);
+  assert.equal(transitionDuration, "0s", "reduced-motion transition is not disabled");
+  for (const width of [375, 768, 1280]) await assertNoOverflow(page, width);
+  for (const [name, minimumHeight] of [["Малая 36", 36], ["Средняя 40", 40], ["Большая 44", 44]] as const) {
+    const targetSize = await page.getByRole("button", { name }).boundingBox();
+    assert.ok(targetSize && targetSize.height >= minimumHeight, `${name} target is too small: ${JSON.stringify(targetSize)}`);
+  }
+  assertPageSignals(signals, "scenario fixture");
+  await page.close();
+}
+
+async function main(): Promise<void> {
+  await readFile(resolve(browserRoot, "index.html"));
+  const productionServer = await startPreviewServer(browserRoot, productionPort, resolve(appRoot, "vite.config.ts"));
+  const fixtureRoot = await mkdtemp(join(appRoot, ".tmp-ui-foundation-fixture-"));
+  const fixtureDist = resolve(fixtureRoot, "dist");
+  let fixtureServer: PreviewServer | undefined;
+  let browser: Browser | undefined;
+  let context: BrowserContext | undefined;
+  try {
+    await buildFixture(fixtureDist);
+    await readFile(resolve(fixtureDist, fixturePath.slice(1)));
+    fixtureServer = await startPreviewServer(fixtureRoot, fixturePort, false, fixturePath);
+    browser = await chromium.launch({ headless: true });
+    context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await testProductionShell(context);
+    await testScenarioFixture(context);
+  } finally {
+    await context?.close();
+    await browser?.close();
+    await fixtureServer?.close();
+    await productionServer.close();
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+}
+
+await main();
