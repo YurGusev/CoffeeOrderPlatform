@@ -551,10 +551,18 @@ verification:
   result: passed
   exitCode: 0
   detail: no whitespace errors
+- command: gh api repos/YurGusev/CoffeeOrderPlatform/pulls/142
+  result: passed
+  exitCode: 0
+  detail: 'PR #142 is open against develop at head e18305a6f47ce9a970d7fc8c5b9e2f912fee58e8; mergeable CLEAN and 71 files match the local scope'
+- command: gh pr checks 142
+  result: pending
+  exitCode: 1
+  detail: no checks reported on the feature branch at readback time
 limitations:
-- No commit, push, GitHub issue/PR mutation, review request or merge was performed; delivery remains local-only.
+- Commit e18305a was created and pushed; PR #142 is open against develop. Merge was not performed.
 - The prior independent review result was REVISE; remediation is locally verified, but a follow-up independent review and
-  CI/PR evidence are not observed.
+  CI evidence are not observed yet.
 - Formal scored visual-QA baseline comparison was not performed; observed served-surface render/interaction evidence was captured
   at 375x844 and 1440x900.
 - ADR-0027 records the explicit #137 exception for the narrow type-only @react-types/shared declaration patch; runtime React Aria behavior is unchanged.
@@ -562,7 +570,7 @@ limitations:
 - Generated browser/package dist and the Playwright Chromium cache are local verification artifacts and are not tracked.
 review:
   agent: independent-code-review
-  result: REVISE_FOLLOWUP_FINDINGS_REMEDIATED_LOCAL_REVIEW_PENDING
+  result: PR_OPEN_CI_PENDING
   contentAcceptance: ACCEPTED
   detail: 'Follow-up findings were addressed locally: Dependency Cruiser AST reachability plus console.log regression, transient Dialog reason reset and current-reason guard, 16px rem baseline with body typography, test-only state fixture, measured initial JS gzip budget and explicit ADR-0027 type-only compatibility exception.'
-  limitations: No follow-up independent review, commit, push, PR, CI or merge evidence is claimed.
+  limitations: No follow-up independent review, CI pass or merge evidence is claimed; PR #142 is open and awaiting checks.
