@@ -554,7 +554,7 @@ verification:
 - command: gh api repos/YurGusev/CoffeeOrderPlatform/pulls/142
   result: passed
   exitCode: 0
-  detail: 'PR #142 is open against develop at head e18305a6f47ce9a970d7fc8c5b9e2f912fee58e8; mergeable CLEAN and 71 files match the local scope'
+  detail: 'PR #142 is open against develop; readback reported mergeable true and 71 files match the local scope; a subsequent evidence-only push updated the handoff'
 - command: gh pr checks 142
   result: pending
   exitCode: 1
