@@ -78,6 +78,33 @@ class LaunchAuthorityTests(unittest.TestCase):
     def test_positive_fixture_is_accepted(self) -> None:
         VALIDATOR.validate_root(FIXTURE_ROOT)
 
+    def test_catalog_identity_and_catalog_staging_authority_are_synchronized(self) -> None:
+        profile = fixture_doc("launch-v1-runtime-profile.json")
+        self.assertEqual(
+            profile["catalogIdentity"],
+            {
+                "algorithm": "hmac-sha256-v1",
+                "secretRef": "aroma.catalogIdentityKeyV1",
+                "keyInput": "dedicated-secret-ref-no-logging",
+                "inputEncoding": "UTF-8",
+                "input": ["hmac-sha256-v1", "0x00", "supplierRef", "0x00", "entityType", "0x00", "NFC(rawProviderIdentifier)"],
+                "separatorByte": 0,
+                "entityTypes": ["product", "variant", "offer"],
+                "supplierRefPolicy": "canonical-sup-ulid",
+                "rawProviderIdentifierPolicy": "non-empty-nul-free-nfc-no-trim-no-case-fold",
+                "outputEncoding": "lowercase-hex",
+                "variantIdPolicy": "never-generated",
+                "collisionPolicy": "quarantine-generation",
+                "rotationPolicy": "versioned-key-new-snapshots-only-existing-identities-remain-stable",
+            },
+        )
+        role_map = json.loads((FIXTURE_ROOT / "config" / "database-role-map.json").read_text(encoding="utf-8"))
+        catalog = next(database for database in role_map["databases"] if database["name"] == "coffee_platform_catalog")
+        for runtime_role in catalog["runtimeRoles"]:
+            if runtime_role["runtime"] in {"catalog-supplier-sync", "catalog-activation-worker"}:
+                self.assertIn("supplier_snapshots", runtime_role["tables"])
+                self.assertNotIn("snapshot_generations", runtime_role["tables"])
+
     def test_validator_cli_is_deterministic(self) -> None:
         command = [sys.executable, str(SCRIPT_PATH), "--root", str(FIXTURE_ROOT)]
         first = subprocess.run(command, check=False, capture_output=True, text=True)

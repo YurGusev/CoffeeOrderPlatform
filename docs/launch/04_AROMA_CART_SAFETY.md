@@ -25,6 +25,12 @@ It does not expose arbitrary URL/method/body and does not blind-retry unsafe
 operations. Catalog identity may call only safe catalog reads. Mutation
 audience is restricted to Orders convergence.
 
+`getCartSnapshot()` возвращает только полный `AromaCartSnapshot`. `providerSnapshotRef`
+имеет происхождение `aroma-gateway:cart-body-sha256:<sha256>` от полностью
+полученного raw provider body; это Gateway reference, а не provider field. Cart lines
+разрешаются локально через Integration-owned binding по provider offer ID. Сырые
+provider IDs, body, cookies и credentials наружу не выходят.
+
 ## Попытка convergence
 
 ```text

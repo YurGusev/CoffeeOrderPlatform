@@ -1,0 +1,307 @@
+{
+  "artifactKind": "live-anonymized-provider-observation-report",
+  "wireFormatFixture": false,
+  "notForDecoderTests": true,
+  "transformations": [
+    "Raw provider product/offer IDs replaced with productKey/offerKey pseudonyms while preserving relations",
+    "Provider field names renamed: name to displayName, param_value to paramValue, sold_by_piece to soldByPiece, product_on_stop to productOnStop, show_on_wholesale to showOnWholesale",
+    "Raw response bodies omitted and replaced with responseShape, selected samples, and transport metadata",
+    "Absolute pagination links reduced to absoluteLinkHosts",
+    "Credential, cookie, profile, and PII values omitted"
+  ],
+  "synthetic": false,
+  "origin": "https://aromateacoffee.ru",
+  "observedAtUtc": "2026-09-08T15:04:56Z/2026-09-08T15:13:58Z",
+  "transport": {
+    "tlsVerification": true,
+    "redirects": "forbidden",
+    "sequential": true,
+    "maxResponseBytes": 2097152,
+    "providerMutations": []
+  },
+  "redaction": {
+    "providerIds": "replaced with report-local productKey/offerKey pseudonyms",
+    "cookieValues": "omitted",
+    "credentials": "omitted",
+    "profileValues": "omitted",
+    "rawBodies": "not stored"
+  },
+  "cookieProperties": [
+    {
+      "name": "dcCNXv",
+      "domain": null,
+      "path": "/",
+      "secure": false,
+      "httpOnly": false,
+      "sameSite": "Lax",
+      "expiryPresent": true
+    },
+    {
+      "name": "october_session",
+      "domain": "aromateacoffee.ru",
+      "path": "/",
+      "secure": false,
+      "httpOnly": true,
+      "sameSite": "lax",
+      "expiryPresent": true
+    },
+    {
+      "name": "aroma_auth",
+      "domain": "aromateacoffee.ru",
+      "path": "/",
+      "secure": false,
+      "httpOnly": true,
+      "sameSite": "lax",
+      "expiryPresent": true
+    }
+  ],
+  "requests": [
+    {
+      "id": "catalog-public-page-1",
+      "observedAtUtc": "2026-09-08T15:09:11Z",
+      "authorization": "public",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=1&per_page=10",
+      "status": 200,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 167195,
+      "responseShape": {
+        "topLevel": ["data", "links", "meta"],
+        "dataCount": 10,
+        "meta": {
+          "current_page": 1,
+          "from": 1,
+          "to": 10,
+          "last_page": 47,
+          "per_page": 10,
+          "total": 466
+        }
+      },
+      "sample": [
+        {
+          "productKey": "product-tea-1",
+          "displayName": "Chinese Black Tea Black Snail (Черная улитка)",
+          "soldByPiece": false,
+          "productOnStop": false,
+          "showOnWholesale": true,
+          "discountCount": 0,
+          "offers": [
+            {
+              "offerKey": "offer-tea-1",
+              "displayName": "Chinese Black Tea Black Snail (Черная улитка)",
+              "price": 0,
+              "priceType": "integer",
+              "paramsCount": 1
+            }
+          ]
+        },
+        {
+          "productKey": "product-tea-2",
+          "displayName": "Chinese Black Tea Da Hong Pao (Да Хун Пао Большой красный халат)",
+          "soldByPiece": false,
+          "productOnStop": false,
+          "showOnWholesale": true,
+          "discountCount": 0,
+          "offers": [
+            {
+              "offerKey": "offer-tea-2",
+              "displayName": "Chinese Black Tea Da Hong Pao (Да Хун Пао Большой красный халат)",
+              "price": 0,
+              "priceType": "integer",
+              "paramsCount": 1
+            }
+          ]
+        }
+      ],
+      "setCookieNames": ["dcCNXv", "october_session"]
+    },
+    {
+      "id": "catalog-public-page-47",
+      "observedAtUtc": "2026-09-08T15:04:56Z",
+      "authorization": "public",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=47&per_page=10",
+      "status": 200,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 171671,
+      "responseShape": {
+        "topLevel": ["data", "links", "meta"],
+        "dataCount": 6,
+        "meta": {
+          "current_page": 47,
+          "from": 461,
+          "to": 466,
+          "last_page": 47,
+          "per_page": 10,
+          "total": 466
+        },
+        "absoluteLinkHosts": ["dev.aromateacoffee.ru"]
+      },
+      "sample": {
+        "productKey": "product-coffee-1",
+        "displayName": "Эфиопия Гуджи Урага, кофе жареный",
+        "soldByPiece": false,
+        "productOnStop": false,
+        "showOnWholesale": true,
+        "discountCount": 0,
+        "offers": [
+          {
+            "offerKey": "offer-coffee-1",
+            "displayName": "Эфиопия Гуджи Урага, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+            "price": 940,
+            "priceType": "integer",
+            "params": [
+              {"param": {"name": "Вес", "slug": "weight"}, "paramValue": {"slug": "200", "value": "200"}, "value": null},
+              {"param": {"name": "Молотый", "slug": "is_grinded"}, "paramValue": null, "value": "0"}
+            ]
+          },
+          {
+            "offerKey": "offer-coffee-2",
+            "displayName": "Эфиопия Гуджи Урага, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+            "price": 4500,
+            "priceType": "integer",
+            "params": [
+              {"param": {"name": "Вес", "slug": "weight"}, "paramValue": {"slug": "1000", "value": "1000"}, "value": null},
+              {"param": {"name": "Молотый", "slug": "is_grinded"}, "paramValue": null, "value": "0"}
+            ]
+          },
+          {
+            "offerKey": "offer-coffee-3",
+            "displayName": "Эфиопия Гуджи Урага, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+            "price": 940,
+            "priceType": "integer",
+            "params": [
+              {"param": {"name": "Вес", "slug": "weight"}, "paramValue": {"slug": "200", "value": "200"}, "value": null},
+              {"param": {"name": "Молотый", "slug": "is_grinded"}, "paramValue": null, "value": "1"}
+            ]
+          },
+          {
+            "offerKey": "offer-coffee-4",
+            "displayName": "Эфиопия Гуджи Урага, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+            "price": 4500,
+            "priceType": "integer",
+            "params": [
+              {"param": {"name": "Вес", "slug": "weight"}, "paramValue": {"slug": "1000", "value": "1000"}, "value": null},
+              {"param": {"name": "Молотый", "slug": "is_grinded"}, "paramValue": null, "value": "1"}
+            ]
+          }
+        ]
+      },
+      "setCookieNames": ["dcCNXv", "october_session"]
+    },
+    {
+      "id": "user-public",
+      "observedAtUtc": "2026-09-08T15:11:27Z",
+      "authorization": "public",
+      "method": "GET",
+      "path": "/api/v1/user",
+      "status": 403,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 39,
+      "responseShape": {"topLevel": ["error"]}
+    },
+    {
+      "id": "cart-public",
+      "observedAtUtc": "2026-09-08T15:11:27Z",
+      "authorization": "public",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "status": 403,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 39,
+      "responseShape": {"topLevel": ["error"]}
+    },
+    {
+      "id": "catalog-public-out-of-range-page",
+      "observedAtUtc": "2026-09-08T15:13:58Z",
+      "authorization": "public",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=233&per_page=10",
+      "status": 200,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 2110,
+      "responseShape": {
+        "topLevel": ["data", "links", "meta"],
+        "dataCount": 0,
+        "meta": {"current_page": 233, "from": null, "to": null, "last_page": 47, "per_page": 10, "total": 466}
+      }
+    },
+    {
+      "id": "login",
+      "observedAtUtc": "2026-09-08T15:04:57Z",
+      "authorization": "pre-session",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "requestBodyShape": {"email": "redacted", "password": "redacted"},
+      "status": 200,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 678,
+      "responseShape": {"topLevel": ["data"], "dataFields": ["redacted profile fields"]},
+      "setCookieNames": ["dcCNXv", "october_session", "aroma_auth"]
+    },
+    {
+      "id": "user",
+      "observedAtUtc": "2026-09-08T15:04:58Z",
+      "authorization": "authenticated",
+      "method": "GET",
+      "path": "/api/v1/user",
+      "status": 200,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 678,
+      "responseShape": {"topLevel": ["data"], "dataFields": ["redacted profile fields"]},
+      "profileEmailMatchesImportedCredential": true,
+      "setCookieNames": ["october_session"]
+    },
+    {
+      "id": "cart-empty",
+      "observedAtUtc": "2026-09-08T15:04:58Z",
+      "authorization": "authenticated",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "status": 200,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 114,
+      "responseShape": {
+        "topLevel": ["prices", "products"],
+        "productsCount": 0,
+        "pricesFields": ["categories", "discounts", "prices", "total", "weights"],
+        "emptyArrayFields": ["categories", "weights", "discounts", "prices"],
+        "totalFields": ["default", "promo"]
+      },
+      "setCookieNames": ["october_session"]
+    },
+    {
+      "id": "catalog-authenticated-page-47",
+      "observedAtUtc": "2026-09-08T15:04:58Z",
+      "authorization": "authenticated",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=47&per_page=10",
+      "status": 200,
+      "contentType": "application/json",
+      "bodyComplete": true,
+      "bytesRead": 171671,
+      "responseShape": {"sameAs": "catalog-public-page-47", "samplePriceDifference": false},
+      "setCookieNames": ["october_session"]
+    },
+    {
+      "id": "wholesale-ui",
+      "observedAtUtc": "2026-09-08T15:09:58Z",
+      "authorization": "public",
+      "method": "GET",
+      "path": "/wholesale",
+      "status": 200,
+      "contentType": "text/html",
+      "bodyComplete": true,
+      "bytesRead": 97959,
+      "responseShape": {"pageKind": "KillBot user verification", "inputCount": 0, "scriptSrcCount": 0}
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
+import test from "node:test";
+import {
+  decodeCartSnapshot,
+  decodeCatalogPage,
+  decodeProviderRejection,
+} from "../../apps/aroma-gateway/dist/infrastructure/provider/decoder.js";
+
+const capture = async (name) => JSON.parse(await readFile(new URL(`../../evidence/aroma-provider/2026-09-12-cart-mutations/${name}`, import.meta.url), "utf8"));
+
+void test("decoder отличает полный пустой cart от partial и сохраняет offer id отдельно от cart-line id", async () => {
+  const emptyBody = await capture("initial-cart.json");
+  const empty = decodeCartSnapshot(emptyBody);
+  assert.equal(empty.kind, "empty");
+  assert.deepEqual(empty.lines, []);
+
+  const populated = decodeCartSnapshot(await capture("add-one-get.json"));
+  assert.equal(populated.kind, "non-empty");
+  assert.equal(populated.lines.length, 1);
+  assert.notEqual(populated.lines[0].cartLineId, populated.lines[0].offerId);
+  assert.equal(populated.lines[0].offerPriceRaw, "852.6");
+  assert.equal(populated.lines[0].quantity, 1);
+
+  assert.throws(() => decodeCartSnapshot({products: []}), {code: "ProviderDecodeIncomplete"});
+  assert.throws(() => decodeCartSnapshot({products: [], prices: {total: {default: 0, promo: 0}}}), {code: "ProviderDecodeIncomplete"});
+  for (const key of ["default", "promo"]) {
+    assert.throws(() => decodeCartSnapshot({...emptyBody, prices: {...emptyBody.prices, total: {...emptyBody.prices.total, [key]: 1}}}), {code: "ProviderDecodeInvalid"});
+  }
+  for (const key of ["categories", "weights", "discounts", "prices"]) {
+    assert.throws(() => decodeCartSnapshot({...emptyBody, prices: {...emptyBody.prices, [key]: [{}]}}), {code: "ProviderDecodeInvalid"});
+  }
+  const raw = await capture("add-one-get.json");
+  assert.throws(() => decodeCartSnapshot({...raw, products: [{id: 1, offer: {id: 2, price: 1.2}, quantity: 1}]}), {code: "ProviderDecodeIncomplete"});
+  assert.throws(() => decodeCartSnapshot({...raw, products: [raw.products[0], raw.products[0]]}), {code: "ProviderDecodeInvalid"});
+});
+
+void test("decoder принимает фактическую catalog page и проверяет использованные поля", async () => {
+  const page = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12-authenticated/catalog-page1.json", import.meta.url), "utf8"));
+  const decoded = decodeCatalogPage(page);
+  assert.equal(decoded.currentPage, 1);
+  assert.ok(decoded.products.length > 0);
+  assert.equal(decoded.products[0].offers[0].priceRaw, "0");
+  assert.throws(() => decodeCatalogPage({...page, data: [{...page.data[0], offers: [{...page.data[0].offers[0], price: "not-a-decimal"}]}]}), {code: "ProviderDecodeInvalid"});
+});
+
+void test("rejection shapes are recognized without claiming that a 422 had no effect", async () => {
+  const duplicate = await capture("add-same-offer.json");
+  const rejection = decodeProviderRejection(422, duplicate);
+  assert.equal(rejection.effect, "unknown");
+  assert.deepEqual(rejection.errorFieldNames, ["offer_id"]);
+  assert.throws(() => decodeProviderRejection(422, {error: "bad", errors: {offer_id: [4]}}), {code: "ProviderDecodeInvalid"});
+  assert.throws(() => decodeProviderRejection(422, {}), {code: "ProviderDecodeInvalid"});
+});

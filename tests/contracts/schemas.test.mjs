@@ -48,6 +48,40 @@ void test("common and event schemas compile as strict JSON Schema 2020-12", asyn
   for (const schema of schemas) assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
 });
 
+void test("uri-reference format follows RFC 3986 reference grammar", () => {
+  const validate = contractAjv().compile({type: "string", format: "uri-reference"});
+  for (const value of ["./1:abc", "/a:b", "//[::1]/", "http://[::1]/", "HTTP://EXAMPLE.COM/problem", "urn:example:test", "/relative/path", "../a?b#c", "a%20b"])
+    assert.equal(validate(value), true, JSON.stringify(value));
+  const invalid = ["1:abc", ":abc", "/[::1]", "http://[", "/has space", "\\evil.com", "%", "\0", "foo[bar", "foo]bar", "\"foo", "%GG"];
+  assert.deepEqual(invalid.filter((value) => validate(value)), [], "accepted invalid URI references");
+});
+
+void test("ProblemDetails type and instance use the same URI-reference grammar", async () => {
+  const {ajv, schemas} = await loadSchemas();
+  const problemSchema = schemas.find((schema) => schema.$id.endsWith("/common/problem-details.v1.schema.json"));
+  assert.ok(problemSchema);
+  const validate = ajv.getSchema(`${problemSchema.$id}#/$defs/ProblemDetails`);
+  assert.ok(validate);
+  const base = {
+    type: "about:blank",
+    title: "VALIDATION_FAILED",
+    status: 400,
+    code: "VALIDATION_FAILED",
+    detail: "Request validation failed",
+    instance: "/problems/validation",
+    correlationId: "11111111-1111-4111-8111-111111111111",
+    errors: [],
+  };
+  const valid = ["./1:abc", "/a:b", "//[::1]/", "http://[::1]/", "HTTP://EXAMPLE.COM/problem", "urn:example:test", "/relative/path", "../a?b#c", "a%20b"];
+  const invalid = ["1:abc", ":abc", "/[::1]", "http://[", "/has space", "\\evil.com", "%", "\0", "foo[bar", "foo]bar", "\"foo", "%GG"];
+  for (const field of ["type", "instance"]) {
+    for (const value of valid) assert.equal(validate({...base, [field]: value}), true, `${field}: ${JSON.stringify(value)}`);
+    const accepted = invalid.filter((value) => validate({...base, [field]: value}));
+    assert.deepEqual(accepted, [], `${field}: accepted invalid URI references`);
+  }
+  assert.equal(validate({...base, title: "😀".repeat(101)}), true);
+});
+
 void test("event schemas reference common definitions instead of copying them", async () => {
   const {schemas} = await loadSchemas();
   const common = schemas.filter((schema) => schema.$id.includes("/common/"));

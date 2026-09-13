@@ -23,7 +23,7 @@ business durability. Техническую authority задаёт
 
 #4 + #62 → #5 Customer
 #4 + #62 → #10 Gateway → #6 staging
-#6 + #63 → #16 activation → #17 Catalog API → #18 capacity → #7 Pricing
+#6 + #63 → #16 activation + durable AROMA binding ack → #17 Catalog API → #18 capacity → #7 Pricing
 #5 + #7 + #17 + #18 + #63 → #8 Orders → #9 React
 #10 + #16 + #18 + #8 + #63 → #11 convergence
 #8 + #9 + #11 + #63 → #12 Realtime
@@ -102,8 +102,8 @@ collector.
 | #4 | #2, #3, #60, #119 | OpenAPI/JSON Schema, types-only generation, fixtures → business contract consumers |
 | #5 | #4, #62, #119 | Customer API/migrations → #8, #9, #13 |
 | #10 | #4, #62 | safe NDJSON/cart transport, durable operation journal → #6, #11 |
-| #6 | #10, #62 | Received Catalog staging generation → #16 |
-| #16 | #6, #63 | active revision + owner Outbox events → #17, #18, #8, #11 |
+| #6 | #10, #62 | Received Catalog staging generation + immutable AROMA binding preparation → #16 |
+| #16 | #6, #63 | durable binding acknowledgements, active revision + owner Outbox events → #17, #18, #8, #11 |
 | #17 | #4, #16 | Catalog search + Pricing input → #18, #7, #8, #9 |
 | #18 | #10, #6, #16, #17 | pipeline recovery/capacity evidence → #7, #8, #9, #11, #13 |
 | #7 | #4, #17, #18, #62, #119 | immutable PricingQuote/verify → #8, #9 |

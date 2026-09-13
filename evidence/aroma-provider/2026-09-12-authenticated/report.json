@@ -1,0 +1,509 @@
+{
+  "scope": "authorized-account-login-then-read-only",
+  "origin": "https://aromateacoffee.ru",
+  "credentialsSource": "Canonical development pair returned 422; prior encrypted System import returned 200 and account match was verified in memory",
+  "requestBudget": 6,
+  "requestsPerformed": 6,
+  "tlsVerification": true,
+  "redirects": "deny",
+  "cookiesStored": "memory only; jar cleared at end",
+  "mutations": "no cart/order/profile/logout/refresh calls",
+  "cookieAttributes": [
+    {
+      "name": "dcCNXv",
+      "domain": "aromateacoffee.ru",
+      "path": "/",
+      "secure": false,
+      "expiresEpoch": 1820765744
+    },
+    {
+      "name": "october_session",
+      "domain": ".aromateacoffee.ru",
+      "path": "/",
+      "secure": false,
+      "expiresEpoch": 1796429746
+    },
+    {
+      "name": "aroma_auth",
+      "domain": ".aromateacoffee.ru",
+      "path": "/",
+      "secure": false,
+      "expiresEpoch": 1823789744
+    }
+  ],
+  "requests": [
+    {
+      "tag": "login",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "utc": "2026-09-12T16:14:22.713180+00:00",
+      "status": 422,
+      "contentType": "application/json",
+      "bytesRead": 160,
+      "bodyComplete": true,
+      "responseShape": {
+        "error": "str",
+        "errors": {
+          "email": {
+            "type": "array",
+            "length": 1,
+            "itemShapes": [
+              "str"
+            ]
+          }
+        }
+      },
+      "credentialSource": "canonical-development"
+    },
+    {
+      "tag": "login-import",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "credentialSource": "prior-encrypted-System-import",
+      "utc": "2026-09-12T16:15:44.988088+00:00",
+      "status": 200,
+      "contentType": "application/json",
+      "bytesRead": 678,
+      "bodyComplete": true,
+      "responseShape": {
+        "data": {
+          "email": "str",
+          "wholesale": "bool",
+          "retail": "bool",
+          "company_type": "str",
+          "company_official_name": "str",
+          "company_address": "NoneType",
+          "company_inn": "NoneType",
+          "company_director": "NoneType",
+          "company_kpp": "NoneType",
+          "name": "str",
+          "city": "str",
+          "phone": "str",
+          "delivery_service_id": "int",
+          "orders_count": "int"
+        }
+      }
+    },
+    {
+      "tag": "user",
+      "method": "GET",
+      "path": "/api/v1/user",
+      "credentialSource": "prior-encrypted-System-import",
+      "utc": "2026-09-12T16:15:45.312735+00:00",
+      "status": 200,
+      "contentType": "application/json",
+      "bytesRead": 678,
+      "bodyComplete": true,
+      "responseShape": {
+        "data": {
+          "email": "str",
+          "wholesale": "bool",
+          "retail": "bool",
+          "company_type": "str",
+          "company_official_name": "str",
+          "company_address": "NoneType",
+          "company_inn": "NoneType",
+          "company_director": "NoneType",
+          "company_kpp": "NoneType",
+          "name": "str",
+          "city": "str",
+          "phone": "str",
+          "delivery_service_id": "int",
+          "orders_count": "int"
+        }
+      },
+      "accountMatchesConfiguredEmail": true
+    },
+    {
+      "tag": "cart",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "credentialSource": "prior-encrypted-System-import",
+      "utc": "2026-09-12T16:15:45.611154+00:00",
+      "status": 200,
+      "contentType": "application/json",
+      "bytesRead": 114,
+      "bodyComplete": true,
+      "responseShape": {
+        "products": {
+          "type": "array",
+          "length": 0,
+          "itemShapes": []
+        },
+        "prices": {
+          "categories": {
+            "type": "array",
+            "length": 0,
+            "itemShapes": []
+          },
+          "weights": {
+            "type": "array",
+            "length": 0,
+            "itemShapes": []
+          },
+          "discounts": {
+            "type": "array",
+            "length": 0,
+            "itemShapes": []
+          },
+          "prices": {
+            "type": "array",
+            "length": 0,
+            "itemShapes": []
+          },
+          "total": {
+            "default": "int",
+            "promo": "int"
+          }
+        }
+      },
+      "sha256Raw": "d843b153a190d6901f37f8484e363ca27e74a8f577cabbcc97fe6ec00a2ab0a9",
+      "productCount": 0,
+      "capture": "cart.json",
+      "sha256Sanitized": "4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57"
+    },
+    {
+      "tag": "catalog-page1",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=1&per_page=10",
+      "credentialSource": "prior-encrypted-System-import",
+      "utc": "2026-09-12T16:15:46.137887+00:00",
+      "status": 200,
+      "contentType": "application/json",
+      "bytesRead": 167195,
+      "bodyComplete": true,
+      "responseShape": {
+        "data": {
+          "type": "array",
+          "length": 10,
+          "itemShapes": [
+            {
+              "meta_title": "str",
+              "meta_description": "str",
+              "id": "int",
+              "slug": "str",
+              "name": "str",
+              "front_name": "str",
+              "description": "str",
+              "video_link": "NoneType",
+              "root": {
+                "name": "str",
+                "slug": "str",
+                "composite_slug": "str",
+                "description": "str",
+                "image": "NoneType"
+              },
+              "category": {
+                "name": "str",
+                "slug": "str",
+                "composite_slug": "str",
+                "description": "NoneType",
+                "image": "NoneType"
+              },
+              "tags": {
+                "type": "array",
+                "length": 0,
+                "itemShapes": []
+              },
+              "offers": {
+                "type": "array",
+                "length": 1,
+                "itemShapes": [
+                  {
+                    "id": "int",
+                    "name": "str",
+                    "vendor_code": "str",
+                    "price": "int",
+                    "params": {
+                      "type": "array",
+                      "length": 1,
+                      "itemShapes": [
+                        {
+                          "param": {
+                            "id": "int",
+                            "name": "str",
+                            "slug": "str",
+                            "type": "str",
+                            "icon": "NoneType"
+                          },
+                          "param_value": {
+                            "id": "int",
+                            "value": "str",
+                            "slug": "str",
+                            "icon": "NoneType"
+                          },
+                          "value": "NoneType"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "params": {
+                "type": "array",
+                "length": 0,
+                "itemShapes": []
+              },
+              "preview": "NoneType",
+              "photos": {
+                "type": "array",
+                "length": 1,
+                "itemShapes": [
+                  {
+                    "path": "str",
+                    "title": "NoneType",
+                    "description": "NoneType"
+                  }
+                ]
+              },
+              "full_description": "str",
+              "discount": {
+                "type": "array",
+                "length": 0,
+                "itemShapes": []
+              },
+              "show_on_wholesale": "bool",
+              "product_on_stop": "bool",
+              "sold_by_piece": "bool",
+              "disable_volume_discount": "bool",
+              "disable_personal_discount": "bool"
+            }
+          ]
+        },
+        "links": {
+          "first": "str",
+          "last": "str",
+          "prev": "NoneType",
+          "next": "str"
+        },
+        "meta": {
+          "current_page": "int",
+          "from": "int",
+          "last_page": "int",
+          "links": {
+            "type": "array",
+            "length": 15,
+            "itemShapes": [
+              {
+                "url": "NoneType",
+                "label": "str",
+                "active": "bool"
+              }
+            ]
+          },
+          "path": "str",
+          "per_page": "int",
+          "to": "int",
+          "total": "int"
+        }
+      },
+      "sha256Raw": "3a7bdb883c659e935402f5b27eaac2a1d631eee7c0d9f1485488600e2337635b",
+      "capture": "catalog-page1.json",
+      "sha256Sanitized": "47127d5b9c3479784dbb43d3ef0ce0549211dbc0ef2423989d890570b1633d25",
+      "comparisonToEarlierPublic": {
+        "matchedBy": "vendor_code",
+        "uniqueInBothSamples": true,
+        "sameVendorCodeSet": true,
+        "priceChangedCount": 0,
+        "publicPriceValues": [
+          0
+        ],
+        "authenticatedPriceValues": [
+          0
+        ]
+      }
+    },
+    {
+      "tag": "catalog-page24",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=24&per_page=10",
+      "credentialSource": "prior-encrypted-System-import",
+      "utc": "2026-09-12T16:15:46.699109+00:00",
+      "status": 200,
+      "contentType": "application/json",
+      "bytesRead": 106378,
+      "bodyComplete": true,
+      "responseShape": {
+        "data": {
+          "type": "array",
+          "length": 10,
+          "itemShapes": [
+            {
+              "meta_title": "str",
+              "meta_description": "str",
+              "id": "int",
+              "slug": "str",
+              "name": "str",
+              "front_name": "str",
+              "description": "str",
+              "video_link": "NoneType",
+              "root": {
+                "name": "str",
+                "slug": "str",
+                "composite_slug": "str",
+                "description": "str",
+                "image": {
+                  "path": "str",
+                  "title": "NoneType",
+                  "description": "NoneType"
+                }
+              },
+              "category": {
+                "name": "str",
+                "slug": "str",
+                "composite_slug": "str",
+                "description": "str",
+                "image": "NoneType"
+              },
+              "tags": {
+                "type": "array",
+                "length": 0,
+                "itemShapes": []
+              },
+              "offers": {
+                "type": "array",
+                "length": 1,
+                "itemShapes": [
+                  {
+                    "id": "int",
+                    "name": "str",
+                    "vendor_code": "str",
+                    "price": "int",
+                    "params": {
+                      "type": "array",
+                      "length": 0,
+                      "itemShapes": []
+                    }
+                  }
+                ]
+              },
+              "params": {
+                "type": "array",
+                "length": 0,
+                "itemShapes": []
+              },
+              "preview": "NoneType",
+              "photos": {
+                "type": "array",
+                "length": 1,
+                "itemShapes": [
+                  {
+                    "path": "str",
+                    "title": "NoneType",
+                    "description": "NoneType"
+                  }
+                ]
+              },
+              "full_description": "str",
+              "discount": {
+                "type": "array",
+                "length": 0,
+                "itemShapes": []
+              },
+              "show_on_wholesale": "bool",
+              "product_on_stop": "bool",
+              "sold_by_piece": "bool",
+              "disable_volume_discount": "bool",
+              "disable_personal_discount": "bool"
+            }
+          ]
+        },
+        "links": {
+          "first": "str",
+          "last": "str",
+          "prev": "str",
+          "next": "str"
+        },
+        "meta": {
+          "current_page": "int",
+          "from": "int",
+          "last_page": "int",
+          "links": {
+            "type": "array",
+            "length": 15,
+            "itemShapes": [
+              {
+                "url": "str",
+                "label": "str",
+                "active": "bool"
+              }
+            ]
+          },
+          "path": "str",
+          "per_page": "int",
+          "to": "int",
+          "total": "int"
+        }
+      },
+      "sha256Raw": "cd8a51dddd1c487d11e838583a26d0684414178eaaeaac195dde216cbe595fe0",
+      "capture": "catalog-page24.json",
+      "sha256Sanitized": "d85b538d50e0f03967fd3e72bff64e4938dbb153bc3fe2ab22cb4d15dd7e5e93",
+      "comparisonToEarlierPublic": {
+        "matchedBy": "vendor_code",
+        "uniqueInBothSamples": true,
+        "sameVendorCodeSet": true,
+        "priceChangedCount": 0,
+        "publicPriceValues": [
+          175,
+          200,
+          215,
+          225,
+          260,
+          315,
+          380,
+          490,
+          495,
+          1700,
+          2250,
+          2350
+        ],
+        "authenticatedPriceValues": [
+          175,
+          200,
+          215,
+          225,
+          260,
+          315,
+          380,
+          490,
+          495,
+          1700,
+          2250,
+          2350
+        ]
+      }
+    }
+  ],
+  "sanitization": "Full catalog/cart JSON structure retained; id/*_id pseudonymized consistently within this capture set; email strings redacted; profile/login only shape and boolean account match retained; no credential/cookie/header values persisted",
+  "limitations": [
+    "No session TTL/refresh proof",
+    "No mutation semantics proof",
+    "Catalog prices remain without confirmed currency/scale/basis",
+    "Public comparison is sequential, not controlled simultaneous experiment",
+    "HttpOnly/SameSite omitted: probe did not preserve raw attribute spelling; case-sensitive CookieJar lookup cannot prove absence"
+  ],
+  "credentialInventoryMismatch": {
+    "canonicalDevelopmentDiffersFromPriorSystemImport": true,
+    "canonicalInventoryModified": false
+  },
+  "maxResponseBytes": 2097152,
+  "timeoutSeconds": {
+    "login": 20,
+    "read": 15
+  },
+  "credentialCorrection": {
+    "utc": "2026-09-12T16:19:58.256625+00:00",
+    "authorizedByUser": true,
+    "updatedPaths": [
+      "environments.development.aroma.email",
+      "environments.development.aroma.password"
+    ],
+    "allOtherEncryptedLeavesUnchanged": true,
+    "sourceMatchesSuccessfulLogin": true,
+    "scopedMacVerification": "pass",
+    "configCheck": "pass",
+    "securitySecrets": "pass",
+    "runtimeRestarted": false,
+    "additionalLoginPerformed": false
+  }
+}

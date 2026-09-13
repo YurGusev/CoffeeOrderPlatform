@@ -51,6 +51,7 @@ Machine authority #19 фиксирует следующие `operationId`; #4 п
 | `pricing-service` | `catalog-service` | `GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input` | `getCatalogPricingInput` | нет |
 | `orders-service` | `pricing-service` | `POST /api/internal-v1/pricing/quotes:verify` | `verifyPricingQuote` | нет |
 | `catalog-supplier-sync` | `aroma-gateway` | `POST /api/internal-v1/aroma/catalog-exports` | `exportAromaCatalog` | нет |
+| `catalog-activation-worker` | `aroma-gateway` | `POST /api/internal-v1/aroma/offer-bindings` | `registerAromaOfferBinding` | нет |
 | `aroma-observer` | `aroma-gateway` | `POST /api/internal-v1/aroma/cart-snapshots:read` | `readAromaCartSnapshot` | нет |
 | `aroma-convergence` | `aroma-gateway` | `POST /api/internal-v1/aroma/cart-snapshots:read` | `readAromaCartSnapshot` | нет |
 | `aroma-convergence` | `aroma-gateway` | `POST /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity` | `setAromaCartLineQuantity` | да |

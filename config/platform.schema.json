@@ -297,11 +297,13 @@
       }
     },
     "aroma": {
-      "type": "object", "additionalProperties": false, "required": ["origin", "redirectsAllowed"],
+      "type": "object", "additionalProperties": false, "required": ["supplierRef", "scopeRef", "origin", "redirectsAllowed"],
       "properties": {
+        "supplierRef": {"type": "string", "const": "sup_00000000000000000000000001"},
+        "scopeRef": {"type": "string", "const": "aroma-primary"},
         "origin": {
           "type": "object", "additionalProperties": false, "required": ["scheme", "host", "port"],
-          "properties": {"scheme": {"type": "string", "const": "https"}, "host": {"type": "string", "const": "aroma.origin.host"}, "port": {"type": "integer", "const": 443}}
+          "properties": {"scheme": {"type": "string", "const": "https"}, "host": {"type": "string", "const": "aromateacoffee.ru"}, "port": {"type": "integer", "const": 443}}
         },
         "redirectsAllowed": {"type": "boolean", "const": false}
       }

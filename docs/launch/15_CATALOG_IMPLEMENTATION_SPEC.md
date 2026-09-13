@@ -7,7 +7,7 @@
 
 ```text
 AROMA provider
-  -> aroma-gateway: private HTTP NDJSON stream
+  -> aroma-gateway: private HTTP NDJSON stream (providerSnapshotRef=`aroma-gateway:catalog-export:${snapshotRef}`)
   -> catalog-supplier-sync: batch validation + staging
   -> Catalog DB: Received generation
   -> catalog-activation-worker: validation + atomic activation + Outbox
@@ -30,8 +30,10 @@ Catalog DB через `FOR UPDATE SKIP LOCKED`.
 | `catalog-activation-worker` | проверить `Received`, материализовать и активировать | `coffee_platform_catalog` / `coffee_catalog_activate_rw` | provider HTTP, public HTTP |
 | `catalog-service` | читать только активное поколение и обслуживать HTTP | `coffee_platform_catalog` / `coffee_catalog_api_ro` | provider HTTP, staging writes, activation |
 
-Секреты AROMA доступны только `aroma-gateway`. Ни один Catalog runtime не
-получает URL/роль Customer, Pricing, Orders или Integration DB.
+Provider credentials are the `aroma.email` and `aroma.password` secret leaves,
+used with the canonical account scope `aroma-primary` and supplier
+`sup_00000000000000000000000001`; Catalog never receives those credentials.
+
 
 ## 3. Поток Gateway -> Catalog
 
@@ -40,7 +42,8 @@ Catalog DB через `FOR UPDATE SKIP LOCKED`.
 `POST /api/internal-v1/aroma/catalog-exports`
 
 - audience: только service identity `catalog-supplier-sync`;
-- request: `{ "snapshotRef": "snp_<ULID>", "supplierRef": "sup_<ULID>" }`;
+- request: `{ "snapshotRef": "snp_<ULID>", "supplierRef": "sup_<ULID>" }`; the
+  Gateway accepts only its canonical AROMA supplier `sup_00000000000000000000000001`.
 - response: `200 application/x-ndjson; charset=utf-8`;
 - общий deadline: `15m`; idle timeout между records: `30s`;
 - клиент обязан поддерживать backpressure и отменять provider request при
@@ -54,7 +57,9 @@ Catalog DB через `FOR UPDATE SKIP LOCKED`.
 Каждая строка — один JSON object и `\n`. `streamVersion` всегда `"1"`.
 
 1. `snapshot-started`: `snapshotRef`, `supplierRef`, `providerSnapshotRef`,
-   `startedAt`.
+   `startedAt`. Gateway provenance is exactly
+   `aroma-gateway:catalog-export:<snapshotRef>`; it is a traversal reference, not
+   a content hash.
 2. `snapshot-batch`: `snapshotRef`, `batchNumber`, `offerCount`,
    `uncompressedBytes`, `batchHash`, `previousBatchHash`, `items`.
 3. `snapshot-completed`: `snapshotRef`, `batchCount`, `productCount`,
@@ -72,14 +77,45 @@ SHA-256 конкатенации бинарных batch hashes в порядке
 `availability`, `imageUrl`. Raw provider identifiers, cookies и session ids не
 передаются. `offerRef` назначается Catalog при активации.
 
-Gateway вычисляет source hashes только как
-`HMAC-SHA256(catalogIdentityKeyV1, "hmac-sha256-v1\\0" + supplierRef + "\\0" +
-entityType + "\\0" + NFC(rawProviderIdentifier))`. Record обязан содержать
-`sourceIdentityScheme="hmac-sha256-v1"`. Key доступен только Gateway, не
-совпадает с session/actor/cursor keys и не ротируется автоматически. Unique
-scope — `(supplierRef,entityType,sourceHash)`; одинаковый hash с различными
-semantic facts отклоняет snapshot как `SOURCE_IDENTITY_COLLISION`. Ротация key
-требует отдельного ADR и alias migration; Catalog никогда не получает raw ID.
+Gateway вычисляет каждый source hash только как HMAC-SHA256 с dedicated key
+`aroma.catalogIdentityKeyV1`. Точное byte framing сообщения `M`:
+`UTF-8("hmac-sha256-v1") || 0x00 || UTF-8(supplierRef) || 0x00 ||
+UTF-8(entityType) || 0x00 || UTF-8(NFC(rawProviderIdentifier))`.
+`0x00` — один literal NUL byte, а не два текстовых символа `\` и `0`.
+`entityType` проходит строгий guard и принимает только `product`, `variant` или
+`offer`; `supplierRef` — canonical `sup_<ULID>`. Raw provider identifier не
+trim/lowercase-ится: принимается только непустая well-formed UTF-16 строка без
+NUL, затем применяется только NFC. Результат — ровно 64 lowercase hex символа.
+Ключ передаётся helper отдельным typed input, не логируется, не совпадает с
+session/actor/cursor keys и не ротируется автоматически. Helper создаёт только
+identity proof: Catalog activation назначает owner refs, а `variantRef`/variant
+ID никогда не генерируется Gateway. Gateway не пишет в Catalog DB и не передаёт
+Catalog raw ID.
+
+Record обязан содержать `sourceIdentityScheme="hmac-sha256-v1"`. Unique scope —
+`(supplierRef,entityType,sourceHash)`; одинаковый hash с различными semantic facts
+отклоняет snapshot как `SOURCE_IDENTITY_COLLISION`. Ротация key требует отдельного
+ADR и alias migration.
+Where the provider does not prove an independent variant, Gateway treats the
+provider offer identifier only as the Platform source variant key for hashing;
+it is not a provider-independent variant alias. Absent or unknown packing/grind
+facts remain absent/unknown and are not defaulted to a known value.
+
+### 3.3 Immutable binding перед активацией
+
+`catalog-activation-worker` в durable preparation transaction назначает или
+переиспользует `offerRef` и сохраняет задание регистрации binding. После commit
+он отправляет `POST /api/internal-v1/aroma/offer-bindings` до активации поколения. Gateway
+принимает binding только для `Completed` snapshot и точного
+`supplierRef/sourceIdentityScheme/sourceOfferKeyHash`; ответ `Bound` и
+`firstSnapshotRef` сохраняются durable. HTTP выполняется вне Catalog
+transaction, а активация разрешена только после durable ack для каждого
+required binding. Потерянный ответ повторяет тот же request и возвращает
+immutable row.
+
+Binding сохраняет identity proof и не означает mutation-ready. Dispatch требует
+configured supplier, подтверждённую variant/packing/grind policy и свежий exact
+unique cart line; до этого cart dispatch остаётся fail-closed.
 
 ## 4. Staging и пакетный импорт
 

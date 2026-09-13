@@ -12,7 +12,7 @@ const runtimeSchemaSelection = {
     parameters: ['CustomerQuery', 'PageLimit', 'CustomerCursor', 'Cursor', 'IdempotencyKey', 'ReplayOnly'],
   },
   internal: {
-    components: ['CustomerOrderInput', 'CustomerRef', 'ProblemDetails'],
+    components: ['CustomerOrderInput', 'CustomerRef', 'ProblemDetails', 'AromaOfferBindingRequest', 'AromaOfferBindingResponse', 'AromaMutationResponse', 'AromaCartSnapshotReadRequest', 'AromaCartSnapshot'],
     parameters: ['CustomerRef'],
   },
 };

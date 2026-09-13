@@ -110,6 +110,23 @@ export type AromaCatalogExportRequest = {
   supplierRef: IdentifiersV1SchemaSupplierRef;
 };
 
+export type AromaOfferBindingRequest = {
+  offerRef: IdentifiersV1SchemaOfferRef;
+  supplierRef: IdentifiersV1SchemaSupplierRef;
+  snapshotRef: IdentifiersV1SchemaSnapshotRef;
+  sourceIdentityScheme: 'hmac-sha256-v1';
+  sourceOfferKeyHash: HashSha256;
+};
+
+export type AromaOfferBindingResponse = {
+  offerRef: IdentifiersV1SchemaOfferRef;
+  supplierRef: IdentifiersV1SchemaSupplierRef;
+  sourceIdentityScheme: 'hmac-sha256-v1';
+  sourceOfferKeyHash: HashSha256;
+  firstSnapshotRef: IdentifiersV1SchemaSnapshotRef;
+  state: 'Bound';
+};
+
 export type AromaCatalogItem = {
   sourceProductKeyHash: HashSha256;
   sourceVariantKeyHash: HashSha256;
@@ -261,6 +278,11 @@ export type ErrorAromaProviderUnavailable = ProblemDetailsV1SchemaProblemDetails
   code?: 'AROMA_PROVIDER_UNAVAILABLE';
 };
 
+export type ErrorAromaCartItemNotFound = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 404;
+  code?: 'AROMA_CART_ITEM_NOT_FOUND';
+};
+
 export type ErrorAromaOperationRefConflict = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
   code?: 'AROMA_OPERATION_REF_CONFLICT';
@@ -274,6 +296,21 @@ export type ErrorAromaOperationInProgress = ProblemDetailsV1SchemaProblemDetails
 export type ErrorAromaOperationUnknownOutcome = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
   code?: 'AROMA_OPERATION_UNKNOWN_OUTCOME';
+};
+
+export type ErrorAromaBindingConflict = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_BINDING_CONFLICT';
+};
+
+export type ErrorAromaBindingSourceNotFound = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_BINDING_SOURCE_NOT_FOUND';
+};
+
+export type ErrorAromaBindingSnapshotIncomplete = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'AROMA_BINDING_SNAPSHOT_INCOMPLETE';
 };
 
 export type ErrorInternalError = ProblemDetailsV1SchemaProblemDetails & {
@@ -533,6 +570,51 @@ export type ExportAromaCatalogResponses = {
 
 export type ExportAromaCatalogResponse = ExportAromaCatalogResponses[keyof ExportAromaCatalogResponses];
 
+export type RegisterAromaOfferBindingData = {
+  body: AromaOfferBindingRequest;
+  headers?: {
+    'X-Correlation-ID'?: Uuid2;
+    traceparent?: MoneyVersionTimeV1SchemaTraceparent;
+  };
+  path?: never;
+  query?: never;
+  url: '/api/internal-v1/aroma/offer-bindings';
+};
+
+export type RegisterAromaOfferBindingErrors = {
+  /**
+   * Request, path, or signed context validation failed.
+   */
+  400: ErrorValidationFailed;
+  /**
+   * A valid mTLS service identity is required.
+   */
+  401: ErrorServiceAuthenticationRequired;
+  /**
+   * Caller, audience, operation, or delegation context is invalid.
+   */
+  403: ErrorServiceDelegationInvalid;
+  /**
+   * Immutable source or snapshot binding conflict.
+   */
+  409: ErrorAromaBindingConflict | ErrorAromaBindingSourceNotFound | ErrorAromaBindingSnapshotIncomplete;
+  /**
+   * Provider is unavailable or the safe typed operation timed out.
+   */
+  503: ErrorAromaProviderUnavailable;
+};
+
+export type RegisterAromaOfferBindingError = RegisterAromaOfferBindingErrors[keyof RegisterAromaOfferBindingErrors];
+
+export type RegisterAromaOfferBindingResponses = {
+  /**
+   * Existing or newly registered immutable binding.
+   */
+  200: AromaOfferBindingResponse;
+};
+
+export type RegisterAromaOfferBindingResponse = RegisterAromaOfferBindingResponses[keyof RegisterAromaOfferBindingResponses];
+
 export type ReadAromaCartSnapshotData = {
   body: AromaCartSnapshotReadRequest;
   headers?: {
@@ -601,6 +683,10 @@ export type SetAromaCartLineQuantityErrors = {
    */
   403: ErrorServiceDelegationInvalid;
   /**
+   * The requested cart line was absent in the fresh provider snapshot.
+   */
+  404: ErrorAromaCartItemNotFound;
+  /**
    * Operation reference or mutation safety conflict.
    */
   409: ErrorAromaOperationRefConflict | ErrorAromaOperationInProgress | ErrorAromaOperationUnknownOutcome;
@@ -647,6 +733,10 @@ export type RemoveAromaCartLineErrors = {
    * Caller, audience, operation, or delegation context is invalid.
    */
   403: ErrorServiceDelegationInvalid;
+  /**
+   * The requested cart line was absent in the fresh provider snapshot.
+   */
+  404: ErrorAromaCartItemNotFound;
   /**
    * Operation reference or mutation safety conflict.
    */

@@ -49,6 +49,7 @@
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 27. [Восстановление команд браузера](26_BROWSER_COMMAND_RECOVERY.md)
+28. [Исследованный HTTP-протокол AROMA и открытые вопросы](27_AROMA_PROVIDER_PROTOCOL.md)
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
 

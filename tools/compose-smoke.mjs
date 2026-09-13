@@ -20,6 +20,9 @@ import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { load as parseYaml } from "js-yaml";
 import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../packages/platform-security/src/index.ts";
+import {createDatabase} from "../packages/platform-database/dist/index.js";
+import {applyMigrations, migrationChecksum} from "../packages/platform-migrations/dist/index.js";
+import {OfferBindingStore} from "../apps/aroma-gateway/dist/infrastructure/database/offer-binding-store.js";
 import pg from "pg";
 import {
   SERVER_IDENTITY_SQL,
@@ -91,6 +94,8 @@ function usage() {
     "  --database-proof                  run the isolated customer PostgreSQL readiness proof",
     "  --customer-proof                 run the isolated Customer integration suite",
     "  --recovery-proof                  run the isolated full 15-runtime PostgreSQL/Kafka recovery proof",
+    "  --aroma-binding-proof             run the isolated native HTTPS AROMA offer-binding proof",
+    "  --aroma-cart-proof                run the isolated native mTLS safe cart-read proof with a local provider fixture",
     "  --provision-empty-postgres-network create coffee_postgres_data only when absent; never starts PostgreSQL",
     "  --no-build                         use already-built runtime images",
     "  --project-name <name>              explicit isolated Compose project name",
@@ -107,9 +112,12 @@ function parseArguments(argv) {
     databaseProof: false,
     customerProof: false,
     recoveryProof: false,
+    aromaBindingProof: false,
+    aromaCartProof: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    if (argument === "--") continue;
     if (argument === "--stub-secrets") options.stubSecrets = true;
     else if (argument === "--provision-empty-postgres-network")
       options.provisionNetwork = true;
@@ -117,6 +125,8 @@ function parseArguments(argv) {
     else if (argument === "--database-proof") options.databaseProof = true;
     else if (argument === "--customer-proof") options.customerProof = true;
     else if (argument === "--recovery-proof") options.recoveryProof = true;
+    else if (argument === "--aroma-binding-proof") options.aromaBindingProof = true;
+    else if (argument === "--aroma-cart-proof") options.aromaCartProof = true;
     else if (argument === "--keep") options.keep = true;
     else if (argument === "--project-name") {
       const value = argv[++index];
@@ -132,11 +142,11 @@ function parseArguments(argv) {
       throw new Error(`unknown option ${argument}\n\n${usage()}`);
     }
   }
-  if ([options.databaseProof, options.customerProof, options.recoveryProof].filter(Boolean).length > 1)
-    throw new Error("--database-proof, --customer-proof and --recovery-proof are mutually exclusive");
+  if ([options.databaseProof, options.customerProof, options.recoveryProof, options.aromaBindingProof, options.aromaCartProof].filter(Boolean).length > 1)
+    throw new Error("--database-proof, --customer-proof, --recovery-proof, --aroma-binding-proof and --aroma-cart-proof are mutually exclusive");
   if (options.recoveryProof && options.stubSecrets)
     throw new Error("--recovery-proof requires generated fixture credentials, not --stub-secrets");
-  if (!options.stubSecrets && !options.databaseProof && !options.customerProof && !options.recoveryProof && !process.env.SOPS_AGE_KEY_FILE) {
+  if (!options.stubSecrets && !options.databaseProof && !options.customerProof && !options.recoveryProof && !options.aromaBindingProof && !options.aromaCartProof && !process.env.SOPS_AGE_KEY_FILE) {
     throw new Error(
       "SOPS_AGE_KEY_FILE is required for decrypted scoped secrets; use --stub-secrets only for topology smoke without DB/provider proof",
     );
@@ -275,7 +285,11 @@ async function writeStubSecret(
     }
     current[segments.at(-1)] = securityMaterial?.[ref] ?? (ref === `security.serviceTransportKeys.${runtime}`
       ? transportMaterial
-      : ref === "edge.tlsPrivateKey" && publicTlsMaterial !== undefined
+      : ref === "aroma.email"
+        ? "issue10-safe-read@example.invalid"
+        : ref === "aroma.password"
+          ? "compose-aroma-fixture-password"
+          : ref === "edge.tlsPrivateKey" && publicTlsMaterial !== undefined
         ? publicTlsMaterial.keyPem
         : ref === "edge.tlsCertificate" && publicTlsMaterial !== undefined
           ? publicTlsMaterial.certPem
@@ -512,13 +526,13 @@ async function materializeSecrets(secretsDir, options) {
     { json: true },
   );
   const publicHostname = parsePublicTlsHostname(platformConfig.platform?.publicBaseUrl);
-  const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof
+  const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
     ? await createStubTransportMaterials(secretsDir, platformConfig.environment, publicHostname)
     : undefined;
   const stubSecurityMaterial = stubTransportMaterials === undefined ? undefined : createStubSecurityMaterial();
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
-    if (options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof) {
+    if (options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
       const service = platformConfig.services[runtime];
       await writeStubSecret(
         path,
@@ -528,7 +542,7 @@ async function materializeSecrets(secretsDir, options) {
         service.optionalSecretRefs ?? [],
         options.databaseProofCredentials?.[runtime] ??
           options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[runtime],
-        options.recoveryProof ? kafkaCredential : undefined,
+        options.stubSecrets || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof ? kafkaCredential : undefined,
         stubTransportMaterials?.service.get(runtime),
         runtime === "edge-gateway" ? stubTransportMaterials?.publicTls : undefined,
         stubSecurityMaterial,
@@ -689,7 +703,7 @@ function ensureExternalNetwork(options) {
   }
 }
 
-async function writeScopedComposeOverride(projectName) {
+async function writeScopedComposeOverride(projectName, options = {}) {
   const path = join(
     SECRETS_TMPFS_ROOT,
     `coffee-platform-compose-${projectName}-${randomUUID().slice(0, 8)}.yaml`,
@@ -701,6 +715,49 @@ async function writeScopedComposeOverride(projectName) {
       `    name: ${projectName}_${network}`,
       `    external: ${network === EXTERNAL_POSTGRES_NETWORK ? "true" : "false"}`,
     ]),
+    ...(options.aromaBindingProof ? [
+      "",
+      "services:",
+      "  aroma-gateway:",
+      "    networks: !override",
+      "      - coffee_internal_api",
+      "      - coffee_postgres_data",
+      "    environment:",
+      "      NODE_OPTIONS: --enable-source-maps --import=/app/dist/.aroma-proof-tls-observer.mjs",
+      "    volumes:",
+      `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-gateway-tls-observer.mjs:/app/dist/.aroma-proof-tls-observer.mjs:ro`,
+    ] : []),
+    ...(options.aromaCartProof ? [
+      "",
+      "services:",
+      "  aroma-gateway:",
+      "    networks: !override",
+      "      - coffee_internal_api",
+      "      - coffee_postgres_data",
+      "      - coffee_provider_egress",
+      "    environment:",
+      "      NODE_EXTRA_CA_CERTS: /run/aroma-proof/provider-ca.crt",
+      "    volumes:",
+      `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-cart-proof:/run/aroma-proof:ro`,
+      "  aroma-provider-fixture:",
+      `    image: ${CUSTOMER_TEST_IMAGE}`,
+      "    command: [node, /run/aroma-proof/provider-server.mjs]",
+      "    networks:",
+      "      coffee_provider_egress:",
+      "        aliases:",
+      "          - aromateacoffee.ru",
+      "    volumes:",
+      `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-cart-proof:/run/aroma-proof`,
+      "    healthcheck:",
+      "      test:",
+      "        - CMD",
+      "        - node",
+      "        - -e",
+      "        - const net=require('node:net'); const socket=net.connect(443, '127.0.0.1', () => { socket.destroy(); process.exit(0); }); socket.on('error', () => process.exit(1));",
+      "      interval: 1s",
+      "      timeout: 1s",
+      "      retries: 30",
+    ] : []),
     "",
   ].join("\n");
   await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
@@ -1005,7 +1062,7 @@ async function waitForPostgresClient(connectionString, timeoutMs = 60_000) {
 
 async function bootstrapRecoveryDatabases(container, proofCredentials) {
   const port = publishedDatabasePort(container);
-  const adminUrl = `postgresql://${encodeURIComponent(proofCredentials.admin.username)}:${encodeURIComponent(proofCredentials.admin.password)}@127.0.0.1:${port}/postgres`;
+  const adminUrl = ["postgresql://", encodeURIComponent(proofCredentials.admin.username), ":", encodeURIComponent(proofCredentials.admin.password), "@127.0.0.1:", port, "/postgres"].join("");
   await waitForPostgresClient(adminUrl);
   const adminClient = await createPostgresClient(adminUrl);
   try {
@@ -1035,6 +1092,441 @@ async function bootstrapRecoveryDatabases(container, proofCredentials) {
   } finally {
     await adminClient.end();
   }
+}
+
+function aromaProofDatabaseOptions(runtime, service, port, credential) {
+  return {
+    owner: runtime,
+    database: service.database,
+    allowedDatabase: service.database,
+    host: "127.0.0.1",
+    port,
+    user: credential.username,
+    password: credential.password,
+    ssl: false,
+    pool: service.dbPool,
+    shutdownGraceMs: 30_000,
+  };
+}
+
+async function applyAromaBindingMigration(port, credentials, platformConfig) {
+  const database = platformConfig.databases?.integration ?? "coffee_platform_integration";
+  const integration = credentials.roleMap.databases.find((candidate) => candidate.name === database);
+  assert.ok(integration, "aroma binding integration database is missing");
+  const migratorPassword = credentials.rolePasswords[integration.migratorRole];
+  assert.ok(migratorPassword, "aroma binding migrator password is missing");
+  const migrator = createDatabase(aromaProofDatabaseOptions(
+    "aroma-binding-migrator",
+    {database, dbPool: {max: 2, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 2000, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}},
+    port,
+    {username: integration.migratorRole, password: migratorPassword},
+  ));
+  await migrator.resource.start(AbortSignal.timeout(10_000));
+  try {
+    const sessionSql = await readFile(join(ROOT, "apps/aroma-gateway/migrations/0001_provider_sessions.sql"), "utf8");
+    const bindingSql = await readFile(join(ROOT, "apps/aroma-gateway/migrations/0003_offer_bindings.sql"), "utf8");
+    const identitySql = await readFile(join(ROOT, "apps/aroma-gateway/migrations/0004_provider_offer_identity.sql"), "utf8");
+    await applyMigrations(migrator, [
+      {id: "0001_provider_sessions", sql: sessionSql, checksum: migrationChecksum(sessionSql)},
+      {id: "0003_offer_bindings", sql: bindingSql, checksum: migrationChecksum(bindingSql)},
+      {id: "0004_provider_offer_identity", sql: identitySql, checksum: migrationChecksum(identitySql)},
+    ], {
+      schema: "integration",
+      ledgerTable: "platform_schema_migrations",
+      lockKey: "compose-smoke-aroma-binding-proof",
+    });
+  } finally {
+    await migrator.resource.stop(AbortSignal.timeout(10_000));
+  }
+}
+
+async function seedAromaBindingSnapshot(port, credentials, platformConfig, runId) {
+  const service = platformConfig.services["aroma-gateway"];
+  const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
+  assert.ok(service && credential, "aroma gateway database credentials are missing");
+  const database = createDatabase(aromaProofDatabaseOptions("aroma-gateway", service, port, credential));
+  await database.resource.start(AbortSignal.timeout(10_000));
+  const store = new OfferBindingStore(database);
+  const supplierRef = "sup_00000000000000000000000001";
+  const snapshotRef = "snp_00000000000000000000000001";
+  const identities = [
+    {supplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "a".repeat(64), rawProviderOfferId: `compose-proof-raw-provider-canary-${runId}`},
+    {supplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "b".repeat(64), rawProviderOfferId: `compose-proof-raw-provider-second-${runId}`},
+  ];
+  try {
+    await store.beginExport(snapshotRef, supplierRef);
+    await store.recordBatch(snapshotRef, supplierRef, identities);
+    await store.completeExport(snapshotRef, "c".repeat(64));
+  } catch (error) {
+    await database.resource.stop(AbortSignal.timeout(10_000));
+    throw error;
+  }
+  return {database, supplierRef, snapshotRef, identities, rawCanary: identities[0].rawProviderOfferId};
+}
+
+async function createUntrustedAromaProofMaterial(secretsDir, environment, serverCaPem) {
+  const directory = join(secretsDir, "aroma-proof-untrusted");
+  await mkdir(directory, {recursive: true, mode: 0o700});
+  const caKey = join(directory, "ca.key");
+  const caCert = join(directory, "ca.crt");
+  const key = join(directory, "caller.key");
+  const csr = join(directory, "caller.csr");
+  const cert = join(directory, "caller.crt");
+  const ext = join(directory, "caller.ext");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKey, "-out", caCert, "-days", "1", "-subj", "/CN=compose-smoke-untrusted-ca"], {stdio: "ignore"});
+  await writeFile(ext, `subjectAltName=URI:spiffe://coffee-platform/${environment}/catalog-activation-worker\\nextendedKeyUsage=clientAuth\\n`, {encoding: "utf8", mode: 0o400});
+  execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", csr, "-subj", "/CN=catalog-activation-worker"], {stdio: "ignore"});
+  execFileSync("openssl", ["x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey, "-CAcreateserial", "-out", cert, "-days", "1", "-sha256", "-extfile", ext], {stdio: "ignore"});
+  return JSON.stringify({caPem: serverCaPem, certPem: await readFile(cert, "utf8"), keyPem: await readFile(key, "utf8")});
+}
+
+async function writeAromaBindingProofFixtures(secretsDir, materialized, environment, tlsObserver) {
+  assert.ok(tlsObserver, "aroma binding TLS observer is missing");
+  const directory = join(secretsDir, "aroma-proof");
+  await mkdir(directory, {recursive: true, mode: 0o700});
+  const writeMaterial = async (name, value) => {
+    const path = join(directory, name);
+    await writeFile(path, value, {encoding: "utf8", mode: 0o400});
+    await chmod(path, 0o400);
+    return path;
+  };
+  const caller = await writeMaterial("caller.json", materialized.transportMaterials.service.get("catalog-activation-worker"));
+  const foreign = await writeMaterial("foreign.json", materialized.transportMaterials.service.get("orders-service"));
+  const gateway = await writeMaterial("gateway.json", materialized.transportMaterials.service.get("aroma-gateway"));
+  const apiInternal = await writeMaterial("api-internal.json", JSON.stringify({
+    material: JSON.parse(materialized.transportMaterials.service.get("api-internal")),
+    signingKey: materialized.securityMaterial["security.apiInternalDelegationSigningPrivateKey"],
+  }));
+  const untrusted = await writeMaterial("untrusted.json", await createUntrustedAromaProofMaterial(secretsDir, environment, JSON.parse(materialized.transportMaterials.service.get("aroma-gateway")).caPem));
+  return {directory, caller, foreign, gateway, apiInternal, untrusted};
+}
+
+function findAromaTrackedSocket(trackedSockets, suppliedSocket) {
+  if (suppliedSocket === undefined || suppliedSocket === null) return undefined;
+  const suppliedParent = suppliedSocket._parent;
+  const hasSuppliedParent = suppliedParent !== undefined && suppliedParent !== null;
+  return trackedSockets.find(({socket}) => {
+    if (socket === suppliedSocket) return true;
+    if (hasSuppliedParent && socket === suppliedParent) return true;
+    const trackedParent = socket?._parent;
+    const hasTrackedParent = trackedParent !== undefined && trackedParent !== null;
+    if (hasTrackedParent && trackedParent === suppliedSocket) return true;
+    return hasSuppliedParent && hasTrackedParent && trackedParent === suppliedParent;
+  });
+}
+
+function assertAromaGatewaySocketAssociationRegression() {
+  const sharedParent = {};
+  const knownSocket = {_parent: sharedParent};
+  const tracked = [{socket: knownSocket, remotePort: 41001, localPort: 4301}];
+  assert.equal(findAromaTrackedSocket(tracked, knownSocket), tracked[0], "direct socket identity must match");
+  assert.equal(findAromaTrackedSocket(tracked, {_parent: sharedParent}), tracked[0], "shared parent identity must match");
+  assert.equal(findAromaTrackedSocket([{socket: {_parent: undefined}}], {_parent: undefined}), undefined, "missing parents must not match");
+  assert.equal(findAromaTrackedSocket([{socket: knownSocket}], {}), undefined, "unknown socket must not match");
+}
+
+const AROMA_BINDING_TLS_OBSERVER_SOURCE = `import {Server as TLSServer} from "node:tls";
+import {Server as NetServer} from "node:net";
+let sequence = 0;
+const sockets = [];
+${findAromaTrackedSocket.toString()}
+const certificateVerificationCodes = new Set([
+  "ERR_SSL_CERTIFICATE_VERIFY_FAILED",
+  "ERR_SSL_PEER_DID_NOT_RETURN_A_CERTIFICATE",
+  "ERR_SSL_SSLV3_ALERT_CERTIFICATE_UNKNOWN",
+  "ERR_SSL_TLSV13_ALERT_CERTIFICATE_REQUIRED",
+  "ERR_SSL_TLSV1_ALERT_UNKNOWN_CA",
+  "ERR_SSL_TLSV3_ALERT_BAD_CERTIFICATE",
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "CERT_UNTRUSTED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+]);
+const certificateVerificationMessage = /certificate (?:verify failed|required)|peer did not return a certificate|unknown ca|bad certificate/i;
+const trackSocket = (socket) => {
+  if (sockets.some(({socket: knownSocket}) => knownSocket === socket)) return;
+  const tracked = {socket, remotePort: null, localPort: null};
+  const refresh = () => {
+    if (Number.isInteger(socket.remotePort)) tracked.remotePort = socket.remotePort;
+    if (Number.isInteger(socket.localPort)) tracked.localPort = socket.localPort;
+  };
+  sockets.push(tracked);
+  refresh();
+  socket.once("connect", refresh);
+  socket.once("secureConnect", refresh);
+  socket.once("close", refresh);
+};
+const originalNetEmit = NetServer.prototype.emit;
+NetServer.prototype.emit = function (event, ...args) {
+  if (event === "connection" && args[0] !== undefined) trackSocket(args[0]);
+  return originalNetEmit.call(this, event, ...args);
+};
+const originalEmit = TLSServer.prototype.emit;
+const record = (error, socket, connection = {}, verificationSocket = socket) => {
+  const associated = socket !== undefined && Number.isInteger(connection.remotePort) && Number.isInteger(connection.localPort);
+  const errorCode = associated && typeof verificationSocket?.authorizationError === "string"
+    ? verificationSocket.authorizationError
+    : associated && typeof error?.code === "string" ? error.code : "unknown";
+  const message = error instanceof Error ? error.message : String(error);
+  const category = associated && (certificateVerificationCodes.has(errorCode) || certificateVerificationMessage.test(message))
+    ? "client-certificate-verification"
+    : "unassociated-tls-client-error";
+  process.stderr.write("AROMA_BINDING_TLS_PROOF " + JSON.stringify({
+    event: "tlsClientError",
+    sequence: ++sequence,
+    category,
+    errorCode,
+    authorizationError: associated && typeof verificationSocket?.authorizationError === "string" ? verificationSocket.authorizationError : null,
+    remotePort: associated ? connection.remotePort : null,
+    localPort: associated ? connection.localPort : null,
+  }) + "\\n");
+};
+TLSServer.prototype.emit = function (event, ...args) {
+  if (event === "connection" && args[0] !== undefined) trackSocket(args[0]);
+  if (event === "tlsClientError") {
+    const error = args[0];
+    const suppliedSocket = args[1];
+    const trackedSocket = findAromaTrackedSocket(sockets, suppliedSocket);
+    if (trackedSocket === undefined) record(error, undefined, {}, suppliedSocket);
+    else record(error, trackedSocket.socket, {remotePort: trackedSocket.remotePort, localPort: trackedSocket.localPort}, suppliedSocket);
+  }
+  return originalEmit.call(this, event, ...args);
+};
+`;
+
+async function prepareAromaBindingTlsObserver(secretsDir) {
+  const observer = join(secretsDir, "aroma-gateway-tls-observer.mjs");
+  await writeFile(observer, AROMA_BINDING_TLS_OBSERVER_SOURCE, {encoding: "utf8", mode: 0o400});
+  await chmod(observer, 0o400);
+  await chown(observer, 1000, 1000);
+  return {observer};
+}
+
+function aromaBindingProofSource({phase, supplierRef, snapshotRef, identities, environment, rawCanary}) {
+  return `import {readFile} from "node:fs/promises";
+import {request as httpsRequest} from "node:https";
+import {sign} from "node:crypto";
+
+const phase = ${JSON.stringify(phase)};
+const supplierRef = ${JSON.stringify(supplierRef)};
+const snapshotRef = ${JSON.stringify(snapshotRef)};
+const identities = ${JSON.stringify(identities.map(({sourceOfferKeyHash}) => sourceOfferKeyHash))};
+const expectedEnvironment = ${JSON.stringify(environment)};
+const rawCanary = ${JSON.stringify(rawCanary)};
+const operationId = "registerAromaOfferBinding";
+const originalCaller = "catalog-activation-worker";
+const read = async (name) => JSON.parse(await readFile("/run/aroma-proof/" + name, "utf8"));
+const caller = await read("caller.json");
+const foreign = await read("foreign.json");
+const gateway = await read("gateway.json");
+const apiInternal = await read("api-internal.json");
+const untrusted = await read("untrusted.json");
+const callerMaterial = caller;
+const gatewayMaterial = gateway;
+const apiMaterial = apiInternal.material;
+const observedResponses = [];
+const tlsCertificateRejectionCodes = new Set([
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "CERT_UNTRUSTED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "ERR_SSL_SSLV3_ALERT_CERTIFICATE_UNKNOWN",
+  "ERR_SSL_TLSV13_ALERT_CERTIFICATE_REQUIRED",
+  "ERR_SSL_TLSV1_ALERT_UNKNOWN_CA",
+  "ERR_SSL_TLSV3_ALERT_BAD_CERTIFICATE",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+]);
+const isTlsCertificateRejection = (error) => {
+  const code = typeof error?.code === "string" ? error.code : "";
+  if (tlsCertificateRejectionCodes.has(code)) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:ssl|tls)v?[0-9]+(?:[.][0-9]+)?_alert_(?:unknown_ca|bad_certificate|certificate_required)|certificate (?:required|verify failed|has expired)|unable to verify (?:the )?first certificate|self[- ]signed certificate/i.test(message);
+};
+const status = async ({host, port, path, material, body, token, expectedServerRuntime, rawBody}) => new Promise((resolve, reject) => {
+  let localPort;
+  const options = {
+    host, port, method: "POST", path, servername: host, ca: material.caPem, minVersion: "TLSv1.3", rejectUnauthorized: true,
+    headers: {"content-type": "application/json", "content-length": Buffer.byteLength(rawBody ?? JSON.stringify(body ?? {}))},
+    checkServerIdentity: (_hostname, certificate) => {
+      const san = certificate.subjectaltname?.split(",").map((value) => value.trim()).find((value) => value.startsWith("URI:"));
+      if (san !== "URI:spiffe://coffee-platform/" + expectedEnvironment + "/" + expectedServerRuntime) return new Error("target server SAN is invalid");
+      return undefined;
+    },
+  };
+  if (material.certPem !== undefined && material.keyPem !== undefined) { options.cert = material.certPem; options.key = material.keyPem; }
+  if (token !== undefined) options.headers["x-service-delegation"] = token;
+  const request = httpsRequest(options, (response) => {
+    let value = "";
+    response.setEncoding("utf8");
+    response.on("data", (chunk) => { value += chunk; if (value.length > 65536) request.destroy(new Error("response exceeded bound")); });
+    response.once("end", () => { let parsed; try { parsed = value ? JSON.parse(value) : undefined; } catch { parsed = undefined; } const result = {kind: "http", status: response.statusCode ?? 0, body: parsed, rawBody: value}; observedResponses.push(result); resolve(result); });
+  });
+  request.once("socket", (socket) => {
+    socket.once("connect", () => { localPort = socket.localPort; });
+    socket.once("secureConnect", () => { localPort = socket.localPort; });
+  });
+  request.once("timeout", () => request.destroy(new Error("bounded HTTPS request timeout")));
+  request.once("error", (error) => {
+    if (isTlsCertificateRejection(error)) {
+      resolve({kind: "tls-rejected", code: error.code ?? "certificate-rejection", localPort});
+      return;
+    }
+    if (error instanceof Error) error.localPort = localPort;
+    reject(error);
+  });
+  request.setTimeout(5000);
+  request.end(rawBody ?? JSON.stringify(body));
+});
+const baseBody = {offerRef: "off_00000000000000000000000001", supplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: identities[0], snapshotRef};
+const expectedBinding = {offerRef: baseBody.offerRef, supplierRef, sourceIdentityScheme: baseBody.sourceIdentityScheme, sourceOfferKeyHash: baseBody.sourceOfferKeyHash, firstSnapshotRef: snapshotRef, state: "Bound"};
+const requestApi = (body, rawBody) => status({host: "api-internal", port: 4051, path: "/api/internal-v1/aroma/offer-bindings", material: callerMaterial, body, rawBody, expectedServerRuntime: "api-internal"});
+const requestGateway = (material, token, body = baseBody, rawBody) => status({host: "aroma-gateway", port: 4301, path: "/api/internal-v1/aroma/offer-bindings", material, token, body, rawBody, expectedServerRuntime: "aroma-gateway"});
+const assertNoRawCanaryInResponses = () => { if (observedResponses.some(({body, rawBody}) => JSON.stringify(body ?? "").includes(rawCanary) || rawBody.includes(rawCanary))) throw new Error("raw provider canary appeared in an HTTP response"); };
+const canonical = (value) => value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number" ? JSON.stringify(value) : Array.isArray(value) ? "[" + value.map(canonical).join(",") + "]" : "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + canonical(value[key])).join(",") + "}";
+const assertNormativeBinding = (result, label) => {
+  if (result.kind !== "http" || result.status !== 200) throw new Error(label + " did not return 200");
+  if (canonical(result.body) !== canonical(expectedBinding)) throw new Error(label + " body was not the normative binding");
+};
+const assertUnavailableEndpointRejected = async () => {
+  let result;
+  try {
+    result = await status({host: "aroma-proof-unreachable.invalid", port: 1, path: "/api/internal-v1/aroma/offer-bindings", material: callerMaterial, body: baseBody, expectedServerRuntime: "aroma-gateway"});
+  } catch (error) {
+    if (isTlsCertificateRejection(error)) throw new Error("unavailable endpoint was misclassified as TLS rejection");
+    return {kind: "network-rejected"};
+  }
+  throw new Error("unavailable endpoint unexpectedly returned " + result.kind + ":" + (result.status ?? "unknown"));
+};
+const requestGatewayForCertificateVerification = async (material, label) => {
+  let result;
+  let error;
+  try {
+    result = await requestGateway(material, undefined);
+  } catch (candidate) {
+    error = candidate;
+  }
+  if (result?.kind === "http") throw new Error(label + " unexpectedly returned HTTP " + result.status);
+  if (error !== undefined && error.code !== "ECONNRESET" && result?.kind !== "tls-rejected") throw error;
+  const localPort = result?.localPort ?? error?.localPort;
+  if (!Number.isInteger(localPort)) throw new Error(label + " did not expose a local probe port");
+  return {kind: "gateway-certificate-rejection-pending", localPort};
+};
+const delegation = (overrides = {}) => { const now = Math.floor(Date.now() / 1000); return {iss: "api-internal", aud: "aroma-gateway", originalCaller, operationId, correlationId: "compose-proof-correlation", traceparent: "00-00000000000000000000000000000000-0000000000000000-00", iat: now, exp: now + 30, jti: "compose-proof-jti-" + now, kid: "api-internal-delegation-v1", ...overrides}; };
+const signed = (claims) => { const payload = Buffer.from(canonical(claims)); return payload.toString("base64url") + "." + sign(null, payload, apiInternal.signingKey).toString("base64url"); };
+if (phase === "replay") {
+  const replay = await requestApi(baseBody);
+  assertNormativeBinding(replay, "restart replay");
+  assertNoRawCanaryInResponses();
+  console.log(JSON.stringify({phase, replayStatus: replay.status, normativeExistingResult: true, normativeBindingBody: true}));
+} else {
+  const allowed = await requestApi(baseBody);
+  assertNormativeBinding(allowed, "allowed caller registration");
+  const replay = await requestApi(baseBody);
+  assertNormativeBinding(replay, "exact replay");
+  const offerConflict = await requestApi({...baseBody, sourceOfferKeyHash: identities[1]});
+  const sourceConflict = await requestApi({...baseBody, offerRef: "off_00000000000000000000000002"});
+  if (offerConflict.kind !== "http" || offerConflict.status !== 409 || sourceConflict.kind !== "http" || sourceConflict.status !== 409) throw new Error("binding conflict was accepted");
+  const noCertificate = await requestGateway({...gateway, certPem: undefined, keyPem: undefined}, undefined);
+  const untrustedCertificate = await requestGatewayForCertificateVerification(untrusted, "untrusted client certificate");
+  const foreignIdentity = await requestGateway(foreign, undefined);
+  const unavailableEndpoint = await assertUnavailableEndpointRejected();
+  if (noCertificate.kind !== "tls-rejected" || untrustedCertificate.kind !== "gateway-certificate-rejection-pending" || unavailableEndpoint.kind !== "network-rejected" || foreignIdentity.kind !== "http" || foreignIdentity.status !== 401) throw new Error("transport identity rejection proof failed");
+  const forged = signed(delegation()).split("."); forged[1] = "AA";
+  const expired = signed(delegation({iat: Math.floor(Date.now() / 1000) - 30, exp: Math.floor(Date.now() / 1000) - 10}));
+  const wrongCaller = signed(delegation({originalCaller: "orders-service"}));
+  const wrongOperation = signed(delegation({operationId: "wrongOperation"}));
+  const delegationStatuses = [];
+  for (const token of [forged.join("."), expired, wrongCaller, wrongOperation]) delegationStatuses.push((await requestGateway(apiMaterial, token)).status);
+  if (delegationStatuses.some((value) => value !== 403)) throw new Error("invalid delegation was accepted: " + delegationStatuses.join(","));
+  const malformed = await requestApi(baseBody, "{");
+  if (malformed.kind !== "http" || malformed.status !== 400) throw new Error("malformed JSON did not return contract 400");
+  assertNoRawCanaryInResponses();
+  console.log(JSON.stringify({phase, allowedStatus: allowed.status, replayStatus: replay.status, normativeExistingResult: true, normativeBindingBody: true, offerRefConflictStatus: offerConflict.status, sourceIdentityConflictStatus: sourceConflict.status, noClientCertificate: noCertificate.kind, untrustedClientCertificate: untrustedCertificate.kind, untrustedClientPort: untrustedCertificate.localPort, unavailableEndpoint: unavailableEndpoint.kind, foreignIdentityStatus: foreignIdentity.status, forgedDelegationStatus: delegationStatuses[0], expiredDelegationStatus: delegationStatuses[1], wrongOriginalCallerStatus: delegationStatuses[2], wrongOperationStatus: delegationStatuses[3], malformedJsonStatus: malformed.status}));
+}`;
+}
+
+async function runAromaBindingProofFixture(projectName, secretsDir, composeFile, fixture, phase, snapshot, environment) {
+  const beforeEvents = aromaGatewayTlsProofEvents(projectName, secretsDir, composeFile);
+  const source = aromaBindingProofSource({phase, supplierRef: snapshot.supplierRef, snapshotRef: snapshot.snapshotRef, identities: snapshot.identities, environment, rawCanary: snapshot.rawCanary});
+  const output = runDocker(["run", "--rm", "--interactive", "--network", `${projectName}_coffee_internal_api`, "--volume", `${fixture.directory}:/run/aroma-proof:ro`, CUSTOMER_TEST_IMAGE, "node", "--input-type=module"], {input: source});
+  const line = output.trim().split("\\n").filter(Boolean).at(-1);
+  assert.ok(line, `aroma binding ${phase} fixture returned no evidence`);
+  const result = JSON.parse(line);
+  if (result.untrustedClientPort !== undefined) {
+    assertAromaGatewayClientCertificateVerification(projectName, secretsDir, composeFile, beforeEvents, result.untrustedClientPort, phase);
+    result.untrustedClientCertificate = "tls-rejected";
+    result.gatewayClientCertificateVerification = true;
+    delete result.untrustedClientPort;
+  }
+  return result;
+}
+
+async function queryAromaBindingCount(port, snapshot, credentials, platformConfig) {
+  const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
+  const connectionString = ["postgresql://", encodeURIComponent(credential.username), ":", encodeURIComponent(credential.password), "@127.0.0.1:", port, "/", platformConfig.services["aroma-gateway"].database].join("");
+  const client = await createPostgresClient(connectionString);
+  try {
+    const result = await client.query("SELECT count(*)::int AS count FROM integration.provider_offer_bindings WHERE supplier_ref = $1", [snapshot.supplierRef]);
+    return result.rows[0]?.count;
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertAromaBindingTopology(projectName, secretsDir, composeFile) {
+  const rows = serviceRows(projectName, secretsDir, composeFile);
+  assert.equal(rows.length, 2, "aroma binding proof must start exactly two Compose services");
+  const byService = new Map(rows.map((row) => [row.Service, row]));
+  for (const runtime of ["api-internal", "aroma-gateway"]) {
+    const row = byService.get(runtime);
+    assert.ok(row, `${runtime} is absent from aroma binding proof`);
+    assert.equal(row.State, "running", `${runtime} is not running`);
+    assert.equal(row.Health, "healthy", `${runtime} is not healthy`);
+    const container = JSON.parse(runDocker(["inspect", row.ID]))[0];
+    const networks = Object.keys(container.NetworkSettings.Networks ?? {}).sort();
+    const expected = runtime === "api-internal"
+      ? [`${projectName}_coffee_internal_api`]
+      : [`${projectName}_coffee_internal_api`, `${projectName}_coffee_postgres_data`].sort();
+    assert.deepEqual(networks, expected, `${runtime} connected to an unexpected network`);
+    assert.equal(networks.some((network) => network.includes("coffee_provider_egress")), false, `${runtime} connected to provider egress`);
+  }
+  return byService;
+}
+
+function aromaGatewayTlsProofEvents(projectName, secretsDir, composeFile) {
+  const marker = "AROMA_BINDING_TLS_PROOF ";
+  return runCompose(projectName, secretsDir, ["logs", "--no-color", "--no-log-prefix", "--tail", "200", "aroma-gateway"], {composeFile})
+    .split("\n")
+    .flatMap((line) => {
+      const markerIndex = line.indexOf(marker);
+      if (markerIndex === -1) return [];
+      try {
+        return [JSON.parse(line.slice(markerIndex + marker.length))];
+      } catch {
+        throw new Error("Gateway TLS proof log marker is not valid JSON");
+      }
+    });
+}
+
+function assertAromaGatewayClientCertificateVerification(projectName, secretsDir, composeFile, beforeEvents, localPort, phase) {
+  const beforeMaxSequence = Math.max(0, ...beforeEvents.map((event) => typeof event.sequence === "number" ? event.sequence : 0));
+  const event = aromaGatewayTlsProofEvents(projectName, secretsDir, composeFile).find((candidate) =>
+    candidate.event === "tlsClientError" &&
+    candidate.category === "client-certificate-verification" &&
+    candidate.errorCode !== "unknown" &&
+    typeof candidate.authorizationError === "string" &&
+    candidate.sequence > beforeMaxSequence &&
+    candidate.localPort === 4301 &&
+    candidate.remotePort === localPort,
+  );
+  assert.ok(event, `aroma binding ${phase} has no Gateway-side client certificate verification error for this connection`);
 }
 
 function parseComposePs(output) {
@@ -2313,8 +2805,93 @@ function assertStopped(projectName, secretsDir, composeFile = COMPOSE_FILE) {
   }
 }
 
+async function prepareAromaCartProviderFixture(secretsDir) {
+  const directory = join(secretsDir, "aroma-cart-proof");
+  await mkdir(directory, {recursive: true, mode: 0o700});
+  const caKey = join(directory, "provider-ca.key");
+  const caCert = join(directory, "provider-ca.crt");
+  const key = join(directory, "provider.key");
+  const csr = join(directory, "provider.csr");
+  const cert = join(directory, "provider.crt");
+  const ext = join(directory, "provider.ext");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKey, "-out", caCert, "-days", "1", "-subj", "/CN=issue10-aroma-provider-fixture"], {stdio: "ignore"});
+  await writeFile(ext, "subjectAltName=DNS:aromateacoffee.ru\nextendedKeyUsage=serverAuth\n", {encoding: "utf8", mode: 0o400});
+  execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", csr, "-subj", "/CN=aromateacoffee.ru"], {stdio: "ignore"});
+  execFileSync("openssl", ["x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey, "-CAcreateserial", "-out", cert, "-days", "1", "-sha256", "-extfile", ext], {stdio: "ignore"});
+  await writeFile(join(directory, "add-one-get.json"), await readFile(join(ROOT, "evidence/aroma-provider/2026-09-12-cart-mutations/add-one-get.json"), "utf8"), {encoding: "utf8", mode: 0o400});
+  await writeFile(join(directory, "provider-count.json"), JSON.stringify({login: 0, cart: 0}) + "\n", {encoding: "utf8", mode: 0o600});
+  await writeFile(join(directory, "provider-server.mjs"), `import {createServer} from "node:https";\nimport {readFile, writeFile} from "node:fs/promises";\nconst key = await readFile("/run/aroma-proof/provider.key");\nconst cert = await readFile("/run/aroma-proof/provider.crt");\nconst cart = await readFile("/run/aroma-proof/add-one-get.json", "utf8");\nlet counts = {login: 0, cart: 0};\nconst persist = () => writeFile("/run/aroma-proof/provider-count.json", JSON.stringify(counts) + String.fromCharCode(10));\nconst json = (response, status, body, headers = {}) => { response.writeHead(status, {"content-type": "application/json", ...headers}); response.end(body); };\nconst server = createServer({key, cert}, async (request, response) => {\n  if (request.method === "POST" && request.url === "/api/v1/auth/login") {\n    counts.login += 1; await persist();\n    let input = ""; for await (const chunk of request) input += chunk;\n    const email = JSON.parse(input).email;\n    json(response, 200, JSON.stringify({data: {email, wholesale: true, retail: false}}), {"set-cookie": "aroma_session=fixture-cookie; Path=/; HttpOnly; Secure"}); return;\n  }\n  if (request.method === "GET" && request.url === "/api/v1/cart/") {\n    counts.cart += 1; await persist(); json(response, 200, cart); return;\n  }\n  json(response, 404, JSON.stringify({error: "not found"}));\n});\nconst shutdown = () => server.close((error) => { if (error) throw error; });\nprocess.once("SIGINT", shutdown);\nprocess.once("SIGTERM", shutdown);\nserver.listen(443, "0.0.0.0");\n`.replaceAll("\\\\n", "\\n"), {encoding: "utf8", mode: 0o400});
+  return {directory, caCert: join(directory, "provider-ca.crt"), countFile: join(directory, "provider-count.json")};
+}
+
+function aromaCartProofSource(environment) {
+  return `import {readFile} from "node:fs/promises";\nimport {request as httpsRequest} from "node:https";\nconst caller = JSON.parse(await readFile("/run/aroma-proof/caller.json", "utf8"));\nconst foreign = JSON.parse(await readFile("/run/aroma-proof/foreign.json", "utf8"));\nconst expectedSan = "URI:spiffe://coffee-platform/${environment}/api-internal";\nconst requestApi = (material, body, headers = {}) => new Promise((resolve, reject) => {\n  const raw = JSON.stringify(body);\n  const options = {host: "api-internal", port: 4051, method: "POST", path: "/api/internal-v1/aroma/cart-snapshots:read", ca: material.caPem, cert: material.certPem, key: material.keyPem, servername: "api-internal", minVersion: "TLSv1.3", rejectUnauthorized: true, headers: {"content-type": "application/json", "content-length": Buffer.byteLength(raw), ...headers}, checkServerIdentity: (_hostname, certificate) => certificate.subjectaltname?.split(",").map((value) => value.trim()).includes(expectedSan) ? undefined : new Error("api-internal SAN mismatch")};\n  const request = httpsRequest(options, (response) => { let value = ""; response.setEncoding("utf8"); response.on("data", (chunk) => { value += chunk; if (value.length > 2 * 1024 * 1024) request.destroy(new Error("response exceeded bound")); }); response.once("end", () => { let parsed; try { parsed = JSON.parse(value); } catch { parsed = undefined; } resolve({status: response.statusCode ?? 0, body: parsed, raw}); }); });\n  request.setTimeout(15000, () => request.destroy(new Error("bounded probe timeout"))); request.once("error", reject); request.end(raw);\n});\nconst requestBody = {cartScopeRef: "aroma-primary"};\nconst unauthorized = await requestApi(foreign, requestBody);\nconst spoofed = await requestApi(caller, requestBody, {"x-service-delegation": "forged-by-fixture"});\nconst malformed = await requestApi(caller, {cartScopeRef: "wrong"});\nconst success = await requestApi(caller, requestBody);\nif (unauthorized.status !== 401 || spoofed.status !== 403 || malformed.status !== 400 || success.status !== 200) throw new Error("safe-read authorization matrix failed: " + [unauthorized.status, spoofed.status, malformed.status, success.status].join("/"));\nif (JSON.stringify(success.body).includes("300000") || JSON.stringify(success.body).includes("fixture-cookie")) throw new Error("provider material crossed the API boundary");\nif (success.body?.cartScopeRef !== "aroma-primary" || success.body?.lines?.length !== 1 || success.body.lines[0].offerRef !== "off_00000000000000000000000001" || success.body.lines[0].quantity !== "1") throw new Error("sanitized cart snapshot mismatch");\nconsole.log(JSON.stringify({unauthorizedStatus: unauthorized.status, spoofedDelegationStatus: spoofed.status, malformedStatus: malformed.status, successStatus: success.status, sanitizedSnapshot: true, providerMaterialRedacted: true}));\n`;
+}
+
+async function runAromaCartProofFixture(projectName, secretsDir, composeFile, fixture, environment) {
+  const output = runDocker(["run", "--rm", "--interactive", "--network", `${projectName}_coffee_internal_api`, "--volume", `${fixture.directory}:/run/aroma-proof:ro`, CUSTOMER_TEST_IMAGE, "node", "--input-type=module"], {input: aromaCartProofSource(environment)});
+  const line = output.trim().split("\\n").filter(Boolean).at(-1);
+  assert.ok(line, "aroma cart fixture returned no evidence");
+  return JSON.parse(line);
+}
+
+async function seedAromaCartReadBinding(port, credentials, platformConfig) {
+  const service = platformConfig.services["aroma-gateway"];
+  const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
+  assert.ok(service && credential, "aroma gateway database credentials are missing");
+  const database = createDatabase(aromaProofDatabaseOptions("aroma-gateway", service, port, credential));
+  await database.resource.start(AbortSignal.timeout(10_000));
+  const store = new OfferBindingStore(database);
+  const supplierRef = "sup_00000000000000000000000001";
+  const snapshotRef = "snp_00000000000000000000000002";
+  const offerRef = "off_00000000000000000000000001";
+  try {
+    await store.beginExport(snapshotRef, supplierRef);
+    await store.recordBatch(snapshotRef, supplierRef, [{
+      supplierRef,
+      sourceIdentityScheme: "hmac-sha256-v1",
+      sourceOfferKeyHash: "d".repeat(64),
+      rawProviderOfferId: "300000",
+      rawProviderProductId: "200000",
+      rawProviderVariantId: "300000",
+      packing: "Aroma",
+      grindId: null,
+    }]);
+    await store.completeExport(snapshotRef, "e".repeat(64));
+    await store.register({offerRef, supplierRef, snapshotRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "d".repeat(64)});
+  } catch (error) {
+    await database.resource.stop(AbortSignal.timeout(10_000));
+    throw error;
+  }
+  return {database, supplierRef, snapshotRef, offerRef};
+}
+
+async function assertAromaCartTopology(projectName, secretsDir, composeFile) {
+  const rows = serviceRows(projectName, secretsDir, composeFile);
+  assert.equal(rows.length, 3, "aroma cart proof must start exactly three services");
+  const byService = new Map(rows.map((row) => [row.Service, row]));
+  for (const runtime of ["api-internal", "aroma-gateway", "aroma-provider-fixture"]) {
+    const row = byService.get(runtime);
+    assert.ok(row, `${runtime} is absent from aroma cart proof`);
+    assert.equal(row.State, "running", `${runtime} is not running`);
+    assert.equal(row.Health, "healthy", `${runtime} is not healthy`);
+    const container = JSON.parse(runDocker(["inspect", row.ID]))[0];
+    const networks = Object.keys(container.NetworkSettings.Networks ?? {}).sort();
+    const expected = runtime === "api-internal" ? [`${projectName}_coffee_internal_api`] : runtime === "aroma-gateway" ? [`${projectName}_coffee_internal_api`, `${projectName}_coffee_postgres_data`, `${projectName}_coffee_provider_egress`].sort() : [`${projectName}_coffee_provider_egress`];
+    assert.deepEqual(networks, expected, `${runtime} connected to an unexpected network`);
+  }
+  return byService;
+}
+
+async function readAromaCartProviderCounts(countFile) {
+  const counts = JSON.parse(await readFile(countFile, "utf8"));
+  assert.deepEqual(Object.keys(counts).sort(), ["cart", "login"]);
+  return counts;
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
+  if (options.aromaBindingProof) assertAromaGatewaySocketAssociationRegression();
   const projectName =
     options.projectName ??
     `coffee-compose-smoke-${process.pid}-${randomUUID().slice(0, 8)}`;
@@ -2332,15 +2909,28 @@ async function main() {
   let recoveryDeliveryDatabase;
   let recoveryDeliveryTables = false;
   let customerProofRoles;
+  let aromaBindingSnapshot;
+  let aromaBindingTlsObserver;
+  let aromaBindingFixture;
+  let aromaBindingEvidence;
+  let aromaBindingRestartEvidence;
+  let aromaBindingCleanupReceipt;
+  let aromaCartProviderFixture;
+  let aromaCartFixture;
+  let aromaCartSnapshot;
+  let aromaCartEvidence;
+  let aromaCartRestartEvidence;
+  let aromaCartCleanupReceipt;
+  const platformConfig = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
   try {
     const databaseProofCredentials = options.databaseProof || options.customerProof
       ? await readDatabaseProofCredentials()
       : undefined;
-    recoveryProofCredentials = options.recoveryProof
+    recoveryProofCredentials = options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
       ? await readRecoveryProofCredentials()
       : undefined;
-    if (options.databaseProof || options.customerProof || options.recoveryProof) {
-      composeFile = await writeScopedComposeOverride(projectName);
+    if (options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
+      composeFile = await writeScopedComposeOverride(projectName, {aromaBindingProof: options.aromaBindingProof, aromaCartProof: options.aromaCartProof});
       const networkNames = databaseProofNetworkNames(projectName);
       for (const networkName of networkNames) {
         try {
@@ -2360,10 +2950,18 @@ async function main() {
         : {[DATABASE_PROOF_RUNTIME]: databaseProofCredentials.owner},
       recoveryProofCredentials,
     });
+    if (options.aromaBindingProof) aromaBindingTlsObserver = await prepareAromaBindingTlsObserver(secretsDir);
+    if (options.aromaCartProof) {
+      aromaCartProviderFixture = await prepareAromaCartProviderFixture(secretsDir);
+      const directory = join(secretsDir, "aroma-cart-proof");
+      await writeFile(join(directory, "caller.json"), materialized.transportMaterials.service.get("aroma-observer"), {encoding: "utf8", mode: 0o400});
+      await writeFile(join(directory, "foreign.json"), materialized.transportMaterials.service.get("orders-service"), {encoding: "utf8", mode: 0o400});
+      aromaCartFixture = {directory};
+    }
     runCompose(projectName, secretsDir, ["config", "--quiet"], {composeFile});
-    if (!options.databaseProof && !options.customerProof && !options.recoveryProof)
+    if (!options.databaseProof && !options.customerProof && !options.recoveryProof && !options.aromaBindingProof && !options.aromaCartProof)
       provisionedNetwork = ensureExternalNetwork(options);
-    if (options.databaseProof || options.customerProof || options.recoveryProof) {
+    if (options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
       const postgresCredentials = options.databaseProof || options.customerProof
         ? databaseProofCredentials
         : recoveryProofCredentials;
@@ -2373,19 +2971,29 @@ async function main() {
         databaseProofNetwork,
         postgresCredentials.admin,
         {
-          initialDatabase: options.recoveryProof
+          initialDatabase: options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
             ? "postgres"
             : "coffee_platform_customer",
-          publishHost: options.recoveryProof,
+          publishHost: options.recoveryProof || options.aromaBindingProof || options.aromaCartProof,
         },
       );
       await waitForDockerHealthy(databaseProofContainer);
       await waitForDatabaseProofReady(
         databaseProofContainer,
         postgresCredentials.admin,
-        options.recoveryProof ? "postgres" : "coffee_platform_customer",
+        options.recoveryProof || options.aromaBindingProof || options.aromaCartProof ? "postgres" : "coffee_platform_customer",
       );
-      if (options.databaseProof || options.customerProof) {
+      if (options.aromaBindingProof) {
+        recoveryDatabaseProof = await bootstrapRecoveryDatabases(databaseProofContainer, postgresCredentials);
+        const port = recoveryDatabaseProof.port;
+        await applyAromaBindingMigration(port, recoveryProofCredentials, platformConfig);
+        aromaBindingSnapshot = await seedAromaBindingSnapshot(port, recoveryProofCredentials, platformConfig, projectName);
+      } else if (options.aromaCartProof) {
+        recoveryDatabaseProof = await bootstrapRecoveryDatabases(databaseProofContainer, postgresCredentials);
+        const port = recoveryDatabaseProof.port;
+        await applyAromaBindingMigration(port, recoveryProofCredentials, platformConfig);
+        aromaCartSnapshot = await seedAromaCartReadBinding(port, recoveryProofCredentials, platformConfig);
+      } else if (options.databaseProof || options.customerProof) {
         bootstrapDatabaseProofRole(
           databaseProofContainer,
           postgresCredentials.admin,
@@ -2424,9 +3032,14 @@ async function main() {
     if (!options.noBuild)
       buildRuntimeImages(
         projectName,
-        options.databaseProof || options.customerProof ? [DATABASE_PROOF_RUNTIME] : RUNTIMES,
+        options.databaseProof || options.customerProof
+          ? [DATABASE_PROOF_RUNTIME]
+          : options.aromaBindingProof || options.aromaCartProof
+            ? ["api-internal", "aroma-gateway"]
+            : RUNTIMES,
       );
     if (options.customerProof) await writeCustomerProofFixtures(secretsDir, materialized.securityMaterial, materialized.transportMaterials);
+    if (options.aromaBindingProof) aromaBindingFixture = await writeAromaBindingProofFixtures(secretsDir, materialized, platformConfig.environment, aromaBindingTlsObserver);
     const upArguments = options.databaseProof || options.customerProof
       ? [
           "up",
@@ -2435,17 +3048,66 @@ async function main() {
           "--no-build",
           DATABASE_PROOF_RUNTIME,
         ]
-      : ["up", "--detach", "--wait", "--no-build"];
+      : options.aromaBindingProof || options.aromaCartProof
+        ? ["up", "--detach", "--wait", "--no-build", "api-internal", "aroma-gateway", ...(options.aromaCartProof ? ["aroma-provider-fixture"] : [])]
+        : ["up", "--detach", "--wait", "--no-build"];
     composeAttempted = true;
     runCompose(projectName, secretsDir, upArguments, {composeFile, inherit: true});
-    const rows = options.databaseProof || options.customerProof
+    const rows = options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof
       ? new Map(
           serviceRows(projectName, secretsDir, composeFile).map((row) => [row.Service, row]),
         )
       : assertHealthy(projectName, secretsDir, composeFile);
     let kafkaRetention;
     let nativeFoundation;
-    if (options.databaseProof) {
+    if (options.aromaBindingProof) {
+      assert.ok(aromaBindingSnapshot && aromaBindingFixture && recoveryDatabaseProof, "aroma binding proof fixtures are missing");
+      const initialRows = await assertAromaBindingTopology(projectName, secretsDir, composeFile);
+      aromaBindingEvidence = await runAromaBindingProofFixture(projectName, secretsDir, composeFile, aromaBindingFixture, "baseline", aromaBindingSnapshot, platformConfig.environment);
+      const afterRegisterCount = await queryAromaBindingCount(recoveryDatabaseProof.port, aromaBindingSnapshot, recoveryProofCredentials, platformConfig);
+      assert.equal(afterRegisterCount, 1, "allowed registration did not create exactly one durable binding");
+      runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "aroma-gateway"], {composeFile, inherit: true});
+      runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "aroma-gateway"], {composeFile, inherit: true});
+      const restartedRows = await assertAromaBindingTopology(projectName, secretsDir, composeFile);
+      assert.equal(restartedRows.get("api-internal")?.ID, initialRows.get("api-internal")?.ID, "api-internal was restarted unexpectedly");
+      assert.equal(restartedRows.get("aroma-gateway")?.State, "running", "aroma-gateway did not restart");
+      aromaBindingRestartEvidence = await runAromaBindingProofFixture(projectName, secretsDir, composeFile, aromaBindingFixture, "replay", aromaBindingSnapshot, platformConfig.environment);
+      const afterRestartCount = await queryAromaBindingCount(recoveryDatabaseProof.port, aromaBindingSnapshot, recoveryProofCredentials, platformConfig);
+      assert.equal(afterRestartCount, 1, "restart replay created a second binding");
+      const boundedLogs = runCompose(projectName, secretsDir, ["logs", "--no-color", "--no-log-prefix", "--tail", "200", "api-internal", "aroma-gateway"], {composeFile});
+      assert.ok(boundedLogs.length <= 100_000, "proof logs exceeded the bounded redaction window");
+      const redactionCanaries = [
+        aromaBindingSnapshot.rawCanary,
+        recoveryProofCredentials.admin.password,
+        recoveryProofCredentials.databaseCredentialsByRuntime["aroma-gateway"].password,
+        materialized.kafkaCredential.password,
+      ];
+      for (const canary of redactionCanaries) {
+        assert.equal(boundedLogs.includes(canary), false, "proof logs exposed a secret or raw provider canary");
+        assert.equal(JSON.stringify({aromaBindingEvidence, aromaBindingRestartEvidence}).includes(canary), false, "proof output exposed a secret or raw provider canary");
+      }
+      aromaBindingCleanupReceipt = {composeProject: projectName, disposableDatabase: databaseProofContainer, fixture: "--rm", networks: [`${projectName}_coffee_internal_api`, `${projectName}_coffee_postgres_data`], boundedLogLines: 200, redacted: true};
+    } else if (options.aromaCartProof) {
+      assert.ok(aromaCartSnapshot && aromaCartFixture && aromaCartProviderFixture && recoveryDatabaseProof && recoveryProofCredentials, "aroma cart proof fixtures are missing");
+      const initialRows = await assertAromaCartTopology(projectName, secretsDir, composeFile);
+      aromaCartEvidence = await runAromaCartProofFixture(projectName, secretsDir, composeFile, aromaCartFixture, platformConfig.environment);
+      const firstCounts = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
+      assert.deepEqual(firstCounts, {login: 1, cart: 1}, "safe read did not use one login and one cart GET");
+      runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "aroma-gateway"], {composeFile, inherit: true});
+      runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "aroma-gateway"], {composeFile, inherit: true});
+      const restartedRows = await assertAromaCartTopology(projectName, secretsDir, composeFile);
+      assert.equal(restartedRows.get("api-internal")?.ID, initialRows.get("api-internal")?.ID, "api-internal was restarted unexpectedly");
+      aromaCartRestartEvidence = await runAromaCartProofFixture(projectName, secretsDir, composeFile, aromaCartFixture, platformConfig.environment);
+      const secondCounts = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
+      assert.deepEqual(secondCounts, {login: 1, cart: 2}, "restart did not reuse the encrypted PostgreSQL session");
+      const boundedLogs = runCompose(projectName, secretsDir, ["logs", "--no-color", "--no-log-prefix", "--tail", "200", "api-internal", "aroma-gateway", "aroma-provider-fixture"], {composeFile});
+      assert.ok(boundedLogs.length <= 100_000, "proof logs exceeded the bounded redaction window");
+      for (const canary of ["fixture-cookie", '"id": 300000', '"id":300000', recoveryProofCredentials.admin.password, recoveryProofCredentials.databaseCredentialsByRuntime["aroma-gateway"].password, materialized.kafkaCredential.password]) {
+        assert.equal(boundedLogs.includes(canary), false, "safe-read logs exposed a secret or raw provider canary");
+        assert.equal(JSON.stringify({aromaCartEvidence, aromaCartRestartEvidence}).includes(canary), false, "safe-read evidence exposed a secret or raw provider canary");
+      }
+      aromaCartCleanupReceipt = {composeProject: projectName, disposableDatabase: databaseProofContainer, providerFixture: "aroma-provider-fixture", fixture: "--rm", networks: [`${projectName}_coffee_internal_api`, `${projectName}_coffee_postgres_data`, `${projectName}_coffee_provider_egress`], boundedLogLines: 200, redacted: true};
+    } else if (options.databaseProof) {
       const row = rows.get(DATABASE_PROOF_RUNTIME);
       assert.ok(row, `${DATABASE_PROOF_RUNTIME} is absent from Compose ps`);
       assert.equal(row.State, "running");
@@ -2546,19 +3208,25 @@ async function main() {
     console.log(
       JSON.stringify({
         project: projectName,
-        runtimes: options.databaseProof || options.customerProof ? 1 : RUNTIMES.length,
-        kafka: !(options.databaseProof || options.customerProof),
-        kafkaCompatibility: !(options.databaseProof || options.customerProof),
-        kafkaRetention: options.databaseProof || options.customerProof ? undefined : kafkaRetention,
+        runtimes: options.aromaBindingProof || options.aromaCartProof ? ["api-internal", "aroma-gateway"] : options.databaseProof || options.customerProof ? 1 : RUNTIMES.length,
+        kafka: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
+        kafkaCompatibility: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
+        kafkaRetention: options.aromaBindingProof || options.aromaCartProof ? undefined : options.databaseProof || options.customerProof ? undefined : kafkaRetention,
         recoveryProof: options.recoveryProof
           ? {postgres: recoveryDatabaseProof, kafka: kafkaRetention, native: nativeFoundation}
           : undefined,
-        telemetry: !(options.databaseProof || options.customerProof),
+        aromaBindingProof: options.aromaBindingProof
+          ? {services: ["api-internal", "aroma-gateway"], baseline: aromaBindingEvidence, restartReplay: aromaBindingRestartEvidence, durableBindingCount: 1, cleanup: aromaBindingCleanupReceipt}
+          : undefined,
+        aromaCartProof: options.aromaCartProof
+          ? {services: ["api-internal", "aroma-gateway", "aroma-provider-fixture"], baseline: aromaCartEvidence, restartReplay: aromaCartRestartEvidence, providerCalls: {first: {login: 1, cart: 1}, restart: {login: 1, cart: 2}}, cleanup: aromaCartCleanupReceipt}
+          : undefined,
+        telemetry: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
         healthEndpoints: options.customerProof ? [] : ["/health/live", "/health/ready", "/metrics"],
-        stubSecrets: options.stubSecrets || options.databaseProof || options.customerProof,
-        dbIntegrationProof: options.databaseProof || options.customerProof || options.recoveryProof,
+        stubSecrets: options.stubSecrets || options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof,
+        dbIntegrationProof: options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof,
         customerIntegrationProof: options.customerProof,
-        hostPublish: options.databaseProof || options.customerProof ? [] : ["4000:4000"],
+        hostPublish: options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof ? [] : ["4000:4000"],
         gracefulShutdown: true,
       }),
     );
@@ -2578,6 +3246,15 @@ async function main() {
         );
       } catch {
         /* preserve the original recovery proof result */
+      }
+    }
+    for (const snapshot of [aromaBindingSnapshot, aromaCartSnapshot]) {
+      if (snapshot?.database && !options.keep) {
+        try {
+          await snapshot.database.resource.stop(AbortSignal.timeout(10_000));
+        } catch {
+          /* preserve the original smoke failure */
+        }
       }
     }
     if (composeAttempted && !options.keep) {

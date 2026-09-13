@@ -2,8 +2,10 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import yaml from 'js-yaml';
+import { contractAjv } from './contracts-ajv.mjs';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const valueAfter = (name) => process.argv[process.argv.indexOf(name) + 1];
@@ -31,7 +33,9 @@ function baseSchemaSources() {
 }
 
 const evidencePath = resolve(root, 'contracts/compatibility-evidence.yaml');
-const optionalEvidence = existsSync(evidencePath) ? yaml.load(readFileSync(evidencePath, 'utf8')).optionalExpansions ?? [] : [];
+const compatibilityEvidence = existsSync(evidencePath) ? yaml.load(readFileSync(evidencePath, 'utf8')) ?? {} : {};
+const optionalEvidence = compatibilityEvidence.optionalExpansions ?? [];
+const narrowingEvidence = compatibilityEvidence.narrowingCorrections ?? [];
 
 function fromBase(path) {
   if (baseRoot) {
@@ -52,6 +56,47 @@ function requireOptionalEvidence(sourcePath, at, property) {
   if (!readFileSync(resolve(root, evidence.fixture), 'utf8').includes(`"${property}"`)) fail(`${at}: evidence fixture does not contain ${property}`);
 }
 
+function fixtureValue(document, pointer, at) {
+  if (typeof pointer !== 'string' || !pointer.startsWith('/')) fail(`${at}: narrowing evidence fixtureValuePointer is missing`);
+  let value = document;
+  for (const token of pointer.slice(1).split('/').map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'))) {
+    if (value === null || typeof value !== 'object' || !Object.hasOwn(value, token)) fail(`${at}: narrowing evidence fixtureValuePointer does not resolve`);
+    value = value[token];
+  }
+  return value;
+}
+
+function proveNarrowing(evidence, at, keyword, before, after) {
+  const document = yaml.load(readFileSync(resolve(root, evidence.fixture), 'utf8'));
+  const fixtures = Array.isArray(document) ? document : [document];
+  const fixture = fixtures.find((entry) => entry?.case === evidence.fixtureCase);
+  if (fixture === undefined) fail(`${at}: narrowing evidence fixture does not contain case ${evidence.fixtureCase}`);
+  if (evidence.expectedKeyword !== keyword || fixture.expectedKeyword !== keyword) fail(`${at}: narrowing evidence is not bound to keyword ${keyword}`);
+  const value = fixtureValue(fixture, evidence.fixtureValuePointer, at);
+  const ajv = contractAjv();
+  const beforeValidator = ajv.compile(before === undefined ? true : {type: 'string', [keyword]: before});
+  const afterValidator = ajv.compile({type: 'string', [keyword]: after});
+  if (!beforeValidator(value)) fail(`${at}: narrowing fixture was not accepted by the previous constraint`);
+  if (afterValidator(value)) fail(`${at}: narrowing fixture is still accepted by the new constraint`);
+  if (!afterValidator.errors?.some((error) => error.keyword === keyword)) fail(`${at}: narrowing fixture does not fail keyword ${keyword}`);
+}
+
+function evidenceValueHash(value) {
+  return createHash('sha256').update(JSON.stringify(value === undefined ? null : value)).digest('hex');
+}
+
+function requireNarrowingEvidence(sourcePath, at, keyword, before, after) {
+  const previousValue = before === undefined ? null : before;
+  const evidence = narrowingEvidence.find((entry) => entry.schemaPath === sourcePath && entry.location === at && entry.keyword === keyword &&
+    ((JSON.stringify(entry.before) === JSON.stringify(previousValue) && JSON.stringify(entry.after) === JSON.stringify(after)) ||
+      (entry.beforeSha256 === evidenceValueHash(previousValue) && entry.afterSha256 === evidenceValueHash(after))));
+  if (!evidence) fail(`${at}: ${keyword} narrowed`);
+  if (!Number.isSafeInteger(evidence.issue) || evidence.issue <= 0 || typeof evidence.reason !== 'string' || evidence.reason.length < 10) fail(`${at}: narrowing evidence must name issue and reason`);
+  if (typeof evidence.migration !== 'string' || !existsSync(resolve(root, evidence.migration))) fail(`${at}: narrowing evidence migration document is missing`);
+  if (typeof evidence.fixture !== 'string' || !existsSync(resolve(root, evidence.fixture)) || typeof evidence.fixtureCase !== 'string') fail(`${at}: narrowing evidence fixture is missing`);
+  proveNarrowing(evidence, at, keyword, before, after);
+}
+
 function compareSchema(before, after, at, sourcePath) {
   if (before === undefined || before === null) {
     if (after !== undefined && after !== null) fail(`${at}: schema constraint added`);
@@ -64,7 +109,8 @@ function compareSchema(before, after, at, sourcePath) {
   }
   if (before.$ref !== after.$ref) fail(`${at}: $ref changed`);
   if ((Object.hasOwn(before, 'const') || Object.hasOwn(after, 'const')) && before.const !== after.const) fail(`${at}: const changed`);
-  if (after.pattern !== undefined && before.pattern !== after.pattern) fail(`${at}: pattern narrowed`);
+  if (after.pattern !== undefined && before.pattern !== after.pattern) requireNarrowingEvidence(sourcePath, at, 'pattern', before.pattern, after.pattern);
+  if (after.format !== undefined && before.format !== after.format) requireNarrowingEvidence(sourcePath, at, 'format', before.format, after.format);
   for (const keyword of ['minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties']) {
     if (after[keyword] !== undefined && (before[keyword] === undefined || after[keyword] > before[keyword])) fail(`${at}: ${keyword} narrowed`);
   }
@@ -101,7 +147,7 @@ function compareSchema(before, after, at, sourcePath) {
     if (!Object.hasOwn(after.$defs ?? {}, name)) fail(`${at}: definition ${name} removed`);
     compareSchema(schema, after.$defs[name], `${at}.$defs.${name}`, sourcePath);
   }
-  const structural = new Set(['$ref', 'const', 'pattern', 'type', 'enum', 'required', 'properties', '$defs', 'items', 'allOf', 'anyOf', 'oneOf', 'prefixItems', 'additionalProperties', 'minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties', 'maximum', 'exclusiveMaximum', 'maxItems', 'maxLength', 'maxProperties', 'title', 'description', 'examples', 'example', 'default', 'deprecated', 'readOnly', 'writeOnly']);
+  const structural = new Set(['$ref', 'const', 'pattern', 'format', 'type', 'enum', 'required', 'properties', '$defs', 'items', 'allOf', 'anyOf', 'oneOf', 'prefixItems', 'additionalProperties', 'minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties', 'maximum', 'exclusiveMaximum', 'maxItems', 'maxLength', 'maxProperties', 'title', 'description', 'examples', 'example', 'default', 'deprecated', 'readOnly', 'writeOnly']);
   for (const [keyword, value] of Object.entries(before)) if (!structural.has(keyword) && JSON.stringify(value) !== JSON.stringify(after[keyword])) fail(`${at}: unsupported keyword ${keyword} changed`);
   for (const [keyword] of Object.entries(after)) if (!structural.has(keyword) && !Object.hasOwn(before, keyword)) fail(`${at}: unsupported keyword ${keyword} added`);
 }
