@@ -1,5 +1,5 @@
 import {createPublicKey} from "node:crypto";
-import {aromaContractSchemas, isAromaCartSnapshot, isAromaCartSnapshotReadRequest, isAromaOfferBindingRequest, isAromaOfferBindingResponse, type AromaCartSnapshot, type AromaOfferBindingRequest, type AromaOfferBindingResponse} from "@coffee-platform/contracts-aroma-v1";
+import {aromaContractSchemas, isAromaCatalogExportRequest, isAromaCartSnapshot, isAromaCartSnapshotReadRequest, isAromaOfferBindingRequest, isAromaOfferBindingResponse, isAromaRemoveLineRequest, isAromaSetQuantityRequest, type AromaCartSnapshot, type AromaOfferBindingRequest, type AromaOfferBindingResponse} from "@coffee-platform/contracts-aroma-v1";
 import type {Database} from "@coffee-platform/database";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
 import {verifyServiceDelegationWithKeySet} from "@coffee-platform/security";
@@ -164,14 +164,17 @@ export function registerAromaCartSnapshotRoute(app: RuntimeApp, reader: Provider
 export type {AromaOfferBindingRequest, AromaOfferBindingResponse, AromaCartSnapshot};
 
 function mutationRequest(request: Request, operationKind: "SetLineQuantity" | "RemoveLine", offerRef: string): Readonly<Record<string, unknown>> | undefined {
-  const body = request.body;
-  if (body === null || typeof body !== "object" || Array.isArray(body)) return undefined;
-  const value = body as Record<string, unknown>;
-  if (value["cartScopeRef"] !== "aroma-primary" || typeof value["operationRef"] !== "string") return undefined;
-  const quantity = value["quantity"];
-  if (operationKind === "SetLineQuantity" && !(typeof quantity === "number" && Number.isSafeInteger(quantity) && quantity > 0) && !(typeof quantity === "string" && /^[1-9][0-9]*$/u.test(quantity))) return undefined;
-  if (operationKind === "RemoveLine" && value["operationRef"] === undefined) return undefined;
-  return {operationRef: value["operationRef"], cartScopeRef: "aroma-primary", operationKind, offerRef, ...(operationKind === "SetLineQuantity" ? {quantityMilli: value["quantity"]} : {})};
+  if (operationKind === "SetLineQuantity") {
+    if (!isAromaSetQuantityRequest(request.body)) return undefined;
+    const value = request.body;
+    // Provider mutation semantics are only proven for the existing integer representation;
+    // keep decimal wire lossless at transport, but fail closed before journal/provider dispatch.
+    if (value.quantity.includes(".")) return undefined;
+    return {operationRef: value.operationRef, cartScopeRef: value.cartScopeRef, operationKind, offerRef, quantityMilli: value.quantity};
+  }
+  if (!isAromaRemoveLineRequest(request.body)) return undefined;
+  const value = request.body;
+  return {operationRef: value.operationRef, cartScopeRef: value.cartScopeRef, operationKind, offerRef};
 }
 
 function mutationDelegation(request: Request, claims: InternalClaims): MutationDelegation {
@@ -223,10 +226,8 @@ export function registerAromaCatalogExportRoute(app: RuntimeApp, sourceFactory: 
     let claims: InternalClaims;
     try { const token = oneHeader(header(request, "x-service-delegation")); if (token === undefined) throw new Error("missing delegation"); claims = verifyServiceDelegationWithKeySet(token, {publicKeys: verificationKeys, issuer: "api-internal", audience: "aroma-gateway", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5}); } catch { return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed")); }
     if (claims.originalCaller !== "catalog-supplier-sync" || claims.operationId !== "exportAromaCatalog") return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed"));
-    const body = request.body;
-    if (body === null || typeof body !== "object" || Array.isArray(body)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
-    const value = body as Record<string, unknown>;
-    if (typeof value["snapshotRef"] !== "string" || typeof value["supplierRef"] !== "string") return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+    if (!isAromaCatalogExportRequest(request.body)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+    const value = request.body;
     const configuredSupplierRef = expectedSupplierRef ?? context?.config?.aroma?.supplierRef ?? CANONICAL_AROMA_SUPPLIER_REF;
     if (configuredSupplierRef !== undefined && value["supplierRef"] !== configuredSupplierRef) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
     const requestValue: CatalogExportRequest = {snapshotRef: value["snapshotRef"], supplierRef: value["supplierRef"], providerSnapshotRef: `aroma-gateway:catalog-export:${value["snapshotRef"]}`};

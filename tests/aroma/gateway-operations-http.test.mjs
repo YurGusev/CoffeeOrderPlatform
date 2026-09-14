@@ -76,10 +76,25 @@ void test("internal cart routes forward valid mutations and reject caller identi
   assert.equal(state.calls[1].kind, "remove");
   assert.equal(state.calls.length, 2);
 
+  const decimal = {...setBody, quantity: "0.001234567890123456789"};
+  const decimalResponse = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, payload: decimal});
+  assert.equal(decimalResponse.statusCode, 200);
+  assert.deepEqual(state.calls[2].body, decimal);
+
+  for (const [url, payload] of [
+    [`/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, {...setBody, quantity: 2}],
+    [`/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, {...setBody, extra: true}],
+    [`/api/internal-v1/aroma/cart-lines/${offerRef}:remove`, {...removeBody, quantity: "1"}],
+  ]) {
+    const response = await app.inject({method: "POST", url, payload});
+    assert.equal(response.statusCode, 400);
+  }
+  assert.equal(state.calls.length, 3);
+
   const spoofed = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, headers: {"x-original-caller": "orders-service"}, payload: setBody});
   assert.equal(spoofed.statusCode, 403);
   assert.equal(spoofed.json().code, "SERVICE_DELEGATION_INVALID");
-  assert.equal(state.calls.length, 2);
+  assert.equal(state.calls.length, 3);
 });
 
 void test("Gateway matches literal-colon mutation URLs and extracts only the public offerRef", async t => {
@@ -108,4 +123,10 @@ void test("Gateway matches literal-colon mutation URLs and extracts only the pub
   assert.equal(removeResponse.statusCode, 200);
   assert.equal(calls[1].body.offerRef, offerRef);
   assert.equal(calls[1].body.operationKind, "RemoveLine");
+  for (const payload of [{...setBody, quantity: "2.5"}, {...setBody, quantity: 2}, {...setBody, extra: true}, {...removeBody, quantity: "1"}]) {
+    const target = "quantity" in payload && !("extra" in payload) && payload.quantity === "1" ? "remove" : "set-quantity";
+    const response = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:${target}`, headers: {"x-service-delegation": signed(target === "remove" ? "removeAromaCartLine" : "setAromaCartLineQuantity")}, payload});
+    assert.equal(response.statusCode, 400);
+  }
+  assert.equal(calls.length, 2);
 });

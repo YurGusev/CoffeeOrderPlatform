@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createRuntime} from "../../packages/platform-runtime/dist/index.js";
 import {createHttpAromaCatalogClient, createHttpAromaCartClient, registerInternalRoutes} from "../../apps/api-internal/dist/index.js";
+import {isAromaCatalogExportRequest, isAromaRemoveLineRequest, isAromaSetQuantityRequest} from "../../packages/contracts/aroma-v1/dist/index.js";
 
 const offerRef = "off_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const operationRef = "op_01ARZ3NDEKTSV4RRFFQ69G5FAV";
@@ -11,6 +12,19 @@ const removeRequest = {operationRef, cartScopeRef: "aroma-primary"};
 const mutationResponse = {operationRef, cartScopeRef: "aroma-primary", offerRef, state: "Acknowledged"};
 const cartItemNotFound = {type: "about:blank", title: "AROMA_CART_ITEM_NOT_FOUND", status: 404, code: "AROMA_CART_ITEM_NOT_FOUND", detail: "Cart line was not present in the fresh provider snapshot", instance: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, correlationId: "00000000-0000-4000-8000-000000000000", errors: []};
 const snapshot = {cartScopeRef: "aroma-primary", providerSnapshotRef: "provider-1", capturedAt: "2026-09-13T10:00:00Z", cartFingerprint: "a".repeat(64), lines: [{offerRef, quantity: "2"}]};
+
+void test("shared AROMA request validators preserve decimal wire and reject non-canonical shapes", () => {
+  assert.equal(isAromaCatalogExportRequest(exportRequest), true);
+  assert.equal(isAromaCatalogExportRequest({...exportRequest, extra: true}), false);
+  assert.equal(isAromaCatalogExportRequest({...exportRequest, snapshotRef: 1}), false);
+  assert.equal(isAromaSetQuantityRequest({...setRequest, quantity: "0.001"}), true);
+  const numericQuantity = {...setRequest, quantity: 2};
+  assert.equal(isAromaSetQuantityRequest(numericQuantity), false);
+  assert.equal(numericQuantity.quantity, 2);
+  assert.equal(isAromaSetQuantityRequest({...setRequest, extra: true}), false);
+  assert.equal(isAromaRemoveLineRequest(removeRequest), true);
+  assert.equal(isAromaRemoveLineRequest({...removeRequest, quantity: "1"}), false);
+});
 
 function exportStream() {
   return new ReadableStream({start(controller) { controller.enqueue(new TextEncoder().encode('{"recordType":"snapshot-started"}\n')); controller.close(); }});
@@ -88,15 +102,23 @@ void test("forbidden caller, forged delegation, wrong operation shape, and malfo
   const before = state.calls.length;
   assert.equal((await app.inject({method: "POST", url: "/api/internal-v1/aroma/catalog-exports", payload: exportRequest})).statusCode, 401);
   assert.equal((await app.inject({method: "POST", url: "/api/internal-v1/aroma/catalog-exports", headers: {"x-service-delegation": "forged"}, payload: exportRequest})).statusCode, 403);
-  assert.equal((await app.inject({method: "POST", url: "/api/internal-v1/aroma/cart-lines/not-an-offer:set-quantity", payload: setRequest})).statusCode, 400);
-  assert.equal((await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:remove`, payload: {...removeRequest, operationRef: "op_wrong"}})).statusCode, 400);
+  assert.equal((await app.inject({method: "POST", url: "/api/internal-v1/aroma/cart-lines/not-an-offer:set-quantity", payload: setRequest})).statusCode, 401);
+  assert.equal((await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:remove`, payload: {...removeRequest, operationRef: "op_wrong"}})).statusCode, 401);
   assert.equal(state.calls.length, before);
 
   state.caller = "catalog-supplier-sync";
   assert.equal((await app.inject({method: "POST", url: "/api/internal-v1/aroma/catalog-exports", payload: {...exportRequest, extra: true}})).statusCode, 400);
+  assert.equal((await app.inject({method: "POST", url: "/api/internal-v1/aroma/catalog-exports", payload: {...exportRequest, snapshotRef: 1}})).statusCode, 400);
   assert.equal((await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, payload: setRequest})).statusCode, 401);
   state.caller = "aroma-convergence";
   assert.equal((await app.inject({method: "POST", url: "/api/internal-v1/aroma/catalog-exports", payload: exportRequest})).statusCode, 401);
+  for (const [url, payload] of [
+    [`/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, {...setRequest, quantity: 2}],
+    [`/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, {...setRequest, extra: true}],
+    [`/api/internal-v1/aroma/cart-lines/${offerRef}:remove`, {...removeRequest, quantity: "1"}],
+  ]) {
+    assert.equal((await app.inject({method: "POST", url, payload})).statusCode, 400);
+  }
   assert.equal(state.calls.length, before);
 });
 

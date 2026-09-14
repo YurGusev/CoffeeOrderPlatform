@@ -1,5 +1,5 @@
 import {createPrivateKey, createPublicKey, randomUUID} from "node:crypto";
-import {aromaContractSchemas, isAromaCartSnapshot, isAromaCartSnapshotReadRequest, isAromaOfferBindingRequest, isAromaOfferBindingResponse, isAromaProblem, isAromaMutationResponse, type AromaCatalogExportRequest, type AromaCartSnapshotReadRequest, type AromaOfferBindingRequest} from "@coffee-platform/contracts-aroma-v1";
+import {aromaContractSchemas, isAromaCatalogExportRequest, isAromaCartSnapshot, isAromaCartSnapshotReadRequest, isAromaOfferBindingRequest, isAromaOfferBindingResponse, isAromaProblem, isAromaMutationResponse, isAromaRemoveLineRequest, isAromaSetQuantityRequest, type AromaCatalogExportRequest, type AromaCartSnapshotReadRequest, type AromaOfferBindingRequest, type AromaRemoveLineRequest, type AromaSetQuantityRequest} from "@coffee-platform/contracts-aroma-v1";
 import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, isCustomerOrderInput, isCustomerProblem, isCustomerRef} from "@coffee-platform/contracts-customer-v1";
 import type {CustomerOrderInput} from "@coffee-platform/contracts-customer-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
@@ -39,9 +39,6 @@ type Problem = Readonly<{
 
 type AromaCaller = "orders-service" | "catalog-activation-worker" | "catalog-supplier-sync" | "aroma-observer" | "aroma-convergence";
 type CartMutationCaller = "aroma-convergence";
-type AromaSetQuantityRequest = Readonly<{operationRef: string; cartScopeRef: "aroma-primary"; quantity: string}>;
-type AromaRemoveLineRequest = Readonly<{operationRef: string; cartScopeRef: "aroma-primary"}>;
-
 export type InternalCallerClaims = Readonly<{
   iss: string;
   aud: string;
@@ -71,54 +68,6 @@ export type InternalApiAdapters = Readonly<{
 
 const ULID = "[0-9A-HJKMNP-TV-Z]{26}";
 const OFFER_REF = new RegExp(`^off_${ULID}$`, "u");
-const SNAPSHOT_REF = new RegExp(`^snp_${ULID}$`, "u");
-const SUPPLIER_REF = new RegExp(`^sup_${ULID}$`, "u");
-const OPERATION_REF = new RegExp(`^op_${ULID}$`, "u");
-const PROVIDER_QUANTITY = "^(?:[1-9][0-9]*)(?:\\.[0-9]+)?$|^0\\.(?!0+$)[0-9]+$";
-
-/** Source OpenAPI/JSON-Schema request shapes for the operations owned by this adapter. */
-export const internalAromaOperationSchemas = Object.freeze({
-  catalogExportRequest: {
-    type: "object",
-    additionalProperties: {not: {}},
-    required: ["snapshotRef", "supplierRef"],
-    properties: {
-      snapshotRef: {type: "string", pattern: `^snp_${ULID}$`},
-      supplierRef: {type: "string", pattern: `^sup_${ULID}$`},
-    },
-  },
-  setQuantityRequest: {
-    type: "object",
-    additionalProperties: {not: {}},
-    required: ["operationRef", "cartScopeRef", "quantity"],
-    properties: {
-      operationRef: {type: "string", pattern: `^op_${ULID}$`},
-      cartScopeRef: {type: "string", const: "aroma-primary"},
-      quantity: {type: "string", pattern: PROVIDER_QUANTITY},
-    },
-  },
-  removeLineRequest: {
-    type: "object",
-    additionalProperties: {not: {}},
-    required: ["operationRef", "cartScopeRef"],
-    properties: {
-      operationRef: {type: "string", pattern: `^op_${ULID}$`},
-      cartScopeRef: {type: "string", const: "aroma-primary"},
-    },
-  },
-  setQuantityParams: {
-    type: "object",
-    additionalProperties: {not: {}},
-    required: ["offerRef:set"],
-    properties: {"offerRef:set": {type: "string", pattern: `^off_${ULID}:set$`}},
-  },
-  removeLineParams: {
-    type: "object",
-    additionalProperties: {not: {}},
-    required: ["offerRef:remove"],
-    properties: {"offerRef:remove": {type: "string", pattern: `^off_${ULID}:remove$`}},
-  },
-});
 
 function header(request: Request, name: string): HeaderValue {
   return Object.entries(request.headers).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1];
@@ -228,26 +177,6 @@ function operationOfferRef(request: Request, suffix: ":set" | ":remove"): string
   return OFFER_REF.test(offerRef) ? offerRef : undefined;
 }
 
-function stringValue(value: unknown): string { return typeof value === "string" ? value : ""; }
-
-function isAromaCatalogExportRequest(value: unknown): value is AromaCatalogExportRequest {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const source = value as Record<string, unknown>;
-  return Object.keys(source).length === 2 && SNAPSHOT_REF.test(stringValue(source["snapshotRef"])) && SUPPLIER_REF.test(stringValue(source["supplierRef"]));
-}
-
-function isAromaSetQuantityRequest(value: unknown): value is AromaSetQuantityRequest {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const source = value as Record<string, unknown>;
-  return Object.keys(source).length === 3 && OPERATION_REF.test(stringValue(source["operationRef"])) && source["cartScopeRef"] === "aroma-primary" && typeof source["quantity"] === "string" && new RegExp(PROVIDER_QUANTITY, "u").test(source["quantity"]);
-}
-
-function isAromaRemoveLineRequest(value: unknown): value is AromaRemoveLineRequest {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const source = value as Record<string, unknown>;
-  return Object.keys(source).length === 2 && OPERATION_REF.test(stringValue(source["operationRef"])) && source["cartScopeRef"] === "aroma-primary";
-}
-
 function operationSchemaResponse(): Readonly<Record<number, unknown>> {
   return {200: aromaContractSchemas["mutationResponse"], 400: aromaContractSchemas["problem"], 401: aromaContractSchemas["problem"], 403: aromaContractSchemas["problem"], 404: aromaContractSchemas["problem"], 409: aromaContractSchemas["problem"], 503: aromaContractSchemas["problem"]};
 }
@@ -295,7 +224,7 @@ export function registerInternalRoutes(app: RuntimeApp, adapters: InternalApiAda
     config: {runtimeDeadlineProfile: "defaultMs"},
     bodyLimit: 64 * 1024,
     errorHandler: (_error, request, rawReply) => sendProblem(rawReply as unknown as Reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed")),
-    schema: {body: internalAromaOperationSchemas.catalogExportRequest, response: {200: {type: "string"}, 400: aromaContractSchemas["problem"], 401: aromaContractSchemas["problem"], 403: aromaContractSchemas["problem"], 503: aromaContractSchemas["problem"]}},
+    schema: {response: {200: {type: "string"}, 400: aromaContractSchemas["problem"], 401: aromaContractSchemas["problem"], 403: aromaContractSchemas["problem"], 503: aromaContractSchemas["problem"]}},
     handler: async (request, rawReply) => {
       const reply = rawReply as unknown as Reply;
       const originalCaller = trustedCaller(request, ["catalog-supplier-sync"]);
@@ -331,7 +260,7 @@ export function registerInternalRoutes(app: RuntimeApp, adapters: InternalApiAda
     config: {runtimeDeadlineProfile: "defaultMs"},
     bodyLimit: 64 * 1024,
     errorHandler: (_error, request, rawReply) => sendProblem(rawReply as unknown as Reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed")),
-    schema: {body: internalAromaOperationSchemas.setQuantityRequest, params: internalAromaOperationSchemas.setQuantityParams, response: operationSchemaResponse()},
+    schema: {response: operationSchemaResponse()},
     handler: async (request, rawReply) => {
       const reply = rawReply as unknown as Reply;
       const originalCaller: CartMutationCaller | undefined = request.runtimeContext?.transportIdentity?.runtime === "aroma-convergence" ? "aroma-convergence" : undefined;
@@ -350,7 +279,7 @@ export function registerInternalRoutes(app: RuntimeApp, adapters: InternalApiAda
     config: {runtimeDeadlineProfile: "defaultMs"},
     bodyLimit: 64 * 1024,
     errorHandler: (_error, request, rawReply) => sendProblem(rawReply as unknown as Reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed")),
-    schema: {body: internalAromaOperationSchemas.removeLineRequest, params: internalAromaOperationSchemas.removeLineParams, response: operationSchemaResponse()},
+    schema: {response: operationSchemaResponse()},
     handler: async (request, rawReply) => {
       const reply = rawReply as unknown as Reply;
       const originalCaller: CartMutationCaller | undefined = request.runtimeContext?.transportIdentity?.runtime === "aroma-convergence" ? "aroma-convergence" : undefined;

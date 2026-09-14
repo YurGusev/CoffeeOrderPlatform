@@ -3,7 +3,9 @@ import test from "node:test";
 import {ProviderError} from "../../apps/aroma-gateway/dist/domain/provider-errors.js";
 import {
   decryptCookieMaterial,
+  encryptCookieMaterial,
   MemoryProviderSessionStore,
+  providerSessionScopeHash,
 } from "../../apps/aroma-gateway/dist/infrastructure/database/provider-session-store.js";
 import {ProviderSessionManager} from "../../apps/aroma-gateway/dist/infrastructure/provider/session.js";
 
@@ -343,4 +345,125 @@ void test("cancellation aborts the last waiter and close cleans the pending flig
   await manager.close();
   assert.equal(transportAborted, 1);
   assert.equal(closed, 1);
+});
+
+void test("late login completion after close cannot remember or persist cookies", async () => {
+  const store = new MemoryProviderSessionStore();
+  const loginEntered = Promise.withResolvers();
+  const releaseLogin = Promise.withResolvers();
+  const transport = {
+    login: async () => {
+      loginEntered.resolve();
+      await releaseLogin.promise;
+      return loginResult();
+    },
+  };
+  const manager = new ProviderSessionManager({transport, store, encryptionKey: Buffer.alloc(32, 21)});
+  const pending = manager.acquire(scope);
+  await loginEntered.promise;
+  const closing = manager.close();
+  releaseLogin.resolve();
+  await assert.rejects(pending, {code: "ProviderSessionUnavailable"});
+  await closing;
+  assert.equal(store.saveCalls, 0);
+});
+
+void test("late persisted load completion after force destroy cannot remember decrypted cookies", async () => {
+  const key = Buffer.alloc(32, 22);
+  const store = new MemoryProviderSessionStore();
+  const scopeHash = providerSessionScopeHash(scope.scopeRef, "canonical@example.test");
+  await store.save(scopeHash, encryptCookieMaterial([cookie], key), null);
+  const loadEntered = Promise.withResolvers();
+  const releaseLoad = Promise.withResolvers();
+  const originalLoad = store.load.bind(store);
+  store.load = async (...args) => {
+    loadEntered.resolve();
+    await releaseLoad.promise;
+    return originalLoad(...args);
+  };
+  let loginCalls = 0;
+  const manager = new ProviderSessionManager({
+    transport: {login: async () => { loginCalls += 1; return loginResult(); }},
+    store,
+    encryptionKey: key,
+  });
+  const pending = manager.acquire(scope);
+  await loadEntered.promise;
+  manager.forceDestroy();
+  releaseLoad.resolve();
+  await assert.rejects(pending, {code: "ProviderSessionUnavailable"});
+  assert.equal(loginCalls, 0);
+  assert.equal(store.deleteCalls, 0);
+});
+
+void test("late cookie rotation completion after close or force destroy cannot save or restore cookies", async () => {
+  for (const shutdown of ["close", "forceDestroy"]) {
+    const store = new MemoryProviderSessionStore();
+    const rotationEntered = Promise.withResolvers();
+    const releaseRotation = Promise.withResolvers();
+    const transport = {
+      login: async () => loginResult(),
+      read: async function* () {
+        yield Buffer.from("{}");
+        rotationEntered.resolve();
+        await releaseRotation.promise;
+        return [{...cookie, value: `late-${shutdown}-cookie`}];
+      },
+    };
+    const manager = new ProviderSessionManager({transport, store, encryptionKey: Buffer.alloc(32, shutdown === "close" ? 23 : 24)});
+    const session = await manager.acquire(scope);
+    const reading = (async () => {
+      for await (const _chunk of session.read({kind: "cart"}, new AbortController().signal)) { /* consume */ }
+    })();
+    await rotationEntered.promise;
+    const closing = shutdown === "close" ? manager.close() : undefined;
+    if (shutdown === "forceDestroy") manager.forceDestroy();
+    releaseRotation.resolve();
+    await assert.rejects(reading, {code: "ProviderSessionUnavailable"});
+    if (closing !== undefined) await closing;
+    assert.equal(store.saveCalls, 1);
+  }
+});
+
+void test("concurrent close calls share one completion promise", async () => {
+  const store = new MemoryProviderSessionStore();
+  let closed = 0;
+  const manager = new ProviderSessionManager({
+    transport: {login: async () => loginResult(), close: async () => { closed += 1; await new Promise(resolve => setImmediate(resolve)); }},
+    store,
+    encryptionKey: Buffer.alloc(32, 19),
+  });
+  const first = manager.close();
+  const second = manager.close();
+  assert.strictEqual(first, second);
+  await first;
+  assert.equal(closed, 1);
+});
+
+void test("force destroy reaches a non-cooperative active read and closes transport once", async () => {
+  const store = new MemoryProviderSessionStore();
+  let closed = 0;
+  const entered = Promise.withResolvers();
+  const transport = {
+    login: async () => loginResult(),
+    read: async function* () {
+      yield Buffer.from("{}");
+      entered.resolve();
+      await new Promise(() => {});
+    },
+    close: async () => { closed += 1; },
+  };
+  const manager = new ProviderSessionManager({transport, store, encryptionKey: Buffer.alloc(32, 20)});
+  const session = await manager.acquire(scope);
+  const active = (async () => {
+    for await (const _chunk of session.read({kind: "cart"}, new AbortController().signal)) { /* consume */ }
+  })();
+  await entered.promise;
+  const closing = manager.close();
+  manager.forceDestroy();
+  manager.forceDestroy();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(closed, 1);
+  void closing;
+  void active;
 });

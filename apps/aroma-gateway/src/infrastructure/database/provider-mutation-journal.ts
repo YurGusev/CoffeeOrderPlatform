@@ -330,6 +330,7 @@ export class ProviderMutationJournalRepository {
   readonly #markDispatched: JournalStatement;
   readonly #acknowledge: JournalStatement;
   readonly #reject: JournalStatement;
+  readonly #rejectReservation: JournalStatement;
   readonly #markUnknown: JournalStatement;
   readonly #recoverDispatched: OperationStatement;
 
@@ -376,6 +377,13 @@ export class ProviderMutationJournalRepository {
           failure_code = $6, response_status = $7::smallint, response_body_bytes = $8,
           completed_at = clock_timestamp(), last_seen_at = clock_timestamp()
       WHERE operation_ref = $1 AND reservation_owner = $2::uuid AND request_hash = $3 AND state = 'Dispatched'
+      RETURNING ${JOURNAL_COLUMNS}`);
+    this.#rejectReservation = defineStatement(database, `UPDATE integration.provider_mutation_journal
+      SET state = 'Rejected', provider_status_code = $4::integer, outcome_hash = $5,
+          failure_code = $6, response_status = $7::smallint, response_body_bytes = $8,
+          dispatched_at = COALESCE(dispatched_at, started_at),
+          completed_at = clock_timestamp(), last_seen_at = clock_timestamp()
+      WHERE operation_ref = $1 AND reservation_owner = $2::uuid AND request_hash = $3 AND state = 'Reserved'
       RETURNING ${JOURNAL_COLUMNS}`);
     this.#markUnknown = defineStatement(database, `UPDATE integration.provider_mutation_journal
       SET state = 'UnknownOutcome', failure_code = $4,
@@ -496,6 +504,29 @@ export class ProviderMutationJournalRepository {
     return this.#resolveTerminalRace(transaction, value);
   }
 
+  public async rejectReservation(transaction: Transaction, value: MutationReservation, result: MutationRejected): Promise<MutationTerminalResult | MutationUnknownOutcomeResult> {
+    validateOwner(value.reservationOwner);
+    const validated = terminalResultFromInput(result, false);
+    if (validated.state !== "Rejected" || validated.failureCode === undefined) throw new MutationJournalError("AROMA_MUTATION_INVALID");
+    const updated = await this.#rejectReservation(transaction, [
+      value.operationRef,
+      value.reservationOwner,
+      value.requestHash,
+      validated.providerStatusCode ?? null,
+      typedResponseHash(validated.responseBodyBytes),
+      validated.failureCode,
+      validated.statusCode,
+      validated.responseBodyBytes,
+    ]);
+    if (updated.rows[0] !== undefined) return validated;
+    const current = await this.read(transaction, value.operationRef);
+    if (current === undefined) throw new MutationJournalError("AROMA_JOURNAL_CORRUPT");
+    if (!samePermit(current, value)) throw new MutationJournalError("AROMA_RESERVATION_LOST");
+    if (current.state === "Acknowledged" || current.state === "Rejected") return terminal(current, true);
+    if (current.state === "UnknownOutcome" || current.state === "Dispatched") return unknown(current, true);
+    throw new MutationJournalError("AROMA_RESERVATION_LOST");
+  }
+
   public async markUnknown(transaction: Transaction, value: DispatchPermit, failureCode: MutationUnknownFailureCode): Promise<MutationUnknownOutcomeResult | MutationTerminalResult> {
     validateOwner(value.reservationOwner);
     safeFailureCode(failureCode);
@@ -614,6 +645,15 @@ export class ProviderMutationJournalStore implements MutationJournalPort {
   public async reject(value: DispatchPermit, result: MutationRejected, signal?: AbortSignal): Promise<MutationTerminalResult | MutationUnknownOutcomeResult> {
     try {
       return await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.reject(transaction, value, result));
+    } catch (error) {
+      if (!isUnknownCommit(error)) throw error;
+      return this.#recoverOutcome(value.operationRef, value);
+    }
+  }
+
+  public async rejectReservation(value: MutationReservation, result: MutationRejected, signal?: AbortSignal): Promise<MutationTerminalResult | MutationUnknownOutcomeResult> {
+    try {
+      return await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.rejectReservation(transaction, value, result));
     } catch (error) {
       if (!isUnknownCommit(error)) throw error;
       return this.#recoverOutcome(value.operationRef, value);

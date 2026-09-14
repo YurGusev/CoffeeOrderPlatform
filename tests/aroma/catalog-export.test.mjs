@@ -268,6 +268,18 @@ void test("external cancellation propagates and closes the injected iterator", a
   assert.equal(returned, true);
 });
 
+void test("completed terminal remains one-shot while the consumer pauses before next", async () => {
+  const stream = makeStream([], {limits: {idleTimeoutMs: 10}});
+  const started = await stream.next();
+  const completed = await stream.next();
+  assert.equal(JSON.parse(Buffer.from(started.value).toString()).recordType, "snapshot-started");
+  assert.equal(JSON.parse(Buffer.from(completed.value).toString()).recordType, "snapshot-completed");
+  await new Promise(resolve => setTimeout(resolve, 30));
+  const done = await stream.next();
+  assert.equal(done.done, true);
+  await stream.return();
+});
+
 void test("oversized item/batch fails after start and never completes", async () => {
   const records = parse(
     await collect(

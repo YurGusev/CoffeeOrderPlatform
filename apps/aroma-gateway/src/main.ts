@@ -63,6 +63,7 @@ const composition: RuntimeComposition = {
         encryptionKey: createHash("sha256").update(requiredSecretString(context, "aroma.sessionEncryptionKey"), "utf8").digest(),
       });
       providerSessions = sessions;
+      providerSessionHandle = sessions;
       const providerSession = sessions;
       const bindings = new OfferBindingStore(database);
       const credentials = {
@@ -79,10 +80,11 @@ const composition: RuntimeComposition = {
           recordBatch: (input: CatalogExportBatchPersistenceInput, signal) => {
             const supplierRef = input.identities[0]?.supplierRef;
             if (supplierRef === undefined) return;
-            return bindings.recordBatch(input.record.snapshotRef, supplierRef, input.identities, signal);
+            return bindings.recordBatch(input.record.snapshotRef, supplierRef, input.record, input.identities, signal);
           },
-          completeExport: (summary: CatalogExportSummary, signal) => bindings.completeExport(summary.snapshotRef, summary.contentHash, signal),
+          completeExport: (summary: CatalogExportSummary, signal) => bindings.completeExport(summary, signal),
           failExport: (input, signal) => bindings.failExport(input.record.snapshotRef, signal),
+          abortExport: (snapshotRef, signal) => bindings.abortExport(snapshotRef, signal),
         },
       };
       const reader = new ProviderCartReader({
@@ -92,6 +94,7 @@ const composition: RuntimeComposition = {
         supplierRef: context.config.aroma.supplierRef,
       });
       const journal = new ProviderMutationJournalStore(database);
+      mutationJournal = journal;
       const mutator = new ProviderCartMutator({sessions: providerSession, credentials, bindings, supplierRef: context.config.aroma.supplierRef, transport: client});
       const executor = new GatewayMutationExecutor(journal, mutator.execute.bind(mutator));
       registerAromaBindingRoutes(app, database, context, context.config.aroma.supplierRef);
@@ -106,23 +109,40 @@ const composition: RuntimeComposition = {
     }
   },
   resources: [{
+    name: "aroma-mutation-journal-recovery",
+    start: async (signal) => {
+      const journal = mutationJournal;
+      if (journal === undefined) throw new Error("aroma-gateway mutation journal is not configured");
+      await journal.recoverAfterRestart(undefined, signal);
+    },
+    stop: () => {
+      mutationJournal = undefined;
+    },
+    destroy: () => {
+      mutationJournal = undefined;
+    },
+  }, {
     name: "aroma-provider-session",
     start: () => {
       if (providerSessions === undefined) throw new Error("aroma-gateway provider session is not configured");
     },
     stop: async () => {
-      const current = providerSessions;
+      const current = providerSessionHandle;
       providerSessions = undefined;
       await current?.close();
     },
     destroy: () => {
-      const current = providerSessions;
+      const current = providerSessionHandle;
       providerSessions = undefined;
-      void current?.close();
+      current?.forceDestroy();
     },
   }],
 };
 
 let providerSessions: ProviderSessionManager | undefined;
+let mutationJournal: ProviderMutationJournalStore | undefined;
+// Keep the owned handle after stop clears readiness. Runtime destroy must still
+// reach the same manager if a stop deadline expires while reads are pending.
+let providerSessionHandle: ProviderSessionManager | undefined;
 
 await startConfiguredRuntime("aroma-gateway", composition);

@@ -22,6 +22,8 @@ export interface CartOfferBindingResolver {
   resolveByRawProviderOfferId(rawProviderOfferId: string, supplierRef: string, signal?: AbortSignal): Promise<CartOfferBinding | undefined>;
   /** Optional full-identity lookup for mappings that can resolve variants directly. */
   resolveByProviderIdentity?: (identity: CartProviderIdentity, supplierRef: string, signal?: AbortSignal) => Promise<CartOfferBinding | undefined>;
+  /** One bounded lookup for a complete provider cart, preserving request order. */
+  resolveByProviderIdentities?: (identities: readonly CartProviderIdentity[], supplierRef: string, signal?: AbortSignal) => Promise<readonly (CartOfferBinding | undefined)[]>;
 
 }
 
@@ -90,7 +92,7 @@ export class ProviderCartReader {
   readonly #sessions: ProviderSessionManager;
   readonly #credentials: ProviderCredentialScope;
   readonly #bindings: CartOfferBindingResolver;
-  readonly #supplierRef: string | undefined;
+  readonly #supplierRef: string;
   readonly #now: () => string;
 
   constructor(options: ProviderCartReaderOptions) {
@@ -105,13 +107,29 @@ export class ProviderCartReader {
     signal.throwIfAborted();
     const session = await this.#sessions.acquire(this.#credentials, signal);
     const body = await collect(session.read({kind: "cart"}, signal), signal);
+    // Freshness is the provider observation boundary. Local decoding and DB work
+    // must not move capturedAt forward and make an old provider body look fresh.
+    const capturedAt = this.#now();
     const decoded = decodeCartSnapshot(body);
+    const identities = decoded.lines.map((line): CartProviderIdentity => ({offerId: line.offerId, packing: line.packing, grindId: line.grindId}));
+    let bindings: readonly (CartOfferBinding | undefined)[];
+    if (identities.length === 0) {
+      bindings = [];
+    } else if (this.#bindings.resolveByProviderIdentities !== undefined) {
+      bindings = await this.#bindings.resolveByProviderIdentities(identities, this.#supplierRef, signal);
+      if (bindings.length !== identities.length) throw new ProviderError("ProviderCartMappingAmbiguous");
+    } else {
+      const resolved: Array<CartOfferBinding | undefined> = [];
+      for (const identity of identities) resolved.push(await resolveCartBinding(this.#bindings, identity, this.#supplierRef, signal));
+      bindings = resolved;
+    }
     const lines: Array<Readonly<{offerRef: string; quantity: string}>> = [];
     const offerRefs = new Set<string>();
-    for (const line of decoded.lines) {
-      const identity: CartProviderIdentity = {offerId: line.offerId, packing: line.packing, grindId: line.grindId};
-      const binding = await resolveCartBinding(this.#bindings, identity, this.#supplierRef, signal);
-      if (binding === undefined) throw new ProviderError("ProviderCartMappingMissing");
+    for (const [index, line] of decoded.lines.entries()) {
+      const binding = bindings[index];
+      if (binding === undefined || !sameProviderIdentity(binding.providerIdentity, identities[index]! ) || (binding.supplierRef !== undefined && binding.supplierRef !== this.#supplierRef)) {
+        throw new ProviderError("ProviderCartMappingMissing");
+      }
       if (typeof binding.offerRef !== "string" || binding.offerRef.length === 0 || !binding.offerRef.isWellFormed() || binding.offerRef.includes("\u0000") || offerRefs.has(binding.offerRef)) {
         throw new ProviderError("ProviderCartMappingAmbiguous");
       }
@@ -122,7 +140,7 @@ export class ProviderCartReader {
     return {
       cartScopeRef: "aroma-primary",
       providerSnapshotRef,
-      capturedAt: this.#now(),
+      capturedAt,
       cartFingerprint: sha256(canonicalLines(lines)),
       lines,
     };

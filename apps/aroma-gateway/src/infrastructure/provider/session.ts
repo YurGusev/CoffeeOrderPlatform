@@ -103,6 +103,10 @@ export class ProviderSessionManager {
   readonly #cacheMaxAgeMs: number;
   readonly #cacheMaxEntries: number;
   #closed = false;
+  #shutdownEpoch = 0;
+  #forceDestroyed = false;
+  #closePromise: Promise<void> | undefined;
+  #transportClosePromise: Promise<void> | undefined;
 
   constructor(options: Readonly<{
     transport: ProviderLoginTransport;
@@ -132,6 +136,10 @@ export class ProviderSessionManager {
       this.#scopeStates.set(scopeHash, state);
     }
     return state;
+  }
+
+  #isOpen(epoch = this.#shutdownEpoch): boolean {
+    return !this.#closed && epoch === this.#shutdownEpoch;
   }
 
   /** Serialize only short persistence operations; provider HTTP stays outside this queue. */
@@ -223,6 +231,7 @@ export class ProviderSessionManager {
   }
 
   async #loadOrLogin(scope: Readonly<{scopeRef: string; email: string; password: string}>, scopeHash: string, signal: AbortSignal): Promise<ProviderSession> {
+    const shutdownEpoch = this.#shutdownEpoch;
     const now = this.#now();
     const scopeState = this.#scopeState(scopeHash);
     const generation = scopeState.generation;
@@ -232,16 +241,22 @@ export class ProviderSessionManager {
       if (error instanceof ProviderError) throw error;
       throw new ProviderError("ProviderSessionUnavailable");
     }
+    if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
     const storedAge = stored === undefined ? Number.POSITIVE_INFINITY : now - epochMilliseconds(stored.storedAt);
-    if (scopeState.generation === generation && stored !== undefined && Number.isFinite(storedAge) && storedAge >= 0 && storedAge <= this.#cacheMaxAgeMs && usableExpiry(stored.expiresAt, now)) {
+    if (this.#isOpen(shutdownEpoch) && scopeState.generation === generation && stored !== undefined && Number.isFinite(storedAge) && storedAge >= 0 && storedAge <= this.#cacheMaxAgeMs && usableExpiry(stored.expiresAt, now)) {
       try {
         const cookies = decryptCookieMaterial(stored.encryptedCookieMaterial, this.#encryptionKey);
-        if (usableCookies(cookies, now)) return this.#remember(scopeHash, cookies, stored.expiresAt);
+        if (usableCookies(cookies, now)) {
+          if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
+          return this.#remember(scopeHash, cookies, stored.expiresAt);
+        }
       } catch {
         // Corrupt/authentication-failed ciphertext is discarded, never exposed.
       }
+      if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
       await this.#persist(scopeHash, () => this.#store.delete(scopeHash, signal));
     }
+    if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
     signal.throwIfAborted();
     let login: ProviderLoginResult;
     try { login = await this.#transport.login({email: scope.email, password: scope.password}, signal); }
@@ -249,6 +264,7 @@ export class ProviderSessionManager {
       if (error instanceof ProviderError) throw error;
       throw new ProviderError("ProviderAuthenticationFailed");
     }
+    if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
     if (login.profile.email.trim().toLowerCase() !== scope.email) throw new ProviderError("ProviderProtocolViolation");
     const activeCookies = login.cookies.filter(cookie => cookie.expiresAt === null || epochMilliseconds(cookie.expiresAt) > this.#now());
     if (!usableCookies(activeCookies, this.#now())) throw new ProviderError("ProviderSessionUnavailable");
@@ -257,8 +273,9 @@ export class ProviderSessionManager {
     let persisted = false;
     try {
       await this.#persist(scopeHash, async () => {
-        if (scopeState.generation !== generation || scopeState.currentState !== undefined) return;
+        if (!this.#isOpen(shutdownEpoch) || scopeState.generation !== generation || scopeState.currentState !== undefined) return;
         await this.#store.save(scopeHash, encrypted, expiresAt, signal);
+        if (!this.#isOpen(shutdownEpoch)) return;
         persisted = true;
       });
     }
@@ -267,14 +284,17 @@ export class ProviderSessionManager {
       throw new ProviderError("ProviderSessionUnavailable");
     }
     if (!persisted) {
+      if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
       const current = this.#cache.get(scopeHash);
       if (current !== undefined && this.#isCurrent(scopeHash, current.state)) return current.session;
       throw new ProviderError("ProviderSessionUnavailable");
     }
+    if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
     return this.#remember(scopeHash, activeCookies, expiresAt);
   }
 
   #remember(scopeHash: string, cookies: readonly ProviderCookie[], expiresAt: string | null): ProviderSession {
+    if (!this.#isOpen()) throw new ProviderError("ProviderSessionUnavailable");
     // The manager is constructed inside the Gateway with the trusted provider
     // transport. An empty host here means "the already validated provider
     // cookie set", never an arbitrary caller-selected host.
@@ -310,8 +330,9 @@ export class ProviderSessionManager {
     let finishRead!: () => void;
     const activeRead = new Promise<void>(resolve => { finishRead = resolve; });
     this.#activeReads.add(activeRead);
-    const source = this.#transport.read(operation, combinedSignal, state.cookies);
+    let source: AsyncGenerator<Uint8Array, readonly ProviderCookie[]> | undefined;
     try {
+      source = this.#transport.read(operation, combinedSignal, state.cookies);
       while (true) {
         const chunk = await source.next();
         if (chunk.done) {
@@ -324,7 +345,7 @@ export class ProviderSessionManager {
       if (error instanceof ProviderError && error.code === "ProviderAuthenticationFailed") await this.#invalidate(scopeHash, state);
       throw error;
     } finally {
-      try { await source.return([]); } catch { /* preserve the provider result */ }
+      try { await source?.return([]); } catch { /* preserve the provider result */ }
       finishRead();
       this.#activeReads.delete(activeRead);
     }
@@ -338,16 +359,17 @@ export class ProviderSessionManager {
   }
 
   async #rotate(scopeHash: string, state: SessionState, updates: readonly ProviderCookie[]): Promise<void> {
+    const shutdownEpoch = this.#shutdownEpoch;
     let invalid = false;
     await this.#persist(scopeHash, async () => {
       const cached = this.#cache.get(scopeHash);
-      if (!this.#isCurrent(scopeHash, state) || cached === undefined || cached.state !== state) return;
+      if (!this.#isOpen(shutdownEpoch) || !this.#isCurrent(scopeHash, state) || cached === undefined || cached.state !== state) return;
       const now = this.#now();
       const merged = mergeCookies(state.cookies, updates, now);
       if (!usableCookies(merged, now)) { invalid = true; return; }
       const expiresAt = earliestCookieExpiry(merged);
       await this.#store.save(scopeHash, encryptCookieMaterial(merged, this.#encryptionKey), expiresAt, AbortSignal.timeout(this.#cacheMaxAgeMs));
-      if (!this.#isCurrent(scopeHash, state)) return;
+      if (!this.#isOpen(shutdownEpoch) || !this.#isCurrent(scopeHash, state)) return;
       state.cookies.splice(0, state.cookies.length, ...merged);
       this.#cache.set(scopeHash, {...cached, cookies: [...merged], cachedAt: now});
     });
@@ -355,7 +377,7 @@ export class ProviderSessionManager {
       await this.#invalidate(scopeHash, state);
       throw new ProviderError("ProviderSessionUnavailable");
     }
-    if (!this.#isCurrent(scopeHash, state)) throw new ProviderError("ProviderSessionUnavailable");
+    if (!this.#isOpen(shutdownEpoch) || !this.#isCurrent(scopeHash, state)) throw new ProviderError("ProviderSessionUnavailable");
   }
 
   async #invalidate(scopeHash: string, state: SessionState): Promise<void> {
@@ -371,9 +393,10 @@ export class ProviderSessionManager {
     });
   }
 
-  async close(): Promise<void> {
+  #beginShutdown(): void {
     if (this.#closed) return;
     this.#closed = true;
+    this.#shutdownEpoch += 1;
     this.#lifecycle.abort();
     this.#cache.clear();
     for (const state of this.#sessionStates) {
@@ -382,10 +405,36 @@ export class ProviderSessionManager {
     }
     this.#sessionStates.clear();
     for (const flight of this.#flights.values()) flight.controller.abort();
+  }
+
+  #closeTransport(): Promise<void> {
+    this.#transportClosePromise ??= Promise.resolve().then(() => this.#transport.close?.()).then(() => undefined);
+    return this.#transportClosePromise;
+  }
+
+  async #closeImpl(): Promise<void> {
+    this.#beginShutdown();
     await Promise.allSettled([...this.#flights.values()].map(flight => flight.promise));
     this.#flights.clear();
     await Promise.allSettled(this.#activeReads);
     await Promise.allSettled(Array.from(this.#scopeStates.values(), scope => scope.persistence));
-    if (this.#transport.close !== undefined) await this.#transport.close();
+    await this.#closeTransport();
+  }
+
+  close(): Promise<void> {
+    this.#closePromise ??= this.#closeImpl();
+    return this.#closePromise;
+  }
+
+  /**
+   * Fail-stop shutdown for a runtime deadline. It deliberately does not wait
+   * for provider generators that ignore cancellation; the transport is still
+   * closed exactly once and normal close keeps its shared promise.
+   */
+  forceDestroy(): void {
+    if (this.#forceDestroyed) return;
+    this.#forceDestroyed = true;
+    this.#beginShutdown();
+    void this.#closeTransport().catch(() => { /* fail-stop cleanup is best effort */ });
   }
 }

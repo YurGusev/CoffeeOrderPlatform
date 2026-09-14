@@ -118,6 +118,24 @@ export const internalV1Schemas = {
       }
     }
   },
+  "AromaCatalogExportRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "snapshotRef",
+      "supplierRef"
+    ],
+    "properties": {
+      "snapshotRef": {
+        "type": "string",
+        "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "supplierRef": {
+        "type": "string",
+        "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$"
+      }
+    }
+  },
   "AromaOfferBindingRequest": {
     "type": "object",
     "additionalProperties": false,
@@ -279,6 +297,47 @@ export const internalV1Schemas = {
             }
           }
         }
+      }
+    }
+  },
+  "AromaSetQuantityRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "operationRef",
+      "cartScopeRef",
+      "quantity"
+    ],
+    "properties": {
+      "operationRef": {
+        "type": "string",
+        "pattern": "^op_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "cartScopeRef": {
+        "type": "string",
+        "const": "aroma-primary"
+      },
+      "quantity": {
+        "type": "string",
+        "pattern": "^(?:[1-9][0-9]*)(?:\\.[0-9]+)?$|^0\\.(?!0+$)[0-9]+$"
+      }
+    }
+  },
+  "AromaRemoveLineRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "operationRef",
+      "cartScopeRef"
+    ],
+    "properties": {
+      "operationRef": {
+        "type": "string",
+        "pattern": "^op_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "cartScopeRef": {
+        "type": "string",
+        "const": "aroma-primary"
       }
     }
   }

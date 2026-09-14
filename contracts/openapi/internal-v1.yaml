@@ -162,7 +162,7 @@ paths:
       x-auth: mTLS-and-signed-delegation
       x-deadline: 15m
       x-idle-timeout: 30s
-      x-side-effects: none
+      x-side-effects: Integration persistence
       security:
         - serviceMTLS: []
       parameters:

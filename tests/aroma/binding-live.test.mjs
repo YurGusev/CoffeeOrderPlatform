@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {createHash} from "node:crypto";
 import test from "node:test";
 import {readFile} from "node:fs/promises";
 import {resolve} from "node:path";
@@ -8,12 +9,16 @@ import {createDatabase, withTransaction} from "../../packages/platform-database/
 import {defineStatement} from "../../packages/platform-database/dist/owner.js";
 import {applyMigrations, migrationChecksum} from "../../packages/platform-migrations/dist/index.js";
 import {OfferBindingRepository, OfferBindingStore} from "../../apps/aroma-gateway/dist/infrastructure/database/offer-binding-store.js";
+import {canonicalCatalogJson, sha256CatalogHash} from "../../apps/aroma-gateway/dist/application/catalog-export.js";
 
 const {Client} = pg;
 const SCHEME = "hmac-sha256-v1";
 const pool = {max: 4, checkoutTimeoutMs: 150, lockTimeoutMs: 3000, interactiveStatementTimeoutMs: 2000, backgroundStatementTimeoutMs: 2000, terminalTimeoutMs: 500, transactionTimeoutMs: 3000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000};
 const id = (prefix, n) => `${prefix}_${String(n).padStart(26, "0")}`;
 const hash = (n) => String(n).padStart(64, "0");
+const exportItem = (identity) => ({sourceProductKeyHash: identity.sourceProductKeyHash, sourceVariantKeyHash: identity.sourceVariantKeyHash, sourceOfferKeyHash: identity.sourceOfferKeyHash, displayName: "Coffee", unit: "piece", supplierUnitMinor: "1", currency: "RUB", availability: "Available", imageUrl: "", sourceIdentityScheme: SCHEME});
+const exportBatch = (snapshotRef, batchNumber, identity, previousBatchHash = null) => { const items = [exportItem(identity)]; const bytes = Buffer.from(canonicalCatalogJson(items), "utf8"); return {streamVersion: "1", recordType: "snapshot-batch", snapshotRef, batchNumber, offerCount: 1, uncompressedBytes: bytes.byteLength, batchHash: sha256CatalogHash(bytes, "batch"), previousBatchHash, items}; };
+const exportSummary = (snapshotRef, supplierRef, batch) => ({snapshotRef, supplierRef, batchCount: 1, productCount: 1, variantCount: 1, offerCount: 1, contentHash: createHash("sha256").update(Buffer.from(batch.batchHash, "hex")).digest("hex")});
 const req = (offerRef, supplierRef, snapshotRef, sourceOfferKeyHash) => ({offerRef, supplierRef, snapshotRef, sourceIdentityScheme: SCHEME, sourceOfferKeyHash});
 const errorCode = async (promise) => { try { await promise; return undefined; } catch (error) { return error?.code; } };
 
@@ -30,10 +35,12 @@ async function proof({adminUrl, port, roleMap, rolePasswords}) {
   const runtimeDb = (owner) => createDatabase({owner, database: database.name, allowedDatabase: database.name, host: "127.0.0.1", port, user: runtime.role, password: rolePasswords[runtime.role], pool, shutdownGraceMs: 8000});
   const bindingSql = await readFile(resolve("apps/aroma-gateway/migrations/0003_offer_bindings.sql"), "utf8");
   const identitySql = await readFile(resolve("apps/aroma-gateway/migrations/0004_provider_offer_identity.sql"), "utf8");
+  const exportSql = await readFile(resolve("apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql"), "utf8");
   await migrator.resource.start(AbortSignal.timeout(1000));
   await applyMigrations(migrator, [
     {id: "0003_offer_bindings", sql: bindingSql, checksum: migrationChecksum(bindingSql)},
     {id: "0004_provider_offer_identity", sql: identitySql, checksum: migrationChecksum(identitySql)},
+    {id: "0005_catalog_export_attempts", sql: exportSql, checksum: migrationChecksum(exportSql)},
   ], {schema: "integration", ledgerTable: "platform_schema_migrations", lockKey: "issue10-binding"});
   await migrator.resource.stop(AbortSignal.timeout(1000));
   a = runtimeDb("issue10-binding-a");
@@ -57,6 +64,39 @@ async function proof({adminUrl, port, roleMap, rolePasswords}) {
   await storeA.completeExport(snapshot1, snapshot1Hash);
   assert.equal(await errorCode(storeA.completeExport(snapshot1, hash(999))), "AROMA_BINDING_SNAPSHOT_INCOMPLETE");
   await setup(storeA, snapshot2, [{supplierRef: supplier, sourceIdentityScheme: SCHEME, sourceOfferKeyHash: source1, rawProviderOfferId: raw1}]);
+  const ownershipSnapshot = id("snp", 9);
+  const identityA = {supplierRef: supplier, sourceIdentityScheme: SCHEME, sourceOfferKeyHash: hash(20), sourceProductKeyHash: hash(120), sourceVariantKeyHash: hash(220), rawProviderOfferId: "provider-raw-export-a", rawProviderProductId: "provider-product-export-a", rawProviderVariantId: "provider-variant-export-a"};
+  const identityB = {...identityA, sourceOfferKeyHash: hash(21), sourceProductKeyHash: hash(121), sourceVariantKeyHash: hash(221), rawProviderOfferId: "provider-raw-export-b", rawProviderProductId: "provider-product-export-b", rawProviderVariantId: "provider-variant-export-b"};
+  const ownershipBatchA = exportBatch(ownershipSnapshot, 0, identityA);
+  const ownershipBatchB = exportBatch(ownershipSnapshot, 0, identityB);
+  await storeA.beginExport(ownershipSnapshot, supplier);
+  await storeA.recordBatch(ownershipSnapshot, supplier, ownershipBatchA, [identityA]);
+  await storeA.abortExport(ownershipSnapshot);
+  await storeB.beginExport(ownershipSnapshot, supplier);
+  await storeB.recordBatch(ownershipSnapshot, supplier, ownershipBatchB, [identityB]);
+  const summaryB = exportSummary(ownershipSnapshot, supplier, ownershipBatchB);
+  await storeB.completeExport(summaryB);
+  await storeB.completeExport(summaryB);
+  assert.equal(await errorCode(storeA.register(req(id("off", 20), supplier, ownershipSnapshot, identityA.sourceOfferKeyHash))), "AROMA_BINDING_SNAPSHOT_INCOMPLETE");
+  await storeA.register(req(id("off", 21), supplier, ownershipSnapshot, identityB.sourceOfferKeyHash));
+  const failedRetrySnapshot = id("snp", 12);
+  const staleRetryIdentity = {...identityA, sourceOfferKeyHash: hash(22), rawProviderOfferId: "provider-raw-export-stale-retry"};
+  await storeA.beginExport(failedRetrySnapshot, supplier);
+  await storeA.recordBatch(failedRetrySnapshot, supplier, exportBatch(failedRetrySnapshot, 0, staleRetryIdentity), [staleRetryIdentity]);
+  await storeA.failExport(failedRetrySnapshot);
+  await storeB.beginExport(failedRetrySnapshot, supplier);
+  await storeB.completeExport(failedRetrySnapshot, hash(112));
+  assert.equal(await errorCode(storeA.register(req(id("off", 22), supplier, failedRetrySnapshot, staleRetryIdentity.sourceOfferKeyHash))), "AROMA_BINDING_SNAPSHOT_INCOMPLETE");
+  const concurrentSnapshot = id("snp", 10);
+  const starts = await Promise.all([storeA.beginExport(concurrentSnapshot, supplier).then(() => "started", (error) => error.code), storeB.beginExport(concurrentSnapshot, supplier).then(() => "started", (error) => error.code)]);
+  assert.equal(starts.filter((value) => value === "started").length, 1);
+  assert.equal(starts.filter((value) => value === "AROMA_BINDING_CONFLICT").length, 1);
+  await storeA.abortExport(concurrentSnapshot);
+  const conflictSnapshot = id("snp", 11);
+  await storeA.beginExport(conflictSnapshot, supplier);
+  await storeA.recordBatch(conflictSnapshot, supplier, exportBatch(conflictSnapshot, 0, identityA), [identityA]);
+  assert.equal(await errorCode(storeA.recordBatch(conflictSnapshot, supplier, exportBatch(conflictSnapshot, 0, identityB), [identityB])), "AROMA_BINDING_CONFLICT");
+  await storeA.abortExport(conflictSnapshot);
   await setup(storeA, incomplete, [{supplierRef: supplier, sourceIdentityScheme: SCHEME, sourceOfferKeyHash: source3, rawProviderOfferId: "provider-raw-3"}], false);
   const first = await storeA.register(req(offer1, supplier, snapshot1, source1));
   assert.equal(first.firstSnapshotRef, snapshot1);
@@ -109,6 +149,19 @@ async function proof({adminUrl, port, roleMap, rolePasswords}) {
   assert.equal(nullFacts?.grindId, null);
   assert.equal(Object.hasOwn(nullFacts ?? {}, "packing"), true);
   assert.equal(Object.hasOwn(nullFacts ?? {}, "grindId"), true);
+  const bulkBindings = await storeA.resolveByProviderIdentities([
+    {offerId: identityBases[4].rawProviderOfferId},
+    {offerId: identityBases[5].rawProviderOfferId, packing: null, grindId: null},
+  ], supplier);
+  assert.equal(bulkBindings.length, 2);
+  assert.equal(bulkBindings[0]?.offerRef, id("off", 6));
+  assert.equal(bulkBindings[1]?.offerRef, id("off", 7));
+  assert.equal(Object.hasOwn(bulkBindings[0]?.providerIdentity ?? {}, "packing"), false);
+  assert.equal(Object.hasOwn(bulkBindings[0]?.providerIdentity ?? {}, "grindId"), false);
+  assert.equal(bulkBindings[1]?.providerIdentity.packing, null);
+  assert.equal(bulkBindings[1]?.providerIdentity.grindId, null);
+  assert.equal(Object.hasOwn(bulkBindings[1]?.providerIdentity ?? {}, "packing"), true);
+  assert.equal(Object.hasOwn(bulkBindings[1]?.providerIdentity ?? {}, "grindId"), true);
   admin = new Client({connectionString: adminUrl.replace(/\/postgres$/, `/${database.name}`), connectionTimeoutMillis: 1000});
   await admin.connect();
   const waitForLock = async (applicationName) => {

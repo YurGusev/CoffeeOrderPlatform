@@ -165,6 +165,19 @@ class MemoryJournal {
     return {kind: "InProgress", state: "Reserved", operationRef: record.operationRef};
   }
 
+  async rejectReservation(reservationValue, result) {
+    const record = this.current(reservationValue);
+    if (record.state === "Acknowledged" || record.state === "Rejected") return terminal(record, true);
+    if (record.state !== "Reserved") throw codedError("AROMA_RESERVATION_LOST");
+    record.state = "Rejected";
+    record.statusCode = result.statusCode;
+    record.failureCode = result.failureCode;
+    record.responseBodyBytes = new Uint8Array(result.responseBodyBytes);
+    record.completedAt = Date.now();
+    this.shared.events.push("rejected-before-dispatch");
+    return terminal(record, false);
+  }
+
   async acknowledge(permitValue, result) {
     const record = this.current(permitValue);
     if (record.state === "Acknowledged" || record.state === "Rejected") return terminal(record, true);
@@ -418,7 +431,7 @@ void test("production composition mounts the typed mutation bridge without a tes
 
 void test("journal migration is ordered, Integration-owned, constrained, and does not define provider/session payload storage", async () => {
   const files = (await readdir(MIGRATIONS)).filter((name) => name.endsWith(".sql")).sort();
-  assert.deepEqual(files, ["0001_provider_sessions.sql", "0002_provider_mutation_journal.sql", "0003_offer_bindings.sql", "0004_provider_offer_identity.sql"]);
+  assert.deepEqual(files, ["0001_provider_sessions.sql", "0002_provider_mutation_journal.sql", "0003_offer_bindings.sql", "0004_provider_offer_identity.sql", "0005_catalog_export_attempts.sql"]);
   const sessionSql = await readFile(`${MIGRATIONS}/0001_provider_sessions.sql`, "utf8");
   assert.match(sessionSql, /CREATE TABLE integration\.provider_sessions/);
   assert.match(sessionSql, /encrypted_cookie_material bytea/);
@@ -465,6 +478,43 @@ void test("concurrent calls produce one durable reservation and one dispatch per
   assert.equal(shared.dispatchCalls, 1);
   assert.equal(firstCalls.value, 1);
   assert.equal(secondCalls.value, 0);
+});
+
+void test("safe preparation finishes before the dispatch permit and known preparation failure is terminal before dispatch", async () => {
+  const shared = new SharedJournal();
+  const journal = new MemoryJournal(shared, "owner-a");
+  const requestValue = request(40);
+  const preparationEvents = [];
+  let unsafeCalls = 0;
+  const executor = new GatewayMutationExecutor(
+    journal,
+    async requestValue2 => {
+      unsafeCalls++;
+      preparationEvents.push("unsafe");
+      assert.equal(shared.records.get(requestValue2.operationRef).state, "Dispatched");
+      return {state: "Acknowledged", statusCode: 200, responseBodyBytes: acknowledgedBytes(requestValue2)};
+    },
+    async () => {
+      preparationEvents.push("prepared");
+      return {safeCart: true};
+    },
+  );
+  const acknowledged = await executor.execute(requestValue, delegation());
+  assert.equal(acknowledged.state, "Acknowledged");
+  assert.deepEqual(preparationEvents, ["prepared", "unsafe"]);
+  assert.deepEqual(shared.events.slice(0, 2), ["reserved-committed", "dispatched-committed"]);
+  assert.equal(unsafeCalls, 1);
+
+  const failedRequest = request(41);
+  const failed = await new GatewayMutationExecutor(
+    new MemoryJournal(shared, "owner-b"),
+    async () => { throw new Error("unsafe preparation failure must not reach provider"); },
+    async () => { throw codedError("ProviderSessionUnavailable"); },
+  ).execute(failedRequest, delegation());
+  assert.equal(failed.state, "Rejected");
+  assert.equal(failed.statusCode, 503);
+  assert.equal(shared.records.get(failedRequest.operationRef).state, "Rejected");
+  assert.equal(shared.dispatchCalls, 1);
 });
 
 void test("delegation is rejected before reserve and a changed request conflicts on operationRef", async () => {

@@ -1,6 +1,6 @@
 import type {AromaMutationResponse} from "@coffee-platform/contracts-aroma-v1";
 import {ProviderError} from "../domain/provider-errors.js";
-import type {DispatchPermit, NormalizedMutationRequest, UnsafeMutationResult} from "../domain/mutation-journal.js";
+import {PROVIDER_MUTATION_PREPARER, type DispatchPermit, type NormalizedMutationRequest, type PreparedProviderUnsafeMutator, type UnsafeMutationResult} from "../domain/mutation-journal.js";
 import type {OfferBindingStore, ResolvedProviderOffer} from "../infrastructure/database/offer-binding-store.js";
 import type {ProviderCredentialScope, ProviderSessionManager} from "../infrastructure/provider/session.js";
 import type {ProviderHttpClient} from "../infrastructure/provider/http-client.js";
@@ -22,6 +22,19 @@ function problem(status: number, code: string): Uint8Array {
 }
 
 type KnownProviderFacts = Readonly<{packing: string | null; grindId: string | null}>;
+type ProviderSession = Awaited<ReturnType<ProviderSessionManager["acquire"]>>;
+type PreparedMutation = Readonly<{
+  session: ProviderSession;
+  identity: ResolvedProviderOffer;
+  facts: KnownProviderFacts;
+  line: readonly [string, number] | undefined;
+  quantity: number | undefined;
+}>;
+
+class PreparationError extends Error {
+  readonly code: string;
+  constructor(code: string) { super(code); this.name = "PreparationError"; this.code = code; }
+}
 
 function knownProviderFacts(identity: ResolvedProviderOffer): KnownProviderFacts {
   if (!Object.hasOwn(identity, "packing") || identity.packing === undefined || !Object.hasOwn(identity, "grindId") || identity.grindId === undefined) {
@@ -60,7 +73,8 @@ export class ProviderCartMutator {
   readonly #transport: Pick<ProviderHttpClient, "mutate"> | undefined;
   public constructor(options: ProviderCartMutatorOptions) { this.#sessions = options.sessions; this.#credentials = options.credentials; this.#bindings = options.bindings; this.#supplierRef = options.supplierRef; this.#transport = options.transport; }
 
-  public async execute(request: NormalizedMutationRequest, _permit: DispatchPermit, signal: AbortSignal): Promise<UnsafeMutationResult> {
+  /** Safe provider preparation: identity, session and the preflight cart GET only. */
+  public async prepare(request: NormalizedMutationRequest, signal: AbortSignal): Promise<PreparedMutation> {
     const identity = await this.#bindings.resolveProviderOffer(request.offerRef, this.#supplierRef ?? "", signal);
     if (identity === undefined || (this.#supplierRef !== undefined && identity.supplierRef !== this.#supplierRef)) throw new ProviderError("ProviderCartMappingMissing");
     const facts = knownProviderFacts(identity);
@@ -68,13 +82,40 @@ export class ProviderCartMutator {
     const body = await this.#collect(session.read({kind: "cart"}, signal), signal);
     const current = decodeCartSnapshot(body);
     const line = exactLine(current, identity, facts);
-
-    if (request.operationKind === "RemoveLine" && line === undefined) return {state: "Rejected", statusCode: 404, failureCode: "AROMA_CART_ITEM_NOT_FOUND", responseBodyBytes: problem(404, "AROMA_CART_ITEM_NOT_FOUND")};
     const quantity = request.quantityMilli === null ? undefined : Number(request.quantityMilli);
     // Provider bounds beyond a positive integer are not proven. Do not encode the
     // observed test values (1/2) as a product maximum; the transport still
     // requires a lossless integer representation.
     if (quantity !== undefined && (!Number.isSafeInteger(quantity) || quantity < 1)) throw new ProviderError("ProviderProtocolViolation");
+    if (request.operationKind === "RemoveLine" && line === undefined) throw new PreparationError("ProviderCartItemNotFound");
+    return {session, identity, facts, line, quantity};
+  }
+
+  /**
+   * The getter carries the safe-preparation handoff through the existing
+   * `mutator.execute.bind(mutator)` composition without changing main.ts.
+   */
+  public get execute(): PreparedProviderUnsafeMutator {
+    const execute = ((request: NormalizedMutationRequest, permit: DispatchPermit, signal: AbortSignal, preparation?: unknown) => this.#execute(request, permit, signal, preparation)) as PreparedProviderUnsafeMutator;
+    Object.defineProperty(execute, PROVIDER_MUTATION_PREPARER, {value: this.prepare.bind(this)});
+    const nativeBind = Reflect.get(Function.prototype, "bind") as (thisArg: unknown, ...args: unknown[]) => PreparedProviderUnsafeMutator;
+    Object.defineProperty(execute, "bind", {value: (thisArg: unknown, ...boundArguments: unknown[]) => {
+      const bound = Reflect.apply(nativeBind, execute, [thisArg, ...boundArguments]) as PreparedProviderUnsafeMutator;
+      Object.defineProperty(bound, PROVIDER_MUTATION_PREPARER, {value: this.prepare.bind(this)});
+      return bound;
+    }});
+    return execute;
+  }
+
+  async #execute(request: NormalizedMutationRequest, _permit: DispatchPermit, signal: AbortSignal, preparation?: unknown): Promise<UnsafeMutationResult> {
+    let prepared: PreparedMutation;
+    try {
+      prepared = preparation === undefined ? await this.prepare(request, signal) : preparation as PreparedMutation;
+    } catch (error) {
+      if (error instanceof PreparationError && error.code === "ProviderCartItemNotFound") return {state: "Rejected", statusCode: 404, failureCode: "AROMA_CART_ITEM_NOT_FOUND", responseBodyBytes: problem(404, "AROMA_CART_ITEM_NOT_FOUND")};
+      throw error;
+    }
+    const {session, identity, facts, line, quantity} = prepared;
     const result = session.mutate !== undefined
       ? await session.mutate(
           request.operationKind === "RemoveLine"

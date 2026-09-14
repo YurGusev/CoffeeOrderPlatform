@@ -195,6 +195,8 @@ export type CatalogExportPersistence = Readonly<{
     input: CatalogExportFailurePersistenceInput,
     signal: AbortSignal,
   ) => void | Promise<void>;
+  /** Discard an interrupted traversal without touching immutable source identities. */
+  abortExport?: (snapshotRef: string, signal: AbortSignal) => void | Promise<void>;
 }>;
 
 export type CatalogExportBoundary = Readonly<{
@@ -708,6 +710,11 @@ function validatePersistence(boundary: CatalogExportPersistence): void {
     typeof boundary.failExport !== "function"
   )
     throw invalid("failExport is invalid");
+  if (
+    boundary.abortExport !== undefined &&
+    typeof boundary.abortExport !== "function"
+  )
+    throw invalid("abortExport is invalid");
 }
 
 function sourceIterator(
@@ -737,6 +744,48 @@ function sourceIterator(
   }
   if (typeof candidate.next === "function") return source as SourceIterator;
   throw invalid("source must be an AsyncIterable or AsyncIterator");
+}
+
+function cancellableSourceIterator(
+  iterator: SourceIterator,
+  signal: AbortSignal,
+): SourceIterator {
+  let returnPromise: Promise<IteratorResult<NormalizedCatalogOffer>> | undefined;
+  const close = (): Promise<IteratorResult<NormalizedCatalogOffer>> => {
+    returnPromise ??= Promise.resolve(iterator.return?.()).then(
+      result => result ?? ({done: true, value: undefined} as IteratorReturnResult<undefined>),
+    );
+    return returnPromise;
+  };
+  const next = (): Promise<IteratorResult<NormalizedCatalogOffer>> => {
+    const nextPromise = Promise.resolve().then(() => iterator.next());
+    if (signal.aborted) {
+      void close().catch(() => undefined);
+      return Promise.reject(asAbortError(signal.reason));
+    }
+    return new Promise((resolve, reject) => {
+      const onAbort = (): void => {
+        signal.removeEventListener("abort", onAbort);
+        void close().catch(() => undefined);
+        reject(asAbortError(signal.reason));
+      };
+      signal.addEventListener("abort", onAbort, {once: true});
+      nextPromise.then(
+        value => {
+          signal.removeEventListener("abort", onAbort);
+          resolve(value);
+        },
+        error => {
+          signal.removeEventListener("abort", onAbort);
+          reject(error);
+        },
+      );
+    });
+  };
+  return {
+    next,
+    return: () => close(),
+  };
 }
 
 function timestamp(clock: CatalogExportClock, field: string): string {
@@ -1068,7 +1117,10 @@ async function* runExport(
   const state = makeRuntimeState(config.signal);
   const identity = resolveIdentity(boundary.identity);
   const hash = resolveHash(boundary.hash);
-  const iterator = sourceIterator(config.source);
+  const iterator = cancellableSourceIterator(
+    sourceIterator(config.source),
+    state.combinedSignal,
+  );
   let iteratorClosed = false;
   let streamStarted = false;
   let terminal = false;
@@ -1366,9 +1418,16 @@ async function* runExport(
       completedAt,
     });
     terminal = true;
-    for await (const line of emit(completed)) yield line;
+    if (totalTimer !== undefined) {
+      clearTimeout(totalTimer);
+      totalTimer = undefined;
+    }
+    for await (const line of emit(completed, false)) yield line;
   } catch (error) {
     failure = error;
+    // The completed record has already committed. A later idle/cleanup error
+    // must never append a second terminal record or rewrite that result.
+    if (terminal) return;
     if (!streamStarted || isExternalCancellation(error, state)) throw error;
     try {
       await close();
@@ -1386,9 +1445,24 @@ async function* runExport(
     });
     await persistFailure(failed, code);
     terminal = true;
+    if (totalTimer !== undefined) {
+      clearTimeout(totalTimer);
+      totalTimer = undefined;
+    }
     for await (const line of emit(failed, false)) yield line;
   } finally {
     if (totalTimer !== undefined) clearTimeout(totalTimer);
+    if (!state.internalController.signal.aborted)
+      state.internalController.abort(asAbortError(new Error("catalog export closed")));
+    if (streamStarted && !terminal && boundary.persistence.abortExport !== undefined) {
+      try {
+        // External cancellation may already be aborted; cleanup is durable work
+        // and therefore receives its own bounded, non-aborted signal.
+        await boundary.persistence.abortExport(request.snapshotRef, new AbortController().signal);
+      } catch {
+        // Preserve the original cancellation/consumer-close outcome.
+      }
+    }
     if (!iteratorClosed) {
       try {
         await close();

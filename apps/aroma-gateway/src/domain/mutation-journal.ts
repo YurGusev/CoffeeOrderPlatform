@@ -126,6 +126,8 @@ export type MutationUnknownFailureCode =
 
 export type MutationJournalPort = Readonly<{
   reserve: (request: NormalizedMutationRequest, delegation: MutationDelegation, signal?: AbortSignal) => Promise<ReservationDecision>;
+  /** Persist a known safe-preparation rejection while the row is still Reserved. */
+  rejectReservation?: (reservation: MutationReservation, result: MutationRejected, signal?: AbortSignal) => Promise<MutationTerminalResult | MutationUnknownOutcomeResult>;
   markDispatched: (reservation: MutationReservation, signal?: AbortSignal) => Promise<DispatchDecision>;
   acknowledge: (permit: DispatchPermit, result: MutationAcknowledged, signal?: AbortSignal) => Promise<MutationTerminalResult | MutationUnknownOutcomeResult>;
   reject: (permit: DispatchPermit, result: MutationRejected, signal?: AbortSignal) => Promise<MutationTerminalResult | MutationUnknownOutcomeResult>;
@@ -136,7 +138,14 @@ export type ProviderUnsafeMutator = (
   request: NormalizedMutationRequest,
   permit: DispatchPermit,
   signal: AbortSignal,
+  preparation?: unknown,
 ) => Promise<UnsafeMutationResult>;
+export type ProviderMutationPreparer = (request: NormalizedMutationRequest, signal: AbortSignal) => Promise<unknown>;
+/** Internal handoff used by ProviderCartMutator without widening the transport seam. */
+export const PROVIDER_MUTATION_PREPARER = Symbol("provider-mutation-preparer");
+export type PreparedProviderUnsafeMutator = ProviderUnsafeMutator & {
+  readonly [PROVIDER_MUTATION_PREPARER]?: ProviderMutationPreparer;
+};
 /** @deprecated compatibility alias for existing unit seams; production never uses a test implementation. */
 export type TestOnlyUnsafeProviderMutator = ProviderUnsafeMutator;
 
@@ -342,6 +351,34 @@ function failureCode(error: unknown): MutationUnknownFailureCode {
   return "AROMA_PROVIDER_OUTCOME_UNKNOWN";
 }
 
+function preparationErrorCode(error: unknown): string {
+  const code = error !== null && typeof error === "object" && "code" in error ? (error as {code?: unknown}).code : undefined;
+  if (code === "ProviderCartItemNotFound") return "AROMA_CART_ITEM_NOT_FOUND";
+  if (code === "ProviderCartMappingMissing") return "AROMA_PROVIDER_MAPPING_MISSING";
+  if (code === "ProviderCartMappingAmbiguous") return "AROMA_PROVIDER_MAPPING_AMBIGUOUS";
+  if (code === "ProviderDecodeInvalid" || code === "ProviderDecodeIncomplete" || code === "ProviderReadIncomplete" || code === "ProviderProtocolViolation") return "AROMA_PROVIDER_INVALID_RESPONSE";
+  if (code === "ProviderAuthenticationFailed" || code === "ProviderAuthorizationFailed") return "AROMA_PROVIDER_AUTHENTICATION_FAILED";
+  if (code === "ProviderSessionUnavailable" || code === "ProviderUnavailable" || code === "ProviderCancelled") return "AROMA_PROVIDER_UNAVAILABLE";
+  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return "AROMA_PROVIDER_UNAVAILABLE";
+  return "AROMA_PROVIDER_PREPARATION_FAILED";
+}
+
+function preparationRejection(error: unknown): MutationRejected {
+  const code = preparationErrorCode(error);
+  const statusCode = code === "AROMA_CART_ITEM_NOT_FOUND" ? 404 : code === "AROMA_PROVIDER_MAPPING_MISSING" || code === "AROMA_PROVIDER_MAPPING_AMBIGUOUS" ? 422 : code === "AROMA_PROVIDER_INVALID_RESPONSE" ? 502 : 503;
+  const responseBodyBytes = new TextEncoder().encode(JSON.stringify({
+    type: "about:blank",
+    title: code,
+    status: statusCode,
+    code,
+    detail: "Provider mutation was not dispatched because safe preparation failed.",
+    instance: "/api/internal-v1/aroma/cart-lines",
+    correlationId: "00000000-0000-4000-8000-000000000000",
+    errors: [],
+  }));
+  return {state: "Rejected", statusCode, failureCode: code, responseBodyBytes};
+}
+
 function noCancellation(): AbortSignal {
   return new AbortController().signal;
 }
@@ -359,10 +396,13 @@ function executionFromReservation(decision: ReservationDecision | DispatchDecisi
 export class GatewayMutationExecutor {
   readonly #journal: MutationJournalPort;
   readonly #unsafeMutator: ProviderUnsafeMutator;
+  readonly #preparer: ProviderMutationPreparer | undefined;
 
-  public constructor(journal: MutationJournalPort, unsafeMutator: ProviderUnsafeMutator) {
+  public constructor(journal: MutationJournalPort, unsafeMutator: ProviderUnsafeMutator, preparer?: ProviderMutationPreparer) {
     this.#journal = journal;
     this.#unsafeMutator = unsafeMutator;
+    const preparedMutator = unsafeMutator as PreparedProviderUnsafeMutator & {readonly prepare?: ProviderMutationPreparer};
+    this.#preparer = preparer ?? preparedMutator[PROVIDER_MUTATION_PREPARER] ?? preparedMutator.prepare;
   }
 
   public async execute(request: MutationRequest, delegation: MutationDelegation, signal?: AbortSignal): Promise<MutationExecutionResult> {
@@ -375,13 +415,24 @@ export class GatewayMutationExecutor {
     if (reservedResult !== undefined) return reservedResult;
     if (reservation.kind !== "Reserved") throw new MutationJournalError("AROMA_JOURNAL_CORRUPT");
     operationSignal.throwIfAborted();
+    let preparation: unknown;
+    if (this.#preparer !== undefined) {
+      try {
+        preparation = await this.#preparer(normalized, operationSignal);
+      } catch (error) {
+        if (operationSignal.aborted) throw error;
+        const rejected = preparationRejection(error);
+        if (this.#journal.rejectReservation !== undefined) return this.#journal.rejectReservation(reservation.reservation, rejected, noCancellation());
+        return {...rejected, replayed: false};
+      }
+    }
     const dispatch = await this.#journal.markDispatched(reservation.reservation, operationSignal);
     const dispatchResult = executionFromReservation(dispatch);
     if (dispatchResult !== undefined) return dispatchResult;
     if (dispatch.kind !== "DispatchPermitted") throw new MutationJournalError("AROMA_JOURNAL_CORRUPT");
     let result: UnsafeMutationResult;
     try {
-      result = validateUnsafeMutationResult(await this.#unsafeMutator(normalized, dispatch.permit, operationSignal), normalized);
+      result = validateUnsafeMutationResult(await this.#unsafeMutator(normalized, dispatch.permit, operationSignal, preparation), normalized);
     } catch (error) {
       return this.#journal.markUnknown(dispatch.permit, failureCode(error), noCancellation());
     }
