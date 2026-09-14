@@ -34,7 +34,7 @@ function domainMatches(host: string, domain: string): boolean {
 
 function parseExpiry(value: string): string {
   try { return toInstant(value).toString(); } catch { /* RFC 6265 date follows below. */ }
-  const match = /^(?:[A-Za-z]{3},\s*)?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+GMT$/u.exec(value.trim());
+  const match = /^(?:[A-Za-z]{3},\s*)?(\d{1,2})(?:\s+|-)([A-Za-z]{3})(?:\s+|-)(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s+GMT$/u.exec(value.trim());
   if (match === null) cookieInvalid();
   const [, day, monthName, year, hour, minute, second] = match;
   if (day === undefined || monthName === undefined || year === undefined || hour === undefined || minute === undefined || second === undefined) cookieInvalid();
@@ -112,7 +112,7 @@ function epochMilliseconds(value: string): number {
 
 export function cookieHeader(cookies: readonly ProviderCookie[], originHost: string, now = Number(nowInstant().epochMilliseconds)): string {
   const usable = cookies.filter(cookie =>
-    COOKIE_NAME.test(cookie.name) && cookie.value.length <= MAX_COOKIE_VALUE &&
+    COOKIE_NAME.test(cookie.name) && cookie.value.length <= MAX_COOKIE_VALUE && !hasControl(cookie.value) &&
     (originHost === "" || cookie.domain === null || domainMatches(originHost, cookie.domain)) &&
     cookie.path === "/" && (cookie.expiresAt === null || epochMilliseconds(cookie.expiresAt) > now));
   return usable.map(cookie => `${cookie.name}=${cookie.value}`).join("; ");
@@ -147,7 +147,7 @@ export function deserializeCookieMaterial(value: string): readonly ProviderCooki
     const secure = source["secure"];
     const httpOnly = source["httpOnly"];
     const sameSite = source["sameSite"];
-    if (typeof name !== "string" || !COOKIE_NAME.test(name) || typeof cookieValue !== "string" || cookieValue.length > MAX_COOKIE_VALUE ||
+    if (typeof name !== "string" || !COOKIE_NAME.test(name) || typeof cookieValue !== "string" || cookieValue.length > MAX_COOKIE_VALUE || hasControl(cookieValue) ||
       !(domain === null || typeof domain === "string") || typeof path !== "string" || path !== "/" ||
       !(expiresAt === null || typeof expiresAt === "string") || typeof secure !== "boolean" || typeof httpOnly !== "boolean" ||
       !(sameSite === null || sameSite === "strict" || sameSite === "lax" || sameSite === "none")) cookieInvalid();

@@ -23,6 +23,7 @@ const normalized = {
   currency: "RUB",
   availability: "Available",
   imageUrl: "https://example.test/tea",
+  supplierPromotions: [],
   providerIdentity: {
     rawProviderProductId: "provider-product",
     rawProviderVariantId: "platform-source-variant",
@@ -36,7 +37,7 @@ const credentials = {scopeRef, email: "canonical@example.test", password: "test-
 void test("provider catalog source preserves normalizer identity, including unknown packing and grind", async () => {
   const source = createProviderCatalogSource({
     sessions: {acquire: async () => ({read: async function* () {
-      yield bytes({data: [{id: 7, name: "Tea", offers: [{id: "70", name: "Tea", vendor_code: "T", price: 1, params: []}]}], links: {first: null, last: null, prev: null, next: null}, meta: {current_page: 1, from: 1, to: 1, last_page: 1, per_page: 1, total: 1}});
+      yield bytes({data: [{id: 7, name: "Tea", discount: [], offers: [{id: "70", name: "Tea", vendor_code: "T", price: 1, params: []}]}], links: {first: null, last: null, prev: null, next: null}, meta: {current_page: 1, from: 1, to: 1, last_page: 1, per_page: 1, total: 1}});
     }})},
     credentials,
     sourceIdentityKey: Buffer.from("key"),

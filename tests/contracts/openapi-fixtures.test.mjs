@@ -255,6 +255,7 @@ void test("NDJSON success stream validates every record and terminal ordering", 
   assert.equal(new Set(lines.map((line) => line.snapshotRef)).size, 1);
   assert.equal(lines[1].batchNumber, 0);
   assert.equal(lines[1].previousBatchHash, null);
+  assert.deepEqual(lines[1].items[0].supplierPromotions, [{discountBasisPoints: 1000, minimumWeightRaw: "0", providerCreatedAt: "2026-09-05T09:00:00.000Z", providerUpdatedAt: "2026-09-05T09:30:00.000Z"}]);
   assert.equal(lines.at(-1).recordType, "snapshot-completed");
 
   let releaseProducer;

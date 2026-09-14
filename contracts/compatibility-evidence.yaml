@@ -1,3 +1,9 @@
+optionalExpansions:
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaCatalogItem
+    property: supplierPromotions
+    fixture: contracts/fixtures/positive/ndjson/aroma-catalog-success.ndjson
+
 narrowingCorrections:
   - schemaPath: contracts/schemas/common/problem-details.v1.schema.json
     location: contracts/schemas/common/problem-details.v1.schema.json.$defs.ProblemDetails.instance

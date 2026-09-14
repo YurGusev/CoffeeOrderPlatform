@@ -1,7 +1,10 @@
 import {ProviderError} from "../../domain/provider-errors.js";
+import {toInstant} from "@coffee-platform/platform-time";
 
 const DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/u;
+const CANONICAL_NON_NEGATIVE_DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/u;
 const ID = /^[0-9]+$/u;
+const RFC3339_UTC = /^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?Z$/u;
 
 export type ProviderCartLine = Readonly<{
   /** Provider cart line id (`products[].id`). */
@@ -29,10 +32,18 @@ export type ProviderCatalogOffer = Readonly<{
   priceRaw: string;
 }>;
 
+export type ProviderCatalogDiscount = Readonly<{
+  discountRaw: string;
+  minimumWeightRaw: string;
+  providerCreatedAt: string;
+  providerUpdatedAt: string;
+}>;
+
 export type ProviderCatalogProduct = Readonly<{
   productId: string;
   name: string;
   offers: readonly ProviderCatalogOffer[];
+  discounts: readonly ProviderCatalogDiscount[];
 }>;
 
 export type ProviderCatalogPage = Readonly<{
@@ -104,6 +115,24 @@ function decimalText(value: unknown): string {
   const normalized = typeof value === "number" && Number.isFinite(value) ? String(value) : value;
   if (typeof normalized !== "string" || !DECIMAL.test(normalized)) invalid();
   return normalized;
+}
+
+function catalogMoneyText(value: unknown): string {
+  const normalized = typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? String(value) : value;
+  if (typeof normalized !== "string" || !DECIMAL.test(normalized)) invalid();
+  return normalized;
+}
+
+function canonicalNonNegativeDecimal(value: unknown): string {
+  const normalized = typeof value === "number" && Number.isFinite(value) ? String(value) : value;
+  if (typeof normalized !== "string" || !CANONICAL_NON_NEGATIVE_DECIMAL.test(normalized)) invalid();
+  return normalized;
+}
+
+function rfc3339Utc(value: unknown): string {
+  if (typeof value !== "string" || !RFC3339_UTC.test(value)) invalid();
+  try { toInstant(value); } catch { invalid(); }
+  return value;
 }
 
 function isZeroDecimal(value: string): boolean {
@@ -181,19 +210,39 @@ export function decodeCatalogPage(body: unknown): ProviderCatalogPage {
   if (currentPage === 0 || lastPage === 0 || perPage === 0) invalid();
   const products = data.map((value): ProviderCatalogProduct => {
     const product = record(value);
+    const productId = providerId(required(product, "id", (_value): _value is unknown => true));
     const offers = array(product, "offers").map((candidate): ProviderCatalogOffer => {
       const offer = record(candidate);
       return {
         offerId: providerId(required(offer, "id", (_value): _value is unknown => true)),
         name: text(required(offer, "name", (item): item is string => typeof item === "string")),
         vendorCode: text(required(offer, "vendor_code", (item): item is string => typeof item === "string")),
-        priceRaw: decimalText(required(offer, "price", (item): item is number | string => typeof item === "number" || typeof item === "string")),
+        priceRaw: catalogMoneyText(required(offer, "price", (item): item is number | string => typeof item === "number" || typeof item === "string")),
+      };
+    });
+    const discounts = array(product, "discount").map((candidate): ProviderCatalogDiscount => {
+      const discount = record(candidate);
+      // Validate the provider identifier, but deliberately do not retain it in
+      // the normalized supplier fact.
+      providerId(required(discount, "id", (_value): _value is unknown => true));
+      const productRef = discount["product_id"];
+      if (productRef !== undefined && providerId(productRef) !== productId) invalid();
+      if (discount["user_id"] !== undefined && discount["user_id"] !== null) invalid();
+      const discountRaw = canonicalNonNegativeDecimal(required(discount, "discount", (item): item is number | string => typeof item === "number" || typeof item === "string"));
+      if (isZeroDecimal(discountRaw)) invalid();
+      const minimumWeightRaw = canonicalNonNegativeDecimal(required(discount, "min_weight", (item): item is number | string => typeof item === "number" || typeof item === "string"));
+      return {
+        discountRaw,
+        minimumWeightRaw,
+        providerCreatedAt: rfc3339Utc(required(discount, "created_at", (item): item is string => typeof item === "string")),
+        providerUpdatedAt: rfc3339Utc(required(discount, "updated_at", (item): item is string => typeof item === "string")),
       };
     });
     return {
-      productId: providerId(required(product, "id", (_value): _value is unknown => true)),
+      productId,
       name: text(required(product, "name", (item): item is string => typeof item === "string")),
       offers,
+      discounts,
     };
   });
   return {products, currentPage, lastPage, perPage, total};

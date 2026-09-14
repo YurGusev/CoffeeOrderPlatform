@@ -744,6 +744,22 @@ components:
           $ref: '#/components/schemas/SnapshotRef'
         state:
           const: Bound
+    AromaSupplierPromotion:
+      type: object
+      additionalProperties: false
+      required: [discountBasisPoints, minimumWeightRaw, providerCreatedAt, providerUpdatedAt]
+      properties:
+        discountBasisPoints:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        minimumWeightRaw:
+          type: string
+          pattern: '^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$'
+        providerCreatedAt:
+          $ref: '#/components/schemas/Timestamp'
+        providerUpdatedAt:
+          $ref: '#/components/schemas/Timestamp'
     AromaCatalogItem:
       type: object
       additionalProperties: false
@@ -773,6 +789,10 @@ components:
           type: string
           format: uri
           maxLength: 2048
+        supplierPromotions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AromaSupplierPromotion'
         sourceIdentityScheme:
           type: string
           const: hmac-sha256-v1

@@ -5,9 +5,9 @@ import {ProviderCartMutator} from "../../apps/aroma-gateway/dist/application/pro
 
 const supplierRef = "sup_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const offerRef = "off_01ARZ3NDEKTSV4RRFFQ69G5FAV";
-const page = (currentPage, lastPage, total = lastPage) => ({data: [{id: currentPage, name: "Tea", offers: [{id: String(currentPage), name: "Tea", vendor_code: "T", price: 1, params: []}]}], links: {first: null, last: null, prev: null, next: null}, meta: {current_page: currentPage, from: currentPage, to: currentPage, last_page: lastPage, per_page: 1, total}});
+const page = (currentPage, lastPage, total = lastPage) => ({data: [{id: currentPage, name: "Tea", discount: [], offers: [{id: String(currentPage), name: "Tea", vendor_code: "T", price: 1, params: []}]}], links: {first: null, last: null, prev: null, next: null}, meta: {current_page: currentPage, from: currentPage, to: currentPage, last_page: lastPage, per_page: 1, total}});
 const bytes = value => Buffer.from(JSON.stringify(value));
-const normalized = (product, offer) => ({displayName: offer.name, unit: "piece", supplierUnitMinor: "1", currency: "RUB", availability: "Available", imageUrl: "https://example.test/tea", providerIdentity: {rawProviderProductId: product.productId, rawProviderVariantId: offer.offerId, rawProviderOfferId: offer.offerId, packing: null, grindId: null}});
+const normalized = (product, offer) => ({displayName: offer.name, unit: "piece", supplierUnitMinor: "1", currency: "RUB", availability: "Available", imageUrl: "https://example.test/tea", supplierPromotions: [], providerIdentity: {rawProviderProductId: product.productId, rawProviderVariantId: offer.offerId, rawProviderOfferId: offer.offerId, packing: null, grindId: null}});
 
 void test("provider catalog source is sequential, bounded, cancellable, and HMAC identity is Gateway-local", async () => {
   const controller = new AbortController();

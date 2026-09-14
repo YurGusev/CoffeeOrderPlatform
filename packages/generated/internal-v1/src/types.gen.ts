@@ -127,6 +127,13 @@ export type AromaOfferBindingResponse = {
   state: 'Bound';
 };
 
+export type AromaSupplierPromotion = {
+  discountBasisPoints: number;
+  minimumWeightRaw: string;
+  providerCreatedAt: MoneyVersionTimeV1SchemaTimestamp;
+  providerUpdatedAt: MoneyVersionTimeV1SchemaTimestamp;
+};
+
 export type AromaCatalogItem = {
   sourceProductKeyHash: HashSha256;
   sourceVariantKeyHash: HashSha256;
@@ -137,6 +144,7 @@ export type AromaCatalogItem = {
   currency: MoneyVersionTimeV1SchemaCurrency;
   availability: 'Available' | 'Unavailable' | 'Stopped';
   imageUrl: string;
+  supplierPromotions?: Array<AromaSupplierPromotion>;
   sourceIdentityScheme: 'hmac-sha256-v1';
 };
 

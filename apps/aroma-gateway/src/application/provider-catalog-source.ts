@@ -1,8 +1,9 @@
 import {ProviderError} from "../domain/provider-errors.js";
+import {toInstant} from "@coffee-platform/platform-time";
 import {createSourceIdentity, type SourceIdentityKey} from "../domain/source-identity.js";
 import {decodeCatalogPage, type ProviderCatalogOffer, type ProviderCatalogPage, type ProviderCatalogProduct} from "../infrastructure/provider/decoder.js";
 import type {ProviderCredentialScope, ProviderSessionManager} from "../infrastructure/provider/session.js";
-import type {NormalizedCatalogOffer} from "./catalog-export.js";
+import type {NormalizedCatalogOffer, SupplierPromotion} from "./catalog-export.js";
 
 export type ProviderCatalogSourceOptions = Readonly<{
   sessions: ProviderSessionManager;
@@ -18,6 +19,68 @@ function providerIdentity(product: ProviderCatalogProduct, offer: ProviderCatalo
   // A supplied identity is authoritative. Only a completely absent identity gets
   // provider IDs as a source fallback; packing/grind fields are never defaulted.
   return normalized ?? {rawProviderProductId: product.productId, rawProviderVariantId: offer.offerId, rawProviderOfferId: offer.offerId};
+}
+
+const PROVIDER_DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/u;
+const CANONICAL_NON_NEGATIVE_DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/u;
+const UTC_TIMESTAMP = /^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?Z$/u;
+
+function failNormalization(): never {
+  throw new ProviderError("ProviderProtocolViolation");
+}
+
+function exactMinorUnits(priceRaw: string): string {
+  if (!PROVIDER_DECIMAL.test(priceRaw)) return failNormalization();
+  const parts = priceRaw.split(".");
+  const integerPart = parts[0];
+  const fractionPart = parts[1] ?? "";
+  if (integerPart === undefined || fractionPart.length > 2) return failNormalization();
+  const minor = BigInt(integerPart) * 100n + BigInt(fractionPart.padEnd(2, "0") || "0");
+  if (minor <= 0n) return failNormalization();
+  return minor.toString();
+}
+
+function basisPoints(discountRaw: string): number {
+  if (!PROVIDER_DECIMAL.test(discountRaw)) return failNormalization();
+  const parts = discountRaw.split(".");
+  const integerPart = parts[0];
+  const fractionPart = parts[1] ?? "";
+  if (integerPart === undefined || fractionPart.length > 2) return failNormalization();
+  const result = BigInt(integerPart) * 100n + BigInt(fractionPart.padEnd(2, "0") || "0");
+  if (result <= 0n || result > 10_000n) return failNormalization();
+  return Number(result);
+}
+
+function promotionFromProviderDiscount(discount: ProviderCatalogProduct["discounts"][number]): SupplierPromotion {
+  if (!CANONICAL_NON_NEGATIVE_DECIMAL.test(discount.minimumWeightRaw) || !UTC_TIMESTAMP.test(discount.providerCreatedAt) || !UTC_TIMESTAMP.test(discount.providerUpdatedAt)) return failNormalization();
+  try { toInstant(discount.providerCreatedAt); toInstant(discount.providerUpdatedAt); } catch { return failNormalization(); }
+  return Object.freeze({
+    discountBasisPoints: basisPoints(discount.discountRaw),
+    minimumWeightRaw: discount.minimumWeightRaw,
+    providerCreatedAt: discount.providerCreatedAt,
+    providerUpdatedAt: discount.providerUpdatedAt,
+  });
+}
+
+export function normalizeProviderPriceToMinor(priceRaw: string): string {
+  return exactMinorUnits(priceRaw);
+}
+
+export function normalizeProviderCatalogPromotions(product: ProviderCatalogProduct): readonly SupplierPromotion[] {
+  if (!Array.isArray(product.discounts)) return failNormalization();
+  return Object.freeze(product.discounts.map(promotionFromProviderDiscount));
+}
+
+export function normalizeProviderCatalogMoneyAndPromotions(product: ProviderCatalogProduct, offer: ProviderCatalogOffer): Readonly<{
+  supplierUnitMinor: string;
+  currency: "RUB";
+  supplierPromotions: readonly SupplierPromotion[];
+}> {
+  return Object.freeze({
+    supplierUnitMinor: exactMinorUnits(offer.priceRaw),
+    currency: "RUB",
+    supplierPromotions: normalizeProviderCatalogPromotions(product),
+  });
 }
 
 const MAX_PAGE_SIZE = 500;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ProviderHttpClient } from "../../apps/aroma-gateway/dist/infrastructure/provider/http-client.js";
+import {cookieHeader, deserializeCookieMaterial} from "../../apps/aroma-gateway/dist/infrastructure/provider/cookie-jar.js";
 
 const options = {
   origin: "https://provider.test",
@@ -170,6 +171,36 @@ void test("Provider read returns validated cookie rotation only after the comple
   assert.equal(completed.done, true);
   assert.equal(completed.value[0].name, "october_session");
   assert.equal(completed.value[0].value, "rotated-secret");
+});
+
+void test("Provider read accepts the observed hyphenated cookie Expires without weakening domain checks", async (t) => {
+  const client = new ProviderHttpClient(options);
+  t.after(() => client.close());
+  t.mock.method(
+    globalThis,
+    "fetch",
+    async () =>
+      new Response("{}", {
+        headers: {
+          "content-type": "application/json",
+          "set-cookie":
+            "october_session=rotated-secret; Domain=provider.test; Path=/; Expires=Tue, 14-Sep-2027 10:11:12 GMT; Secure; HttpOnly",
+        },
+      }),
+  );
+  const source = client.read({ kind: "cart" }, signal());
+  await source.next();
+  const completed = await source.next();
+  assert.equal(completed.done, true);
+  assert.equal(completed.value[0].expiresAt, "2027-09-14T10:11:12Z");
+  assert.equal(completed.value[0].domain, "provider.test");
+  assert.equal(completed.value[0].secure, true);
+});
+
+void test("persisted cookie material cannot inject request headers", () => {
+  const material = JSON.stringify([{name: "october_session", value: "ok\r\nX-Injected: yes", domain: "provider.test", path: "/", expiresAt: null, secure: true, httpOnly: true, sameSite: null}]);
+  assert.throws(() => deserializeCookieMaterial(material), {code: "ProviderProtocolViolation"});
+  assert.equal(cookieHeader([{name: "october_session", value: "ok\r\nX-Injected: yes", domain: "provider.test", path: "/", expiresAt: null, secure: true, httpOnly: true, sameSite: null}], "provider.test"), "");
 });
 
 void test("Provider cart safe GET waits at least 250 ms after releasing the failed body", async (t) => {

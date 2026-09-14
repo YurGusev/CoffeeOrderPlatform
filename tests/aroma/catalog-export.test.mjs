@@ -23,6 +23,7 @@ const offer = (index, product = 0, variant = 0) => ({
   currency: "RUB",
   availability: "Available",
   imageUrl: `https://images.example.test/${index}.jpg`,
+  supplierPromotions: [],
   product,
   variant,
 });
@@ -154,6 +155,18 @@ void test("catalog export emits exact canonical bytes, hashes, links, and distin
     ["batch", 0, ["offer-Coffee 0", "offer-Coffee 1"]],
     ["complete", 2],
   ]);
+});
+
+void test("catalog export carries normalized supplier promotions and strips provider fields", async () => {
+  const promotion = {discountBasisPoints: 1000, minimumWeightRaw: "0", providerCreatedAt: "2026-09-14T04:55:24.000000Z", providerUpdatedAt: "2026-09-14T04:55:24.000000Z", rawProviderDiscountId: "200083"};
+  const records = parse(await collect(makeStream([{...offer(0), supplierPromotions: [promotion]}])));
+  assert.deepEqual(records[1].items[0].supplierPromotions, [{discountBasisPoints: 1000, minimumWeightRaw: "0", providerCreatedAt: "2026-09-14T04:55:24.000000Z", providerUpdatedAt: "2026-09-14T04:55:24.000000Z"}]);
+  assert.equal(JSON.stringify(records[1]).includes("rawProviderDiscountId"), false);
+  for (const invalidPromotion of [{...promotion, discountBasisPoints: 10_001}, {...promotion, providerUpdatedAt: "2026-02-30T00:00:00Z"}]) {
+    const failed = parse(await collect(makeStream([{...offer(0), supplierPromotions: [invalidPromotion]}])));
+    assert.deepEqual(failed.map((record) => record.recordType), ["snapshot-started", "snapshot-failed"]);
+    assert.equal(failed.at(-1).code, "INVALID_STREAM");
+  }
 });
 
 void test("100k offers consume in bounded batches without whole-catalog buffering", async () => {

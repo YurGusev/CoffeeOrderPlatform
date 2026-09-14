@@ -42,6 +42,22 @@ void test("decoder принимает фактическую catalog page и п�
   assert.ok(decoded.products.length > 0);
   assert.equal(decoded.products[0].offers[0].priceRaw, "0");
   assert.throws(() => decodeCatalogPage({...page, data: [{...page.data[0], offers: [{...page.data[0].offers[0], price: "not-a-decimal"}]}]}), {code: "ProviderDecodeInvalid"});
+  for (const price of [Number.MAX_SAFE_INTEGER + 1, 12.3]) assert.throws(() => decodeCatalogPage({...page, data: [{...page.data[0], offers: [{...page.data[0].offers[0], price}]}]}), {code: "ProviderDecodeInvalid"});
+});
+
+void test("decoder preserves only normalized discount facts and rejects incomplete rules", async () => {
+  const page = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12-authenticated/catalog-page1.json", import.meta.url), "utf8"));
+  const product = page.data[0];
+  const rule = {id: 200083, product_id: product.id, user_id: null, discount: 10, min_weight: 0, created_at: "2026-09-05T05:14:32.000000Z", updated_at: "2026-09-05T05:14:32.000000Z"};
+  const decoded = decodeCatalogPage({...page, data: [{...product, discount: [rule]}]});
+  assert.deepEqual(decoded.products[0].discounts, [{discountRaw: "10", minimumWeightRaw: "0", providerCreatedAt: rule.created_at, providerUpdatedAt: rule.updated_at}]);
+  for (const bad of [
+    {...rule, discount: 0},
+    {...rule, min_weight: "-1"},
+    {...rule, created_at: "not-a-date"},
+    {...rule, updated_at: "2026-09-05T05:14:32Z", product_id: product.id + 1},
+  ]) assert.throws(() => decodeCatalogPage({...page, data: [{...product, discount: [bad]}]}), {code: "ProviderDecodeInvalid"});
+  assert.throws(() => decodeCatalogPage({...page, data: [{...product, discount: undefined}]}), {code: "ProviderDecodeInvalid"});
 });
 
 void test("rejection shapes are recognized without claiming that a 422 had no effect", async () => {

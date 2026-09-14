@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { nowInstant } from "@coffee-platform/platform-time";
+import { nowInstant, toInstant } from "@coffee-platform/platform-time";
 
 export const CATALOG_EXPORT_STREAM_VERSION = "1" as const;
 export const CATALOG_SOURCE_IDENTITY_SCHEME = "hmac-sha256-v1" as const;
@@ -9,6 +9,12 @@ export const CATALOG_MAX_BATCH_BYTES = 2_097_152;
 export type Sha256Hash = string;
 export type CatalogUnit = "piece" | "gram" | "kilogram";
 export type CatalogAvailability = "Available" | "Unavailable" | "Stopped";
+export type SupplierPromotion = Readonly<{
+  discountBasisPoints: number;
+  minimumWeightRaw: string;
+  providerCreatedAt: string;
+  providerUpdatedAt: string;
+}>;
 export type CatalogExportFailureCode =
   | "PROVIDER_UNAVAILABLE"
   | "PROVIDER_TIMEOUT"
@@ -24,6 +30,7 @@ export type NormalizedCatalogOffer = Readonly<{
   currency: "RUB";
   availability: CatalogAvailability;
   imageUrl: string;
+  supplierPromotions: readonly SupplierPromotion[];
   /** Gateway-only source facts consumed by the persistence identity boundary. */
   providerIdentity?: Readonly<{
     rawProviderProductId: string;
@@ -103,6 +110,7 @@ export type CatalogItem = Readonly<{
   currency: "RUB";
   availability: CatalogAvailability;
   imageUrl: string;
+  supplierPromotions: readonly SupplierPromotion[];
   sourceIdentityScheme: typeof CATALOG_SOURCE_IDENTITY_SCHEME;
 }>;
 
@@ -481,6 +489,26 @@ function validateRequest(request: CatalogExportRequest): void {
 function validateTimestamp(value: string, field: string): void {
   if (!TIMESTAMP_PATTERN.test(value))
     throw invalid(`${field} is not a UTC timestamp`);
+  try { toInstant(value); } catch { throw invalid(`${field} is not a UTC timestamp`); }
+}
+
+const CANONICAL_NON_NEGATIVE_DECIMAL_PATTERN = /^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/u;
+
+function validateSupplierPromotions(value: unknown): asserts value is readonly SupplierPromotion[] {
+  if (!Array.isArray(value)) throw invalid("normalized offer supplierPromotions is invalid");
+  for (const promotion of value) {
+    if (!isPlainObject(promotion)) throw invalid("normalized supplier promotion is invalid");
+    if (typeof promotion["discountBasisPoints"] !== "number" || !Number.isSafeInteger(promotion["discountBasisPoints"]) || promotion["discountBasisPoints"] <= 0 || promotion["discountBasisPoints"] > 10_000) {
+      throw invalid("normalized supplier promotion discountBasisPoints is invalid");
+    }
+    if (typeof promotion["minimumWeightRaw"] !== "string" || !CANONICAL_NON_NEGATIVE_DECIMAL_PATTERN.test(promotion["minimumWeightRaw"])) {
+      throw invalid("normalized supplier promotion minimumWeightRaw is invalid");
+    }
+    if (typeof promotion["providerCreatedAt"] !== "string") throw invalid("normalized supplier promotion providerCreatedAt is invalid");
+    validateTimestamp(promotion["providerCreatedAt"], "providerCreatedAt");
+    if (typeof promotion["providerUpdatedAt"] !== "string") throw invalid("normalized supplier promotion providerUpdatedAt is invalid");
+    validateTimestamp(promotion["providerUpdatedAt"], "providerUpdatedAt");
+  }
 }
 
 function validateNormalizedOffer(
@@ -523,6 +551,7 @@ function validateNormalizedOffer(
   ) {
     throw invalid("normalized offer imageUrl is invalid");
   }
+  validateSupplierPromotions(value["supplierPromotions"]);
 }
 
 function validateRawProviderId(
@@ -656,6 +685,12 @@ function outputItem(
     currency: offer.currency,
     availability: offer.availability,
     imageUrl: offer.imageUrl,
+    supplierPromotions: Object.freeze(offer.supplierPromotions.map((promotion) => Object.freeze({
+      discountBasisPoints: promotion.discountBasisPoints,
+      minimumWeightRaw: promotion.minimumWeightRaw,
+      providerCreatedAt: promotion.providerCreatedAt,
+      providerUpdatedAt: promotion.providerUpdatedAt,
+    }))),
     sourceIdentityScheme: CATALOG_SOURCE_IDENTITY_SCHEME,
   });
 }

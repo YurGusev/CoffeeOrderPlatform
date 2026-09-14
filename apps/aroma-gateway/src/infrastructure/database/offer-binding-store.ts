@@ -97,7 +97,7 @@ function hashContent(rows: readonly BatchRow[]): string {
   return digest.digest("hex");
 }
 function legacyBatchRecord(snapshotRef: string, identities: readonly ProviderOfferIdentity[]): CatalogBatchRecord {
-  return {streamVersion: "1", recordType: "snapshot-batch", snapshotRef, batchNumber: 0, offerCount: identities.length, uncompressedBytes: 2, batchHash: createHash("sha256").update(JSON.stringify(identities)).digest("hex"), previousBatchHash: null, items: identities.map((identity) => ({sourceProductKeyHash: identity.sourceProductKeyHash ?? identity.sourceOfferKeyHash, sourceVariantKeyHash: identity.sourceVariantKeyHash ?? identity.sourceOfferKeyHash, sourceOfferKeyHash: identity.sourceOfferKeyHash, displayName: "legacy", unit: "piece", supplierUnitMinor: "1", currency: "RUB", availability: "Available", imageUrl: "", sourceIdentityScheme: SCHEME}))};
+  return {streamVersion: "1", recordType: "snapshot-batch", snapshotRef, batchNumber: 0, offerCount: identities.length, uncompressedBytes: 2, batchHash: createHash("sha256").update(JSON.stringify(identities)).digest("hex"), previousBatchHash: null, items: identities.map((identity) => ({sourceProductKeyHash: identity.sourceProductKeyHash ?? identity.sourceOfferKeyHash, sourceVariantKeyHash: identity.sourceVariantKeyHash ?? identity.sourceOfferKeyHash, sourceOfferKeyHash: identity.sourceOfferKeyHash, displayName: "legacy", unit: "piece", supplierUnitMinor: "1", currency: "RUB", availability: "Available", imageUrl: "", supplierPromotions: [], sourceIdentityScheme: SCHEME}))};
 }
 
 export class OfferBindingRepository {
