@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
 import test from "node:test";
 import {createProviderCatalogSource, normalizeProviderCatalogMoneyAndPromotions, normalizeProviderCatalogOffer, normalizeProviderPriceToMinor} from "../../apps/aroma-gateway/dist/application/provider-catalog-source.js";
+import {decodeCatalogPage} from "../../apps/aroma-gateway/dist/infrastructure/provider/decoder.js";
+import {MemoryProviderSessionStore} from "../../apps/aroma-gateway/dist/infrastructure/database/provider-session-store.js";
+import {ProviderHttpClient} from "../../apps/aroma-gateway/dist/infrastructure/provider/http-client.js";
+import {ProviderSessionManager} from "../../apps/aroma-gateway/dist/infrastructure/provider/session.js";
 
 const credentials = {scopeRef: "aroma-primary", email: "canonical@example.test", password: "test-only"};
 const bytes = value => Buffer.from(JSON.stringify(value), "utf8");
@@ -40,6 +45,48 @@ void test("catalog source requests pages sequentially and does not fetch page tw
   assert.equal((await source.next()).done, true);
 });
 
+void test("catalog source composes the real HTTP client and session manager without prefetching the next page", async (t) => {
+  const calls = [];
+  const client = new ProviderHttpClient({origin: "https://provider.test", timeoutMs: 1_000, maxResponseBytes: 64 * 1024, connections: 1});
+  const manager = new ProviderSessionManager({
+    transport: client,
+    store: new MemoryProviderSessionStore(),
+    encryptionKey: Buffer.alloc(32, 7),
+  });
+  t.after(() => manager.close());
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    calls.push({url, init});
+    if (url.endsWith("/api/v1/auth/login")) {
+      return new Response(JSON.stringify({data: {email: credentials.email, wholesale: true, retail: false}}), {
+        headers: {
+          "content-type": "application/json",
+          "set-cookie": "october_session=provider-session; Domain=provider.test; Path=/; HttpOnly",
+        },
+      });
+    }
+    const pageNumber = Number(new URL(url).searchParams.get("page"));
+    return new Response(JSON.stringify(page(pageNumber, 2, 2)), {headers: {"content-type": "application/json"}});
+  });
+  const source = createProviderCatalogSource({
+    sessions: manager,
+    credentials,
+    sourceIdentityKey: Buffer.from("identity-key"),
+    pageSize: 1,
+    normalize,
+  });
+  const first = await source.next();
+  assert.equal(first.done, false);
+  assert.equal(first.value.displayName, "Offer 1");
+  assert.deepEqual(calls.map(call => new URL(call.url).pathname), ["/api/v1/auth/login", "/api/v1/catalog/wholesale/products"]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.length, 2);
+  const second = await source.next();
+  assert.equal(second.done, false);
+  assert.equal(second.value.displayName, "Offer 2");
+  assert.equal(new URL(calls[2].url).searchParams.get("page"), "2");
+  assert.equal((await source.next()).done, true);
+});
+
 void test("catalog source fails closed on metadata drift and when no explicit normalizer is supplied", async () => {
   let calls = 0;
   const drifting = createProviderCatalogSource({
@@ -66,7 +113,8 @@ void test("money and supplier promotions normalize exactly and fail closed", () 
   assert.equal(normalizeProviderPriceToMinor("446"), "44600");
   assert.equal(normalizeProviderPriceToMinor("549"), "54900");
   assert.equal(normalizeProviderPriceToMinor("12.30"), "1230");
-  for (const price of ["0", "0.00", "1.001", "01", "1e2"]) assert.throws(() => normalizeProviderPriceToMinor(price), {code: "ProviderProtocolViolation"});
+  assert.equal(normalizeProviderPriceToMinor("12.300"), "1230");
+  for (const price of ["0", "0.00", "12.301", "1.001", "01", "1e2"]) assert.throws(() => normalizeProviderPriceToMinor(price), {code: "ProviderProtocolViolation"});
   const product = {
     productId: "7",
     name: "Coffee",
@@ -79,10 +127,40 @@ void test("money and supplier promotions normalize exactly and fail closed", () 
     currency: "RUB",
     supplierPromotions: [{discountBasisPoints: 1000, minimumWeightRaw: "0", providerCreatedAt: "2026-09-14T04:55:24.000000Z", providerUpdatedAt: "2026-09-14T04:55:24.000000Z"}],
   });
-  for (const bad of [{...product, discounts: undefined}, {...product, discounts: [{...product.discounts[0], discountRaw: "0"}]}, {...product, discounts: [{...product.discounts[0], discountRaw: "100.01"}]}, {...product, discounts: [{...product.discounts[0], minimumWeightRaw: "0.00"}]}, {...product, discounts: [{...product.discounts[0], providerUpdatedAt: "not-a-date"}]}, {...product, discounts: [{...product.discounts[0], providerUpdatedAt: "2026-02-30T00:00:00Z"}]}]) {
+  assert.equal(normalizeProviderCatalogMoneyAndPromotions({...product, discounts: [{...product.discounts[0], discountRaw: "10.000"}]}, offer).supplierPromotions[0].discountBasisPoints, 1000);
+  for (const bad of [{...product, discounts: undefined}, {...product, discounts: [{...product.discounts[0], discountRaw: "0"}]}, {...product, discounts: [{...product.discounts[0], discountRaw: "10.001"}]}, {...product, discounts: [{...product.discounts[0], discountRaw: "100.01"}]}, {...product, discounts: [{...product.discounts[0], minimumWeightRaw: "0.00"}]}, {...product, discounts: [{...product.discounts[0], providerUpdatedAt: "not-a-date"}]}, {...product, discounts: [{...product.discounts[0], providerUpdatedAt: "2026-02-30T00:00:00Z"}]}]) {
     assert.throws(() => normalizeProviderCatalogMoneyAndPromotions(bad, offer), {code: "ProviderProtocolViolation"});
   }
 });
+
+void test("production normalizer preserves capture-backed money but rejects unresolved unit without inventing packing or grind", async () => {
+  const capture = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12/page47.json", import.meta.url), "utf8"));
+  const decoded = decodeCatalogPage(capture);
+  const product = decoded.products[0];
+  const offer = product.offers[0];
+  const money = normalizeProviderCatalogMoneyAndPromotions(product, offer);
+  assert.equal(money.supplierUnitMinor, "94000");
+  assert.equal(money.currency, "RUB");
+  assert.throws(() => normalizeProviderCatalogOffer(product, offer), {code: "ProviderProtocolViolation"});
+  // Even with an explicit piece unit, captures do not prove a distinct
+  // provider variant id. offer.id must not be copied into variant identity.
+  assert.throws(() => normalizeProviderCatalogOffer({...product, soldByPiece: true}, offer), {code: "ProviderProtocolViolation"});
+});
+
+void test("production normalizer rejects missing unit, image, availability, and identity facts", async () => {
+  const capture = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12/page47.json", import.meta.url), "utf8"));
+  const decoded = decodeCatalogPage(capture);
+  const product = decoded.products[0];
+  const offer = product.offers[0];
+  const cases = [
+    {...product, soldByPiece: false, previewPath: null, photoPaths: [], offers: [offer]},
+    {...product, productOnStop: undefined, offers: [offer]},
+    {...product, soldByPiece: false, offers: [{...offer, params: []}]},
+    {...product, productId: "", offers: [offer]},
+  ];
+  for (const missingFact of cases) assert.throws(() => normalizeProviderCatalogOffer(missingFact, missingFact.offers[0]), {code: "ProviderProtocolViolation"});
+});
+
 
 void test("catalog source propagates cancellation before the next provider page", async () => {
   const controller = new AbortController();

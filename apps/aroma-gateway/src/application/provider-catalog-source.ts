@@ -2,7 +2,7 @@ import {ProviderError} from "../domain/provider-errors.js";
 import {toInstant} from "@coffee-platform/platform-time";
 import {createSourceIdentity, type SourceIdentityKey} from "../domain/source-identity.js";
 import {decodeCatalogPage, type ProviderCatalogOffer, type ProviderCatalogPage, type ProviderCatalogProduct} from "../infrastructure/provider/decoder.js";
-import type {ProviderCredentialScope, ProviderSessionManager} from "../infrastructure/provider/session.js";
+import {readProviderSafely, type ProviderCredentialScope, type ProviderSessionManager} from "../infrastructure/provider/session.js";
 import type {NormalizedCatalogOffer, SupplierPromotion} from "./catalog-export.js";
 
 export type ProviderCatalogSourceOptions = Readonly<{
@@ -11,14 +11,13 @@ export type ProviderCatalogSourceOptions = Readonly<{
   sourceIdentityKey: SourceIdentityKey;
   pageSize?: number;
   signal?: AbortSignal;
-  /** Explicitly supplied normalization is required because provider money/unit semantics are not proven. */
+  /** Test seam; production uses normalizeProviderCatalogOffer when this is omitted. */
   normalize?: (product: ProviderCatalogProduct, offer: ProviderCatalogOffer) => NormalizedCatalogOffer;
 }>;
 
-function providerIdentity(product: ProviderCatalogProduct, offer: ProviderCatalogOffer, normalized: NormalizedCatalogOffer["providerIdentity"]): NonNullable<NormalizedCatalogOffer["providerIdentity"]> {
-  // A supplied identity is authoritative. Only a completely absent identity gets
-  // provider IDs as a source fallback; packing/grind fields are never defaulted.
-  return normalized ?? {rawProviderProductId: product.productId, rawProviderVariantId: offer.offerId, rawProviderOfferId: offer.offerId};
+function providerIdentity(normalized: NormalizedCatalogOffer["providerIdentity"]): NonNullable<NormalizedCatalogOffer["providerIdentity"]> {
+  if (normalized === undefined || typeof normalized.rawProviderProductId !== "string" || normalized.rawProviderProductId.length === 0 || typeof normalized.rawProviderVariantId !== "string" || normalized.rawProviderVariantId.length === 0 || typeof normalized.rawProviderOfferId !== "string" || normalized.rawProviderOfferId.length === 0) throw new ProviderError("ProviderProtocolViolation");
+  return normalized;
 }
 
 const PROVIDER_DECIMAL = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/u;
@@ -33,7 +32,7 @@ function exactMinorUnits(priceRaw: string): string {
   if (!PROVIDER_DECIMAL.test(priceRaw)) return failNormalization();
   const parts = priceRaw.split(".");
   const integerPart = parts[0];
-  const fractionPart = parts[1] ?? "";
+  const fractionPart = (parts[1] ?? "").replace(/0+$/u, "");
   if (integerPart === undefined || fractionPart.length > 2) return failNormalization();
   const minor = BigInt(integerPart) * 100n + BigInt(fractionPart.padEnd(2, "0") || "0");
   if (minor <= 0n) return failNormalization();
@@ -44,7 +43,7 @@ function basisPoints(discountRaw: string): number {
   if (!PROVIDER_DECIMAL.test(discountRaw)) return failNormalization();
   const parts = discountRaw.split(".");
   const integerPart = parts[0];
-  const fractionPart = parts[1] ?? "";
+  const fractionPart = (parts[1] ?? "").replace(/0+$/u, "");
   if (integerPart === undefined || fractionPart.length > 2) return failNormalization();
   const result = BigInt(integerPart) * 100n + BigInt(fractionPart.padEnd(2, "0") || "0");
   if (result <= 0n || result > 10_000n) return failNormalization();
@@ -103,9 +102,52 @@ async function collectPage(source: AsyncIterable<Uint8Array>, signal: AbortSigna
   return result;
 }
 
-function defaultNormalize(): never {
-  // The observed API exposes an integer price but no currency, scale, unit, or image contract.
-  throw new ProviderError("ProviderProtocolViolation");
+function requiredImageUrl(product: ProviderCatalogProduct): string {
+  const candidates: string[] = [];
+  if (product.previewPath !== undefined && product.previewPath !== null) candidates.push(product.previewPath);
+  if (product.photoPaths !== undefined) candidates.push(...product.photoPaths);
+  const imageUrl = candidates[0];
+  if (imageUrl === undefined || imageUrl.length === 0 || !URL.canParse(imageUrl)) return failNormalization();
+  const protocol = new URL(imageUrl).protocol;
+  if (protocol !== "http:" && protocol !== "https:") return failNormalization();
+  return imageUrl;
+}
+
+function normalizeProviderUnit(product: ProviderCatalogProduct): "piece" {
+  // `weight` describes an offer/packing observation. Policy explicitly forbids
+  // turning the package price into a per-gram price or inferring a quantity unit.
+  if (product.soldByPiece === true) return "piece";
+  return failNormalization();
+}
+
+function normalizeProviderAvailability(product: ProviderCatalogProduct): "Available" | "Unavailable" | "Stopped" {
+  if (typeof product.productOnStop !== "boolean" || typeof product.showOnWholesale !== "boolean") return failNormalization();
+  if (product.productOnStop) return "Stopped";
+  return product.showOnWholesale ? "Available" : "Unavailable";
+}
+
+function providerIdentityForOffer(product: ProviderCatalogProduct, offer: ProviderCatalogOffer): NonNullable<NormalizedCatalogOffer["providerIdentity"]> {
+  if (!/^[0-9]+$/u.test(product.productId) || product.productId === "0" || !/^[0-9]+$/u.test(offer.offerId) || offer.offerId === "0") return failNormalization();
+  // Captures prove product.id and offer.id only. The downstream identity
+  // contract also requires an independent variant identifier, so duplicating
+  // offer.id into that field would invent a provider fact.
+  return failNormalization();
+}
+
+/** Production normalization is limited to facts proven by the observed catalog captures and policy. */
+export function normalizeProviderCatalogOffer(product: ProviderCatalogProduct, offer: ProviderCatalogOffer): NormalizedCatalogOffer {
+  if (typeof product.name !== "string" || product.name.length === 0 || typeof offer.name !== "string" || offer.name.length === 0 || typeof offer.vendorCode !== "string" || offer.vendorCode.length === 0) return failNormalization();
+  const money = normalizeProviderCatalogMoneyAndPromotions(product, offer);
+  return Object.freeze({
+    displayName: offer.name,
+    unit: normalizeProviderUnit(product),
+    supplierUnitMinor: money.supplierUnitMinor,
+    currency: money.currency,
+    availability: normalizeProviderAvailability(product),
+    imageUrl: requiredImageUrl(product),
+    supplierPromotions: money.supplierPromotions,
+    providerIdentity: providerIdentityForOffer(product, offer),
+  });
 }
 
 function checkedPage(page: ProviderCatalogPage, requested: number, expected: ProviderCatalogPage | undefined): void {
@@ -124,7 +166,7 @@ export async function* createProviderCatalogSource(options: ProviderCatalogSourc
   const pageSize = options.pageSize ?? 10;
   if (!Number.isSafeInteger(pageSize) || pageSize <= 0 || pageSize > MAX_PAGE_SIZE) throw new ProviderError("ProviderProtocolViolation");
   const signal = options.signal ?? new AbortController().signal;
-  const normalize = options.normalize ?? (() => defaultNormalize());
+  const normalize = options.normalize ?? normalizeProviderCatalogOffer;
   let page = 1;
   let expected: ProviderCatalogPage | undefined;
   let productCount = 0;
@@ -132,8 +174,7 @@ export async function* createProviderCatalogSource(options: ProviderCatalogSourc
   try {
     while (expected === undefined || page <= expected.lastPage) {
       signal.throwIfAborted();
-      const session = await options.sessions.acquire(options.credentials, signal);
-      const body = await collectPage(session.read({kind: "catalog-page", page, pageSize}, signal), signal);
+      const body = await collectPage(readProviderSafely(options.sessions, options.credentials, {kind: "catalog-page", page, pageSize}, signal), signal);
       const decoded = decodeCatalogPage(body);
       checkedPage(decoded, page, expected);
       expected ??= decoded;
@@ -145,7 +186,7 @@ export async function* createProviderCatalogSource(options: ProviderCatalogSourc
           const normalized = normalize(product, offer);
           // Raw identifiers stay in this Gateway-local side-channel and are never
           // copied by createCatalogExportStream into NDJSON records.
-          yield Object.freeze({...normalized, providerIdentity: providerIdentity(product, offer, normalized.providerIdentity)});
+          yield Object.freeze({...normalized, providerIdentity: providerIdentity(normalized.providerIdentity)});
         }
       }
       if (page === decoded.lastPage) break;
@@ -159,11 +200,6 @@ export async function* createProviderCatalogSource(options: ProviderCatalogSourc
   }
 }
 
-/** Fail-closed normalizer. A scale must be explicitly proven/configured. */
-export function normalizeProviderCatalogOffer(_product: ProviderCatalogProduct, _offer: ProviderCatalogOffer): NormalizedCatalogOffer {
-  throw new ProviderError("ProviderProtocolViolation");
-}
-
 export function sourceIdentityForOffer(value: NormalizedCatalogOffer, supplierRef: string, key: SourceIdentityKey) {
   const identity = value.providerIdentity;
   if (identity === undefined) throw new ProviderError("ProviderProtocolViolation");
@@ -171,8 +207,6 @@ export function sourceIdentityForOffer(value: NormalizedCatalogOffer, supplierRe
     supplierRef,
     sourceIdentityScheme: "hmac-sha256-v1" as const,
     sourceProductKeyHash: createSourceIdentity({supplierRef, entityType: "product", rawProviderIdentifier: identity.rawProviderProductId, sourceIdentityKey: key}).sourceIdentityHash,
-    // Provider protocol does not prove an independent variant identifier; this
-    // hash is the Platform source-variant key derived from the provider offer id.
     sourceVariantKeyHash: createSourceIdentity({supplierRef, entityType: "variant", rawProviderIdentifier: identity.rawProviderVariantId, sourceIdentityKey: key}).sourceIdentityHash,
     sourceOfferKeyHash: createSourceIdentity({supplierRef, entityType: "offer", rawProviderIdentifier: identity.rawProviderOfferId, sourceIdentityKey: key}).sourceIdentityHash,
     rawProviderProductId: identity.rawProviderProductId,

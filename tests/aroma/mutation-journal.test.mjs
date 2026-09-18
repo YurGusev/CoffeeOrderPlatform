@@ -4,7 +4,8 @@ import {fileURLToPath} from "node:url";
 import test from "node:test";
 import {openBlackholeProxy, runLiveProof} from "../../scripts/db-live-proof.mjs";
 import {isAromaProblem} from "../../packages/contracts/aroma-v1/dist/index.js";
-import {createDatabase} from "../../packages/platform-database/dist/index.js";
+import {createDatabase, withTransaction} from "../../packages/platform-database/dist/index.js";
+import {defineStatement} from "../../packages/platform-database/dist/owner.js";
 import {applyMigrations, migrationChecksum} from "../../packages/platform-migrations/dist/index.js";
 import {
   GatewayMutationExecutor,
@@ -278,17 +279,24 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
   let conflictingReserveProxy;
   let terminalProxy;
   let missingTerminalProxy;
+  let proofStage = "bootstrap";
   try {
+    proofStage = "apply-migrations";
     migrator = liveDatabase("aroma-journal-live-migrator", database.name, database.migratorRole, rolePasswords[database.migratorRole], port);
     await migrator.resource.start(AbortSignal.timeout(1000));
     const sql = await readFile(`${MIGRATIONS}/0002_provider_mutation_journal.sql`, "utf8");
-    await applyMigrations(migrator, [{id: "0002_provider_mutation_journal", sql, checksum: migrationChecksum(sql)}], {schema: "integration", ledgerTable: "platform_schema_migrations", lockKey: "issue10-mutation-journal"});
+    const retentionSql = await readFile(`${MIGRATIONS}/0006_provider_mutation_retention.sql`, "utf8");
+    await applyMigrations(migrator, [
+      {id: "0002_provider_mutation_journal", sql, checksum: migrationChecksum(sql)},
+      {id: "0006_provider_mutation_retention", sql: retentionSql, checksum: migrationChecksum(retentionSql)},
+    ], {schema: "integration", ledgerTable: "platform_schema_migrations", lockKey: "issue10-mutation-journal"});
     await migrator.resource.stop(AbortSignal.timeout(1000));
 
     direct = liveDatabase("aroma-journal-live-direct", database.name, runtime.role, rolePasswords[runtime.role], port);
     await direct.resource.start(AbortSignal.timeout(1000));
     const directStore = new ProviderMutationJournalStore(direct, {reservationOwner: LIVE_RESERVATION_OWNER, leaseMs: 30_000});
 
+    proofStage = "reserve-conflict-after-unknown-commit";
     const originalRequest = request(34);
     const conflictingRequest = {...request(35), operationRef: originalRequest.operationRef, quantityMilli: "4"};
     conflictingReserveProxy = await openBlackholeProxy(port, "COMMIT", {
@@ -330,6 +338,7 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
     await expectedConflict;
     assert.equal(originalProviderMutatorCalls, 0);
 
+    proofStage = "dispatch-unknown-commit";
     const unknownRequest = request(31);
     const unknownReservation = await directStore.reserve(unknownRequest, delegation());
     assert.equal(unknownReservation.kind, "Reserved");
@@ -353,6 +362,7 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
     assert.equal(safeUnknown.state, "UnknownOutcome");
     assert.equal(unsafeDispatchCalls, 0);
 
+    proofStage = "terminal-commit-recovery";
     const terminalRequest = request(32);
     const terminalReservation = await directStore.reserve(terminalRequest, delegation());
     assert.equal(terminalReservation.kind, "Reserved");
@@ -382,6 +392,7 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
     assert.equal(replay.replayed, true);
     assert.equal(replayProviderCalls, 0);
 
+    proofStage = "missing-terminal-recovery";
     const missingTerminalRequest = request(33);
     missingTerminalProxy = await openBlackholeProxy(port, "COMMIT", {dropCommandOnce: true, dropCommandAt: 3});
     missingTerminalDatabase = liveDatabase("aroma-journal-live-missing-terminal", database.name, runtime.role, rolePasswords[runtime.role], missingTerminalProxy.port);
@@ -406,7 +417,34 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
     assert.deepEqual(missingTerminalReplay, {state: "UnknownOutcome", failureCode: "AROMA_PROVIDER_OUTCOME_UNKNOWN", replayed: true});
     assert.equal(missingTerminalMutatorCalls, 1);
 
-    return {migration: "0002_provider_mutation_journal", reserveConflictAfterUnknownCommit: true, conflictingRow: "Acknowledged", conflictingMutatorCalls, originalProviderMutatorCalls, terminalCommitReplay: true, terminalRow: "Acknowledged", unknownCommitWithoutTerminal: true, unknownRow: "Dispatched", terminalCommitWithoutTerminal: true, missingTerminalRow: "Dispatched", missingTerminalMutatorCalls, unsafeDispatchCalls, replayProviderCalls};
+    proofStage = "retention-cleanup";
+    const cleanupTerminalRequest = request(36);
+    const cleanupTerminalReservation = await directStore.reserve(cleanupTerminalRequest, delegation());
+    assert.equal(cleanupTerminalReservation.kind, "Reserved");
+    const cleanupTerminalDispatch = await directStore.markDispatched(cleanupTerminalReservation.reservation);
+    assert.equal(cleanupTerminalDispatch.kind, "DispatchPermitted");
+    await directStore.acknowledge(cleanupTerminalDispatch.permit, {state: "Acknowledged", statusCode: 200, responseBodyBytes: acknowledgedBytes(cleanupTerminalRequest)});
+    const cleanupReservedRequest = request(37);
+    const cleanupReserved = await directStore.reserve(cleanupReservedRequest, delegation());
+    assert.equal(cleanupReserved.kind, "Reserved");
+    const ageRows = defineStatement(direct, `UPDATE integration.provider_mutation_journal
+      SET created_at = clock_timestamp() - INTERVAL '91 days',
+          retention_until = clock_timestamp() - INTERVAL '1 day',
+          completed_at = CASE WHEN operation_ref = $1 THEN clock_timestamp() - INTERVAL '91 days' ELSE completed_at END
+      WHERE operation_ref IN ($1, $2)`);
+    await withTransaction(direct, {mode: "background"}, transaction => ageRows(transaction, [cleanupTerminalRequest.operationRef, cleanupReservedRequest.operationRef]));
+    assert.equal(await directStore.cleanupTerminal(1), 1);
+    assert.equal(await directStore.get(cleanupTerminalRequest.operationRef), undefined);
+    const retainedReserved = await directStore.get(cleanupReservedRequest.operationRef);
+    assert.ok(retainedReserved);
+    assert.equal(retainedReserved.state, "Reserved");
+    assert.equal(await directStore.cleanupTerminal(100), 0);
+
+    return {migration: "0006_provider_mutation_retention", reserveConflictAfterUnknownCommit: true, conflictingRow: "Acknowledged", conflictingMutatorCalls, originalProviderMutatorCalls, terminalCommitReplay: true, terminalRow: "Acknowledged", unknownCommitWithoutTerminal: true, unknownRow: "Dispatched", terminalCommitWithoutTerminal: true, missingTerminalRow: "Dispatched", missingTerminalMutatorCalls, cleanupTerminalVsReserved: true, unsafeDispatchCalls, replayProviderCalls};
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "UNKNOWN";
+    const sqlState = error && typeof error === "object" && "sqlState" in error && typeof error.sqlState === "string" ? error.sqlState : "none";
+    throw new Error(`journal-live-proof stage=${proofStage} code=${code} sqlState=${sqlState}`);
   } finally {
     await Promise.allSettled([conflictingReserveProxy?.close(), unknownProxy?.close(), terminalProxy?.close(), missingTerminalProxy?.close()]);
     for (const databaseHandle of [missingTerminalDatabase, terminalDatabase, unknownDatabase, conflictingReserveDatabase, direct, migrator]) databaseHandle?.resource.destroy();
@@ -415,7 +453,7 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
 
 void test("LIVE: ProviderMutationJournalStore recovers unknown COMMIT without unsafe redispatch", {skip: process.env.COFFEE_DB_LIVE_PROOF !== "1"}, async () => {
   const result = await runLiveProof({runId: `issue10journal${Date.now().toString(36)}`, bindingProof: journalLiveProof});
-  assert.deepEqual(result.binding, {migration: "0002_provider_mutation_journal", reserveConflictAfterUnknownCommit: true, conflictingRow: "Acknowledged", conflictingMutatorCalls: 1, originalProviderMutatorCalls: 0, terminalCommitReplay: true, terminalRow: "Acknowledged", unknownCommitWithoutTerminal: true, unknownRow: "Dispatched", terminalCommitWithoutTerminal: true, missingTerminalRow: "Dispatched", missingTerminalMutatorCalls: 1, unsafeDispatchCalls: 0, replayProviderCalls: 0});
+  assert.deepEqual(result.binding, {migration: "0006_provider_mutation_retention", reserveConflictAfterUnknownCommit: true, conflictingRow: "Acknowledged", conflictingMutatorCalls: 1, originalProviderMutatorCalls: 0, terminalCommitReplay: true, terminalRow: "Acknowledged", unknownCommitWithoutTerminal: true, unknownRow: "Dispatched", terminalCommitWithoutTerminal: true, missingTerminalRow: "Dispatched", missingTerminalMutatorCalls: 1, cleanupTerminalVsReserved: true, unsafeDispatchCalls: 0, replayProviderCalls: 0});
   assert.equal(result.cleanup.containerRemoved, true);
 });
 
@@ -431,7 +469,7 @@ void test("production composition mounts the typed mutation bridge without a tes
 
 void test("journal migration is ordered, Integration-owned, constrained, and does not define provider/session payload storage", async () => {
   const files = (await readdir(MIGRATIONS)).filter((name) => name.endsWith(".sql")).sort();
-  assert.deepEqual(files, ["0001_provider_sessions.sql", "0002_provider_mutation_journal.sql", "0003_offer_bindings.sql", "0004_provider_offer_identity.sql", "0005_catalog_export_attempts.sql"]);
+  assert.deepEqual(files, ["0001_provider_sessions.sql", "0002_provider_mutation_journal.sql", "0003_offer_bindings.sql", "0004_provider_offer_identity.sql", "0005_catalog_export_attempts.sql", "0006_provider_mutation_retention.sql"]);
   const sessionSql = await readFile(`${MIGRATIONS}/0001_provider_sessions.sql`, "utf8");
   assert.match(sessionSql, /CREATE TABLE integration\.provider_sessions/);
   assert.match(sessionSql, /encrypted_cookie_material bytea/);
@@ -446,6 +484,20 @@ void test("journal migration is ordered, Integration-owned, constrained, and doe
   assert.match(sql, /CHECK \(quantity_milli IS NULL OR quantity_milli > 0\)/);
   assert.match(sql, /operation_kind = 'SetLineQuantity' AND quantity_milli IS NOT NULL/);
   assert.doesNotMatch(sql, /password|cookie|secret|provider_body|request_body|plaintext|PII/i);
+  const retentionSql = await readFile(`${MIGRATIONS}/0006_provider_mutation_retention.sql`, "utf8");
+  assert.match(retentionSql, /SET retention_until = COALESCE\(completed_at, created_at\) \+ INTERVAL '90 days'/);
+  assert.match(retentionSql, /SET DEFAULT \(CURRENT_TIMESTAMP \+ INTERVAL '90 days'\)/);
+  assert.match(retentionSql, /ALTER COLUMN retention_until SET NOT NULL/);
+  assert.match(retentionSql, /state IN \('Acknowledged', 'Rejected', 'UnknownOutcome'\)/);
+  assert.match(retentionSql, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE integration\.provider_mutation_journal/);
+  const storeSql = await readFile(fileURLToPath(new URL("../../apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts", import.meta.url)), "utf8");
+  assert.match(storeSql, /cleanupTerminal/);
+  assert.match(storeSql, /DELETE FROM integration\.provider_mutation_journal/);
+  assert.match(storeSql, /FOR UPDATE SKIP LOCKED/);
+  assert.equal((storeSql.match(/retention_until = clock_timestamp\(\) \+ INTERVAL '90 days'/g) ?? []).length, 5);
+  assert.doesNotMatch(storeSql, /\borders\b|orders_/i);
+  const composeSmoke = await readFile(fileURLToPath(new URL("../../tools/compose-smoke.mjs", import.meta.url)), "utf8");
+  assert.match(composeSmoke, /"0006_provider_mutation_retention"/);
 });
 
 void test("concurrent calls produce one durable reservation and one dispatch permit", async () => {

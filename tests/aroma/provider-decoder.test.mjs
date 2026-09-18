@@ -40,6 +40,12 @@ void test("decoder принимает фактическую catalog page и п�
   const decoded = decodeCatalogPage(page);
   assert.equal(decoded.currentPage, 1);
   assert.ok(decoded.products.length > 0);
+  assert.equal(decoded.products[0].productOnStop, false);
+  assert.equal(decoded.products[0].showOnWholesale, true);
+  assert.equal(decoded.products[0].soldByPiece, false);
+  assert.equal(decoded.products[0].previewPath, null);
+  assert.ok((decoded.products[0].photoPaths?.length ?? 0) > 0);
+  assert.deepEqual(decoded.products[0].offers[0].params, [{slug: "weight", value: "25"}]);
   assert.equal(decoded.products[0].offers[0].priceRaw, "0");
   assert.throws(() => decodeCatalogPage({...page, data: [{...page.data[0], offers: [{...page.data[0].offers[0], price: "not-a-decimal"}]}]}), {code: "ProviderDecodeInvalid"});
   for (const price of [Number.MAX_SAFE_INTEGER + 1, 12.3]) assert.throws(() => decodeCatalogPage({...page, data: [{...page.data[0], offers: [{...page.data[0].offers[0], price}]}]}), {code: "ProviderDecodeInvalid"});

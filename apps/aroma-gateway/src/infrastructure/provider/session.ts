@@ -12,6 +12,7 @@ import {
   providerSessionScopeHash,
   type ProviderSessionStore,
 } from "../database/provider-session-store.js";
+import {finishGatewaySpan, type GatewayTelemetry} from "../observability.js";
 
 /**
  * BOUNDED_LOCAL_SESSION_CACHE: local decrypted-cookie cache only. It is not a
@@ -58,6 +59,17 @@ type Flight = Readonly<{
   waiters: {count: number};
 }>;
 
+function cancellationObserved(
+  error: unknown,
+  originalSignal: AbortSignal,
+  lifecycleSignal: AbortSignal,
+  open: boolean,
+): boolean {
+  return !open || originalSignal.aborted || lifecycleSignal.aborted ||
+    (originalSignal.reason !== undefined && error === originalSignal.reason) ||
+    (lifecycleSignal.reason !== undefined && error === lifecycleSignal.reason);
+}
+
 function credentials(value: ProviderCredentialScope): Readonly<{scopeRef: string; email: string; password: string}> {
   if (value === null || typeof value !== "object" ||
     typeof value.scopeRef !== "string" || value.scopeRef.length === 0 || value.scopeRef.length > 128 || !value.scopeRef.isWellFormed() || value.scopeRef.includes("\u0000") ||
@@ -102,6 +114,8 @@ export class ProviderSessionManager {
   readonly #now: () => number;
   readonly #cacheMaxAgeMs: number;
   readonly #cacheMaxEntries: number;
+  readonly #telemetry: GatewayTelemetry | undefined;
+  #observedProviderDegraded = false;
   #closed = false;
   #shutdownEpoch = 0;
   #forceDestroyed = false;
@@ -115,6 +129,7 @@ export class ProviderSessionManager {
     now?: () => number;
     cacheMaxAgeMs?: number;
     cacheMaxEntries?: number;
+    telemetry?: GatewayTelemetry;
   }>) {
     if (!(options.encryptionKey instanceof Uint8Array) || options.encryptionKey.byteLength !== 32 ||
       !Number.isSafeInteger(options.cacheMaxAgeMs ?? BOUNDED_LOCAL_SESSION_CACHE_MAX_AGE_MS) || (options.cacheMaxAgeMs ?? BOUNDED_LOCAL_SESSION_CACHE_MAX_AGE_MS) <= 0 ||
@@ -127,6 +142,7 @@ export class ProviderSessionManager {
     this.#now = options.now ?? (() => Number(nowInstant().epochMilliseconds));
     this.#cacheMaxAgeMs = options.cacheMaxAgeMs ?? BOUNDED_LOCAL_SESSION_CACHE_MAX_AGE_MS;
     this.#cacheMaxEntries = options.cacheMaxEntries ?? BOUNDED_LOCAL_SESSION_CACHE_MAX_ENTRIES;
+    this.#telemetry = options.telemetry;
   }
 
   #scopeState(scopeHash: string): ScopeState {
@@ -136,6 +152,14 @@ export class ProviderSessionManager {
       this.#scopeStates.set(scopeHash, state);
     }
     return state;
+  }
+
+  #markProviderFailure(): void {
+    this.#observedProviderDegraded = true;
+  }
+
+  #markProviderSuccess(): void {
+    this.#observedProviderDegraded = false;
   }
 
   #isOpen(epoch = this.#shutdownEpoch): boolean {
@@ -167,6 +191,7 @@ export class ProviderSessionManager {
 
   acquire(scope: ProviderCredentialScope, signal: AbortSignal = new AbortController().signal): Promise<ProviderSession> {
     if (this.#closed) return Promise.reject(new ProviderError("ProviderSessionUnavailable"));
+    this.#telemetry?.metrics.increment("sessionAttempts");
     const checked = credentials(scope);
     signal.throwIfAborted();
     const scopeHash = providerSessionScopeHash(checked.scopeRef, checked.email);
@@ -175,6 +200,8 @@ export class ProviderSessionManager {
     if (cached !== undefined && this.#isCurrent(scopeHash, cached.state) && now - cached.cachedAt >= 0 && now - cached.cachedAt <= this.#cacheMaxAgeMs && usableExpiry(cached.session.expiresAt, now) && usableCookies(cached.cookies, now)) {
       this.#cache.delete(scopeHash);
       this.#cache.set(scopeHash, cached);
+      this.#telemetry?.metrics.increment("sessionCacheHits");
+      this.#telemetry?.metrics.result("sessionResult", "cache_hit");
       return Promise.resolve(cached.session);
     }
     if (cached !== undefined) {
@@ -192,13 +219,101 @@ export class ProviderSessionManager {
     if (flight === undefined) {
       const controller = new AbortController();
       const waiters = {count: 0};
-      const promise = this.#loadOrLogin(checked, scopeHash, controller.signal).finally(() => {
+      const loginSpan = this.#telemetry?.startSpan("aroma.gateway.session");
+      const promise = this.#loadOrLogin(checked, scopeHash, controller.signal).then(value => {
+        this.#telemetry?.metrics.increment("sessionLogins");
+        this.#telemetry?.metrics.result("sessionResult", "login");
+        if (loginSpan !== undefined) finishGatewaySpan(loginSpan);
+        return value;
+      }, error => {
+        this.#telemetry?.metrics.increment("sessionFailures");
+        this.#telemetry?.metrics.result("sessionResult", "failure");
+        if (loginSpan !== undefined) finishGatewaySpan(loginSpan, error);
+        throw error;
+      }).finally(() => {
         if (this.#flights.get(scopeHash)?.promise === promise) this.#flights.delete(scopeHash);
       });
       flight = {controller, promise, email: checked.email, password: checked.password, waiters};
       this.#flights.set(scopeHash, flight);
     }
     return this.#waitFor(flight, signal);
+  }
+
+  /** Read-only provider path: at most one empty-body re-authentication. */
+  async *readSafe(scope: ProviderCredentialScope, operation: ReadOperation, signal: AbortSignal = new AbortController().signal): AsyncGenerator<Uint8Array> {
+    this.#telemetry?.metrics.increment("safeReadAttempts");
+    const span = this.#telemetry?.startSpan("aroma.gateway.safe_read", {operation: operation.kind});
+    let spanEnded = false;
+    let outcomeRecorded = false;
+    let outcomeError: unknown;
+    const endSpan = (error?: unknown): void => {
+      if (span === undefined || spanEnded) return;
+      spanEnded = true;
+      finishGatewaySpan(span, error);
+    };
+    const recordFailure = (error: unknown): void => {
+      if (outcomeRecorded) return;
+      outcomeRecorded = true;
+      outcomeError = error;
+      this.#telemetry?.metrics.increment("safeReadFailures");
+      this.#telemetry?.metrics.result("safeReadResult", "failure");
+    };
+    const recordSuccess = (): void => {
+      if (outcomeRecorded) return;
+      outcomeRecorded = true;
+      this.#telemetry?.metrics.result("safeReadResult", "success");
+    };
+    try {
+      let session = await this.acquire(scope, signal);
+      let yielded = false;
+      try {
+        for await (const chunk of session.read(operation, signal)) {
+          yielded = true;
+          this.#telemetry?.metrics.increment("safeReadBytes", chunk.byteLength);
+          yield chunk;
+        }
+        recordSuccess();
+        return;
+      } catch (error) {
+        if (!(error instanceof ProviderError) || error.code !== "ProviderAuthenticationFailed" || yielded) {
+          recordFailure(error);
+          throw error;
+        }
+        // The failed state is invalidated by the session manager. Re-authenticate
+        // only before any bytes have escaped and only once for this read.
+        try {
+          session = await this.acquire(scope, signal);
+        } catch (reauthError) {
+          recordFailure(reauthError);
+          throw reauthError;
+        }
+        this.#telemetry?.metrics.increment("safeReadReauthenticated");
+        this.#telemetry?.metrics.result("safeReadResult", "reauthenticated");
+        try {
+          for await (const chunk of session.read(operation, signal)) {
+            this.#telemetry?.metrics.increment("safeReadBytes", chunk.byteLength);
+            yield chunk;
+          }
+          recordSuccess();
+          return;
+        } catch (retryError) {
+          recordFailure(retryError);
+          throw retryError;
+        }
+      }
+    } catch (error) {
+      if (!outcomeRecorded) recordFailure(error);
+      throw error;
+    } finally {
+      // A consumer return/break closes the generator without entering catch;
+      // close the span as cancellation and never end it a second time.
+      endSpan(outcomeRecorded ? outcomeError : new ProviderError("ProviderCancelled"));
+    }
+  }
+
+  /** Local-only readiness; this deliberately performs no provider I/O. */
+  isReady(): boolean {
+    return !this.#observedProviderDegraded && this.#isOpen() && typeof this.#transport.login === "function" && typeof this.#transport.read === "function" && typeof this.#transport.mutate === "function";
   }
 
   async #waitFor(flight: Flight, signal: AbortSignal): Promise<ProviderSession> {
@@ -210,7 +325,7 @@ export class ProviderSessionManager {
         settled = true;
         signal.removeEventListener("abort", abort);
         flight.waiters.count--;
-        if (flight.waiters.count === 0) flight.controller.abort();
+        if (flight.waiters.count === 0) flight.controller.abort(signal.reason);
         reject(new ProviderError("ProviderCancelled"));
       };
       signal.addEventListener("abort", abort, {once: true});
@@ -238,6 +353,7 @@ export class ProviderSessionManager {
     let stored;
     try { stored = await this.#persist(scopeHash, () => this.#store.load(scopeHash, signal)); }
     catch (error) {
+      if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
       if (error instanceof ProviderError) throw error;
       throw new ProviderError("ProviderSessionUnavailable");
     }
@@ -259,15 +375,19 @@ export class ProviderSessionManager {
     if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
     signal.throwIfAborted();
     let login: ProviderLoginResult;
-    try { login = await this.#transport.login({email: scope.email, password: scope.password}, signal); }
-    catch (error) {
+    let activeCookies: readonly ProviderCookie[];
+    try {
+      login = await this.#transport.login({email: scope.email, password: scope.password}, signal);
+      if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
+      if (login.profile.email.trim().toLowerCase() !== scope.email) throw new ProviderError("ProviderProtocolViolation");
+      activeCookies = login.cookies.filter(cookie => cookie.expiresAt === null || epochMilliseconds(cookie.expiresAt) > this.#now());
+      if (!usableCookies(activeCookies, this.#now())) throw new ProviderError("ProviderSessionUnavailable");
+      this.#markProviderSuccess();
+    } catch (error) {
+      if (!cancellationObserved(error, signal, this.#lifecycle.signal, this.#isOpen(shutdownEpoch))) this.#markProviderFailure();
       if (error instanceof ProviderError) throw error;
       throw new ProviderError("ProviderAuthenticationFailed");
     }
-    if (!this.#isOpen(shutdownEpoch)) throw new ProviderError("ProviderSessionUnavailable");
-    if (login.profile.email.trim().toLowerCase() !== scope.email) throw new ProviderError("ProviderProtocolViolation");
-    const activeCookies = login.cookies.filter(cookie => cookie.expiresAt === null || epochMilliseconds(cookie.expiresAt) > this.#now());
-    if (!usableCookies(activeCookies, this.#now())) throw new ProviderError("ProviderSessionUnavailable");
     const expiresAt = earliestCookieExpiry(activeCookies);
     const encrypted = encryptCookieMaterial(activeCookies, this.#encryptionKey);
     let persisted = false;
@@ -326,6 +446,7 @@ export class ProviderSessionManager {
 
   async *#readSession(scopeHash: string, state: SessionState, operation: ReadOperation, signal: AbortSignal): AsyncGenerator<Uint8Array> {
     if (!state.active || this.#transport.read === undefined) throw new ProviderError("ProviderSessionUnavailable");
+    const shutdownEpoch = this.#shutdownEpoch;
     const combinedSignal = AbortSignal.any([signal, this.#lifecycle.signal]);
     let finishRead!: () => void;
     const activeRead = new Promise<void>(resolve => { finishRead = resolve; });
@@ -337,11 +458,13 @@ export class ProviderSessionManager {
         const chunk = await source.next();
         if (chunk.done) {
           if (chunk.value.length > 0) await this.#rotate(scopeHash, state, chunk.value);
+          this.#markProviderSuccess();
           return;
         }
         yield chunk.value;
       }
     } catch (error) {
+      if (!cancellationObserved(error, signal, this.#lifecycle.signal, this.#isOpen(shutdownEpoch))) this.#markProviderFailure();
       if (error instanceof ProviderError && error.code === "ProviderAuthenticationFailed") await this.#invalidate(scopeHash, state);
       throw error;
     } finally {
@@ -353,9 +476,24 @@ export class ProviderSessionManager {
 
   async #mutateSession(state: SessionState, operation: MutationOperation, signal: AbortSignal): Promise<ProviderMutationTransportResult> {
     if (!state.active || this.#transport.mutate === undefined) throw new ProviderError("ProviderSessionUnavailable");
+    const shutdownEpoch = this.#shutdownEpoch;
     signal.throwIfAborted();
-    try { return await this.#transport.mutate(operation, signal, state.cookies); }
-    catch (error) { if (error instanceof ProviderError) throw error; throw new ProviderError("ProviderUnavailable"); }
+    try {
+      const result = await this.#transport.mutate(operation, signal, state.cookies);
+      // Typed business rejections (for example 422) prove transport reachability,
+      // but auth, throttling/timeout and server failures are provider degradation.
+      if (result.statusCode === 401 || result.statusCode === 403 || result.statusCode === 408 || result.statusCode === 429 || result.statusCode >= 500) {
+        this.#markProviderFailure();
+      } else {
+        this.#markProviderSuccess();
+      }
+      return result;
+    }
+    catch (error) {
+      if (!cancellationObserved(error, signal, this.#lifecycle.signal, this.#isOpen(shutdownEpoch))) this.#markProviderFailure();
+      if (error instanceof ProviderError) throw error;
+      throw new ProviderError("ProviderUnavailable");
+    }
   }
 
   async #rotate(scopeHash: string, state: SessionState, updates: readonly ProviderCookie[]): Promise<void> {
@@ -397,14 +535,14 @@ export class ProviderSessionManager {
     if (this.#closed) return;
     this.#closed = true;
     this.#shutdownEpoch += 1;
-    this.#lifecycle.abort();
+    this.#lifecycle.abort(new ProviderError("ProviderCancelled"));
     this.#cache.clear();
     for (const state of this.#sessionStates) {
       state.active = false;
       state.cookies.splice(0);
     }
     this.#sessionStates.clear();
-    for (const flight of this.#flights.values()) flight.controller.abort();
+    for (const flight of this.#flights.values()) flight.controller.abort(this.#lifecycle.signal.reason);
   }
 
   #closeTransport(): Promise<void> {
@@ -437,4 +575,19 @@ export class ProviderSessionManager {
     this.#beginShutdown();
     void this.#closeTransport().catch(() => { /* fail-stop cleanup is best effort */ });
   }
+}
+
+/** Compatibility seam for existing test doubles; production uses readSafe above. */
+export async function* readProviderSafely(
+  sessions: Pick<ProviderSessionManager, "acquire"> & Partial<Pick<ProviderSessionManager, "readSafe">>,
+  scope: ProviderCredentialScope,
+  operation: ReadOperation,
+  signal: AbortSignal,
+): AsyncGenerator<Uint8Array> {
+  if (typeof sessions.readSafe === "function") {
+    yield* sessions.readSafe(scope, operation, signal);
+    return;
+  }
+  const session = await sessions.acquire(scope, signal);
+  yield* session.read(operation, signal);
 }

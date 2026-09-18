@@ -6,6 +6,7 @@ import {
   type ProviderRejection,
   type ProviderUser,
 } from "./decoder.js";
+import {finishGatewaySpan, type GatewayTelemetry} from "../observability.js";
 import {
   parseSetCookieHeaders,
   cookieHeader,
@@ -46,6 +47,7 @@ export type ProviderHttpOptions = Readonly<{
   timeoutMs: number;
   maxResponseBytes: number;
   connections: number;
+  telemetry?: GatewayTelemetry;
 }>;
 
 export type ProviderLoginResult = Readonly<{
@@ -132,12 +134,18 @@ export class ProviderHttpClient {
     this.#origin = origin.origin;
     this.#originHost = origin.hostname.toLowerCase();
     this.#options = { ...options };
+
     this.#agent = new Agent({
       connections: options.connections,
       pipelining: 1,
       connect: { timeout: options.timeoutMs },
       maxHeaderSize: 16_384,
     });
+  }
+
+  /** Local transport readiness only; no provider request is made. */
+  isReady(): boolean {
+    return !this.#shutdown.signal.aborted && this.#origin.startsWith("https://") && this.#agent !== undefined;
   }
 
   async *read(
@@ -170,6 +178,9 @@ export class ProviderHttpClient {
     ) {
       throw new ProviderError("ProviderProtocolViolation");
     }
+    const startedAt = performance.now();
+    const span = this.#options.telemetry?.startSpan("aroma.gateway.provider.login");
+    let failure: unknown;
     const combined = combineSignal(
       signal,
       this.#shutdown.signal,
@@ -234,14 +245,16 @@ export class ProviderHttpClient {
       const cookies = parseSetCookieHeaders(response.headers, this.#originHost);
       return { profile, cookies };
     } catch (error) {
-      if (error instanceof ProviderError) throw error;
-      throw new ProviderError("ProviderUnavailable");
+      failure = error instanceof ProviderError ? error : new ProviderError("ProviderUnavailable");
+      throw failure;
     } finally {
       try {
         await response?.body?.cancel();
       } catch {
         /* typed error is retained */
       }
+      this.#options.telemetry?.observeProviderLatency(performance.now() - startedAt);
+      if (span !== undefined) finishGatewaySpan(span, failure);
     }
   }
 
@@ -287,6 +300,9 @@ export class ProviderHttpClient {
     } else {
       method = "DELETE";
     }
+    const startedAt = performance.now();
+    const span = this.#options.telemetry?.startSpan("aroma.gateway.provider.mutation", {method});
+    let failure: unknown;
     const combined = combineSignal(
       signal,
       this.#shutdown.signal,
@@ -341,14 +357,16 @@ export class ProviderHttpClient {
         );
       return { statusCode: response.status, body: bytes };
     } catch (error) {
-      if (error instanceof ProviderError) throw error;
-      throw new ProviderError("ProviderUnavailable");
+      failure = error instanceof ProviderError ? error : new ProviderError("ProviderUnavailable");
+      throw failure;
     } finally {
       try {
         await response?.body?.cancel();
       } catch {
         /* typed error is retained */
       }
+      this.#options.telemetry?.observeProviderLatency(performance.now() - startedAt);
+      if (span !== undefined) finishGatewaySpan(span, failure);
     }
   }
 
@@ -362,6 +380,8 @@ export class ProviderHttpClient {
   ): AsyncGenerator<Uint8Array, readonly ProviderCookie[]> {
     const providerFetch = globalThis.fetch as unknown as ProviderFetch;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const startedAt = performance.now();
+      const span = this.#options.telemetry?.startSpan("aroma.gateway.provider.read", {method});
       const combined = combineSignal(
         signal,
         this.#shutdown.signal,
@@ -371,6 +391,7 @@ export class ProviderHttpClient {
       let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
       let received = 0;
       let retryError: ProviderError | undefined;
+      let failure: unknown;
       try {
         combined.throwIfAborted();
         response = await providerFetch(`${this.#origin}${path}`, {
@@ -468,6 +489,7 @@ export class ProviderHttpClient {
           (typed.code === "ProviderUnavailable" ||
             typed.code === "ProviderReadIncomplete") &&
           attempt < 2;
+        failure = typed;
         if (!retryable) throw typed;
         retryError = typed;
       } finally {
@@ -485,6 +507,8 @@ export class ProviderHttpClient {
             /* preserve the original typed error */
           }
         }
+        this.#options.telemetry?.observeProviderLatency(performance.now() - startedAt);
+        if (span !== undefined) finishGatewaySpan(span, failure);
       }
       try {
         await this.#waitForCartReadRetry(signal);

@@ -8,6 +8,7 @@ import type {ProviderCartReader} from "../../application/cart-reader.js";
 import {OfferBindingStore, OfferBindingStoreError} from "../../infrastructure/database/offer-binding-store.js";
 import {Readable} from "node:stream";
 import {createCatalogExportStream, type CatalogExportBoundary, type CatalogExportRequest} from "../../application/catalog-export.js";
+import type {GatewayTelemetry} from "../../infrastructure/observability.js";
 import {GatewayMutationExecutor, type MutationDelegation, type MutationExecutionResult} from "../../domain/mutation-journal.js";
 
 type RuntimeApp = Parameters<NonNullable<RuntimeComposition["configure"]>>[0];
@@ -205,7 +206,7 @@ function registerMutationRoute(app: RuntimeApp, executor: GatewayMutationExecuto
     const body = mutationRequest(request, operationKind, offerRef);
     if (body === undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
     try { return mutationResult(reply, request, await executor.execute(body as never, mutationDelegation(request, claims), request.runtimeContext?.signal)); }
-    catch (error) { if (error !== null && typeof error === "object" && "code" in error && (error as {code?: unknown}).code === "AROMA_MUTATION_INVALID") return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed")); if (error instanceof Error && (error as {code?: unknown}).code === "AROMA_OPERATION_REF_CONFLICT") return sendProblem(reply, problem(request, 409, "AROMA_OPERATION_REF_CONFLICT", "operation reference conflicts with a previous request")); return sendProblem(reply, problem(request, 503, "AROMA_PROVIDER_UNAVAILABLE", "provider capability is unavailable")); }
+    catch (error) { const code = error !== null && typeof error === "object" && "code" in error && typeof (error as {code?: unknown}).code === "string" ? (error as {code: string}).code : "UNKNOWN"; if (code === "AROMA_MUTATION_INVALID") return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed")); if (code === "AROMA_OPERATION_REF_CONFLICT") return sendProblem(reply, problem(request, 409, "AROMA_OPERATION_REF_CONFLICT", "operation reference conflicts with a previous request")); request.log?.warn({event: "aroma.mutation.failure", code}, "AROMA mutation failed"); return sendProblem(reply, problem(request, 503, "AROMA_PROVIDER_UNAVAILABLE", "provider capability is unavailable")); }
   }});
 }
 
@@ -216,7 +217,7 @@ export function registerAromaMutationRoutes(app: RuntimeApp, executor: GatewayMu
 }
 
 export type CatalogSourceFactory = (supplierRef: string, signal: AbortSignal) => AsyncIterable<import("../../application/catalog-export.js").NormalizedCatalogOffer>;
-export function registerAromaCatalogExportRoute(app: RuntimeApp, sourceFactory: CatalogSourceFactory, boundary: CatalogExportBoundary, context: RuntimeCompositionContext | undefined, expectedSupplierRef?: string): void {
+export function registerAromaCatalogExportRoute(app: RuntimeApp, sourceFactory: CatalogSourceFactory, boundary: CatalogExportBoundary, context: RuntimeCompositionContext | undefined, expectedSupplierRef?: string, telemetry?: GatewayTelemetry): void {
   let verificationKeys: readonly ReturnType<typeof createPublicKey>[] | undefined;
   if (context !== undefined) { try { verificationKeys = keys(context); } catch { verificationKeys = undefined; } }
   app.post("/api/internal-v1/aroma/catalog-exports", {config: {runtimeDeadlineProfile: "readMs"}, bodyLimit: 64 * 1024, errorHandler: (error, request, rawReply) => frameworkError(request, rawReply as unknown as Reply, error), handler: async (request, rawReply) => {
@@ -232,7 +233,7 @@ export function registerAromaCatalogExportRoute(app: RuntimeApp, sourceFactory: 
     if (configuredSupplierRef !== undefined && value["supplierRef"] !== configuredSupplierRef) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
     const requestValue: CatalogExportRequest = {snapshotRef: value["snapshotRef"], supplierRef: value["supplierRef"], providerSnapshotRef: `aroma-gateway:catalog-export:${value["snapshotRef"]}`};
     const signal = request.runtimeContext?.signal ?? new AbortController().signal;
-    const stream = createCatalogExportStream({source: sourceFactory(requestValue.supplierRef, signal), request: requestValue, boundary, signal});
+    const stream = createCatalogExportStream({source: sourceFactory(requestValue.supplierRef, signal), request: requestValue, boundary, signal, ...(telemetry === undefined ? {} : {telemetry})});
     return reply.header("cache-control", "no-store").header("content-type", "application/x-ndjson").code(200).send(Readable.from(stream));
   }});
 }

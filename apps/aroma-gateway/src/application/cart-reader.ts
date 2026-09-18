@@ -3,7 +3,7 @@ import type {AromaCartSnapshot} from "@coffee-platform/contracts-aroma-v1";
 import {nowInstant} from "@coffee-platform/platform-time";
 import {ProviderError} from "../domain/provider-errors.js";
 import {decodeCartSnapshot} from "../infrastructure/provider/decoder.js";
-import type {ProviderCredentialScope, ProviderSessionManager} from "../infrastructure/provider/session.js";
+import {readProviderSafely, type ProviderCredentialScope, type ProviderSessionManager} from "../infrastructure/provider/session.js";
 
 export type CartProviderIdentity = Readonly<{
   offerId: string;
@@ -105,8 +105,7 @@ export class ProviderCartReader {
 
   async read(signal: AbortSignal = new AbortController().signal): Promise<AromaCartSnapshot> {
     signal.throwIfAborted();
-    const session = await this.#sessions.acquire(this.#credentials, signal);
-    const body = await collect(session.read({kind: "cart"}, signal), signal);
+    const body = await collect(readProviderSafely(this.#sessions, this.#credentials, {kind: "cart"}, signal), signal);
     // Freshness is the provider observation boundary. Local decoding and DB work
     // must not move capturedAt forward and make an old provider body look fresh.
     const capturedAt = this.#now();

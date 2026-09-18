@@ -1,4 +1,6 @@
 import {randomUUID} from "node:crypto";
+import type {GatewayTelemetry} from "../observability.js";
+import {finishGatewaySpan} from "../observability.js";
 import {DatabaseTransactionError, type Database, type QueryResult, type SqlScalar, type Transaction, withTransaction} from "@coffee-platform/database";
 import {defineStatement} from "@coffee-platform/database/owner";
 import {
@@ -27,7 +29,8 @@ import {
 const JOURNAL_COLUMNS = `operation_ref, cart_scope_ref, operation_kind, offer_ref, quantity_milli,
   request_hash, caller_identity, original_caller, operation_id, correlation_id, traceparent,
   state, reservation_owner, lease_until, provider_status_code, outcome_hash, failure_code,
-  response_status, response_body_bytes, created_at, started_at, dispatched_at, completed_at, last_seen_at`;
+  response_status, response_body_bytes, created_at, started_at, dispatched_at, completed_at, last_seen_at,
+  retention_until`;
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const ISO_TIMESTAMP = /^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?Z$/;
@@ -41,6 +44,8 @@ const SAFE_FAILURE_CODES = new Set<MutationUnknownFailureCode>([
 ]);
 const UNKNOWN_COMMIT_RECOVERY_TIMEOUT_MS = 1_000;
 const MAX_TYPED_RESPONSE_BYTES = 64 * 1024;
+const DEFAULT_TERMINAL_CLEANUP_LIMIT = 100;
+const MAX_TERMINAL_CLEANUP_LIMIT = 1_000;
 
 type JournalRow = Readonly<{
   operation_ref: unknown;
@@ -67,6 +72,7 @@ type JournalRow = Readonly<{
   dispatched_at: unknown;
   completed_at: unknown;
   last_seen_at: unknown;
+  retention_until: unknown;
 }>;
 
 type OperationRow = Readonly<{operation_ref: unknown}>;
@@ -99,6 +105,7 @@ export type ProviderMutationJournalRecord = Readonly<{
   dispatchedAt: string | null;
   completedAt: string | null;
   lastSeenAt: string;
+  retentionUntil: string;
 }>;
 
 function corrupt(): never {
@@ -196,6 +203,7 @@ function rowToRecord(row: JournalRow): ProviderMutationJournalRecord {
     dispatchedAt: row.dispatched_at === null || row.dispatched_at === undefined ? null : timestamp(row.dispatched_at),
     completedAt: row.completed_at === null || row.completed_at === undefined ? null : timestamp(row.completed_at),
     lastSeenAt: timestamp(row.last_seen_at),
+    retentionUntil: timestamp(row.retention_until),
   };
 }
 
@@ -275,6 +283,10 @@ function validateLease(leaseMs: number): void {
   if (!Number.isSafeInteger(leaseMs) || leaseMs <= 0 || leaseMs > 86_400_000) throw new MutationJournalError("AROMA_MUTATION_INVALID");
 }
 
+function validateTerminalCleanupLimit(limit: number): void {
+  if (!Number.isSafeInteger(limit) || limit <= 0 || limit > MAX_TERMINAL_CLEANUP_LIMIT) throw new MutationJournalError("AROMA_MUTATION_INVALID");
+}
+
 function validateResponseBytes(value: unknown, expected: Readonly<{state: "Acknowledged" | "Rejected"; statusCode: number; failureCode?: string}>): Uint8Array {
   if (!isValidGatewayMutationResponseBytes(value, expected)) throw new MutationJournalError("AROMA_MUTATION_INVALID");
   return new Uint8Array(value);
@@ -323,6 +335,52 @@ function isUnknownCommit(error: unknown): boolean {
   return error instanceof DatabaseTransactionError && error.code === "TRANSACTION_OUTCOME_UNKNOWN";
 }
 
+function stateMetric(state: MutationJournalState): "reserved" | "dispatched" | "acknowledged" | "rejected" | "unknown" {
+  if (state === "Reserved") return "reserved";
+  if (state === "Dispatched") return "dispatched";
+  if (state === "Acknowledged") return "acknowledged";
+  if (state === "Rejected") return "rejected";
+  return "unknown";
+}
+
+function decisionState(decision: ReservationDecision | DispatchDecision): "reserved" | "dispatched" | "acknowledged" | "rejected" | "unknown" {
+  if (decision.kind === "Reserved") return "reserved";
+  if (decision.kind === "DispatchPermitted") return "dispatched";
+  if (decision.kind === "InProgress") return stateMetric(decision.state);
+  if (decision.kind === "Replay") return stateMetric(decision.outcome.state);
+  return "unknown";
+}
+
+function observeJournalState(telemetry: GatewayTelemetry | undefined, state: "reserved" | "dispatched" | "acknowledged" | "rejected" | "unknown"): void {
+  telemetry?.metrics.result("journalState", state);
+}
+
+function observeTerminalOutcome(telemetry: GatewayTelemetry | undefined, result: MutationTerminalResult | MutationUnknownOutcomeResult): void {
+  const state = stateMetric(result.state);
+  observeJournalState(telemetry, state);
+  if (state === "acknowledged") telemetry?.metrics.increment("mutationAcknowledged");
+  else if (state === "rejected") telemetry?.metrics.increment("mutationRejected");
+  else if (state === "unknown") telemetry?.metrics.increment("mutationUnknown");
+}
+
+function finishOperationSpan(span: ReturnType<GatewayTelemetry["startSpan"]> | undefined, operationRef: string, result: string, error?: unknown): void {
+  if (span === undefined) return;
+  span.setAttribute("operationRef", operationRef);
+  span.setAttribute("result", result);
+  finishGatewaySpan(span, error);
+}
+
+function observeDecisionOutcome(telemetry: GatewayTelemetry | undefined, operationRef: string, decision: ReservationDecision | DispatchDecision): void {
+  if (decision.kind !== "Replay" && decision.kind !== "UnknownOutcome") return;
+  observeTerminalOutcome(telemetry, decision.outcome);
+  finishMutationOutcomeSpan(telemetry, operationRef, decision.outcome);
+}
+
+function finishMutationOutcomeSpan(telemetry: GatewayTelemetry | undefined, operationRef: string, result: MutationTerminalResult | MutationUnknownOutcomeResult, error?: unknown): void {
+  const span = telemetry?.startSpan("aroma.gateway.mutation.outcome", {operationRef});
+  finishOperationSpan(span, operationRef, stateMetric(result.state), error);
+}
+
 export class ProviderMutationJournalRepository {
   readonly #insertReservation: JournalStatement;
   readonly #takeoverReservation: JournalStatement;
@@ -333,6 +391,7 @@ export class ProviderMutationJournalRepository {
   readonly #rejectReservation: JournalStatement;
   readonly #markUnknown: JournalStatement;
   readonly #recoverDispatched: OperationStatement;
+  readonly #cleanupTerminal: OperationStatement;
 
   public constructor(database: Database) {
     this.#insertReservation = defineStatement(database, `INSERT INTO integration.provider_mutation_journal
@@ -369,33 +428,56 @@ export class ProviderMutationJournalRepository {
     this.#acknowledge = defineStatement(database, `UPDATE integration.provider_mutation_journal
       SET state = 'Acknowledged', provider_status_code = $4::integer, outcome_hash = $5,
           response_status = $6::smallint, response_body_bytes = $7,
-          completed_at = clock_timestamp(), last_seen_at = clock_timestamp()
+          completed_at = clock_timestamp(),
+          retention_until = clock_timestamp() + INTERVAL '90 days',
+          last_seen_at = clock_timestamp()
       WHERE operation_ref = $1 AND reservation_owner = $2::uuid AND request_hash = $3 AND state = 'Dispatched'
       RETURNING ${JOURNAL_COLUMNS}`);
     this.#reject = defineStatement(database, `UPDATE integration.provider_mutation_journal
       SET state = 'Rejected', provider_status_code = $4::integer, outcome_hash = $5,
           failure_code = $6, response_status = $7::smallint, response_body_bytes = $8,
-          completed_at = clock_timestamp(), last_seen_at = clock_timestamp()
+          completed_at = clock_timestamp(),
+          retention_until = clock_timestamp() + INTERVAL '90 days',
+          last_seen_at = clock_timestamp()
       WHERE operation_ref = $1 AND reservation_owner = $2::uuid AND request_hash = $3 AND state = 'Dispatched'
       RETURNING ${JOURNAL_COLUMNS}`);
     this.#rejectReservation = defineStatement(database, `UPDATE integration.provider_mutation_journal
       SET state = 'Rejected', provider_status_code = $4::integer, outcome_hash = $5,
           failure_code = $6, response_status = $7::smallint, response_body_bytes = $8,
           dispatched_at = COALESCE(dispatched_at, started_at),
-          completed_at = clock_timestamp(), last_seen_at = clock_timestamp()
+          completed_at = clock_timestamp(),
+          retention_until = clock_timestamp() + INTERVAL '90 days',
+          last_seen_at = clock_timestamp()
       WHERE operation_ref = $1 AND reservation_owner = $2::uuid AND request_hash = $3 AND state = 'Reserved'
       RETURNING ${JOURNAL_COLUMNS}`);
     this.#markUnknown = defineStatement(database, `UPDATE integration.provider_mutation_journal
       SET state = 'UnknownOutcome', failure_code = $4,
-          completed_at = clock_timestamp(), last_seen_at = clock_timestamp()
+          completed_at = clock_timestamp(),
+          retention_until = clock_timestamp() + INTERVAL '90 days',
+          last_seen_at = clock_timestamp()
       WHERE operation_ref = $1 AND reservation_owner = $2::uuid AND request_hash = $3 AND state = 'Dispatched'
       RETURNING ${JOURNAL_COLUMNS}`);
     this.#recoverDispatched = defineStatement(database, `UPDATE integration.provider_mutation_journal
       SET state = 'UnknownOutcome', failure_code = $2,
-          completed_at = COALESCE(completed_at, clock_timestamp()), last_seen_at = clock_timestamp()
+          completed_at = COALESCE(completed_at, clock_timestamp()),
+          retention_until = clock_timestamp() + INTERVAL '90 days',
+          last_seen_at = clock_timestamp()
       WHERE state = 'Dispatched' AND dispatched_at IS NOT NULL
         AND ($1::timestamptz IS NULL OR dispatched_at < $1::timestamptz)
       RETURNING operation_ref`);
+    this.#cleanupTerminal = defineStatement(database, `WITH candidates AS (
+        SELECT operation_ref
+        FROM integration.provider_mutation_journal
+        WHERE state IN ('Acknowledged', 'Rejected', 'UnknownOutcome')
+          AND retention_until <= clock_timestamp()
+        ORDER BY retention_until, operation_ref
+        FOR UPDATE SKIP LOCKED
+        LIMIT $1::integer
+      )
+      DELETE FROM integration.provider_mutation_journal AS journal
+      USING candidates
+      WHERE journal.operation_ref = candidates.operation_ref
+      RETURNING journal.operation_ref`);
   }
 
   public async read(transaction: Transaction, operationRef: string): Promise<ProviderMutationJournalRecord | undefined> {
@@ -546,6 +628,12 @@ export class ProviderMutationJournalRepository {
     return result.rowCount;
   }
 
+  public async cleanupTerminal(transaction: Transaction, limit: number): Promise<number> {
+    validateTerminalCleanupLimit(limit);
+    const result = await this.#cleanupTerminal(transaction, [limit]);
+    return result.rowCount;
+  }
+
   async #resolveTerminalRace(transaction: Transaction, value: DispatchPermit): Promise<MutationTerminalResult> {
     const current = await this.read(transaction, value.operationRef);
     if (current === undefined) throw new MutationJournalError("AROMA_JOURNAL_CORRUPT");
@@ -559,6 +647,7 @@ export class ProviderMutationJournalRepository {
 export type ProviderMutationJournalStoreOptions = Readonly<{
   reservationOwner?: string;
   leaseMs?: number;
+  telemetry?: GatewayTelemetry;
 }>;
 
 export class ProviderMutationJournalStore implements MutationJournalPort {
@@ -566,12 +655,14 @@ export class ProviderMutationJournalStore implements MutationJournalPort {
   readonly #repository: ProviderMutationJournalRepository;
   readonly #reservationOwner: string;
   readonly #leaseMs: number;
+  readonly #telemetry: GatewayTelemetry | undefined;
 
   public constructor(database: Database, options: ProviderMutationJournalStoreOptions = {}) {
     this.#database = database;
     this.#repository = new ProviderMutationJournalRepository(database);
     this.#reservationOwner = options.reservationOwner ?? randomUUID();
     this.#leaseMs = options.leaseMs ?? 30_000;
+    this.#telemetry = options.telemetry;
     validateOwner(this.#reservationOwner);
     validateLease(this.#leaseMs);
   }
@@ -610,62 +701,137 @@ export class ProviderMutationJournalStore implements MutationJournalPort {
   public async reserve(request: NormalizedMutationRequest, delegation: MutationDelegation, signal?: AbortSignal): Promise<ReservationDecision> {
     const normalized = normalizeMutationRequest(request);
     assertMutationDelegation(normalized, delegation);
+    const span = this.#telemetry?.startSpan("aroma.gateway.journal.acquire", {operationRef: normalized.operationRef});
     try {
-      return await withTransaction(this.#database, {
-        ...transactionOptions(signal),
-        correlationId: delegation.correlationId,
-        ...(delegation.traceparent === undefined ? {} : {traceparent: delegation.traceparent}),
-      }, transaction => this.#repository.reserve(transaction, normalized, delegation, this.#reservationOwner, this.#leaseMs));
+      let outcome: ReservationDecision;
+      try {
+        outcome = await withTransaction(this.#database, {
+          ...transactionOptions(signal),
+          correlationId: delegation.correlationId,
+          ...(delegation.traceparent === undefined ? {} : {traceparent: delegation.traceparent}),
+        }, transaction => this.#repository.reserve(transaction, normalized, delegation, this.#reservationOwner, this.#leaseMs));
+      } catch (error) {
+        if (!isUnknownCommit(error)) throw error;
+        outcome = await this.#recoverReservationOutcome(normalized, delegation);
+      }
+      this.#telemetry?.metrics.increment("journalAcquire");
+      const state = decisionState(outcome);
+      observeJournalState(this.#telemetry, state);
+      observeDecisionOutcome(this.#telemetry, normalized.operationRef, outcome);
+      finishOperationSpan(span, normalized.operationRef, state);
+      return outcome;
     } catch (error) {
-      if (!isUnknownCommit(error)) throw error;
-      return this.#recoverReservationOutcome(normalized, delegation);
+      this.#telemetry?.metrics.increment("journalAcquire");
+      finishOperationSpan(span, normalized.operationRef, "unknown", error);
+      throw error;
     }
   }
 
   public async markDispatched(value: MutationReservation, signal?: AbortSignal): Promise<DispatchDecision> {
+    const span = this.#telemetry?.startSpan("aroma.gateway.journal.dispatch", {operationRef: value.operationRef});
     try {
-      return await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.markDispatched(transaction, value));
+      let outcome: DispatchDecision;
+      try {
+        outcome = await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.markDispatched(transaction, value));
+      } catch (error) {
+        if (!isUnknownCommit(error)) throw error;
+        const recovered = await this.#recoverOutcome(value.operationRef, value);
+        outcome = recovered.state === "UnknownOutcome" ? {kind: "UnknownOutcome", outcome: recovered} : {kind: "Replay", outcome: recovered};
+      }
+      this.#telemetry?.metrics.increment("journalDispatch");
+      const state = decisionState(outcome);
+      observeJournalState(this.#telemetry, state);
+      observeDecisionOutcome(this.#telemetry, value.operationRef, outcome);
+      finishOperationSpan(span, value.operationRef, state);
+      return outcome;
     } catch (error) {
-      if (!isUnknownCommit(error)) throw error;
-      const outcome = await this.#recoverOutcome(value.operationRef, value);
-      if (outcome.state === "UnknownOutcome") return {kind: "UnknownOutcome", outcome};
-      return {kind: "Replay", outcome};
+      this.#telemetry?.metrics.increment("journalDispatch");
+      finishOperationSpan(span, value.operationRef, "unknown", error);
+      throw error;
     }
   }
 
   public async acknowledge(value: DispatchPermit, result: MutationAcknowledged, signal?: AbortSignal): Promise<MutationTerminalResult | MutationUnknownOutcomeResult> {
+    const span = this.#telemetry?.startSpan("aroma.gateway.journal.terminal_persistence", {operationRef: value.operationRef});
     try {
-      return await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.acknowledge(transaction, value, result));
+      let outcome: MutationTerminalResult | MutationUnknownOutcomeResult;
+      try {
+        outcome = await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.acknowledge(transaction, value, result));
+      } catch (error) {
+        if (!isUnknownCommit(error)) throw error;
+        outcome = await this.#recoverOutcome(value.operationRef, value);
+      }
+      observeTerminalOutcome(this.#telemetry, outcome);
+      this.#telemetry?.metrics.increment("journalTerminalPersistence");
+      finishOperationSpan(span, value.operationRef, stateMetric(outcome.state));
+      finishMutationOutcomeSpan(this.#telemetry, value.operationRef, outcome);
+      return outcome;
     } catch (error) {
-      if (!isUnknownCommit(error)) throw error;
-      return this.#recoverOutcome(value.operationRef, value);
+      finishOperationSpan(span, value.operationRef, "unknown", error);
+      throw error;
     }
   }
 
   public async reject(value: DispatchPermit, result: MutationRejected, signal?: AbortSignal): Promise<MutationTerminalResult | MutationUnknownOutcomeResult> {
+    const span = this.#telemetry?.startSpan("aroma.gateway.journal.terminal_persistence", {operationRef: value.operationRef});
     try {
-      return await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.reject(transaction, value, result));
+      let outcome: MutationTerminalResult | MutationUnknownOutcomeResult;
+      try {
+        outcome = await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.reject(transaction, value, result));
+      } catch (error) {
+        if (!isUnknownCommit(error)) throw error;
+        outcome = await this.#recoverOutcome(value.operationRef, value);
+      }
+      observeTerminalOutcome(this.#telemetry, outcome);
+      this.#telemetry?.metrics.increment("journalTerminalPersistence");
+      finishOperationSpan(span, value.operationRef, stateMetric(outcome.state));
+      finishMutationOutcomeSpan(this.#telemetry, value.operationRef, outcome);
+      return outcome;
     } catch (error) {
-      if (!isUnknownCommit(error)) throw error;
-      return this.#recoverOutcome(value.operationRef, value);
+      finishOperationSpan(span, value.operationRef, "unknown", error);
+      throw error;
     }
   }
 
   public async rejectReservation(value: MutationReservation, result: MutationRejected, signal?: AbortSignal): Promise<MutationTerminalResult | MutationUnknownOutcomeResult> {
+    const span = this.#telemetry?.startSpan("aroma.gateway.journal.terminal_persistence", {operationRef: value.operationRef});
     try {
-      return await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.rejectReservation(transaction, value, result));
+      let outcome: MutationTerminalResult | MutationUnknownOutcomeResult;
+      try {
+        outcome = await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.rejectReservation(transaction, value, result));
+      } catch (error) {
+        if (!isUnknownCommit(error)) throw error;
+        outcome = await this.#recoverOutcome(value.operationRef, value);
+      }
+      observeTerminalOutcome(this.#telemetry, outcome);
+      this.#telemetry?.metrics.increment("journalTerminalPersistence");
+      finishOperationSpan(span, value.operationRef, stateMetric(outcome.state));
+      finishMutationOutcomeSpan(this.#telemetry, value.operationRef, outcome);
+      return outcome;
     } catch (error) {
-      if (!isUnknownCommit(error)) throw error;
-      return this.#recoverOutcome(value.operationRef, value);
+      finishOperationSpan(span, value.operationRef, "unknown", error);
+      throw error;
     }
   }
 
   public async markUnknown(value: DispatchPermit, failureCode: MutationUnknownFailureCode, signal?: AbortSignal): Promise<MutationUnknownOutcomeResult | MutationTerminalResult> {
+    const span = this.#telemetry?.startSpan("aroma.gateway.journal.terminal_persistence", {operationRef: value.operationRef});
     try {
-      return await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.markUnknown(transaction, value, failureCode));
+      let outcome: MutationUnknownOutcomeResult | MutationTerminalResult;
+      try {
+        outcome = await withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.markUnknown(transaction, value, failureCode));
+      } catch (error) {
+        if (!isUnknownCommit(error)) throw error;
+        outcome = await this.#recoverOutcome(value.operationRef, value, failureCode);
+      }
+      observeTerminalOutcome(this.#telemetry, outcome);
+      this.#telemetry?.metrics.increment("journalTerminalPersistence");
+      finishOperationSpan(span, value.operationRef, stateMetric(outcome.state));
+      finishMutationOutcomeSpan(this.#telemetry, value.operationRef, outcome);
+      return outcome;
     } catch (error) {
-      if (!isUnknownCommit(error)) throw error;
-      return this.#recoverOutcome(value.operationRef, value, failureCode);
+      finishOperationSpan(span, value.operationRef, "unknown", error);
+      throw error;
     }
   }
 
@@ -676,6 +842,11 @@ export class ProviderMutationJournalStore implements MutationJournalPort {
 
   public async recoverStaleDispatched(cutoff?: string, signal?: AbortSignal): Promise<number> {
     return this.recoverAfterRestart(cutoff, signal);
+  }
+
+  public async cleanupTerminal(limit = DEFAULT_TERMINAL_CLEANUP_LIMIT, signal?: AbortSignal): Promise<number> {
+    validateTerminalCleanupLimit(limit);
+    return withTransaction(this.#database, transactionOptions(signal), transaction => this.#repository.cleanupTerminal(transaction, limit));
   }
 
   public async get(operationRef: string, signal?: AbortSignal): Promise<ProviderMutationJournalRecord | undefined> {

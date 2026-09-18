@@ -2,7 +2,7 @@ import type {AromaMutationResponse} from "@coffee-platform/contracts-aroma-v1";
 import {ProviderError} from "../domain/provider-errors.js";
 import {PROVIDER_MUTATION_PREPARER, type DispatchPermit, type NormalizedMutationRequest, type PreparedProviderUnsafeMutator, type UnsafeMutationResult} from "../domain/mutation-journal.js";
 import type {OfferBindingStore, ResolvedProviderOffer} from "../infrastructure/database/offer-binding-store.js";
-import type {ProviderCredentialScope, ProviderSessionManager} from "../infrastructure/provider/session.js";
+import {readProviderSafely, type ProviderCredentialScope, type ProviderSessionManager} from "../infrastructure/provider/session.js";
 import type {ProviderHttpClient} from "../infrastructure/provider/http-client.js";
 import {decodeCartSnapshot} from "../infrastructure/provider/decoder.js";
 
@@ -78,8 +78,16 @@ export class ProviderCartMutator {
     const identity = await this.#bindings.resolveProviderOffer(request.offerRef, this.#supplierRef ?? "", signal);
     if (identity === undefined || (this.#supplierRef !== undefined && identity.supplierRef !== this.#supplierRef)) throw new ProviderError("ProviderCartMappingMissing");
     const facts = knownProviderFacts(identity);
-    const session = await this.#sessions.acquire(this.#credentials, signal);
-    const body = await this.#collect(session.read({kind: "cart"}, signal), signal);
+    const safeRead = (this.#sessions as ProviderSessionManager & {readSafe?: ProviderSessionManager["readSafe"]}).readSafe;
+    let session: ProviderSession;
+    let body: Uint8Array;
+    if (typeof safeRead === "function") {
+      body = await this.#collect(readProviderSafely(this.#sessions, this.#credentials, {kind: "cart"}, signal), signal);
+      session = await this.#sessions.acquire(this.#credentials, signal);
+    } else {
+      session = await this.#sessions.acquire(this.#credentials, signal);
+      body = await this.#collect(session.read({kind: "cart"}, signal), signal);
+    }
     const current = decodeCartSnapshot(body);
     const line = exactLine(current, identity, facts);
     const quantity = request.quantityMilli === null ? undefined : Number(request.quantityMilli);

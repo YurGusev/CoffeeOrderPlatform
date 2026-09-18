@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
 import test from "node:test";
 import {createProviderCatalogSource, normalizeProviderCatalogOffer, sourceIdentityForOffer} from "../../apps/aroma-gateway/dist/application/provider-catalog-source.js";
 import {ProviderCartMutator} from "../../apps/aroma-gateway/dist/application/provider-cart-mutator.js";
@@ -31,6 +32,21 @@ void test("catalog source fails closed when provider metadata drifts or money no
   assert.equal(call, 2);
   await assert.rejects(async () => { const empty = createProviderCatalogSource({sessions: {acquire: async () => ({read: async function* () {yield bytes(page(1, 1));}})}, credentials: {scopeRef: "aroma", email: "a@example.test", password: "secret"}, sourceIdentityKey: Buffer.from("key"), normalize: normalizeProviderCatalogOffer}); for await (const _ of empty) {} }, {code: "ProviderProtocolViolation"});
 });
+
+void test("production composition uses the real provider normalizer and rejects capture-backed unresolved unit", async () => {
+  const capture = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12/page47.json", import.meta.url), "utf8"));
+  const body = {...capture, meta: {...capture.meta, current_page: 1, from: 1, to: capture.data.length, last_page: 1, per_page: 10, total: capture.data.length}};
+  const calls = [];
+  const source = createProviderCatalogSource({
+    sessions: {acquire: async () => ({read: async function* (operation) {calls.push(operation.page); yield bytes(body);}})},
+    credentials: {scopeRef: "aroma", email: "a@example.test", password: "secret"},
+    sourceIdentityKey: Buffer.from("key"),
+    pageSize: 10,
+  });
+  await assert.rejects(() => source.next(), {code: "ProviderProtocolViolation"});
+  assert.deepEqual(calls, [1]);
+});
+
 
 void test("production mutator resolves exact identity and performs one unsafe call", async () => {
   const cart = {prices: {total: {default: 0, promo: 0}}, products: [{id: 71, offer: {id: 70, price: 1}, quantity: 1, packing: null, grind_id: null}]};

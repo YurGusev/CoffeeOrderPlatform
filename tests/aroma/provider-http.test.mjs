@@ -290,6 +290,39 @@ void test("Provider cart retry abort during delay запрещает второ�
   assert.equal(calls, 1);
 });
 
+void test("provider login, mutation, and read failures record latency and error spans", async (t) => {
+  const spans = [];
+  const latencies = [];
+  const telemetry = {
+    metrics: {increment() {}, result() {}},
+    observeProviderLatency(value) { latencies.push(value); },
+    startSpan(name) {
+      const observed = {name, statuses: 0, exceptions: 0, ends: 0};
+      spans.push(observed);
+      return {
+        setAttribute() {},
+        setStatus() { observed.statuses++; },
+        recordException() { observed.exceptions++; },
+        end() { observed.ends++; },
+      };
+    },
+  };
+  const client = new ProviderHttpClient({...options, telemetry});
+  t.after(() => client.close());
+  t.mock.method(globalThis, "fetch", async () => { throw new Error("provider unavailable"); });
+
+  await assert.rejects(client.login({email: "operator@example.test", password: "not-emitted"}, signal()), {code: "ProviderUnavailable"});
+  await assert.rejects(client.mutate({kind: "add-cart-line", offerId: "1", quantity: 1}, signal()), {code: "ProviderUnavailable"});
+  await assert.rejects(collect(client.read({kind: "catalog-page", page: 1, pageSize: 1}, signal())), {code: "ProviderUnavailable"});
+
+  assert.equal(latencies.length, 3);
+  assert.deepEqual(spans.map(({name, statuses, exceptions, ends}) => ({name, statuses, exceptions, ends})), [
+    {name: "aroma.gateway.provider.login", statuses: 1, exceptions: 1, ends: 1},
+    {name: "aroma.gateway.provider.mutation", statuses: 1, exceptions: 1, ends: 1},
+    {name: "aroma.gateway.provider.read", statuses: 1, exceptions: 1, ends: 1},
+  ]);
+});
+
 void test("Provider cart retry shutdown during delay запрещает второй dispatch", async (t) => {
   const client = new ProviderHttpClient(options);
   t.after(() => client.close());
@@ -520,4 +553,11 @@ void test("Provider mutation transport decodes a typed provider rejection withou
   assert.equal(result.statusCode, 422);
   assert.deepEqual(result.rejection, {statusCode: 422, effect: "unknown", errorFieldNames: ["offer_id"]});
   assert.equal(calls, 1);
+});
+
+void test("provider client readiness is local and closes without a provider call", async () => {
+  const client = new ProviderHttpClient(options);
+  assert.equal(client.isReady(), true);
+  await client.close();
+  assert.equal(client.isReady(), false);
 });

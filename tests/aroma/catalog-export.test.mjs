@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   CATALOG_SOURCE_IDENTITY_SCHEME,
@@ -8,6 +10,11 @@ import {
   createCatalogExportStream,
   sha256CatalogHash,
 } from "../../apps/aroma-gateway/dist/application/catalog-export.js";
+import {createProviderCatalogSource, sourceIdentityForOffer} from "../../apps/aroma-gateway/dist/application/provider-catalog-source.js";
+import {MemoryProviderSessionStore} from "../../apps/aroma-gateway/dist/infrastructure/database/provider-session-store.js";
+import {GatewayMetrics} from "../../apps/aroma-gateway/dist/infrastructure/observability.js";
+import {ProviderHttpClient} from "../../apps/aroma-gateway/dist/infrastructure/provider/http-client.js";
+import {ProviderSessionManager} from "../../apps/aroma-gateway/dist/infrastructure/provider/session.js";
 
 const request = Object.freeze({
   snapshotRef: "snp_01ARZ3NDEKTSV4RRFFQ69G5FAW",
@@ -26,6 +33,16 @@ const offer = (index, product = 0, variant = 0) => ({
   supplierPromotions: [],
   product,
   variant,
+});
+const providerPage = (currentPage, lastPage) => ({
+  data: [{
+    id: currentPage,
+    name: `Coffee ${currentPage}`,
+    discount: [],
+    offers: [{id: String(currentPage), name: `Coffee ${currentPage}`, vendor_code: `C-${currentPage}`, price: 10, params: []}],
+  }],
+  links: {first: null, last: null, prev: null, next: null},
+  meta: {current_page: currentPage, from: currentPage, to: currentPage, last_page: lastPage, per_page: 1, total: lastPage},
 });
 
 const identityFor = (input, { supplierRef }) => ({
@@ -98,6 +115,36 @@ function makeStream(values, options = {}) {
   });
 }
 
+function recordingTelemetry(events) {
+  const metrics = new GatewayMetrics();
+  const spans = [];
+  return {
+    metrics,
+    spans,
+    observeProviderLatency() {},
+    startSpan(name, attributes = {}) {
+      const span = {
+        name,
+        attributes: {...attributes},
+        endCount: 0,
+        setAttribute(key, value) {
+          this.attributes[key] = value;
+          return this;
+        },
+        recordException(error) { this.exception = error; },
+        setStatus() { return this; },
+        end() {
+          this.endCount += 1;
+          events.push(`end:${name}`);
+        },
+      };
+      spans.push(span);
+      events.push(`start:${name}`);
+      return span;
+    },
+  };
+}
+
 void test("catalog export emits exact canonical bytes, hashes, links, and distinct counts", async () => {
   const calls = [];
   const lines = await collect(
@@ -157,6 +204,95 @@ void test("catalog export emits exact canonical bytes, hashes, links, and distin
   ]);
 });
 
+void test("catalog telemetry spans one completed persistence/emission boundary per exported batch", async () => {
+  const events = [];
+  const telemetry = recordingTelemetry(events);
+  const persistenceEvents = [];
+  await collect(createCatalogExportStream({
+    source: sourceFrom([offer(0, 1, 7), offer(1, 2, 8)]),
+    request,
+    telemetry,
+    limits: {maxOffersPerBatch: 1},
+    boundary: boundary({persistence: {
+      recordBatch: ({record}) => { persistenceEvents.push(record.batchNumber); },
+    }}),
+  }));
+  assert.deepEqual(persistenceEvents, [0, 1]);
+  assert.deepEqual(telemetry.spans.map(span => span.name), ["aroma.gateway.catalog_batch", "aroma.gateway.catalog_batch"]);
+  assert.deepEqual(telemetry.spans.map(span => span.endCount), [1, 1]);
+  assert.equal(events.filter(event => event.startsWith("start:aroma.gateway.catalog_batch")).length, 2);
+  assert.equal(telemetry.metrics.render().find(line => line.startsWith("aroma_gateway_catalog_batches_total ")), "aroma_gateway_catalog_batches_total 2");
+});
+
+void test("catalog export keeps the real provider source demand-driven between persisted batches", async (t) => {
+  const credentials = {scopeRef: "aroma-primary", email: "canonical@example.test", password: "test-only"};
+  const sourceIdentityKey = Buffer.from("identity-key");
+  const calls = [];
+  const client = new ProviderHttpClient({origin: "https://provider.test", timeoutMs: 1_000, maxResponseBytes: 64 * 1024, connections: 1});
+  const manager = new ProviderSessionManager({
+    transport: client,
+    store: new MemoryProviderSessionStore(),
+    encryptionKey: Buffer.alloc(32, 8),
+  });
+  t.after(() => manager.close());
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    calls.push({url, init});
+    if (url.endsWith("/api/v1/auth/login")) {
+      return new Response(JSON.stringify({data: {email: credentials.email, wholesale: true, retail: false}}), {
+        headers: {
+          "content-type": "application/json",
+          "set-cookie": "october_session=provider-session; Domain=provider.test; Path=/; HttpOnly",
+        },
+      });
+    }
+    const pageNumber = Number(new URL(url).searchParams.get("page"));
+    return new Response(JSON.stringify(providerPage(pageNumber, 2)), {headers: {"content-type": "application/json"}});
+  });
+  const source = createProviderCatalogSource({
+    sessions: manager,
+    credentials,
+    sourceIdentityKey,
+    pageSize: 1,
+    normalize: (product, providerOffer) => ({
+      displayName: providerOffer.name,
+      unit: "piece",
+      supplierUnitMinor: "1000",
+      currency: "RUB",
+      availability: "Available",
+      imageUrl: "https://images.example.test/provider.jpg",
+      supplierPromotions: [],
+      providerIdentity: {
+        rawProviderProductId: product.productId,
+        rawProviderVariantId: providerOffer.offerId,
+        rawProviderOfferId: providerOffer.offerId,
+        packing: null,
+        grindId: null,
+      },
+    }),
+  });
+  const stream = createCatalogExportStream({
+    source,
+    request,
+    boundary: boundary({
+      identity: value => sourceIdentityForOffer(value, request.supplierRef, sourceIdentityKey),
+      persistence: {recordBatch: () => {}},
+    }),
+    limits: {maxOffersPerBatch: 1},
+  });
+  const started = await stream.next();
+  assert.equal(JSON.parse(Buffer.from(started.value).toString()).recordType, "snapshot-started");
+  assert.equal(calls.length, 0);
+  const firstBatch = await stream.next();
+  assert.equal(JSON.parse(Buffer.from(firstBatch.value).toString()).recordType, "snapshot-batch");
+  assert.deepEqual(calls.map(call => new URL(call.url).searchParams.get("page")), [null, "1"]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.length, 2);
+  const secondBatch = await stream.next();
+  assert.equal(JSON.parse(Buffer.from(secondBatch.value).toString()).recordType, "snapshot-batch");
+  assert.equal(new URL(calls[2].url).searchParams.get("page"), "2");
+  await stream.return();
+});
+
 void test("catalog export carries normalized supplier promotions and strips provider fields", async () => {
   const promotion = {discountBasisPoints: 1000, minimumWeightRaw: "0", providerCreatedAt: "2026-09-14T04:55:24.000000Z", providerUpdatedAt: "2026-09-14T04:55:24.000000Z", rawProviderDiscountId: "200083"};
   const records = parse(await collect(makeStream([{...offer(0), supplierPromotions: [promotion]}])));
@@ -169,15 +305,65 @@ void test("catalog export carries normalized supplier promotions and strips prov
   }
 });
 
-void test("100k offers consume in bounded batches without whole-catalog buffering", async () => {
-  const total = 100_000;
+const catalogHeapProbe = String.raw`
+import {
+  CATALOG_SOURCE_IDENTITY_SCHEME,
+  createCatalogExportStream,
+  sha256CatalogHash,
+} from "./apps/aroma-gateway/dist/application/catalog-export.js";
+
+const total = 100_000;
+const maxOffersPerBatch = 500;
+const request = {
+  snapshotRef: "snp_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  supplierRef: "sup_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  providerSnapshotRef: "provider-snapshot-1",
+};
+const clock = {now: () => "2026-09-05T10:00:00.000Z"};
+const hash = (value) => value.toString(16).padStart(64, "0");
+const offer = (index, product = 0, variant = 0) => ({
+  displayName: "Coffee " + index,
+  unit: "piece",
+  supplierUnitMinor: String(100 + index),
+  currency: "RUB",
+  availability: "Available",
+  imageUrl: "https://images.example.test/" + index + ".jpg",
+  supplierPromotions: [],
+  product,
+  variant,
+});
+const identity = (input, {supplierRef}) => ({
+  supplierRef,
+  sourceIdentityScheme: CATALOG_SOURCE_IDENTITY_SCHEME,
+  sourceProductKeyHash: hash(input.product),
+  sourceVariantKeyHash: hash(input.variant),
+  sourceOfferKeyHash: hash(
+    input.product * 1_000_000 +
+      input.variant * 10_000 +
+      Number(input.displayName.replace("Coffee ", "")),
+  ),
+  rawProviderProductId: "product-" + input.product,
+  rawProviderVariantId: "variant-" + input.variant,
+  rawProviderOfferId: "offer-" + input.displayName,
+});
+const forceGc = () => {
+  if (typeof globalThis.gc !== "function")
+    throw new Error("child process was not started with --expose-gc");
+  globalThis.gc();
+};
+
+async function consumeExport(count, {measure = false} = {}) {
   let consumed = 0;
   let persistedOffers = 0;
   let maxUnpersisted = 0;
-  let returned = false;
+  let maxBatch = 0;
+  let batches = 0;
+  let chunks = 0;
+  let completedRecords = 0;
+  let peakHeapUsed = 0;
   const source = {
     async next() {
-      if (consumed === total) return { done: true, value: undefined };
+      if (consumed === count) return {done: true, value: undefined};
       consumed += 1;
       maxUnpersisted = Math.max(maxUnpersisted, consumed - persistedOffers);
       return {
@@ -186,30 +372,112 @@ void test("100k offers consume in bounded batches without whole-catalog bufferin
       };
     },
     async return() {
-      returned = true;
-      return { done: true, value: undefined };
+      return {done: true, value: undefined};
     },
   };
-  let batches = 0;
-  const lines = await collect(
-    makeStream([], {
-      source,
-      limits: { maxTotalOffers: total, maxTotalBatches: 300 },
-      boundary: boundary({
-        persistence: {
-          recordBatch: ({ record }) => {
-            batches += 1;
-            persistedOffers += record.offerCount;
-          },
+  const stream = createCatalogExportStream({
+    source,
+    request,
+    boundary: {
+      identity,
+      hash: sha256CatalogHash,
+      persistence: {
+        beginExport() {},
+        recordBatch({record}) {
+          batches += 1;
+          maxBatch = Math.max(maxBatch, record.offerCount);
+          persistedOffers += record.offerCount;
         },
-      }),
-    }),
+        completeExport() {},
+      },
+    },
+    clock,
+    limits: {
+      maxOffersPerBatch,
+      maxTotalOffers: count,
+      maxTotalBatches: 300,
+    },
+  });
+  for await (const chunk of stream) {
+    const line = Buffer.from(chunk).toString("utf8");
+    chunks += 1;
+    if (line.includes('"recordType":"snapshot-completed"'))
+      completedRecords += 1;
+    if (measure) {
+      // Measure only after a full GC at each deterministic emitted-record boundary;
+      // this tests retained heap, not scheduler-dependent transient samples.
+      forceGc();
+      peakHeapUsed = Math.max(peakHeapUsed, process.memoryUsage().heapUsed);
+    }
+  }
+  return {
+    completedRecords,
+    consumed,
+    chunks,
+    batches,
+    maxBatch,
+    maxUnpersisted,
+    peakHeapUsed,
+  };
+}
+
+await consumeExport(16);
+forceGc();
+const baselineHeapUsed = process.memoryUsage().heapUsed;
+const workload = await consumeExport(total, {measure: true});
+forceGc();
+const afterHeapUsed = process.memoryUsage().heapUsed;
+if (workload.completedRecords !== 1 || workload.consumed !== total)
+  throw new Error("100k catalog export did not complete exactly once");
+process.stdout.write(JSON.stringify({
+  afterHeapUsed,
+  baselineHeapUsed,
+  ...workload,
+}));
+`;
+
+void test("100k production catalog export proves bounded retained heap in a child process", () => {
+  const result = spawnSync(
+    process.execPath,
+    ["--expose-gc", "--input-type=module", "-e", catalogHeapProbe],
+    {
+      cwd: fileURLToPath(new URL("../../", import.meta.url)),
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024,
+    },
   );
-  assert.equal(consumed, total);
-  assert.equal(batches, 200);
-  assert.equal(maxUnpersisted <= 500, true);
-  assert.equal(returned, true);
-  assert.equal(parse(lines).at(-1).recordType, "snapshot-completed");
+  assert.equal(
+    result.status,
+    0,
+    `heap probe failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+  );
+  const metrics = JSON.parse(result.stdout);
+  const peakDelta = metrics.peakHeapUsed - metrics.baselineHeapUsed;
+  const afterDelta = metrics.afterHeapUsed - metrics.baselineHeapUsed;
+  // Warmed, forced-GC measurements observed ~26 MB peak and <1 MB after-run
+  // retention here. 64 MiB peak and 16 MiB after-run budgets leave ample room
+  // for V8 variance while staying below the ~76 MB peak/~50 MB retained heap
+  // produced when all 202 output records are kept as strings.
+  const peakBudgetBytes = 64 * 1024 * 1024;
+  const afterBudgetBytes = 16 * 1024 * 1024;
+  assert.ok(peakDelta > 0, JSON.stringify(metrics));
+  assert.ok(peakDelta <= peakBudgetBytes, JSON.stringify({metrics, peakDelta, peakBudgetBytes}));
+  assert.ok(afterDelta <= afterBudgetBytes, JSON.stringify({metrics, afterDelta, afterBudgetBytes}));
+  assert.equal(metrics.batches, 200);
+  assert.equal(metrics.maxBatch, 500);
+  assert.equal(metrics.maxUnpersisted, 500);
+  assert.equal(metrics.chunks, 202);
+  assert.equal(metrics.completedRecords, 1);
+  assert.equal(metrics.consumed, 100_000);
+  process.stdout.write(`catalog heap probe: ${JSON.stringify({
+    baselineHeapUsed: metrics.baselineHeapUsed,
+    peakHeapUsed: metrics.peakHeapUsed,
+    afterHeapUsed: metrics.afterHeapUsed,
+    peakDelta,
+    afterDelta,
+    maxBatch: metrics.maxBatch,
+    maxUnpersisted: metrics.maxUnpersisted,
+  })}\n`);
 });
 
 void test("consumer backpressure prevents source pulls while a batch is paused", async () => {

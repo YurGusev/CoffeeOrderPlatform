@@ -1129,6 +1129,7 @@ async function applyAromaBindingMigration(port, credentials, platformConfig) {
       "0003_offer_bindings",
       "0004_provider_offer_identity",
       "0005_catalog_export_attempts",
+      "0006_provider_mutation_retention",
     ];
     const migrations = [];
     for (const id of migrationIds) {
@@ -2915,7 +2916,7 @@ if (JSON.stringify(safe.body).includes("300000") || JSON.stringify(safe.body).in
 if (safe.body?.cartScopeRef !== "aroma-primary" || safe.body?.lines?.length !== 1 || safe.body.lines[0].offerRef !== offerRef || safe.body.lines[0].quantity !== "__INITIAL_QUANTITY__") throw new Error("sanitized cart snapshot mismatch");
 const setBody = {operationRef: "op_00000000000000000000000001", cartScopeRef: "aroma-primary", quantity: "2"};
 const set = await requestApi(convergence, setPath, setBody);
-if (set.status !== 200 || set.body?.state !== "Acknowledged" || set.body?.operationRef !== setBody.operationRef) throw new Error("set mutation was not acknowledged");
+if (set.status !== 200 || set.body?.state !== "Acknowledged" || set.body?.operationRef !== setBody.operationRef) throw new Error("set mutation was not acknowledged: status=" + set.status + " state=" + String(set.body?.state ?? "none") + " code=" + String(set.body?.code ?? "none"));
 const afterSet = await requestApi(caller, readPath, readBody);
 if (afterSet.status !== 200 || afterSet.body?.lines?.[0]?.quantity !== "__AFTER_SET_QUANTITY__") throw new Error("set fresh cart read-back mismatch");
 const setCounts = await readCounts();
@@ -3204,6 +3205,7 @@ async function main() {
           databaseProofContainer,
           postgresCredentials,
         );
+        await applyAromaBindingMigration(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
         const deliveryDatabase = recoveryProofCredentials.roleMap.databases.find(
           (candidate) => candidate.name === "coffee_platform_orders",
         );

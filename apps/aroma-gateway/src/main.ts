@@ -10,6 +10,7 @@ import {OfferBindingStore} from "./infrastructure/database/offer-binding-store.j
 import {ProviderSessionStoreAdapter} from "./infrastructure/database/provider-session-store.js";
 import {ProviderHttpClient} from "./infrastructure/provider/http-client.js";
 import {ProviderSessionManager} from "./infrastructure/provider/session.js";
+import {createGatewayTelemetry, GatewayMetrics} from "./infrastructure/observability.js";
 import {registerAromaBindingRoutes, registerAromaCartSnapshotRoute, registerAromaCatalogExportRoute, registerAromaMutationRoutes} from "./transport/http/index.js";
 
 function secretAt(context: RuntimeCompositionContext, path: string): unknown {
@@ -40,10 +41,14 @@ function cartTimeoutMs(context: RuntimeCompositionContext): number {
   return profile;
 }
 
+const gatewayMetrics = new GatewayMetrics();
+const gatewayTelemetry = createGatewayTelemetry(gatewayMetrics);
+
 const composition: RuntimeComposition = {
+  metrics: () => gatewayMetrics.render(),
   readinessChecks: [{
     name: "aroma-provider-session",
-    check: () => providerSessions !== undefined,
+    check: () => providerClient?.isReady() === true && providerSessions?.isReady() === true,
   }],
   configure: async (app, _signal, database, _kafka, context) => {
     if (database === undefined) throw new Error("aroma-gateway database is required");
@@ -56,13 +61,16 @@ const composition: RuntimeComposition = {
         timeoutMs: cartTimeoutMs(context),
         maxResponseBytes: 2 * 1024 * 1024,
         connections: context.config.services["aroma-gateway"].concurrency,
+        telemetry: gatewayTelemetry,
       });
       sessions = new ProviderSessionManager({
         transport: client,
         store: new ProviderSessionStoreAdapter(database),
         encryptionKey: createHash("sha256").update(requiredSecretString(context, "aroma.sessionEncryptionKey"), "utf8").digest(),
+        telemetry: gatewayTelemetry,
       });
       providerSessions = sessions;
+      providerClient = client;
       providerSessionHandle = sessions;
       const providerSession = sessions;
       const bindings = new OfferBindingStore(database);
@@ -93,16 +101,17 @@ const composition: RuntimeComposition = {
         bindings,
         supplierRef: context.config.aroma.supplierRef,
       });
-      const journal = new ProviderMutationJournalStore(database);
+      const journal = new ProviderMutationJournalStore(database, {telemetry: gatewayTelemetry});
       mutationJournal = journal;
       const mutator = new ProviderCartMutator({sessions: providerSession, credentials, bindings, supplierRef: context.config.aroma.supplierRef, transport: client});
       const executor = new GatewayMutationExecutor(journal, mutator.execute.bind(mutator));
       registerAromaBindingRoutes(app, database, context, context.config.aroma.supplierRef);
       registerAromaCartSnapshotRoute(app, reader, context);
-      registerAromaCatalogExportRoute(app, (supplierRef, signal) => createProviderCatalogSource({sessions: providerSession, credentials, sourceIdentityKey: catalogIdentityKey, pageSize: 10, signal, normalize: normalizeProviderCatalogOffer}), exportBoundary, context, context.config.aroma.supplierRef);
+      registerAromaCatalogExportRoute(app, (supplierRef, signal) => createProviderCatalogSource({sessions: providerSession, credentials, sourceIdentityKey: catalogIdentityKey, pageSize: 10, signal, normalize: normalizeProviderCatalogOffer}), exportBoundary, context, context.config.aroma.supplierRef, gatewayTelemetry);
       registerAromaMutationRoutes(app, executor, context);
     } catch (error) {
       providerSessions = undefined;
+      providerClient = undefined;
       if (sessions !== undefined) await sessions.close();
       else await client?.close();
       throw error;
@@ -129,17 +138,20 @@ const composition: RuntimeComposition = {
     stop: async () => {
       const current = providerSessionHandle;
       providerSessions = undefined;
+      providerClient = undefined;
       await current?.close();
     },
     destroy: () => {
       const current = providerSessionHandle;
       providerSessions = undefined;
+      providerClient = undefined;
       current?.forceDestroy();
     },
   }],
 };
 
 let providerSessions: ProviderSessionManager | undefined;
+let providerClient: ProviderHttpClient | undefined;
 let mutationJournal: ProviderMutationJournalStore | undefined;
 // Keep the owned handle after stop clears readiness. Runtime destroy must still
 // reach the same manager if a stop deadline expires while reads are pending.

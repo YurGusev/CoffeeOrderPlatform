@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { nowInstant, toInstant } from "@coffee-platform/platform-time";
+import {finishGatewaySpan, type GatewayTelemetry} from "../infrastructure/observability.js";
 
 export const CATALOG_EXPORT_STREAM_VERSION = "1" as const;
 export const CATALOG_SOURCE_IDENTITY_SCHEME = "hmac-sha256-v1" as const;
@@ -230,6 +231,7 @@ export type CatalogExportOptions = Readonly<{
     | AsyncIterator<NormalizedCatalogOffer>;
   request: CatalogExportRequest;
   boundary: CatalogExportBoundary;
+  telemetry?: GatewayTelemetry;
   signal?: AbortSignal;
   clock?: CatalogExportClock;
   limits?: Partial<CatalogExportLimits> &
@@ -1062,6 +1064,7 @@ function resolveOptions(
     signal: AbortSignal;
     clock: CatalogExportClock;
     limits: CatalogExportLimits;
+    telemetry: GatewayTelemetry | undefined;
   }> {
   const options: CatalogExportOptions =
     isPlainObject(sourceOrOptions) &&
@@ -1101,6 +1104,7 @@ function resolveOptions(
     signal,
     clock,
     limits: validateLimits(options.limits),
+    telemetry: options.telemetry,
   };
 }
 
@@ -1146,9 +1150,10 @@ async function* runExport(
       signal: AbortSignal;
       clock: CatalogExportClock;
       limits: CatalogExportLimits;
+      telemetry: GatewayTelemetry | undefined;
     }>,
 ): AsyncGenerator<Uint8Array> {
-  const { request, boundary, clock, limits } = config;
+  const { request, boundary, clock, limits, telemetry } = config;
   const state = makeRuntimeState(config.signal);
   const identity = resolveIdentity(boundary.identity);
   const hash = resolveHash(boundary.hash);
@@ -1268,29 +1273,52 @@ async function* runExport(
       record,
       identities: Object.freeze(batchIdentities.slice()),
     });
+    const span = telemetry?.startSpan("aroma.gateway.catalog_batch", {
+      batchNumber,
+      offerCount: record.offerCount,
+      batchBytes: record.uncompressedBytes,
+    });
+    let spanError: unknown;
+    let spanCompleted = false;
     let acknowledgement: unknown;
     try {
-      acknowledgement = await runWithLimits(
-        () => boundary.persistence.recordBatch(input, state.combinedSignal),
-        state,
-        limits,
-      );
+      try {
+        acknowledgement = await runWithLimits(
+          () => boundary.persistence.recordBatch(input, state.combinedSignal),
+          state,
+          limits,
+        );
+      } catch (error) {
+        if (isExternalCancellation(error, state)) throw error;
+        if (error instanceof CatalogExportError) throw error;
+        throw invalid("recordBatch persistence failed", error);
+      }
+      compareOptionalAck(acknowledgement, record);
+      binaryBatchHashes.push(Buffer.from(batchHash, "hex"));
+      batchCount += 1;
+      totalByteCount += itemBytes.byteLength;
+      previousBatchHash = batchHash;
+      for await (const line of emit(record)) yield line;
+      spanCompleted = true;
+      telemetry?.metrics.increment("catalogBatches");
+      telemetry?.metrics.increment("catalogBatchBytes", itemBytes.byteLength);
+      span?.setAttribute("result", "success");
+      batchNumber += 1;
+      batchItems = [];
+      batchItemJson = [];
+      batchIdentities = [];
+      batchBytes = 2;
     } catch (error) {
-      if (isExternalCancellation(error, state)) throw error;
-      if (error instanceof CatalogExportError) throw error;
-      throw invalid("recordBatch persistence failed", error);
+      spanError = error;
+      span?.setAttribute("result", isExternalCancellation(error, state) ? "cancelled" : "error");
+      throw error;
+    } finally {
+      if (!spanCompleted && spanError === undefined) {
+        span?.setAttribute("result", "cancelled");
+        spanError = new Error("catalog batch cancelled");
+      }
+      if (span !== undefined) finishGatewaySpan(span, spanError);
     }
-    compareOptionalAck(acknowledgement, record);
-    binaryBatchHashes.push(Buffer.from(batchHash, "hex"));
-    batchCount += 1;
-    totalByteCount += itemBytes.byteLength;
-    previousBatchHash = batchHash;
-    for await (const line of emit(record)) yield line;
-    batchNumber += 1;
-    batchItems = [];
-    batchItemJson = [];
-    batchIdentities = [];
-    batchBytes = 2;
   };
 
   try {
@@ -1458,6 +1486,7 @@ async function* runExport(
       totalTimer = undefined;
     }
     for await (const line of emit(completed, false)) yield line;
+    telemetry?.metrics.result("catalogResult", "success");
   } catch (error) {
     failure = error;
     // The completed record has already committed. A later idle/cleanup error
@@ -1485,6 +1514,8 @@ async function* runExport(
       totalTimer = undefined;
     }
     for await (const line of emit(failed, false)) yield line;
+    telemetry?.metrics.increment("catalogFailures");
+    telemetry?.metrics.result("catalogResult", "failure");
   } finally {
     if (totalTimer !== undefined) clearTimeout(totalTimer);
     if (!state.internalController.signal.aborted)

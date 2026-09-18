@@ -25,7 +25,8 @@ state Reserved|Dispatched|Acknowledged|Rejected|UnknownOutcome;
 reservation_owner uuid; lease_until timestamptz;
 provider_status_code integer NULL; outcome_hash char(64) NULL;
 failure_code varchar(64) NULL; response_status smallint NULL;
-response_body_bytes bytea NULL; created_at/started_at/dispatched_at/completed_at/last_seen_at.
+response_body_bytes bytea NULL; created_at/started_at/dispatched_at/completed_at/last_seen_at;
+retention_until timestamptz NOT NULL — не ранее 90 дней после terminal completion.
 ```
 
 `operation_kind` — транспортная операция Gateway: Orders `SetQuantity` отображается
@@ -72,9 +73,10 @@ cart scope, operation, offer, quantity и trusted caller/delegation. Чужая 
 
 Gateway никогда повторно не отправляет mutation с тем же `operationRef`.
 Convergence после unknown начинает новую Attempt с fresh GET и сверяет свою
-reservation. Gateway не читает Orders DB. Terminal retention — 90 дней и
-должен превышать максимальный Orders recovery horizon; cleanup использует
-только Integration-owned state/age. Orders хранит operationRef не менее 90 дней.
+reservation. Gateway не читает Orders DB. Terminal retention — 90 дней от
+`completed_at` для каждой terminal transition; он превышает максимальный Orders
+recovery horizon; cleanup использует только Integration-owned state/age. Orders
+хранит operationRef не менее 90 дней.
 
 ## Обязательные тесты
 

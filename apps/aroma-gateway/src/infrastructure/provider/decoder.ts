@@ -30,6 +30,13 @@ export type ProviderCatalogOffer = Readonly<{
   name: string;
   vendorCode: string;
   priceRaw: string;
+  /** Only the observed param facts needed by the production normalizer. */
+  params?: readonly ProviderCatalogParam[];
+}>;
+
+export type ProviderCatalogParam = Readonly<{
+  slug: string;
+  value: string | null;
 }>;
 
 export type ProviderCatalogDiscount = Readonly<{
@@ -44,6 +51,12 @@ export type ProviderCatalogProduct = Readonly<{
   name: string;
   offers: readonly ProviderCatalogOffer[];
   discounts: readonly ProviderCatalogDiscount[];
+  /** These are optional at decode time for legacy test doubles; production normalization requires them. */
+  productOnStop?: boolean;
+  showOnWholesale?: boolean;
+  soldByPiece?: boolean;
+  previewPath?: string | null;
+  photoPaths?: readonly string[];
 }>;
 
 export type ProviderCatalogPage = Readonly<{
@@ -104,6 +117,44 @@ function text(value: unknown): string {
 function nullableText(value: unknown): string | null {
   if (value === null) return null;
   return text(value);
+}
+
+function optionalBoolean(source: Record<string, unknown>, key: string): boolean | undefined {
+  if (!Object.hasOwn(source, key)) return undefined;
+  const value = source[key];
+  if (typeof value !== "boolean") invalid();
+  return value;
+}
+
+function providerParam(value: unknown): ProviderCatalogParam {
+  const param = record(value);
+  const metadata = record(required(param, "param", (candidate): candidate is Record<string, unknown> => candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)));
+  const slug = text(required(metadata, "slug", (candidate): candidate is string => typeof candidate === "string"));
+  const paramValue = param["param_value"];
+  let normalizedValue: string | null;
+  if (paramValue === null || paramValue === undefined) {
+    const valueField = param["value"];
+    normalizedValue = valueField === null || valueField === undefined ? null : text(valueField);
+  } else {
+    const valueRecord = record(paramValue);
+    normalizedValue = text(required(valueRecord, "value", (candidate): candidate is string => typeof candidate === "string"));
+  }
+  if (slug === "is_grinded" && normalizedValue !== "0" && normalizedValue !== "1") invalid();
+  return {slug, value: normalizedValue};
+}
+
+function optionalProviderImages(product: Record<string, unknown>): {previewPath?: string | null; photoPaths?: readonly string[]} {
+  const result: {previewPath?: string | null; photoPaths?: readonly string[]} = {};
+  if (Object.hasOwn(product, "preview")) {
+    const preview = product["preview"];
+    result.previewPath = preview === null ? null : text(record(preview)["path"]);
+  }
+  if (Object.hasOwn(product, "photos")) {
+    const photos = product["photos"];
+    if (!Array.isArray(photos)) invalid();
+    result.photoPaths = photos.map(photo => text(record(photo)["path"]));
+  }
+  return result;
 }
 
 function nonNegativeInteger(value: unknown): number {
@@ -213,11 +264,13 @@ export function decodeCatalogPage(body: unknown): ProviderCatalogPage {
     const productId = providerId(required(product, "id", (_value): _value is unknown => true));
     const offers = array(product, "offers").map((candidate): ProviderCatalogOffer => {
       const offer = record(candidate);
+      const params = Object.hasOwn(offer, "params") ? array(offer, "params").map(providerParam) : undefined;
       return {
         offerId: providerId(required(offer, "id", (_value): _value is unknown => true)),
         name: text(required(offer, "name", (item): item is string => typeof item === "string")),
         vendorCode: text(required(offer, "vendor_code", (item): item is string => typeof item === "string")),
         priceRaw: catalogMoneyText(required(offer, "price", (item): item is number | string => typeof item === "number" || typeof item === "string")),
+        ...(params === undefined ? {} : {params}),
       };
     });
     const discounts = array(product, "discount").map((candidate): ProviderCatalogDiscount => {
@@ -238,11 +291,19 @@ export function decodeCatalogPage(body: unknown): ProviderCatalogPage {
         providerUpdatedAt: rfc3339Utc(required(discount, "updated_at", (item): item is string => typeof item === "string")),
       };
     });
+    const images = optionalProviderImages(product);
+    const productOnStop = optionalBoolean(product, "product_on_stop");
+    const showOnWholesale = optionalBoolean(product, "show_on_wholesale");
+    const soldByPiece = optionalBoolean(product, "sold_by_piece");
     return {
       productId,
       name: text(required(product, "name", (item): item is string => typeof item === "string")),
       offers,
       discounts,
+      ...(productOnStop === undefined ? {} : {productOnStop}),
+      ...(showOnWholesale === undefined ? {} : {showOnWholesale}),
+      ...(soldByPiece === undefined ? {} : {soldByPiece}),
+      ...images,
     };
   });
   return {products, currentPage, lastPage, perPage, total};
