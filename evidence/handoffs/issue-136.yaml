@@ -1,0 +1,127 @@
+issue: 136
+baseCommit: c0ee57ce9eec294d8b82a76fb991305753fc4c38
+status: proposed
+inputs:
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: contracts/openapi/client-v1.yaml
+    sha256: 0f9698cfbd3de2b3960be33a12afdd77671da4b6021c7644704ca57bc77f2f97
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: docs/launch/26_BROWSER_COMMAND_RECOVERY.md
+    sha256: 094d6e47dd095299e5190c58f36ce9b7ecaddd87e2f2c81fa17de308bf23eb31
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: docs/launch/07_FRONTEND_CONTRACT.md
+    sha256: 30d6221961fc51749b4a5cddb63fb46e40bc82e221184070022fa835fff62828
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: f08cea0501dc056bcca09dc69ed8985332eaaefbd9b2434f5082c9e3c11381f9
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 05b762f9bca3be4f35457b12d03661d85d93581f7960d15d9f76bb4cf3f2dc59
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: docs/launch/README.md
+    sha256: db00590b71ea750c0f43e21458afdbc6a75f6557e8a4c7ad7c3c9b33a66bdc7a
+outputs:
+  - artifact: docs/adr/ADR-0027-frontend-ui-foundation.md
+    sha256: 50f9d1dafe5d9598ac302325486a16746ee757531937e015f73fb336bf83d9a0
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/frontend/ux/README.md
+    sha256: 7858c358141126f55424896322dff84c358bbacacf5e08e691c47f3176c26c0b
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/frontend/ux/customers.svg
+    sha256: 83ed5261260f37bdd0fbbbc2892622a56904ec6efea069a7a9f9530f83f77c64
+    consumers: [137, 9, 13]
+  - artifact: docs/frontend/ux/new-order.svg
+    sha256: dcb453306d9c3b10abbf819064b6bd436cd82a6de0718e4283ded3844c31b10c
+    consumers: [137, 9, 13]
+  - artifact: docs/frontend/ux/catalog.svg
+    sha256: 9166d546817c408d8e031488b4873b1bf2c9aa5ad4cba39678f38a1db59e6d32
+    consumers: [137, 9, 13]
+  - artifact: docs/frontend/ux/order-card.svg
+    sha256: 55507fa4bea45822fdd2b9e48a9ad732e9033e0f708f31bdcc65666e0f4221ef
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/launch/07_FRONTEND_CONTRACT.md
+    sha256: 43dbfcc6b8c14fb15ac6b8b963af588e7b15922d1eee5dee761f0db558f3b398
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: 66298fc0898dd74ea0fab0bdb4671c71d723c6ad139e89984e9dac19a051aeae
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 617cb8b7b57a01ad9da436fb08708db5c4a7c0be3143c12579693aac181ebb7c
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/launch/README.md
+    sha256: fd0103d691d586f64ca1a3e5996905645896fb2740a87438294f03206904a114
+    consumers: [137, 9, 12, 13]
+verification:
+  - command: git rev-parse HEAD && git rev-parse --abbrev-ref HEAD && git status --short --branch
+    result: passed
+    exitCode: 0
+    detail: branch docs/136-frontend-architecture-ux at base c0ee57ce9eec294d8b82a76fb991305753fc4c38; rebased onto current origin/develop
+  - command: pnpm authority:check
+    result: passed
+    exitCode: 0
+    detail: launch authority positive acceptance and 4 unittest cases passed; temporary ignored node_modules created by pnpm was removed after the run
+  - command: pnpm run check
+    result: blocked
+    exitCode: 1
+    detail: authority, toolchain, compatibility, config, contract lint/generation/breaking checks passed; contract suite passed 24/26, while openapi-fixtures.test.mjs and recovery.test.mjs failed because packages/platform-runtime/node_modules/@coffee-platform/config/dist/index.js is absent; lint, typecheck and full test stages were not reached
+  - command: git diff --check 11c5c388b322bffc4717687d57a09fa493888291 --
+    result: passed
+    exitCode: 0
+  - command: python3 exact-file XML parse and viewBox/title/desc assertion for customers.svg, new-order.svg, catalog.svg, order-card.svg
+    result: passed
+    exitCode: 0
+    detail: all four exact files parsed and every root has a positive viewBox plus non-empty title and desc
+  - command: Sharp librsvg render of all four SVGs at density 96 to a temporary directory outside the repository after v2 remediation
+    result: passed
+    exitCode: 0
+    detail: v2 root re-verification observed customers 2133x1653; new-order 1920x1253; catalog 2133x1387; order-card 2133x2453; temporary PNGs were removed after inspection
+  - command: Python Pillow density-96 control-crop and source panel-bound inspection after v2 SVG edits
+    result: passed
+    exitCode: 0
+    detail: changed controls and Customer footer had positive raster margins (minimum 10.2 px for changed Order Card controls and 15.2 px for Customer footer); confirmed Blocked label stayed inside its panel; no button clipping observed; temporary PNGs were removed
+  - command: python3 changed/untracked union allowlist, trailing-whitespace and CJK/Hangul assertion
+    result: passed
+    exitCode: 0
+    detail: exactly the 11 issue-136 allowlist paths; no CJK/Hangul framing or trailing whitespace
+  - command: python3 operator-copy, customerRef visibility, and draft-endpoint consistency assertion
+    result: passed
+    exitCode: 0
+    detail: no operator-facing ALLOWEDACTIONS, provider mutation, Browser не вычисляет, Повторить GET, current card, or SVG annotation phrases; New Order shows customerRef and UX README uses authoritative POST /api/client-v1/orders/drafts; technical mappings remain in README annotations
+  - command: python3 v2 semantic allowedActions, quote-to-PUT, reconciliation-cancel, and geometry assertion
+    result: passed
+    exitCode: 0
+    detail: Draft has no reconciliation control; Blocked has Confirmed context, owner reason and reconciliation only; Confirmed example owns reconciliation; quote-to-PUT uses one explicit action; reconciliation has visible Отмена; Add-from-Catalog and Save flow controls are bounded
+  - command: Python Pillow targeted density-96 render and source assertion for the lower green Order Card block
+    result: passed
+    exitCode: 0
+    detail: removed reconciliation button; block now shows only AROMA state «Ожидается чтение корзины» inside the existing Confirmed panel; rendered text bbox stayed inside panel and former button surface is absent
+  - command: sha256sum of actual output artifacts
+    result: passed
+    exitCode: 0
+    detail: the 10 hashes above were observed after remediation; evidence/handoffs/issue-136.yaml is neither listed nor hashed as an output
+limitations:
+  - ADR and handoff remain proposed; content acceptance is not claimed.
+  - SVG rendering and bounded pixel/source-geometry inspection passed, but browser reflow, keyboard behavior, focus execution, screen reader, full contrast/target-size and WCAG evidence were not run.
+  - IBM Plex Sans WOFF2 materialization and exact font rendering remain downstream #137 work; Sharp used available system fallback fonts.
+  - UI source, dependency pins/compatibility, package/browser build, routes, QueryClient, transport, EventSource and business/runtime behavior were not implemented.
+  - Implementation and acceptance of #137/#9/#12/#13, Playwright, CSP, deep links and bundle gates remain downstream work.
+review:
+  agent: independent-technical-review-v4
+  result: PASS
+  contentAcceptance: NOT_RUN
+  detail: v4 technical review PASS; all reported defects are closed, and owner content acceptance remains a separate decision
+  limitations: owner content acceptance remains separate; browser accessibility review, commit, push, PR and merge evidence are recorded only after their observed operations

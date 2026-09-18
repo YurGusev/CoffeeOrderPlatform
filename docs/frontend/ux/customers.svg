@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1240" role="img" aria-labelledby="title desc">
+  <title id="title">Макет поиска и создания клиентов</title>
+  <desc id="desc">Операторский экран поиска клиентов с постраничной навигацией, прямым выбором результата и диалогом создания клиента с проверкой полей.</desc>
+  <defs>
+    <style>
+      text { font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Arial, sans-serif; fill: #1A1D23; }
+      .muted { fill: #5B6472; } .label { font-size: 12px; font-weight: 500; }
+      .body { font-size: 14px; } .heading { font-size: 20px; font-weight: 600; }
+      .section { font-size: 16px; font-weight: 600; } .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+      .surface { fill: #F7F8FA; } .panel { fill: #FFFFFF; stroke: #DDE1E7; }
+      .primary { fill: #3355D1; } .primaryText { fill: #FFFFFF; font-weight: 600; }
+      .focus { fill: none; stroke: #1D4ED8; stroke-width: 2; }
+      .danger { fill: #FEF2F2; stroke: #FCA5A5; } .dangerText { fill: #B91C1C; }
+      .warning { fill: #FFFBEB; stroke: #F59E0B; } .warningText { fill: #92400E; }
+      .success { fill: #ECFDF3; stroke: #86EFAC; } .successText { fill: #166534; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1240" fill="#FFFFFF"/>
+  <rect width="232" height="1240" class="surface"/>
+  <text x="28" y="42" class="heading">Coffee Platform</text>
+  <text x="28" y="70" class="label muted">ОПЕРАТОРСКАЯ КОНСОЛЬ</text>
+  <rect x="16" y="104" width="200" height="40" rx="6" class="primary"/>
+  <text x="48" y="129" class="body primaryText">Клиенты</text>
+  <text x="48" y="181" class="body muted">Каталог</text>
+  <text x="48" y="229" class="body muted">Заказы</text>
+
+  <text x="272" y="52" class="heading">Клиенты</text>
+  <text x="272" y="78" class="body muted">Найдите клиента или создайте нового</text>
+  <rect x="1356" y="28" width="208" height="44" rx="6" class="primary"/>
+  <path d="M1378 50h14m-7-7v14" stroke="#FFFFFF" stroke-width="2"/>
+  <text x="1410" y="55" class="body primaryText">Создать клиента</text>
+
+  <text x="272" y="126" class="label">Имя, телефон или электронная почта</text>
+  <rect x="272" y="138" width="660" height="40" rx="6" class="panel"/>
+  <circle cx="296" cy="158" r="7" fill="none" stroke="#5B6472" stroke-width="2"/>
+  <path d="M301 163l6 6" stroke="#5B6472" stroke-width="2"/>
+  <text x="320" y="163" class="body">Марина</text>
+  <rect x="270" y="136" width="664" height="44" rx="7" class="focus"/>
+  <rect x="948" y="138" width="112" height="40" rx="6" class="primary"/>
+  <text x="974" y="163" class="body primaryText">Найти</text>
+  <text x="1080" y="163" class="label muted">Не менее 2 символов</text>
+
+  <rect x="272" y="208" width="900" height="360" rx="6" class="panel"/>
+  <text x="296" y="244" class="section">Результаты</text>
+  <text x="1080" y="244" class="label muted">Показано 1–3</text>
+  <line x1="272" y1="264" x2="1172" y2="264" stroke="#DDE1E7"/>
+
+  <rect x="284" y="276" width="876" height="76" rx="6" fill="#FFFFFF" stroke="#C2277A" stroke-width="2"/>
+  <text x="308" y="306" class="body" font-weight="600">Марина Соколова</text>
+  <text x="308" y="332" class="body muted">+7 ••• •••-12-34 · m•••••@example.test</text>
+  <rect x="1024" y="294" width="112" height="40" rx="6" class="primary"/>
+  <text x="1047" y="319" class="body primaryText">Выбрать</text>
+
+  <line x1="296" y1="366" x2="1148" y2="366" stroke="#DDE1E7"/>
+  <text x="308" y="397" class="body" font-weight="600">Марина Орлова</text>
+  <text x="308" y="423" class="body muted">+7 ••• •••-56-78</text>
+  <rect x="1024" y="381" width="112" height="40" rx="6" class="panel"/>
+  <text x="1047" y="406" class="body">Выбрать</text>
+
+  <line x1="296" y1="442" x2="1148" y2="442" stroke="#DDE1E7"/>
+  <text x="308" y="473" class="body" font-weight="600">Марианна Волкова</text>
+  <text x="308" y="499" class="body muted">m••••••@example.test</text>
+  <rect x="1024" y="457" width="112" height="40" rx="6" class="panel"/>
+  <text x="1047" y="482" class="body">Выбрать</text>
+
+  <line x1="272" y1="516" x2="1172" y2="516" stroke="#DDE1E7"/>
+  <rect x="296" y="528" width="144" height="36" rx="6" class="panel"/>
+  <text x="315" y="551" class="body">← Предыдущие</text>
+  <text x="646" y="551" class="body muted">Результаты 1–20</text>
+  <rect x="1000" y="528" width="148" height="36" rx="6" class="panel"/>
+  <text x="1024" y="551" class="body">Следующие →</text>
+
+  <rect x="1196" y="208" width="368" height="360" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="1220" y="244" class="section">Состояния результатов</text>
+  <text x="1220" y="280" class="label muted">ЗАГРУЗКА</text>
+  <rect x="1220" y="292" width="320" height="40" rx="6" class="panel"/>
+  <circle cx="1242" cy="312" r="7" fill="none" stroke="#3355D1" stroke-width="2" stroke-dasharray="12 6"/>
+  <text x="1262" y="317" class="body">Ищем клиентов…</text>
+  <text x="1220" y="366" class="label muted">ПУСТО</text>
+  <text x="1220" y="392" class="body">Совпадений не найдено</text>
+  <text x="1220" y="416" class="body muted">Измените запрос или создайте клиента.</text>
+  <text x="1220" y="454" class="label muted">ОШИБКА</text>
+  <rect x="1220" y="466" width="320" height="78" rx="6" class="danger"/>
+  <text x="1236" y="494" class="body dangerText" font-weight="600">Не удалось выполнить поиск</text>
+  <text x="1236" y="520" class="body dangerText">Сообщите код: 6b0c…</text>
+
+  <rect x="272" y="604" width="1292" height="584" rx="6" class="surface" stroke="#DDE1E7"/>
+  <text x="296" y="640" class="section">Диалог «Создать клиента»</text>
+  <rect x="420" y="664" width="996" height="492" rx="6" class="panel"/>
+  <text x="452" y="704" class="heading">Новый клиент</text>
+  <text x="452" y="730" class="body muted">Укажите имя и хотя бы один способ связи</text>
+
+  <text x="452" y="770" class="label">Имя *</text>
+  <rect x="452" y="782" width="436" height="40" rx="6" class="panel"/>
+  <text x="468" y="807" class="body">Марина Соколова</text>
+
+  <text x="920" y="770" class="label">Телефон</text>
+  <rect x="920" y="782" width="436" height="40" rx="6" class="danger"/>
+  <text x="936" y="807" class="body">8 999 123-45-67</text>
+  <rect x="918" y="780" width="440" height="44" rx="7" class="focus"/>
+  <text x="920" y="844" class="label dangerText">Введите номер в международном формате, например +79991234567</text>
+
+  <text x="452" y="884" class="label">Электронная почта</text>
+  <rect x="452" y="896" width="436" height="40" rx="6" class="panel"/>
+  <text x="468" y="921" class="body">marina@example.test</text>
+  <text x="920" y="884" class="label">Адрес, строка 1</text>
+  <rect x="920" y="896" width="436" height="40" rx="6" class="panel"/>
+  <text x="936" y="921" class="body">ул. Лесная, 12</text>
+
+  <text x="452" y="976" class="label">Город</text>
+  <rect x="452" y="988" width="284" height="40" rx="6" class="panel"/>
+  <text x="468" y="1013" class="body">Москва</text>
+  <text x="760" y="976" class="label">Индекс</text>
+  <rect x="760" y="988" width="128" height="40" rx="6" class="panel"/>
+  <text x="776" y="1013" class="body">125009</text>
+  <text x="920" y="976" class="label">Страна</text>
+  <rect x="920" y="988" width="128" height="40" rx="6" class="panel"/>
+  <text x="936" y="1013" class="body">Россия</text>
+  <text x="1072" y="976" class="label">Адрес, строка 2</text>
+  <rect x="1072" y="988" width="284" height="40" rx="6" class="panel"/>
+  <text x="1088" y="1013" class="body muted">необязательно</text>
+
+  <line x1="420" y1="1060" x2="1416" y2="1060" stroke="#DDE1E7"/>
+  <rect x="1092" y="1084" width="112" height="44" rx="6" class="panel"/>
+  <text x="1118" y="1111" class="body">Отмена</text>
+  <rect x="1220" y="1084" width="176" height="44" rx="6" class="primary"/>
+  <text x="1245" y="1111" class="body primaryText">Создать клиента</text>
+
+  <text x="272" y="1220" class="label muted">ПРИМЕР СОСТОЯНИЙ · ДАННЫЕ ВЫМЫШЛЕНЫ · ВЫБОР КЛИЕНТА ОТКРОЕТ СОЗДАНИЕ ЗАКАЗА</text>
+</svg>

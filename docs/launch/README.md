@@ -49,7 +49,8 @@
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 27. [Восстановление команд браузера](26_BROWSER_COMMAND_RECOVERY.md)
-28. [Исследованный HTTP-протокол AROMA и открытые вопросы](27_AROMA_PROVIDER_PROTOCOL.md)
+28. [UX-контракт и редактируемые frontend-макеты](../frontend/ux/README.md)
+29. [Исследованный HTTP-протокол AROMA и открытые вопросы](27_AROMA_PROVIDER_PROTOCOL.md)
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
 
@@ -70,6 +71,14 @@ superseding ADR-0018 только в перечисленной области. 
 Единственную TS7-native compiler/lint/codegen authority определяет
 [ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md); TS5/6 compatibility lane и
 второй compiler для этого greenfield launch запрещены.
+
+[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет future
+presentation package `packages/platform-ui` / `@coffee-platform/ui`, разделение
+browser/Node build graphs и точное dependency ownership #137/#9/#12.
+[UX-контракт](../frontend/ux/README.md) фиксирует одну visual direction,
+React Aria/Tailwind v4 primitives, self-hosted IBM Plex Sans и состояния экранов.
+Эти документы не означают materialized frontend, выполнение #9/#12/#13,
+browser rendering или accessibility PASS.
 
 ## Текущая техническая authority
 
