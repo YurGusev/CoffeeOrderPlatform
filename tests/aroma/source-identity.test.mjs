@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {createHmac} from "node:crypto";
+import {createHmac, createSecretKey} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import {join, resolve} from "node:path";
@@ -102,6 +102,10 @@ void test("source identity rejects embedded NUL, empty, malformed, and unknown i
 
   assert.throws(
     () => computeSourceIdentityHash(INPUT, Buffer.alloc(0)),
+    (error) => error instanceof SourceIdentityValidationError && error.code === "INVALID_KEY",
+  );
+  assert.throws(
+    () => computeSourceIdentityHash(INPUT, createSecretKey(Buffer.alloc(0))),
     (error) => error instanceof SourceIdentityValidationError && error.code === "INVALID_KEY",
   );
   assert.throws(

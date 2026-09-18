@@ -1,6 +1,6 @@
 import {ProviderError} from "../domain/provider-errors.js";
 import {toInstant} from "@coffee-platform/platform-time";
-import {createSourceIdentity, type SourceIdentityKey} from "../domain/source-identity.js";
+import {createSourceIdentity, SOURCE_IDENTITY_SCHEME, type SourceIdentityKey} from "../domain/source-identity.js";
 import {decodeCatalogPage, type ProviderCatalogOffer, type ProviderCatalogPage, type ProviderCatalogProduct} from "../infrastructure/provider/decoder.js";
 import {readProviderSafely, type ProviderCredentialScope, type ProviderSessionManager} from "../infrastructure/provider/session.js";
 import type {NormalizedCatalogOffer, SupplierPromotion} from "./catalog-export.js";
@@ -35,7 +35,7 @@ function exactMinorUnits(priceRaw: string): string {
   const fractionPart = (parts[1] ?? "").replace(/0+$/u, "");
   if (integerPart === undefined || fractionPart.length > 2) return failNormalization();
   const minor = BigInt(integerPart) * 100n + BigInt(fractionPart.padEnd(2, "0") || "0");
-  if (minor <= 0n) return failNormalization();
+  if (minor < 0n) return failNormalization();
   return minor.toString();
 }
 
@@ -114,10 +114,10 @@ function requiredImageUrl(product: ProviderCatalogProduct): string {
 }
 
 function normalizeProviderUnit(product: ProviderCatalogProduct): "piece" {
-  // `weight` describes an offer/packing observation. Policy explicitly forbids
-  // turning the package price into a per-gram price or inferring a quantity unit.
-  if (product.soldByPiece === true) return "piece";
-  return failNormalization();
+  // Owner policy: quantity counts packages/pieces. `weight` describes the
+  // package shown by the offer; it never changes unit or price basis.
+  if (typeof product.soldByPiece !== "boolean") return failNormalization();
+  return "piece";
 }
 
 function normalizeProviderAvailability(product: ProviderCatalogProduct): "Available" | "Unavailable" | "Stopped" {
@@ -128,22 +128,28 @@ function normalizeProviderAvailability(product: ProviderCatalogProduct): "Availa
 
 function providerIdentityForOffer(product: ProviderCatalogProduct, offer: ProviderCatalogOffer): NonNullable<NormalizedCatalogOffer["providerIdentity"]> {
   if (!/^[0-9]+$/u.test(product.productId) || product.productId === "0" || !/^[0-9]+$/u.test(offer.offerId) || offer.offerId === "0") return failNormalization();
-  // Captures prove product.id and offer.id only. The downstream identity
-  // contract also requires an independent variant identifier, so duplicating
-  // offer.id into that field would invent a provider fact.
-  return failNormalization();
+  // The provider does not expose an independent variant identifier. Per the
+  // Catalog authority, its offer identifier is also the Platform source-variant
+  // key. Domain-separated HMAC framing keeps variant and offer identities
+  // distinct; this does not create a provider or Catalog variant ID.
+  return {
+    rawProviderProductId: product.productId,
+    rawProviderVariantId: offer.offerId,
+    rawProviderOfferId: offer.offerId,
+  };
 }
 
 /** Production normalization is limited to facts proven by the observed catalog captures and policy. */
 export function normalizeProviderCatalogOffer(product: ProviderCatalogProduct, offer: ProviderCatalogOffer): NormalizedCatalogOffer {
   if (typeof product.name !== "string" || product.name.length === 0 || typeof offer.name !== "string" || offer.name.length === 0 || typeof offer.vendorCode !== "string" || offer.vendorCode.length === 0) return failNormalization();
   const money = normalizeProviderCatalogMoneyAndPromotions(product, offer);
+  const availability = normalizeProviderAvailability(product);
   return Object.freeze({
     displayName: offer.name,
     unit: normalizeProviderUnit(product),
     supplierUnitMinor: money.supplierUnitMinor,
     currency: money.currency,
-    availability: normalizeProviderAvailability(product),
+    availability: money.supplierUnitMinor === "0" && availability === "Available" ? "Unavailable" : availability,
     imageUrl: requiredImageUrl(product),
     supplierPromotions: money.supplierPromotions,
     providerIdentity: providerIdentityForOffer(product, offer),
@@ -205,7 +211,7 @@ export function sourceIdentityForOffer(value: NormalizedCatalogOffer, supplierRe
   if (identity === undefined) throw new ProviderError("ProviderProtocolViolation");
   return {
     supplierRef,
-    sourceIdentityScheme: "hmac-sha256-v1" as const,
+    sourceIdentityScheme: SOURCE_IDENTITY_SCHEME,
     sourceProductKeyHash: createSourceIdentity({supplierRef, entityType: "product", rawProviderIdentifier: identity.rawProviderProductId, sourceIdentityKey: key}).sourceIdentityHash,
     sourceVariantKeyHash: createSourceIdentity({supplierRef, entityType: "variant", rawProviderIdentifier: identity.rawProviderVariantId, sourceIdentityKey: key}).sourceIdentityHash,
     sourceOfferKeyHash: createSourceIdentity({supplierRef, entityType: "offer", rawProviderIdentifier: identity.rawProviderOfferId, sourceIdentityKey: key}).sourceIdentityHash,

@@ -13,8 +13,12 @@
 cookie storage. `ProviderSessionManager` выполняет concurrent single-flight login,
 хранит decrypted cookies только в памяти Gateway и очищает их при shutdown.
 `BOUNDED_LOCAL_SESSION_CACHE` ограничен 5 минутами и 32 scope entries; это локальная
-reuse policy, а не provider TTL/refresh semantics. Явный expiry cookie имеет приоритет;
-refresh и re-auth не реализованы. Журнал не хранит provider session payload.
+reuse policy, а не provider TTL/refresh semantics. Явный expiry cookie имеет приоритет.
+Для safe pre-dispatch read разрешён один bounded re-auth после подтверждённого
+authentication failure; concurrent readers используют single-flight login. После
+partial output или unsafe mutation dispatch re-auth/replay запрещён. Provider
+TTL/refresh semantics по-прежнему не установлены. Журнал не хранит provider
+session payload.
 
 ```text
 operation_ref varchar(30) PRIMARY KEY; cart_scope_ref varchar(64);

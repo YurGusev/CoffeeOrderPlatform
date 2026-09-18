@@ -1,4 +1,6 @@
-Последняя проверка: [согласованные cart mutations и подтверждённая очистка](2026-09-12-cart-mutations/README.md).
+Последняя read-only проверка: [transformed unit/identity observations 18 сентября](2026-09-18-read-only-unit-identity-observations.json). Raw bodies/identifiers, credentials, cookies и PII не сохранялись; provider mutations не выполнялись.
+
+Последняя mutation-проверка: [согласованные cart mutations и подтверждённая очистка](2026-09-12-cart-mutations/README.md).
 
 Актуальный следующий этап: [preflight и точный сценарий проверки adapters](2026-09-12-adapter-preflight/README.md).
 

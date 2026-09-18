@@ -33,7 +33,7 @@ void test("catalog source fails closed when provider metadata drifts or money no
   await assert.rejects(async () => { const empty = createProviderCatalogSource({sessions: {acquire: async () => ({read: async function* () {yield bytes(page(1, 1));}})}, credentials: {scopeRef: "aroma", email: "a@example.test", password: "secret"}, sourceIdentityKey: Buffer.from("key"), normalize: normalizeProviderCatalogOffer}); for await (const _ of empty) {} }, {code: "ProviderProtocolViolation"});
 });
 
-void test("production composition uses the real provider normalizer and rejects capture-backed unresolved unit", async () => {
+void test("production composition uses the real provider normalizer for package offers", async () => {
   const capture = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12/page47.json", import.meta.url), "utf8"));
   const body = {...capture, meta: {...capture.meta, current_page: 1, from: 1, to: capture.data.length, last_page: 1, per_page: 10, total: capture.data.length}};
   const calls = [];
@@ -43,7 +43,18 @@ void test("production composition uses the real provider normalizer and rejects 
     sourceIdentityKey: Buffer.from("key"),
     pageSize: 10,
   });
-  await assert.rejects(() => source.next(), {code: "ProviderProtocolViolation"});
+  const expectedOffers = body.data.reduce((count, product) => count + product.offers.length, 0);
+  assert.equal(expectedOffers, 24);
+  const normalizedOffers = [];
+  for await (const normalizedOffer of source) normalizedOffers.push(normalizedOffer);
+  assert.equal(normalizedOffers.length, expectedOffers);
+  assert.equal(normalizedOffers[0].unit, "piece");
+  assert.equal(normalizedOffers[0].supplierUnitMinor, "94000");
+  for (const normalizedOffer of normalizedOffers) {
+    assert.equal(normalizedOffer.unit, "piece");
+    assert.equal(normalizedOffer.providerIdentity.packing, undefined);
+    assert.equal(normalizedOffer.providerIdentity.grindId, undefined);
+  }
   assert.deepEqual(calls, [1]);
 });
 

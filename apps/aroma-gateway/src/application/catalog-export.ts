@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { nowInstant, toInstant } from "@coffee-platform/platform-time";
 import {finishGatewaySpan, type GatewayTelemetry} from "../infrastructure/observability.js";
+import {SOURCE_IDENTITY_SCHEME} from "../domain/source-identity.js";
 
 export const CATALOG_EXPORT_STREAM_VERSION = "1" as const;
-export const CATALOG_SOURCE_IDENTITY_SCHEME = "hmac-sha256-v1" as const;
+export const CATALOG_SOURCE_IDENTITY_SCHEME = SOURCE_IDENTITY_SCHEME;
 export const CATALOG_MAX_OFFERS_PER_BATCH = 500;
 export const CATALOG_MAX_BATCH_BYTES = 2_097_152;
 
@@ -291,7 +292,7 @@ const REF_PATTERNS = Object.freeze({
   snapshot: /^snp_[0-9A-HJKMNP-TV-Z]{26}$/,
   supplier: /^sup_[0-9A-HJKMNP-TV-Z]{26}$/,
 });
-const MONEY_MINOR_PATTERN = /^-?(0|[1-9][0-9]*)$/;
+const MONEY_MINOR_PATTERN = /^(0|[1-9][0-9]*)$/;
 const TIMESTAMP_PATTERN =
   /^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?Z$/;
 const DEFAULT_CLOCK: CatalogExportClock = Object.freeze({
@@ -545,6 +546,9 @@ function validateNormalizedOffer(
     value["availability"] !== "Stopped"
   ) {
     throw invalid("normalized offer availability is invalid");
+  }
+  if (value["supplierUnitMinor"] === "0" && value["availability"] === "Available") {
+    throw invalid("zero-price normalized offer cannot be Available");
   }
   if (
     typeof value["imageUrl"] !== "string" ||

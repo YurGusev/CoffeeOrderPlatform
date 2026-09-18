@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import {createHmac} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
-import {createProviderCatalogSource, normalizeProviderCatalogMoneyAndPromotions, normalizeProviderCatalogOffer, normalizeProviderPriceToMinor} from "../../apps/aroma-gateway/dist/application/provider-catalog-source.js";
+import {createProviderCatalogSource, normalizeProviderCatalogMoneyAndPromotions, normalizeProviderCatalogOffer, normalizeProviderPriceToMinor, sourceIdentityForOffer} from "../../apps/aroma-gateway/dist/application/provider-catalog-source.js";
 import {decodeCatalogPage} from "../../apps/aroma-gateway/dist/infrastructure/provider/decoder.js";
 import {MemoryProviderSessionStore} from "../../apps/aroma-gateway/dist/infrastructure/database/provider-session-store.js";
 import {ProviderHttpClient} from "../../apps/aroma-gateway/dist/infrastructure/provider/http-client.js";
@@ -114,7 +115,9 @@ void test("money and supplier promotions normalize exactly and fail closed", () 
   assert.equal(normalizeProviderPriceToMinor("549"), "54900");
   assert.equal(normalizeProviderPriceToMinor("12.30"), "1230");
   assert.equal(normalizeProviderPriceToMinor("12.300"), "1230");
-  for (const price of ["0", "0.00", "12.301", "1.001", "01", "1e2"]) assert.throws(() => normalizeProviderPriceToMinor(price), {code: "ProviderProtocolViolation"});
+  assert.equal(normalizeProviderPriceToMinor("0"), "0");
+  assert.equal(normalizeProviderPriceToMinor("0.00"), "0");
+  for (const price of ["-1", "-0.01", "12.301", "1.001", "01", "1e2"]) assert.throws(() => normalizeProviderPriceToMinor(price), {code: "ProviderProtocolViolation"});
   const product = {
     productId: "7",
     name: "Coffee",
@@ -133,7 +136,7 @@ void test("money and supplier promotions normalize exactly and fail closed", () 
   }
 });
 
-void test("production normalizer preserves capture-backed money but rejects unresolved unit without inventing packing or grind", async () => {
+void test("production normalizer uses the offer ID as the domain-separated source variant key", async () => {
   const capture = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12/page47.json", import.meta.url), "utf8"));
   const decoded = decodeCatalogPage(capture);
   const product = decoded.products[0];
@@ -141,21 +144,51 @@ void test("production normalizer preserves capture-backed money but rejects unre
   const money = normalizeProviderCatalogMoneyAndPromotions(product, offer);
   assert.equal(money.supplierUnitMinor, "94000");
   assert.equal(money.currency, "RUB");
-  assert.throws(() => normalizeProviderCatalogOffer(product, offer), {code: "ProviderProtocolViolation"});
-  // Even with an explicit piece unit, captures do not prove a distinct
-  // provider variant id. offer.id must not be copied into variant identity.
-  assert.throws(() => normalizeProviderCatalogOffer({...product, soldByPiece: true}, offer), {code: "ProviderProtocolViolation"});
+  const explicitPiece = normalizeProviderCatalogOffer(product, offer);
+  assert.equal(explicitPiece.unit, "piece");
+  assert.deepEqual(explicitPiece.providerIdentity, {
+    rawProviderProductId: product.productId,
+    rawProviderVariantId: offer.offerId,
+    rawProviderOfferId: offer.offerId,
+  });
+  assert.equal(explicitPiece.providerIdentity.packing, undefined);
+  assert.equal(explicitPiece.providerIdentity.grindId, undefined);
+
+  const supplierRef = "sup_00000000000000000000000001";
+  const key = Buffer.from("identity-key");
+  const identity = sourceIdentityForOffer(explicitPiece, supplierRef, key);
+  const independentlyComputedHash = entityType => createHmac("sha256", key)
+    .update(Buffer.from(`hmac-sha256-v1\0${supplierRef}\0${entityType}\0${entityType === "product" ? product.productId : offer.offerId}`, "utf8"))
+    .digest("hex");
+  assert.equal(identity.sourceProductKeyHash, independentlyComputedHash("product"));
+  assert.equal(identity.sourceVariantKeyHash, independentlyComputedHash("variant"));
+  assert.equal(identity.sourceOfferKeyHash, independentlyComputedHash("offer"));
+  assert.notEqual(identity.sourceVariantKeyHash, identity.sourceOfferKeyHash);
 });
 
-void test("production normalizer rejects missing unit, image, availability, and identity facts", async () => {
+void test("zero-price captures preserve exact zero and become locally Unavailable", async () => {
+  for (const path of ["../../evidence/aroma-provider/2026-09-12/page1.json", "../../evidence/aroma-provider/2026-09-12-authenticated/catalog-page1.json"]) {
+    const capture = JSON.parse(await readFile(new URL(path, import.meta.url), "utf8"));
+    const decoded = decodeCatalogPage(capture);
+    const offers = decoded.products.flatMap(product => product.offers.map(offer => normalizeProviderCatalogOffer(product, offer)));
+    assert.equal(offers.length, 10);
+    assert.equal(offers.every(offer => offer.supplierUnitMinor === "0" && offer.availability === "Unavailable"), true);
+    const stopped = normalizeProviderCatalogOffer({...decoded.products[0], productOnStop: true}, decoded.products[0].offers[0]);
+    assert.equal(stopped.supplierUnitMinor, "0");
+    assert.equal(stopped.availability, "Stopped");
+  }
+  for (const price of ["-1", "-0.01", "1.001", "1e2"]) assert.throws(() => normalizeProviderPriceToMinor(price), {code: "ProviderProtocolViolation"});
+});
+
+void test("production normalizer rejects missing image, availability, identity, or unit facts", async () => {
   const capture = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12/page47.json", import.meta.url), "utf8"));
   const decoded = decodeCatalogPage(capture);
   const product = decoded.products[0];
   const offer = product.offers[0];
   const cases = [
-    {...product, soldByPiece: false, previewPath: null, photoPaths: [], offers: [offer]},
+    {...product, previewPath: null, photoPaths: [], offers: [offer]},
     {...product, productOnStop: undefined, offers: [offer]},
-    {...product, soldByPiece: false, offers: [{...offer, params: []}]},
+    {...product, soldByPiece: undefined, offers: [offer]},
     {...product, productId: "", offers: [offer]},
   ];
   for (const missingFact of cases) assert.throws(() => normalizeProviderCatalogOffer(missingFact, missingFact.offers[0]), {code: "ProviderProtocolViolation"});

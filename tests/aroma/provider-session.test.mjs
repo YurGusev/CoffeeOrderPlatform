@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import {spawnSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
 import test from "node:test";
 import {ProviderError} from "../../apps/aroma-gateway/dist/domain/provider-errors.js";
 import {
@@ -60,9 +62,10 @@ function recordingTelemetry() {
       const span = {
         name,
         attributes: {...attributes},
+        exceptions: [],
         endCount: 0,
         setAttribute(key, value) { this.attributes[key] = value; return this; },
-        recordException() {},
+        recordException(error) { this.exceptions.push({name: error?.name, message: error?.message, stack: error?.stack}); },
         setStatus() { return this; },
         end() { this.endCount += 1; },
       };
@@ -845,4 +848,82 @@ void test("session readiness is local and telemetry spans contain no credential 
   assert.doesNotMatch(output, /secret-cookie|password-from-caller|provider-body-pii/);
   await manager.close();
   assert.equal(manager.isReady(), false);
+});
+
+void test("real provider client/session telemetry excludes credentials, cookies, and provider bodies", async (t) => {
+  const canaries = {
+    email: "canary-email-value@example.test",
+    password: "canary-password-value",
+    cookie: "canary-cookie-value",
+    body: "canary-provider-body-value",
+  };
+  const telemetry = recordingTelemetry();
+  let mode = "success";
+  t.mock.method(globalThis, "fetch", async (url) => {
+    if (url.endsWith("/api/v1/auth/login")) {
+      if (mode === "failure") {
+        return new Response(JSON.stringify({error: canaries.body}), {
+          status: 422,
+          headers: {"content-type": "application/json"},
+        });
+      }
+      return new Response(JSON.stringify({data: profile}), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "set-cookie": `october_session=${canaries.cookie}; Domain=provider.test; Path=/; HttpOnly; Secure`,
+        },
+      });
+    }
+    return new Response(JSON.stringify({provider: canaries.body}), {
+      status: 200,
+      headers: {"content-type": "application/json"},
+    });
+  });
+  const client = new ProviderHttpClient({...httpOptions, telemetry});
+  const manager = new ProviderSessionManager({
+    transport: client,
+    store: new MemoryProviderSessionStore(),
+    encryptionKey: Buffer.alloc(32, 33),
+    telemetry,
+  });
+  t.after(() => manager.close());
+
+  const session = await manager.acquire({...scope, password: canaries.password});
+  assert.ok((await collect(session.read({kind: "cart"}, new AbortController().signal))).includes(canaries.body));
+  mode = "failure";
+  await assert.rejects(
+    client.login({email: canaries.email, password: canaries.password}, new AbortController().signal),
+    {code: "ProviderAuthenticationFailed"},
+  );
+
+  const telemetryOutput = JSON.stringify({
+    spans: telemetry.spans,
+    metrics: telemetry.metrics.render(),
+  });
+  for (const canary of Object.values(canaries)) assert.doesNotMatch(telemetryOutput, new RegExp(canary));
+  assert.equal(telemetry.spans.flatMap(span => span.exceptions).some(error => error?.message === "ProviderError"), true);
+});
+
+void test("typed provider failure crash output excludes credential, cookie, and body canaries", () => {
+  const canaries = ["crash-email-value@example.test", "crash-password-value", "crash-cookie-value", "crash-provider-body-value"];
+  const script = `
+    globalThis.fetch = async () => new Response(JSON.stringify({error: "${canaries[3]}"}), {status: 422, headers: {"content-type": "application/json", "set-cookie": "october_session=${canaries[2]}; Domain=provider.test; Path=/; HttpOnly"}});
+    const {ProviderHttpClient} = await import("./apps/aroma-gateway/dist/infrastructure/provider/http-client.js");
+    const client = new ProviderHttpClient({origin: "https://provider.test", timeoutMs: 1000, maxResponseBytes: 16384, connections: 1});
+    await client.login({email: "${canaries[0]}", password: "${canaries[1]}"}, new AbortController().signal);
+  `;
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+    cwd: fileURLToPath(new URL("../../", import.meta.url)),
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+    timeout: 5_000,
+  });
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /ProviderAuthenticationFailed/);
+  for (const canary of canaries) {
+    assert.doesNotMatch(result.stdout, new RegExp(canary));
+    assert.doesNotMatch(result.stderr, new RegExp(canary));
+  }
 });

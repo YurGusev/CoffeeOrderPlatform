@@ -1,6 +1,6 @@
 issue: 10
 baseCommit: c0ee57ce9eec294d8b82a76fb991305753fc4c38
-currentIncrementBaseline: a05d17045b455a4674744ee96ecd5e941f1331bd
+currentIncrementBaseline: 07c07f18c666b445bdf338a01b5dea4bba25b9de
 status: blocked-not-pr-ready
 historicalBaselines:
   - kind: local-dirty-worktree-before-safe-read-increment
@@ -28,10 +28,11 @@ workingTree:
     modifiedTracked: 41
     untrackedEntries: 7
   currentCounts:
-    modifiedTracked: 25
-    untrackedEntries: 10
+    modifiedTracked: 13
+    untrackedEntries: 3
   headIsNotCommitOfAllChanges: true
   currentIncrementCommitPushPullRequestMergeDeploymentPerformed: false
+  localDevelopDocumentationSyncCommitPerformed: true
 scope:
   included:
     - exact api-internal and Gateway operations for Catalog export, cart read, set quantity and remove
@@ -41,13 +42,15 @@ scope:
     - supplier-scoped offer binding, collision detection and traversal provenance
     - PostgreSQL, AROMA Compose and isolated recovery-proof acceptance harnesses
   excluded:
-    - unproven provider Catalog money, unit, availability, image and packing/grind normalization semantics
+    - unproven provider packing/grind mapping and zero-price admission; accepted RUB×100 and package/piece unit policy are included
     - unproven provider quantity bounds, step and fractional support
     - Catalog staging/activation, Orders convergence, Pricing, checkout and invoices
     - commit, push, pull request, issue close, merge and deployment
 hashBasis:
-  acceptedPredecessorOutputs: git-object-at-a05d170
-  currentOutputs: final-working-tree
+  historicalSameIssueBaseline: git-object-at-a05d170
+  note: a05d170 is a historical baseline of the same issue increment, not an accepted predecessor
+  currentOutputs: git-object-at-07c07f1
+  latestAfter07c07f1Outputs: final-working-tree
 acceptedPredecessorInputs:
   - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
     sha256: 81f345875c78af88c8064895f8c8847860d549b3efe441f146eceeb16b349e05
@@ -78,6 +81,7 @@ acceptedPredecessorOutputs:
     sha256: 19d4ff0aeabf71ea0ef952aa286f2a0ae261060b1a7e1229c20d75daf0d4dd6b
   - artifact: apps/aroma-gateway/migrations/0004_provider_offer_identity.sql
     sha256: 8c45935ef9e5f592056e7756bdb562759ecfcbd0ff33ab3ca59d4805e7fa295d
+
   - artifact: apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql
     sha256: 3652392ee45bdf02621c60d84b808171bf32c834b070dcef15cb5d2cdaab940c
   - artifact: apps/aroma-gateway/package.json
@@ -326,6 +330,25 @@ acceptedPredecessorOutputs:
     sha256: 1c1a35fe5c9435fc644aa351532ed146a31f05731f00fc099efbd92a98d38842
   - artifact: tools/compose-smoke.mjs
     sha256: d004d50e85cd1c5bbe3d4069f637990ec4cb5ffd7e24a20bb17767cc5d1b4ecc
+
+inputs:
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: contracts/openapi/internal-v1.yaml
+    sha256: d8fa8ddce4578ee843677b177c705e8675b99c30e8d323cc597ac4454ad1a2b0
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: evidence/handoffs/issue-62.yaml
+    sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: packages/platform-database/package.json
+    sha256: ab1aa303985767d83e243ed7b32cf0da6c918f73e64984516c052da88d1426eb
+
 currentOutputs:
   - artifact: apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql
     sha256: 9590251d2b8889843e0a2f84e14dacc659d81279a9cc1f97c64afafcf231ccd9
@@ -798,3 +821,255 @@ latestAfterA05d170:
     - provider quantity bounds, step and fractional semantics remain open; live external AROMA provider acceptance was not performed in this local-only increment
   cleanup: {disposableComposeResources: removed, temporaryScopedSecrets: removed, sharedResources: preserved}
   externalMutations: {providerRequests: false, providerMutations: false, commit: false, push: false, pullRequestOrIssueMutation: false, merge: false, deployment: false}
+
+latestAfter07c07f1:
+  date: 2026-09-18 00:00:00+00:00
+  baselineCommit: 07c07f18c666b445bdf338a01b5dea4bba25b9de
+  status: local-remediation-provider-admission-pending
+  implemented:
+  - offer ID is the authority-approved Platform source variant key in a domain-separated HMAC; it is not claimed
+    as an independent provider variant ID
+  - live Fastify and native HTTP proof pauses downstream after page 1 collection and prevents provider page 2 request
+    and body pull until resume
+  - bounded read-only provider probe updated non-empty cart/catalog observations without admitting unknown unit,
+    quantity, packing, grind or mutation semantics
+  - operation journal documentation now matches implemented one-time safe pre-dispatch re-auth and preserves the
+    post-dispatch replay prohibition
+  - Нормализатор применяет подтверждённую owner policy piece/RUB×100 для упаковок и штук, включая sold_by_piece=false;
+    packing/grind не синтезируются
+  - Canary-тесты проходят через ProviderHttpClient/ProviderSessionManager и проверяют in-process spans/metrics/typed
+    errors и аварийный stdout/stderr отдельного Node.js процесса
+  - Нулевая цена сохраняется точно как 0; Available заменяется локальным Unavailable, Stopped сохраняется. Проверены
+    public и authenticated page1; zero + Available отвергается на export boundary.
+  currentOutputs:
+  - artifact: apps/aroma-gateway/src/application/provider-catalog-source.ts
+    sha256: eb3f96410ce209fec09a5ebd83f49f31e054a4e172a778446bfd63005e36b92e
+  - artifact: apps/aroma-gateway/src/domain/source-identity.ts
+    sha256: e7b9bb51ff2f0251158247658dffc18bb29c1f758f8700ae284aecd87f2bfcc3
+  - artifact: apps/aroma-gateway/src/application/catalog-export.ts
+    sha256: 0612845cda329c92f09445de5f9a6ad0b538c39af00285f9bc73b2b8554f99de
+  - artifact: apps/aroma-gateway/src/infrastructure/database/offer-binding-store.ts
+    sha256: bc8b9a41db77036ae839ba2285a6dab13f887826497f7f4d29862d67c9569fc9
+  - artifact: docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md
+    sha256: 4dc34600eec2d390367e392c9f0ae957400c2e6bdc1ac8f69e4e42fa10d2cfc0
+  - artifact: docs/launch/27_AROMA_PROVIDER_PROTOCOL.md
+    sha256: 103a00c64362d6d8522392b037de61a2ccbc0886342f5202b13d6f31a4e5f023
+  - artifact: evidence/aroma-provider/README.md
+    sha256: e3075b5d8439c1d9d0b2c73ea563c4b21acc8d7d40b6df10a63e64bad5204138
+  - artifact: evidence/aroma-provider/2026-09-18-read-only-unit-identity-observations.json
+    sha256: 867907c60bb425bc10b6b9fcccb1a99262ff492f4759d05c04fb4de1ff1e7e02
+  - artifact: tests/aroma/catalog-export.test.mjs
+    sha256: 907014d961b36f4a6892a1ca2b34f9ef8dc51ed5ff1a43cc17ff8fb50b69d9b2
+  - artifact: tests/aroma/provider-catalog-source.test.mjs
+    sha256: 3d8116bc800a178b267cc2c18d8a8f20eb041e5ca9a9359fda521bfd06b426f1
+  - artifact: tests/aroma/source-identity.test.mjs
+    sha256: a0485b8502ef5bcbe8f0a68ed8f14a3744021495a59a7a6b26ea10baa97e2faa
+  - artifact: tests/aroma/provider-session.test.mjs
+    sha256: 2412f613985f2fb29412ebdec95ea066d6421ba3a992f3931aad6742227e9c5a
+  - artifact: tests/aroma/gateway-production-composition.test.mjs
+    sha256: 77a426d6066d67ccabe6cde74068d35b6eb6712dc8d1b2c17e5f4b836cc13007
+  - artifact: docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md
+    sha256: e6edd67b49613c194b7e3158f7e6bc06e4e1f1cc3cdaa9396e62e2c8c5237ebf
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 98d958f04ea5172b526f2cddd2d9bf3547692517dfbc09b022c44c358165bce0
+  verification:
+  - command: bounded read-only provider probe
+    exitCode: 0
+    actualAggregate:
+      loginAttempts: 3
+      safeReads: 6
+      mutations: 0
+    finalRun:
+      loginAttempts: 1
+      safeReads: 4
+    rawBodiesOrIdentifiersPersisted: false
+    secretsCookiesOrPiiPersisted: false
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: node --test tests/aroma/binding-live.test.mjs
+    exitCode: 0
+    passed: 1
+    failed: 0
+    note: sequential prerequisite after one transient bootstrap read timeout in independent review
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm check
+    exitCode: 0
+    tests: 359
+    passed: 343
+    failed: 0
+    skipped: 16
+    evidenceAge: до текущего этапа подготовки к merge
+  - command: pnpm test:aroma-catalog-stream
+    exitCode: 0
+    passed: 30
+    failed: 0
+    skipped: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm security:secrets
+    exitCode: 0
+    scope: encrypted-material-and-runtime-scopes-not-full-runtime-canary
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: node scripts/check-database-ownership.mjs
+    exitCode: 0
+    databases: 5
+    runtimeClaims: 15
+    liveTargetGrants: false
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: node scripts/db-smoke.mjs --plan
+    exitCode: 0
+    structuralOnly: true
+    liveDatabase: false
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: git diff --check
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm test:aroma-unit
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 59
+    failed: 0
+  - command: pnpm test:aroma-http
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 8
+    failed: 0
+  - command: pnpm test:aroma-catalog-stream
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 30
+    failed: 0
+  - command: pnpm test:aroma-cart-read
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 44
+    failed: 0
+  - command: pnpm test:aroma-journal
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 27
+    failed: 0
+    skipped: 1
+    liveSkipCoveredBy: pnpm test:aroma-mutation-recovery
+  - command: pnpm contracts:lint
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm contracts:check-generated
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm contracts:breaking
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm contracts:test
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 39
+    failed: 0
+  - command: pnpm check
+    exitCode: 0
+    evidenceAge: current
+    tests: 359
+    passed: 343
+    failed: 0
+    skipped: 16
+  - command: pnpm test:aroma-mutation-recovery
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 17
+    failed: 0
+    skipped: 0
+    realPostgres: true
+  - command: pnpm test:aroma-binding
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    nativeMtls: true
+    realPostgres: true
+  - command: pnpm test:aroma-compose
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    realPostgres: true
+    providerKind: local-fake
+    liveProviderAcceptance: false
+  - command: pnpm test:compose-smoke -- --recovery-proof
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    preparedPostgresRuntimesHealthy: 15
+    isolatedRecoveryPhase: passed
+    kafkaRecovery: true
+    stubSecrets: false
+    scope: startup/recovery существующего runtime; не live Catalog/provider acceptance
+  - command: git diff --check
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: node --test tests/aroma/provider-catalog-source.test.mjs
+    exitCode: 0
+    passed: 8
+    failed: 0
+    evidenceAge: current; public and authenticated zero-price captures
+  blockers:
+  - Два bounded login с canonical development credentials вернули HTTP 422; GET после отказа не выполнялись. Учётная
+    запись совпадает с ранее успешным encrypted import; причина отказа не установлена.
+  - Production источник packing/grind не определён; unknown не равен explicit null. Существующий binding не обогащается
+    свежей корзиной.
+  - Provider upper quantity bound не подтверждён; согласованная модель считает целые упаковки/штуки. Универсальные
+    provider limits не заявлены.
+  - Финальный delivery acceptance и публикация актуального head в PR пока не выполнены.
+  openFacts:
+  - provider quantity bounds, step and fractions remain unproven
+  - controlled duplicate POST 422 effect and repeated DELETE 404 are evidenced for one selected offer only; global
+    provider semantics remain unknown
+  - provider session TTL/refresh/invalidation remains unproven; bounded pre-dispatch safe re-auth is implemented,
+    while post-dispatch replay is forbidden
+  ledger:
+    selfHashExcluded: true
+    secretsExcluded: true
+    acceptedPredecessorSeparate: true
+  externalMutations:
+    providerRequests: true
+    providerRequestsKind: login only; two 422 responses; no cart/catalog GET or mutations
+    providerMutations: false
+    commit: true
+    push: false
+    pullRequestOrIssueMutation: false
+    merge: false
+    deployment: false
+    commitScope: локальная синхронизация develop и проверенные доработки issue 10; без push и merge PR
+    localBranchIntegration: true
+    providerRequestsCount: 2
+  ownerPolicy:
+    confirmedOn: '2026-09-18'
+    unit: piece
+    quantityMeaning: число упаковок или штук
+    priceBasis: одна упаковка или штука, без пересчёта на килограмм
+    weightMeaning: вес фасовки; 0.2 кг не означает provider quantity 0.2
+    authority: docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md
+  integration:
+    developSourceCommit: 7ef4b94e16b7cf68e45861f75be4de477e24c8a7
+    localBranchSynchronized: true
+    conflictsResolved:
+    - docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    - docs/launch/README.md
+    dirtyFilesPreserved: true
+    unrelatedUserChangesExcluded: true
+    remoteUpdated: false
+  limitations:
+  - Default Compose требует подготовленный external PostgreSQL; isolated startup/recovery проверяется отдельно и
+    не означает deployment.
+  - 'In-process trace capture не доказывает production exporter/backend delivery; глобальные alerts/browser bundle
+    не добавлены в scope #10.'
+  canaryEvidence:
+    telemetryAndErrors: 'tests/aroma/provider-session.test.mjs: реальный HTTP/session путь; in-process capture spans
+      и metrics'
+    crashOutput: 'tests/aroma/provider-session.test.mjs: отдельный Node.js процесс, typed auth failure, stdout/stderr'
+    logsAndJournal: 'существующий local-fake AROMA Compose proof: безопасные logs, typed journal rows и replay;
+      объём logs ограничен harness'
+    productionTraceDelivery: 'не проверялась; backend/exporter относится к #64'
+  review:
+    runtimeIncrement: существенных замечаний независимого reviewer не найдено
+    documentationFinding: AROMA-REVIEW-01 устранено
+    fullIssueReady: false
+    zeroPriceIncrement: Существенных code findings нет; ZERO-REVIEW-01 stale documentation исправлена; authenticated
+      regression добавлена.
+  cleanup:
+    proofOwnedComposeResources: удалены
+    sharedCoffeePostgresData: сохранена
+    unrelatedUserFilesVerified: 478
+    unrelatedUserFileHashChanges: 0

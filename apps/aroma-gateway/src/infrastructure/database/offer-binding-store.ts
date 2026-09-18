@@ -2,9 +2,9 @@ import {createHash} from "node:crypto";
 import {DatabaseTransactionError, withTransaction, type Database, type SqlScalar, type Transaction} from "@coffee-platform/database";
 import {defineStatement, type OwnerStatement} from "@coffee-platform/database/owner";
 import {isAromaOfferBindingRequest, type AromaOfferBindingRequest, type AromaOfferBindingResponse} from "@coffee-platform/contracts-aroma-v1";
-import {canonicalCatalogJson, sha256CatalogHash, type CatalogBatchRecord, type CatalogExportSummary} from "../../application/catalog-export.js";
+import {CATALOG_SOURCE_IDENTITY_SCHEME, canonicalCatalogJson, sha256CatalogHash, type CatalogBatchRecord, type CatalogExportSummary} from "../../application/catalog-export.js";
 
-const SCHEME = "hmac-sha256-v1" as const;
+const SCHEME = CATALOG_SOURCE_IDENTITY_SCHEME;
 const MAX_BATCH = 500;
 const MAX_BULK_IDENTITIES = 10_000;
 const EXPORT_OUTCOME_REREAD_TIMEOUT_MS = 1_000;

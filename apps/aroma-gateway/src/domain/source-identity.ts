@@ -73,7 +73,8 @@ export function isSourceEntityType(value: unknown): value is SourceEntityType {
 export function isSourceIdentityKey(value: unknown): value is SourceIdentityKey {
   if (value instanceof Uint8Array) return value.byteLength > 0;
   if (!isRecord(value)) return false;
-  return value["type"] === "secret" && typeof value["export"] === "function";
+  return value["type"] === "secret" && typeof value["export"] === "function" &&
+    typeof value["symmetricKeySize"] === "number" && value["symmetricKeySize"] > 0;
 }
 
 export function assertSourceIdentityInput(value: unknown): asserts value is SourceIdentityInput {

@@ -43,7 +43,7 @@
 | Полный каталог | `GET /api/v1/catalog/wholesale/products?page=1&per_page=<page size>` и следующие страницы | JSON `{data,meta}` |
 | Добавление строки | `POST /api/v1/cart/?timestamp=<ISO time>`, form-urlencoded `offer_id`, `quantity`, `packing`, optional `grind_id` | JSON корзины с целевой позицией; возможна ошибка даже в 2xx |
 | Абсолютное количество | `PUT /api/v1/cart/{cartItemId}?timestamp=<ISO time>`, JSON `quantity`, `packing`, optional `grind_id` | JSON корзины с целевой строкой |
-| Удаление строки | `DELETE /api/v1/cart/{cartItemId}?timestamp=<ISO time>`, без body | Клиент считает 2xx и 404 успешными; отдельного доказательства семантики provider 404 нет |
+| Удаление строки | `DELETE /api/v1/cart/{cartItemId}?timestamp=<ISO time>`, без body | В controlled-сценарии 2026-09-12 удаление дало 200, повторное удаление той же строки — 404; это не общая гарантия provider 404 |
 
 Cart requests используют `Accept: application/json`, `x-timestamp`, `Origin`,
 `Referer: <origin>/lk` и Gateway-owned `Cookie`. Login использует Accept,
@@ -271,11 +271,35 @@ Provider cart mutations не выполнялись. Не проверены п�
 рабочего аккаунта и истечение/refresh сессии. Captures для decoder tests не
 создавались; сохранены только несекретные результаты выше.
 
+### Актуальный read-only probe 2026-09-18
+
+После реализации Gateway выполнен отдельный bounded read-only probe через scoped
+runtime materialization и production `ProviderHttpClient`/`ProviderSessionManager`.
+Изначальный бюджет был один login и до шести safe reads. Из-за двух локальных
+ошибок observation wrapper фактически выполнены три login и шесть safe reads;
+ошибка происходила после успешного чтения catalog page 1 и не была provider
+failure. Cart POST/PUT/DELETE не выполнялись. Финальный успешный run: один login,
+catalog page 1, catalog page 47, cart GET и user GET.
+
+Санитизированный отчёт:
+[`2026-09-18-read-only-unit-identity-observations.json`](../../evidence/aroma-provider/2026-09-18-read-only-unit-identity-observations.json).
+Raw bodies, identifiers, credentials, cookies и PII не сохранялись.
+
+Probe подтвердил непустую cart shape: line quantity `1`, `packing=null`,
+`grind_id=null`; `products[].price=446` и вложенный `offer.price=579.8`
+различаются. Это не устанавливает provider unit metadata, price basis или catalog fallback.
+Catalog page 1/47 по-прежнему не содержат явных unit, price-basis,
+min/max/step/fraction metadata; наблюдаются только `weight`, `is_grinded` и
+`sold_by_piece=false`. Поэтому quantity admission/bounds и packing/grind mapping
+остаются fail-closed; `unit=piece` задаётся owner policy ниже.
+
 ## Binding не доказывает mutation semantics
 
 Исследование не доказало, что `offerRef` однозначно определяет provider line:
 line может различаться `grind_id`, упаковкой или иными variant attributes.
-Не доказаны currency, scale/basis, unit, discounts/taxes, quantity bounds,
+Provider wire не содержит unit metadata; owner policy от 2026-09-18 задаёт
+`unit=piece` для валидных Aroma offers без пересчёта веса или цены. Не доказаны
+currency, scale/basis, discounts/taxes, quantity bounds,
 packing/grind policy и canonical image URL. Публичные HTML-страницы сайта (включая `/wholesale`) вернули KillBot
 verification; frontend bundle и UI quantity limits не наблюдались. API каталога
 на основном host отвечал успешно, как зафиксировано выше. Сопоставление
@@ -298,22 +322,28 @@ verification page. Поэтому ограничения UI и сравнени�
 между API и UI не подтверждены. Ограничения backend из UI не выводились.
 Legacy `AromaCatalogLookupService.cs` (строки 443–469, 652, 872–905 в указанном
 выше revision) содержит клиентскую интерпретацию веса и `is_grinded`;
-она не используется как доказательство единицы quantity или provider bounds.
-Все перечисленные выше неизвестные остаются blockers нормализации и mutation.
+она не используется как доказательство provider bounds или packing/grind.
+Отсутствие provider metadata о currency, scale и price basis не блокирует
+нормализацию по принятой owner policy: RUB × 100 за одну упаковку/штуку,
+`unit=piece`, без пересчёта по весу. Нулевая цена сохраняется как `0`, но
+`Available` заменяется локальным `Unavailable`; невалидная цена блокирует
+нормализацию соответствующего offer. Неизвестные quantity bounds и
+packing/grind сохраняют ограничения provider mutations. Исторические
+наблюдения выше не отменяют последующие решения владельца в документе 28.
 
 ## Итоговая таблица исследования
 
 | Вопрос | Подтверждённый факт | Доказательство | Что осталось неизвестным | Влияние на adapter |
 |---|---|---|---|---|
-| Currency и scale цены | `offers[].price` — JSON integer; в выборке встречаются `0`, `940` и `4500` | API catalog, public и authenticated reads 2026-09-08; [`catalog-and-session-2026-09-08.json`](../../evidence/aroma-provider/catalog-and-session-2026-09-08.json), request ID `catalog-public-page-47` | Валюта, minor-unit scale, нулевая цена как отсутствие/реальная цена | Не конвертировать и не заполнять `supplierUnitMinor/currency` догадкой |
-| Price basis | Price связан с конкретным offer; 200 г и 1000 г имеют разные offers и цены, но basis не раскрыт | Один product с четырьмя offer IDs, `weight` 200/1000 и `is_grinded` 0/1 | Цена упаковки, веса, кг, скидки, налоги и округление | Хранить только подтверждённые supplier facts; не считать цену за кг/упаковку формулой |
-| Quantity unit, дробность и bounds | В полной пустой корзине нет quantity; UI закрыт KillBot; catalog содержит только `sold_by_piece=false` в выборке | `GET /api/v1/cart/` и `GET /wholesale` 2026-09-08; mutations запрещены | Единица, начальное значение, integer/decimal, min/max/step и серверные ограничения | Не выбирать `ProviderQuantity` и DB bounds до документации/отдельного теста |
+| Currency и scale цены | Provider wire не содержит currency/scale; интеграционная policy отдельно принимает `offers[].price` как RUB и точное умножение на 100 для одной упаковки/штуки | API catalog и принятое решение [`28_AROMA_CATALOG_PRICING_POLICY.md`](28_AROMA_CATALOG_PRICING_POLICY.md) | Provider-specific metadata не выводится из wire | Применять принятое RUB×100 mapping; нулевую цену сохранять как `0`, переводить `Available` в локальное `Unavailable` и не считать это supplier stock claim |
+| Price basis | Price связан с конкретным offer; owner policy фиксирует его как цену одной упаковки/штуки без пересчёта на кг | Один product с четырьмя offer IDs, `weight` 200/1000 и `is_grinded` 0/1 плюс owner policy 2026-09-18 | Provider wire не раскрывает скидки, налоги и округление; provider price basis metadata отсутствует | Хранить принятое package/piece basis; не считать цену за кг/упаковку формулой |
+| Quantity unit, дробность и bounds | Provider wire не содержит unit metadata; owner policy 2026-09-18 задаёт `unit=piece`, `sold_by_piece=false` этому не препятствует; quantity `1` наблюдалась в cart | Bounded safe reads 2026-09-18, transformed report и owner policy | Integer/decimal admission, min/max/step и серверные ограничения | Применять только `piece` policy; bounds/дробность без отдельного доказательства отклонять до journal/provider dispatch |
 | Offer/variant identity | В выборке один product имеет отдельные offer IDs для веса 200/1000 и `is_grinded` 0/1 | `data[].offers[].id/name/params[]` на page 47; IDs обезличены в отчёте наблюдений | Гарантия для всех категорий и достаточность одного offer ID для mutation | Считать offer key отдельной identity; сохранять variant params и требовать binding |
-| `packing` и `grind` | Catalog явно показывает `is_grinded`; catalog не содержит поля `packing`; `packing`/`grind_id` есть только в legacy client hypothesis | Live catalog shape + System source; cart пуст | Как `packing` кодируется, относится ли к offer или cart line, и допустимая пара с `grind_id` | Не синтезировать provider mutation payload из имени offer |
-| Cart item identity | При authenticated read `products=[]`; relation cart item ID ↔ offer ID и duplicate lines не наблюдались | Полное `GET /api/v1/cart/` 200 с пустым массивом | `products[].id`, `offer.id`, повтор одного offer, line-level prices и variant fields в непустой корзине | Нельзя разрешить `cartItemId` из пустого snapshot или считать `offerRef` line identity |
-| Session flow | На основном host login/user/cart/catalog работают без redirect; public catalog устанавливает cookies | Финальный последовательный probe 2026-09-08, cookie properties в разделе выше | TTL/refresh/invalidation и обязательность companion cookie | Typed client хранит cookies только scoped/in-memory, запрещает redirects и re-auth replay |
+| `packing` и `grind` | Catalog показывает `is_grinded`; в непустой cart 2026-09-18 наблюдались `packing=null`, `grind_id=null` | Live catalog shape и bounded cart GET 2026-09-18 | Допустимые non-null values, связь с offer/cart line и обязательность пары | Не синтезировать provider mutation payload из имени offer или null observation |
+| Cart item identity | Непустая cart shape и отдельные line/offer identity fields наблюдались; raw IDs не сохранялись в transformed report | Bounded cart GET 2026-09-18; ранее сохранённые controlled captures | Correlation текущей line с Catalog binding, duplicate policy и общая uniqueness guarantee | Разрешать line только через fresh exact unique binding; один read не делает offerRef line identity |
+| Session flow | На основном host login/user/cart/catalog работают без redirect; текущая реализация хранит зашифрованную session materialization и допускает bounded safe re-auth только до partial output/unsafe dispatch | Финальный последовательный probe 2026-09-08 и локальные session/journal проверки; cookie properties в разделе выше | Provider TTL/refresh/invalidation и обязательность companion cookie остаются неизвестными | После unsafe dispatch re-auth и повтор mutation запрещены; pre-dispatch safe re-auth ограничен одним bounded переходом и не является доказательством provider TTL |
 | Pagination | Ответ `{data,links,meta}`; при `per_page=10` `total=466`, `last_page=47`; links ведут на `dev` host | page 1/page 47 200; page 233 ранее дал 200 с пустым data при `last_page=47` | Snapshot isolation и точная server policy для out-of-range pages | Строить same-origin pages самостоятельно и fail closed на неожиданный empty/out-of-range |
-| Mutation semantics | Не подтверждены и не выполнялись | Scope задачи запрещает POST/PUT/DELETE корзины | Ack/reject, add/update/delete, missing-line 404, quantity effect и unknown outcome | Только Dispatched barrier + fresh read; blind retry и blind DELETE запрещены |
+| Mutation semantics | Ограниченный сценарий 12 сентября подтвердил add, set quantity 1→2, duplicate POST 422, delete и repeated delete 404 для одного offer | [`2026-09-12-cart-mutations`](../../evidence/aroma-provider/2026-09-12-cart-mutations/README.md) | Глобальные bounds/fractions, остальные packing/grind combinations, effect неоднозначных ответов и session refresh | Только Dispatched barrier + fresh read; наблюдённый сценарий не разрешает blind retry или обобщение на другие offers |
 
 ### Решения, которые adapter уже может принять
 
@@ -332,8 +362,8 @@ Legacy `AromaCatalogLookupService.cs` (строки 443–469, 652, 872–905 в
 
 ### Решения, которые всё ещё нельзя принять
 
-- валюту, scale и price basis, включая трактовку `price=0`;
-- unit, дробность и bounds quantity;
+- provider-supplied currency/scale fields отсутствуют; действует принятое policy mapping RUB×100 для цены одной упаковки/штуки, а zero-price handling задан локальной Platform policy;
+- дробность и bounds quantity; `unit=piece` задаётся принятой owner policy, а не provider metadata;
 - production-наполнение существующего binding и Gateway-local разрешение
   provider cart-line identity;
 - mapping `packing`/`grind_id`, cart-line identity и политику duplicate lines;
@@ -343,7 +373,7 @@ Legacy `AromaCatalogLookupService.cs` (строки 443–469, 652, 872–905 в
 ### Что требует документации поставщика
 
 Нужны официальные схемы и правила для currency/scale/basis/discounts/taxes,
-quantity unit и bounds, полного offer/packing/grind identity, cart item
+quantity bounds, полного offer/packing/grind identity, cart item
 identity, pagination consistency, origin policy и cookie security/TTL.
 
 ## Непроверенные мутации: controlled test plan
@@ -351,7 +381,7 @@ identity, pagination consistency, origin policy и cookie security/TTL.
 Только после отдельного явного разрешения и выделенного тестового аккаунта,
 точного выбранного offer и заранее согласованных packing/grind параметров.
 Отдельно требуется зафиксировать ожидаемую quantity и её документированный
-unit/bounds; значения `1` и `2` нельзя подставлять как доказанные.
+bounds; значения `1` и `2` нельзя подставлять как доказанные bounds.
 
 1. Выполнить fresh GET cart baseline и убедиться, что тело полное, snapshot
    однозначен, а выбранный offer/variant либо отсутствует для сценария add,
@@ -376,9 +406,11 @@ unit/bounds; значения `1` и `2` нельзя подставлять к�
 Сохранены минимальные обезличенные ответы с датой, методом, путём, status,
 content-type, признаком полного получения и происхождением в
 [`evidence/aroma-provider/`](../../evidence/aroma-provider/): public/auth
-catalog page samples, login и пустая cart read. Не сохранены непустая корзина,
-mutation ack/reject, missing-line outcome и допустимый range/scale quantity —
-для них нужен отдельный разрешённый controlled test.
+catalog page samples и login. Непустая cart read 2026-09-18 сохранена только как
+transformed field/type observations без raw body и identifiers. Controlled captures
+2026-09-12 отдельно подтверждают ack/reject для выбранного offer и missing-line
+повторный DELETE 404; это не устанавливает глобальную provider semantics или
+допустимый range/scale quantity.
 Cookie values, credentials и пользовательские данные в сохранённом отчёте не
 включены. Подмена ID должна сохранять отношения между catalog offer/cart
 offer/cart item; отчёт наблюдений явно отличается по происхождению от
@@ -474,7 +506,8 @@ mutation journal с recovery после неопределённого COMMIT. �
 HMAC key wiring и наполнение binding, session lifecycle, complete cart read и
 set/remove adapters, четыре production операции Gateway/api-internal,
 Gateway observability/readiness и обязательная полная приёмка. Для adapters
-нужны подтверждённые currency/scale/price basis, variant/packing/quantity,
+нужны подтверждённые currency/scale и provider-specific price metadata сверх
+принятого package/piece basis, variant/packing/quantity bounds,
 cart-line identity и mutation acknowledgement/missing-line semantics.
 `providerSnapshotRef` требует определённого происхождения и гарантий по
 внутреннему контракту; наличие именно такого поля в JSON AROMA не требуется.
@@ -491,9 +524,13 @@ snapshot; это не доказательство cart-line или provider mut
 [авторизованные captures](../../evidence/aroma-provider/2026-09-12-authenticated/README.md)
 сохраняют JSON shape с документированным обезличиванием ID. Это пригодные
 образцы наблюдавшихся ответов, но не полная provider schema. Подтверждены login,
-account probe, пустая корзина и отдельные страницы каталога. Публичные и
+account probe, пустая корзина и отдельные страницы каталога. Это описание
+ограничено указанными public/auth captures и не включает более поздние cart
+evidence ниже. Публичные и
 авторизованные цены выбранных страниц совпали; currency/scale/price basis этим
-не установлены. Непустые строки, refresh и mutations не проверялись.
+не установлены. В этой ранней выборке непустые строки, refresh и mutations не
+проверялись; последующие controlled captures и read-only observations описаны
+ниже и не переписывают происхождение этой выборки.
 
 Development email/password исправлены в canonical encrypted inventory по
 отдельному разрешению пользователя; runtime получает их исключительно через
@@ -511,9 +548,12 @@ Integration owner boundary, а `catalog-activation-worker` сохраняет п
 
 ## Подтверждение границ этого этапа
 
-В текущем этапе не выполнялись обращения к сайту или API AROMA, login/refresh,
-provider mutations, cart checks, commit, push, PR/issues publication, merge,
-deployment или provider-origin selection. Исторические provider observations
+В локальном binding-этапе, к которому относится этот раздел, не выполнялись
+обращения к сайту или API AROMA, login/refresh, provider mutations или cart
+checks. Это историческая граница конкретного proof, а не утверждение о всей
+последующей работе #10: controlled cart scenario и bounded read-only probe
+описаны ниже. В binding-этапе также не выполнялись commit, push, PR/issues
+publication, merge, deployment или provider-origin selection. Provider observations
 выше и `evidence/aroma-provider/` относятся к отдельной работе и не являются
 доказательством текущего binding proof. Runtime binding code, contracts и
 canonical secrets inventory изменялись только в уже dirty рабочем дереве в
@@ -538,5 +578,6 @@ DELETE созданной строки дал 200, повторный DELETE —
 Этот этап заменяет историческое отсутствие любых mutation observations только
 для перечисленного сценария. Он не доказывает глобальные bounds/fractional
 quantity, остальные packing/grind combinations, full cart identity, auth refresh
-или безопасность resend. Production adapters и wiring пока не реализованы;
+или безопасность resend. Production adapters и wiring теперь существуют, но остаются fail-closed там,
+где этот сценарий не доказал quantity bounds/packing/grind/session semantics;
 полная готовность #10 не заявляется. Supplier order submission не выполнялся.

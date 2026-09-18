@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
@@ -15,6 +15,9 @@ import {MemoryProviderSessionStore} from "../../apps/aroma-gateway/dist/infrastr
 import {GatewayMetrics} from "../../apps/aroma-gateway/dist/infrastructure/observability.js";
 import {ProviderHttpClient} from "../../apps/aroma-gateway/dist/infrastructure/provider/http-client.js";
 import {ProviderSessionManager} from "../../apps/aroma-gateway/dist/infrastructure/provider/session.js";
+import {registerAromaCatalogExportRoute} from "../../apps/aroma-gateway/dist/transport/http/index.js";
+import {createRuntime} from "../../packages/platform-runtime/dist/index.js";
+import {signServiceDelegation} from "../../packages/platform-security/dist/index.js";
 
 const request = Object.freeze({
   snapshotRef: "snp_01ARZ3NDEKTSV4RRFFQ69G5FAW",
@@ -222,6 +225,21 @@ void test("catalog telemetry spans one completed persistence/emission boundary p
   assert.deepEqual(telemetry.spans.map(span => span.endCount), [1, 1]);
   assert.equal(events.filter(event => event.startsWith("start:aroma.gateway.catalog_batch")).length, 2);
   assert.equal(telemetry.metrics.render().find(line => line.startsWith("aroma_gateway_catalog_batches_total ")), "aroma_gateway_catalog_batches_total 2");
+});
+
+void test("catalog export rejects zero-price Available and accepts local unavailable states", async () => {
+  const zeroAvailable = {...offer(0), supplierUnitMinor: "0"};
+  const failed = parse(await collect(makeStream([zeroAvailable])));
+  assert.deepEqual(failed.map(record => record.recordType), ["snapshot-started", "snapshot-failed"]);
+  assert.equal(failed.at(-1).code, "INVALID_STREAM");
+  for (const availability of ["Unavailable", "Stopped"]) {
+    const records = parse(await collect(makeStream([{...zeroAvailable, availability}])));
+    assert.equal(records[1].items[0].supplierUnitMinor, "0");
+    assert.equal(records[1].items[0].availability, availability);
+  }
+  const negative = parse(await collect(makeStream([{...offer(0), supplierUnitMinor: "-1"}])));
+  assert.deepEqual(negative.map(record => record.recordType), ["snapshot-started", "snapshot-failed"]);
+  assert.equal(negative.at(-1).code, "INVALID_STREAM");
 });
 
 void test("catalog export keeps the real provider source demand-driven between persisted batches", async (t) => {
@@ -916,4 +934,213 @@ void test("production core requires an explicit source and has no synthetic fall
     (error) =>
       error instanceof CatalogExportError && error.code === "INVALID_STREAM",
   );
+});
+
+void test("live catalog export propagates paused downstream backpressure to provider pages", async (t) => {
+  const credentials = {scopeRef: "aroma-primary", email: "canonical@example.test", password: "test-only"};
+  const sourceIdentityKey = Buffer.from("identity-key");
+  const providerOrigin = "https://provider.test";
+  const providerCalls = [];
+  const pageBodyPulls = {1: 0, 2: 0};
+  const pageBodyDone = {1: false, 2: false};
+  const nativeFetch = globalThis.fetch.bind(globalThis);
+  const largeImageUrl = `https://images.example.test/${"x".repeat(2_000)}`;
+  let releasePage1Body = () => {};
+  const page1MayFinish = new Promise(resolve => { releasePage1Body = resolve; });
+  async function waitFor(predicate, message) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (predicate()) return;
+      await new Promise(resolve => setTimeout(resolve, 1));
+    }
+    assert.fail(message);
+  }
+
+  function liveProviderPage(pageNumber) {
+    const offerCount = pageNumber === 1 ? 5_000 : 1;
+    return {
+      data: [{
+        id: pageNumber,
+        name: `Coffee page ${pageNumber}`,
+        discount: [],
+        offers: Array.from({length: offerCount}, (_, index) => ({
+          id: String(pageNumber * 10_000 + index + 1),
+          name: `Coffee ${pageNumber}-${index}`,
+          vendor_code: `C-${pageNumber}-${index}`,
+          price: 10,
+          params: [],
+        })),
+      }],
+      links: {first: null, last: null, prev: null, next: null},
+      meta: {current_page: pageNumber, from: 1, to: offerCount, last_page: 2, per_page: 1, total: 2},
+    };
+  }
+
+  function providerPageResponse(pageNumber) {
+    const bytes = new TextEncoder().encode(JSON.stringify(liveProviderPage(pageNumber)));
+    let sent = false;
+    const body = new ReadableStream({
+      async pull(controller) {
+        pageBodyPulls[pageNumber] += 1;
+        if (sent) {
+          controller.close();
+          pageBodyDone[pageNumber] = true;
+          return;
+        }
+        sent = true;
+        controller.enqueue(bytes);
+        if (pageNumber === 1) await page1MayFinish;
+        controller.close();
+        pageBodyDone[pageNumber] = true;
+      },
+    });
+    return new Response(body, {headers: {"content-type": "application/json"}});
+  }
+
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    const href = String(url);
+    if (!href.startsWith(providerOrigin)) return nativeFetch(url, init);
+    providerCalls.push({url: href, init});
+    if (href.endsWith("/api/v1/auth/login")) {
+      return new Response(JSON.stringify({data: {email: credentials.email, wholesale: true, retail: false}}), {
+        headers: {
+          "content-type": "application/json",
+          "set-cookie": "october_session=provider-session; Domain=provider.test; Path=/; HttpOnly",
+        },
+      });
+    }
+    const pageNumber = Number(new URL(href).searchParams.get("page"));
+    return providerPageResponse(pageNumber);
+  });
+
+  const client = new ProviderHttpClient({origin: providerOrigin, timeoutMs: 2_000, maxResponseBytes: 4 * 1024 * 1024, connections: 1});
+  const manager = new ProviderSessionManager({
+    transport: client,
+    store: new MemoryProviderSessionStore(),
+    encryptionKey: Buffer.alloc(32, 8),
+  });
+  const {privateKey, publicKey} = generateKeyPairSync("ed25519");
+  const publicPem = publicKey.export({type: "spki", format: "pem"}).toString();
+  const routeContext = {
+    secrets: {
+      security: {
+        delegationVerificationKeys: {
+          "api-internal": {active: publicPem, previous: publicPem},
+        },
+      },
+    },
+  };
+  const app = await createRuntime({
+    name: "aroma-catalog-backpressure-test",
+    host: "127.0.0.1",
+    port: 0,
+    shutdownGraceMs: 1_000,
+    deadlineMs: 10_000,
+    deadlineProfiles: {readMs: 10_000},
+  });
+  app.addHook("preHandler", async (incoming) => {
+    incoming.runtimeContext.transportIdentity = {runtime: "api-internal", environment: "test", san: "spiffe://test/api-internal"};
+  });
+  registerAromaCatalogExportRoute(
+    app,
+    (_supplierRef, signal) => createProviderCatalogSource({
+      sessions: manager,
+      credentials,
+      sourceIdentityKey,
+      pageSize: 1,
+      signal,
+      normalize: (product, providerOffer) => ({
+        displayName: providerOffer.name,
+        unit: "piece",
+        supplierUnitMinor: "1000",
+        currency: "RUB",
+        availability: "Available",
+        imageUrl: largeImageUrl,
+        supplierPromotions: [],
+        providerIdentity: {
+          rawProviderProductId: product.productId,
+          rawProviderVariantId: providerOffer.offerId,
+          rawProviderOfferId: providerOffer.offerId,
+          packing: null,
+          grindId: null,
+        },
+      }),
+    }),
+    boundary({
+      identity: value => sourceIdentityForOffer(value, request.supplierRef, sourceIdentityKey),
+      persistence: {recordBatch: () => {}},
+    }),
+    routeContext,
+    request.supplierRef,
+  );
+
+  let reader;
+  try {
+    await app.runtimeController.start();
+    const address = app.server.address();
+    assert.ok(address && typeof address === "object");
+    const now = Math.floor(Date.now() / 1_000);
+    const delegation = signServiceDelegation({
+      iss: "api-internal",
+      aud: "aroma-gateway",
+      originalCaller: "catalog-supplier-sync",
+      operationId: "exportAromaCatalog",
+      correlationId: "corr_catalog_backpressure",
+      traceparent: "00-00000000000000000000000000000000-0000000000000000-01",
+      iat: now,
+      exp: now + 60,
+      jti: randomUUID(),
+      kid: "catalog-backpressure-test",
+    }, privateKey);
+    const response = await nativeFetch(`http://127.0.0.1:${address.port}/api/internal-v1/aroma/catalog-exports`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-service-delegation": delegation,
+      },
+      body: JSON.stringify({snapshotRef: request.snapshotRef, supplierRef: request.supplierRef}),
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "application/x-ndjson");
+    assert.ok(response.body);
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let wire = "";
+    while (!wire.includes("\n")) {
+      const chunk = await reader.read();
+      assert.equal(chunk.done, false, "catalog export ended before snapshot-started");
+      wire += decoder.decode(chunk.value, {stream: true});
+    }
+    assert.equal(JSON.parse(wire.slice(0, wire.indexOf("\n"))).recordType, "snapshot-started");
+
+    await waitFor(() => pageBodyPulls[1] > 0, "page 1 provider body was not pulled");
+    assert.equal(pageBodyDone[1], false, "the current source must collect the whole page before yielding its offer");
+    assert.equal(providerCalls.filter(call => new URL(call.url).searchParams.get("page") === "2").length, 0, "paused downstream must not request page 2");
+    assert.equal(pageBodyPulls[2], 0, "paused downstream must not pull page 2's provider body");
+
+    releasePage1Body();
+    await waitFor(() => pageBodyDone[1], "page 1 provider body did not finish");
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(providerCalls.filter(call => new URL(call.url).searchParams.get("page") === "2").length, 0, "paused downstream must not request page 2 after page 1 collection");
+    assert.equal(pageBodyPulls[2], 0, "paused downstream must not pull page 2's provider body after page 1 collection");
+
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) wire += decoder.decode(chunk.value, {stream: true});
+    wire += decoder.decode();
+    const records = parse(wire.split("\n").filter(Boolean).map(line => `${line}\n`));
+    assert.equal(records[0].recordType, "snapshot-started");
+    assert.equal(records.at(-1).recordType, "snapshot-completed");
+    assert.equal(records.slice(1, -1).every(record => record.recordType === "snapshot-batch"), true);
+    assert.equal(records.slice(1, -1).reduce((total, record) => total + record.offerCount, 0), 5_001);
+    assert.equal(records.at(-2).offerCount, 1);
+    assert.equal(pageBodyDone[2], true);
+    assert.ok(pageBodyPulls[2] > 0, "resuming downstream must pull page 2's provider body");
+    assert.deepEqual(
+      providerCalls.filter(call => new URL(call.url).searchParams.has("page")).map(call => new URL(call.url).searchParams.get("page")),
+      ["1", "2"],
+    );
+  } finally {
+    releasePage1Body();
+    await reader?.cancel();
+    await app.runtimeController.closeRuntime("test");
+    await manager.close();
+  }
 });
