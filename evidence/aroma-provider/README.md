@@ -40,3 +40,7 @@ UI controls, screenshots или frontend bundle. Непустая корзина
 ack/reject, missing-line outcome и quantity bounds требуют отдельного
 разрешённого controlled test по плану в
 `docs/launch/27_AROMA_PROVIDER_PROTOCOL.md`.
+
+## Исправление login probe 18 сентября 2026
+
+[Преобразованный отчёт](2026-09-18-login-probe-correction.json): предыдущие `422` вызваны неверным чтением вложенных secret fields в исследовательском скрипте, а не подтверждённым отказом действующей учётной записи. Исправленный probe получил `200` для login, catalog, cart и grinds. Production lookup не затронут. Отчёт не является wire fixture и не доказывает универсальный packing/grind mapping.

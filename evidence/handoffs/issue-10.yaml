@@ -856,7 +856,7 @@ latestAfter07c07f1:
   - artifact: docs/launch/27_AROMA_PROVIDER_PROTOCOL.md
     sha256: 103a00c64362d6d8522392b037de61a2ccbc0886342f5202b13d6f31a4e5f023
   - artifact: evidence/aroma-provider/README.md
-    sha256: e3075b5d8439c1d9d0b2c73ea563c4b21acc8d7d40b6df10a63e64bad5204138
+    sha256: 13b84c77ffaea1fc8a30399adb0d9719fff790857201bd0b417f6e4307285784
   - artifact: evidence/aroma-provider/2026-09-18-read-only-unit-identity-observations.json
     sha256: 867907c60bb425bc10b6b9fcccb1a99262ff492f4759d05c04fb4de1ff1e7e02
   - artifact: tests/aroma/catalog-export.test.mjs
@@ -873,6 +873,8 @@ latestAfter07c07f1:
     sha256: e6edd67b49613c194b7e3158f7e6bc06e4e1f1cc3cdaa9396e62e2c8c5237ebf
   - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
     sha256: 98d958f04ea5172b526f2cddd2d9bf3547692517dfbc09b022c44c358165bce0
+  - artifact: evidence/aroma-provider/2026-09-18-login-probe-correction.json
+    sha256: fe27aee360a1d9a337752ab5ba2e53043836694621502511540304f5d17bd68a
   verification:
   - command: bounded read-only provider probe
     exitCode: 0
@@ -1006,8 +1008,6 @@ latestAfter07c07f1:
     failed: 0
     evidenceAge: current; public and authenticated zero-price captures
   blockers:
-  - Два bounded login с canonical development credentials вернули HTTP 422; GET после отказа не выполнялись. Учётная
-    запись совпадает с ранее успешным encrypted import; причина отказа не установлена.
   - Production источник packing/grind не определён; unknown не равен explicit null. Существующий binding не обогащается
     свежей корзиной.
   - Provider upper quantity bound не подтверждён; согласованная модель считает целые упаковки/штуки. Универсальные
@@ -1025,7 +1025,8 @@ latestAfter07c07f1:
     acceptedPredecessorSeparate: true
   externalMutations:
     providerRequests: true
-    providerRequestsKind: login only; two 422 responses; no cart/catalog GET or mutations
+    providerRequestsKind: two invalid research login requests (422 due to wrong nested lookup), then corrected login
+      + catalog/cart/grinds GET (all 200); no cart mutations
     providerMutations: false
     commit: true
     push: false
@@ -1034,7 +1035,7 @@ latestAfter07c07f1:
     deployment: false
     commitScope: локальная синхронизация develop и проверенные доработки issue 10; без push и merge PR
     localBranchIntegration: true
-    providerRequestsCount: 2
+    providerRequestsCount: 6
   ownerPolicy:
     confirmedOn: '2026-09-18'
     unit: piece

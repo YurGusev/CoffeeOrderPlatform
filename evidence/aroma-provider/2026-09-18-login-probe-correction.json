@@ -1,0 +1,51 @@
+{
+  "kind": "transformed-observation-not-wire-fixture",
+  "date": "2026-09-18",
+  "origin": "https://aromateacoffee.ru",
+  "source": "bounded probe execution reported by researcher; raw bodies not retained",
+  "correction": {
+    "previousProbeError": "Flat secret lookup instead of secrets.aroma.email/password; login fields were undefined",
+    "credentialFailureProven": false,
+    "productionSecretLookupAffected": false
+  },
+  "successfulProbe": {
+    "requestCount": 4,
+    "requests": [
+      {
+        "operation": "login",
+        "status": 200
+      },
+      {
+        "operation": "catalog-page-1",
+        "status": 200,
+        "products": 10,
+        "offers": 10,
+        "zeroPrices": 10
+      },
+      {
+        "operation": "cart-read",
+        "status": 200,
+        "lines": 1,
+        "quantityType": "number",
+        "packing": null,
+        "grind_id": null
+      },
+      {
+        "operation": "grinds-read",
+        "status": 200,
+        "entries": 12
+      }
+    ]
+  },
+  "limitations": [
+    "Это преобразованный отчёт, не raw capture и не decoder fixture.",
+    "Наблюдение null у одной строки не задаёт default для всех offers.",
+    "Справочник помолов не доказывает mapping offer в grind/packing."
+  ],
+  "safety": {
+    "cartMutations": 0,
+    "rawIdentifiersStored": false,
+    "credentialsOrCookieValuesStored": false,
+    "temporaryFilesRemoved": true
+  }
+}
