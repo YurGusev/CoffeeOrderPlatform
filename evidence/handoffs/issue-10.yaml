@@ -31,7 +31,8 @@ workingTree:
     modifiedTracked: 13
     untrackedEntries: 3
   headIsNotCommitOfAllChanges: true
-  currentIncrementCommitPushPullRequestMergeDeploymentPerformed: false
+  currentIncrementCommitPerformed: true
+  currentIncrementPushPullRequestMergeDeploymentPerformed: false
   localDevelopDocumentationSyncCommitPerformed: true
 scope:
   included:
