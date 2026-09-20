@@ -133,7 +133,7 @@
         "inputEncoding": { "const": "UTF-8" },
         "input": { "const": ["hmac-sha256-v1", "0x00", "supplierRef", "0x00", "entityType", "0x00", "NFC(rawProviderIdentifier)"] },
         "separatorByte": { "const": 0 },
-        "entityTypes": { "const": ["product", "variant", "offer"] },
+        "entityTypes": { "const": ["product", "variant", "offer", "grind"] },
         "supplierRefPolicy": { "const": "canonical-sup-ulid" },
         "rawProviderIdentifierPolicy": { "const": "non-empty-nul-free-nfc-no-trim-no-case-fold" },
         "outputEncoding": { "const": "lowercase-hex" },

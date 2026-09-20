@@ -8,6 +8,27 @@
 Техническая authority Platform — [ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md),
 внутренний wire contract — [InternalApiV1](../../contracts/openapi/internal-v1.yaml).
 
+## Действующее уточнение от 18 сентября 2026
+
+Исторические таблицы ниже описывают свои выборки, а не текущий delivery status.
+Владелец подтвердил целые упаковки/штуки и упаковку `Aroma`; оператор выбирает
+помол из справочника `GET /api/v1/catalog/grinds`. Gateway передаёт наружу только
+`sourceGrindKeyHash` и название, выбранный hash входит в journal и физическую
+identity строки. Отсутствующий помол означает отсутствие выбора, а `packing=null`
+в существующей корзине не приравнивается к `Aroma`.
+
+Полный [read-only export](../../evidence/aroma-provider/2026-09-18-complete-catalog-export.json)
+прошёл 47 страниц: 464 продукта, 806 offers, 119 ground offers с 12 вариантами
+помола. JSON decimal price читается точно из исходного токена; одна отсутствующая
+фотография передана как `imageUrl: null`. Quantity admission — положительные
+целые до `Number.MAX_SAFE_INTEGER` как технического transport ceiling. Это не
+заявление о глобальных ограничениях поставщика. Динамические rejects и
+неопределённые post-dispatch outcomes обрабатываются без повторной mutation.
+
+Текущие проверки и ограничения: [финальный delivery evidence](../../evidence/issue-10-final-delivery.md).
+Реализация UI/Orders/Catalog consumers остаётся в их issues; она не переносится
+в Gateway. Provider mutations в этом финальном цикле не выполнялись.
+
 ## Происхождение сведений
 
 Исследован локальный CoffeeOrderSystem, commit
@@ -290,8 +311,26 @@ Probe подтвердил непустую cart shape: line quantity `1`, `pack
 различаются. Это не устанавливает provider unit metadata, price basis или catalog fallback.
 Catalog page 1/47 по-прежнему не содержат явных unit, price-basis,
 min/max/step/fraction metadata; наблюдаются только `weight`, `is_grinded` и
-`sold_by_piece=false`. Поэтому quantity admission/bounds и packing/grind mapping
-остаются fail-closed; `unit=piece` задаётся owner policy ниже.
+`sold_by_piece=false`. Поэтому quantity admission/bounds и неподтверждённый
+packing/grind mapping остаются fail-closed; подтверждённые `grindOptions` и
+выбранный hash проходят отдельную identity-проверку. `unit=piece` задаётся
+owner policy ниже.
+
+Owner policy от 2026-09-18 задаёт для Aroma `defaultPacking=Aroma` и
+`unit=piece`: `0.2 kg` означает одну фасовку, `quantity=2` — две фасовки, а
+`offers.price` — цену одной фасовки/штуки без пересчёта на килограмм. Для помола
+Catalog владелец может передать отдельный `sourceGrindKeyHash` (и отображаемый
+`grindOptions`), который является optional выбором линии; 12 synthetic
+`offerRef` для вариантов помола не создаются. Это owner policy, а не доказательство
+provider unit/packing metadata.
+
+`imageUrl` остаётся обязательным полем normalized offer, но допускает `null` при
+отсутствии provider image. Такое значение сохраняется как provider fact; Catalog
+и UI используют downstream placeholder, не синтезируя URL и не исключая offer.
+Это bounded internal-v1 correction по issue #10 до подключения потребителей:
+schema widening не требует новой API-версии; downstream Catalog/UI (#6) должны
+принимать nullable generated contract. Отсутствие изображения не блокирует весь
+catalog export.
 
 ## Binding не доказывает mutation semantics
 

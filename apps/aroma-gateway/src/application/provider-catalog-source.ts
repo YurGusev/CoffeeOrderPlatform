@@ -3,16 +3,18 @@ import {toInstant} from "@coffee-platform/platform-time";
 import {createSourceIdentity, SOURCE_IDENTITY_SCHEME, type SourceIdentityKey} from "../domain/source-identity.js";
 import {decodeCatalogPage, type ProviderCatalogOffer, type ProviderCatalogPage, type ProviderCatalogProduct} from "../infrastructure/provider/decoder.js";
 import {readProviderSafely, type ProviderCredentialScope, type ProviderSessionManager} from "../infrastructure/provider/session.js";
-import type {NormalizedCatalogOffer, SupplierPromotion} from "./catalog-export.js";
+import type {CatalogGrindOption, NormalizedCatalogOffer, SupplierPromotion} from "./catalog-export.js";
+import {readProviderGrinds, type ProviderGrindOption} from "./provider-grinds.js";
 
 export type ProviderCatalogSourceOptions = Readonly<{
   sessions: ProviderSessionManager;
   credentials: ProviderCredentialScope;
+  supplierRef?: string;
   sourceIdentityKey: SourceIdentityKey;
   pageSize?: number;
   signal?: AbortSignal;
   /** Test seam; production uses normalizeProviderCatalogOffer when this is omitted. */
-  normalize?: (product: ProviderCatalogProduct, offer: ProviderCatalogOffer) => NormalizedCatalogOffer;
+  normalize?: (product: ProviderCatalogProduct, offer: ProviderCatalogOffer, grindOptions?: readonly CatalogGrindOption[]) => NormalizedCatalogOffer;
 }>;
 
 function providerIdentity(normalized: NormalizedCatalogOffer["providerIdentity"]): NonNullable<NormalizedCatalogOffer["providerIdentity"]> {
@@ -102,12 +104,13 @@ async function collectPage(source: AsyncIterable<Uint8Array>, signal: AbortSigna
   return result;
 }
 
-function requiredImageUrl(product: ProviderCatalogProduct): string {
+function requiredImageUrl(product: ProviderCatalogProduct): string | null {
   const candidates: string[] = [];
   if (product.previewPath !== undefined && product.previewPath !== null) candidates.push(product.previewPath);
   if (product.photoPaths !== undefined) candidates.push(...product.photoPaths);
   const imageUrl = candidates[0];
-  if (imageUrl === undefined || imageUrl.length === 0 || !URL.canParse(imageUrl)) return failNormalization();
+  if (imageUrl === undefined) return null;
+  if (imageUrl.length === 0 || !URL.canParse(imageUrl)) return failNormalization();
   const protocol = new URL(imageUrl).protocol;
   if (protocol !== "http:" && protocol !== "https:") return failNormalization();
   return imageUrl;
@@ -140,10 +143,19 @@ function providerIdentityForOffer(product: ProviderCatalogProduct, offer: Provid
 }
 
 /** Production normalization is limited to facts proven by the observed catalog captures and policy. */
-export function normalizeProviderCatalogOffer(product: ProviderCatalogProduct, offer: ProviderCatalogOffer): NormalizedCatalogOffer {
+function offerIsGround(offer: ProviderCatalogOffer): boolean {
+  const value = offer.params?.find((param) => param.slug === "is_grinded")?.value;
+  if (value === undefined || value === "0") return false;
+  if (value !== "1") return failNormalization();
+  return true;
+}
+
+export function normalizeProviderCatalogOffer(product: ProviderCatalogProduct, offer: ProviderCatalogOffer, grindOptions?: readonly CatalogGrindOption[]): NormalizedCatalogOffer {
   if (typeof product.name !== "string" || product.name.length === 0 || typeof offer.name !== "string" || offer.name.length === 0 || typeof offer.vendorCode !== "string" || offer.vendorCode.length === 0) return failNormalization();
   const money = normalizeProviderCatalogMoneyAndPromotions(product, offer);
   const availability = normalizeProviderAvailability(product);
+  const ground = offerIsGround(offer);
+  if (ground && grindOptions !== undefined && grindOptions.length === 0) return failNormalization();
   return Object.freeze({
     displayName: offer.name,
     unit: normalizeProviderUnit(product),
@@ -152,6 +164,7 @@ export function normalizeProviderCatalogOffer(product: ProviderCatalogProduct, o
     availability: money.supplierUnitMinor === "0" && availability === "Available" ? "Unavailable" : availability,
     imageUrl: requiredImageUrl(product),
     supplierPromotions: money.supplierPromotions,
+    ...(ground && grindOptions === undefined ? {} : ground ? {grindOptions: Object.freeze([...(grindOptions ?? [])])} : {}),
     providerIdentity: providerIdentityForOffer(product, offer),
   });
 }
@@ -173,6 +186,8 @@ export async function* createProviderCatalogSource(options: ProviderCatalogSourc
   if (!Number.isSafeInteger(pageSize) || pageSize <= 0 || pageSize > MAX_PAGE_SIZE) throw new ProviderError("ProviderProtocolViolation");
   const signal = options.signal ?? new AbortController().signal;
   const normalize = options.normalize ?? normalizeProviderCatalogOffer;
+  const productionNormalizer = options.normalize === undefined;
+  let grindOptions: readonly ProviderGrindOption[] | undefined;
   let page = 1;
   let expected: ProviderCatalogPage | undefined;
   let productCount = 0;
@@ -189,7 +204,12 @@ export async function* createProviderCatalogSource(options: ProviderCatalogSourc
         signal.throwIfAborted();
         for (const offer of product.offers) {
           offerCount += 1;
-          const normalized = normalize(product, offer);
+          const isGround = offer.params?.some((param) => param.slug === "is_grinded" && param.value === "1") === true;
+          if (productionNormalizer && isGround && grindOptions === undefined) {
+            if (options.supplierRef === undefined) throw new ProviderError("ProviderProtocolViolation");
+            grindOptions = await readProviderGrinds(options.sessions, options.credentials, options.supplierRef, options.sourceIdentityKey, signal);
+          }
+          const normalized = normalize(product, offer, grindOptions?.map(({sourceGrindKeyHash, displayName}) => ({sourceGrindKeyHash, displayName})));
           // Raw identifiers stay in this Gateway-local side-channel and are never
           // copied by createCatalogExportStream into NDJSON records.
           yield Object.freeze({...normalized, providerIdentity: providerIdentity(normalized.providerIdentity)});

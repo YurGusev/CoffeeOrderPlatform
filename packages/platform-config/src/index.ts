@@ -24,6 +24,7 @@ export type TransportMode = "public-tls" | "mtls";
 
 export const AROMA_SUPPLIER_REF = "sup_00000000000000000000000001" as const;
 export const AROMA_SCOPE_REF = "aroma-primary" as const;
+export const AROMA_DEFAULT_PACKING = "Aroma" as const;
 
 export const KAFKA_TOPIC_NAMES: readonly KafkaTopicName[] = [
   "coffee.catalog.snapshot.v1",
@@ -181,6 +182,7 @@ export type AromaConfig = Readonly<{
   scopeRef: typeof AROMA_SCOPE_REF;
   origin: Readonly<{scheme: "https"; host: "aromateacoffee.ru"; port: 443}>;
   redirectsAllowed: false;
+  defaultPacking: typeof AROMA_DEFAULT_PACKING;
 }>;
 export type PlatformConfig = Readonly<{
   $schema: "./platform.schema.json";
@@ -385,7 +387,7 @@ function opaqueObject(
 
 function aromaConfig(value: unknown, path: string): AromaConfig {
   const aroma = record(value, path);
-  exactKeys(aroma, ["supplierRef", "scopeRef", "origin", "redirectsAllowed"], path);
+  exactKeys(aroma, ["supplierRef", "scopeRef", "origin", "redirectsAllowed", "defaultPacking"], path);
   if (aroma["supplierRef"] !== AROMA_SUPPLIER_REF)
     throw new PlatformConfigError(`${path}.supplierRef`, `ожидался supplierRef ${AROMA_SUPPLIER_REF}`);
   if (aroma["scopeRef"] !== AROMA_SCOPE_REF)
@@ -396,11 +398,14 @@ function aromaConfig(value: unknown, path: string): AromaConfig {
     throw new PlatformConfigError(`${path}.origin`, "origin не совпадает с каноническим AROMA origin");
   if (aroma["redirectsAllowed"] !== false)
     throw new PlatformConfigError(`${path}.redirectsAllowed`, "redirectsAllowed должен быть false");
+  if (aroma["defaultPacking"] !== AROMA_DEFAULT_PACKING)
+    throw new PlatformConfigError(`${path}.defaultPacking`, `ожидался defaultPacking ${AROMA_DEFAULT_PACKING}`);
   return Object.freeze({
     supplierRef: AROMA_SUPPLIER_REF,
     scopeRef: AROMA_SCOPE_REF,
     origin: Object.freeze({scheme: "https", host: "aromateacoffee.ru", port: 443}),
     redirectsAllowed: false,
+    defaultPacking: AROMA_DEFAULT_PACKING,
   });
 }
 

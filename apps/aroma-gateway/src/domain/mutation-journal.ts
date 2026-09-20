@@ -11,6 +11,7 @@ export type MutationRequest = Readonly<{
   operationKind: MutationOperationKind;
   offerRef: string;
   quantityMilli?: MutationQuantity;
+  sourceGrindKeyHash?: string;
 }>;
 
 /** Claims are supplied only after the transport/delegation verifier has run. */
@@ -31,6 +32,7 @@ export type NormalizedMutationRequest = Readonly<{
   operationKind: MutationOperationKind;
   offerRef: string;
   quantityMilli: string | null;
+  sourceGrindKeyHash?: string;
 }>;
 
 export type MutationJournalErrorCode =
@@ -63,6 +65,7 @@ export type DispatchPermit = Readonly<{
   operationRef: string;
   requestHash: string;
   reservationOwner: string;
+  sourceGrindKeyHash?: string;
 }>;
 
 /** Bytes are the Gateway's bounded typed reply, never a raw provider body. */
@@ -157,6 +160,7 @@ export type GatewayMutationResponseExpectation = Readonly<{
   operationRef?: string;
   cartScopeRef?: string;
   offerRef?: string;
+  sourceGrindKeyHash?: string;
 }>;
 
 const OPERATION_REF = /^op_[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -166,7 +170,10 @@ const TRACEPARENT = /^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/;
 const QUANTITY = /^(0|[1-9][0-9]*)$/;
 const SAFE_SERVICE_IDENTITY = /^[a-z][a-z0-9-]{0,63}$/;
 const SAFE_OPERATION_ID = /^[A-Za-z][A-Za-z0-9]{0,127}$/;
-const MAX_QUANTITY = 9_223_372_036_854_775_807n;
+const SOURCE_GRIND_KEY_HASH = /^[a-f0-9]{64}$/;
+// Technical dispatch cap: ProviderCartMutator converts the admitted package/piece count to Number.
+// This is not a provider inventory maximum.
+const MAX_QUANTITY = BigInt(Number.MAX_SAFE_INTEGER);
 const MAX_TYPED_RESPONSE_BYTES = 64 * 1024;
 const FAILURE_CODES = new Set<MutationUnknownFailureCode>([
   "AROMA_PROVIDER_TIMEOUT",
@@ -200,12 +207,14 @@ export function normalizeMutationRequest(request: MutationRequest): NormalizedMu
   const quantityMilli = request.operationKind === "RemoveLine"
     ? request.quantityMilli === undefined || request.quantityMilli === null ? null : invalid()
     : normalizeQuantity(request.quantityMilli);
+  if (request.sourceGrindKeyHash !== undefined && (typeof request.sourceGrindKeyHash !== "string" || !SOURCE_GRIND_KEY_HASH.test(request.sourceGrindKeyHash))) invalid();
   return {
     operationRef: request.operationRef,
     cartScopeRef: request.cartScopeRef,
     operationKind: request.operationKind,
     offerRef: request.offerRef,
     quantityMilli,
+    ...(request.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash: request.sourceGrindKeyHash}),
   };
 }
 
@@ -232,7 +241,7 @@ export function assertMutationDelegation(request: MutationRequest | NormalizedMu
 
 export function canonicalMutationRequest(request: MutationRequest | NormalizedMutationRequest, delegation: MutationDelegation): string {
   const normalized = normalizeMutationRequest(request);
-  return JSON.stringify([
+  const base = [
     "aroma-gateway-mutation-v1",
     normalized.cartScopeRef,
     normalized.operationKind,
@@ -241,7 +250,8 @@ export function canonicalMutationRequest(request: MutationRequest | NormalizedMu
     delegation.callerIdentity,
     delegation.originalCaller,
     delegation.operationId,
-  ]);
+  ];
+  return JSON.stringify(normalized.sourceGrindKeyHash === undefined ? base : [...base, normalized.sourceGrindKeyHash]);
 }
 
 export function canonicalMutationRequestHash(request: MutationRequest | NormalizedMutationRequest, delegation: MutationDelegation): string {
@@ -288,6 +298,9 @@ export function isValidGatewayMutationResponseBytes(value: unknown, expected: Ga
   if (body === undefined) return false;
   if (expected.state === "Acknowledged") {
     if (!isAromaMutationResponse(body) || expected.statusCode !== 200) return false;
+    const bodyRecord = body as Record<string, unknown>;
+    const responseGrind = bodyRecord["sourceGrindKeyHash"];
+    if (expected.sourceGrindKeyHash === undefined ? responseGrind !== undefined : responseGrind !== expected.sourceGrindKeyHash) return false;
     return (expected.operationRef === undefined || body.operationRef === expected.operationRef) &&
       (expected.cartScopeRef === undefined || body.cartScopeRef === expected.cartScopeRef) &&
       (expected.offerRef === undefined || body.offerRef === expected.offerRef);
@@ -317,6 +330,7 @@ function validateUnsafeMutationResult(value: unknown, request: NormalizedMutatio
       operationRef: request.operationRef,
       cartScopeRef: request.cartScopeRef,
       offerRef: request.offerRef,
+      ...(request.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash: request.sourceGrindKeyHash}),
     })) invalidTypedMutationResponse();
     return {
       state: "Acknowledged",

@@ -143,8 +143,12 @@ export type AromaCatalogItem = {
   supplierUnitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   currency: MoneyVersionTimeV1SchemaCurrency;
   availability: 'Available' | 'Unavailable' | 'Stopped';
-  imageUrl: string;
+  imageUrl: string | null;
   supplierPromotions?: Array<AromaSupplierPromotion>;
+  grindOptions?: Array<{
+    sourceGrindKeyHash: HashSha256;
+    displayName: string;
+  }>;
   sourceIdentityScheme: 'hmac-sha256-v1';
 };
 
@@ -198,6 +202,7 @@ export type AromaCartSnapshotReadRequest = {
 export type AromaCartLine = {
   offerRef: IdentifiersV1SchemaOfferRef;
   quantity: MoneyVersionTimeV1SchemaQuantityDecimal;
+  sourceGrindKeyHash?: HashSha256;
 };
 
 export type AromaCartSnapshot = {
@@ -212,17 +217,20 @@ export type AromaSetQuantityRequest = {
   operationRef: IdentifiersV1SchemaOperationRef;
   cartScopeRef: 'aroma-primary';
   quantity: MoneyVersionTimeV1SchemaProviderQuantity;
+  sourceGrindKeyHash?: HashSha256;
 };
 
 export type AromaRemoveLineRequest = {
   operationRef: IdentifiersV1SchemaOperationRef;
   cartScopeRef: 'aroma-primary';
+  sourceGrindKeyHash?: HashSha256;
 };
 
 export type AromaMutationResponse = {
   operationRef: IdentifiersV1SchemaOperationRef;
   cartScopeRef: 'aroma-primary';
   offerRef: IdentifiersV1SchemaOfferRef;
+  sourceGrindKeyHash?: HashSha256;
   state: 'Acknowledged';
 };
 

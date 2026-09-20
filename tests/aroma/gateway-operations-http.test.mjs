@@ -12,6 +12,7 @@ const ack = {operationRef, cartScopeRef: "aroma-primary", offerRef, state: "Ackn
 const context = {correlationId: "corr-mutation", signal: new AbortController().signal};
 const setBody = {operationRef, cartScopeRef: "aroma-primary", quantity: "3"};
 const removeBody = {operationRef, cartScopeRef: "aroma-primary"};
+const selectedGrindKeyHash = "a".repeat(64);
 
 void test("typed internal cart client forwards exact set/remove operation URLs and JSON", async () => {
   const calls = [];
@@ -21,13 +22,21 @@ void test("typed internal cart client forwards exact set/remove operation URLs a
   }});
   assert.deepEqual(await client.setQuantity(offerRef, setBody, context, "signed-set"), {status: 200, body: ack});
   assert.deepEqual(await client.remove(offerRef, removeBody, context, "signed-remove"), {status: 200, body: ack});
+  const selectedSetBody = {...setBody, sourceGrindKeyHash: selectedGrindKeyHash};
+  const selectedRemoveBody = {...removeBody, sourceGrindKeyHash: selectedGrindKeyHash};
+  await client.setQuantity(offerRef, selectedSetBody, context, "signed-selected-set");
+  await client.remove(offerRef, selectedRemoveBody, context, "signed-selected-remove");
   assert.deepEqual(calls.map(call => call.path), [
     `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`,
     `/api/internal-v1/aroma/cart-lines/${offerRef}:remove`,
+    `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`,
+    `/api/internal-v1/aroma/cart-lines/${offerRef}:remove`,
   ]);
-  assert.deepEqual(calls.map(call => call.options.method), ["POST", "POST"]);
+  assert.deepEqual(calls.map(call => call.options.method), ["POST", "POST", "POST", "POST"]);
   assert.deepEqual(JSON.parse(calls[0].options.body), setBody);
   assert.deepEqual(JSON.parse(calls[1].options.body), removeBody);
+  assert.deepEqual(JSON.parse(calls[2].options.body), selectedSetBody);
+  assert.deepEqual(JSON.parse(calls[3].options.body), selectedRemoveBody);
   assert.equal(calls[0].options.headers["x-service-delegation"], "signed-set");
   assert.equal(calls[1].options.headers["x-service-delegation"], "signed-remove");
   assert.equal(calls[0].options.headers["x-actor-ref"], undefined);
@@ -107,7 +116,7 @@ void test("Gateway matches literal-colon mutation URLs and extracts only the pub
   const calls = [];
   registerAromaMutationRoutes(app, {execute: async (body, delegation) => {
     calls.push({body, delegation});
-    return {state: "Acknowledged", statusCode: 200, responseBodyBytes: Buffer.from(JSON.stringify({...ack, operationRef: body.operationRef}))};
+    return {state: "Acknowledged", statusCode: 200, responseBodyBytes: Buffer.from(JSON.stringify({...ack, operationRef: body.operationRef, ...(body.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash: body.sourceGrindKeyHash})}))};
   }}, {secrets: {security: {delegationVerificationKeys: {"api-internal": {active: publicPem, previous: publicPem}}}}});
   await app.runtimeController.start();
   t.after(() => app.runtimeController.closeRuntime("SIGTERM"));
@@ -115,18 +124,26 @@ void test("Gateway matches literal-colon mutation URLs and extracts only the pub
     const iat = Math.floor(Date.now() / 1000);
     return signServiceDelegation({iss: "api-internal", aud: "aroma-gateway", originalCaller: "aroma-convergence", operationId, correlationId: "corr-gateway-route", traceparent: "00-00000000000000000000000000000000-0000000000000000-00", iat, exp: iat + 60, jti: `jti-${operationId}`, kid: "test"}, privateKey);
   };
-  const setResponse = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, headers: {"x-service-delegation": signed("setAromaCartLineQuantity")}, payload: setBody});
+  const setResponse = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, headers: {"x-service-delegation": signed("setAromaCartLineQuantity")}, payload: {...setBody, sourceGrindKeyHash: selectedGrindKeyHash}});
   assert.equal(setResponse.statusCode, 200);
   assert.equal(calls[0].body.offerRef, offerRef);
   assert.equal(calls[0].body.operationKind, "SetLineQuantity");
+  assert.equal(calls[0].body.sourceGrindKeyHash, selectedGrindKeyHash);
   const removeResponse = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:remove`, headers: {"x-service-delegation": signed("removeAromaCartLine")}, payload: removeBody});
   assert.equal(removeResponse.statusCode, 200);
   assert.equal(calls[1].body.offerRef, offerRef);
   assert.equal(calls[1].body.operationKind, "RemoveLine");
+  const selectedRemove = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:remove`, headers: {"x-service-delegation": signed("removeAromaCartLine")}, payload: {...removeBody, operationRef: "op_01ARZ3NDEKTSV4RRFFQ69G5FAA", sourceGrindKeyHash: selectedGrindKeyHash}});
+  assert.equal(selectedRemove.statusCode, 200);
+  assert.equal(calls[2].body.sourceGrindKeyHash, selectedGrindKeyHash);
+  const beforeInvalid = calls.length;
+  const invalidGrind = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:set-quantity`, headers: {"x-service-delegation": signed("setAromaCartLineQuantity")}, payload: {...setBody, sourceGrindKeyHash: "G".repeat(64)}});
+  assert.equal(invalidGrind.statusCode, 400);
+  assert.equal(calls.length, beforeInvalid);
   for (const payload of [{...setBody, quantity: "2.5"}, {...setBody, quantity: 2}, {...setBody, extra: true}, {...removeBody, quantity: "1"}]) {
     const target = "quantity" in payload && !("extra" in payload) && payload.quantity === "1" ? "remove" : "set-quantity";
     const response = await app.inject({method: "POST", url: `/api/internal-v1/aroma/cart-lines/${offerRef}:${target}`, headers: {"x-service-delegation": signed(target === "remove" ? "removeAromaCartLine" : "setAromaCartLineQuantity")}, payload});
     assert.equal(response.statusCode, 400);
   }
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
 });

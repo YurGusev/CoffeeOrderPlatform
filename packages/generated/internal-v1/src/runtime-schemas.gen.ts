@@ -228,6 +228,10 @@ export const internalV1Schemas = {
         "type": "string",
         "pattern": "^off_[0-9A-HJKMNP-TV-Z]{26}$"
       },
+      "sourceGrindKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
       "state": {
         "const": "Acknowledged"
       }
@@ -294,6 +298,10 @@ export const internalV1Schemas = {
             "quantity": {
               "type": "string",
               "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
+            },
+            "sourceGrindKeyHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
             }
           }
         }
@@ -320,6 +328,10 @@ export const internalV1Schemas = {
       "quantity": {
         "type": "string",
         "pattern": "^(?:[1-9][0-9]*)(?:\\.[0-9]+)?$|^0\\.(?!0+$)[0-9]+$"
+      },
+      "sourceGrindKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
       }
     }
   },
@@ -338,6 +350,10 @@ export const internalV1Schemas = {
       "cartScopeRef": {
         "type": "string",
         "const": "aroma-primary"
+      },
+      "sourceGrindKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
       }
     }
   }

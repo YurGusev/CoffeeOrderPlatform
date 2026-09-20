@@ -2,7 +2,7 @@ import {createHash} from "node:crypto";
 import {startConfiguredRuntime, type RuntimeComposition, type RuntimeCompositionContext} from "@coffee-platform/runtime";
 import {ProviderCartReader} from "./application/cart-reader.js";
 import {sha256CatalogHash, type CatalogExportBoundary, type CatalogStartedRecord, type CatalogExportBatchPersistenceInput, type CatalogExportSummary} from "./application/catalog-export.js";
-import {createProviderCatalogSource, normalizeProviderCatalogOffer, sourceIdentityForOffer} from "./application/provider-catalog-source.js";
+import {createProviderCatalogSource, sourceIdentityForOffer} from "./application/provider-catalog-source.js";
 import {ProviderCartMutator} from "./application/provider-cart-mutator.js";
 import {GatewayMutationExecutor} from "./domain/mutation-journal.js";
 import {ProviderMutationJournalStore} from "./infrastructure/database/provider-mutation-journal.js";
@@ -100,14 +100,16 @@ const composition: RuntimeComposition = {
         credentials,
         bindings,
         supplierRef: context.config.aroma.supplierRef,
+        defaultPacking: context.config.aroma.defaultPacking,
+        sourceIdentityKey: catalogIdentityKey,
       });
       const journal = new ProviderMutationJournalStore(database, {telemetry: gatewayTelemetry});
       mutationJournal = journal;
-      const mutator = new ProviderCartMutator({sessions: providerSession, credentials, bindings, supplierRef: context.config.aroma.supplierRef, transport: client});
+      const mutator = new ProviderCartMutator({sessions: providerSession, credentials, bindings, supplierRef: context.config.aroma.supplierRef, sourceIdentityKey: catalogIdentityKey, defaultPacking: context.config.aroma.defaultPacking, transport: client});
       const executor = new GatewayMutationExecutor(journal, mutator.execute.bind(mutator));
       registerAromaBindingRoutes(app, database, context, context.config.aroma.supplierRef);
       registerAromaCartSnapshotRoute(app, reader, context);
-      registerAromaCatalogExportRoute(app, (supplierRef, signal) => createProviderCatalogSource({sessions: providerSession, credentials, sourceIdentityKey: catalogIdentityKey, pageSize: 10, signal, normalize: normalizeProviderCatalogOffer}), exportBoundary, context, context.config.aroma.supplierRef, gatewayTelemetry);
+      registerAromaCatalogExportRoute(app, (supplierRef, signal) => createProviderCatalogSource({sessions: providerSession, credentials, supplierRef, sourceIdentityKey: catalogIdentityKey, pageSize: 10, signal}), exportBoundary, context, context.config.aroma.supplierRef, gatewayTelemetry);
       registerAromaMutationRoutes(app, executor, context);
     } catch (error) {
       providerSessions = undefined;

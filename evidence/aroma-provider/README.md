@@ -1,3 +1,5 @@
+Последний полный read-only export: [18 сентября — 47 страниц, 806 offers и 12 помолов](2026-09-18-complete-catalog-export.json). Реальные HTTP/session/decoder/normalizer/HMAC/NDJSON; persistence в этом probe — test-only in-memory. Это transformed receipt, не wire fixture и не доказательство записи в production DB. Корзина не менялась.
+
 Последняя read-only проверка: [transformed unit/identity observations 18 сентября](2026-09-18-read-only-unit-identity-observations.json). Raw bodies/identifiers, credentials, cookies и PII не сохранялись; provider mutations не выполнялись.
 
 Последняя mutation-проверка: [согласованные cart mutations и подтверждённая очистка](2026-09-12-cart-mutations/README.md).

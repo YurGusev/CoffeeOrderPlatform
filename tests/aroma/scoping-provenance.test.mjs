@@ -116,6 +116,7 @@ void test("mutator scopes offer resolution before acquiring a provider session",
   const foreign = new ProviderCartMutator({
     sessions: {acquire: async () => { sessions += 1; throw new Error("must not acquire"); }},
     credentials,
+    defaultPacking: "Aroma",
     supplierRef,
     bindings: {resolveProviderOffer: async (...args) => { resolverArgs = args; return {offerRef, supplierRef: foreignSupplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "a".repeat(64), rawProviderOfferId: "70", rawProviderProductId: "71", rawProviderVariantId: "70", packing: null, grindId: null, cartLineId: null}; }},
   });
@@ -125,13 +126,14 @@ void test("mutator scopes offer resolution before acquiring a provider session",
 });
 
 void test("own supplier binding reaches one provider session after scoped resolution", async () => {
-  const cart = quantity => ({prices: {total: {default: 0, promo: 0}}, products: [{id: 71, offer: {id: 70, price: 1}, quantity, packing: null, grind_id: null}]});
+  const cart = quantity => ({prices: {total: {default: 0, promo: 0}}, products: [{id: 71, offer: {id: 70, price: 1}, quantity, packing: "Aroma", grind_id: null}]});
   let reads = 0;
   let mutations = 0;
   const identity = {offerRef, supplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "a".repeat(64), rawProviderOfferId: "70", rawProviderProductId: "71", rawProviderVariantId: "70", packing: null, grindId: null, cartLineId: "71"};
   const mutator = new ProviderCartMutator({
     sessions: {acquire: async () => ({read: async function* () { yield bytes(cart(reads++ === 0 ? 1 : 2)); }})},
     credentials,
+    defaultPacking: "Aroma",
     supplierRef,
     bindings: {resolveProviderOffer: async (receivedOfferRef, receivedSupplierRef) => { assert.equal(receivedOfferRef, offerRef); assert.equal(receivedSupplierRef, supplierRef); return identity; }},
     transport: {mutate: async () => ({statusCode: 200, body: bytes(cart(2))})},

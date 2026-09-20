@@ -1982,6 +1982,8 @@ export async function runLiveProof({
       `coffee.platform.run=${proofRunId}`,
       "--publish",
       "127.0.0.1::5432",
+      "--tmpfs",
+      "/var/lib/postgresql/data",
       "--env",
       `POSTGRES_PASSWORD=${adminPassword}`,
       "--env",

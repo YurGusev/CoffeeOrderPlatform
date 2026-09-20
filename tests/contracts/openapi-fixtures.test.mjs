@@ -256,6 +256,12 @@ void test("NDJSON success stream validates every record and terminal ordering", 
   assert.equal(lines[1].batchNumber, 0);
   assert.equal(lines[1].previousBatchHash, null);
   assert.deepEqual(lines[1].items[0].supplierPromotions, [{discountBasisPoints: 1000, minimumWeightRaw: "0", providerCreatedAt: "2026-09-05T09:00:00.000Z", providerUpdatedAt: "2026-09-05T09:30:00.000Z"}]);
+  const grindLines = (await readFile(join(POSITIVE_ROOT, "ndjson/aroma-catalog-grind-options.ndjson"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  for (const [index, line] of grindLines.entries()) assert.equal(validate(line), true, `grind option line ${index + 1}: ${JSON.stringify(validate.errors)}`);
+  assert.deepEqual(grindLines[1].items[0].grindOptions, [{sourceGrindKeyHash: "4444444444444444444444444444444444444444444444444444444444444444", displayName: "Средний помол"}]);
+  const missingImageLines = (await readFile(join(POSITIVE_ROOT, "ndjson/aroma-catalog-missing-image.ndjson"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  for (const [index, line] of missingImageLines.entries()) assert.equal(validate(line), true, `missing image line ${index + 1}: ${JSON.stringify(validate.errors)}`);
+  assert.equal(missingImageLines[1].items[0].imageUrl, null);
   assert.equal(lines.at(-1).recordType, "snapshot-completed");
 
   let releaseProducer;

@@ -5,6 +5,8 @@ import type {OfferBindingStore, ResolvedProviderOffer} from "../infrastructure/d
 import {readProviderSafely, type ProviderCredentialScope, type ProviderSessionManager} from "../infrastructure/provider/session.js";
 import type {ProviderHttpClient} from "../infrastructure/provider/http-client.js";
 import {decodeCartSnapshot} from "../infrastructure/provider/decoder.js";
+import type {SourceIdentityKey} from "../domain/source-identity.js";
+import {readProviderGrinds} from "./provider-grinds.js";
 
 const encoder = new TextEncoder();
 const json = (value: unknown): Uint8Array => encoder.encode(JSON.stringify(value));
@@ -14,6 +16,8 @@ export type ProviderCartMutatorOptions = Readonly<{
   credentials: ProviderCredentialScope;
   bindings: Pick<OfferBindingStore, "resolveProviderOffer">;
   supplierRef: string;
+  sourceIdentityKey?: SourceIdentityKey;
+  defaultPacking: string;
   transport?: Pick<ProviderHttpClient, "mutate">;
 }>;
 
@@ -21,7 +25,7 @@ function problem(status: number, code: string): Uint8Array {
   return json({type: "about:blank", title: code, status, code, detail: "Provider cart line is missing", instance: "/api/internal-v1/aroma/cart-lines", correlationId: "00000000-0000-4000-8000-000000000000", errors: []});
 }
 
-type KnownProviderFacts = Readonly<{packing: string | null; grindId: string | null}>;
+type KnownProviderFacts = Readonly<{packing: string; grindId: string | null}>;
 type ProviderSession = Awaited<ReturnType<ProviderSessionManager["acquire"]>>;
 type PreparedMutation = Readonly<{
   session: ProviderSession;
@@ -36,11 +40,9 @@ class PreparationError extends Error {
   constructor(code: string) { super(code); this.name = "PreparationError"; this.code = code; }
 }
 
-function knownProviderFacts(identity: ResolvedProviderOffer): KnownProviderFacts {
-  if (!Object.hasOwn(identity, "packing") || identity.packing === undefined || !Object.hasOwn(identity, "grindId") || identity.grindId === undefined) {
-    throw new ProviderError("ProviderCartMappingMissing");
-  }
-  return {packing: identity.packing, grindId: identity.grindId};
+function knownProviderFacts(defaultPacking: string): KnownProviderFacts {
+  if (defaultPacking.length === 0 || !defaultPacking.isWellFormed()) throw new ProviderError("ProviderCartMappingMissing");
+  return {packing: defaultPacking, grindId: null};
 }
 
 function exactLine(snapshot: ReturnType<typeof decodeCartSnapshot>, identity: ResolvedProviderOffer, facts: KnownProviderFacts): readonly [string, number] | undefined {
@@ -60,7 +62,7 @@ function assertMutationResponse(body: Uint8Array, request: NormalizedMutationReq
 }
 
 function acknowledged(request: NormalizedMutationRequest): UnsafeMutationResult {
-  const body: AromaMutationResponse = {operationRef: request.operationRef, cartScopeRef: "aroma-primary", offerRef: request.offerRef, state: "Acknowledged"};
+  const body = {operationRef: request.operationRef, cartScopeRef: "aroma-primary", offerRef: request.offerRef, state: "Acknowledged", ...(request.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash: request.sourceGrindKeyHash})} as AromaMutationResponse;
   return {state: "Acknowledged", statusCode: 200, responseBodyBytes: json(body)};
 }
 
@@ -70,14 +72,25 @@ export class ProviderCartMutator {
   readonly #credentials: ProviderCredentialScope;
   readonly #bindings: Pick<OfferBindingStore, "resolveProviderOffer">;
   readonly #supplierRef: string | undefined;
+  readonly #sourceIdentityKey: SourceIdentityKey | undefined;
+  readonly #defaultPacking: string;
   readonly #transport: Pick<ProviderHttpClient, "mutate"> | undefined;
-  public constructor(options: ProviderCartMutatorOptions) { this.#sessions = options.sessions; this.#credentials = options.credentials; this.#bindings = options.bindings; this.#supplierRef = options.supplierRef; this.#transport = options.transport; }
+  public constructor(options: ProviderCartMutatorOptions) { this.#sessions = options.sessions; this.#credentials = options.credentials; this.#bindings = options.bindings; this.#supplierRef = options.supplierRef; this.#sourceIdentityKey = options.sourceIdentityKey; this.#defaultPacking = options.defaultPacking; this.#transport = options.transport; }
 
   /** Safe provider preparation: identity, session and the preflight cart GET only. */
   public async prepare(request: NormalizedMutationRequest, signal: AbortSignal): Promise<PreparedMutation> {
     const identity = await this.#bindings.resolveProviderOffer(request.offerRef, this.#supplierRef ?? "", signal);
     if (identity === undefined || (this.#supplierRef !== undefined && identity.supplierRef !== this.#supplierRef)) throw new ProviderError("ProviderCartMappingMissing");
-    const facts = knownProviderFacts(identity);
+    const bindingFacts = knownProviderFacts(this.#defaultPacking);
+    let grindId = bindingFacts.grindId;
+    if (request.sourceGrindKeyHash !== undefined) {
+      if (this.#sourceIdentityKey === undefined || this.#supplierRef === undefined) throw new ProviderError("ProviderCartMappingMissing");
+      const matches = (await readProviderGrinds(this.#sessions, this.#credentials, this.#supplierRef, this.#sourceIdentityKey, signal))
+        .filter((grind) => grind.sourceGrindKeyHash === request.sourceGrindKeyHash);
+      if (matches.length !== 1) throw new ProviderError("ProviderCartMappingMissing");
+      grindId = matches[0]!.rawId;
+    }
+    const facts: KnownProviderFacts = {packing: bindingFacts.packing, grindId};
     const safeRead = (this.#sessions as ProviderSessionManager & {readSafe?: ProviderSessionManager["readSafe"]}).readSafe;
     let session: ProviderSession;
     let body: Uint8Array;
@@ -129,16 +142,16 @@ export class ProviderCartMutator {
           request.operationKind === "RemoveLine"
             ? {kind: "remove-cart-line", cartLineId: line![0]}
             : line === undefined
-              ? {kind: "add-cart-line", offerId: identity.rawProviderOfferId, quantity: quantity!, ...(facts.packing === null ? {} : {packing: facts.packing}), ...(facts.grindId === null ? {} : {grindId: facts.grindId})}
-              : {kind: "set-cart-line-quantity", cartLineId: line[0], quantity: quantity!, ...(facts.packing === null ? {} : {packing: facts.packing}), ...(facts.grindId === null ? {} : {grindId: facts.grindId})},
+              ? {kind: "add-cart-line", offerId: identity.rawProviderOfferId, quantity: quantity!, packing: facts.packing, ...(facts.grindId === null ? {} : {grindId: facts.grindId})}
+              : {kind: "set-cart-line-quantity", cartLineId: line[0], quantity: quantity!, packing: facts.packing, ...(facts.grindId === null ? {} : {grindId: facts.grindId})},
           signal,
         )
       : await this.#transport!.mutate(
           request.operationKind === "RemoveLine"
             ? {kind: "remove-cart-line", cartLineId: line![0]}
             : line === undefined
-              ? {kind: "add-cart-line", offerId: identity.rawProviderOfferId, quantity: quantity!, ...(facts.packing === null ? {} : {packing: facts.packing}), ...(facts.grindId === null ? {} : {grindId: facts.grindId})}
-              : {kind: "set-cart-line-quantity", cartLineId: line[0], quantity: quantity!, ...(facts.packing === null ? {} : {packing: facts.packing}), ...(facts.grindId === null ? {} : {grindId: facts.grindId})},
+              ? {kind: "add-cart-line", offerId: identity.rawProviderOfferId, quantity: quantity!, packing: facts.packing, ...(facts.grindId === null ? {} : {grindId: facts.grindId})}
+              : {kind: "set-cart-line-quantity", cartLineId: line[0], quantity: quantity!, packing: facts.packing, ...(facts.grindId === null ? {} : {grindId: facts.grindId})},
           signal,
           undefined,
         );

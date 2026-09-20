@@ -72,9 +72,11 @@ used with the canonical account scope `aroma-primary` and supplier
 один. `batchHash` — lowercase SHA-256 канонического `items`; `contentHash` —
 SHA-256 конкатенации бинарных batch hashes в порядке `batchNumber`.
 
-Каждый item содержит строго: `sourceProductKeyHash`, `sourceVariantKeyHash`,
-`sourceOfferKeyHash`, `displayName`, `unit`, `supplierUnitMinor`, `currency`,
-`availability`, `imageUrl`. Raw provider identifiers, cookies и session ids не
+Каждый item содержит обязательные `sourceProductKeyHash`,
+`sourceVariantKeyHash`, `sourceOfferKeyHash`, `displayName`, `unit`,
+`supplierUnitMinor`, `currency`, `availability`, `imageUrl` и
+`sourceIdentityScheme`; optional `supplierPromotions` и `grindOptions` передаются
+только в typed contract. Raw provider identifiers, cookies и session ids не
 передаются. `offerRef` назначается Catalog при активации.
 
 Gateway вычисляет каждый source hash только как HMAC-SHA256 с dedicated key
@@ -82,8 +84,8 @@ Gateway вычисляет каждый source hash только как HMAC-SHA
 `UTF-8("hmac-sha256-v1") || 0x00 || UTF-8(supplierRef) || 0x00 ||
 UTF-8(entityType) || 0x00 || UTF-8(NFC(rawProviderIdentifier))`.
 `0x00` — один literal NUL byte, а не два текстовых символа `\` и `0`.
-`entityType` проходит строгий guard и принимает только `product`, `variant` или
-`offer`; `supplierRef` — canonical `sup_<ULID>`. Raw provider identifier не
+`entityType` проходит строгий guard и принимает только `product`, `variant`,
+`offer` или `grind`; `supplierRef` — canonical `sup_<ULID>`. Raw provider identifier не
 trim/lowercase-ится: принимается только непустая well-formed UTF-16 строка без
 NUL, затем применяется только NFC. Результат — ровно 64 lowercase hex символа.
 Ключ передаётся helper отдельным typed input, не логируется, не совпадает с
@@ -116,6 +118,27 @@ immutable row.
 Binding сохраняет identity proof и не означает mutation-ready. Dispatch требует
 configured supplier, подтверждённую variant/packing/grind policy и свежий exact
 unique cart line; до этого cart dispatch остаётся fail-closed.
+
+### 3.4 Выбор помола оператором
+
+Решение владельца от 18 сентября 2026: использовать все варианты справочника
+помолов AROMA; оператор выбирает вариант при заказе. Gateway передаёт
+`grindOptions` с `sourceGrindKeyHash` и `displayName`, не raw provider IDs.
+Catalog сохраняет эти варианты вместе со снимком и отдаёт их Orders/UI в #6;
+Orders фиксирует выбор в строке заказа и передаёт соответствующий hash в #11.
+Это отдельная ось выбора, а не двенадцать синтетических `offerRef` одного товара.
+Binding base offer остаётся неизменяемым. Отсутствие выбранного помола не
+подменяется произвольным значением из справочника.
+
+Gateway отправляет упаковку из `config.aroma.defaultPacking` (`Aroma`, решение
+владельца «как в старой системе»). Это политика новых команд, а не доказательство,
+что наблюдаемое provider `packing=null` означает `Aroma`. Такие строки нельзя
+молча объединять. Physical cart key включает base offer, упаковку и выбранный
+помол; один offer с разными помолами — разные строки.
+
+`imageUrl=null` означает отсутствие изображения у поставщика. Catalog сохраняет
+этот факт, UI использует собственный placeholder. Отсутствие фото не исключает
+товар из полного снимка и не меняет его цену или доступность.
 
 ## 4. Staging и пакетный импорт
 

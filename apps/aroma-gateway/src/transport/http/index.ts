@@ -171,11 +171,13 @@ function mutationRequest(request: Request, operationKind: "SetLineQuantity" | "R
     // Provider mutation semantics are only proven for the existing integer representation;
     // keep decimal wire lossless at transport, but fail closed before journal/provider dispatch.
     if (value.quantity.includes(".")) return undefined;
-    return {operationRef: value.operationRef, cartScopeRef: value.cartScopeRef, operationKind, offerRef, quantityMilli: value.quantity};
+    const sourceGrindKeyHash = value.sourceGrindKeyHash;
+    return {operationRef: value.operationRef, cartScopeRef: value.cartScopeRef, operationKind, offerRef, quantityMilli: value.quantity, ...(sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash})};
   }
   if (!isAromaRemoveLineRequest(request.body)) return undefined;
   const value = request.body;
-  return {operationRef: value.operationRef, cartScopeRef: value.cartScopeRef, operationKind, offerRef};
+  const sourceGrindKeyHash = value.sourceGrindKeyHash;
+  return {operationRef: value.operationRef, cartScopeRef: value.cartScopeRef, operationKind, offerRef, ...(sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash})};
 }
 
 function mutationDelegation(request: Request, claims: InternalClaims): MutationDelegation {

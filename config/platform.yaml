@@ -93,6 +93,7 @@ aroma:
     host: aromateacoffee.ru
     port: 443
   redirectsAllowed: false
+  defaultPacking: Aroma
 
 security:
   actorContext:

@@ -37,9 +37,11 @@ void test("production composition uses the real provider normalizer for package 
   const capture = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12/page47.json", import.meta.url), "utf8"));
   const body = {...capture, meta: {...capture.meta, current_page: 1, from: 1, to: capture.data.length, last_page: 1, per_page: 10, total: capture.data.length}};
   const calls = [];
+  let grindCalls = 0;
   const source = createProviderCatalogSource({
-    sessions: {acquire: async () => ({read: async function* (operation) {calls.push(operation.page); yield bytes(body);}})},
+    sessions: {acquire: async () => ({read: async function* (operation) {if (operation.kind === "grinds") {grindCalls += 1; yield bytes(Array.from({length: 12}, (_, index) => ({id: index + 1, name: `Помол ${index + 1}`}))); return;} calls.push(operation.page); yield bytes(body);}})},
     credentials: {scopeRef: "aroma", email: "a@example.test", password: "secret"},
+    supplierRef,
     sourceIdentityKey: Buffer.from("key"),
     pageSize: 10,
   });
@@ -50,21 +52,23 @@ void test("production composition uses the real provider normalizer for package 
   assert.equal(normalizedOffers.length, expectedOffers);
   assert.equal(normalizedOffers[0].unit, "piece");
   assert.equal(normalizedOffers[0].supplierUnitMinor, "94000");
+  assert.equal(normalizedOffers.some((offer) => Array.isArray(offer.grindOptions) && offer.grindOptions.length === 12), true);
   for (const normalizedOffer of normalizedOffers) {
     assert.equal(normalizedOffer.unit, "piece");
     assert.equal(normalizedOffer.providerIdentity.packing, undefined);
     assert.equal(normalizedOffer.providerIdentity.grindId, undefined);
   }
   assert.deepEqual(calls, [1]);
+  assert.equal(grindCalls, 1);
 });
 
 
 void test("production mutator resolves exact identity and performs one unsafe call", async () => {
-  const cart = {prices: {total: {default: 0, promo: 0}}, products: [{id: 71, offer: {id: 70, price: 1}, quantity: 1, packing: null, grind_id: null}]};
+  const cart = {prices: {total: {default: 0, promo: 0}}, products: [{id: 71, offer: {id: 70, price: 1}, quantity: 1, packing: "Aroma", grind_id: null}]};
   let unsafeCalls = 0;
   let reads = 0;
   const changed = {...cart, products: [{...cart.products[0], quantity: 2}]};
-  const mutator = new ProviderCartMutator({sessions: {acquire: async () => ({read: async function* () {reads += 1; yield bytes(reads === 1 ? cart : changed);}})}, credentials: {scopeRef: "aroma", email: "a@example.test", password: "secret"}, bindings: {resolveProviderOffer: async () => ({offerRef, supplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "a".repeat(64), rawProviderOfferId: "70", rawProviderProductId: "70", rawProviderVariantId: "70", packing: null, grindId: null, cartLineId: null})}, transport: {mutate: async operation => {unsafeCalls += 1; assert.equal(operation.kind, "set-cart-line-quantity"); return {statusCode: 200, body: bytes(changed)};}}});
+  const mutator = new ProviderCartMutator({sessions: {acquire: async () => ({read: async function* () {reads += 1; yield bytes(reads === 1 ? cart : changed);}})}, credentials: {scopeRef: "aroma", email: "a@example.test", password: "secret"}, bindings: {resolveProviderOffer: async () => ({offerRef, supplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "a".repeat(64), rawProviderOfferId: "70", rawProviderProductId: "70", rawProviderVariantId: "70", packing: null, grindId: null, cartLineId: null})}, defaultPacking: "Aroma", transport: {mutate: async operation => {unsafeCalls += 1; assert.equal(operation.kind, "set-cart-line-quantity"); return {statusCode: 200, body: bytes(changed)};}}});
   const result = await mutator.execute({operationRef: "op_01ARZ3NDEKTSV4RRFFQ69G5FAV", cartScopeRef: "aroma-primary", operationKind: "SetLineQuantity", offerRef, quantityMilli: "2"}, {}, new AbortController().signal);
   assert.equal(result.state, "Acknowledged");
   assert.equal(unsafeCalls, 1);

@@ -9,7 +9,7 @@
 
 Catalog должен сопоставлять записи поставщика между полными snapshots, не
 передавая raw provider identifiers за пределы Gateway. Identity обязана быть
-детерминированной, разделять product/variant/offer domains и не зависеть от
+детерминированной, разделять product/variant/offer/grind domains и не зависеть от
 изменяемых display/price/availability facts. Предыдущая profile-запись с
 `supplierProductRef`, `supplierVariantRef`, `normalizedPack` и `normalizedUnit`
 не является согласованным byte-level контрактом.
@@ -17,8 +17,10 @@ Catalog должен сопоставлять записи поставщика 
 ## Решение
 
 Gateway использует только `aroma.catalogIdentityKeyV1` как отдельный typed key
-input. Для `supplierRef`, строгого `entityType` (`product | variant | offer`) и
-raw provider identifier helper строит ровно следующую последовательность байт:
+input. Для `supplierRef`, строгого `entityType` (`product | variant | offer | grind`) и
+raw provider identifier helper строит ровно следующую последовательность байт. Для
+`grind` raw identifier является provider grind ID; схема и ключ остаются теми же,
+а product/variant/offer hashes не меняются:
 
 ```text
 UTF-8("hmac-sha256-v1")

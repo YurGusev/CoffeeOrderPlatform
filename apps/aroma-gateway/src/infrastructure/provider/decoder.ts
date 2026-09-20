@@ -168,8 +168,19 @@ function decimalText(value: unknown): string {
   return normalized;
 }
 
+const CATALOG_MONEY_SOURCE = Symbol("catalog-money-source");
+type CatalogMoneySource = {[CATALOG_MONEY_SOURCE]: string};
+
+function isCatalogMoneySource(value: unknown): value is CatalogMoneySource {
+  return value !== null && typeof value === "object" && CATALOG_MONEY_SOURCE in value;
+}
+
 function catalogMoneyText(value: unknown): string {
-  const normalized = typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? String(value) : value;
+  const normalized = typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? String(value)
+    : typeof value === "object" && value !== null && CATALOG_MONEY_SOURCE in value
+      ? (value as CatalogMoneySource)[CATALOG_MONEY_SOURCE]
+      : value;
   if (typeof normalized !== "string" || !DECIMAL.test(normalized)) invalid();
   return normalized;
 }
@@ -190,16 +201,24 @@ function isZeroDecimal(value: string): boolean {
   return /^0(?:\.0+)?$/u.test(value);
 }
 
-function jsonBody(body: unknown): unknown {
+function jsonBody(body: unknown, mode: "default" | "catalog" = "default"): unknown {
+  const reviver = mode === "catalog"
+    ? (key: string, value: unknown, context?: {source: string}): unknown => {
+      if (key === "price" && typeof value === "number" && context !== undefined) {
+        return {[CATALOG_MONEY_SOURCE]: context.source};
+      }
+      return value;
+    }
+    : undefined;
   if (body instanceof Uint8Array) {
     let decoded: string;
     try { decoded = new TextDecoder("utf-8", {fatal: true}).decode(body); } catch { invalid(true); }
     if (decoded.length === 0) invalid(true);
-    try { return JSON.parse(decoded) as unknown; } catch { invalid(); }
+    try { return JSON.parse(decoded, reviver) as unknown; } catch { invalid(); }
   }
   if (typeof body === "string") {
     if (body.length === 0) invalid(true);
-    try { return JSON.parse(body) as unknown; } catch { invalid(); }
+    try { return JSON.parse(body, reviver) as unknown; } catch { invalid(); }
   }
   return body;
 }
@@ -228,11 +247,12 @@ export function decodeCartSnapshot(body: unknown): ProviderCartSnapshot {
     };
   });
   const cartLineIds = new Set<string>();
-  const offerIds = new Set<string>();
+  const offerIdentities = new Set<string>();
   for (const line of lines) {
-    if (cartLineIds.has(line.cartLineId) || offerIds.has(line.offerId)) invalid();
+    const offerIdentity = line.offerId + "\u0000" + (line.packing ?? "") + "\u0000" + (line.grindId ?? "");
+    if (cartLineIds.has(line.cartLineId) || offerIdentities.has(offerIdentity)) invalid();
     cartLineIds.add(line.cartLineId);
-    offerIds.add(line.offerId);
+    offerIdentities.add(offerIdentity);
   }
 
   // Empty is a semantic result only after the complete observed empty shape has
@@ -247,7 +267,7 @@ export function decodeCartSnapshot(body: unknown): ProviderCartSnapshot {
 }
 
 export function decodeCatalogPage(body: unknown): ProviderCatalogPage {
-  const root = record(jsonBody(body));
+  const root = record(jsonBody(body, "catalog"));
   const data = array(root, "data");
   const links = record(required(root, "links", (value): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value)));
   for (const key of ["first", "last", "prev", "next"] as const) {
@@ -269,7 +289,7 @@ export function decodeCatalogPage(body: unknown): ProviderCatalogPage {
         offerId: providerId(required(offer, "id", (_value): _value is unknown => true)),
         name: text(required(offer, "name", (item): item is string => typeof item === "string")),
         vendorCode: text(required(offer, "vendor_code", (item): item is string => typeof item === "string")),
-        priceRaw: catalogMoneyText(required(offer, "price", (item): item is number | string => typeof item === "number" || typeof item === "string")),
+        priceRaw: catalogMoneyText(required(offer, "price", (item): item is number | string | CatalogMoneySource => typeof item === "number" || typeof item === "string" || isCatalogMoneySource(item))),
         ...(params === undefined ? {} : {params}),
       };
     });

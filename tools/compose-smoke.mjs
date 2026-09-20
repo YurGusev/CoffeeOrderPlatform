@@ -18,11 +18,12 @@ import {request as httpsRequest} from "node:https";
 import { join, resolve } from "node:path";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { load as parseYaml } from "js-yaml";
+import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../packages/platform-security/src/index.ts";
 import {createDatabase} from "../packages/platform-database/dist/index.js";
 import {applyMigrations, migrationChecksum} from "../packages/platform-migrations/dist/index.js";
 import {OfferBindingStore} from "../apps/aroma-gateway/dist/infrastructure/database/offer-binding-store.js";
+import {createSourceIdentity} from "../apps/aroma-gateway/dist/domain/source-identity.js";
 import pg from "pg";
 import {
   SERVER_IDENTITY_SQL,
@@ -554,6 +555,19 @@ async function materializeSecrets(secretsDir, options) {
         encoding: "utf8",
         stdio: ["ignore", "ignore", "pipe"],
       });
+      const kafkaRefs = platformConfig.services[runtime].secretRefs.filter((ref) => ref.startsWith("kafka."));
+      if (kafkaRefs.length > 0) {
+        const document = parseYaml(await readFile(path, "utf8"), {json: true});
+        for (const ref of kafkaRefs) {
+          const segments = ref.split(".");
+          let target = document.secrets;
+          for (const segment of segments.slice(0, -1)) target = target[segment] ??= {};
+          target[segments.at(-1)] = kafkaCredential;
+        }
+        await chmod(path, 0o600);
+        await writeFile(path, dumpYaml(document, {noRefs: true, lineWidth: 120}), {encoding: "utf8", mode: 0o400});
+        await chmod(path, 0o400);
+      }
     }
     // Docker Compose's local file-secret backend ignores long-syntax uid/gid/mode
     // and bind-mounts the source inode. Own it by the exact non-root runtime UID
@@ -1130,6 +1144,7 @@ async function applyAromaBindingMigration(port, credentials, platformConfig) {
       "0004_provider_offer_identity",
       "0005_catalog_export_attempts",
       "0006_provider_mutation_retention",
+      "0007_provider_mutation_grind",
     ];
     const migrations = [];
     for (const id of migrationIds) {
@@ -2825,20 +2840,28 @@ async function prepareAromaCartProviderFixture(secretsDir) {
   execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", csr, "-subj", "/CN=aromateacoffee.ru"], {stdio: "ignore"});
   execFileSync("openssl", ["x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey, "-CAcreateserial", "-out", cert, "-days", "1", "-sha256", "-extfile", ext], {stdio: "ignore"});
   await writeFile(join(directory, "add-one-get.json"), await readFile(join(ROOT, "evidence/aroma-provider/2026-09-12-cart-mutations/add-one-get.json"), "utf8"), {encoding: "utf8", mode: 0o400});
+  const scopedGateway = parseYaml(await readFile(join(secretsDir, "aroma-gateway.yaml"), "utf8"), {json: true});
+  const supplierRef = "sup_00000000000000000000000001";
+  const catalogIdentityKey = Buffer.from(scopedGateway.secrets.aroma.catalogIdentityKeyV1, "utf8");
+  const grinds = Array.from({length: 12}, (_, index) => ({id: String(index + 1), name: `Fixture grind ${index + 1}`}));
+  await writeFile(join(directory, "catalog-grinds.json"), JSON.stringify(grinds) + "\n", {encoding: "utf8", mode: 0o400});
+  await writeFile(join(directory, "selected-grind.json"), JSON.stringify({rawId: "1", sourceGrindKeyHash: createSourceIdentity({supplierRef, entityType: "grind", rawProviderIdentifier: "1", sourceIdentityKey: catalogIdentityKey}).sourceIdentityHash}) + "\n", {encoding: "utf8", mode: 0o400});
   await writeFile(join(directory, "provider-count.json"), JSON.stringify({login: 0, cart: 0, post: 0, put: 0, delete: 0}) + "\n", {encoding: "utf8", mode: 0o600});
   await writeFile(join(directory, "provider-server.mjs"), `import {createServer} from "node:https";
 import {readFile, writeFile} from "node:fs/promises";
 const key = await readFile("/run/aroma-proof/provider.key");
 const cert = await readFile("/run/aroma-proof/provider.crt");
 let cart = JSON.parse(await readFile("/run/aroma-proof/add-one-get.json", "utf8"));
+const grinds = JSON.parse(await readFile("/run/aroma-proof/catalog-grinds.json", "utf8"));
+if (cart.products[0] !== undefined) cart.products[0].grind_id = "1";
 let counts = {login: 0, cart: 0, post: 0, put: 0, delete: 0};
 const persist = () => writeFile("/run/aroma-proof/provider-count.json", JSON.stringify(counts) + String.fromCharCode(10));
 const json = (response, status, body, headers = {}) => { response.writeHead(status, {"content-type": "application/json", ...headers}); response.end(body); };
 const currentLine = (cartLineId) => cart.products.find((product) => String(product.id) === String(cartLineId));
 const cartBytes = () => JSON.stringify(cart);
-const addLine = (offerId, quantity, packing) => {
+const addLine = (offerId, quantity, packing, grindId) => {
   const template = cart.products[0] ?? {id: 300001, offer: {id: Number(offerId), name: "Fixture coffee", vendor_code: "C-200-26", price: 852.6, params: []}, product_name: "Fixture coffee", preview: {path: "https://fixture.invalid/image", title: null, description: null}, offer_name: "Fixture coffee", grind_id: null, packing: packing ?? "Aroma", quantity: 1, price: 620, discount_value: 0, total_with_discount: 620, product_type: "coffee", product_slug: "fixture-coffee", category_composite_slug: "kofe/monosorta", show_on_wholesale: true, product_on_stop: false, sold_by_piece: false, disable_volume_discount: false, disable_personal_discount: false};
-  cart.products = [{...template, id: 300001, offer: {...template.offer, id: Number(offerId)}, quantity: Number(quantity), packing: packing ?? "Aroma", grind_id: null}];
+  cart.products = [{...template, id: 300001, offer: {...template.offer, id: Number(offerId)}, quantity: Number(quantity), packing: packing ?? "Aroma", grind_id: grindId ?? "1"}];
 };
 const server = createServer({key, cert}, async (request, response) => {
   if (request.method === "POST" && request.url === "/api/v1/auth/login") {
@@ -2850,11 +2873,14 @@ const server = createServer({key, cert}, async (request, response) => {
   if (request.method === "GET" && request.url === "/api/v1/cart/") {
     counts.cart += 1; await persist(); json(response, 200, cartBytes()); return;
   }
+  if (request.method === "GET" && request.url === "/api/v1/catalog/grinds") {
+    json(response, 200, JSON.stringify({data: grinds})); return;
+  }
   if (request.url === "/api/v1/cart/" && request.method === "POST") {
     counts.post += 1; await persist();
     let input = ""; for await (const chunk of request) input += chunk;
     const form = new URLSearchParams(input);
-    addLine(form.get("offer_id"), form.get("quantity"), form.get("packing"));
+    addLine(form.get("offer_id"), form.get("quantity"), form.get("packing"), form.get("grind_id"));
     if (form.get("quantity") === "3") { json(response, 200, JSON.stringify({malformed: true})); return; }
     json(response, 200, cartBytes()); return;
   }
@@ -2894,6 +2920,7 @@ import {request as httpsRequest} from "node:https";
 const caller = JSON.parse(await readFile("/run/aroma-proof/caller.json", "utf8"));
 const convergence = JSON.parse(await readFile("/run/aroma-proof/convergence.json", "utf8"));
 const foreign = JSON.parse(await readFile("/run/aroma-proof/foreign.json", "utf8"));
+const selectedGrind = JSON.parse(await readFile("/run/aroma-proof/selected-grind.json", "utf8"));
 const expectedSan = "URI:spiffe://coffee-platform/__ENV__/api-internal";
 const offerRef = "off_00000000000000000000000001";
 const readPath = "/api/internal-v1/aroma/cart-snapshots:read";
@@ -2913,33 +2940,33 @@ const malformed = await requestApi(caller, readPath, {cartScopeRef: "wrong"});
 const safe = await requestApi(caller, readPath, readBody);
 if (unauthorized.status !== 401 || spoofed.status !== 403 || malformed.status !== 400 || safe.status !== 200) throw new Error("safe-read authorization matrix failed: " + [unauthorized.status, spoofed.status, malformed.status, safe.status].join("/"));
 if (JSON.stringify(safe.body).includes("300000") || JSON.stringify(safe.body).includes("fixture-cookie")) throw new Error("provider material crossed the API boundary");
-if (safe.body?.cartScopeRef !== "aroma-primary" || safe.body?.lines?.length !== 1 || safe.body.lines[0].offerRef !== offerRef || safe.body.lines[0].quantity !== "__INITIAL_QUANTITY__") throw new Error("sanitized cart snapshot mismatch");
-const setBody = {operationRef: "op_00000000000000000000000001", cartScopeRef: "aroma-primary", quantity: "2"};
+if (safe.body?.cartScopeRef !== "aroma-primary" || safe.body?.lines?.length !== 1 || safe.body.lines[0].offerRef !== offerRef || safe.body.lines[0].quantity !== "__INITIAL_QUANTITY__" || safe.body.lines[0].sourceGrindKeyHash !== selectedGrind.sourceGrindKeyHash) throw new Error("sanitized cart snapshot mismatch");
+const setBody = {operationRef: "op_00000000000000000000000001", cartScopeRef: "aroma-primary", quantity: "2", sourceGrindKeyHash: selectedGrind.sourceGrindKeyHash};
 const set = await requestApi(convergence, setPath, setBody);
-if (set.status !== 200 || set.body?.state !== "Acknowledged" || set.body?.operationRef !== setBody.operationRef) throw new Error("set mutation was not acknowledged: status=" + set.status + " state=" + String(set.body?.state ?? "none") + " code=" + String(set.body?.code ?? "none"));
+if (set.status !== 200 || set.body?.state !== "Acknowledged" || set.body?.operationRef !== setBody.operationRef || set.body?.sourceGrindKeyHash !== selectedGrind.sourceGrindKeyHash) throw new Error("set mutation was not acknowledged: status=" + set.status + " state=" + String(set.body?.state ?? "none") + " code=" + String(set.body?.code ?? "none"));
 const afterSet = await requestApi(caller, readPath, readBody);
-if (afterSet.status !== 200 || afterSet.body?.lines?.[0]?.quantity !== "__AFTER_SET_QUANTITY__") throw new Error("set fresh cart read-back mismatch");
+if (afterSet.status !== 200 || afterSet.body?.lines?.[0]?.quantity !== "__AFTER_SET_QUANTITY__" || afterSet.body?.lines?.[0]?.sourceGrindKeyHash !== selectedGrind.sourceGrindKeyHash) throw new Error("set fresh cart read-back mismatch");
 const setCounts = await readCounts();
 const setReplay = await requestApi(convergence, setPath, setBody);
 if (setReplay.status !== 200 || Buffer.compare(set.responseBytes, setReplay.responseBytes) !== 0) throw new Error("set replay response bytes changed");
 if (JSON.stringify(await readCounts()) !== JSON.stringify(setCounts)) throw new Error("set replay dispatched a second unsafe call");
-const removeBody = {operationRef: "op_00000000000000000000000002", cartScopeRef: "aroma-primary"};
+const removeBody = {operationRef: "op_00000000000000000000000002", cartScopeRef: "aroma-primary", sourceGrindKeyHash: selectedGrind.sourceGrindKeyHash};
 const remove = await requestApi(convergence, removePath, removeBody);
-if (remove.status !== 200 || remove.body?.state !== "Acknowledged" || remove.body?.operationRef !== removeBody.operationRef) throw new Error("remove mutation was not acknowledged");
+if (remove.status !== 200 || remove.body?.state !== "Acknowledged" || remove.body?.operationRef !== removeBody.operationRef || remove.body?.sourceGrindKeyHash !== selectedGrind.sourceGrindKeyHash) throw new Error("remove mutation was not acknowledged");
 const afterRemove = await requestApi(caller, readPath, readBody);
 if (afterRemove.status !== 200 || afterRemove.body?.lines?.length !== __AFTER_REMOVE_LINES__) throw new Error("remove fresh cart read-back mismatch");
 const removeCounts = await readCounts();
 const removeReplay = await requestApi(convergence, removePath, removeBody);
 if (removeReplay.status !== 200 || Buffer.compare(remove.responseBytes, removeReplay.responseBytes) !== 0) throw new Error("remove replay response bytes changed");
 if (JSON.stringify(await readCounts()) !== JSON.stringify(removeCounts)) throw new Error("remove replay dispatched a second unsafe call");
-const malformedBody = {operationRef: "op_00000000000000000000000003", cartScopeRef: "aroma-primary", quantity: "3"};
+const malformedBody = {operationRef: "op_00000000000000000000000003", cartScopeRef: "aroma-primary", quantity: "3", sourceGrindKeyHash: selectedGrind.sourceGrindKeyHash};
 const malformedMutation = await requestApi(convergence, setPath, malformedBody);
 if (malformedMutation.status !== 409 || malformedMutation.body?.code !== "AROMA_OPERATION_UNKNOWN_OUTCOME") throw new Error("malformed post-dispatch did not become UnknownOutcome");
 const malformedCounts = await readCounts();
 const malformedReplay = await requestApi(convergence, setPath, malformedBody);
 if (malformedReplay.status !== 409 || malformedReplay.body?.code !== "AROMA_OPERATION_UNKNOWN_OUTCOME") throw new Error("malformed UnknownOutcome replay failed");
 if (JSON.stringify(await readCounts()) !== JSON.stringify(malformedCounts)) throw new Error("malformed UnknownOutcome replay redispatched");
-const lostBody = {operationRef: "op_00000000000000000000000004", cartScopeRef: "aroma-primary", quantity: "4"};
+const lostBody = {operationRef: "op_00000000000000000000000004", cartScopeRef: "aroma-primary", quantity: "4", sourceGrindKeyHash: selectedGrind.sourceGrindKeyHash};
 const lost = await requestApi(convergence, setPath, lostBody);
 if (lost.status !== 409 || lost.body?.code !== "AROMA_OPERATION_UNKNOWN_OUTCOME") throw new Error("lost post-dispatch did not become UnknownOutcome");
 const lostCounts = await readCounts();
@@ -2980,7 +3007,7 @@ async function seedAromaCartReadBinding(port, credentials, platformConfig) {
       rawProviderProductId: "300001",
       rawProviderVariantId: "300000",
       packing: "Aroma",
-      grindId: null,
+      grindId: "1",
     }]);
     await store.completeExport(snapshotRef, "e".repeat(64));
     await store.register({offerRef, supplierRef, snapshotRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "d".repeat(64)});
@@ -3023,7 +3050,7 @@ async function readAromaMutationJournal(port, credentials, platformConfig, opera
   await client.connect();
   try {
     const result = await client.query(
-      `SELECT operation_ref, operation_kind, offer_ref, state, response_status, octet_length(response_body_bytes) AS response_bytes, outcome_hash, failure_code, caller_identity, original_caller, dispatched_at IS NOT NULL AS dispatched
+      `SELECT operation_ref, operation_kind, offer_ref, source_grind_key_hash, state, response_status, octet_length(response_body_bytes) AS response_bytes, outcome_hash, failure_code, caller_identity, original_caller, dispatched_at IS NOT NULL AS dispatched
        FROM integration.provider_mutation_journal
        WHERE operation_ref = ANY($1::varchar[])
        ORDER BY operation_ref`,
@@ -3033,6 +3060,7 @@ async function readAromaMutationJournal(port, credentials, platformConfig, opera
       operationRef: row.operation_ref,
       operationKind: row.operation_kind,
       offerRef: row.offer_ref,
+      sourceGrindKeyHash: row.source_grind_key_hash,
       state: row.state,
       responseStatus: row.response_status,
       responseBytes: row.response_bytes,
@@ -3047,7 +3075,7 @@ async function readAromaMutationJournal(port, credentials, platformConfig, opera
   }
 }
 
-function assertAromaMutationJournal(rows) {
+function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   assert.equal(rows.length, 4, "cart mutation proof must persist exactly four journal rows");
   const byRef = new Map(rows.map((row) => [row.operationRef, row]));
   const acknowledged = ["op_00000000000000000000000001", "op_00000000000000000000000002"];
@@ -3062,6 +3090,7 @@ function assertAromaMutationJournal(rows) {
     assert.equal(row.dispatched, true);
     assert.equal(row.callerIdentity, "api-internal");
     assert.equal(row.originalCaller, "aroma-convergence");
+    assert.equal(row.sourceGrindKeyHash, sourceGrindKeyHash);
   }
   const unknownFailures = new Map([
     ["op_00000000000000000000000003", "AROMA_PROVIDER_INVALID_RESPONSE"],
@@ -3078,6 +3107,7 @@ function assertAromaMutationJournal(rows) {
     assert.equal(row.dispatched, true);
     assert.equal(row.callerIdentity, "api-internal");
     assert.equal(row.originalCaller, "aroma-convergence");
+    assert.equal(row.sourceGrindKeyHash, sourceGrindKeyHash);
   }
   return rows;
 }
@@ -3286,6 +3316,7 @@ async function main() {
     } else if (options.aromaCartProof) {
       assert.ok(aromaCartSnapshot && aromaCartFixture && aromaCartProviderFixture && recoveryDatabaseProof && recoveryProofCredentials, "aroma cart proof fixtures are missing");
       const initialRows = await assertAromaCartTopology(projectName, secretsDir, composeFile);
+      const selectedGrind = JSON.parse(await readFile(join(aromaCartFixture.directory, "selected-grind.json"), "utf8"));
       aromaCartEvidence = await runAromaCartProofFixture(projectName, secretsDir, composeFile, aromaCartFixture, platformConfig.environment);
       const firstCounts = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
       assert.deepEqual(firstCounts, {login: 1, cart: 11, post: 1, put: 2, delete: 1}, "cart mutation provider call counts were not exact");
@@ -3295,7 +3326,7 @@ async function main() {
         "op_00000000000000000000000003",
         "op_00000000000000000000000004",
       ];
-      const firstJournalRows = assertAromaMutationJournal(await readAromaMutationJournal(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig, operationRefs));
+      const firstJournalRows = assertAromaMutationJournal(await readAromaMutationJournal(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig, operationRefs), selectedGrind.sourceGrindKeyHash);
       aromaCartEvidence = {...aromaCartEvidence, journalRows: firstJournalRows, realPostgresJournal: true, providerAccess: false, providerKind: "local-fake", liveProviderAcceptance: false};
       runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "aroma-gateway"], {composeFile, inherit: true});
       runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "aroma-gateway"], {composeFile, inherit: true});
@@ -3304,7 +3335,7 @@ async function main() {
       aromaCartRestartEvidence = await runAromaCartProofFixture(projectName, secretsDir, composeFile, aromaCartFixture, platformConfig.environment, "4");
       const secondCounts = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
       assert.deepEqual(secondCounts, {login: 1, cart: 15, post: 1, put: 2, delete: 1}, "restart did not reuse the encrypted PostgreSQL session or replay terminal mutations");
-      const secondJournalRows = assertAromaMutationJournal(await readAromaMutationJournal(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig, operationRefs));
+      const secondJournalRows = assertAromaMutationJournal(await readAromaMutationJournal(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig, operationRefs), selectedGrind.sourceGrindKeyHash);
       assert.deepEqual(secondJournalRows, firstJournalRows, "restart changed durable mutation journal rows");
       aromaCartRestartEvidence = {...aromaCartRestartEvidence, journalRows: secondJournalRows, realPostgresJournal: true, providerAccess: false, providerKind: "local-fake", liveProviderAcceptance: false};
       const boundedLogs = runCompose(projectName, secretsDir, ["logs", "--no-color", "--no-log-prefix", "--tail", "200", "api-internal", "aroma-gateway", "aroma-provider-fixture"], {composeFile});
@@ -3418,6 +3449,10 @@ async function main() {
         runtimes: options.aromaBindingProof || options.aromaCartProof ? ["api-internal", "aroma-gateway"] : options.databaseProof || options.customerProof ? 1 : RUNTIMES.length,
         kafka: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
         kafkaCompatibility: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
+        ephemeralKafkaBroker: !(options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof),
+        credentialSource: options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
+          ? "local-fixture"
+          : "canonical-runtime-plus-local-kafka-fixture",
         kafkaRetention: options.aromaBindingProof || options.aromaCartProof ? undefined : options.databaseProof || options.customerProof ? undefined : kafkaRetention,
         recoveryProof: options.recoveryProof
           ? {postgres: recoveryDatabaseProof, kafka: kafkaRetention, native: nativeFoundation}

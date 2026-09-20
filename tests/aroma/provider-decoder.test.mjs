@@ -6,6 +6,7 @@ import {
   decodeCatalogPage,
   decodeProviderRejection,
 } from "../../apps/aroma-gateway/dist/infrastructure/provider/decoder.js";
+import {decodeProviderGrinds} from "../../apps/aroma-gateway/dist/application/provider-grinds.js";
 
 const capture = async (name) => JSON.parse(await readFile(new URL(`../../evidence/aroma-provider/2026-09-12-cart-mutations/${name}`, import.meta.url), "utf8"));
 
@@ -33,10 +34,16 @@ void test("decoder отличает полный пустой cart от partial 
   const raw = await capture("add-one-get.json");
   assert.throws(() => decodeCartSnapshot({...raw, products: [{id: 1, offer: {id: 2, price: 1.2}, quantity: 1}]}), {code: "ProviderDecodeIncomplete"});
   assert.throws(() => decodeCartSnapshot({...raw, products: [raw.products[0], raw.products[0]]}), {code: "ProviderDecodeInvalid"});
+  const twoGrinds = {...raw, products: [
+    {...raw.products[0], id: 300001, grind_id: "1"},
+    {...raw.products[0], id: 300002, grind_id: "2"},
+  ]};
+  assert.equal(decodeCartSnapshot(twoGrinds).lines.length, 2);
 });
 
 void test("decoder принимает фактическую catalog page и проверяет использованные поля", async () => {
-  const page = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12-authenticated/catalog-page1.json", import.meta.url), "utf8"));
+  const pageText = await readFile(new URL("../../evidence/aroma-provider/2026-09-12-authenticated/catalog-page1.json", import.meta.url), "utf8");
+  const page = JSON.parse(pageText);
   const decoded = decodeCatalogPage(page);
   assert.equal(decoded.currentPage, 1);
   assert.ok(decoded.products.length > 0);
@@ -48,7 +55,18 @@ void test("decoder принимает фактическую catalog page и п�
   assert.deepEqual(decoded.products[0].offers[0].params, [{slug: "weight", value: "25"}]);
   assert.equal(decoded.products[0].offers[0].priceRaw, "0");
   assert.throws(() => decodeCatalogPage({...page, data: [{...page.data[0], offers: [{...page.data[0].offers[0], price: "not-a-decimal"}]}]}), {code: "ProviderDecodeInvalid"});
-  for (const price of [Number.MAX_SAFE_INTEGER + 1, 12.3]) assert.throws(() => decodeCatalogPage({...page, data: [{...page.data[0], offers: [{...page.data[0].offers[0], price}]}]}), {code: "ProviderDecodeInvalid"});
+  for (const price of [Number.MAX_SAFE_INTEGER + 1, 12.3, -1]) assert.throws(() => decodeCatalogPage({...page, data: [{...page.data[0], offers: [{...page.data[0].offers[0], price}]}]}), {code: "ProviderDecodeInvalid"});
+
+  const fractionalText = pageText.replace(/("price"\s*:\s*)0/u, "$112.30");
+  assert.notEqual(fractionalText, pageText);
+  const fractional = decodeCatalogPage(fractionalText);
+  assert.equal(fractional.products[0].offers[0].priceRaw, "12.30");
+  const fractionalBytes = decodeCatalogPage(new TextEncoder().encode(fractionalText));
+  assert.equal(fractionalBytes.products[0].offers[0].priceRaw, "12.30");
+  assert.equal(fractional.products[0].offers[0].name, decoded.products[0].offers[0].name);
+  assert.equal(fractional.currentPage, decoded.currentPage);
+  assert.throws(() => decodeCatalogPage(fractionalText.replace("12.30", "-1")), {code: "ProviderDecodeInvalid"});
+  assert.throws(() => decodeCatalogPage(fractionalText.replace("12.30", "1e2")), {code: "ProviderDecodeInvalid"});
 });
 
 void test("decoder preserves only normalized discount facts and rejects incomplete rules", async () => {
@@ -73,4 +91,14 @@ void test("rejection shapes are recognized without claiming that a 422 had no ef
   assert.deepEqual(rejection.errorFieldNames, ["offer_id"]);
   assert.throws(() => decodeProviderRejection(422, {error: "bad", errors: {offer_id: [4]}}), {code: "ProviderDecodeInvalid"});
   assert.throws(() => decodeProviderRejection(422, {}), {code: "ProviderDecodeInvalid"});
+});
+
+void test("provider grind decoder accepts only bounded id/name entries", () => {
+  assert.deepEqual(decodeProviderGrinds({data: [{id: 1, name: "Турка"}, {id: "2", name: "Френч-пресс"}]}), [
+    {rawId: "1", displayName: "Турка"},
+    {rawId: "2", displayName: "Френч-пресс"},
+  ]);
+  for (const invalid of [[], {data: []}, {data: [{id: 1, title: "unsupported"}]}, {data: [{id: 0, name: "bad"}]}, {data: [{id: 1, name: "x"}, {id: 1, name: "duplicate"}]}]) {
+    assert.throws(() => decodeProviderGrinds(invalid), {code: "ProviderDecodeInvalid"});
+  }
 });

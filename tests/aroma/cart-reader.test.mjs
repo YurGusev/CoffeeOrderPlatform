@@ -4,6 +4,7 @@ import {readFile} from "node:fs/promises";
 import test from "node:test";
 import {ProviderError} from "../../apps/aroma-gateway/dist/domain/provider-errors.js";
 import {ProviderCartReader} from "../../apps/aroma-gateway/dist/application/cart-reader.js";
+import {createSourceIdentity} from "../../apps/aroma-gateway/dist/domain/source-identity.js";
 
 const capture = async (name) => JSON.parse(await readFile(new URL(`../../evidence/aroma-provider/2026-09-12-cart-mutations/${name}`, import.meta.url), "utf8"));
 const sessionFor = (body) => ({read: async function* () { yield Buffer.from(JSON.stringify(body), "utf8"); }});
@@ -11,6 +12,8 @@ const reader = (body, resolve, now = "2026-09-12T16:20:00Z") => new ProviderCart
   sessions: {acquire: async () => sessionFor(body)},
   credentials: {scopeRef: "aroma-development", email: "canonical@example.test", password: "not-used-by-test"},
   bindings: {resolveByRawProviderOfferId: resolve},
+  supplierRef: "sup_00000000000000000000000001",
+  defaultPacking: "Aroma",
   now: () => now,
 });
 
@@ -55,18 +58,19 @@ void test("cart reader rejects independently changed packing or grind identity w
   }
 });
 
-void test("cart reader accepts a full-identity resolver mapping", async () => {
+void test("cart reader resolves the immutable base binding before applying provider choice", async () => {
   const body = await capture("add-one-get.json");
   const identities = [];
   const result = await new ProviderCartReader({
     sessions: {acquire: async () => sessionFor(body)},
     credentials: {scopeRef: "aroma-development", email: "canonical@example.test", password: "not-used-by-test"},
+    supplierRef: "sup_00000000000000000000000001",
+    defaultPacking: "Aroma",
     bindings: {
-      resolveByRawProviderOfferId: async () => { throw new Error("raw-only lookup must not be used"); },
-      resolveByProviderIdentity: async (identity) => { identities.push(identity); return {offerRef: "off_01ARZ3NDEKTSV4RRFFQ69G5FAV", providerIdentity: identity}; },
+      resolveByRawProviderOfferId: async (rawProviderOfferId) => { identities.push(rawProviderOfferId); return {offerRef: "off_01ARZ3NDEKTSV4RRFFQ69G5FAV", providerIdentity: {offerId: rawProviderOfferId}}; },
     },
   }).read();
-  assert.deepEqual(identities, [{offerId: "300000", packing: "Aroma", grindId: null}]);
+  assert.deepEqual(identities, ["300000"]);
   assert.deepEqual(result.lines, [{offerRef: "off_01ARZ3NDEKTSV4RRFFQ69G5FAV", quantity: "1"}]);
 });
 
@@ -77,6 +81,7 @@ void test("cart reader captures freshness at provider-body completion before bin
   const result = await new ProviderCartReader({
     sessions: {acquire: async () => ({read: async function* () { yield Buffer.from(JSON.stringify(body), "utf8"); events.push("provider-body-complete"); }})},
     credentials: {scopeRef: "aroma-development", email: "canonical@example.test", password: "not-used-by-test"},
+    defaultPacking: "Aroma",
     bindings: {
       resolveByRawProviderOfferId: async () => {
         events.push("binding-lookup");
@@ -95,7 +100,7 @@ void test("cart reader captures freshness at provider-body completion before bin
   assert.equal(result.capturedAt, "2026-09-12T16:20:00Z");
 });
 
-void test("cart reader uses one bounded bulk exact-identity lookup and preserves result order", async () => {
+void test("cart reader resolves base bindings in provider line order", async () => {
   const first = await capture("add-one-get.json");
   const second = {...first.products[0], id: first.products[0].id + 1, offer: {...first.products[0].offer, id: first.products[0].offer.id + 1}};
   const body = {...first, products: [first.products[0], second]};
@@ -103,36 +108,63 @@ void test("cart reader uses one bounded bulk exact-identity lookup and preserves
   const result = await new ProviderCartReader({
     sessions: {acquire: async () => sessionFor(body)},
     credentials: {scopeRef: "aroma-development", email: "canonical@example.test", password: "not-used-by-test"},
+    supplierRef: "sup_00000000000000000000000001",
+    defaultPacking: "Aroma",
     bindings: {
-      resolveByRawProviderOfferId: async () => { throw new Error("per-line lookup must not be used"); },
-      resolveByProviderIdentities: async (identities, supplierRef) => {
-        calls.push({identities, supplierRef});
-        return identities.map((identity, index) => ({
-          offerRef: `off_01ARZ3NDEKTSV4RRFFQ69G5FA${index + 1}`,
-          supplierRef,
-          providerIdentity: identity,
-        }));
+      resolveByRawProviderOfferId: async (rawProviderOfferId, supplierRef) => {
+        calls.push(rawProviderOfferId);
+        return {offerRef: `off_01ARZ3NDEKTSV4RRFFQ69G5FA${calls.length}`, supplierRef, providerIdentity: {offerId: rawProviderOfferId}};
       },
     },
   }).read();
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].identities.length, 2);
+  assert.deepEqual(calls, ["300000", "300001"]);
   assert.deepEqual(result.lines.map((line) => line.offerRef), ["off_01ARZ3NDEKTSV4RRFFQ69G5FA1", "off_01ARZ3NDEKTSV4RRFFQ69G5FA2"]);
 });
 
-void test("cart reader fails closed when a bulk identity is missing or crosses supplier", async () => {
+void test("cart reader fails closed when a base identity is missing or crosses supplier", async () => {
   const body = await capture("add-one-get.json");
   for (const binding of [undefined, {offerRef: "off_01ARZ3NDEKTSV4RRFFQ69G5FAV", supplierRef: "sup_foreign", providerIdentity: {offerId: "300000", packing: "Aroma", grindId: null}}]) {
     const reader = new ProviderCartReader({
       sessions: {acquire: async () => sessionFor(body)},
       credentials: {scopeRef: "aroma-development", email: "canonical@example.test", password: "not-used-by-test"},
+      defaultPacking: "Aroma",
       bindings: {
-        resolveByRawProviderOfferId: async () => { throw new Error("per-line lookup must not be used"); },
-        resolveByProviderIdentities: async () => [binding],
+        resolveByRawProviderOfferId: async () => binding,
       },
     });
     await assert.rejects(reader.read(), {code: "ProviderCartMappingMissing"});
   }
+});
+
+void test("cart reader keeps two selected grinds as distinct lines of one offer", async () => {
+  const supplierRef = "sup_00000000000000000000000001";
+  const sourceIdentityKey = Buffer.from("cart-reader-grind-key");
+  const body = {
+    products: [
+      {id: 300001, offer: {id: 300000, price: 1}, quantity: 1, packing: "Aroma", grind_id: "1"},
+      {id: 300002, offer: {id: 300000, price: 1}, quantity: 2, packing: "Aroma", grind_id: "2"},
+    ],
+    prices: {categories: [], weights: [], discounts: [], prices: [], total: {default: 0, promo: 0}},
+  };
+  const session = {
+    read: async function* (operation) {
+      yield Buffer.from(JSON.stringify(operation.kind === "grinds" ? [{id: 1, name: "Турка"}, {id: 2, name: "Френч"}] : body), "utf8");
+    },
+  };
+  const result = await new ProviderCartReader({
+    sessions: {acquire: async () => session},
+    credentials: {scopeRef: "aroma-development", email: "canonical@example.test", password: "not-used-by-test"},
+    supplierRef,
+    defaultPacking: "Aroma",
+    sourceIdentityKey,
+    bindings: {resolveByRawProviderOfferId: async () => ({offerRef: "off_01ARZ3NDEKTSV4RRFFQ69G5FAV", supplierRef, providerIdentity: {offerId: "300000"}})},
+  }).read();
+  const firstHash = createSourceIdentity({supplierRef, entityType: "grind", rawProviderIdentifier: "1", sourceIdentityKey}).sourceIdentityHash;
+  const secondHash = createSourceIdentity({supplierRef, entityType: "grind", rawProviderIdentifier: "2", sourceIdentityKey}).sourceIdentityHash;
+  assert.deepEqual(result.lines, [
+    {offerRef: "off_01ARZ3NDEKTSV4RRFFQ69G5FAV", quantity: "1", sourceGrindKeyHash: firstHash},
+    {offerRef: "off_01ARZ3NDEKTSV4RRFFQ69G5FAV", quantity: "2", sourceGrindKeyHash: secondHash},
+  ]);
 });
 
 void test("partial provider stream never becomes empty cart", async () => {
@@ -140,6 +172,7 @@ void test("partial provider stream never becomes empty cart", async () => {
   const result = new ProviderCartReader({
     sessions: {acquire: async () => ({read: async function* () { yield Buffer.from("{\"products\":[]", "utf8"); throw new ProviderError("ProviderReadIncomplete", true); }})},
     credentials: {scopeRef: "aroma-development", email: "canonical@example.test", password: "not-used-by-test"},
+    defaultPacking: "Aroma",
     bindings: {resolveByRawProviderOfferId: async () => undefined},
   });
   await assert.rejects(result.read(), {code: "ProviderReadIncomplete"});

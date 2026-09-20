@@ -18,6 +18,7 @@ import {
 export type ReadOperation =
   | Readonly<{ kind: "cart" }>
   | Readonly<{ kind: "user" }>
+  | Readonly<{ kind: "grinds" }>
   | Readonly<{ kind: "catalog-page"; page: number; pageSize: number }>;
 
 export type MutationOperation =
@@ -77,6 +78,8 @@ function operationPath(operation: ReadOperation): string {
       return "/api/v1/cart/";
     case "user":
       return "/api/v1/user";
+    case "grinds":
+      return "/api/v1/catalog/grinds";
     case "catalog-page": {
       if (!positive(operation.page) || !positive(operation.pageSize))
         throw new ProviderError("ProviderProtocolViolation");

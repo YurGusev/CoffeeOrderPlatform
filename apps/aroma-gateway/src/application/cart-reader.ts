@@ -4,6 +4,8 @@ import {nowInstant} from "@coffee-platform/platform-time";
 import {ProviderError} from "../domain/provider-errors.js";
 import {decodeCartSnapshot} from "../infrastructure/provider/decoder.js";
 import {readProviderSafely, type ProviderCredentialScope, type ProviderSessionManager} from "../infrastructure/provider/session.js";
+import {readProviderGrinds} from "./provider-grinds.js";
+import type {SourceIdentityKey} from "../domain/source-identity.js";
 
 export type CartProviderIdentity = Readonly<{
   offerId: string;
@@ -32,6 +34,8 @@ export type ProviderCartReaderOptions = Readonly<{
   credentials: ProviderCredentialScope;
   bindings: CartOfferBindingResolver;
   supplierRef: string;
+  defaultPacking: string;
+  sourceIdentityKey?: SourceIdentityKey;
   now?: () => string;
 }>;
 
@@ -58,15 +62,12 @@ async function collect(source: AsyncIterable<Uint8Array>, signal: AbortSignal): 
   return result;
 }
 
-function canonicalLines(lines: readonly Readonly<{offerRef: string; quantity: string}>[]): Uint8Array {
-  const ordered = [...lines].sort((left, right) => left.offerRef.localeCompare(right.offerRef));
+function canonicalLines(lines: readonly Readonly<{offerRef: string; quantity: string; sourceGrindKeyHash?: string}>[]): Uint8Array {
+  const ordered = [...lines].sort((left, right) => {
+    const offerOrder = left.offerRef.localeCompare(right.offerRef);
+    return offerOrder !== 0 ? offerOrder : (left.sourceGrindKeyHash ?? "").localeCompare(right.sourceGrindKeyHash ?? "");
+  });
   return Buffer.from(JSON.stringify(ordered), "utf8");
-}
-
-function sameProviderIdentity(value: unknown, expected: CartProviderIdentity): boolean {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const identity = value as Record<string, unknown>;
-  return identity["offerId"] === expected.offerId && identity["packing"] === expected.packing && identity["grindId"] === expected.grindId;
 }
 
 async function resolveCartBinding(
@@ -75,12 +76,10 @@ async function resolveCartBinding(
   supplierRef: string | undefined,
   signal: AbortSignal,
 ): Promise<CartOfferBinding | undefined> {
-  const binding = resolver.resolveByProviderIdentity === undefined
-    ? await resolver.resolveByRawProviderOfferId(identity.offerId, supplierRef ?? "", signal)
-    : await resolver.resolveByProviderIdentity(identity, supplierRef ?? "", signal);
+  const binding = await resolver.resolveByRawProviderOfferId(identity.offerId, supplierRef ?? "", signal);
   return binding !== undefined &&
     (supplierRef === undefined || binding.supplierRef === undefined || binding.supplierRef === supplierRef) &&
-    sameProviderIdentity(binding.providerIdentity, identity) ? binding : undefined;
+    (binding.providerIdentity === undefined || binding.providerIdentity.offerId === identity.offerId) ? binding : undefined;
 }
 
 /**
@@ -93,6 +92,8 @@ export class ProviderCartReader {
   readonly #credentials: ProviderCredentialScope;
   readonly #bindings: CartOfferBindingResolver;
   readonly #supplierRef: string;
+  readonly #defaultPacking: string;
+  readonly #sourceIdentityKey: SourceIdentityKey | undefined;
   readonly #now: () => string;
 
   constructor(options: ProviderCartReaderOptions) {
@@ -100,6 +101,8 @@ export class ProviderCartReader {
     this.#credentials = options.credentials;
     this.#bindings = options.bindings;
     this.#supplierRef = options.supplierRef;
+    this.#defaultPacking = options.defaultPacking;
+    this.#sourceIdentityKey = options.sourceIdentityKey;
     this.#now = options.now ?? (() => nowInstant().toString());
   }
 
@@ -111,29 +114,38 @@ export class ProviderCartReader {
     const capturedAt = this.#now();
     const decoded = decodeCartSnapshot(body);
     const identities = decoded.lines.map((line): CartProviderIdentity => ({offerId: line.offerId, packing: line.packing, grindId: line.grindId}));
+    const grindOptions = decoded.lines.some((line) => line.grindId !== null)
+      ? this.#sourceIdentityKey === undefined
+        ? (() => { throw new ProviderError("ProviderCartMappingMissing"); })()
+        : await readProviderGrinds(this.#sessions, this.#credentials, this.#supplierRef, this.#sourceIdentityKey, signal)
+      : [];
+    const grindHashesByRawId = new Map(grindOptions.map((option) => [option.rawId, option.sourceGrindKeyHash]));
     let bindings: readonly (CartOfferBinding | undefined)[];
     if (identities.length === 0) {
       bindings = [];
-    } else if (this.#bindings.resolveByProviderIdentities !== undefined) {
-      bindings = await this.#bindings.resolveByProviderIdentities(identities, this.#supplierRef, signal);
-      if (bindings.length !== identities.length) throw new ProviderError("ProviderCartMappingAmbiguous");
     } else {
       const resolved: Array<CartOfferBinding | undefined> = [];
       for (const identity of identities) resolved.push(await resolveCartBinding(this.#bindings, identity, this.#supplierRef, signal));
       bindings = resolved;
     }
-    const lines: Array<Readonly<{offerRef: string; quantity: string}>> = [];
+    const lines: Array<Readonly<{offerRef: string; quantity: string; sourceGrindKeyHash?: string}>> = [];
     const offerRefs = new Set<string>();
     for (const [index, line] of decoded.lines.entries()) {
       const binding = bindings[index];
-      if (binding === undefined || !sameProviderIdentity(binding.providerIdentity, identities[index]! ) || (binding.supplierRef !== undefined && binding.supplierRef !== this.#supplierRef)) {
+      if (line.packing !== this.#defaultPacking || binding === undefined || (binding.supplierRef !== undefined && binding.supplierRef !== this.#supplierRef)) {
         throw new ProviderError("ProviderCartMappingMissing");
       }
-      if (typeof binding.offerRef !== "string" || binding.offerRef.length === 0 || !binding.offerRef.isWellFormed() || binding.offerRef.includes("\u0000") || offerRefs.has(binding.offerRef)) {
+      let sourceGrindKeyHash: string | undefined;
+      if (line.grindId !== null) {
+        sourceGrindKeyHash = grindHashesByRawId.get(line.grindId);
+        if (sourceGrindKeyHash === undefined) throw new ProviderError("ProviderCartMappingMissing");
+      }
+      const lineKey = binding.offerRef + "\u0000" + (sourceGrindKeyHash ?? "");
+      if (typeof binding.offerRef !== "string" || binding.offerRef.length === 0 || !binding.offerRef.isWellFormed() || binding.offerRef.includes("\u0000") || offerRefs.has(lineKey)) {
         throw new ProviderError("ProviderCartMappingAmbiguous");
       }
-      offerRefs.add(binding.offerRef);
-      lines.push({offerRef: binding.offerRef, quantity: String(line.quantity)});
+      offerRefs.add(lineKey);
+      lines.push({offerRef: binding.offerRef, quantity: String(line.quantity), ...(sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash})});
     }
     const providerSnapshotRef = `aroma-gateway:cart-body-sha256:${sha256(body)}`;
     return {

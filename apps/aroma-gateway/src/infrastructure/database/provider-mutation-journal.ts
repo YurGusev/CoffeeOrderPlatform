@@ -27,7 +27,7 @@ import {
 } from "../../domain/mutation-journal.js";
 
 const JOURNAL_COLUMNS = `operation_ref, cart_scope_ref, operation_kind, offer_ref, quantity_milli,
-  request_hash, caller_identity, original_caller, operation_id, correlation_id, traceparent,
+  source_grind_key_hash, request_hash, caller_identity, original_caller, operation_id, correlation_id, traceparent,
   state, reservation_owner, lease_until, provider_status_code, outcome_hash, failure_code,
   response_status, response_body_bytes, created_at, started_at, dispatched_at, completed_at, last_seen_at,
   retention_until`;
@@ -53,6 +53,7 @@ type JournalRow = Readonly<{
   operation_kind: unknown;
   offer_ref: unknown;
   quantity_milli: unknown;
+  source_grind_key_hash: unknown;
   request_hash: unknown;
   caller_identity: unknown;
   original_caller: unknown;
@@ -85,6 +86,7 @@ export type ProviderMutationJournalRecord = Readonly<{
   operationKind: "SetLineQuantity" | "RemoveLine";
   offerRef: string;
   quantityMilli: string | null;
+  sourceGrindKeyHash: string | null;
   requestHash: string;
   callerIdentity: string;
   originalCaller: string;
@@ -168,10 +170,12 @@ function rowToRecord(row: JournalRow): ProviderMutationJournalRecord {
   const providerStatusCode = nullableNumber(row.provider_status_code);
   const responseBodyBytes = nullableBytes(row.response_body_bytes);
   const requestHash = requiredString(row.request_hash);
+  const sourceGrindKeyHash = nullableString(row.source_grind_key_hash);
   const outcomeHash = nullableString(row.outcome_hash);
   const failureCode = nullableString(row.failure_code);
   if (outcomeHash !== null && !HASH.test(outcomeHash)) corrupt();
   if (!HASH.test(requestHash)) corrupt();
+  if (sourceGrindKeyHash !== null && !HASH.test(sourceGrindKeyHash)) corrupt();
   if (failureCode !== null && !FAILURE_CODE.test(failureCode)) corrupt();
   if (responseStatus !== null && (responseStatus < 100 || responseStatus > 599)) corrupt();
   if (providerStatusCode !== null && (providerStatusCode < 100 || providerStatusCode > 599)) corrupt();
@@ -184,6 +188,7 @@ function rowToRecord(row: JournalRow): ProviderMutationJournalRecord {
     operationKind,
     offerRef: requiredString(row.offer_ref),
     quantityMilli: quantity(row.quantity_milli),
+    sourceGrindKeyHash,
     requestHash,
     callerIdentity: requiredString(row.caller_identity),
     originalCaller: requiredString(row.original_caller),
@@ -221,14 +226,15 @@ function permit(record: ProviderMutationJournalRecord): DispatchPermit {
     operationRef: record.operationRef,
     requestHash: record.requestHash,
     reservationOwner: record.reservationOwner,
+    ...(record.sourceGrindKeyHash === null ? {} : {sourceGrindKeyHash: record.sourceGrindKeyHash}),
   };
 }
 
 function terminal(record: ProviderMutationJournalRecord, replayed: boolean): MutationTerminalResult {
   if ((record.state !== "Acknowledged" && record.state !== "Rejected") || record.responseStatus === null || record.responseBodyBytes === null) corrupt();
-  let expected: Readonly<{state: "Acknowledged" | "Rejected"; statusCode: number; failureCode?: string; operationRef?: string; cartScopeRef?: string; offerRef?: string}>;
+  let expected: Readonly<{state: "Acknowledged" | "Rejected"; statusCode: number; failureCode?: string; operationRef?: string; cartScopeRef?: string; offerRef?: string; sourceGrindKeyHash?: string}>;
   if (record.state === "Acknowledged") {
-    expected = {state: "Acknowledged", statusCode: record.responseStatus, operationRef: record.operationRef, cartScopeRef: record.cartScopeRef, offerRef: record.offerRef};
+    expected = {state: "Acknowledged", statusCode: record.responseStatus, operationRef: record.operationRef, cartScopeRef: record.cartScopeRef, offerRef: record.offerRef, ...(record.sourceGrindKeyHash === null ? {} : {sourceGrindKeyHash: record.sourceGrindKeyHash})};
   } else {
     if (record.failureCode === null) corrupt();
     expected = {state: "Rejected", statusCode: record.responseStatus, failureCode: record.failureCode};
@@ -258,12 +264,14 @@ function sameRequest(record: ProviderMutationJournalRecord, request: NormalizedM
     record.operationKind === request.operationKind &&
     record.offerRef === request.offerRef &&
     record.quantityMilli === request.quantityMilli &&
+    (record.sourceGrindKeyHash === null ? undefined : record.sourceGrindKeyHash) === request.sourceGrindKeyHash &&
     record.callerIdentity === delegation.callerIdentity &&
     record.originalCaller === delegation.originalCaller &&
     record.operationId === delegation.operationId;
 }
 
 function samePermit(record: ProviderMutationJournalRecord, value: DispatchPermit): boolean {
+  // requestHash already commits to sourceGrindKeyHash; reservations/permits retain the legacy shape.
   return record.operationRef === value.operationRef && record.requestHash === value.requestHash && record.reservationOwner === value.reservationOwner;
 }
 
@@ -287,7 +295,7 @@ function validateTerminalCleanupLimit(limit: number): void {
   if (!Number.isSafeInteger(limit) || limit <= 0 || limit > MAX_TERMINAL_CLEANUP_LIMIT) throw new MutationJournalError("AROMA_MUTATION_INVALID");
 }
 
-function validateResponseBytes(value: unknown, expected: Readonly<{state: "Acknowledged" | "Rejected"; statusCode: number; failureCode?: string}>): Uint8Array {
+function validateResponseBytes(value: unknown, expected: Readonly<{state: "Acknowledged" | "Rejected"; statusCode: number; failureCode?: string; sourceGrindKeyHash?: string}>): Uint8Array {
   if (!isValidGatewayMutationResponseBytes(value, expected)) throw new MutationJournalError("AROMA_MUTATION_INVALID");
   return new Uint8Array(value);
 }
@@ -298,11 +306,11 @@ function validateProviderStatus(value: number | undefined): number | null {
   return value;
 }
 
-function terminalResultFromInput(result: MutationAcknowledged | MutationRejected, replayed: boolean): MutationTerminalResult {
+function terminalResultFromInput(result: MutationAcknowledged | MutationRejected, replayed: boolean, sourceGrindKeyHash?: string): MutationTerminalResult {
   const providerStatusCode = validateProviderStatus(result.providerStatusCode);
   if (result.state === "Acknowledged") {
     if (result.statusCode !== 200) throw new MutationJournalError("AROMA_MUTATION_INVALID");
-    const responseBodyBytes = validateResponseBytes(result.responseBodyBytes, {state: "Acknowledged", statusCode: 200});
+    const responseBodyBytes = validateResponseBytes(result.responseBodyBytes, {state: "Acknowledged", statusCode: 200, ...(sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash})});
     return {
       state: "Acknowledged",
       statusCode: 200,
@@ -395,11 +403,11 @@ export class ProviderMutationJournalRepository {
 
   public constructor(database: Database) {
     this.#insertReservation = defineStatement(database, `INSERT INTO integration.provider_mutation_journal
-      (operation_ref, cart_scope_ref, operation_kind, offer_ref, quantity_milli, request_hash,
+      (operation_ref, cart_scope_ref, operation_kind, offer_ref, quantity_milli, source_grind_key_hash, request_hash,
        caller_identity, original_caller, operation_id, correlation_id, traceparent, state,
        reservation_owner, lease_until, created_at, started_at, last_seen_at)
-      VALUES ($1, $2, $3, $4, $5::bigint, $6, $7, $8, $9, $10::uuid, $11, 'Reserved', $12::uuid,
-        clock_timestamp() + ($13::bigint * interval '1 millisecond'), clock_timestamp(), clock_timestamp(), clock_timestamp())
+      VALUES ($1, $2, $3, $4, $5::bigint, $6, $7, $8, $9, $10, $11::uuid, $12, 'Reserved', $13::uuid,
+        clock_timestamp() + ($14::bigint * interval '1 millisecond'), clock_timestamp(), clock_timestamp(), clock_timestamp())
       ON CONFLICT (operation_ref) DO NOTHING
       RETURNING ${JOURNAL_COLUMNS}`);
     this.#takeoverReservation = defineStatement(database, `UPDATE integration.provider_mutation_journal
@@ -414,7 +422,8 @@ export class ProviderMutationJournalRepository {
         AND operation_kind = $8
         AND offer_ref = $9
         AND quantity_milli IS NOT DISTINCT FROM $10::bigint
-        AND cart_scope_ref = $11
+        AND source_grind_key_hash IS NOT DISTINCT FROM $11
+        AND cart_scope_ref = $12
         AND state = 'Reserved'
         AND lease_until <= clock_timestamp()
       RETURNING ${JOURNAL_COLUMNS}`);
@@ -504,6 +513,7 @@ export class ProviderMutationJournalRepository {
       normalized.operationKind,
       normalized.offerRef,
       normalized.quantityMilli,
+      normalized.sourceGrindKeyHash ?? null,
       requestHash,
       delegation.callerIdentity,
       delegation.originalCaller,
@@ -529,6 +539,7 @@ export class ProviderMutationJournalRepository {
         normalized.operationKind,
         normalized.offerRef,
         normalized.quantityMilli,
+        normalized.sourceGrindKeyHash ?? null,
         normalized.cartScopeRef,
       ]);
       const takeoverRow = takeover.rows[0];
@@ -554,7 +565,7 @@ export class ProviderMutationJournalRepository {
 
   public async acknowledge(transaction: Transaction, value: DispatchPermit, result: MutationAcknowledged): Promise<MutationTerminalResult> {
     validateOwner(value.reservationOwner);
-    const validated = terminalResultFromInput(result, false);
+    const validated = terminalResultFromInput(result, false, value.sourceGrindKeyHash);
     const updated = await this.#acknowledge(transaction, [
       value.operationRef,
       value.reservationOwner,

@@ -23,6 +23,7 @@ session payload.
 ```text
 operation_ref varchar(30) PRIMARY KEY; cart_scope_ref varchar(64);
 operation_kind SetLineQuantity|RemoveLine; offer_ref varchar(30); quantity_milli positive bigint for Set, NULL for Remove;
+source_grind_key_hash char(64) NULL — forward migration 0007;
 request_hash char(64); caller_identity varchar(64); original_caller varchar(64);
 operation_id varchar(128); correlation_id uuid; traceparent varchar(128);
 state Reserved|Dispatched|Acknowledged|Rejected|UnknownOutcome;
@@ -36,7 +37,7 @@ retention_until timestamptz NOT NULL — не ранее 90 дней после 
 `operation_kind` — транспортная операция Gateway: Orders `SetQuantity` отображается
 в `SetLineQuantity` только при строго положительном количестве, `Remove` — в
 `RemoveLine` с `NULL`. Canonical request hash включает
-operation/offer/quantity и trusted caller; `original_caller`/`operation_id`
+operation/offer/quantity, выбранный `sourceGrindKeyHash` и trusted caller; `original_caller`/`operation_id`
 проверяются из signed delegation до reserve/replay.
 
 `Dispatched` фиксируется CAS отдельной короткой transaction до unsafe HTTP.
@@ -52,7 +53,7 @@ JSON bytes, неверные поля или несогласованный stat
 
 Если COMMIT reserve возвращает `TRANSACTION_OUTCOME_UNKNOWN`, bounded reread по
 `operationRef` повторяет полную `sameRequest`-проверку исходных request hash,
-cart scope, operation, offer, quantity и trusted caller/delegation. Чужая row
+cart scope, operation, offer, quantity, выбранный помол и trusted caller/delegation. Чужая row
 возвращает `AROMA_OPERATION_REF_CONFLICT`; она не может стать replay исходного
 запроса. Отсутствующая row возвращает safe `UnknownOutcome`.
 
@@ -88,3 +89,26 @@ Replay acknowledged/rejected; hash conflict, включая competing row пос
 неопределённого reserve COMMIT; crash до/после dispatch; lost response;
 concurrent одинаковый operationRef; ровно один provider call;
 redaction; Gateway без grants к Orders; Orders без grants к Integration DB.
+
+## Выбор помола и совместимость журнала
+
+Оператор выбирает помол через Catalog/Orders. Gateway принимает только opaque
+`sourceGrindKeyHash` из своего справочника, разрешает его в raw provider ID
+внутри Gateway и проверяет полный cart key до и после mutation. В fingerprint
+и durable row входит выбранный hash. Тот же `operationRef` с другим помолом —
+конфликт, а не replay. Acknowledgement обязан подтверждать тот же выбор.
+
+Для запросов без помола canonical request bytes/hash сохранены; nullable
+колонка не меняет старые terminal responses. Forward migration `0007` не
+переписывает старые операции и не разрешает повторный dispatch.
+
+## Исполнимое ограничение количества
+
+Количество — целое число упаковок/штук по решению владельца. Gateway принимает
+`1..Number.MAX_SAFE_INTEGER`; верхняя граница — предел точного JSON-number
+представления транспорта, а не объявленный максимум AROMA. Ноль, дробь и выход
+за этот предел отклоняются до reserve/dispatch. Фактические ограничения AROMA
+(остаток, максимум для товара или аккаунта) не выдумываются: отказ после
+возможного dispatch обрабатывается существующим durable протоколом, без retry.
+Неизвестный универсальный максимум поставщика не превращается в разрешение
+на округление, fractional packages или слепой повтор запроса.

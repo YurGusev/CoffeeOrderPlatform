@@ -17,6 +17,10 @@ export type SupplierPromotion = Readonly<{
   providerCreatedAt: string;
   providerUpdatedAt: string;
 }>;
+export type CatalogGrindOption = Readonly<{
+  sourceGrindKeyHash: Sha256Hash;
+  displayName: string;
+}>;
 export type CatalogExportFailureCode =
   | "PROVIDER_UNAVAILABLE"
   | "PROVIDER_TIMEOUT"
@@ -31,8 +35,9 @@ export type NormalizedCatalogOffer = Readonly<{
   supplierUnitMinor: string;
   currency: "RUB";
   availability: CatalogAvailability;
-  imageUrl: string;
+  imageUrl: string | null;
   supplierPromotions: readonly SupplierPromotion[];
+  grindOptions?: readonly CatalogGrindOption[];
   /** Gateway-only source facts consumed by the persistence identity boundary. */
   providerIdentity?: Readonly<{
     rawProviderProductId: string;
@@ -111,8 +116,9 @@ export type CatalogItem = Readonly<{
   supplierUnitMinor: string;
   currency: "RUB";
   availability: CatalogAvailability;
-  imageUrl: string;
+  imageUrl: string | null;
   supplierPromotions: readonly SupplierPromotion[];
+  grindOptions?: readonly CatalogGrindOption[];
   sourceIdentityScheme: typeof CATALOG_SOURCE_IDENTITY_SCHEME;
 }>;
 
@@ -514,6 +520,16 @@ function validateSupplierPromotions(value: unknown): asserts value is readonly S
   }
 }
 
+function validateGrindOptions(value: unknown): asserts value is readonly CatalogGrindOption[] {
+  if (value === undefined) return;
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100) throw invalid("normalized offer grindOptions is invalid");
+  const seen = new Set<string>();
+  for (const option of value) {
+    if (!isPlainObject(option) || typeof option["sourceGrindKeyHash"] !== "string" || !HASH_PATTERN.test(option["sourceGrindKeyHash"]) || typeof option["displayName"] !== "string" || option["displayName"].length === 0 || option["displayName"].length > 200 || !option["displayName"].isWellFormed() || option["displayName"].includes("\u0000") || seen.has(option["sourceGrindKeyHash"])) throw invalid("normalized offer grindOptions is invalid");
+    seen.add(option["sourceGrindKeyHash"]);
+  }
+}
+
 function validateNormalizedOffer(
   value: unknown,
 ): asserts value is NormalizedCatalogOffer {
@@ -551,13 +567,15 @@ function validateNormalizedOffer(
     throw invalid("zero-price normalized offer cannot be Available");
   }
   if (
-    typeof value["imageUrl"] !== "string" ||
-    value["imageUrl"].length > 2048 ||
-    !URL.canParse(value["imageUrl"])
+    value["imageUrl"] !== null &&
+    (typeof value["imageUrl"] !== "string" ||
+      value["imageUrl"].length > 2048 ||
+      !URL.canParse(value["imageUrl"]))
   ) {
     throw invalid("normalized offer imageUrl is invalid");
   }
   validateSupplierPromotions(value["supplierPromotions"]);
+  validateGrindOptions(value["grindOptions"]);
 }
 
 function validateRawProviderId(
@@ -697,6 +715,7 @@ function outputItem(
       providerCreatedAt: promotion.providerCreatedAt,
       providerUpdatedAt: promotion.providerUpdatedAt,
     }))),
+    ...(offer.grindOptions === undefined ? {} : {grindOptions: Object.freeze(offer.grindOptions.map((option) => Object.freeze({sourceGrindKeyHash: option.sourceGrindKeyHash, displayName: option.displayName})))}),
     sourceIdentityScheme: CATALOG_SOURCE_IDENTITY_SCHEME,
   });
 }

@@ -36,6 +36,7 @@ function acknowledgedBytes(requestValue) {
     operationRef: requestValue.operationRef,
     cartScopeRef: requestValue.cartScopeRef,
     offerRef: requestValue.offerRef,
+    ...(requestValue.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash: requestValue.sourceGrindKeyHash}),
     state: "Acknowledged",
   }));
 }
@@ -286,15 +287,40 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
     await migrator.resource.start(AbortSignal.timeout(1000));
     const sql = await readFile(`${MIGRATIONS}/0002_provider_mutation_journal.sql`, "utf8");
     const retentionSql = await readFile(`${MIGRATIONS}/0006_provider_mutation_retention.sql`, "utf8");
+    const grindSql = await readFile(`${MIGRATIONS}/0007_provider_mutation_grind.sql`, "utf8");
     await applyMigrations(migrator, [
       {id: "0002_provider_mutation_journal", sql, checksum: migrationChecksum(sql)},
       {id: "0006_provider_mutation_retention", sql: retentionSql, checksum: migrationChecksum(retentionSql)},
+      {id: "0007_provider_mutation_grind", sql: grindSql, checksum: migrationChecksum(grindSql)},
     ], {schema: "integration", ledgerTable: "platform_schema_migrations", lockKey: "issue10-mutation-journal"});
     await migrator.resource.stop(AbortSignal.timeout(1000));
 
     direct = liveDatabase("aroma-journal-live-direct", database.name, runtime.role, rolePasswords[runtime.role], port);
     await direct.resource.start(AbortSignal.timeout(1000));
     const directStore = new ProviderMutationJournalStore(direct, {reservationOwner: LIVE_RESERVATION_OWNER, leaseMs: 30_000});
+
+    const takeoverRequest = {...request(30), sourceGrindKeyHash: "c".repeat(64)};
+    const shortLeaseStore = new ProviderMutationJournalStore(direct, {reservationOwner: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", leaseMs: 5});
+    const initialTakeover = await shortLeaseStore.reserve(takeoverRequest, delegation());
+    assert.equal(initialTakeover.kind, "Reserved");
+    await new Promise(resolve => setTimeout(resolve, 25));
+    const takeover = await directStore.reserve(takeoverRequest, delegation());
+    assert.equal(takeover.kind, "Reserved");
+    const takeoverRow = await directStore.get(takeoverRequest.operationRef);
+    assert.equal(takeoverRow?.sourceGrindKeyHash, takeoverRequest.sourceGrindKeyHash);
+    const takeoverDispatch = await directStore.markDispatched(takeover.reservation);
+    assert.equal(takeoverDispatch.kind, "DispatchPermitted");
+    let selectedProviderCalls = 1;
+    const selectedAck = await directStore.acknowledge(takeoverDispatch.permit, {state: "Acknowledged", statusCode: 200, responseBodyBytes: acknowledgedBytes(takeoverRequest)});
+    assert.equal(selectedAck.state, "Acknowledged");
+    const selectedReplay = await new GatewayMutationExecutor(directStore, async () => {
+      selectedProviderCalls++;
+      throw new Error("selected grind replay must not dispatch provider");
+    }).execute(takeoverRequest, delegation());
+    assert.equal(selectedReplay.state, "Acknowledged");
+    assert.equal(selectedReplay.replayed, true);
+    assert.equal(Buffer.from(selectedReplay.responseBodyBytes).toString("hex"), Buffer.from(selectedAck.responseBodyBytes).toString("hex"));
+    assert.equal(selectedProviderCalls, 1);
 
     proofStage = "reserve-conflict-after-unknown-commit";
     const originalRequest = request(34);
@@ -440,7 +466,7 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
     assert.equal(retainedReserved.state, "Reserved");
     assert.equal(await directStore.cleanupTerminal(100), 0);
 
-    return {migration: "0006_provider_mutation_retention", reserveConflictAfterUnknownCommit: true, conflictingRow: "Acknowledged", conflictingMutatorCalls, originalProviderMutatorCalls, terminalCommitReplay: true, terminalRow: "Acknowledged", unknownCommitWithoutTerminal: true, unknownRow: "Dispatched", terminalCommitWithoutTerminal: true, missingTerminalRow: "Dispatched", missingTerminalMutatorCalls, cleanupTerminalVsReserved: true, unsafeDispatchCalls, replayProviderCalls};
+    return {migration: "0007_provider_mutation_grind", expiredReservationTakeoverWithGrind: true, reserveConflictAfterUnknownCommit: true, conflictingRow: "Acknowledged", conflictingMutatorCalls, originalProviderMutatorCalls, terminalCommitReplay: true, terminalRow: "Acknowledged", unknownCommitWithoutTerminal: true, unknownRow: "Dispatched", terminalCommitWithoutTerminal: true, missingTerminalRow: "Dispatched", missingTerminalMutatorCalls, cleanupTerminalVsReserved: true, unsafeDispatchCalls, replayProviderCalls};
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "UNKNOWN";
     const sqlState = error && typeof error === "object" && "sqlState" in error && typeof error.sqlState === "string" ? error.sqlState : "none";
@@ -453,7 +479,7 @@ async function journalLiveProof({port, roleMap, rolePasswords}) {
 
 void test("LIVE: ProviderMutationJournalStore recovers unknown COMMIT without unsafe redispatch", {skip: process.env.COFFEE_DB_LIVE_PROOF !== "1"}, async () => {
   const result = await runLiveProof({runId: `issue10journal${Date.now().toString(36)}`, bindingProof: journalLiveProof});
-  assert.deepEqual(result.binding, {migration: "0006_provider_mutation_retention", reserveConflictAfterUnknownCommit: true, conflictingRow: "Acknowledged", conflictingMutatorCalls: 1, originalProviderMutatorCalls: 0, terminalCommitReplay: true, terminalRow: "Acknowledged", unknownCommitWithoutTerminal: true, unknownRow: "Dispatched", terminalCommitWithoutTerminal: true, missingTerminalRow: "Dispatched", missingTerminalMutatorCalls: 1, cleanupTerminalVsReserved: true, unsafeDispatchCalls: 0, replayProviderCalls: 0});
+  assert.deepEqual(result.binding, {migration: "0007_provider_mutation_grind", expiredReservationTakeoverWithGrind: true, reserveConflictAfterUnknownCommit: true, conflictingRow: "Acknowledged", conflictingMutatorCalls: 1, originalProviderMutatorCalls: 0, terminalCommitReplay: true, terminalRow: "Acknowledged", unknownCommitWithoutTerminal: true, unknownRow: "Dispatched", terminalCommitWithoutTerminal: true, missingTerminalRow: "Dispatched", missingTerminalMutatorCalls: 1, cleanupTerminalVsReserved: true, unsafeDispatchCalls: 0, replayProviderCalls: 0});
   assert.equal(result.cleanup.containerRemoved, true);
 });
 
@@ -469,7 +495,7 @@ void test("production composition mounts the typed mutation bridge without a tes
 
 void test("journal migration is ordered, Integration-owned, constrained, and does not define provider/session payload storage", async () => {
   const files = (await readdir(MIGRATIONS)).filter((name) => name.endsWith(".sql")).sort();
-  assert.deepEqual(files, ["0001_provider_sessions.sql", "0002_provider_mutation_journal.sql", "0003_offer_bindings.sql", "0004_provider_offer_identity.sql", "0005_catalog_export_attempts.sql", "0006_provider_mutation_retention.sql"]);
+  assert.deepEqual(files, ["0001_provider_sessions.sql", "0002_provider_mutation_journal.sql", "0003_offer_bindings.sql", "0004_provider_offer_identity.sql", "0005_catalog_export_attempts.sql", "0006_provider_mutation_retention.sql", "0007_provider_mutation_grind.sql"]);
   const sessionSql = await readFile(`${MIGRATIONS}/0001_provider_sessions.sql`, "utf8");
   assert.match(sessionSql, /CREATE TABLE integration\.provider_sessions/);
   assert.match(sessionSql, /encrypted_cookie_material bytea/);
@@ -490,6 +516,8 @@ void test("journal migration is ordered, Integration-owned, constrained, and doe
   assert.match(retentionSql, /ALTER COLUMN retention_until SET NOT NULL/);
   assert.match(retentionSql, /state IN \('Acknowledged', 'Rejected', 'UnknownOutcome'\)/);
   assert.match(retentionSql, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE integration\.provider_mutation_journal/);
+  const grindSql = await readFile(`${MIGRATIONS}/0007_provider_mutation_grind.sql`, "utf8");
+  assert.match(grindSql, /source_grind_key_hash/);
   const storeSql = await readFile(fileURLToPath(new URL("../../apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts", import.meta.url)), "utf8");
   assert.match(storeSql, /cleanupTerminal/);
   assert.match(storeSql, /DELETE FROM integration\.provider_mutation_journal/);
@@ -582,6 +610,24 @@ void test("delegation is rejected before reserve and a changed request conflicts
   assert.equal(shared.reserveCalls, 2);
 });
 
+void test("selected grind is part of the operation identity while legacy no-grind replay keeps its hash", async () => {
+  const shared = new SharedJournal();
+  const calls = {value: 0};
+  const executor = new GatewayMutationExecutor(new MemoryJournal(shared, "owner-a"), acknowledgeMutator(shared, calls));
+  const first = {...request(42), sourceGrindKeyHash: "a".repeat(64)};
+  const second = {...first, sourceGrindKeyHash: "b".repeat(64)};
+  await executor.execute(first, delegation());
+  await assert.rejects(executor.execute(second, delegation()), {code: "AROMA_OPERATION_REF_CONFLICT"});
+  assert.equal(calls.value, 1);
+
+  const legacy = request(43);
+  const legacyHash = canonicalMutationRequestHash(legacy, delegation());
+  assert.equal(legacyHash, canonicalMutationRequestHash({...legacy, sourceGrindKeyHash: undefined}, delegation()));
+  const replay = await executor.execute(legacy, delegation());
+  assert.equal(replay.replayed, false);
+  assert.equal(canonicalMutationRequestHash(legacy, delegation()), legacyHash);
+});
+
 void test("SetLineQuantity rejects null and zero before reserve while RemoveLine keeps null", async () => {
   const shared = new SharedJournal();
   const journal = new MemoryJournal(shared, "owner-a");
@@ -598,6 +644,17 @@ void test("SetLineQuantity rejects null and zero before reserve while RemoveLine
   );
   assert.equal(removeResult.state, "Acknowledged");
   assert.equal(removeCalls.value, 1);
+  assert.equal(shared.reserveCalls, 1);
+});
+
+void test("SetLineQuantity caps the integer at the lossless provider dispatch boundary", async () => {
+  const shared = new SharedJournal();
+  const journal = new MemoryJournal(shared, "owner-a");
+  const executor = new GatewayMutationExecutor(journal, acknowledgeMutator(shared, {value: 0}));
+  const accepted = {...request(44), quantityMilli: String(Number.MAX_SAFE_INTEGER)};
+  await assert.doesNotReject(executor.execute(accepted, delegation()));
+  assert.equal(shared.reserveCalls, 1);
+  await assert.rejects(executor.execute({...request(45), quantityMilli: String(Number.MAX_SAFE_INTEGER + 1)}, delegation()), {code: "AROMA_MUTATION_INVALID"});
   assert.equal(shared.reserveCalls, 1);
 });
 
@@ -656,6 +713,7 @@ void test("ProviderCartMutator malformed response becomes durable UnknownOutcome
     sessions: {acquire: async () => session},
     credentials: {scopeRef: "aroma-primary", email: "canonical@example.test", password: "test-only"},
     bindings: {resolveProviderOffer: async () => identity},
+    defaultPacking: "Aroma",
   });
   const executor = new GatewayMutationExecutor(journal, mutator.execute.bind(mutator));
   const first = await executor.execute(requestValue, delegation());

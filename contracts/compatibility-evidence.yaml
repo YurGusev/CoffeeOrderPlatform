@@ -3,6 +3,26 @@ optionalExpansions:
     location: contracts/openapi/internal-v1.yaml#AromaCatalogItem
     property: supplierPromotions
     fixture: contracts/fixtures/positive/ndjson/aroma-catalog-success.ndjson
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaCatalogItem
+    property: grindOptions
+    fixture: contracts/fixtures/positive/ndjson/aroma-catalog-grind-options.ndjson
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaCartLine
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaMutationResponse
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaSetQuantityRequest
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaRemoveLineRequest
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
 
 narrowingCorrections:
   - schemaPath: contracts/schemas/common/problem-details.v1.schema.json

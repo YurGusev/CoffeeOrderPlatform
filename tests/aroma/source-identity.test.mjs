@@ -67,12 +67,13 @@ void test("source identity normalizes provider identifiers to NFC only", () => {
   );
 });
 
-void test("product, variant, and offer remain separate HMAC domains", () => {
+void test("product, variant, offer, and grind remain separate HMAC domains", () => {
   const hashes = SOURCE_ENTITY_TYPES.map((entityType) => computeSourceIdentityHash({...INPUT, entityType}, KEY));
   assert.equal(new Set(hashes).size, SOURCE_ENTITY_TYPES.length);
   assert.equal(isSourceEntityType("product"), true);
   assert.equal(isSourceEntityType("variant"), true);
   assert.equal(isSourceEntityType("offer"), true);
+  assert.equal(isSourceEntityType("grind"), true);
   assert.equal(isSourceEntityType("Product"), false);
   assert.equal(isSourceEntityType("variant\u0000"), false);
   assert.equal(isSourceEntityType(null), false);

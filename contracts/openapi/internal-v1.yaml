@@ -786,13 +786,27 @@ components:
           type: string
           enum: [Available, Unavailable, Stopped]
         imageUrl:
-          type: string
+          type: [string, 'null']
           format: uri
           maxLength: 2048
         supplierPromotions:
           type: array
           items:
             $ref: '#/components/schemas/AromaSupplierPromotion'
+        grindOptions:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [sourceGrindKeyHash, displayName]
+            properties:
+              sourceGrindKeyHash:
+                $ref: '#/components/schemas/Hash'
+              displayName:
+                type: string
+                minLength: 1
+                maxLength: 200
         sourceIdentityScheme:
           type: string
           const: hmac-sha256-v1
@@ -905,6 +919,8 @@ components:
           $ref: '#/components/schemas/OfferRef'
         quantity:
           $ref: '#/components/schemas/QuantityDecimal'
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
     AromaCartSnapshot:
       type: object
       additionalProperties: false
@@ -939,6 +955,8 @@ components:
           const: aroma-primary
         quantity:
           $ref: '#/components/schemas/ProviderQuantity'
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
     AromaRemoveLineRequest:
       type: object
       additionalProperties: false
@@ -949,6 +967,8 @@ components:
         cartScopeRef:
           type: string
           const: aroma-primary
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
     AromaMutationResponse:
       type: object
       additionalProperties: false
@@ -961,6 +981,8 @@ components:
           const: aroma-primary
         offerRef:
           $ref: '#/components/schemas/OfferRef'
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
         state:
           const: Acknowledged
     ErrorValidationFailed:

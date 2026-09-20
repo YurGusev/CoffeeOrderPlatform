@@ -180,7 +180,7 @@ void test("zero-price captures preserve exact zero and become locally Unavailabl
   for (const price of ["-1", "-0.01", "1.001", "1e2"]) assert.throws(() => normalizeProviderPriceToMinor(price), {code: "ProviderProtocolViolation"});
 });
 
-void test("production normalizer rejects missing image, availability, identity, or unit facts", async () => {
+void test("production normalizer rejects malformed image, availability, identity, or unit facts", async () => {
   const capture = JSON.parse(await readFile(new URL("../../evidence/aroma-provider/2026-09-12/page47.json", import.meta.url), "utf8"));
   const decoded = decodeCatalogPage(capture);
   const product = decoded.products[0];
@@ -191,7 +191,8 @@ void test("production normalizer rejects missing image, availability, identity, 
     {...product, soldByPiece: undefined, offers: [offer]},
     {...product, productId: "", offers: [offer]},
   ];
-  for (const missingFact of cases) assert.throws(() => normalizeProviderCatalogOffer(missingFact, missingFact.offers[0]), {code: "ProviderProtocolViolation"});
+  assert.equal(normalizeProviderCatalogOffer(cases[0], cases[0].offers[0]).imageUrl, null);
+  for (const missingFact of cases.slice(1)) assert.throws(() => normalizeProviderCatalogOffer(missingFact, missingFact.offers[0]), {code: "ProviderProtocolViolation"});
 });
 
 

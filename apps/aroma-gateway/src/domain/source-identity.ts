@@ -2,7 +2,7 @@ import {createHmac} from "node:crypto";
 import type {KeyObject} from "node:crypto";
 
 export const SOURCE_IDENTITY_SCHEME = "hmac-sha256-v1" as const;
-export const SOURCE_ENTITY_TYPES = ["product", "variant", "offer"] as const;
+export const SOURCE_ENTITY_TYPES = ["product", "variant", "offer", "grind"] as const;
 
 export type SourceEntityType = (typeof SOURCE_ENTITY_TYPES)[number];
 export type SourceIdentityKey = Uint8Array | KeyObject;
@@ -67,7 +67,7 @@ function isNulFreeNonEmptyString(value: unknown): value is string {
 }
 
 export function isSourceEntityType(value: unknown): value is SourceEntityType {
-  return value === "product" || value === "variant" || value === "offer";
+  return value === "product" || value === "variant" || value === "offer" || value === "grind";
 }
 
 export function isSourceIdentityKey(value: unknown): value is SourceIdentityKey {

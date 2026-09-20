@@ -433,7 +433,7 @@ def validate_domain_contracts(catalog: Any, orders: Any) -> None:
         "inputEncoding": "UTF-8",
         "input": ["hmac-sha256-v1", "0x00", "supplierRef", "0x00", "entityType", "0x00", "NFC(rawProviderIdentifier)"],
         "separatorByte": 0,
-        "entityTypes": ["product", "variant", "offer"],
+        "entityTypes": ["product", "variant", "offer", "grind"],
         "supplierRefPolicy": "canonical-sup-ulid",
         "rawProviderIdentifierPolicy": "non-empty-nul-free-nfc-no-trim-no-case-fold",
         "outputEncoding": "lowercase-hex",
