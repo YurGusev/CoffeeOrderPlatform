@@ -1,0 +1,102 @@
+{
+  "products": [
+    {
+      "id": 300001,
+      "offer": {
+        "id": 300000,
+        "name": "Эфиопия Сидамо Грэйд 1, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+        "vendor_code": "C-200-26",
+        "price": 852.6,
+        "params": [
+          {
+            "param": {
+              "id": 300002,
+              "name": "Вес",
+              "slug": "weight",
+              "type": "number",
+              "icon": null
+            },
+            "param_value": {
+              "id": 300003,
+              "value": "200",
+              "slug": "200",
+              "icon": null
+            },
+            "value": null
+          },
+          {
+            "param": {
+              "id": 300004,
+              "name": "Молотый",
+              "slug": "is_grinded",
+              "type": "bool",
+              "icon": null
+            },
+            "param_value": null,
+            "value": "0"
+          }
+        ]
+      },
+      "product_name": "Эфиопия Сидамо Грэйд 1, кофе жареный",
+      "preview": {
+        "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6ba/66c/69a6ba66c084f490642240.jpg",
+        "title": null,
+        "description": null
+      },
+      "offer_name": "Эфиопия Сидамо Грэйд 1, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+      "grind_id": null,
+      "packing": "Aroma",
+      "quantity": 2,
+      "price": 1240,
+      "discount_value": 30,
+      "total_with_discount": 868,
+      "product_type": "coffee",
+      "product_slug": "efiopiia-sidamo-greid-1",
+      "category_composite_slug": "kofe/monosorta",
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    }
+  ],
+  "prices": {
+    "categories": [
+      {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      }
+    ],
+    "weights": {
+      "kofe": 400
+    },
+    "discounts": {
+      "kofe": {
+        "id": 300005,
+        "created_at": "2024-03-11T08:13:19.000000Z",
+        "updated_at": "2024-03-11T08:13:19.000000Z",
+        "category_id": 300006,
+        "user_id": 300007,
+        "min_weight": 0,
+        "discount": 30
+      }
+    },
+    "prices": {
+      "kofe": {
+        "default": 1240,
+        "promo": 868
+      }
+    },
+    "total": {
+      "default": 1240,
+      "promo": 868
+    }
+  }
+}

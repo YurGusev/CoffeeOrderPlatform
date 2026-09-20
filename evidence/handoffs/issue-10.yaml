@@ -1,0 +1,1466 @@
+issue: 10
+baseCommit: c0ee57ce9eec294d8b82a76fb991305753fc4c38
+currentIncrementBaseline: 07c07f18c666b445bdf338a01b5dea4bba25b9de
+status: ready-for-merge
+currentReadinessAuthority: finalDelivery
+historicalBaselines:
+  - kind: local-dirty-worktree-before-safe-read-increment
+    headAtCapture: c0ee57ce9eec294d8b82a76fb991305753fc4c38
+    diffArtifact: /tmp/issue-10-safe-read-baseline.diff
+    diffSha256: 54a80ecf4a60a5060520c53284f7e4f80ce01b8ba0bf0fd94b929797a1c5b349
+    statusArtifact: /tmp/issue-10-safe-read-baseline.status
+    statusSha256: e7c47f2df57a2099e54b40673787c9d9e1244e695d32d4d1391bcf93968da059
+  - kind: local-dirty-worktree-before-safe-read-remediation
+    headAtCapture: c0ee57ce9eec294d8b82a76fb991305753fc4c38
+    diffArtifact: /tmp/issue-10-safe-read-remediation-baseline.diff
+    diffSha256: e4158e74fdc5f359f17c7ba3eff757ae123695403170316977e94c3a6a43f725
+    statusArtifact: /tmp/issue-10-safe-read-remediation-baseline.status
+    statusSha256: 9f1f624d400b8adee8afe4b4c0b68b647f57875eb0b3bb0ff95ee1e00867d5ae
+  - kind: local-dirty-worktree-before-r1-r2-remediation
+    headAtCapture: c0ee57ce9eec294d8b82a76fb991305753fc4c38
+    diffArtifact: /tmp/issue-10-r1-r2-baseline.diff
+    diffSha256: 2e4592f4c1a6df88ebf7ed0737bd2e9880386f074d43a6d20b2f3a022dce32d8
+    statusArtifact: /tmp/issue-10-r1-r2-baseline.status
+    statusSha256: e68ea9731fe8afaaf93ff94b33090c491ba029b43cec8eb0415ba9a57c1b3239
+workingTree:
+  branch: feature/10-aroma-gateway
+  dirtyBefore: true
+  beforeCounts:
+    modifiedTracked: 41
+    untrackedEntries: 7
+  currentCounts:
+    modifiedTracked: 13
+    untrackedEntries: 3
+  headIsNotCommitOfAllChanges: true
+  currentIncrementCommitPerformed: true
+  currentIncrementPushPullRequestMergeDeploymentPerformed: false
+  localDevelopDocumentationSyncCommitPerformed: true
+scope:
+  included:
+    - exact api-internal and Gateway operations for Catalog export, cart read, set quantity and remove
+    - canonical supplier/account scope, signed delegation and native mTLS boundaries
+    - encrypted provider sessions, safe cart retry, full cart identity and durable mutation journal
+    - validated mutation acknowledgement, one unsafe dispatch and reconciliation without mutation retry
+    - supplier-scoped offer binding, collision detection and traversal provenance
+    - PostgreSQL, AROMA Compose and isolated recovery-proof acceptance harnesses
+  excluded:
+    - unproven provider packing/grind mapping and zero-price admission; accepted RUB×100 and package/piece unit policy are included
+    - unproven provider quantity bounds, step and fractional support
+    - Catalog staging/activation, Orders convergence, Pricing, checkout and invoices
+    - commit, push, pull request, issue close, merge and deployment
+hashBasis:
+  historicalSameIssueBaseline: git-object-at-a05d170
+  note: a05d170 is a historical baseline of the same issue increment, not an accepted predecessor
+  currentOutputs: git-object-at-07c07f1
+  latestAfter07c07f1Outputs: final-working-tree
+acceptedPredecessorInputs:
+  - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+    sha256: 81f345875c78af88c8064895f8c8847860d549b3efe441f146eceeb16b349e05
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 42fe80929008e53abdb28e2c71188827fa1f64c00a3c2557e0d1e5ad48eaee61
+  - artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
+    sha256: 3ded6c893e0e32430fce9931b6f77067731782ad52158ee318d5041151a3737f
+  - artifact: contracts/openapi/internal-v1.yaml
+    sha256: a490426c3293d679883ac91f25dbd69abc9a52c963077cdfb1d1933c5842b7fe
+  - artifact: apps/aroma-gateway/migrations/0003_offer_bindings.sql
+    sha256: 19d4ff0aeabf71ea0ef952aa286f2a0ae261060b1a7e1229c20d75daf0d4dd6b
+  - artifact: platform/launch-v1-runtime-profile.schema.json
+    sha256: a075c526e7a773a6c4781b06b65c967b32bebbc44726e84853b7bfade6467182
+acceptedPredecessorOutputs:
+  - artifact: apps/api-internal/package.json
+    sha256: 5e633a3c80ef5f39ee4bc36c31824e249b4f5001c6a7f7c3a3f661da77666703
+  - artifact: apps/api-internal/src/index.ts
+    sha256: 13e99d28efe8deb7e8db1ec582cd8a4d93722ad30303504555696b09ab73dd5c
+  - artifact: apps/api-internal/src/main.ts
+    sha256: 52dd54a3edfc75e22b821bc365ed13c1eb19290706f68a790da93e093868721a
+  - artifact: apps/api-internal/tsconfig.json
+    sha256: 577e2e3df08e705565d28c45718f6846103bcd63bb0757fbd0bdfdd73ee2aa74
+  - artifact: apps/aroma-gateway/migrations/0001_provider_sessions.sql
+    sha256: 41a8936bd3fd75160d2b44ecaa82e00fd15c0d3a3c5c5fd73cccbc4583b35aff
+  - artifact: apps/aroma-gateway/migrations/0002_provider_mutation_journal.sql
+    sha256: 5ba627ed7256557c47682a3ef6beafe770d8f9da6217364f19236fe76d9c801b
+  - artifact: apps/aroma-gateway/migrations/0003_offer_bindings.sql
+    sha256: 19d4ff0aeabf71ea0ef952aa286f2a0ae261060b1a7e1229c20d75daf0d4dd6b
+  - artifact: apps/aroma-gateway/migrations/0004_provider_offer_identity.sql
+    sha256: 8c45935ef9e5f592056e7756bdb562759ecfcbd0ff33ab3ca59d4805e7fa295d
+
+  - artifact: apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql
+    sha256: 3652392ee45bdf02621c60d84b808171bf32c834b070dcef15cb5d2cdaab940c
+  - artifact: apps/aroma-gateway/package.json
+    sha256: 8952d5426683c4d7bd57636f4b58f9f11683062850f95cc5d9c3c85b34d1efb1
+  - artifact: apps/aroma-gateway/src/application/cart-reader.ts
+    sha256: d7fc655d472f82348aff7955815fd13db339d6c9aa0f3510d230934ad45ce51f
+  - artifact: apps/aroma-gateway/src/application/catalog-export.ts
+    sha256: 9b890ceb532d419b01c0374e50672f922d9108ca452ee0cb310e20d70fd97606
+  - artifact: apps/aroma-gateway/src/application/provider-cart-mutator.ts
+    sha256: 73937bf51869813600b9b19ce0752e9232525a9c8f7ae3410e624d8c425259cd
+  - artifact: apps/aroma-gateway/src/application/provider-catalog-source.ts
+    sha256: 5dcf04e6fd3755977d93ec03b3f4baf4411d59df6f13b22369b31e311d292a4b
+  - artifact: apps/aroma-gateway/src/domain/mutation-journal.ts
+    sha256: 666c399740644406f35519e14c1c511db5c236877e4a6617461a8a7becb288cf
+  - artifact: apps/aroma-gateway/src/domain/provider-errors.ts
+    sha256: 65f2b15fdac5a39e47726e5705b76a3b44b15255890e09529fc19f9a2876e30e
+  - artifact: apps/aroma-gateway/src/domain/source-identity.ts
+    sha256: 86f64a7e0e42b0d206325e74c72b3639d86efd17270f55893d9e5f8021f6e14b
+  - artifact: apps/aroma-gateway/src/infrastructure/database/offer-binding-store.ts
+    sha256: ef0b72906d0ca4dd9d8bf5bd7416597eac20442c96da010be03ba288f5c3b15b
+  - artifact: apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts
+    sha256: 2dad8cacba8b81756a3a541294341f626ad0c5dc0ea3ffd21917406a8704964e
+  - artifact: apps/aroma-gateway/src/infrastructure/database/provider-session-store.ts
+    sha256: 19711c403ab1a1c94a978a25232358befe7a94de6c7cde0f63923abe9bd7036a
+  - artifact: apps/aroma-gateway/src/infrastructure/provider/cookie-jar.ts
+    sha256: afdc306c43673301e99bc74829f2a92901f37bf4640a982ddce0cc103498f02a
+  - artifact: apps/aroma-gateway/src/infrastructure/provider/decoder.ts
+    sha256: a287dbbb826cba1bef75b67ad0b5bf9d2e59cb8a88965ef49a434a027b59e0ed
+  - artifact: apps/aroma-gateway/src/infrastructure/provider/http-client.ts
+    sha256: b629d0b6ab808ab6f2f0f642ad3d031c3a3bb274b6571404792d709f2a68f9de
+  - artifact: apps/aroma-gateway/src/infrastructure/provider/session.ts
+    sha256: 9cc76b332b1ae24f3c39352ad0ee4c2e5b58fae460e8c72582f5c3d5649a42c5
+  - artifact: apps/aroma-gateway/src/main.ts
+    sha256: 6886665009c177dcf564280476be958386383a2bb50916ee8913b4e58c51dfd8
+  - artifact: apps/aroma-gateway/src/transport/http/index.ts
+    sha256: 766a7165c87c598438b71a3beb1c576e5fb99095533f93d1d5b652ef4b64f4c1
+  - artifact: apps/aroma-gateway/tsconfig.json
+    sha256: 8d562f12c0373c594cc35c98e46962b635869d186dd94ca7d7f10aeb5229205f
+  - artifact: compose.yaml
+    sha256: fa6d17c4ba93221b3c0a6ca9343d57f58f002259786e2bc70d4dc76475c9f063
+  - artifact: config/database-role-map.json
+    sha256: fcba7637e40b73258e90f3de1292a70713134320761c9bd161b5c7a86675f657
+  - artifact: config/permissions/catalog-activation-worker.json
+    sha256: 63ab9703e1628abef4f632d7a7289d05d13cfc0cb732d508e6f3c2383fe391df
+  - artifact: config/platform.schema.json
+    sha256: 2720dae90703e405d8005a93abdccd49d3b146aa0ac10ee4d7c612aba18f0a63
+  - artifact: config/platform.yaml
+    sha256: aa01f2c0853aab4acd98fc8c04d650b9de9ff0931210144c3cfd4448bc3197b6
+  - artifact: config/service-catalog.json
+    sha256: 92a13e7cb762b378743445c832e02d65b94fe693dd13586cba3c1c2293d9964c
+  - artifact: config/service-interactions.json
+    sha256: eecad8154a08caa83030d9590bd5262ee41a60467130b70a016a0c6963aa8e56
+  - artifact: contracts/compatibility-evidence.yaml
+    sha256: 6cb4b921f953f89740d4f4b0d8c045a90e8d3cf40f7eca49c9a89fb6c18cc0b3
+  - artifact: contracts/fixtures/negative/http/rejections.json
+    sha256: 569d3d38089769cacda5e79327814e56a992abacbcf72d0e02c286c9e89cde3e
+  - artifact: contracts/fixtures/negative/ndjson/aroma-catalog-invalid.ndjson
+    sha256: 98d44d537237a34cb123695220713fad00a9239c54661982992bac5649ed8a98
+  - artifact: contracts/fixtures/positive/http/problems.json
+    sha256: 9f7a77c558d00372f268200045e26233750244829fc7244fda65de8c2990518d
+  - artifact: contracts/fixtures/positive/http/success.json
+    sha256: 2d21e9f941f387a167f36efc8582b4059139a26bb76f6fd869646445c716cf29
+  - artifact: contracts/fixtures/positive/ndjson/aroma-catalog-success.ndjson
+    sha256: 5511625b2ccbf92f01d047589c1bd1f8d6d5eed1b672e4653e63cdd42dbd7ec4
+  - artifact: contracts/manifest.yaml
+    sha256: aa98189817c7c4f512c9d28b393bed7663c81bae93d705cac7cae39cf9735b5f
+  - artifact: contracts/openapi/internal-v1.yaml
+    sha256: a490426c3293d679883ac91f25dbd69abc9a52c963077cdfb1d1933c5842b7fe
+  - artifact: contracts/schemas/common/money-version-time.v1.schema.json
+    sha256: 80f6173914262b6a07d4181c6b6bf5a6e4493c67849c6152464930b57672674d
+  - artifact: contracts/schemas/common/problem-details.v1.schema.json
+    sha256: e1035e5b91a5db0742e0d368a1aed17c61814bd70c09244e7f327bb04c8b6980
+  - artifact: docs/adr/ADR-0028-gateway-source-identity-authority.md
+    sha256: 95329c3717a52efe9b232fc2113b7a9c58a69ccdf9263b87e7fff21c9f1ea7e7
+  - artifact: docs/launch/04_AROMA_CART_SAFETY.md
+    sha256: 013f4ed0e8231a63c6ca14c55179176dabc10d0d0aab850b8310d8abca1fad20
+  - artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md
+    sha256: 2f66a5da35f9704ea1724ad58b8e5149e441b45177c6dae0363153f849416b9f
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 42fe80929008e53abdb28e2c71188827fa1f64c00a3c2557e0d1e5ad48eaee61
+  - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+    sha256: 81f345875c78af88c8064895f8c8847860d549b3efe441f146eceeb16b349e05
+  - artifact: docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md
+    sha256: 261d973652637d74334af068dab07238ae34a03ff2fc147e1529993f3e3a8f8d
+  - artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
+    sha256: 3ded6c893e0e32430fce9931b6f77067731782ad52158ee318d5041151a3737f
+  - artifact: docs/launch/27_AROMA_PROVIDER_PROTOCOL.md
+    sha256: f5f9b5e51c4d310e235482ece51615d92335e18c713ccaaae197b9381f398622
+  - artifact: docs/launch/README.md
+    sha256: 375265b69e894812545ecfcbc4f036b3c92ee5d1746347f6c8d9edca73b59cd2
+  - artifact: evidence/aroma-provider/2026-09-12-adapter-preflight/README.md
+    sha256: 8a279cd948456c30fbbef22751fe199c68f00c34f22cad99e931725729f05dfa
+  - artifact: evidence/aroma-provider/2026-09-12-adapter-preflight/report.json
+    sha256: 6fd7bb25c05040e2173572fa31e7d31ddd462724b9b93a70140815ec0c9894a5
+  - artifact: evidence/aroma-provider/2026-09-12-authenticated/README.md
+    sha256: 45118b278091be1c3cdae22fb36c5e33785dbae1ea93fdfe71600bafc936cf25
+  - artifact: evidence/aroma-provider/2026-09-12-authenticated/cart.json
+    sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+  - artifact: evidence/aroma-provider/2026-09-12-authenticated/catalog-page1.json
+    sha256: 47127d5b9c3479784dbb43d3ef0ce0549211dbc0ef2423989d890570b1633d25
+  - artifact: evidence/aroma-provider/2026-09-12-authenticated/catalog-page24.json
+    sha256: d85b538d50e0f03967fd3e72bff64e4938dbb153bc3fe2ab22cb4d15dd7e5e93
+  - artifact: evidence/aroma-provider/2026-09-12-authenticated/report.json
+    sha256: ece19c31a2e28aec13536b1a2f8603a4ba7ec58844020ff30c7fb109b8e4864d
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/README.md
+    sha256: 12719a455e8f76865e36c92b21fbe7361a603447d38ad9f2ec6892854fbd99f4
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/add-one-get.json
+    sha256: 630cc48764173d37785a832cb0e6b93d2126dacec5b5509df8d2b60d13a31ef7
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/add-one.json
+    sha256: 630cc48764173d37785a832cb0e6b93d2126dacec5b5509df8d2b60d13a31ef7
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/add-same-offer-get.json
+    sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/add-same-offer.json
+    sha256: 553bad40b864fcde6cce1135e33ecd66c0e92ac91d3e67756d87d119d0435dee
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/final-cart.json
+    sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/initial-cart.json
+    sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/remove-missing.json
+    sha256: 4fbcac9c489c6f04b19b6c460ba455a9d507c0618c0f0a0b2401d16a14433da7
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/remove-owned-get.json
+    sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/remove-owned.json
+    sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/report.json
+    sha256: 6ec9991555bd618e360a3aa9b4cfec5301aff5c399a223f9072997f0a0e8eed3
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/set-two-again-get.json
+    sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/set-two-again.json
+    sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/set-two-get.json
+    sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/set-two.json
+    sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+  - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/stop-reconciliation.json
+    sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+  - artifact: evidence/aroma-provider/2026-09-12/README.md
+    sha256: 1ebcdcc0f44492886921c805e55f1df0104c9a3c9de4276d25e7c13ef22c0833
+  - artifact: evidence/aroma-provider/2026-09-12/cart-public.json
+    sha256: 5c119288290e970f5f088a0f78f07b903a0903af64df1ce3dc062a106e786e7e
+  - artifact: evidence/aroma-provider/2026-09-12/page1.json
+    sha256: 764fcea9d855cf35a1373d289c5e496843a4b6447d6ab75d68ee20064f671ec8
+  - artifact: evidence/aroma-provider/2026-09-12/page24.json
+    sha256: 8ef6a2a98a616b3a39279ad2b6da14aeeff4fb147544adc769d8e287b568673a
+  - artifact: evidence/aroma-provider/2026-09-12/page47.json
+    sha256: 213573e0b8e5bcc7c194f1d0890dd31972a9714a4357e9234b92c002cbc419c0
+  - artifact: evidence/aroma-provider/2026-09-12/report.json
+    sha256: 1a6e3f4d26e153e7ed393acb81e87e6dd0cc48a8483f01d693fad2e87568c583
+  - artifact: evidence/aroma-provider/README.md
+    sha256: 2d6dee0629fceffa7ee9eefd96f4359843f2c7d27d3afcc5d2dd38e748e0ad26
+  - artifact: evidence/aroma-provider/catalog-and-session-2026-09-08.json
+    sha256: 078e018c6ba4aa88cd190e61fbadaf0f3bb504ce21cbd6bb128e2ee499c27f23
+  - artifact: evidence/handoffs/issue-10.yaml
+    sha256: fa95253d6ba95eecf8d036cac1080d44720a91142c360a1e6e4e5a021339a591
+  - artifact: evidence/issue-10-binding-acceptance.md
+    sha256: 7ec35eaa155ecce04e0da4c433faa94dce754d0e9b88c2bdb05d89245e5918ae
+  - artifact: evidence/issue-10-contract-narrowing.md
+    sha256: 2964b99d7dfc467e9c401f5ba486949683019f3efaff199bba00e137a61d380e
+  - artifact: evidence/issue-10-core-regression-acceptance.md
+    sha256: c65eb1199ece2719aa35f43602c7c8fa0679bb1d6200a6e3132650512c6d29d7
+  - artifact: package.json
+    sha256: a742ac547eaf5124585c6aa979e3de66a8dccffb116a11ed8bf27066089ee404
+  - artifact: packages/contracts/aroma-v1/package.json
+    sha256: bdd058f2926cbbaed3d08979e44c6bb34e67ad11b3eda2c627c513e89b6a4816
+  - artifact: packages/contracts/aroma-v1/src/index.ts
+    sha256: 95167aa61fffaf64a8b85dfe209f9f0012069a74c17ad98d6399bc98f02cf0cc
+  - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
+    sha256: ed19e74de0d36d8e2d9478b6d580ee64359d844021f589808b5f0b8a654a4d5f
+  - artifact: packages/generated/internal-v1/src/index.ts
+    sha256: 9db8693bf29da7d03250130c6d5464c2136e4b8f8fc6bec26a3fca1d69494d0a
+  - artifact: packages/generated/internal-v1/src/runtime-schemas.gen.ts
+    sha256: 83934e344702f73eff083de385536549c204349635bf51042b34befe2837a7f7
+  - artifact: packages/generated/internal-v1/src/types.gen.ts
+    sha256: 93b041f551185469cf68492848eb0c408917abc87139cee99e8851c268d47712
+  - artifact: packages/platform-config/src/index.ts
+    sha256: 27f5fa221c70e4fd8ab70c01a7bb3145e2456b7a6bac87211ebeec71f587b63a
+  - artifact: platform/launch-v1-connectivity-policy.json
+    sha256: 223b6698626f197526dbd6089816e7666ef9cb83356b96905877d5d37c8f5b92
+  - artifact: platform/launch-v1-runtime-profile.json
+    sha256: 41ee7f1d014a3a9b435a8012032eecc2c1c777b75735cc92f28c2d23326da587
+  - artifact: platform/launch-v1-runtime-profile.schema.json
+    sha256: a075c526e7a773a6c4781b06b65c967b32bebbc44726e84853b7bfade6467182
+  - artifact: pnpm-lock.yaml
+    sha256: 2ffd6611beab73117ba9ae0b7d08cc13da74ca5a584fcec01980348a8abb5f23
+  - artifact: scripts/aroma-session-live-proof.mjs
+    sha256: 5dbf418f912e344f59c80f1af00e3b65d85a35928ad57cb345a2049ed55bba2a
+  - artifact: scripts/check-service-catalog.mjs
+    sha256: f700082e2aff9d4e9b8540e6fb0a608b7dfb5cb1ca404842eb0c6f597e907ed0
+  - artifact: scripts/contracts-ajv.mjs
+    sha256: 29bdaf925fded7668bb56bd04bf0694f55fb12f48f85aa24a22649bd6e498584
+  - artifact: scripts/contracts-breaking.mjs
+    sha256: 01f045f47b4cc8420143b21cd557cca89d90412f66908acaf01f31a2470c7415
+  - artifact: scripts/contracts-generate.mjs
+    sha256: db2b689ab1c0d3d296436185ee0dc8f6657bfa41eb88938513fe740c6aff319a
+  - artifact: scripts/db-live-proof.mjs
+    sha256: 0798fe5457a4119ea5c3cf41f61804de3de8f1b6d57e94214c77daa86bac99cc
+  - artifact: scripts/validate-launch-authority.py
+    sha256: fd6989cb62c6a0cc91d1f507a63ee04c189cf32eb360da588341a86436775168
+  - artifact: secrets/platform.secrets.sops.yaml
+    sha256: d72aec3c7b7a2063aed506f571186a9641e3ed64b09cd070f60a886a8e66e304
+  - artifact: tests/aroma/api-internal-operations.test.mjs
+    sha256: 8aa818aa559fd9a971d493fede579d39a5aae1deaa7a4d7dafe858d3997aeabc
+  - artifact: tests/aroma/binding-http.test.mjs
+    sha256: dd963ec503eb2862a84276794a41c9eefe993183928ebee7064f995134f64e53
+  - artifact: tests/aroma/binding-live.test.mjs
+    sha256: 173ab0ae91988af3f6c6e03d78f54b33aa2e37a52023a5b3182afa7d99ada6e4
+  - artifact: tests/aroma/cart-reader.test.mjs
+    sha256: 3813eb4ae39c67f6117672d8ed9abac4527bc218ae19f12e9f5cbb78e5a23165
+  - artifact: tests/aroma/catalog-export.test.mjs
+    sha256: f99d0eaf6c16cadb284510813674296ab43bc7bddf8ee35fbf467463df12831e
+  - artifact: tests/aroma/gateway-operations-http.test.mjs
+    sha256: ca656ce59be5aa50da19f90854fced6fbb7ec597a18b045a81039f1900238367
+  - artifact: tests/aroma/gateway-production-composition.test.mjs
+    sha256: fddd6762808af3f16303802f15d46f043efe8325fe402e521fab6c7a83c07177
+  - artifact: tests/aroma/mutation-journal.test.mjs
+    sha256: ac5ee9c00776a5154512ed0324dc44bead5aeae0393f92c334da3f3ec6666259
+  - artifact: tests/aroma/provider-cart-mutator.test.mjs
+    sha256: 53b0068581d7d41c164aed6c7e3dd35a2fd801917587c647df0a3a93f5d0e6e9
+  - artifact: tests/aroma/provider-catalog-source.test.mjs
+    sha256: d95438720159c5167d940e13799f37595c0e69c0feef0fa569c7b78300d743c0
+  - artifact: tests/aroma/provider-decoder.test.mjs
+    sha256: b58bd65c23357a5396e37566773a4716b6a82c7505de4d0731167975dc0c956c
+  - artifact: tests/aroma/provider-http.test.mjs
+    sha256: 9b3a3b1675da839878ade7b5b8444810d107cecf376cb04cbfafec1309093f03
+  - artifact: tests/aroma/provider-session.test.mjs
+    sha256: 5cb62439f1d2f238b87d0c7c13adcf39a4b9e84c8ab5bbf7648f8e9daf4f877f
+  - artifact: tests/aroma/safe-read-http.test.mjs
+    sha256: 576d1a3894b01c3e74db462168b776bd6885bef3a9858544619d74951f0037dd
+  - artifact: tests/aroma/scoping-provenance.test.mjs
+    sha256: 871158e4c51295c2fadb798ee705c7128ec598d0aec777638dccde05b91bf269
+  - artifact: tests/aroma/source-identity.test.mjs
+    sha256: 7456bb9fbc81aeda8c9206c086f0010aaea457c1f222bdc2ea25637cc9777baf
+  - artifact: tests/authority/fixtures/negative/cases.json
+    sha256: 564332c488bc34083fa3023cef51445ddb5641b36e3a22b1bc31216cd94889ff
+  - artifact: tests/authority/test_launch_authority.py
+    sha256: 0d08ed502b64fa5c6e2f905646c95912d01319fd471c59df237edb64f171222a
+  - artifact: tests/compose/topology.test.mjs
+    sha256: 592649c7150a5d5af99898044026861de2f89868cfb84bbd26eace902a51774d
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: a00705909deb4b09de2e1cc811ff2d2bc6430997b18db01f50d0689133b0902b
+  - artifact: tests/contracts/breaking.test.mjs
+    sha256: 2159a67bfc872637ba88a3edc0685df154d73d0f52b8142bd010d6033da7c220
+  - artifact: tests/contracts/openapi-fixtures.test.mjs
+    sha256: 014cf480bab6a24bd5342ff07a1cb2fc41049beebff4098d36cbad676cd906f6
+  - artifact: tests/contracts/schemas.test.mjs
+    sha256: 1c1a35fe5c9435fc644aa351532ed146a31f05731f00fc099efbd92a98d38842
+  - artifact: tools/compose-smoke.mjs
+    sha256: d004d50e85cd1c5bbe3d4069f637990ec4cb5ffd7e24a20bb17767cc5d1b4ecc
+
+inputs:
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: contracts/openapi/internal-v1.yaml
+    sha256: d8fa8ddce4578ee843677b177c705e8675b99c30e8d323cc597ac4454ad1a2b0
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: evidence/handoffs/issue-62.yaml
+    sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: packages/platform-database/package.json
+    sha256: ab1aa303985767d83e243ed7b32cf0da6c918f73e64984516c052da88d1426eb
+
+currentOutputs:
+  - artifact: apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql
+    sha256: 9590251d2b8889843e0a2f84e14dacc659d81279a9cc1f97c64afafcf231ccd9
+  - artifact: apps/aroma-gateway/package.json
+    sha256: 5609b9f725d5b32c1d88e9637f1cb7f1dd8cd2fa5759c3f8386ec3941722c530
+  - artifact: apps/aroma-gateway/src/application/cart-reader.ts
+    sha256: 56d594dfe9298f29d95a2eb569eb0cf834db3756d377f9bb86debe1513cf0c70
+  - artifact: apps/aroma-gateway/src/application/catalog-export.ts
+    sha256: 649f38746f97975fe45e7f9727d11223df528f78327269e0a10f558684dba374
+  - artifact: apps/aroma-gateway/src/application/provider-cart-mutator.ts
+    sha256: 0f41b46bd587a50990d8d211cee62cb46f0232d23de3ffcd4bac6d80d07056fa
+  - artifact: apps/aroma-gateway/src/application/provider-catalog-source.ts
+    sha256: 5b437e81744126f3a09889481293cd22d9f8e929634845d59e8663eea982bd94
+  - artifact: apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts
+    sha256: c78ea35367c588c9268923d0664e334ef7aa95b66e249abe072f6d57a550ffff
+  - artifact: apps/aroma-gateway/src/infrastructure/observability.ts
+    sha256: 8f4ca1a34f75b4d4f5a74fa1077ec4bbf9207fe1d4cae45183eb3eb190c6ec0e
+  - artifact: apps/aroma-gateway/src/infrastructure/provider/decoder.ts
+    sha256: caed941c2560f8864005caeb89e6884f8f8438f9f13c624cc00c609ff9efb35c
+  - artifact: apps/aroma-gateway/src/infrastructure/provider/http-client.ts
+    sha256: 15b0464947b8fe6b88a003ad1331d589f4d2b14f10ecf488af9966859640ad14
+  - artifact: apps/aroma-gateway/src/infrastructure/provider/session.ts
+    sha256: 1d76679f4d7030774d609b1355a3b539315cdd535f82e0e6bb2d6a995cd124f9
+  - artifact: apps/aroma-gateway/src/main.ts
+    sha256: ca81758381d1e02b4d8d510918ecf4bef36bc89e95dd03ea639cdd86d26f0187
+  - artifact: apps/aroma-gateway/src/transport/http/index.ts
+    sha256: 3c1eac6e8b4236e06ae14e662ea7b787cdefab7bd9d901a54d7a51425a66da25
+  - artifact: docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md
+    sha256: d2dfaf5eb00f98142538af07c70cf4aaad749cbbf05b062fcd0247c1c625e7aa
+  - artifact: docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md
+    sha256: 54f92f080ca5052e97191da92fb71cdd200f8a1ea383451e220b4a7336d97693
+  - artifact: evidence/aroma-provider/2026-09-14-pricing-observations.json
+    sha256: c581596331eb1d248a965ef3979bcb5a904e647090f72775ecea4d9a6e642c92
+  - artifact: packages/platform-runtime/src/index.ts
+    sha256: a8326986c8e6d68b09038f4c46d7c0cf68b1a0fef1d765a87d00688967c35272
+  - artifact: pnpm-lock.yaml
+    sha256: 5d1b9090bdf13d5e30a05fe342eed9e5020692afc926991ab278ff4d6895dc62
+  - artifact: scripts/check-architecture.mjs
+    sha256: dbc74cff5d8d91f2185fa5249ee7d65d34921b9c723a76dafe99cc12682b86ed
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: da6033d35a00703b1556169b0c811a00983f9e680fb61eb01b812d8430b3ddd6
+  - artifact: tests/architecture/fixtures/invalid-generic-retry-dependency/package.json
+    sha256: daf1731cf14bef60cc7951d3af4fe520913b7c5ada51a060c0f012b896c1ad41
+  - artifact: tests/architecture/fixtures/invalid-generic-retry-wrapper/apps/aroma-gateway/src/retry.ts
+    sha256: f5ee2b74f46a79882d1d11b35d6338d927448c3776fb651e2ba1ea49639da4ae
+  - artifact: tests/architecture/fixtures/invalid-postgres-url/apps/orders-service/src/bad.ts
+    sha256: ed98b1737137adff9c754da63df2b77fdc7fd60e665f9adf0dd41cf291b6edc9
+  - artifact: tests/architecture/fixtures/invalid-provider-fetch/apps/aroma-gateway/src/bad.ts
+    sha256: e8421d5ef4bd749a972cd8c799ee36d3b34a8a58604c16aed6bb6ee3eed2f96d
+  - artifact: tests/architecture/fixtures/invalid-provider-proxy/apps/aroma-gateway/src/bad.ts
+    sha256: c9bdb37566e72a5630274fdfdb0dce091a22b6293ba35de556bd9652a6ac739d
+  - artifact: tests/aroma/catalog-export.test.mjs
+    sha256: 30b6dadc007bf1d140cf86a69fb74e480824b34c9c28eabd475ed5088238a063
+  - artifact: tests/aroma/gateway-production-composition.test.mjs
+    sha256: c24c669eac9860038e4bf26d6eb8d8e4069709c035985214aa255092d69a3b10
+  - artifact: tests/aroma/mutation-journal.test.mjs
+    sha256: d0e3e3a6d204fea7ebc53445bf5a8c80b05c3ab474260c3b55613f8b34cd3a8c
+  - artifact: tests/aroma/provider-catalog-source.test.mjs
+    sha256: d5a26f973c6a206792807d065cd8aa2adb5e95c6697d57ab931d0d8ead64c27e
+  - artifact: tests/aroma/provider-decoder.test.mjs
+    sha256: e2bb6e7ca1e2272902076d58338052757ee0cb9ab3448607790a9d01f5b1d2ae
+  - artifact: tests/aroma/provider-http.test.mjs
+    sha256: 3f14c018e72de502b72d2811605ea7e6350590506ca32401416960c9e58dee5d
+  - artifact: tests/aroma/provider-session.test.mjs
+    sha256: 6b6c78eba43b9a3c920c62d91c3250ee0ab1590b4ee17368246946a8744df6db
+  - artifact: tests/runtime/lifecycle.test.mjs
+    sha256: 9e68b0e240e4fdb75434a520256ab3a6415a524360cdae3b31c3b2e1a180b6ac
+  - artifact: tools/compose-smoke.mjs
+    sha256: fecd0b5f06790c63bb8647a64ca6ab75902f1ddf48b88547adfaafb993e34b0a
+verification:
+  static:
+    - command: node --check tests/aroma/binding-live.test.mjs
+      exitCode: 0
+    - command: node --check tests/aroma/mutation-journal.test.mjs
+      exitCode: 0
+    - command: node --check scripts/db-live-proof.mjs
+      exitCode: 0
+    - command: node --check tools/compose-smoke.mjs
+      exitCode: 0
+    - command: pnpm exec oxlint tools/compose-smoke.mjs
+      exitCode: 0
+    - command: git diff --check
+      exitCode: 0
+    - command: pnpm config:check
+      exitCode: 0
+    - command: pnpm security:secrets
+      exitCode: 0
+    - command: pnpm authority:check
+      exitCode: 0
+    - command: pnpm contracts:check-generated
+      exitCode: 0
+    - command: pnpm contracts:lint
+      exitCode: 0
+    - command: pnpm contracts:breaking
+      exitCode: 0
+    - command: pnpm contracts:test
+      exitCode: 0
+    - command: pnpm architecture:check
+      exitCode: 0
+    - command: pnpm db:smoke
+      exitCode: 0
+    - command: pnpm typecheck
+      exitCode: 0
+    - command: pnpm lint
+      exitCode: 0
+    - command: pnpm exec tsc -b --pretty false
+      repetitions: 2
+      exitCode: 0
+    - command: pnpm run check
+      exitCode: 0
+  runtime:
+    - command: pnpm test
+      repetitions: 2
+      exitCode: 0
+    - command: node --test tests/aroma/*.test.mjs
+      exitCode: 0
+      scope: export-source-identity-journal-binding-provider
+      providerAccess: false
+    - command: COFFEE_DB_LIVE_PROOF=1 node --test tests/aroma/mutation-journal.test.mjs
+      repetitions: 2
+      exitCode: 0
+      tests: 15
+      passed: 15
+      failed: 0
+      skipped: 0
+      providerAccess: false
+      reserveCommitRecovery:
+        previousFlake: first-external-run-14-pass-1-fail-then-15-pass
+        order: [original-commit-suppressed, new-peer-close-after-baseline, recovery-select-blocked, original-reservation-absent, competing-terminal-committed, competing-row-reread, recovery-select-released, original-conflict]
+        competingOperationRef: AROMA_OPERATION_REF_CONFLICT
+        comparedFields: [requestHash, cartScopeRef, operationKind, offerRef, quantityMilli, caller, delegationSubject, delegationScope]
+        competingTerminalRow: Acknowledged
+        competingMutatorCalls: 1
+        originalMutatorCalls: 0
+      terminalCommitRecovery:
+        terminalRow: Acknowledged
+        missingTerminalRow: Dispatched
+        missingTerminalMutatorCalls: 1
+        replayProviderCalls: 0
+      cleanup: complete
+    - command: node --test tests/aroma/binding-http.test.mjs tests/aroma/catalog-export.test.mjs tests/aroma/mutation-journal.test.mjs tests/aroma/provider-http.test.mjs tests/aroma/source-identity.test.mjs
+      exitCode: 0
+      tests: 47
+      passed: 46
+      failed: 0
+      skipped: 1
+      providerAccess: false
+      contractRegressionCases: [strict-rfc3986-uri-reference-corpus, unicode-title-101, zero-set-quantity]
+    - command: pnpm run check
+      exitCode: 0
+      tests: 251
+      passed: 235
+      failed: 0
+      skipped: 16
+      providerAccess: false
+      historicalAtCapture: true
+    - command: COFFEE_DB_LIVE_PROOF=1 node --test tests/aroma/binding-http.test.mjs tests/aroma/binding-live.test.mjs tests/compose/topology.test.mjs
+      exitCode: 0
+      bindingLiveSkipped: false
+    - command: pnpm test:compose-smoke -- --aroma-binding-proof
+      exitCode: 0
+      realContainerMtls: true
+      providerAccess: false
+      durableBindingCount: 1
+      normativeBindingBody: true
+      normativeBindingFields: [offerRef, supplierRef, sourceIdentityScheme, sourceOfferKeyHash, firstSnapshotRef, state]
+      unavailableEndpoint: network-rejected
+      certificateNegativeNetworkErrors: fail-proof
+      gatewayClientCertificateVerification: authorizationError-correlated-to-fixture-connection
+      ambiguousEconnreset: fail-proof
+      socketAssociationRegression: [missing-parent, unknown-socket]
+      cleanup: complete
+  negative:
+    - command: COFFEE_DB_LIVE_PROOF=1 pnpm test
+      exitCode: 1
+      reason: global-live-proof-locator-guard-in-two-lifecycle-tests
+      acceptanceGate: false
+    - command: pnpm test:compose-smoke -- --stub-secrets --no-build --project-name coffee-compose-smoke-360926-1b914da3
+      exitCode: 1
+      reason: missing-image-pricing-service
+    - command: pnpm test:compose-smoke -- --stub-secrets --no-build --keep --project-name coffee-compose-smoke-360926-1b914da3
+      exitCode: 1
+      reason: catalog-service-unhealthy-cascade
+      diagnostics:
+        kafka: healthy
+        apiInternal: healthy
+        ordersService: running-exit-0-unhealthy-readiness-503
+        postgresOnCoffeePostgresData: absent
+      cleanup: complete
+claims:
+  proven:
+    - immutable binding registration/replay/conflict/race/restart/lost-answer/store-grants
+    - real container mTLS caller-api-internal-gateway path
+    - Gateway-side client-certificate verification error correlated to the untrusted fixture connection
+    - strict Gateway socket association without all-sockets fallback
+    - delegation signing and Gateway claim enforcement
+    - no raw provider canary in HTTP responses/logs/sanitized proof output
+    - canonical secrets validator remains strict
+    - canonical hmac-sha256-v1 UTF-8 framing/NUL/NFC/domain validation and variant non-generation
+    - synchronized Catalog staging naming authority across specification/profile/schema/validator/role-map/tests
+    - explicit-source bounded NDJSON export backpressure/cancellation/limits/hash-count and terminal lifecycle core
+    - bidirectional product/variant/offer source-identity collision detection across flushed export batches
+    - Integration mutation journal CAS/lease/dispatch-before-HTTP/UnknownOutcome/replay state machine
+    - generated internal-v1 AromaMutationResponse and isAromaProblem validation before terminal persistence
+    - source-owned RFC 3986 URI-reference pattern shared by contract AJV and generated runtime validation
+    - invalid ProblemDetails type/instance 1:abc, :abc, /[::1], spaces, backslash, malformed percent, NUL, bracket and quote fail closed
+    - valid ./1:abc, /a:b, //[::1]/, http://[::1]/, uppercase HTTP URI, URN, relative path/query/fragment and percent encoding remain accepted
+    - exact narrowing evidence executes old-valid/new-invalid fixture proof and rejects ineffective evidence
+    - SetLineQuantity null/zero rejection before reservation while RemoveLine retains null
+    - positive-only ProviderQuantity source schema and positive Integration journal SQL constraint without invented provider max/scale/step
+    - reserve unknown-COMMIT reread compares the original normalized request and trusted delegation before replay/in-progress recovery
+    - two consecutive real PostgreSQL runs deterministically gate competing terminal COMMIT before recovery reread and return AROMA_OPERATION_REF_CONFLICT
+    - real PostgreSQL terminal-COMMIT reread for both persisted-terminal and absent-terminal outcomes without redispatch
+  not_proven:
+    - provider-backed completed-snapshot producer/exporter and production source membership/binding population
+    - catalog currency/scale/unit/variant/availability/imageUrl normalization and providerSnapshotRef authority
+    - production HMAC key material wiring and full provider identity protocol
+    - provider cookie TTL semantics beyond observed rotation and companion-cookie lifecycle beyond the implemented validated merge
+    - cart-line identity/duplicates/completeness and provider quantity/packing semantics
+    - provider-backed live acceptance of production set/remove dispatch against the external AROMA account
+    - full Compose readiness while coffee_postgres infrastructure is absent
+    - historical bootstrap-first Query read timeout root cause; not reproduced in bounded rerun
+futureClarification:
+  issues: [10, 6, 16]
+  preparationOwner: catalog-activation-worker creates/reuses offerRef and persists binding preparation in Catalog owner transaction after completed snapshot
+  bindingOwner: aroma-gateway persists immutable binding in Integration owner DB
+  acknowledgementOwner: catalog-activation-worker persists Bound/firstSnapshotRef as durable acknowledgement in Catalog owner DB/Outbox
+  activationGate: Catalog activation waits for all required acknowledgements before publishing active generation
+  rationale: durable ack distinguishes committed binding from lost HTTP response and prevents partial activation/convergence violations
+secrets:
+  repositorySource: absent
+  encryptedExternalCopy: /home/yurgusev/.local/share/coffee-platform/imports/aroma-import.secrets.sops.yaml
+  directoryMode: "0700"
+  fileMode: "0600"
+  sha256: d165bbbab388944a8c1a5a0f77309ff0b582895053652d140de8dff30c2cd4a2
+  plaintextRead: false
+  runtimeImported: false
+cleanup:
+  proofProject: verified-removed
+  fullComposeDiagnosticProject: verified-removed
+  sharedCoffeePostgresData: preserved
+  temporaryScopedSecrets: removed
+externalMutations:
+  aromaRequests: false
+  providerMutations: false
+  commit: false
+  push: false
+  pullRequestOrIssueMutation: false
+  merge: false
+  deployment: false
+
+latestCorrection:
+  date: 2026-09-12
+  scope: malformed-unicode-source-identity-and-issue-scope-documentation
+  evidence: evidence/issue-10-core-regression-acceptance.md
+  checks:
+    - command: pnpm exec tsc -b apps/aroma-gateway/tsconfig.json --pretty false
+      exitCode: 0
+    - command: node --test tests/aroma/source-identity.test.mjs tests/aroma/catalog-export.test.mjs
+      exitCode: 0
+      passed: 25
+      failed: 0
+      skipped: 0
+    - command: pnpm exec oxlint apps/aroma-gateway/src/domain/source-identity.ts apps/aroma-gateway/src/application/catalog-export.ts tests/aroma/source-identity.test.mjs tests/aroma/catalog-export.test.mjs
+      exitCode: 0
+  fullSuiteAndLiveProofRepeated: false
+  priorVerificationIsHistorical: true
+  providerAccess: false
+  commitPushMergePerformed: false
+
+providerCharacterization:
+  date: 2026-09-12
+  scope: separate-user-authorized-one-offer-cart-scenario
+  evidence: evidence/aroma-provider/2026-09-12-cart-mutations/report.json
+  priorCoreExternalMutationFieldsAreHistorical: true
+  runtimeImplementationChanged: false
+  providerRequestsPerformed: true
+  cartMutations: 6
+  safeGets: 10
+  logins: 2
+  extraLoginReason: cleanup-after-in-memory-session-cleared-on-422-stop
+  automaticRetries: 0
+  cleanup: final-complete-cart-equals-initial-empty-cart
+  productionAdapterAcceptance: false
+  orderInvoicePaymentProfileMutations: false
+
+latestSafeReadIncrement:
+  date: 2026-09-13
+  historicalAtCurrentHandoff: true
+  providerAccess: false
+  providerMutations: false
+  path: [caller, api-internal, aroma-gateway, ProviderSession, ProviderCartReader]
+  reviewFindingsClosed:
+    - successful-read-cookie-rotation-encrypted-and-reused-after-restart
+    - provider-401-invalidates-cache-and-persisted-session-before-single-flight-relogin
+    - generation-ordered-rotate-invalidate-acquire-race
+    - stale-401-cannot-delete-newer-session
+    - cart-only-pre-body-retry-has-cancellable-250ms-backoff
+    - gateway-source-identity-renumbered-to-adr-0028
+    - cart-line-full-provider-identity-fails-closed
+    - contradictory-empty-cart-shape-is-rejected
+  checks:
+    - {command: node --test tests/aroma/provider-decoder.test.mjs tests/aroma/cart-reader.test.mjs tests/aroma/safe-read-http.test.mjs, exitCode: 0, passed: 13, failed: 0, skipped: 0}
+    - {command: pnpm test:aroma-unit, exitCode: 0, passed: 32, failed: 0, skipped: 0}
+    - {command: pnpm test:aroma-http, exitCode: 0, passed: 8, failed: 0, skipped: 0}
+    - {command: pnpm test:aroma-integration, exitCode: 0, realPostgres: true, cleanup: complete, historicalFromPriorSessionRemediation: true, notRepeatedForR1R2: true}
+    - {command: pnpm test:aroma-binding, exitCode: 0, nativeMtls: true, cleanup: complete, historicalFromPriorSessionRemediation: true, notRepeatedForR1R2: true}
+    - {command: pnpm test:aroma-compose, exitCode: 0, nativeMtls: true, validReadStatus: 200, restartSessionReuse: true, cleanup: complete, historicalFromPriorSessionRemediation: true, notRepeatedForR1R2: true}
+    - {command: pnpm contracts:check-generated, exitCode: 0, aggregateSha256: 9540f0def2a984bf2088f82fc481800b86d6d7d85556d98a573ddf3798070f66}
+    - {command: pnpm architecture:check, exitCode: 0}
+    - {command: pnpm typecheck, exitCode: 0}
+    - {command: pnpm lint, exitCode: 0}
+    - {command: pnpm check, exitCode: 0, tests: 284, passed: 268, failed: 0, skipped: 16}
+    - {command: pnpm db:smoke, exitCode: 0}
+  bareComposeSmoke:
+    command: pnpm test:compose-smoke
+    status: blocked
+    reason: SOPS_AGE_KEY_FILE-not-set
+  commitPushMergeDeploymentPerformed: false
+
+latestFullCompletionAttempt:
+  date: 2026-09-13
+  status: blocked-not-pr-ready
+  head: c0ee57ce9eec294d8b82a76fb991305753fc4c38
+  workingTree: {modifiedTracked: 55, untrackedEntries: 15, safeOutputArtifacts: 127, inputArtifacts: 6, commitPushPullRequestMergeDeploymentPerformed: false}
+  implemented:
+    - exact api-internal export, cart-read, set-quantity and remove routes with caller/delegation validation
+    - Gateway provider catalog paginator and fail-closed production export composition
+    - full-identity non-empty cart resolution with legacy rows failing closed
+    - production provider mutator with durable journal, validated mutation response, one unsafe dispatch, fresh verification GET and no retry
+    - malformed mutation response becomes durable UnknownOutcome and replay performs no provider dispatch
+    - canonical supplier sup_00000000000000000000000001 is bound to aroma-primary; foreign or missing bindings block provider session/HTTP dispatch, while mutation journal persistence occurs before binding lookup
+    - supplier-scoped binding resolution and immutable cross-snapshot identity collision checks preserve absent versus explicit null
+    - per-traversal providerSnapshotRef uses aroma-gateway:catalog-export:<snapshotRef>
+    - deterministic pre-dispatch AROMA_CART_ITEM_NOT_FOUND remains a typed 404 across Gateway and api-internal
+    - forward-compatible provider identity migration and updated live/Compose migration harnesses
+    - named catalog-stream, cart-read, journal and mutation-recovery commands
+  blocked:
+    - production Catalog normalizer remains fail-closed because provider currency, price scale and unit basis are not authoritative
+    - Catalog evidence does not prove availability, canonical image, packing/grind or independent provider variant semantics
+    - ProviderQuantity contract accepts positive decimals while Gateway safely permits only observed positive integers; provider min, max, step and fractional support are unknown
+    - manual KillBot verification could not be performed because the browser preview was unavailable; no bypass or live provider request was attempted
+    - full 15-runtime Compose topology is not green because its external coffee_postgres_data network had no PostgreSQL service; service liveness was observed but DB-backed readiness remained 503
+  verification:
+    - {command: pnpm install --frozen-lockfile, exitCode: 0, result: already-up-to-date}
+    - {command: side-effect-free production entrypoint import smoke, exitCode: 0}
+    - {command: pnpm test:aroma-catalog-stream, exitCode: 0}
+    - {command: pnpm test:aroma-cart-read, exitCode: 0}
+    - {command: pnpm test:aroma-journal, exitCode: 0, passed: 26, failed: 0, skipped: 1}
+    - {command: pnpm test:aroma-mutation-recovery, exitCode: 0, realPostgres: true}
+    - {command: pnpm test:aroma-binding, exitCode: 0, realPostgres: true, nativeMtls: true, identityCollisionCases: 6, cleanup: complete}
+    - {command: pnpm test:aroma-compose, exitCode: 0, canonicalSupplierFixture: true, nativeMtls: true, restartSessionReuse: true, redaction: true, cleanup: complete}
+    - {command: pnpm db:smoke, exitCode: 0, mode: plan}
+    - {command: pnpm contracts:check-generated, exitCode: 0, aggregateSha256: 7ec7d56389301d3e904f45ad8f42d5429c7b94ddd9943db9b0e40481e107bd01}
+    - {command: pnpm contracts:breaking, exitCode: 0}
+    - {command: pnpm check, exitCode: 0, tests: 314, passed: 298, failed: 0, skipped: 16}
+    - {command: git diff --check, exitCode: 0}
+    - {command: pnpm test:compose-smoke -- --stub-secrets, exitCode: 1, reason: external-postgresql-absent, dbBackedReadiness: 503, cleanup: verified}
+    - {command: pnpm test:compose-smoke -- --recovery-proof, exitCode: 0, stubSecrets: false, dbIntegrationProof: true, kafkaRecoveryProof: true, telemetry: true, cleanup: {containers: 0, networks: 0, volumes: 0}}
+    - {command: independent bug-first remediation review, result: pass, highFindings: 0, mediumFindings: 0}
+  cleanup: {disposableComposeContainers: absent, disposableComposeNetworks: absent, sharedCoffeePostgresData: preserved, preExistingTmpfsSecretDirectory: coffee-platform-secrets-nfRL1X-preserved}
+  primaryLedger: {inputs: 6, outputs: 127, selfHashExcluded: true, secretsExcluded: true, historicalBaselinesSeparate: true}
+  keyOutputHashes:
+    package.json: a742ac547eaf5124585c6aa979e3de66a8dccffb116a11ed8bf27066089ee404
+    config/platform.yaml: aa01f2c0853aab4acd98fc8c04d650b9de9ff0931210144c3cfd4448bc3197b6
+    config/platform.schema.json: 2720dae90703e405d8005a93abdccd49d3b146aa0ac10ee4d7c612aba18f0a63
+    packages/platform-config/src/index.ts: 27f5fa221c70e4fd8ab70c01a7bb3145e2456b7a6bac87211ebeec71f587b63a
+    apps/api-internal/src/index.ts: a832a796b84a423d105db66318d6dc95950b187ac8cb41b2cbf9239cccfce87b
+    apps/aroma-gateway/src/application/provider-cart-mutator.ts: d67ac7468ad870510afdd550894cb4fee21864d08c761bd6bd0da4dd9299ea64
+    apps/aroma-gateway/src/application/provider-catalog-source.ts: 53b8cb81ebc5df74ab0b3d080850ca3ec41b0db8d642727556348d0a7e379662
+    apps/aroma-gateway/src/transport/http/index.ts: 101210cfa55c9d3d960b51a3bbdf0bb665f7f4ecbb70c16a42a7d89bef647f4f
+    apps/aroma-gateway/src/infrastructure/database/offer-binding-store.ts: 2b71d5e161f852beb3acfcfbc85513a656bff0455bf98ff1819907a05f46a96e
+    contracts/openapi/internal-v1.yaml: 4d6e84dfc395ab965fd9f2b4889ee331566492fcd1df27abdff13a5f0bea2b59
+    apps/aroma-gateway/migrations/0004_provider_offer_identity.sql: 8c45935ef9e5f592056e7756bdb562759ecfcbd0ff33ab3ca59d4805e7fa295d
+    tools/compose-smoke.mjs: 707c82a2bc7202d1949284ed7fbb5de4b81fffa529b6b40e691fa765c0c8af2a
+
+latestUltraworkRemediation:
+  date: 2026-09-14
+  baselineCommit: ebe429f52d6796b19aa64328ca220512e8a4e1cd
+  mergeBaseDevelop: c0ee57ce9eec294d8b82a76fb991305753fc4c38
+  workingTree: {modifiedTracked: 22, untrackedEntries: 1, outputArtifacts: 128, inputArtifacts: 6}
+  scope:
+    - durable Catalog export-attempt ownership, ordered batch membership and commit-outcome reconciliation
+    - strict shared API and Gateway request validation without coercion or invented quantity semantics
+    - safe mutation preparation before durable dispatch permit and startup journal recovery
+    - one-shot NDJSON terminal lifecycle, cancellable source ownership and fail-stop transport destruction
+    - provider-body capturedAt plus one bounded exact-identity PostgreSQL bulk lookup
+    - api-internal to Gateway to real PostgreSQL stores and journal to local fake provider integration proof
+  verification:
+    - {command: pnpm test, exitCode: 0, tests: 325, passed: 309, failed: 0, skipped: 16, providerAccess: false}
+    - {command: pnpm test:aroma-catalog-stream, exitCode: 0, passed: 22, failed: 0, skipped: 0}
+    - {command: pnpm test:aroma-cart-read, exitCode: 0, passed: 33, failed: 0, skipped: 0}
+    - {command: pnpm test:aroma-journal, exitCode: 0, passed: 27, failed: 0, skipped: 1}
+    - {command: pnpm test:aroma-mutation-recovery, exitCode: 0, realPostgres: true, passed: 17, failed: 0, skipped: 0, cleanup: complete}
+    - {command: pnpm test:aroma-binding, exitCode: 0, realPostgres: true, nativeMtls: true, productionBulkResolver: true, compatibilityShim: false, cleanup: complete}
+    - {command: pnpm test:aroma-compose, exitCode: 0, providerAccess: false, providerKind: local-fake, liveProviderAcceptance: false, realPostgresJournal: true, exactReplayWithoutRedispatch: true, unknownOutcomeWithoutRedispatch: true, cleanup: complete}
+    - {command: pnpm contracts:check-generated, exitCode: 0, aggregateSha256: b880c302a74a35a50711061a1e7b843f0b20166d6ccc61f3aca3ed9fda71b1d9}
+    - {command: pnpm contracts:lint && pnpm contracts:breaking && pnpm contracts:test, exitCode: 0, contractTests: 39}
+    - {command: pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm typecheck, exitCode: 0}
+    - {command: git diff --check, exitCode: 0}
+    - {command: independent narrow bug-first re-review, result: pass, highFindings: 0, mediumFindings: 0}
+  fixtureReceipt:
+    providerCallsBeforeRestart: {login: 1, cart: 11, post: 1, put: 2, delete: 1}
+    providerCallsAfterRestart: {login: 1, cart: 15, post: 1, put: 2, delete: 1}
+    journalStates: {Acknowledged: 2, UnknownOutcome: 2}
+  blockers:
+    - production Catalog normalization remains fail-closed pending provider currency, price scale, unit, availability, image and variant authority
+    - provider quantity min, max, step and fractional semantics remain unproven; decimal strings fail capability admission before journal/provider
+    - local fake-provider proof is not live external AROMA acceptance
+    - full 15-runtime stub-secrets topology remains historical blocked evidence and was not rerun in this increment
+  cleanup:
+    currentWorkflowContainers: 0
+    currentWorkflowNetworks: 0
+    currentWorkflowVolumes: 0
+    removedCurrentWorkflowSecretDirs: 6
+    preservedPreExistingSecretDir: coffee-platform-secrets-nfRL1X
+  ledger: {selfHashExcluded: true, secretsExcluded: true, historicalBaselinesSeparate: true}
+  externalMutations: {providerRequests: false, providerMutations: false, commit: false, push: false, pullRequestOrIssueMutation: false, merge: false, deployment: false}
+
+latestPricingDocumentationDecision:
+  date: 2026-09-14
+  status: local-documentation-only-not-provider-acceptance
+  document: docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md
+  syncIntervalMinutes: 60
+  currentOutputs: 130
+  runtimeContractsConfigChanged: false
+  evidenceKind: transformed-observation-report-not-wire-fixture
+  note: Документ фиксирует решение пользователя; исторические команды не повторялись, acceptance остаётся открытым.
+
+latestAfterA05d170:
+  date: 2026-09-18
+  baselineCommit: a05d17045b455a4674744ee96ecd5e941f1331bd
+  status: blocked-not-pr-ready
+  implemented:
+    - exact decimal lexical normalization including 12.300 to 1230 without Number conversion
+    - production Catalog normalization preserves the accepted exact RUB-to-minor-unit mapping, observed promotions, image and availability facts; capture-backed offers without authoritative unit still fail closed and weight is not treated as unit
+    - bounded safe re-auth before partial output or unsafe dispatch, with single-flight and no mutation retry
+    - finite Gateway metrics and redacted OpenTelemetry instrumentation for session, provider read/login/mutation, catalog batches and journal transitions; no production tracing backend or trace delivery is proven
+    - local readiness with observed provider degradation/recovery, cancellation-aware login/read/mutate classification and zero provider I/O from healthcheck
+    - terminal-relative journal retention metadata and bounded terminal-only cleanup
+    - demand-driven provider page fetching plus forced-GC heap samples for 100000 offers and cross-batch collision proofs; neither claim is HTTP end-to-end backpressure or absolute peak process memory
+    - architecture RED guards for literal PostgreSQL URLs, provider transport bypass and generic retry wrappers
+    - canonical AROMA migration chain in cart and 15-runtime recovery Compose harnesses
+  verification:
+    - {command: pnpm check, exitCode: 0}
+    - {command: node --test tests/aroma/provider-http.test.mjs tests/aroma/provider-session.test.mjs tests/aroma/provider-decoder.test.mjs tests/aroma/provider-catalog-source.test.mjs tests/aroma/gateway-production-composition.test.mjs, exitCode: 0, passed: 59, failed: 0}
+    - {command: pnpm test:aroma-unit, exitCode: 0}
+    - {command: pnpm test:aroma-http, exitCode: 0}
+    - {command: pnpm test:aroma-catalog-stream, exitCode: 0, passed: 27, failed: 0}
+    - {command: pnpm test:aroma-journal, exitCode: 0, passed: 27, failed: 0, skipped: 1}
+    - {command: pnpm test:aroma-mutation-recovery, exitCode: 0, realPostgres: true, passed: 17, failed: 0, skipped: 0}
+    - {command: pnpm test:aroma-binding, exitCode: 0, nativeMtls: true, realPostgres: true}
+    - {command: pnpm test:aroma-compose, exitCode: 0, localProviderFixture: true, realPostgresJournal: true}
+    - {command: node tools/compose-smoke.mjs --recovery-proof, exitCode: 0, evidenceAge: historical-before-current-readiness-and-catalog-increment, ordinaryPreparedPostgresStartup: passed, isolatedRecoveryPhase: passed, runtimesHealthy: 15, kafkaRecovery: true, telemetryInstrumentation: true, productionTraceDelivery: not-proven}
+    - {command: node tools/compose-smoke.mjs --recovery-proof, exitCode: 0, evidenceAge: current, ordinaryPreparedPostgresStartup: passed, preparedPostgresRuntimesHealthy: 15, readinessPreserved: true, isolatedRecoveryPhase: passed, kafkaRecovery: true, telemetryInstrumentation: true, productionTraceDelivery: not-proven}
+    - {command: node tools/compose-smoke.mjs, exitCode: 1, blocker: external-production-postgresql-unavailable}
+    - {command: served-package-production-deploy-and-observability-import, exitCode: 0, dependency: '@opentelemetry/api@1.9.1'}
+    - {command: independent-adversarial-re-review, result: pass, findingsClosed: [terminal-relative-retention, provider-http-latency, provider-read-error-span]}
+    - {command: independent-readiness-and-catalog-review, result: pass-after-remediation, findingsClosed: [resolved-mutation-auth-response-readiness, synthetic-offer-as-variant-identity]}
+  boundedHeapProof:
+    offers: 100000
+    maxBatch: 500
+    peakDeltaBytes: 26056040
+    peakBudgetBytes: 67108864
+    retainedDeltaBytes: 222248
+    retainedBudgetBytes: 16777216
+  blockers:
+    - accepted RUB×100 mapping and observed promotions are implemented; captured offers remain fail-closed where unit or other required identity/presentation facts are unresolved, without defaults
+    - full production-topology Compose cannot become ready while external PostgreSQL on coffee_postgres_data is unavailable; isolated recovery topology passes
+    - provider quantity bounds, step and fractional semantics remain open; live external AROMA provider acceptance was not performed in this local-only increment
+  cleanup: {disposableComposeResources: removed, temporaryScopedSecrets: removed, sharedResources: preserved}
+  externalMutations: {providerRequests: false, providerMutations: false, commit: false, push: false, pullRequestOrIssueMutation: false, merge: false, deployment: false}
+
+latestAfter07c07f1:
+  date: 2026-09-18 00:00:00+00:00
+  baselineCommit: 07c07f18c666b445bdf338a01b5dea4bba25b9de
+  status: local-remediation-provider-admission-pending
+  implemented:
+  - offer ID is the authority-approved Platform source variant key in a domain-separated HMAC; it is not claimed
+    as an independent provider variant ID
+  - live Fastify and native HTTP proof pauses downstream after page 1 collection and prevents provider page 2 request
+    and body pull until resume
+  - bounded read-only provider probe updated non-empty cart/catalog observations without admitting unknown unit,
+    quantity, packing, grind or mutation semantics
+  - operation journal documentation now matches implemented one-time safe pre-dispatch re-auth and preserves the
+    post-dispatch replay prohibition
+  - Нормализатор применяет подтверждённую owner policy piece/RUB×100 для упаковок и штук, включая sold_by_piece=false;
+    packing/grind не синтезируются
+  - Canary-тесты проходят через ProviderHttpClient/ProviderSessionManager и проверяют in-process spans/metrics/typed
+    errors и аварийный stdout/stderr отдельного Node.js процесса
+  - Нулевая цена сохраняется точно как 0; Available заменяется локальным Unavailable, Stopped сохраняется. Проверены
+    public и authenticated page1; zero + Available отвергается на export boundary.
+  currentOutputs:
+  - artifact: apps/aroma-gateway/src/application/provider-catalog-source.ts
+    sha256: eb3f96410ce209fec09a5ebd83f49f31e054a4e172a778446bfd63005e36b92e
+  - artifact: apps/aroma-gateway/src/domain/source-identity.ts
+    sha256: e7b9bb51ff2f0251158247658dffc18bb29c1f758f8700ae284aecd87f2bfcc3
+  - artifact: apps/aroma-gateway/src/application/catalog-export.ts
+    sha256: 0612845cda329c92f09445de5f9a6ad0b538c39af00285f9bc73b2b8554f99de
+  - artifact: apps/aroma-gateway/src/infrastructure/database/offer-binding-store.ts
+    sha256: bc8b9a41db77036ae839ba2285a6dab13f887826497f7f4d29862d67c9569fc9
+  - artifact: docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md
+    sha256: 4dc34600eec2d390367e392c9f0ae957400c2e6bdc1ac8f69e4e42fa10d2cfc0
+  - artifact: docs/launch/27_AROMA_PROVIDER_PROTOCOL.md
+    sha256: 103a00c64362d6d8522392b037de61a2ccbc0886342f5202b13d6f31a4e5f023
+  - artifact: evidence/aroma-provider/README.md
+    sha256: 13b84c77ffaea1fc8a30399adb0d9719fff790857201bd0b417f6e4307285784
+  - artifact: evidence/aroma-provider/2026-09-18-read-only-unit-identity-observations.json
+    sha256: 867907c60bb425bc10b6b9fcccb1a99262ff492f4759d05c04fb4de1ff1e7e02
+  - artifact: tests/aroma/catalog-export.test.mjs
+    sha256: 907014d961b36f4a6892a1ca2b34f9ef8dc51ed5ff1a43cc17ff8fb50b69d9b2
+  - artifact: tests/aroma/provider-catalog-source.test.mjs
+    sha256: 3d8116bc800a178b267cc2c18d8a8f20eb041e5ca9a9359fda521bfd06b426f1
+  - artifact: tests/aroma/source-identity.test.mjs
+    sha256: a0485b8502ef5bcbe8f0a68ed8f14a3744021495a59a7a6b26ea10baa97e2faa
+  - artifact: tests/aroma/provider-session.test.mjs
+    sha256: 2412f613985f2fb29412ebdec95ea066d6421ba3a992f3931aad6742227e9c5a
+  - artifact: tests/aroma/gateway-production-composition.test.mjs
+    sha256: 77a426d6066d67ccabe6cde74068d35b6eb6712dc8d1b2c17e5f4b836cc13007
+  - artifact: docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md
+    sha256: e6edd67b49613c194b7e3158f7e6bc06e4e1f1cc3cdaa9396e62e2c8c5237ebf
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 98d958f04ea5172b526f2cddd2d9bf3547692517dfbc09b022c44c358165bce0
+  - artifact: evidence/aroma-provider/2026-09-18-login-probe-correction.json
+    sha256: fe27aee360a1d9a337752ab5ba2e53043836694621502511540304f5d17bd68a
+  verification:
+  - command: bounded read-only provider probe
+    exitCode: 0
+    actualAggregate:
+      loginAttempts: 3
+      safeReads: 6
+      mutations: 0
+    finalRun:
+      loginAttempts: 1
+      safeReads: 4
+    rawBodiesOrIdentifiersPersisted: false
+    secretsCookiesOrPiiPersisted: false
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: node --test tests/aroma/binding-live.test.mjs
+    exitCode: 0
+    passed: 1
+    failed: 0
+    note: sequential prerequisite after one transient bootstrap read timeout in independent review
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm check
+    exitCode: 0
+    tests: 359
+    passed: 343
+    failed: 0
+    skipped: 16
+    evidenceAge: до текущего этапа подготовки к merge
+  - command: pnpm test:aroma-catalog-stream
+    exitCode: 0
+    passed: 30
+    failed: 0
+    skipped: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm security:secrets
+    exitCode: 0
+    scope: encrypted-material-and-runtime-scopes-not-full-runtime-canary
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: node scripts/check-database-ownership.mjs
+    exitCode: 0
+    databases: 5
+    runtimeClaims: 15
+    liveTargetGrants: false
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: node scripts/db-smoke.mjs --plan
+    exitCode: 0
+    structuralOnly: true
+    liveDatabase: false
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: git diff --check
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm test:aroma-unit
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 59
+    failed: 0
+  - command: pnpm test:aroma-http
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 8
+    failed: 0
+  - command: pnpm test:aroma-catalog-stream
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 30
+    failed: 0
+  - command: pnpm test:aroma-cart-read
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 44
+    failed: 0
+  - command: pnpm test:aroma-journal
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 27
+    failed: 0
+    skipped: 1
+    liveSkipCoveredBy: pnpm test:aroma-mutation-recovery
+  - command: pnpm contracts:lint
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm contracts:check-generated
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm contracts:breaking
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: pnpm contracts:test
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 39
+    failed: 0
+  - command: pnpm check
+    exitCode: 0
+    evidenceAge: current
+    tests: 359
+    passed: 343
+    failed: 0
+    skipped: 16
+  - command: pnpm test:aroma-mutation-recovery
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    passed: 17
+    failed: 0
+    skipped: 0
+    realPostgres: true
+  - command: pnpm test:aroma-binding
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    nativeMtls: true
+    realPostgres: true
+  - command: pnpm test:aroma-compose
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    realPostgres: true
+    providerKind: local-fake
+    liveProviderAcceptance: false
+  - command: pnpm test:compose-smoke -- --recovery-proof
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+    preparedPostgresRuntimesHealthy: 15
+    isolatedRecoveryPhase: passed
+    kafkaRecovery: true
+    stubSecrets: false
+    scope: startup/recovery существующего runtime; не live Catalog/provider acceptance
+  - command: git diff --check
+    exitCode: 0
+    evidenceAge: before-zero-price-increment; unchanged tested scope
+  - command: node --test tests/aroma/provider-catalog-source.test.mjs
+    exitCode: 0
+    passed: 8
+    failed: 0
+    evidenceAge: current; public and authenticated zero-price captures
+  blockers:
+  - Production источник packing/grind не определён; unknown не равен explicit null. Существующий binding не обогащается
+    свежей корзиной.
+  - Provider upper quantity bound не подтверждён; согласованная модель считает целые упаковки/штуки. Универсальные
+    provider limits не заявлены.
+  - Финальный delivery acceptance и публикация актуального head в PR пока не выполнены.
+  openFacts:
+  - provider quantity bounds, step and fractions remain unproven
+  - controlled duplicate POST 422 effect and repeated DELETE 404 are evidenced for one selected offer only; global
+    provider semantics remain unknown
+  - provider session TTL/refresh/invalidation remains unproven; bounded pre-dispatch safe re-auth is implemented,
+    while post-dispatch replay is forbidden
+  ledger:
+    selfHashExcluded: true
+    secretsExcluded: true
+    acceptedPredecessorSeparate: true
+  externalMutations:
+    providerRequests: true
+    providerRequestsKind: two invalid research login requests (422 due to wrong nested lookup), then corrected login
+      + catalog/cart/grinds GET (all 200); no cart mutations
+    providerMutations: false
+    commit: true
+    push: false
+    pullRequestOrIssueMutation: false
+    merge: false
+    deployment: false
+    commitScope: локальная синхронизация develop и проверенные доработки issue 10; без push и merge PR
+    localBranchIntegration: true
+    providerRequestsCount: 6
+  ownerPolicy:
+    confirmedOn: '2026-09-18'
+    unit: piece
+    quantityMeaning: число упаковок или штук
+    priceBasis: одна упаковка или штука, без пересчёта на килограмм
+    weightMeaning: вес фасовки; 0.2 кг не означает provider quantity 0.2
+    authority: docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md
+  integration:
+    developSourceCommit: 7ef4b94e16b7cf68e45861f75be4de477e24c8a7
+    localBranchSynchronized: true
+    conflictsResolved:
+    - docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    - docs/launch/README.md
+    dirtyFilesPreserved: true
+    unrelatedUserChangesExcluded: true
+    remoteUpdated: false
+  limitations:
+  - Default Compose требует подготовленный external PostgreSQL; isolated startup/recovery проверяется отдельно и
+    не означает deployment.
+  - 'In-process trace capture не доказывает production exporter/backend delivery; глобальные alerts/browser bundle
+    не добавлены в scope #10.'
+  canaryEvidence:
+    telemetryAndErrors: 'tests/aroma/provider-session.test.mjs: реальный HTTP/session путь; in-process capture spans
+      и metrics'
+    crashOutput: 'tests/aroma/provider-session.test.mjs: отдельный Node.js процесс, typed auth failure, stdout/stderr'
+    logsAndJournal: 'существующий local-fake AROMA Compose proof: безопасные logs, typed journal rows и replay;
+      объём logs ограничен harness'
+    productionTraceDelivery: 'не проверялась; backend/exporter относится к #64'
+  review:
+    runtimeIncrement: существенных замечаний независимого reviewer не найдено
+    documentationFinding: AROMA-REVIEW-01 устранено
+    fullIssueReady: false
+    zeroPriceIncrement: Существенных code findings нет; ZERO-REVIEW-01 stale documentation исправлена; authenticated
+      regression добавлена.
+  cleanup:
+    proofOwnedComposeResources: удалены
+    sharedCoffeePostgresData: сохранена
+    unrelatedUserFilesVerified: 478
+    unrelatedUserFileHashChanges: 0
+
+finalDelivery:
+  baseline: 89366e6ce5aa176d2084d06b3dfe710cf6ee1a41
+  status: ready-for-merge
+  authority: >-
+    This block supersedes current readiness claims in historical increment sections; historical test results remain
+    scoped to their recorded baseline.
+  evidence: evidence/issue-10-final-delivery.md
+  outputs:
+    - artifact: apps/api-internal/package.json
+      sha256: 5e633a3c80ef5f39ee4bc36c31824e249b4f5001c6a7f7c3a3f661da77666703
+    - artifact: apps/api-internal/src/index.ts
+      sha256: 13e99d28efe8deb7e8db1ec582cd8a4d93722ad30303504555696b09ab73dd5c
+    - artifact: apps/api-internal/src/main.ts
+      sha256: 52dd54a3edfc75e22b821bc365ed13c1eb19290706f68a790da93e093868721a
+    - artifact: apps/api-internal/tsconfig.json
+      sha256: 577e2e3df08e705565d28c45718f6846103bcd63bb0757fbd0bdfdd73ee2aa74
+    - artifact: apps/aroma-gateway/migrations/0001_provider_sessions.sql
+      sha256: 41a8936bd3fd75160d2b44ecaa82e00fd15c0d3a3c5c5fd73cccbc4583b35aff
+    - artifact: apps/aroma-gateway/migrations/0002_provider_mutation_journal.sql
+      sha256: 5ba627ed7256557c47682a3ef6beafe770d8f9da6217364f19236fe76d9c801b
+    - artifact: apps/aroma-gateway/migrations/0003_offer_bindings.sql
+      sha256: 19d4ff0aeabf71ea0ef952aa286f2a0ae261060b1a7e1229c20d75daf0d4dd6b
+    - artifact: apps/aroma-gateway/migrations/0004_provider_offer_identity.sql
+      sha256: 8c45935ef9e5f592056e7756bdb562759ecfcbd0ff33ab3ca59d4805e7fa295d
+    - artifact: apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql
+      sha256: 3652392ee45bdf02621c60d84b808171bf32c834b070dcef15cb5d2cdaab940c
+    - artifact: apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql
+      sha256: 9590251d2b8889843e0a2f84e14dacc659d81279a9cc1f97c64afafcf231ccd9
+    - artifact: apps/aroma-gateway/migrations/0007_provider_mutation_grind.sql
+      sha256: f55734e3a6b50708bc4262a023192912ea86aeee64d814bcc25b7f9753a48a69
+    - artifact: apps/aroma-gateway/package.json
+      sha256: 5609b9f725d5b32c1d88e9637f1cb7f1dd8cd2fa5759c3f8386ec3941722c530
+    - artifact: apps/aroma-gateway/src/application/cart-reader.ts
+      sha256: ce266bb3126cb3eb6e66b262c54c9eb231cd360bc3796d6020dbe98a2ba462da
+    - artifact: apps/aroma-gateway/src/application/catalog-export.ts
+      sha256: 2c664c06bbb84052ead913ef425db338859dce88d5eca10fdef8e440fe642249
+    - artifact: apps/aroma-gateway/src/application/provider-cart-mutator.ts
+      sha256: 236ff6bf7e24785499f9d9b81d3bacc1de56e1e4979749460ede8481e6672a82
+    - artifact: apps/aroma-gateway/src/application/provider-catalog-source.ts
+      sha256: fdc4a2cd2f0de02b8d6491dd8239f19b1406c7fa82b68708da47a5fd55c9916c
+    - artifact: apps/aroma-gateway/src/application/provider-grinds.ts
+      sha256: 038b8200eec6c7f241a31a781cc788994907afd8d9fa3b5faaa6eab7f026c042
+    - artifact: apps/aroma-gateway/src/domain/mutation-journal.ts
+      sha256: bacbdb3097efde69f66d30066047b0340cf6c7ab13d917e4c6cbb1c1a880afd8
+    - artifact: apps/aroma-gateway/src/domain/provider-errors.ts
+      sha256: 65f2b15fdac5a39e47726e5705b76a3b44b15255890e09529fc19f9a2876e30e
+    - artifact: apps/aroma-gateway/src/domain/source-identity.ts
+      sha256: 8a5688030c1f26823efbc3d9c293cf0c23c6c9788dabf164c5d2873d8e2c18a4
+    - artifact: apps/aroma-gateway/src/infrastructure/database/offer-binding-store.ts
+      sha256: bc8b9a41db77036ae839ba2285a6dab13f887826497f7f4d29862d67c9569fc9
+    - artifact: apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts
+      sha256: 679171a3fb570be7dc25ae70c027baa734d4bbbfb68e77ebb1e671f93f3646a9
+    - artifact: apps/aroma-gateway/src/infrastructure/database/provider-session-store.ts
+      sha256: 19711c403ab1a1c94a978a25232358befe7a94de6c7cde0f63923abe9bd7036a
+    - artifact: apps/aroma-gateway/src/infrastructure/observability.ts
+      sha256: 8f4ca1a34f75b4d4f5a74fa1077ec4bbf9207fe1d4cae45183eb3eb190c6ec0e
+    - artifact: apps/aroma-gateway/src/infrastructure/provider/cookie-jar.ts
+      sha256: afdc306c43673301e99bc74829f2a92901f37bf4640a982ddce0cc103498f02a
+    - artifact: apps/aroma-gateway/src/infrastructure/provider/decoder.ts
+      sha256: 394075596e804164fc770ad9c591bcb327d2599788020b68896255193eca2467
+    - artifact: apps/aroma-gateway/src/infrastructure/provider/http-client.ts
+      sha256: 8e54bfa607339d305d39d307230d2eb772a9613548a22c673abbef44cd4dddc7
+    - artifact: apps/aroma-gateway/src/infrastructure/provider/session.ts
+      sha256: 1d76679f4d7030774d609b1355a3b539315cdd535f82e0e6bb2d6a995cd124f9
+    - artifact: apps/aroma-gateway/src/main.ts
+      sha256: 5baba8fcd3c78fba27a858bde59e80df929bcbe297178193212efa749c426266
+    - artifact: apps/aroma-gateway/src/transport/http/index.ts
+      sha256: 84b9a56a325ee178c9f92c740fe9e3cb5832861bbba75206495f9f9681903a2e
+    - artifact: apps/aroma-gateway/tsconfig.json
+      sha256: 8d562f12c0373c594cc35c98e46962b635869d186dd94ca7d7f10aeb5229205f
+    - artifact: compose.yaml
+      sha256: fa6d17c4ba93221b3c0a6ca9343d57f58f002259786e2bc70d4dc76475c9f063
+    - artifact: config/database-role-map.json
+      sha256: fcba7637e40b73258e90f3de1292a70713134320761c9bd161b5c7a86675f657
+    - artifact: config/permissions/catalog-activation-worker.json
+      sha256: 63ab9703e1628abef4f632d7a7289d05d13cfc0cb732d508e6f3c2383fe391df
+    - artifact: config/platform.schema.json
+      sha256: c925d4458b9233fe765a33fbf5e0c92c6b371c0deea18e726f03d4e211a4b992
+    - artifact: config/platform.yaml
+      sha256: 115efccc357bced3ea4bd68eff07ceffff0438d01c52a500752ec1faab920f58
+    - artifact: config/service-catalog.json
+      sha256: 92a13e7cb762b378743445c832e02d65b94fe693dd13586cba3c1c2293d9964c
+    - artifact: config/service-interactions.json
+      sha256: eecad8154a08caa83030d9590bd5262ee41a60467130b70a016a0c6963aa8e56
+    - artifact: contracts/compatibility-evidence.yaml
+      sha256: dd574b8b7120375a56f843f0cfcd635f12e4a8178db3f72678fd0005f43c7005
+    - artifact: contracts/fixtures/negative/http/rejections.json
+      sha256: 569d3d38089769cacda5e79327814e56a992abacbcf72d0e02c286c9e89cde3e
+    - artifact: contracts/fixtures/negative/ndjson/aroma-catalog-invalid.ndjson
+      sha256: 98d44d537237a34cb123695220713fad00a9239c54661982992bac5649ed8a98
+    - artifact: contracts/fixtures/positive/http/problems.json
+      sha256: 9f7a77c558d00372f268200045e26233750244829fc7244fda65de8c2990518d
+    - artifact: contracts/fixtures/positive/http/success.json
+      sha256: 2f2af33bff3772d78e0d7ef44555f49b05d65b94271481d2ac3f8930ae9c1380
+    - artifact: contracts/fixtures/positive/ndjson/aroma-catalog-grind-options.ndjson
+      sha256: 89a48398e6f6e4ad918c07e6b49af8ae52338f96c30b30f9b438b8f297ac0742
+    - artifact: contracts/fixtures/positive/ndjson/aroma-catalog-missing-image.ndjson
+      sha256: 142278d7a3cc09a064961b18d928064607f7501f944657c1f5d95427d6f1878c
+    - artifact: contracts/fixtures/positive/ndjson/aroma-catalog-success.ndjson
+      sha256: 5511625b2ccbf92f01d047589c1bd1f8d6d5eed1b672e4653e63cdd42dbd7ec4
+    - artifact: contracts/manifest.yaml
+      sha256: aa98189817c7c4f512c9d28b393bed7663c81bae93d705cac7cae39cf9735b5f
+    - artifact: contracts/openapi/internal-v1.yaml
+      sha256: 62c578651f5bfedead5451c49a7b5e72a73acde9e0cc5ae8cc18e5eac0c12206
+    - artifact: contracts/schemas/common/money-version-time.v1.schema.json
+      sha256: 80f6173914262b6a07d4181c6b6bf5a6e4493c67849c6152464930b57672674d
+    - artifact: contracts/schemas/common/problem-details.v1.schema.json
+      sha256: e1035e5b91a5db0742e0d368a1aed17c61814bd70c09244e7f327bb04c8b6980
+    - artifact: docs/adr/ADR-0028-gateway-source-identity-authority.md
+      sha256: dfe4f42cd8054db4e43be9a9e5f455b0dd5153f14695abe9d860af237fc0ec96
+    - artifact: docs/launch/04_AROMA_CART_SAFETY.md
+      sha256: 013f4ed0e8231a63c6ca14c55179176dabc10d0d0aab850b8310d8abca1fad20
+    - artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md
+      sha256: 2f66a5da35f9704ea1724ad58b8e5149e441b45177c6dae0363153f849416b9f
+    - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+      sha256: 98d958f04ea5172b526f2cddd2d9bf3547692517dfbc09b022c44c358165bce0
+    - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+      sha256: 82692def05d3955d5ed6c10fe12f53e4bd4a4ad01a3846a8b4e39099cca40233
+    - artifact: docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md
+      sha256: 98c969094686c548d8b5627b24e14c589d27f43234647ea578488fccc09b44d1
+    - artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
+      sha256: 3ded6c893e0e32430fce9931b6f77067731782ad52158ee318d5041151a3737f
+    - artifact: docs/launch/27_AROMA_PROVIDER_PROTOCOL.md
+      sha256: 192291832cc9322180fc5415eb97a818125196a9f934c335d583027f8c52a43e
+    - artifact: docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md
+      sha256: e6edd67b49613c194b7e3158f7e6bc06e4e1f1cc3cdaa9396e62e2c8c5237ebf
+    - artifact: evidence/aroma-provider/2026-09-12-adapter-preflight/README.md
+      sha256: 8a279cd948456c30fbbef22751fe199c68f00c34f22cad99e931725729f05dfa
+    - artifact: evidence/aroma-provider/2026-09-12-adapter-preflight/report.json
+      sha256: 6fd7bb25c05040e2173572fa31e7d31ddd462724b9b93a70140815ec0c9894a5
+    - artifact: evidence/aroma-provider/2026-09-12-authenticated/README.md
+      sha256: 45118b278091be1c3cdae22fb36c5e33785dbae1ea93fdfe71600bafc936cf25
+    - artifact: evidence/aroma-provider/2026-09-12-authenticated/cart.json
+      sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+    - artifact: evidence/aroma-provider/2026-09-12-authenticated/catalog-page1.json
+      sha256: 47127d5b9c3479784dbb43d3ef0ce0549211dbc0ef2423989d890570b1633d25
+    - artifact: evidence/aroma-provider/2026-09-12-authenticated/catalog-page24.json
+      sha256: d85b538d50e0f03967fd3e72bff64e4938dbb153bc3fe2ab22cb4d15dd7e5e93
+    - artifact: evidence/aroma-provider/2026-09-12-authenticated/report.json
+      sha256: ece19c31a2e28aec13536b1a2f8603a4ba7ec58844020ff30c7fb109b8e4864d
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/README.md
+      sha256: 12719a455e8f76865e36c92b21fbe7361a603447d38ad9f2ec6892854fbd99f4
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/add-one-get.json
+      sha256: 630cc48764173d37785a832cb0e6b93d2126dacec5b5509df8d2b60d13a31ef7
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/add-one.json
+      sha256: 630cc48764173d37785a832cb0e6b93d2126dacec5b5509df8d2b60d13a31ef7
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/add-same-offer-get.json
+      sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/add-same-offer.json
+      sha256: 553bad40b864fcde6cce1135e33ecd66c0e92ac91d3e67756d87d119d0435dee
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/final-cart.json
+      sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/initial-cart.json
+      sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/remove-missing.json
+      sha256: 4fbcac9c489c6f04b19b6c460ba455a9d507c0618c0f0a0b2401d16a14433da7
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/remove-owned-get.json
+      sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/remove-owned.json
+      sha256: 4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/report.json
+      sha256: 6ec9991555bd618e360a3aa9b4cfec5301aff5c399a223f9072997f0a0e8eed3
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/set-two-again-get.json
+      sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/set-two-again.json
+      sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/set-two-get.json
+      sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/set-two.json
+      sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+    - artifact: evidence/aroma-provider/2026-09-12-cart-mutations/stop-reconciliation.json
+      sha256: 3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322
+    - artifact: evidence/aroma-provider/2026-09-12/README.md
+      sha256: 1ebcdcc0f44492886921c805e55f1df0104c9a3c9de4276d25e7c13ef22c0833
+    - artifact: evidence/aroma-provider/2026-09-12/cart-public.json
+      sha256: 5c119288290e970f5f088a0f78f07b903a0903af64df1ce3dc062a106e786e7e
+    - artifact: evidence/aroma-provider/2026-09-12/page1.json
+      sha256: 764fcea9d855cf35a1373d289c5e496843a4b6447d6ab75d68ee20064f671ec8
+    - artifact: evidence/aroma-provider/2026-09-12/page24.json
+      sha256: 8ef6a2a98a616b3a39279ad2b6da14aeeff4fb147544adc769d8e287b568673a
+    - artifact: evidence/aroma-provider/2026-09-12/page47.json
+      sha256: 213573e0b8e5bcc7c194f1d0890dd31972a9714a4357e9234b92c002cbc419c0
+    - artifact: evidence/aroma-provider/2026-09-12/report.json
+      sha256: 1a6e3f4d26e153e7ed393acb81e87e6dd0cc48a8483f01d693fad2e87568c583
+    - artifact: evidence/aroma-provider/2026-09-14-pricing-observations.json
+      sha256: c581596331eb1d248a965ef3979bcb5a904e647090f72775ecea4d9a6e642c92
+    - artifact: evidence/aroma-provider/2026-09-18-complete-catalog-export.json
+      sha256: 4345f9cf31bdce69a10a8309a3374df7323af06a6f745e8ff9f8036f21f9101c
+    - artifact: evidence/aroma-provider/2026-09-18-login-probe-correction.json
+      sha256: fe27aee360a1d9a337752ab5ba2e53043836694621502511540304f5d17bd68a
+    - artifact: evidence/aroma-provider/2026-09-18-read-only-unit-identity-observations.json
+      sha256: 867907c60bb425bc10b6b9fcccb1a99262ff492f4759d05c04fb4de1ff1e7e02
+    - artifact: evidence/aroma-provider/README.md
+      sha256: 72455c04dc230c4ade6715574da957bdb2a1a0baf1e6eb78083909dcce70b680
+    - artifact: evidence/aroma-provider/catalog-and-session-2026-09-08.json
+      sha256: 078e018c6ba4aa88cd190e61fbadaf0f3bb504ce21cbd6bb128e2ee499c27f23
+    - artifact: evidence/issue-10-binding-acceptance.md
+      sha256: 7ec35eaa155ecce04e0da4c433faa94dce754d0e9b88c2bdb05d89245e5918ae
+    - artifact: evidence/issue-10-contract-narrowing.md
+      sha256: 2964b99d7dfc467e9c401f5ba486949683019f3efaff199bba00e137a61d380e
+    - artifact: evidence/issue-10-core-regression-acceptance.md
+      sha256: c65eb1199ece2719aa35f43602c7c8fa0679bb1d6200a6e3132650512c6d29d7
+    - artifact: evidence/issue-10-final-delivery.md
+      sha256: 24f4290e9cb99b27c9cc3894e11fee9cb178b8b71f276e28de64af8074a73bcb
+    - artifact: package.json
+      sha256: a742ac547eaf5124585c6aa979e3de66a8dccffb116a11ed8bf27066089ee404
+    - artifact: packages/contracts/aroma-v1/package.json
+      sha256: bdd058f2926cbbaed3d08979e44c6bb34e67ad11b3eda2c627c513e89b6a4816
+    - artifact: packages/contracts/aroma-v1/src/index.ts
+      sha256: 95167aa61fffaf64a8b85dfe209f9f0012069a74c17ad98d6399bc98f02cf0cc
+    - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
+      sha256: ed19e74de0d36d8e2d9478b6d580ee64359d844021f589808b5f0b8a654a4d5f
+    - artifact: packages/generated/internal-v1/src/index.ts
+      sha256: 9db8693bf29da7d03250130c6d5464c2136e4b8f8fc6bec26a3fca1d69494d0a
+    - artifact: packages/generated/internal-v1/src/runtime-schemas.gen.ts
+      sha256: dff7389a0bfa331a592a6f72aa440feb2a1d7e9c5c56c1e394247c7f15c7159a
+    - artifact: packages/generated/internal-v1/src/types.gen.ts
+      sha256: e30a7d18f1223f3708b9a79df17ab8ac8d3675d39108e8f4b91eb1a1b3a2ea22
+    - artifact: packages/platform-config/src/index.ts
+      sha256: d33c4a9fdf06dab5b1aa4ec3020d601cf59244a9adf250076892920a45b9b4dd
+    - artifact: packages/platform-runtime/src/index.ts
+      sha256: a8326986c8e6d68b09038f4c46d7c0cf68b1a0fef1d765a87d00688967c35272
+    - artifact: platform/launch-v1-connectivity-policy.json
+      sha256: 223b6698626f197526dbd6089816e7666ef9cb83356b96905877d5d37c8f5b92
+    - artifact: platform/launch-v1-runtime-profile.json
+      sha256: b5b6d02eabf52ebe6f6368bac71b55a8edaaac982e1d3a2c309d7cdbff3dc9a3
+    - artifact: platform/launch-v1-runtime-profile.schema.json
+      sha256: 4a935383f81f059e91832dad83ad6663d13acba568a3108570d4f4dd50f9491f
+    - artifact: pnpm-lock.yaml
+      sha256: 5d1b9090bdf13d5e30a05fe342eed9e5020692afc926991ab278ff4d6895dc62
+    - artifact: scripts/aroma-session-live-proof.mjs
+      sha256: 5dbf418f912e344f59c80f1af00e3b65d85a35928ad57cb345a2049ed55bba2a
+    - artifact: scripts/check-architecture.mjs
+      sha256: dbc74cff5d8d91f2185fa5249ee7d65d34921b9c723a76dafe99cc12682b86ed
+    - artifact: scripts/check-service-catalog.mjs
+      sha256: f700082e2aff9d4e9b8540e6fb0a608b7dfb5cb1ca404842eb0c6f597e907ed0
+    - artifact: scripts/contracts-ajv.mjs
+      sha256: 29bdaf925fded7668bb56bd04bf0694f55fb12f48f85aa24a22649bd6e498584
+    - artifact: scripts/contracts-breaking.mjs
+      sha256: 01f045f47b4cc8420143b21cd557cca89d90412f66908acaf01f31a2470c7415
+    - artifact: scripts/contracts-generate.mjs
+      sha256: db2b689ab1c0d3d296436185ee0dc8f6657bfa41eb88938513fe740c6aff319a
+    - artifact: scripts/db-live-proof.mjs
+      sha256: 9da99efc453b8eb9909d1231081cb557fef03c89e9c7ee507d8b01ef710b075e
+    - artifact: scripts/validate-launch-authority.py
+      sha256: 39ff18872c9d8e037179924082eb578d79eec35d4b02f490690c7b1e9ea22b67
+    - artifact: secrets/platform.secrets.sops.yaml
+      sha256: d72aec3c7b7a2063aed506f571186a9641e3ed64b09cd070f60a886a8e66e304
+    - artifact: tests/architecture/checks.test.mjs
+      sha256: da6033d35a00703b1556169b0c811a00983f9e680fb61eb01b812d8430b3ddd6
+    - artifact: tests/architecture/fixtures/invalid-generic-retry-dependency/package.json
+      sha256: daf1731cf14bef60cc7951d3af4fe520913b7c5ada51a060c0f012b896c1ad41
+    - artifact: tests/architecture/fixtures/invalid-generic-retry-wrapper/apps/aroma-gateway/src/retry.ts
+      sha256: f5ee2b74f46a79882d1d11b35d6338d927448c3776fb651e2ba1ea49639da4ae
+    - artifact: tests/architecture/fixtures/invalid-postgres-url/apps/orders-service/src/bad.ts
+      sha256: ed98b1737137adff9c754da63df2b77fdc7fd60e665f9adf0dd41cf291b6edc9
+    - artifact: tests/architecture/fixtures/invalid-provider-fetch/apps/aroma-gateway/src/bad.ts
+      sha256: e8421d5ef4bd749a972cd8c799ee36d3b34a8a58604c16aed6bb6ee3eed2f96d
+    - artifact: tests/architecture/fixtures/invalid-provider-proxy/apps/aroma-gateway/src/bad.ts
+      sha256: c9bdb37566e72a5630274fdfdb0dce091a22b6293ba35de556bd9652a6ac739d
+    - artifact: tests/aroma/api-internal-operations.test.mjs
+      sha256: 8aa818aa559fd9a971d493fede579d39a5aae1deaa7a4d7dafe858d3997aeabc
+    - artifact: tests/aroma/binding-http.test.mjs
+      sha256: dd963ec503eb2862a84276794a41c9eefe993183928ebee7064f995134f64e53
+    - artifact: tests/aroma/binding-live.test.mjs
+      sha256: 173ab0ae91988af3f6c6e03d78f54b33aa2e37a52023a5b3182afa7d99ada6e4
+    - artifact: tests/aroma/cart-reader.test.mjs
+      sha256: b8a97082fb99f459acae492a885f27c35d9f7e771efbe9d47bf01cfaa93a284e
+    - artifact: tests/aroma/catalog-export.test.mjs
+      sha256: 907014d961b36f4a6892a1ca2b34f9ef8dc51ed5ff1a43cc17ff8fb50b69d9b2
+    - artifact: tests/aroma/gateway-operations-http.test.mjs
+      sha256: 53c6aa162dc153592a94356d7f040b963c0f0749f1ad82ca0e74d0006a5a45ea
+    - artifact: tests/aroma/gateway-production-composition.test.mjs
+      sha256: b26b43570bc42deac1bec738c1a29e121c6534d171d45e06abe618926aada50f
+    - artifact: tests/aroma/mutation-journal.test.mjs
+      sha256: 0661cc2f3ca067e8d4a71cf06a888b31ec8e780d8fc83b23e850ffe45ca222b6
+    - artifact: tests/aroma/provider-cart-mutator.test.mjs
+      sha256: 2b3be7d9e688dfe1f862c2bc9398fb86035cc67b374dff784240a8a907e2fa10
+    - artifact: tests/aroma/provider-catalog-source.test.mjs
+      sha256: 9caa9e0d9e2e26abccbdc01abbbc72a56600759b8cfd9e7a09b1d8fe13d527f2
+    - artifact: tests/aroma/provider-decoder.test.mjs
+      sha256: d9ceb307fd7aa707bc1185286c7865b9b50f7578b0745b125e131ecfb6b73a1b
+    - artifact: tests/aroma/provider-http.test.mjs
+      sha256: 3f14c018e72de502b72d2811605ea7e6350590506ca32401416960c9e58dee5d
+    - artifact: tests/aroma/provider-session.test.mjs
+      sha256: 2412f613985f2fb29412ebdec95ea066d6421ba3a992f3931aad6742227e9c5a
+    - artifact: tests/aroma/safe-read-http.test.mjs
+      sha256: 576d1a3894b01c3e74db462168b776bd6885bef3a9858544619d74951f0037dd
+    - artifact: tests/aroma/scoping-provenance.test.mjs
+      sha256: 6a9b06f7ad58da9b02ff493ac8f62b921c4a4a6740ae01841b8bd29417b506c1
+    - artifact: tests/aroma/source-identity.test.mjs
+      sha256: 613d7b5b7e16f1a81eba46efe2be7333e72d892155532cd4b74e9393eb166d41
+    - artifact: tests/authority/fixtures/negative/cases.json
+      sha256: 564332c488bc34083fa3023cef51445ddb5641b36e3a22b1bc31216cd94889ff
+    - artifact: tests/authority/test_launch_authority.py
+      sha256: 218c200fc19403a41a5c777707108b63cee4c0d8e3c80de57ef1bc76a0fcff73
+    - artifact: tests/compose/topology.test.mjs
+      sha256: 592649c7150a5d5af99898044026861de2f89868cfb84bbd26eace902a51774d
+    - artifact: tests/config/platform-config.test.mjs
+      sha256: da42d10d42d78704dfe0da701a1583417664d33fc1a8fde887791862120d4ea2
+    - artifact: tests/contracts/breaking.test.mjs
+      sha256: 2159a67bfc872637ba88a3edc0685df154d73d0f52b8142bd010d6033da7c220
+    - artifact: tests/contracts/openapi-fixtures.test.mjs
+      sha256: 6ffccc092652dd2ac60132cbb25f6ae52754e25fe038b1ec0c83edc1c13b14f3
+    - artifact: tests/contracts/schemas.test.mjs
+      sha256: 1c1a35fe5c9435fc644aa351532ed146a31f05731f00fc099efbd92a98d38842
+    - artifact: tests/runtime/lifecycle.test.mjs
+      sha256: 9e68b0e240e4fdb75434a520256ab3a6415a524360cdae3b31c3b2e1a180b6ac
+    - artifact: tools/compose-smoke.mjs
+      sha256: e26002e2e28e424acea3391422348456225770f1809dd0f704d715225e924010
+  selfHashExcluded: true
+  ownerPolicy:
+    unit: piece
+    quantity: positive integer packages/pieces, lossless JSON transport maximum Number.MAX_SAFE_INTEGER; not a provider maximum
+    defaultPacking: Aroma
+    grindSelection: operator selects provider directory option; sourceGrindKeyHash separate from offerRef
+  providerEvidence: evidence/aroma-provider/2026-09-18-complete-catalog-export.json
+  providerCartMutations: false
+  downstream:
+    catalog6: 'Accept grindOptions and nullable image; importer, activation and hourly scheduler owned by #6'
+    orders11: 'Persist selected grind and include it in physical convergence key; owned by #11'
+    acceptedHandoff: After merge; not a prerequisite implementation of consumers
+  unrelatedUserFilesExcluded: true
+  mergePerformed: false
+  deploymentPerformed: false
+  verifiedOn: '2026-09-20'
+  outputConsumers:
+    - '#6 Catalog'
+    - '#11 Orders'
+  verification:
+    check:
+      exit: 0
+      tests: 364
+      passed: 348
+      failed: 0
+      skipped: 16
+    contracts:
+      passed: 39
+      failed: 0
+    liveJournal:
+      command: pnpm test:aroma-mutation-recovery
+      passed: 19
+      failed: 0
+      skipped: 0
+    sessionIntegration:
+      command: pnpm test:aroma-integration
+      exit: 0
+    bindingCompose:
+      project: coffee-aroma-final-current
+      exit: 0
+    cartCompose:
+      project: coffee-aroma-final-current
+      exit: 0
+      provider: local-fake
+      selectedGrind: true
+      restartReplay: true
+    defaultCompose:
+      project: coffee-issue10-default-current
+      exit: 0
+      runtimes: 15
+      preparedDisposablePostgres: true
+      canonicalScopedSecrets: true
+      ephemeralKafkaFixture: true
+      productionDeployment: false
+    securitySecrets:
+      exit: 0
+    dbSmoke:
+      exit: 0
+      scope: structural
+    generatedAggregate: 2464e66fe2c38de047411bbb4255ba0df6109c6ac4302eb7924c75dab11e0517
+  review:
+    GRIND_REV_01: fixed
+    GRIND_REV_02: fixed
+    GRIND_REV_03: fixed
+    openSubstantialFindings: 0
+  cleanup:
+    proofContainers: 0
+    proofNetworks: 0
+    ownTmpfsRemoved: true
+    sharedPostgresDataUntouched: true
+    userFilesHashMatched: 478
+  limitations:
+    - Provider global max/step/TTL are not asserted; conservative typed adapter policy remains documented.
+    - Existing cart packing=null is not silently converted into Aroma.
+    - 'Trace backend/alerts delivery belongs to #64.'
+    - PostgreSQL tmpfs proofs do not establish durability across host reboot.
+    - 16 baseline test skips remain; AROMA mandatory live journal proof executed independently without skips.

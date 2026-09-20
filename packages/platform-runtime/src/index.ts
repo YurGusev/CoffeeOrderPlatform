@@ -55,6 +55,8 @@ export type RuntimeResource = Readonly<{
 export type RuntimeComposition = Readonly<{
   readinessChecks?: readonly RuntimeReadinessCheck[];
   resources?: readonly RuntimeResource[];
+  /** Additional bounded Prometheus lines owned by the composed runtime. */
+  metrics?: () => readonly string[];
   /** Configured database owners receive their one opaque Database as `database`. */
   configure?: (
     app: FastifyInstance,
@@ -770,7 +772,12 @@ export async function createRuntime(
       reply
         .type("text/plain; version=0.0.4")
         .send(
-          `# platform foundation\nruntime_admission_rejected_total ${admissionRejected}\n`,
+          [
+            "# platform foundation",
+            `runtime_admission_rejected_total ${admissionRejected}`,
+            ...(identity.metrics?.() ?? []),
+            "",
+          ].join("\n"),
         ),
   );
   app.addHook("preClose", async () => {

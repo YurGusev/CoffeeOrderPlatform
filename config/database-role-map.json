@@ -44,7 +44,7 @@
           "role": "coffee_catalog_import_rw",
           "temporaryTables": true,
           "tables": {
-            "snapshot_generations": ["SELECT", "INSERT", "UPDATE"],
+            "supplier_snapshots": ["SELECT", "INSERT", "UPDATE"],
             "snapshot_batches": ["SELECT", "INSERT", "UPDATE"],
             "snapshot_products": ["SELECT", "INSERT", "UPDATE"],
             "snapshot_variants": ["SELECT", "INSERT", "UPDATE"],
@@ -57,7 +57,7 @@
           "role": "coffee_catalog_activate_rw",
           "temporaryTables": true,
           "tables": {
-            "snapshot_generations": ["SELECT", "UPDATE"],
+            "supplier_snapshots": ["SELECT", "UPDATE"],
             "snapshot_batches": ["SELECT"],
             "snapshot_products": ["SELECT"],
             "snapshot_variants": ["SELECT"],
@@ -172,8 +172,12 @@
           "role": "coffee_aroma_gateway_rw",
           "temporaryTables": true,
           "tables": {
-            "provider_sessions": ["SELECT", "INSERT", "UPDATE"],
-            "provider_mutation_journal": ["SELECT", "INSERT", "UPDATE"]
+            "provider_sessions": ["SELECT", "INSERT", "UPDATE", "DELETE"],
+            "provider_mutation_journal": ["SELECT", "INSERT", "UPDATE"],
+            "provider_catalog_exports": ["SELECT", "INSERT", "UPDATE"],
+            "provider_source_offers": ["SELECT", "INSERT"],
+            "provider_export_offers": ["SELECT", "INSERT"],
+            "provider_offer_bindings": ["SELECT", "INSERT"]
           }
         }
       ]

@@ -930,7 +930,7 @@ function defineDeliveryOwnerStatement(database, defineStatement) {
   );
 }
 
-function packetQueries(buffer, queries) {
+function packetQueries(buffer, queries, extendedQueries = []) {
   let offset = 0;
   while (buffer.length - offset >= 4) {
     if (buffer[offset] === 0) {
@@ -945,6 +945,12 @@ function packetQueries(buffer, queries) {
     if (buffer[offset] === 0x51) {
       const body = buffer.subarray(offset + 5, offset + length + 1);
       queries.push(body.toString("utf8").replace(/\0.*$/s, "").trim().toUpperCase());
+    } else if (buffer[offset] === 0x50) {
+      const body = buffer.subarray(offset + 5, offset + length + 1);
+      const statementEnd = body.indexOf(0);
+      const queryEnd = statementEnd < 0 ? -1 : body.indexOf(0, statementEnd + 1);
+      if (queryEnd >= 0)
+        extendedQueries.push(body.subarray(statementEnd + 1, queryEnd).toString("utf8").trim().toUpperCase());
     }
     offset += length + 1;
   }
@@ -970,16 +976,36 @@ function packetCommandTags(buffer, tags) {
 export async function openBlackholeProxy(
   targetPort,
   commandToDrop,
-  { targetHost = "127.0.0.1", listenHost = "127.0.0.1", listenPort = 0, dropOnce = false } = {},
+  {
+    targetHost = "127.0.0.1",
+    listenHost = "127.0.0.1",
+    listenPort = 0,
+    dropOnce = false,
+    dropCommandOnce = false,
+    dropCommandAt = 1,
+    blockExtendedQuery,
+  } = {},
 ) {
+  if (!Number.isSafeInteger(dropCommandAt) || dropCommandAt < 1)
+    fail("blackhole command occurrence must be a positive safe integer");
+  if (blockExtendedQuery !== undefined && (typeof blockExtendedQuery !== "string" || blockExtendedQuery.trim() === ""))
+    fail("blackhole extended-query barrier must name a non-empty query fragment");
   const observed = [];
   const sockets = new Set();
   const commandWaiters = new Map();
   const replyDropWaiters = new Set();
+  const queryBlockWaiters = new Set();
+  const peerCloseWaiters = new Set();
+  const blockedQueryFragment = blockExtendedQuery?.trim().toUpperCase();
   let closedPeers = 0;
   let replyDropped;
+  let blockedQuery;
+  let blockedQueryRelease;
+  let blockQueryArmed = blockedQueryFragment !== undefined;
   let droppedReplyBytes = 0;
   let dropArmed = true;
+  let dropCommandArmed = dropCommandOnce;
+  let matchingCommands = 0;
   const rejectBarriers = (error) => {
     for (const waiters of commandWaiters.values()) {
       for (const waiter of waiters) waiter.reject(error);
@@ -987,6 +1013,10 @@ export async function openBlackholeProxy(
     commandWaiters.clear();
     for (const waiter of replyDropWaiters) waiter.reject(error);
     replyDropWaiters.clear();
+    for (const waiter of queryBlockWaiters) waiter.reject(error);
+    queryBlockWaiters.clear();
+    for (const waiter of peerCloseWaiters) waiter.reject(error);
+    peerCloseWaiters.clear();
   };
   const signalCommand = (command) => {
     for (const waiter of commandWaiters.get(command) ?? []) waiter.resolve({ command });
@@ -996,6 +1026,15 @@ export async function openBlackholeProxy(
     replyDropped = value;
     for (const waiter of replyDropWaiters) waiter.resolve(value);
     replyDropWaiters.clear();
+  };
+  const signalQueryBlocked = (query) => {
+    blockedQuery = query;
+    for (const waiter of queryBlockWaiters) waiter.resolve({query});
+    queryBlockWaiters.clear();
+  };
+  const signalPeerClosed = () => {
+    for (const waiter of peerCloseWaiters) waiter.resolve({closedPeers});
+    peerCloseWaiters.clear();
   };
   const waitFor = (waiters, predicate, timeoutMs, description) => {
     if (predicate()) return Promise.resolve(predicate());
@@ -1026,11 +1065,14 @@ export async function openBlackholeProxy(
     let replyBuffer = Buffer.alloc(0);
     let upstream;
     let dropResponses = false;
+    let holdQuery = false;
+    let heldChunks = [];
     let peerClosed = false;
     const close = () => {
       if (peerClosed) return;
       peerClosed = true;
       closedPeers += 1;
+      signalPeerClosed();
       sockets.delete(client);
       upstream?.destroy();
     };
@@ -1040,17 +1082,44 @@ export async function openBlackholeProxy(
     upstream.once("error", () => client.destroy());
     upstream.once("close", () => client.destroy());
     client.on("data", (chunk) => {
+      if (holdQuery) {
+        heldChunks.push(chunk);
+        return;
+      }
       commandBuffer = Buffer.concat([commandBuffer, chunk]);
       const before = observed.length;
-      commandBuffer = packetQueries(commandBuffer, observed);
+      const extendedQueries = [];
+      commandBuffer = packetQueries(commandBuffer, observed, extendedQueries);
+      let suppressChunk = false;
       for (const command of observed.slice(before)) {
         signalCommand(command);
-        if (command === commandToDrop && (!dropOnce || dropArmed)) {
+        if (command !== commandToDrop) continue;
+        matchingCommands += 1;
+        if (!dropCommandOnce && (!dropOnce || dropArmed)) {
           dropResponses = true;
           dropArmed = false;
         }
+        if (dropCommandArmed && matchingCommands === dropCommandAt) {
+          suppressChunk = true;
+          dropCommandArmed = false;
+        }
       }
-      upstream.write(chunk);
+      for (const query of extendedQueries) {
+        if (blockQueryArmed && query.includes(blockedQueryFragment)) {
+          blockQueryArmed = false;
+          holdQuery = true;
+          heldChunks.push(chunk);
+          blockedQueryRelease = () => {
+            holdQuery = false;
+            const chunks = heldChunks;
+            heldChunks = [];
+            for (const heldChunk of chunks) upstream.write(heldChunk);
+          };
+          signalQueryBlocked(query);
+          return;
+        }
+      }
+      if (!suppressChunk) upstream.write(chunk);
     });
     upstream.on("data", (chunk) => {
       if (!dropResponses) {
@@ -1099,6 +1168,32 @@ export async function openBlackholeProxy(
         () => replyDropped !== undefined,
         timeoutMs,
         `${commandToDrop} reply dropped`,
+      );
+    },
+    waitForQueryBlocked(timeoutMs = 5_000) {
+      if (blockedQuery !== undefined) return Promise.resolve({query: blockedQuery});
+      return waitFor(
+        queryBlockWaiters,
+        () => blockedQuery !== undefined,
+        timeoutMs,
+        `${blockedQueryFragment} extended query blocked`,
+      );
+    },
+    releaseBlockedQuery() {
+      if (blockedQueryRelease === undefined) fail("blackhole extended-query barrier was not blocked");
+      const release = blockedQueryRelease;
+      blockedQueryRelease = undefined;
+      release();
+    },
+    waitForPeerClosed(previousClosedPeers = 0, timeoutMs = 5_000) {
+      if (!Number.isSafeInteger(previousClosedPeers) || previousClosedPeers < 0)
+        fail("blackhole peer-close baseline must be a non-negative safe integer");
+      if (closedPeers > previousClosedPeers) return Promise.resolve({closedPeers});
+      return waitFor(
+        peerCloseWaiters,
+        () => closedPeers > previousClosedPeers,
+        timeoutMs,
+        `database peer closed after baseline ${previousClosedPeers}`,
       );
     },
     closeConnections() {
@@ -1864,6 +1959,7 @@ async function writeEvidence(evidenceDir, result) {
 export async function runLiveProof({
   runId: requestedRunId,
   evidenceDir,
+  bindingProof,
 } = {}) {
   const proofRunId = safeRunId(requestedRunId);
   const containerName = `coffee-issue3-db-proof-${proofRunId}`;
@@ -1886,6 +1982,8 @@ export async function runLiveProof({
       `coffee.platform.run=${proofRunId}`,
       "--publish",
       "127.0.0.1::5432",
+      "--tmpfs",
+      "/var/lib/postgresql/data",
       "--env",
       `POSTGRES_PASSWORD=${adminPassword}`,
       "--env",
@@ -2003,6 +2101,16 @@ export async function runLiveProof({
     const legacyUnchanged =
       JSON.stringify(legacyBefore) === JSON.stringify(legacyAfter);
     if (!legacyUnchanged) fail("legacy sentinel data changed");
+    let binding;
+    if (bindingProof !== undefined) {
+      phase = "binding-proof";
+      binding = await bindingProof({
+        adminUrl,
+        port: Number(port),
+        roleMap,
+        rolePasswords,
+      });
+    }
     phase = "database-foundation";
     const foundation = await runDatabaseFoundationProof({
       adminUrl,
@@ -2050,6 +2158,7 @@ export async function runLiveProof({
         foreignInsertDeniedCount,
       },
       legacy: { databases: LEGACY_DATABASES, unchanged: legacyUnchanged },
+      ...(binding === undefined ? {} : {binding}),
       foundation,
       delivery,
       cleanup: { containerName, containerRemoved: false },

@@ -152,6 +152,7 @@ INTERNAL_ALLOWLIST = (
     ("pricing-service", "catalog-service", "GET", "/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input", "getCatalogPricingInput", False),
     ("orders-service", "pricing-service", "POST", "/api/internal-v1/pricing/quotes:verify", "verifyPricingQuote", False),
     ("catalog-supplier-sync", "aroma-gateway", "POST", "/api/internal-v1/aroma/catalog-exports", "exportAromaCatalog", False),
+    ("catalog-activation-worker", "aroma-gateway", "POST", "/api/internal-v1/aroma/offer-bindings", "registerAromaOfferBinding", False),
     ("aroma-observer", "aroma-gateway", "POST", "/api/internal-v1/aroma/cart-snapshots:read", "readAromaCartSnapshot", False),
     ("aroma-convergence", "aroma-gateway", "POST", "/api/internal-v1/aroma/cart-snapshots:read", "readAromaCartSnapshot", False),
     ("aroma-convergence", "aroma-gateway", "POST", "/api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity", "setAromaCartLineQuantity", True),
@@ -290,9 +291,9 @@ def validate_runtime_profile(profile: dict[str, Any]) -> None:
         "contractDecisionRef": "docs/adr/ADR-0020-launch-contract-closure.md",
         "identityRef": "docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md",
         "runtimeCatalogRef": "docs/launch/10_RUNTIME_CATALOG.md",
+        "catalogIdentityRef": "docs/adr/ADR-0028-gateway-source-identity-authority.md",
     }, "profile.authority: decision references changed")
     require(profile["exactDeployableRuntimeCount"] == 15, "profile.exactDeployableRuntimeCount: expected 15")
-
     entries = runtime_entries(profile)
     names = [entry.get("name") for entry in entries]
     require(len(entries) == 15 and set(names) == RUNTIME_SET and len(set(names)) == 15, "profile.runtimes: exact 15-runtime inventory required")
@@ -428,7 +429,15 @@ def validate_domain_contracts(catalog: Any, orders: Any) -> None:
     require(catalog == {
         "algorithm": "hmac-sha256-v1",
         "secretRef": "aroma.catalogIdentityKeyV1",
-        "input": ["supplierProductRef", "supplierVariantRef", "normalizedPack", "normalizedUnit"],
+        "keyInput": "dedicated-secret-ref-no-logging",
+        "inputEncoding": "UTF-8",
+        "input": ["hmac-sha256-v1", "0x00", "supplierRef", "0x00", "entityType", "0x00", "NFC(rawProviderIdentifier)"],
+        "separatorByte": 0,
+        "entityTypes": ["product", "variant", "offer", "grind"],
+        "supplierRefPolicy": "canonical-sup-ulid",
+        "rawProviderIdentifierPolicy": "non-empty-nul-free-nfc-no-trim-no-case-fold",
+        "outputEncoding": "lowercase-hex",
+        "variantIdPolicy": "never-generated",
         "collisionPolicy": "quarantine-generation",
         "rotationPolicy": "versioned-key-new-snapshots-only-existing-identities-remain-stable",
     }, "profile.catalogIdentity: HMAC identity contract changed")
@@ -476,7 +485,7 @@ def validate_connectivity(policy: dict[str, Any]) -> None:
         "customer-service": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data"],
         "catalog-service": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data"],
         "catalog-supplier-sync": ["coffee_internal_api", "coffee_postgres_data"],
-        "catalog-activation-worker": ["coffee_postgres_data", "coffee_kafka_event"],
+        "catalog-activation-worker": ["coffee_postgres_data", "coffee_kafka_event", "coffee_internal_api"],
         "pricing-service": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data"],
         "orders-service": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data", "coffee_kafka_event"],
         "orders-aroma-preparation": ["coffee_postgres_data", "coffee_kafka_event"],

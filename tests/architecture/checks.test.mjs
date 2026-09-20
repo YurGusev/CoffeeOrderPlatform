@@ -531,3 +531,33 @@ void test("RED BOUND-KAFKA-CLIENT: handlers cannot bypass bounded delivery", asy
     }
   } finally {await rm(root, {recursive: true, force: true});}
 });
+
+void test("RED ARCH-POSTGRES-URL: app source cannot contain a literal PostgreSQL URL", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-postgres-url"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-POSTGRES-URL/);
+});
+
+void test("RED ARCH-TYPED-PROVIDER-HTTP: AROMA Gateway fetch stays in the typed provider client", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-provider-fetch"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+});
+
+void test("RED ARCH-TYPED-PROVIDER-HTTP: AROMA Gateway cannot add a generic proxy", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-provider-proxy"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+});
+
+void test("RED ARCH-GENERIC-RETRY: generic retry dependency is forbidden", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-generic-retry-dependency"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-GENERIC-RETRY/);
+});
+
+void test("RED ARCH-GENERIC-RETRY: generic retry wrapper is forbidden", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-generic-retry-wrapper"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-GENERIC-RETRY/);
+});

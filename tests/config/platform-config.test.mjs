@@ -57,6 +57,44 @@ void test("GREEN: canonical config and encrypted secrets pass the foundation che
   assert.match(result.stdout, /15 runtimes/);
 });
 
+void test("GREEN: canonical source identity and Catalog staging authority are synchronized", async () => {
+  const profile = JSON.parse(await readFile(join(REPO_ROOT, "platform/launch-v1-runtime-profile.json"), "utf8"));
+  assert.deepEqual(profile.catalogIdentity, {
+    algorithm: "hmac-sha256-v1",
+    secretRef: "aroma.catalogIdentityKeyV1",
+    keyInput: "dedicated-secret-ref-no-logging",
+    inputEncoding: "UTF-8",
+    input: ["hmac-sha256-v1", "0x00", "supplierRef", "0x00", "entityType", "0x00", "NFC(rawProviderIdentifier)"],
+    separatorByte: 0,
+    entityTypes: ["product", "variant", "offer", "grind"],
+    supplierRefPolicy: "canonical-sup-ulid",
+    rawProviderIdentifierPolicy: "non-empty-nul-free-nfc-no-trim-no-case-fold",
+    outputEncoding: "lowercase-hex",
+    variantIdPolicy: "never-generated",
+    collisionPolicy: "quarantine-generation",
+    rotationPolicy: "versioned-key-new-snapshots-only-existing-identities-remain-stable",
+  });
+  const gateway = profile.runtimes.find((runtime) => runtime.name === "aroma-gateway");
+  assert.ok(gateway.secretRefs.includes("aroma.catalogIdentityKeyV1"));
+  assert.equal(profile.runtimes.filter((runtime) => runtime.name !== "aroma-gateway").some((runtime) => runtime.secretRefs.includes("aroma.catalogIdentityKeyV1")), false);
+
+  const roleMap = JSON.parse(await readFile(join(REPO_ROOT, "config/database-role-map.json"), "utf8"));
+  const catalog = roleMap.databases.find((database) => database.name === "coffee_platform_catalog");
+  for (const runtime of catalog.runtimeRoles.filter(({runtime}) => ["catalog-supplier-sync", "catalog-activation-worker"].includes(runtime))) {
+    assert.ok(Object.hasOwn(runtime.tables, "supplier_snapshots"));
+    assert.equal(Object.hasOwn(runtime.tables, "snapshot_generations"), false);
+  }
+  const platform = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+    {json: true},
+  );
+  assert.deepEqual(platform.aroma.origin, {scheme: "https", host: "aromateacoffee.ru", port: 443});
+  assert.equal(platform.aroma.supplierRef, "sup_00000000000000000000000001");
+  assert.equal(platform.aroma.scopeRef, "aroma-primary");
+  assert.equal(platform.aroma.defaultPacking, "Aroma");
+  assert.equal(platform.services["aroma-gateway"].replicas, 1, "safe-read session generation is process-local until durable CAS/epoch exists");
+});
+
 void test("GREEN: Kafka access is directional and uses the launch group mapping", async () => {
   const document = parseYaml(
     await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),

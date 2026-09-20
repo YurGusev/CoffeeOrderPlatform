@@ -1,0 +1,75 @@
+optionalExpansions:
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaCatalogItem
+    property: supplierPromotions
+    fixture: contracts/fixtures/positive/ndjson/aroma-catalog-success.ndjson
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaCatalogItem
+    property: grindOptions
+    fixture: contracts/fixtures/positive/ndjson/aroma-catalog-grind-options.ndjson
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaCartLine
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaMutationResponse
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaSetQuantityRequest
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#AromaRemoveLineRequest
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+
+narrowingCorrections:
+  - schemaPath: contracts/schemas/common/problem-details.v1.schema.json
+    location: contracts/schemas/common/problem-details.v1.schema.json.$defs.ProblemDetails.instance
+    keyword: format
+    before: null
+    after: uri-reference
+    issue: 10
+    reason: Correct the shared RFC 9457 instance constraint before production callers are connected.
+    migration: evidence/issue-10-contract-narrowing.md
+    fixture: contracts/fixtures/negative/http/rejections.json
+    fixtureCase: invalid-problem-instance
+    fixtureValuePointer: /set/0/1
+    expectedKeyword: format
+  - schemaPath: contracts/schemas/common/problem-details.v1.schema.json
+    location: contracts/schemas/common/problem-details.v1.schema.json.$defs.ProblemDetails.instance
+    keyword: pattern
+    beforeSha256: 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b
+    afterSha256: 8c8663bb9fd47e36644c511ad4f843e5945c88aa01d29681f781949b8a69b979
+    issue: 10
+    reason: Reject URI-reference characters and malformed percent encoding that WHATWG URL parsing normalizes.
+    migration: evidence/issue-10-contract-narrowing.md
+    fixture: contracts/fixtures/negative/http/rejections.json
+    fixtureCase: invalid-problem-instance-space
+    fixtureValuePointer: /set/0/1
+    expectedKeyword: pattern
+  - schemaPath: contracts/schemas/common/problem-details.v1.schema.json
+    location: contracts/schemas/common/problem-details.v1.schema.json.$defs.ProblemDetails.type
+    keyword: pattern
+    beforeSha256: 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b
+    afterSha256: 8c8663bb9fd47e36644c511ad4f843e5945c88aa01d29681f781949b8a69b979
+    issue: 10
+    reason: Apply the same strict RFC 3986 URI-reference syntax to the Problem Details type member.
+    migration: evidence/issue-10-contract-narrowing.md
+    fixture: contracts/fixtures/negative/http/rejections.json
+    fixtureCase: invalid-problem-type-space
+    fixtureValuePointer: /set/0/1
+    expectedKeyword: pattern
+  - schemaPath: contracts/schemas/common/money-version-time.v1.schema.json
+    location: contracts/schemas/common/money-version-time.v1.schema.json.$defs.ProviderQuantity
+    keyword: pattern
+    before: '^(0|[1-9][0-9]*)(\.[0-9]+)?$'
+    after: '^(?:[1-9][0-9]*)(?:\.[0-9]+)?$|^0\.(?!0+$)[0-9]+$'
+    issue: 10
+    reason: Correct Set quantity to strictly positive while Remove remains a separate operation.
+    migration: evidence/issue-10-contract-narrowing.md
+    fixture: contracts/fixtures/negative/http/rejections.json
+    fixtureCase: zero-provider-quantity
+    fixtureValuePointer: /body/quantity
+    expectedKeyword: pattern

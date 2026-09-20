@@ -1,0 +1,3016 @@
+{
+  "data": [
+    {
+      "meta_title": "Кофе Эфиопия Гуджи Урага оптом - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофе Эфиопия Гуджи Урага оптом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить микролот кофе Эфиопия Гуджи Урага по хорошей цене. ✔️ Ездим в страны произрастания: выбираем и импортируем лучшие сорта ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100086,
+      "slug": "efiopiia-gudzi-uraga",
+      "name": "Эфиопия Гуджи Урага, кофе жареный",
+      "front_name": "",
+      "description": "Клубника, мармелад, молодое вино, цукаты, черный чай.",
+      "video_link": null,
+      "root": {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Микролоты",
+        "slug": "mikroloty",
+        "composite_slug": "kofe/mikroloty",
+        "description": "<p><strong>Микролоты кофе от обжарщика AROMA TEA COFFEE</strong></p><p><br></p><p>Купить микролоты кофе оптом – для спешелти-кофейни, ресторана, домашнего заваривания. Мы сами посещаем кофейные плантации Южной Америки, Азии и Африки, выбираем и привозим редкие лоты с фермерских хозяйств Бразилии, Кении, Эфиопии, Гватемалы и других стран.<br><br>Микролот – выдающийся кофе ограниченной партии, отличается высочайшим качеством. Тщательно отобранные зёрна заботливо выращены на семейных фермах или на отдельных участках плантаций. Такой кофе собирают вручную, а все дефекты удаляют до начала обработки. Обрабатывают часто экспериментальными методами и с добавленной ферментацией. Микролоты требуют не только скрупулёзного внимания к сбору урожая, но и высокого мастерства обжарщиков и бариста. Такие лоты востребованы в заведениях, где напитки готовят альтернативными методами. При определённой обжарке отлично раскрываются в эспрессо.<br><br>AROMA TEA COFFEE – крафтовая фабрика, производитель свежеобжаренного кофе. Обжариваем микролоты под заказ. Упаковываем в трехслойные пачки с дегазационными клапанами. Оптовые цены при покупке от 10 кг чая и кофе вместе. Индивидуальные условия при заказах от 300 кг. Запустим контрактное производство под вашей торговой маркой. Акции на популярные позиции прайса каждую неделю. Доставка по РФ транспортными компаниями.</p>",
+        "image": null
+      },
+      "tags": [
+        {
+          "name": "Обжарено под фильтр",
+          "slug": "rekomenduem-i-po-umolcaniiu-obzarivaem-pod-filtr",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/529/c95/63d529c951ee9713585651.svg",
+            "title": null,
+            "description": null
+          }
+        },
+        {
+          "name": "Временная позиция",
+          "slug": "vremennaia-poziciia",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/687/4a1/6f1/6874a16f1b8ed149978876.png",
+            "title": null,
+            "description": null
+          }
+        }
+      ],
+      "offers": [
+        {
+          "id": 100087,
+          "name": "Эфиопия Гуджи Урага, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-200-109",
+          "price": 940,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100088,
+          "name": "Эфиопия Гуджи Урага, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-1000-109",
+          "price": 4500,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100089,
+          "name": "Эфиопия Гуджи Урага, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-200-109",
+          "price": 940,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "id": 100090,
+          "name": "Эфиопия Гуджи Урага, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-1000-109",
+          "price": 4500,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "param": {
+            "id": 100035,
+            "name": "Скрин (размер зерна)",
+            "slug": "screen",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b4b/322/63eb4b3229e08982110246.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100037,
+            "value": "16-18",
+            "slug": "16-18",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100037,
+            "name": "Кислотность",
+            "slug": "acidity",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100091,
+            "value": "5",
+            "slug": "5-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100039,
+            "name": "Плотность",
+            "slug": "density",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100067,
+            "value": "3",
+            "slug": "3-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100041,
+            "name": "Аромат",
+            "slug": "flavor",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100042,
+            "value": "4",
+            "slug": "4-2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100067,
+            "name": "Способ обработки",
+            "slug": "sposob-obrabotki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100092,
+            "value": "винная ферментация",
+            "slug": "vinnaia-fermentaciia",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100030,
+            "name": "Информация",
+            "slug": "info",
+            "type": "text",
+            "icon": null
+          },
+          "param_value": null,
+          "value": "Оценка Q-грейдера - 87"
+        },
+        {
+          "param": {
+            "id": 100040,
+            "name": "Регион",
+            "slug": "region",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/ea0/63ecb9ea0e8af041846308.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100093,
+            "value": "Африка",
+            "slug": "afrika",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b3d/ebf/63eb3debf1e5b729815036.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100043,
+            "name": "Вид",
+            "slug": "vid",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/c91/63ecb9c9124dd171487383.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100094,
+            "value": "Микролоты",
+            "slug": "mikroloty",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100095,
+            "name": "Высота произрастания",
+            "slug": "vysota-proizrastaniia",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cba/180/63ecba180e9ac991091853.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100096,
+            "value": "2122-2195м",
+            "slug": "2122-2195m",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100097,
+            "name": "Оценка Q-грейдера",
+            "slug": "ocenka-q-greidera",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100098,
+            "value": "87",
+            "slug": "87",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100045,
+            "name": "Степень обжарки",
+            "slug": "stepen-obzarki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100099,
+            "value": "Светлая",
+            "slug": "svetlaia",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100100,
+            "value": "Фильтр",
+            "slug": "filtr",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b4/32c/63e4b432c301c058352776.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100101,
+            "value": "Пуровер",
+            "slug": "purover",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/e13/63e4b3e131b1b716667550.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100102,
+            "value": "Кемекс",
+            "slug": "kemeks",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/5d8/63e4b35d82777968949259.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        }
+      ],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6bd/e48/69a6bde485b45916507029.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/710/c2e/6a0710c2ecb41421307654.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/683/410/c74/683410c74a9d4361396805.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "<p>Микролот Эфиопия Гуджи Урага обработан экспериментальным способом – путем винной ферментации. Он подойдёт для приготовления фильтр кофе, кемекса, пуровера. Описание различных способов приготовления посмотрите <u><a href=\"https://aromateacoffee.ru/sposoby-prigotovleniya-kofe\">тут.</a></u> Напитки получаются с гладким телом и винно-мармеладным вкусом, который раскрывается нотками спелых ягод и чая по мере остывания.</p><p>Дополнить африканский микролот яблочным штруделем, клубникой в шоколаде или вялеными ягодами – удачная идея для кофе-брейка. В кафе и specialty кофейнях, которые предлагают гостям фильтр кофеи иные методы альтернативного заваривания, этот кофе способен стать востребованной позицией. Приготовьте лот дома, чтобы получить интересный вкусовой опыт. Эфиопия Гуджи Урага достойно покажет себя в качестве диджестива.<br><br>Урага – именитая станция обработки в Эфиопии. Она была построена 10 лет назад. Расположена в одноимённой местности в регионе Гуджи на высоте 2000 метров над уровнем моря. Станция обрабатывает кофе мелких фермеров, живущих поблизости. Руководит ей Исраэль Дегфа.<br><br>Эфиопский кофе со станции Урага отличается чистотой и комплексностью по двум причинам. Первая – чёткий контроль качества и процессов обработки. На станции работает команда специалистов, которая сортирует зерно и выбирает дефекты, а владелец вкладывает средства в модернизацию технологической оснащённости. Вторая причина – терруар зоны Гуджи. Она считается одной из самых благоприятных в стране для выращивания кофе с высоким вкусовым потенциалом. У нас вы сможете купить микролот Эфиопия Гуджи Урага как молотый, так и в зернах.</p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Кофе Эфиопия Зена Лема оптом - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофе Эфиопия Зена Лема оптом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить микролот кофе Эфиопия Зена Лема по хорошей цене. ✔️ Ездим в страны произрастания: выбираем и импортируем лучшие сорта ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100103,
+      "slug": "efiopiia-zena-lema",
+      "name": "Эфиопия Зена Лема, кофе жареный",
+      "front_name": "",
+      "description": "Бергамот, портвейн, тропические фрукты, спелые ягоды, черный чай.",
+      "video_link": null,
+      "root": {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Микролоты",
+        "slug": "mikroloty",
+        "composite_slug": "kofe/mikroloty",
+        "description": "<p><strong>Микролоты кофе от обжарщика AROMA TEA COFFEE</strong></p><p><br></p><p>Купить микролоты кофе оптом – для спешелти-кофейни, ресторана, домашнего заваривания. Мы сами посещаем кофейные плантации Южной Америки, Азии и Африки, выбираем и привозим редкие лоты с фермерских хозяйств Бразилии, Кении, Эфиопии, Гватемалы и других стран.<br><br>Микролот – выдающийся кофе ограниченной партии, отличается высочайшим качеством. Тщательно отобранные зёрна заботливо выращены на семейных фермах или на отдельных участках плантаций. Такой кофе собирают вручную, а все дефекты удаляют до начала обработки. Обрабатывают часто экспериментальными методами и с добавленной ферментацией. Микролоты требуют не только скрупулёзного внимания к сбору урожая, но и высокого мастерства обжарщиков и бариста. Такие лоты востребованы в заведениях, где напитки готовят альтернативными методами. При определённой обжарке отлично раскрываются в эспрессо.<br><br>AROMA TEA COFFEE – крафтовая фабрика, производитель свежеобжаренного кофе. Обжариваем микролоты под заказ. Упаковываем в трехслойные пачки с дегазационными клапанами. Оптовые цены при покупке от 10 кг чая и кофе вместе. Индивидуальные условия при заказах от 300 кг. Запустим контрактное производство под вашей торговой маркой. Акции на популярные позиции прайса каждую неделю. Доставка по РФ транспортными компаниями.</p>",
+        "image": null
+      },
+      "tags": [
+        {
+          "name": "Обжарено под фильтр",
+          "slug": "rekomenduem-i-po-umolcaniiu-obzarivaem-pod-filtr",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/529/c95/63d529c951ee9713585651.svg",
+            "title": null,
+            "description": null
+          }
+        },
+        {
+          "name": "Временная позиция",
+          "slug": "vremennaia-poziciia",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/687/4a1/6f1/6874a16f1b8ed149978876.png",
+            "title": null,
+            "description": null
+          }
+        }
+      ],
+      "offers": [
+        {
+          "id": 100104,
+          "name": "Эфиопия Зена Лема, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-200-110",
+          "price": 940,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100105,
+          "name": "Эфиопия Зена Лема, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-1000-110",
+          "price": 4500,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100106,
+          "name": "Эфиопия Зена Лема, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-200-110",
+          "price": 940,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "id": 100107,
+          "name": "Эфиопия Зена Лема, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-1000-110",
+          "price": 4500,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "param": {
+            "id": 100035,
+            "name": "Скрин (размер зерна)",
+            "slug": "screen",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b4b/322/63eb4b3229e08982110246.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100037,
+            "value": "16-18",
+            "slug": "16-18",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100037,
+            "name": "Кислотность",
+            "slug": "acidity",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100038,
+            "value": "4",
+            "slug": "4-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100039,
+            "name": "Плотность",
+            "slug": "density",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100041,
+            "value": "5",
+            "slug": "5",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100041,
+            "name": "Аромат",
+            "slug": "flavor",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100066,
+            "value": "5",
+            "slug": "5-2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100067,
+            "name": "Способ обработки",
+            "slug": "sposob-obrabotki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100108,
+            "value": "анаэробный",
+            "slug": "anaerobnyi",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100030,
+            "name": "Информация",
+            "slug": "info",
+            "type": "text",
+            "icon": null
+          },
+          "param_value": null,
+          "value": "Оценка Q-грейдера - 88"
+        },
+        {
+          "param": {
+            "id": 100043,
+            "name": "Вид",
+            "slug": "vid",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/c91/63ecb9c9124dd171487383.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100094,
+            "value": "Микролоты",
+            "slug": "mikroloty",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100040,
+            "name": "Регион",
+            "slug": "region",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/ea0/63ecb9ea0e8af041846308.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100093,
+            "value": "Африка",
+            "slug": "afrika",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b3d/ebf/63eb3debf1e5b729815036.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100095,
+            "name": "Высота произрастания",
+            "slug": "vysota-proizrastaniia",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cba/180/63ecba180e9ac991091853.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100109,
+            "value": "2035м",
+            "slug": "2035m",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100097,
+            "name": "Оценка Q-грейдера",
+            "slug": "ocenka-q-greidera",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100110,
+            "value": "88",
+            "slug": "88",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100045,
+            "name": "Степень обжарки",
+            "slug": "stepen-obzarki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100099,
+            "value": "Светлая",
+            "slug": "svetlaia",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100100,
+            "value": "Фильтр",
+            "slug": "filtr",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b4/32c/63e4b432c301c058352776.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100101,
+            "value": "Пуровер",
+            "slug": "purover",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/e13/63e4b3e131b1b716667550.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100102,
+            "value": "Кемекс",
+            "slug": "kemeks",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/5d8/63e4b35d82777968949259.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        }
+      ],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6bd/f40/69a6bdf40c500079517277.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/704/c0a/6a0704c0aecef362962773.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/683/412/079/6834120799ee7028985166.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/683/412/07c/68341207c9b8e659021371.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/683/412/08e/68341208ef639116522633.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "<p>Эфиопия Зена Лема – африканский микролот экспериментальной обработки. Подходит для приготовления фильтр кофе, пуровера, кемекса. Разные способы приготовления описаны <strong><em><u><a href=\"https://aromateacoffee.ru/sposoby-prigotovleniya-kofe\">тут.</a></u></em></strong> Напитки получаются с плотным телом и винно-фруктовым вкусом, который полнее раскрывается нотами спелых ягод и чая «Эрл Грей» по мере остывания.</p><p><br>Лот гармонично сочетается с орехово-фруктовыми смесями, финиками, вялеными ягодами и отлично проявляет себя в качестве дижестива. Смело рекомендуем купить этот эфиопский кофе для specialty кофеен или кафе, которые предлагают гостям фильтр кофе и используют другие способы альтернативного заваривания. Если вы готовите напитки в фильтре дома, данный микролот станет возможностью порадовать себя и обогатит ваш гастрономический опыт.<br><br>Кофе Эфиопия Зена Лема приехал к нам из административного округа Гедеб, который находится в регионе Южных Наций, Национальностей и Народов Эфиопии. Микролот обработан на станции Ворка Челчеле, где используют 12 стандартных контейнеров для ферментации. На станции установлены более 360 кроватей для сушки зерна с собственным кодом для каждой. Используя эти номера, сотрудники контролируют и отслеживают статус обработки. Все международные правила производства кофе на Ворка Челчеле строго соблюдают. У нас вы можете заказать микролот Эфиопия Зена Лема как в зёрнах, так и молотый.</p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Кофе Эфиопия Иргачефф Идидо оптом - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофе Эфиопия Иргачефф Идидо оптом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить микролот кофе Эфиопия Иргачефф Идидо по хорошей цене. ✔️ Ездим в страны произрастания: выбираем и импортируем лучшие сорта ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100111,
+      "slug": "efiopiia-irgaceff-idido",
+      "name": "Эфиопия Иргачефф Идидо, кофе жареный",
+      "front_name": "",
+      "description": "Лайм, цветы, абрикос, цитрус.",
+      "video_link": null,
+      "root": {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Микролоты",
+        "slug": "mikroloty",
+        "composite_slug": "kofe/mikroloty",
+        "description": "<p><strong>Микролоты кофе от обжарщика AROMA TEA COFFEE</strong></p><p><br></p><p>Купить микролоты кофе оптом – для спешелти-кофейни, ресторана, домашнего заваривания. Мы сами посещаем кофейные плантации Южной Америки, Азии и Африки, выбираем и привозим редкие лоты с фермерских хозяйств Бразилии, Кении, Эфиопии, Гватемалы и других стран.<br><br>Микролот – выдающийся кофе ограниченной партии, отличается высочайшим качеством. Тщательно отобранные зёрна заботливо выращены на семейных фермах или на отдельных участках плантаций. Такой кофе собирают вручную, а все дефекты удаляют до начала обработки. Обрабатывают часто экспериментальными методами и с добавленной ферментацией. Микролоты требуют не только скрупулёзного внимания к сбору урожая, но и высокого мастерства обжарщиков и бариста. Такие лоты востребованы в заведениях, где напитки готовят альтернативными методами. При определённой обжарке отлично раскрываются в эспрессо.<br><br>AROMA TEA COFFEE – крафтовая фабрика, производитель свежеобжаренного кофе. Обжариваем микролоты под заказ. Упаковываем в трехслойные пачки с дегазационными клапанами. Оптовые цены при покупке от 10 кг чая и кофе вместе. Индивидуальные условия при заказах от 300 кг. Запустим контрактное производство под вашей торговой маркой. Акции на популярные позиции прайса каждую неделю. Доставка по РФ транспортными компаниями.</p>",
+        "image": null
+      },
+      "tags": [
+        {
+          "name": "Обжарено под фильтр",
+          "slug": "rekomenduem-i-po-umolcaniiu-obzarivaem-pod-filtr",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/529/c95/63d529c951ee9713585651.svg",
+            "title": null,
+            "description": null
+          }
+        },
+        {
+          "name": "Временная позиция",
+          "slug": "vremennaia-poziciia",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/687/4a1/6f1/6874a16f1b8ed149978876.png",
+            "title": null,
+            "description": null
+          }
+        }
+      ],
+      "offers": [
+        {
+          "id": 100112,
+          "name": "Эфиопия Иргачефф Идидо, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-200-74",
+          "price": 640,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100113,
+          "name": "Эфиопия Иргачефф Идидо, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-1000-74",
+          "price": 3000,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100114,
+          "name": "Эфиопия Иргачефф Идидо, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-200-74",
+          "price": 640,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "id": 100115,
+          "name": "Эфиопия Иргачефф Идидо, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-1000-74",
+          "price": 3000,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "param": {
+            "id": 100035,
+            "name": "Скрин (размер зерна)",
+            "slug": "screen",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b4b/322/63eb4b3229e08982110246.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100116,
+            "value": "14-16",
+            "slug": "14-16",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100037,
+            "name": "Кислотность",
+            "slug": "acidity",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100091,
+            "value": "5",
+            "slug": "5-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100039,
+            "name": "Плотность",
+            "slug": "density",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100067,
+            "value": "3",
+            "slug": "3-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100041,
+            "name": "Аромат",
+            "slug": "flavor",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100066,
+            "value": "5",
+            "slug": "5-2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100067,
+            "name": "Способ обработки",
+            "slug": "sposob-obrabotki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100117,
+            "value": "мытый",
+            "slug": "mytyi",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100030,
+            "name": "Информация",
+            "slug": "info",
+            "type": "text",
+            "icon": null
+          },
+          "param_value": null,
+          "value": "Оценка Q-грейдера - 87"
+        },
+        {
+          "param": {
+            "id": 100043,
+            "name": "Вид",
+            "slug": "vid",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/c91/63ecb9c9124dd171487383.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100094,
+            "value": "Микролоты",
+            "slug": "mikroloty",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100040,
+            "name": "Регион",
+            "slug": "region",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/ea0/63ecb9ea0e8af041846308.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100093,
+            "value": "Африка",
+            "slug": "afrika",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b3d/ebf/63eb3debf1e5b729815036.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100095,
+            "name": "Высота произрастания",
+            "slug": "vysota-proizrastaniia",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cba/180/63ecba180e9ac991091853.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100118,
+            "value": "1920-2100 м",
+            "slug": "1920-2100-m",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100045,
+            "name": "Степень обжарки",
+            "slug": "stepen-obzarki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100099,
+            "value": "Светлая",
+            "slug": "svetlaia",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100097,
+            "name": "Оценка Q-грейдера",
+            "slug": "ocenka-q-greidera",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100098,
+            "value": "87",
+            "slug": "87",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100069,
+            "value": "Френч-пресс",
+            "slug": "frenc-press-2",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/a94/63e4b3a94462a569796043.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100100,
+            "value": "Фильтр",
+            "slug": "filtr",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b4/32c/63e4b432c301c058352776.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100119,
+            "value": "Сифон",
+            "slug": "sifon",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/fde/63e4b3fdee4be953521999.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100101,
+            "value": "Пуровер",
+            "slug": "purover",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/e13/63e4b3e131b1b716667550.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100102,
+            "value": "Кемекс",
+            "slug": "kemeks",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/5d8/63e4b35d82777968949259.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100052,
+            "value": "Гейзерная кофеварка",
+            "slug": "geizernaia-kofevarka",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b2/cf1/63e4b2cf146d1128865160.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100120,
+            "value": "Аэропресс",
+            "slug": "aeropress",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/37a/63e4b337a03f3055074495.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        }
+      ],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6be/02d/69a6be02d891f924470160.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/704/ae6/6a0704ae637f2478810421.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/683/414/9d2/6834149d2eeb8167525998.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "<p>Идидо — кооператив в одноименной деревне, расположенной в регионе Иргачефф, в зоне Гедео на юге Эфиопии. В кооператив Идидо вступают фермеры, разбросанные по многим сообществам и деревням. Этот кофе был обработан натуральным способом. При таком способе кофе сушат тонким слоем на африканских кроватях (перфорированных настилах над землей). Чтобы избежать чрезмерной ферментации, ягоды переворачивают каждые 3 часа в первые несколько дней. В зависимости от погодных условий сушка занимает в среднем 5–6 недель.</p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Кофе Иргачефф нат Челчеле оптом - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофе Эфиопия Иргачефф нат Челчеле оптом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить микролот кофе Эфиопия Иргачефф нат Челчеле по хорошей цене. ✔️ Ездим в страны произрастания: выбираем и импортируем лучшие сорта ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100121,
+      "slug": "efiopiia-irgaceff-nat-celcele",
+      "name": "Эфиопия Иргачефф нат Челчеле, кофе жареный",
+      "front_name": "",
+      "description": "Персик/абрикос, молочный шоколад, темные ягоды.",
+      "video_link": null,
+      "root": {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Микролоты",
+        "slug": "mikroloty",
+        "composite_slug": "kofe/mikroloty",
+        "description": "<p><strong>Микролоты кофе от обжарщика AROMA TEA COFFEE</strong></p><p><br></p><p>Купить микролоты кофе оптом – для спешелти-кофейни, ресторана, домашнего заваривания. Мы сами посещаем кофейные плантации Южной Америки, Азии и Африки, выбираем и привозим редкие лоты с фермерских хозяйств Бразилии, Кении, Эфиопии, Гватемалы и других стран.<br><br>Микролот – выдающийся кофе ограниченной партии, отличается высочайшим качеством. Тщательно отобранные зёрна заботливо выращены на семейных фермах или на отдельных участках плантаций. Такой кофе собирают вручную, а все дефекты удаляют до начала обработки. Обрабатывают часто экспериментальными методами и с добавленной ферментацией. Микролоты требуют не только скрупулёзного внимания к сбору урожая, но и высокого мастерства обжарщиков и бариста. Такие лоты востребованы в заведениях, где напитки готовят альтернативными методами. При определённой обжарке отлично раскрываются в эспрессо.<br><br>AROMA TEA COFFEE – крафтовая фабрика, производитель свежеобжаренного кофе. Обжариваем микролоты под заказ. Упаковываем в трехслойные пачки с дегазационными клапанами. Оптовые цены при покупке от 10 кг чая и кофе вместе. Индивидуальные условия при заказах от 300 кг. Запустим контрактное производство под вашей торговой маркой. Акции на популярные позиции прайса каждую неделю. Доставка по РФ транспортными компаниями.</p>",
+        "image": null
+      },
+      "tags": [
+        {
+          "name": "Обжарено под эспрессо (средняя и темная обжарка)",
+          "slug": "rekomenduem-i-po-umolcaniiu-obzarivaem-pod-espresso",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/651/fbe/910/651fbe910ba14510123997.svg",
+            "title": null,
+            "description": null
+          }
+        },
+        {
+          "name": "Временная позиция",
+          "slug": "vremennaia-poziciia",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/687/4a1/6f1/6874a16f1b8ed149978876.png",
+            "title": null,
+            "description": null
+          }
+        },
+        {
+          "name": "Отсутствует на складе",
+          "slug": "otsutstvuet-na-sklade",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/ef2/02b/6a0ef202b868e095802552.png",
+            "title": null,
+            "description": null
+          }
+        }
+      ],
+      "offers": [
+        {
+          "id": 100122,
+          "name": "Эфиопия Иргачефф нат Челчеле, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-200-75",
+          "price": 816,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100123,
+          "name": "Эфиопия Иргачефф нат Челчеле, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-1000-75",
+          "price": 3880,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100124,
+          "name": "Эфиопия Иргачефф нат Челчеле, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-200-75",
+          "price": 816,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "id": 100125,
+          "name": "Эфиопия Иргачефф нат Челчеле, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-1000-75",
+          "price": 3880,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "param": {
+            "id": 100035,
+            "name": "Скрин (размер зерна)",
+            "slug": "screen",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b4b/322/63eb4b3229e08982110246.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100116,
+            "value": "14-16",
+            "slug": "14-16",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100037,
+            "name": "Кислотность",
+            "slug": "acidity",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100126,
+            "value": "3",
+            "slug": "3-2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100039,
+            "name": "Плотность",
+            "slug": "density",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100041,
+            "value": "5",
+            "slug": "5",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100041,
+            "name": "Аромат",
+            "slug": "flavor",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100066,
+            "value": "5",
+            "slug": "5-2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100067,
+            "name": "Способ обработки",
+            "slug": "sposob-obrabotki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100068,
+            "value": "сухой",
+            "slug": "suxoi",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100030,
+            "name": "Информация",
+            "slug": "info",
+            "type": "text",
+            "icon": null
+          },
+          "param_value": null,
+          "value": "Оценка Q-грейдера - 88"
+        },
+        {
+          "param": {
+            "id": 100045,
+            "name": "Степень обжарки",
+            "slug": "stepen-obzarki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100046,
+            "value": "Средняя",
+            "slug": "sredniaia",
+            "icon": null
+          },
+          "value": null
+        }
+      ],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6be/105/69a6be1054ca2456427350.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/704/870/6a0704870dc21422847141.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/683/415/796/683415796855e981654187.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": true,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Кофе Эфиопия Иргачефф оптом - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофе Эфиопия Иргачефф оптом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить кофе Эфиопия Иргачефф (молотый и в зернах) по хорошей цене. ✔️ Ездим в страны произрастания: выбираем и импортируем лучшие сорта ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100127,
+      "slug": "efiopiia-irgaceff",
+      "name": "Эфиопия Иргачефф, кофе жареный",
+      "front_name": "Кофе Эфиопия Иргачефф",
+      "description": "Кориандр, жасмин, бергамот, лемонграсс, корица, темные ягоды.",
+      "video_link": null,
+      "root": {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Моносорта",
+        "slug": "monosorta",
+        "composite_slug": "kofe/monosorta",
+        "description": "<p><br></p><h2><strong>Моносорта кофе оптом от производителя AROMA TEA COFFEE</strong></h2><p><br></p><p>Купить разные сорта кофе по оптовым ценам – натуральная 100% арабика из Бразилии, Колумбии, Эфиопии, Кении. Более 20 позиций в ассортименте: Эфиопия Сидамо, Бразилия Можиана, Сантос, Вьетнам Тай Нгуен. Мы сами посещаем зарубежные плантации, чтобы выбрать лучшие моносорта для коммерческого сектора и домашнего приготовления.<br><br>Моносорта – зерновой или молотый кофе, который закроет большинство задач бариста, так как подходит для приготовления любым методом. Профиль обжарки подбираем индивидуально под каждый сорт, чтобы полноценно раскрыть энзимные свойства и подчеркнуть терруар. Последние тенденции в кофейной индустрии перевели большинство кофеен на работу с моносортами, что позволяет потребителю знакомиться с преимуществами арабики из множества кофейных регионов.<br><br>В AROMA TEA COFFEE вы заказываете свежеобжаренный кофе. Обжариваем и отгружаем на следующий день после получения заказа. Упаковка трёхслойная, с клапанами для дегазации. Опт от 10 кг чая и кофе вместе. При закупке от 300 кг – индивидуальные условия. Организуем производство под СТМ. Снижение цен на популярные сорта каждую неделю. Доставка транспортными компаниями по РФ.</p>",
+        "image": null
+      },
+      "tags": [
+        {
+          "name": "Популярный",
+          "slug": "populiarnyi-copt",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/537/724/63d537724f74c463460547.svg",
+            "title": null,
+            "description": null
+          }
+        },
+        {
+          "name": "Обжарено под фильтр",
+          "slug": "rekomenduem-i-po-umolcaniiu-obzarivaem-pod-filtr",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/529/c95/63d529c951ee9713585651.svg",
+            "title": null,
+            "description": null
+          }
+        }
+      ],
+      "offers": [
+        {
+          "id": 100128,
+          "name": "Эфиопия Иргачефф, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-200-28",
+          "price": 660,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100129,
+          "name": "Эфиопия Иргачефф, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-1000-28",
+          "price": 3100,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100130,
+          "name": "Эфиопия Иргачефф, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-200-28",
+          "price": 660,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "id": 100131,
+          "name": "Эфиопия Иргачефф, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-1000-28",
+          "price": 3100,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "param": {
+            "id": 100035,
+            "name": "Скрин (размер зерна)",
+            "slug": "screen",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b4b/322/63eb4b3229e08982110246.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100043,
+            "value": "15-17",
+            "slug": "15-17",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100037,
+            "name": "Кислотность",
+            "slug": "acidity",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100038,
+            "value": "4",
+            "slug": "4-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100039,
+            "name": "Плотность",
+            "slug": "density",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100067,
+            "value": "3",
+            "slug": "3-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100041,
+            "name": "Аромат",
+            "slug": "flavor",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100097,
+            "value": "2",
+            "slug": "2-2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100030,
+            "name": "Информация",
+            "slug": "info",
+            "type": "text",
+            "icon": null
+          },
+          "param_value": null,
+          "value": "Оценка Q-грейдера - 85"
+        },
+        {
+          "param": {
+            "id": 100067,
+            "name": "Способ обработки",
+            "slug": "sposob-obrabotki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100117,
+            "value": "мытый",
+            "slug": "mytyi",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100043,
+            "name": "Вид",
+            "slug": "vid",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/c91/63ecb9c9124dd171487383.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100132,
+            "value": "Моносорта",
+            "slug": "monosorta",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100045,
+            "name": "Степень обжарки",
+            "slug": "stepen-obzarki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100099,
+            "value": "Светлая",
+            "slug": "svetlaia",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100040,
+            "name": "Регион",
+            "slug": "region",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/ea0/63ecb9ea0e8af041846308.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100093,
+            "value": "Африка",
+            "slug": "afrika",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b3d/ebf/63eb3debf1e5b729815036.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100069,
+            "value": "Френч-пресс",
+            "slug": "frenc-press-2",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/a94/63e4b3a94462a569796043.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100100,
+            "value": "Фильтр",
+            "slug": "filtr",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b4/32c/63e4b432c301c058352776.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100119,
+            "value": "Сифон",
+            "slug": "sifon",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/fde/63e4b3fdee4be953521999.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100101,
+            "value": "Пуровер",
+            "slug": "purover",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/e13/63e4b3e131b1b716667550.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100102,
+            "value": "Кемекс",
+            "slug": "kemeks",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/5d8/63e4b35d82777968949259.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100120,
+            "value": "Аэропресс",
+            "slug": "aeropress",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/37a/63e4b337a03f3055074495.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100097,
+            "name": "Оценка Q-грейдера",
+            "slug": "ocenka-q-greidera",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100133,
+            "value": "85",
+            "slug": "85",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100095,
+            "name": "Высота произрастания",
+            "slug": "vysota-proizrastaniia",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cba/180/63ecba180e9ac991091853.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100134,
+            "value": "1750-2200 м",
+            "slug": "1750-2200-m",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100135,
+            "name": "Разновидность",
+            "slug": "raznovidnost",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100136,
+            "value": "местные разновидности/ эфиопское наследие",
+            "slug": "mestnye-raznovidnosti-efiopskoe-nasledie",
+            "icon": null
+          },
+          "value": null
+        }
+      ],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6ba/455/69a6ba455976a001842553.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/6b3/492/6a06b3492a30c527453680.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/5de/63d0de5de7bca300182252.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/5df/63d0de5df1220136700830.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "<p>Кофе с высокой кислотностью и средней плотностью. Во вкусе кориандр, жасмин, бергамот, лемонграсс, корица, тёмные ягоды. С пряным послевкусием.</p><p>Эфиопия Иргачефф – африканский моносорт мытой обработки. Подойдёт в качестве кофе под фильтр, пуровер. Описания способов приготовления вы найдёте тут. Напитки отличаются шелковистым телом с кислинкой цедры и сладостью тёмных ягод, вкус дополнится нотами шоколада и специй по мере остывания. Сорт удачно сочетается с яблочным тартом, банановым кексом, фруктами и вялеными ягодами. Благодаря умеренной крепости эта арабика позволит устроить кофе-брейк в любое время суток.&nbsp;</p><p>Эфиопия Иргачефф сможет удачно дополнить меню кофеен и кафе, в которых подают фильтр кофе и применяют иные способы альтернативного заваривания. Если готовите моносорт дома, выбирайте пуровер, капельную &nbsp;кофеварку или френч-пресс.</p><p>Иргачефф – не только знаменитый кофейный регион, расположенный в южной части Эфиопии, но и торговая марка, в 2004 году её официально зарегистрировало правительство государства. Среди основных кофепроизводящих регионов страны Иргачефф – самый высокогорный. Плантации здесь находятся на высоте 1750-2200 метров над уровнем моря.На большой высоте ягоды зреют медленнее, поэтому набирают больше вкуса и аромата. Собирают урожай с октября по январь. Знаток легко узнает данную арабику по внешнему виду – однородному зерну небольшого размера. Эфиопия Иргачефф – один из популярнейших сортов в обжарке под фильтр, у нас вы можете купить его в зёрнах и молотый.</p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Кофе Эфиопия Сидамо оптом - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофе Эфиопия Сидамо оптом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! В нашем магазине вы можете заказать и купить моносорт кофе Эфиопия Сидамо по хорошей цене. ✔️ Ездим в страны произрастания: выбираем и импортируем лучшие сорта ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎️ 8 800 600 52 23.",
+      "id": 100137,
+      "slug": "efiopiia-sidamo-greid-1",
+      "name": "Эфиопия Сидамо Грэйд 1, кофе жареный",
+      "front_name": "Эфиопия Сидамо Грэйд 1",
+      "description": "Специи и горький шоколад, малина, лимон.",
+      "video_link": null,
+      "root": {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Моносорта",
+        "slug": "monosorta",
+        "composite_slug": "kofe/monosorta",
+        "description": "<p><br></p><h2><strong>Моносорта кофе оптом от производителя AROMA TEA COFFEE</strong></h2><p><br></p><p>Купить разные сорта кофе по оптовым ценам – натуральная 100% арабика из Бразилии, Колумбии, Эфиопии, Кении. Более 20 позиций в ассортименте: Эфиопия Сидамо, Бразилия Можиана, Сантос, Вьетнам Тай Нгуен. Мы сами посещаем зарубежные плантации, чтобы выбрать лучшие моносорта для коммерческого сектора и домашнего приготовления.<br><br>Моносорта – зерновой или молотый кофе, который закроет большинство задач бариста, так как подходит для приготовления любым методом. Профиль обжарки подбираем индивидуально под каждый сорт, чтобы полноценно раскрыть энзимные свойства и подчеркнуть терруар. Последние тенденции в кофейной индустрии перевели большинство кофеен на работу с моносортами, что позволяет потребителю знакомиться с преимуществами арабики из множества кофейных регионов.<br><br>В AROMA TEA COFFEE вы заказываете свежеобжаренный кофе. Обжариваем и отгружаем на следующий день после получения заказа. Упаковка трёхслойная, с клапанами для дегазации. Опт от 10 кг чая и кофе вместе. При закупке от 300 кг – индивидуальные условия. Организуем производство под СТМ. Снижение цен на популярные сорта каждую неделю. Доставка транспортными компаниями по РФ.</p>",
+        "image": null
+      },
+      "tags": [
+        {
+          "name": "Обжарено под фильтр",
+          "slug": "rekomenduem-i-po-umolcaniiu-obzarivaem-pod-filtr",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/529/c95/63d529c951ee9713585651.svg",
+            "title": null,
+            "description": null
+          }
+        }
+      ],
+      "offers": [
+        {
+          "id": 100138,
+          "name": "Эфиопия Сидамо Грэйд 1, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-200-26",
+          "price": 620,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100139,
+          "name": "Эфиопия Сидамо Грэйд 1, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-1000-26",
+          "price": 2900,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100140,
+          "name": "Эфиопия Сидамо Грэйд 1, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-200-26",
+          "price": 620,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "id": 100141,
+          "name": "Эфиопия Сидамо Грэйд 1, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-1000-26",
+          "price": 2900,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "param": {
+            "id": 100035,
+            "name": "Скрин (размер зерна)",
+            "slug": "screen",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b4b/322/63eb4b3229e08982110246.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100043,
+            "value": "15-17",
+            "slug": "15-17",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100037,
+            "name": "Кислотность",
+            "slug": "acidity",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100038,
+            "value": "4",
+            "slug": "4-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100039,
+            "name": "Плотность",
+            "slug": "density",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100040,
+            "value": "2",
+            "slug": "2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100041,
+            "name": "Аромат",
+            "slug": "flavor",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100142,
+            "value": "3",
+            "slug": "3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100030,
+            "name": "Информация",
+            "slug": "info",
+            "type": "text",
+            "icon": null
+          },
+          "param_value": null,
+          "value": "Оценка Q-грейдера - 85"
+        },
+        {
+          "param": {
+            "id": 100067,
+            "name": "Способ обработки",
+            "slug": "sposob-obrabotki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100117,
+            "value": "мытый",
+            "slug": "mytyi",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100043,
+            "name": "Вид",
+            "slug": "vid",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/c91/63ecb9c9124dd171487383.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100132,
+            "value": "Моносорта",
+            "slug": "monosorta",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100045,
+            "name": "Степень обжарки",
+            "slug": "stepen-obzarki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100099,
+            "value": "Светлая",
+            "slug": "svetlaia",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100040,
+            "name": "Регион",
+            "slug": "region",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/ea0/63ecb9ea0e8af041846308.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100093,
+            "value": "Африка",
+            "slug": "afrika",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b3d/ebf/63eb3debf1e5b729815036.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100069,
+            "value": "Френч-пресс",
+            "slug": "frenc-press-2",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/a94/63e4b3a94462a569796043.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100100,
+            "value": "Фильтр",
+            "slug": "filtr",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b4/32c/63e4b432c301c058352776.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100119,
+            "value": "Сифон",
+            "slug": "sifon",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/fde/63e4b3fdee4be953521999.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100101,
+            "value": "Пуровер",
+            "slug": "purover",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/e13/63e4b3e131b1b716667550.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100102,
+            "value": "Кемекс",
+            "slug": "kemeks",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/5d8/63e4b35d82777968949259.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100120,
+            "value": "Аэропресс",
+            "slug": "aeropress",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/37a/63e4b337a03f3055074495.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100097,
+            "name": "Оценка Q-грейдера",
+            "slug": "ocenka-q-greidera",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100133,
+            "value": "85",
+            "slug": "85",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100095,
+            "name": "Высота произрастания",
+            "slug": "vysota-proizrastaniia",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cba/180/63ecba180e9ac991091853.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100143,
+            "value": "1800-2000 м",
+            "slug": "1800-2000-m",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100135,
+            "name": "Разновидность",
+            "slug": "raznovidnost",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100136,
+            "value": "местные разновидности/ эфиопское наследие",
+            "slug": "mestnye-raznovidnosti-efiopskoe-nasledie",
+            "icon": null
+          },
+          "value": null
+        }
+      ],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6ba/66c/69a6ba66c084f490642240.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/6b3/8fd/6a06b38fdea54752728357.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/655/63d0de655847e839207179.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/655/63d0de655f740619856038.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "<p>Кофе с высокой кислотностью и средней плотностью. Во вкусе специи, горький шоколад, малина, лимон. С цитрусовым послевкусием.</p><p>Эфиопия Сидамо – африканский моносорт мытой обработки. Кофе подходит под фильтр, кемекс. Рекомендации по различным способам заваривания читайте здесь. Напитки отличаются шелковистым телом с цедровой кислинкой и нотками спелой малины, вкус раскроется шоколадными оттенками по мере остывания. Моносорт гармоничен в сочетании с выпечкой, фруктами, вялеными ягодами, сладкими панкейками. Напиток поможет приятно проснуться утром и поддержит бодрый настрой в течение дня.&nbsp;</p><p>Вы можете приобрести кофе Эфиопия Сидамо для кафе или кофейни, если в заведении подают гостям фильтр кофе и применяют иные альтернативные способы заваривания. В случае домашнего приготовления сорт великолепно проявит себя в пуровере, френч-прессе, капельной кофеварке.</p><p>Сидамо – один из ведуших кофепроизводящих регионов Эфиопии. Учитывая популярность кофе, который растёт в этой местности, правительство страны зарегистрировало Сидамо как торговую марку. Кофейные деревья в регионе растут достаточно высоко, на высоте от 1600 до 1900 метров над уровнем моря. Ягоды зреют медленно, зато набирают обильную сладость. Больше половины урожая здесь обрабатывают мытым способом.</p><p>Эфиопский кофе принято сортировать по грейдам. Всего существует восемь грейдов, среди которых первый отличается наивысшим качеством, а восьмой – наихудшим. Среди всей мытой арабики, которую производят в стране, к экспорту допускается только зерно 1-го и 2-го грейда. У нас вы сможете купить кофе Эфиопия Сидамо 1 грейда зерновой и молотый.</p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    }
+  ],
+  "links": {
+    "first": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=1",
+    "last": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=47",
+    "prev": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=46",
+    "next": null
+  },
+  "meta": {
+    "current_page": 47,
+    "from": 461,
+    "last_page": 47,
+    "links": [
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=46",
+        "label": "pagination.previous",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=1",
+        "label": "1",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=2",
+        "label": "2",
+        "active": false
+      },
+      {
+        "url": null,
+        "label": "...",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=38",
+        "label": "38",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=39",
+        "label": "39",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=40",
+        "label": "40",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=41",
+        "label": "41",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=42",
+        "label": "42",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=43",
+        "label": "43",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=44",
+        "label": "44",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=45",
+        "label": "45",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=46",
+        "label": "46",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=47",
+        "label": "47",
+        "active": true
+      },
+      {
+        "url": null,
+        "label": "pagination.next",
+        "active": false
+      }
+    ],
+    "path": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products",
+    "per_page": 10,
+    "to": 466,
+    "total": 466
+  }
+}

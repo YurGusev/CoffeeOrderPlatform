@@ -1,0 +1,236 @@
+{
+  "scope": "bounded-public-read-only-characterization",
+  "origin": "https://aromateacoffee.ru",
+  "requestsPerformed": 5,
+  "requestBudget": 12,
+  "timeoutSeconds": 15,
+  "maxResponseBytes": 2097152,
+  "redirects": "deny",
+  "tlsVerification": true,
+  "loginPerformed": false,
+  "sessionReused": false,
+  "credentialsRead": false,
+  "cookiesPersisted": false,
+  "mutationsPerformed": false,
+  "requests": [
+    {
+      "tag": "page1",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=1&per_page=10",
+      "auth": "none",
+      "utc": "2026-09-12T16:06:35.720780+00:00",
+      "status": 200,
+      "contentType": "application/json",
+      "bytesRead": 167195,
+      "bodyComplete": true,
+      "sha256Raw": "3a7bdb883c659e935402f5b27eaac2a1d631eee7c0d9f1485488600e2337635b",
+      "capture": "page1.json",
+      "sha256Sanitized": "764fcea9d855cf35a1373d289c5e496843a4b6447d6ab75d68ee20064f671ec8",
+      "sampleSummary": {
+        "products": 10,
+        "offers": 10,
+        "priceJsonTypes": [
+          "int"
+        ],
+        "priceObservedValues": [
+          0
+        ],
+        "productOnStopObserved": [
+          false
+        ],
+        "previewTypes": [
+          "NoneType"
+        ],
+        "discountArrayLengths": [
+          0
+        ]
+      }
+    },
+    {
+      "tag": "page24",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=24&per_page=10",
+      "auth": "none",
+      "utc": "2026-09-12T16:07:42.506461+00:00",
+      "status": 200,
+      "contentType": "application/json",
+      "bytesRead": 106378,
+      "bodyComplete": true,
+      "sha256Raw": "cd8a51dddd1c487d11e838583a26d0684414178eaaeaac195dde216cbe595fe0",
+      "topKeys": [
+        "data",
+        "links",
+        "meta"
+      ],
+      "products": 10,
+      "offers": 16,
+      "meta": {
+        "current_page": 24,
+        "from": 231,
+        "last_page": 47,
+        "path": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products",
+        "per_page": 10,
+        "to": 240,
+        "total": 466
+      },
+      "capture": "page24.json",
+      "sha256Sanitized": "8ef6a2a98a616b3a39279ad2b6da14aeeff4fb147544adc769d8e287b568673a",
+      "sampleSummary": {
+        "products": 10,
+        "offers": 16,
+        "priceJsonTypes": [
+          "int"
+        ],
+        "priceObservedValues": [
+          175,
+          200,
+          215,
+          225,
+          260,
+          315,
+          380,
+          490,
+          495,
+          1700,
+          2250,
+          2350
+        ],
+        "productOnStopObserved": [
+          false
+        ],
+        "previewTypes": [
+          "NoneType",
+          "dict"
+        ],
+        "discountArrayLengths": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "tag": "page47",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=47&per_page=10",
+      "auth": "none",
+      "utc": "2026-09-12T16:07:43.134043+00:00",
+      "status": 200,
+      "contentType": "application/json",
+      "bytesRead": 171671,
+      "bodyComplete": true,
+      "sha256Raw": "f0e330d99ddff2d264c849cf8f62fb64e4b60921e153db3fed1f51d1dcbe1967",
+      "topKeys": [
+        "data",
+        "links",
+        "meta"
+      ],
+      "products": 6,
+      "offers": 24,
+      "meta": {
+        "current_page": 47,
+        "from": 461,
+        "last_page": 47,
+        "path": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products",
+        "per_page": 10,
+        "to": 466,
+        "total": 466
+      },
+      "capture": "page47.json",
+      "sha256Sanitized": "213573e0b8e5bcc7c194f1d0890dd31972a9714a4357e9234b92c002cbc419c0",
+      "sampleSummary": {
+        "products": 6,
+        "offers": 24,
+        "priceJsonTypes": [
+          "int"
+        ],
+        "priceObservedValues": [
+          620,
+          640,
+          660,
+          816,
+          940,
+          2900,
+          3000,
+          3100,
+          3880,
+          4500
+        ],
+        "productOnStopObserved": [
+          false,
+          true
+        ],
+        "previewTypes": [
+          "NoneType"
+        ],
+        "discountArrayLengths": [
+          0
+        ]
+      }
+    },
+    {
+      "tag": "cart-public",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "auth": "none",
+      "utc": "2026-09-12T16:07:43.779595+00:00",
+      "status": 403,
+      "contentType": "application/json",
+      "bytesRead": 39,
+      "bodyComplete": true,
+      "sha256Raw": "df3427abe32a0e18e6bf5c0482d4e84c5d75fcf31b24c6f3c5797c34879d144d",
+      "topKeys": [
+        "error"
+      ],
+      "capture": "cart-public.json",
+      "sha256Sanitized": "5c119288290e970f5f088a0f78f07b903a0903af64df1ce3dc062a106e786e7e"
+    },
+    {
+      "tag": "wholesale",
+      "method": "GET",
+      "path": "/wholesale",
+      "auth": "none",
+      "utc": "2026-09-12T16:07:43.473065+00:00",
+      "status": 200,
+      "contentType": "text/html",
+      "bytesRead": 98078,
+      "bodyComplete": true,
+      "sha256Raw": "72e2760084f49541a7d641da544fe8878250ff80583244e09dd2246ed90fde03",
+      "killBot": true
+    }
+  ],
+  "sanitization": {
+    "fieldNamesAndJsonTypesPreserved": true,
+    "idFields": "id and *_id non-null int/string pseudonymized consistently across captures; no mapping persisted",
+    "publicNamesDescriptionsVendorCodesAndMediaUrls": "retained as public catalog data; media URLs were not fetched",
+    "emailsRedacted": 0,
+    "headers": "only content-type retained; no Set-Cookie/auth header values retained",
+    "scope": "full JSON page after stated substitutions; not byte-identical wire response, not full provider schema or normalization approval"
+  },
+  "legacySamples": [
+    {
+      "path": "/home/yurgusev/CoffeeOrderSystem/docs/Интеграция/samples/aroma-cart-add-success-safari-200.json",
+      "sha256": "18075beb3b3ce1b410caa92dc565f7065b36516ba1f851456e1dd3a929712032",
+      "classification": "Historical sample; README claims real response; request/time/auth/completeness provenance absent; not current provider guarantee"
+    },
+    {
+      "path": "/home/yurgusev/CoffeeOrderSystem/docs/Интеграция/samples/aroma-cart-invalid-session-403.json",
+      "sha256": "5c119288290e970f5f088a0f78f07b903a0903af64df1ce3dc062a106e786e7e",
+      "classification": "Historical sample; README claims real response; request/time/auth/completeness provenance absent; not current provider guarantee"
+    },
+    {
+      "path": "/home/yurgusev/CoffeeOrderSystem/docs/Интеграция/samples/aroma-cart-validation-error-422.json",
+      "sha256": "d00c2943c9dbbf23431022636c8b7d3ae29b70e1f8db71591b2e7101103f0441",
+      "classification": "Historical sample; README claims real response; request/time/auth/completeness provenance absent; not current provider guarantee"
+    },
+    {
+      "path": "/home/yurgusev/CoffeeOrderSystem/docs/Интеграция/samples/aroma-catalog-wholesale-products-not-found.json",
+      "sha256": "355c15c418600480eb8c85705bcb5ee98cbb04b9a37675acf6bcc98664635d76",
+      "classification": "Historical sample; README claims real response; request/time/auth/completeness provenance absent; not current provider guarantee"
+    },
+    {
+      "path": "/home/yurgusev/CoffeeOrderSystem/docs/Интеграция/samples/aroma-catalog-wholesale-products-safari-200.json",
+      "sha256": "7babe577cdd1aabb741f67e8d4c76b9ddba33bf84b56730b0371c4f96975f2dd",
+      "classification": "Historical sample; README claims real response; request/time/auth/completeness provenance absent; not current provider guarantee"
+    }
+  ]
+}

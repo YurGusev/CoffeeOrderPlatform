@@ -301,7 +301,7 @@
       "providerSnapshotRef": "provider-snapshot-1",
       "capturedAt": "2026-09-05T10:04:00Z",
       "cartFingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      "lines": [{"offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "quantity": "1"}]
+      "lines": [{"offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "quantity": "1", "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444"}]
     }
   },
   {
@@ -310,7 +310,7 @@
     "status": 200,
     "mediaType": "application/json",
     "schema": "AromaMutationResponse",
-    "body": {"operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2", "cartScopeRef": "aroma-primary", "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "state": "Acknowledged"}
+    "body": {"operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2", "cartScopeRef": "aroma-primary", "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444", "state": "Acknowledged"}
   },
   {
     "document": "internal-v1",
@@ -318,7 +318,7 @@
     "status": 200,
     "mediaType": "application/json",
     "schema": "AromaMutationResponse",
-    "body": {"operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2", "cartScopeRef": "aroma-primary", "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "state": "Acknowledged"}
+    "body": {"operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2", "cartScopeRef": "aroma-primary", "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444", "state": "Acknowledged"}
   },
   {
     "document": "internal-v1",
@@ -327,6 +327,21 @@
     "mediaType": "application/x-ndjson",
     "schema": "AromaCatalogExportRecord",
     "streamFixture": "aroma-catalog-success.ndjson"
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "registerAromaOfferBinding",
+    "status": 200,
+    "mediaType": "application/json",
+    "schema": "AromaOfferBindingResponse",
+    "body": {
+      "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+      "supplierRef": "sup_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "sourceIdentityScheme": "hmac-sha256-v1",
+      "sourceOfferKeyHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "firstSnapshotRef": "snp_01ARZ3NDEKTSV4RRFFQ69G5FB0",
+      "state": "Bound"
+    }
   },
   {
     "document": "client-v1",

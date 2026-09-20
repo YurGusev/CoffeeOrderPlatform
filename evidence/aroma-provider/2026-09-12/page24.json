@@ -1,0 +1,1523 @@
+{
+  "data": [
+    {
+      "meta_title": "Фирменный сахар - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Сахар с логотипом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! В нашем магазине вы можете заказать и купить пакетированный сахар по хорошей цене. ✔️ Поставки по России и за рубеж ✔️ Продажа по выгодной стоимости! ☎️ 8 800 600 52 23.",
+      "id": 100026,
+      "slug": "saxar-firmennyi-s-logotipom-paketirovannyi-5gr",
+      "name": "Сахар фирменный (с логотипом) пакетированный 5 г",
+      "front_name": "Сахар фирменный (с логотипом) пакетированный 5 г",
+      "description": "2000 шт в коробке. Возможно изготовление сахара с вашим дизайном. Подробности у менеджеров.",
+      "video_link": null,
+      "root": {
+        "name": "Сопутствующие товары",
+        "slug": "soputstvuyushchie-materialy",
+        "composite_slug": "soputstvuyushchie-materialy",
+        "description": "<p>Кроме чая и кофе у нас можно купить сопутствующие товары, актуальные для HoReCa и домашнего использования.<br><br>В каталоге – товары для «сладкой жизни»: шоколадки, горячий шоколад, сахар, мёд, сиропы, кофе в шоколаде. Продаём дрип-кофе, чай в пакетиках, натуральный кофейный скраб для тела и ингредиенты для вендинга.<br><br>Мы тщательно следим, чтобы наш ассортимент пополняли товары только лучшего качества, а наши клиенты могли приобрести всё необходимое в одном месте.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/202/6a0eec20234f2164789425.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Сахар, шоколад",
+        "slug": "saxar-sokolad",
+        "composite_slug": "soputstvuyushchie-materialy/saxar-sokolad",
+        "description": "",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100027,
+          "name": "Сахар фирменный (с логотипом) пакетированный 5 г",
+          "vendor_code": "G-1-0002",
+          "price": 2350,
+          "params": []
+        }
+      ],
+      "params": [],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/7d0/297/63d7d0297a02c977279031.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Кофе Свит оптом - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофе Свит оптом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить кофе Свит по хорошей цене. ✔️ Ездим в страны произрастания: выбираем и импортируем лучшие сорта ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100028,
+      "slug": "svit",
+      "name": "Свит, кофе жареный",
+      "front_name": "Кофе Свит",
+      "description": "Сладкий персик, красные яблоки, шоколад, орехи.",
+      "video_link": null,
+      "root": {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Эспрессо-смеси",
+        "slug": "espresso-smesi",
+        "composite_slug": "kofe/espresso-smesi",
+        "description": "<p><br></p><h2><strong>Эспрессо-смеси оптом от обжарщика AROMA TEA COFFEE</strong></h2><p><br></p><p><br></p><p><br></p><p>Купить эспрессо-смеси по оптовым ценам – для кофейни, бара, ресторана. Лучший вариант для домашнего приготовления в автоматической кофемашине и турке. В ассортименте смеси сортов 100% арабики и с добавлением робусты. Мы сами посещаем кофейные плантации Южной Америки, Африки и Азии. Выбираем лучшее зерно и обжариваем его в России. Вы получаете свежеобжаренный кофе с отгрузкой на следующий день после приёма заказа.<br><br>В ассортименте 11 смесей для разного формата заведений. Подберём лучшую под вашу аудиторию: кофе с лёгким или плотным вкусом, с кислинкой и без, бодрящий с повышенным содержанием кофеина и декаф. Закажите зерно для идеальных эспрессо, американо, капучино и латте. Универсальные бленды для точек, работающих на потоке: кофе с собой, пекарни, стрит-фуд. В продаже эспрессо-смеси для профессиональных кофеен с запоминающимся фирменным вкусом.<br><br>Трёхслойная упаковка с дегазационными клапанами под оптовые и розничные объёмы. Опт от 10 кг чая и кофе вместе. Можем запустить контрактное производство под вашей торговой маркой (СТМ). Еженедельные акции на смеси и моносорта. Индивидуальные условия при заказе от 300 кг. Доставка по РФ транспортными компаниями.</p>",
+        "image": null
+      },
+      "tags": [
+        {
+          "name": "Обжарено под эспрессо (средняя и темная обжарка)",
+          "slug": "rekomenduem-i-po-umolcaniiu-obzarivaem-pod-espresso",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/651/fbe/910/651fbe910ba14510123997.svg",
+            "title": null,
+            "description": null
+          }
+        },
+        {
+          "name": "Рекомендуем  для молочных напитков",
+          "slug": "rekomenduem-dlia-molocnyx-napitkov",
+          "icon": {
+            "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/529/73e/63d52973e2d1f115201856.svg",
+            "title": null,
+            "description": null
+          }
+        }
+      ],
+      "offers": [
+        {
+          "id": 100029,
+          "name": "Свит, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-200-49",
+          "price": 490,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100032,
+          "name": "Свит, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+          "vendor_code": "C-1000-49",
+          "price": 2250,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100033,
+          "name": "Свит, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-200-49",
+          "price": 490,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "id": 100034,
+          "name": "Свит, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+          "vendor_code": "CG-1000-49",
+          "price": 2250,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "param": {
+            "id": 100035,
+            "name": "Скрин (размер зерна)",
+            "slug": "screen",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b4b/322/63eb4b3229e08982110246.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100036,
+            "value": "15-18",
+            "slug": "15-18",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100037,
+            "name": "Кислотность",
+            "slug": "acidity",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100038,
+            "value": "4",
+            "slug": "4-3",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100039,
+            "name": "Плотность",
+            "slug": "density",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100040,
+            "value": "2",
+            "slug": "2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100041,
+            "name": "Аромат",
+            "slug": "flavor",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100042,
+            "value": "4",
+            "slug": "4-2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100043,
+            "name": "Вид",
+            "slug": "vid",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/c91/63ecb9c9124dd171487383.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100044,
+            "value": "Эспрессо-смеси",
+            "slug": "espresso-smesi",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100045,
+            "name": "Степень обжарки",
+            "slug": "stepen-obzarki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100046,
+            "value": "Средняя",
+            "slug": "sredniaia",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100040,
+            "name": "Регион",
+            "slug": "region",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/ea0/63ecb9ea0e8af041846308.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100047,
+            "value": "Смесь",
+            "slug": "smes",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100049,
+            "value": "Эспрессо",
+            "slug": "espresso",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b2/5f9/63e4b25f9cc8b907718003.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100050,
+            "value": "Турка",
+            "slug": "turka",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b2/951/63e4b2951de08221608694.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100051,
+            "value": "Домашняя рожковая кофемашина",
+            "slug": "domasniaia-rozkovaia-kofemasina",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b4/a29/63e4b4a298eab858556581.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100052,
+            "value": "Гейзерная кофеварка",
+            "slug": "geizernaia-kofevarka",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b2/cf1/63e4b2cf146d1128865160.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100053,
+            "name": "Страна происхождения",
+            "slug": "strana-proisxozdeniia",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100054,
+            "value": "Бразилия, Лаос",
+            "slug": "braziliia-laos",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100030,
+            "name": "Информация",
+            "slug": "info",
+            "type": "text",
+            "icon": null
+          },
+          "param_value": null,
+          "value": "Бразилия, Лаос"
+        }
+      ],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6b6/102/69a6b610228d6539747858.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/6ac/aba/6a06acaba64e7868535481.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/5d3/63d0de5d3faf2531655845.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/5d4/63d0de5d46fee012349432.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "<p><br></p><p>Свит – &nbsp;это смесь 100% арабики из Бразилии и Лаоса. Понятная для большинства любителей кофе смесь с ровным сладким вкусом и бархатистым телом. Частый выбор для прекрасной половины человечества. Средняя обжарка.</p><p><br><strong>Вкус кофе</strong>. Кофе с невысокой кислотностью, манящей персиковой сладостью. Вы почувствуете яблочные ноты и классическое сладкое шоколадное послевкусие. Легкий кофе, который просто пить черным, без добавок.</p><p><br><strong>Способы приготовления</strong>. Кофе раскроется при приготовлении в кофемашине, домашней рожковой кофемашине, гейзерной кофеварке. Можно сварить такой кофе в турке или заварить в чашке. Свит подойдет для приготовления американо, а еще молочных напитков: капучино, латте, и других.</p><p><br><strong>Для кого.&nbsp;</strong>Эспрессо-смесь Свит подойдет, как для домашнего использования, так и для спешелти кофеен. При приготовлении в профессиональной эспрессо-машине рекомендуется настраивать помол в течении дня, чтобы не отступать от вкусового профиля.</p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Ситечко для заваривания чая - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Ситечко для заваривания чая в чайнике или кружке в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить ложку-ситечко для заваривания чая по хорошей цене. ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100055,
+      "slug": "sitecko-dlia-zavarivaniia-caia",
+      "name": "Ситечко для заваривания чая",
+      "front_name": "Ситечко для заваривания чая",
+      "description": "Ситечко для приготовления чая 14,8 см * 2 см. Подходит для приготовления любых чаёв. Форма аксессуара позволяет легко зачерпнуть сухой чай и избежать попадания чаинок в чашку.",
+      "video_link": null,
+      "root": {
+        "name": "Инвентарь и материалы",
+        "slug": "inventar-i-materialy",
+        "composite_slug": "inventar-i-materialy",
+        "description": "<p>Собрали коллекцию сопутствующих товаров, востребованных в заведениях HoReCa, розничных торговых точках и для приготовления любимых напитков дома.<br><br>У нас вы сможете купить специализированные материалы и инвентарь – от посуды и упаковки для чая и кофе до брендированной одежды для продавца и бариста.<br><br>Мы постоянно расширяем ассортимент продукции, чтобы наши клиенты могли приобрести её в одном месте.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/33d/6a0eec33dbf83281563091.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Инвентарь для чая",
+        "slug": "inventar-dlia-caia",
+        "composite_slug": "inventar-i-materialy/inventar-dlia-caia",
+        "description": "",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100056,
+          "name": "Ситечко для заваривания чая",
+          "vendor_code": "M-4-0058",
+          "price": 225,
+          "params": []
+        }
+      ],
+      "params": [],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/64a/f8e/704/64af8e70404fd001613242.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/738/63d0de738a11d004184153.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/738/63d0de7382751306245358.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/739/63d0de7391b09053571610.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/739/63d0de7399c34051352899.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/73a/63d0de73a0532496022023.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/73a/63d0de73a5fbb785741218.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/73a/63d0de73ac31a127764256.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Кофейный скраб для тела - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофейный скраб для тела в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! В нашем магазине вы можете заказать и купить кофейный скраб по хорошей цене. ✔️ Поставки по России и за рубеж ✔️ Продажа по выгодной стоимости! ☎️ 8 800 600 52 23.",
+      "id": 100057,
+      "slug": "skrab-kofeinyi-dlia-tela-200gr",
+      "name": "Скраб кофейный для тела 200 г",
+      "front_name": "Скраб кофейный для тела 200 г",
+      "description": "Скраб для тела на основе обжаренного молотого кофе и розовой гималайской соли. Обладает лимфодренажным эффектом, способствует деликатному отшелушиванию ороговевших клеток кожи.",
+      "video_link": null,
+      "root": {
+        "name": "Сопутствующие товары",
+        "slug": "soputstvuyushchie-materialy",
+        "composite_slug": "soputstvuyushchie-materialy",
+        "description": "<p>Кроме чая и кофе у нас можно купить сопутствующие товары, актуальные для HoReCa и домашнего использования.<br><br>В каталоге – товары для «сладкой жизни»: шоколадки, горячий шоколад, сахар, мёд, сиропы, кофе в шоколаде. Продаём дрип-кофе, чай в пакетиках, натуральный кофейный скраб для тела и ингредиенты для вендинга.<br><br>Мы тщательно следим, чтобы наш ассортимент пополняли товары только лучшего качества, а наши клиенты могли приобрести всё необходимое в одном месте.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/202/6a0eec20234f2164789425.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Скраб",
+        "slug": "skrab",
+        "composite_slug": "soputstvuyushchie-materialy/skrab",
+        "description": "",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100058,
+          "name": "Скраб кофейный для тела 200 г",
+          "vendor_code": "G-9-0001",
+          "price": 315,
+          "params": []
+        }
+      ],
+      "params": [],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/64a/7ae/c9e/64a7aec9e5581262694408.png",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/785/77c/63d78577cf5a0687372798.png",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/785/77d/63d78577d4feb974091349.png",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Кофе Сникерс оптом - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Кофе Сникерс оптом в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, совсем недорого! У нас вы можете заказать и купить кофе Сникерс по хорошей цене. ✔️ Ездим в страны произрастания: выбираем и импортируем лучшие сорта ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23",
+      "id": 100059,
+      "slug": "snikers",
+      "name": "Сникерс, кофе жареный",
+      "front_name": "",
+      "description": "Орехи, карамель, шоколад.",
+      "video_link": null,
+      "root": {
+        "name": "Кофе зерновой и молотый",
+        "slug": "kofe",
+        "composite_slug": "kofe",
+        "description": "<p>Зерновой и молотый кофе обжаренный бесконтактным способом в потоках горячего воздуха. В нашем ассортименте: эспрессо-смеси, моносорта, микролоты, ароматизированный кофе – всего более 70 позиций на ваш выбор.</p><p>Мы сами выезжаем на плантации, чтобы выбрать лучшие коммерческие сорта и редкие микролоты. Работаем напрямую с производителями кофе, что позволяет держать стабильный вкус и высокое качество нашей продукции.</p><p>Мы не храним обжаренный кофе на складе, изготавливаем продукцию под заказ клиента, отправляем еще горячим. Наш кофе пользуется большой популярностью в сфере индустрии гостеприимства и у простых кофеманов.</p><p>Так же мы выполняем проекты под СТМ для крупных заказчиков.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/0d8/6a0eec0d89a19862339107.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Ароматизированный кофе",
+        "slug": "aromatizirovannyi-kofe",
+        "composite_slug": "kofe/aromatizirovannyi-kofe",
+        "description": "<p><br></p><h2><strong>Ароматизированный кофе оптом от обжарщика AROMA TEA COFFEE</strong></h2><p><br></p><p>Купить ароматизированный кофе – свежеобжаренный, в зёрнах и молотый по оптовым ценам. Более 20 позиций в ассортименте. Мы сами посещаем кофейные плантации, выбираем для производства смесей зерно с лучшим соотношением стоимости и качества.<br><br>Шоколад и апельсин, банан и ром, карамель и лесной орех – эти и многие другие ароматы приятно гармонируют с классическим вкусом кофе. В каждом случае мы подобрали необходимое количество ароматизатора и провели множество тестов, чтобы найти идеальный вкусовой баланс. Ароматизированный кофе идеален с добавлением молока, сгущёнки, сахара или сиропа. На выходе вы получаете десертный напиток с завораживающим ароматом. Не советуем готовить такие зёрна в кофемашинах и кофемолках (за исключением ножевых), так как маслянистая основа ароматизатора остаётся на жерновах и стенках заварочного блока, провоцируя поломку устройства. Рекомендованные способы приготовления – турка, кемекс, гейзерная кофеварка, фильтр.<br><br>Обжариваем зерновой кофе под заказ. Отгрузка на следующий день после получения заказа. Опт от 10 кг чая и кофе вместе. Трёхслойная упаковка с дегазационными клапанами. Индивидуальные условия при покупке продукции от 300 кг. Готовы производить продукцию под вашей торговой маркой. Снижаем цены на популярные сорта каждую неделю. Доставка транспортными компаниями по территории России.</p>",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100060,
+          "name": "Сникерс, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+          "vendor_code": "CF-200-35",
+          "price": 380,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100061,
+          "name": "Сникерс, кофе жареный (Упаковка 1000 г. ЗЕРНОВОЙ)",
+          "vendor_code": "CF-1000-35",
+          "price": 1700,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "0"
+            }
+          ]
+        },
+        {
+          "id": 100062,
+          "name": "Сникерс, кофе жареный (Упаковка 200 г. МОЛОТЫЙ)",
+          "vendor_code": "CFG-200-35",
+          "price": 380,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100030,
+                "value": "200",
+                "slug": "200",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        },
+        {
+          "id": 100063,
+          "name": "Сникерс, кофе жареный (Упаковка 1000 г. МОЛОТЫЙ)",
+          "vendor_code": "CFG-1000-35",
+          "price": 1700,
+          "params": [
+            {
+              "param": {
+                "id": 100002,
+                "name": "Вес",
+                "slug": "weight",
+                "type": "number",
+                "icon": null
+              },
+              "param_value": {
+                "id": 100031,
+                "value": "1000",
+                "slug": "1000",
+                "icon": null
+              },
+              "value": null
+            },
+            {
+              "param": {
+                "id": 100031,
+                "name": "Молотый",
+                "slug": "is_grinded",
+                "type": "bool",
+                "icon": null
+              },
+              "param_value": null,
+              "value": "1"
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "param": {
+            "id": 100035,
+            "name": "Скрин (размер зерна)",
+            "slug": "screen",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/b4b/322/63eb4b3229e08982110246.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100064,
+            "value": "16+",
+            "slug": "16",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/51f/986/63d51f986ab59017922342.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100037,
+            "name": "Кислотность",
+            "slug": "acidity",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100039,
+            "value": "1",
+            "slug": "1",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100039,
+            "name": "Плотность",
+            "slug": "density",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100065,
+            "value": "4",
+            "slug": "4",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100041,
+            "name": "Аромат",
+            "slug": "flavor",
+            "type": "number",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100066,
+            "value": "5",
+            "slug": "5-2",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100067,
+            "name": "Способ обработки",
+            "slug": "sposob-obrabotki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100068,
+            "value": "сухой",
+            "slug": "suxoi",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100030,
+            "name": "Информация",
+            "slug": "info",
+            "type": "text",
+            "icon": null
+          },
+          "param_value": null,
+          "value": "Вьетнам. Не рекомендуем для кофемашины"
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100069,
+            "value": "Френч-пресс",
+            "slug": "frenc-press-2",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b3/a94/63e4b3a94462a569796043.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100050,
+            "value": "Турка",
+            "slug": "turka",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b2/951/63e4b2951de08221608694.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100052,
+            "value": "Гейзерная кофеварка",
+            "slug": "geizernaia-kofevarka",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/4b2/cf1/63e4b2cf146d1128865160.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100048,
+            "name": "В чем заваривать кофе",
+            "slug": "v-cem-zavarivat",
+            "type": "checkboxes",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100070,
+            "value": "Чашка",
+            "slug": "caska",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/672/c9d/308/672c9d308127f034850014.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100045,
+            "name": "Степень обжарки",
+            "slug": "stepen-obzarki",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100046,
+            "value": "Средняя",
+            "slug": "sredniaia",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100043,
+            "name": "Вид",
+            "slug": "vid",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/c91/63ecb9c9124dd171487383.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100071,
+            "value": "Ароматизированный кофе",
+            "slug": "aromatizirovannyi-kofe",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100040,
+            "name": "Регион",
+            "slug": "region",
+            "type": "string",
+            "icon": {
+              "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63e/cb9/ea0/63ecb9ea0e8af041846308.svg",
+              "title": null,
+              "description": null
+            }
+          },
+          "param_value": {
+            "id": 100047,
+            "value": "Смесь",
+            "slug": "smes",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100072,
+            "name": "Информация:",
+            "slug": "ne-rekomenduem-dlia-kofemasiny",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100073,
+            "value": "Не рекомендуем для кофемашины",
+            "slug": "ne-rekomenduem-dlia-kofemasiny",
+            "icon": null
+          },
+          "value": null
+        },
+        {
+          "param": {
+            "id": 100053,
+            "name": "Страна происхождения",
+            "slug": "strana-proisxozdeniia",
+            "type": "string",
+            "icon": null
+          },
+          "param_value": {
+            "id": 100074,
+            "value": "Вьетнам",
+            "slug": "vetnam",
+            "icon": null
+          },
+          "value": null
+        }
+      ],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/69a/6bc/b98/69a6bcb98c166241855130.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/703/2db/6a07032db7518757947908.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/672/a0e/7c3/672a0e7c32800119880463.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/672/a0e/7ce/672a0e7ceba55460983345.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "<p>Десертный кофе для любителей кофе с молоком и сладкими добавками. Благодаря кофе средней обжарки и ароматизатору напиток получится со вкусом легендарных шоколадных батончиков.<br>Этот кофе предназначен для домашнего использования любителями кофе с добавками. Отлично сочетается с молоком, сливками, сгущенным молоком, сахаром или сиропом.<br>Лучше всего этот кофе раскроется в турке. Можно приготовить в френч-прессе, гейзерной кофеварке. Так же подходит для заваривания в кружке. Подробное описание способов приготовления можно посмотреть <a href=\"https://aromateacoffee.ru/sposoby-prigotovleniya-kofe\" title=\"https://aromateacoffee.ru/sposoby-prigotovleniya-kofe\"><u><strong>тут</strong></u></a><u><strong>.</strong></u></p><p>Мы не рекомендуем готовить ароматизированный кофе в кофемашине. Для помола используйте только ножевую кофемолку.</p><p>Мы сочетаем узнаваемый вкус классического кофе с популярными десертными ароматами, создавая уникальный вкусоароматические композиции. Ароматизированный кофе это отличное решение для тех, кому приелась кофейная классика и хочется попробовать, что то новое.</p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Совки для льда - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Металлические совки для льда в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить совок для льда по хорошей цене. ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100075,
+      "slug": "sovok-stal-50ml",
+      "name": "Совок сталь 50мл",
+      "front_name": "Совок сталь 50мл",
+      "description": "L=19/14,B=6.5 см;металлич.",
+      "video_link": null,
+      "root": {
+        "name": "Инвентарь и материалы",
+        "slug": "inventar-i-materialy",
+        "composite_slug": "inventar-i-materialy",
+        "description": "<p>Собрали коллекцию сопутствующих товаров, востребованных в заведениях HoReCa, розничных торговых точках и для приготовления любимых напитков дома.<br><br>У нас вы сможете купить специализированные материалы и инвентарь – от посуды и упаковки для чая и кофе до брендированной одежды для продавца и бариста.<br><br>Мы постоянно расширяем ассортимент продукции, чтобы наши клиенты могли приобрести её в одном месте.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/33d/6a0eec33dbf83281563091.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Посуда",
+        "slug": "posuda",
+        "composite_slug": "inventar-i-materialy/posuda",
+        "description": "",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100076,
+          "name": "Совок сталь 50мл",
+          "vendor_code": "M-4-0021",
+          "price": 200,
+          "params": []
+        }
+      ],
+      "params": [],
+      "preview": {
+        "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/63d/0de/5c7/63d0de5c70402081319018.jpg",
+        "title": null,
+        "description": null
+      },
+      "photos": [],
+      "full_description": "<p>Металлический совок позволяет набрать необходимое количество льда для приготовления напитков.</p><p><br></p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "{category} {product_name} - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ {category} {product_name} в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! В нашем магазине вы можете заказать и купить {product_name} по хорошей цене. ✔️ Поставки по России и за рубеж ✔️ Продажа по выгодной стоимости! ☎️ 8 800 600 52 23.",
+      "id": 100077,
+      "slug": "stakan-bumaznyi-firmennyi-250ml-50st",
+      "name": "Стакан бумажный фирменный 250 мл (50шт)",
+      "front_name": "Стакан бумажный фирменный 250 мл (50шт)",
+      "description": "Бумажный стаканчик 250 мл с фирменным наименованием и QR кодом для горячих напитков. Подходит для выездных мероприятий, а также предприятий формата Tea and Coffee to go. D-80 мм",
+      "video_link": null,
+      "root": {
+        "name": "Инвентарь и материалы",
+        "slug": "inventar-i-materialy",
+        "composite_slug": "inventar-i-materialy",
+        "description": "<p>Собрали коллекцию сопутствующих товаров, востребованных в заведениях HoReCa, розничных торговых точках и для приготовления любимых напитков дома.<br><br>У нас вы сможете купить специализированные материалы и инвентарь – от посуды и упаковки для чая и кофе до брендированной одежды для продавца и бариста.<br><br>Мы постоянно расширяем ассортимент продукции, чтобы наши клиенты могли приобрести её в одном месте.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/33d/6a0eec33dbf83281563091.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Материалы",
+        "slug": "materialy",
+        "composite_slug": "inventar-i-materialy/materialy",
+        "description": "",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100078,
+          "name": "Стакан бумажный фирменный 250 мл (50шт)",
+          "vendor_code": "M-3-0013",
+          "price": 260,
+          "params": []
+        }
+      ],
+      "params": [],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/64a/7fa/ffb/64a7faffb1fdf004208667.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/65f/acd/3e1/65facd3e1be53966915645.jpeg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Подставки для подогрева чайника - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Подставку для подогрева стеклянного чайника от свечи в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! У нас вы можете заказать и купить подставку по хорошей цене. ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100079,
+      "slug": "stekliannaia-podstavka-dlia-podogreva-cainika",
+      "name": "Стеклянная подставка для подогрева чайника",
+      "front_name": "Стеклянная подставка для подогрева чайника",
+      "description": "Стеклянная подставка для подогрева чайника. Внутренний диаметр 120 мм, высота 75 мм.  Подходит для сервировочных чайников объёмом 500 мл",
+      "video_link": "https://rutube.ru/play/embed/9a5fe4c7cde55798de6cb862e5742844",
+      "root": {
+        "name": "Инвентарь и материалы",
+        "slug": "inventar-i-materialy",
+        "composite_slug": "inventar-i-materialy",
+        "description": "<p>Собрали коллекцию сопутствующих товаров, востребованных в заведениях HoReCa, розничных торговых точках и для приготовления любимых напитков дома.<br><br>У нас вы сможете купить специализированные материалы и инвентарь – от посуды и упаковки для чая и кофе до брендированной одежды для продавца и бариста.<br><br>Мы постоянно расширяем ассортимент продукции, чтобы наши клиенты могли приобрести её в одном месте.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/33d/6a0eec33dbf83281563091.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Посуда",
+        "slug": "posuda",
+        "composite_slug": "inventar-i-materialy/posuda",
+        "description": "",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100080,
+          "name": "Стеклянная подставка для подогрева чайника",
+          "vendor_code": "M-11-0010",
+          "price": 215,
+          "params": []
+        }
+      ],
+      "params": [],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/648/2c1/59c/6482c159cd584377664525.jpg",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/648/2c1/5a1/6482c15a1519a069390638.jpg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "Стеклянные чашки бриллиант карамель 300 мл - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ Стеклянные чашки бриллиант карамель 300 мл в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, совсем недорого! У нас вы можете заказать и купить стеклянную чашку бриллиант карамель 300 мл по хорошей цене. ✔️ Поставки по России и за рубеж ✔️ Скидки за объем заказа ✔️ Продажа по выгодной стоимости! ☎ 8 800 600 52 23.",
+      "id": 100081,
+      "slug": "stekliannaia-caska-brilliant-karamel-300-ml",
+      "name": "Стеклянная чашка бриллиант карамель 300 мл",
+      "front_name": "Стеклянная чашка бриллиант карамель 300 мл",
+      "description": "Стеклянная чашка со стеклянной ручкой для эстетичного чаепития. Стекло карамельного цвета. Высота - 9 см, d - 6 см.",
+      "video_link": null,
+      "root": {
+        "name": "Инвентарь и материалы",
+        "slug": "inventar-i-materialy",
+        "composite_slug": "inventar-i-materialy",
+        "description": "<p>Собрали коллекцию сопутствующих товаров, востребованных в заведениях HoReCa, розничных торговых точках и для приготовления любимых напитков дома.<br><br>У нас вы сможете купить специализированные материалы и инвентарь – от посуды и упаковки для чая и кофе до брендированной одежды для продавца и бариста.<br><br>Мы постоянно расширяем ассортимент продукции, чтобы наши клиенты могли приобрести её в одном месте.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/33d/6a0eec33dbf83281563091.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Посуда",
+        "slug": "posuda",
+        "composite_slug": "inventar-i-materialy/posuda",
+        "description": "",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100082,
+          "name": "Стеклянная чашка бриллиант карамель 300 мл",
+          "vendor_code": "M-11-0034",
+          "price": 495,
+          "params": []
+        }
+      ],
+      "params": [],
+      "preview": {
+        "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/66b/99f/683/66b99f6837166626119065.jpeg",
+        "title": null,
+        "description": null
+      },
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/66b/99f/7c5/66b99f7c5ab7f300029198.jpeg",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "",
+      "discount": [
+        {
+          "id": 100083,
+          "created_at": "2026-09-05T05:14:32.000000Z",
+          "updated_at": "2026-09-05T05:14:32.000000Z",
+          "product_id": 100081,
+          "user_id": null,
+          "min_weight": 0,
+          "discount": 10
+        }
+      ],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    },
+    {
+      "meta_title": "{category} {product_name} - купить в {v_gorode} | От производителя!",
+      "meta_description": "✅ {category} {product_name} в {v_gorode} от производителя AROMA TEA COFFEE - быстрая доставка, недорого! В нашем магазине вы можете заказать и купить {product_name} по хорошей цене. ✔️ Поставки по России и за рубеж ✔️ Продажа по выгодной стоимости! ☎️ 8 800 600 52 23.",
+      "id": 100084,
+      "slug": "stekliannaia-caska-brilliant-riflenaia-300-ml",
+      "name": "Стеклянная чашка бриллиант рифленая 300 мл",
+      "front_name": "Стеклянная чашка бриллиант рифленая 300 мл",
+      "description": "Стеклянная чашка со стеклянной ручкой для эстетичного чаепития. Высота – 9 см, 6 см - d",
+      "video_link": "https://rutube.ru/play/embed/1a76b120b1d08788ab28d8e748f40c91",
+      "root": {
+        "name": "Инвентарь и материалы",
+        "slug": "inventar-i-materialy",
+        "composite_slug": "inventar-i-materialy",
+        "description": "<p>Собрали коллекцию сопутствующих товаров, востребованных в заведениях HoReCa, розничных торговых точках и для приготовления любимых напитков дома.<br><br>У нас вы сможете купить специализированные материалы и инвентарь – от посуды и упаковки для чая и кофе до брендированной одежды для продавца и бариста.<br><br>Мы постоянно расширяем ассортимент продукции, чтобы наши клиенты могли приобрести её в одном месте.</p>",
+        "image": {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/6a0/eec/33d/6a0eec33dbf83281563091.jpg",
+          "title": null,
+          "description": null
+        }
+      },
+      "category": {
+        "name": "Посуда",
+        "slug": "posuda",
+        "composite_slug": "inventar-i-materialy/posuda",
+        "description": "",
+        "image": null
+      },
+      "tags": [],
+      "offers": [
+        {
+          "id": 100085,
+          "name": "Стеклянная чашка бриллиант рифленая 300 мл",
+          "vendor_code": "M-11-0024",
+          "price": 175,
+          "params": []
+        }
+      ],
+      "params": [],
+      "preview": null,
+      "photos": [
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/656/d75/56a/656d7556ab19f592881926.png",
+          "title": null,
+          "description": null
+        },
+        {
+          "path": "https://dev.aromateacoffee.ru/storage/app/uploads/public/656/d75/57e/656d7557e4b97506179762.png",
+          "title": null,
+          "description": null
+        }
+      ],
+      "full_description": "<p>Стеклянная чашка со стеклянной ручкой для эстетичного чаепития<br><br>Высота – 9 см, 6 см - d</p>",
+      "discount": [],
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false,
+      "disable_volume_discount": false,
+      "disable_personal_discount": false
+    }
+  ],
+  "links": {
+    "first": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=1",
+    "last": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=47",
+    "prev": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=23",
+    "next": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=25"
+  },
+  "meta": {
+    "current_page": 24,
+    "from": 231,
+    "last_page": 47,
+    "links": [
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=23",
+        "label": "pagination.previous",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=1",
+        "label": "1",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=2",
+        "label": "2",
+        "active": false
+      },
+      {
+        "url": null,
+        "label": "...",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=21",
+        "label": "21",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=22",
+        "label": "22",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=23",
+        "label": "23",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=24",
+        "label": "24",
+        "active": true
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=25",
+        "label": "25",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=26",
+        "label": "26",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=27",
+        "label": "27",
+        "active": false
+      },
+      {
+        "url": null,
+        "label": "...",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=46",
+        "label": "46",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=47",
+        "label": "47",
+        "active": false
+      },
+      {
+        "url": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products?page=25",
+        "label": "pagination.next",
+        "active": false
+      }
+    ],
+    "path": "https://dev.aromateacoffee.ru/api/v1/catalog/wholesale/products",
+    "per_page": 10,
+    "to": 240,
+    "total": 466
+  }
+}

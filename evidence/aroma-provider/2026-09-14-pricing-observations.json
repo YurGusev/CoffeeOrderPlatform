@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 1,
+  "kind": "transformed-observation-report-not-wire-fixture",
+  "note": "Отчёт из ранее выполненных API-запросов. Содержит выбранные поля и raw body hashes; исходные bodies не сохранялись. Не использовать как полный provider decoder fixture.",
+  "authentication": "public-read-only",
+  "origin": "https://aromateacoffee.ru",
+  "catalogScan": {
+    "startedAt": "2026-09-14T14:58:43.269569+00:00",
+    "origin": "https://aromateacoffee.ru",
+    "pageSize": 10,
+    "expectedTotal": 464,
+    "lastPage": 47,
+    "productsRead": 464,
+    "pages": [
+      {
+        "page": 1,
+        "status": 200,
+        "bytes": 167195,
+        "sha256": "b6cb7df165da45844638c7d7de144416d015e0703223919e0bb02091b74f0a50"
+      },
+      {
+        "page": 2,
+        "status": 200,
+        "bytes": 138697,
+        "sha256": "a999c36a894dd8f7c133f6c5bc6293d12aef323ec703e1f9ed632480d3b741bc"
+      },
+      {
+        "page": 3,
+        "status": 200,
+        "bytes": 118841,
+        "sha256": "ea88cd2b420276eaa502a1e3fdb61c1a44dc2f58b1b97217505993b1bb4c8e25"
+      },
+      {
+        "page": 4,
+        "status": 200,
+        "bytes": 109092,
+        "sha256": "674796d0fca41fd8312fdf126cef32f76a95297d923657295aba768c5ad7d6d2"
+      },
+      {
+        "page": 5,
+        "status": 200,
+        "bytes": 266324,
+        "sha256": "67c2cd654c747783c9490837abb48835939dac96ef815378bac43f55248ef22e"
+      },
+      {
+        "page": 6,
+        "status": 200,
+        "bytes": 162903,
+        "sha256": "98b922e7cf90ffe817b719e4af00ce13c74de4dd207195728d020e7aabd536e7"
+      },
+      {
+        "page": 7,
+        "status": 200,
+        "bytes": 129290,
+        "sha256": "b1265dc10120f08a98af01e6f3f6e31c21243035a1af0e47eaf6d0b92e2863d5"
+      },
+      {
+        "page": 8,
+        "status": 200,
+        "bytes": 120697,
+        "sha256": "4cb04a934ab63d0a99e309856237ee337718a37813a8db9093414b8a8a169509"
+      },
+      {
+        "page": 9,
+        "status": 200,
+        "bytes": 237290,
+        "sha256": "05cfc43c7e2421c18d7c06a27cbf2742424380f2d6b3c1659acf9b78c10a19f6"
+      },
+      {
+        "page": 10,
+        "status": 200,
+        "bytes": 166183,
+        "sha256": "35c77c4f4ea258524fdf930e338785b2eb8d6ee018e3637c040c2ddc5530c812"
+      },
+      {
+        "page": 11,
+        "status": 200,
+        "bytes": 151093,
+        "sha256": "9c5a26b088d5005a72aaaf79134c9d3a8df20b8d4cb258d063b7dd8ca43f35ff"
+      },
+      {
+        "page": 12,
+        "status": 200,
+        "bytes": 68132,
+        "sha256": "046aa03802f1e102bc67a2141ad34a773dea6f122f5da47603f9056ec8ba97dc"
+      },
+      {
+        "page": 13,
+        "status": 200,
+        "bytes": 171632,
+        "sha256": "a16d9c14f0ffbf92da64c6569d613931cd0c4f0de79411ed388258179e41a37a"
+      },
+      {
+        "page": 14,
+        "status": 200,
+        "bytes": 161567,
+        "sha256": "f125a1e4826529560f74a108cb2b59fb78e680cc62be102fce127d04737e449e"
+      },
+      {
+        "page": 15,
+        "status": 200,
+        "bytes": 132797,
+        "sha256": "d9620239e1ee99a4f1250b80f4793c73d11f2cdce33099f912e883d74d88a9a7"
+      },
+      {
+        "page": 16,
+        "status": 200,
+        "bytes": 143420,
+        "sha256": "ad4e0a11f0d8ab3bcf5a31dc579e29879a1161b47a53f7675e541f8156bc44ff"
+      },
+      {
+        "page": 17,
+        "status": 200,
+        "bytes": 141462,
+        "sha256": "424d7c71385019a556a56ce40f8c55a5d6d4340da0fd97bbc1a7699e5a11f1d7"
+      },
+      {
+        "page": 18,
+        "status": 200,
+        "bytes": 91266,
+        "sha256": "586f919a4f2187ecb9fd37df1d45a580a46546476da375786f1da185933df26a"
+      },
+      {
+        "page": 19,
+        "status": 200,
+        "bytes": 61120,
+        "sha256": "081f7cf83702a61e6b893983864a25e87a5959eb562547269567b432b93ff089"
+      },
+      {
+        "page": 20,
+        "status": 200,
+        "bytes": 59832,
+        "sha256": "e47ebba1ffe39a1c7eabd1d0c6cbdda634523a47f96f0c6b6c179fc4486a5b19"
+      },
+      {
+        "page": 21,
+        "status": 200,
+        "bytes": 108563,
+        "sha256": "73b993a3201e5c5614d33f92501c202c4bac59a265e99aa856ec22a157c12046"
+      },
+      {
+        "page": 22,
+        "status": 200,
+        "bytes": 162635,
+        "sha256": "03dda85dc94ec98cbc42fdaa82c6fd234277c328ffe0cd7d6799ec9ff20ce365"
+      },
+      {
+        "page": 23,
+        "status": 200,
+        "bytes": 232935,
+        "sha256": "705cfb8995bb0bbc85e56b051f5312ca8804584758b0cd38b05030dfe64b7aa1"
+      },
+      {
+        "page": 24,
+        "status": 200,
+        "bytes": 106533,
+        "sha256": "42cb1147402c6d0040bad1a819abdfcc413b5c88fcee62931a68457c50941f95"
+      },
+      {
+        "page": 25,
+        "status": 200,
+        "bytes": 123319,
+        "sha256": "1b58313dcef80ad4e708efe5778fa047dca5466d7f4c3c554c47591d6be4eb95"
+      },
+      {
+        "page": 26,
+        "status": 200,
+        "bytes": 239225,
+        "sha256": "7f9b01a2fec7cbb52cc67b37480ba7b3edb73e41314c6566db624382bd6247ec"
+      },
+      {
+        "page": 27,
+        "status": 200,
+        "bytes": 265357,
+        "sha256": "972c93826963114991a4dc61ae7d045f593b1cd3d8b5475e34e62319f4d7583f"
+      },
+      {
+        "page": 28,
+        "status": 200,
+        "bytes": 215115,
+        "sha256": "9508f3312d74b68cb7cf2f2829f2f519cb75f3bc20a0edf1c335e1596905c3cd"
+      },
+      {
+        "page": 29,
+        "status": 200,
+        "bytes": 258160,
+        "sha256": "fe757434c80b69e077f6d462f53f43fd62502344b60267a6899feccedaac253d"
+      },
+      {
+        "page": 30,
+        "status": 200,
+        "bytes": 83670,
+        "sha256": "f77ac041d70bae91e8254654e00821c5221b05e161c9ba7e5ab0af71309fbc29"
+      },
+      {
+        "page": 31,
+        "status": 200,
+        "bytes": 158844,
+        "sha256": "f1dcb26e5d0ab4159d70dedac6ddfd2aa543ac81483a6ec552e0f2032cc166ea"
+      },
+      {
+        "page": 32,
+        "status": 200,
+        "bytes": 254689,
+        "sha256": "05e94751fd5ef9dbb0b1bf1c133e0c9d13e981ce328ffd604f0a4c640500a43d"
+      },
+      {
+        "page": 33,
+        "status": 200,
+        "bytes": 261350,
+        "sha256": "41c54bae96f159eeda28adeed53764b68bfcf2f23d884ff5066f2b86110e00c3"
+      },
+      {
+        "page": 34,
+        "status": 200,
+        "bytes": 256145,
+        "sha256": "8a6b631d22143e6d152aae47eccc4f4c4559baa00707b9db071532cc1af5fab2"
+      },
+      {
+        "page": 35,
+        "status": 200,
+        "bytes": 253862,
+        "sha256": "12d4adbea99f365e294fb7c6e6d637d397e56f3db6b23860f4c4ab3f6ce56a10"
+      },
+      {
+        "page": 36,
+        "status": 200,
+        "bytes": 268930,
+        "sha256": "6c1346cf1ab4d4351a28021d4fc9f0d556bb15954fc30dba019a161124d026cd"
+      },
+      {
+        "page": 37,
+        "status": 200,
+        "bytes": 253552,
+        "sha256": "3675dc8bbb08b458688cacbc94db46fa763268db558d102aa6a26274f3e968fb"
+      },
+      {
+        "page": 38,
+        "status": 200,
+        "bytes": 261489,
+        "sha256": "47ddc9b4c8b9d111e060ac8d386fc7f677395df473bbb451955ec0063bfae515"
+      },
+      {
+        "page": 39,
+        "status": 200,
+        "bytes": 266188,
+        "sha256": "77b099edbb78896bc435bcc3a86d98ab9e1d124103a8f47dc880272f8f5b987f"
+      },
+      {
+        "page": 40,
+        "status": 200,
+        "bytes": 259257,
+        "sha256": "1d40d6679d796423c423aadf32bca09b11b8d4bbefa44307402d02b37ed13729"
+      },
+      {
+        "page": 41,
+        "status": 200,
+        "bytes": 276497,
+        "sha256": "78bd1028b918f77e9ba28c2fc37a51894eefb6de1cc8a4f9e5118ec143ae4ce2"
+      },
+      {
+        "page": 42,
+        "status": 200,
+        "bytes": 234360,
+        "sha256": "2d991252479f871a9a66f18f7d17cdc984cdf0b89035392f0e324952799e760c"
+      },
+      {
+        "page": 43,
+        "status": 200,
+        "bytes": 269596,
+        "sha256": "adb4f57e8b23346cf90c8066ab013f2dbe0f7b56df7ceeeb31552d0ad044f336"
+      },
+      {
+        "page": 44,
+        "status": 200,
+        "bytes": 224327,
+        "sha256": "22e224ab06ac85c81d9b27297a63e87c9c0e4af7375474bdf50dafdd59a60f4b"
+      },
+      {
+        "page": 45,
+        "status": 200,
+        "bytes": 118081,
+        "sha256": "e66f51fe68dca7e85ece1f801bbd5ad6558a875905f3b7b26156beaddf98ff0f"
+      },
+      {
+        "page": 46,
+        "status": 200,
+        "bytes": 152872,
+        "sha256": "100a73ac5417d148188116242cbd8acd1cd2c983ad725a51bca8e04f6091bfe0"
+      },
+      {
+        "page": 47,
+        "status": 200,
+        "bytes": 111897,
+        "sha256": "b94f0d917bb61c4841bd8e6ef3f43ec8b722774dd4d16bd7c50f7bad1b6b66b7"
+      }
+    ],
+    "matches": [
+      {
+        "name": "Воронка керамическая v02 1-4",
+        "productOnStop": false,
+        "showOnWholesale": true,
+        "rule": {
+          "discount": 10,
+          "min_weight": 0,
+          "created_at": "2026-09-14T04:55:24.000000Z",
+          "updated_at": "2026-09-14T04:55:24.000000Z"
+        },
+        "accountScoped": false,
+        "offers": [
+          {
+            "vendorCode": "M-4-0075",
+            "name": "Воронка керамическая v02 1-4",
+            "price": 549,
+            "calculatedAfter10Percent": "494.10"
+          }
+        ]
+      },
+      {
+        "name": "Дегустационный набор чая «ЭКО Купажи»",
+        "productOnStop": false,
+        "showOnWholesale": true,
+        "rule": {
+          "discount": 10,
+          "min_weight": 0,
+          "created_at": "2026-09-14T04:54:25.000000Z",
+          "updated_at": "2026-09-14T04:54:25.000000Z"
+        },
+        "accountScoped": false,
+        "offers": [
+          {
+            "vendorCode": "GT-1-0081",
+            "name": "Дегустационный набор чая «ЭКО Купажи»",
+            "price": 333,
+            "calculatedAfter10Percent": "299.70"
+          }
+        ]
+      },
+      {
+        "name": "Крем-мёд с черносливом",
+        "productOnStop": false,
+        "showOnWholesale": true,
+        "rule": {
+          "discount": 10,
+          "min_weight": 0,
+          "created_at": "2026-09-14T04:55:04.000000Z",
+          "updated_at": "2026-09-14T04:55:04.000000Z"
+        },
+        "accountScoped": false,
+        "offers": [
+          {
+            "vendorCode": "G-5-0008",
+            "name": "Крем-мёд с черносливом",
+            "price": 158,
+            "calculatedAfter10Percent": "142.20"
+          }
+        ]
+      },
+      {
+        "name": "Типод с деревянной ручкой и крышкой 500 мл",
+        "productOnStop": false,
+        "showOnWholesale": true,
+        "rule": {
+          "discount": 10,
+          "min_weight": 0,
+          "created_at": "2026-09-14T04:55:43.000000Z",
+          "updated_at": "2026-09-14T04:55:43.000000Z"
+        },
+        "accountScoped": false,
+        "offers": [
+          {
+            "vendorCode": "M-11-0038",
+            "name": "Типод с деревянной ручкой и крышкой 500 мл",
+            "price": 1211,
+            "calculatedAfter10Percent": "1089.90"
+          }
+        ]
+      },
+      {
+        "name": "Чай черный в пирамидках Ассам FBOP 20 шт",
+        "productOnStop": false,
+        "showOnWholesale": true,
+        "rule": {
+          "discount": 10,
+          "min_weight": 0,
+          "created_at": "2026-09-14T04:54:43.000000Z",
+          "updated_at": "2026-09-14T04:54:43.000000Z"
+        },
+        "accountScoped": false,
+        "offers": [
+          {
+            "vendorCode": "G-7-0016",
+            "name": "Чай черный в пирамидках Ассам FBOP 20 шт",
+            "price": 150,
+            "calculatedAfter10Percent": "135.00"
+          }
+        ]
+      }
+    ],
+    "allDiscountRates": [
+      35,
+      10,
+      35,
+      10,
+      10,
+      35,
+      30,
+      10,
+      30,
+      30,
+      10
+    ],
+    "complete": true,
+    "completedAt": "2026-09-14T15:00:26.061175+00:00"
+  },
+  "cupObservation": {
+    "utc": "2026-09-14T14:42:08.515684+00:00",
+    "request": "https://aromateacoffee.ru/api/v1/catalog/wholesale/products?search=%D0%A1%D1%82%D0%B5%D0%BA%D0%BB%D1%8F%D0%BD%D0%BD%D0%B0%D1%8F+%D1%87%D0%B0%D1%88%D0%BA%D0%B0&page=1&per_page=10",
+    "status": 200,
+    "bytes": 37773,
+    "sha256": "34aed7953cc7a0c60ce22d809f24e9d7a3a91b07c7736dee2001ab82a4475344",
+    "products": [
+      {
+        "name": "Стеклянная чашка бриллиант карамель 300 мл",
+        "flags": {
+          "product_on_stop": false,
+          "show_on_wholesale": true,
+          "sold_by_piece": false,
+          "disable_volume_discount": false,
+          "disable_personal_discount": false
+        },
+        "offers": [
+          {
+            "vendor_code": "M-11-0034",
+            "price": 446
+          }
+        ],
+        "discount": []
+      }
+    ]
+  },
+  "userConfirmations": [
+    {
+      "date": "2026-09-14",
+      "fact": "Пользователь подтвердил цену чашки M-11-0034 на сайте: 446 рублей за штуку. Браузером агента не проверялось."
+    },
+    {
+      "date": "2026-09-14",
+      "fact": "Пользователь сообщил о недельной ротации акций; API не сообщил дату окончания."
+    },
+    {
+      "date": "2026-09-14",
+      "fact": "Пользователь утвердил период синхронизации один час."
+    }
+  ],
+  "transformations": [
+    "Опущены raw product/rule identifiers; сопоставление по коммерческому vendor code.",
+    "Опущены все неиспользуемые product/offer fields; не полная wire schema.",
+    "calculatedAfter10Percent — локальная decimal арифметика, не поле ответа AROMA.",
+    "accountScoped — boolean наличия user_id, значение user_id не сохранялось."
+  ],
+  "limitations": [
+    "Даты created_at/updated_at не доказывают validFrom/expiresAt.",
+    "Суммы после скидки не проверялись в корзине или checkout.",
+    "Полный обход не доказывает provider snapshot isolation.",
+    "При создании этого файла новых provider запросов не выполнялось."
+  ]
+}

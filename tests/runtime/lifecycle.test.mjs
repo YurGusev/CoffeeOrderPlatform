@@ -1046,3 +1046,13 @@ void test("scoped secrets fail closed on foreign identity or missing refs", () =
   assert.throws(() => assertScopedSecrets(valid, "customer-service", "development", ["postgres.ordersService"]), /required ref postgres\.ordersService is missing/);
   assert.throws(() => assertScopedSecrets({...valid, unexpected: true}, "customer-service", "development", ["postgres.customer"]), /unknown or missing metadata key/);
 });
+
+void test("runtime metrics endpoint appends bounded composition metrics", async (t) => {
+  const app = await createRuntime({name: "metrics-composition-test", host: "127.0.0.1", port: 0, shutdownGraceMs: 500, metrics: () => ["aroma_gateway_safe_read_attempts_total 1"]});
+  await app.runtimeController.start();
+  t.after(() => app.runtimeController.closeRuntime("SIGTERM"));
+  const response = await app.inject({method: "GET", url: "/metrics"});
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /runtime_admission_rejected_total 0/);
+  assert.match(response.body, /aroma_gateway_safe_read_attempts_total 1/);
+});

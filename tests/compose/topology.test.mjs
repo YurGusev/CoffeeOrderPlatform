@@ -46,7 +46,7 @@ const NETWORKS = {
     "coffee_postgres_data",
   ],
   "catalog-supplier-sync": ["coffee_internal_api", "coffee_postgres_data"],
-  "catalog-activation-worker": ["coffee_postgres_data", "coffee_kafka_event"],
+  "catalog-activation-worker": ["coffee_postgres_data", "coffee_kafka_event", "coffee_internal_api"],
   "pricing-service": [
     "coffee_public_api_backend",
     "coffee_internal_api",

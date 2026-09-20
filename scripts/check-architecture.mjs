@@ -63,6 +63,7 @@ async function checkPackageDependencies(root) {
         fail('BOUND-IMPORT', `${path} declares forbidden shared business package ${name}`);
       }
       if (name.toLowerCase() === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${path} declares forbidden Axios dependency`);
+      if (GENERIC_RETRY_DEPENDENCY_RE.test(name)) fail('ARCH-GENERIC-RETRY', `${path} declares forbidden generic retry dependency ${name}`);
       if (name === 'zod' || name.startsWith('zod/')) fail('ARCH-FORBIDDEN-SCHEMA', `${path} declares forbidden Zod schema mirror`);
       if (/^(?:@?[^/]+\/)?(?:ffi(?:-napi)?|sqlite3?|better-sqlite3|vfs|virtual-fs|virtual_fs|memfs)$/i.test(name)) {
         fail('ARCH-FORBIDDEN-NATIVE', `${path} declares forbidden FFI/SQLite/VFS dependency ${name}`);
@@ -73,6 +74,13 @@ async function checkPackageDependencies(root) {
 
 const FORBIDDEN_MODULE_RE = /\b(?:from|import|require)\b[^\n]*['"]([^'"]+)['"]/ig;
 const RELATIVE_IMPORT_RE = /\b(?:from|import\s*\()\s*['"](\.{1,2}\/[^'"]+)['"]/g;
+const GENERIC_RETRY_DEPENDENCY_RE = /(?:^|[/_-])(?:async-retry|cockatiel|exponential-backoff|fetch-retry|p-retry|promise-retry|retry|retry-as-promised)(?:$|[/_-])/i;
+const LITERAL_POSTGRES_URL_RE = /["'`](?:postgres(?:ql)?:\/\/)/i;
+const GENERIC_RETRY_WRAPPER_RE = /(?<![.\w])(?:doRetry|executeWithRetry|performRetry|retry|retryAsync|retryOperation|retryWithBackoff|runWithRetry|withRetry)\s*(?:<[^;\n]*?>\s*)?\(/;
+const AROMA_GATEWAY_SOURCE_RE = /(?:^|\/)apps\/aroma-gateway\//;
+const TYPED_PROVIDER_HTTP_CLIENT_RE = /(?:^|\/)apps\/aroma-gateway\/src\/infrastructure\/provider\/http-client\.(?:cts|mts|ts)$/;
+const GENERIC_PROVIDER_HTTP_MODULE_RE = /^(?:@fastify\/http-proxy|http-proxy|node:(?:http|https|net|tls)|(?:http|https|net|tls)|undici)(?:\/|$)/i;
+const GENERIC_PROVIDER_PROXY_RE = /(?<![.\w])(?:forward(?:Request|Response)?|passThrough|proxy)\s*(?:<[^;\n]*?>\s*)?(?:=|\()/i;
 
 function forbiddenModuleKind(moduleName) {
   const normalized = moduleName.toLowerCase();
@@ -95,11 +103,28 @@ function findSwitchBody(source, openingBrace) {
 
 function checkStaticSource(path, source) {
   const label = path.replaceAll('\\', '/');
+  if (/(?:^|\/)apps\//.test(label) && LITERAL_POSTGRES_URL_RE.test(source)) {
+    fail('ARCH-POSTGRES-URL', `${label}: literal PostgreSQL connection URL is forbidden in app source; use scoped platform configuration`);
+  }
+  if (AROMA_GATEWAY_SOURCE_RE.test(label) && !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label)) {
+    if (/(?<![.\w])(?:globalThis\s*\.\s*)?fetch\s*\(/.test(source)) {
+      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: provider HTTP fetch must stay inside the typed provider http-client`);
+    }
+    if (GENERIC_PROVIDER_PROXY_RE.test(source)) {
+      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: generic provider proxy/forwarder is forbidden outside the typed provider http-client`);
+    }
+  }
+  if (AROMA_GATEWAY_SOURCE_RE.test(label) && GENERIC_RETRY_WRAPPER_RE.test(source)) {
+    fail('ARCH-GENERIC-RETRY', `${label}: generic retry wrapper is forbidden; retry ownership must remain explicit and bounded`);
+  }
   if (/\b(?:new\s+Date\s*\(|Date\s*\.\s*(?:now|parse|UTC)\s*\()/m.test(source)) {
     fail('ARCH-TEMPORAL', `${label}: mutable Date API is forbidden; use Temporal`);
   }
   for (const match of source.matchAll(FORBIDDEN_MODULE_RE)) {
     const moduleName = match[1];
+    if (AROMA_GATEWAY_SOURCE_RE.test(label) && !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label) && GENERIC_PROVIDER_HTTP_MODULE_RE.test(moduleName)) {
+      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: generic provider HTTP module ${moduleName} is forbidden outside the typed provider http-client`);
+    }
     if (/contracts\/fixtures|fixtures\/.*\.json/.test(moduleName)) fail('BOUND-CONTRACT-FIXTURE', `${label}: production source imports contract fixture ${moduleName}`);
     if (/(?:^|\/)apps\/(?:web|api-public)\//.test(label) && /(?:generated|contracts)-internal-v1|@coffee-platform\/contracts-(?:customer|catalog|pricing|orders|aroma)-v1/.test(moduleName)) {
       fail('BOUND-CONTRACT-AUDIENCE', `${label}: browser/public graph imports internal contract ${moduleName}`);
