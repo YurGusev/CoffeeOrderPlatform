@@ -1,0 +1,169 @@
+.field {
+  display: grid;
+  min-width: 0;
+  gap: var(--cos-space-1);
+}
+
+.control,
+.inputShell,
+.comboboxShell {
+  min-width: 0;
+}
+
+.inputShell,
+.comboboxShell {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+}
+
+.leading {
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: var(--cos-space-3);
+  display: inline-flex;
+  color: var(--cos-text-secondary);
+  pointer-events: none;
+}
+
+.select,
+.input {
+  display: block;
+  width: 100%;
+  min-height: var(--cos-density-control-height);
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-sm);
+  padding: 0 var(--cos-density-control-padding-inline);
+  color: var(--cos-text-primary);
+  background: var(--cos-surface-elevated);
+  font: inherit;
+  line-height: var(--cos-type-body-line);
+  transition:
+    border-color var(--cos-motion-fast) ease,
+    background var(--cos-motion-fast) ease,
+    box-shadow var(--cos-motion-fast) ease;
+}
+
+.select {
+  appearance: auto;
+}
+
+.inputShell .select,
+.comboboxShell .input {
+  padding-inline-start: var(--cos-density-control-padding-inline);
+}
+
+.inputShell:has(.leading) .select,
+.comboboxShell:has(.leading) .input {
+  padding-inline-start: calc(var(--cos-density-control-padding-inline) + 1.25rem);
+}
+
+.select:hover:not(:disabled),
+.select:focus-visible,
+.input:hover:not(:disabled),
+.input:focus-visible {
+  border-color: var(--cos-border-active);
+}
+
+.select:focus-visible,
+.input:focus-visible {
+  outline: none;
+  box-shadow: var(--cos-focus-ring);
+}
+
+.select[aria-invalid="true"],
+.input[aria-invalid="true"] {
+  border-color: var(--cos-status-error);
+}
+
+.select:disabled,
+.input:disabled {
+  color: var(--cos-text-disabled);
+  background: var(--cos-surface-panel);
+  cursor: not-allowed;
+}
+
+.field[data-size="sm"] .select,
+.field[data-size="sm"] .input {
+  min-height: 2rem;
+  font-size: var(--cos-type-caption-size);
+}
+
+.field[data-size="lg"] .select,
+.field[data-size="lg"] .input {
+  min-height: 3rem;
+}
+
+.status,
+.description,
+.error {
+  display: block;
+  font-size: var(--cos-type-caption-size);
+  line-height: var(--cos-type-caption-line);
+}
+
+.status,
+.description {
+  color: var(--cos-text-secondary);
+}
+
+.error {
+  color: var(--cos-status-error);
+}
+
+.option {
+  display: block;
+  min-block-size: 2.25rem;
+  padding: var(--cos-space-2) var(--cos-space-3);
+  border-radius: var(--cos-radius-sm);
+  color: var(--cos-text-primary);
+  cursor: pointer;
+  line-height: var(--cos-type-body-line);
+}
+
+.option:hover,
+.optionActive {
+  outline: none;
+  background: var(--cos-selection-hover);
+}
+
+.option[aria-selected="true"] {
+  color: var(--cos-action-primary-strong);
+  font-weight: var(--cos-font-weight-strong);
+}
+
+.option[aria-disabled="true"] {
+  color: var(--cos-text-disabled);
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .select,
+  .input {
+    transition-duration: 0.01ms;
+  }
+}
+
+@media (forced-colors: active) {
+  .select,
+  .input {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+  }
+
+  .leading,
+  .status,
+  .description,
+  .error {
+    color: CanvasText;
+  }
+
+  .option:hover,
+  .optionActive {
+    outline: 2px solid Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+}

@@ -1,0 +1,3454 @@
+{
+  "generatedAt": "2026-09-21T16:55:12.400Z",
+  "surface": "http://127.0.0.1:8783/",
+  "desktopOnly": true,
+  "results": [
+    {
+      "label": "desktop-1024",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 1024,
+          "height": 600
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 1024,
+          "scrollWidth": 1024,
+          "clientHeight": 600,
+          "scrollHeight": 1147
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 1024,
+          "height": 1147,
+          "right": 1024,
+          "bottom": 1147
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "right": 0,
+          "bottom": 0
+        },
+        "content": {
+          "x": 10,
+          "y": 162,
+          "width": 1004,
+          "height": 975,
+          "right": 1014,
+          "bottom": 1137
+        },
+        "heading": {
+          "x": 78,
+          "y": 169,
+          "width": 489,
+          "height": 36,
+          "right": 567,
+          "bottom": 205
+        },
+        "toolbar": {
+          "x": 12,
+          "y": 240,
+          "width": 1000,
+          "height": 178,
+          "right": 1012,
+          "bottom": 418
+        },
+        "tablePanel": {
+          "x": 12,
+          "y": 430,
+          "width": 1000,
+          "height": 707,
+          "right": 1012,
+          "bottom": 1137
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 747,
+            "y": 255,
+            "width": 131,
+            "height": 32,
+            "right": 878,
+            "bottom": 287
+          }
+        },
+        "registryHint": {
+          "visible": true,
+          "text": "Справа ещё статусы, корзина и действияК началу спискаПоказать статусы и действия",
+          "verticalVisible": false,
+          "horizontalVisible": true,
+          "verticalState": "end",
+          "horizontalState": "more",
+          "box": {
+            "x": 13,
+            "y": 1049,
+            "width": 998,
+            "height": 34,
+            "right": 1011,
+            "bottom": 1083
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 998,
+          "scrollWidth": 1537,
+          "clientHeight": 618,
+          "scrollHeight": 618,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 25,
+          "y": 42,
+          "width": 734,
+          "height": 923,
+          "right": 759,
+          "bottom": 965
+        },
+        "itemsViewport": {
+          "x": 36,
+          "y": 105,
+          "width": 712,
+          "height": 795,
+          "right": 748,
+          "bottom": 900
+        },
+        "itemsTable": {
+          "x": 51,
+          "y": 105,
+          "width": 682,
+          "height": 795,
+          "right": 733,
+          "bottom": 900
+        },
+        "itemsHint": {
+          "visible": false,
+          "text": "Ниже ещё товарыПоказать следующие",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "itemRows": [
+          {
+            "top": 145,
+            "bottom": 264,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 264,
+            "bottom": 383,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 383,
+            "bottom": 502,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 502,
+            "bottom": 641,
+            "height": 139,
+            "intersection": 139,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 641,
+            "bottom": 760,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 760,
+            "bottom": 899,
+            "height": 139,
+            "intersection": 139,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 795,
+          "scrollHeight": 795,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 36,
+          "y": 900,
+          "width": 712,
+          "height": 54,
+          "right": 748,
+          "bottom": 954
+        },
+        "pagination": {
+          "x": 13,
+          "y": 1476,
+          "width": 998,
+          "height": 53,
+          "right": 1011,
+          "bottom": 1529
+        },
+        "confirm": {
+          "x": 606,
+          "y": 918,
+          "width": 142,
+          "height": 32,
+          "right": 748,
+          "bottom": 950
+        },
+        "workflow": {
+          "x": 1358,
+          "y": -1,
+          "width": 127,
+          "height": 32,
+          "right": 1485,
+          "bottom": 31
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 6,
+        "confirmHit": false,
+        "confirmInViewport": false,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": false
+        },
+        "horizontal": {
+          "available": true,
+          "atEnd": {
+            "scrollLeft": 539,
+            "maxScroll": 539,
+            "state": "end"
+          },
+          "returnedLeft": 0
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": false
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 600,
+          "clientHeight": 600,
+          "scrollHeight": 600,
+          "maxHeight": "600px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "desktop-1280",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 1280,
+          "scrollWidth": 1280,
+          "clientHeight": 720,
+          "scrollHeight": 720
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 1280,
+          "height": 720,
+          "right": 1280,
+          "bottom": 720
+        },
+        "sidebar": {
+          "x": 12,
+          "y": 12,
+          "width": 184,
+          "height": 696,
+          "right": 196,
+          "bottom": 708
+        },
+        "content": {
+          "x": 210,
+          "y": 46,
+          "width": 1058,
+          "height": 662,
+          "right": 1268,
+          "bottom": 708
+        },
+        "heading": {
+          "x": 278,
+          "y": 50,
+          "width": 489,
+          "height": 36,
+          "right": 767,
+          "bottom": 86
+        },
+        "toolbar": {
+          "x": 212,
+          "y": 114,
+          "width": 1054,
+          "height": 152,
+          "right": 1266,
+          "bottom": 266
+        },
+        "tablePanel": {
+          "x": 212,
+          "y": 274,
+          "width": 1054,
+          "height": 434,
+          "right": 1266,
+          "bottom": 708
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 1005,
+            "y": 125,
+            "width": 131,
+            "height": 32,
+            "right": 1136,
+            "bottom": 157
+          }
+        },
+        "registryHint": {
+          "visible": true,
+          "text": "Ниже ещё счета и заказы · Справа ещё статусы, корзина и действияПоказать остальныеПоказать статусы и действия",
+          "verticalVisible": true,
+          "horizontalVisible": true,
+          "verticalState": "more",
+          "horizontalState": "more",
+          "box": {
+            "x": 213,
+            "y": 624,
+            "width": 1052,
+            "height": 30,
+            "right": 1265,
+            "bottom": 654
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 1052,
+          "scrollWidth": 1537,
+          "clientHeight": 349,
+          "scrollHeight": 618,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 225,
+          "y": 329,
+          "width": 1038,
+          "height": 287,
+          "right": 1263,
+          "bottom": 616
+        },
+        "itemsViewport": {
+          "x": 236,
+          "y": 392,
+          "width": 1016,
+          "height": 129,
+          "right": 1252,
+          "bottom": 521
+        },
+        "itemsTable": {
+          "x": 251,
+          "y": 392,
+          "width": 986,
+          "height": 575,
+          "right": 1237,
+          "bottom": 967
+        },
+        "itemsHint": {
+          "visible": true,
+          "text": "Ниже ещё товары заказаПоказать следующие",
+          "box": {
+            "x": 235,
+            "y": 521,
+            "width": 1018,
+            "height": 30,
+            "right": 1253,
+            "bottom": 551
+          }
+        },
+        "itemRows": [
+          {
+            "top": 432,
+            "bottom": 521,
+            "height": 89,
+            "intersection": 89,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 521,
+            "bottom": 610,
+            "height": 89,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 610,
+            "bottom": 699,
+            "height": 89,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 699,
+            "bottom": 788,
+            "height": 89,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 788,
+            "bottom": 877,
+            "height": 89,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 877,
+            "bottom": 966,
+            "height": 89,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 129,
+          "scrollHeight": 575,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 236,
+          "y": 551,
+          "width": 1016,
+          "height": 54,
+          "right": 1252,
+          "bottom": 605
+        },
+        "pagination": {
+          "x": 213,
+          "y": 654,
+          "width": 1052,
+          "height": 53,
+          "right": 1265,
+          "bottom": 707
+        },
+        "confirm": {
+          "x": 1110,
+          "y": 569,
+          "width": 142,
+          "height": 32,
+          "right": 1252,
+          "bottom": 601
+        },
+        "workflow": {
+          "x": 1558,
+          "y": 286,
+          "width": 127,
+          "height": 32,
+          "right": 1685,
+          "bottom": 318
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 1,
+        "confirmHit": true,
+        "confirmInViewport": true,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": true,
+          "atEnd": {
+            "scrollTop": 269,
+            "maxScroll": 269,
+            "state": "end"
+          },
+          "returnedTop": 0
+        },
+        "horizontal": {
+          "available": true,
+          "atEnd": {
+            "scrollLeft": 485,
+            "maxScroll": 485,
+            "state": "end"
+          },
+          "returnedLeft": 0
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": true,
+          "atEnd": {
+            "steps": 4,
+            "scrollTop": 446,
+            "maxScroll": 446,
+            "state": "end",
+            "lastRowFullyVisible": true
+          },
+          "returnedTop": 0
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 720,
+          "clientHeight": 720,
+          "scrollHeight": 720,
+          "maxHeight": "720px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "desktop-1366",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 1366,
+          "height": 768
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 1366,
+          "scrollWidth": 1366,
+          "clientHeight": 768,
+          "scrollHeight": 768
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 1366,
+          "height": 768,
+          "right": 1366,
+          "bottom": 768
+        },
+        "sidebar": {
+          "x": 12,
+          "y": 12,
+          "width": 226,
+          "height": 744,
+          "right": 238,
+          "bottom": 756
+        },
+        "content": {
+          "x": 252,
+          "y": 46,
+          "width": 1102,
+          "height": 710,
+          "right": 1354,
+          "bottom": 756
+        },
+        "heading": {
+          "x": 320,
+          "y": 53,
+          "width": 489,
+          "height": 36,
+          "right": 809,
+          "bottom": 89
+        },
+        "toolbar": {
+          "x": 254,
+          "y": 124,
+          "width": 1098,
+          "height": 178,
+          "right": 1352,
+          "bottom": 302
+        },
+        "tablePanel": {
+          "x": 254,
+          "y": 314,
+          "width": 1098,
+          "height": 442,
+          "right": 1352,
+          "bottom": 756
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 1087,
+            "y": 139,
+            "width": 131,
+            "height": 32,
+            "right": 1218,
+            "bottom": 171
+          }
+        },
+        "registryHint": {
+          "visible": true,
+          "text": "Ниже ещё счета и заказы · Справа ещё статусы, корзина и действияПоказать остальныеПоказать статусы и действия",
+          "verticalVisible": true,
+          "horizontalVisible": true,
+          "verticalState": "more",
+          "horizontalState": "more",
+          "box": {
+            "x": 255,
+            "y": 668,
+            "width": 1096,
+            "height": 34,
+            "right": 1351,
+            "bottom": 702
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 1096,
+          "scrollWidth": 1537,
+          "clientHeight": 353,
+          "scrollHeight": 618,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 267,
+          "y": 369,
+          "width": 1076,
+          "height": 261,
+          "right": 1343,
+          "bottom": 630
+        },
+        "itemsViewport": {
+          "x": 278,
+          "y": 432,
+          "width": 1054,
+          "height": 99,
+          "right": 1332,
+          "bottom": 531
+        },
+        "itemsTable": {
+          "x": 293,
+          "y": 432,
+          "width": 1024,
+          "height": 395,
+          "right": 1317,
+          "bottom": 827
+        },
+        "itemsHint": {
+          "visible": true,
+          "text": "Ниже ещё товары заказаПоказать следующие",
+          "box": {
+            "x": 277,
+            "y": 531,
+            "width": 1056,
+            "height": 34,
+            "right": 1333,
+            "bottom": 565
+          }
+        },
+        "itemRows": [
+          {
+            "top": 472,
+            "bottom": 531,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 531,
+            "bottom": 590,
+            "height": 59,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 590,
+            "bottom": 649,
+            "height": 59,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 649,
+            "bottom": 708,
+            "height": 59,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 708,
+            "bottom": 767,
+            "height": 59,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 767,
+            "bottom": 826,
+            "height": 59,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 99,
+          "scrollHeight": 395,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 278,
+          "y": 565,
+          "width": 1054,
+          "height": 54,
+          "right": 1332,
+          "bottom": 619
+        },
+        "pagination": {
+          "x": 255,
+          "y": 702,
+          "width": 1096,
+          "height": 53,
+          "right": 1351,
+          "bottom": 755
+        },
+        "confirm": {
+          "x": 1190,
+          "y": 583,
+          "width": 142,
+          "height": 32,
+          "right": 1332,
+          "bottom": 615
+        },
+        "workflow": {
+          "x": 1600,
+          "y": 326,
+          "width": 127,
+          "height": 32,
+          "right": 1727,
+          "bottom": 358
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 1,
+        "confirmHit": true,
+        "confirmInViewport": true,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": true,
+          "atEnd": {
+            "scrollTop": 265,
+            "maxScroll": 265,
+            "state": "end"
+          },
+          "returnedTop": 0
+        },
+        "horizontal": {
+          "available": true,
+          "atEnd": {
+            "scrollLeft": 441,
+            "maxScroll": 441,
+            "state": "end"
+          },
+          "returnedLeft": 0
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": true,
+          "atEnd": {
+            "steps": 3,
+            "scrollTop": 296,
+            "maxScroll": 296,
+            "state": "end",
+            "lastRowFullyVisible": true
+          },
+          "returnedTop": 0
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 768,
+          "clientHeight": 768,
+          "scrollHeight": 768,
+          "maxHeight": "768px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "desktop-1440",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 1440,
+          "scrollWidth": 1440,
+          "clientHeight": 900,
+          "scrollHeight": 900
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 900,
+          "right": 1440,
+          "bottom": 900
+        },
+        "sidebar": {
+          "x": 12,
+          "y": 12,
+          "width": 226,
+          "height": 876,
+          "right": 238,
+          "bottom": 888
+        },
+        "content": {
+          "x": 252,
+          "y": 46,
+          "width": 1176,
+          "height": 842,
+          "right": 1428,
+          "bottom": 888
+        },
+        "heading": {
+          "x": 320,
+          "y": 53,
+          "width": 489,
+          "height": 36,
+          "right": 809,
+          "bottom": 89
+        },
+        "toolbar": {
+          "x": 254,
+          "y": 124,
+          "width": 1172,
+          "height": 178,
+          "right": 1426,
+          "bottom": 302
+        },
+        "tablePanel": {
+          "x": 254,
+          "y": 314,
+          "width": 1172,
+          "height": 574,
+          "right": 1426,
+          "bottom": 888
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 1161,
+            "y": 139,
+            "width": 131,
+            "height": 32,
+            "right": 1292,
+            "bottom": 171
+          }
+        },
+        "registryHint": {
+          "visible": true,
+          "text": "Ниже ещё счета и заказы · Справа ещё статусы, корзина и действияПоказать остальныеПоказать статусы и действия",
+          "verticalVisible": true,
+          "horizontalVisible": true,
+          "verticalState": "more",
+          "horizontalState": "more",
+          "box": {
+            "x": 255,
+            "y": 800,
+            "width": 1170,
+            "height": 34,
+            "right": 1425,
+            "bottom": 834
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 1170,
+          "scrollWidth": 1537,
+          "clientHeight": 485,
+          "scrollHeight": 618,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 267,
+          "y": 369,
+          "width": 1150,
+          "height": 379,
+          "right": 1417,
+          "bottom": 748
+        },
+        "itemsViewport": {
+          "x": 278,
+          "y": 432,
+          "width": 1128,
+          "height": 217,
+          "right": 1406,
+          "bottom": 649
+        },
+        "itemsTable": {
+          "x": 293,
+          "y": 432,
+          "width": 1098,
+          "height": 395,
+          "right": 1391,
+          "bottom": 827
+        },
+        "itemsHint": {
+          "visible": true,
+          "text": "Ниже ещё товары заказаПоказать следующие",
+          "box": {
+            "x": 277,
+            "y": 649,
+            "width": 1130,
+            "height": 34,
+            "right": 1407,
+            "bottom": 683
+          }
+        },
+        "itemRows": [
+          {
+            "top": 472,
+            "bottom": 531,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 531,
+            "bottom": 590,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 590,
+            "bottom": 649,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 649,
+            "bottom": 708,
+            "height": 59,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 708,
+            "bottom": 767,
+            "height": 59,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          },
+          {
+            "top": 767,
+            "bottom": 826,
+            "height": 59,
+            "intersection": 0,
+            "fullyVisible": false,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 217,
+          "scrollHeight": 395,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 278,
+          "y": 683,
+          "width": 1128,
+          "height": 54,
+          "right": 1406,
+          "bottom": 737
+        },
+        "pagination": {
+          "x": 255,
+          "y": 834,
+          "width": 1170,
+          "height": 53,
+          "right": 1425,
+          "bottom": 887
+        },
+        "confirm": {
+          "x": 1264,
+          "y": 701,
+          "width": 142,
+          "height": 32,
+          "right": 1406,
+          "bottom": 733
+        },
+        "workflow": {
+          "x": 1600,
+          "y": 326,
+          "width": 127,
+          "height": 32,
+          "right": 1727,
+          "bottom": 358
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 3,
+        "confirmHit": true,
+        "confirmInViewport": true,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": true,
+          "atEnd": {
+            "scrollTop": 133,
+            "maxScroll": 133,
+            "state": "end"
+          },
+          "returnedTop": 0
+        },
+        "horizontal": {
+          "available": true,
+          "atEnd": {
+            "scrollLeft": 367,
+            "maxScroll": 367,
+            "state": "end"
+          },
+          "returnedLeft": 0
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": true,
+          "atEnd": {
+            "steps": 1,
+            "scrollTop": 178,
+            "maxScroll": 178,
+            "state": "end",
+            "lastRowFullyVisible": true
+          },
+          "returnedTop": 0
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 900,
+          "clientHeight": 900,
+          "scrollHeight": 900,
+          "maxHeight": "900px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "desktop-1920",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 1920,
+          "scrollWidth": 1920,
+          "clientHeight": 1080,
+          "scrollHeight": 1080
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "right": 1920,
+          "bottom": 1080
+        },
+        "sidebar": {
+          "x": 12,
+          "y": 12,
+          "width": 226,
+          "height": 1056,
+          "right": 238,
+          "bottom": 1068
+        },
+        "content": {
+          "x": 252,
+          "y": 46,
+          "width": 1656,
+          "height": 1022,
+          "right": 1908,
+          "bottom": 1068
+        },
+        "heading": {
+          "x": 320,
+          "y": 53,
+          "width": 489,
+          "height": 36,
+          "right": 809,
+          "bottom": 89
+        },
+        "toolbar": {
+          "x": 254,
+          "y": 124,
+          "width": 1652,
+          "height": 178,
+          "right": 1906,
+          "bottom": 302
+        },
+        "tablePanel": {
+          "x": 254,
+          "y": 314,
+          "width": 1652,
+          "height": 754,
+          "right": 1906,
+          "bottom": 1068
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 1641,
+            "y": 139,
+            "width": 131,
+            "height": 32,
+            "right": 1772,
+            "bottom": 171
+          }
+        },
+        "registryHint": {
+          "visible": false,
+          "text": "Ниже ещё счета и заказыПоказать остальныеПоказать статусы и действия",
+          "verticalVisible": false,
+          "horizontalVisible": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 1650,
+          "scrollWidth": 1650,
+          "clientHeight": 699,
+          "scrollHeight": 699,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 267,
+          "y": 369,
+          "width": 1630,
+          "height": 523,
+          "right": 1897,
+          "bottom": 892
+        },
+        "itemsViewport": {
+          "x": 278,
+          "y": 432,
+          "width": 1608,
+          "height": 395,
+          "right": 1886,
+          "bottom": 827
+        },
+        "itemsTable": {
+          "x": 293,
+          "y": 432,
+          "width": 1578,
+          "height": 395,
+          "right": 1871,
+          "bottom": 827
+        },
+        "itemsHint": {
+          "visible": false,
+          "text": "Ниже ещё товарыПоказать следующие",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "itemRows": [
+          {
+            "top": 472,
+            "bottom": 531,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 531,
+            "bottom": 590,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 590,
+            "bottom": 649,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 649,
+            "bottom": 708,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 708,
+            "bottom": 767,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 767,
+            "bottom": 826,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 395,
+          "scrollHeight": 395,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 278,
+          "y": 827,
+          "width": 1608,
+          "height": 54,
+          "right": 1886,
+          "bottom": 881
+        },
+        "pagination": {
+          "x": 255,
+          "y": 1014,
+          "width": 1650,
+          "height": 53,
+          "right": 1905,
+          "bottom": 1067
+        },
+        "confirm": {
+          "x": 1744,
+          "y": 845,
+          "width": 142,
+          "height": 32,
+          "right": 1886,
+          "bottom": 877
+        },
+        "workflow": {
+          "x": 1701,
+          "y": 326,
+          "width": 127,
+          "height": 32,
+          "right": 1828,
+          "bottom": 358
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 6,
+        "confirmHit": true,
+        "confirmInViewport": true,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": false
+        },
+        "horizontal": {
+          "available": false
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": false
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 1080,
+          "clientHeight": 1080,
+          "scrollHeight": 1080,
+          "maxHeight": "1080px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "desktop-2560-wide",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 2560,
+          "height": 1080
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 2560,
+          "scrollWidth": 2560,
+          "clientHeight": 1080,
+          "scrollHeight": 1080
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 2560,
+          "height": 1080,
+          "right": 2560,
+          "bottom": 1080
+        },
+        "sidebar": {
+          "x": 12,
+          "y": 12,
+          "width": 226,
+          "height": 1056,
+          "right": 238,
+          "bottom": 1068
+        },
+        "content": {
+          "x": 252,
+          "y": 46,
+          "width": 2296,
+          "height": 1022,
+          "right": 2548,
+          "bottom": 1068
+        },
+        "heading": {
+          "x": 320,
+          "y": 53,
+          "width": 489,
+          "height": 36,
+          "right": 809,
+          "bottom": 89
+        },
+        "toolbar": {
+          "x": 254,
+          "y": 124,
+          "width": 2292,
+          "height": 178,
+          "right": 2546,
+          "bottom": 302
+        },
+        "tablePanel": {
+          "x": 254,
+          "y": 314,
+          "width": 2292,
+          "height": 754,
+          "right": 2546,
+          "bottom": 1068
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 2281,
+            "y": 139,
+            "width": 131,
+            "height": 32,
+            "right": 2412,
+            "bottom": 171
+          }
+        },
+        "registryHint": {
+          "visible": false,
+          "text": "Ниже ещё счета и заказыПоказать остальныеПоказать статусы и действия",
+          "verticalVisible": false,
+          "horizontalVisible": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 2290,
+          "scrollWidth": 2290,
+          "clientHeight": 699,
+          "scrollHeight": 699,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 267,
+          "y": 369,
+          "width": 2270,
+          "height": 523,
+          "right": 2537,
+          "bottom": 892
+        },
+        "itemsViewport": {
+          "x": 278,
+          "y": 432,
+          "width": 2248,
+          "height": 395,
+          "right": 2526,
+          "bottom": 827
+        },
+        "itemsTable": {
+          "x": 293,
+          "y": 432,
+          "width": 2218,
+          "height": 395,
+          "right": 2511,
+          "bottom": 827
+        },
+        "itemsHint": {
+          "visible": false,
+          "text": "Ниже ещё товарыПоказать следующие",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "itemRows": [
+          {
+            "top": 472,
+            "bottom": 531,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 531,
+            "bottom": 590,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 590,
+            "bottom": 649,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 649,
+            "bottom": 708,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 708,
+            "bottom": 767,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 767,
+            "bottom": 826,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 395,
+          "scrollHeight": 395,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 278,
+          "y": 827,
+          "width": 2248,
+          "height": 54,
+          "right": 2526,
+          "bottom": 881
+        },
+        "pagination": {
+          "x": 255,
+          "y": 1014,
+          "width": 2290,
+          "height": 53,
+          "right": 2545,
+          "bottom": 1067
+        },
+        "confirm": {
+          "x": 2384,
+          "y": 845,
+          "width": 142,
+          "height": 32,
+          "right": 2526,
+          "bottom": 877
+        },
+        "workflow": {
+          "x": 2257,
+          "y": 326,
+          "width": 127,
+          "height": 32,
+          "right": 2384,
+          "bottom": 358
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 6,
+        "confirmHit": true,
+        "confirmInViewport": true,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": false
+        },
+        "horizontal": {
+          "available": false
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": false
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 1080,
+          "clientHeight": 1080,
+          "scrollHeight": 1080,
+          "maxHeight": "1080px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "desktop-2560",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 2560,
+          "height": 1440
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 2560,
+          "scrollWidth": 2560,
+          "clientHeight": 1440,
+          "scrollHeight": 1440
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 2560,
+          "height": 1440,
+          "right": 2560,
+          "bottom": 1440
+        },
+        "sidebar": {
+          "x": 12,
+          "y": 12,
+          "width": 226,
+          "height": 1416,
+          "right": 238,
+          "bottom": 1428
+        },
+        "content": {
+          "x": 252,
+          "y": 46,
+          "width": 2296,
+          "height": 1382,
+          "right": 2548,
+          "bottom": 1428
+        },
+        "heading": {
+          "x": 320,
+          "y": 53,
+          "width": 489,
+          "height": 36,
+          "right": 809,
+          "bottom": 89
+        },
+        "toolbar": {
+          "x": 254,
+          "y": 124,
+          "width": 2292,
+          "height": 178,
+          "right": 2546,
+          "bottom": 302
+        },
+        "tablePanel": {
+          "x": 254,
+          "y": 314,
+          "width": 2292,
+          "height": 1114,
+          "right": 2546,
+          "bottom": 1428
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 2281,
+            "y": 139,
+            "width": 131,
+            "height": 32,
+            "right": 2412,
+            "bottom": 171
+          }
+        },
+        "registryHint": {
+          "visible": false,
+          "text": "Ниже ещё счета и заказыПоказать остальныеПоказать статусы и действия",
+          "verticalVisible": false,
+          "horizontalVisible": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 2290,
+          "scrollWidth": 2290,
+          "clientHeight": 1059,
+          "scrollHeight": 1059,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 267,
+          "y": 369,
+          "width": 2270,
+          "height": 523,
+          "right": 2537,
+          "bottom": 892
+        },
+        "itemsViewport": {
+          "x": 278,
+          "y": 432,
+          "width": 2248,
+          "height": 395,
+          "right": 2526,
+          "bottom": 827
+        },
+        "itemsTable": {
+          "x": 293,
+          "y": 432,
+          "width": 2218,
+          "height": 395,
+          "right": 2511,
+          "bottom": 827
+        },
+        "itemsHint": {
+          "visible": false,
+          "text": "Ниже ещё товарыПоказать следующие",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "itemRows": [
+          {
+            "top": 472,
+            "bottom": 531,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 531,
+            "bottom": 590,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 590,
+            "bottom": 649,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 649,
+            "bottom": 708,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 708,
+            "bottom": 767,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 767,
+            "bottom": 826,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 395,
+          "scrollHeight": 395,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 278,
+          "y": 827,
+          "width": 2248,
+          "height": 54,
+          "right": 2526,
+          "bottom": 881
+        },
+        "pagination": {
+          "x": 255,
+          "y": 1374,
+          "width": 2290,
+          "height": 53,
+          "right": 2545,
+          "bottom": 1427
+        },
+        "confirm": {
+          "x": 2384,
+          "y": 845,
+          "width": 142,
+          "height": 32,
+          "right": 2526,
+          "bottom": 877
+        },
+        "workflow": {
+          "x": 2257,
+          "y": 326,
+          "width": 127,
+          "height": 32,
+          "right": 2384,
+          "bottom": 358
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 6,
+        "confirmHit": true,
+        "confirmInViewport": true,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": false
+        },
+        "horizontal": {
+          "available": false
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": false
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 1440,
+          "clientHeight": 1440,
+          "scrollHeight": 1440,
+          "maxHeight": "1440px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "desktop-3440",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 3440,
+          "height": 1440
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 3440,
+          "scrollWidth": 3440,
+          "clientHeight": 1440,
+          "scrollHeight": 1440
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 3440,
+          "height": 1440,
+          "right": 3440,
+          "bottom": 1440
+        },
+        "sidebar": {
+          "x": 12,
+          "y": 12,
+          "width": 226,
+          "height": 1416,
+          "right": 238,
+          "bottom": 1428
+        },
+        "content": {
+          "x": 252,
+          "y": 46,
+          "width": 3176,
+          "height": 1382,
+          "right": 3428,
+          "bottom": 1428
+        },
+        "heading": {
+          "x": 320,
+          "y": 53,
+          "width": 489,
+          "height": 36,
+          "right": 809,
+          "bottom": 89
+        },
+        "toolbar": {
+          "x": 254,
+          "y": 124,
+          "width": 3172,
+          "height": 178,
+          "right": 3426,
+          "bottom": 302
+        },
+        "tablePanel": {
+          "x": 254,
+          "y": 314,
+          "width": 3172,
+          "height": 1114,
+          "right": 3426,
+          "bottom": 1428
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 3161,
+            "y": 139,
+            "width": 131,
+            "height": 32,
+            "right": 3292,
+            "bottom": 171
+          }
+        },
+        "registryHint": {
+          "visible": false,
+          "text": "Ниже ещё счета и заказыПоказать остальныеПоказать статусы и действия",
+          "verticalVisible": false,
+          "horizontalVisible": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 3170,
+          "scrollWidth": 3170,
+          "clientHeight": 1059,
+          "scrollHeight": 1059,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 267,
+          "y": 369,
+          "width": 3150,
+          "height": 523,
+          "right": 3417,
+          "bottom": 892
+        },
+        "itemsViewport": {
+          "x": 278,
+          "y": 432,
+          "width": 3128,
+          "height": 395,
+          "right": 3406,
+          "bottom": 827
+        },
+        "itemsTable": {
+          "x": 293,
+          "y": 432,
+          "width": 3098,
+          "height": 395,
+          "right": 3391,
+          "bottom": 827
+        },
+        "itemsHint": {
+          "visible": false,
+          "text": "Ниже ещё товарыПоказать следующие",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "itemRows": [
+          {
+            "top": 472,
+            "bottom": 531,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 531,
+            "bottom": 590,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 590,
+            "bottom": 649,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 649,
+            "bottom": 708,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 708,
+            "bottom": 767,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 767,
+            "bottom": 826,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 395,
+          "scrollHeight": 395,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 278,
+          "y": 827,
+          "width": 3128,
+          "height": 54,
+          "right": 3406,
+          "bottom": 881
+        },
+        "pagination": {
+          "x": 255,
+          "y": 1374,
+          "width": 3170,
+          "height": 53,
+          "right": 3425,
+          "bottom": 1427
+        },
+        "confirm": {
+          "x": 3264,
+          "y": 845,
+          "width": 142,
+          "height": 32,
+          "right": 3406,
+          "bottom": 877
+        },
+        "workflow": {
+          "x": 3021,
+          "y": 326,
+          "width": 127,
+          "height": 32,
+          "right": 3148,
+          "bottom": 358
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 6,
+        "confirmHit": true,
+        "confirmInViewport": true,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": false
+        },
+        "horizontal": {
+          "available": false
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": false
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 1440,
+          "clientHeight": 1440,
+          "scrollHeight": 1440,
+          "maxHeight": "1440px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "desktop-3840",
+      "mobile": false,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 3840,
+          "height": 2160
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 3840,
+          "scrollWidth": 3840,
+          "clientHeight": 2160,
+          "scrollHeight": 2160
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 3840,
+          "height": 2160,
+          "right": 3840,
+          "bottom": 2160
+        },
+        "sidebar": {
+          "x": 12,
+          "y": 12,
+          "width": 226,
+          "height": 2136,
+          "right": 238,
+          "bottom": 2148
+        },
+        "content": {
+          "x": 252,
+          "y": 46,
+          "width": 3576,
+          "height": 2102,
+          "right": 3828,
+          "bottom": 2148
+        },
+        "heading": {
+          "x": 320,
+          "y": 53,
+          "width": 489,
+          "height": 36,
+          "right": 809,
+          "bottom": 89
+        },
+        "toolbar": {
+          "x": 254,
+          "y": 124,
+          "width": 3572,
+          "height": 178,
+          "right": 3826,
+          "bottom": 302
+        },
+        "tablePanel": {
+          "x": 254,
+          "y": 314,
+          "width": 3572,
+          "height": 1834,
+          "right": 3826,
+          "bottom": 2148
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 3561,
+            "y": 139,
+            "width": 131,
+            "height": 32,
+            "right": 3692,
+            "bottom": 171
+          }
+        },
+        "registryHint": {
+          "visible": false,
+          "text": "Ниже ещё счета и заказыПоказать остальныеПоказать статусы и действия",
+          "verticalVisible": false,
+          "horizontalVisible": false,
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 3570,
+          "scrollWidth": 3570,
+          "clientHeight": 1779,
+          "scrollHeight": 1779,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 267,
+          "y": 467,
+          "width": 3550,
+          "height": 523,
+          "right": 3817,
+          "bottom": 990
+        },
+        "itemsViewport": {
+          "x": 278,
+          "y": 530,
+          "width": 3528,
+          "height": 395,
+          "right": 3806,
+          "bottom": 925
+        },
+        "itemsTable": {
+          "x": 293,
+          "y": 530,
+          "width": 3498,
+          "height": 395,
+          "right": 3791,
+          "bottom": 925
+        },
+        "itemsHint": {
+          "visible": false,
+          "text": "Ниже ещё товарыПоказать следующие",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "itemRows": [
+          {
+            "top": 570,
+            "bottom": 629,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 629,
+            "bottom": 688,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 688,
+            "bottom": 747,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 747,
+            "bottom": 806,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 806,
+            "bottom": 865,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 865,
+            "bottom": 924,
+            "height": 59,
+            "intersection": 59,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 395,
+          "scrollHeight": 395,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 278,
+          "y": 925,
+          "width": 3528,
+          "height": 54,
+          "right": 3806,
+          "bottom": 979
+        },
+        "pagination": {
+          "x": 255,
+          "y": 2094,
+          "width": 3570,
+          "height": 53,
+          "right": 3825,
+          "bottom": 2147
+        },
+        "confirm": {
+          "x": 3664,
+          "y": 943,
+          "width": 142,
+          "height": 32,
+          "right": 3806,
+          "bottom": 975
+        },
+        "workflow": {
+          "x": 3369,
+          "y": 424,
+          "width": 127,
+          "height": 32,
+          "right": 3496,
+          "bottom": 456
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 6,
+        "confirmHit": true,
+        "confirmInViewport": true,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": false
+        },
+        "horizontal": {
+          "available": false
+        }
+      },
+      "interaction": {
+        "itemScroll": {
+          "available": false
+        },
+        "confirmReachable": true,
+        "quantityChanged": true,
+        "drawer": {
+          "title": "Редактировать товар",
+          "width": 384,
+          "height": 2160,
+          "clientHeight": 2160,
+          "scrollHeight": 2160,
+          "maxHeight": "2160px",
+          "overflowY": "hidden",
+          "rightGap": 0,
+          "visible": true,
+          "initialFocus": "edit-product"
+        },
+        "escapeReturnFocus": true,
+        "outsideClose": true,
+        "outsideReturnFocus": true,
+        "workflowText": "КОРЗИНА AROMA\nНе запрошена\nПРИВЯЗКА К СЧЁТУ\nБез счёта\nСТАТУС СЧЁТА\nЧерновики\nОПЛАТА\nОплата не запрошена\n\nСчёт группирует заказы. Товары изменяются только внутри выбранного заказа.",
+        "workflowContainsInvoice": true,
+        "workflowContainsPayment": true,
+        "productSearchRows": 1,
+        "invoiceSearchOrders": 2,
+        "invoiceSearchGroups": 1,
+        "customerSearchRows": 1
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "mobile-375",
+      "mobile": true,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 375,
+          "height": 812
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 375,
+          "scrollWidth": 375,
+          "clientHeight": 812,
+          "scrollHeight": 1648
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 375,
+          "height": 1648,
+          "right": 375,
+          "bottom": 1648
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "right": 0,
+          "bottom": 0
+        },
+        "content": {
+          "x": 10,
+          "y": 162,
+          "width": 355,
+          "height": 1476,
+          "right": 365,
+          "bottom": 1638
+        },
+        "heading": {
+          "x": 72,
+          "y": 167,
+          "width": 289,
+          "height": 36,
+          "right": 361,
+          "bottom": 203
+        },
+        "toolbar": {
+          "x": 10,
+          "y": 290,
+          "width": 355,
+          "height": 520,
+          "right": 365,
+          "bottom": 810
+        },
+        "tablePanel": {
+          "x": 10,
+          "y": 822,
+          "width": 355,
+          "height": 816,
+          "right": 365,
+          "bottom": 1638
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 190,
+            "y": 337,
+            "width": 131,
+            "height": 32,
+            "right": 321,
+            "bottom": 369
+          }
+        },
+        "registryHint": {
+          "visible": true,
+          "text": "Справа ещё статусы, корзина и действияК началу спискаПоказать статусы и действия",
+          "verticalVisible": false,
+          "horizontalVisible": true,
+          "verticalState": "end",
+          "horizontalState": "more",
+          "box": {
+            "x": 11,
+            "y": 1441,
+            "width": 353,
+            "height": 57,
+            "right": 364,
+            "bottom": 1498
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 353,
+          "scrollWidth": 1537,
+          "clientHeight": 618,
+          "scrollHeight": 618,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 23,
+          "y": 139,
+          "width": 321,
+          "height": 1044,
+          "right": 344,
+          "bottom": 1183
+        },
+        "itemsViewport": {
+          "x": 34,
+          "y": 272,
+          "width": 299,
+          "height": 815,
+          "right": 333,
+          "bottom": 1087
+        },
+        "itemsTable": {
+          "x": 49,
+          "y": 272,
+          "width": 598,
+          "height": 815,
+          "right": 647,
+          "bottom": 1087
+        },
+        "itemsHint": {
+          "visible": false,
+          "text": "Ниже ещё товарыПоказать следующие",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "itemRows": [
+          {
+            "top": 312,
+            "bottom": 431,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 431,
+            "bottom": 550,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 550,
+            "bottom": 669,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 669,
+            "bottom": 808,
+            "height": 139,
+            "intersection": 139,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 808,
+            "bottom": 947,
+            "height": 139,
+            "intersection": 139,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 947,
+            "bottom": 1086,
+            "height": 139,
+            "intersection": 139,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 815,
+          "scrollHeight": 815,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 34,
+          "y": 1087,
+          "width": 299,
+          "height": 85,
+          "right": 333,
+          "bottom": 1172
+        },
+        "pagination": {
+          "x": 11,
+          "y": 1717,
+          "width": 353,
+          "height": 139,
+          "right": 364,
+          "bottom": 1856
+        },
+        "confirm": {
+          "x": 125,
+          "y": 1140,
+          "width": 142,
+          "height": 32,
+          "right": 267,
+          "bottom": 1172
+        },
+        "workflow": {
+          "x": 1356,
+          "y": 96,
+          "width": 127,
+          "height": 32,
+          "right": 1483,
+          "bottom": 128
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 6,
+        "confirmHit": false,
+        "confirmInViewport": false,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": false
+        },
+        "horizontal": {
+          "available": true,
+          "atEnd": {
+            "scrollLeft": 1184,
+            "maxScroll": 1184,
+            "state": "end"
+          },
+          "returnedLeft": 0
+        }
+      },
+      "mobileState": {
+        "documentHorizontalOverflow": 0,
+        "tableHorizontalOverflow": 1184,
+        "bodyOverflowX": "auto",
+        "activeElement": "BUTTON"
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    },
+    {
+      "label": "mobile-430",
+      "mobile": true,
+      "httpStatus": 200,
+      "initial": {
+        "viewport": {
+          "width": 430,
+          "height": 932
+        },
+        "scrollPosition": {
+          "x": 0,
+          "y": 0
+        },
+        "document": {
+          "clientWidth": 430,
+          "scrollWidth": 430,
+          "clientHeight": 932,
+          "scrollHeight": 1512
+        },
+        "shell": {
+          "x": 0,
+          "y": 0,
+          "width": 430,
+          "height": 1512,
+          "right": 430,
+          "bottom": 1512
+        },
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "right": 0,
+          "bottom": 0
+        },
+        "content": {
+          "x": 10,
+          "y": 162,
+          "width": 410,
+          "height": 1340,
+          "right": 420,
+          "bottom": 1502
+        },
+        "heading": {
+          "x": 72,
+          "y": 167,
+          "width": 344,
+          "height": 36,
+          "right": 416,
+          "bottom": 203
+        },
+        "toolbar": {
+          "x": 10,
+          "y": 290,
+          "width": 410,
+          "height": 384,
+          "right": 420,
+          "bottom": 674
+        },
+        "tablePanel": {
+          "x": 10,
+          "y": 686,
+          "width": 410,
+          "height": 816,
+          "right": 420,
+          "bottom": 1502
+        },
+        "invoiceGroups": 5,
+        "rows": 6,
+        "clippedKeyText": [],
+        "typography": {
+          "bodyFamily": "\"Inter Variable\", Inter, system-ui, sans-serif",
+          "bodySize": "14px",
+          "bodyLineHeight": "20px",
+          "headingFamily": "\"Manrope Variable\", Manrope, system-ui, sans-serif",
+          "headingSize": "28px"
+        },
+        "fonts": {
+          "status": "loaded",
+          "inter": true,
+          "manrope": true
+        },
+        "surface": {
+          "toolbarRadius": "14px",
+          "primaryRadius": "8px",
+          "primaryTarget": {
+            "x": 190,
+            "y": 337,
+            "width": 131,
+            "height": 32,
+            "right": 321,
+            "bottom": 369
+          }
+        },
+        "registryHint": {
+          "visible": true,
+          "text": "Справа ещё статусы, корзина и действияК началу спискаПоказать статусы и действия",
+          "verticalVisible": false,
+          "horizontalVisible": true,
+          "verticalState": "end",
+          "horizontalState": "more",
+          "box": {
+            "x": 11,
+            "y": 1305,
+            "width": 408,
+            "height": 57,
+            "right": 419,
+            "bottom": 1362
+          }
+        },
+        "tableScroll": {
+          "clientWidth": 408,
+          "scrollWidth": 1537,
+          "clientHeight": 618,
+          "scrollHeight": 618,
+          "overflowX": "auto",
+          "overflowY": "auto"
+        }
+      },
+      "expanded": {
+        "panel": {
+          "x": 23,
+          "y": 259,
+          "width": 376,
+          "height": 1044,
+          "right": 399,
+          "bottom": 1303
+        },
+        "itemsViewport": {
+          "x": 34,
+          "y": 392,
+          "width": 354,
+          "height": 815,
+          "right": 388,
+          "bottom": 1207
+        },
+        "itemsTable": {
+          "x": 49,
+          "y": 392,
+          "width": 598,
+          "height": 815,
+          "right": 647,
+          "bottom": 1207
+        },
+        "itemsHint": {
+          "visible": false,
+          "text": "Ниже ещё товарыПоказать следующие",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "right": 0,
+            "bottom": 0
+          }
+        },
+        "itemRows": [
+          {
+            "top": 432,
+            "bottom": 551,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 551,
+            "bottom": 670,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 670,
+            "bottom": 789,
+            "height": 119,
+            "intersection": 119,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 789,
+            "bottom": 928,
+            "height": 139,
+            "intersection": 139,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 928,
+            "bottom": 1067,
+            "height": 139,
+            "intersection": 139,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          },
+          {
+            "top": 1067,
+            "bottom": 1206,
+            "height": 139,
+            "intersection": 139,
+            "fullyVisible": true,
+            "partiallyVisible": false
+          }
+        ],
+        "itemScroll": {
+          "clientHeight": 815,
+          "scrollHeight": 815,
+          "scrollTop": 0
+        },
+        "footer": {
+          "x": 34,
+          "y": 1207,
+          "width": 354,
+          "height": 85,
+          "right": 388,
+          "bottom": 1292
+        },
+        "pagination": {
+          "x": 11,
+          "y": 1837,
+          "width": 408,
+          "height": 139,
+          "right": 419,
+          "bottom": 1976
+        },
+        "confirm": {
+          "x": 125,
+          "y": 1260,
+          "width": 142,
+          "height": 32,
+          "right": 267,
+          "bottom": 1292
+        },
+        "workflow": {
+          "x": 1356,
+          "y": 216,
+          "width": 127,
+          "height": 32,
+          "right": 1483,
+          "bottom": 248
+        },
+        "footerContained": true,
+        "panelInsideRegistry": true,
+        "footerPaginationOverlap": 0,
+        "itemFooterOverlap": 0,
+        "partialItemRows": 0,
+        "fullyVisibleItemRows": 6,
+        "confirmHit": false,
+        "confirmInViewport": false,
+        "ariaExpanded": "true"
+      },
+      "registryScroll": {
+        "vertical": {
+          "available": false
+        },
+        "horizontal": {
+          "available": true,
+          "atEnd": {
+            "scrollLeft": 1129,
+            "maxScroll": 1129,
+            "state": "end"
+          },
+          "returnedLeft": 0
+        }
+      },
+      "mobileState": {
+        "documentHorizontalOverflow": 0,
+        "tableHorizontalOverflow": 1129,
+        "bodyOverflowX": "auto",
+        "activeElement": "BUTTON"
+      },
+      "network": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failures": [],
+        "badResponses": [],
+        "external": []
+      }
+    }
+  ],
+  "resizeEvidence": [
+    {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "document": {
+        "clientWidth": 1280,
+        "scrollWidth": 1280,
+        "clientHeight": 720,
+        "scrollHeight": 720
+      },
+      "tablePanel": {
+        "top": 274,
+        "bottom": 708,
+        "height": 434
+      },
+      "registry": {
+        "clientWidth": 1052,
+        "scrollWidth": 1537,
+        "clientHeight": 349,
+        "scrollHeight": 618,
+        "hintVisible": true
+      }
+    },
+    {
+      "viewport": {
+        "width": 2560,
+        "height": 1080
+      },
+      "document": {
+        "clientWidth": 2560,
+        "scrollWidth": 2560,
+        "clientHeight": 1080,
+        "scrollHeight": 1080
+      },
+      "tablePanel": {
+        "top": 314,
+        "bottom": 1068,
+        "height": 754
+      },
+      "registry": {
+        "clientWidth": 2290,
+        "scrollWidth": 2290,
+        "clientHeight": 699,
+        "scrollHeight": 699,
+        "hintVisible": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 2560,
+        "height": 1440
+      },
+      "document": {
+        "clientWidth": 2560,
+        "scrollWidth": 2560,
+        "clientHeight": 1440,
+        "scrollHeight": 1440
+      },
+      "tablePanel": {
+        "top": 314,
+        "bottom": 1428,
+        "height": 1114
+      },
+      "registry": {
+        "clientWidth": 2290,
+        "scrollWidth": 2290,
+        "clientHeight": 1059,
+        "scrollHeight": 1059,
+        "hintVisible": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 3440,
+        "height": 1440
+      },
+      "document": {
+        "clientWidth": 3440,
+        "scrollWidth": 3440,
+        "clientHeight": 1440,
+        "scrollHeight": 1440
+      },
+      "tablePanel": {
+        "top": 314,
+        "bottom": 1428,
+        "height": 1114
+      },
+      "registry": {
+        "clientWidth": 3170,
+        "scrollWidth": 3170,
+        "clientHeight": 1059,
+        "scrollHeight": 1059,
+        "hintVisible": false
+      }
+    },
+    {
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "document": {
+        "clientWidth": 1024,
+        "scrollWidth": 1024,
+        "clientHeight": 600,
+        "scrollHeight": 1147
+      },
+      "tablePanel": {
+        "top": 430,
+        "bottom": 1137,
+        "height": 707
+      },
+      "registry": {
+        "clientWidth": 998,
+        "scrollWidth": 1537,
+        "clientHeight": 618,
+        "scrollHeight": 618,
+        "hintVisible": true
+      }
+    },
+    {
+      "viewport": {
+        "width": 3840,
+        "height": 2160
+      },
+      "document": {
+        "clientWidth": 3840,
+        "scrollWidth": 3840,
+        "clientHeight": 2160,
+        "scrollHeight": 2160
+      },
+      "tablePanel": {
+        "top": 314,
+        "bottom": 2148,
+        "height": 1834
+      },
+      "registry": {
+        "clientWidth": 3570,
+        "scrollWidth": 3570,
+        "clientHeight": 1779,
+        "scrollHeight": 1779,
+        "hintVisible": false
+      }
+    }
+  ],
+  "defects": []
+}

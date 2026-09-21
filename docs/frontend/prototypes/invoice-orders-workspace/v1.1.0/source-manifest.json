@@ -1,0 +1,213 @@
+{
+  "sourceRepository": "https://github.com/YurGusev/CoffeeOrderSystem",
+  "branch": "develop",
+  "commit": "3d4b30b1eaac14c77f41d8779f5e03c54cfacbef",
+  "snapshotRoot": "sources/legacy-presentation",
+  "bundle": "exact-source.css",
+  "verification": "self-contained snapshots plus embedded font bytes",
+  "files": [
+    {
+      "path": "app/styles/tokens.css",
+      "sha256": "53f6217b7f552db075fe4112ff35c8e9d4ca956c6e6b6df6a9f2275eea9f518e",
+      "mode": "verbatim"
+    },
+    {
+      "path": "app/styles/global.css",
+      "sha256": "c6321333f43aa1eef75200b384c2b69610a2bc55c3db8d95840543809ff5b565",
+      "mode": "verbatim"
+    },
+    {
+      "path": "app/shell/OperatorShell.module.css",
+      "sha256": "341e8d677bbead5db4bfe4071502d10c2b4cf15ffa5bbd887da9cb5d21361fda",
+      "mode": "class names namespaced only",
+      "prefix": "operator-shell",
+      "classCount": 35
+    },
+    {
+      "path": "shared/ui/AppLogo.module.css",
+      "sha256": "53989e31ba264edb0eb4ebd9ef0de85bf1c21581c8aba61d051f90615a94ff5e",
+      "mode": "class names namespaced only",
+      "prefix": "app-logo",
+      "classCount": 6
+    },
+    {
+      "path": "features/orders/components/OrdersWorkspace.module.css",
+      "sha256": "d5616f7ebc2805ef9ad6431d16b4b644bfa8824f6aa8fd706e5dab45dcde552a",
+      "mode": "class names namespaced only",
+      "prefix": "orders-workspace",
+      "classCount": 53
+    },
+    {
+      "path": "features/orders/components/OrdersTable.module.css",
+      "sha256": "25a81ad64ddd1784ccd63d93da6c0b99bb7f83cde599b4788214503ca0af8868",
+      "mode": "class names namespaced only",
+      "prefix": "orders-table",
+      "classCount": 44
+    },
+    {
+      "path": "features/orders/components/OrdersFiniteVariants.module.css",
+      "sha256": "8e8d7169b21f878db1c6c181d375eb4e4a18edc874662fec0fac643a47e6a344",
+      "mode": "class names namespaced only",
+      "prefix": "orders-finite",
+      "classCount": 60
+    },
+    {
+      "path": "shared/ui/action.module.css",
+      "sha256": "6c725e4071a4ee490c84bc68ea529e418e06af5f4655028bdd97658e88ececac",
+      "mode": "class names namespaced only",
+      "prefix": "ui-action",
+      "classCount": 5
+    },
+    {
+      "path": "shared/ui/layout.module.css",
+      "sha256": "07efad4abe3df0110dbd323336da84d040dc58bc0106034ea8862934bc6d9ac6",
+      "mode": "class names namespaced only",
+      "prefix": "ui-layout",
+      "classCount": 4
+    },
+    {
+      "path": "shared/ui/text.module.css",
+      "sha256": "1da6073b26c17426bb190aa00ee7b5dafc69f02b6e174f70018f860e1f349c75",
+      "mode": "class names namespaced only",
+      "prefix": "ui-text",
+      "classCount": 5
+    },
+    {
+      "path": "shared/ui/status.module.css",
+      "sha256": "0678a5b2279e9c3fb5a2251657917e42af0d4f30c27c3336093f4bdeee9d0547",
+      "mode": "class names namespaced only",
+      "prefix": "ui-status",
+      "classCount": 3
+    },
+    {
+      "path": "shared/ui/overlay.module.css",
+      "sha256": "e66f10cf8dc88aa6620ae8ce2525e4b0424073c2000cd43918815410d92ef243",
+      "mode": "class names namespaced only",
+      "prefix": "ui-overlay",
+      "classCount": 21
+    },
+    {
+      "path": "shared/ui/field.module.css",
+      "sha256": "2a4606d28e993fcb6ab33cd9b0a5375d9e65c622758288d4df3e5c39d2b2af4b",
+      "mode": "class names namespaced only",
+      "prefix": "ui-field",
+      "classCount": 13
+    },
+    {
+      "path": "shared/ui/select.module.css",
+      "sha256": "a05c4d1c3ba4098c580ff935b6488de358cad45643e42c0a96e2b39c18467ba3",
+      "mode": "class names namespaced only",
+      "prefix": "ui-select",
+      "classCount": 12
+    },
+    {
+      "path": "shared/ui/dialog.module.css",
+      "sha256": "ad26c821606f207200718703ae0b561873216568eb6ef8c8fbda869137218199",
+      "mode": "class names namespaced only",
+      "prefix": "ui-dialog",
+      "classCount": 10
+    },
+    {
+      "path": "shared/ui/scrollArea.module.css",
+      "sha256": "916cd2a25b4ef3e1c193d13ad0ddaaa519f5b5c57478a007563446f7ee51c703",
+      "mode": "class names namespaced only",
+      "prefix": "ui-scroll",
+      "classCount": 1
+    }
+  ],
+  "fontFiles": [
+    {
+      "family": "Inter",
+      "path": "./files/inter-cyrillic-ext-wght-normal.woff2",
+      "sha256": "ca157063339ac4ad418f214f3abfed119b0798ab4d377386ce5c9e5a7a435ebd",
+      "bytes": 25960,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Inter",
+      "path": "./files/inter-cyrillic-wght-normal.woff2",
+      "sha256": "71d5ee93cc1e9f1d520a3a8b66456de18c7879d8df09d57fcd2eaff75fef0075",
+      "bytes": 18748,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Inter",
+      "path": "./files/inter-greek-ext-wght-normal.woff2",
+      "sha256": "6e9e020a25f9b56d418f2c085b1d3c09725a4da23fe693a5b463064606732190",
+      "bytes": 11232,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Inter",
+      "path": "./files/inter-greek-wght-normal.woff2",
+      "sha256": "1be3448e292fbf05ffe176fe1e43f135013d50b1e7d324ad1a558f623d3bb6f6",
+      "bytes": 18996,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Inter",
+      "path": "./files/inter-vietnamese-wght-normal.woff2",
+      "sha256": "5c66f9e07e90c6d4ac4922cc68d60de26c17b1858e677fb5e603fce3952b3ff2",
+      "bytes": 10252,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Inter",
+      "path": "./files/inter-latin-ext-wght-normal.woff2",
+      "sha256": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956",
+      "bytes": 85068,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Inter",
+      "path": "./files/inter-latin-wght-normal.woff2",
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "bytes": 48256,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Manrope",
+      "path": "./files/manrope-cyrillic-ext-wght-normal.woff2",
+      "sha256": "de37de877dc17e4577341fa68bb5cb526b53d54cb29721e674208546a3c7849d",
+      "bytes": 2552,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Manrope",
+      "path": "./files/manrope-cyrillic-wght-normal.woff2",
+      "sha256": "c268b459a9329e59fecf39a17618efd44c71735532048d60b12aab76a8c14914",
+      "bytes": 14500,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Manrope",
+      "path": "./files/manrope-greek-wght-normal.woff2",
+      "sha256": "2fb2e8cbfd52ae46179a8b6024eb162f1f9c6de3d22d6e3a30d8f395de7220be",
+      "bytes": 9444,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Manrope",
+      "path": "./files/manrope-vietnamese-wght-normal.woff2",
+      "sha256": "6bbb044ab420e07edb0a3042d2eb314b85e83a0182e945a15ab3b9092668dfd5",
+      "bytes": 8520,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Manrope",
+      "path": "./files/manrope-latin-ext-wght-normal.woff2",
+      "sha256": "3911b66d9f2e005a4b989223405d0e5032619c668597ba467cc76a23c8fffcfb",
+      "bytes": 15120,
+      "version": "5.3.0"
+    },
+    {
+      "family": "Manrope",
+      "path": "./files/manrope-latin-wght-normal.woff2",
+      "sha256": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+      "bytes": 24836,
+      "version": "5.3.0"
+    }
+  ],
+  "bundleSha256": "cbb71de6a4892ac04049b62599884f4acf7e51f47ac886cada172dd57fc4cff8",
+  "note": "CSS declarations are source-exact; local CSS Module class selectors are deterministically namespaced only."
+}
