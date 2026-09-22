@@ -1,0 +1,126 @@
+issue: 144
+baseCommit: 4b2cad1dab30af66ad0b2fe64da280222e506574
+status: ready-for-review
+scope: Только архитектурный атлас и его read-only проверка; не business delivery
+inputs:
+- issue: 10
+  acceptedMergeCommit: 4b2cad1dab30af66ad0b2fe64da280222e506574
+  artifact: evidence/handoffs/issue-10.yaml
+  sha256: 4d23f7ca941bbfbe3d02505a887d6750babfd04ed7ced7b398ccd46fdad67b37
+outputs:
+- artifact: docs/architecture/01_Границы и runtime.md
+  sha256: e972231c2c70a4186f99543a6b5ec89feb8c61a431b6dc24763e859081cd2b11
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/02_Бизнес-сценарии.md
+  sha256: a370a96aeeffb4385f6865ac4e525d3ccb96a149e30059673d05e2a97bf712af
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/03_Данные и владение.md
+  sha256: 2c004ec8363f4e56d4b3651768608bf602beed6d08867b7e393928916f0f1e56
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/04_Схема PostgreSQL.md
+  sha256: f079306addafb194da7b10565c07312a450ff059800abbafddd1fb1caa0c447c
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/05_HTTP и события.md
+  sha256: a08baa9f0b2a8b6eb8f386cff8fb780b3d4e149a1191d3b4b8e0ab1bd8dd0538
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/06_Frontend и каналы.md
+  sha256: 491f101974e6ef9fe9fb8d14ef7e68e379b09c0f1e4bf3dea7d1a422557c9d3d
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/07_AROMA протокол.md
+  sha256: a68fe4610ccd22ae4739a0423d4c24b0ee9232e80ffee80544d6789a36cb3e37
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/08_AROMA сходимость.md
+  sha256: f45dbf648f06aceaa4db5b40aaf0ec8d78e8ca836c6a3108dc783dfba2264a31
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/09_Инфраструктура и безопасность.md
+  sha256: ed30630a8866742e025dbdbdd8ae14d31be679965e13393f28ee1e1ba29e4142
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/10_Надёжность и приёмка.md
+  sha256: e320ca816d065661aa65cc2aa9124e1086069079a29c4ad2dbf95d8e9b171e22
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/11_Источники и проверка.md
+  sha256: b6d6ae72790277f8a5dc1a6dadcc89d410ed22175cf6887888c9dd34dfde95d9
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/12_Расхождения и незавершённое.md
+  sha256: f68dce2a8fb52da92188687fb125ba4580c2cd79adefc420d23026dfa20cf87e
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/README.md
+  sha256: 51f1bface8895d3e64844ee944d9f3d31b486656cae8e39d04878b2fc869e1a2
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/contract-inventory.json
+  sha256: 1f36aec4b9353f822be4d070e901809488ed2b948811e755391983f3d36f75f8
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/mermaid-result.json
+  sha256: 7b2640936ab74a3e4332d2e6df01ee215f842c95cbc7549a18844198128fd99a
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/schema-inventory.json
+  sha256: 7bd6b58ad213b11ac69cb292c79f2fe474160fec602b3537fa0c469c4049ed63
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/source-manifest.json
+  sha256: 135c3f974936e1c6430284af3f5e53c696e56df651c9ff4c586b06188b4703a1
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/validate_atlas.py
+  sha256: d5704c69a2b430e008438458a8adabc641408f5efda00a68934a772a7f792ea7
+  consumers:
+  - architecture-review
+  - documentation
+- artifact: docs/architecture/validation-result.json
+  sha256: 15b436fa2dfa19601e2a99879f6e23b3feefbf50e4e19942e252ed5516143f15
+  consumers:
+  - architecture-review
+  - documentation
+verification:
+- command: python3 docs/architecture/validate_atlas.py
+  result: passed
+  exitCode: 0
+- command: python3 scripts/validate-launch-authority.py
+  result: passed
+  exitCode: 0
+- command: python3 -m unittest discover -s tests/authority -p 'test_*.py'
+  result: passed
+  exitCode: 0
+  tests: 5
+- command: git diff --cached --check
+  result: passed
+  exitCode: 0
+limitations:
+- 'Mermaid: исторические parse/render PASS только для 2 из 14 блоков; остальные 12
+  NOT_RUN, общий статус PARTIAL.'
+- PostgreSQL/Kafka/AROMA, browser E2E, deployment и product acceptance не запускались.
+- Runtime, контракты, миграции, pins, canonical revision roots, пользовательский vault
+  и прежние изменения макетов/навыков не меняются.
+- Merge и auto-merge не разрешены пользователем и не выполняются.

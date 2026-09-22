@@ -1,0 +1,584 @@
+{
+  "metadata": {
+    "type": "architecture",
+    "project": "CoffeeOrderPlatform",
+    "status": "reference",
+    "verified": "2026-09-22",
+    "source_commit": "4b2cad1dab30af66ad0b2fe64da280222e506574"
+  },
+  "counts": {
+    "normativeHttpOperations": 19,
+    "clientV1Operations": 11,
+    "internalV1Operations": 8,
+    "versionedKafkaMessages": 7,
+    "registeredRouteOperationMappings": 8,
+    "contractOnlyRouteOperationMappings": 11
+  },
+  "httpContracts": [
+    {
+      "path": "contracts/openapi/client-v1.yaml",
+      "surface": "client-v1",
+      "status": "normative-physical-openapi",
+      "evidence": "contracts/openapi/client-v1.yaml:33-709"
+    },
+    {
+      "path": "contracts/openapi/internal-v1.yaml",
+      "surface": "internal-v1",
+      "status": "normative-physical-openapi",
+      "evidence": "contracts/openapi/internal-v1.yaml:15-361"
+    },
+    {
+      "path": "contracts/manifest.yaml",
+      "status": "manifest/fixtures/corrections",
+      "evidence": "contracts/manifest.yaml:1-46"
+    }
+  ],
+  "routes": [
+    {
+      "surface": "client-v1",
+      "method": "POST",
+      "path": "/api/client-v1/customers",
+      "operationId": "createCustomer",
+      "owner": "Customer",
+      "auth": "bearer actor/session",
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-public/src/index.ts:150",
+        "apps/customer-service/src/http/index.ts:290"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "GET",
+      "path": "/api/client-v1/customers",
+      "operationId": "searchCustomers",
+      "owner": "Customer",
+      "auth": "bearer actor/session",
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-public/src/index.ts:180",
+        "apps/customer-service/src/http/index.ts:330"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "GET",
+      "path": "/api/client-v1/catalog/products",
+      "operationId": "searchCatalogProducts",
+      "owner": "Catalog",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/client-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "POST",
+      "path": "/api/client-v1/pricing/quotes",
+      "operationId": "createPricingQuote",
+      "owner": "Pricing",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/client-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "POST",
+      "path": "/api/client-v1/orders/drafts",
+      "operationId": "createOrderDraft",
+      "owner": "Orders",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/client-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "PUT",
+      "path": "/api/client-v1/orders/{orderRef}/items/{itemRef}",
+      "operationId": "upsertOrderItem",
+      "owner": "Orders",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/client-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "DELETE",
+      "path": "/api/client-v1/orders/{orderRef}/items/{itemRef}",
+      "operationId": "removeOrderItem",
+      "owner": "Orders",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/client-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "POST",
+      "path": "/api/client-v1/orders/{orderRef}/commands/confirm",
+      "operationId": "confirmOrder",
+      "owner": "Orders",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/client-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "POST",
+      "path": "/api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation",
+      "operationId": "requestAromaReconciliation",
+      "owner": "Orders",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/client-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "GET",
+      "path": "/api/client-v1/orders/{orderRef}",
+      "operationId": "getOrderCard",
+      "owner": "Orders",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/client-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "client-v1",
+      "method": "GET",
+      "path": "/events",
+      "operationId": "streamOrderInvalidations",
+      "owner": "Realtime",
+      "auth": "bearer actor/session",
+      "status": "contract-only",
+      "evidence": [
+        "docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md:1-196",
+        "apps/realtime-gateway/src/main.ts:1-3"
+      ],
+      "specEvidence": [
+        "contracts/openapi/client-v1.yaml"
+      ]
+    },
+    {
+      "surface": "internal-v1",
+      "method": "GET",
+      "path": "/api/internal-v1/customers/{customerRef}/order-input",
+      "operationId": "getCustomerOrderInput",
+      "owner": "Customer",
+      "auth": "service mTLS + signed delegation",
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-internal/src/index.ts:202",
+        "apps/customer-service/src/http/index.ts:357"
+      ],
+      "specEvidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ]
+    },
+    {
+      "surface": "internal-v1",
+      "method": "GET",
+      "path": "/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input",
+      "operationId": "getCatalogPricingInput",
+      "owner": "Catalog",
+      "auth": "service mTLS + signed delegation",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ]
+    },
+    {
+      "surface": "internal-v1",
+      "method": "POST",
+      "path": "/api/internal-v1/pricing/quotes:verify",
+      "operationId": "verifyPricingQuote",
+      "owner": "Pricing",
+      "auth": "service mTLS + signed delegation",
+      "status": "contract-only",
+      "evidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ],
+      "specEvidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ]
+    },
+    {
+      "surface": "internal-v1",
+      "method": "POST",
+      "path": "/api/internal-v1/aroma/catalog-exports",
+      "operationId": "exportAromaCatalog",
+      "owner": "AROMA Gateway",
+      "auth": "service mTLS + signed delegation",
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-internal/src/index.ts:223",
+        "apps/aroma-gateway/src/transport/http/index.ts:225"
+      ],
+      "specEvidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ]
+    },
+    {
+      "surface": "internal-v1",
+      "method": "POST",
+      "path": "/api/internal-v1/aroma/offer-bindings",
+      "operationId": "registerAromaOfferBinding",
+      "owner": "AROMA Gateway",
+      "auth": "service mTLS + signed delegation",
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-internal/src/index.ts:185",
+        "apps/aroma-gateway/src/transport/http/index.ts:78"
+      ],
+      "specEvidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ]
+    },
+    {
+      "surface": "internal-v1",
+      "method": "POST",
+      "path": "/api/internal-v1/aroma/cart-snapshots:read",
+      "operationId": "readAromaCartSnapshot",
+      "owner": "AROMA Gateway",
+      "auth": "service mTLS + signed delegation",
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-internal/src/index.ts:241",
+        "apps/aroma-gateway/src/transport/http/index.ts:132"
+      ],
+      "specEvidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ]
+    },
+    {
+      "surface": "internal-v1",
+      "method": "POST",
+      "path": "/api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity",
+      "operationId": "setAromaCartLineQuantity",
+      "owner": "AROMA Gateway",
+      "auth": "service mTLS + signed delegation",
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-internal/src/index.ts:259",
+        "apps/aroma-gateway/src/transport/http/index.ts:194"
+      ],
+      "specEvidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ]
+    },
+    {
+      "surface": "internal-v1",
+      "method": "POST",
+      "path": "/api/internal-v1/aroma/cart-lines/{offerRef}:remove",
+      "operationId": "removeAromaCartLine",
+      "owner": "AROMA Gateway",
+      "auth": "service mTLS + signed delegation",
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-internal/src/index.ts:278",
+        "apps/aroma-gateway/src/transport/http/index.ts:194"
+      ],
+      "specEvidence": [
+        "contracts/openapi/internal-v1.yaml"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "messageType": "CatalogSnapshotActivated.v1",
+      "kind": "event",
+      "producer": "catalog-activation-worker",
+      "consumerGroup": "none",
+      "topic": "coffee.catalog.snapshot.v1",
+      "key": "supplierRef",
+      "schema": "contracts/schemas/events/catalog-snapshot-activated.v1.schema.json",
+      "status": "schema-and-config-only",
+      "evidence": [
+        "contracts/schemas/events/catalog-snapshot-activated.v1.schema.json",
+        "contracts/manifest.yaml",
+        "docs/launch/06_EVENTS_AND_RECOVERY.md:26-44",
+        "config/platform.yaml:38-86"
+      ],
+      "runtimeBindingEvidence": []
+    },
+    {
+      "messageType": "CatalogMappingChanged.v2",
+      "kind": "event",
+      "producer": "catalog-activation-worker",
+      "consumerGroup": "orders-aroma-preparation-v1",
+      "topic": "coffee.catalog.mapping.v2",
+      "key": "productRef",
+      "schema": "contracts/schemas/events/catalog-mapping-changed.v2.schema.json",
+      "status": "schema-and-config-only",
+      "evidence": [
+        "contracts/schemas/events/catalog-mapping-changed.v2.schema.json",
+        "contracts/manifest.yaml",
+        "docs/launch/06_EVENTS_AND_RECOVERY.md:26-44",
+        "config/platform.yaml:38-86"
+      ],
+      "runtimeBindingEvidence": []
+    },
+    {
+      "messageType": "OrderConfirmed.v1",
+      "kind": "event",
+      "producer": "orders-service",
+      "consumerGroup": "orders-aroma-preparation-v1",
+      "topic": "coffee.orders.lifecycle.v1",
+      "key": "orderRef",
+      "schema": "contracts/schemas/events/order-confirmed.v1.schema.json",
+      "status": "schema-and-config-only",
+      "evidence": [
+        "contracts/schemas/events/order-confirmed.v1.schema.json",
+        "contracts/manifest.yaml",
+        "docs/launch/06_EVENTS_AND_RECOVERY.md:26-44",
+        "config/platform.yaml:38-86"
+      ],
+      "runtimeBindingEvidence": []
+    },
+    {
+      "messageType": "AromaConvergenceRequested.v1",
+      "kind": "command",
+      "producer": "orders-service / orders-aroma-preparation",
+      "consumerGroup": "aroma-convergence-v1",
+      "topic": "coffee.aroma.cart.commands.v1",
+      "key": "cartScopeRef",
+      "schema": "contracts/schemas/events/aroma-convergence-requested.v1.schema.json",
+      "status": "schema-and-config-only",
+      "evidence": [
+        "contracts/schemas/events/aroma-convergence-requested.v1.schema.json",
+        "contracts/manifest.yaml",
+        "docs/launch/06_EVENTS_AND_RECOVERY.md:26-44",
+        "config/platform.yaml:38-86"
+      ],
+      "runtimeBindingEvidence": []
+    },
+    {
+      "messageType": "AromaObservationChanged.v1",
+      "kind": "event",
+      "producer": "aroma-observer / aroma-convergence",
+      "consumerGroup": "orders-aroma-projection-v1",
+      "topic": "coffee.aroma.cart.events.v1",
+      "key": "cartScopeRef",
+      "schema": "contracts/schemas/events/aroma-observation-changed.v1.schema.json",
+      "status": "schema-and-config-only",
+      "evidence": [
+        "contracts/schemas/events/aroma-observation-changed.v1.schema.json",
+        "contracts/manifest.yaml",
+        "docs/launch/06_EVENTS_AND_RECOVERY.md:26-44",
+        "config/platform.yaml:38-86"
+      ],
+      "runtimeBindingEvidence": []
+    },
+    {
+      "messageType": "AromaConvergenceChanged.v1",
+      "kind": "event",
+      "producer": "aroma-convergence",
+      "consumerGroup": "orders-aroma-projection-v1",
+      "topic": "coffee.aroma.cart.events.v1",
+      "key": "cartScopeRef",
+      "schema": "contracts/schemas/events/aroma-convergence-changed.v1.schema.json",
+      "status": "schema-and-config-only",
+      "evidence": [
+        "contracts/schemas/events/aroma-convergence-changed.v1.schema.json",
+        "contracts/manifest.yaml",
+        "docs/launch/06_EVENTS_AND_RECOVERY.md:26-44",
+        "config/platform.yaml:38-86"
+      ],
+      "runtimeBindingEvidence": []
+    },
+    {
+      "messageType": "RealtimeInvalidated.v1",
+      "kind": "event",
+      "producer": "owner services",
+      "consumerGroup": "realtime-gateway-v1",
+      "topic": "coffee.realtime.invalidate.v1",
+      "key": "subjectRef",
+      "schema": "contracts/schemas/events/realtime-invalidated.v1.schema.json",
+      "status": "schema-and-config-only",
+      "evidence": [
+        "contracts/schemas/events/realtime-invalidated.v1.schema.json",
+        "contracts/manifest.yaml",
+        "docs/launch/06_EVENTS_AND_RECOVERY.md:26-44",
+        "config/platform.yaml:38-86"
+      ],
+      "runtimeBindingEvidence": []
+    }
+  ],
+  "actualRegistrationSummary": [
+    {
+      "runtime": "api-public",
+      "registeredHandlers": 2,
+      "operations": [
+        "createCustomer",
+        "searchCustomers"
+      ],
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-public/src/index.ts:150-226",
+        "apps/api-public/src/main.ts:5-17"
+      ]
+    },
+    {
+      "runtime": "api-internal",
+      "registeredHandlers": 6,
+      "operations": [
+        "registerAromaOfferBinding",
+        "getCustomerOrderInput",
+        "exportAromaCatalog",
+        "readAromaCartSnapshot",
+        "setAromaCartLineQuantity",
+        "removeAromaCartLine"
+      ],
+      "status": "registered-handler",
+      "evidence": [
+        "apps/api-internal/src/index.ts:185-292",
+        "apps/api-internal/src/main.ts:7-20"
+      ]
+    },
+    {
+      "runtime": "customer-service",
+      "registeredHandlers": 3,
+      "operations": [
+        "createCustomer",
+        "searchCustomers",
+        "getCustomerOrderInput"
+      ],
+      "status": "owner-handler",
+      "evidence": [
+        "apps/customer-service/src/http/index.ts:289-378",
+        "apps/customer-service/src/main.ts:53-82"
+      ]
+    },
+    {
+      "runtime": "aroma-gateway",
+      "registeredHandlers": 4,
+      "operations": [
+        "registerAromaOfferBinding",
+        "readAromaCartSnapshot",
+        "setAromaCartLineQuantity",
+        "removeAromaCartLine",
+        "exportAromaCatalog"
+      ],
+      "status": "owner/gateway-handler",
+      "evidence": [
+        "apps/aroma-gateway/src/transport/http/index.ts:78-241",
+        "apps/aroma-gateway/src/main.ts:47-120"
+      ]
+    },
+    {
+      "runtime": "realtime-gateway",
+      "registeredHandlers": 0,
+      "operations": [
+        "streamOrderInvalidations"
+      ],
+      "status": "contract-only",
+      "evidence": [
+        "apps/realtime-gateway/src/main.ts:1-3",
+        "docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md:10-21"
+      ]
+    },
+    {
+      "runtime": "web",
+      "registeredHandlers": 0,
+      "operations": [
+        "all browser routes"
+      ],
+      "status": "bootstrap-only",
+      "evidence": [
+        "apps/web/src/main.ts:1-3",
+        "apps/web/package.json:1-1"
+      ]
+    }
+  ],
+  "stubsAndFailClosedHelpers": [
+    {
+      "path": "apps/api-public/src/index.ts",
+      "symbol": "createUnavailablePublicAdapters",
+      "status": "stub/fail-closed",
+      "evidence": "apps/api-public/src/index.ts:312-317"
+    },
+    {
+      "path": "apps/customer-service/src/http/index.ts",
+      "symbol": "createUnavailableCustomerAdapters",
+      "status": "stub/fail-closed",
+      "evidence": "apps/customer-service/src/http/index.ts:428-440"
+    },
+    {
+      "path": "apps/aroma-gateway/src/transport/http/index.ts",
+      "symbol": "createUnavailableAromaBindingRoutes",
+      "status": "stub/fail-closed",
+      "evidence": "apps/aroma-gateway/src/transport/http/index.ts:111-126 and generated declaration evidence"
+    }
+  ],
+  "realtime": {
+    "kafkaMessage": "RealtimeInvalidated.v1",
+    "topic": "coffee.realtime.invalidate.v1",
+    "consumerGroup": "realtime-gateway-v1",
+    "ssePath": "GET /events",
+    "sseStatus": "contract-only",
+    "evidence": [
+      "contracts/schemas/events/realtime-invalidated.v1.schema.json:1-27",
+      "docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md:41-171",
+      "packages/contracts/realtime-v1/src/index.ts:1-10"
+    ]
+  },
+  "frontendAndChannels": {
+    "webStatus": "bootstrap-only",
+    "reactRoutesStatus": "spec-only",
+    "agentV1Status": "disabled-in-first-launch",
+    "vkHermesStatus": "future-boundary-only",
+    "evidence": [
+      "apps/web/src/main.ts:1-3",
+      "docs/launch/07_FRONTEND_CONTRACT.md:1-119",
+      "docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md:1-331",
+      "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md:89-107",
+      "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M09_HERMES_VK/08_CHANNEL_IDENTITY_BROKER_CONTRACT.md:1-56"
+    ]
+  }
+}

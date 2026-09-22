@@ -1,0 +1,121 @@
+{
+  "status": "PARTIAL",
+  "scope": "Mermaid parser and SVG renderer; not visual/layout acceptance",
+  "diagrams": 14,
+  "passed": 2,
+  "not_run": 12,
+  "results": [
+    {
+      "file": "01_Границы и runtime.md",
+      "diagram_in_file": 1,
+      "sha256": "001dd4c076e4f1e85abbc34ce8cd4ea5c80678d0bf71c75d7536951e632ac66d",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "02_Бизнес-сценарии.md",
+      "diagram_in_file": 1,
+      "sha256": "ff6145c3ecf9da444dcb639581ec8a17245fb10ca26057e14f25935c3b2dddbf",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "02_Бизнес-сценарии.md",
+      "diagram_in_file": 2,
+      "sha256": "c42106bac09d701844f8953ae71d2b91c52049508974ac5f997226c8bac7c63b",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "04_Схема PostgreSQL.md",
+      "diagram_in_file": 1,
+      "sha256": "fe4ace813aac378cf4af2f0218b74b72be6024b9972ee64d611f4af7baca6a0f",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "04_Схема PostgreSQL.md",
+      "diagram_in_file": 2,
+      "sha256": "429afd71185b58044b430d3911730186f9b924b49c1d1c4bad88a6618af3350a",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "05_HTTP и события.md",
+      "diagram_in_file": 1,
+      "sha256": "84caf20ae0154984688e1b7c9c7e1a982320702938bd110ddeef23adef5b1472",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "05_HTTP и события.md",
+      "diagram_in_file": 2,
+      "sha256": "402cfd022f742199b451e2aee2a11ae7456a45c7d774954233549840649d63ec",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "06_Frontend и каналы.md",
+      "diagram_in_file": 1,
+      "sha256": "8bbc05d2435202ecd141366d10a666bee538a3aafcdbc5ac575b05367bbb1599",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "06_Frontend и каналы.md",
+      "diagram_in_file": 2,
+      "sha256": "e68e93b1ecadc5ec37c5369253b250313aa57935296a6404d8248272b30c39ee",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "06_Frontend и каналы.md",
+      "diagram_in_file": 3,
+      "sha256": "b372e44967551590bd22f57ef19d323407efd1230ab74a4191e7819594b23c03",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "08_AROMA сходимость.md",
+      "diagram_in_file": 1,
+      "sha256": "05c8bca9f0a34a91b62c6423c97894dd792d044cc113d344a163993688c1f522",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "08_AROMA сходимость.md",
+      "diagram_in_file": 2,
+      "sha256": "a5e90cfac85dc24c048fbf28f1cdfa4cb1e7170eef281e7be5c2052c173c0049",
+      "status": "NOT_RUN",
+      "evidence": "Full GUI verification approval timed out; not retried",
+      "svg_bytes": null
+    },
+    {
+      "file": "09_Инфраструктура и безопасность.md",
+      "diagram_in_file": 1,
+      "sha256": "6fd57313806449ede3a329643ff4db759d6319ee56b2daa9d4515b0b70cfc7ac",
+      "status": "PASS",
+      "evidence": "Observed installed Obsidian Mermaid parse and SVG render before integration",
+      "svg_bytes": 26026
+    },
+    {
+      "file": "10_Надёжность и приёмка.md",
+      "diagram_in_file": 1,
+      "sha256": "434746a9e7970692a2804243b03414bf206e5cd010225043e1362da8ef094311",
+      "status": "PASS",
+      "evidence": "Observed installed Obsidian Mermaid parse and SVG render before integration",
+      "svg_bytes": 30015
+    }
+  ]
+}
