@@ -1,6 +1,6 @@
 import {Ajv2020} from "ajv/dist/2020.js";
 import type {AnySchema, ValidateFunction} from "ajv";
-import type {AromaCartSnapshot, AromaCartSnapshotReadRequest, AromaCatalogExportRequest, AromaMutationResponse, AromaOfferBindingRequest, AromaOfferBindingResponse, AromaRemoveLineRequest, AromaSetQuantityRequest, ProblemDetails} from "@coffee-platform/generated-internal-v1";
+import type {AromaCartSnapshot, AromaCartSnapshotReadRequest, AromaCatalogExportRecord, AromaCatalogExportRequest, AromaMutationResponse, AromaOfferBindingRequest, AromaOfferBindingResponse, AromaRemoveLineRequest, AromaSetQuantityRequest, ProblemDetails} from "@coffee-platform/generated-internal-v1";
 import {internalV1Schemas} from "@coffee-platform/generated-internal-v1/runtime-schemas.gen.js";
 
 export type {AromaCartSnapshot, AromaCartSnapshotReadRequest, AromaCatalogExportRecord, AromaCatalogExportRequest, AromaMutationResponse, AromaOfferBindingRequest, AromaOfferBindingResponse, AromaRemoveLineRequest, AromaSetQuantityRequest, ProblemDetails} from '@coffee-platform/generated-internal-v1';
@@ -18,8 +18,10 @@ ajv.addFormat("date-time", {type: "string", validate: (value: string) => {
   return false;
 }});
 ajv.addFormat("uri-reference", {type: "string", validate: (value: string) => uriReferencePattern.test(value)});
+ajv.addFormat("uri", {type: "string", validate: (value: string) => { try { const url = new URL(value); return url.protocol !== ""; } catch { return false; } }});
 const schemas: Readonly<Record<string, RuntimeSchema>> = Object.freeze({
   catalogExportRequest: internalV1Schemas["AromaCatalogExportRequest"],
+  catalogExportRecord: internalV1Schemas["AromaCatalogExportRecord"],
   offerBindingRequest: internalV1Schemas["AromaOfferBindingRequest"],
   offerBindingResponse: internalV1Schemas["AromaOfferBindingResponse"],
   mutationResponse: internalV1Schemas["AromaMutationResponse"],
@@ -30,6 +32,7 @@ const schemas: Readonly<Record<string, RuntimeSchema>> = Object.freeze({
   problem: problemSchema,
 });
 const validateCatalogExportRequest: ValidateFunction = ajv.compile(schemas["catalogExportRequest"]!);
+const validateCatalogExportRecord: ValidateFunction = ajv.compile(schemas["catalogExportRecord"]!);
 const validateRequest: ValidateFunction = ajv.compile(schemas["offerBindingRequest"]!);
 const validateResponse: ValidateFunction = ajv.compile(schemas["offerBindingResponse"]!);
 const validateMutationResponse: ValidateFunction = ajv.compile(schemas["mutationResponse"]!);
@@ -41,6 +44,7 @@ const validateProblem: ValidateFunction = ajv.compile(schemas["problem"]!);
 
 export const aromaContractSchemas: Readonly<Record<string, RuntimeSchema>> = schemas;
 export function isAromaCatalogExportRequest(value: unknown): value is AromaCatalogExportRequest { return validateCatalogExportRequest(value) as boolean; }
+export function isAromaCatalogExportRecord(value: unknown): value is AromaCatalogExportRecord { return validateCatalogExportRecord(value) as boolean; }
 export function isAromaOfferBindingRequest(value: unknown): value is AromaOfferBindingRequest { return validateRequest(value) as boolean; }
 export function isAromaOfferBindingResponse(value: unknown): value is AromaOfferBindingResponse { return validateResponse(value) as boolean; }
 export function isAromaMutationResponse(value: unknown): value is AromaMutationResponse { return validateMutationResponse(value) as boolean; }
@@ -58,3 +62,6 @@ export const contractPackage = {
     schemas: 'contracts/schemas',
   },
 } as const;
+
+export {CATALOG_MAX_BATCH_BYTES, CATALOG_MAX_ITEM_BYTES, CATALOG_MAX_OFFERS_PER_BATCH, CATALOG_MAX_STREAM_LINE_BYTES, canonicalCatalogJson, catalogBatchCanonicalBytes, catalogBatchBytes, catalogBatchHash, catalogContentHash, createCatalogContentHash, catalogSha256} from "./catalog-hash.js";
+export type {CatalogContentHashAccumulator, CatalogHash, CatalogJsonPrimitive, CatalogJsonValue} from "./catalog-hash.js";

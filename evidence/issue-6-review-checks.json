@@ -1,0 +1,112 @@
+{
+  "observedAt": "2026-09-21T20:03:47+00:00",
+  "commands": [
+    {
+      "command": "pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-final-observability",
+      "exitCode": 0,
+      "outputArtifact": "evidence/issue-6-terminal-checks/compose-recovery-proof-fail-closed-20260921.log",
+      "outputSha256": "c77ce4ef5025e6215e06f9d8246bbb1996c6c1b6be41e9c7ac25d3059a64364e",
+      "outputCapture": "complete terminal capture with trailing whitespace normalized",
+      "summary": [
+        "15 runtimes plus the generated local HTTPS provider fixture became healthy",
+        "provider network internal=true; public provider egress impossible",
+        "providerFixture login=1 and catalog=1; cart/post/put/delete=0",
+        "five disposable PostgreSQL databases created; runtimeRoleCount=10; bootstrap idempotent",
+        "Kafka broker acknowledgement, retained record after container recreation, native ordering/rebalance/quarantine/SIGTERM/unknown-commit recovery all passed",
+        "health endpoints, telemetry and graceful shutdown passed",
+        "project-scoped containers, volumes, networks, tmpfs secrets and fixtures removed"
+      ]
+    },
+    {
+      "command": "pnpm test:catalog-ingestion && pnpm test:catalog-stream && pnpm test:catalog-copy && pnpm test:catalog-recovery && pnpm check && pnpm db:smoke && git diff --check",
+      "exitCode": 0,
+      "outputArtifact": "evidence/issue-6-terminal-checks/final-verification-fail-closed-20260921.log",
+      "outputSha256": "8f877c90b38d4d96967f56250858a9019958c3ff87ec9004e21c8c00e7762118",
+      "outputCapture": "complete terminal capture",
+      "summary": [
+        "Catalog ingestion: 6 passed, 0 failed, 0 skipped",
+        "Catalog stream: 21 passed, 0 failed, 0 skipped",
+        "Catalog COPY: 1 passed, 0 failed, 0 skipped",
+        "Catalog recovery: 1 passed, 0 failed, 0 skipped",
+        "contracts: 39 passed, 0 failed, 0 skipped",
+        "repository: 393 tests, 377 passed, 0 failed, 16 pre-existing opt-in skips",
+        "pnpm db:smoke: exit 0",
+        "git diff --check: exit 0"
+      ]
+    }
+  ],
+  "red": {
+    "observability": {
+      "command": "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='residual observability' tests/catalog/stream.test.mjs",
+      "exitCode": 1,
+      "summary": "AssertionError: stream span missing; 1 failed, 0 skipped before production observability edits",
+      "outputCapture": "observed delegate transcript; no standalone log artifact"
+    },
+    "terminalMemory": {
+      "command": "node --experimental-test-module-mocks --expose-gc --max-old-space-size=64 tests/catalog/terminal-capacity-proof.mjs",
+      "exitCode": 1,
+      "outputArtifact": "evidence/issue-6-terminal-red.log",
+      "outputSha256": "5a3a5399af5422930088cb613777b211fa4965bf9bf083fef1e7a0c6657fecf3"
+    },
+    "composeCatalogMigrations": {
+      "command": "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='Compose recovery proof applies Catalog migrations' tests/catalog/ingestion.test.mjs",
+      "exitCode": 1,
+      "summary": "Recovery proof did not apply Catalog migrations before runtime startup"
+    },
+    "composeLocalProvider": {
+      "command": "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='Compose recovery proof routes startup export' tests/catalog/ingestion.test.mjs",
+      "exitCode": 1,
+      "summary": "Recovery proof did not propagate its flag to the scoped Compose override/local provider fixture"
+    },
+    "composeProviderFailClosed": {
+      "command": "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='Compose recovery proof routes startup export' tests/catalog/ingestion.test.mjs",
+      "exitCode": 1,
+      "summary": "Recovery provider network was not internal and the proof did not assert an observed local Catalog fixture request"
+    }
+  },
+  "earlierAttempts": [
+    {
+      "command": "pnpm test:compose-smoke -- --stub-secrets --provision-empty-postgres-network --project-name coffee-issue6-final-observability",
+      "exitCode": 1,
+      "failure": "Truthful DB-backed readiness rejected the topology-only empty PostgreSQL network; this mode is not the mandatory recovery proof"
+    },
+    {
+      "command": "pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-final-observability",
+      "exitCode": 1,
+      "failure": "Catalog migrations were absent before catalog-supplier-sync startup; fixed in the proof harness"
+    },
+    {
+      "command": "pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-final-observability",
+      "exitCode": 1,
+      "failure": "The generated local provider fixture was not attached because recoveryProof was not propagated to the scoped override; fixed and regression-tested"
+    }
+  ],
+  "independentReview": {
+    "model": "gpt-5.6-luna",
+    "verdict": "ship",
+    "findings": [],
+    "observed": [
+      "provider egress internal=true for the recovery override",
+      "provider fixture persisted and reported login=1/catalog=1 with mutation counts zero",
+      "observability identifiers remain outside metric labels",
+      "lazy SQL fixture limitation remains explicit"
+    ],
+    "execution": "read-only; no Compose, Docker, tests or state-changing command"
+  },
+  "limitations": [
+    "The 131072-manifest complete() proof uses the production store algorithm with a lazy SQL fixture; it is not PostgreSQL-driver or production RSS capacity evidence",
+    "The Compose provider is a generated local HTTPS fixture, not the real AROMA provider",
+    "External OTLP collector delivery was not exercised",
+    "No deployment, commit, push, PR or merge was performed"
+  ],
+  "cleanup": {
+    "scopes": [
+      "coffee-catalog-*",
+      "coffee-issue6-final-observability-*"
+    ],
+    "containers": [],
+    "volumes": [],
+    "networks": [],
+    "probeFixtures": []
+  }
+}

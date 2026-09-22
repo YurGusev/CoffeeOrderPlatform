@@ -272,6 +272,7 @@ services:
     deadlineProfiles: {defaultMs: 900000}
     concurrency: 1
     replicas: 1
+    scheduler: {intervalMs: 3600000, startupImport: true, overlapPolicy: skip}
     dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_catalog
     kafka: { producers: [], consumers: [] }

@@ -160,6 +160,11 @@ export type PermissionConfig = Readonly<{
   childProcess: boolean;
   workers: boolean;
 }>;
+export type CatalogSchedulerConfig = Readonly<{
+  intervalMs: 3_600_000;
+  startupImport: true;
+  overlapPolicy: "skip";
+}>;
 export type RuntimeConfig = Readonly<{
   transportMode: TransportMode;
   listen: ListenConfig;
@@ -176,6 +181,7 @@ export type RuntimeConfig = Readonly<{
   kafka: KafkaServiceConfig;
   permissions: PermissionConfig;
   mutationCapability: boolean;
+  scheduler: CatalogSchedulerConfig | null;
 }>;
 export type AromaConfig = Readonly<{
   supplierRef: typeof AROMA_SUPPLIER_REF;
@@ -807,8 +813,21 @@ function runtimeConfig(
       "mutationCapability",
     ],
     path,
-    ["optionalSecretRefs"],
+    ["optionalSecretRefs", "scheduler"],
   );
+  const schedulerValue = source["scheduler"];
+  if (runtime === "catalog-supplier-sync" && schedulerValue === undefined)
+    throw new PlatformConfigError(`${path}.scheduler`, "scheduler обязателен для catalog-supplier-sync");
+  if (runtime !== "catalog-supplier-sync" && schedulerValue !== undefined)
+    throw new PlatformConfigError(`${path}.scheduler`, "scheduler разрешён только catalog-supplier-sync");
+  let scheduler: CatalogSchedulerConfig | null = null;
+  if (schedulerValue !== undefined) {
+    const configured = record(schedulerValue, `${path}.scheduler`);
+    exactKeys(configured, ["intervalMs", "startupImport", "overlapPolicy"], `${path}.scheduler`);
+    if (configured["intervalMs"] !== 3_600_000 || configured["startupImport"] !== true || configured["overlapPolicy"] !== "skip")
+      throw new PlatformConfigError(`${path}.scheduler`, "ожидался hourly single-flight skip scheduler");
+    scheduler = Object.freeze({intervalMs: 3_600_000, startupImport: true, overlapPolicy: "skip"});
+  }
   const listen = record(source["listen"], `${path}.listen`);
   exactKeys(listen, ["host", "port"], `${path}.listen`);
   const transportMode = source["transportMode"];
@@ -885,6 +904,7 @@ function runtimeConfig(
       workers: permissions["workers"],
     }),
     mutationCapability: source["mutationCapability"],
+    scheduler,
   });
 }
 

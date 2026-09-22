@@ -154,24 +154,69 @@ Gateway отправляет упаковку из `config.aroma.defaultPacking`
   `catalog.snapshot_offers`, `catalog.snapshot_availability`, всегда с
   `snapshot_ref` в ключе.
 
-Состояния импорта: `Created -> Receiving -> Received` или
-`Created|Receiving -> Rejected`. Только terminal `snapshot-completed` может
-перевести generation в `Received`.
+Состояния импорта: `Created -> Receiving -> Received|Rejected` или
+`Created -> Rejected`. `Created` фиксируется до HTTP с
+`provider_snapshot_ref=NULL`; provenance сохраняется только из прошедшего generated
+schema `snapshot-started`. `Received` и `Rejected` terminal, а conflicting replay
+не меняет terminal state.
 
-Алгоритм каждого batch выполняется отдельной короткой транзакцией:
+Каждый новый batch выполняется одной короткой транзакцией:
 
-1. заблокировать строку snapshot;
-2. проверить состояние и `batchNumber`;
-3. повтор существующего номера с тем же hash считать idempotent no-op;
-4. тот же номер с другим hash перевести в `Rejected/BATCH_HASH_CONFLICT`;
-5. проверить лимиты, типы, identity hashes и уникальность;
-6. загрузить строки через `COPY FROM STDIN`;
-7. записать batch manifest и увеличить `next_batch_number`;
-8. commit и только затем запросить следующий record.
+1. до expected-number rule прочитать manifest этого `batchNumber`; exact replay
+   сверить с durable reconstruction и вернуть idempotent no-op, conflict — fail closed;
+2. заблокировать generation и проверить `Receiving`, `next_batch_number` и
+   `previousBatchHash`;
+3. проверить generated schema, raw byte limits, `offerCount` и общий canonical hash;
+4. создать transaction-local `pg_temp.catalog_import_batch ON COMMIT DROP` и
+   выполнить один bounded `COPY FROM STDIN` с backpressure;
+5. set-based проверить references, duplicates и semantic identity collisions;
+6. merge entity rows и сохранить `batch_number,item_index` исходного offer;
+7. перечитать persistent rows, восстановить wire items по `item_index` и повторно
+   проверить bytes/hash;
+8. вставить manifest, пересчитать durable counters и commit; следующий stream
+   record запрашивается только после известного результата.
 
-При `snapshot-completed` importer проверяет непрерывный диапазон `0..N-1`, все
-counts и `contentHash`. Несовпадение переводит generation в `Rejected`. Ошибка,
-partial stream, timeout или restart никогда не меняют активное поколение.
+SQL `NULL` отличает отсутствующие optional properties от JSONB `[]`;
+`imageUrl:null` восстанавливается как обязательное поле. Money остаётся canonical
+non-negative decimal string без float/×100. Grind options хранятся JSONB-фактом и
+не размножают offer rows.
+
+При `snapshot-completed` importer сначала требует чистый EOF и только затем
+bounded-проходом по одному batch проверяет непрерывные durable ordinals, hash
+chain, persistent reconstruction, identities, повторно вычисленные counts и
+`contentHash`. Короткая locked transition в `Received` выполняется после этих
+проверок; единый 15-минутный deadline ограничивает весь traversal, включая
+create, HTTP, COPY, verification и terminal transition. Exact terminal replay —
+no-op. Потеря ответа `COMMIT` для create, started, batch, Received и reject
+разрешается operation-specific durable reread; недоступная БД оставляет
+`OutcomeUnknown`, без blind retry и ложного terminal claim.
+Partial stream/restart переводит только незавершённую generation в `Rejected`, а
+новый traversal получает новый `snapshotRef`; активное поколение #16 не изменяется.
+
+### Recovery, readiness и bounded observability (#6)
+
+Перед **каждым** новым export scheduler выполняет owner-local recovery. Ошибка
+recovery (включая недоступную БД после `OutcomeUnknown`) запрещает начало нового
+export; очередной tick повторяет recovery, а не неизвестную provider operation.
+Readiness остаётся false до завершения startup recovery и при завершении
+supervisor loop; обычный отказ импорта/провайдера не означает смерть supervisor.
+
+Importer использует существующие OTel/runtime metrics и structured logger, как
+Gateway: spans `catalog.import.generation`, `.validation`, `.copy`, `.transaction`;
+bounded counters batches/bytes, duration sum/count, import age и фиксированный
+outcome enum. Batch counters отражают успешно reconciled stream batches, включая
+exact replay, а не уникальные durable rows. Age — время с последнего успешного
+импорта (до первого успеха — с запуска telemetry); `has_success` различает эти
+состояния. Диагностика не содержит raw IDs, payload, SQL, error strings или secrets.
+
+NDJSON framing проверяет бюджет до накопления фрагмента: целые строки читаются
+через view, фрагментированные — через один reusable bounded buffer без повторного
+копирования префикса. `test:catalog-stream` проверяет остановку upstream demand
+при delayed persistence и большой фрагментированный поток в bounded-heap процессе.
+`test:catalog-recovery` дополнительно убивает реальный процесс после durable batch,
+запускает новый PID и проверяет recovery-before-export через production composition
+с локальными bootstrap/DNS и mTLS InternalApi fixture. Это не deployment/provider
+load proof. Точные наблюдения и ограничения: `evidence/issue-6-review-remediation.md`.
 
 ## 5. Активация
 

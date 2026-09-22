@@ -1,12 +1,14 @@
-import { createHash } from "node:crypto";
+import {CATALOG_MAX_BATCH_BYTES as SHARED_MAX_BATCH_BYTES, CATALOG_MAX_OFFERS_PER_BATCH as SHARED_MAX_OFFERS_PER_BATCH, canonicalCatalogJson, catalogSha256} from "@coffee-platform/contracts-aroma-v1";
+import type {CatalogJsonValue as JsonValue} from "@coffee-platform/contracts-aroma-v1";
 import { nowInstant, toInstant } from "@coffee-platform/platform-time";
 import {finishGatewaySpan, type GatewayTelemetry} from "../infrastructure/observability.js";
 import {SOURCE_IDENTITY_SCHEME} from "../domain/source-identity.js";
 
 export const CATALOG_EXPORT_STREAM_VERSION = "1" as const;
 export const CATALOG_SOURCE_IDENTITY_SCHEME = SOURCE_IDENTITY_SCHEME;
-export const CATALOG_MAX_OFFERS_PER_BATCH = 500;
-export const CATALOG_MAX_BATCH_BYTES = 2_097_152;
+export const CATALOG_MAX_OFFERS_PER_BATCH = SHARED_MAX_OFFERS_PER_BATCH;
+export const CATALOG_MAX_BATCH_BYTES = SHARED_MAX_BATCH_BYTES;
+export {canonicalCatalogJson};
 
 export type Sha256Hash = string;
 export type CatalogUnit = "piece" | "gram" | "kilogram";
@@ -279,9 +281,6 @@ export class CatalogExportError extends Error {
   }
 }
 
-type JsonPrimitive = string | number | boolean | null;
-type JsonValue =
-  JsonPrimitive | readonly JsonValue[] | { [key: string]: JsonValue };
 type MaybePromise<T> = T | Promise<T>;
 type SourceIterator = AsyncIterator<NormalizedCatalogOffer>;
 
@@ -338,62 +337,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function canonicalize(
-  value: JsonValue,
-  stack = new WeakSet<object>(),
-): JsonValue {
-  if (Array.isArray(value)) {
-    if (stack.has(value))
-      throw new TypeError("canonical JSON does not permit cycles");
-    stack.add(value);
-    const result: JsonValue[] = [];
-    for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value))
-        throw new TypeError("canonical JSON does not permit sparse arrays");
-      result.push(canonicalize(value[index]!, stack));
-    }
-    stack.delete(value);
-    return result;
-  }
-  if (value !== null && typeof value === "object") {
-    if (!isPlainObject(value))
-      throw new TypeError("canonical JSON permits only plain objects");
-    if (stack.has(value))
-      throw new TypeError("canonical JSON does not permit cycles");
-    stack.add(value);
-    const sorted: Record<string, JsonValue> = Object.create(null) as Record<
-      string,
-      JsonValue
-    >;
-    for (const key of Object.keys(value).sort()) {
-      const child = value[key];
-      if (child === undefined)
-        throw new TypeError("canonical JSON does not permit undefined values");
-      sorted[key] = canonicalize(child as JsonValue, stack);
-    }
-    stack.delete(value);
-    return sorted;
-  }
-  if (typeof value === "number" && !Number.isFinite(value))
-    throw new TypeError("canonical JSON requires finite numbers");
-  if (
-    value === undefined ||
-    typeof value === "function" ||
-    typeof value === "symbol" ||
-    typeof value === "bigint"
-  ) {
-    throw new TypeError("canonical JSON does not permit this value");
-  }
-  return value;
-}
-
-/** Compact canonical JSON with recursively lexicographic object keys. */
-export function canonicalCatalogJson(value: JsonValue): string {
-  const encoded = JSON.stringify(canonicalize(value));
-  if (encoded === undefined)
-    throw new TypeError("value cannot be represented as canonical JSON");
-  return encoded;
-}
 
 function utf8(value: string): Uint8Array {
   return Buffer.from(value, "utf8");
@@ -1231,7 +1174,7 @@ async function* runExport(
       throw hashConflict(`${kind} hash boundary failed`, error);
     }
     validateHashResult(result, kind);
-    const expected = createHash("sha256").update(bytes).digest("hex");
+    const expected = catalogSha256(bytes);
     if (result !== expected)
       throw hashConflict(`${kind} hash does not match canonical bytes`);
     return result;
@@ -1564,4 +1507,4 @@ async function* runExport(
 
 /** The default SHA-256 boundary is injectable so tests and adapters can observe it. */
 export const sha256CatalogHash: CatalogHashResolver = (bytes) =>
-  createHash("sha256").update(bytes).digest("hex");
+  catalogSha256(bytes);

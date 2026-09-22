@@ -1,0 +1,194 @@
+issue: 6
+baseCommit: 4b2cad1dab30af66ad0b2fe64da280222e506574
+inputs:
+- issue: 4
+  acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+  artifact: evidence/handoffs/issue-4.yaml
+  sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+- issue: 10
+  acceptedMergeCommit: 4b2cad1dab30af66ad0b2fe64da280222e506574
+  artifact: evidence/handoffs/issue-10.yaml
+  sha256: 4d23f7ca941bbfbe3d02505a887d6750babfd04ed7ced7b398ccd46fdad67b37
+- issue: 62
+  acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+  artifact: evidence/handoffs/issue-62.yaml
+  sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+outputs:
+- artifact: packages/contracts/aroma-v1/src/catalog-hash.ts
+  sha256: 86f91cd7dda01adb6cc2f2837523f476979f08a60d4dc428822de326eea7a27a
+  consumers:
+  - 10
+  - 16
+- artifact: packages/contracts/aroma-v1/src/index.ts
+  sha256: d3af129303f353adcc015e8ce10b0eb6a15f1a74f7c986ecd1a2525883f81436
+  consumers:
+  - 10
+  - 16
+- artifact: tests/catalog/fixtures/hash-vectors.json
+  sha256: 034c34a2da29fb5a2529b8904e0dc6208a0eafbf2195558b6b924e5c6fc253c1
+  consumers:
+  - 16
+- artifact: apps/catalog-service/migrations/0001_supplier_snapshots.sql
+  sha256: d3202a196ae91fd207d7efa1c3591f891451af1f6163c611ed4612d9db9a9344
+  consumers:
+  - 16
+- artifact: apps/catalog-service/migrations/0002_snapshot_batches.sql
+  sha256: 031d71677423f1a93b30914a5860220ef8f1fa177517480f341da0c55303274f
+  consumers:
+  - 16
+- artifact: apps/catalog-service/migrations/0003_snapshot_staging.sql
+  sha256: 4038d61d239058e83edd0fbf2fedbdd903069dfde051b848d19468af446ff9c1
+  consumers:
+  - 16
+- artifact: apps/catalog-supplier-sync/src/catalog-import-store.ts
+  sha256: e7719f63d009578dca82e2cb72be22822d2721005daec3c055d09d164a7c7fac
+  consumers: []
+- artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+  sha256: 38f01d6a0f5b1e8a69460cb9afcd3a805ef1162dbc943becd1b3a6a651c28ec9
+  consumers:
+  - 16
+- artifact: evidence/issue-6-acceptance.md
+  sha256: ac55bdb3c89a90c0625d996f529944985755859a3f75afe452ef454aced6d682
+  consumers:
+  - 16
+- artifact: apps/catalog-supplier-sync/src/main.ts
+  sha256: e153e76c9e0c9ef87ef399db7eaa639e33eb4d4565482c129c7a32e2424fa029
+  consumers: []
+- artifact: apps/catalog-supplier-sync/src/run-catalog-import.ts
+  sha256: 464d5ffc8bedc82e64b26fe5a5cca4cd8357ae6845353dbbd756d8749e47c8df
+  consumers: []
+- artifact: apps/catalog-supplier-sync/src/ndjson-reader.ts
+  sha256: c9206a0dbfaddfdb08ef461a382cb7a7177a95e77638a7ab92073af9e9a9cab6
+  consumers: []
+- artifact: apps/catalog-supplier-sync/src/observability.ts
+  sha256: eca0ac3dff6bed8a45d45cc33db11bace6b3fd536eea8b37baee62e75d81b3cb
+  consumers: []
+- artifact: tests/catalog/stream.test.mjs
+  sha256: a31c301f9865f77a8e3df7b74347208ebcbb9470deb9fd585381438322e6cac8
+  consumers: []
+- artifact: tests/catalog/composition-proof.mjs
+  sha256: ecd051c5daebb934560d43b591a66ef85118e250972a308a2dc455194255444c
+  consumers: []
+- artifact: tests/catalog/runtime-child.mjs
+  sha256: 5bca7455fa332cce06071f54711674535ab4121c9140190d928b36762194adcb
+  consumers: []
+- artifact: tests/catalog/stream-capacity-proof.mjs
+  sha256: 19c4478466b99af80e5e0679c2456d273f15ccd6be43c1710b4b0c520e67adba
+  consumers: []
+- artifact: tests/catalog/copy-live.test.mjs
+  sha256: 4133b0b31146297844adaccbe6f0bb9c834d9b73a531703361435a17ce0118fa
+  consumers: []
+- artifact: tests/catalog/recovery-live.test.mjs
+  sha256: c56786b5774a8ac4ffb428c57d4d5b2b9af1eb69d6ed5455c9aa35ac549456e6
+  consumers: []
+- artifact: scripts/catalog-copy-live-proof.mjs
+  sha256: 6f59f116b7aabfa7c2dff652b580897757f2a1808f2698f18367c26799497e8c
+  consumers: []
+- artifact: scripts/catalog-recovery-live-proof.mjs
+  sha256: 4f2c916ee6d9cd98962d234bb39d7788976ebd4c2a693866b0e4cb67d058da72
+  consumers: []
+- artifact: scripts/catalog-runtime-live-proof.mjs
+  sha256: 8163ac36edb98bd46e969f1ff7bb864cf455193c8205185f31e1a4cc3da4d38f
+  consumers: []
+- artifact: evidence/issue-6-review-remediation.md
+  sha256: beee5aeeec483a65f509a76a947aeb6928d217898368487b6544610ed9e85e75
+  consumers: []
+- artifact: evidence/issue-6-review-checks.json
+  sha256: a92536f90a177dad46b4a06d753b81a96f0e34af61df1454ef11528128af8049
+  consumers: []
+- artifact: tests/catalog/ingestion.test.mjs
+  sha256: 309314a8da7e133682cfc05fadb1823b9ea4857a7612a83c674f4b098bc5811a
+  consumers: []
+- artifact: tests/catalog/terminal-capacity-proof.mjs
+  sha256: 397deaea458096fd92e47ce324d74c72d410a2c024ba9972abf519190958fcc0
+  consumers: []
+- artifact: evidence/issue-6-terminal-red.log
+  sha256: 5a3a5399af5422930088cb613777b211fa4965bf9bf083fef1e7a0c6657fecf3
+  consumers: []
+- artifact: tests/catalog/observability-proof.mjs
+  sha256: e60432493a9471c2fdfeb793cfd311f60f32b51005f5d1fdf3f5de4c4c992a3b
+  consumers: []
+- artifact: tools/compose-smoke.mjs
+  sha256: f3891594660884cdaa275c4ace1e1af6da98f3e0610862311bc28093651c3f8c
+  consumers: []
+- artifact: evidence/issue-6-terminal-checks/compose-recovery-proof-fail-closed-20260921.log
+  sha256: c77ce4ef5025e6215e06f9d8246bbb1996c6c1b6be41e9c7ac25d3059a64364e
+  consumers: []
+- artifact: evidence/issue-6-terminal-checks/final-verification-fail-closed-20260921.log
+  sha256: 8f877c90b38d4d96967f56250858a9019958c3ff87ec9004e21c8c00e7762118
+  consumers: []
+verification:
+- command: pnpm check
+  result: passed
+  exitCode: 0
+  detail: authority, toolchain, config, contracts, architecture, rule parity, lint, typecheck; 393 total, 377 passed, 16 unrelated
+    opt-in skips; zero Catalog skips
+- command: pnpm test:catalog-ingestion
+  result: passed
+  exitCode: 0
+  detail: 6 passed, 0 skipped; unchanged golden hash, incremental binary digest/order/hex/finalization contract, generated
+    record guard, TEMP runtime type allowlist, Compose Catalog migration ordering and local-provider wiring
+- command: pnpm test:catalog-stream
+  result: passed
+  exitCode: 0
+  detail: 21 passed, 0 skipped; recovery-before-every-export, real scheduler loss/restoration ticks, truthful readiness, bounded
+    stream/generation/validation/COPY/transaction telemetry, safe correlation fields, batch duration, stream/COPY backpressure,
+    linear framing and 168344938-byte capacity/backpressure subprocess; production complete() verifies 131072 distinct
+    manifests, 131072 reconstructions, two recounts, one transition and exact replay with 161296 bytes peak retained heap
+    growth (<4194304); lazy SQL fixture, not PostgreSQL capacity
+- command: pnpm test:catalog-copy
+  result: passed
+  exitCode: 0
+  detail: 1 passed, 0 skipped; disposable PostgreSQL 17.11, TEMP COPY/merge/reconstruction, locked replay conflict, terminal
+    timestamp, durable ordinal/count tamper, rollback and grants; real COPY/transaction OTel instrumentation and reconciled
+    batch metrics
+- command: pnpm test:catalog-recovery
+  result: passed
+  exitCode: 0
+  detail: 1 passed, 0 skipped; create/started/batch/terminal/reject unknown COMMIT and terminal acknowledgement loss; SIGKILL
+    and new PID through production composition, real mTLS InternalApi fixture, readiness 503 to 200 and recovery before new
+    export
+- command: pnpm contracts:check-generated
+  result: passed
+  exitCode: 0
+- command: pnpm config:check
+  result: passed
+  exitCode: 0
+- command: pnpm architecture:check
+  result: passed
+  exitCode: 0
+- command: pnpm typecheck
+  result: passed
+  exitCode: 0
+- command: pnpm lint
+  result: passed
+  exitCode: 0
+- command: pnpm test
+  result: passed
+  exitCode: 0
+  detail: 393 total, 377 passed, 16 unrelated live skips, no Catalog skips (executed within pnpm check)
+- command: pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-final-observability
+  result: passed
+  exitCode: 0
+  detail: disposable PostgreSQL/Kafka recovery, Catalog migrations before startup, 15 healthy runtimes plus local HTTPS provider
+    fixture, native delivery proofs, graceful shutdown and project-scoped cleanup; no real provider access
+- command: pnpm db:smoke
+  result: passed
+  exitCode: 0
+- command: git diff --check
+  result: passed
+  exitCode: 0
+limitations:
+- No real AROMA calls or mutations were performed.
+- No commit, push, PR or merge was performed.
+- Issue 16 must use its own Catalog owner-local database adapter; it must not import catalog-supplier-sync runtime code.
+- Live restart uses local bootstrap/DNS and a local mutual-TLS InternalApi fixture, not deployed api-internal, Gateway or
+  provider.
+- Capacity proof uses a controlled persistence seam and sampled memory in a 64 MiB old-space subprocess, not an end-to-end
+  DB/provider load benchmark.
+- OTel instrumentation and runtime metrics are observed; external collector delivery is not claimed.
+- Mandatory Compose recovery proof uses generated fixture credentials and a local HTTPS provider, not production secrets or provider.
+- Terminal capacity proof executes production complete/hash/reconstruction with lazy SQL fixtures; it is not a PostgreSQL
+  capacity benchmark.
+- First pnpm check attempt hit AROMA binding saturation DB_POOL_EXHAUSTED; isolated and full reruns passed unchanged; failed
+  receipt retained.

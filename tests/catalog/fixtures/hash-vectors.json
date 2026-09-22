@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "sourceProductKeyHash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "sourceVariantKeyHash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "sourceOfferKeyHash": "3333333333333333333333333333333333333333333333333333333333333333",
+      "displayName": "Кофе ☕\tстрока\n\\\"",
+      "unit": "piece",
+      "supplierUnitMinor": "12345",
+      "currency": "RUB",
+      "availability": "Available",
+      "imageUrl": null,
+      "supplierPromotions": [],
+      "grindOptions": [],
+      "sourceIdentityScheme": "hmac-sha256-v1"
+    }
+  ],
+  "batchHash": "c720f27453a3974b8ac6531421b7bc2c1022ef388a0b06b1476f9bb74366e470",
+  "contentHash": "a54d94109a18a7024dca3d4e2490f169eee9b0d0d2c442cf2dab1574cdf45fe2"
+}
