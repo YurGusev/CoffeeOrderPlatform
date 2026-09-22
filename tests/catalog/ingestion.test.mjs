@@ -61,6 +61,29 @@ void test("generated record guard accepts only the four typed variants", () => {
     startedAt:"2026-09-20T00:00:00Z",
   }), true);
   assert.equal(isAromaCatalogExportRecord({recordType:"other"}), false);
+  for (const money of ["1.0","01","+1","1e2"," 1",1,Number.MAX_SAFE_INTEGER+1,null]) {
+    assert.equal(isAromaCatalogExportRecord({streamVersion:"1",recordType:"snapshot-batch",snapshotRef:"snp_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      batchNumber:0,offerCount:1,uncompressedBytes:100,batchHash:VECTOR.batchHash,previousBatchHash:null,
+      items:[{...ITEM,supplierUnitMinor:money}]}),false,`invalid money ${String(money)}`);
+  }
+});
+
+void test("Catalog rejects negative money before acquiring a transaction", async () => {
+  const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/catalog-import-store.js");
+  const items=[{...ITEM,supplierUnitMinor:"-1"}];
+  const record={streamVersion:"1",recordType:"snapshot-batch",snapshotRef:"snp_01ARZ3NDEKTSV4RRFFQ69G5FAV",batchNumber:0,
+    offerCount:1,uncompressedBytes:hashes.catalogBatchBytes(items),batchHash:catalogBatchHash(items),previousBatchHash:null,items};
+  // The shared Money scalar is signed; Catalog supplier prices are not.
+  assert.equal(isAromaCatalogExportRecord(record),true);
+  await assert.rejects(() => createCatalogImportStore({}).recordBatch(record),error => error.code === "INVALID_STREAM_SCHEMA");
+});
+
+void test("reject accepts only closed durable codes even from untyped callers", async () => {
+  const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/catalog-import-store.js");
+  const store=createCatalogImportStore({});
+  for (const code of ["SECRET_SQL", "SNAPSHOT_NOT_FOUND", "TERMINAL_REPLAY_CONFLICT", "BATCH_REPLAY_CONFLICT"]) {
+    await assert.rejects(() => store.reject("snp_01ARZ3NDEKTSV4RRFFQ69G5FAV",code), error => error.code === "INVALID_FAILURE_CODE");
+  }
 });
 
 void test("TEMP table owner capability rejects runtime type injection", () => {
@@ -80,6 +103,15 @@ void test("Compose recovery proof applies Catalog migrations before runtime star
   assert.notEqual(migrations, -1, "recovery proof must apply Catalog migrations");
   assert.notEqual(startup, -1, "Compose startup boundary is missing");
   assert.ok(migrations < startup, "Catalog migrations must precede Compose runtime startup");
+});
+
+void test("Compose Kafka recreation removes anonymous volumes from the replaced container", async () => {
+  const source = await readFile(new URL("../../tools/compose-smoke.mjs", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /\["rm", "--force", "--stop", "--volumes", "kafka"\]/u,
+    "Kafka recreation must remove anonymous image volumes while preserving the named log volume",
+  );
 });
 
 void test("Compose recovery proof routes startup export only to the local provider fixture", async () => {

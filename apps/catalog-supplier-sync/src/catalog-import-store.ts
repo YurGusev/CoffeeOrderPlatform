@@ -8,7 +8,20 @@ import {toInstant} from "@coffee-platform/platform-time";
 type Started = Extract<AromaCatalogExportRecord, {recordType: "snapshot-started"}>;
 type Batch = Extract<AromaCatalogExportRecord, {recordType: "snapshot-batch"}>;
 type Completed = Extract<AromaCatalogExportRecord, {recordType: "snapshot-completed"}>;
-type Failed = Extract<AromaCatalogExportRecord, {recordType: "snapshot-failed"}>;
+const FAILURE_CODES = [
+  "PROVIDER_UNAVAILABLE", "PROVIDER_TIMEOUT", "INVALID_STREAM", "HTTP_BEFORE_STARTED", "RECOVERY_INCOMPLETE", "IMPORT_DEADLINE_EXCEEDED",
+  "INVALID_STREAM_SCHEMA", "INVALID_STREAM_SEQUENCE", "INVALID_STREAM_MISSING_TERMINAL",
+  "CATALOG_STREAM_LINE_TOO_LARGE", "CATALOG_STREAM_EMPTY_LINE", "CATALOG_STREAM_INVALID_UTF8", "CATALOG_STREAM_INVALID_JSON", "CATALOG_STREAM_INCOMPLETE",
+  "BATCH_OFFER_COUNT_MISMATCH", "BATCH_OFFER_LIMIT", "BATCH_BYTE_LIMIT", "ITEM_BYTE_LIMIT", "BATCH_BYTE_COUNT_MISMATCH",
+  "BATCH_HASH_CONFLICT", "BATCH_SEQUENCE_CONFLICT", "BATCH_CHAIN_CONFLICT", "SOURCE_IDENTITY_COLLISION",
+  "BATCH_DURABLE_ORDINAL_MISMATCH", "BATCH_DURABLE_HASH_MISMATCH",
+  "TERMINAL_COUNT_MISMATCH", "TERMINAL_CHAIN_MISMATCH", "TERMINAL_CONTENT_HASH_MISMATCH", "IMPORT_DB_ROLLED_BACK",
+] as const;
+export type CatalogFailureCode = typeof FAILURE_CODES[number];
+export function catalogFailureCode(code: unknown): CatalogFailureCode | undefined {
+  if (code === "BATCH_REPLAY_CONFLICT") return "BATCH_HASH_CONFLICT";
+  return FAILURE_CODES.find(candidate => candidate === code);
+}
 export type CatalogItem = Batch["items"][number];
 export type SnapshotState = "Created" | "Receiving" | "Received" | "Rejected";
 export type SnapshotRow = Readonly<{
@@ -75,6 +88,9 @@ function transactionOptions(signal?: AbortSignal): Readonly<{mode: "background";
   return {mode: "background", ...(signal === undefined ? {} : {signal})};
 }
 function assertBatchShape(record: Batch): void {
+  if (record.items.some(item => typeof item.supplierUnitMinor !== "string" || !/^(0|[1-9][0-9]*)$/u.test(item.supplierUnitMinor))) {
+    throw new CatalogImportError("INVALID_STREAM_SCHEMA");
+  }
   if (record.offerCount !== record.items.length) throw new CatalogImportError("BATCH_OFFER_COUNT_MISMATCH");
   if (record.items.length > CATALOG_MAX_OFFERS_PER_BATCH) throw new CatalogImportError("BATCH_OFFER_LIMIT");
   const bytes = catalogBatchBytes(record.items);
@@ -97,7 +113,19 @@ function sameTerminal(row: SnapshotRow, record: Completed): boolean {
 export type CatalogImportStore = ReturnType<typeof createCatalogImportStore>;
 export function createCatalogImportStore(database: Database, telemetry: CatalogTelemetry = new CatalogTelemetry()) {
   const transact = <T>(signal: AbortSignal | undefined, work: (transaction: Transaction) => Promise<T>): Promise<T> =>
-    telemetry.observe("transaction", () => withTransaction(database, transactionOptions(signal), work));
+    telemetry.observe("transaction", async () => {
+      let observed: Transaction | undefined;
+      try {
+        return await withTransaction(database, transactionOptions(signal), transaction => { observed = transaction; return work(transaction); });
+      } catch (error) {
+        // Only an observed rollback of a known SQL failure is a rejection candidate.
+        // Lost connections, cancelled COPY and unknown COMMIT/ROLLBACK keep their DB classification.
+        if (error instanceof DatabaseTransactionError && error.code === "DB_QUERY_FAILED" && observed?.state() === "RolledBack") {
+          throw new CatalogImportError("IMPORT_DB_ROLLED_BACK");
+        }
+        throw error;
+      }
+    });
   const statement = <Row>(sql: string) => defineStatement<Row, readonly SqlScalar[]>(database, sql);
   const createTemp = defineTemporaryTable(database, "catalog_import_batch", TEMP_COLUMNS);
   const copyTemp = defineCopy(database, "catalog_import_batch", TEMP_COLUMN_NAMES, "pg_temp");
@@ -297,7 +325,8 @@ export function createCatalogImportStore(database: Database, telemetry: CatalogT
         return "stored";
       });
     },
-    async reject(snapshotRef: string, code: Failed["code"] | "HTTP_BEFORE_STARTED" | "RECOVERY_INCOMPLETE" | "IMPORT_DEADLINE_EXCEEDED", signal?: AbortSignal): Promise<"stored" | "replay"> {
+    async reject(snapshotRef: string, code: CatalogFailureCode, signal?: AbortSignal): Promise<"stored" | "replay"> {
+      if (catalogFailureCode(code) !== code) throw new CatalogImportError("INVALID_FAILURE_CODE");
       return transact(signal, async transaction => {
         const row = (await lockSnapshot(transaction, [snapshotRef])).rows[0];
         if (row === undefined) throw new CatalogImportError("SNAPSHOT_NOT_FOUND");

@@ -1749,7 +1749,7 @@ function assertKafkaDurableRetention(
   runCompose(
     projectName,
     secretsDir,
-    ["rm", "--force", "--stop", "kafka"],
+    ["rm", "--force", "--stop", "--volumes", "kafka"],
     {composeFile},
   );
   runCompose(

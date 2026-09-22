@@ -2,13 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {Readable} from "node:stream";
 import {trace} from "@opentelemetry/api";
+import {DatabaseTransactionError} from "../../packages/platform-database/dist/index.js";
+import {CatalogImportError} from "../../apps/catalog-supplier-sync/dist/catalog-import-store.js";
+import {catalogBatchBytes, catalogBatchHash} from "../../packages/contracts/aroma-v1/dist/index.js";
 import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 import {readNdjson} from "../../apps/catalog-supplier-sync/dist/ndjson-reader.js";
 import {createHourlyScheduler} from "../../apps/catalog-supplier-sync/dist/hourly-scheduler.js";
 import {InternalCatalogClient} from "../../apps/catalog-supplier-sync/dist/internal-api-client.js";
 import {runCatalogImport} from "../../apps/catalog-supplier-sync/dist/run-catalog-import.js";
-import {reconcileBatch, reconcileCompleted, reconcileCreate, reconcileRejected, reconcileStarted} from "../../apps/catalog-supplier-sync/dist/reconcile-imports.js";
+import {CatalogOutcomeUnknown, reconcileBatch, reconcileCompleted, reconcileCreate, reconcileRejected, reconcileStarted} from "../../apps/catalog-supplier-sync/dist/reconcile-imports.js";
 
 const supplierRef = "sup_00000000000000000000000001";
 const snapshotRef = "snp_01ARZ3NDEKTSV4RRFFQ69G5FBA";
@@ -19,12 +22,14 @@ const completedRecord = Object.freeze({streamVersion:"1", recordType:"snapshot-c
   contentHash:"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", completedAt:"2026-09-20T00:01:00Z"});
 
 function importStore(events) {
+  const state={state:"Created",failure_code:null};
   return Object.freeze({
+    durable:state,
     create: async () => { events.push("create"); },
-    acceptStarted: async () => { events.push("started"); },
+    acceptStarted: async () => { events.push("started"); state.state="Receiving"; },
     recordBatch: async () => { events.push("batch"); return "stored"; },
-    complete: async () => { events.push("complete"); return "stored"; },
-    reject: async (_ref, code) => { events.push(`reject:${code}`); return "stored"; },
+    complete: async () => { events.push("complete"); state.state="Received"; return "stored"; },
+    reject: async (_ref, code) => { events.push(`reject:${code}`); state.state="Rejected"; state.failure_code=code; },
     getSnapshot: async () => null,
     listIncomplete: async () => [],
     verifyBatchReplay: async () => false,
@@ -32,11 +37,152 @@ function importStore(events) {
   });
 }
 
+const emptyBatch = Object.freeze({streamVersion:"1", recordType:"snapshot-batch", snapshotRef, batchNumber:0,
+  offerCount:0, uncompressedBytes:catalogBatchBytes([]), batchHash:catalogBatchHash([]), previousBatchHash:null, items:[]});
+const importOptions = (store, records) => ({store, supplierRef, snapshotRef, signal:new AbortController().signal,
+  context:{correlationId:"33333333-3333-4333-8333-333333333333"}, exportCatalog:async function* () { yield* records; }});
+
+for (const [label, records, code] of /** @type {Array<[string, unknown[], string]>} */ ([
+  ["schema", [{}], "INVALID_STREAM_SCHEMA"],
+  ["batch before start", [emptyBatch], "INVALID_STREAM_SEQUENCE"],
+  ["completed before start", [completedRecord], "INVALID_STREAM_SEQUENCE"],
+  ["duplicate start", [startedRecord, startedRecord], "INVALID_STREAM_SEQUENCE"],
+  ["wrong supplier", [{...startedRecord, supplierRef:"sup_00000000000000000000000002"}], "INVALID_STREAM_SEQUENCE"],
+  ["wrong snapshot", [{...startedRecord, snapshotRef:"snp_01ARZ3NDEKTSV4RRFFQ69G5FBB"}], "INVALID_STREAM_SEQUENCE"],
+  ["gap", [startedRecord, {...emptyBatch,batchNumber:1}], "BATCH_SEQUENCE_CONFLICT"],
+  ["terminal count", [startedRecord, {...completedRecord,batchCount:1}], "TERMINAL_COUNT_MISMATCH"],
+  ["missing terminal", [startedRecord], "INVALID_STREAM_MISSING_TERMINAL"],
+  ["second terminal", [startedRecord,completedRecord,completedRecord], "INVALID_STREAM_SEQUENCE"],
+])) {
+  void test(`durable closed reason: ${label}`, async () => {
+    const events=[];
+    const store=importStore(events);
+    await assert.rejects(() => runCatalogImport(importOptions(store,records)), error => error.code === code);
+    assert.deepEqual(store.durable,{state:"Rejected",failure_code:code});
+    assert.equal(events.at(-1),`reject:${code}`);
+    assert.equal(events.includes("complete"),false);
+  });
+}
+for (const code of ["BATCH_CHAIN_CONFLICT","SOURCE_IDENTITY_COLLISION","TERMINAL_CONTENT_HASH_MISMATCH",
+  "BATCH_DURABLE_HASH_MISMATCH","BATCH_DURABLE_ORDINAL_MISMATCH","BATCH_REPLAY_CONFLICT","BATCH_BYTE_COUNT_MISMATCH"]) {
+  void test(`durable store reason: ${code}`, async () => {
+    const events=[];
+    const store={...importStore(events),recordBatch:async () => {throw new CatalogImportError(code);}};
+    await assert.rejects(() => runCatalogImport(importOptions(store,[startedRecord,emptyBatch])),error => error.code === code);
+    const persisted=code === "BATCH_REPLAY_CONFLICT" ? "BATCH_HASH_CONFLICT" : code;
+    assert.equal(events.at(-1),`reject:${persisted}`);
+    assert.deepEqual(store.durable,{state:"Rejected",failure_code:persisted});
+    assert.equal(events.includes("complete"),false);
+  });
+}
+for (const code of ["DB_CONNECTION_LOST","DB_ROLLBACK_FAILED","DB_QUERY_FAILED","TRANSACTION_OUTCOME_UNKNOWN"]) {
+  void test(`uncertain database ${code} never writes terminal failure`, async () => {
+    const events=[];
+    const store={...importStore(events),recordBatch:async () => {throw new DatabaseTransactionError(code);},
+      getSnapshot:async () => {throw new DatabaseTransactionError("DB_CONNECTION_LOST");},
+      verifyBatchReplay:async () => {throw new DatabaseTransactionError("DB_CONNECTION_LOST");}};
+    await assert.rejects(() => runCatalogImport(importOptions(store,[startedRecord,emptyBatch])));
+    assert.equal(events.some(value => value.startsWith("reject:")),false);
+  });
+}
+void test("unknown batch outcome stays unknown when its reconciliation transaction rolls back", async () => {
+  const events=[];
+  const store={...importStore(events),recordBatch:async () => {throw new DatabaseTransactionError("TRANSACTION_OUTCOME_UNKNOWN");},
+    verifyBatchReplay:async () => {throw new CatalogImportError("IMPORT_DB_ROLLED_BACK");}};
+  await assert.rejects(() => runCatalogImport(importOptions(store,[startedRecord,emptyBatch])),
+    error => error instanceof CatalogOutcomeUnknown && error.operation === "batch");
+  assert.equal(events.some(value => value.startsWith("reject:")),false);
+});
+void test("unknown error text and arbitrary code are never durable failure codes", async () => {
+  for (const error of [new Error("BATCH_HASH_CONFLICT: password=secret"), Object.assign(new Error("SQL secret"),{code:"SECRET_PROVIDER_BODY"})]) {
+    const events=[];
+    const store={...importStore(events),recordBatch:async () => {throw error;}};
+    await assert.rejects(() => runCatalogImport(importOptions(store,[startedRecord,emptyBatch])));
+    assert.equal(events.at(-1),"reject:INVALID_STREAM");
+  }
+});
+for (const code of ["PROVIDER_UNAVAILABLE","PROVIDER_TIMEOUT","INVALID_STREAM","BATCH_HASH_CONFLICT","SOURCE_IDENTITY_COLLISION"]) {
+  void test(`provider terminal contract code ${code} before started is preserved`, async () => {
+    const events=[];
+    await assert.rejects(() => runCatalogImport(importOptions(importStore(events),[
+      {streamVersion:"1",recordType:"snapshot-failed",snapshotRef,code,failedAt:"2026-09-20T00:01:00Z"}])));
+    assert.deepEqual(events,["create",`reject:${code}`]);
+  });
+}
+void test("HTTP protocol failures persist bounded typed codes and cancel unread body", async () => {
+  for (const [status, contentType, cancelRejects] of [[503,"application/problem+json",false],[200,"text/plain",false],[503,"application/problem+json",true],[200,"text/plain",true]]) {
+    const events=[]; let cancelled=false;
+    const body=new ReadableStream({cancel() {cancelled=true; if (cancelRejects) return Promise.reject(new Error("private cancellation failure"));}});
+    const client=new InternalCatalogClient({fetch:async () => new Response(body,{status,headers:{"content-type":contentType}})});
+    await assert.rejects(() => runCatalogImport({...importOptions(importStore(events),[]),exportCatalog:client.export.bind(client)}));
+    assert.equal(events.at(-1),"reject:HTTP_BEFORE_STARTED"); assert.equal(cancelled,true);
+  }
+});
+
+void test("response-body transport failure before started persists HTTP_BEFORE_STARTED", async () => {
+  const events=[];
+  const body=new ReadableStream({start(controller) {controller.error(new TypeError("terminated with private provider detail"));}});
+  const client=new InternalCatalogClient({fetch:async () => new Response(body,{headers:{"content-type":"application/x-ndjson"}})});
+  await assert.rejects(() => runCatalogImport({...importOptions(importStore(events),[]),exportCatalog:client.export.bind(client)}));
+  assert.equal(events.at(-1),"reject:HTTP_BEFORE_STARTED");
+});
+
+void test("HTTP client exposes stable protocol codes without changing durable phase mapping", async () => {
+  const client=new InternalCatalogClient({fetch:async () => new Response("private body",{status:503})});
+  await assert.rejects(async () => {
+    for await (const record of client.export({snapshotRef,supplierRef},{correlationId:"safe",signal:new AbortController().signal})) assert.fail(JSON.stringify(record));
+  },error => error.code === "CATALOG_EXPORT_HTTP_503");
+});
+
+void test("known rollback needs a successful guarded reread before safe rejection", async () => {
+  for (const available of [true,false]) {
+    const events=[];
+    const store={...importStore(events),recordBatch:async () => {throw new CatalogImportError("IMPORT_DB_ROLLED_BACK");},
+      getSnapshot:async () => { if (!available) throw new DatabaseTransactionError("DB_CONNECTION_LOST");
+        return {supplier_ref:supplierRef,state:"Receiving"}; }};
+    await assert.rejects(() => runCatalogImport(importOptions(store,[startedRecord,emptyBatch])));
+    assert.equal(events.some(value => value.startsWith("reject:")),available);
+    if (available) assert.equal(events.at(-1),"reject:IMPORT_DB_ROLLED_BACK");
+  }
+});
+void test("unknown application error before started is not a transport failure", async () => {
+  const events=[];
+  await assert.rejects(() => runCatalogImport({...importOptions(importStore(events),[]),exportCatalog:() => ({[Symbol.asyncIterator](){return this;},next(){return Promise.reject(new Error("untrusted message"));}})}));
+  assert.equal(events.at(-1),"reject:INVALID_STREAM");
+});
+
 async function collect(chunks, options = {}) {
   const result = [];
   for await (const value of readNdjson(Readable.from(chunks), options)) result.push(value);
   return result;
 }
+
+void test("client transport, empty body and malformed NDJSON persist only bounded protocol reasons", async () => {
+  const cases = [
+    {fetch:async () => {throw new Error("provider credentials and body");},code:"HTTP_BEFORE_STARTED"},
+    {fetch:async () => new Response(null,{status:200,headers:{"content-type":"application/x-ndjson"}}),code:"HTTP_BEFORE_STARTED"},
+    ...[
+      [Buffer.from("\n"),"CATALOG_STREAM_EMPTY_LINE"],
+      [Buffer.from("no-json\n"),"CATALOG_STREAM_INVALID_JSON"],
+      [Buffer.from([255,10]),"CATALOG_STREAM_INVALID_UTF8"],
+      [Buffer.from("{}"),"CATALOG_STREAM_INCOMPLETE"],
+    ].map(([wire,code]) => ({fetch:async () => new Response(wire,{headers:{"content-type":"application/x-ndjson"}}),code})),
+  ];
+  for (const {fetch,code} of cases) {
+    const store=importStore([]),client=new InternalCatalogClient({fetch});
+    await assert.rejects(() => runCatalogImport({...importOptions(store,[]),exportCatalog:client.export.bind(client)}));
+    assert.deepEqual(store.durable,{state:"Rejected",failure_code:code});
+  }
+});
+
+void test("provider terminal after batch waits for clean EOF and rejects a subsequent record", async () => {
+  const failed={streamVersion:"1",recordType:"snapshot-failed",snapshotRef,code:"PROVIDER_TIMEOUT",failedAt:"2026-09-21T00:00:00Z"};
+  for (const tail of [[],[emptyBatch],[startedRecord],[failed],[completedRecord]]) {
+    const store=importStore([]);
+    await assert.rejects(() => runCatalogImport(importOptions(store,[startedRecord,emptyBatch,failed,...tail])));
+    assert.deepEqual(store.durable,{state:"Rejected",failure_code:tail.length === 0 ? "PROVIDER_TIMEOUT" : "INVALID_STREAM_SEQUENCE"});
+  }
+});
 
 void test("large fragmented importer is memory-bounded and persistence backpressures upstream", {timeout:180_000}, async (t) => {
   const {stdout} = await promisify(execFile)(process.execPath, ["--expose-gc", "--max-old-space-size=64", "tests/catalog/stream-capacity-proof.mjs"], {timeout:170_000});
@@ -157,7 +303,7 @@ void test("completed snapshot is not persisted as Received until clean EOF", asy
     exportCatalog:async function* () { yield startedRecord; yield completedRecord; yield startedRecord; },
   }), /INVALID_STREAM_SEQUENCE/u);
   assert.equal(events.includes("complete"), false);
-  assert.equal(events.at(-1), "reject:INVALID_STREAM");
+  assert.equal(events.at(-1), "reject:INVALID_STREAM_SEQUENCE");
 });
 
 void test("one total deadline aborts an import across the whole traversal", async () => {

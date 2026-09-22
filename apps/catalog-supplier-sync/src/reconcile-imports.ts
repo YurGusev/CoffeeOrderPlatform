@@ -1,6 +1,6 @@
 import type {AromaCatalogExportRecord} from "@coffee-platform/contracts-aroma-v1";
 import {toInstant} from "@coffee-platform/platform-time";
-import {CatalogImportError, isOutcomeUnknown, type CatalogImportStore, type SnapshotRow} from "./catalog-import-store.js";
+import {isOutcomeUnknown, type CatalogImportStore, type SnapshotRow} from "./catalog-import-store.js";
 
 type Batch = Extract<AromaCatalogExportRecord, {recordType: "snapshot-batch"}>;
 type Completed = Extract<AromaCatalogExportRecord, {recordType: "snapshot-completed"}>;
@@ -41,7 +41,7 @@ export async function runReconciled(
     let durable: boolean;
     try { durable = await reconcile(); }
     catch (readError) {
-      if (readError instanceof CatalogReconciledFailure || readError instanceof CatalogImportError) throw readError;
+      if (readError instanceof CatalogReconciledFailure) throw readError;
       throw new CatalogOutcomeUnknown(operation, readError);
     }
     if (!durable) throw new CatalogReconciledFailure(operation, "DURABLE_POSTCONDITION_FAILED");

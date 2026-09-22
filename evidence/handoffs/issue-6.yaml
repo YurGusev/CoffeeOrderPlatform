@@ -41,21 +41,21 @@ outputs:
   consumers:
   - 16
 - artifact: apps/catalog-supplier-sync/src/catalog-import-store.ts
-  sha256: e7719f63d009578dca82e2cb72be22822d2721005daec3c055d09d164a7c7fac
+  sha256: 98ca769914767769f965701ae610a3a20352872bf94487b642d6604152f9d5ae
   consumers: []
 - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
-  sha256: 38f01d6a0f5b1e8a69460cb9afcd3a805ef1162dbc943becd1b3a6a651c28ec9
+  sha256: 24e7cfeb4a926baa86f8164ee2a64a22c8c3cbde09116c5b18d41820473d7da5
   consumers:
   - 16
 - artifact: evidence/issue-6-acceptance.md
-  sha256: ac55bdb3c89a90c0625d996f529944985755859a3f75afe452ef454aced6d682
+  sha256: 47b0174f9be122d0197f9d2fe2919b85defd499880b55c03dbc9409cd104615a
   consumers:
   - 16
 - artifact: apps/catalog-supplier-sync/src/main.ts
   sha256: e153e76c9e0c9ef87ef399db7eaa639e33eb4d4565482c129c7a32e2424fa029
   consumers: []
 - artifact: apps/catalog-supplier-sync/src/run-catalog-import.ts
-  sha256: 464d5ffc8bedc82e64b26fe5a5cca4cd8357ae6845353dbbd756d8749e47c8df
+  sha256: 25a096404aa14d89de9728549a44bd9544b864c1ecca3cac3f13a458ea320051
   consumers: []
 - artifact: apps/catalog-supplier-sync/src/ndjson-reader.ts
   sha256: c9206a0dbfaddfdb08ef461a382cb7a7177a95e77638a7ab92073af9e9a9cab6
@@ -64,7 +64,7 @@ outputs:
   sha256: eca0ac3dff6bed8a45d45cc33db11bace6b3fd536eea8b37baee62e75d81b3cb
   consumers: []
 - artifact: tests/catalog/stream.test.mjs
-  sha256: a31c301f9865f77a8e3df7b74347208ebcbb9470deb9fd585381438322e6cac8
+  sha256: d5cf7baff34d1ff05b888d4a3f4b91f9184f14d8abb77d24757cfe014b67d8e2
   consumers: []
 - artifact: tests/catalog/composition-proof.mjs
   sha256: ecd051c5daebb934560d43b591a66ef85118e250972a308a2dc455194255444c
@@ -76,13 +76,13 @@ outputs:
   sha256: 19c4478466b99af80e5e0679c2456d273f15ccd6be43c1710b4b0c520e67adba
   consumers: []
 - artifact: tests/catalog/copy-live.test.mjs
-  sha256: 4133b0b31146297844adaccbe6f0bb9c834d9b73a531703361435a17ce0118fa
+  sha256: cfc484a4143b282f3074d5bd97113323c4b02d3d379baab21cb4efba8eeba2b5
   consumers: []
 - artifact: tests/catalog/recovery-live.test.mjs
   sha256: c56786b5774a8ac4ffb428c57d4d5b2b9af1eb69d6ed5455c9aa35ac549456e6
   consumers: []
 - artifact: scripts/catalog-copy-live-proof.mjs
-  sha256: 6f59f116b7aabfa7c2dff652b580897757f2a1808f2698f18367c26799497e8c
+  sha256: 977c62991d05972f47ac248b30ea071c1b0bc2e04712a6e2a7a7f2b230a2ac23
   consumers: []
 - artifact: scripts/catalog-recovery-live-proof.mjs
   sha256: 4f2c916ee6d9cd98962d234bb39d7788976ebd4c2a693866b0e4cb67d058da72
@@ -91,13 +91,13 @@ outputs:
   sha256: 8163ac36edb98bd46e969f1ff7bb864cf455193c8205185f31e1a4cc3da4d38f
   consumers: []
 - artifact: evidence/issue-6-review-remediation.md
-  sha256: beee5aeeec483a65f509a76a947aeb6928d217898368487b6544610ed9e85e75
+  sha256: 66ed591ca7465e39d795dae0c7d907a27129f8155c9ca9291fbf0a407fcd0e83
   consumers: []
 - artifact: evidence/issue-6-review-checks.json
-  sha256: a92536f90a177dad46b4a06d753b81a96f0e34af61df1454ef11528128af8049
+  sha256: 8500179ef407855c2467ec533a9e6fe895ab789a54c9d6f6d3a91a654f7f6aa8
   consumers: []
 - artifact: tests/catalog/ingestion.test.mjs
-  sha256: 309314a8da7e133682cfc05fadb1823b9ea4857a7612a83c674f4b098bc5811a
+  sha256: f69d1247a2ecaae8bf4a9c6d3a8146a6f789c1a0c5256eb875a2e2b51f09eed6
   consumers: []
 - artifact: tests/catalog/terminal-capacity-proof.mjs
   sha256: 397deaea458096fd92e47ce324d74c72d410a2c024ba9972abf519190958fcc0
@@ -109,7 +109,31 @@ outputs:
   sha256: e60432493a9471c2fdfeb793cfd311f60f32b51005f5d1fdf3f5de4c4c992a3b
   consumers: []
 - artifact: tools/compose-smoke.mjs
-  sha256: f3891594660884cdaa275c4ace1e1af6da98f3e0610862311bc28093651c3f8c
+  sha256: f52ce6ec3c72ffa278ef6645fb75037fc8fc750453807ad11fe9ebd4aa075bdc
+  consumers: []
+- artifact: apps/catalog-supplier-sync/src/internal-api-client.ts
+  sha256: 0063bb6e3ccec12b8f31a17a3e3b212a249e779b596ddf1b68a776b7203a453f
+  consumers: []
+- artifact: apps/catalog-supplier-sync/src/reconcile-imports.ts
+  sha256: 71bedc52c7cbbcc3af7be8485be061916786b9b777c3bb4f74452c507921dd59
+  consumers: []
+- artifact: config/database-role-map.json
+  sha256: 4530d9016158eb97e4afad02fb5d1bd8bcce9b383e9e3ac3b662049088bb93f4
+  consumers: []
+- artifact: scripts/catalog-live-harness.mjs
+  sha256: a8fcc89bb4510be8a69d02a976ae338975290d53ae3b8579763deb6ee8fb8533
+  consumers: []
+- artifact: tests/architecture/checks.test.mjs
+  sha256: 306603f655c6a6ae7c3f37c1a91114ce660829232d3cfec9c795948a39f9941a
+  consumers: []
+- artifact: evidence/issue-6-terminal-checks/final-verification-20260922.log
+  sha256: 914b6910e4a87de4cce6365ebdf018ec0140abc1ca3104bcfe2601cdbde18445
+  consumers: []
+- artifact: evidence/issue-6-terminal-checks/compose-recovery-proof-fresh-image-20260922.log
+  sha256: fcf6813c9ee97ebd2f84af8f9f12e2bf28ed3e646d1641caba5bedaf77b94ab6
+  consumers: []
+- artifact: evidence/issue-6-terminal-checks/fresh-image-provenance-20260922.json
+  sha256: 1ac5cdf41582480cc62d3dbc07b434ec299baa02a9aabded796370bdc02110eb
   consumers: []
 - artifact: evidence/issue-6-terminal-checks/compose-recovery-proof-fail-closed-20260921.log
   sha256: c77ce4ef5025e6215e06f9d8246bbb1996c6c1b6be41e9c7ac25d3059a64364e
@@ -121,17 +145,19 @@ verification:
 - command: pnpm check
   result: passed
   exitCode: 0
-  detail: authority, toolchain, config, contracts, architecture, rule parity, lint, typecheck; 393 total, 377 passed, 16 unrelated
+  detail: authority, toolchain, config, contracts, architecture, rule parity, lint, typecheck; 437 total, 421 passed, 16 unrelated
     opt-in skips; zero Catalog skips
 - command: pnpm test:catalog-ingestion
   result: passed
   exitCode: 0
-  detail: 6 passed, 0 skipped; unchanged golden hash, incremental binary digest/order/hex/finalization contract, generated
-    record guard, TEMP runtime type allowlist, Compose Catalog migration ordering and local-provider wiring
+  detail: 9 passed, 0 skipped; unchanged golden hash, incremental binary digest/order/hex/finalization contract, generated
+    record guard, closed rejection allowlist, TEMP runtime type allowlist, Compose Catalog migration ordering,
+    anonymous Kafka volume cleanup and local-provider wiring
 - command: pnpm test:catalog-stream
   result: passed
   exitCode: 0
-  detail: 21 passed, 0 skipped; recovery-before-every-export, real scheduler loss/restoration ticks, truthful readiness, bounded
+  detail: 56 passed, 0 skipped; closed durable failure reasons, uncertain outcome separation, transport mapping,
+    recovery-before-every-export, real scheduler loss/restoration ticks, truthful readiness, bounded
     stream/generation/validation/COPY/transaction telemetry, safe correlation fields, batch duration, stream/COPY backpressure,
     linear framing and 168344938-byte capacity/backpressure subprocess; production complete() verifies 131072 distinct
     manifests, 131072 reconstructions, two recounts, one transition and exact replay with 161296 bytes peak retained heap
@@ -166,15 +192,17 @@ verification:
 - command: pnpm test
   result: passed
   exitCode: 0
-  detail: 393 total, 377 passed, 16 unrelated live skips, no Catalog skips (executed within pnpm check)
-- command: pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-final-observability
+  detail: 437 total, 421 passed, 16 unrelated live skips, no Catalog skips (executed within pnpm check)
+- command: pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-fresh-2ae61552a0fd-20260922060457
   result: passed
   exitCode: 0
   detail: disposable PostgreSQL/Kafka recovery, Catalog migrations before startup, 15 healthy runtimes plus local HTTPS provider
-    fixture, native delivery proofs, graceful shutdown and project-scoped cleanup; no real provider access
+    fixture, native delivery proofs, graceful shutdown, anonymous Kafka volume removal and zero scoped/tmpfs/dangling leftovers;
+    no real provider access
 - command: pnpm db:smoke
   result: passed
   exitCode: 0
+  detail: structural smoke only; foreign CONNECT denial is proven separately by real importer-role Client.connect calls in the live Catalog harness
 - command: git diff --check
   result: passed
   exitCode: 0

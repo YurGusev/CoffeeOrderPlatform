@@ -87,6 +87,51 @@ real AROMA request or mutation was made. This supersedes the earlier missing-SOP
 and bounded `--stub-secrets` attempts, whose timeout alone was not accepted as
 proof of an external-only blocker.
 
+## Дополнительное закрытие критериев 22 сентября 2026 года
+
+- `failure_code` принимает только закрытый набор безопасных кодов. Ошибки схемы,
+  порядка, batch gap/chain, source identity, terminal counts/hash и provider
+  terminal code остаются различимыми; SQL, `Error.message` и тело ответа
+  провайдера не сохраняются.
+- `DB_QUERY_FAILED` становится `IMPORT_DB_ROLLED_BACK` только после наблюдённого
+  успешного `ROLLBACK`. Перед terminal `Rejected` выполняется guarded reread.
+  Потеря соединения, неизвестный `COMMIT`/`ROLLBACK` и ошибка reconciliation read
+  сохраняют неопределённый исход и не разрешают terminal write.
+- HTTP status/content-type errors и отказ чтения response body до `started` дают
+  только `HTTP_BEFORE_STARTED`. Ошибка best-effort `body.cancel()` не заменяет
+  исходный безопасный transport code.
+- Live PostgreSQL proof вызывает cancellation и source error после первого
+  полученного COPY chunk, проверяет уничтожение source, пригодность pool и
+  неизменность шести таблиц. Post-merge сценарий наблюдает четыре merge и
+  SQLSTATE `42501` на manifest insert, затем подтверждает полный rollback.
+- Migration proof применяет `0001`, затем вперёд `0002`/`0003`, сохраняет
+  `Created`, `Receiving`, `Received`, `Rejected`, подтверждает repeat no-op и
+  `MIGRATION_CHECKSUM_DRIFT`. Checksummed migrations не менялись.
+- ACL proof входит настоящей `coffee_catalog_import_rw`: TEMP разрешён, девять
+  запрещённых операций возвращают `42501`. Foreign database denial доказан не
+  structural планом `pnpm db:smoke`, а четырьмя фактическими `Client.connect()`
+  к чужим БД; каждый отказ вернул `42501`.
+- Существующий architecture checker проверяет пять importer-specific
+  запрещённых направлений и разрешённые package imports.
+
+Receipt `evidence/issue-6-terminal-checks/final-verification-20260922.log`
+фиксирует Catalog `9/56/1/1`, architecture `42`, repository
+`437 total / 421 passed / 0 failed / 16` существующих opt-in skips, а также
+успешные `pnpm check`, `pnpm db:smoke` и `git diff --check`. `pnpm db:smoke`
+учитывается только как structural smoke; proof foreign `CONNECT` находится в
+live Catalog harness того же receipt.
+
+Fresh-image receipt
+`evidence/issue-6-terminal-checks/fresh-image-provenance-20260922.json` записывает
+base SHA, текущий HEAD только как базу незакоммиченного diff, `dirtyTree=true`,
+отсутствие финального implementation commit и SHA-256 parity четырёх реально
+собранных host/image artifacts. Recovery proof на 15 уникальных image tags
+прошёл с fixture `login=1`, `catalog=1`, `cart/post/put/delete=0`.
+После исправления Kafka recreation удаляет anonymous image volume через
+`docker compose rm --volumes`; финальная проверка обнаружила ноль project
+containers/volumes/networks, tmpfs fixture directories, generated project
+override files и соответствующих dangling anonymous volumes.
+
 ## Rollback
 
 Before publication, remove only this worktree/branch and issue-owned disposable containers. After migration application, use forward correction; do not rewrite checksummed migrations.

@@ -193,6 +193,89 @@ no-op. Потеря ответа `COMMIT` для create, started, batch, Receive
 Partial stream/restart переводит только незавершённую generation в `Rejected`, а
 новый traversal получает новый `snapshotRef`; активное поколение #16 не изменяется.
 
+### Закрытая классификация отказов (#6)
+
+`failure_code` — внутренний закрытый allowlist, а не текст исключения и не
+произвольный provider/SQL code. Он не расширяет публичный HTTP/OpenAPI контракт.
+`CatalogImportError` и `CatalogStreamError` несут стабильный `code`; importer
+принимает только перечисленные ниже причины. `Error.message`, SQL, provider body,
+credentials и неизвестные `error.code` никогда не становятся durable причиной.
+
+| Наблюдаемый отказ | Durable `failure_code` |
+|---|---|
+HTTP/non-200, отсутствующий body, неверный content type до started | `CATALOG_EXPORT_HTTP_*`, `CATALOG_EXPORT_INVALID_CONTENT_TYPE` → `HTTP_BEFORE_STARTED` |
+| Неверная generated record schema; неканоническая либо отрицательная цена offer | `INVALID_STREAM_SCHEMA` |
+| Неверный snapshot/supplier, повторный `started`, batch/completed до `started`, любая запись после terminal | `INVALID_STREAM_SEQUENCE` |
+| EOF без terminal | `INVALID_STREAM_MISSING_TERMINAL` |
+| Framing: лимит строки, пустая строка, UTF-8, JSON, неполная последняя строка | `CATALOG_STREAM_LINE_TOO_LARGE`, `CATALOG_STREAM_EMPTY_LINE`, `CATALOG_STREAM_INVALID_UTF8`, `CATALOG_STREAM_INVALID_JSON`, `CATALOG_STREAM_INCOMPLETE` |
+| Неизвестный не-DB отказ без доверенного bounded code | `INVALID_STREAM` |
+| Число offers, лимит offers/batch/item, несовпадение canonical bytes | `BATCH_OFFER_COUNT_MISMATCH`, `BATCH_OFFER_LIMIT`, `BATCH_BYTE_LIMIT`, `ITEM_BYTE_LIMIT`, `BATCH_BYTE_COUNT_MISMATCH` |
+| Пропуск номера batch | `BATCH_SEQUENCE_CONFLICT` |
+| Несовпадение `previousBatchHash` нового batch | `BATCH_CHAIN_CONFLICT` |
+| Неверный payload hash или конфликтующий replay (`BATCH_REPLAY_CONFLICT` внутри store) | `BATCH_HASH_CONFLICT` |
+| Identity collision, включая повтор offer и несовместимые product/variant/grind facts | `SOURCE_IDENTITY_COLLISION` |
+| Повреждённая durable реконструкция или ordinals | `BATCH_DURABLE_HASH_MISMATCH`, `BATCH_DURABLE_ORDINAL_MISMATCH` |
+| Terminal count, chain или content hash | `TERMINAL_COUNT_MISMATCH`, `TERMINAL_CHAIN_MISMATCH`, `TERMINAL_CONTENT_HASH_MISMATCH` |
+| Валидный provider terminal (допустим и до `started`) | Точный contract code: `PROVIDER_UNAVAILABLE`, `PROVIDER_TIMEOUT`, `INVALID_STREAM`, `BATCH_HASH_CONFLICT`, `SOURCE_IDENTITY_COLLISION` |
+| Deadline в потоке при известном результате DB / последующее owner recovery | `IMPORT_DEADLINE_EXCEEDED` / `RECOVERY_INCOMPLETE` |
+| Известная SQL-ошибка с подтверждённым `RolledBack` и успешным guard reread незавершённого собственного snapshot | `IMPORT_DB_ROLLED_BACK` |
+
+Отрицательная цена запрещена именно Catalog ingestion policy: общий scalar schema
+сам по себе не заменяет проверку non-negative canonical decimal string.
+`Received` и `Rejected` неизменяемы: точный terminal replay возвращает no-op,
+конфликт не заменяет state/reason. Exact batch replay проверяется также после
+продвижения следующих batches и в `Received`; `Rejected` batch replay не разрешает.
+Решение о terminal принимается только после чистого EOF: provider terminal с
+последующей записью не считается принятым provider отказом.
+
+Не все `DB_*` означают неопределённость. Store переводит только
+`DB_QUERY_FAILED` при фактически наблюдаемом состоянии transaction `RolledBack`
+в `IMPORT_DB_ROLLED_BACK`; importer затем перечитывает generation, сверяет
+supplier и `Created|Receiving`, а `reject` повторно проверяет state под lock.
+Connection loss, unknown COMMIT/ROLLBACK, отменённый COPY и недоступный reread
+не дают права записывать ложный `Rejected`. Неизвестный исход остаётся
+`OutcomeUnknown` либо исходной отменой; operation-specific reconciliation и
+следующий recovery работают по durable фактам. Ошибка reread не заменяется
+успешной классификацией. Никакого разбора текста SQL-ошибки для этого нет.
+
+### Проверяемые границы хранения и imports (#6)
+
+Importer имеет `SELECT/INSERT/UPDATE` только на `supplier_snapshots` и
+`SELECT/INSERT` на остальных пяти staging/manifest таблицах. `UPDATE` для этих
+пяти таблиц, `DELETE`, постоянный DDL в `catalog`/`public` не разрешены.
+`TEMP` нужен transaction-local COPY; foreign database `CONNECT` запрещён.
+`config/database-role-map.json` повторяет минимальные grants миграций, не
+расширяет их до общего RW. Миграции 0001–0003 не переписываются.
+
+`test:catalog-copy` использует настоящий disposable PostgreSQL и production
+`createCatalogImportStore`/`defineCopy`: отмена через `AbortSignal` и ошибка
+источника происходят после первого потреблённого COPY chunk. Сравниваются
+полные pre/post rows всех шести таблиц, включая manifest, counters и state;
+проверяются уничтожение источника, доступность pool, отсутствие active COPY /
+idle-in-transaction и ограниченное завершение. Test-only observer подтверждает
+все четыре merge; отзыв `INSERT` на manifest даёт наблюдённый на настоящем driver
+SQLSTATE `42501`. Rollback удаляет весь новый batch, не меняя предыдущие факты.
+Grant и test-local подмены восстанавливаются в `finally`; production fault hooks
+отсутствуют.
+
+Тот же harness применяет сначала 0001, сохраняет четыре состояния, затем
+применяет 0002–0003 без изменения существующих rows. Повторный запуск — no-op;
+изменённый SQL с **пересчитанным** checksum отклоняется против ledger как
+`MIGRATION_CHECKSUM_DRIFT`, ledger остаётся неизменным. ACL/TEMP и запрещённые
+операции проверяются настоящим login `coffee_catalog_import_rw` с `42501`.
+Foreign CONNECT proof использует существующий live foundation/bootstrap route:
+реальный login importer пробует четыре foreign databases и наблюдает `42501`.
+Вывод `pnpm db:smoke` без `--execute` — только structural plan, не CONNECT proof.
+
+`tests/architecture/checks.test.mjs` прогоняет пять запрещённых imports из
+`catalog-supplier-sync` в `catalog-activation-worker`, `api-internal`,
+`orders-service`, `pricing-service`, `customer-service`, проверяя точные
+`BOUND-IMPORT`, source и target. Контрольные imports versioned contracts и
+разрешённых platform packages проходят существующий checker. Общие business
+packages, imports реализаций соседних apps и Effect запрещены; authority —
+ADR-0025, native async/AbortSignal. Public HTTP, activation/outbox и active
+Catalog generation находятся за границей этих staging-проверок.
+
 ### Recovery, readiness и bounded observability (#6)
 
 Перед **каждым** новым export scheduler выполняет owner-local recovery. Ошибка

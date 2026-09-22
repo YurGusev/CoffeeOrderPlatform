@@ -1,112 +1,112 @@
 {
-  "observedAt": "2026-09-21T20:03:47+00:00",
+  "observedAt": "2026-09-22T11:50:55+05:00",
+  "revision": {
+    "baseSha": "4b2cad1dab30af66ad0b2fe64da280222e506574",
+    "headSha": "2ae61552a0fdf28c8350078fbae80a879ad4dbdb",
+    "headMeaning": "published base of the uncommitted implementation diff, not a final implementation SHA",
+    "dirtyTree": true,
+    "implementationCommit": null
+  },
   "commands": [
     {
-      "command": "pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-final-observability",
+      "command": "pnpm test:catalog-ingestion && pnpm test:catalog-stream && pnpm test:catalog-copy && pnpm test:catalog-recovery && node --test tests/architecture/checks.test.mjs && pnpm check && pnpm db:smoke && git diff --check",
       "exitCode": 0,
-      "outputArtifact": "evidence/issue-6-terminal-checks/compose-recovery-proof-fail-closed-20260921.log",
-      "outputSha256": "c77ce4ef5025e6215e06f9d8246bbb1996c6c1b6be41e9c7ac25d3059a64364e",
-      "outputCapture": "complete terminal capture with trailing whitespace normalized",
-      "summary": [
-        "15 runtimes plus the generated local HTTPS provider fixture became healthy",
-        "provider network internal=true; public provider egress impossible",
-        "providerFixture login=1 and catalog=1; cart/post/put/delete=0",
-        "five disposable PostgreSQL databases created; runtimeRoleCount=10; bootstrap idempotent",
-        "Kafka broker acknowledgement, retained record after container recreation, native ordering/rebalance/quarantine/SIGTERM/unknown-commit recovery all passed",
-        "health endpoints, telemetry and graceful shutdown passed",
-        "project-scoped containers, volumes, networks, tmpfs secrets and fixtures removed"
-      ]
-    },
-    {
-      "command": "pnpm test:catalog-ingestion && pnpm test:catalog-stream && pnpm test:catalog-copy && pnpm test:catalog-recovery && pnpm check && pnpm db:smoke && git diff --check",
-      "exitCode": 0,
-      "outputArtifact": "evidence/issue-6-terminal-checks/final-verification-fail-closed-20260921.log",
-      "outputSha256": "8f877c90b38d4d96967f56250858a9019958c3ff87ec9004e21c8c00e7762118",
+      "outputArtifact": "evidence/issue-6-terminal-checks/final-verification-20260922.log",
+      "outputSha256": "914b6910e4a87de4cce6365ebdf018ec0140abc1ca3104bcfe2601cdbde18445",
       "outputCapture": "complete terminal capture",
       "summary": [
-        "Catalog ingestion: 6 passed, 0 failed, 0 skipped",
-        "Catalog stream: 21 passed, 0 failed, 0 skipped",
+        "Catalog ingestion: 9 passed, 0 failed, 0 skipped",
+        "Catalog stream: 56 passed, 0 failed, 0 skipped",
         "Catalog COPY: 1 passed, 0 failed, 0 skipped",
         "Catalog recovery: 1 passed, 0 failed, 0 skipped",
-        "contracts: 39 passed, 0 failed, 0 skipped",
-        "repository: 393 tests, 377 passed, 0 failed, 16 pre-existing opt-in skips",
-        "pnpm db:smoke: exit 0",
+        "architecture fixtures: 42 passed, 0 failed, 0 skipped",
+        "repository: 437 tests, 421 passed, 0 failed, 16 pre-existing opt-in skips",
+        "pnpm db:smoke: exit 0 as structural smoke only",
+        "foreign CONNECT proof: four real importer-role Client.connect attempts returned SQLSTATE 42501 in the live Catalog harness",
         "git diff --check: exit 0"
+      ]
+    },
+    {
+      "command": "fresh unique-tag image build from the dirty worktree, then pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-fresh-2ae61552a0fd-20260922060457",
+      "exitCode": 0,
+      "outputArtifact": "evidence/issue-6-terminal-checks/compose-recovery-proof-fresh-image-20260922.log",
+      "outputSha256": "fcf6813c9ee97ebd2f84af8f9f12e2bf28ed3e646d1641caba5bedaf77b94ab6",
+      "outputCapture": "complete build and recovery captures; after the interrupted initial build the remaining images were built from the same dirty tree, then recovery was rerun after anonymous-volume cleanup remediation",
+      "summary": [
+        "15 current-worktree runtime images plus the generated local HTTPS provider fixture became healthy",
+        "provider network internal=true; public provider egress impossible",
+        "provider fixture login=1 and catalog=1; cart/post/put/delete=0",
+        "five disposable PostgreSQL databases created; runtimeRoleCount=10; bootstrap idempotent",
+        "Kafka acknowledgement, retained record after recreation, native ordering/rebalance/quarantine/SIGTERM/unknown-commit recovery passed",
+        "health endpoints, telemetry and graceful shutdown passed",
+        "Kafka recreation removes its anonymous image volume while preserving the named log volume",
+        "final cleanup: zero project containers/volumes/networks, zero matching tmpfs fixture directories and zero matching dangling volumes"
+      ]
+    },
+    {
+      "command": "sha256sum host compiled importer artifacts; docker run --entrypoint sha256sum <fresh-catalog-supplier-sync-image> /app/dist/{run-catalog-import,internal-api-client,catalog-import-store,reconcile-imports}.js",
+      "exitCode": 0,
+      "outputArtifact": "evidence/issue-6-terminal-checks/fresh-image-provenance-20260922.json",
+      "outputSha256": "1ac5cdf41582480cc62d3dbc07b434ec299baa02a9aabded796370bdc02110eb",
+      "summary": [
+        "baseSha and current headSha recorded separately",
+        "dirtyTree=true and implementationCommit=null recorded explicitly",
+        "fresh project tag was absent before build",
+        "four host/image compiled artifact SHA-256 pairs match exactly",
+        "proof harness hash and zero-resource cleanup observations are recorded"
       ]
     }
   ],
-  "red": {
-    "observability": {
-      "command": "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='residual observability' tests/catalog/stream.test.mjs",
-      "exitCode": 1,
-      "summary": "AssertionError: stream span missing; 1 failed, 0 skipped before production observability edits",
-      "outputCapture": "observed delegate transcript; no standalone log artifact"
-    },
-    "terminalMemory": {
-      "command": "node --experimental-test-module-mocks --expose-gc --max-old-space-size=64 tests/catalog/terminal-capacity-proof.mjs",
-      "exitCode": 1,
-      "outputArtifact": "evidence/issue-6-terminal-red.log",
-      "outputSha256": "5a3a5399af5422930088cb613777b211fa4965bf9bf083fef1e7a0c6657fecf3"
-    },
-    "composeCatalogMigrations": {
-      "command": "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='Compose recovery proof applies Catalog migrations' tests/catalog/ingestion.test.mjs",
-      "exitCode": 1,
-      "summary": "Recovery proof did not apply Catalog migrations before runtime startup"
-    },
-    "composeLocalProvider": {
-      "command": "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='Compose recovery proof routes startup export' tests/catalog/ingestion.test.mjs",
-      "exitCode": 1,
-      "summary": "Recovery proof did not propagate its flag to the scoped Compose override/local provider fixture"
-    },
-    "composeProviderFailClosed": {
-      "command": "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='Compose recovery proof routes startup export' tests/catalog/ingestion.test.mjs",
-      "exitCode": 1,
-      "summary": "Recovery provider network was not internal and the proof did not assert an observed local Catalog fixture request"
-    }
-  },
-  "earlierAttempts": [
+  "redGreen": [
     {
-      "command": "pnpm test:compose-smoke -- --stub-secrets --provision-empty-postgres-network --project-name coffee-issue6-final-observability",
-      "exitCode": 1,
-      "failure": "Truthful DB-backed readiness rejected the topology-only empty PostgreSQL network; this mode is not the mandatory recovery proof"
+      "finding": "known rollback was unsafe when reused by an unknown-outcome reconciliation read",
+      "red": "a TRANSACTION_OUTCOME_UNKNOWN mutation followed by IMPORT_DB_ROLLED_BACK from reconciliation escaped as rejection-eligible",
+      "green": "reconciliation errors preserve CatalogOutcomeUnknown; stream regression passes without a terminal rejection write"
     },
     {
-      "command": "pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-final-observability",
-      "exitCode": 1,
-      "failure": "Catalog migrations were absent before catalog-supplier-sync startup; fixed in the proof harness"
+      "finding": "response-body transport and body.cancel failures lost the intended pre-start transport classification",
+      "red": "body read or cancellation errors persisted INVALID_STREAM",
+      "green": "body read failure before started persists HTTP_BEFORE_STARTED and cancellation is best-effort; all stream regressions pass"
     },
     {
-      "command": "pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-final-observability",
-      "exitCode": 1,
-      "failure": "The generated local provider fixture was not attached because recoveryProof was not propagated to the scoped override; fixed and regression-tested"
+      "finding": "COPY and post-merge rollback required real transactional negative proof",
+      "red": "pre-existing tests did not cross the active COPY boundary or prove all durable surfaces",
+      "green": "live harness observes one consumed chunk, source destruction, usable pool, six unchanged tables, four merges and SQLSTATE 42501 before full rollback"
+    },
+    {
+      "finding": "Kafka container recreation could orphan an anonymous image volume",
+      "red": "source inspection and the first evidence review found docker compose rm without --volumes",
+      "green": "the regression requires --volumes; repeated recovery proof and post-teardown inspection found no matching dangling volumes"
     }
   ],
-  "independentReview": {
-    "model": "gpt-5.6-luna",
-    "verdict": "ship",
-    "findings": [],
-    "observed": [
-      "provider egress internal=true for the recovery override",
-      "provider fixture persisted and reported login=1/catalog=1 with mutation counts zero",
-      "observability identifiers remain outside metric labels",
-      "lazy SQL fixture limitation remains explicit"
+  "review": {
+    "initialVerdict": "no_ship",
+    "initialBlockingFindings": [
+      "reconciliation read rollback could authorize false Rejected after an unknown COMMIT",
+      "response body or cancellation failure could lose HTTP_BEFORE_STARTED"
     ],
-    "execution": "read-only; no Compose, Docker, tests or state-changing command"
+    "remediation": "implemented tests-first and verified locally",
+    "runtimeRemediationVerdict": "ship",
+    "evidenceVerdictBeforeCleanupRemediation": "no_ship",
+    "finalIndependentCleanupVerdict": "no_ship because one stale generated project override remained",
+    "finalFindingRemediation": "the exact override was removed after zero process/container reference checks",
+    "finalStatus": "ready; every independent review finding is remediated"
   },
   "limitations": [
     "The 131072-manifest complete() proof uses the production store algorithm with a lazy SQL fixture; it is not PostgreSQL-driver or production RSS capacity evidence",
     "The Compose provider is a generated local HTTPS fixture, not the real AROMA provider",
     "External OTLP collector delivery was not exercised",
-    "No deployment, commit, push, PR or merge was performed"
+    "The current HEAD is the published base of an uncommitted diff, not a final implementation commit",
+    "No deployment, commit, push, PR update or merge was performed"
   ],
   "cleanup": {
-    "scopes": [
-      "coffee-catalog-*",
-      "coffee-issue6-final-observability-*"
-    ],
+    "project": "coffee-issue6-fresh-2ae61552a0fd-20260922060457",
     "containers": [],
     "volumes": [],
     "networks": [],
-    "probeFixtures": []
+    "catalogProofResources": [],
+    "tmpfsFixtureDirectories": [],
+    "projectOverrideFiles": [],
+    "matchingDanglingVolumes": []
   }
 }

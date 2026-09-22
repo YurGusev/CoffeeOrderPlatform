@@ -1,7 +1,7 @@
 import {Readable} from "node:stream";
 import type {AromaCatalogExportRequest} from "@coffee-platform/contracts-aroma-v1";
 import type {HttpClient} from "@coffee-platform/platform-http";
-import {readNdjson} from "./ndjson-reader.js";
+import {CatalogStreamError, readNdjson} from "./ndjson-reader.js";
 
 export type CatalogExportContext = Readonly<{correlationId: string; signal: AbortSignal; traceparent?: string}>;
 
@@ -18,17 +18,22 @@ export class InternalCatalogClient {
     if (context.traceparent !== undefined) headers["traceparent"] = context.traceparent;
     const response = await this.#http.fetch("/api/internal-v1/aroma/catalog-exports", {
       method: "POST", headers, body: JSON.stringify(request), signal: context.signal,
-    });
+    }).catch(() => { throw new CatalogStreamError("CATALOG_EXPORT_HTTP_UNAVAILABLE"); });
     if (response.status !== 200 || response.body === null) {
-      await response.body?.cancel();
-      throw new Error(`CATALOG_EXPORT_HTTP_${response.status}`);
+      await response.body?.cancel().catch(() => undefined);
+      throw new CatalogStreamError(`CATALOG_EXPORT_HTTP_${response.status}`);
     }
     const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
     if (contentType !== "application/x-ndjson") {
-      await response.body.cancel();
-      throw new Error("CATALOG_EXPORT_INVALID_CONTENT_TYPE");
+      await response.body.cancel().catch(() => undefined);
+      throw new CatalogStreamError("CATALOG_EXPORT_INVALID_CONTENT_TYPE");
     }
-    const source = Readable.fromWeb(response.body);
-    yield* readNdjson(source, {signal: context.signal});
+    try {
+      const source = Readable.fromWeb(response.body);
+      yield* readNdjson(source, {signal: context.signal});
+    } catch (error) {
+      if (error instanceof CatalogStreamError || context.signal.aborted) throw error;
+      throw new CatalogStreamError("CATALOG_EXPORT_HTTP_UNAVAILABLE");
+    }
   }
 }

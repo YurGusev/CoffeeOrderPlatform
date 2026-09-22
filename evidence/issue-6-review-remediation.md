@@ -197,3 +197,53 @@ An independent read-only re-review returned **ship** with no actionable findings
 It confirmed that recovery provider egress is fail-closed, the persisted fixture
 receipt proves one Catalog request, observability identifiers remain outside metric
 labels, and the lazy-SQL terminal-memory limitation remains explicit.
+
+## Дополнение по оставшимся критериям — 22 сентября 2026 года
+
+После следующего независимого review устранены два блокирующих дефекта:
+
+1. Rollback при reconciliation read больше не считается доказательством rollback
+   исходного batch. Любая ошибка повторной проверки после
+   `TRANSACTION_OUTCOME_UNKNOWN`, кроме явного несовпадения durable
+   postcondition, сохраняет `CatalogOutcomeUnknown` и не разрешает запись
+   `Rejected`.
+2. Ошибка чтения HTTP response body до `started` классифицируется как
+   `HTTP_BEFORE_STARTED`; best-effort cancellation при status/content-type
+   failure не может перезаписать исходный bounded code своей ошибкой.
+
+Новые regressions сначала падали, затем прошли в
+`pnpm test:catalog-stream`: **56 passed, 0 failed, 0 skipped**. Live PostgreSQL
+proof сохранил **1 passed, 0 skipped** и фиксирует настоящий COPY cancel/source
+error после consumed chunk, post-merge rollback, forward/checksum migrations,
+фактические ACL и четыре foreign `CONNECT` denial с SQLSTATE `42501`.
+
+Финальные receipts:
+
+- `evidence/issue-6-terminal-checks/final-verification-20260922.log`, SHA-256
+  `914b6910e4a87de4cce6365ebdf018ec0140abc1ca3104bcfe2601cdbde18445`;
+- `evidence/issue-6-terminal-checks/compose-recovery-proof-fresh-image-20260922.log`,
+  SHA-256 `fcf6813c9ee97ebd2f84af8f9f12e2bf28ed3e646d1641caba5bedaf77b94ab6`;
+- `evidence/issue-6-terminal-checks/fresh-image-provenance-20260922.json` —
+  SHA-256 `1ac5cdf41582480cc62d3dbc07b434ec299baa02a9aabded796370bdc02110eb`;
+  `baseSha=4b2cad1...`, `headSha=2ae6155...`, `dirtyTree=true`, финальный commit
+  отсутствует, четыре compiled artifact hash совпадают между host и image.
+
+Recovery proof использовал уникальные свежие image tags из текущего dirty
+worktree, локальный HTTPS provider и fail-closed internal provider network. Он
+не является production deployment, реальным provider load или доказательством
+внешней доставки OTLP.
+
+Первый независимый evidence review обнаружил оставшийся после прерванного build
+tmpfs fixture directory и потенциальную утечку anonymous Kafka volume при
+recreation. Точный tmpfs directory удалён только после проверки отсутствия
+mount/process references. В `tools/compose-smoke.mjs` добавлен
+`docker compose rm --volumes`, его regression сначала RED, затем **9/9 GREEN**.
+Повторный recovery proof прошёл; после teardown наблюдались ноль project
+containers/volumes/networks, ноль `coffee-platform-secrets-*` directories и
+ноль dangling volumes из окна proof.
+
+Повторная независимая cleanup-проверка обнаружила один generated Compose
+override от прерванного первого запуска. Перед удалением точного файла
+подтверждены ноль process references и ноль container mount references;
+после удаления matching project override files также равны нулю. Остальные
+проверенные evidence/handoff hashes совпали; runtime findings отсутствовали.

@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-22T11:50:55+05:00",
+  "baseSha": "4b2cad1dab30af66ad0b2fe64da280222e506574",
+  "headSha": "2ae61552a0fdf28c8350078fbae80a879ad4dbdb",
+  "headMeaning": "Последний существовавший commit до текущих незакоммиченных изменений; это не финальный SHA реализации.",
+  "dirtyTree": true,
+  "finalImplementationCommit": null,
+  "commitCreatedForReceipt": false,
+  "composeProject": "coffee-issue6-fresh-2ae61552a0fd-20260922060457",
+  "freshTagAbsentBeforeBuild": true,
+  "catalogSupplierSyncImage": {
+    "tag": "coffee-issue6-fresh-2ae61552a0fd-20260922060457-catalog-supplier-sync:latest",
+    "id": "sha256:e0b6bda0f0f9d954981f00ee6274fbda8d5dff4a6bc53a29e045229c11d6c189",
+    "created": "2026-09-22T06:10:04.125743959Z"
+  },
+  "sourceSha256": {
+    "apps/catalog-supplier-sync/src/run-catalog-import.ts": "25a096404aa14d89de9728549a44bd9544b864c1ecca3cac3f13a458ea320051",
+    "apps/catalog-supplier-sync/src/internal-api-client.ts": "0063bb6e3ccec12b8f31a17a3e3b212a249e779b596ddf1b68a776b7203a453f",
+    "apps/catalog-supplier-sync/src/catalog-import-store.ts": "98ca769914767769f965701ae610a3a20352872bf94487b642d6604152f9d5ae",
+    "apps/catalog-supplier-sync/src/reconcile-imports.ts": "71bedc52c7cbbcc3af7be8485be061916786b9b777c3bb4f74452c507921dd59"
+  },
+  "compiledArtifactParity": [
+    {
+      "host": "apps/catalog-supplier-sync/dist/run-catalog-import.js",
+      "image": "/app/dist/run-catalog-import.js",
+      "hostSha256": "bd2bd505a937b287015f4067acbe1c003b66c1b4a66445676d1d8ec64df8cb15",
+      "imageSha256": "bd2bd505a937b287015f4067acbe1c003b66c1b4a66445676d1d8ec64df8cb15",
+      "matches": true
+    },
+    {
+      "host": "apps/catalog-supplier-sync/dist/internal-api-client.js",
+      "image": "/app/dist/internal-api-client.js",
+      "hostSha256": "f63b04f79dd85aeba4ed709be5f29e8c75b6b450f5b6bec1dbb45b8fd13dad91",
+      "imageSha256": "f63b04f79dd85aeba4ed709be5f29e8c75b6b450f5b6bec1dbb45b8fd13dad91",
+      "matches": true
+    },
+    {
+      "host": "apps/catalog-supplier-sync/dist/catalog-import-store.js",
+      "image": "/app/dist/catalog-import-store.js",
+      "hostSha256": "73abfa8bffc2bdd30ed71d6e5a3df92556063d8f3eed355d9891ee15332717f7",
+      "imageSha256": "73abfa8bffc2bdd30ed71d6e5a3df92556063d8f3eed355d9891ee15332717f7",
+      "matches": true
+    },
+    {
+      "host": "apps/catalog-supplier-sync/dist/reconcile-imports.js",
+      "image": "/app/dist/reconcile-imports.js",
+      "hostSha256": "432b334bde6151aad1413c71bb5acf45b914227bd0eeb04283b3b2ed87a5ad8f",
+      "imageSha256": "432b334bde6151aad1413c71bb5acf45b914227bd0eeb04283b3b2ed87a5ad8f",
+      "matches": true
+    }
+  ],
+  "allComparedArtifactsMatch": true,
+  "proofHarness": {
+    "path": "tools/compose-smoke.mjs",
+    "sha256": "f52ce6ec3c72ffa278ef6645fb75037fc8fc750453807ad11fe9ebd4aa075bdc",
+    "kafkaRecreateRemovesAnonymousVolumes": true
+  },
+  "recoveryProof": {
+    "command": "pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-fresh-2ae61552a0fd-20260922060457",
+    "exitCode": 0,
+    "providerFixture": {
+      "login": 1,
+      "catalog": 1,
+      "cart": 0,
+      "post": 0,
+      "put": 0,
+      "delete": 0
+    },
+    "log": "evidence/issue-6-terminal-checks/compose-recovery-proof-fresh-image-20260922.log",
+    "logSha256": "fcf6813c9ee97ebd2f84af8f9f12e2bf28ed3e646d1641caba5bedaf77b94ab6",
+    "cleanup": {
+      "projectContainers": 0,
+      "projectVolumes": 0,
+      "projectNetworks": 0,
+      "matchingTmpfsSecretDirectories": 0,
+      "matchingProjectOverrideFiles": 0,
+      "matchingDanglingAnonymousVolumes": 0
+    }
+  },
+  "buildNote": "Первый единый build+proof превысил лимит foreground tool после создания 10 уникальных image tags. Project-scoped PostgreSQL resources были удалены; оставшиеся 5 images собраны из того же dirty worktree. После исправления удаления anonymous Kafka volume recovery proof повторно выполнен с --no-build на всех 15 уникальных tags; оставшиеся от прерванного запуска точные tmpfs fixture directory и generated Compose override удалены после проверки отсутствия process/container references. Финальная проверка не обнаружила project resources, tmpfs fixtures/overrides или соответствующие dangling volumes."
+}

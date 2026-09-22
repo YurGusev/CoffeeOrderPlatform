@@ -1,7 +1,11 @@
 import {canonicalCatalogJson, catalogBatchBytes, catalogBatchHash, catalogContentHash} from "../packages/contracts/aroma-v1/dist/index.js";
 import {createCatalogImportStore} from "../apps/catalog-supplier-sync/dist/catalog-import-store.js";
 import {runCatalogImport} from "../apps/catalog-supplier-sync/dist/run-catalog-import.js";
-import {withCatalogPostgres} from "./catalog-live-harness.mjs";
+import {withCatalogPostgres, proveCatalogForeignConnect} from "./catalog-live-harness.mjs";
+import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
+import {Client} from "pg";
+import {Readable} from "node:stream";
 import {trace} from "@opentelemetry/api";
 import {CatalogTelemetry} from "../apps/catalog-supplier-sync/dist/observability.js";
 
@@ -33,15 +37,269 @@ async function started(store, snapshot, provider = "provider-snapshot-1") {
   await store.acceptStarted({streamVersion:"1", recordType:"snapshot-started", snapshotRef:snapshot, supplierRef, providerSnapshotRef:provider, startedAt:"2026-09-20T00:00:00Z"});
 }
 
+const TABLES=["supplier_snapshots","snapshot_batches","snapshot_products","snapshot_variants","snapshot_offers","snapshot_availability"];
+async function capture(admin, ref) {
+  const rows={};
+  for (const table of TABLES) {
+    rows[table]=(await admin.query(`SELECT to_jsonb(t) AS row FROM catalog.${table} t WHERE snapshot_ref=$1 ORDER BY to_jsonb(t)::text`,[ref])).rows.map(row => row.row);
+  }
+  return rows;
+}
+async function assertUnchanged(admin,ref,before) {
+  const after=await capture(admin,ref);
+  assert.deepEqual(after,before);
+  const active=(await admin.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE usename='coffee_catalog_import_rw' AND (state LIKE 'idle in transaction%' OR (state='active' AND query ~ '^COPY'))")).rows[0].count;
+  assert.equal(active,0,"no active COPY or idle-in-transaction runtime backend");
+  return after;
+}
+async function copyFailureProof(database,admin,mode,ref) {
+  const controller=new AbortController();
+  let sourceRef;
+  let consumedChunks=0;
+  let consumedBytes=0;
+  const originalFrom=Readable.from.bind(Readable);
+  const fromDescriptor=Object.getOwnPropertyDescriptor(Readable,"from");
+  const controlledFrom=function(...args) {
+    const source=originalFrom.apply(Readable,args);
+    sourceRef=source;
+    source.once("data",chunk => {
+      consumedChunks++; consumedBytes+=Buffer.byteLength(chunk);
+      // Pause only after the production pipeline has consumed real source data.
+      // The scheduled fault runs after that chunk has reached the COPY sink.
+      source.pause();
+      setImmediate(() => mode === "abort" ? controller.abort() : source.destroy(new Error("secret provider body source fault")));
+    });
+    return source;
+  };
+  const store=createCatalogImportStore(database);
+  await started(store,ref,`provider-${mode}`);
+  const seed=batch(ref,[{...second,sourceProductKeyHash:hash("7"),sourceVariantKeyHash:hash("8"),sourceOfferKeyHash:hash("9")}]);
+  await createCatalogImportStore(database).recordBatch(seed);
+  const before=await capture(admin,ref);
+  let code;
+  try {
+    Readable.from=controlledFrom;
+    await assert.rejects(() => store.recordBatch(batch(ref,[first,second],1,seed.batchHash),controller.signal),error => {
+      code=error.code; return mode === "abort" ? code === "DB_INTERRUPTED" : code === "DB_CONNECTION_LOST";
+    });
+  } finally {Object.defineProperty(Readable,"from",fromDescriptor);}
+  assert.equal(sourceRef.destroyed,true);
+  assert.ok(consumedChunks>0);
+  const after=await assertUnchanged(admin,ref,before);
+  assert.equal((await store.getSnapshot(ref,AbortSignal.timeout(3_000))).state,"Receiving");
+  return {code,consumedChunks,consumedBytes,sourceDestroyed:sourceRef.destroyed,sixTablesUnchanged:true,poolUsable:true,before,after};
+}
+async function postMergeProof(database,admin) {
+  const store=createCatalogImportStore(database);
+  const ref="snp_00000000000000000000000103";
+  await started(store,ref,"provider-post-merge");
+  const seed=batch(ref,[first]);
+  await store.recordBatch(seed);
+  const before=await capture(admin,ref);
+  // Disposable DB observer: every merge must produce a row before the
+  // revoked manifest INSERT fails. No production SQL or hooks are changed.
+  await admin.query("CREATE SEQUENCE catalog.merge_probe START 1");
+  await admin.query("GRANT USAGE ON SEQUENCE catalog.merge_probe TO coffee_catalog_import_rw");
+  await admin.query(`CREATE FUNCTION catalog.observe_merges_proof() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NOT EXISTS(SELECT 1 FROM catalog.snapshot_products WHERE snapshot_ref=NEW.snapshot_ref AND source_product_key_hash='${hash("4")}')
+        OR NOT EXISTS(SELECT 1 FROM catalog.snapshot_variants WHERE snapshot_ref=NEW.snapshot_ref AND source_variant_key_hash='${hash("5")}')
+        OR NOT EXISTS(SELECT 1 FROM catalog.snapshot_offers WHERE snapshot_ref=NEW.snapshot_ref AND source_offer_key_hash='${hash("6")}')
+        OR NOT EXISTS(SELECT 1 FROM catalog.snapshot_availability WHERE snapshot_ref=NEW.snapshot_ref AND source_offer_key_hash='${hash("6")}')
+      THEN RAISE EXCEPTION 'merge precondition missing' USING ERRCODE='P0002'; END IF;
+      PERFORM nextval('catalog.merge_probe');
+      RETURN NEW;
+    END $$`);
+  await admin.query("CREATE TRIGGER observe_merges_proof AFTER INSERT ON catalog.snapshot_availability FOR EACH ROW EXECUTE FUNCTION catalog.observe_merges_proof()");
+  await admin.query("REVOKE INSERT ON catalog.snapshot_batches FROM coffee_catalog_import_rw");
+  // Observe the SQLSTATE at the real driver boundary; foundation intentionally
+  // redacts it before the importer sees DB_QUERY_FAILED. Restore unconditionally.
+  const query=Client.prototype.query,manifestStates=[];
+  Client.prototype.query=function(...args) {
+    const result=query.apply(this,args);
+    if (this.connectionParameters.user === "coffee_catalog_import_rw" && args[0]?.text?.startsWith("INSERT INTO catalog.snapshot_batches")) {
+      return result.catch(error => {manifestStates.push(error.code);throw error;});
+    }
+    return result;
+  };
+  let errorCode;
+  try {
+    await assert.rejects(() => store.recordBatch(batch(ref,[second],1,seed.batchHash)),error => {
+      errorCode=error.code; return error.code === "IMPORT_DB_ROLLED_BACK";
+    });
+    assert.deepEqual(manifestStates,["42501"]);
+    assert.equal((await admin.query("SELECT is_called FROM catalog.merge_probe")).rows[0].is_called,true);
+    const after=await assertUnchanged(admin,ref,before);
+    assert.equal((await store.getSnapshot(ref,AbortSignal.timeout(3_000))).state,"Receiving");
+    const importRef="snp_00000000000000000000000104";
+    const importBatch=batch(importRef,[second]);
+    await assert.rejects(() => runCatalogImport({store,supplierRef,snapshotRef:importRef,signal:AbortSignal.timeout(5_000),
+      context:{correlationId:"11111111-1111-4111-8111-111111111111"},
+      exportCatalog:async function* () {
+        yield {streamVersion:"1",recordType:"snapshot-started",snapshotRef:importRef,supplierRef,providerSnapshotRef:"known-rollback",startedAt:"2026-09-20T00:00:00Z"};
+        yield importBatch;
+      }}),error => error.code === "IMPORT_DB_ROLLED_BACK");
+    const row=await store.getSnapshot(importRef);
+    assert.equal(row.state,"Rejected");
+    assert.equal(row.failure_code,"IMPORT_DB_ROLLED_BACK");
+    const persisted=await capture(admin,importRef);
+    for (const table of TABLES.slice(1)) assert.deepEqual(persisted[table],[]);
+    assert.doesNotMatch(JSON.stringify(persisted),/secret|provider body|23514/u);
+    return {postMergeRollback:{code:errorCode,sqlstate:manifestStates[0],allFourMergesObserved:true,sixTablesUnchanged:true,poolUsable:true,before,after},
+      knownRollback:{failureCode:row.failure_code,safeText:true}};
+  } finally {
+    Client.prototype.query=query;
+    await admin.query("GRANT INSERT ON catalog.snapshot_batches TO coffee_catalog_import_rw");
+    await admin.query("DROP TRIGGER observe_merges_proof ON catalog.snapshot_availability");
+    await admin.query("DROP FUNCTION catalog.observe_merges_proof()");
+    await admin.query("DROP SEQUENCE catalog.merge_probe");
+  }
+}
+
+async function stateMatrixProof(database,admin) {
+  const store=createCatalogImportStore(database);
+  const results=[];
+  let serial=200;
+  const next=() => `snp_${String(serial++).padStart(26,"0")}`;
+  const startRecord=ref => ({streamVersion:"1",recordType:"snapshot-started",snapshotRef:ref,supplierRef,
+    providerSnapshotRef:"matrix-provider",startedAt:"2026-09-20T00:00:00Z"});
+  async function negative(name,ref,operation,code) {
+    const before=await capture(admin,ref);
+    await assert.rejects(operation,error => error.code === code,name);
+    await assertUnchanged(admin,ref,before);
+    results.push({name,code,passed:true});
+  }
+  const ref=next();
+  await store.create(ref,supplierRef);
+  const record=batch(ref,[second]);
+  const terminal=completed(ref,[record],[second]);
+  await negative("Created batch",ref,() => store.recordBatch(record),"BATCH_SEQUENCE_CONFLICT");
+  await negative("Created complete",ref,() => store.complete(terminal),"TERMINAL_REPLAY_CONFLICT");
+  await negative("wrong supplier",ref,() => store.acceptStarted({...startRecord(ref),supplierRef:"sup_00000000000000000000000002"}),"SNAPSHOT_STARTED_CONFLICT");
+  await store.acceptStarted(startRecord(ref));
+  let before=await capture(admin,ref);
+  await store.acceptStarted(startRecord(ref));
+  await assertUnchanged(admin,ref,before);
+  results.push({name:"started exact replay",passed:true});
+  await negative("wrong provider",ref,() => store.acceptStarted({...startRecord(ref),providerSnapshotRef:"other"}),"SNAPSHOT_STARTED_CONFLICT");
+  await negative("batch gap",ref,() => store.recordBatch({...record,batchNumber:1}),"BATCH_SEQUENCE_CONFLICT");
+  await negative("chain",ref,() => store.recordBatch({...record,previousBatchHash:"0".repeat(64)}),"BATCH_CHAIN_CONFLICT");
+  await negative("byte count",ref,() => store.recordBatch({...record,uncompressedBytes:1}),"BATCH_BYTE_COUNT_MISMATCH");
+  await negative("offer count",ref,() => store.recordBatch({...record,offerCount:2}),"BATCH_OFFER_COUNT_MISMATCH");
+  await negative("payload hash",ref,() => store.recordBatch({...record,batchHash:"0".repeat(64)}),"BATCH_HASH_CONFLICT");
+  for (const money of ["-1","01","1.0","1e2",1,null]) {
+    await negative(`invalid money ${String(money)}`,ref,() => store.recordBatch(batch(ref,[{...second,supplierUnitMinor:money}])),"INVALID_STREAM_SCHEMA");
+  }
+  for (const [name,items] of [
+    ["duplicate offer same",[second,second]],
+    ["duplicate offer changed",[second,{...second,displayName:"other"}]],
+    ["product collision",[second,{...first,sourceProductKeyHash:second.sourceProductKeyHash}]],
+    ["variant collision",[second,{...first,sourceVariantKeyHash:second.sourceVariantKeyHash}]],
+    ["grind collision",[{...second,grindOptions:[{sourceGrindKeyHash:hash("a"),displayName:"A"},{sourceGrindKeyHash:hash("a"),displayName:"B"}]}]],
+  ]) await negative(name,ref,() => store.recordBatch(batch(ref,items)),"SOURCE_IDENTITY_COLLISION");
+  await store.recordBatch(record);
+  before=await capture(admin,ref);
+  assert.equal(await store.recordBatch(record),"replay");
+  await assertUnchanged(admin,ref,before);
+  results.push({name:"Receiving exact batch replay",passed:true});
+  await negative("changed previous hash replay",ref,() => store.recordBatch({...record,previousBatchHash:hash("b")}),"BATCH_REPLAY_CONFLICT");
+  await negative("terminal counts",ref,() => store.complete({...terminal,productCount:2}),"TERMINAL_COUNT_MISMATCH");
+  await negative("terminal content",ref,() => store.complete({...terminal,contentHash:hash("c")}),"TERMINAL_CONTENT_HASH_MISMATCH");
+  await negative("cross-batch variant to product conflict",ref,() => store.recordBatch(batch(ref,
+    [{...second,sourceProductKeyHash:hash("a"),sourceOfferKeyHash:hash("b")}],1,record.batchHash)),"SOURCE_IDENTITY_COLLISION");
+  const later=batch(ref,[first],1,record.batchHash);
+  await store.recordBatch(later);
+  before=await capture(admin,ref);
+  assert.equal(await store.recordBatch(record),"replay");
+  await assertUnchanged(admin,ref,before);
+  results.push({name:"older batch replay after progress",passed:true});
+  const final=completed(ref,[record,later],[second,first]);
+  // A nonzero manifest permits a different previous hash at the SQL layer;
+  // complete must still reject the broken generation chain.
+  await admin.query("UPDATE catalog.snapshot_batches SET previous_batch_hash=$2 WHERE snapshot_ref=$1 AND batch_number=1",[ref,hash("b")]);
+  await negative("terminal chain",ref,() => store.complete(final),"TERMINAL_CHAIN_MISMATCH");
+  await admin.query("UPDATE catalog.snapshot_batches SET previous_batch_hash=$2 WHERE snapshot_ref=$1 AND batch_number=1",[ref,record.batchHash]);
+  await store.complete(final);
+  assert.equal((await store.getSnapshot(ref)).received_at.toISOString(),"2026-09-20T02:00:00.000Z");
+  const received=await capture(admin,ref);
+  assert.equal(await store.complete(final),"replay");
+  assert.equal(await store.recordBatch(record),"replay");
+  await assertUnchanged(admin,ref,received);
+  results.push({name:"Received exact terminal and batch replay",passed:true});
+  await negative("Received reject",ref,() => store.reject(ref,"INVALID_STREAM"),"TERMINAL_REPLAY_CONFLICT");
+  await negative("Received started",ref,() => store.acceptStarted(startRecord(ref)),"SNAPSHOT_STARTED_CONFLICT");
+  const createdRejected=next();
+  await store.create(createdRejected,supplierRef);
+  await store.reject(createdRejected,"PROVIDER_UNAVAILABLE");
+  assert.equal((await store.getSnapshot(createdRejected)).state,"Rejected");
+  assert.equal((await store.getSnapshot(createdRejected)).received_at,null);
+  const rejected=next();
+  await started(store,rejected);
+  const rejectedBatch=batch(rejected,[second]);
+  await store.recordBatch(rejectedBatch);
+  await store.reject(rejected,"PROVIDER_TIMEOUT");
+  before=await capture(admin,rejected);
+  assert.equal(await store.reject(rejected,"PROVIDER_TIMEOUT"),"replay");
+  await assertUnchanged(admin,rejected,before);
+  results.push({name:"Rejected exact replay",passed:true});
+  await negative("Rejected different reason",rejected,() => store.reject(rejected,"INVALID_STREAM"),"TERMINAL_REPLAY_CONFLICT");
+  await negative("Rejected completed",rejected,() => store.complete(completed(rejected,[rejectedBatch],[second])),"TERMINAL_REPLAY_CONFLICT");
+  await negative("Rejected batch replay",rejected,() => store.recordBatch(rejectedBatch),"BATCH_REPLAY_CONFLICT");
+  await negative("Rejected started",rejected,() => store.acceptStarted(startRecord(rejected)),"SNAPSHOT_STARTED_CONFLICT");
+  return results;
+}
+
+async function aclProof({port,runtimePassword,databaseName,adminClient}) {
+  const client=new Client({host:"127.0.0.1",port,database:databaseName,user:"coffee_catalog_import_rw",password:runtimePassword,connectionTimeoutMillis:2_000});
+  const denials=[];
+  await adminClient.query("CREATE TABLE catalog.acl_protected(value integer)");
+  try {
+    await client.connect();
+    assert.equal((await client.query("SELECT current_user AS role")).rows[0].role,"coffee_catalog_import_rw");
+    const map=JSON.parse(await readFile(new URL("../config/database-role-map.json",import.meta.url),"utf8"));
+    const configured=map.databases.find(row => row.name === databaseName).runtimeRoles.find(row => row.role === "coffee_catalog_import_rw");
+    for (const table of TABLES) {
+      const expected=table === "supplier_snapshots" ? ["SELECT","INSERT","UPDATE"] : ["SELECT","INSERT"];
+      assert.deepEqual(configured.tables[table],expected,`minimal role-map ${table}`);
+      for (const permission of ["SELECT","INSERT","UPDATE","DELETE","TRUNCATE","REFERENCES","TRIGGER","MAINTAIN"]) {
+        const granted=(await client.query("SELECT has_table_privilege(current_user,$1,$2) AS granted",[`catalog.${table}`,permission])).rows[0].granted;
+        assert.equal(granted,expected.includes(permission),`${table} ${permission}`);
+      }
+    }
+    assert.deepEqual((await client.query("SELECT has_schema_privilege(current_user,'catalog','USAGE') AS usage, has_schema_privilege(current_user,'catalog','CREATE') AS create")).rows[0],{usage:true,create:false});
+    await client.query("BEGIN");
+    await client.query("CREATE TEMP TABLE catalog_acl_probe(value integer) ON COMMIT DROP");
+    await client.query("INSERT INTO catalog_acl_probe VALUES(1)");
+    assert.equal((await client.query("SELECT value FROM catalog_acl_probe")).rows[0].value,1);
+    await client.query("ROLLBACK");
+    for (const [operation,sql] of [
+      ...TABLES.slice(1).map(table => [`UPDATE ${table}`,`UPDATE catalog.${table} SET snapshot_ref=snapshot_ref`]),
+      ["DELETE supplier_snapshots","DELETE FROM catalog.supplier_snapshots"],
+      ["INSERT protected","INSERT INTO catalog.acl_protected VALUES(1)"],
+      ["DDL catalog","CREATE TABLE catalog.forbidden(value text)"],["DDL public","CREATE TABLE public.forbidden(value text)"],
+    ]) {
+      await assert.rejects(() => client.query(sql),error => {assert.equal(error.code,"42501");denials.push({operation,sqlstate:error.code});return true;});
+    }
+    return {role:"coffee_catalog_import_rw",tempRoundTrip:true,roleMapMatchesMigrations:true,denials};
+  } finally {await client.end();await adminClient.query("DROP TABLE catalog.acl_protected");}
+}
+
 export async function runCatalogCopyProof() {
   const spans = new Map();
   trace.setGlobalTracerProvider({getTracer:() => ({startSpan:name => {
     const row = spans.get(name) ?? {started:0,ended:0}; row.started++; spans.set(name,row);
     return {end:() => {row.ended++;}, setStatus:() => {}, spanContext:() => ({traceId:"1".repeat(32),spanId:"2".repeat(16),traceFlags:1})};
   }})});
-  try { return await withCatalogPostgres(async ({database, adminClient, firstApply, secondApply}) => {
+  try {
+    const foreignConnect=await proveCatalogForeignConnect();
+    return await withCatalogPostgres(async ({database, adminClient, firstApply, secondApply, migrationProof, port, runtimePassword, databaseName}) => {
     const telemetry = new CatalogTelemetry();
     const store = createCatalogImportStore(database, telemetry);
+    const midCopyAbort=await copyFailureProof(database,adminClient,"abort","snp_00000000000000000000000101");
+    const copySourceFailure=await copyFailureProof(database,adminClient,"source","snp_00000000000000000000000102");
+    const {postMergeRollback,knownRollback}=await postMergeProof(database,adminClient);
+    const acl=await aclProof({port,runtimePassword,databaseName,adminClient});
+    const stateMatrix=await stateMatrixProof(database,adminClient);
     await started(store, snapshotRef);
     const record = batch(snapshotRef, [first, second]);
     if (await store.recordBatch(record) !== "stored") throw new Error("first batch was not stored");
@@ -153,7 +411,9 @@ export async function runCatalogCopyProof() {
         yield metricsBatch;
         yield completed(metricsRef,[metricsBatch],[second]);
       }});
-    return {skipped:false, telemetry:{spans:Object.fromEntries(spans),metrics:telemetry.render()}, migrations:firstApply.length === 3 && secondApply.length === 0 ? "idempotent" : "invalid", copy:"bounded-temp-copy",
+    const active=(await adminClient.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE usename='coffee_catalog_import_rw' AND (state LIKE 'idle in transaction%' OR (state='active' AND query ~ '^COPY'))")).rows[0].count;
+    assert.equal(active,0);
+    return {skipped:false, noActiveCopyOrTransaction:active === 0, migrationProof,midCopyAbort,copySourceFailure,postMergeRollback,knownRollback,acl,foreignConnect,stateMatrix,telemetry:{spans:Object.fromEntries(spans),metrics:telemetry.render()}, migrations:firstApply.length === 3 && secondApply.length === 0 ? "idempotent" : "invalid", copy:"bounded-temp-copy",
       reconstruction:{items:reconstructed, batchHash:record.batchHash, contentHash:terminal.contentHash},
       state:row.state, optionals:{missingGrinds:!("grindOptions" in reconstructed[0]), emptyGrinds:Array.isArray(reconstructed[1].grindOptions)},
       replayConflictRejected, receivingReplayConflictRejected, terminalConflictRejected, terminalTimestampConflictRejected,

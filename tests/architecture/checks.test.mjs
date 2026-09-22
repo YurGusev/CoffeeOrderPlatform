@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -125,6 +125,44 @@ void test("RED BOUND-IMPORT: Catalog cannot import Orders infrastructure DB", ()
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /BOUND-IMPORT/);
   assert.match(output(result), /catalog-service.*orders-service/s);
+});
+
+for (const targetRuntime of ["catalog-activation-worker","api-internal","orders-service","pricing-service","customer-service"]) {
+  void test(`RED BOUND-IMPORT: catalog-supplier-sync -> ${targetRuntime}`, async () => {
+    const root=await mkdtemp(join(tmpdir(),"coffee-catalog-boundary-"));
+    const source="apps/catalog-supplier-sync/src/boundary.ts";
+    const target=`apps/${targetRuntime}/src/internal.ts`;
+    try {
+      await mkdir(join(root,"apps/catalog-supplier-sync/src"),{recursive:true});
+      await mkdir(join(root,`apps/${targetRuntime}/src`),{recursive:true});
+      await writeFile(join(root,target),'export const internal = "private";\n');
+      await writeFile(join(root,source),`import {internal} from "../../${targetRuntime}/src/internal.js";\nvoid internal;\n`);
+      const result=run("check-architecture.mjs",root);
+      assert.notEqual(result.status,0,output(result));
+      assert.ok(output(result).includes("BOUND-IMPORT"),output(result));
+      assert.ok(output(result).includes(`${source} -> ${target}`),output(result));
+      assert.doesNotMatch(output(result),/unavailable|did not return an AST graph/u);
+    } finally { await rm(root,{recursive:true,force:true}); }
+  });
+}
+
+void test("GREEN: Catalog importer uses allowed contract and platform packages", async () => {
+  const root=await mkdtemp(join(tmpdir(),"coffee-catalog-packages-"));
+  try {
+    await mkdir(join(root,"apps/catalog-supplier-sync/src/infrastructure"),{recursive:true});
+    await symlink(join(REPO_ROOT,"apps/catalog-supplier-sync/node_modules"),join(root,"apps/catalog-supplier-sync/node_modules"),"dir");
+    await writeFile(join(root,"apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts"),[
+      'import {catalogBatchHash} from "@coffee-platform/contracts-aroma-v1";',
+      'import {withTransaction} from "@coffee-platform/database";',
+      'import {defineCopy} from "@coffee-platform/database/owner";',
+      'import type {HttpClient} from "@coffee-platform/platform-http";',
+      'void [catalogBatchHash,withTransaction,defineCopy];',
+      'export type Client = HttpClient;',
+    ].join("\n"));
+    const result=run("check-architecture.mjs",root);
+    assert.equal(result.status,0,output(result));
+    assert.match(output(result),/passed with Dependency Cruiser/u);
+  } finally { await rm(root,{recursive:true,force:true}); }
 });
 
 void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {
