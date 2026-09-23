@@ -43,12 +43,18 @@
     "db:live-proof": "node scripts/db-live-proof.mjs",
     "image:build": "node tools/docker-build.mjs",
     "versions:check": "node scripts/check-toolchain-versions.mjs",
+    "ui:build": "pnpm --filter @coffee-platform/ui build",
+    "web:build": "pnpm ui:build && pnpm --filter @coffee-platform/web build:browser",
+    "dev:browser": "pnpm --filter @coffee-platform/web dev:browser",
+    "browser:bundle:check": "node scripts/check-browser-bundle.mjs",
+    "test:ui": "vitest run --config packages/platform-ui/vitest.config.ts",
+    "test:web-foundation": "node --experimental-strip-types apps/web/test/ui-foundation.spec.ts",
     "profile:check": "node scripts/check-toolchain-profiles.mjs",
     "clean-clone:check": "node scripts/verify-clean-clone.mjs",
-    "lint": "oxlint --type-aware --deny-warnings --ignore-pattern 'tests/architecture/fixtures/**' --ignore-pattern 'packages/generated/**' apps packages scripts tests",
+    "lint": "oxlint --type-aware --deny-warnings --ignore-pattern 'tests/architecture/fixtures/**' --ignore-pattern 'packages/generated/**' --ignore-pattern 'packages/platform-ui/provenance/**' apps packages scripts tests",
     "typecheck": "tsc -b --pretty false",
     "test": "node --test tests/**/*.test.mjs packages/*/test/**/*.test.mjs",
-    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm typecheck && pnpm web:build && pnpm browser:bundle:check && pnpm test:ui && pnpm test:web-foundation && pnpm test"
   },
   "devDependencies": {
     "ajv": "8.20.0",

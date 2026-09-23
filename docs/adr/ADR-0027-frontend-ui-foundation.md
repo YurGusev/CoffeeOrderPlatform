@@ -97,6 +97,22 @@ Icon runtime, React Hook Form/RHF, Zod, Radix, Base UI, второй `QueryClien
 Exact pins, запись в manifest/lockfile/toolchain registry и compatibility checks
 с Node 26, React, Vite и TS7 принадлежат #137; этот ADR версии не фиксирует.
 
+#### Узкое исключение совместимости TypeScript 7
+
+Для #137 явно разрешено одно type-only исключение: pnpm patch для
+`@react-types/shared@3.36.1`, транзитивной declaration-зависимости
+`react-aria-components@1.21.1`. Исключение ограничено шестью optional
+ARIA/DOM properties, не меняет runtime/framework behavior, public API, schema,
+wire format или application code и не является разрешением патчить React Aria
+или другой framework source.
+
+Исключение действительно только при одновременных условиях: upstream revision,
+license, patch hash и rationale зафиксированы в
+`packages/platform-ui/THIRD_PARTY_NOTICES.md`; `skipLibCheck` остаётся `false`;
+UI и browser graphs проходят отдельный `tsc --noEmit`; patch удаляется после
+появления совместимого upstream declaration. Любое другое framework patch,
+runtime patch или suppression type errors требует отдельного ADR/issue.
+
 ### Владение по issues
 
 - #137: `packages/platform-ui`, browser shell/entrypoint, React/Vite/Tailwind

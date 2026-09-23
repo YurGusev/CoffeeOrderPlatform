@@ -2,7 +2,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { dirname, join, posix, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -22,10 +22,12 @@ const ALLOWED_PLATFORM_PACKAGES = new Set([
   '@coffee-platform/runtime',
   '@coffee-platform/security',
   '@coffee-platform/testing',
+  '@coffee-platform/ui',
 ]);
 
 function isAllowedPlatformPackage(name) {
-  return ALLOWED_PLATFORM_PACKAGES.has(name) || name.startsWith('@coffee-platform/contracts-') || name.startsWith('@coffee-platform/generated-');
+  const root = name.startsWith("@") ? name.split("/").slice(0, 2).join("/") : name.split("/")[0];
+  return ALLOWED_PLATFORM_PACKAGES.has(name) || ALLOWED_PLATFORM_PACKAGES.has(root) || root.startsWith("@coffee-platform/contracts-") || root.startsWith("@coffee-platform/generated-");
 }
 
 function fail(rule, message) {
@@ -53,7 +55,7 @@ async function checkPackageDependencies(root) {
   ].filter((path) => path.endsWith('package.json') && existsSync(path));
   for (const path of files) {
     const json = JSON.parse(await readFile(path, 'utf8'));
-    const dependencies = { ...json.dependencies, ...json.devDependencies, ...json.peerDependencies };
+    const dependencies = { ...json.dependencies, ...json.devDependencies, ...json.peerDependencies, ...json.optionalDependencies };
     for (const [name, value] of Object.entries(dependencies)) {
       if (typeof value !== 'string') continue;
       if (value.includes('/apps/') || value.startsWith('file:../apps') || value.startsWith('link:../apps')) {
@@ -63,8 +65,14 @@ async function checkPackageDependencies(root) {
         fail('BOUND-IMPORT', `${path} declares forbidden shared business package ${name}`);
       }
       if (name.toLowerCase() === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${path} declares forbidden Axios dependency`);
+      if (path === join(root, 'apps/aroma-gateway/package.json') && ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(name)) {
+        fail('ARCH-TYPED-PROVIDER-HTTP', `${path} declares alternate provider HTTP client ${name}; use native fetch/Undici`);
+      }
       if (GENERIC_RETRY_DEPENDENCY_RE.test(name)) fail('ARCH-GENERIC-RETRY', `${path} declares forbidden generic retry dependency ${name}`);
       if (name === 'zod' || name.startsWith('zod/')) fail('ARCH-FORBIDDEN-SCHEMA', `${path} declares forbidden Zod schema mirror`);
+      if (/^(?:@radix-ui\/|@base-ui\/|lucide-react$|class-variance-authority$)/.test(name)) {
+        fail('ARCH-FORBIDDEN-UI-DEPENDENCY', `${path} declares forbidden UI dependency ${name}`);
+      }
       if (/^(?:@?[^/]+\/)?(?:ffi(?:-napi)?|sqlite3?|better-sqlite3|vfs|virtual-fs|virtual_fs|memfs)$/i.test(name)) {
         fail('ARCH-FORBIDDEN-NATIVE', `${path} declares forbidden FFI/SQLite/VFS dependency ${name}`);
       }
@@ -72,15 +80,213 @@ async function checkPackageDependencies(root) {
   }
 }
 
-const FORBIDDEN_MODULE_RE = /\b(?:from|import|require)\b[^\n]*['"]([^'"]+)['"]/ig;
-const RELATIVE_IMPORT_RE = /\b(?:from|import\s*\()\s*['"](\.{1,2}\/[^'"]+)['"]/g;
-const GENERIC_RETRY_DEPENDENCY_RE = /(?:^|[/_-])(?:async-retry|cockatiel|exponential-backoff|fetch-retry|p-retry|promise-retry|retry|retry-as-promised)(?:$|[/_-])/i;
+const GENERIC_RETRY_DEPENDENCY_RE = /(?:^|[/_-])(?:async-retry|cockatiel|exponential-backoff|fetch-retry|p-retry|promise-retry|retry-as-promised)(?:$|[/_-])/i;
 const LITERAL_POSTGRES_URL_RE = /["'`](?:postgres(?:ql)?:\/\/)/i;
 const GENERIC_RETRY_WRAPPER_RE = /(?<![.\w])(?:doRetry|executeWithRetry|performRetry|retry|retryAsync|retryOperation|retryWithBackoff|runWithRetry|withRetry)\s*(?:<[^;\n]*?>\s*)?\(/;
 const AROMA_GATEWAY_SOURCE_RE = /(?:^|\/)apps\/aroma-gateway\//;
 const TYPED_PROVIDER_HTTP_CLIENT_RE = /(?:^|\/)apps\/aroma-gateway\/src\/infrastructure\/provider\/http-client\.(?:cts|mts|ts)$/;
-const GENERIC_PROVIDER_HTTP_MODULE_RE = /^(?:@fastify\/http-proxy|http-proxy|node:(?:http|https|net|tls)|(?:http|https|net|tls)|undici)(?:\/|$)/i;
+const ALTERNATE_PROVIDER_HTTP_MODULE_RE = /^(?:node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
+const GENERIC_PROVIDER_HTTP_MODULE_RE = /^(?:@fastify\/http-proxy|http-proxy|node:(?:http|http2|https|net|tls)|(?:http|http2|https|net|tls)|undici|node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
 const GENERIC_PROVIDER_PROXY_RE = /(?<![.\w])(?:forward(?:Request|Response)?|passThrough|proxy)\s*(?:<[^;\n]*?>\s*)?(?:=|\()/i;
+const MODULE_SPECIFIER_RE = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]|\brequire\s*\(\s*['"]([^'"]+)['"]/g;
+const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
+
+function moduleSpecifiers(source) {
+  return [...source.matchAll(MODULE_SPECIFIER_RE)]
+    .map((match) => match[1] ?? match[2] ?? match[3])
+    .filter(Boolean);
+}
+
+function isTypeScriptSource(path) {
+  return /\.(?:ts|tsx|mts|cts)$/.test(path) && !/(?:[\\/])(dist|node_modules|provenance)(?:[\\/])/.test(path);
+}
+
+async function collectSourceFiles(root) {
+  return (await Promise.all(['apps', 'packages'].map((target) => walk(join(root, target)))))
+    .flat()
+    .filter(isTypeScriptSource);
+}
+
+function sourceLabel(path, root) {
+  return relative(root, path).replaceAll('\\', '/');
+}
+
+function sourceCandidates(candidate) {
+  const normalized = resolve(candidate);
+  const withoutRuntimeExtension = normalized.replace(/\.(?:mjs|cjs|js|jsx)$/, '');
+  const bases = [...new Set([normalized, withoutRuntimeExtension])];
+  return bases.flatMap((base) => [base, ...SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`), ...SOURCE_EXTENSIONS.map((extension) => join(base, `index${extension}`))]);
+}
+
+function resolveSourceCandidate(candidate, files) {
+  return sourceCandidates(candidate).find((path) => files.has(path));
+}
+
+function packageNameForSpecifier(specifier) {
+  return specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+}
+
+function resolveGraphImport(fromPath, specifier, files, workspacePackages) {
+  if (specifier.startsWith('.')) {
+    return resolveSourceCandidate(join(dirname(fromPath), specifier), files);
+  }
+  const packageName = packageNameForSpecifier(specifier);
+  const packageRoot = workspacePackages.get(packageName);
+  if (!packageRoot) return undefined;
+  const subpath = specifier.slice(packageName.length).replace(/^\/+/, '');
+  const candidate = subpath ? join(packageRoot, 'src', subpath) : join(packageRoot, 'src', 'index');
+  return resolveSourceCandidate(candidate, files);
+}
+
+function graphFromEntries(entries, root, workspacePackages = new Map()) {
+  const modules = new Map(entries.map(({ path, source }) => {
+    const absolutePath = resolve(root, path);
+    return [absolutePath, { path: absolutePath, source, imports: [], edges: [] }];
+  }));
+  const files = new Set(modules.keys());
+  for (const module of modules.values()) {
+    module.imports = [...new Set(moduleSpecifiers(module.source))];
+    module.edges = module.imports.map((specifier) => ({
+      specifier,
+      target: resolveGraphImport(module.path, specifier, files, workspacePackages),
+    }));
+  }
+  return { modules, root, workspacePackages };
+}
+
+async function workspacePackageRoots(root) {
+  const packageFiles = [join(root, 'package.json'), ...await walk(join(root, 'apps')), ...await walk(join(root, 'packages'))]
+    .filter((path) => path.endsWith('package.json') && existsSync(path));
+  const packages = new Map();
+  for (const path of packageFiles) {
+    const document = JSON.parse(await readFile(path, 'utf8'));
+    if (typeof document.name === 'string') packages.set(document.name, dirname(path));
+  }
+  return packages;
+}
+
+function isPathUnder(label, prefix) {
+  return label === prefix || label.startsWith(`${prefix}/`);
+}
+
+function appRuntimeFor(label) {
+  const match = label.match(/^apps\/([^/]+)\//);
+  return match?.[1];
+}
+
+function isBrowserLabel(label) {
+  return label.startsWith('apps/web/src/browser/');
+}
+
+function isServerLabel(label) {
+  return /^apps\/(?!web\/)[^/]+\//.test(label);
+}
+
+function isUiLabel(label) {
+  return label.startsWith('packages/platform-ui/src/');
+}
+
+function isNodeSpecifier(specifier) {
+  return specifier.startsWith('node:') || /^(?:assert|buffer|child_process|crypto|fs|http|https|net|os|path|stream|url|util|worker_threads)$/.test(specifier);
+}
+
+function isUiTransportSpecifier(specifier) {
+  return specifier.startsWith('@tanstack/') || specifier === 'effect' || specifier.startsWith('@effect/');
+}
+
+function isForbiddenUiTarget(label) {
+  return label.startsWith('apps/') || isPathUnder(label, 'packages/platform-runtime') || isPathUnder(label, 'packages/contracts') || isPathUnder(label, 'packages/generated');
+}
+
+function checkGraphContext(graph, roots, context) {
+  const queue = [...roots];
+  const visited = new Set();
+  while (queue.length > 0) {
+    const path = queue.shift();
+    if (visited.has(path)) continue;
+    visited.add(path);
+    const module = graph.modules.get(path);
+    if (!module) continue;
+    const label = sourceLabel(path, graph.root);
+    for (const edge of module.edges) {
+      const targetLabel = edge.target ? sourceLabel(edge.target, graph.root) : undefined;
+      if (context.kind === 'browser') {
+        if (edge.coreModule || isNodeSpecifier(edge.specifier) || edge.specifier === '@coffee-platform/runtime') {
+          fail('BOUND-BROWSER-NODE', `${label} -> ${edge.specifier}: browser graph reaches Node/runtime module`);
+        }
+        if (targetLabel && (targetLabel === 'apps/web/src/main.ts' || (targetLabel.startsWith('apps/') && !targetLabel.startsWith('apps/web/')) || isPathUnder(targetLabel, 'packages/platform-runtime'))) {
+          fail('BOUND-BROWSER-NODE', `${label} -> ${targetLabel}: browser graph reaches Node/server source`);
+        }
+      }
+      if (context.kind === 'server' && (edge.specifier === '@coffee-platform/ui' || (targetLabel && isUiLabel(targetLabel)))) {
+        fail('BOUND-SERVER-UI', `${label} -> ${edge.specifier || targetLabel}: server graph reaches browser UI package`);
+      }
+      if (context.kind === 'ui') {
+        if (edge.coreModule || isNodeSpecifier(edge.specifier)) fail('BOUND-UI-NODE', `${label} -> ${edge.specifier}: UI graph reaches Node module`);
+        if (isUiTransportSpecifier(edge.specifier)) fail('BOUND-UI-QUERY', `${label} -> ${edge.specifier}: UI graph reaches transport/state library`);
+        if (edge.specifier === '@coffee-platform/runtime' || (targetLabel && isForbiddenUiTarget(targetLabel))) {
+          fail('BOUND-UI-RUNTIME', `${label} -> ${edge.specifier || targetLabel}: UI graph reaches runtime/business source`);
+        }
+      }
+      if (context.kind === 'app' && edge.specifier.startsWith('@coffee-platform/') && !isAllowedPlatformPackage(edge.specifier)) {
+        fail('BOUND-IMPORT', `${label} -> ${edge.specifier}: only versioned contracts and platform technical packages are allowed`);
+      }
+      if (context.kind === 'app' && targetLabel) {
+        const targetRuntime = appRuntimeFor(targetLabel);
+        if (targetRuntime && targetRuntime !== context.runtime) fail('BOUND-IMPORT', `${label} -> ${targetLabel}: runtime implementation boundary crossed transitively`);
+        if (/^packages\/(domain|models|shared-business)(\/|$)/.test(targetLabel)) fail('BOUND-IMPORT', `${label} -> ${targetLabel}: shared business package forbidden transitively`);
+      }
+      if (edge.target) queue.push(edge.target);
+    }
+  }
+}
+
+function checkTransitiveBoundaries(graph) {
+  const browserRoots = [...graph.modules.keys()].filter((path) => isBrowserLabel(sourceLabel(path, graph.root)));
+  const serverRoots = [...graph.modules.keys()].filter((path) => isServerLabel(sourceLabel(path, graph.root)));
+  const uiRoots = [...graph.modules.keys()].filter((path) => isUiLabel(sourceLabel(path, graph.root)));
+  const appRoots = [...graph.modules.keys()].filter((path) => appRuntimeFor(sourceLabel(path, graph.root)));
+  checkGraphContext(graph, browserRoots, { kind: 'browser' });
+  checkGraphContext(graph, serverRoots, { kind: 'server' });
+  checkGraphContext(graph, uiRoots, { kind: 'ui' });
+  for (const runtime of new Set(appRoots.map((path) => appRuntimeFor(sourceLabel(path, graph.root)))) ) {
+    checkGraphContext(graph, appRoots.filter((path) => appRuntimeFor(sourceLabel(path, graph.root)) === runtime), { kind: 'app', runtime });
+  }
+}
+
+function dependencyCruiserSourceGraph(result, root, sourceFiles, workspacePackages) {
+  const files = new Set(sourceFiles);
+  const modules = new Map();
+  for (const dependencyModule of result.modules ?? []) {
+    if (typeof dependencyModule.source !== 'string') continue;
+    const path = resolve(root, dependencyModule.source);
+    if (!files.has(path)) continue;
+    modules.set(path, { path, imports: [], edges: [] });
+  }
+
+  for (const dependencyModule of result.modules ?? []) {
+    if (typeof dependencyModule.source !== 'string') continue;
+    const path = resolve(root, dependencyModule.source);
+    const module = modules.get(path);
+    if (!module) continue;
+    for (const dependency of dependencyModule.dependencies ?? []) {
+      const specifier = dependency.module;
+      if (typeof specifier !== 'string' || specifier === '✖') continue;
+      let target;
+      if (!dependency.couldNotResolve && typeof dependency.resolved === 'string' && /^(?:apps|packages)\//.test(dependency.resolved)) {
+        target = resolveSourceCandidate(resolve(root, dependency.resolved), files);
+      }
+      target ??= resolveGraphImport(path, specifier, files, workspacePackages);
+      module.imports.push(specifier);
+      module.edges.push({ coreModule: dependency.coreModule === true, specifier, target });
+    }
+  }
+  return { modules, root, workspacePackages };
+}
+
+export function checkTransitiveSourceGraph(entries, options = {}) {
+  checkTransitiveBoundaries(graphFromEntries(entries, options.root ?? '/repo', options.workspacePackages ?? new Map()));
+}
 
 function forbiddenModuleKind(moduleName) {
   const normalized = moduleName.toLowerCase();
@@ -103,6 +309,8 @@ function findSwitchBody(source, openingBrace) {
 
 function checkStaticSource(path, source) {
   const label = path.replaceAll('\\', '/');
+  const isUiPackage = label.includes('/packages/platform-ui/');
+  const isBrowserSource = label.includes('/apps/web/src/browser/');
   if (/(?:^|\/)apps\//.test(label) && LITERAL_POSTGRES_URL_RE.test(source)) {
     fail('ARCH-POSTGRES-URL', `${label}: literal PostgreSQL connection URL is forbidden in app source; use scoped platform configuration`);
   }
@@ -120,13 +328,31 @@ function checkStaticSource(path, source) {
   if (/\b(?:new\s+Date\s*\(|Date\s*\.\s*(?:now|parse|UTC)\s*\()/m.test(source)) {
     fail('ARCH-TEMPORAL', `${label}: mutable Date API is forbidden; use Temporal`);
   }
-  for (const match of source.matchAll(FORBIDDEN_MODULE_RE)) {
-    const moduleName = match[1];
+  for (const moduleName of moduleSpecifiers(source)) {
+    if (AROMA_GATEWAY_SOURCE_RE.test(label) && ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(moduleName)) {
+      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: alternate provider HTTP client ${moduleName} is forbidden; use native fetch/Undici`);
+    }
     if (AROMA_GATEWAY_SOURCE_RE.test(label) && !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label) && GENERIC_PROVIDER_HTTP_MODULE_RE.test(moduleName)) {
       fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: generic provider HTTP module ${moduleName} is forbidden outside the typed provider http-client`);
     }
+    if (isUiPackage && /^(?:@radix-ui\/|@base-ui\/|lucide-react$|class-variance-authority$)/.test(moduleName)) {
+      fail('ARCH-FORBIDDEN-UI-DEPENDENCY', `${label}: forbidden UI dependency ${moduleName}`);
+    }
+    if (isBrowserSource && (isNodeSpecifier(moduleName) || moduleName === '@coffee-platform/runtime')) {
+      fail('BOUND-BROWSER-NODE', `${label}: browser source imports Node/runtime module ${moduleName}`);
+    }
+    if (label.endsWith('/apps/web/src/main.ts') && /(?:^|\/)browser(?:\/|$)/.test(moduleName)) {
+      fail('BOUND-NODE-BROWSER', `${label}: Node entry imports browser source ${moduleName}`);
+    }
+    if (/(?:^|\/)apps\/(?!web\/)[^/]+\//.test(label) && (moduleName === "@coffee-platform/ui" || /packages\/platform-ui\//.test(moduleName))) {
+      fail('BOUND-SERVER-UI', `${label}: server runtime imports browser UI package`);
+    }
+    if (isUiPackage && isNodeSpecifier(moduleName)) fail('BOUND-UI-NODE', `${label}: UI package imports Node module ${moduleName}`);
+    if (isUiPackage && isUiTransportSpecifier(moduleName)) fail('BOUND-UI-QUERY', `${label}: UI package imports transport/state module ${moduleName}`);
     if (/contracts\/fixtures|fixtures\/.*\.json/.test(moduleName)) fail('BOUND-CONTRACT-FIXTURE', `${label}: production source imports contract fixture ${moduleName}`);
-    if (/(?:^|\/)apps\/(?:web|api-public)\//.test(label) && /(?:generated|contracts)-internal-v1|@coffee-platform\/contracts-(?:customer|catalog|pricing|orders|aroma)-v1/.test(moduleName)) {
+    const internalContract = /(?:^|[/@])(?:generated|contracts)-internal-v1(?:\/|$)/.test(moduleName);
+    const browserContract = /(?:^|\/)apps\/web\//.test(label) && /^@coffee-platform\/contracts-(?:customer|catalog|pricing|orders|aroma)-v1$/.test(moduleName);
+    if (/(?:^|\/)apps\/(?:web|api-public)\//.test(label) && (internalContract || browserContract)) {
       fail('BOUND-CONTRACT-AUDIENCE', `${label}: browser/public graph imports internal contract ${moduleName}`);
     }
     if (label.startsWith('apps/') && /^(?:@fastify\/swagger|@scalar\/)/.test(moduleName)) {
@@ -149,11 +375,14 @@ function checkStaticSource(path, source) {
     if (kind === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${label}: Axios import ${moduleName} is forbidden; use native fetch/Undici`);
     if (kind === 'native') fail('ARCH-FORBIDDEN-NATIVE', `${label}: experimental FFI/SQLite/VFS import ${moduleName} is forbidden without an ADR allowlist`);
   }
+  if (isUiPackage && /\bfetch\s*\(/m.test(source)) {
+    fail('BOUND-UI-NETWORK', `${label}: UI package cannot perform network calls`);
+  }
   if (/^\s*(?:const\s+[^=]+\s*=\s*)?require\s*\(|\bmodule\.exports\b|\bexports\.[A-Za-z_$]/m.test(source)) {
     fail('TS7-ESM', `${label}: CommonJS require/module.exports is forbidden`);
   }
-  for (const match of source.matchAll(RELATIVE_IMPORT_RE)) {
-    if (!match[1].endsWith('.js')) fail('TS7-ESM', `${label}: relative import ${match[1]} must use a .js runtime specifier`);
+  for (const moduleName of moduleSpecifiers(source).filter((specifier) => specifier.startsWith('.'))) {
+    if (!moduleName.endsWith('.js') && !moduleName.endsWith('.css')) fail('TS7-ESM', `${label}: relative import ${moduleName} must use a .js runtime specifier`);
   }
   if (/\benum\s+[A-Za-z_$][\w$]*/m.test(source)) fail('TS7-ERASABLE', `${label}: enum is non-erasable syntax; use a literal union`);
   if (/(?:\bas\s+any\b|:\s*any\b|<any>)/m.test(source)) fail('TS7-UNSAFE-ANY', `${label}: explicit any is forbidden`);
@@ -175,9 +404,7 @@ function checkStaticSource(path, source) {
 }
 
 async function checkStaticSources(root) {
-  const sourceFiles = (await Promise.all(['apps', 'packages'].map((target) => walk(join(root, target)))))
-    .flat()
-    .filter((path) => /\.(?:ts|tsx|mts|cts)$/.test(path));
+  const sourceFiles = await collectSourceFiles(root);
   for (const path of sourceFiles) checkStaticSource(path, await readFile(path, 'utf8'));
 }
 
@@ -244,9 +471,7 @@ async function runDependencyCruiser(root, configPath) {
   const targets = ['apps', 'packages'].filter((path) => existsSync(join(root, path)));
   if (targets.length === 0) return { skipped: true, reason: 'runtime roots are not materialized before issue #3' };
 
-  const sourceFiles = (await Promise.all(targets.map((target) => walk(join(root, target)))))
-    .flat()
-    .filter((path) => /\.(?:ts|tsx|mts)$/.test(path))
+  const sourceFiles = (await collectSourceFiles(root))
     .map((path) => path.slice(root.length + 1));
   if (sourceFiles.length === 0) return { skipped: true, reason: 'no TypeScript sources are materialized' };
 
@@ -267,24 +492,14 @@ async function runDependencyCruiser(root, configPath) {
     const diagnostic = graph.summary.violations?.map((violation) => `${violation.rule.name} ${violation.from} -> ${violation.to}`).join('; ');
     fail('BOUND-IMPORT', diagnostic || 'Dependency Cruiser rejected the import graph');
   }
-  for (const module of graph.modules || []) {
-    if (!module.source.startsWith('apps/')) continue;
-    const sourceRuntime = module.source.split('/')[1];
-    for (const dependency of module.dependencies || []) {
-      const target = dependency.resolved.startsWith('.')
-        ? posix.normalize(posix.join(posix.dirname(module.source), dependency.resolved)).replace(/\.js$/, '.ts')
-        : dependency.resolved;
-      if (target.startsWith('apps/')) {
-        const targetRuntime = target.split('/')[1];
-        if (targetRuntime !== sourceRuntime) fail('BOUND-IMPORT', `${module.source} -> ${target}: runtime implementation boundary crossed`);
-      }
-      if (/^packages\/(domain|models|shared-business)(\/|$)/.test(target)) fail('BOUND-IMPORT', `${module.source} -> ${target}: shared business package forbidden`);
-      if (target.startsWith('@coffee-platform/') && !isAllowedPlatformPackage(target)) {
-        fail('BOUND-IMPORT', `${module.source} -> ${target}: only versioned contracts and platform technical packages are allowed`);
-      }
-    }
-  }
+  checkTransitiveBoundaries(
+    dependencyCruiserSourceGraph(graph, root, sourceFilesAbsolute(root, sourceFiles), await workspacePackageRoots(root)),
+  );
   return { skipped: false };
+}
+
+function sourceFilesAbsolute(root, sourceFiles) {
+  return sourceFiles.map((path) => resolve(root, path));
 }
 
 export async function checkArchitecture(root = SCRIPT_ROOT) {
@@ -299,6 +514,8 @@ export async function checkArchitecture(root = SCRIPT_ROOT) {
   if (!existsSync(configPath) || !(await stat(configPath)).isFile()) fail('BOUND-IMPORT', '.dependency-cruiser.cjs is missing');
   return await runDependencyCruiser(resolvedRoot, configPath);
 }
+
+export { checkStaticSource };
 
 function parseRoot(argv) {
   const index = argv.indexOf('--root');
