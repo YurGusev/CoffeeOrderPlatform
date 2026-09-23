@@ -1,6 +1,7 @@
-# UX-контракт операторского frontend
+# UX-контракт операторского frontend — исторический черновик #136
 
-Статус: proposed, спецификация #136 для реализации #137/#9/#12 и проверки #13.
+Статус: визуальная часть **не принята владельцем**. Текущий выбор — [ADR-0029](../../adr/ADR-0029-selected-frontend-prototype.md) и [прототип v1.1.0](../prototypes/invoice-orders-workspace/v1.1.0/README.md) для стиля всей SPA. Четыре SVG ниже и светлые tokens/IBM Plex Sans сохраняются как история #136, не как инструкция для #137. Таблицы flow/focus — прежние проектные annotations; при расхождении проверять нормативные launch contracts и новый дизайн.
+
 SVG — редактируемые XML-макеты с вымышленными данными, а не executable frontend,
 новые routes, API/schema, runtime или доказательство browser/WCAG.
 

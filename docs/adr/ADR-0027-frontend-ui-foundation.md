@@ -1,9 +1,11 @@
 # ADR-0027: foundation операторского frontend и UI package
 
-- Статус: предложено для содержательного решения владельца.
+- Статус: техническая граница предложена; прежнее визуальное направление не принято владельцем.
 - Область: browser foundation первого запуска и presentation boundary.
 - Владельцы реализации: [issue #137](https://github.com/YurGusev/CoffeeOrderPlatform/issues/137), [issue #9](https://github.com/YurGusev/CoffeeOrderPlatform/issues/9) и [issue #12](https://github.com/YurGusev/CoffeeOrderPlatform/issues/12).
-- Нормативный UX-контракт: [docs/frontend/ux/README.md](../frontend/ux/README.md).
+- Текущий визуальный ориентир: [ADR-0029](ADR-0029-selected-frontend-prototype.md) и versioned [прототип v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md). [Исторический UX-документ #136](../frontend/ux/README.md) сохраняется для traceability и описания прежних flow/focus предположений, но его палитра, IBM Plex Sans и SVG не нормативны.
+
+> Раздел **Visual contract** ниже оставлен как исторический текст #136 и в случае расхождения уступает ADR-0029. Не использовать его значения цветов, шрифтов, радиусов и layout как текущую задачу #137.
 
 ## Контекст
 

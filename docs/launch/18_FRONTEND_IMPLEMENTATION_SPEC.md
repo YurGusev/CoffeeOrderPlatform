@@ -4,9 +4,11 @@
 routes, query keys, mutation retry, conflict recovery или UI states заново.
 [Восстановление browser commands](26_BROWSER_COMMAND_RECOVERY.md) определяет
 read-only lookup, terminal outcomes и единый порядок принятия Order Card.
-[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет foundation,
-границу `@coffee-platform/ui` и dependency ownership; визуальные tokens и
-editable mockups находятся в [UX-контракте](../frontend/ux/README.md).
+[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет техническую
+foundation, границу `@coffee-platform/ui` и dependency ownership. Текущий
+визуальный ориентир — [ADR-0029](../adr/ADR-0029-selected-frontend-prototype.md)
+и [прототип v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md).
+Светлые [SVG #136](../frontend/ux/README.md) сохранены только как история.
 
 ## 1. Граница приложения
 
@@ -224,19 +226,23 @@ server-provided reconciliation action.
 
 ## 8. Формы, primitives, focus и narrow layout
 
-Public props/events/ref/composition, validation, pending, dismissal и focus для
+Публичные props/events/ref/composition, validation, pending, dismissal и focus для
 `Button`, `Link`, `Dialog`, `Field/Input`, `Alert`, `Badge`, `Loading`, `Empty`
-зафиксированы в таблице [UX-контракта](../frontend/ux/README.md). #137 реализует
-этот API без второго локального набора primitives; #9 композирует business forms,
-Router и Query поверх него.
+сохраняют техническую boundary ADR-0027; #137 реализует один набор primitives,
+#9 композирует business forms, Router и Query поверх него. Исторические цвета,
+шрифты и размеры [UX-документа #136](../frontend/ux/README.md) не применять.
 
-- visual contract один: operational/restrained console, IBM Plex Sans с
-  Russian/Cyrillic, self-hosted будущим #137 WOFF2 через
-  `@font-face`/`font-display: swap` и OFL/source revision/SHA-256 evidence;
-  remote font CDN запрещён;
-- colors, 4px spacing scale, 36/40/44px control sizes, 6px radius, 1px border и
-  2px `#1D4ED8` focus ring берутся без переопределения из UX-контракта; status не
-  передаётся только цветом;
+- Визуальная система одна: `--cos-*` из `exact-source.css` выбранного
+  [v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md),
+  self-hosted Inter Variable для body и Manrope Variable для headings, source
+  revision/SHA-256/licence evidence; remote font CDN запрещён;
+- Геометрию desktop controls и focus брать из versioned `DESIGN.md`/исходного
+  CSS; минимальные hit targets и keyboard/focus проверить в #137/#13. Ширины
+  375/430 у прототипа — диагностика, не mobile PASS; старые 36/40/44px,
+  `#1D4ED8` и белую палитру не объявлять текущим визуальным контрактом;
+- Invoice/orders registry, invoice/payment drawer и `/app/orders` в этой версии
+  только fixture. Production Order Card остаётся `/app/orders/:orderRef`, другие
+  маршруты не добавлять до принятых owner projections;
 - каждый input имеет visible `<label>` и связанный error через
   `aria-describedby`;
 - после failed submit field `VALIDATION_FAILED` фокус получает первое invalid

@@ -1,0 +1,94 @@
+.layout {
+  display: flex;
+  min-width: 0;
+  gap: var(--cos-space-3);
+}
+
+.layout[data-orientation="vertical"] {
+  flex-direction: column;
+}
+
+.layout[data-orientation="horizontal"] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.layout[data-density="compact"] {
+  gap: var(--cos-space-2);
+}
+
+.layout[data-density="comfortable"] {
+  gap: var(--cos-space-5);
+}
+
+.layout[data-variant="solid"] {
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-md);
+  background: var(--cos-surface-panel);
+}
+
+.layout[data-variant="soft"] {
+  border: 1px solid var(--cos-border-subtle);
+  border-radius: var(--cos-radius-md);
+  background: var(--cos-selection-hover);
+}
+
+.layout[data-variant="outline"] {
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-md);
+  background: transparent;
+}
+
+.layout[data-tone="primary"] {
+  border-color: var(--cos-border-active);
+}
+
+.layout[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--cos-status-success) 58%, var(--cos-border-default));
+}
+
+.layout[data-tone="warning"] {
+  border-color: color-mix(in srgb, var(--cos-status-warning) 58%, var(--cos-border-default));
+}
+
+.layout[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--cos-status-error) 58%, var(--cos-border-default));
+}
+
+.layout[data-tone="info"] {
+  border-color: color-mix(in srgb, var(--cos-status-info) 58%, var(--cos-border-default));
+}
+
+.divider {
+  flex: 0 0 auto;
+  border: 0;
+  background: var(--cos-border-divider);
+}
+
+.dividerHorizontal {
+  width: 100%;
+  height: 1px;
+}
+
+.dividerVertical {
+  width: 1px;
+  min-height: var(--cos-density-control-height);
+}
+
+.divider[data-tone="primary"] {
+  background: var(--cos-border-active);
+}
+
+@media (forced-colors: active) {
+  .layout[data-variant="solid"],
+  .layout[data-variant="soft"],
+  .layout[data-variant="outline"] {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+
+  .divider {
+    background: CanvasText;
+  }
+}

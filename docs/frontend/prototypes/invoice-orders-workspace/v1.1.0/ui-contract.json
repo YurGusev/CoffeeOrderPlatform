@@ -1,0 +1,232 @@
+{
+  "documentType": "coffee-order-platform/ui-implementation-handoff",
+  "schemaVersion": "1.1.0",
+  "designId": "orders-workspace-v1",
+  "status": "approved-reference",
+  "language": "ru",
+  "scope": {
+    "surface": "operator-invoices-orders",
+    "implementationMode": "clean-room-react",
+    "supportedViewportMinWidth": 1024,
+    "narrowViewports": "diagnostic-only"
+  },
+  "visualSource": {
+    "repository": "https://github.com/YurGusev/CoffeeOrderSystem",
+    "branch": "develop",
+    "commit": "3d4b30b1eaac14c77f41d8779f5e03c54cfacbef",
+    "allowedScope": "presentation-only",
+    "manifest": "source-manifest.json"
+  },
+  "canonicalProjectSources": [
+    "docs/launch/07_FRONTEND_CONTRACT.md",
+    "docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md",
+    "docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md",
+    "packages/generated/client-v1/dist/types.gen.d.ts"
+  ],
+  "referenceFiles": {
+    "renderedPrototype": "index.html",
+    "prototypeBehavior": "prototype.js",
+    "visualCss": "exact-source.css",
+    "behaviorBridgeCss": "bridge.css",
+    "designSpec": "DESIGN.md",
+    "agentHandoff": "AGENT_HANDOFF.md",
+    "componentMap": "COMPONENT_MAP.md",
+    "acceptance": "ACCEPTANCE.md",
+    "implementationPrompt": "IMPLEMENTATION_PROMPT.md"
+  },
+  "routes": [
+    {
+      "id": "order-card",
+      "path": "/app/orders/:orderRef",
+      "status": "canonical",
+      "ownerContract": "OrderCardResponse"
+    },
+    {
+      "id": "invoice-orders-registry",
+      "path": "/app/orders",
+      "status": "contract-gap",
+      "requiredBeforeProduction": [
+        "accepted invoice-to-orders owner projection endpoint",
+        "cursor/filter schema",
+        "invoice group and order summary projections",
+        "stable Order-to-Invoice binding",
+        "route acceptance"
+      ]
+    }
+  ],
+  "componentTree": {
+    "name": "InvoiceOrdersWorkspaceScreen",
+    "children": [
+      {"name": "OperatorShell", "selector": "[data-ui='operator-shell']"},
+      {"name": "OrdersPageHeader", "selector": "[data-ui='page-header']"},
+      {"name": "OrdersToolbar", "selector": "[data-ui='orders-toolbar']"},
+      {
+        "name": "InvoiceRegistry",
+        "selector": "[data-ui='invoice-registry']",
+        "children": [
+          {
+            "name": "InvoiceGroupRow",
+            "selector": "[data-ui='invoice-group-row']",
+            "children": [
+              {"name": "OrderRow", "selector": "[data-ui='order-row']"},
+              {
+                "name": "ExpandedOrderComposer",
+                "selector": "[data-ui='order-composer']",
+                "children": [
+                  {"name": "OrderItemsTable", "selector": "[data-ui='order-items']"},
+                  {"name": "QuantityControl", "selector": "[data-ui='quantity-control']"},
+                  {"name": "OrderSummary", "selector": "[data-ui='order-summary']"}
+                ]
+              }
+            ]
+          },
+          {"name": "CursorPagination", "selector": "[data-ui='orders-pagination']"}
+        ]
+      },
+      {"name": "DrawerHost", "selector": "[data-ui='drawer']"},
+      {"name": "ToastRegion", "selector": "[data-ui='toast']"}
+    ]
+  },
+  "ownerTypes": {
+    "orderCard": "OrderCardResponse",
+    "orderItem": "OrderItem",
+    "pricing": "OrderPricing | null",
+    "aroma": "AromaCard",
+    "allowedActions": [
+      "edit-items",
+      "confirm",
+      "request-aroma-reconciliation"
+    ]
+  },
+  "actionBindings": [
+    {
+      "ui": ["add-order-item", "edit-order-item", "remove-order-item", "quantity-control"],
+      "requiresAllowedAction": "edit-items",
+      "transport": "PUT/DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}",
+      "requires": ["expectedVersion", "Idempotency-Key", "quoteRef", "quoteHash"]
+    },
+    {
+      "ui": ["confirm-order"],
+      "requiresAllowedAction": "confirm",
+      "transport": "POST /api/client-v1/orders/{orderRef}/commands/confirm",
+      "requires": ["expectedVersion", "Idempotency-Key"]
+    },
+    {
+      "ui": ["request-aroma-reconciliation"],
+      "requiresAllowedAction": "request-aroma-reconciliation",
+      "transport": "POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation",
+      "requires": ["expectedVersion", "Idempotency-Key", "reason"]
+    }
+  ],
+  "serverOwnedFields": [
+    "identity",
+    "version",
+    "projectionVersion",
+    "status",
+    "money",
+    "pricing",
+    "aroma",
+    "blockers",
+    "allowedActions"
+  ],
+  "requiredStates": [
+    "loading",
+    "empty",
+    "success",
+    "validation-error",
+    "problem-details",
+    "route-fatal",
+    "pending-mutation",
+    "version-conflict",
+    "stale-quote",
+    "provider-unavailable",
+    "NotRequested",
+    "PendingObservation",
+    "OutOfSync",
+    "Converging",
+    "InSync",
+    "Blocked",
+    "UnknownOutcome"
+  ],
+  "visualContract": {
+    "bodyFont": "Inter Variable 14px/20px",
+    "headingFont": "Manrope Variable",
+    "sidebarWidthPx": 226,
+    "shellGapPx": 14,
+    "outerPaddingPx": 12,
+    "toolbarRadiusPx": 14,
+    "compactControlHeightPx": 32,
+    "drawerWidthPx": 384,
+    "tableMinWidthPx": 1537,
+    "inlineComposerHeight": "derived from live registry viewport; whole item rows only",
+    "desktopMonitorRange": "1024x600 through 3840x2160",
+    "colorsFrom": "exact-source.css --cos-*"
+  },
+  "stableSelectors": [
+    "operator-shell",
+    "sidebar",
+    "workspace",
+    "page-header",
+    "orders-toolbar",
+    "orders-filters",
+    "invoice-registry",
+    "invoice-group-row",
+    "invoice-group-toggle",
+    "orders-scroll",
+    "orders-table",
+    "order-row",
+    "expanded-order-row",
+    "order-composer",
+    "order-items-scroll",
+    "items-scroll-hint",
+    "order-items",
+    "order-item",
+    "quantity-control",
+    "add-order-item",
+    "edit-order-item",
+    "remove-order-item",
+    "order-summary",
+    "confirm-order",
+    "open-order-workflow",
+    "orders-pagination",
+    "registry-scroll-hint",
+    "drawer",
+    "toast"
+  ],
+  "contractGaps": [
+    {
+      "id": "invoice-orders-registry-api",
+      "severity": "blocking-for-production-list",
+      "rule": "Do not derive invoice groups by browser fan-out over Order Card resources or by a client-side Invoice/Order/Payment join."
+    },
+    {
+      "id": "invoice-projection",
+      "severity": "blocking-for-production-binding",
+      "rule": "Invoice is Invoices-owned; the invoice-to-orders hierarchy and stable binding are absent from OrderCardResponse."
+    },
+    {
+      "id": "payment-projection",
+      "severity": "blocking-for-production-binding",
+      "rule": "Payment is Payments-owned and is not a field of OrderCardResponse."
+    }
+  ],
+  "prohibited": [
+    "legacy React runtime imports",
+    "legacy API/state/domain types",
+    "browser-calculated authoritative totals",
+    "browser-synthesized allowedActions",
+    "direct browser calls to AROMA",
+    "blind retry after UnknownOutcome",
+    "cross-owner browser joins",
+    "mock fields in production DTOs"
+  ],
+  "verification": {
+    "functional": "node docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify.mjs",
+    "servedSurface": "node docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/evidence/served-verify.mjs",
+    "sourceIdentity": "node docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify-source.mjs",
+    "handoffConsistency": "node docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify-handoff.mjs",
+    "expectedFunctionalAssertions": 66,
+    "servedViewports": ["1024x600", "1280x720", "1366x768", "1440x900", "1920x1080", "2560x1080", "2560x1440", "3440x1440", "3840x2160", "375x812 diagnostic", "430x932 diagnostic"],
+    "liveResizeViewports": ["1280x720", "2560x1080", "2560x1440", "3440x1440", "1024x600", "3840x2160"]
+  }
+}

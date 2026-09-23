@@ -1,0 +1,35 @@
+.scrollArea {
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--cos-action-primary) var(--cos-surface-canvas-raised);
+}
+
+.scrollArea[data-scroll-size="compact"] {
+  max-height: 12rem;
+}
+
+.scrollArea[data-scroll-size="standard"] {
+  max-height: 22rem;
+}
+
+.scrollArea[data-scroll-size="tall"] {
+  max-height: 22.5rem;
+}
+
+.scrollArea:focus-visible {
+  outline: 2px solid var(--cos-border-active);
+  outline-offset: -2px;
+}
+
+@media (forced-colors: active) {
+  .scrollArea {
+    scrollbar-color: ButtonText Canvas;
+  }
+
+  .scrollArea:focus-visible {
+    outline-color: Highlight;
+  }
+}

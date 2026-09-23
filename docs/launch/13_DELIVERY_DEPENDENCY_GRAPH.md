@@ -6,8 +6,10 @@
 для конкретных consumers. Ветка создаётся от accepted `develop`, без stacked
 или unmerged predecessor. Выполненный scaffold не считается доказательством
 business durability. Техническую authority задаёт
-[ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md), а frontend presentation
-foundation — [ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md).
+[ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md), а frontend
+техническую foundation — [ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md).
+Текущий visual source для #137/#9 — [ADR-0029](../adr/ADR-0029-selected-frontend-prototype.md);
+закрытый #136 сам по себе не доказал содержательную приёмку прежних SVG.
 
 ## Граф после recovery
 
@@ -118,7 +120,7 @@ collector.
 | #18 | #10, #6, #16, #17 | pipeline recovery/capacity evidence → #7, #8, #9, #11, #13 |
 | #7 | #4, #17, #18, #62, #119 | immutable PricingQuote/verify → #8, #9 |
 | #8 | #4, #5, #7, #17, #18, #63, #119 | Draft/Confirm/contribution/Order Card → #9, #11, #12 |
-| #136 | accepted #4, #119 | ADR-0027, editable UX mockups и нормативное frontend-согласование → #137, #9, #12, #13 |
+| #136 | accepted #4, #119 | historical ADR-0027/SVG handoff merged; `contentAcceptance: NOT_RUN`, светлый visual отклонён владельцем; новое решение ADR-0029 + versioned prototype → #137, #9, #12, #13 |
 | #137 | #136 | `@coffee-platform/ui`, React/Vite/Tailwind/React Aria foundation, browser/Node graphs → #9 |
 | #9 | #4, #5, #7, #8, #17, #18, #119, #137 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13 |
 | #11 | #10, #16, #18, #8, #63 | observer/convergence/UnknownOutcome → #12, #13 |
