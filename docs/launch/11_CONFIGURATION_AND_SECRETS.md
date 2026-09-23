@@ -176,6 +176,11 @@ Inventory authority — это encrypted paths в `secrets/platform.secrets.sops
 
 `security.customerCursorSigningPrivateKey` — отдельный Customer-scoped ключ;
 он не переиспользуется для Catalog cursor, actor context, delegation или mTLS.
+`catalog-activation-worker` использует только собственные scoped
+`postgres.catalogActivate` и `security.serviceTransportKeys.catalog-activation-worker`:
+последний устанавливает mTLS до allowlisted `api-internal` для Gateway binding.
+Raw provider credentials, произвольный outbound URL и общий доступ к SOPS-файлу
+worker не получает. Секрет HMAC source identity остаётся в Gateway.
 Public verification metadata Customer cursor находится в
 `security.customerCursor` в `config/platform.yaml`; active/previous public
 material остаётся в SOPS inventory и materializes только для Customer.

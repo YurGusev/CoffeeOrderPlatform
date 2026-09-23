@@ -10,13 +10,19 @@
 | База данных/схема | Writer | Сущности первого запуска |
 |---|---|---|
 | `coffee_platform_customer` | customer-service | Customer, Address, ChannelLink |
-| `coffee_platform_catalog` | catalog services | Product, Variant, SupplierSnapshot, OfferMapping, Availability |
+| `coffee_platform_catalog` | Catalog owner: `catalog-supplier-sync` пишет только staging, `catalog-activation-worker` — active/identity/Outbox | Product, Variant, SupplierSnapshot, OfferMapping, Availability, SourceIdentity, Outbox |
 | `coffee_platform_pricing` | pricing-service | PricingPolicyVersion, PricingQuote |
 | `coffee_platform_orders` | Orders runtimes | Order, OrderItem, History, Desired, `cart_desired_order_facts`, Observed, ConvergenceAttempt, MutationReservation, `order_aroma_projections`, Outbox, Inbox |
 | `coffee_platform_integration` | aroma-gateway | encrypted session metadata, provider operation journal |
 
 Ни один сервис не получает права записи в БД другого владельца. Read models
 используют события или явные owner API; межвладельческий SQL запрещён.
+
+Catalog API читает только pointer-selected `active_*` views через
+`coffee_catalog_api_ro`; миграции `0001`–`0007` принадлежат одному
+`catalog-service` migrator. `Received` staging не виден клиенту до commit,
+переключение `catalog_state` и запись owner Outbox атомарны; Gateway binding
+проходит вне этой транзакции через `api-internal`.
 
 Core Order tables пишет только `orders-service`. Cart Desired и
 `order_aroma_projections` пишет только `orders-aroma-preparation`; observer и

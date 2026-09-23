@@ -2,7 +2,7 @@
 
 import { randomBytes, createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
@@ -1934,6 +1934,140 @@ async function runDatabaseFoundationProof({
   }
 }
 
+async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
+  const catalog = roleMap.databases.find((database) => database.name === "coffee_platform_catalog");
+  if (!catalog) fail("missing Catalog database in role map");
+  const migrationNames = [
+    "0001_supplier_snapshots.sql", "0002_snapshot_batches.sql", "0003_snapshot_staging.sql",
+    "0004_catalog_active.sql", "0005_catalog_identity.sql", "0006_catalog_outbox.sql",
+    "0007_catalog_grants.sql",
+  ];
+  const migrationDirectory = join(REPO_ROOT, "apps/catalog-service/migrations");
+  const migrator = await createClient(replaceDatabase(adminUrl, catalog.name, {
+    user: catalog.migratorRole, password: rolePasswords[catalog.migratorRole],
+  }));
+  const appliedMigrations = [];
+  try {
+    await migrator.query(`CREATE TABLE IF NOT EXISTS catalog.platform_schema_migrations (
+      id text PRIMARY KEY, checksum char(64) NOT NULL, applied_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+    for (const name of migrationNames) {
+      const sql = await readFile(join(migrationDirectory, name), "utf8");
+      await migrator.query(sql);
+      await migrator.query(
+        "INSERT INTO catalog.platform_schema_migrations (id,checksum) VALUES ($1,$2)",
+        [name.slice(0, -4), createHash("sha256").update(sql, "utf8").digest("hex")],
+      );
+      appliedMigrations.push(name.slice(0, -4));
+    }
+  } finally {
+    await migrator.end();
+  }
+
+  const connectRole = async (role) => createClient(replaceDatabase(adminUrl, catalog.name, {
+    user: role, password: rolePasswords[role],
+  }));
+  const activation = await connectRole("coffee_catalog_activate_rw");
+  const api = await connectRole("coffee_catalog_api_ro");
+  const importer = await connectRole("coffee_catalog_import_rw");
+  const sqlstates = {};
+  async function expectDenied(client, key, sql) {
+    try {
+      await client.query(sql);
+    } catch (error) {
+      sqlstates[key] = error.code ?? null;
+      if (error.code !== "42501") fail(`${key}: expected SQLSTATE 42501, got ${error.code ?? "none"}`);
+      outcomes[key] = true;
+      return true;
+    }
+    sqlstates[key] = null;
+    fail(`${key}: operation unexpectedly succeeded`);
+  }
+  const snapshotRef = `snp_${randomBytes(16).toString("hex").toUpperCase().slice(0, 26)}`;
+  const supplierRef = `sup_${randomBytes(16).toString("hex").toUpperCase().slice(0, 26)}`;
+  const productRef = `prd_${randomBytes(16).toString("hex").toUpperCase().slice(0, 26)}`;
+  const messageId = `catalog-live-${randomBytes(8).toString("hex")}`;
+  const outcomes = {};
+  try {
+    await importer.query(
+      "INSERT INTO catalog.supplier_snapshots (snapshot_ref,supplier_ref,provider_snapshot_ref,state,declared_batch_count,declared_product_count,declared_variant_count,declared_offer_count,content_hash,received_at) VALUES ($1,$2,'live-proof','Received',0,1,0,0,repeat('a',64),clock_timestamp())",
+      [snapshotRef, supplierRef],
+    );
+    await activation.query("SELECT snapshot_ref FROM catalog.supplier_snapshots WHERE snapshot_ref=$1", [snapshotRef]);
+    outcomes.activationStagingSelect = true;
+    await activation.query("UPDATE catalog.supplier_snapshots SET state='Active' WHERE snapshot_ref=$1", [snapshotRef]);
+    await activation.query(
+      "INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ($1,$2,'Live proof','live proof')",
+      [snapshotRef, productRef],
+    );
+    await activation.query(
+      "UPDATE catalog.catalog_state SET active_snapshot_ref=$1,active_snapshot_revision=1,active_content_hash=repeat('a',64),updated_at=clock_timestamp() WHERE id=true",
+      [snapshotRef],
+    );
+    outcomes.activationActiveInsert = true;
+    outcomes.activationActiveUpdate = true;
+
+    const occurredAt = new Date().toISOString();
+    const envelope = {
+      envelopeVersion: "1", messageId, messageType: "CatalogSnapshotActivated.v1", occurredAt,
+      producer: "db-live-proof", correlationId: "catalog-live-proof", causationId: null,
+      traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      aggregate: {type: "Catalog", ref: "catalog", version: "1"},
+      payload: {snapshotRef, snapshotRevision: "1"},
+    };
+    await activation.query(
+      `INSERT INTO catalog.outbox_messages (message_id,message_type,topic,aggregate_ref,aggregate_sequence,owner_version,partition_key,schema_version,envelope,payload,payload_hash,occurred_at,correlation_id,causation_id,traceparent,state,lease_owner,lease_token,lease_until,attempt,next_attempt_at) VALUES ($1,$2,'coffee.catalog.snapshot.v1','catalog',1,'1','catalog','1',$3::jsonb,$4::jsonb,repeat('b',64),$5,$6,NULL,$7,'Pending','',0,$5,0,$5)`,
+      [messageId, "CatalogSnapshotActivated.v1", JSON.stringify(envelope), JSON.stringify(envelope.payload), occurredAt, "catalog-live-proof", envelope.traceparent],
+    );
+    await activation.query(
+      "UPDATE catalog.outbox_messages SET state='Publishing',lease_owner='live-proof',lease_token=1,lease_until=clock_timestamp() + interval '1 minute' WHERE message_id=$1",
+      [messageId],
+    );
+    outcomes.activationOutboxInsert = true;
+    outcomes.activationOutboxUpdate = true;
+
+    for (const view of ["active_products", "active_variants", "active_offer_mappings", "active_availability"]) {
+      await api.query(`SELECT * FROM catalog.${view}`);
+    }
+    outcomes.apiActiveViewsSelect = true;
+    await expectDenied(api, "apiStagingSelect", "SELECT * FROM catalog.supplier_snapshots");
+    await expectDenied(api, "apiActiveInsert", `INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('${snapshotRef}','prd_00000000000000000000000001','Denied','denied')`);
+    await expectDenied(api, "apiActiveUpdate", "UPDATE catalog.catalog_state SET active_snapshot_revision=2 WHERE id=true");
+    await expectDenied(importer, "importActiveSelect", "SELECT * FROM catalog.active_products");
+    await expectDenied(importer, "importActiveInsert", `INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('${snapshotRef}','prd_00000000000000000000000002','Denied','denied')`);
+    await expectDenied(importer, "importActiveUpdate", "UPDATE catalog.catalog_state SET active_snapshot_revision=2 WHERE id=true");
+    await expectDenied(importer, "importOutboxSelect", "SELECT * FROM catalog.outbox_messages");
+    await expectDenied(importer, "importOutboxInsert", "INSERT INTO catalog.outbox_messages (message_id) VALUES ('denied')");
+    await expectDenied(importer, "importOutboxUpdate", "UPDATE catalog.outbox_messages SET state='Published' WHERE message_id='missing'");
+
+    const foreignConnect = {};
+    for (const database of ["coffee_platform_customer", "coffee_platform_pricing", "coffee_platform_orders", "coffee_platform_integration"]) {
+      const client = new Client({
+        connectionString: replaceDatabase(adminUrl, database, {
+          user: "coffee_catalog_activate_rw", password: rolePasswords.coffee_catalog_activate_rw,
+        }), connectionTimeoutMillis: 1000, query_timeout: 2000,
+      });
+      client.on("error", () => {});
+      try {
+        await client.connect();
+        foreignConnect[database] = { denied: false, sqlstate: null };
+        fail(`activation role unexpectedly connected to ${database}`);
+      } catch (error) {
+        foreignConnect[database] = { denied: error.code === "42501", sqlstate: error.code ?? null };
+        if (error.code !== "42501") fail(`activation CONNECT ${database}: expected SQLSTATE 42501, got ${error.code ?? "none"}`);
+      } finally {
+        await client.end().catch(() => undefined);
+      }
+    }
+    outcomes.connectDeniedToForeignDatabases = Object.values(foreignConnect).every((entry) => entry.denied);
+    return { appliedMigrations, outcomes, sqlstates, foreignConnect };
+  } finally {
+    await importer.end();
+    await api.end();
+    await activation.end();
+  }
+}
+
 async function writeEvidence(evidenceDir, result) {
   if (!evidenceDir) return;
   await mkdir(evidenceDir, {recursive: true});
@@ -2133,6 +2267,13 @@ export async function runLiveProof({
     } catch (error) {
       fail(`delivery PostgreSQL proof: ${error.message}`);
     }
+    let catalogActivation;
+    phase = "catalog-activation-postgresql-proof";
+    try {
+      catalogActivation = await runCatalogActivationProof({ adminUrl, roleMap, rolePasswords });
+    } catch (error) {
+      fail(`Catalog activation PostgreSQL proof: ${error.message}`);
+    }
     result = {
       schemaVersion: 1,
       runId: proofRunId,
@@ -2164,6 +2305,7 @@ export async function runLiveProof({
       ...(binding === undefined ? {} : {binding}),
       foundation,
       delivery,
+      catalogActivation,
       cleanup: { containerName, containerRemoved: false },
     };
   } catch (error) {

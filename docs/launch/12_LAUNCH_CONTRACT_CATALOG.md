@@ -305,6 +305,14 @@ provider response и secret data запрещены.
 | `AromaConvergenceChanged.v1` | aroma-convergence | cartScopeRef | `cartScopeRef`, `desiredRevision`, `observedRevision`, `attemptRef`, `attemptState: NoOpInSync|VerifiedInSync|OutOfSync|Blocked|UnknownOutcome|Failed`, `changedAt`, `blockerCodes[]` |
 | `RealtimeInvalidated.v1` | owner services | subjectRef | `subjectType: order`, `subjectRef`, `ownerVersion`, `reason: OrderChanged|AromaStateChanged` |
 
+Catalog пишет оба события в owner Outbox **в той же транзакции**, что и
+`catalog_state` pointer. `CatalogSnapshotActivated.v1` создаётся для каждой
+действительно активированной revision, `CatalogMappingChanged.v2` — только для
+изменившейся mapping/availability; Kafka relay сохраняет durable `messageId`
+при повторной доставке. Полные `products`/`variants`/`offers` передавать в
+envelope или payload нельзя. Стабильные `productRef`/`variantRef`/`offerRef`
+назначаются по scoped Gateway source identity, а не по порядку batch.
+
 Дополнительные ограничения payload:
 
 - `productCount`: JSON integer, minimum `0`;

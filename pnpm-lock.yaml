@@ -128,9 +128,27 @@ importers:
 
   apps/catalog-activation-worker:
     dependencies:
+      '@coffee-platform/contracts-aroma-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/aroma-v1
+      '@coffee-platform/database':
+        specifier: workspace:*
+        version: link:../../packages/platform-database
+      '@coffee-platform/outbox':
+        specifier: workspace:*
+        version: link:../../packages/platform-outbox
+      '@coffee-platform/platform-http':
+        specifier: workspace:*
+        version: link:../../packages/platform-http
+      '@coffee-platform/platform-time':
+        specifier: workspace:*
+        version: link:../../packages/platform-time
       '@coffee-platform/runtime':
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      '@coffee-platform/security':
+        specifier: workspace:*
+        version: link:../../packages/platform-security
 
   apps/catalog-service:
     dependencies:
