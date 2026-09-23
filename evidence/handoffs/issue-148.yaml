@@ -11,7 +11,7 @@ outputs:
     sha256: 5c1dba544f100f00e982a24043705288af4345541bc4ef497e1ef7c2b74464b2
     consumers: [137, 9, 12, 13]
   - artifact: docs/adr/ADR-0029-selected-frontend-prototype.md
-    sha256: 76e8a8db06b946833a121d66db01f7962892bfd0245c82cc86783f282b0e06a6
+    sha256: 2c0ffd343185cbd3063a8e2dc1ed33887271f9472098a393d8c2a6d6741f99bc
     consumers: [137, 9, 12, 13]
   - artifact: docs/frontend/prototypes/README.md
     sha256: 562d6baac25c4d8fb26d5801bde6c72bc776d58f7bd35fdc26408ffeb2f7fa9d
