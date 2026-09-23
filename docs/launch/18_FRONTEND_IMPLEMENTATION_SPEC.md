@@ -270,23 +270,20 @@ server-provided reconciliation action.
 - money форматируется `Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'})`
   только из authoritative minor-unit decimal string через bigint-safe helper.
 
-Responsive contract имеет ровно три диапазона, подробно определённые в
-UX-контракте и обязательные для #137/#9:
+Desktop layout для `>=1024px` задаёт v1.1.0: навигация и плотность таблиц,
+панели и controls берутся из versioned `DESIGN.md`/`exact-source.css`.
+Прежние breakpoint layouts, ширины dialog и sticky action bars из UX #136
+не являются действующим визуальным контрактом. Прототип на `375/430px` даёт
+диагностику, а не готовую мобильную компоновку.
 
-- `375–767px`: верхняя modal navigation вместо sidebar; Customers/Catalog/Order
-  tables становятся карточками без изменения DOM order; dialog имеет
-  `width:calc(100vw - 32px)` и внутренний vertical scroll; action bar sticky и
-  складывается в одну колонку; page horizontal overflow запрещён;
-- `768–1279px`: compact top navigation; secondary cell metadata переносится, но
-  quantity/actions не скрываются; dialog не шире `min(640px, calc(100vw - 48px))`;
-  action bars wrap; только table wrapper может иметь keyboard-accessible
-  horizontal scroll;
-- `>=1280px`: постоянная sidebar, полные columns, inline action bars; command
-  dialogs не шире 640px, Customer dialog — 1000px; обязательный action text не
-  обрезается и не заменяется ellipsis.
-
-Widths 375, 768 и 1280, а также 400% zoom/reflow наблюдает #13. Эти требования не
-являются заявлением WCAG/browser PASS до materialized UI и фактических проверок.
+#137 проверяет доступный shell на измеренных ширинах без заявления о готовности
+business-экранов. #9 определяет и проверяет reflow экранов на `375px`/`768px`
+в новом стиле: все нормативные routes и actions доступны без hover-only UI,
+обязательный текст не обрезан, DOM/reading/Tab order согласованы, focus не
+теряется, page horizontal overflow отсутствует; dialog остаётся доступным
+без прокрутки фона, а table overflow при необходимости доступен с клавиатуры.
+#13 проверяет `375px`, `768px`, `1280px` и 400% zoom/reflow по фактическому UI.
+Это не заявление WCAG/browser PASS до materialized экранов и проверок.
 
 ## 9. Доставка и граница сессии
 

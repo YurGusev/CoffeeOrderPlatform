@@ -1,6 +1,6 @@
 # ADR-0029: выбранный визуальный ориентир операторской SPA
 
-- Статус: локальный проект решения; владелец выбрал направление 2026-09-23, публикация и приёмка реализации отдельно.
+- Статус: визуальное направление выбрано владельцем 2026-09-23; публикация документа и приёмка реализации — отдельные события.
 - Область: оформление всей операторской SPA первого запуска; не новые owner API или business routes.
 - Источник: [`docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md`](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md), local repository commit `2aa6644c9c042c7b722702e6cde31324a4057bb9`.
 - Presentation provenance: CoffeeOrderSystem `develop` commit `3d4b30b1eaac14c77f41d8779f5e03c54cfacbef`, only source-identified CSS/font assets per [`source-manifest.json`](../frontend/prototypes/invoice-orders-workspace/v1.1.0/source-manifest.json).
@@ -21,4 +21,6 @@ ADR-0027 продолжает задавать **техническую**, а н
 
 Исполнитель читает как единый versioned пакет `README.md`, `AGENT_HANDOFF.md`, `DESIGN.md`, `ui-contract.json`, `COMPONENT_MAP.md` и `ACCEPTANCE.md`; сохраняет `data-ui` hooks только там, где есть реальная соответствующая поверхность. Локальная проверка 2026-09-23 в отдельном worktree на `2aa6644`: `verify-source.mjs` — 29/29 source/font assets; `verify-handoff.mjs` — 79 проверок без дефектов; `verify.mjs` — 66 assertions на трёх desktop viewport без дефектов; `served-verify.mjs` — 9 desktop и 2 диагностических mobile viewport, шесть resize-проверок без дефектов. Это доказательства **прототипа**, не работы #137/#9 или production binding.
 
-Содержательное принятие старых светлых макетов #136 не заявляется: `evidence/handoffs/issue-136.yaml` оставляет `contentAcceptance: NOT_RUN`. Исторический handoff и hashes не переписывать. Перед merge реализации #137 обновить её visual/font evidence, повторить browser/contrast tests на новых assets, независимый review и GitHub checks; текущий PR #142 по старым tokens не удовлетворяет этому решению.
+Handoff #136 при публикации в `develop` оставил `contentAcceptance: NOT_RUN`; ветка PR #142 позже отметила `ACCEPTED`. Владелец 2026-09-23 подтвердил, что четыре светлых SVG были ранее содержательно приняты, но дата и источник первоначального решения ещё ожидаются для точной provenance. Исторический handoff не переписывать задним числом. Подтверждённая прежняя приёмка не делает SVG текущим ориентиром: владелец заменил их для всей SPA версией `v1.1.0`.
+
+До обновления и merge #137 опубликовать в `develop` выбранный versioned прототип и это уточнение visual authority. Отдельно вне #137 включить исправление нарушенной границы Catalog importer, иначе полный архитектурный gate #137 остаётся красным. Затем совместить #137 с обновлённым `develop`, обновить visual/font evidence, повторить полный gate и browser/contrast tests на новых assets, независимый review и GitHub checks. Опубликованный PR #142 по старым tokens не удовлетворяет этому решению без локально подготовленной адаптации. Владелец 2026-09-23 разрешил remote-публикацию и слияние лишь после успешных CI и независимого review; локальные проверки не равны merge или приёмке.

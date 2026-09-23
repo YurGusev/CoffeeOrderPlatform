@@ -50,7 +50,7 @@
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 27. [Восстановление команд браузера](26_BROWSER_COMMAND_RECOVERY.md)
 28. [Выбранный versioned frontend-прототип и границы fixture](../frontend/prototypes/README.md)
-29. [Исторические UX-макеты #136 (визуально не приняты)](../frontend/ux/README.md)
+29. [Исторические UX-макеты #136 (ранее приняты, теперь заменены)](../frontend/ux/README.md)
 30. [Исследованный HTTP-протокол AROMA и открытые вопросы](27_AROMA_PROVIDER_PROTOCOL.md)
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
@@ -75,7 +75,7 @@ superseding ADR-0018 только в перечисленной области. 
 
 [ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет техническую
 границу `packages/platform-ui` / `@coffee-platform/ui`, browser/Node graphs и
-ownership #137/#9/#12. После отказа владельца от светлых SVG #136 текущий
+ownership #137/#9/#12. После решения владельца заменить светлые SVG #136 текущий
 визуальный выбор всей SPA — [ADR-0029](../adr/ADR-0029-selected-frontend-prototype.md)
 и [versioned прототип v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md):
 Inter/Manrope и `--cos-*` с verified source identity. Реестр счетов и оплата

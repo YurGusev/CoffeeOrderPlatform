@@ -120,7 +120,7 @@ collector.
 | #18 | #10, #6, #16, #17 | pipeline recovery/capacity evidence → #7, #8, #9, #11, #13 |
 | #7 | #4, #17, #18, #62, #119 | immutable PricingQuote/verify → #8, #9 |
 | #8 | #4, #5, #7, #17, #18, #63, #119 | Draft/Confirm/contribution/Order Card → #9, #11, #12 |
-| #136 | accepted #4, #119 | historical ADR-0027/SVG handoff merged; `contentAcceptance: NOT_RUN`, светлый visual отклонён владельцем; новое решение ADR-0029 + versioned prototype → #137, #9, #12, #13 |
+| #136 | accepted #4, #119 | historical ADR-0027/SVG handoff merged with `contentAcceptance: NOT_RUN`; владелец подтвердил последующую приёмку SVG 2026-09-23 (дата/источник первоначального решения уточняются); visual заменён ADR-0029 + versioned prototype → #137, #9, #12, #13 |
 | #137 | #136 | `@coffee-platform/ui`, React/Vite/Tailwind/React Aria foundation, browser/Node graphs → #9 |
 | #9 | #4, #5, #7, #8, #17, #18, #119, #137 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13 |
 | #11 | #10, #16, #18, #8, #63 | observer/convergence/UnknownOutcome → #12, #13 |

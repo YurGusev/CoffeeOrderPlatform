@@ -1,11 +1,12 @@
 # ADR-0027: foundation операторского frontend и UI package
 
-- Статус: техническая граница предложена; прежнее визуальное направление не принято владельцем.
+- Статус: техническая граница предложена в опубликованном `develop`; прежнее визуальное направление больше не действует.
 - Область: browser foundation первого запуска и presentation boundary.
 - Владельцы реализации: [issue #137](https://github.com/YurGusev/CoffeeOrderPlatform/issues/137), [issue #9](https://github.com/YurGusev/CoffeeOrderPlatform/issues/9) и [issue #12](https://github.com/YurGusev/CoffeeOrderPlatform/issues/12).
 - Текущий визуальный ориентир: [ADR-0029](ADR-0029-selected-frontend-prototype.md) и versioned [прототип v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md). [Исторический UX-документ #136](../frontend/ux/README.md) сохраняется для traceability и описания прежних flow/focus предположений, но его палитра, IBM Plex Sans и SVG не нормативны.
 
-> Раздел **Visual contract** ниже оставлен как исторический текст #136 и в случае расхождения уступает ADR-0029. Не использовать его значения цветов, шрифтов, радиусов и layout как текущую задачу #137.
+Текущий visual contract задаёт только ADR-0029 и versioned прототип v1.1.0;
+исторические значения #136 остаются в UX-документе, но здесь не повторяются.
 
 ## Контекст
 
@@ -59,10 +60,14 @@ provider code.
   является runtime dependency.
 
 Начальный inventory ограничен `Button`, `Link`, `Dialog`, `Field/Input`,
-`Alert`, `Badge`, `Loading` и `Empty`. Нормативная таблица public
-props/events/ref/composition, validation, pending/loading, dismissal/focus и точные
-правила layout для 375/768/1280 находится в
-[UX-контракте](../frontend/ux/README.md); #137 не придумывает второй API. Для
+`Alert`, `Badge`, `Loading` и `Empty`. Таблица public
+props/events/ref/composition и поведения validation, pending/loading,
+dismissal/focus в [UX-контракте #136](../frontend/ux/README.md) сохраняется как
+технический inventory для #137, но его прежние палитра, шрифт и точные layout
+правила не действуют. Текущий visual/layout для desktop определяют
+[ADR-0029](ADR-0029-selected-frontend-prototype.md) и v1.1.0; 375/768 reflow
+требует отдельной проверки #9/#13 по launch contracts. #137 не придумывает
+второй API. Для
 primitives #137 реализует default/hover/focus-visible/active/disabled/loading/
 error/empty states, keyboard behavior, focus restoration, status semantics и
 `prefers-reduced-motion`.
@@ -104,47 +109,20 @@ Exact pins, запись в manifest/lockfile/toolchain registry и compatibilit
 - #13: launch verification; этот ADR не является browser, accessibility,
   deployment или release evidence.
 
-### Visual contract
+### Визуальное направление и технические гарантии
 
-Direction одна: operational / restrained data-dense console. Запрещены
-editorial cream/serif direction, glass, gradients и decorative card grid.
+Точные токены, шрифты, размеры и layout для всей SPA определяет
+[ADR-0029](ADR-0029-selected-frontend-prototype.md) с прототипом v1.1.0.
+#137 self-host-ит проверенные WOFF2 в `packages/platform-ui` через `@font-face`
+с `font-display: swap`, фиксирует source revision, SHA-256 и licence notice;
+внешний font CDN запрещён.
 
-Typography:
-
-- `IBM Plex Sans` с Cyrillic; fallback
-  `system-ui, -apple-system, "Segoe UI", Arial, sans-serif`;
-- будущий #137 self-host-ит проверенные WOFF2 assets в `packages/platform-ui` и
-  объявляет их через `@font-face` с `font-display: swap`;
-- #137 фиксирует source URL/revision, SIL OFL 1.1 notice и SHA-256 font assets;
-  remote font CDN запрещён;
-- body 14px/20px, primary headings 20px/24px, labels 12px/16px; weights
-  400/500/600.
-
-Tokens:
-
-- background `#FFFFFF`, surface `#F7F8FA`, text `#1A1D23`, muted `#5B6472`,
-  border `#DDE1E7`;
-- primary `#3355D1`, on-primary `#FFFFFF`;
-- accent `#C2277A`, on-accent `#FFFFFF`, только selected/highlighted state;
-- success background `#ECFDF3`, border `#86EFAC`, text/icon `#166534`;
-- warning background `#FFFBEB`, border `#F59E0B`, text/icon `#92400E`;
-- danger background `#FEF2F2`, border `#FCA5A5`, text/icon `#B91C1C`;
-- focus ring `#1D4ED8`, 2px; обычный text остаётся `#1A1D23`;
-- status никогда не передаётся только цветом: нужен текст и/или icon.
-
-Spacing использует scale 4/8/12/16/20/24/32px. Default control имеет высоту
-40px, compact data control — 36px, touch/dialog action target — не менее 44px.
-Radius 6px, border 1px, blanket shadows запрещены. DOM/focus order совпадает с
-visual order. Field validation фокусирует первое invalid поле; summary получает
-focus только при отсутствии focusable field target. Dialog удерживает focus,
-использует определённый в UX-контракте initial focus и возвращает его trigger;
-Escape или outside-close не должны терять unsent input. Motion используется
-только для state/causality: 150ms ease-out и отключение через
-`prefers-reduced-motion`.
-
-Рассчитанные contrast ratios для выбранных foreground/background pairs:
-primary 6.25:1, accent 5.43:1, success 6.76:1, warning 6.84:1, danger 5.91:1,
-focus 6.70:1, body text 16.88:1. Это проверка token pairs, а не WCAG/browser PASS.
+Статус не передаётся только цветом: нужен текст или значок. DOM/focus order
+совпадает с визуальным порядком; field validation фокусирует первое invalid
+поле, dialog удерживает focus и не теряет несохранённый ввод при Escape/outside.
+Motion отключается через `prefers-reduced-motion`. Контрастность и поведение
+нужно проверить на выбранной палитре; старые расчёты для светлых SVG не являются
+browser/WCAG PASS новой темы.
 
 ## Business и recovery boundaries
 

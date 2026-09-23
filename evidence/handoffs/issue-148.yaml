@@ -1,0 +1,100 @@
+issue: 148
+baseCommit: 76c2d580c86bbd2b272369859cbecf97815e2b8e
+status: local-verified
+inputs:
+  - issue: 136
+    acceptedMergeCommit: 7ef4b94e16b7cf68e45861f75be4de477e24c8a7
+    artifact: evidence/handoffs/issue-136.yaml
+    sha256: d0bbb5ca4317b2ebe73df1908e191d05ad831b797e954729dbf53105db65b806
+outputs:
+  - artifact: docs/adr/ADR-0027-frontend-ui-foundation.md
+    sha256: 5c1dba544f100f00e982a24043705288af4345541bc4ef497e1ef7c2b74464b2
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/adr/ADR-0029-selected-frontend-prototype.md
+    sha256: 76e8a8db06b946833a121d66db01f7962892bfd0245c82cc86783f282b0e06a6
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/frontend/prototypes/README.md
+    sha256: 562d6baac25c4d8fb26d5801bde6c72bc776d58f7bd35fdc26408ffeb2f7fa9d
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md
+    sha256: 7a124d28b7370671d58b8fd5e75b476756d2c25465749fdb119d2215b0c59ed5
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/DESIGN.md
+    sha256: 068ed749a752348ea198fb31ebc56dddcefdbe1bf989bfa47409013dc6efe6b1
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/AGENT_HANDOFF.md
+    sha256: 6d72eee496b8d9e2d62dae28b781ee0a7c284c2b99cd19a037fad1a128096206
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/ACCEPTANCE.md
+    sha256: 674ebf4bff59f2c291b931bd48c8596ecac064a097e47c5eba408ea70804ffcc
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/COMPONENT_MAP.md
+    sha256: 9ca6817b0e24434815c93fd6a3388cebeb0237948095102e5bf5b61703fc1466
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/ui-contract.json
+    sha256: a3620bf225cf2a78ce5a92961e8f2e423b438e38fbcde91c791e2ef087aba8e2
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/source-manifest.json
+    sha256: a37a01271e204095754ae1b2674b325b753c92ec3247e77ee04fe3eed422d6af
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/index.html
+    sha256: 983a526421cf3834fe1945aa32d7e89d7d8c9c98476e2818ee511060a6fe678f
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/exact-source.css
+    sha256: cbb71de6a4892ac04049b62599884f4acf7e51f47ac886cada172dd57fc4cff8
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/bridge.css
+    sha256: 98b8d434662aff37841caba38ac07e6b7fa0820e32d3f34a57b3fae660b06790
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/prototype.js
+    sha256: d71fb8f256d21aba3978158a8e63dc571c1533f13ebda498510f35b44add7042
+    consumers: [137]
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify-source.mjs
+    sha256: fb4aeab683d2592ef9965041b5d542318ecabe807e5fbc51016371880e21845a
+    consumers: []
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify-handoff.mjs
+    sha256: 48fe1d4dcfe7c041b0aa0584145f436a928de8c8bd6192836e15d222cae7ef59
+    consumers: []
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify.mjs
+    sha256: 113669fab2beeacfaf7ec74e4accebce84ed12e6c06ff99e448dfb6fe75b248a
+    consumers: []
+  - artifact: docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/evidence/served/report.json
+    sha256: 721713914b0c6335557d741f2e121a8d0009a2c763de9fb96b75eb713d887b7c
+    consumers: []
+  - artifact: docs/frontend/ux/README.md
+    sha256: a4a6f550ddfe4f6947220a682d60e230a4ea83f4723235ccf89e8b8571bf266c
+    consumers: [137]
+  - artifact: docs/launch/07_FRONTEND_CONTRACT.md
+    sha256: 5d0e39f89e2fa3334e23d9d704c447e5fcdd823bc4dca31336ed153d87f50727
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: 1a9aa02c1848868f8b941752ba420baaffb0349437af11ae9a77bdb9d45fe67b
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: 073b38f52be98a6ec080b9580b6dc61db096ff14fb366bf64719a42405f0d393
+    consumers: [137, 9, 12, 13]
+  - artifact: docs/launch/README.md
+    sha256: c110ef2589f648d37ae2d8fed45776ebb7cbd92019ec04552ae83dfa4b258243
+    consumers: [137, 9, 12, 13]
+verification:
+  - command: node docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify-source.mjs
+    result: passed
+    detail: 29 of 29 source and font assets matched
+  - command: node docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify-handoff.mjs
+    result: passed
+    detail: 79 checks, no defects
+  - command: node docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/verify.mjs
+    result: passed
+    detail: 66 assertions, three desktop viewports, no defects
+  - command: node docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/evidence/served-verify.mjs
+    result: passed
+    detail: 9 desktop interactions, 2 mobile diagnostics, 6 resize checks, no defects
+  - command: pnpm authority:check
+    result: passed
+  - command: git diff --check
+    result: passed
+limitations:
+  - The owner confirmed on 2026-09-23 that the four light SVG had previously been accepted; the date/source of the original acceptance is pending. The published #136 handoff remains unchanged at NOT_RUN.
+  - Old SVG remain as history; only v1.1.0 supplies current visual direction for the SPA.
+  - Invoice/payment registry in the prototype is fixture-only; no production route, owner API or browser bundle is added.
+  - Prototype checks are not production SPA accessibility, GitHub CI, or merge evidence.

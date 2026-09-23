@@ -7,8 +7,9 @@ CoffeeOrderSystem остаётся только источником UX-набл
 Техническую foundation задаёт [ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md).
 Визуальный ориентир всей SPA — [ADR-0029](../adr/ADR-0029-selected-frontend-prototype.md)
 и versioned [прототип v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md).
-Светлые [SVG #136](../frontend/ux/README.md) исторические и не приняты
-содержательно. Прототип — fixture/demo: его invoice registry и payment drawer
+Светлые [SVG #136](../frontend/ux/README.md) ранее были приняты, но теперь
+замещены как визуальный ориентир версией `v1.1.0`. Прототип — fixture/demo:
+его invoice registry и payment drawer
 не являются production route/API или browser/accessibility evidence.
 
 - #137 владеет `packages/platform-ui` / `@coffee-platform/ui`, browser shell,
