@@ -1,0 +1,349 @@
+{
+  "scope": "user-authorized-one-offer-cart-characterization",
+  "origin": "https://aromateacoffee.ru",
+  "candidate": "C-200-26",
+  "requests": [
+    {
+      "tag": "login",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "utc": "2026-09-12T16:48:10.214214+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 678,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "ec94dd8facf1cca6ddaf359cd10607d53182cf9d6f5c926b2b69186101a41f19"
+    },
+    {
+      "tag": "initial-cart",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:48:10.668692+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 114,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "d843b153a190d6901f37f8484e363ca27e74a8f577cabbcc97fe6ec00a2ab0a9",
+      "capture": "initial-cart.json",
+      "sha256Sanitized": "4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57"
+    },
+    {
+      "tag": "catalog-candidate",
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=47&per_page=10",
+      "utc": "2026-09-12T16:48:10.946655+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 171671,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "f0e330d99ddff2d264c849cf8f62fb64e4b60921e153db3fed1f51d1dcbe1967"
+    },
+    {
+      "tag": "add-one",
+      "method": "POST",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:48:11.607615+00:00",
+      "state": "RECEIVED",
+      "payload": {
+        "offer_id": 300000,
+        "quantity": 1,
+        "packing": "Aroma"
+      },
+      "encoding": "form-urlencoded",
+      "status": 200,
+      "bytes": 5939,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "4a196282382fcc72f9cf274ed8c252e0c92d3846a1695e0eaf0a97fe12c48172",
+      "capture": "add-one.json",
+      "sha256Sanitized": "630cc48764173d37785a832cb0e6b93d2126dacec5b5509df8d2b60d13a31ef7"
+    },
+    {
+      "tag": "add-one-get",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:48:11.953408+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 5939,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "4a196282382fcc72f9cf274ed8c252e0c92d3846a1695e0eaf0a97fe12c48172",
+      "capture": "add-one-get.json",
+      "sha256Sanitized": "630cc48764173d37785a832cb0e6b93d2126dacec5b5509df8d2b60d13a31ef7"
+    },
+    {
+      "tag": "set-two",
+      "method": "PUT",
+      "path": "/api/v1/cart/300001",
+      "utc": "2026-09-12T16:48:12.277687+00:00",
+      "state": "RECEIVED",
+      "payload": {
+        "quantity": 2,
+        "packing": "Aroma"
+      },
+      "encoding": "json",
+      "status": 200,
+      "bytes": 5942,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "2f4c2dc4a179a41270a3b21b3ba21b87f35140b198459424a6c181e4c8ecbb9d",
+      "capture": "set-two.json",
+      "sha256Sanitized": "3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322"
+    },
+    {
+      "tag": "set-two-get",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:48:12.619261+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 5942,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "2f4c2dc4a179a41270a3b21b3ba21b87f35140b198459424a6c181e4c8ecbb9d",
+      "capture": "set-two-get.json",
+      "sha256Sanitized": "3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322"
+    },
+    {
+      "tag": "set-two-again",
+      "method": "PUT",
+      "path": "/api/v1/cart/300001",
+      "utc": "2026-09-12T16:48:12.935822+00:00",
+      "state": "RECEIVED",
+      "payload": {
+        "quantity": 2,
+        "packing": "Aroma"
+      },
+      "encoding": "json",
+      "status": 200,
+      "bytes": 5942,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "2f4c2dc4a179a41270a3b21b3ba21b87f35140b198459424a6c181e4c8ecbb9d",
+      "capture": "set-two-again.json",
+      "sha256Sanitized": "3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322"
+    },
+    {
+      "tag": "set-two-again-get",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:48:13.280062+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 5942,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "2f4c2dc4a179a41270a3b21b3ba21b87f35140b198459424a6c181e4c8ecbb9d",
+      "capture": "set-two-again-get.json",
+      "sha256Sanitized": "3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322"
+    },
+    {
+      "tag": "add-same-offer",
+      "method": "POST",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:48:13.584783+00:00",
+      "state": "RECEIVED",
+      "payload": {
+        "offer_id": 300000,
+        "quantity": 1,
+        "packing": "Aroma"
+      },
+      "encoding": "form-urlencoded",
+      "status": 422,
+      "bytes": 107,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "9b45897977d1a9f3422781be0225965c3623c2b45382064050110e23cebf50b0",
+      "capture": "add-same-offer.json",
+      "sha256Sanitized": "553bad40b864fcde6cce1135e33ecd66c0e92ac91d3e67756d87d119d0435dee"
+    },
+    {
+      "tag": "add-same-offer-get",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:48:13.877276+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 5942,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "2f4c2dc4a179a41270a3b21b3ba21b87f35140b198459424a6c181e4c8ecbb9d",
+      "capture": "add-same-offer-get.json",
+      "sha256Sanitized": "3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322"
+    },
+    {
+      "tag": "stop-reconciliation",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:48:14.202625+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 5942,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "2f4c2dc4a179a41270a3b21b3ba21b87f35140b198459424a6c181e4c8ecbb9d",
+      "capture": "stop-reconciliation.json",
+      "sha256Sanitized": "3c3ca9ea0776df6ea193f8f4df405f4d6a0757f318cafefd7fcf3ccd35024322"
+    },
+    {
+      "tag": "cleanup-login",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "utc": "2026-09-12T16:49:41.718218+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 678,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "ec94dd8facf1cca6ddaf359cd10607d53182cf9d6f5c926b2b69186101a41f19"
+    },
+    {
+      "tag": "cleanup-pre-read",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:49:42.187612+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 5942,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "2f4c2dc4a179a41270a3b21b3ba21b87f35140b198459424a6c181e4c8ecbb9d"
+    },
+    {
+      "tag": "remove-owned",
+      "method": "DELETE",
+      "path": "/api/v1/cart/300001",
+      "utc": "2026-09-12T16:49:42.550431+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 114,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "d843b153a190d6901f37f8484e363ca27e74a8f577cabbcc97fe6ec00a2ab0a9",
+      "capture": "remove-owned.json",
+      "sha256Sanitized": "4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57"
+    },
+    {
+      "tag": "remove-owned-get",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:49:42.875248+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 114,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "d843b153a190d6901f37f8484e363ca27e74a8f577cabbcc97fe6ec00a2ab0a9",
+      "capture": "remove-owned-get.json",
+      "sha256Sanitized": "4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57"
+    },
+    {
+      "tag": "remove-missing",
+      "method": "DELETE",
+      "path": "/api/v1/cart/300001",
+      "utc": "2026-09-12T16:49:43.162760+00:00",
+      "state": "RECEIVED",
+      "status": 404,
+      "bytes": 73,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "866c47df59d3a3a7d582cf7baad4ffacd1a40b1ef420bd59a508cb64d1be1fb4",
+      "capture": "remove-missing.json",
+      "sha256Sanitized": "4fbcac9c489c6f04b19b6c460ba455a9d507c0618c0f0a0b2401d16a14433da7"
+    },
+    {
+      "tag": "final-cart",
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:49:43.435942+00:00",
+      "state": "RECEIVED",
+      "status": 200,
+      "bytes": 114,
+      "contentType": "application/json",
+      "complete": true,
+      "sha256Raw": "d843b153a190d6901f37f8484e363ca27e74a8f577cabbcc97fe6ec00a2ab0a9",
+      "capture": "final-cart.json",
+      "sha256Sanitized": "4313b6fb656bcc7a4b172c67c9c0eff3c643efa0fc96b7269db5cee091381c57"
+    }
+  ],
+  "mutationLimit": 7,
+  "getLimit": 12,
+  "loginLimit": 1,
+  "tlsVerification": true,
+  "redirects": "deny",
+  "automaticRetries": 0,
+  "checkout": false,
+  "credentialsPersisted": false,
+  "result": "SCENARIO_COMPLETED_WITH_DUPLICATE_REJECTION",
+  "counts": {
+    "GET": 10,
+    "mutation": 6,
+    "login": 2
+  },
+  "candidateFacts": {
+    "offer_id": 300000,
+    "vendor_code": "C-200-26",
+    "name": "Эфиопия Сидамо Грэйд 1, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+    "price": 620,
+    "params": {
+      "weight": "200",
+      "is_grinded": "0"
+    }
+  },
+  "stopReason": "MUTATION_NOT_CONFIRMED_SUCCESS",
+  "cleanup": "EMPTY_CART_CONFIRMED",
+  "remainingLineCount": 1,
+  "cookieJarCleared": true,
+  "rawIdentifierMapPersisted": false,
+  "cleanupContinuation": {
+    "reason": "duplicate POST returned complete 422; matching complete GET confirms existing test line; original in-memory login session already cleared",
+    "additionalLogin": 1,
+    "originalLoginLimit": 1,
+    "effectiveLoginLimit": 2,
+    "mutationLimitUnchanged": 7,
+    "getLimitUnchanged": 12,
+    "exactRawCartHashMatched": true
+  },
+  "cleanupDeleteStatus": 200,
+  "missingDeleteStatus": 404,
+  "initialAndFinalEqual": true,
+  "sanitization": {
+    "fieldNamesAndJsonTypesPreserved": true,
+    "idFields": "Non-null int/string id and *_id values pseudonymized; mapping not persisted; this also replaced the errors.offer_id string, so its original error text is unavailable in this capture.",
+    "secrets": "Login bodies not captured; credentials, cookies and auth headers not persisted; contact/token/password named string fields and email-looking values redacted.",
+    "cartBodies": "All 14 captured cart responses retained after stated substitutions; raw byte hashes separate from sanitized hashes.",
+    "notAFullProviderSchema": true
+  },
+  "observations": {
+    "addOneStatus": 200,
+    "setTwoStatus": 200,
+    "repeatSetTwoStatus": 200,
+    "repeatPostStatus": 422,
+    "repeatPostEffectObserved": "cart products unchanged in following GET",
+    "deleteExistingStatus": 200,
+    "deleteMissingStatus": 404,
+    "quantities": [
+      1,
+      2
+    ],
+    "weightsObserved": [
+      200,
+      400
+    ],
+    "linePricesObserved": [
+      620,
+      1240
+    ],
+    "linePromoTotalsObserved": [
+      434,
+      868
+    ],
+    "nestedOfferPriceObserved": 852.6,
+    "currencyConfirmed": false,
+    "globalQuantityBoundsConfirmed": false
+  }
+}

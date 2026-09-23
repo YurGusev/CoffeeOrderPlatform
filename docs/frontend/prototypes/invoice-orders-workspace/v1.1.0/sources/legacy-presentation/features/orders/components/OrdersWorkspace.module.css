@@ -1,0 +1,576 @@
+.page {
+  min-height: calc(100dvh - 24px);
+  padding: 2px 2px 0;
+}
+
+.shell {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pageHeader {
+  min-height: 58px;
+  padding: 5px 8px;
+}
+
+.pageIcon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--cos-action-primary) 36%, transparent);
+  border-radius: 12px;
+  color: var(--cos-action-hover);
+  background: linear-gradient(
+    145deg,
+    var(--cos-selection-selected),
+    color-mix(in srgb, var(--cos-action-primary-strong) 10%, transparent)
+  );
+  box-shadow: 0 0 32px var(--cos-effect-canvas-glow-violet);
+}
+
+.pageTitle {
+  font-family: var(--cos-font-heading);
+  font-size: var(--cos-type-h1-size);
+  font-weight: 600;
+  line-height: var(--cos-type-h1-line);
+  letter-spacing: var(--cos-type-h1-spacing);
+}
+
+.pageSubtitle {
+  margin: 0;
+  color: var(--cos-text-secondary);
+  font-size: var(--cos-type-caption-size);
+  line-height: var(--cos-type-caption-line);
+}
+
+.headerRow,
+.headerIdentity,
+.toolbarTitle,
+.toolbarActions,
+.refreshing,
+.tableActionGroup,
+.paginationControls {
+  display: flex;
+  align-items: center;
+}
+
+.headerRow {
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.headerIdentity {
+  min-width: 0;
+  gap: 16px;
+}
+
+.titleStack {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pageTitle {
+  margin: 0;
+}
+
+.toolbar {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-md);
+  background:
+    linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--cos-action-primary-strong) 5%, transparent),
+      transparent 38%
+    ),
+    var(--cos-surface-canvas-raised);
+  box-shadow: var(--cos-elevation-2);
+}
+
+.toolbarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbarTitle {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbarCount {
+  font-size: var(--cos-type-caption-size);
+}
+
+.toolbarActions {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.toolbarButton,
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-sm);
+  padding: 0 10px;
+  color: var(--cos-action-hover);
+  background: var(--cos-selection-selected);
+  font: inherit;
+  font-size: var(--cos-type-body-size);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color var(--cos-motion-fast) ease,
+    color var(--cos-motion-fast) ease,
+    background var(--cos-motion-fast) ease;
+}
+
+.toolbarButton:hover:not(:disabled),
+.toolbarButton:focus-visible,
+.primaryButton:hover:not(:disabled),
+.primaryButton:focus-visible,
+.secondaryButton:hover:not(:disabled),
+.secondaryButton:focus-visible {
+  border-color: var(--cos-border-active);
+  color: var(--cos-text-on-action);
+  background: var(--cos-action-hover);
+}
+
+.toolbarButtonPrimary,
+.primaryButton {
+  border-color: var(--cos-action-primary-strong);
+  color: var(--cos-text-on-action);
+  background: var(--cos-action-primary-strong);
+}
+
+.toolbarButtonSubtle,
+.secondaryButton {
+  color: var(--cos-text-secondary);
+  background: transparent;
+}
+
+.toolbarButtonDefault {
+  color: var(--cos-text-primary);
+  background: var(--cos-surface-elevated);
+}
+
+.toolbarButton:disabled,
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  color: var(--cos-text-disabled);
+  background: var(--cos-surface-panel);
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns:
+    minmax(240px, 1.35fr)
+    minmax(190px, 1fr)
+    minmax(155px, 0.75fr)
+    minmax(145px, 0.62fr)
+    minmax(145px, 0.62fr);
+  gap: 10px;
+}
+
+.savedViews {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-block: 1px;
+  scrollbar-width: thin;
+}
+
+.savedViewButton {
+  display: inline-flex;
+  min-height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--cos-border-default);
+  border-radius: 999px;
+  padding: 0 11px;
+  color: var(--cos-text-secondary);
+  background: var(--cos-surface-panel);
+  font: inherit;
+  font-size: var(--cos-type-caption-size);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color var(--cos-motion-fast) ease,
+    color var(--cos-motion-fast) ease,
+    background var(--cos-motion-fast) ease;
+}
+
+.savedViewButton:hover:not(:disabled),
+.savedViewButton:focus-visible,
+.savedViewButtonActive {
+  border-color: var(--cos-border-active);
+  color: var(--cos-text-primary);
+  background: var(--cos-selection-selected);
+}
+
+.savedViewButtonStop {
+  color: var(--cos-status-error);
+}
+
+.savedViewButtonStop.savedViewButtonActive {
+  border-color: color-mix(in srgb, var(--cos-status-error) 64%, var(--cos-border-default));
+  background: color-mix(in srgb, var(--cos-status-error) 12%, var(--cos-surface-panel));
+}
+
+.savedViewButtonDisabled {
+  color: var(--cos-text-disabled);
+  background: transparent;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.filterControl {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.filterLabel {
+  color: var(--cos-text-secondary);
+  font-size: var(--cos-type-caption-size);
+  line-height: var(--cos-type-caption-line);
+}
+
+.filterInputShell {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.filterLeadingIcon {
+  position: absolute;
+  inset-inline-start: 11px;
+  color: var(--cos-text-secondary);
+  pointer-events: none;
+}
+
+.filterInput {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-sm);
+  padding: 0 10px;
+  color: var(--cos-text-primary);
+  background: var(--cos-surface-canvas-raised);
+  font: inherit;
+  font-size: var(--cos-type-body-size);
+  line-height: var(--cos-type-body-line);
+  transition:
+    border-color var(--cos-motion-fast) ease,
+    box-shadow var(--cos-motion-fast) ease;
+}
+
+.filterInputShell:has(.filterLeadingIcon) .filterInput {
+  padding-inline-start: 34px;
+}
+
+.filterInput:hover:not(:disabled),
+.filterInput:focus-visible {
+  border-color: var(--cos-border-default);
+}
+
+.filterInput:focus-visible {
+  border-color: var(--cos-border-active);
+  outline: none;
+  box-shadow: var(--cos-focus-ring);
+}
+
+.filterInput[aria-invalid="true"] {
+  border-color: var(--cos-status-error);
+}
+
+.filterError {
+  color: var(--cos-status-error);
+  font-size: var(--cos-type-caption-size);
+  line-height: var(--cos-type-caption-line);
+}
+
+.ordersWorkspace {
+  display: grid;
+  align-items: start;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.tablePanel {
+  display: flex;
+  min-width: 0;
+  min-height: 520px;
+  max-height: calc(100dvh - 254px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--cos-border-default);
+  border-radius: 12px;
+  background: var(--cos-surface-panel);
+  box-shadow: var(--cos-elevation-overlay);
+}
+
+.summaryStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.summaryCard {
+  padding: 12px 14px;
+  border: 1px solid var(--cos-border-divider);
+  border-radius: var(--cos-radius-sm);
+  background: var(--cos-surface-elevated);
+}
+
+.summaryLabel {
+  color: var(--cos-text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.summaryValue {
+  margin-top: 4px;
+  color: var(--cos-text-primary);
+  font-weight: 750;
+}
+
+.paginationBar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-top: 1px solid var(--cos-border-default);
+  background: var(--cos-surface-canvas-raised);
+}
+
+.refreshing {
+  gap: 6px;
+  color: var(--cos-action-hover);
+  font-size: var(--cos-type-caption-size);
+}
+
+.actionMuted {
+  font-size: var(--cos-type-body-size);
+}
+
+.refreshWarning {
+  display: flex;
+  min-width: 0;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--cos-status-warning) 54%, transparent);
+  border-radius: var(--cos-radius-md);
+  padding: 10px 12px;
+  color: var(--cos-text-primary);
+  background: color-mix(in srgb, var(--cos-status-warning) 13%, var(--cos-surface-panel));
+}
+
+.refreshWarningIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding-top: 2px;
+  color: var(--cos-status-warning);
+}
+
+.refreshWarningBody {
+  min-width: 0;
+  flex: 1;
+}
+
+.refreshWarningBody > strong {
+  display: block;
+  font-weight: 650;
+}
+
+.refreshWarningContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  color: var(--cos-text-secondary);
+  font-size: var(--cos-type-caption-size);
+}
+
+.paginationControls {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.paginationControls > :global([data-size]) {
+  flex: 0 0 160px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.paginationItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.paginationButton {
+  display: inline-grid;
+  min-width: 30px;
+  min-height: 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--cos-radius-sm);
+  padding: 0 6px;
+  color: var(--cos-text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--cos-type-caption-size);
+  cursor: pointer;
+}
+
+.paginationButton:hover:not(:disabled),
+.paginationButton:focus-visible,
+.paginationButtonActive {
+  border-color: var(--cos-border-active);
+  color: var(--cos-text-primary);
+  background: var(--cos-selection-hover);
+}
+
+.paginationButton:disabled {
+  color: var(--cos-text-disabled);
+  cursor: not-allowed;
+}
+
+.paginationEllipsis {
+  color: var(--cos-text-secondary);
+}
+
+.skeletonRow {
+  height: 62px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--cos-border-subtle);
+}
+
+@media (min-width: 88em) {
+  .ordersWorkspace {
+    grid-template-columns: minmax(680px, 1fr) minmax(400px, 480px);
+  }
+}
+
+@media (max-width: 76em) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 48em) {
+  .page {
+    padding: 0;
+  }
+
+  .pageHeader {
+    padding-inline: 4px;
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .savedViews {
+    margin-inline: -4px;
+    padding-inline: 4px;
+  }
+
+  .summaryStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .paginationBar {
+    align-items: flex-start;
+  }
+
+  .refreshWarningContent {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tablePanel {
+    min-height: 480px;
+    max-height: calc(100dvh - 300px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbarButton,
+  .primaryButton,
+  .secondaryButton,
+  .filterInput {
+    transition-duration: 0.01ms;
+  }
+
+  .savedViewButton {
+    transition-duration: 0.01ms;
+  }
+}
+
+@media (forced-colors: active) {
+  .toolbarButton,
+  .primaryButton,
+  .secondaryButton,
+  .filterInput,
+  .paginationButton,
+  .refreshWarning {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+  }
+
+  .savedViewButton {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: ButtonFace;
+  }
+
+  .toolbarButton:disabled,
+  .primaryButton:disabled,
+  .secondaryButton:disabled,
+  .paginationButton:disabled,
+  .filterLabel,
+  .filterError,
+  .refreshWarningIcon,
+  .refreshWarningContent,
+  .refreshing {
+    color: GrayText;
+  }
+}

@@ -12,7 +12,7 @@ export interface AlertProps {
 
 const toneClasses: Record<AlertTone, string> = {
   danger: "border-danger-border bg-danger-bg text-danger-text",
-  info: "border-primary/30 bg-primary/10 text-primary",
+  info: "border-primary/30 bg-primary/10 text-[var(--cos-action-primary-soft-text)]",
   success: "border-success-border bg-success-bg text-success-text",
   warning: "border-warning-border bg-warning-bg text-warning-text",
 };

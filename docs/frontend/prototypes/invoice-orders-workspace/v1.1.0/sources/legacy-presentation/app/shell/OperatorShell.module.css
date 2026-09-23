@@ -1,0 +1,326 @@
+.operatorShell {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-columns: 226px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px;
+}
+
+.sidebar {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  height: calc(100dvh - 24px);
+  min-height: 620px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-lg);
+  background:
+    linear-gradient(180deg, var(--cos-selection-hover), transparent 24%), var(--cos-surface-panel);
+  box-shadow: var(--cos-elevation-3);
+}
+
+.brand {
+  display: grid;
+  gap: 10px;
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid var(--cos-border-subtle);
+}
+
+.workspaceBadge {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 2px 8px;
+  border: 1px solid var(--cos-border-active);
+  border-radius: var(--cos-radius-sm);
+  color: var(--cos-action-hover);
+  background: var(--cos-selection-selected);
+  font-size: 10px;
+  font-weight: var(--cos-font-weight-strong);
+  line-height: 1;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.navigation {
+  display: grid;
+  gap: 5px;
+  padding: 14px 10px;
+}
+
+.navigation > section {
+  display: grid;
+  gap: 4px;
+}
+
+.navigationGroupLabel,
+.mobileNavigationGroupLabel {
+  margin: 8px 12px 0;
+  color: var(--cos-text-disabled);
+  font-size: 10px;
+  font-weight: var(--cos-font-weight-strong);
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.navigationSection {
+  display: grid;
+  gap: 3px;
+}
+
+.navigationGroup {
+  display: grid;
+  gap: 3px;
+}
+
+.childNavigation {
+  display: grid;
+  gap: 3px;
+  padding-left: 22px;
+}
+
+.childNavigation .navigationLink {
+  min-height: 38px;
+  font-size: 12px;
+}
+
+.navigationLink {
+  position: relative;
+  display: grid;
+  min-height: 44px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--cos-text-secondary);
+  text-decoration: none;
+  transition:
+    color var(--cos-motion-fast) ease,
+    border-color var(--cos-motion-fast) ease,
+    background var(--cos-motion-fast) ease;
+}
+
+.navigationLink:hover,
+.navigationLink:focus-visible {
+  border-color: var(--cos-border-default);
+  color: var(--cos-text-primary);
+  background: var(--cos-selection-hover);
+}
+
+.navigationLinkActive {
+  border-color: var(--cos-border-active);
+  color: var(--cos-text-primary);
+  background: linear-gradient(90deg, var(--cos-selection-selected), var(--cos-selection-hover));
+  box-shadow: inset 3px 0 0 var(--cos-action-primary);
+}
+
+.navigationIcon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+}
+
+.navigationLinkUnavailable {
+  cursor: default;
+  color: var(--cos-text-disabled);
+  opacity: 0.78;
+}
+
+.developmentMark {
+  color: var(--cos-text-disabled);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: right;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding: 16px;
+  border-top: 1px solid var(--cos-border-subtle);
+  background: var(--cos-surface-canvas-raised);
+}
+
+.profileIdentity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border: 1px solid var(--cos-border-active);
+  border-radius: 50%;
+  color: var(--cos-action-hover);
+  background: var(--cos-selection-selected);
+  font-size: 13px;
+  font-weight: var(--cos-font-weight-strong);
+  line-height: 1;
+}
+
+.profileText {
+  min-width: 0;
+}
+
+.profileName,
+.profileRoles {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profileName {
+  color: var(--cos-text-primary);
+  font-size: var(--cos-type-body-size);
+  font-weight: var(--cos-font-weight-heading);
+  line-height: var(--cos-type-body-line);
+}
+
+.profileRoles,
+.migrationStatus,
+.mobileStatus {
+  color: var(--cos-text-secondary);
+  font-size: var(--cos-type-caption-size);
+  line-height: var(--cos-type-caption-line);
+}
+
+.migrationStatus,
+.mobileStatus {
+  white-space: nowrap;
+}
+
+.content {
+  min-width: 0;
+}
+
+/* Reserve the Payment Desk footprint before its lazy route stylesheet resolves. */
+.contentPaymentDesk {
+  min-height: 838px;
+}
+
+.workspace {
+  min-width: 0;
+}
+
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 2px 10px;
+  color: var(--cos-text-secondary);
+  font-size: 12px;
+}
+
+.breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.breadcrumb a {
+  color: inherit;
+}
+
+.breadcrumbSeparator {
+  color: var(--cos-text-disabled);
+}
+
+.mobileHeader,
+.mobileNavigation {
+  display: none;
+}
+
+@media (max-width: 82em) {
+  .operatorShell {
+    grid-template-columns: 184px minmax(0, 1fr);
+  }
+
+  .brand {
+    padding-inline: 14px;
+  }
+
+  .navigationLink {
+    padding-inline: 9px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 48em) {
+  .contentPaymentDesk {
+    min-height: 1400px;
+  }
+}
+
+@media (max-width: 64em) {
+  .operatorShell {
+    display: block;
+    padding: 10px;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobileHeader {
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid var(--cos-border-default);
+    border-radius: var(--cos-radius-md);
+    background: var(--cos-surface-panel);
+  }
+
+  .mobileNavigation {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding-block: 8px;
+    overflow-x: auto;
+  }
+
+  .mobileNavigation .navigationLink {
+    min-width: max-content;
+    grid-template-columns: 18px auto auto;
+    padding-inline: 11px;
+  }
+
+  .mobileNavigationSection {
+    display: grid;
+    gap: 4px;
+    min-width: max-content;
+  }
+
+  .mobileNavigationGroupLabel {
+    margin: 0 5px;
+  }
+
+  .mobileNavigationItems,
+  .mobileNavigationGroup,
+  .mobileChildNavigation {
+    display: flex;
+    gap: 6px;
+  }
+
+  .mobileChildNavigation .navigationLink {
+    border-style: dashed;
+  }
+}

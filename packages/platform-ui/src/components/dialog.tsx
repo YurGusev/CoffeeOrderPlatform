@@ -72,8 +72,10 @@ export function Dialog({
     commitOpenChange(false);
   };
   const handleOutsideInteraction = (element: Element): boolean => {
-    if (shouldCloseOnInteractOutside && !shouldCloseOnInteractOutside(element)) return false;
-    if (!canClose("outside")) return false;
+    if (shouldCloseOnInteractOutside && !shouldCloseOnInteractOutside(element)) {
+      closeReason.current = null;
+      return false;
+    }
     closeReason.current = "outside";
     return true;
   };

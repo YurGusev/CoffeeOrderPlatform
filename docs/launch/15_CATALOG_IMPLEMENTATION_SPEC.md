@@ -7,7 +7,7 @@
 
 ```text
 AROMA provider
-  -> aroma-gateway: private HTTP NDJSON stream
+  -> aroma-gateway: private HTTP NDJSON stream (providerSnapshotRef=`aroma-gateway:catalog-export:${snapshotRef}`)
   -> catalog-supplier-sync: batch validation + staging
   -> Catalog DB: Received generation
   -> catalog-activation-worker: validation + atomic activation + Outbox
@@ -30,8 +30,10 @@ Catalog DB через `FOR UPDATE SKIP LOCKED`.
 | `catalog-activation-worker` | проверить `Received`, материализовать и активировать | `coffee_platform_catalog` / `coffee_catalog_activate_rw` | provider HTTP, public HTTP |
 | `catalog-service` | читать только активное поколение и обслуживать HTTP | `coffee_platform_catalog` / `coffee_catalog_api_ro` | provider HTTP, staging writes, activation |
 
-Секреты AROMA доступны только `aroma-gateway`. Ни один Catalog runtime не
-получает URL/роль Customer, Pricing, Orders или Integration DB.
+Provider credentials are the `aroma.email` and `aroma.password` secret leaves,
+used with the canonical account scope `aroma-primary` and supplier
+`sup_00000000000000000000000001`; Catalog never receives those credentials.
+
 
 ## 3. Поток Gateway -> Catalog
 
@@ -40,7 +42,8 @@ Catalog DB через `FOR UPDATE SKIP LOCKED`.
 `POST /api/internal-v1/aroma/catalog-exports`
 
 - audience: только service identity `catalog-supplier-sync`;
-- request: `{ "snapshotRef": "snp_<ULID>", "supplierRef": "sup_<ULID>" }`;
+- request: `{ "snapshotRef": "snp_<ULID>", "supplierRef": "sup_<ULID>" }`; the
+  Gateway accepts only its canonical AROMA supplier `sup_00000000000000000000000001`.
 - response: `200 application/x-ndjson; charset=utf-8`;
 - общий deadline: `15m`; idle timeout между records: `30s`;
 - клиент обязан поддерживать backpressure и отменять provider request при
@@ -54,7 +57,9 @@ Catalog DB через `FOR UPDATE SKIP LOCKED`.
 Каждая строка — один JSON object и `\n`. `streamVersion` всегда `"1"`.
 
 1. `snapshot-started`: `snapshotRef`, `supplierRef`, `providerSnapshotRef`,
-   `startedAt`.
+   `startedAt`. Gateway provenance is exactly
+   `aroma-gateway:catalog-export:<snapshotRef>`; it is a traversal reference, not
+   a content hash.
 2. `snapshot-batch`: `snapshotRef`, `batchNumber`, `offerCount`,
    `uncompressedBytes`, `batchHash`, `previousBatchHash`, `items`.
 3. `snapshot-completed`: `snapshotRef`, `batchCount`, `productCount`,
@@ -67,19 +72,73 @@ Catalog DB через `FOR UPDATE SKIP LOCKED`.
 один. `batchHash` — lowercase SHA-256 канонического `items`; `contentHash` —
 SHA-256 конкатенации бинарных batch hashes в порядке `batchNumber`.
 
-Каждый item содержит строго: `sourceProductKeyHash`, `sourceVariantKeyHash`,
-`sourceOfferKeyHash`, `displayName`, `unit`, `supplierUnitMinor`, `currency`,
-`availability`, `imageUrl`. Raw provider identifiers, cookies и session ids не
+Каждый item содержит обязательные `sourceProductKeyHash`,
+`sourceVariantKeyHash`, `sourceOfferKeyHash`, `displayName`, `unit`,
+`supplierUnitMinor`, `currency`, `availability`, `imageUrl` и
+`sourceIdentityScheme`; optional `supplierPromotions` и `grindOptions` передаются
+только в typed contract. Raw provider identifiers, cookies и session ids не
 передаются. `offerRef` назначается Catalog при активации.
 
-Gateway вычисляет source hashes только как
-`HMAC-SHA256(catalogIdentityKeyV1, "hmac-sha256-v1\\0" + supplierRef + "\\0" +
-entityType + "\\0" + NFC(rawProviderIdentifier))`. Record обязан содержать
-`sourceIdentityScheme="hmac-sha256-v1"`. Key доступен только Gateway, не
-совпадает с session/actor/cursor keys и не ротируется автоматически. Unique
-scope — `(supplierRef,entityType,sourceHash)`; одинаковый hash с различными
-semantic facts отклоняет snapshot как `SOURCE_IDENTITY_COLLISION`. Ротация key
-требует отдельного ADR и alias migration; Catalog никогда не получает raw ID.
+Gateway вычисляет каждый source hash только как HMAC-SHA256 с dedicated key
+`aroma.catalogIdentityKeyV1`. Точное byte framing сообщения `M`:
+`UTF-8("hmac-sha256-v1") || 0x00 || UTF-8(supplierRef) || 0x00 ||
+UTF-8(entityType) || 0x00 || UTF-8(NFC(rawProviderIdentifier))`.
+`0x00` — один literal NUL byte, а не два текстовых символа `\` и `0`.
+`entityType` проходит строгий guard и принимает только `product`, `variant`,
+`offer` или `grind`; `supplierRef` — canonical `sup_<ULID>`. Raw provider identifier не
+trim/lowercase-ится: принимается только непустая well-formed UTF-16 строка без
+NUL, затем применяется только NFC. Результат — ровно 64 lowercase hex символа.
+Ключ передаётся helper отдельным typed input, не логируется, не совпадает с
+session/actor/cursor keys и не ротируется автоматически. Helper создаёт только
+identity proof: Catalog activation назначает owner refs, а `variantRef`/variant
+ID никогда не генерируется Gateway. Gateway не пишет в Catalog DB и не передаёт
+Catalog raw ID.
+
+Record обязан содержать `sourceIdentityScheme="hmac-sha256-v1"`. Unique scope —
+`(supplierRef,entityType,sourceHash)`; одинаковый hash с различными semantic facts
+отклоняет snapshot как `SOURCE_IDENTITY_COLLISION`. Ротация key требует отдельного
+ADR и alias migration.
+Where the provider does not prove an independent variant, Gateway treats the
+provider offer identifier only as the Platform source variant key for hashing;
+it is not a provider-independent variant alias. Absent or unknown packing/grind
+facts remain absent/unknown and are not defaulted to a known value.
+
+### 3.3 Immutable binding перед активацией
+
+`catalog-activation-worker` в durable preparation transaction назначает или
+переиспользует `offerRef` и сохраняет задание регистрации binding. После commit
+он отправляет `POST /api/internal-v1/aroma/offer-bindings` до активации поколения. Gateway
+принимает binding только для `Completed` snapshot и точного
+`supplierRef/sourceIdentityScheme/sourceOfferKeyHash`; ответ `Bound` и
+`firstSnapshotRef` сохраняются durable. HTTP выполняется вне Catalog
+transaction, а активация разрешена только после durable ack для каждого
+required binding. Потерянный ответ повторяет тот же request и возвращает
+immutable row.
+
+Binding сохраняет identity proof и не означает mutation-ready. Dispatch требует
+configured supplier, подтверждённую variant/packing/grind policy и свежий exact
+unique cart line; до этого cart dispatch остаётся fail-closed.
+
+### 3.4 Выбор помола оператором
+
+Решение владельца от 18 сентября 2026: использовать все варианты справочника
+помолов AROMA; оператор выбирает вариант при заказе. Gateway передаёт
+`grindOptions` с `sourceGrindKeyHash` и `displayName`, не raw provider IDs.
+Catalog сохраняет эти варианты вместе со снимком и отдаёт их Orders/UI в #6;
+Orders фиксирует выбор в строке заказа и передаёт соответствующий hash в #11.
+Это отдельная ось выбора, а не двенадцать синтетических `offerRef` одного товара.
+Binding base offer остаётся неизменяемым. Отсутствие выбранного помола не
+подменяется произвольным значением из справочника.
+
+Gateway отправляет упаковку из `config.aroma.defaultPacking` (`Aroma`, решение
+владельца «как в старой системе»). Это политика новых команд, а не доказательство,
+что наблюдаемое provider `packing=null` означает `Aroma`. Такие строки нельзя
+молча объединять. Physical cart key включает base offer, упаковку и выбранный
+помол; один offer с разными помолами — разные строки.
+
+`imageUrl=null` означает отсутствие изображения у поставщика. Catalog сохраняет
+этот факт, UI использует собственный placeholder. Отсутствие фото не исключает
+товар из полного снимка и не меняет его цену или доступность.
 
 ## 4. Staging и пакетный импорт
 
@@ -95,24 +154,163 @@ semantic facts отклоняет snapshot как `SOURCE_IDENTITY_COLLISION`. �
   `catalog.snapshot_offers`, `catalog.snapshot_availability`, всегда с
   `snapshot_ref` в ключе.
 
-Состояния импорта: `Created -> Receiving -> Received` или
-`Created|Receiving -> Rejected`. Только terminal `snapshot-completed` может
-перевести generation в `Received`.
+Состояния импорта: `Created -> Receiving -> Received|Rejected` или
+`Created -> Rejected`. `Created` фиксируется до HTTP с
+`provider_snapshot_ref=NULL`; provenance сохраняется только из прошедшего generated
+schema `snapshot-started`. `Received` и `Rejected` terminal, а conflicting replay
+не меняет terminal state.
 
-Алгоритм каждого batch выполняется отдельной короткой транзакцией:
+Каждый новый batch выполняется одной короткой транзакцией:
 
-1. заблокировать строку snapshot;
-2. проверить состояние и `batchNumber`;
-3. повтор существующего номера с тем же hash считать idempotent no-op;
-4. тот же номер с другим hash перевести в `Rejected/BATCH_HASH_CONFLICT`;
-5. проверить лимиты, типы, identity hashes и уникальность;
-6. загрузить строки через `COPY FROM STDIN`;
-7. записать batch manifest и увеличить `next_batch_number`;
-8. commit и только затем запросить следующий record.
+1. до expected-number rule прочитать manifest этого `batchNumber`; exact replay
+   сверить с durable reconstruction и вернуть idempotent no-op, conflict — fail closed;
+2. заблокировать generation и проверить `Receiving`, `next_batch_number` и
+   `previousBatchHash`;
+3. проверить generated schema, raw byte limits, `offerCount` и общий canonical hash;
+4. создать transaction-local `pg_temp.catalog_import_batch ON COMMIT DROP` и
+   выполнить один bounded `COPY FROM STDIN` с backpressure;
+5. set-based проверить references, duplicates и semantic identity collisions;
+6. merge entity rows и сохранить `batch_number,item_index` исходного offer;
+7. перечитать persistent rows, восстановить wire items по `item_index` и повторно
+   проверить bytes/hash;
+8. вставить manifest, пересчитать durable counters и commit; следующий stream
+   record запрашивается только после известного результата.
 
-При `snapshot-completed` importer проверяет непрерывный диапазон `0..N-1`, все
-counts и `contentHash`. Несовпадение переводит generation в `Rejected`. Ошибка,
-partial stream, timeout или restart никогда не меняют активное поколение.
+SQL `NULL` отличает отсутствующие optional properties от JSONB `[]`;
+`imageUrl:null` восстанавливается как обязательное поле. Money остаётся canonical
+non-negative decimal string без float/×100. Grind options хранятся JSONB-фактом и
+не размножают offer rows.
+
+При `snapshot-completed` importer сначала требует чистый EOF и только затем
+bounded-проходом по одному batch проверяет непрерывные durable ordinals, hash
+chain, persistent reconstruction, identities, повторно вычисленные counts и
+`contentHash`. Короткая locked transition в `Received` выполняется после этих
+проверок; единый 15-минутный deadline ограничивает весь traversal, включая
+create, HTTP, COPY, verification и terminal transition. Exact terminal replay —
+no-op. Потеря ответа `COMMIT` для create, started, batch, Received и reject
+разрешается operation-specific durable reread; недоступная БД оставляет
+`OutcomeUnknown`, без blind retry и ложного terminal claim.
+Partial stream/restart переводит только незавершённую generation в `Rejected`, а
+новый traversal получает новый `snapshotRef`; активное поколение #16 не изменяется.
+
+### Закрытая классификация отказов (#6)
+
+`failure_code` — внутренний закрытый allowlist, а не текст исключения и не
+произвольный provider/SQL code. Он не расширяет публичный HTTP/OpenAPI контракт.
+`CatalogImportError` и `CatalogStreamError` несут стабильный `code`; importer
+принимает только перечисленные ниже причины. `Error.message`, SQL, provider body,
+credentials и неизвестные `error.code` никогда не становятся durable причиной.
+
+| Наблюдаемый отказ | Durable `failure_code` |
+|---|---|
+HTTP/non-200, отсутствующий body, неверный content type до started | `CATALOG_EXPORT_HTTP_*`, `CATALOG_EXPORT_INVALID_CONTENT_TYPE` → `HTTP_BEFORE_STARTED` |
+| Неверная generated record schema; неканоническая либо отрицательная цена offer | `INVALID_STREAM_SCHEMA` |
+| Неверный snapshot/supplier, повторный `started`, batch/completed до `started`, любая запись после terminal | `INVALID_STREAM_SEQUENCE` |
+| EOF без terminal | `INVALID_STREAM_MISSING_TERMINAL` |
+| Framing: лимит строки, пустая строка, UTF-8, JSON, неполная последняя строка | `CATALOG_STREAM_LINE_TOO_LARGE`, `CATALOG_STREAM_EMPTY_LINE`, `CATALOG_STREAM_INVALID_UTF8`, `CATALOG_STREAM_INVALID_JSON`, `CATALOG_STREAM_INCOMPLETE` |
+| Неизвестный не-DB отказ без доверенного bounded code | `INVALID_STREAM` |
+| Число offers, лимит offers/batch/item, несовпадение canonical bytes | `BATCH_OFFER_COUNT_MISMATCH`, `BATCH_OFFER_LIMIT`, `BATCH_BYTE_LIMIT`, `ITEM_BYTE_LIMIT`, `BATCH_BYTE_COUNT_MISMATCH` |
+| Пропуск номера batch | `BATCH_SEQUENCE_CONFLICT` |
+| Несовпадение `previousBatchHash` нового batch | `BATCH_CHAIN_CONFLICT` |
+| Неверный payload hash или конфликтующий replay (`BATCH_REPLAY_CONFLICT` внутри store) | `BATCH_HASH_CONFLICT` |
+| Identity collision, включая повтор offer и несовместимые product/variant/grind facts | `SOURCE_IDENTITY_COLLISION` |
+| Повреждённая durable реконструкция или ordinals | `BATCH_DURABLE_HASH_MISMATCH`, `BATCH_DURABLE_ORDINAL_MISMATCH` |
+| Terminal count, chain или content hash | `TERMINAL_COUNT_MISMATCH`, `TERMINAL_CHAIN_MISMATCH`, `TERMINAL_CONTENT_HASH_MISMATCH` |
+| Валидный provider terminal (допустим и до `started`) | Точный contract code: `PROVIDER_UNAVAILABLE`, `PROVIDER_TIMEOUT`, `INVALID_STREAM`, `BATCH_HASH_CONFLICT`, `SOURCE_IDENTITY_COLLISION` |
+| Deadline в потоке при известном результате DB / последующее owner recovery | `IMPORT_DEADLINE_EXCEEDED` / `RECOVERY_INCOMPLETE` |
+| Известная SQL-ошибка с подтверждённым `RolledBack` и успешным guard reread незавершённого собственного snapshot | `IMPORT_DB_ROLLED_BACK` |
+
+Отрицательная цена запрещена именно Catalog ingestion policy: общий scalar schema
+сам по себе не заменяет проверку non-negative canonical decimal string.
+`Received` и `Rejected` неизменяемы: точный terminal replay возвращает no-op,
+конфликт не заменяет state/reason. Exact batch replay проверяется также после
+продвижения следующих batches и в `Received`; `Rejected` batch replay не разрешает.
+Решение о terminal принимается только после чистого EOF: provider terminal с
+последующей записью не считается принятым provider отказом.
+
+Не все `DB_*` означают неопределённость. Store переводит только
+`DB_QUERY_FAILED` при фактически наблюдаемом состоянии transaction `RolledBack`
+в `IMPORT_DB_ROLLED_BACK`; importer затем перечитывает generation, сверяет
+supplier и `Created|Receiving`, а `reject` повторно проверяет state под lock.
+Connection loss, unknown COMMIT/ROLLBACK, отменённый COPY и недоступный reread
+не дают права записывать ложный `Rejected`. Неизвестный исход остаётся
+`OutcomeUnknown` либо исходной отменой; operation-specific reconciliation и
+следующий recovery работают по durable фактам. Ошибка reread не заменяется
+успешной классификацией. Никакого разбора текста SQL-ошибки для этого нет.
+
+### Проверяемые границы хранения и imports (#6)
+
+Importer имеет `SELECT/INSERT/UPDATE` только на `supplier_snapshots` и
+`SELECT/INSERT` на остальных пяти staging/manifest таблицах. `UPDATE` для этих
+пяти таблиц, `DELETE`, постоянный DDL в `catalog`/`public` не разрешены.
+`TEMP` нужен transaction-local COPY; foreign database `CONNECT` запрещён.
+`config/database-role-map.json` повторяет минимальные grants миграций, не
+расширяет их до общего RW. Миграции 0001–0003 не переписываются.
+
+`test:catalog-copy` использует настоящий disposable PostgreSQL и production
+`createCatalogImportStore`/`defineCopy`: отмена через `AbortSignal` и ошибка
+источника происходят после первого потреблённого COPY chunk. Сравниваются
+полные pre/post rows всех шести таблиц, включая manifest, counters и state;
+проверяются уничтожение источника, доступность pool, отсутствие active COPY /
+idle-in-transaction и ограниченное завершение. Test-only observer подтверждает
+все четыре merge; отзыв `INSERT` на manifest даёт наблюдённый на настоящем driver
+SQLSTATE `42501`. Rollback удаляет весь новый batch, не меняя предыдущие факты.
+Grant и test-local подмены восстанавливаются в `finally`; production fault hooks
+отсутствуют.
+
+Тот же harness применяет сначала 0001, сохраняет четыре состояния, затем
+применяет 0002–0003 без изменения существующих rows. Повторный запуск — no-op;
+изменённый SQL с **пересчитанным** checksum отклоняется против ledger как
+`MIGRATION_CHECKSUM_DRIFT`, ledger остаётся неизменным. ACL/TEMP и запрещённые
+операции проверяются настоящим login `coffee_catalog_import_rw` с `42501`.
+Foreign CONNECT proof использует существующий live foundation/bootstrap route:
+реальный login importer пробует четыре foreign databases и наблюдает `42501`.
+Вывод `pnpm db:smoke` без `--execute` — только structural plan, не CONNECT proof.
+
+Связанная проверка остановки в `test:catalog-copy` пропускает валидные записи
+через `InternalCatalogClient` и настоящее тело HTTP-ответа в `runCatalogImport`.
+После начала PostgreSQL COPY и занятия им одного соединения проверка
+останавливает ресурс БД и отменяет сигнал импорта: читатель HTTP и источник COPY
+уничтожаются, COPY завершается `DB_INTERRUPTED`, все шесть таблиц совпадают с
+состоянием **перед пакетом**, соединение освобождается, активных COPY и
+незавершённых транзакций нет, остановка укладывается в штатные 40 секунд.
+Источник HTTP — локальный тестовый сервер, не развёрнутый `api-internal` и не
+реальный провайдер; проверка не доказывает сетевую доступность production или
+доставку телеметрии.
+
+`tests/architecture/checks.test.mjs` прогоняет пять запрещённых imports из
+`catalog-supplier-sync` в `catalog-activation-worker`, `api-internal`,
+`orders-service`, `pricing-service`, `customer-service`, проверяя точные
+`BOUND-IMPORT`, source и target. Контрольные imports versioned contracts и
+разрешённых platform packages проходят существующий checker. Общие business
+packages, imports реализаций соседних apps и Effect запрещены; authority —
+ADR-0025, native async/AbortSignal. Public HTTP, activation/outbox и active
+Catalog generation находятся за границей этих staging-проверок.
+
+### Восстановление, готовность и ограниченная наблюдаемость (#6)
+
+Перед **каждым** новым export scheduler выполняет owner-local recovery. Ошибка
+recovery (включая недоступную БД после `OutcomeUnknown`) запрещает начало нового
+export; очередной tick повторяет recovery, а не неизвестную provider operation.
+Readiness остаётся false до завершения startup recovery и при завершении
+supervisor loop; обычный отказ импорта/провайдера не означает смерть supervisor.
+
+Importer использует существующие OTel/runtime metrics и structured logger, как
+Gateway: spans `catalog.import.generation`, `.validation`, `.copy`, `.transaction`;
+bounded counters batches/bytes, duration sum/count, import age и фиксированный
+outcome enum. Batch counters отражают успешно reconciled stream batches, включая
+exact replay, а не уникальные durable rows. Age — время с последнего успешного
+импорта (до первого успеха — с запуска telemetry); `has_success` различает эти
+состояния. Диагностика не содержит raw IDs, payload, SQL, error strings или secrets.
+
+NDJSON framing проверяет бюджет до накопления фрагмента: целые строки читаются
+через view, фрагментированные — через один reusable bounded buffer без повторного
+копирования префикса. `test:catalog-stream` проверяет остановку upstream demand
+при delayed persistence и большой фрагментированный поток в bounded-heap процессе.
+`test:catalog-recovery` дополнительно убивает реальный процесс после durable batch,
+запускает новый PID и проверяет recovery-before-export через production composition
+с локальными bootstrap/DNS и mTLS InternalApi fixture. Это не deployment/provider
+load proof. Точные наблюдения и ограничения: `evidence/issue-6-review-remediation.md`.
 
 ## 5. Активация
 

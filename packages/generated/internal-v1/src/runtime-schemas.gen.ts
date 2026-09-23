@@ -54,6 +54,7 @@ export const internalV1Schemas = {
       "type": {
         "type": "string",
         "format": "uri-reference",
+        "pattern": "^(?!(?![A-Za-z][A-Za-z0-9+\\-.]*:)[^/?#]*:)(?:[A-Za-z][A-Za-z0-9+\\-.]*:)?(?:\\/\\/(?:(?:[A-Za-z0-9\\-._~!$&'()*+,;=:]|%[0-9A-Fa-f]{2})*@)?(?:\\[(?:(?:(?:(?:[0-9A-Fa-f]{1,4}:){6}|::(?:[0-9A-Fa-f]{1,4}:){5}|(?:[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){4}|(?:(?:[0-9A-Fa-f]{1,4}:){0,1}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){3}|(?:(?:[0-9A-Fa-f]{1,4}:){0,2}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){2}|(?:(?:[0-9A-Fa-f]{1,4}:){0,3}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}:|(?:(?:[0-9A-Fa-f]{1,4}:){0,4}[0-9A-Fa-f]{1,4})?::)(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?))|(?:(?:[0-9A-Fa-f]{1,4}:){0,5}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}|(?:(?:[0-9A-Fa-f]{1,4}:){0,6}[0-9A-Fa-f]{1,4})?::)|[Vv][0-9A-Fa-f]+\\.[A-Za-z0-9\\-._~!$&'()*+,;=:]+)\\]|(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)|(?:[A-Za-z0-9\\-._~!$&'()*+,;=]|%[0-9A-Fa-f]{2})*)(?::\\d*)?(?:\\/(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)*|\\/(?:(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})+(?:\\/(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)*)?|(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})+(?:\\/(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)*)?(?:\\?(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@/?]|%[0-9A-Fa-f]{2})*)?(?:#(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@/?]|%[0-9A-Fa-f]{2})*)?$",
         "minLength": 1,
         "maxLength": 2048
       },
@@ -78,6 +79,8 @@ export const internalV1Schemas = {
       },
       "instance": {
         "type": "string",
+        "format": "uri-reference",
+        "pattern": "^(?!(?![A-Za-z][A-Za-z0-9+\\-.]*:)[^/?#]*:)(?:[A-Za-z][A-Za-z0-9+\\-.]*:)?(?:\\/\\/(?:(?:[A-Za-z0-9\\-._~!$&'()*+,;=:]|%[0-9A-Fa-f]{2})*@)?(?:\\[(?:(?:(?:(?:[0-9A-Fa-f]{1,4}:){6}|::(?:[0-9A-Fa-f]{1,4}:){5}|(?:[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){4}|(?:(?:[0-9A-Fa-f]{1,4}:){0,1}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){3}|(?:(?:[0-9A-Fa-f]{1,4}:){0,2}[0-9A-Fa-f]{1,4})?::(?:[0-9A-Fa-f]{1,4}:){2}|(?:(?:[0-9A-Fa-f]{1,4}:){0,3}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}:|(?:(?:[0-9A-Fa-f]{1,4}:){0,4}[0-9A-Fa-f]{1,4})?::)(?:[0-9A-Fa-f]{1,4}:[0-9A-Fa-f]{1,4}|(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?))|(?:(?:[0-9A-Fa-f]{1,4}:){0,5}[0-9A-Fa-f]{1,4})?::[0-9A-Fa-f]{1,4}|(?:(?:[0-9A-Fa-f]{1,4}:){0,6}[0-9A-Fa-f]{1,4})?::)|[Vv][0-9A-Fa-f]+\\.[A-Za-z0-9\\-._~!$&'()*+,;=:]+)\\]|(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)|(?:[A-Za-z0-9\\-._~!$&'()*+,;=]|%[0-9A-Fa-f]{2})*)(?::\\d*)?(?:\\/(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)*|\\/(?:(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})+(?:\\/(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)*)?|(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})+(?:\\/(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*)*)?(?:\\?(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@/?]|%[0-9A-Fa-f]{2})*)?(?:#(?:[A-Za-z0-9\\-._~!$&'()*+,;=:@/?]|%[0-9A-Fa-f]{2})*)?$",
         "minLength": 1,
         "maxLength": 2048
       },
@@ -112,6 +115,561 @@ export const internalV1Schemas = {
             }
           }
         }
+      }
+    }
+  },
+  "AromaCatalogExportRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "snapshotRef",
+      "supplierRef"
+    ],
+    "properties": {
+      "snapshotRef": {
+        "type": "string",
+        "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "supplierRef": {
+        "type": "string",
+        "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$"
+      }
+    }
+  },
+  "AromaCatalogExportRecord": {
+    "oneOf": [
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "streamVersion",
+          "recordType",
+          "snapshotRef",
+          "supplierRef",
+          "providerSnapshotRef",
+          "startedAt"
+        ],
+        "properties": {
+          "streamVersion": {
+            "const": "1"
+          },
+          "recordType": {
+            "const": "snapshot-started"
+          },
+          "snapshotRef": {
+            "type": "string",
+            "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "supplierRef": {
+            "type": "string",
+            "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "providerSnapshotRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "streamVersion",
+          "recordType",
+          "snapshotRef",
+          "batchNumber",
+          "offerCount",
+          "uncompressedBytes",
+          "batchHash",
+          "previousBatchHash",
+          "items"
+        ],
+        "properties": {
+          "streamVersion": {
+            "const": "1"
+          },
+          "recordType": {
+            "const": "snapshot-batch"
+          },
+          "snapshotRef": {
+            "type": "string",
+            "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "batchNumber": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "uncompressedBytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2097152
+          },
+          "batchHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "previousBatchHash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sourceProductKeyHash",
+                "sourceVariantKeyHash",
+                "sourceOfferKeyHash",
+                "displayName",
+                "unit",
+                "supplierUnitMinor",
+                "currency",
+                "availability",
+                "imageUrl",
+                "sourceIdentityScheme"
+              ],
+              "properties": {
+                "sourceProductKeyHash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "sourceVariantKeyHash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "sourceOfferKeyHash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "displayName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "piece",
+                    "gram",
+                    "kilogram"
+                  ]
+                },
+                "supplierUnitMinor": {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)$"
+                },
+                "currency": {
+                  "type": "string",
+                  "const": "RUB"
+                },
+                "availability": {
+                  "type": "string",
+                  "enum": [
+                    "Available",
+                    "Unavailable",
+                    "Stopped"
+                  ]
+                },
+                "imageUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uri",
+                  "maxLength": 2048
+                },
+                "supplierPromotions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "discountBasisPoints",
+                      "minimumWeightRaw",
+                      "providerCreatedAt",
+                      "providerUpdatedAt"
+                    ],
+                    "properties": {
+                      "discountBasisPoints": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      "minimumWeightRaw": {
+                        "type": "string",
+                        "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+                      },
+                      "providerCreatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+                      },
+                      "providerUpdatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+                      }
+                    }
+                  }
+                },
+                "grindOptions": {
+                  "type": "array",
+                  "maxItems": 100,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "sourceGrindKeyHash",
+                      "displayName"
+                    ],
+                    "properties": {
+                      "sourceGrindKeyHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    }
+                  }
+                },
+                "sourceIdentityScheme": {
+                  "type": "string",
+                  "const": "hmac-sha256-v1"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "streamVersion",
+          "recordType",
+          "snapshotRef",
+          "batchCount",
+          "productCount",
+          "variantCount",
+          "offerCount",
+          "contentHash",
+          "completedAt"
+        ],
+        "properties": {
+          "streamVersion": {
+            "const": "1"
+          },
+          "recordType": {
+            "const": "snapshot-completed"
+          },
+          "snapshotRef": {
+            "type": "string",
+            "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "batchCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "productCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "variantCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "streamVersion",
+          "recordType",
+          "snapshotRef",
+          "code",
+          "failedAt"
+        ],
+        "properties": {
+          "streamVersion": {
+            "const": "1"
+          },
+          "recordType": {
+            "const": "snapshot-failed"
+          },
+          "snapshotRef": {
+            "type": "string",
+            "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "PROVIDER_UNAVAILABLE",
+              "PROVIDER_TIMEOUT",
+              "INVALID_STREAM",
+              "BATCH_HASH_CONFLICT",
+              "SOURCE_IDENTITY_COLLISION"
+            ]
+          },
+          "failedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+          }
+        }
+      }
+    ]
+  },
+  "AromaOfferBindingRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "offerRef",
+      "supplierRef",
+      "snapshotRef",
+      "sourceIdentityScheme",
+      "sourceOfferKeyHash"
+    ],
+    "properties": {
+      "offerRef": {
+        "type": "string",
+        "pattern": "^off_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "supplierRef": {
+        "type": "string",
+        "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "snapshotRef": {
+        "type": "string",
+        "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "sourceIdentityScheme": {
+        "type": "string",
+        "const": "hmac-sha256-v1"
+      },
+      "sourceOfferKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    }
+  },
+  "AromaOfferBindingResponse": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "offerRef",
+      "supplierRef",
+      "sourceIdentityScheme",
+      "sourceOfferKeyHash",
+      "firstSnapshotRef",
+      "state"
+    ],
+    "properties": {
+      "offerRef": {
+        "type": "string",
+        "pattern": "^off_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "supplierRef": {
+        "type": "string",
+        "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "sourceIdentityScheme": {
+        "type": "string",
+        "const": "hmac-sha256-v1"
+      },
+      "sourceOfferKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "firstSnapshotRef": {
+        "type": "string",
+        "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "state": {
+        "const": "Bound"
+      }
+    }
+  },
+  "AromaMutationResponse": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "operationRef",
+      "cartScopeRef",
+      "offerRef",
+      "state"
+    ],
+    "properties": {
+      "operationRef": {
+        "type": "string",
+        "pattern": "^op_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "cartScopeRef": {
+        "type": "string",
+        "const": "aroma-primary"
+      },
+      "offerRef": {
+        "type": "string",
+        "pattern": "^off_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "sourceGrindKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "state": {
+        "const": "Acknowledged"
+      }
+    }
+  },
+  "AromaCartSnapshotReadRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "cartScopeRef"
+    ],
+    "properties": {
+      "cartScopeRef": {
+        "type": "string",
+        "const": "aroma-primary"
+      }
+    }
+  },
+  "AromaCartSnapshot": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "cartScopeRef",
+      "providerSnapshotRef",
+      "capturedAt",
+      "cartFingerprint",
+      "lines"
+    ],
+    "properties": {
+      "cartScopeRef": {
+        "type": "string",
+        "const": "aroma-primary"
+      },
+      "providerSnapshotRef": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256
+      },
+      "capturedAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+      },
+      "cartFingerprint": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "lines": {
+        "type": "array",
+        "maxItems": 10000,
+        "uniqueItems": true,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "offerRef",
+            "quantity"
+          ],
+          "properties": {
+            "offerRef": {
+              "type": "string",
+              "pattern": "^off_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "quantity": {
+              "type": "string",
+              "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
+            },
+            "sourceGrindKeyHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        }
+      }
+    }
+  },
+  "AromaSetQuantityRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "operationRef",
+      "cartScopeRef",
+      "quantity"
+    ],
+    "properties": {
+      "operationRef": {
+        "type": "string",
+        "pattern": "^op_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "cartScopeRef": {
+        "type": "string",
+        "const": "aroma-primary"
+      },
+      "quantity": {
+        "type": "string",
+        "pattern": "^(?:[1-9][0-9]*)(?:\\.[0-9]+)?$|^0\\.(?!0+$)[0-9]+$"
+      },
+      "sourceGrindKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    }
+  },
+  "AromaRemoveLineRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "operationRef",
+      "cartScopeRef"
+    ],
+    "properties": {
+      "operationRef": {
+        "type": "string",
+        "pattern": "^op_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "cartScopeRef": {
+        "type": "string",
+        "const": "aroma-primary"
+      },
+      "sourceGrindKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
       }
     }
   }

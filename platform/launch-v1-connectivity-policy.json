@@ -138,9 +138,9 @@
     },
     {
       "runtime": "catalog-activation-worker",
-      "dockerNetworks": ["coffee_postgres_data", "coffee_kafka_event"],
+      "dockerNetworks": ["coffee_postgres_data", "coffee_kafka_event", "coffee_internal_api"],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee_postgres:5432", "kafka:9092"],
+      "allowedHostPorts": ["coffee_postgres:5432", "kafka:9092", "api-internal:4051"],
       "allowedExternalEgress": [],
       "denyAssertions": [
         "no-http-business-route",

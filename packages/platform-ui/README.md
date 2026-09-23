@@ -1,36 +1,33 @@
 # `@coffee-platform/ui`
 
-Business-neutral presentation primitives for the CoffeeOrderPlatform browser
-foundation. React Aria owns semantic, keyboard and focus behavior; Tailwind CSS
-v4 owns styling and tokens.
+Бизнес-нейтральные primitives интерфейса оператора. React Aria отвечает за
+семантику, клавиатуру и focus; Tailwind CSS v4 — за стили и tokens.
 
-The package does not import application routes, transport, Query, Effect, API
-contracts, generated DTOs, runtime packages, provider clients or browser network
-APIs. Application screens and server-state composition belong to issue #9.
+Пакет не импортирует маршруты приложения, transport, Query, Effect, API-контракты,
+generated DTO, runtime-пакеты, клиентов провайдера и browser network APIs.
+Экраны приложения и композиция server state принадлежат #9.
 
-## Public surface
+## Публичный API
 
-The public surface is intentionally limited to `Button`, `Link`, `Dialog`,
-`Field`, `Input`, `Alert`, `Badge`, `Loading`, `Empty` and package-owned inline
-icons.
+Публичная поверхность ограничена `Button`, `Link`, `Dialog`, `Field`, `Input`,
+`Alert`, `Badge`, `Loading`, `Empty` и собственными inline SVG-иконками.
 
-- `Button`: `variant` is `primary | secondary | danger | quiet`; `size` is
-  `compact | default | touch`; `isPending` exposes the React Aria pending state;
-  `ref` targets the native button.
-- `Field`: `isInvalid` is independent from `errorMessage`; `ref` targets the
-  native input and is the hook for first-invalid focus.
-- `Input`: package-owned React Aria input wrapper with the same native input ref
-  contract.
-- `Dialog`: supports controlled (`isOpen`) and uncontrolled (`defaultOpen`)
-  usage. Outside dismissal is opt-in through `isDismissable`; Escape can be
-  disabled with `isKeyboardDismissDisabled`. `onRequestClose` may reject
-  `escape`, `outside` or explicit `action` closes while data is dirty or
-  pending. `initialFocusRef` and `returnFocusRef` make focus policy explicit;
-  the modal surface is bounded and scrollable on small viewports.
+- `Button`: `variant` — `primary | secondary | danger | quiet`; `size` —
+  `compact | default | touch`; `isPending` показывает pending-состояние React
+  Aria; `ref` указывает на нативную кнопку.
+- `Field`: `isInvalid` не зависит от `errorMessage`; `ref` указывает на нативный
+  input и позволяет сфокусировать первое невалидное поле.
+- `Input`: собственная оболочка React Aria input с тем же контрактом нативного `ref`.
+- `Dialog`: управляемый (`isOpen`) и неуправляемый (`defaultOpen`) режимы.
+  Закрытие по клику снаружи требует `isDismissable`; Escape можно отключить через
+  `isKeyboardDismissDisabled`. `onRequestClose` вправе отклонить закрытие по
+  `escape`, `outside` или явному `action`, если есть несохранённый ввод или pending
+  command. `initialFocusRef` и `returnFocusRef` задают focus policy; модальная
+  поверхность ограничена по размеру и прокручивается на узких экранах.
 
-## Browser and package builds
+## Сборка пакета и browser
 
-From the repository root:
+Из корня репозитория:
 
 ```sh
 pnpm --filter @coffee-platform/ui build
@@ -38,26 +35,32 @@ pnpm web:build
 pnpm dev:browser
 ```
 
-`dev:browser` starts the Vite browser shell. The existing Node entry remains
-`apps/web/src/main.ts` and is built separately to `apps/web/dist/main.js`.
-The browser bundle is emitted to `apps/web/dist/browser`; generated `dist`
-artifacts are local verification outputs and are not committed.
+`dev:browser` запускает Vite browser shell. Существующий Node entry остаётся в
+`apps/web/src/main.ts` и отдельно собирается в `apps/web/dist/main.js`.
+Browser bundle выводится в `apps/web/dist/browser`; generated `dist` — только
+локальный результат проверки, его не коммитить.
 
-The package stylesheet is exported as `@coffee-platform/ui/styles.css`. IBM
-Plex Sans is self-hosted from the package font assets; no remote font or
-network request is required by the foundation.
+Стили пакета экспортируются как `@coffee-platform/ui/styles.css`: tokens
+выбранного прототипа v1.1.0 адаптированы к Tailwind CSS v4 и границам React Aria.
+Inter Variable используется для основного текста, Manrope Variable — для
+заголовков. Оба шрифта хранятся локально в `src/styles/fonts/`; внешний font CDN
+и сетевой запрос не нужны. Source commits, размеры и SHA-256 активов указаны в
+`src/styles/fonts/prototype-font-manifest.json`; лицензии лежат рядом со шрифтами.
 
-## Provenance
+От прототипа взяты только presentation tokens, типографика и визуальное направление
+shell. Fixture-реестр счетов, legacy runtime, routes и API не включены в пакет
+или production browser shell.
 
-The selected shadcn/ui React Aria source snapshots and local adaptations are
-recorded in `provenance/shadcn/` and `THIRD_PARTY_NOTICES.md`. That directory
-is provenance only and is not imported by the runtime build.
+## Происхождение
 
-## TypeScript 7 compatibility exception
+Снимки исходников shadcn/ui React Aria и локальные адаптации описаны в
+`provenance/shadcn/` и `THIRD_PARTY_NOTICES.md`. Каталог provenance не входит
+в runtime build.
 
-The exact `react-aria-components@1.21.1` dependency currently requires the
-narrow, type-only `@react-types/shared@3.36.1` declaration patch recorded in
-`THIRD_PARTY_NOTICES.md` and `ADR-0027`. This is an explicit #137 exception for
-six optional ARIA/DOM properties only: it does not patch runtime framework code,
-does not permit `skipLibCheck`, and must be removed when upstream declarations
-become compatible with the pinned TypeScript 7 graph.
+## Узкое исключение совместимости TypeScript 7
+
+Зафиксированный `react-aria-components@1.21.1` пока требует type-only patch
+declarations `@react-types/shared@3.36.1` из `THIRD_PARTY_NOTICES.md` и ADR-0027.
+Исключение #137 касается только шести optional ARIA/DOM properties: runtime
+framework code не изменяется, `skipLibCheck` не допускается. Patch нужно удалить
+после появления совместимых upstream declarations для закреплённого TypeScript 7.

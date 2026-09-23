@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build, preview, type PreviewServer } from "vite";
@@ -13,6 +14,31 @@ const browserRoot = resolve(repoRoot, "apps/web/dist/browser");
 const productionPort = Number(process.env.WEB_FOUNDATION_PORT ?? "4173");
 const fixturePort = Number(process.env.WEB_FOUNDATION_FIXTURE_PORT ?? String(productionPort + 1));
 const fixturePath = "/test/ui-foundation.fixture.html";
+const fontRoot = resolve(repoRoot, "packages/platform-ui/src/styles/fonts");
+
+async function assertFontSourceIdentity(): Promise<void> {
+  const manifest = JSON.parse(await readFile(resolve(fontRoot, "prototype-font-manifest.json"), "utf8")) as {
+    prototypeCommit: string;
+    sourceFiles: Record<string, string>;
+    fontFiles: Array<{ file: string; sha256: string; bytes: number }>;
+  };
+  assert.equal(manifest.prototypeCommit, "2aa6644c9c042c7b722702e6cde31324a4057bb9");
+  const tokens = await readFile(resolve(repoRoot, "packages/platform-ui/src/styles/tokens.css"));
+  const globalStyles = await readFile(resolve(repoRoot, "packages/platform-ui/src/styles/global.css"));
+  assert.equal(createHash("sha256").update(tokens).digest("hex"), manifest.sourceFiles["app/styles/tokens.css"]);
+  assert.equal(createHash("sha256").update(globalStyles).digest("hex"), manifest.sourceFiles["app/styles/global.css"]);
+  assert.equal(manifest.fontFiles.length, 13);
+  for (const font of manifest.fontFiles) {
+    const path = resolve(fontRoot, font.file);
+    const data = await readFile(path);
+    assert.equal(data.byteLength, font.bytes, `${font.file} byte size drift`);
+    assert.equal(createHash("sha256").update(data).digest("hex"), font.sha256, `${font.file} SHA-256 drift`);
+  }
+  const assets = await import("node:fs/promises").then(({ readdir }) => readdir(fontRoot));
+  assert.deepEqual(assets.filter((file) => file.endsWith(".woff2")).sort(), manifest.fontFiles.map(({ file }) => file).sort());
+  assert.ok((await stat(resolve(fontRoot, "Inter-OFL.txt"))).size > 0);
+  assert.ok((await stat(resolve(fontRoot, "Manrope-OFL.txt"))).size > 0);
+}
 
 type PageSignals = {
   consoleErrors: string[];
@@ -116,7 +142,7 @@ async function assertFoundationTokens(page: Page): Promise<void> {
   assert.equal(tokens.rootFontSize, "16px", `unexpected root rem baseline: ${JSON.stringify(tokens)}`);
   assert.equal(tokens.bodyFontSize, "14px", `unexpected body typography: ${JSON.stringify(tokens)}`);
   assert.equal(tokens.buttonFontSize, "14px", `unexpected standard button typography: ${JSON.stringify(tokens)}`);
-  assert.equal(tokens.buttonRadius, "6px", `unexpected control radius: ${JSON.stringify(tokens)}`);
+  assert.equal(tokens.buttonRadius, "8px", `unexpected control radius: ${JSON.stringify(tokens)}`);
 }
 
 function assertPageSignals(signals: PageSignals, label: string): void {
@@ -129,25 +155,73 @@ async function testProductionShell(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   const signals = observePage(page);
   await page.goto(`http://127.0.0.1:${productionPort}/`, { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Операторская foundation для CoffeeOrderPlatform" }).waitFor();
+  await page.getByRole("heading", { name: "Рабочее пространство" }).waitFor();
   assert.equal(await page.title(), "CoffeeOrderPlatform — UI foundation");
   assert.equal(await page.getByText("Фокусировать первое invalid поле").count(), 0);
   assert.equal(await page.getByRole("button", { name: "Открыть диалог" }).count(), 0);
-  await page.getByRole("link", { name: "К состояниям foundation" }).click();
-  await page.getByRole("status").first().waitFor();
+  const futureSections = page.getByLabel("Будущие разделы");
+  assert.equal(await futureSections.locator("[aria-disabled=true]").count(), 3);
+  assert.equal(await page.locator("[aria-current=page]").count(), 0, "foundation shell must not claim an active route");
+  const search = page.getByRole("button", { name: "Поиск", exact: true });
+  assert.equal(await search.count(), 1, "search button must have one accessible name");
+  assert.equal(await search.isDisabled(), true);
+  assert.equal(await page.getByRole("link", { name: /Открыть раздел/ }).count(), 0);
+  assert.equal(await page.getByText("ДОСТУПЕН").count(), 0, "foundation shell must not claim an implemented Orders section");
+  assert.equal(await page.getByText("Счета").count(), 0, "invoice registry fixture leaked into production shell");
+  assert.equal(await page.getByText("Данные сервера не подключены").count(), 1);
+  assert.equal(await page.getByText("presentation foundation").count(), 0);
+  assert.equal(await page.locator(".workspace-topbar > .foundation-badge").textContent(), "ОСНОВА");
+  assert.equal(await page.getByText("Локальная основа интерфейса").count(), 1);
+  await page.getByRole("link", { name: "К началу" }).click();
   await assertNoCriticalA11y(page, "production initial foundation");
   await assertFoundationTokens(page);
+  const shellStyles = await page.evaluate(() => {
+    const badge = document.querySelector<HTMLElement>(".card-heading > .foundation-badge");
+    const icon = document.querySelector<SVGElement>(".page-intro [data-slot='button'] svg");
+    const alert = document.querySelector<HTMLElement>(".state-grid > .foundation-alert");
+    if (!badge || !icon || !alert) throw new Error("foundation shell styles are missing");
+    return {
+      badgeFontSize: getComputedStyle(badge).fontSize,
+      badgeMinHeight: getComputedStyle(badge).minHeight,
+      iconWidth: getComputedStyle(icon).width,
+      alertMinHeight: getComputedStyle(alert).minHeight,
+    };
+  });
+  assert.deepEqual(shellStyles, { badgeFontSize: "9px", badgeMinHeight: "22px", iconWidth: "16px", alertMinHeight: "104px" });
 
   const fontState = await page.evaluate(async () => {
     await document.fonts.ready;
     return {
-      hasFamily: getComputedStyle(document.body).fontFamily.includes("IBM Plex Sans"),
-      loadedRegular: document.fonts.check('16px "IBM Plex Sans"'),
+      bodyFamily: getComputedStyle(document.body).fontFamily,
+      headingFamily: getComputedStyle(document.querySelector("h1")!).fontFamily,
+      loadedInter: document.fonts.check('16px "Inter Variable"'),
+      loadedManrope: document.fonts.check('16px "Manrope Variable"'),
     };
   });
-  assert.equal(fontState.hasFamily, true, "IBM Plex Sans is not the active document family");
-  assert.equal(fontState.loadedRegular, true, "IBM Plex Sans regular face did not load");
-  assert.ok(signals.fontRequests.length >= 1, "production shell did not request a local WOFF2 font");
+  assert.match(fontState.bodyFamily, /Inter Variable/);
+  assert.match(fontState.headingFamily, /Manrope Variable/);
+  assert.equal(fontState.loadedInter, true, "Inter variable face did not load");
+  assert.equal(fontState.loadedManrope, true, "Manrope variable face did not load");
+  assert.ok(signals.fontRequests.length >= 2, "production shell did not request both local variable font families");
+  await page.setViewportSize({ width: 1024, height: 600 });
+  const desktopSidebar = await page.locator(".operator-sidebar").boundingBox();
+  assert.ok(desktopSidebar && Math.abs(desktopSidebar.width - 226) <= 1, `1024px desktop sidebar is missing or not 226px: ${JSON.stringify(desktopSidebar)}`);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForFunction(() => window.scrollY > 0);
+  const sidebarTop = await page.locator(".operator-sidebar").evaluate((element) => element.getBoundingClientRect().top);
+  assert.ok(Math.abs(sidebarTop - 12) <= 2, `1024px desktop sidebar did not stay sticky: ${sidebarTop}`);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const compactGrid = await page.locator(".state-grid").boundingBox();
+  const compactEmpty = await page.locator(".state-grid > section").boundingBox();
+  assert.ok(compactGrid && compactEmpty, "compact state panel is missing");
+  assert.ok(
+    Math.abs(compactEmpty.x - compactGrid.x) <= 2 && compactEmpty.width >= compactGrid.width - 2,
+    `compact empty state leaves an unused grid cell: ${JSON.stringify({ compactGrid, compactEmpty })}`,
+  );
+  await page.setViewportSize({ width: 1023, height: 600 });
+  assert.equal(await page.locator(".operator-sidebar").isVisible(), false, "below 1024px desktop boundary the sidebar should be hidden");
+  assert.equal(await page.getByRole("heading", { name: "Рабочее пространство" }).isVisible(), true);
+  await assertNoOverflow(page, 1023);
   for (const width of [375, 768, 1280]) await assertNoOverflow(page, width);
   assertPageSignals(signals, "production shell");
   await page.close();
@@ -164,12 +238,12 @@ async function testScenarioFixture(context: BrowserContext): Promise<void> {
   const fontState = await page.evaluate(async () => {
     await document.fonts.ready;
     return {
-      hasFamily: getComputedStyle(document.body).fontFamily.includes("IBM Plex Sans"),
-      loadedRegular: document.fonts.check('16px "IBM Plex Sans"'),
+      hasFamily: getComputedStyle(document.body).fontFamily.includes("Inter Variable"),
+      loadedRegular: document.fonts.check('16px "Inter Variable"'),
     };
   });
-  assert.equal(fontState.hasFamily, true, "fixture did not activate IBM Plex Sans");
-  assert.equal(fontState.loadedRegular, true, "fixture IBM Plex Sans regular face did not load");
+  assert.equal(fontState.hasFamily, true, "fixture did not activate Inter");
+  assert.equal(fontState.loadedRegular, true, "fixture Inter variable face did not load");
   assert.ok(signals.fontRequests.length >= 1, "fixture did not request a local WOFF2 font");
 
   const invalidField = page.getByRole("textbox", { name: "Email оператора" });
@@ -202,6 +276,12 @@ async function testScenarioFixture(context: BrowserContext): Promise<void> {
   await dialog.waitFor({ state: "hidden" });
   await trigger.click();
   await dialog.waitFor();
+  const outsideCloseRequests = Number(await page.getByTestId("outside-close-requests").textContent());
+  await page.mouse.click(2, 2);
+  await dialog.waitFor({ state: "hidden" });
+  assert.equal(Number(await page.getByTestId("outside-close-requests").textContent()), outsideCloseRequests + 1, "allowed outside interaction must check the close policy once");
+  await trigger.click();
+  await dialog.waitFor();
   await dialogInput.fill("изменено");
   await page.keyboard.press("Escape");
   assert.equal(await dialog.isVisible(), true, "dirty dialog closed on Escape after reopen");
@@ -226,7 +306,7 @@ async function testScenarioFixture(context: BrowserContext): Promise<void> {
 
   await page.emulateMedia({ reducedMotion: "reduce" });
   const transitionDuration = await trigger.evaluate((element) => getComputedStyle(element).transitionDuration);
-  assert.equal(transitionDuration, "0s", "reduced-motion transition is not disabled");
+  assert.equal(transitionDuration, "1e-05s", "reduced-motion transition is not disabled");
   for (const width of [375, 768, 1280]) await assertNoOverflow(page, width);
   for (const [name, minimumHeight] of [["Малая 36", 36], ["Средняя 40", 40], ["Большая 44", 44]] as const) {
     const targetSize = await page.getByRole("button", { name }).boundingBox();
@@ -237,6 +317,7 @@ async function testScenarioFixture(context: BrowserContext): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  await assertFontSourceIdentity();
   await readFile(resolve(browserRoot, "index.html"));
   const productionServer = await startPreviewServer(browserRoot, productionPort, resolve(appRoot, "vite.config.ts"));
   const fixtureRoot = await mkdtemp(join(appRoot, ".tmp-ui-foundation-fixture-"));

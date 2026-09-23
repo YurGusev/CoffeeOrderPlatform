@@ -1,3 +1,3 @@
 # Third-party notice and patch artifacts preserve upstream/format-required spaces.
 patches/*.patch -whitespace
-packages/platform-ui/src/styles/fonts/license.txt -whitespace
+packages/platform-ui/src/styles/fonts/*-OFL.txt -whitespace

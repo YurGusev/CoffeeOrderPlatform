@@ -1,0 +1,13 @@
+{
+  "products": [],
+  "prices": {
+    "categories": [],
+    "weights": [],
+    "discounts": [],
+    "prices": [],
+    "total": {
+      "default": 0,
+      "promo": 0
+    }
+  }
+}

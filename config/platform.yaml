@@ -86,11 +86,14 @@ kafka:
     quarantine: { durable: owner-database, realtime: topic-dlq }
 
 aroma:
+  supplierRef: sup_00000000000000000000000001
+  scopeRef: aroma-primary
   origin:
     scheme: https
-    host: aroma.origin.host
+    host: aromateacoffee.ru
     port: 443
   redirectsAllowed: false
+  defaultPacking: Aroma
 
 security:
   actorContext:
@@ -269,6 +272,7 @@ services:
     deadlineProfiles: {defaultMs: 900000}
     concurrency: 1
     replicas: 1
+    scheduler: {intervalMs: 3600000, startupImport: true, overlapPolicy: skip}
     dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_catalog
     kafka: { producers: [], consumers: [] }
@@ -292,9 +296,9 @@ services:
         producers: [coffee.catalog.snapshot.v1, coffee.catalog.mapping.v2],
         consumers: [],
       }
-    outbound: []
+    outbound: [api-internal:4051]
     secretRefs: [postgres.catalogActivate, kafka.catalog, security.serviceTransportKeys.catalog-activation-worker, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/catalog-activation-worker.json, net: [coffee_postgres:5432, kafka:9092], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    permissions: {manifest: config/permissions/catalog-activation-worker.json, net: [coffee_postgres:5432, kafka:9092, api-internal:4051], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
   pricing-service:
@@ -422,7 +426,7 @@ services:
     database: coffee_platform_integration
     kafka: { producers: [], consumers: [] }
     outbound: [aroma.origin.host:443]
-    secretRefs: [postgres.aromaGateway, aroma.email, aroma.password, aroma.sessionEncryptionKey, aroma.catalogIdentityKeyV1, security.serviceTransportKeys.aroma-gateway, telemetry.exporterToken]
+    secretRefs: [postgres.aromaGateway, aroma.email, aroma.password, aroma.sessionEncryptionKey, aroma.catalogIdentityKeyV1, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.aroma-gateway, telemetry.exporterToken]
     permissions: {manifest: config/permissions/aroma-gateway.json, net: [coffee_postgres:5432, aroma.origin.host:443], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: true
 

@@ -13,7 +13,7 @@ const baseline = {
   components: { schemas: { Item: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, state: { type: 'string', enum: ['A', 'B'] } } } } },
 };
 
-async function red(mutator, withOptionalEvidence = false) {
+async function red(mutator, withOptionalEvidence = false, withNarrowingEvidence = false, narrowingFixtureValue = '0') {
   const directory = await mkdtemp(join(tmpdir(), 'contracts-breaking-'));
   const base = join(directory, 'base');
   const current = join(directory, 'current');
@@ -26,6 +26,13 @@ async function red(mutator, withOptionalEvidence = false) {
     await mkdir(join(current, 'contracts/fixtures/positive/http'), { recursive: true });
     await writeFile(join(current, 'contracts/fixtures/positive/http/optional-note.json'), JSON.stringify({ id: '1', note: 'evidence' }));
     await writeFile(join(current, 'contracts/compatibility-evidence.yaml'), yaml.dump({ optionalExpansions: [{ schemaPath: 'contracts/openapi/client-v1.yaml', location: 'contracts/openapi/client-v1.yaml#Item', property: 'note', fixture: 'contracts/fixtures/positive/http/optional-note.json' }] }));
+  }
+  if (withNarrowingEvidence) {
+    await mkdir(join(current, 'contracts/fixtures/negative/http'), { recursive: true });
+    await mkdir(join(current, 'docs/launch'), { recursive: true });
+    await writeFile(join(current, 'contracts/fixtures/negative/http/narrow-id.json'), JSON.stringify({case: 'narrow-id', id: narrowingFixtureValue, expectedKeyword: 'pattern'}));
+    await writeFile(join(current, 'docs/launch/narrow-id.md'), '# Narrow ID migration\n');
+    await writeFile(join(current, 'contracts/compatibility-evidence.yaml'), yaml.dump({narrowingCorrections: [{schemaPath: 'contracts/openapi/client-v1.yaml', location: 'contracts/openapi/client-v1.yaml#Item.id', keyword: 'pattern', before: null, after: '^[1-9]$', issue: 10, reason: 'Correct a pre-runtime request constraint before provider integration.', migration: 'docs/launch/narrow-id.md', fixture: 'contracts/fixtures/negative/http/narrow-id.json', fixtureCase: 'narrow-id', fixtureValuePointer: '/id', expectedKeyword: 'pattern'}]}));
   }
   const result = spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], { cwd: root, encoding: 'utf8' });
   await rm(directory, { recursive: true, force: true });
@@ -72,6 +79,17 @@ void test('breaking guard rejects endpoint/schema/status/operation rename and sc
 void test('breaking guard admits optional expansion only with fixture and policy evidence', async () => {
   const result = await red((document) => { document.components.schemas.Item.properties.note = { type: 'string' }; }, true);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
+
+void test('breaking guard admits only an exact narrowing correction with migration evidence', async () => {
+  const accepted = await red((document) => { document.components.schemas.Item.properties.id.pattern = '^[1-9]$'; }, false, true);
+  assert.equal(accepted.status, 0, `${accepted.stdout}\n${accepted.stderr}`);
+  const different = await red((document) => { document.components.schemas.Item.properties.id.pattern = '^[1-8]$'; }, false, true);
+  assert.notEqual(different.status, 0, `${different.stdout}\n${different.stderr}`);
+  assert.match(different.stderr, /breaking contract/);
+  const ineffective = await red((document) => { document.components.schemas.Item.properties.id.pattern = '^[1-9]$'; }, false, true, '7');
+  assert.notEqual(ineffective.status, 0, `${ineffective.stdout}\n${ineffective.stderr}`);
+  assert.match(ineffective.stderr, /breaking contract/);
 });
 
 void test('breaking guard admits a same-wire parameter ref replacement with a wider schema', async () => {

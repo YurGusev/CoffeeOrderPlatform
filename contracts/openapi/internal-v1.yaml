@@ -162,7 +162,7 @@ paths:
       x-auth: mTLS-and-signed-delegation
       x-deadline: 15m
       x-idle-timeout: 30s
-      x-side-effects: none
+      x-side-effects: Integration persistence
       security:
         - serviceMTLS: []
       parameters:
@@ -190,6 +190,60 @@ paths:
           $ref: '#/components/responses/ServiceAuthenticationRequired'
         '403':
           $ref: '#/components/responses/ServiceDelegationInvalid'
+        '503':
+          $ref: '#/components/responses/AromaProviderUnavailable'
+  /api/internal-v1/aroma/offer-bindings:
+    post:
+      tags: [aroma]
+      operationId: registerAromaOfferBinding
+      summary: Register one immutable AROMA offer binding
+      x-owner: aroma-gateway
+      x-audience: aroma-gateway
+      x-caller: catalog-activation-worker
+      x-callers: [catalog-activation-worker]
+      x-exposure: internal
+      x-auth: mTLS-and-signed-delegation
+      x-deadline: 5s
+      x-side-effects: immutable-binding-registration
+      x-operation-allowlist:
+        - originalCaller: catalog-activation-worker
+          operationId: registerAromaOfferBinding
+      security:
+        - serviceMTLS: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Traceparent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AromaOfferBindingRequest'
+      responses:
+        '200':
+          description: Existing or newly registered immutable binding.
+          headers:
+            X-Correlation-ID:
+              $ref: '#/components/headers/CorrelationResponse'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AromaOfferBindingResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/ServiceAuthenticationRequired'
+        '403':
+          $ref: '#/components/responses/ServiceDelegationInvalid'
+        '409':
+          description: Immutable source or snapshot binding conflict.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorAromaBindingConflict'
+                  - $ref: '#/components/schemas/ErrorAromaBindingSourceNotFound'
+                  - $ref: '#/components/schemas/ErrorAromaBindingSnapshotIncomplete'
         '503':
           $ref: '#/components/responses/AromaProviderUnavailable'
   /api/internal-v1/aroma/cart-snapshots:read:
@@ -284,6 +338,12 @@ paths:
           $ref: '#/components/responses/ServiceAuthenticationRequired'
         '403':
           $ref: '#/components/responses/ServiceDelegationInvalid'
+        '404':
+          description: The requested cart line was absent in the fresh provider snapshot.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorAromaCartItemNotFound'
         '409':
           description: Operation reference or mutation safety conflict.
           content:
@@ -340,6 +400,12 @@ paths:
           $ref: '#/components/responses/ServiceAuthenticationRequired'
         '403':
           $ref: '#/components/responses/ServiceDelegationInvalid'
+        '404':
+          description: The requested cart line was absent in the fresh provider snapshot.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorAromaCartItemNotFound'
         '409':
           description: Operation reference or mutation safety conflict.
           content:
@@ -644,6 +710,56 @@ components:
           $ref: '#/components/schemas/SnapshotRef'
         supplierRef:
           $ref: '#/components/schemas/SupplierRef'
+    AromaOfferBindingRequest:
+      type: object
+      additionalProperties: false
+      required: [offerRef, supplierRef, snapshotRef, sourceIdentityScheme, sourceOfferKeyHash]
+      properties:
+        offerRef:
+          $ref: '#/components/schemas/OfferRef'
+        supplierRef:
+          $ref: '#/components/schemas/SupplierRef'
+        snapshotRef:
+          $ref: '#/components/schemas/SnapshotRef'
+        sourceIdentityScheme:
+          type: string
+          const: hmac-sha256-v1
+        sourceOfferKeyHash:
+          $ref: '#/components/schemas/Hash'
+    AromaOfferBindingResponse:
+      type: object
+      additionalProperties: false
+      required: [offerRef, supplierRef, sourceIdentityScheme, sourceOfferKeyHash, firstSnapshotRef, state]
+      properties:
+        offerRef:
+          $ref: '#/components/schemas/OfferRef'
+        supplierRef:
+          $ref: '#/components/schemas/SupplierRef'
+        sourceIdentityScheme:
+          type: string
+          const: hmac-sha256-v1
+        sourceOfferKeyHash:
+          $ref: '#/components/schemas/Hash'
+        firstSnapshotRef:
+          $ref: '#/components/schemas/SnapshotRef'
+        state:
+          const: Bound
+    AromaSupplierPromotion:
+      type: object
+      additionalProperties: false
+      required: [discountBasisPoints, minimumWeightRaw, providerCreatedAt, providerUpdatedAt]
+      properties:
+        discountBasisPoints:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        minimumWeightRaw:
+          type: string
+          pattern: '^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$'
+        providerCreatedAt:
+          $ref: '#/components/schemas/Timestamp'
+        providerUpdatedAt:
+          $ref: '#/components/schemas/Timestamp'
     AromaCatalogItem:
       type: object
       additionalProperties: false
@@ -670,9 +786,27 @@ components:
           type: string
           enum: [Available, Unavailable, Stopped]
         imageUrl:
-          type: string
+          type: [string, 'null']
           format: uri
           maxLength: 2048
+        supplierPromotions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AromaSupplierPromotion'
+        grindOptions:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [sourceGrindKeyHash, displayName]
+            properties:
+              sourceGrindKeyHash:
+                $ref: '#/components/schemas/Hash'
+              displayName:
+                type: string
+                minLength: 1
+                maxLength: 200
         sourceIdentityScheme:
           type: string
           const: hmac-sha256-v1
@@ -785,6 +919,8 @@ components:
           $ref: '#/components/schemas/OfferRef'
         quantity:
           $ref: '#/components/schemas/QuantityDecimal'
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
     AromaCartSnapshot:
       type: object
       additionalProperties: false
@@ -819,6 +955,8 @@ components:
           const: aroma-primary
         quantity:
           $ref: '#/components/schemas/ProviderQuantity'
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
     AromaRemoveLineRequest:
       type: object
       additionalProperties: false
@@ -829,6 +967,8 @@ components:
         cartScopeRef:
           type: string
           const: aroma-primary
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
     AromaMutationResponse:
       type: object
       additionalProperties: false
@@ -841,6 +981,8 @@ components:
           const: aroma-primary
         offerRef:
           $ref: '#/components/schemas/OfferRef'
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
         state:
           const: Acknowledged
     ErrorValidationFailed:
@@ -927,6 +1069,13 @@ components:
           properties:
             status: { const: 503 }
             code: { const: AROMA_PROVIDER_UNAVAILABLE }
+    ErrorAromaCartItemNotFound:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 404 }
+            code: { const: AROMA_CART_ITEM_NOT_FOUND }
     ErrorAromaOperationRefConflict:
       allOf:
         - $ref: '#/components/schemas/ProblemDetails'
@@ -948,6 +1097,27 @@ components:
           properties:
             status: { const: 409 }
             code: { const: AROMA_OPERATION_UNKNOWN_OUTCOME }
+    ErrorAromaBindingConflict:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: AROMA_BINDING_CONFLICT }
+    ErrorAromaBindingSourceNotFound:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: AROMA_BINDING_SOURCE_NOT_FOUND }
+    ErrorAromaBindingSnapshotIncomplete:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: AROMA_BINDING_SNAPSHOT_INCOMPLETE }
     ErrorInternalError:
       allOf:
         - $ref: '#/components/schemas/ProblemDetails'

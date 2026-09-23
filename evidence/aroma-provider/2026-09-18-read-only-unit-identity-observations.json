@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "kind": "transformed-read-only-observations",
+  "capturedDate": "2026-09-18",
+  "question": "Do safe provider reads expose explicit unit, price-basis, packing, grind identity, or quantity capability metadata?",
+  "scope": {
+    "origin": "https://aromateacoffee.ru",
+    "redirectsAllowed": false,
+    "mutationsPerformed": false,
+    "rawBodiesPersisted": false,
+    "rawIdentifiersPersisted": false,
+    "credentialsCookiesOrPiiPersisted": false
+  },
+  "plannedBudget": {
+    "loginAttempts": 1,
+    "safeReads": 6
+  },
+  "actualAggregate": {
+    "loginAttempts": 3,
+    "safeReads": 6,
+    "note": "Two initial catalog page-1 reads completed at the provider transport and then failed in the local observation wrapper because it did not return the async-generator cookie result. The wrapper was corrected before the final bounded run. No mutation was attempted."
+  },
+  "finalSuccessfulRun": {
+    "loginAttempts": 1,
+    "safeReads": 4,
+    "endpoints": [
+      "/api/v1/catalog/wholesale/products?page=1&per_page=10",
+      "/api/v1/catalog/wholesale/products?page=47&per_page=10",
+      "/api/v1/cart/",
+      "/api/v1/user"
+    ]
+  },
+  "catalog": {
+    "topLevelKeys": ["data", "links", "meta"],
+    "productKeys": [
+      "category",
+      "description",
+      "disable_personal_discount",
+      "disable_volume_discount",
+      "discount",
+      "front_name",
+      "full_description",
+      "id",
+      "meta_description",
+      "meta_title",
+      "name",
+      "offers",
+      "params",
+      "photos",
+      "preview",
+      "product_on_stop",
+      "root",
+      "show_on_wholesale",
+      "slug",
+      "sold_by_piece",
+      "tags",
+      "video_link"
+    ],
+    "offerKeys": ["id", "name", "params", "price", "vendor_code"],
+    "observedParamSlugs": ["is_grinded", "weight"],
+    "observedFlags": {
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false
+    },
+    "explicitUnitField": false,
+    "explicitPriceBasisField": false,
+    "explicitQuantityCapabilityMetadata": false,
+    "packingField": false
+  },
+  "cart": {
+    "empty": false,
+    "lineCountCategory": "one-or-more",
+    "observedLineFacts": {
+      "quantity": 1,
+      "packing": null,
+      "grind_id": null,
+      "show_on_wholesale": true,
+      "product_on_stop": false,
+      "sold_by_piece": false
+    },
+    "observedPriceFacts": {
+      "linePrice": 446,
+      "nestedOfferPrice": 579.8,
+      "interpretation": "The differing fields do not establish catalog fallback, price basis, or unit semantics."
+    },
+    "identityCorrelationPersisted": false
+  },
+  "user": {
+    "wholesale": true,
+    "otherValuesPersisted": false
+  },
+  "conclusion": {
+    "unitResolved": false,
+    "priceBasisResolved": false,
+    "quantityBoundsStepFractionsResolved": false,
+    "packingOrGrindMappingResolved": false,
+    "cartLineIdentityResolved": false,
+    "safeReadEndpointsOperational": true,
+    "catalogNormalizationRule": "Keep captured sold_by_piece=false offers fail-closed; do not infer unit from weight or price.",
+    "mutationRule": "No new mutation semantics are admitted by this read-only evidence."
+  }
+}

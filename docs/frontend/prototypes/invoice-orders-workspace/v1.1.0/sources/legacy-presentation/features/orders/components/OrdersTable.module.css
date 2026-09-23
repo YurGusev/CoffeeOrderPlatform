@@ -1,0 +1,536 @@
+.tableScroller {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--cos-action-primary) var(--cos-surface-canvas-raised);
+}
+
+.table {
+  min-width: 1537px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.table thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  height: 40px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--cos-border-divider);
+  color: var(--cos-text-secondary);
+  background: var(--cos-surface-table-header);
+  font-size: var(--cos-type-caption-size);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Keep the utility expander, selection and order identity columns ordered in
+ * the horizontal viewport. The expander is part of the table's interaction
+ * contract, so it stays pinned as the leftmost utility column; otherwise a
+ * sticky checkbox at left: 0 would paint over it while the table scrolls.
+ * The data attribute keeps the order offset correct when bulk selection is
+ * unavailable for the current role. */
+.table th[data-column-id="expand"],
+.table td[data-column-id="expand"],
+.table th[data-column-id="select"],
+.table td[data-column-id="select"],
+.table th[data-column-id="id"],
+.table td[data-column-id="id"] {
+  position: sticky;
+  background: var(--cos-surface-row);
+}
+
+.table th[data-column-id="expand"],
+.table td[data-column-id="expand"] {
+  left: 0;
+  z-index: 3;
+}
+
+/* Table-cell padding makes the rendered utility slots 51px (expander) and
+ * 46px (selection) even though their <col> width contracts are 46px/42px.
+ * Sticky offsets follow the rendered slots so the three pinned columns never
+ * overlap after horizontal scrolling. */
+.table th[data-column-id="select"],
+.table td[data-column-id="select"] {
+  left: 51px;
+  z-index: 3;
+}
+
+.table th[data-column-id="id"],
+.table td[data-column-id="id"] {
+  left: 97px;
+  z-index: 3;
+  box-shadow: 4px 0 8px -8px var(--cos-text-primary);
+}
+
+.table thead th[data-column-id="expand"],
+.table thead th[data-column-id="select"],
+.table thead th[data-column-id="id"] {
+  z-index: 5;
+  background: var(--cos-surface-table-header);
+}
+
+.table[data-selection-enabled="false"] th[data-column-id="id"],
+.table[data-selection-enabled="false"] td[data-column-id="id"] {
+  left: 51px;
+}
+
+.table tbody td {
+  min-height: 46px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cos-border-divider);
+  vertical-align: middle;
+}
+
+.orderRow {
+  background: var(--cos-surface-row);
+  transition:
+    background var(--cos-motion-fast) ease,
+    box-shadow var(--cos-motion-fast) ease;
+}
+
+.orderRowGrouped td:first-child {
+  box-shadow: inset 3px 0 0 var(--cos-action-primary);
+}
+
+.orderRowInteractive {
+  cursor: pointer;
+}
+
+.orderRowInteractive:hover,
+.orderRowInteractive:focus-visible {
+  outline: none;
+  background: var(--cos-surface-row-hover);
+  box-shadow: inset 3px 0 0 var(--cos-action-primary-strong);
+}
+
+.orderRowExpanded {
+  background: var(--cos-selection-hover);
+  box-shadow: inset 3px 0 0 var(--cos-action-primary-strong);
+}
+
+.orderRowSelected {
+  background: var(--cos-selection-hover);
+  box-shadow: inset 3px 0 0 var(--cos-action-primary-strong);
+}
+
+.orderRowInteractive:hover td[data-column-id="expand"],
+.orderRowInteractive:hover td[data-column-id="select"],
+.orderRowInteractive:hover td[data-column-id="id"],
+.orderRowInteractive:focus-visible td[data-column-id="expand"],
+.orderRowInteractive:focus-visible td[data-column-id="select"],
+.orderRowInteractive:focus-visible td[data-column-id="id"],
+.orderRowSelected td[data-column-id="expand"],
+.orderRowSelected td[data-column-id="select"],
+.orderRowSelected td[data-column-id="id"],
+.orderRowExpanded td[data-column-id="expand"],
+.orderRowExpanded td[data-column-id="select"],
+.orderRowExpanded td[data-column-id="id"] {
+  background: var(--cos-selection-hover);
+}
+
+.orderIdentifier {
+  color: var(--cos-text-primary);
+  font-family: var(--cos-font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.orderLink {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  color: var(--cos-text-primary);
+  background: transparent;
+  font: inherit;
+  font-family: var(--cos-font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.orderLink:hover,
+.orderLink:focus-visible {
+  color: var(--cos-action-hover);
+  text-decoration-color: currentColor;
+}
+
+.orderLink:disabled {
+  color: var(--cos-text-disabled);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.invoiceNumber {
+  color: var(--cos-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.availabilityBadge {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: var(--cos-radius-sm);
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.availabilityBadgeOk {
+  border-color: var(--cos-status-success);
+  color: var(--cos-text-primary);
+  background: var(--cos-status-success-soft);
+}
+
+.availabilityBadgeStop {
+  border-color: var(--cos-status-error);
+  color: var(--cos-text-primary);
+  background: var(--cos-status-error-soft);
+}
+
+.customerName {
+  color: var(--cos-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.secondaryText {
+  display: block;
+  color: var(--cos-text-secondary) !important;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.cellTruncate {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.numeric {
+  font-family: var(--cos-font-body);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--cos-type-body-line);
+  white-space: nowrap;
+}
+
+.total {
+  color: var(--cos-text-primary);
+  font-weight: 600;
+}
+
+.paymentState {
+  color: var(--cos-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sortButton {
+  display: flex;
+  width: 100%;
+  min-height: 24px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tableActionGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.tableIconButton {
+  display: inline-grid;
+  min-width: 30px;
+  min-height: 30px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--cos-radius-sm);
+  padding: 0 6px;
+  color: var(--cos-action-hover);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--cos-motion-fast) ease,
+    color var(--cos-motion-fast) ease,
+    background var(--cos-motion-fast) ease;
+}
+
+.tableIconButton:hover:not(:disabled),
+.tableIconButton:focus-visible {
+  border-color: var(--cos-border-active);
+  color: var(--cos-text-on-action);
+  background: var(--cos-action-hover);
+}
+
+.tableIconButton:disabled {
+  color: var(--cos-text-disabled);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.inlineCell {
+  padding: 0 !important;
+  background: var(--cos-surface-panel);
+}
+
+.invoiceGroupRow td {
+  padding: 0 !important;
+  border-bottom-color: var(--cos-border-divider) !important;
+  background: var(--cos-surface-group);
+}
+
+.invoiceGroupRowExpanded td {
+  background: var(--cos-surface-group-expanded);
+}
+
+.invoiceGroupButton {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 8px 14px;
+  border: 0;
+  color: var(--cos-text-primary);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--cos-motion-fast) ease,
+    box-shadow var(--cos-motion-fast) ease;
+}
+
+.invoiceGroupSummary {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.invoiceGroupButton:hover {
+  background: var(--cos-selection-hover);
+}
+
+.invoiceGroupButton:focus-visible {
+  box-shadow:
+    inset 3px 0 0 var(--cos-action-primary-strong),
+    var(--cos-focus-ring);
+}
+
+.invoiceGroupChevron {
+  flex: 0 0 auto;
+  transition: transform var(--cos-motion-normal) ease;
+}
+
+.invoiceGroupChevron[data-expanded="true"] {
+  transform: rotate(90deg);
+}
+
+.orderChevron {
+  transition: transform var(--cos-motion-normal) ease;
+}
+
+.orderChevron[data-expanded="true"] {
+  transform: rotate(90deg);
+}
+
+.invoiceGroupTitle {
+  font-family: var(--cos-font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: var(--cos-type-body-line);
+  letter-spacing: -0.001em;
+}
+
+.invoiceGroupTotal {
+  flex: 0 0 auto;
+  color: var(--cos-text-primary);
+  font-family: var(--cos-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: var(--cos-type-body-line);
+}
+
+.inlinePanel {
+  margin: 0 12px 10px;
+  padding: 12px;
+  border: 1px solid var(--cos-border-default);
+  border-radius: 10px;
+  background: var(--cos-surface-elevated);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--cos-border-active) 18%, transparent);
+}
+
+.inlineHeader {
+  padding-bottom: 10px;
+}
+
+.inlineHeader > :global([data-orientation="horizontal"]) {
+  justify-content: space-between;
+}
+
+.groupDisclosureRow td {
+  padding: 0 12px 10px !important;
+  border-bottom: 1px solid var(--cos-border-divider) !important;
+  background: var(--cos-surface-group-expanded);
+  text-align: center;
+}
+
+.groupDisclosureButton {
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-sm);
+  color: var(--cos-text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.groupDisclosureButton:hover,
+.groupDisclosureButton:focus-visible {
+  border-color: var(--cos-border-active);
+  color: var(--cos-text-primary);
+  background: var(--cos-selection-hover);
+}
+
+.selectionCheckbox {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--cos-action-primary-strong);
+  cursor: pointer;
+}
+
+.selectionCheckbox:focus-visible {
+  outline: none;
+  box-shadow: var(--cos-focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tableIconButton {
+    transition-duration: 0.01ms;
+  }
+}
+
+@media (forced-colors: active) {
+  .tableIconButton,
+  .selectionCheckbox,
+  .orderLink,
+  .availabilityBadge {
+    border-color: ButtonText;
+    color: ButtonText;
+    background: Canvas;
+  }
+}
+
+.itemsScroller {
+  overflow-x: auto;
+}
+
+.itemsTable {
+  min-width: 880px;
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.inlineItemsTable {
+  min-width: 520px;
+}
+
+.cardItemsTable {
+  min-width: 0;
+}
+
+.itemsTable th {
+  padding: 8px 10px !important;
+  border-bottom-color: var(--cos-border-divider) !important;
+  color: var(--cos-text-secondary) !important;
+  background: transparent !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  text-align: left;
+}
+
+.itemsTable th[class*="textRight"] {
+  text-align: right;
+}
+
+.itemsTable td {
+  padding: 8px 10px !important;
+}
+
+.cardItemsTable th {
+  padding: 9px 8px !important;
+  font-size: 10px !important;
+}
+
+.cardItemsTable td {
+  padding: 9px 8px !important;
+}
+
+.cardItemsTable td:first-child {
+  min-width: 180px;
+}
+
+.priceCell {
+  display: grid;
+  gap: 3px;
+}
+
+.purchasePrice {
+  color: var(--cos-text-secondary);
+  font-size: 11px;
+}
+
+.markedPrice {
+  color: var(--cos-text-primary);
+  font-weight: 600;
+}
+
+.markedTotal {
+  color: var(--cos-text-on-action);
+  font-weight: 700;
+}
+
+@media (max-width: 76em) {
+  .inlinePanel {
+    padding-inline: 12px;
+  }
+}

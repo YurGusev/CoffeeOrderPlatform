@@ -9,7 +9,7 @@ export interface BadgeProps {
 
 const toneClasses: Record<NonNullable<BadgeProps["tone"]>, string> = {
   danger: "bg-danger-bg text-danger-text",
-  info: "bg-primary/10 text-primary",
+  info: "bg-primary/10 text-[var(--cos-action-primary-soft-text)]",
   neutral: "bg-surface-muted text-muted",
   success: "bg-success-bg text-success-text",
   warning: "bg-warning-bg text-warning-text",

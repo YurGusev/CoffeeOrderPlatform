@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -125,6 +126,51 @@ void test("RED BOUND-IMPORT: Catalog cannot import Orders infrastructure DB", ()
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /BOUND-IMPORT/);
   assert.match(output(result), /catalog-service.*orders-service/s);
+});
+
+for (const targetRuntime of ["catalog-activation-worker","api-internal","orders-service","pricing-service","customer-service"]) {
+  void test(`RED BOUND-IMPORT: catalog-supplier-sync -> ${targetRuntime}`, async () => {
+    const root=await mkdtemp(join(tmpdir(),"coffee-catalog-boundary-"));
+    const source="apps/catalog-supplier-sync/src/boundary.ts";
+    const target=`apps/${targetRuntime}/src/internal.ts`;
+    try {
+      await mkdir(join(root,"apps/catalog-supplier-sync/src"),{recursive:true});
+      await mkdir(join(root,`apps/${targetRuntime}/src`),{recursive:true});
+      await writeFile(join(root,target),'export const internal = "private";\n');
+      await writeFile(join(root,source),`import {internal} from "../../${targetRuntime}/src/internal.js";\nvoid internal;\n`);
+      const result=run("check-architecture.mjs",root);
+      assert.notEqual(result.status,0,output(result));
+      assert.ok(output(result).includes("BOUND-IMPORT"),output(result));
+      assert.ok(output(result).includes(`${source} -> ${target}`),output(result));
+      assert.doesNotMatch(output(result),/unavailable|did not return an AST graph/u);
+    } finally { await rm(root,{recursive:true,force:true}); }
+  });
+}
+
+void test("GREEN: Catalog importer uses allowed contract and platform packages", async () => {
+  const root=await mkdtemp(join(tmpdir(),"coffee-catalog-packages-"));
+  try {
+    await mkdir(join(root,"apps/catalog-supplier-sync/src/infrastructure"),{recursive:true});
+    await symlink(join(REPO_ROOT,"apps/catalog-supplier-sync/node_modules"),join(root,"apps/catalog-supplier-sync/node_modules"),"dir");
+    await writeFile(join(root,"apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts"),[
+      'import {catalogBatchHash} from "@coffee-platform/contracts-aroma-v1";',
+      'import {withTransaction} from "@coffee-platform/database";',
+      'import {defineCopy} from "@coffee-platform/database/owner";',
+      'import type {HttpClient} from "@coffee-platform/platform-http";',
+      'void [catalogBatchHash,withTransaction,defineCopy];',
+      'export type Client = HttpClient;',
+    ].join("\n"));
+    const result=run("check-architecture.mjs",root);
+    assert.equal(result.status,0,output(result));
+    assert.match(output(result),/passed with Dependency Cruiser/u);
+  } finally { await rm(root,{recursive:true,force:true}); }
+});
+
+void test("GREEN: Catalog importer implementation stays in owner infrastructure", async () => {
+  const ownerPath = join(REPO_ROOT, "apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts");
+  const legacyPath = join(REPO_ROOT, "apps/catalog-supplier-sync/src/catalog-import-store.ts");
+  assert.equal(existsSync(legacyPath), false, "SQL owner imports must not remain in the application root");
+  assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
 });
 
 void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {
@@ -530,4 +576,62 @@ void test("RED BOUND-KAFKA-CLIENT: handlers cannot bypass bounded delivery", asy
       assert.match(output(result), /BOUND-KAFKA-CLIENT/);
     }
   } finally {await rm(root, {recursive: true, force: true});}
+});
+
+void test("RED ARCH-POSTGRES-URL: app source cannot contain a literal PostgreSQL URL", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-postgres-url"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-POSTGRES-URL/);
+});
+
+void test("RED ARCH-TYPED-PROVIDER-HTTP: AROMA Gateway fetch stays in the typed provider client", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-provider-fetch"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+});
+
+void test("RED ARCH-TYPED-PROVIDER-HTTP: AROMA Gateway cannot add a generic proxy", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-provider-proxy"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+});
+
+void test("RED ARCH-TYPED-PROVIDER-HTTP: alternate HTTP clients cannot bypass the typed provider client", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-provider-http-"));
+  const directory = join(root, "apps/aroma-gateway/src");
+  try {
+    await mkdir(directory, {recursive: true});
+    for (const moduleName of ["node-fetch", "cross-fetch", "got", "ky", "superagent", "node:http2"]) {
+      await writeFile(join(directory, "bad.ts"), `import * as client from ${JSON.stringify(moduleName)};\nvoid client;\n`);
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+    }
+    await rm(join(directory, "bad.ts"));
+    const typedClient = join(directory, "infrastructure/provider/http-client.ts");
+    await mkdir(join(directory, "infrastructure/provider"), {recursive: true});
+    await writeFile(typedClient, 'import * as client from "node-fetch";\nvoid client;\n');
+    let result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+    await rm(typedClient);
+    for (const bucket of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+      await writeFile(join(root, "apps/aroma-gateway/package.json"), JSON.stringify({[bucket]: {"cross-fetch": "1.0.0"}}));
+      result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, `${bucket}: ${output(result)}`);
+      assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+    }
+  } finally {await rm(root, {recursive: true, force: true});}
+});
+
+void test("RED ARCH-GENERIC-RETRY: generic retry dependency is forbidden", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-generic-retry-dependency"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-GENERIC-RETRY/);
+});
+
+void test("RED ARCH-GENERIC-RETRY: generic retry wrapper is forbidden", () => {
+  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-generic-retry-wrapper"));
+  assert.notEqual(result.status, 0, output(result));
+  assert.match(output(result), /ARCH-GENERIC-RETRY/);
 });

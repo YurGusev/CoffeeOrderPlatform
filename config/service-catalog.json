@@ -35,7 +35,7 @@
       "purpose": "Stateless mTLS/delegation root только для internal-v1",
       "contractPackages": ["packages/contracts/internal-v1"],
       "incomingHttp": ["ANY /api/internal-v1/**"], "incomingEvents": [], "schedules": [],
-      "outgoingHttp": ["customer-service:getCustomerOrderInput", "catalog-service:getCatalogPricingInput", "pricing-service:verifyPricingQuote", "aroma-gateway:exportAromaCatalog", "aroma-gateway:readAromaCartSnapshot", "aroma-gateway:setAromaCartLineQuantity", "aroma-gateway:removeAromaCartLine"],
+      "outgoingHttp": ["customer-service:getCustomerOrderInput", "catalog-service:getCatalogPricingInput", "pricing-service:verifyPricingQuote", "aroma-gateway:exportAromaCatalog", "aroma-gateway:registerAromaOfferBinding", "aroma-gateway:readAromaCartSnapshot", "aroma-gateway:setAromaCartLineQuantity", "aroma-gateway:removeAromaCartLine"],
       "outgoingEvents": [], "database": null,
       "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceVerificationKeys.orders-service", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
       "publicity": "private-trust-root", "transportMode": "mtls"
@@ -82,7 +82,7 @@
       "name": "catalog-activation-worker", "owner": "catalog", "sourceRoot": "apps/catalog-activation-worker",
       "purpose": "Атомарная активация Received generation и запись Catalog Outbox",
       "contractPackages": ["packages/contracts/catalog-v1"],
-      "incomingHttp": [], "incomingEvents": [], "schedules": ["durable Received DB queue"], "outgoingHttp": [],
+      "incomingHttp": [], "incomingEvents": [], "schedules": ["durable Received DB queue"], "outgoingHttp": ["api-internal:registerAromaOfferBinding"],
       "outgoingEvents": ["CatalogSnapshotActivated.v1", "CatalogMappingChanged.v2"],
       "database": {"name": "coffee_platform_catalog", "role": "coffee_catalog_activate_rw", "access": "readwrite-activation-outbox"},
       "secretRefs": ["postgres.catalogActivate", "kafka.catalog", "security.serviceTransportKeys.catalog-activation-worker", "telemetry.exporterToken"],
@@ -149,7 +149,7 @@
       "incomingHttp": ["POST /api/internal-v1/aroma/catalog-exports", "POST /api/internal-v1/aroma/cart-snapshots:read", "POST /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity", "POST /api/internal-v1/aroma/cart-lines/{offerRef}:remove"],
       "incomingEvents": [], "schedules": [], "outgoingHttp": ["provider:allowlisted AROMA HTTPS origin"], "outgoingEvents": [],
       "database": {"name": "coffee_platform_integration", "role": "coffee_aroma_gateway_rw", "access": "readwrite-session-operation-journal"},
-      "secretRefs": ["postgres.aromaGateway", "aroma.email", "aroma.password", "aroma.sessionEncryptionKey", "aroma.catalogIdentityKeyV1", "security.serviceTransportKeys.aroma-gateway", "telemetry.exporterToken"],
+      "secretRefs": ["postgres.aromaGateway", "aroma.email", "aroma.password", "aroma.sessionEncryptionKey", "aroma.catalogIdentityKeyV1", "security.delegationVerificationKeys.api-internal", "security.serviceTransportKeys.aroma-gateway", "telemetry.exporterToken"],
       "publicity": "private-provider-gateway", "transportMode": "mtls"
     },
     {

@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNTIME_FIELDS = new Set(['name', 'owner', 'sourceRoot', 'purpose', 'contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'database', 'secretRefs', 'publicity', 'transportMode']);
-const CATALOG_DIGEST = 'ae10fe6fa11ae369afce27b01edef23e54b7134c21ebb27083b173ed1b849965';
-const INTERACTIONS_DIGEST = 'ad869ee1028882c0a0eebf3376c330960e2156d250d60607be95917a83e470e1';
+const CATALOG_DIGEST = 'd221133e7526481ad0e4adadfac065e6b47c1230e7c9c86732688755270d2dc4';
+const INTERACTIONS_DIGEST = '7f38dcd440506744d2173160aea14281a07814f6909a0ae084064402c80b320d';
 
 function fail(rule, message) {
   const error = new Error(`${rule} ${message}`);

@@ -285,6 +285,7 @@ services:
     networks:
       - coffee_postgres_data
       - coffee_kafka_event
+      - coffee_internal_api
     depends_on:
       kafka:
         condition: service_healthy

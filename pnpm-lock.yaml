@@ -62,6 +62,9 @@ importers:
 
   apps/api-internal:
     dependencies:
+      '@coffee-platform/contracts-aroma-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/aroma-v1
       '@coffee-platform/contracts-customer-v1':
         specifier: workspace:*
         version: link:../../packages/contracts/customer-v1
@@ -98,9 +101,27 @@ importers:
 
   apps/aroma-gateway:
     dependencies:
+      '@coffee-platform/contracts-aroma-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/aroma-v1
+      '@coffee-platform/database':
+        specifier: workspace:*
+        version: link:../../packages/platform-database
+      '@coffee-platform/platform-time':
+        specifier: workspace:*
+        version: link:../../packages/platform-time
       '@coffee-platform/runtime':
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      '@coffee-platform/security':
+        specifier: workspace:*
+        version: link:../../packages/platform-security
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
+      undici:
+        specifier: 8.10.1
+        version: 8.10.1
 
   apps/aroma-observer:
     dependencies:
@@ -122,9 +143,30 @@ importers:
 
   apps/catalog-supplier-sync:
     dependencies:
+      '@coffee-platform/config':
+        specifier: workspace:*
+        version: link:../../packages/platform-config
+      '@coffee-platform/contracts-aroma-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/aroma-v1
+      '@coffee-platform/database':
+        specifier: workspace:*
+        version: link:../../packages/platform-database
+      '@coffee-platform/platform-http':
+        specifier: workspace:*
+        version: link:../../packages/platform-http
+      '@coffee-platform/platform-time':
+        specifier: workspace:*
+        version: link:../../packages/platform-time
       '@coffee-platform/runtime':
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      '@coffee-platform/security':
+        specifier: workspace:*
+        version: link:../../packages/platform-security
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
 
   apps/customer-service:
     dependencies:
@@ -222,6 +264,9 @@ importers:
       '@coffee-platform/generated-internal-v1':
         specifier: workspace:*
         version: link:../../generated/internal-v1
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
 
   packages/contracts/catalog-v1:
     dependencies:
@@ -2028,8 +2073,8 @@ packages:
     resolution: {integrity: sha512-YQ3WlbqjYMmNpdvDH64jAgLjxuAR9+649calDWhbshYaeQGO2bR4nI94ORJmwI3J9YhoKQnpyGOK+0zlWS5N5Q==}
     engines: {node: '>=22.19.0'}
 
-  use-sync-external-store@1.6.0:
-    resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
+  use-sync-external-store@1.7.0:
+    resolution: {integrity: sha512-6L+EeigHMQhdaIPNIFUKwfWJSwWFQ8gJbJ2DLOs5sDIegTwR9fRxvnM3uciHKjIZhFz+KAv2emhWMRvDmMcY8A==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -3302,7 +3347,7 @@ snapshots:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
       react-stately: 3.50.0(react@19.2.8)
-      use-sync-external-store: 1.6.0(react@19.2.8)
+      use-sync-external-store: 1.7.0(react@19.2.8)
 
   react-dom@19.2.8(react@19.2.8):
     dependencies:
@@ -3317,7 +3362,7 @@ snapshots:
       '@react-types/shared': 3.36.1(patch_hash=6d2be2fb416b65bc3a4aafe22d74cefc9b9b51cbb486031b96d70cd089a5bcfd)(react@19.2.8)
       '@swc/helpers': 0.5.23
       react: 19.2.8
-      use-sync-external-store: 1.6.0(react@19.2.8)
+      use-sync-external-store: 1.7.0(react@19.2.8)
 
   react@19.2.8: {}
 
@@ -3492,7 +3537,7 @@ snapshots:
 
   undici@8.10.1: {}
 
-  use-sync-external-store@1.6.0(react@19.2.8):
+  use-sync-external-store@1.7.0(react@19.2.8):
     dependencies:
       react: 19.2.8
 

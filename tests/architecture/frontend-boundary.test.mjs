@@ -39,7 +39,10 @@ for (const [rootFixture, helperFixture, rootPath, helperPath, rule] of transitiv
   assert.throws(() => checkTransitiveSourceGraph(entries, { root: "/repo" }), new RegExp(rule));
 }
 
-console.log(`frontend boundary fixtures: passed (${cases.length + transitiveCases.length})`);
+const appImport = [{ path: "/repo/apps/orders-service/src/root.ts", source: 'import "@coffee-platform/unknown-business";' }];
+assert.throws(() => checkTransitiveSourceGraph(appImport, { root: "/repo" }), /BOUND-IMPORT/);
+
+console.log(`frontend boundary fixtures: passed (${cases.length + transitiveCases.length + 1})`);
 
 const fullCheckRoot = await mkdtemp(resolve(tmpdir(), "coffee-frontend-boundary-"));
 try {

@@ -4,14 +4,18 @@
 
 Первый запуск использует новую React SPA поверх `client-v1`; legacy
 CoffeeOrderSystem остаётся только источником UX-наблюдений, не API/state слоя.
-Foundation и визуальное решение задают
-[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) и
-[редактируемые UX-макеты](../frontend/ux/README.md). SVG не являются executable
-frontend или browser/accessibility evidence.
+Техническую foundation задаёт [ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md).
+Визуальный ориентир всей SPA — [ADR-0029](../adr/ADR-0029-selected-frontend-prototype.md)
+и versioned [прототип v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md).
+Светлые [SVG #136](../frontend/ux/README.md) ранее были приняты, но теперь
+замещены как визуальный ориентир версией `v1.1.0`. Прототип — fixture/demo:
+его invoice registry и payment drawer
+не являются production route/API или browser/accessibility evidence.
 
 - #137 владеет `packages/platform-ui` / `@coffee-platform/ui`, browser shell,
   разделением browser/Node graphs, React Aria behavior, Tailwind v4 styling,
-  self-hosted IBM Plex Sans WOFF2 и package-owned inline SVG icons.
+  self-hosted Inter/Manrope font assets с source/hash/licence evidence и
+  package-owned inline SVG icons.
 - #9 владеет Router, одним `QueryClient`, project-owned `client-v1` transport с
   runtime response validation, forms/routes/recovery UX и static serving.
 - #12 владеет одним `EventSource` на tab и invalidation/refetch lifecycle.
@@ -99,14 +103,16 @@ SDK/client запрещены. Формы используют local React state
 
 React Aria владеет semantic/keyboard/focus behavior; Tailwind v4 и tokens —
 styling. Иконки `search`, `add`, `chevron`, `close`, `warning`, `refresh`
-принадлежат package и встраиваются inline SVG. Typography — IBM Plex Sans с
-Cyrillic, будущие self-hosted WOFF2 через `@font-face`/`font-display: swap`,
-OFL/source revision/SHA-256 evidence; remote font CDN запрещён;
+принадлежат package и встраиваются inline SVG. Typography — self-hosted
+Inter Variable (body) и Manrope Variable (headings) из выбранного `v1.1.0`,
+с source revision/SHA-256/licence evidence; remote font CDN запрещён.
 
-Visual tokens, component states, keyboard/focus/reduced-motion rules и размеры
-controls нормативно перечислены в [UX-контракте](../frontend/ux/README.md).
-Status не передаётся только цветом; motion отключается через
-`prefers-reduced-motion`; DOM/focus order совпадает с visual order.
+Visual tokens берутся из `--cos-*` выбранного прототипа; behavior primitives,
+keyboard/focus/reduced-motion rules и owner guards остаются обязательными.
+Исторические цвета и IBM Plex Sans в [UX-документе #136](../frontend/ux/README.md)
+не являются вторым visual contract. Status не передаётся только цветом;
+motion отключается через `prefers-reduced-motion`; DOM/focus order совпадает
+с visual order.
 
 ## Проверки реализации
 

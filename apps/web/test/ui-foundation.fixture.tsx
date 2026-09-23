@@ -19,6 +19,7 @@ export function UiFoundationFixture(): ReactElement {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogDirty, setDialogDirty] = useState(false);
   const [dialogPending, setDialogPending] = useState(false);
+  const [outsideCloseRequests, setOutsideCloseRequests] = useState(0);
   const [fieldInvalid, setFieldInvalid] = useState(false);
   const [saved, setSaved] = useState(false);
   const dialogInputRef = useRef<HTMLInputElement>(null);
@@ -43,6 +44,7 @@ export function UiFoundationFixture(): ReactElement {
             <Button ref={dialogTriggerRef} onPress={() => setDialogOpen(true)} variant="secondary">
               Открыть диалог
             </Button>
+            <output data-testid="outside-close-requests">{outsideCloseRequests}</output>
             <Link href="#states">К состояниям</Link>
           </div>
         </header>
@@ -91,7 +93,7 @@ export function UiFoundationFixture(): ReactElement {
         </section>
 
         <footer className="text-[12px] leading-4 text-muted">
-          <span>React Aria · Tailwind CSS v4 · IBM Plex Sans · test harness</span>
+          <span>React Aria · Tailwind CSS v4 · Inter / Manrope · test harness</span>
         </footer>
       </div>
 
@@ -108,7 +110,10 @@ export function UiFoundationFixture(): ReactElement {
             setDialogPending(false);
           }
         }}
-        onRequestClose={(reason) => reason === "action" || (!dialogDirty && !dialogPending)}
+        onRequestClose={(reason) => {
+          if (reason === "outside") setOutsideCloseRequests((count) => count + 1);
+          return reason === "action" || (!dialogDirty && !dialogPending);
+        }}
         returnFocusRef={dialogTriggerRef}
         title="Foundation dialog test fixture"
       >

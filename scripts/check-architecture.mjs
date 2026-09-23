@@ -55,7 +55,7 @@ async function checkPackageDependencies(root) {
   ].filter((path) => path.endsWith('package.json') && existsSync(path));
   for (const path of files) {
     const json = JSON.parse(await readFile(path, 'utf8'));
-    const dependencies = { ...json.dependencies, ...json.devDependencies, ...json.peerDependencies };
+    const dependencies = { ...json.dependencies, ...json.devDependencies, ...json.peerDependencies, ...json.optionalDependencies };
     for (const [name, value] of Object.entries(dependencies)) {
       if (typeof value !== 'string') continue;
       if (value.includes('/apps/') || value.startsWith('file:../apps') || value.startsWith('link:../apps')) {
@@ -65,6 +65,10 @@ async function checkPackageDependencies(root) {
         fail('BOUND-IMPORT', `${path} declares forbidden shared business package ${name}`);
       }
       if (name.toLowerCase() === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${path} declares forbidden Axios dependency`);
+      if (path === join(root, 'apps/aroma-gateway/package.json') && ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(name)) {
+        fail('ARCH-TYPED-PROVIDER-HTTP', `${path} declares alternate provider HTTP client ${name}; use native fetch/Undici`);
+      }
+      if (GENERIC_RETRY_DEPENDENCY_RE.test(name)) fail('ARCH-GENERIC-RETRY', `${path} declares forbidden generic retry dependency ${name}`);
       if (name === 'zod' || name.startsWith('zod/')) fail('ARCH-FORBIDDEN-SCHEMA', `${path} declares forbidden Zod schema mirror`);
       if (/^(?:@radix-ui\/|@base-ui\/|lucide-react$|class-variance-authority$)/.test(name)) {
         fail('ARCH-FORBIDDEN-UI-DEPENDENCY', `${path} declares forbidden UI dependency ${name}`);
@@ -76,6 +80,14 @@ async function checkPackageDependencies(root) {
   }
 }
 
+const GENERIC_RETRY_DEPENDENCY_RE = /(?:^|[/_-])(?:async-retry|cockatiel|exponential-backoff|fetch-retry|p-retry|promise-retry|retry-as-promised)(?:$|[/_-])/i;
+const LITERAL_POSTGRES_URL_RE = /["'`](?:postgres(?:ql)?:\/\/)/i;
+const GENERIC_RETRY_WRAPPER_RE = /(?<![.\w])(?:doRetry|executeWithRetry|performRetry|retry|retryAsync|retryOperation|retryWithBackoff|runWithRetry|withRetry)\s*(?:<[^;\n]*?>\s*)?\(/;
+const AROMA_GATEWAY_SOURCE_RE = /(?:^|\/)apps\/aroma-gateway\//;
+const TYPED_PROVIDER_HTTP_CLIENT_RE = /(?:^|\/)apps\/aroma-gateway\/src\/infrastructure\/provider\/http-client\.(?:cts|mts|ts)$/;
+const ALTERNATE_PROVIDER_HTTP_MODULE_RE = /^(?:node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
+const GENERIC_PROVIDER_HTTP_MODULE_RE = /^(?:@fastify\/http-proxy|http-proxy|node:(?:http|http2|https|net|tls)|(?:http|http2|https|net|tls)|undici|node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
+const GENERIC_PROVIDER_PROXY_RE = /(?<![.\w])(?:forward(?:Request|Response)?|passThrough|proxy)\s*(?:<[^;\n]*?>\s*)?(?:=|\()/i;
 const MODULE_SPECIFIER_RE = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]|\brequire\s*\(\s*['"]([^'"]+)['"]/g;
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
 
@@ -216,6 +228,9 @@ function checkGraphContext(graph, roots, context) {
           fail('BOUND-UI-RUNTIME', `${label} -> ${edge.specifier || targetLabel}: UI graph reaches runtime/business source`);
         }
       }
+      if (context.kind === 'app' && edge.specifier.startsWith('@coffee-platform/') && !isAllowedPlatformPackage(edge.specifier)) {
+        fail('BOUND-IMPORT', `${label} -> ${edge.specifier}: only versioned contracts and platform technical packages are allowed`);
+      }
       if (context.kind === 'app' && targetLabel) {
         const targetRuntime = appRuntimeFor(targetLabel);
         if (targetRuntime && targetRuntime !== context.runtime) fail('BOUND-IMPORT', `${label} -> ${targetLabel}: runtime implementation boundary crossed transitively`);
@@ -296,10 +311,30 @@ function checkStaticSource(path, source) {
   const label = path.replaceAll('\\', '/');
   const isUiPackage = label.includes('/packages/platform-ui/');
   const isBrowserSource = label.includes('/apps/web/src/browser/');
+  if (/(?:^|\/)apps\//.test(label) && LITERAL_POSTGRES_URL_RE.test(source)) {
+    fail('ARCH-POSTGRES-URL', `${label}: literal PostgreSQL connection URL is forbidden in app source; use scoped platform configuration`);
+  }
+  if (AROMA_GATEWAY_SOURCE_RE.test(label) && !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label)) {
+    if (/(?<![.\w])(?:globalThis\s*\.\s*)?fetch\s*\(/.test(source)) {
+      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: provider HTTP fetch must stay inside the typed provider http-client`);
+    }
+    if (GENERIC_PROVIDER_PROXY_RE.test(source)) {
+      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: generic provider proxy/forwarder is forbidden outside the typed provider http-client`);
+    }
+  }
+  if (AROMA_GATEWAY_SOURCE_RE.test(label) && GENERIC_RETRY_WRAPPER_RE.test(source)) {
+    fail('ARCH-GENERIC-RETRY', `${label}: generic retry wrapper is forbidden; retry ownership must remain explicit and bounded`);
+  }
   if (/\b(?:new\s+Date\s*\(|Date\s*\.\s*(?:now|parse|UTC)\s*\()/m.test(source)) {
     fail('ARCH-TEMPORAL', `${label}: mutable Date API is forbidden; use Temporal`);
   }
   for (const moduleName of moduleSpecifiers(source)) {
+    if (AROMA_GATEWAY_SOURCE_RE.test(label) && ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(moduleName)) {
+      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: alternate provider HTTP client ${moduleName} is forbidden; use native fetch/Undici`);
+    }
+    if (AROMA_GATEWAY_SOURCE_RE.test(label) && !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label) && GENERIC_PROVIDER_HTTP_MODULE_RE.test(moduleName)) {
+      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: generic provider HTTP module ${moduleName} is forbidden outside the typed provider http-client`);
+    }
     if (isUiPackage && /^(?:@radix-ui\/|@base-ui\/|lucide-react$|class-variance-authority$)/.test(moduleName)) {
       fail('ARCH-FORBIDDEN-UI-DEPENDENCY', `${label}: forbidden UI dependency ${moduleName}`);
     }

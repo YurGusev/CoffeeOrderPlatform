@@ -22,6 +22,10 @@ export type RuntimeName = (typeof RUNTIME_NAMES)[number];
 export type EnvironmentName = "development" | "staging" | "production";
 export type TransportMode = "public-tls" | "mtls";
 
+export const AROMA_SUPPLIER_REF = "sup_00000000000000000000000001" as const;
+export const AROMA_SCOPE_REF = "aroma-primary" as const;
+export const AROMA_DEFAULT_PACKING = "Aroma" as const;
+
 export const KAFKA_TOPIC_NAMES: readonly KafkaTopicName[] = [
   "coffee.catalog.snapshot.v1",
   "coffee.catalog.mapping.v2",
@@ -156,6 +160,11 @@ export type PermissionConfig = Readonly<{
   childProcess: boolean;
   workers: boolean;
 }>;
+export type CatalogSchedulerConfig = Readonly<{
+  intervalMs: 3_600_000;
+  startupImport: true;
+  overlapPolicy: "skip";
+}>;
 export type RuntimeConfig = Readonly<{
   transportMode: TransportMode;
   listen: ListenConfig;
@@ -172,6 +181,14 @@ export type RuntimeConfig = Readonly<{
   kafka: KafkaServiceConfig;
   permissions: PermissionConfig;
   mutationCapability: boolean;
+  scheduler: CatalogSchedulerConfig | null;
+}>;
+export type AromaConfig = Readonly<{
+  supplierRef: typeof AROMA_SUPPLIER_REF;
+  scopeRef: typeof AROMA_SCOPE_REF;
+  origin: Readonly<{scheme: "https"; host: "aromateacoffee.ru"; port: 443}>;
+  redirectsAllowed: false;
+  defaultPacking: typeof AROMA_DEFAULT_PACKING;
 }>;
 export type PlatformConfig = Readonly<{
   $schema: "./platform.schema.json";
@@ -181,7 +198,7 @@ export type PlatformConfig = Readonly<{
   platform: Readonly<Record<string, unknown>>;
   postgres: PostgresConfig;
   kafka: KafkaConfig;
-  aroma: Readonly<Record<string, unknown>>;
+  aroma: AromaConfig;
   security: Readonly<Record<string, unknown>>;
   services: Readonly<Record<RuntimeName, RuntimeConfig>>;
 }>;
@@ -372,6 +389,30 @@ function opaqueObject(
   path: string,
 ): Readonly<Record<string, unknown>> {
   return Object.freeze({ ...record(value, path) });
+}
+
+function aromaConfig(value: unknown, path: string): AromaConfig {
+  const aroma = record(value, path);
+  exactKeys(aroma, ["supplierRef", "scopeRef", "origin", "redirectsAllowed", "defaultPacking"], path);
+  if (aroma["supplierRef"] !== AROMA_SUPPLIER_REF)
+    throw new PlatformConfigError(`${path}.supplierRef`, `ожидался supplierRef ${AROMA_SUPPLIER_REF}`);
+  if (aroma["scopeRef"] !== AROMA_SCOPE_REF)
+    throw new PlatformConfigError(`${path}.scopeRef`, `ожидался scopeRef ${AROMA_SCOPE_REF}`);
+  const origin = record(aroma["origin"], `${path}.origin`);
+  exactKeys(origin, ["scheme", "host", "port"], `${path}.origin`);
+  if (origin["scheme"] !== "https" || origin["host"] !== "aromateacoffee.ru" || origin["port"] !== 443)
+    throw new PlatformConfigError(`${path}.origin`, "origin не совпадает с каноническим AROMA origin");
+  if (aroma["redirectsAllowed"] !== false)
+    throw new PlatformConfigError(`${path}.redirectsAllowed`, "redirectsAllowed должен быть false");
+  if (aroma["defaultPacking"] !== AROMA_DEFAULT_PACKING)
+    throw new PlatformConfigError(`${path}.defaultPacking`, `ожидался defaultPacking ${AROMA_DEFAULT_PACKING}`);
+  return Object.freeze({
+    supplierRef: AROMA_SUPPLIER_REF,
+    scopeRef: AROMA_SCOPE_REF,
+    origin: Object.freeze({scheme: "https", host: "aromateacoffee.ru", port: 443}),
+    redirectsAllowed: false,
+    defaultPacking: AROMA_DEFAULT_PACKING,
+  });
 }
 
 function healthConfig(value: unknown, path: string): HealthConfig {
@@ -772,8 +813,21 @@ function runtimeConfig(
       "mutationCapability",
     ],
     path,
-    ["optionalSecretRefs"],
+    ["optionalSecretRefs", "scheduler"],
   );
+  const schedulerValue = source["scheduler"];
+  if (runtime === "catalog-supplier-sync" && schedulerValue === undefined)
+    throw new PlatformConfigError(`${path}.scheduler`, "scheduler обязателен для catalog-supplier-sync");
+  if (runtime !== "catalog-supplier-sync" && schedulerValue !== undefined)
+    throw new PlatformConfigError(`${path}.scheduler`, "scheduler разрешён только catalog-supplier-sync");
+  let scheduler: CatalogSchedulerConfig | null = null;
+  if (schedulerValue !== undefined) {
+    const configured = record(schedulerValue, `${path}.scheduler`);
+    exactKeys(configured, ["intervalMs", "startupImport", "overlapPolicy"], `${path}.scheduler`);
+    if (configured["intervalMs"] !== 3_600_000 || configured["startupImport"] !== true || configured["overlapPolicy"] !== "skip")
+      throw new PlatformConfigError(`${path}.scheduler`, "ожидался hourly single-flight skip scheduler");
+    scheduler = Object.freeze({intervalMs: 3_600_000, startupImport: true, overlapPolicy: "skip"});
+  }
   const listen = record(source["listen"], `${path}.listen`);
   exactKeys(listen, ["host", "port"], `${path}.listen`);
   const transportMode = source["transportMode"];
@@ -850,6 +904,7 @@ function runtimeConfig(
       workers: permissions["workers"],
     }),
     mutationCapability: source["mutationCapability"],
+    scheduler,
   });
 }
 
@@ -1121,7 +1176,7 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     platform: opaqueObject(source["platform"], "config.platform"),
     postgres,
     kafka,
-    aroma: opaqueObject(source["aroma"], "config.aroma"),
+    aroma: aromaConfig(source["aroma"], "config.aroma"),
     security: opaqueObject(source["security"], "config.security"),
     services: Object.freeze(typedServices),
   });

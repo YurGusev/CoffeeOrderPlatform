@@ -1,0 +1,64 @@
+{
+  "scope": "adapter-preflight-read-only",
+  "origin": "https://aromateacoffee.ru",
+  "requestBudget": 3,
+  "tlsVerification": true,
+  "redirects": "deny",
+  "cartMutations": false,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "utc": "2026-09-12T16:39:39.574831+00:00",
+      "status": 200,
+      "bytes": 678,
+      "contentType": "application/json",
+      "completeWithinLimit": true,
+      "sha256Raw": "ec94dd8facf1cca6ddaf359cd10607d53182cf9d6f5c926b2b69186101a41f19"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cart/",
+      "utc": "2026-09-12T16:39:40.043750+00:00",
+      "status": 200,
+      "bytes": 114,
+      "contentType": "application/json",
+      "completeWithinLimit": true,
+      "sha256Raw": "d843b153a190d6901f37f8484e363ca27e74a8f577cabbcc97fe6ec00a2ab0a9"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/wholesale/products?page=47&per_page=10",
+      "utc": "2026-09-12T16:39:40.305250+00:00",
+      "status": 200,
+      "bytes": 171671,
+      "contentType": "application/json",
+      "completeWithinLimit": true,
+      "sha256Raw": "f0e330d99ddff2d264c849cf8f62fb64e4b60921e153db3fed1f51d1dcbe1967"
+    }
+  ],
+  "cartProductsArray": true,
+  "cartLineCount": 0,
+  "candidate": {
+    "vendorCode": "C-200-26",
+    "name": "Эфиопия Сидамо Грэйд 1, кофе жареный (Упаковка 200 г. ЗЕРНОВОЙ)",
+    "priceObserved": 620,
+    "productOnStop": false,
+    "showOnWholesale": true,
+    "soldByPiece": false,
+    "params": [
+      {
+        "slug": "weight",
+        "value": "200"
+      },
+      {
+        "slug": "is_grinded",
+        "value": "0"
+      }
+    ]
+  },
+  "result": "READ_ONLY_PREFLIGHT_COMPLETE",
+  "requestCount": 3,
+  "credentialsOrCookieValuesPersisted": false,
+  "providerBodyPersisted": false
+}

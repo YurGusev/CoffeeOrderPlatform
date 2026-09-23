@@ -1,6 +1,6 @@
 issue: 136
 baseCommit: c0ee57ce9eec294d8b82a76fb991305753fc4c38
-status: accepted
+status: proposed
 inputs:
   - issue: 4
     acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
@@ -36,10 +36,10 @@ inputs:
     sha256: db00590b71ea750c0f43e21458afdbc6a75f6557e8a4c7ad7c3c9b33a66bdc7a
 outputs:
   - artifact: docs/adr/ADR-0027-frontend-ui-foundation.md
-    sha256: feb803df4ddfdc43eeeee78f5283beecc25e3f509fac255acfd7173461848b66
+    sha256: 50f9d1dafe5d9598ac302325486a16746ee757531937e015f73fb336bf83d9a0
     consumers: [137, 9, 12, 13]
   - artifact: docs/frontend/ux/README.md
-    sha256: dcaf5136b3c4dd2b296a32cab3a918a5dda15c2dd52285035aed58413fa8cd70
+    sha256: 7858c358141126f55424896322dff84c358bbacacf5e08e691c47f3176c26c0b
     consumers: [137, 9, 12, 13]
   - artifact: docs/frontend/ux/customers.svg
     sha256: 83ed5261260f37bdd0fbbbc2892622a56904ec6efea069a7a9f9530f83f77c64
@@ -122,6 +122,6 @@ limitations:
 review:
   agent: independent-technical-review-v4
   result: PASS
-  contentAcceptance: ACCEPTED
-  detail: v4 technical review PASS; owner accepted ADR-0027, UX contract and the four UX artifacts for downstream #137 local execution
-  limitations: browser accessibility review, commit, push, PR and merge evidence are recorded only after their observed operations
+  contentAcceptance: NOT_RUN
+  detail: v4 technical review PASS; all reported defects are closed, and owner content acceptance remains a separate decision
+  limitations: owner content acceptance remains separate; browser accessibility review, commit, push, PR and merge evidence are recorded only after their observed operations

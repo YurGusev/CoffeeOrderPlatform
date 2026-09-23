@@ -12,7 +12,7 @@ export function Link({ children, className, ...props }: LinkProps): ReactElement
     <AriaLink
       {...props}
       className={cn(
-        "inline-flex min-h-9 items-center rounded-control text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+        "inline-flex min-h-9 items-center rounded-control text-[var(--cos-action-primary-soft-text)] underline decoration-primary/40 underline-offset-4 hover:decoration-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
         className,
       )}
     >

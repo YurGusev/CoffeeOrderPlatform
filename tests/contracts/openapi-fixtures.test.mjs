@@ -255,6 +255,13 @@ void test("NDJSON success stream validates every record and terminal ordering", 
   assert.equal(new Set(lines.map((line) => line.snapshotRef)).size, 1);
   assert.equal(lines[1].batchNumber, 0);
   assert.equal(lines[1].previousBatchHash, null);
+  assert.deepEqual(lines[1].items[0].supplierPromotions, [{discountBasisPoints: 1000, minimumWeightRaw: "0", providerCreatedAt: "2026-09-05T09:00:00.000Z", providerUpdatedAt: "2026-09-05T09:30:00.000Z"}]);
+  const grindLines = (await readFile(join(POSITIVE_ROOT, "ndjson/aroma-catalog-grind-options.ndjson"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  for (const [index, line] of grindLines.entries()) assert.equal(validate(line), true, `grind option line ${index + 1}: ${JSON.stringify(validate.errors)}`);
+  assert.deepEqual(grindLines[1].items[0].grindOptions, [{sourceGrindKeyHash: "4444444444444444444444444444444444444444444444444444444444444444", displayName: "Средний помол"}]);
+  const missingImageLines = (await readFile(join(POSITIVE_ROOT, "ndjson/aroma-catalog-missing-image.ndjson"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  for (const [index, line] of missingImageLines.entries()) assert.equal(validate(line), true, `missing image line ${index + 1}: ${JSON.stringify(validate.errors)}`);
+  assert.equal(missingImageLines[1].items[0].imageUrl, null);
   assert.equal(lines.at(-1).recordType, "snapshot-completed");
 
   let releaseProducer;
@@ -303,7 +310,7 @@ void test("negative HTTP fixtures fail closed across trust and representation bo
   const negatives = await jsonFixture(join(NEGATIVE_ROOT, "http/rejections.json"));
   const successByKey = new Map(success.map((fixture) => [`${fixture.document}|${fixture.operationId}|${fixture.status}|${fixture.schema}`, fixture]));
   const problemByKey = new Map(problems.map((fixture) => [`${fixture.document}|${fixture.operationId}|${fixture.status}|${fixture.schema}`, fixture]));
-  const requiredCases = new Set(["missing-field", "additional-field", "invalid-ref-ulid", "invalid-uuid", "invalid-hash", "invalid-traceparent", "invalid-timestamp", "invalid-calendar-timestamp", "numeric-version", "numeric-money", "numeric-quantity", "noncanonical-decimal", "invalid-enum", "invalid-cross-field", "actor-provider-credentials-public", "wrong-problem-status", "wrong-problem-code", "unsupported-representation", "pii-secret-provider-body-sse"]);
+  const requiredCases = new Set(["missing-field", "additional-field", "invalid-ref-ulid", "invalid-uuid", "invalid-hash", "invalid-traceparent", "invalid-timestamp", "invalid-calendar-timestamp", "numeric-version", "numeric-money", "numeric-quantity", "noncanonical-decimal", "invalid-enum", "invalid-cross-field", "actor-provider-credentials-public", "wrong-problem-status", "wrong-problem-code", "invalid-problem-instance", "invalid-problem-instance-leading-digit-scheme", "invalid-problem-instance-empty-scheme", "invalid-problem-instance-path-brackets", "invalid-problem-instance-space", "invalid-problem-type-leading-digit-scheme", "invalid-problem-type-empty-scheme", "invalid-problem-type-path-brackets", "invalid-problem-type-space", "zero-provider-quantity", "unsupported-representation", "pii-secret-provider-body-sse", "binding-additional-field"]);
   assert.deepEqual(new Set(negatives.map((fixture) => fixture.case)), requiredCases);
   for (const fixture of negatives) {
     if (fixture.case === "unsupported-representation") {

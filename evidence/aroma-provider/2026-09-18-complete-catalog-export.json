@@ -1,0 +1,222 @@
+{
+  "startedAt": "2026-09-18T18:50:34.598Z",
+  "scope": "real read-only provider catalog -> production decoder/normalizer/HMAC/NDJSON; test-only in-memory persistence",
+  "calls": [
+    {
+      "kind": "login"
+    },
+    {
+      "kind": "catalog-page",
+      "page": 1
+    },
+    {
+      "kind": "catalog-page",
+      "page": 2
+    },
+    {
+      "kind": "grinds"
+    },
+    {
+      "kind": "catalog-page",
+      "page": 3
+    },
+    {
+      "kind": "catalog-page",
+      "page": 4
+    },
+    {
+      "kind": "catalog-page",
+      "page": 5
+    },
+    {
+      "kind": "catalog-page",
+      "page": 6
+    },
+    {
+      "kind": "catalog-page",
+      "page": 7
+    },
+    {
+      "kind": "catalog-page",
+      "page": 8
+    },
+    {
+      "kind": "catalog-page",
+      "page": 9
+    },
+    {
+      "kind": "catalog-page",
+      "page": 10
+    },
+    {
+      "kind": "catalog-page",
+      "page": 11
+    },
+    {
+      "kind": "catalog-page",
+      "page": 12
+    },
+    {
+      "kind": "catalog-page",
+      "page": 13
+    },
+    {
+      "kind": "catalog-page",
+      "page": 14
+    },
+    {
+      "kind": "catalog-page",
+      "page": 15
+    },
+    {
+      "kind": "catalog-page",
+      "page": 16
+    },
+    {
+      "kind": "catalog-page",
+      "page": 17
+    },
+    {
+      "kind": "catalog-page",
+      "page": 18
+    },
+    {
+      "kind": "catalog-page",
+      "page": 19
+    },
+    {
+      "kind": "catalog-page",
+      "page": 20
+    },
+    {
+      "kind": "catalog-page",
+      "page": 21
+    },
+    {
+      "kind": "catalog-page",
+      "page": 22
+    },
+    {
+      "kind": "catalog-page",
+      "page": 23
+    },
+    {
+      "kind": "catalog-page",
+      "page": 24
+    },
+    {
+      "kind": "catalog-page",
+      "page": 25
+    },
+    {
+      "kind": "catalog-page",
+      "page": 26
+    },
+    {
+      "kind": "catalog-page",
+      "page": 27
+    },
+    {
+      "kind": "catalog-page",
+      "page": 28
+    },
+    {
+      "kind": "catalog-page",
+      "page": 29
+    },
+    {
+      "kind": "catalog-page",
+      "page": 30
+    },
+    {
+      "kind": "catalog-page",
+      "page": 31
+    },
+    {
+      "kind": "catalog-page",
+      "page": 32
+    },
+    {
+      "kind": "catalog-page",
+      "page": 33
+    },
+    {
+      "kind": "catalog-page",
+      "page": 34
+    },
+    {
+      "kind": "catalog-page",
+      "page": 35
+    },
+    {
+      "kind": "catalog-page",
+      "page": 36
+    },
+    {
+      "kind": "catalog-page",
+      "page": 37
+    },
+    {
+      "kind": "catalog-page",
+      "page": 38
+    },
+    {
+      "kind": "catalog-page",
+      "page": 39
+    },
+    {
+      "kind": "catalog-page",
+      "page": 40
+    },
+    {
+      "kind": "catalog-page",
+      "page": 41
+    },
+    {
+      "kind": "catalog-page",
+      "page": 42
+    },
+    {
+      "kind": "catalog-page",
+      "page": 43
+    },
+    {
+      "kind": "catalog-page",
+      "page": 44
+    },
+    {
+      "kind": "catalog-page",
+      "page": 45
+    },
+    {
+      "kind": "catalog-page",
+      "page": 46
+    },
+    {
+      "kind": "catalog-page",
+      "page": 47
+    }
+  ],
+  "completed": true,
+  "offers": 806,
+  "groundOffers": 119,
+  "missingImages": 1,
+  "zeroPrices": 32,
+  "grindCounts": [
+    12
+  ],
+  "batches": 2,
+  "summary": {
+    "batchCount": 2,
+    "completedAt": "2026-09-18T18:50:57.36845735Z",
+    "contentHash": "b7e7ced95bef4b119fe725e56457ce566b09a805982738baa62d82a0708c659c",
+    "offerCount": 806,
+    "productCount": 464,
+    "recordType": "snapshot-completed",
+    "snapshotRef": "snp_01ARZ3NDEKTSV4RRFFQ69G5FAW",
+    "streamVersion": "1",
+    "variantCount": 806
+  },
+  "finishedAt": "2026-09-18T18:50:57.374Z",
+  "cleanup": true
+}

@@ -56,7 +56,7 @@ objects используется `additionalProperties: false`.
 | money minor units | строка `^-?(0|[1-9][0-9]*)$` |
 | QuantityDecimal | строка `^(?:[1-9][0-9]{0,5})(?:\.[0-9]{1,3})?$|^0\.(?!0{1,3}$)[0-9]{1,3}$` |
 | QuantityMilli | non-negative integer decimal string `^(0|[1-9][0-9]*)$` |
-| ProviderQuantity | typed Gateway contract; scale/range проверяется provider adapter |
+| ProviderQuantity | strictly positive canonical decimal string; scale/max/step проверяются provider adapter после подтверждения provider facts |
 | hash | lowercase SHA-256: `^[a-f0-9]{64}$` |
 | timestamp | RFC 3339 UTC `date-time`, суффикс `Z` |
 | currency | `RUB` в первом срезе |
@@ -75,7 +75,7 @@ transport caller, issuer/audience, route allowlist и permission.
 | Schema | Определяется один раз в | Используют |
 |---|---|---|
 | Ref/Money/Version/Timestamp | `schemas/common/identifiers` и `money-version-time` | все HTTP/events/frontend |
-| ProblemDetails | `schemas/common/problem-details` | все HTTP services и project-owned clients |
+| ProblemDetails | `schemas/common/problem-details` | все HTTP services и project-owned clients; `type` и `instance` — URI-reference |
 | MessageEnvelope | `schemas/common/message-envelope` | все семь event schemas |
 | CustomerResponse/Summary | `client-v1.yaml#/components/schemas` | Customer provider, Orders customer snapshot, React |
 | CatalogProductSummary | `client-v1.yaml#/components/schemas` | Catalog provider, Pricing request UI, React |
