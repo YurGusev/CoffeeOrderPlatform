@@ -4,7 +4,7 @@ import {AROMA_SUPPLIER_REF} from "@coffee-platform/config";
 import {createHttpClient, type HttpClient} from "@coffee-platform/platform-http";
 import {startConfiguredRuntime, type RuntimeComposition, type RuntimeCompositionContext} from "@coffee-platform/runtime";
 import {parseServiceTransportMaterial} from "@coffee-platform/security";
-import {createCatalogImportStore, type CatalogImportStore} from "./catalog-import-store.js";
+import {createCatalogImportStore, type CatalogImportStore} from "./infrastructure/catalog-import-store.js";
 import {createHourlyScheduler, type HourlyScheduler} from "./hourly-scheduler.js";
 import {InternalCatalogClient} from "./internal-api-client.js";
 import {recoverIncompleteImports} from "./reconcile-imports.js";

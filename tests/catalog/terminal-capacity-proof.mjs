@@ -83,7 +83,7 @@ mock.module("../../packages/platform-database/dist/owner.js", {namedExports:{
     throw new Error(`unexpected terminal SQL: ${sql}`);
   },
 }});
-const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/catalog-import-store.js");
+const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/infrastructure/catalog-import-store.js");
 const store = createCatalogImportStore({});
 globalThis.gc();
 baseline = process.memoryUsage();

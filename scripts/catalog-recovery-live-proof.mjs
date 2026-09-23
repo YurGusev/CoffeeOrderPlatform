@@ -1,6 +1,6 @@
 import {createDatabase, DatabaseTransactionError} from "../packages/platform-database/dist/index.js";
 import {catalogBatchBytes, catalogBatchHash, catalogContentHash} from "../packages/contracts/aroma-v1/dist/index.js";
-import {createCatalogImportStore} from "../apps/catalog-supplier-sync/dist/catalog-import-store.js";
+import {createCatalogImportStore} from "../apps/catalog-supplier-sync/dist/infrastructure/catalog-import-store.js";
 import {createHourlyScheduler} from "../apps/catalog-supplier-sync/dist/hourly-scheduler.js";
 import {newSnapshotRef, runCatalogImport} from "../apps/catalog-supplier-sync/dist/run-catalog-import.js";
 import {CatalogOutcomeUnknown, reconcileBatch, reconcileCompleted, reconcileCreate, reconcileRejected, reconcileStarted, recoverIncompleteImports, runReconciled} from "../apps/catalog-supplier-sync/dist/reconcile-imports.js";

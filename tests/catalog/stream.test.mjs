@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {Readable} from "node:stream";
 import {trace} from "@opentelemetry/api";
 import {DatabaseTransactionError} from "../../packages/platform-database/dist/index.js";
-import {CatalogImportError} from "../../apps/catalog-supplier-sync/dist/catalog-import-store.js";
+import {CatalogImportError} from "../../apps/catalog-supplier-sync/dist/infrastructure/catalog-import-store.js";
 import {catalogBatchBytes, catalogBatchHash} from "../../packages/contracts/aroma-v1/dist/index.js";
 import {execFile} from "node:child_process";
 import {promisify} from "node:util";
