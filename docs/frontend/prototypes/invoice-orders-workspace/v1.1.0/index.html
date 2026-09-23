@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru" data-design-id="orders-workspace-v1">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Счета и заказы · точное оформление старого React</title>
+<link rel="stylesheet" href="exact-source.css">
+<link rel="stylesheet" href="bridge.css">
+</head>
+<body>
+<div class="operator-shell_operatorShell" data-ui="operator-shell">
+  <aside class="operator-shell_sidebar" aria-label="Основная навигация" data-ui="sidebar">
+    <div class="operator-shell_brand">
+      <div class="app-logo_logo" role="img" aria-label="CoffeeOrderSystem">
+        <span class="app-logo_mark" aria-hidden="true"><svg class="app-logo_icon" viewBox="0 0 24 24"><path d="M4 9h12v7a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h2a3 3 0 0 1 0 6h-2M7 3v2m4-3v3m4-2v2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <div class="app-logo_copy"><span class="app-logo_title">CoffeeOrderSystem</span><span class="app-logo_caption">Operator Web</span></div>
+      </div>
+      <span class="operator-shell_workspaceBadge">Workspace</span>
+    </div>
+    <nav class="operator-shell_navigation" aria-label="Основная навигация разделов">
+      <section aria-labelledby="group-work"><h2 class="operator-shell_navigationGroupLabel" id="group-work">Работа</h2><div class="operator-shell_navigationSection">
+        <a class="operator-shell_navigationLink operator-shell_navigationLinkActive" href="#orders"><svg class="x-icon x-nav-icon" viewBox="0 0 24 24"><path d="M9 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3M9 3h6v4H9zM8 12h8M8 16h6"/></svg><span>Заказы</span></a>
+        <a class="operator-shell_navigationLink" href="#catalog"><svg class="x-icon x-nav-icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 5v14M12 9h5M12 13h5"/></svg><span>Каталог</span></a>
+        <a class="operator-shell_navigationLink" href="#customers"><svg class="x-icon x-nav-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Заказчики</span></a>
+      </div></section>
+      <section aria-labelledby="group-control"><h2 class="operator-shell_navigationGroupLabel" id="group-control">Контроль</h2><div class="operator-shell_navigationSection">
+        <a class="operator-shell_navigationLink" href="#invoices"><svg class="x-icon x-nav-icon" viewBox="0 0 24 24"><path d="M6 2h9l4 4v16H6zM14 2v5h5M9 12h6M9 16h6"/></svg><span>Счета</span></a>
+        <a class="operator-shell_navigationLink" href="#payments"><svg class="x-icon x-nav-icon" viewBox="0 0 24 24"><path d="M3 6h18v12H3zM3 10h18M7 15h2"/></svg><span>Оплата</span></a>
+        <a class="operator-shell_navigationLink" href="#availability"><svg class="x-icon x-nav-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4"/></svg><span>Наличие</span></a>
+      </div></section>
+    </nav>
+    <div class="operator-shell_profile"><div class="operator-shell_profileIdentity"><span class="operator-shell_avatar" aria-hidden="true">ЮГ</span><div class="operator-shell_profileText"><span class="operator-shell_profileName">Юрий Гусев</span><span class="operator-shell_profileRoles">operator · admin</span></div></div><span class="operator-shell_migrationStatus">React workspace</span></div>
+  </aside>
+
+  <header class="operator-shell_mobileHeader"><div class="app-logo_logo"><span class="app-logo_mark">☕</span><div class="app-logo_copy"><span class="app-logo_title">CoffeeOrderSystem</span><span class="app-logo_caption">Operator Web</span></div></div><span class="operator-shell_mobileStatus">React workspace</span></header>
+  <nav class="operator-shell_mobileNavigation" aria-label="Навигация по разделам"><a class="operator-shell_navigationLink operator-shell_navigationLinkActive" href="#orders">Заказы</a><a class="operator-shell_navigationLink" href="#catalog">Каталог</a><a class="operator-shell_navigationLink" href="#invoices">Счета</a></nav>
+
+  <div class="operator-shell_workspace" data-ui="workspace">
+    <nav class="operator-shell_breadcrumbs" aria-label="Хлебные крошки"><span class="operator-shell_breadcrumb"><a href="#work">Работа</a><span class="operator-shell_breadcrumbSeparator">/</span></span><span class="operator-shell_breadcrumb">Заказы</span></nav>
+    <div class="operator-shell_content">
+      <main class="orders-workspace_page" id="orders">
+        <div class="orders-workspace_shell">
+          <section class="orders-workspace_pageHeader" data-ui="page-header"><div class="orders-workspace_headerRow"><div class="orders-workspace_headerIdentity">
+            <span class="orders-workspace_pageIcon" aria-hidden="true"><svg class="x-icon" viewBox="0 0 24 24"><path d="M9 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3M9 3h6v4H9zM8 12h8M8 16h6"/></svg></span>
+            <div class="orders-workspace_titleStack"><h1 class="orders-workspace_pageTitle">Счета и заказы</h1><p class="orders-workspace_pageSubtitle">Сначала счёт, затем его заказы; товары раскрываются внутри выбранного заказа</p></div>
+          </div><div class="orders-workspace_refreshing" id="saved-state" role="status" hidden>Изменения сохранены в макете</div></div></section>
+
+          <div class="orders-workspace_toolbar" data-ui="orders-toolbar">
+            <div class="orders-workspace_toolbarHeader"><div class="orders-workspace_toolbarTitle"><svg class="x-icon x-icon-sm" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4M8 4v4M16 10v4M12 16v4"/></svg><span class="orders-finite_textWeight750">Фильтры выборки</span><span class="orders-finite_textMuted orders-workspace_toolbarCount">· <span id="invoice-count">5</span> счетов · <span id="total-count">6</span> заказов</span></div><div class="orders-workspace_toolbarActions">
+              <button class="orders-workspace_toolbarButton" id="import" type="button"><svg class="x-icon x-icon-sm" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16h16V8zM14 2v6h6M8 13h8M8 17h5"/></svg>Импорт из Excel</button>
+              <button class="orders-workspace_toolbarButton orders-workspace_toolbarButtonPrimary" id="new-order" type="button"><svg class="x-icon x-icon-sm" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Новый заказ</button>
+              <button class="orders-workspace_toolbarButton" id="refresh" type="button"><svg class="x-icon x-icon-sm" viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18 9a7 7 0 0 0-12-2M6 15a7 7 0 0 0 12 2"/></svg>Обновить</button>
+            </div></div>
+            <div class="orders-workspace_savedViews" role="group" aria-label="Сохранённые представления заказов">
+              <button class="orders-workspace_savedViewButton orders-workspace_savedViewButtonActive" data-view="all" aria-pressed="true">Все</button>
+              <button class="orders-workspace_savedViewButton" data-view="drafts" aria-pressed="false">Мои черновики</button>
+              <button class="orders-workspace_savedViewButton orders-workspace_savedViewButtonStop" data-view="stopped" aria-pressed="false">⚠ Со стопом</button>
+              <button class="orders-workspace_savedViewButton" data-view="payments" aria-pressed="false">Ждут оплату</button>
+              <button class="orders-workspace_savedViewButton" data-view="today" aria-pressed="false">Сегодня</button>
+              <button class="orders-workspace_savedViewButton orders-workspace_savedViewButtonDisabled" disabled>Сохранить вид</button>
+            </div>
+            <div class="orders-workspace_filters" data-ui="orders-filters">
+              <label class="orders-workspace_filterControl"><span class="orders-workspace_filterLabel">Поиск</span><span class="orders-workspace_filterInputShell"><svg class="orders-workspace_filterLeadingIcon x-icon x-icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input class="orders-workspace_filterInput" id="search" placeholder="Товар, комментарий, телефон, счёт…"></span></label>
+              <label class="orders-workspace_filterControl"><span class="orders-workspace_filterLabel">Заказчик</span><span class="orders-workspace_filterInputShell"><svg class="orders-workspace_filterLeadingIcon x-icon x-icon-sm" viewBox="0 0 24 24"><circle cx="10" cy="8" r="4"/><path d="M3 21a7 7 0 0 1 14 0M20 20l-3-3"/></svg><input class="orders-workspace_filterInput" id="customer" placeholder="Имя или телефон"></span></label>
+              <label class="orders-workspace_filterControl"><span class="orders-workspace_filterLabel">Статус</span><select class="orders-workspace_filterInput" id="status"><option value="">Все статусы</option><option value="draft">Черновик</option><option value="confirmed">Подтверждён</option><option value="blocked">Стоп</option></select></label>
+              <label class="orders-workspace_filterControl"><span class="orders-workspace_filterLabel">С даты</span><input class="orders-workspace_filterInput" type="date" value="2026-09-01"></label>
+              <label class="orders-workspace_filterControl"><span class="orders-workspace_filterLabel">По дату</span><input class="orders-workspace_filterInput" type="date" value="2026-09-14"></label>
+            </div>
+          </div>
+
+          <section class="orders-workspace_tablePanel x-table-panel" aria-label="Счета и заказы" data-ui="invoice-registry">
+            <div class="orders-table_tableScroller" data-ui="orders-scroll"><table class="orders-table_table" aria-label="Счета, заказы и товары" data-ui="orders-table"><colgroup>
+              <col class="orders-finite_gridColumnExpand"><col class="orders-finite_gridColumnSelect"><col class="orders-finite_gridColumnOrder"><col class="orders-finite_gridColumnCustomer"><col class="orders-finite_gridColumnDate"><col class="orders-finite_gridColumnItemCount"><col class="orders-finite_gridColumnItemCount"><col class="orders-finite_gridColumnTotal"><col class="orders-finite_gridColumnStatus"><col class="orders-finite_gridColumnAvailability"><col class="orders-finite_gridColumnAction">
+            </colgroup><thead><tr><th data-column-id="expand"><span class="x-visually-hidden">Раскрытие</span></th><th data-column-id="select"><input class="orders-table_selectionCheckbox" type="checkbox" aria-label="Выбрать все заказы"></th><th data-column-id="id">Заказ</th><th>Заказчик</th><th>Дата</th><th class="x-right">Позиций</th><th class="x-right">Единиц</th><th class="x-right">Сумма заказа</th><th>Статус</th><th>Корзина</th><th>Действия</th></tr></thead><tbody id="orders-body"></tbody></table></div>
+            <div class="x-register-scroll-hint" id="registry-scroll-hint" data-ui="registry-scroll-hint" role="status" hidden><span id="registry-scroll-copy">Ниже ещё счета и заказы</span><span class="x-scroll-hint-actions"><button class="ui-action_button" data-size="sm" data-variant="link" type="button" data-registry-scroll-more>Показать остальные</button><button class="ui-action_button" data-size="sm" data-variant="link" type="button" data-registry-scroll-side>Показать статусы и действия</button></span></div>
+            <div class="orders-workspace_paginationBar" data-ui="orders-pagination"><span class="orders-finite_textMuted" id="range">Показано 5 счетов · 6 заказов</span><div class="orders-workspace_paginationControls"><select class="ui-select_select" aria-label="Счетов на странице"><option>25 счетов</option></select><nav class="orders-workspace_pagination" aria-label="Навигация по страницам"><button class="orders-workspace_paginationButton" disabled>«</button><button class="orders-workspace_paginationButton" disabled>‹</button><button class="orders-workspace_paginationButton orders-workspace_paginationButtonActive" aria-current="page">1</button><button class="orders-workspace_paginationButton" disabled>›</button><button class="orders-workspace_paginationButton" disabled>»</button></nav></div></div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<div class="ui-dialog_viewport x-drawer-viewport" data-kind="drawer" data-ui="drawer" hidden id="drawer-view"><div class="ui-dialog_scrim" data-close></div><section class="ui-dialog_panel ui-dialog_drawer" data-position="right" data-size="sm" role="dialog" aria-modal="true" aria-labelledby="drawer-title"><header class="ui-dialog_header"><h2 class="ui-dialog_title" id="drawer-title">Редактировать товар</h2><button class="ui-dialog_close" data-close aria-label="Закрыть">×</button></header><div class="ui-dialog_body" id="drawer-body"></div><footer class="x-drawer-footer" id="drawer-footer"></footer></section></div>
+<div class="x-toast" id="toast" role="status" data-ui="toast" hidden><span>✓</span><span id="toast-text"></span><button class="ui-action_button" data-size="sm" data-variant="link" id="undo" hidden>Вернуть</button></div>
+<script src="prototype.js"></script>
+</body>
+</html>

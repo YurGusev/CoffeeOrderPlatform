@@ -1,0 +1,46 @@
+.logo {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--cos-space-2);
+}
+
+.mark {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--cos-border-active);
+  border-radius: 12px;
+  color: var(--cos-action-hover);
+  background: var(--cos-selection-selected);
+  box-shadow: 0 0 28px var(--cos-effect-canvas-glow-violet);
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.9;
+}
+
+.copy {
+  display: grid;
+  min-width: 0;
+  gap: 0;
+}
+
+.title {
+  font-family: "Manrope Variable", Manrope, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.caption {
+  display: block;
+  color: var(--cos-text-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}

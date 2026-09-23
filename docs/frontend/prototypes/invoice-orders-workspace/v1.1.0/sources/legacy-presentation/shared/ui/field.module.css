@@ -1,0 +1,234 @@
+.field {
+  display: grid;
+  min-width: 0;
+  gap: var(--cos-space-1);
+}
+
+.field[data-density="compact"] {
+  gap: 2px;
+}
+
+.field[data-density="comfortable"] {
+  gap: var(--cos-space-2);
+}
+
+.field[data-orientation="horizontal"] {
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--cos-space-3);
+}
+
+.field[data-orientation="horizontal"] .description,
+.field[data-orientation="horizontal"] .error {
+  grid-column: 2;
+}
+
+.control {
+  min-width: 0;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  min-height: var(--cos-density-control-height);
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-sm);
+  padding: 0 var(--cos-density-control-padding-inline);
+  color: var(--cos-text-primary);
+  background: var(--cos-surface-elevated);
+  font: inherit;
+  line-height: var(--cos-type-body-line);
+  transition:
+    border-color var(--cos-motion-fast) ease,
+    background var(--cos-motion-fast) ease,
+    box-shadow var(--cos-motion-fast) ease;
+}
+
+.input::placeholder {
+  color: var(--cos-text-disabled);
+}
+
+.input:hover:not(:disabled),
+.input:focus-visible {
+  border-color: var(--cos-border-active);
+}
+
+.input:focus-visible {
+  box-shadow: var(--cos-focus-ring);
+}
+
+.input[data-state="success"] {
+  border-color: var(--cos-status-success);
+}
+
+.input[data-state="error"],
+.input[aria-invalid="true"] {
+  border-color: var(--cos-status-error);
+}
+
+.input:disabled,
+.input[data-state="disabled"] {
+  color: var(--cos-text-disabled);
+  background: var(--cos-surface-panel);
+  cursor: not-allowed;
+}
+
+.textarea {
+  min-height: 96px;
+  padding-block: var(--cos-space-2);
+  resize: vertical;
+}
+
+.description,
+.error {
+  display: block;
+  font-size: var(--cos-type-caption-size);
+  line-height: var(--cos-type-caption-line);
+}
+
+.description {
+  color: var(--cos-text-secondary);
+}
+
+.error {
+  color: var(--cos-status-error);
+}
+
+.checkField {
+  align-content: start;
+}
+
+.checkLabel {
+  display: inline-flex;
+  min-height: var(--cos-density-control-height);
+  align-items: center;
+  gap: var(--cos-space-2);
+  color: var(--cos-text-primary);
+  cursor: pointer;
+}
+
+.checkInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.checkMark {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-sm);
+  background: var(--cos-surface-elevated);
+  transition:
+    border-color var(--cos-motion-fast) ease,
+    background var(--cos-motion-fast) ease;
+}
+
+.checkInput:checked + .checkMark {
+  border-color: var(--cos-action-primary);
+  background: var(--cos-action-primary-strong);
+}
+
+.checkInput:checked + .checkMark::after {
+  width: 9px;
+  height: 5px;
+  border-bottom: 2px solid var(--cos-text-on-action);
+  border-left: 2px solid var(--cos-text-on-action);
+  content: "";
+  transform: rotate(-45deg) translateY(-1px);
+}
+
+.checkInput:focus-visible + .checkMark {
+  box-shadow: var(--cos-focus-ring);
+}
+
+.checkInput:disabled + .checkMark,
+.checkInput[data-state="disabled"] + .checkMark {
+  border-color: var(--cos-border-subtle);
+  background: var(--cos-surface-panel);
+}
+
+.checkInput[aria-invalid="true"] + .checkMark {
+  border-color: var(--cos-status-error);
+}
+
+.checkField[data-control="switch"] .checkMark {
+  width: 36px;
+  height: 22px;
+  flex-basis: 36px;
+  border-radius: 999px;
+  place-items: center start;
+  padding: 2px;
+}
+
+.checkField[data-control="switch"] .checkMark::after {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--cos-text-secondary);
+  content: "";
+  transition:
+    background var(--cos-motion-fast) ease,
+    transform var(--cos-motion-fast) ease;
+}
+
+.checkField[data-control="switch"] .checkInput:checked + .checkMark::after {
+  background: var(--cos-text-on-action);
+  transform: translateX(14px);
+}
+
+.checkText {
+  font-size: var(--cos-type-body-size);
+  line-height: var(--cos-type-body-line);
+}
+
+.required {
+  color: var(--cos-status-error);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .checkMark,
+  .checkField[data-control="switch"] .checkMark::after {
+    transition-duration: 0.01ms;
+  }
+}
+
+@media (forced-colors: active) {
+  .input {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+  }
+
+  .checkMark {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+
+  .checkInput:checked + .checkMark {
+    background: Highlight;
+  }
+
+  .description,
+  .error {
+    color: CanvasText;
+  }
+}
