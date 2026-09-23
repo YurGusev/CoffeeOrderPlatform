@@ -1,0 +1,64 @@
+issue: 149
+baseCommit: 76c2d580c86bbd2b272369859cbecf97815e2b8e
+status: local-verified
+inputs:
+  - issue: 6
+    acceptedMergeCommit: 76c2d580c86bbd2b272369859cbecf97815e2b8e
+    artifact: evidence/handoffs/issue-6.yaml
+    sha256: 032b0a73a07e92cc1d870177505035257ac3e3ac8abd7b2e5e09c89897c4d685
+outputs:
+  - artifact: apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts
+    sha256: 2a36da4d011b2837c271f69344bd9d9cc282d3b0d595595d18ac8bc1bee53405
+    consumers: [16, 18, 137]
+  - artifact: apps/catalog-supplier-sync/src/main.ts
+    sha256: 399b3dfc10ee91835e19af2a3017d59cada63f1290130ed4efc8a53664341ec5
+    consumers: []
+  - artifact: apps/catalog-supplier-sync/src/reconcile-imports.ts
+    sha256: 5b32e8b3bcc124b2862611754c6737b26cc657ff1a576a8b11354850886459e8
+    consumers: []
+  - artifact: apps/catalog-supplier-sync/src/run-catalog-import.ts
+    sha256: 03881e29cc5cf06b6db7bcfec0f934a0b721c8276dc072be83a338149d34a251
+    consumers: []
+  - artifact: scripts/catalog-copy-live-proof.mjs
+    sha256: eb14a3f81ee497af03dc21c0c825f3ac0f26ea885e8ee27e385578cd8083dbb9
+    consumers: []
+  - artifact: scripts/catalog-recovery-live-proof.mjs
+    sha256: 210746ff7aca8adc32452388f25a6fa4d5fe5a62c792e54afebfc59c5a3978e8
+    consumers: []
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: bcca0c7d922243d5e587d322555a6ebd94ee063e3cf92a507cc2c3fc37b12fe1
+    consumers: [137]
+  - artifact: tests/catalog/composition-proof.mjs
+    sha256: 2ece02f054a882ad53cc7aaa5de2f52101a91a19804d8cbd930a3587a3f21731
+    consumers: []
+  - artifact: tests/catalog/ingestion.test.mjs
+    sha256: 6033a3ef2e17641ee1073b35dee8f800ecf26f661e79257ab8157cbed9d55663
+    consumers: []
+  - artifact: tests/catalog/observability-proof.mjs
+    sha256: 40587ccb563f637f44e76150feabf57c60129fcb0b190186e2e88a68618a6ab6
+    consumers: []
+  - artifact: tests/catalog/stream.test.mjs
+    sha256: b819c97be620b002e6f4b861d370d9bc73ba88317ec9f3b77289696b294fe274
+    consumers: []
+  - artifact: tests/catalog/terminal-capacity-proof.mjs
+    sha256: 6c1bc87b6bf2fcc72e94bb0a4121481ae7c3e1eeeb3f988c956c2bf0c7b9ddea
+    consumers: []
+verification:
+  - command: pnpm install --frozen-lockfile
+    result: passed
+  - command: pnpm typecheck
+    result: passed
+  - command: pnpm architecture:check
+    result: passed
+  - command: pnpm test:catalog-ingestion
+    result: passed
+  - command: pnpm test:catalog-stream
+    result: passed
+  - command: pnpm lint
+    result: passed
+  - command: pnpm check
+    result: passed
+limitations:
+  - Live PostgreSQL COPY/recovery proofs were not rerun; importer logic is unchanged except its relative observability import.
+  - The old src/catalog-import-store.ts path is removed, not recorded as a new output; historical evidence files are untouched.
+  - Local verification and independent read-only review are not published CI, GitHub approval or merge evidence.

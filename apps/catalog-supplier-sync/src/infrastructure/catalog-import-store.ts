@@ -1,5 +1,5 @@
 import {Readable} from "node:stream";
-import {CatalogTelemetry} from "./observability.js";
+import {CatalogTelemetry} from "../observability.js";
 import {CATALOG_MAX_BATCH_BYTES, CATALOG_MAX_ITEM_BYTES, CATALOG_MAX_OFFERS_PER_BATCH, canonicalCatalogJson, catalogBatchBytes, catalogBatchHash, createCatalogContentHash, type AromaCatalogExportRecord} from "@coffee-platform/contracts-aroma-v1";
 import {DatabaseTransactionError, withTransaction, type Database, type SqlScalar, type Transaction} from "@coffee-platform/database";
 import {defineCopy, defineStatement, defineTemporaryTable} from "@coffee-platform/database/owner";

@@ -58,7 +58,7 @@ mock.module("../../packages/platform-database/dist/owner.js", {namedExports:{
   },
 }});
 try {
-  const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/catalog-import-store.js");
+  const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/infrastructure/catalog-import-store.js");
   const {runCatalogImport} = await import("../../apps/catalog-supplier-sync/dist/run-catalog-import.js");
   const realStore = createCatalogImportStore({}, telemetry);
   const store = {...realStore, create:async () => {}, acceptStarted:async () => {}, complete:async () => "stored", reject:async () => "stored"};

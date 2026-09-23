@@ -2,7 +2,7 @@ import {randomBytes} from "node:crypto";
 import {CatalogTelemetry} from "./observability.js";
 import {isAromaCatalogExportRecord, type AromaCatalogExportRecord} from "@coffee-platform/contracts-aroma-v1";
 import type {CatalogExportContext} from "./internal-api-client.js";
-import {CatalogImportError, catalogFailureCode, type CatalogFailureCode, type CatalogImportStore} from "./catalog-import-store.js";
+import {CatalogImportError, catalogFailureCode, type CatalogFailureCode, type CatalogImportStore} from "./infrastructure/catalog-import-store.js";
 import {DatabaseTransactionError} from "@coffee-platform/database";
 import {CatalogStreamError} from "./ndjson-reader.js";
 import {CatalogOutcomeUnknown, CatalogReconciledFailure, reconcileBatch, reconcileCompleted, reconcileCreate, reconcileRejected, reconcileStarted, runReconciled} from "./reconcile-imports.js";

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -163,6 +164,13 @@ void test("GREEN: Catalog importer uses allowed contract and platform packages",
     assert.equal(result.status,0,output(result));
     assert.match(output(result),/passed with Dependency Cruiser/u);
   } finally { await rm(root,{recursive:true,force:true}); }
+});
+
+void test("GREEN: Catalog importer implementation stays in owner infrastructure", async () => {
+  const ownerPath = join(REPO_ROOT, "apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts");
+  const legacyPath = join(REPO_ROOT, "apps/catalog-supplier-sync/src/catalog-import-store.ts");
+  assert.equal(existsSync(legacyPath), false, "SQL owner imports must not remain in the application root");
+  assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
 });
 
 void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {

@@ -1,6 +1,6 @@
 import type {AromaCatalogExportRecord} from "@coffee-platform/contracts-aroma-v1";
 import {toInstant} from "@coffee-platform/platform-time";
-import {isOutcomeUnknown, type CatalogImportStore, type SnapshotRow} from "./catalog-import-store.js";
+import {isOutcomeUnknown, type CatalogImportStore, type SnapshotRow} from "./infrastructure/catalog-import-store.js";
 
 type Batch = Extract<AromaCatalogExportRecord, {recordType: "snapshot-batch"}>;
 type Completed = Extract<AromaCatalogExportRecord, {recordType: "snapshot-completed"}>;
