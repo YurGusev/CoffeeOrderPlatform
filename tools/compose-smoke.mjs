@@ -728,6 +728,9 @@ async function writeScopedComposeOverride(projectName, options = {}) {
       `  ${network}:`,
       `    name: ${projectName}_${network}`,
       `    external: ${network === EXTERNAL_POSTGRES_NETWORK ? "true" : "false"}`,
+      ...(network === "coffee_provider_egress" && (options.aromaCartProof || options.recoveryProof)
+        ? ["    internal: true"]
+        : []),
     ]),
     ...(options.aromaBindingProof ? [
       "",
@@ -741,7 +744,7 @@ async function writeScopedComposeOverride(projectName, options = {}) {
       "    volumes:",
       `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-gateway-tls-observer.mjs:/app/dist/.aroma-proof-tls-observer.mjs:ro`,
     ] : []),
-    ...(options.aromaCartProof ? [
+    ...(options.aromaCartProof || options.recoveryProof ? [
       "",
       "services:",
       "  aroma-gateway:",
@@ -1108,7 +1111,7 @@ async function bootstrapRecoveryDatabases(container, proofCredentials) {
   }
 }
 
-function aromaProofDatabaseOptions(runtime, service, port, credential) {
+function proofDatabaseOptions(runtime, service, port, credential) {
   return {
     owner: runtime,
     database: service.database,
@@ -1129,7 +1132,7 @@ async function applyAromaBindingMigration(port, credentials, platformConfig) {
   assert.ok(integration, "aroma binding integration database is missing");
   const migratorPassword = credentials.rolePasswords[integration.migratorRole];
   assert.ok(migratorPassword, "aroma binding migrator password is missing");
-  const migrator = createDatabase(aromaProofDatabaseOptions(
+  const migrator = createDatabase(proofDatabaseOptions(
     "aroma-binding-migrator",
     {database, dbPool: {max: 2, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 2000, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}},
     port,
@@ -1161,11 +1164,47 @@ async function applyAromaBindingMigration(port, credentials, platformConfig) {
   }
 }
 
+async function applyCatalogMigrations(port, credentials, platformConfig) {
+  const service = platformConfig.services["catalog-supplier-sync"];
+  const database = service?.database;
+  assert.equal(database, "coffee_platform_catalog", "Catalog recovery proof database is missing");
+  const catalog = credentials.roleMap.databases.find((candidate) => candidate.name === database);
+  assert.ok(catalog, "Catalog recovery proof role map is missing");
+  const migratorPassword = credentials.rolePasswords[catalog.migratorRole];
+  assert.ok(migratorPassword, "Catalog recovery proof migrator password is missing");
+  const migrator = createDatabase(proofDatabaseOptions(
+    "catalog-compose-migrator",
+    service,
+    port,
+    {username: catalog.migratorRole, password: migratorPassword},
+  ));
+  await migrator.resource.start(AbortSignal.timeout(10_000));
+  try {
+    const migrationIds = [
+      "0001_supplier_snapshots",
+      "0002_snapshot_batches",
+      "0003_snapshot_staging",
+    ];
+    const migrations = [];
+    for (const id of migrationIds) {
+      const sql = await readFile(join(ROOT, `apps/catalog-service/migrations/${id}.sql`), "utf8");
+      migrations.push({id, sql, checksum: migrationChecksum(sql)});
+    }
+    await applyMigrations(migrator, migrations, {
+      schema: "catalog",
+      ledgerTable: "platform_schema_migrations",
+      lockKey: "compose-smoke-catalog-recovery-proof",
+    });
+  } finally {
+    await migrator.resource.stop(AbortSignal.timeout(10_000));
+  }
+}
+
 async function seedAromaBindingSnapshot(port, credentials, platformConfig, runId) {
   const service = platformConfig.services["aroma-gateway"];
   const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
   assert.ok(service && credential, "aroma gateway database credentials are missing");
-  const database = createDatabase(aromaProofDatabaseOptions("aroma-gateway", service, port, credential));
+  const database = createDatabase(proofDatabaseOptions("aroma-gateway", service, port, credential));
   await database.resource.start(AbortSignal.timeout(10_000));
   const store = new OfferBindingStore(database);
   const supplierRef = "sup_00000000000000000000000001";
@@ -1710,7 +1749,7 @@ function assertKafkaDurableRetention(
   runCompose(
     projectName,
     secretsDir,
-    ["rm", "--force", "--stop", "kafka"],
+    ["rm", "--force", "--stop", "--volumes", "kafka"],
     {composeFile},
   );
   runCompose(
@@ -2846,7 +2885,7 @@ async function prepareAromaCartProviderFixture(secretsDir) {
   const grinds = Array.from({length: 12}, (_, index) => ({id: String(index + 1), name: `Fixture grind ${index + 1}`}));
   await writeFile(join(directory, "catalog-grinds.json"), JSON.stringify(grinds) + "\n", {encoding: "utf8", mode: 0o400});
   await writeFile(join(directory, "selected-grind.json"), JSON.stringify({rawId: "1", sourceGrindKeyHash: createSourceIdentity({supplierRef, entityType: "grind", rawProviderIdentifier: "1", sourceIdentityKey: catalogIdentityKey}).sourceIdentityHash}) + "\n", {encoding: "utf8", mode: 0o400});
-  await writeFile(join(directory, "provider-count.json"), JSON.stringify({login: 0, cart: 0, post: 0, put: 0, delete: 0}) + "\n", {encoding: "utf8", mode: 0o600});
+  await writeFile(join(directory, "provider-count.json"), JSON.stringify({login: 0, catalog: 0, cart: 0, post: 0, put: 0, delete: 0}) + "\n", {encoding: "utf8", mode: 0o600});
   await writeFile(join(directory, "provider-server.mjs"), `import {createServer} from "node:https";
 import {readFile, writeFile} from "node:fs/promises";
 const key = await readFile("/run/aroma-proof/provider.key");
@@ -2854,7 +2893,7 @@ const cert = await readFile("/run/aroma-proof/provider.crt");
 let cart = JSON.parse(await readFile("/run/aroma-proof/add-one-get.json", "utf8"));
 const grinds = JSON.parse(await readFile("/run/aroma-proof/catalog-grinds.json", "utf8"));
 if (cart.products[0] !== undefined) cart.products[0].grind_id = "1";
-let counts = {login: 0, cart: 0, post: 0, put: 0, delete: 0};
+let counts = {login: 0, catalog: 0, cart: 0, post: 0, put: 0, delete: 0};
 const persist = () => writeFile("/run/aroma-proof/provider-count.json", JSON.stringify(counts) + String.fromCharCode(10));
 const json = (response, status, body, headers = {}) => { response.writeHead(status, {"content-type": "application/json", ...headers}); response.end(body); };
 const currentLine = (cartLineId) => cart.products.find((product) => String(product.id) === String(cartLineId));
@@ -2875,6 +2914,16 @@ const server = createServer({key, cert}, async (request, response) => {
   }
   if (request.method === "GET" && request.url === "/api/v1/catalog/grinds") {
     json(response, 200, JSON.stringify({data: grinds})); return;
+  }
+  if (request.method === "GET" && request.url?.startsWith("/api/v1/catalog/wholesale/products?")) {
+    counts.catalog += 1; await persist();
+    const url = new URL(request.url, "https://aromateacoffee.ru");
+    const page = Number(url.searchParams.get("page"));
+    const perPage = Number(url.searchParams.get("per_page"));
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(perPage) || perPage < 1) {
+      json(response, 400, JSON.stringify({error: "invalid pagination"})); return;
+    }
+    json(response, 200, JSON.stringify({data: [], meta: {current_page: page, total: 0, last_page: 1, per_page: perPage}})); return;
   }
   if (request.url === "/api/v1/cart/" && request.method === "POST") {
     counts.post += 1; await persist();
@@ -2991,7 +3040,7 @@ async function seedAromaCartReadBinding(port, credentials, platformConfig) {
   const service = platformConfig.services["aroma-gateway"];
   const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
   assert.ok(service && credential, "aroma gateway database credentials are missing");
-  const database = createDatabase(aromaProofDatabaseOptions("aroma-gateway", service, port, credential));
+  const database = createDatabase(proofDatabaseOptions("aroma-gateway", service, port, credential));
   await database.resource.start(AbortSignal.timeout(10_000));
   const store = new OfferBindingStore(database);
   const supplierRef = "sup_00000000000000000000000001";
@@ -3037,7 +3086,7 @@ async function assertAromaCartTopology(projectName, secretsDir, composeFile) {
 
 async function readAromaCartProviderCounts(countFile) {
   const counts = JSON.parse(await readFile(countFile, "utf8"));
-  assert.deepEqual(Object.keys(counts).sort(), ["cart", "delete", "login", "post", "put"]);
+  assert.deepEqual(Object.keys(counts).sort(), ["cart", "catalog", "delete", "login", "post", "put"]);
   return counts;
 }
 
@@ -3139,6 +3188,7 @@ async function main() {
   let aromaBindingRestartEvidence;
   let aromaBindingCleanupReceipt;
   let aromaCartProviderFixture;
+  let recoveryProviderFixtureCalls;
   let aromaCartFixture;
   let aromaCartSnapshot;
   let aromaCartEvidence;
@@ -3153,7 +3203,11 @@ async function main() {
       ? await readRecoveryProofCredentials()
       : undefined;
     if (options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
-      composeFile = await writeScopedComposeOverride(projectName, {aromaBindingProof: options.aromaBindingProof, aromaCartProof: options.aromaCartProof});
+      composeFile = await writeScopedComposeOverride(projectName, {
+        aromaBindingProof: options.aromaBindingProof,
+        aromaCartProof: options.aromaCartProof,
+        recoveryProof: options.recoveryProof,
+      });
       const networkNames = databaseProofNetworkNames(projectName);
       for (const networkName of networkNames) {
         try {
@@ -3174,8 +3228,10 @@ async function main() {
       recoveryProofCredentials,
     });
     if (options.aromaBindingProof) aromaBindingTlsObserver = await prepareAromaBindingTlsObserver(secretsDir);
-    if (options.aromaCartProof) {
+    if (options.aromaCartProof || options.recoveryProof) {
       aromaCartProviderFixture = await prepareAromaCartProviderFixture(secretsDir);
+    }
+    if (options.aromaCartProof) {
       const directory = join(secretsDir, "aroma-cart-proof");
       await writeFile(join(directory, "caller.json"), materialized.transportMaterials.service.get("aroma-observer"), {encoding: "utf8", mode: 0o400});
       await writeFile(join(directory, "convergence.json"), materialized.transportMaterials.service.get("aroma-convergence"), {encoding: "utf8", mode: 0o400});
@@ -3236,6 +3292,7 @@ async function main() {
           postgresCredentials,
         );
         await applyAromaBindingMigration(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
+        await applyCatalogMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
         const deliveryDatabase = recoveryProofCredentials.roleMap.databases.find(
           (candidate) => candidate.name === "coffee_platform_orders",
         );
@@ -3319,7 +3376,7 @@ async function main() {
       const selectedGrind = JSON.parse(await readFile(join(aromaCartFixture.directory, "selected-grind.json"), "utf8"));
       aromaCartEvidence = await runAromaCartProofFixture(projectName, secretsDir, composeFile, aromaCartFixture, platformConfig.environment);
       const firstCounts = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
-      assert.deepEqual(firstCounts, {login: 1, cart: 11, post: 1, put: 2, delete: 1}, "cart mutation provider call counts were not exact");
+      assert.deepEqual(firstCounts, {login: 1, catalog: 0, cart: 11, post: 1, put: 2, delete: 1}, "cart mutation provider call counts were not exact");
       const operationRefs = [
         "op_00000000000000000000000001",
         "op_00000000000000000000000002",
@@ -3334,7 +3391,7 @@ async function main() {
       assert.equal(restartedRows.get("api-internal")?.ID, initialRows.get("api-internal")?.ID, "api-internal was restarted unexpectedly");
       aromaCartRestartEvidence = await runAromaCartProofFixture(projectName, secretsDir, composeFile, aromaCartFixture, platformConfig.environment, "4");
       const secondCounts = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
-      assert.deepEqual(secondCounts, {login: 1, cart: 15, post: 1, put: 2, delete: 1}, "restart did not reuse the encrypted PostgreSQL session or replay terminal mutations");
+      assert.deepEqual(secondCounts, {login: 1, catalog: 0, cart: 15, post: 1, put: 2, delete: 1}, "restart did not reuse the encrypted PostgreSQL session or replay terminal mutations");
       const secondJournalRows = assertAromaMutationJournal(await readAromaMutationJournal(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig, operationRefs), selectedGrind.sourceGrindKeyHash);
       assert.deepEqual(secondJournalRows, firstJournalRows, "restart changed durable mutation journal rows");
       aromaCartRestartEvidence = {...aromaCartRestartEvidence, journalRows: secondJournalRows, realPostgresJournal: true, providerAccess: false, providerKind: "local-fake", liveProviderAcceptance: false};
@@ -3370,6 +3427,10 @@ async function main() {
       await assertReadiness(projectName, secretsDir, composeFile);
       assertHostExposure(projectName, secretsDir, rows, composeFile);
       if (options.recoveryProof) {
+        assert.ok(aromaCartProviderFixture, "recovery proof local provider fixture is missing");
+        const providerFixtureCalls = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
+        assert.ok(providerFixtureCalls.catalog >= 1, "recovery proof did not reach the local provider fixture for Catalog traversal");
+        recoveryProviderFixtureCalls = providerFixtureCalls;
         runCompose(
           projectName,
           secretsDir,
@@ -3455,7 +3516,7 @@ async function main() {
           : "canonical-runtime-plus-local-kafka-fixture",
         kafkaRetention: options.aromaBindingProof || options.aromaCartProof ? undefined : options.databaseProof || options.customerProof ? undefined : kafkaRetention,
         recoveryProof: options.recoveryProof
-          ? {postgres: recoveryDatabaseProof, kafka: kafkaRetention, native: nativeFoundation}
+          ? {postgres: recoveryDatabaseProof, kafka: kafkaRetention, native: nativeFoundation, providerFixture: recoveryProviderFixtureCalls}
           : undefined,
         aromaBindingProof: options.aromaBindingProof
           ? {services: ["api-internal", "aroma-gateway"], baseline: aromaBindingEvidence, restartReplay: aromaBindingRestartEvidence, durableBindingCount: 1, cleanup: aromaBindingCleanupReceipt}

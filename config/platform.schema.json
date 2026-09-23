@@ -139,6 +139,16 @@
         },
         "health": { "$ref": "#/$defs/health" },
         "deadlineMs": { "type": ["integer", "null"], "minimum": 1 },
+        "scheduler": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["intervalMs", "startupImport", "overlapPolicy"],
+          "properties": {
+            "intervalMs": {"type": "integer", "const": 3600000},
+            "startupImport": {"type": "boolean", "const": true},
+            "overlapPolicy": {"type": "string", "const": "skip"}
+          }
+        },
         "deadlineProfiles": {
           "type": "object",
           "additionalProperties": false,

@@ -1,0 +1,25 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: production complete retained heap grew 4475496 bytes after 49153 manifests (limit 4194304)
+    at sample (file:///home/yurgusev/CoffeeOrderPlatform-issue6/tests/catalog/terminal-capacity-proof.mjs:40:10)
+    at file:///home/yurgusev/CoffeeOrderPlatform-issue6/tests/catalog/terminal-capacity-proof.mjs:57:32
+    at file:///home/yurgusev/CoffeeOrderPlatform-issue6/apps/catalog-supplier-sync/dist/catalog-import-store.js:260:42
+    at withTransaction (file:///home/yurgusev/CoffeeOrderPlatform-issue6/tests/catalog/terminal-capacity-proof.mjs:46:56)
+    at file:///home/yurgusev/CoffeeOrderPlatform-issue6/apps/catalog-supplier-sync/dist/catalog-import-store.js:78:79
+    at NoopContextManager.with (/home/yurgusev/CoffeeOrderPlatform-issue6/node_modules/.pnpm/@opentelemetry+api@1.9.1/node_modules/@opentelemetry/api/build/src/context/NoopContextManager.js:14:19)
+    at ContextAPI.with (/home/yurgusev/CoffeeOrderPlatform-issue6/node_modules/.pnpm/@opentelemetry+api@1.9.1/node_modules/@opentelemetry/api/build/src/api/context.js:51:46)
+    at CatalogTelemetry.observe (file:///home/yurgusev/CoffeeOrderPlatform-issue6/apps/catalog-supplier-sync/dist/observability.js:20:38)
+    at transact (file:///home/yurgusev/CoffeeOrderPlatform-issue6/apps/catalog-supplier-sync/dist/catalog-import-store.js:78:50)
+    at Object.complete (file:///home/yurgusev/CoffeeOrderPlatform-issue6/apps/catalog-supplier-sync/dist/catalog-import-store.js:259:40) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v26.8.1
+exitCode: 1

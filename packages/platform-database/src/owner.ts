@@ -61,6 +61,22 @@ export function defineCopy(database: Database, table: string, columns: readonly 
   };
 }
 
+export type TemporaryColumn = Readonly<{name: string; type: "integer" | "text" | "jsonb"; nullable?: boolean}>;
+const TEMPORARY_COLUMN_TYPES = new Set<TemporaryColumn["type"]>(["integer", "text", "jsonb"]);
+export function defineTemporaryTable(database: Database, table: string, columns: readonly TemporaryColumn[]): (transaction: Transaction) => Promise<void> {
+  if (columns.length === 0 || !/^[a-z][a-z0-9_]{0,62}$/u.test(table)) throw new DatabaseTransactionError("DB_INVALID_CONFIGURATION");
+  const seen = new Set<string>();
+  const definitions = columns.map(column => {
+    if (!/^[a-z][a-z0-9_]{0,62}$/u.test(column.name) || seen.has(column.name) || !TEMPORARY_COLUMN_TYPES.has(column.type)) {
+      throw new DatabaseTransactionError("DB_INVALID_CONFIGURATION");
+    }
+    seen.add(column.name);
+    return `${quoteIdentifier(column.name)} ${column.type}${column.nullable === true ? "" : " NOT NULL"}`;
+  });
+  const sql = `CREATE TEMP TABLE ${quoteIdentifier(table)} (${definitions.join(", ")}) ON COMMIT DROP`;
+  return async transaction => {await execute(database, transaction, sql, [], true);};
+}
+
 // Только checksum runner platform-migrations может импортировать эту DDL capability.
 export function defineMigration(database: Database, sql: string): (transaction: Transaction) => Promise<void> {
   if (/\b(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|END|PREPARE\s+TRANSACTION)\b/i.test(sql)) throw new DatabaseTransactionError("DB_INVALID_CONFIGURATION");

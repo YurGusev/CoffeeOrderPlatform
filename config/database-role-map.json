@@ -45,11 +45,11 @@
           "temporaryTables": true,
           "tables": {
             "supplier_snapshots": ["SELECT", "INSERT", "UPDATE"],
-            "snapshot_batches": ["SELECT", "INSERT", "UPDATE"],
-            "snapshot_products": ["SELECT", "INSERT", "UPDATE"],
-            "snapshot_variants": ["SELECT", "INSERT", "UPDATE"],
-            "snapshot_offers": ["SELECT", "INSERT", "UPDATE"],
-            "snapshot_availability": ["SELECT", "INSERT", "UPDATE"]
+            "snapshot_batches": ["SELECT", "INSERT"],
+            "snapshot_products": ["SELECT", "INSERT"],
+            "snapshot_variants": ["SELECT", "INSERT"],
+            "snapshot_offers": ["SELECT", "INSERT"],
+            "snapshot_availability": ["SELECT", "INSERT"]
           }
         },
         {

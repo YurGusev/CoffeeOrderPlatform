@@ -136,6 +136,322 @@ export const internalV1Schemas = {
       }
     }
   },
+  "AromaCatalogExportRecord": {
+    "oneOf": [
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "streamVersion",
+          "recordType",
+          "snapshotRef",
+          "supplierRef",
+          "providerSnapshotRef",
+          "startedAt"
+        ],
+        "properties": {
+          "streamVersion": {
+            "const": "1"
+          },
+          "recordType": {
+            "const": "snapshot-started"
+          },
+          "snapshotRef": {
+            "type": "string",
+            "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "supplierRef": {
+            "type": "string",
+            "pattern": "^sup_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "providerSnapshotRef": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "streamVersion",
+          "recordType",
+          "snapshotRef",
+          "batchNumber",
+          "offerCount",
+          "uncompressedBytes",
+          "batchHash",
+          "previousBatchHash",
+          "items"
+        ],
+        "properties": {
+          "streamVersion": {
+            "const": "1"
+          },
+          "recordType": {
+            "const": "snapshot-batch"
+          },
+          "snapshotRef": {
+            "type": "string",
+            "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "batchNumber": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "uncompressedBytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2097152
+          },
+          "batchHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "previousBatchHash": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 500,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sourceProductKeyHash",
+                "sourceVariantKeyHash",
+                "sourceOfferKeyHash",
+                "displayName",
+                "unit",
+                "supplierUnitMinor",
+                "currency",
+                "availability",
+                "imageUrl",
+                "sourceIdentityScheme"
+              ],
+              "properties": {
+                "sourceProductKeyHash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "sourceVariantKeyHash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "sourceOfferKeyHash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "displayName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "piece",
+                    "gram",
+                    "kilogram"
+                  ]
+                },
+                "supplierUnitMinor": {
+                  "type": "string",
+                  "pattern": "^-?(0|[1-9][0-9]*)$"
+                },
+                "currency": {
+                  "type": "string",
+                  "const": "RUB"
+                },
+                "availability": {
+                  "type": "string",
+                  "enum": [
+                    "Available",
+                    "Unavailable",
+                    "Stopped"
+                  ]
+                },
+                "imageUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uri",
+                  "maxLength": 2048
+                },
+                "supplierPromotions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "discountBasisPoints",
+                      "minimumWeightRaw",
+                      "providerCreatedAt",
+                      "providerUpdatedAt"
+                    ],
+                    "properties": {
+                      "discountBasisPoints": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      "minimumWeightRaw": {
+                        "type": "string",
+                        "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]*[1-9])?$"
+                      },
+                      "providerCreatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+                      },
+                      "providerUpdatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+                      }
+                    }
+                  }
+                },
+                "grindOptions": {
+                  "type": "array",
+                  "maxItems": 100,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "sourceGrindKeyHash",
+                      "displayName"
+                    ],
+                    "properties": {
+                      "sourceGrindKeyHash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      }
+                    }
+                  }
+                },
+                "sourceIdentityScheme": {
+                  "type": "string",
+                  "const": "hmac-sha256-v1"
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "streamVersion",
+          "recordType",
+          "snapshotRef",
+          "batchCount",
+          "productCount",
+          "variantCount",
+          "offerCount",
+          "contentHash",
+          "completedAt"
+        ],
+        "properties": {
+          "streamVersion": {
+            "const": "1"
+          },
+          "recordType": {
+            "const": "snapshot-completed"
+          },
+          "snapshotRef": {
+            "type": "string",
+            "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "batchCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "productCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "variantCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "streamVersion",
+          "recordType",
+          "snapshotRef",
+          "code",
+          "failedAt"
+        ],
+        "properties": {
+          "streamVersion": {
+            "const": "1"
+          },
+          "recordType": {
+            "const": "snapshot-failed"
+          },
+          "snapshotRef": {
+            "type": "string",
+            "pattern": "^snp_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "PROVIDER_UNAVAILABLE",
+              "PROVIDER_TIMEOUT",
+              "INVALID_STREAM",
+              "BATCH_HASH_CONFLICT",
+              "SOURCE_IDENTITY_COLLISION"
+            ]
+          },
+          "failedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+          }
+        }
+      }
+    ]
+  },
   "AromaOfferBindingRequest": {
     "type": "object",
     "additionalProperties": false,

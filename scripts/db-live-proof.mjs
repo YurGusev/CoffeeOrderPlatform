@@ -983,11 +983,14 @@ export async function openBlackholeProxy(
     dropOnce = false,
     dropCommandOnce = false,
     dropCommandAt = 1,
+    dropReplyAt = 1,
     blockExtendedQuery,
   } = {},
 ) {
   if (!Number.isSafeInteger(dropCommandAt) || dropCommandAt < 1)
     fail("blackhole command occurrence must be a positive safe integer");
+  if (!Number.isSafeInteger(dropReplyAt) || dropReplyAt < 1)
+    fail("blackhole reply occurrence must be a positive safe integer");
   if (blockExtendedQuery !== undefined && (typeof blockExtendedQuery !== "string" || blockExtendedQuery.trim() === ""))
     fail("blackhole extended-query barrier must name a non-empty query fragment");
   const observed = [];
@@ -1095,7 +1098,7 @@ export async function openBlackholeProxy(
         signalCommand(command);
         if (command !== commandToDrop) continue;
         matchingCommands += 1;
-        if (!dropCommandOnce && (!dropOnce || dropArmed)) {
+        if (!dropCommandOnce && matchingCommands === dropReplyAt && (!dropOnce || dropArmed)) {
           dropResponses = true;
           dropArmed = false;
         }
