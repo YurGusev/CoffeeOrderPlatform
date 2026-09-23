@@ -44,11 +44,11 @@ outputs:
   sha256: 98ca769914767769f965701ae610a3a20352872bf94487b642d6604152f9d5ae
   consumers: []
 - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
-  sha256: 24e7cfeb4a926baa86f8164ee2a64a22c8c3cbde09116c5b18d41820473d7da5
+  sha256: 7eb375894df02430c27f1a86b6a2cc6fe4b0d7390d0c9219c4c1e3d79e419587
   consumers:
   - 16
 - artifact: evidence/issue-6-acceptance.md
-  sha256: 47b0174f9be122d0197f9d2fe2919b85defd499880b55c03dbc9409cd104615a
+  sha256: f703faa10c95162229edc54eb2ad003c70c766ed3d6a54fdd228815e9fd7e7b4
   consumers:
   - 16
 - artifact: apps/catalog-supplier-sync/src/main.ts
@@ -76,13 +76,13 @@ outputs:
   sha256: 19c4478466b99af80e5e0679c2456d273f15ccd6be43c1710b4b0c520e67adba
   consumers: []
 - artifact: tests/catalog/copy-live.test.mjs
-  sha256: cfc484a4143b282f3074d5bd97113323c4b02d3d379baab21cb4efba8eeba2b5
+  sha256: 070879a0e2c902a61558de653a0794b16bceb1c6278759563c0984eb1f161398
   consumers: []
 - artifact: tests/catalog/recovery-live.test.mjs
   sha256: c56786b5774a8ac4ffb428c57d4d5b2b9af1eb69d6ed5455c9aa35ac549456e6
   consumers: []
 - artifact: scripts/catalog-copy-live-proof.mjs
-  sha256: 977c62991d05972f47ac248b30ea071c1b0bc2e04712a6e2a7a7f2b230a2ac23
+  sha256: 6cb2d75b603f92412cddab663208a3b4aeede1cc1cf35f50f9a83f01945d1f6b
   consumers: []
 - artifact: scripts/catalog-recovery-live-proof.mjs
   sha256: 4f2c916ee6d9cd98962d234bb39d7788976ebd4c2a693866b0e4cb67d058da72
@@ -91,7 +91,7 @@ outputs:
   sha256: 8163ac36edb98bd46e969f1ff7bb864cf455193c8205185f31e1a4cc3da4d38f
   consumers: []
 - artifact: evidence/issue-6-review-remediation.md
-  sha256: 66ed591ca7465e39d795dae0c7d907a27129f8155c9ca9291fbf0a407fcd0e83
+  sha256: 86e47b04f69b3c494bb9d832ac1363bdd82f5abf3fd9dccdf7585403305a76cf
   consumers: []
 - artifact: evidence/issue-6-review-checks.json
   sha256: 8500179ef407855c2467ec533a9e6fe895ab789a54c9d6f6d3a91a654f7f6aa8
@@ -145,35 +145,37 @@ verification:
 - command: pnpm check
   result: passed
   exitCode: 0
-  detail: authority, toolchain, config, contracts, architecture, rule parity, lint, typecheck; 437 total, 421 passed, 16 unrelated
-    opt-in skips; zero Catalog skips
+  detail: проверены authority, toolchain, config, contracts, architecture, rule parity, lint и typecheck;
+    437 тестов, 421 пройден, 16 прежних opt-in пропусков, пропусков Catalog нет
 - command: pnpm test:catalog-ingestion
   result: passed
   exitCode: 0
-  detail: 9 passed, 0 skipped; unchanged golden hash, incremental binary digest/order/hex/finalization contract, generated
-    record guard, closed rejection allowlist, TEMP runtime type allowlist, Compose Catalog migration ordering,
-    anonymous Kafka volume cleanup and local-provider wiring
+  detail: 9 пройдено, 0 пропущено; неизменённые golden hash, инкрементный бинарный digest, порядок, проверка hex и finalization,
+    проверка generated records, закрытый allowlist причин отказа, типы TEMP, порядок миграций в Compose,
+    очистка анонимных Kafka volumes и маршрутизация к локальному provider fixture
 - command: pnpm test:catalog-stream
   result: passed
   exitCode: 0
-  detail: 56 passed, 0 skipped; closed durable failure reasons, uncertain outcome separation, transport mapping,
-    recovery-before-every-export, real scheduler loss/restoration ticks, truthful readiness, bounded
-    stream/generation/validation/COPY/transaction telemetry, safe correlation fields, batch duration, stream/COPY backpressure,
-    linear framing and 168344938-byte capacity/backpressure subprocess; production complete() verifies 131072 distinct
-    manifests, 131072 reconstructions, two recounts, one transition and exact replay with 161296 bytes peak retained heap
-    growth (<4194304); lazy SQL fixture, not PostgreSQL capacity
+  detail: 56 пройдено, 0 пропущено; закрытые durable причины, отделение неопределённого исхода, transport mapping,
+    recovery перед каждым export, scheduler при отказе и восстановлении БД, достоверная readiness, bounded telemetry
+    stream/generation/validation/COPY/transaction, безопасные корреляционные поля, длительность batch и backpressure,
+    линейное framing и процесс с потоком 168344938 байт; production complete() проверяет 131072 различных manifests,
+    131072 реконструкций, два повторных подсчёта, один переход и exact replay; рост удерживаемого heap 161296 байт
+    (<4194304); используется lazy SQL fixture, не PostgreSQL capacity proof
 - command: pnpm test:catalog-copy
   result: passed
   exitCode: 0
-  detail: 1 passed, 0 skipped; disposable PostgreSQL 17.11, TEMP COPY/merge/reconstruction, locked replay conflict, terminal
-    timestamp, durable ordinal/count tamper, rollback and grants; real COPY/transaction OTel instrumentation and reconciled
-    batch metrics
+  detail: 1 пройден, 0 пропущено; disposable PostgreSQL 17.11, TEMP COPY/merge/reconstruction, конфликт replay под lock,
+    terminal timestamp, повреждение durable ordinal/count, rollback и grants; реальные OTel-инструментация COPY/transaction
+    и метрики согласованных batches. На незакоммиченном дереве повторно проверено связанное HTTP→COPY завершение —
+    читатель и источник уничтожены, `DB_INTERRUPTED`, все шесть таблиц совпали с состоянием до пакета,
+    соединение освобождено, активных COPY/idle transaction нет, остановка заняла менее 40 секунд.
 - command: pnpm test:catalog-recovery
   result: passed
   exitCode: 0
-  detail: 1 passed, 0 skipped; create/started/batch/terminal/reject unknown COMMIT and terminal acknowledgement loss; SIGKILL
-    and new PID through production composition, real mTLS InternalApi fixture, readiness 503 to 200 and recovery before new
-    export
+  detail: 1 пройден, 0 пропущено; неопределённый COMMIT для create/started/batch/terminal/reject и потеря terminal ACK;
+    SIGKILL и новый PID через production composition, локальный mTLS InternalApi fixture, readiness 503→200 и recovery
+    перед новым export
 - command: pnpm contracts:check-generated
   result: passed
   exitCode: 0
@@ -192,31 +194,28 @@ verification:
 - command: pnpm test
   result: passed
   exitCode: 0
-  detail: 437 total, 421 passed, 16 unrelated live skips, no Catalog skips (executed within pnpm check)
+  detail: 437 тестов, 421 пройден, 16 прежних пропусков live-проверок, пропусков Catalog нет; команда исполнена в составе pnpm check
 - command: pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-issue6-fresh-2ae61552a0fd-20260922060457
   result: passed
   exitCode: 0
-  detail: disposable PostgreSQL/Kafka recovery, Catalog migrations before startup, 15 healthy runtimes plus local HTTPS provider
-    fixture, native delivery proofs, graceful shutdown, anonymous Kafka volume removal and zero scoped/tmpfs/dangling leftovers;
-    no real provider access
+  detail: исторический proof для более раннего HEAD 2ae61552a0fd; disposable PostgreSQL/Kafka recovery, миграции Catalog
+    до запуска, 15 здоровых runtimes и локальный HTTPS provider fixture, graceful shutdown, очистка ресурсов;
+    реального обращения к провайдеру не было; не подтверждает текущий HEAD PR
 - command: pnpm db:smoke
   result: passed
   exitCode: 0
-  detail: structural smoke only; foreign CONNECT denial is proven separately by real importer-role Client.connect calls in the live Catalog harness
+  detail: только структурная проверка; запрет foreign CONNECT доказан отдельными вызовами Client.connect с ролью импортёра
 - command: git diff --check
   result: passed
   exitCode: 0
 limitations:
-- No real AROMA calls or mutations were performed.
-- No commit, push, PR or merge was performed.
-- Issue 16 must use its own Catalog owner-local database adapter; it must not import catalog-supplier-sync runtime code.
-- Live restart uses local bootstrap/DNS and a local mutual-TLS InternalApi fixture, not deployed api-internal, Gateway or
-  provider.
-- Capacity proof uses a controlled persistence seam and sampled memory in a 64 MiB old-space subprocess, not an end-to-end
-  DB/provider load benchmark.
-- OTel instrumentation and runtime metrics are observed; external collector delivery is not claimed.
-- Mandatory Compose recovery proof uses generated fixture credentials and a local HTTPS provider, not production secrets or provider.
-- Terminal capacity proof executes production complete/hash/reconstruction with lazy SQL fixtures; it is not a PostgreSQL
-  capacity benchmark.
-- First pnpm check attempt hit AROMA binding saturation DB_POOL_EXHAUSTED; isolated and full reruns passed unchanged; failed
-  receipt retained.
+- Реальных вызовов AROMA и мутаций у провайдера не выполнялось.
+- Ветка опубликована в PR #145; merge и deployment не выполнялись. Отмеченный выше Compose receipt относится к более раннему HEAD.
+- Issue #16 должен использовать собственный owner-local database adapter Catalog, а не импортировать runtime-код catalog-supplier-sync.
+- Live restart использует локальный bootstrap/DNS и mTLS InternalApi fixture, но не deployed api-internal, Gateway или provider.
+- Проверка ёмкости использует управляемый persistence seam и sampled memory в процессе с old-space 64 MiB, а не сквозной DB/provider benchmark.
+- Наблюдались OTel-инструментация и runtime metrics; доставка во внешний collector не проверялась.
+- Compose recovery proof использует generated fixture credentials и локальный HTTPS provider, а не production secrets/provider.
+- Проверка terminal capacity исполняет production complete/hash/reconstruction с lazy SQL fixtures, но не измеряет ёмкость PostgreSQL.
+- Первая попытка pnpm check дала DB_POOL_EXHAUSTED в AROMA binding saturation; изолированный и полный повторы прошли без исправлений;
+  журнал первого отказа сохранён.

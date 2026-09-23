@@ -1,4 +1,4 @@
-import {canonicalCatalogJson, catalogBatchBytes, catalogBatchHash, catalogContentHash} from "../packages/contracts/aroma-v1/dist/index.js";
+import {canonicalCatalogJson, catalogBatchBytes, catalogBatchHash, catalogContentHash, isAromaCatalogExportRecord} from "../packages/contracts/aroma-v1/dist/index.js";
 import {createCatalogImportStore} from "../apps/catalog-supplier-sync/dist/catalog-import-store.js";
 import {runCatalogImport} from "../apps/catalog-supplier-sync/dist/run-catalog-import.js";
 import {withCatalogPostgres, proveCatalogForeignConnect} from "./catalog-live-harness.mjs";
@@ -6,6 +6,9 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import {Client} from "pg";
 import {Readable} from "node:stream";
+import {createServer} from "node:http";
+import {once} from "node:events";
+import {InternalCatalogClient} from "../apps/catalog-supplier-sync/dist/internal-api-client.js";
 import {trace} from "@opentelemetry/api";
 import {CatalogTelemetry} from "../apps/catalog-supplier-sync/dist/observability.js";
 
@@ -88,6 +91,110 @@ async function copyFailureProof(database,admin,mode,ref) {
   const after=await assertUnchanged(admin,ref,before);
   assert.equal((await store.getSnapshot(ref,AbortSignal.timeout(3_000))).state,"Receiving");
   return {code,consumedChunks,consumedBytes,sourceDestroyed:sourceRef.destroyed,sixTablesUnchanged:true,poolUsable:true,before,after};
+}
+async function httpCopyShutdownProof(database,admin) {
+  const ref="snp_00000000000000000000000105";
+  const controller=new AbortController();
+  const startedRecord={streamVersion:"1",recordType:"snapshot-started",snapshotRef:ref,supplierRef,
+    providerSnapshotRef:"http-mid-copy-shutdown",startedAt:"2026-09-20T00:00:00Z"};
+  // The live HTTP contract requires canonical decimal text; the direct-store
+  // fixture above deliberately carries an otherwise accepted legacy spelling.
+  const copyRecord=batch(ref,[{...first,supplierPromotions:[{...first.supplierPromotions[0],minimumWeightRaw:"0.25"}]},second]);
+  assert.equal(isAromaCatalogExportRecord(copyRecord),true,"the HTTP fixture must satisfy InternalApiV1");
+  let responseClosed;
+  let serverRequestReceived=false;
+  const abortedResponse=new Promise(resolve => {responseClosed=resolve;});
+  let prematureResponseClose=false;
+  const server=createServer((_request,response) => {
+    serverRequestReceived=true;
+    response.writeHead(200,{"content-type":"application/x-ndjson"});
+    response.write(`${JSON.stringify(startedRecord)}\n${JSON.stringify(copyRecord)}\n`);
+    response.once("close",() => {prematureResponseClose=!response.writableEnded;responseClosed();});
+  });
+  server.listen(0,"127.0.0.1");
+  await once(server,"listening");
+  const {port: httpPort}=server.address();
+  const httpClient=new InternalCatalogClient({fetch:(path,options) => fetch(`http://127.0.0.1:${httpPort}${path}`,options)});
+  const originalFrom=Readable.from.bind(Readable);
+  const originalFromWeb=Readable.fromWeb.bind(Readable);
+  const fromDescriptor=Object.getOwnPropertyDescriptor(Readable,"from");
+  const fromWebDescriptor=Object.getOwnPropertyDescriptor(Readable,"fromWeb");
+  let copySource;
+  let httpSource;
+  let copySourceReady;
+  const copyPaused=new Promise(resolve => {copySourceReady=resolve;});
+  Readable.from=function(...args) {
+    const source=originalFrom.apply(Readable,args);
+    copySource=source;
+    source.once("data",() => {source.pause();copySourceReady();});
+    return source;
+  };
+  Readable.fromWeb=function(...args) {
+    httpSource=originalFromWeb.apply(Readable,args);
+    return httpSource;
+  };
+  const store=createCatalogImportStore(database);
+  let before;
+  let importError;
+  const receivedRecords=[];
+  const importTask=runCatalogImport({store,supplierRef,snapshotRef:ref,signal:controller.signal,
+    context:{correlationId:"24424424-2442-4442-8442-244244244244"},
+    exportCatalog:async function* (request,context) {for await (const record of httpClient.export(request,context)) {receivedRecords.push({type:record?.recordType,valid:isAromaCatalogExportRecord(record),keys:Object.keys(record ?? {})});yield record;}}}).catch(error => {importError=error;});
+  const shutdownStarted=performance.now();
+  try {
+    await Promise.race([copyPaused,new Promise((_,reject) => {const timer=setTimeout(() => reject(new Error(`COPY source did not start; request=${serverRequestReceived}, import=${importError?.code ?? importError?.message ?? "pending"}, records=${JSON.stringify(receivedRecords)}`)),10_000);timer.unref();})]);
+    let activeCopy=false;
+    const copyDeadline=performance.now()+10_000;
+    while (performance.now()<copyDeadline) {
+      const row=(await admin.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE usename='coffee_catalog_import_rw' AND state='active' AND query ~ '^COPY'" )).rows[0];
+      if (row.count>0) {activeCopy=true;break;}
+      await new Promise(resolve => setTimeout(resolve,10));
+    }
+    assert.equal(activeCopy,true,"real PostgreSQL COPY must be active before shutdown");
+    assert.equal(database.metrics().active,1,"the active COPY owns one leased runtime connection");
+    // Created→Receiving is committed before batch COPY. Compare the durable
+    // state immediately before cancelling COPY, not before starting the export.
+    before=await capture(admin,ref);
+    assert.equal(before.supplier_snapshots[0]?.state,"Receiving");
+    const shutdownTask=database.resource.stop(AbortSignal.timeout(40_000));
+    controller.abort(new DOMException("catalog shutdown","AbortError"));
+    const remainingMs=40_000-(performance.now()-shutdownStarted);
+    assert.ok(remainingMs>0,"shutdown budget elapsed before database shutdown");
+    const deadline=AbortSignal.timeout(Math.max(1,Math.floor(remainingMs)));
+    await Promise.race([Promise.all([shutdownTask,importTask]),new Promise((_,reject) =>
+      deadline.addEventListener("abort",() => reject(new Error("active COPY shutdown exceeded 40s budget")),{once:true}))]);
+    await Promise.race([abortedResponse,new Promise((_,reject) => {const timer=setTimeout(() => reject(new Error("HTTP body reader did not abort")),5_000);timer.unref();})]);
+    assert.equal(prematureResponseClose,true,"HTTP response body must close before completion");
+    assert.equal(copySource.destroyed,true,"COPY source must be destroyed");
+    assert.equal(httpSource.destroyed,true,"HTTP response/body reader source must be destroyed");
+    assert.ok(importError,"aborted COPY import must reject");
+    assert.equal(importError.code,"DB_INTERRUPTED");
+    const after=await capture(admin,ref);
+    assert.deepEqual(after,before,"transaction rollback must preserve all six catalog tables");
+    assert.equal(Object.keys(after).length,6);
+    const active=(await admin.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE usename='coffee_catalog_import_rw' AND (state LIKE 'idle in transaction%' OR (state='active' AND query ~ '^COPY'))")).rows[0].count;
+    assert.equal(active,0,"no COPY or idle transaction backend remains");
+    assert.equal(database.metrics().active,0,"connection lease must be released");
+    assert.equal(database.metrics().pending,0,"database shutdown waits for import transaction settlement");
+    const shutdownMs=performance.now()-shutdownStarted;
+    assert.ok(shutdownMs<40_000,"graceful shutdown must complete within its configured budget");
+    return {readerCancelled:prematureResponseClose,copyCancelled:importError.code==="DB_INTERRUPTED",sourceDestroyed:copySource.destroyed&&httpSource.destroyed,
+      sixTablesRolledBack:true,connectionReleased:database.metrics().active===0,shutdownAborted:controller.signal.aborted,shutdownMs,
+      copyError:importError.code,observedActiveCopy:true,connectionBackendGone:active===0,before,after};
+  } finally {
+    controller.abort();
+    // On a failed assertion or timeout, do not let the proof harness strand a
+    // transaction or an open HTTP response while the disposable DB is removed.
+    if (database.metrics().active>0 || database.metrics().pending>0) database.resource.destroy();
+    Object.defineProperty(Readable,"from",fromDescriptor);
+    Object.defineProperty(Readable,"fromWeb",fromWebDescriptor);
+    server.closeAllConnections();
+    try {
+      await Promise.race([importTask,new Promise((_,reject) => {const timer=setTimeout(() => reject(new Error("import cleanup exceeded 5s")),5_000);timer.unref();})]);
+    } finally {
+      await new Promise((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  }
 }
 async function postMergeProof(database,admin) {
   const store=createCatalogImportStore(database);
@@ -411,9 +518,10 @@ export async function runCatalogCopyProof() {
         yield metricsBatch;
         yield completed(metricsRef,[metricsBatch],[second]);
       }});
+    const httpCopyShutdown=await httpCopyShutdownProof(database,adminClient);
     const active=(await adminClient.query("SELECT count(*)::int AS count FROM pg_stat_activity WHERE usename='coffee_catalog_import_rw' AND (state LIKE 'idle in transaction%' OR (state='active' AND query ~ '^COPY'))")).rows[0].count;
     assert.equal(active,0);
-    return {skipped:false, noActiveCopyOrTransaction:active === 0, migrationProof,midCopyAbort,copySourceFailure,postMergeRollback,knownRollback,acl,foreignConnect,stateMatrix,telemetry:{spans:Object.fromEntries(spans),metrics:telemetry.render()}, migrations:firstApply.length === 3 && secondApply.length === 0 ? "idempotent" : "invalid", copy:"bounded-temp-copy",
+    return {skipped:false, noActiveCopyOrTransaction:active === 0, migrationProof,midCopyAbort,copySourceFailure,httpCopyShutdown,postMergeRollback,knownRollback,acl,foreignConnect,stateMatrix,telemetry:{spans:Object.fromEntries(spans),metrics:telemetry.render()}, migrations:firstApply.length === 3 && secondApply.length === 0 ? "idempotent" : "invalid", copy:"bounded-temp-copy",
       reconstruction:{items:reconstructed, batchHash:record.batchHash, contentHash:terminal.contentHash},
       state:row.state, optionals:{missingGrinds:!("grindOptions" in reconstructed[0]), emptyGrinds:Array.isArray(reconstructed[1].grindOptions)},
       replayConflictRejected, receivingReplayConflictRejected, terminalConflictRejected, terminalTimestampConflictRejected,

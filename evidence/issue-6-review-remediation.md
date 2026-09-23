@@ -1,111 +1,54 @@
-# Issue #6 review remediation — observed local evidence
+# Issue #6: устранение замечаний ревью — наблюдения и локальные свидетельства
 
-Date: 2026-09-21. Scope: `feature/6-catalog-batch-ingestion`, uncommitted worktree.
-This closes the five supplied review findings and follow-up P2 locally; it is not PR, CI, merge,
-deployment, provider access, or #16 activation evidence.
+**Историческая граница исходного отчёта:** первоначальные наблюдения ниже относятся к 21 сентября 2026 года и локальному незакоммиченному рабочему дереву `feature/6-catalog-batch-ingestion` на тот момент. Последующие дополнения также сохраняют свои даты. Поэтому исходные утверждения об отсутствии PR, коммита или отправки изменений (push) описывают только состояние на момент соответствующего отчёта и не являются утверждениями о текущем состоянии.
 
-## Observed RED before the corresponding implementation
+**Текущее состояние:** PR #145 опубликован; его HEAD — `89b4779`. Это текущее состояние не меняет исторические наблюдения ниже и не означает, что исходные локальные прогоны были выполнены на текущем HEAD.
 
-The excerpts below are from executed commands, not reconstructed test results.
-No RED commit was made (commits are not authorized).
+Дата исходного отчёта: 2026-09-21. Объём: `feature/6-catalog-batch-ingestion`, незакоммиченное рабочее дерево на дату исходного отчёта.
+Исходный локальный отчёт закрывает пять предоставленных замечаний ревью и последующее замечание P2; он не является свидетельством о PR, CI, слиянии, развёртывании, доступе к провайдеру или активации #16 на тот исторический момент.
 
-| Finding | Command / observed failing assertion |
+## Наблюдавшиеся RED-сбои до соответствующих изменений реализации
+
+Приведённые ниже фрагменты взяты из выполненных команд, а не восстановлены по результатам тестов.
+Коммит с RED-сбоем не создавался (создание коммитов не было разрешено).
+
+| Замечание | Команда / наблюдавшееся упавшее утверждение |
 |---|---|
-| 1 — recovery on later ticks | `node --experimental-test-module-mocks tests/catalog/composition-proof.mjs recovery`: `Missing expected rejection: DB loss must block the second export` (exit 1). |
-| 2 — truthful readiness | `node --experimental-test-module-mocks tests/catalog/composition-proof.mjs readiness-reject`: `startup recovery and supervisor need a readiness check` (exit 1). |
-| 3 — required telemetry | `pnpm test:catalog-stream`: `generation span missing`; 16 pass, 1 fail, 0 skips. |
-| 4 — real restart evidence | `pnpm test:catalog-recovery`: `restart must kill a production-composed OS process`; actual `undefined`, expected `SIGKILL`; 0 pass, 1 fail, 0 skips. |
-| 5 — framing | `pnpm test:catalog-stream`: `quadratic framing copies: 60637577 bytes for 11012`; 15 pass, 1 fail, 0 skips. |
+| 1 — восстановление на последующих тиках | `node --experimental-test-module-mocks tests/catalog/composition-proof.mjs recovery`: `Missing expected rejection: DB loss must block the second export` (exit 1). |
+| 2 — достоверная готовность | `node --experimental-test-module-mocks tests/catalog/composition-proof.mjs readiness-reject`: `startup recovery and supervisor need a readiness check` (exit 1). |
+| 3 — обязательная телеметрия | `pnpm test:catalog-stream`: `generation span missing`; 16 pass, 1 fail, 0 skips. |
+| 4 — реальные свидетельства перезапуска | `pnpm test:catalog-recovery`: `restart must kill a production-composed OS process`; actual `undefined`, expected `SIGKILL`; 0 pass, 1 fail, 0 skips. |
+| 5 — формирование кадров | `pnpm test:catalog-stream`: `quadratic framing copies: 60637577 bytes for 11012`; 15 pass, 1 fail, 0 skips. |
 
-The persistence pause was already an intended property of the serial importer.
-Its new capacity test adds observation rather than claiming a pre-existing
-backpressure behavior failure. No old tests or evidence requirements were removed.
-During proof development, invalid fixture configuration/schema and lint errors
-also failed gates; they were corrected in new proof code, not by weakening the
-existing wire validators, database rules, or architecture checker.
+Пауза на сохранении данных уже была предусмотренным свойством последовательного импортёра.
+Новый тест ёмкости добавляет наблюдение, а не утверждает, что ранее существовал дефект поведения с обратным давлением.
+Старые тесты и требования к свидетельствам не удалялись. Во время разработки доказательных тестов проверки также блокировали некорректная настройка/схема фикстур и ошибки lint; их исправили в новом коде доказательных тестов, не ослабляя существующие проверки валидаторов сетевого протокола, базы данных или архитектуры.
 
-## Closure and evidence boundaries
+## Устранение замечаний и границы доказательств
 
-1. **Recovery:** the production `main.ts` callback reconciles on **every** tick,
-   before generation creation or HTTP export. The composition regression uses
-   the real scheduler with a deterministic clock: unknown first generation,
-   DB unavailable on the next tick (no export), then restored DB, old-generation
-   rejection, and only then the second export. Recovery failure remains visible
-   in scheduler metrics and bounded structured diagnostics.
-2. **Readiness:** false until startup recovery finishes; false if the supervisor
-   resolves unexpectedly, rejects, or is stopped/destroyed. Import/provider
-   failure does not kill a live supervisor. Both supervisor termination modes and
-   ordinary provider failure are exercised. The live restart proof additionally
-   observes actual HTTP `/health/ready` status **503 → 200** while a PostgreSQL
-   lock deliberately delays startup recovery.
-3. **Telemetry:** reuse Gateway's existing `@opentelemetry/api` and runtime
-   `/metrics`/structured logger pattern. Generation, stream, validation, COPY and
-   transaction spans are emitted and ended on success/failure. Batch duration has
-   sum/count measurements; stream consumer hold time and COPY source pause time
-   measure their respective backpressure boundaries without counting upstream wait
-   or setup/settlement. Diagnostics and span attributes carry the allowlisted
-   `snapshotRef`, `correlationId` and batch-scoped `batchNumber`; metric labels stay
-   fixed to phase/outcome and never contain those identifiers. Batch count/bytes
-   count successfully reconciled accepted stream batches (exact replay included),
-   not claimed unique durable rows. Import age is monotonic time since the last
-   successful generation, or process telemetry startup before any success,
-   disambiguated by `has_success`. Tests reject payloads, raw errors, SQL, secrets,
-   authorization/key material and high-cardinality metric labels. This verifies
-   instrumentation and runtime rendering, **not delivery to an external OTLP
-   collector**.
-4. **Restart / composition / capacity:**
-   - `catalog-runtime-live-proof.mjs` forks `runtime-child.mjs`, which imports the
-     unchanged production main/composition and uses the real runtime lifecycle,
-     scheduler, recovery, PostgreSQL store, typed InternalApi client, Undici and
-     mutual TLS. Only deployment bootstrap/config and DNS are local fixtures;
-     `fetch`, scheduler, store and importer are not mocked in this live proof.
-   - Local HTTPS fixture responds as `api-internal`; it is **not the deployed
-     api-internal service, Gateway or AROMA provider**. It verifies the production
-     InternalApiV1 route/body and TLS peer identity. No provider calls occur.
-   - Parent observes durable `Receiving/next_batch_number=1`, sends SIGKILL,
-     waits for the process exit, then forks a different PID. The old generation
-     is `Rejected` before the second HTTP export is served; the new snapshot is
-     distinct and becomes `Received`. One standalone observed PID pair was
-     **87743 → 87771**; assertions re-observe fresh PIDs on each run.
-   - The separate capacity process has a **64 MiB V8 old-space limit**, serial
-     importer/real reader with a controlled persistence seam, **3,072 batches**,
-     **168,344,938 wire bytes**, and **657,410 fragments of at most 257 bytes**.
-     First batch persistence is held for **125 ms**; producer fragment count
-     remains unchanged after bounded Readable prefetch settles, and there is
-     still only one accepted/uncommitted batch. The gate asserts sampled heap
-     growth <48 MiB, RSS growth <96 MiB and external growth <16 MiB. Final dedicated
-     run measured **17,462,984 / 33,079,296 / 3,564,534 bytes** respectively.
-     This is a synthetic streamed-capacity proof with an instrumented persistence
-     seam, **not a full database/provider load benchmark or continuous RSS peak**.
-5. **NDJSON:** before accumulation, compare fragment length against remaining
-   line budget. Complete lines use views; fragmented lines use one reusable
-   max-line-sized slab, copying each fragment once, without full-prefix concat
-   or a per-fragment object list. Regressions cover one-byte UTF-8 fragments and
-   a small prefix followed by an oversized fragment, plus previous malformed,
-   trailing, cancellation and boundary cases.
+1. **Восстановление:** обратный вызов в промышленном `main.ts` выполняет сверку состояния **на каждом** тике — до создания генерации или HTTP-экспорта. Регрессионная проверка композиции использует реальный планировщик с детерминированными часами: сначала неизвестная генерация, на следующем тике база данных недоступна (экспорта нет), затем база восстановлена, отклонение старой генерации и только после этого второй экспорт. Сбой восстановления остаётся видимым в метриках планировщика и ограниченной структурированной диагностике.
+2. **Готовность:** состояние готовности ложно, пока не завершено восстановление при запуске; оно также ложно, если супервизор неожиданно завершается, отклоняет promise либо останавливается/уничтожается. Ошибка импорта/провайдера не останавливает работающий супервизор. Проверены оба режима завершения супервизора и обычная ошибка провайдера. Дополнительное доказательство работающего перезапуска наблюдает фактический статус HTTP `/health/ready` **503 → 200**, пока блокировка PostgreSQL намеренно задерживает восстановление при запуске.
+3. **Телеметрия:** повторно используются существующие в Gateway `@opentelemetry/api` и шаблоны runtime `/metrics`/структурированного логгера. Создаются и завершаются спаны генерации, потока, валидации, COPY и транзакции — при успехе и при ошибке. Для длительности пакета собираются сумма и число измерений; время удержания потребителя потока и время паузы источника COPY измеряют соответствующие границы обратного давления, не включая ожидание источника upstream или настройку/завершение. Диагностика и атрибуты спанов содержат разрешённые списком `snapshotRef`, `correlationId` и ограниченный рамками пакета `batchNumber`; метки метрик остаются фиксированными (`phase`/`outcome`) и никогда не содержат эти идентификаторы. Число и объём в байтах учитывают успешно согласованные принятые пакеты потока (включая точное повторное воспроизведение), а не заявляют о числе уникальных долговременно сохранённых строк. Возраст импорта — монотонное время с последней успешной генерации либо, до первого успеха, с момента запуска телеметрии процесса; эти случаи различаются через `has_success`. Тесты отклоняют содержимое payload, необработанные ошибки, SQL, секреты, авторизационные/ключевые данные и метки метрик с высокой кардинальностью. Это подтверждает инструментирование и визуализацию runtime-метрик, **но не доставку во внешний OTLP-приёмник**.
+4. **Перезапуск / композиция / ёмкость:**
+   - `catalog-runtime-live-proof.mjs` запускает отдельный процесс `runtime-child.mjs`, который импортирует неизменённые производственные main/composition и использует реальный жизненный цикл runtime, планировщик, восстановление, хранилище PostgreSQL, типизированный InternalApi-клиент, Undici и взаимный TLS. Локальными фикстурами являются только загрузочная конфигурация развёртывания и DNS; в этой проверке на работающем процессе `fetch`, планировщик, хранилище и импортёр не подменены моками.
+   - Локальная HTTPS-фикстура отвечает как `api-internal`; это **не развёрнутые сервисы api-internal, Gateway или провайдер AROMA**. Проверяются производственные маршрут/body InternalApiV1 и идентичность TLS-пира. Вызовов провайдера нет.
+   - Родительский процесс наблюдает долговременное состояние `Receiving/next_batch_number=1`, отправляет SIGKILL, ждёт завершения процесса, затем запускает другой PID. Старая генерация получает статус `Rejected` до того, как отдан второй HTTP-экспорт; новый snapshot отличается и становится `Received`. Одна отдельно наблюдавшаяся пара PID: **87743 → 87771**; при каждом запуске проверки заново наблюдают фактические PID.
+   - В отдельном процессе проверки ёмкости задан **64 MiB лимит V8 old-space**; используется последовательный импортёр/реальный reader с контролируемой точкой подмены сохранения данных, **3,072 пакета**, **168,344,938 wire-байт** и **657,410 фрагментов размером не более 257 байт**. Сохранение первого пакета задерживается на **125 ms**; после завершения ограниченной предварительной выборки Readable число фрагментов производителя не меняется, при этом принят и не зафиксирован только один пакет. Проверка утверждает, что прирост выборочно измеренной heap <48 MiB, RSS <96 MiB, external <16 MiB. Финальный отдельный запуск измерил соответственно **17,462,984 / 33,079,296 / 3,564,534 bytes**. Это синтетическая потоковая проверка ёмкости с инструментированной точкой подмены сохранения, **а не полномасштабный нагрузочный тест базы данных/провайдера и не непрерывный пик RSS**.
+5. **NDJSON:** до накопления сравнивается длина фрагмента с оставшимся лимитом строки. Полные строки используют представления без копирования; для фрагментированных строк применяется один повторно используемый буфер размером не больше максимальной строки, каждый фрагмент копируется один раз, без объединения полного префикса через concat и без списка объектов на каждый фрагмент. Регрессионные проверки охватывают UTF-8-фрагменты по одному байту и небольшой префикс с последующим слишком большим фрагментом, а также прежние случаи некорректных данных, завершающих данных, отмены и границ.
 
-## Follow-up P2 — complete observability contract
+## Последующее замечание P2 — полный контракт наблюдаемости
 
-The first remediation added bounded telemetry but omitted the stream span, batch
-duration, backpressure measurements and safe correlation fields required by #6.
+В первой версии устранения замечаний появилась ограниченная телеметрия, но отсутствовали требуемые для #6 спан потока, длительность пакета, измерения обратного давления и безопасные поля корреляции.
 
-**RED before production edits:** after TypeScript build, the focused production
-wiring test failed with `AssertionError: stream span missing` (1 failed, zero skips).
+**RED до изменений промышленного кода:** после сборки TypeScript сфокусированный тест подключения промышленной инструментации завершился ошибкой `AssertionError: stream span missing` (1 failed, zero skips).
 
-**GREEN:** `catalog.import.stream`, batch-duration sum/count, stream consumer hold
-and COPY source pause measurements are wired through the production importer/store.
-`snapshotRef`, `correlationId` and batch-scoped `batchNumber` are present only in
-diagnostics/span attributes, not metric labels. `tests/catalog/observability-proof.mjs`
-exercises timing boundaries, failure cleanup, context isolation and secret/payload
-redaction. The focused test and final `pnpm test:catalog-stream` pass with zero skips.
+**GREEN:** `catalog.import.stream`, сумма/число измерений длительности пакета, время удержания потребителя потока и пауза источника COPY подключены через промышленный импортёр/хранилище. `snapshotRef`, `correlationId` и ограниченный рамками пакета `batchNumber` присутствуют только в диагностике/атрибутах спанов, но не в метках метрик. `tests/catalog/observability-proof.mjs` проверяет границы измерений времени, очистку при ошибках, изоляцию контекста и удаление секретов/содержимого запроса. Сфокусированный тест и финальный `pnpm test:catalog-stream` проходят без пропусков.
 
-## Follow-up P2 — bounded production terminal verification
+## Последующее замечание P2 — ограниченная проверка промышленного завершения
 
-`complete()` previously kept every verified digest in `batchHashes: string[]`
-until EOF verification. The existing stream capacity fixture mocked `complete()`
-and did not cover this O(batchCount) retention.
+Ранее `complete()` хранил каждый проверенный дайджест в `batchHashes: string[]` до проверки EOF. В существующей потоковой фикстуре ёмкости метод `complete()` был замокан, поэтому удержание памяти порядка O(batchCount) не проверялось.
 
-**RED before production edits:** after `pnpm exec tsc -b --pretty false`, ran:
+**RED до изменений production-кода:** после `pnpm exec tsc -b --pretty false` была выполнена команда:
 
 ```text
 node --experimental-test-module-mocks --expose-gc --max-old-space-size=64 tests/catalog/terminal-capacity-proof.mjs
@@ -113,111 +56,90 @@ AssertionError [ERR_ASSERTION]: production complete retained heap grew 4475496 b
 exitCode: 1
 ```
 
-The exact captured failing output is `evidence/issue-6-terminal-red.log`. A second
-RED, `pnpm test:catalog-ingestion`, failed with
+Точный сохранённый вывод ошибки находится в `evidence/issue-6-terminal-red.log`. Вторая проверка RED, `pnpm test:catalog-ingestion`, завершилась ошибкой
 `TypeError: hashes.createCatalogContentHash is not a function` (3 pass, 1 fail,
-zero skips) before the shared helper was implemented.
+zero skips) до реализации общей функции.
 
-**Implementation:** `aroma-v1` exports `createCatalogContentHash()` and its
-accumulator type. It validates each lowercase SHA-256 hex digest, converts it to
-32 binary bytes, and updates the same SHA-256 state; `digest()` finalizes once.
-The existing array API delegates to this shared authority. Production
-`complete()` now keeps this state and the previous batch hash, plus its existing
-single bounded manifest/reconstructed batch, not a snapshot-sized hash array.
-Verification order, chain/hash checks, durable recounts, guarded transition and
-terminal replay semantics are unchanged. Migrations and their original hashes,
-provider code, activation/#16 boundary, wire output and golden fixture are unchanged.
+**Реализация:** `aroma-v1` экспортирует `createCatalogContentHash()` и тип её аккумулятора. Функция проверяет каждый SHA-256 hex-дайджест в нижнем регистре, преобразует его в 32 бинарных байта и обновляет то же состояние SHA-256; `digest()` завершает вычисление один раз. Существующий API массива делегирует вычисления этому общему источнику логики. Производственный `complete()` теперь хранит это состояние и предыдущий хеш пакета, а также прежний единственный ограниченный манифест/восстановленный пакет, а не массив хешей размером со snapshot. Порядок проверок, проверки цепочки/хеша, повторный подсчёт долговременно сохранённых данных, защищённый переход состояния и семантика повторного выполнения завершающего вызова не изменены. Миграции и их исходные хеши, код провайдера, граница активации/#16, wire-вывод и эталонная фикстура не изменены.
 
-**GREEN production-path evidence:** `tests/catalog/terminal-capacity-proof.mjs`
-imports the production `createCatalogImportStore`; neither `complete()`, manifest
-verification, reconstruction nor the shared hash code is mocked. Only transaction
-and SQL execution are replaced by a lazy, fail-closed fixture returning one
-manifest/batch at a time. Every batch has a distinct digest. Expected content hash
-is independently built with Node crypto over ordered binary digests.
+**Свидетельство GREEN на производственном пути:** `tests/catalog/terminal-capacity-proof.mjs` импортирует производственный `createCatalogImportStore`; ни `complete()`, ни проверка манифеста, ни восстановление, ни общий код хеширования не подменены моками. Подменены только выполнение транзакций и SQL — на ленивую фикстуру с запретом продолжения при неизвестном результате, возвращающую по одному манифесту/пакету. У каждого пакета отдельный дайджест. Ожидаемый хеш содержимого независимо вычисляется средствами Node crypto по упорядоченным бинарным дайджестам.
 
-The dedicated stream gate observes **131,072 manifests and 131,072 reconstructions**,
-**two recounts**, **one Received transition**, exact terminal replay and conflicting
-replay rejection. A 64 MiB old-space subprocess samples post-GC retained heap
-at 8,192-batch intervals and after completion, asserting growth **<4,194,304 bytes**.
-The observed maximum was **161,296 bytes**; sampled RSS growth was **21,020,672 bytes**
-(asserted <67,108,864 bytes). The large count and heap limit reject the old retained
-array without substituting a fake `complete()`.
-This is a production-terminal memory regression with a synthetic SQL seam, **not
-PostgreSQL capacity, provider load, or a continuous allocation/RSS peak proof**.
-The separate existing COPY and recovery gates still use real PostgreSQL.
+Отдельная потоковая проверка наблюдает **131,072 манифест и 131,072 восстановления**, **два повторных подсчёта**, **один переход в Received**, точное повторное воспроизведение terminal и отклонение конфликтующего повтора. Подпроцесс с лимитом old-space 64 MiB измеряет удержанную heap после GC через каждые 8,192 пакета и после завершения, проверяя, что прирост **<4,194,304 bytes**. Наблюдавшийся максимум составил **161,296 bytes**; измеренный прирост RSS — **21,020,672 bytes** (проверяется условие <67,108,864 bytes). Большое число элементов и лимит heap выявляют старый удерживаемый массив, не подменяя фальшивой реализацией `complete()`.
+Это регрессия памяти производственного этапа завершения с синтетической SQL-точкой подмены, **а не проверка ёмкости PostgreSQL, нагрузки провайдера или непрерывного пика выделения памяти/RSS**.
+Отдельные существующие проверки COPY и восстановления по-прежнему используют реальный PostgreSQL.
 
-The hash regression checks empty input, multiple digests/order, invalid hex,
-finalization and the unchanged golden contentHash:
+Проверка хеширования охватывает пустой ввод, несколько дайджестов/порядок, неверный hex, финализацию и неизменённый эталонный contentHash:
 `a54d94109a18a7024dca3d4e2490f169eee9b0d0d2c442cf2dab1574cdf45fe2`.
 
-The first full `pnpm check` run failed outside Catalog with `DB_POOL_EXHAUSTED`
-in `tests/aroma/binding-live.test.mjs` / `runReadinessAndSaturationProof`.
-The isolated `node --test tests/aroma/binding-live.test.mjs` passed (1/1, zero skips),
-and an exact `pnpm check` rerun passed without source, timeout or skip changes.
-The failed attempt is preserved in `issue-6-terminal-checks/check-attempt-1.log`;
-the final exact rerun is included in
+Первый полный запуск `pnpm check` завершился ошибкой вне Catalog: `DB_POOL_EXHAUSTED`
+в `tests/aroma/binding-live.test.mjs` / `runReadinessAndSaturationProof`.
+Изолированный запуск `node --test tests/aroma/binding-live.test.mjs` прошёл (1/1, zero skips),
+и повторный точный запуск `pnpm check` прошёл без изменений исходников, таймаутов или пропусков.
+Неудачная попытка сохранена в `issue-6-terminal-checks/check-attempt-1.log`;
+итоговый точный повторный запуск включён в
 `issue-6-terminal-checks/final-verification-fail-closed-20260921.log`.
-Machine-readable output hashes cover the exact persisted log bytes.
+Хеши машинно-читаемого вывода соответствуют точным байтам сохранённых логов.
 
-## Final local commands
+## Итоговые локальные команды
 
-Machine-readable observed results: `evidence/issue-6-review-checks.json`.
+Машиночитаемые наблюдавшиеся результаты: `evidence/issue-6-review-checks.json`.
 
-- `pnpm test:catalog-ingestion`: **6/6**, zero skips.
-- `pnpm test:catalog-stream`: **21/21**, zero skips.
-- `pnpm test:catalog-copy`: **1/1**, real PostgreSQL, zero skips.
-- `pnpm test:catalog-recovery`: **1/1**, real PostgreSQL + real process/mTLS,
-  zero skips; existing terminal COMMIT ACK loss cases remain.
-- `pnpm check`: **PASS**; contracts 39/39; overall **393 tests, 377 passed,
-  16 pre-existing opt-in non-Catalog skips**, zero failures.
+- `pnpm test:catalog-ingestion`: **6/6**, без пропусков.
+- `pnpm test:catalog-stream`: **21/21**, без пропусков.
+- `pnpm test:catalog-copy`: **1/1**, реальный PostgreSQL, без пропусков.
+- `pnpm test:catalog-recovery`: **1/1**, реальный PostgreSQL + реальный процесс/mTLS,
+  без пропусков; существующие сценарии потери ACK для terminal COMMIT сохранены.
+- `pnpm check`: **PASS**; контракты 39/39; всего **393 теста, 377 прошли,
+  16 ранее существовавших opt-in пропусков вне Catalog**, ноль ошибок.
 - `pnpm test:compose-smoke -- --recovery-proof --no-build --project-name
-  coffee-issue6-final-observability`: **PASS**. The proof creates disposable
-  PostgreSQL/Kafka resources, applies Catalog migrations before startup, routes
-  provider DNS exclusively to a generated local HTTPS fixture on a Docker
-  `internal: true` network, observes all 15 runtimes plus the fixture healthy,
-  exercises PostgreSQL/Kafka/native recovery, and removes the scoped project
-  resources. The receipt records `providerFixture.login=1` and
-  `providerFixture.catalog=1` with cart/mutation counts at zero; the proof fails
-  if Catalog traversal does not reach the fixture. It cannot contact the real
-  provider.
-- `pnpm db:smoke`: **PASS** (structural/role smoke; not a substitute for Catalog
-  live gates).
+  coffee-issue6-final-observability`: **PASS**. Проверка создаёт одноразовые
+  ресурсы PostgreSQL/Kafka, применяет миграции Catalog до запуска, направляет DNS
+  провайдера исключительно на созданную локальную HTTPS-фикстуру в Docker-сети
+  `internal: true`, наблюдает готовность всех 15 runtime и фикстуры, проверяет
+  восстановление PostgreSQL/Kafka/native и удаляет ресурсы ограниченного проекта.
+  Квитанция содержит `providerFixture.login=1` и
+  `providerFixture.catalog=1`, при нулевых счётчиках cart/mutation; проверка
+  завершается ошибкой, если обход Catalog не достигает фикстуры. Реальный
+  провайдер недоступен для этого теста.
+- `pnpm db:smoke`: **PASS** (структурная проверка/проверка ролей; не заменяет
+  проверки Catalog в работающей среде).
 - `git diff --check`: **PASS**.
 
-All new temporary certificates are worktree-local and removed in `finally`;
-child processes, HTTPS sockets and the recovery lock are also cleaned in
-`finally`. PostgreSQL harness uses unique `coffee-catalog-*` container/volume
-names and removes both in its existing `finally`. No schema/migration content,
-checksum-ledger policy, activation/outbox/Kafka implementation, or architecture
-checker was changed by this remediation. Final inspection found no `coffee-catalog-*`
-or `coffee-issue6-final-observability-*` containers, volumes or networks and no
-`.omh/probes` fixtures. No commit/push/PR/merge was performed.
+Все новые временные сертификаты находятся в рабочем дереве и удаляются в `finally`;
+дочерние процессы, HTTPS-сокеты и блокировка восстановления также очищаются в
+`finally`. В тестовом контуре PostgreSQL используются уникальные имена контейнеров/томов
+`coffee-catalog-*`, и оба ресурса удаляются в существующем `finally`. В рамках этого
+устранения замечаний не менялись содержимое схемы/миграций, политика журнала контрольных
+сумм, реализация activation/outbox/Kafka или архитектурная проверка. При финальной
+проверке не обнаружено контейнеров, томов или сетей `coffee-catalog-*` либо
+`coffee-issue6-final-observability-*`, а также фикстур `.omh/probes`. На дату исходного
+локального отчёта коммит/ push/ PR/ слияние не выполнялись.
 
-An independent read-only re-review returned **ship** with no actionable findings.
-It confirmed that recovery provider egress is fail-closed, the persisted fixture
-receipt proves one Catalog request, observability identifiers remain outside metric
-labels, and the lazy-SQL terminal-memory limitation remains explicit.
+Независимая проверка только для чтения вынесла вердикт **ship**, не обнаружив замечаний,
+требующих действий. Она подтвердила, что при восстановлении исходящий трафик провайдера блокируется по умолчанию,
+сохранённая квитанция фикстуры доказывает один запрос Catalog, идентификаторы наблюдаемости
+остаются вне меток метрик, а ограничение памяти на финальной стадии при ленивом SQL явно указано.
 
 ## Дополнение по оставшимся критериям — 22 сентября 2026 года
 
-После следующего независимого review устранены два блокирующих дефекта:
+После следующего независимого ревью устранены два блокирующих дефекта:
 
-1. Rollback при reconciliation read больше не считается доказательством rollback
-   исходного batch. Любая ошибка повторной проверки после
-   `TRANSACTION_OUTCOME_UNKNOWN`, кроме явного несовпадения durable
-   postcondition, сохраняет `CatalogOutcomeUnknown` и не разрешает запись
+1. Откат при повторном чтении во время сверки состояния больше не считается доказательством отката
+   исходного пакета. Любая ошибка повторной проверки после
+   `TRANSACTION_OUTCOME_UNKNOWN`, кроме явного несовпадения устойчивого
+   постусловия, сохраняет `CatalogOutcomeUnknown` и не разрешает запись
    `Rejected`.
-2. Ошибка чтения HTTP response body до `started` классифицируется как
-   `HTTP_BEFORE_STARTED`; best-effort cancellation при status/content-type
-   failure не может перезаписать исходный bounded code своей ошибкой.
+2. Ошибка чтения тела HTTP-ответа до `started` классифицируется как
+   `HTTP_BEFORE_STARTED`; наилучшая попытка отмены при ошибке status/content-type
+   не может перезаписать исходный ограниченный код своей ошибкой.
 
-Новые regressions сначала падали, затем прошли в
-`pnpm test:catalog-stream`: **56 passed, 0 failed, 0 skipped**. Live PostgreSQL
-proof сохранил **1 passed, 0 skipped** и фиксирует настоящий COPY cancel/source
-error после consumed chunk, post-merge rollback, forward/checksum migrations,
-фактические ACL и четыре foreign `CONNECT` denial с SQLSTATE `42501`.
+Новые регрессионные проверки сначала падали, затем прошли в
+`pnpm test:catalog-stream`: **56 passed, 0 failed, 0 skipped**. Проверка с работающим PostgreSQL
+сохранила **1 passed, 0 skipped** и фиксирует настоящую отмену COPY/ошибку источника
+после обработки фрагмента, откат после слияния, прямые миграции/миграции контрольных сумм,
+фактические ACL и четыре отказа в foreign-подключении `CONNECT` с SQLSTATE `42501`.
 
-Финальные receipts:
+Итоговые квитанции:
 
 - `evidence/issue-6-terminal-checks/final-verification-20260922.log`, SHA-256
   `914b6910e4a87de4cce6365ebdf018ec0140abc1ca3104bcfe2601cdbde18445`;
@@ -226,24 +148,24 @@ error после consumed chunk, post-merge rollback, forward/checksum migration
 - `evidence/issue-6-terminal-checks/fresh-image-provenance-20260922.json` —
   SHA-256 `1ac5cdf41582480cc62d3dbc07b434ec299baa02a9aabded796370bdc02110eb`;
   `baseSha=4b2cad1...`, `headSha=2ae6155...`, `dirtyTree=true`, финальный commit
-  отсутствует, четыре compiled artifact hash совпадают между host и image.
+  отсутствует, четыре хеша compiled artifacts совпадают на host и image.
 
-Recovery proof использовал уникальные свежие image tags из текущего dirty
-worktree, локальный HTTPS provider и fail-closed internal provider network. Он
-не является production deployment, реальным provider load или доказательством
+Проверка восстановления использовала уникальные свежие теги образов из текущего изменённого
+рабочего дерева, локальный HTTPS-провайдер и внутреннюю сеть провайдера с запретом трафика по умолчанию. Она
+не является промышленным развёртыванием, реальной нагрузкой провайдера или доказательством
 внешней доставки OTLP.
 
-Первый независимый evidence review обнаружил оставшийся после прерванного build
-tmpfs fixture directory и потенциальную утечку anonymous Kafka volume при
-recreation. Точный tmpfs directory удалён только после проверки отсутствия
-mount/process references. В `tools/compose-smoke.mjs` добавлен
-`docker compose rm --volumes`, его regression сначала RED, затем **9/9 GREEN**.
-Повторный recovery proof прошёл; после teardown наблюдались ноль project
-containers/volumes/networks, ноль `coffee-platform-secrets-*` directories и
-ноль dangling volumes из окна proof.
+Первая независимая проверка свидетельств обнаружила оставшуюся после прерванной сборки
+директорию tmpfs-фикстуры и потенциальную утечку анонимного тома Kafka при
+повторном создании ресурсов. Точная директория tmpfs удалена только после проверки отсутствия ссылок
+на точку подключения или процесс. В `tools/compose-smoke.mjs` добавлен
+`docker compose rm --volumes`; регрессионная проверка сначала завершилась RED, затем
+прошла **9/9 GREEN**.
+Повторная проверка восстановления прошла; после демонтажа обнаружено ноль контейнеров/томов/сетей проекта,
+ноль директорий `coffee-platform-secrets-*` и ноль неиспользуемых томов из периода проверки.
 
-Повторная независимая cleanup-проверка обнаружила один generated Compose
-override от прерванного первого запуска. Перед удалением точного файла
-подтверждены ноль process references и ноль container mount references;
-после удаления matching project override files также равны нулю. Остальные
-проверенные evidence/handoff hashes совпали; runtime findings отсутствовали.
+Повторная независимая проверка очистки обнаружила один сгенерированный файл переопределений Compose
+от прерванного первого запуска. Перед удалением точного файла
+подтверждены ноль ссылок на процесс и ноль ссылок на подключение контейнера;
+после удаления соответствующих файлов переопределений проекта их число также равно нулю. Остальные
+проверенные хеши свидетельств/передачи задач совпали; замечаний по runtime не было.

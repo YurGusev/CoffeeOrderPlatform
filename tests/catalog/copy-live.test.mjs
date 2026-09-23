@@ -11,6 +11,14 @@ void test("disposable PostgreSQL proves migrations, TEMP COPY, reconstruction, t
   assert.equal(result.migrationProof.ledger,"catalog.platform_schema_migrations");
   assert.equal(result.postMergeRollback.sqlstate,"42501");
   assert.equal(result.noActiveCopyOrTransaction,true);
+  const httpCopyShutdown=result.httpCopyShutdown;
+  assert.equal(httpCopyShutdown.readerCancelled,true);
+  assert.equal(httpCopyShutdown.copyCancelled,true);
+  assert.equal(httpCopyShutdown.sourceDestroyed,true);
+  assert.equal(httpCopyShutdown.sixTablesRolledBack,true);
+  assert.equal(httpCopyShutdown.connectionReleased,true);
+  assert.equal(httpCopyShutdown.shutdownAborted,true);
+  assert.ok(httpCopyShutdown.shutdownMs<40_000);
   assert.deepEqual(result.migrationProof.preservedStates,["Created","Received","Receiving","Rejected"]);
   assert.equal(result.migrationProof.repeatNoop,true);
   assert.equal(result.migrationProof.driftCode,"MIGRATION_CHECKSUM_DRIFT");
@@ -45,7 +53,10 @@ void test("disposable PostgreSQL proves migrations, TEMP COPY, reconstruction, t
   assert.ok(result.cleanup.teardownMs<result.cleanup.shutdownBudgetMs);
   assert.ok(result.stateMatrix.length >= 30);
   assert.equal(result.stateMatrix.every(row => row.passed),true);
-  t.diagnostic(JSON.stringify({migration:result.migrationProof,midCopyAbort:result.midCopyAbort,copySourceFailure:result.copySourceFailure,
+  t.diagnostic(JSON.stringify({httpCopyShutdown:{readerCancelled:httpCopyShutdown.readerCancelled,copyCancelled:httpCopyShutdown.copyCancelled,
+    sourceDestroyed:httpCopyShutdown.sourceDestroyed,sixTablesRolledBack:httpCopyShutdown.sixTablesRolledBack,
+    connectionReleased:httpCopyShutdown.connectionReleased,shutdownMs:httpCopyShutdown.shutdownMs},
+    migration:result.migrationProof,midCopyAbort:result.midCopyAbort,copySourceFailure:result.copySourceFailure,
     postMergeRollback:result.postMergeRollback,knownRollback:result.knownRollback,acl:result.acl,foreignConnect:result.foreignConnect,cleanup:result.cleanup,stateMatrix:result.stateMatrix}));
   for (const name of ["validation","copy","transaction"]) {
     const phase=result.telemetry.spans[`catalog.import.${name}`];

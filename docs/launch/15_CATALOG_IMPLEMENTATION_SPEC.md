@@ -267,6 +267,17 @@ Foreign CONNECT proof использует существующий live foundat
 реальный login importer пробует четыре foreign databases и наблюдает `42501`.
 Вывод `pnpm db:smoke` без `--execute` — только structural plan, не CONNECT proof.
 
+Связанная проверка остановки в `test:catalog-copy` пропускает валидные записи
+через `InternalCatalogClient` и настоящее тело HTTP-ответа в `runCatalogImport`.
+После начала PostgreSQL COPY и занятия им одного соединения проверка
+останавливает ресурс БД и отменяет сигнал импорта: читатель HTTP и источник COPY
+уничтожаются, COPY завершается `DB_INTERRUPTED`, все шесть таблиц совпадают с
+состоянием **перед пакетом**, соединение освобождается, активных COPY и
+незавершённых транзакций нет, остановка укладывается в штатные 40 секунд.
+Источник HTTP — локальный тестовый сервер, не развёрнутый `api-internal` и не
+реальный провайдер; проверка не доказывает сетевую доступность production или
+доставку телеметрии.
+
 `tests/architecture/checks.test.mjs` прогоняет пять запрещённых imports из
 `catalog-supplier-sync` в `catalog-activation-worker`, `api-internal`,
 `orders-service`, `pricing-service`, `customer-service`, проверяя точные
@@ -276,7 +287,7 @@ packages, imports реализаций соседних apps и Effect запр�
 ADR-0025, native async/AbortSignal. Public HTTP, activation/outbox и active
 Catalog generation находятся за границей этих staging-проверок.
 
-### Recovery, readiness и bounded observability (#6)
+### Восстановление, готовность и ограниченная наблюдаемость (#6)
 
 Перед **каждым** новым export scheduler выполняет owner-local recovery. Ошибка
 recovery (включая недоступную БД после `OutcomeUnknown`) запрещает начало нового
