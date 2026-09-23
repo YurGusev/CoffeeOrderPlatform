@@ -50,6 +50,7 @@ CREATE TABLE catalog.variants (
   product_ref varchar(30) NOT NULL,
   unit varchar(16) NOT NULL CHECK (unit IN ('piece', 'gram', 'kilogram')),
   image_url text,
+  grind_options jsonb CHECK (grind_options IS NULL OR jsonb_typeof(grind_options) = 'array'),
   PRIMARY KEY (snapshot_ref, variant_ref),
   FOREIGN KEY (snapshot_ref, product_ref)
     REFERENCES catalog.products(snapshot_ref, product_ref) ON DELETE RESTRICT
@@ -92,7 +93,7 @@ CREATE VIEW catalog.active_products AS
    WHERE state.id = true;
 
 CREATE VIEW catalog.active_variants AS
-  SELECT variant.snapshot_ref, variant.variant_ref, variant.product_ref, variant.unit, variant.image_url
+  SELECT variant.snapshot_ref, variant.variant_ref, variant.product_ref, variant.unit, variant.image_url, variant.grind_options
     FROM catalog.catalog_state AS state
     JOIN catalog.variants AS variant ON variant.snapshot_ref = state.active_snapshot_ref
    WHERE state.id = true;

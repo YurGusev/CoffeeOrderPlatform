@@ -55,9 +55,10 @@ export function createCatalogActivationStore(database:Database): Readonly<{
     JOIN catalog.source_identities identity ON identity.supplier_ref=$2 AND identity.entity_type='product'
       AND identity.source_identity_scheme='hmac-sha256-v1' AND identity.source_identity_hash=p.source_product_key_hash
     WHERE p.snapshot_ref=$1::varchar(30) ORDER BY p.source_product_key_hash,v.source_variant_key_hash`);
-  const insertVariants = query<never>(`INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit,image_url)
-    SELECT $1::varchar(30),variant_identity.stable_ref,product_identity.stable_ref,v.unit,p.image_url
+  const insertVariants = query<never>(`INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit,image_url,grind_options)
+    SELECT $1::varchar(30),variant_identity.stable_ref,product_identity.stable_ref,v.unit,p.image_url,o.grind_options
     FROM catalog.snapshot_variants v JOIN catalog.snapshot_products p USING(snapshot_ref,source_product_key_hash)
+    JOIN catalog.snapshot_offers o USING(snapshot_ref,source_variant_key_hash)
     JOIN catalog.source_identities variant_identity ON variant_identity.supplier_ref=$2 AND variant_identity.entity_type='variant'
       AND variant_identity.source_identity_scheme='hmac-sha256-v1' AND variant_identity.source_identity_hash=v.source_variant_key_hash
     JOIN catalog.source_identities product_identity ON product_identity.supplier_ref=$2 AND product_identity.entity_type='product'
@@ -97,8 +98,8 @@ export function createCatalogActivationStore(database:Database): Readonly<{
   const copyMissingProducts = query<never>(`INSERT INTO catalog.products(snapshot_ref,product_ref,display_name,display_name_sort_key)
     SELECT $1::varchar(30),p.product_ref,p.display_name,p.display_name_sort_key FROM catalog.products p
     WHERE p.snapshot_ref=$2 AND NOT EXISTS(SELECT 1 FROM catalog.products n WHERE n.snapshot_ref=$1 AND n.product_ref=p.product_ref)`);
-  const copyMissingVariants = query<never>(`INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit,image_url)
-    SELECT $1::varchar(30),v.variant_ref,v.product_ref,v.unit,v.image_url FROM catalog.variants v
+  const copyMissingVariants = query<never>(`INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit,image_url,grind_options)
+    SELECT $1::varchar(30),v.variant_ref,v.product_ref,v.unit,v.image_url,v.grind_options FROM catalog.variants v
     WHERE v.snapshot_ref=$2 AND NOT EXISTS(SELECT 1 FROM catalog.variants n WHERE n.snapshot_ref=$1 AND n.variant_ref=v.variant_ref)`);
   const markMissing = query<never>(`INSERT INTO catalog.offer_mappings
     (snapshot_ref,variant_ref,offer_ref,mapping_revision,mapping_state,supplier_unit_minor,currency,effective_at)
@@ -268,7 +269,7 @@ export function createCatalogActivationStore(database:Database): Readonly<{
     for (const offer of work.unbound) {
       if (signal?.aborted) return {kind:"pending",snapshotRef:snapshot.snapshot_ref};
       const request:AromaOfferBindingRequest={offerRef:offer.offer_ref,supplierRef:snapshot.supplier_ref,
-        snapshotRef:snapshot.snapshot_ref,sourceIdentityScheme:SCHEME,sourceOfferKeyHash:offer.source_offer_key_hash};
+        snapshotRef:offer.first_snapshot_ref,sourceIdentityScheme:SCHEME,sourceOfferKeyHash:offer.source_offer_key_hash};
       const response=await bind(request);
       if (response.state!=="Bound" || response.offerRef!==request.offerRef || response.supplierRef!==request.supplierRef ||
           response.sourceIdentityScheme!==request.sourceIdentityScheme || response.sourceOfferKeyHash!==request.sourceOfferKeyHash ||

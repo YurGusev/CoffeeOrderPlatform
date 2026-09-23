@@ -114,6 +114,9 @@ facts remain absent/unknown and are not defaulted to a known value.
 transaction, а активация разрешена только после durable ack для каждого
 required binding. Потерянный ответ повторяет тот же request и возвращает
 immutable row.
+При повторном использовании source identity запрос binding использует её
+`first_seen_snapshot_ref`, а не текущий snapshot: параллельные поколения не
+меняют immutable `firstSnapshotRef` в зависимости от порядка HTTP-вызовов.
 
 Binding сохраняет identity proof и не означает mutation-ready. Dispatch требует
 configured supplier, подтверждённую variant/packing/grind policy и свежий exact
@@ -395,6 +398,7 @@ scoped и не перезаписываются «на месте»:
 - `catalog.products(snapshot_ref, product_ref, display_name,
   display_name_sort_key, created_at, PK(snapshot_ref,product_ref))`;
 - `catalog.variants(snapshot_ref, variant_ref, product_ref, unit, image_url,
+  grind_options jsonb (NULL для отсутствующего поля, [] для пустого набора),
   PK(snapshot_ref,variant_ref), FK(snapshot_ref,product_ref))`;
 - `catalog.offer_mappings(snapshot_ref, variant_ref, offer_ref,
   mapping_revision bigint, mapping_state, supplier_unit_minor bigint CHECK

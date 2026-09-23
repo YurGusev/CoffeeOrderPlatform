@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import {Client} from "pg";
 import {readFile} from "node:fs/promises";
 import {resolve} from "node:path";
 import {catalogBatchBytes, catalogBatchHash, catalogContentHash} from "../../packages/contracts/aroma-v1/dist/index.js";
@@ -14,10 +15,11 @@ const V = "2".repeat(64);
 const O = "3".repeat(64);
 const pool = {max:4, checkoutTimeoutMs:2_000, lockTimeoutMs:1_000, interactiveStatementTimeoutMs:5_000, backgroundStatementTimeoutMs:10_000, terminalTimeoutMs:3_000, transactionTimeoutMs:20_000, idleTimeoutMs:30_000, maxLifetimeMs:1_800_000};
 
-async function stage(admin, snapshotRef, price = "123", status = "Available") {
+async function stage(admin, snapshotRef, price = "123", status = "Available", grindOptions = []) {
   const item = {sourceProductKeyHash:P, sourceVariantKeyHash:V, sourceOfferKeyHash:O,
     displayName:"Кофе", unit:"piece", supplierUnitMinor:price, currency:"RUB",
-    availability:status, imageUrl:null, supplierPromotions:[], grindOptions:[], sourceIdentityScheme:"hmac-sha256-v1"};
+    availability:status, imageUrl:null, supplierPromotions:[],
+    ...(grindOptions === null ? {} : {grindOptions}), sourceIdentityScheme:"hmac-sha256-v1"};
   const batchHash = catalogBatchHash([item]);
   await admin.query(`INSERT INTO catalog.supplier_snapshots
     (snapshot_ref,supplier_ref,provider_snapshot_ref,state,next_batch_number,declared_batch_count,
@@ -32,7 +34,7 @@ async function stage(admin, snapshotRef, price = "123", status = "Available") {
   await admin.query(`INSERT INTO catalog.snapshot_variants(snapshot_ref,source_variant_key_hash,source_product_key_hash,display_name,unit)
     VALUES($1,$2,$3,'Кофе','piece')`, [snapshotRef,V,P]);
   await admin.query(`INSERT INTO catalog.snapshot_offers(snapshot_ref,source_offer_key_hash,source_variant_key_hash,batch_number,item_index,supplier_unit_minor,currency,supplier_promotions,grind_options,source_identity_scheme)
-    VALUES($1,$2,$3,0,0,$4,'RUB','[]','[]','hmac-sha256-v1')`, [snapshotRef,O,V,price]);
+    VALUES($1,$2,$3,0,0,$4,'RUB','[]',$5::jsonb,'hmac-sha256-v1')`, [snapshotRef,O,V,price,grindOptions === null ? null : JSON.stringify(grindOptions)]);
   await admin.query(`INSERT INTO catalog.snapshot_availability(snapshot_ref,source_offer_key_hash,availability) VALUES($1,$2,$3)`, [snapshotRef,O,status]);
 }
 
@@ -60,6 +62,86 @@ void test("activation commits pointer and Outbox together; reuses refs; rejects 
     try {return await proveActivation(database,adminClient,port,databaseName);} finally {await database.resource.stop(AbortSignal.timeout(5_000));}
   });
   assert.deepEqual({activated:result.activated,rejected:result.rejected,events:result.events},{activated:7,rejected:1,events:11});
+});
+
+void test("immutable binding keeps the earliest snapshot when two generations register the same offer out of order", {
+  timeout:180_000, skip:process.env.COFFEE_DB_LIVE_PROOF !== "1" ? "disposable PostgreSQL required" : false,
+}, async () => {
+  await withCatalogPostgres(async ({adminClient,port,databaseName}) => {
+    await adminClient.query("CREATE ROLE coffee_catalog_activate_rw LOGIN PASSWORD 'activate-proof'");
+    await adminClient.query("CREATE ROLE coffee_catalog_api_ro LOGIN PASSWORD 'api-proof'");
+    for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants"])
+      await adminClient.query(await readFile(resolve("apps/catalog-service/migrations",`${name}.sql`),"utf8"));
+    const first="snp_00000000000000000000000021";
+    const second="snp_00000000000000000000000022";
+    await stage(adminClient,first);
+    await stage(adminClient,second);
+    const database=createDatabase({owner:"catalog-activation-worker",database:databaseName,allowedDatabase:databaseName,
+      host:"127.0.0.1",port,user:"coffee_catalog_activate_rw",password:"activate-proof",ssl:false,pool,shutdownGraceMs:40_000});
+    await database.resource.start(new AbortController().signal);
+    try {
+      const store=createCatalogActivationStore(database);
+      let registered;
+      const bind=async request => {
+        registered ??= {...request,firstSnapshotRef:request.snapshotRef,state:"Bound"};
+        assert.equal(request.offerRef,registered.offerRef);
+        return registered;
+      };
+      let enterFirst,releaseFirst;
+      const firstEntered=new Promise(resolve => {enterFirst=resolve;});
+      const firstGate=new Promise(resolve => {releaseFirst=resolve;});
+      const pendingFirst=store.runSnapshot(first,async request => {
+        enterFirst(); await firstGate; return bind(request);
+      });
+      await firstEntered;
+      let firstResult;
+      let secondResult;
+      try { secondResult=await store.runSnapshot(second,bind); }
+      finally { releaseFirst(); firstResult=await pendingFirst.catch(error => error); }
+      assert.equal(registered.firstSnapshotRef,first);
+      assert.deepEqual(secondResult,{kind:"activated",snapshotRef:second,snapshotRevision:"1"});
+      assert.deepEqual(firstResult,{kind:"superseded",snapshotRef:first});
+      assert.deepEqual((await adminClient.query("SELECT first_snapshot_ref FROM catalog.offer_binding_acks WHERE snapshot_ref=$1",[second])).rows,
+        [{first_snapshot_ref:first}]);
+    } finally {await database.resource.stop(AbortSignal.timeout(5_000));}
+  });
+});
+
+void test("API role reads active grind options after activation and after a missing-offer snapshot", {
+  timeout:180_000, skip:process.env.COFFEE_DB_LIVE_PROOF !== "1" ? "disposable PostgreSQL required" : false,
+}, async () => {
+  await withCatalogPostgres(async ({adminClient,port,databaseName}) => {
+    await adminClient.query("CREATE ROLE coffee_catalog_activate_rw LOGIN PASSWORD 'activate-proof'");
+    await adminClient.query("CREATE ROLE coffee_catalog_api_ro LOGIN PASSWORD 'api-proof'");
+    for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants"])
+      await adminClient.query(await readFile(resolve("apps/catalog-service/migrations",`${name}.sql`),"utf8"));
+    const first="snp_00000000000000000000000031";
+    const empty="snp_00000000000000000000000032";
+    const noOptions="snp_00000000000000000000000033";
+    const absentOptions="snp_00000000000000000000000034";
+    const grindOptions=[{sourceGrindKeyHash:"4".repeat(64),displayName:"Эспрессо"}];
+    await stage(adminClient,first,"123","Available",grindOptions);
+    const database=createDatabase({owner:"catalog-activation-worker",database:databaseName,allowedDatabase:databaseName,
+      host:"127.0.0.1",port,user:"coffee_catalog_activate_rw",password:"activate-proof",ssl:false,pool,shutdownGraceMs:40_000});
+    const api=new Client({host:"127.0.0.1",port,user:"coffee_catalog_api_ro",password:"api-proof",database:databaseName});
+    await database.resource.start(new AbortController().signal);
+    try {
+      await api.connect();
+      const store=createCatalogActivationStore(database);
+      const bind=async request => ({...request,firstSnapshotRef:first,state:"Bound"});
+      assert.equal((await store.runSnapshot(first,bind)).kind,"activated");
+      assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:grindOptions}]);
+      await stageEmpty(adminClient,empty);
+      assert.equal((await store.runSnapshot(empty,async()=>{throw new Error("empty generation must not bind");})).kind,"activated");
+      assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:grindOptions}]);
+      await stage(adminClient,noOptions);
+      assert.equal((await store.runSnapshot(noOptions,bind)).kind,"activated");
+      assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:[]}]);
+      await stage(adminClient,absentOptions,"123","Available",null);
+      assert.equal((await store.runSnapshot(absentOptions,bind)).kind,"activated");
+      assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:null}]);
+    } finally {await api.end().catch(()=>{}); await database.resource.stop(AbortSignal.timeout(5_000));}
+  });
 });
 
 async function proveActivation(database, admin,port,databaseName) {

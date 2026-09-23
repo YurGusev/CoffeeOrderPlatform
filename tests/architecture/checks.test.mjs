@@ -633,7 +633,7 @@ void test("RED BOUND-IMPORT: a runtime cannot import a foreign owner's database 
   }
 });
 
-void test("RED ARCH-CATALOG-WRITER: only the Catalog activation writer may mutate active Catalog tables", async () => {
+void test("RED ARCH-CATALOG-WRITER: foreign app cannot mutate active Catalog tables", async () => {
   const root = await mkdtemp(join(tmpdir(), "coffee-second-catalog-writer-"));
   try {
     const directory = join(root, "apps/orders-service/src/infrastructure");
@@ -645,6 +645,29 @@ void test("RED ARCH-CATALOG-WRITER: only the Catalog activation writer may mutat
     assert.match(output(result), /orders-service/);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("RED ARCH-CATALOG-WRITER: packages rogue writer is rejected while catalog-service migrations remain allowed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-packages-catalog-writer-"));
+  const migrationRoot = await mkdtemp(join(tmpdir(), "coffee-catalog-migration-owner-"));
+  try {
+    const directory = join(root, "packages/rogue/src");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "writer.ts"), 'const query = "UPDATE catalog.catalog_state SET active_snapshot_ref = $1";\nvoid query;\n');
+    const result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /ARCH-CATALOG-WRITER/);
+    assert.ok(output(result).includes("packages/rogue/src/writer.ts"), output(result));
+
+    const migrations = join(migrationRoot, "apps/catalog-service/migrations");
+    await mkdir(migrations, { recursive: true });
+    await writeFile(join(migrations, "0001-catalog.sql"), 'CREATE TABLE catalog.products (id text PRIMARY KEY);\n');
+    const acceptedMigration = run("check-architecture.mjs", migrationRoot);
+    assert.equal(acceptedMigration.status, 0, output(acceptedMigration));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(migrationRoot, { recursive: true, force: true });
   }
 });
 

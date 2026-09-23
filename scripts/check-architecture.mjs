@@ -183,8 +183,8 @@ async function checkStaticSources(root) {
 }
 
 async function checkCatalogActiveWriters(root) {
-  const appFiles = await walk(join(root, 'apps'));
-  for (const path of appFiles) {
+  const sourceFiles = (await Promise.all(['apps', 'packages'].map((target) => walk(join(root, target))))).flat();
+  for (const path of sourceFiles) {
     const label = path.slice(root.length + 1).replaceAll('\\', '/');
     const isMigration = /\.sql$/i.test(path);
     const isRuntimeSource = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/i.test(path);
