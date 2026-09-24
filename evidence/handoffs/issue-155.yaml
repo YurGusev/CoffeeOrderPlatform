@@ -1,0 +1,23 @@
+issue: 155
+baseCommit: 94a43c1a7d6184b6df3983c32ec06c28d2d99ea2
+inputs:
+  - issue: 153
+    acceptedMergeCommit: 94a43c1a7d6184b6df3983c32ec06c28d2d99ea2
+    artifact: evidence/handoffs/issue-153.yaml
+    sha256: d21da50268db053c361d1d2068a5f8c69a4fa02dcaf748b82544b4171397ad23
+outputs:
+  - artifact: package.json
+    sha256: 20898cefd2ff19bf99d0bcc4bb501604729036d1be89d12e648eab8854bf28c2
+    consumers: [18]
+  - artifact: packages/platform-http/tsconfig.json
+    sha256: f9385072d3625f7b6d092ab3168edf9729cda933afbd245ec8a657d504acb2c6
+    consumers: [18]
+verification:
+  - command: pnpm install --frozen-lockfile
+    result: passed
+  - command: pnpm check
+    result: passed
+  - command: pnpm profile:check
+    result: passed
+limitations:
+  - Проверка выполнена в отдельном свежем worktree с установленными зависимостями; production rollout не проверялся.
