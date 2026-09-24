@@ -19,5 +19,7 @@ verification:
     result: passed
   - command: pnpm profile:check
     result: passed
+  - command: pnpm clean-clone:check --offline
+    result: passed
 limitations:
   - Проверка выполнена в отдельном свежем worktree с установленными зависимостями; production rollout не проверялся.
