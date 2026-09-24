@@ -1,0 +1,24 @@
+issue: 153
+baseCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4
+inputs:
+  - issue: 62
+    acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: packages/platform-database/src/index.ts
+    sha256: 7d4cb1125efac363bcff6244f364a82a6dbe200ddac172e8355dbde5d6c0655e
+outputs:
+  - artifact: packages/platform-database/src/index.ts
+    sha256: 8316b5c77c45a8dd2351bbf1d16384ef39f31d573e428561c44ec8c9c31a4aab
+    consumers: [18]
+  - artifact: tests/database/pool-concurrency-live.test.mjs
+    sha256: 0e056b97babc7028ed3a7dd082d268e298ca01ded9a583b8882cdf12e3a9cb5f
+    consumers: [18]
+verification:
+  - command: COFFEE_DB_LIVE_PROOF=1 node --test tests/database/pool-concurrency-live.test.mjs
+    result: passed; one live PostgreSQL test, zero skipped (first failed on original code)
+  - command: pnpm check
+    result: passed; 471 tests passed, 23 existing opt-in tests skipped
+  - command: pnpm db:live-proof
+    result: passed; disposable PostgreSQL transaction, saturation and grants
+limitations:
+  - No production PostgreSQL or Kafka; deterministic isolated PostgreSQL only.
+  - This handoff does not prove the entire Catalog pipeline gate; issue 18 remains separate.

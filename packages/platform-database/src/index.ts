@@ -60,7 +60,7 @@ export function databaseFailure(error: unknown, metadata: CorrelationMetadata): 
 async function acquire(data: DatabaseData, metadata: CorrelationMetadata, signal?: AbortSignal): Promise<Lease> {
   if (data.shutdown.signal.aborted) throw new DatabaseTransactionError("DB_STOPPED", metadata);
   // Нет безграничной очереди pg: checkout и health делят один объявленный pool cap.
-  if (data.leases.size + data.acquiring >= data.config.max || data.pool.waitingCount > 0) {
+  if (data.leases.size + data.acquiring >= data.config.max) {
     data.saturated++;
     throw new DatabaseTransactionError("DB_POOL_EXHAUSTED", metadata);
   }
