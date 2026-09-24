@@ -52,6 +52,22 @@ instrumentation points после #12 и обеспечивает полный G
 обязательными вместе с принятым foundation #137. #136/#137 не означают
 реализацию #9, #12 или #13.
 
+## Дополнение #159: public transport без обратной зависимости
+
+`#19/#4/#60/#61/#119/#137 → #159 (ADR-0031, normative contract)`.
+От принятого #159 расходятся независимые реализации: `#159 → #160` private
+application authorizer и `#159 + #137 → #161` native nginx/static/fixture;
+только `#160 + #161 → #162` выполняет единый active cutover. #162 поставляет
+transport artifacts в #9 (browser flow), #12 (realtime receiver/soak), #64
+(native telemetry) и #13 (release verification). #160 отдельно поставляет
+realtime actor receiver contract в #12, #161 — direct static в #9.
+Изначальные prerequisites каждого consumer остаются обязательными. Ни #9,
+ни #12, ни #64, ни #13 не предшествуют #159/#160/#161/#162; поэтому нет
+цикла. #162 проверяет peer fixtures без требования готовых business экранов или
+Kafka fanout. #13 проверяет полный production/browser/capacity admission, а
+не считает target числа/fixture результатом PASS. Точная матрица transport,
+auth, limits и no-provider exposure — [контракт #159](29_NGINX_TRANSPORT_AND_AUTH.md).
+
 ## Контракт #63 для downstream
 
 `#63` передаёт consumers четыре связанные границы:
@@ -122,11 +138,15 @@ collector.
 | #8 | #4, #5, #7, #17, #18, #63, #119 | Draft/Confirm/contribution/Order Card → #9, #11, #12 |
 | #136 | accepted #4, #119 | historical ADR-0027/SVG handoff merged with `contentAcceptance: NOT_RUN`; владелец подтвердил последующую приёмку SVG 2026-09-23 (дата/источник первоначального решения уточняются); visual заменён ADR-0029 + versioned prototype → #137, #9, #12, #13 |
 | #137 | #136 | `@coffee-platform/ui`, React/Vite/Tailwind/React Aria foundation, browser/Node graphs → #9 |
-| #9 | #4, #5, #7, #8, #17, #18, #119, #137 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13 |
+| #159 | #19, #4, #60, #61, #119, #137 | ADR-0031 + normative transport/auth contract → #160, #161, #162, #9, #12, #64, #13 |
+| #160 | #159 | private Edge authorizer/session/actor receiver + crypto tests → #162, #12 |
+| #161 | #159, #137 | native nginx image/static/transport fixture → #162, #9, #64 |
+| #162 | #160, #161 | один active cutover/removal old transport, trust/config/rollback evidence → #9, #12, #64, #13 |
+| #9 | #4, #5, #7, #8, #17, #18, #119, #137, #162 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13 |
 | #11 | #10, #16, #18, #8, #63 | observer/convergence/UnknownOutcome → #12, #13 |
-| #12 | #8, #9, #11, #63, #119 | single-instance SSE invalidation/refetch → #64, #13 |
-| #64 | #4, #61, #62, #63, #12 | Pino/OTel, Collector/OpenObserve, alerts/storage/redaction → G14 #13 |
-| #13 | все outputs выше, #119 | verified release evidence → закрытие #1 |
+| #12 | #8, #9, #11, #63, #119, #160, #162 | single-instance SSE invalidation/refetch → #64, #13 |
+| #64 | #4, #61, #62, #63, #12, #162 | Pino/OTel + native applicability, Collector/OpenObserve, alerts/storage/redaction → G14 #13 |
+| #13 | все outputs выше, #119, #162 | verified release evidence → закрытие #1 |
 
 При выполнении #18 отдельно приняты owner-исправления #153 (конкурентный
 PostgreSQL checkout) и #155 (сборка clean clone до contract tests). Их

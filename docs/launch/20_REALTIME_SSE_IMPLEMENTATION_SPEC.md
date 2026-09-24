@@ -43,6 +43,15 @@ owner transaction + Outbox
 Public route существует только на edge. Edge проверяет session/JWT, удаляет
 client `X-Actor-*` headers и передаёт подписанный trusted actor context с
 `actorRef`, permissions, expiry и audience `realtime-gateway`.
+После #162 здесь `edge` означает nginx transport с отдельным private
+`edge-gateway` auth subrequest: nginx сам не валидирует browser session и не
+подписывает actor. Только Edge authorizer выпускает `iss=edge-gateway`, а
+realtime receiver проверяет transport SAN `edge-nginx`, audience и подпись
+по [контракту #159](29_NGINX_TRANSPORT_AND_AUTH.md). Это не меняет Kafka/replay
+и owner authorization ниже; #12 обязан проверить SSE через реальный nginx.
+После logout/401 browser сразу закрывает EventSource и private cache; до
+истечения уже открытого stream realtime перепроверяет `exp` каждые 30s.
+Серверная мгновенная ревокация прежнего соединения не обещается.
 
 В первом запуске stream разрешён только actor с permission `orders:read:any`.
 Query/body subject filters, actorRef, permissions и orderRef endpoint не
@@ -118,6 +127,10 @@ owner refetch и поэтому не нуждается в sticky session/persis
 - socket write deadline 5s;
 - max event data 2 KiB; больше -> quarantine producer event;
 - heartbeat 15s; edge idle timeout минимум 45s;
+- nginx после #162 отключает response buffering/compression/cache, проверяет
+  auth до SSE headers, пропускает `Last-Event-ID`, не применяет 5s API deadline;
+  начальный nginx admission ≤512 streams до transport-inclusive #12 soak,
+  5000 остаётся target capacity, а не доказанным launch результатом;
 - graceful shutdown 20s: перестать принимать connections, отправить
   `stream-reset`, закрыть sockets, затем consumer.
 

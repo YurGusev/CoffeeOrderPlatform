@@ -1,5 +1,14 @@
 # Единая конфигурация и единое хранилище секретов
 
+Следующая структура описывает active Node launch profile до #162. Целевая
+native схема #159 определена в [29_NGINX_TRANSPORT_AND_AUTH.md](29_NGINX_TRANSPORT_AND_AUTH.md):
+public TLS scope переходит `edge-nginx`, signing/OIDC — private
+`edge-gateway`, `web` runtime исчезает, `apps/web` build остаётся.
+Новые non-secret поля, scopes/PEM и schema изменяет только #162 при одном
+cutover; до этого никакой пример ниже не служит вторым источником настроек.
+Единственные value authorities остаются `config/platform.yaml` и зашифрованный
+`secrets/platform.secrets.sops.yaml`.
+
 ## 1. Ровно два нормативных файла
 
 | Назначение | Путь | Содержимое | Git |

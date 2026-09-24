@@ -1,5 +1,15 @@
 # Матрица конфигурации 15 runtime
 
+Это **active** exact-15 Node profile до #162, не target нативного транспорта.
+После принятых [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
+и [29_NGINX_TRANSPORT_AND_AUTH.md](29_NGINX_TRANSPORT_AND_AUTH.md) #162
+атомарно заменяет public Node Edge proxy и `web` runtime на `edge-nginx`
+transport + private `edge-gateway` authorizer, пересчитывает exact set,
+network attachments, secret refs, ports, native health и validators. Остальные
+13 Node roles не меняются; итог — 14 Node + native nginx и прежние 5 owner DB.
+Пока #162 не принят, приведённые ниже host/network матрицы не применяются к
+несуществующему `edge-nginx`; не создавать параллельный public path.
+
 Статус: нормативный input #19/#2/#3. Пустое значение записывается как `null` или
 `[]`; скрытые defaults запрещены. Общие health paths: `/health/live`,
 `/health/ready`, `/metrics`; shutdown grace `30000ms`. Для каждой строки

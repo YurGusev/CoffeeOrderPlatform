@@ -1,5 +1,16 @@
 # Вторая волна: target runtime topology, роли и бюджеты (#71)
 
+Примечание для future admission: после принятого [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
+публичный транспорт W1 target — `edge-nginx`, а `edge-gateway` — только
+private application authorizer; active cutover #162 обязателен до использования
+этого target. Прежнее `15 launch + 19 = 34` означает **15 процессов всего**
+в W1 target (14 Node + 1 native nginx), а не 15 Node + дополнительный nginx.
+Исторический #71 handoff и нижеприведённое описание его принятого snapshot
+не переписываются. Exact PSP ingress/PSP signature/raw-body принадлежат
+#76/#77, W3 topology/точные provider callbacks — #97/#98/#99, а не #159;
+`agent-v1` остаётся private trust surface и никакой wildcard/provider
+placeholder не включён.
+
 Статус: **target-решение #71, принимается только после merge; не работающая поставка**. Authority — [ADR-0030](../adr/ADR-0030-wave2-runtime-topology.md); вход #66 / merge `6934221dc1162af706d73e9d3c230bd51c3e4243`. Ни одного значения ниже ещё нет в исполнимой W2-конфигурации. До accepted #13 сохранены 15 launch runtime, 5 owner DB и их точные контракты; rollout новых ролей заблокирован. Канонические roots read-only. Для каждого этапа нужен отдельный implementation handoff; нижеприведённый target set **не** утверждает, что все роли уже доступны.
 
 ## Роли, процессы и сети

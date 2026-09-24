@@ -93,8 +93,13 @@ PricingQuote может уже истечь: lookup возвращает фак�
 ## 4. Browser intent
 
 `api/idempotency.ts` хранит versioned sessionStorage record только с `key`,
-allowlisted method/concrete path, canonical browser fingerprint, createdAt и
-state. Storage key строится по UUID intent, а не неизвестному resourceRef.
+allowlisted method/concrete path, canonical browser fingerprint, createdAt,
+state и с #159 — server-derived `actorRef` из точного защищённого
+`GET /auth/session`. Storage key строится по UUID intent, а не неизвестному
+resourceRef. Перед отправкой новой команды #9 получает текущий actorRef через
+no-store session status; недоступный/401 status не разрешает команду без
+доверенной привязки intent. Browser storage не предоставляет полномочия:
+Edge/owner повторно проверяют actor и permissions на каждом запросе.
 Customer/Pricing/Draft не требуют resourceRef до первого успешного ответа.
 Body, contact details, цены, quote payload и credentials не сохраняются.
 Fingerprint нужен для проверки exact payload при явном обычном повторении
@@ -120,13 +125,24 @@ Fingerprint нужен для проверки exact payload при явном �
   разрешения не предоставляет. Unsafe AROMA retry отсутствует всегда.
 
 Обычный 400 validation до выполнения завершает данный запрос; 401/403 блокирует
-доступ, но сам по себе не подтверждает исход ранее ambiguous intent. При выходе
-из приложения/смене пользователя #9 отменяет reads, очищает query/mutation cache,
-формы и sessionStorage metadata, #12 закрывает EventSource. Pending intent
-никогда не переносится к новому пользователю и не исполняется автоматически.
-Перед явным выходом при unresolved intent UI предупреждает, что локальное
-восстановление будет потеряно; потеря вкладки/storage требует owner recovery.
-Server-side auth/CSRF/session issuance не заменяются browser checks.
+доступ, но сам по себе **не** подтверждает исход ранее отправленного ambiguous
+intent. На 401/session expiry #9 немедленно скрывает private cache и формы,
+отменяет reads, #12 закрывает EventSource. Метаданные уже отправленного
+unresolved intent остаются в этой вкладке **заблокированными** до reauth,
+без отправки команды, автоматического lookup или отображения private данных.
+Если повторный `GET /auth/session` после login возвращает того же actorRef,
+оператор может **явно** запустить существующий bodyless replay-only lookup с
+прежним key/method/path, новым session CSRF header и без `If-Match-Version`;
+owner заново проверяет actor/scope/permissions. Новый actorRef, потеря
+метаданных, 401/403 при lookup или невозможность доказать привязку → никакого
+replay; показать неизвестный исход и owner recovery, очистить прежнюю private
+metadata перед работой нового пользователя. Отсутствие metadata не означает,
+что исходная команда не выполнилась. При явном logout/смене пользователя #9
+предупреждает об unresolved intent, затем очищает query/mutation cache, формы
+и sessionStorage metadata; #12 закрывает EventSource. Pending intent никогда
+не переносится к новому actor и не исполняется автоматически. Потеря
+вкладки/storage требует owner recovery. Server-side auth/CSRF/session issuance
+не заменяются browser checks; клиентский actorRef — только guard приватности.
 
 ## 5. Актуальность Order Card
 
@@ -157,7 +173,7 @@ owner-specific порядок принятия в существующий Query
 | #5 | Customer read-only lookup и сохранённый CustomerResponse, без повторного создания |
 | #7 | Pricing lookup, включая истёкший quote; новый quote не создаётся lookup |
 | #8 | Пять Orders operations и exact scoped lookup; сохранённая карточка/accepted response |
-| #9 | Pending intent до resourceRef, bodyless recovery после reload, terminal classifier и monotonic cache |
+| #9 | Pending intent до resourceRef, actor binding через `GET /auth/session`, expiry/401 freeze, explicit same-actor bodyless recovery, terminal classifier и monotonic cache |
 | #12 | Первичная синхронизация/refetch после открытия SSE, та же cache/session policy |
 | #13 | Потерянные ответы Customer/Draft/Quote, reload, owner restart и отсутствие дублирующих эффектов |
 
@@ -167,4 +183,7 @@ replay без owner writes; active/expired Acquired; missing/expired result; DB
 unavailable; invalid stored response; forged actor/scope/path; revoked permission;
 PII/key redaction; reload до resourceRef; repeated check без второго эффекта;
 старый GET/replay после новой карточки; ответ предыдущей сессии; accepted
-reconciliation не отображается как InSync.
+reconciliation не отображается как InSync. Дополнительно #9/#13 проверяют:
+401 после отправленного intent не превращается в terminal result; reauth того
+же actor разрешает только явный read-only lookup; другой actor и lost metadata
+не получают прежний result и требуют owner recovery; logout чистит metadata.

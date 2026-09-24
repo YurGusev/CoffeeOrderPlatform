@@ -287,20 +287,34 @@ business-экранов. #9 определяет и проверяет reflow э
 
 ## 9. Доставка и граница сессии
 
-#9 материализует `GET /app/** -> web:3000` по runtime profile: Edge передаёт
-SPA document, web возвращает index.html для app deep links. `/` ведёт в Customer
-flow. Отсутствующий `/assets/**` возвращает 404, API/events/internal/provider paths
-никогда не получают HTML fallback. HTML revalidation/no-store и immutable hashed
-assets проверяются в image/Compose; наличие health endpoint не доказывает SPA.
+#9 принимает browser/deep-link и session/CSRF UX через целевой
+[nginx transport/auth contract](29_NGINX_TRANSPORT_AND_AUTH.md) после #162:
+nginx обслуживает SPA document для допустимых `/app/**` deep links и immutable
+hashed assets из `apps/web` browser build; отдельный `web:3000` runtime не
+входит в target. `/` ведёт в Customer flow. Отсутствующий `/assets/**`
+возвращает 404, API/events/internal/provider paths никогда не получают HTML
+fallback. HTML revalidation/no-store и immutable hashed assets проверяются
+в image/Compose; наличие health endpoint не доказывает SPA. До #162
+существующий Node Edge→web путь сохраняется только как действующий baseline,
+не как вторая реализация после cutover.
 Node entrypoint и browser entrypoint имеют раздельные build graphs; browser не
 импортирует текущий server `main.ts`/platform-runtime.
 
 При logout/смене пользователя отменить pending reads, очистить query/mutation
 cache, формы и sessionStorage; поздние responses прошлой сессии отбрасываются.
-401 немедленно скрывает защищённые данные. Pending intent не исполняется после
-reauth автоматически; потеря local recovery при выходе явно объясняется согласно
-[recovery policy](26_BROWSER_COMMAND_RECOVERY.md). Login return URL допускает
-только локальный `/app/` path. #12 связывает EventSource с тем же lifecycle.
+401 немедленно скрывает защищённые данные, но не определяет исход уже
+отправленной команды. До mutation #9 привязывает pending intent к actorRef
+из no-store `GET /auth/session` без продления session; при expiry/401 metadata
+остаётся заблокированной без вызовов до reauth. Только после сверки того же
+server-derived actorRef допускается **явный** bodyless replay-only lookup с
+прежним key и новым CSRF; иной actor/утрата metadata → owner recovery, не
+автоматический повтор команды. При явном logout local recovery теряется с
+предупреждением согласно [recovery policy](26_BROWSER_COMMAND_RECOVERY.md).
+Login return URL допускает только локальный `/app/` path. #9 отправляет
+session-bound CSRF cookie token в
+`X-CSRF-Token` для unsafe методов, но не читает HttpOnly session cookie и не
+создаёт actor/Authorization header. #12 связывает EventSource с тем же lifecycle;
+#160 владеет auth receiver, #161 — native static/proxy, #162 — active cutover.
 
 ## 10. Тесты
 
