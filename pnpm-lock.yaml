@@ -65,6 +65,9 @@ importers:
       '@coffee-platform/contracts-aroma-v1':
         specifier: workspace:*
         version: link:../../packages/contracts/aroma-v1
+      '@coffee-platform/contracts-catalog-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/catalog-v1
       '@coffee-platform/contracts-customer-v1':
         specifier: workspace:*
         version: link:../../packages/contracts/customer-v1
@@ -80,6 +83,9 @@ importers:
 
   apps/api-public:
     dependencies:
+      '@coffee-platform/contracts-catalog-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/catalog-v1
       '@coffee-platform/contracts-customer-v1':
         specifier: workspace:*
         version: link:../../packages/contracts/customer-v1
@@ -155,9 +161,18 @@ importers:
 
   apps/catalog-service:
     dependencies:
+      '@coffee-platform/contracts-catalog-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/catalog-v1
+      '@coffee-platform/database':
+        specifier: workspace:*
+        version: link:../../packages/platform-database
       '@coffee-platform/runtime':
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      '@coffee-platform/security':
+        specifier: workspace:*
+        version: link:../../packages/platform-security
 
   apps/catalog-supplier-sync:
     dependencies:

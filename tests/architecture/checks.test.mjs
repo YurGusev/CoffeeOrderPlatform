@@ -180,6 +180,36 @@ void test("GREEN: Catalog activation SQL stays in owner infrastructure", async (
   assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
 });
 
+for (const [source, rule] of [
+  ['export const staging = "SELECT * FROM catalog.snapshot_offers";', "ARCH-CATALOG-API-BOUNDARY"],
+  ['export const directTable = "SELECT * FROM catalog.catalog_state";', "ARCH-CATALOG-API-BOUNDARY"],
+  ['import type {HttpClient} from "@coffee-platform/platform-http"; export type ProviderClient = HttpClient;', "ARCH-CATALOG-API-BOUNDARY"],
+  ['export const foreign = "postgresql://localhost/coffee_platform_pricing";', "ARCH-POSTGRES-URL"],
+]) {
+  void test(`RED ARCH-CATALOG-API-BOUNDARY: catalog-service rejects ${source.slice(0, 40)}`, async () => {
+    const root = await mkdtemp(join(tmpdir(), "coffee-catalog-api-boundary-"));
+    try {
+      await mkdir(join(root, "apps/catalog-service/src/infrastructure"), {recursive: true});
+      await writeFile(join(root, "apps/catalog-service/src/infrastructure/catalog-read-store.ts"), `${source}\n`);
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(output(result), new RegExp(rule, "u"));
+    } finally { await rm(root, {recursive: true, force: true}); }
+  });
+}
+
+void test("RED BOUND-DB-CLAIM: architecture rejects write-capable Catalog API role", async () => {
+  const root = await authorityRoot();
+  try {
+    await writeFile(join(root, "runtime-environment.json"), JSON.stringify({bindings: [{
+      runtime: "catalog-service", database: "coffee_platform_catalog", role: "coffee_catalog_activate_rw",
+    }]}));
+    const result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /BOUND-DB-CLAIM.*catalog-service/u);
+  } finally { await rm(root, {recursive: true, force: true}); }
+});
+
 void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {
   const result = run("check-architecture.mjs", join(FIXTURES, "valid-import"));
   assert.equal(result.status, 0, output(result));

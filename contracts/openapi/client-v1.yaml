@@ -182,13 +182,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/CatalogSearchResponse'
         '400':
-          $ref: '#/components/responses/ValidationFailed'
+          description: Invalid query or cursor.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorValidationFailed'
+                  - $ref: '#/components/schemas/ErrorInvalidCursor'
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':
           $ref: '#/components/responses/ActorContextInvalid'
         '503':
-          $ref: '#/components/responses/CatalogSnapshotIncomplete'
+          description: Active Catalog snapshot is incomplete or the owner is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorCatalogSnapshotIncomplete'
+                  - $ref: '#/components/schemas/ErrorCatalogUnavailable'
   /api/client-v1/pricing/quotes:
     post:
       tags: [pricing]
@@ -803,10 +815,9 @@ components:
       name: query
       in: query
       required: true
+      description: Trim, Unicode NFKC, then lowercase; the normalized result must contain 2–200 Unicode code points.
       schema:
         type: string
-        minLength: 2
-        maxLength: 200
     Availability:
       name: availability
       in: query

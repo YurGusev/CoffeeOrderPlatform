@@ -1,0 +1,180 @@
+issue: 17
+baseCommit: 63be432f2a452d4159abc32183678ca91819c013
+inputs:
+- issue: 4
+  acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+  artifact: evidence/handoffs/issue-4.yaml
+  sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+- issue: 16
+  acceptedMergeCommit: 63be432f2a452d4159abc32183678ca91819c013
+  artifact: evidence/handoffs/issue-16.yaml
+  sha256: b3be754dcfa806bc4703682883b7be7e7c660dc8cb5fef9c8ec6a9e5d0547dc4
+outputs:
+- artifact: apps/api-internal/package.json
+  sha256: 424982632a7a570c99d478ffbfb9fa2bfcb2c1d29abfc4d16aad3c5203e3b048
+  consumers: [18, 7, 8, 9]
+- artifact: apps/api-internal/src/index.ts
+  sha256: fe7bdf2f34827d20d973d0f39e855080a96cc430d5e75dd77c5a29f9a91dc198
+  consumers: [18, 7, 8, 9]
+- artifact: apps/api-internal/src/main.ts
+  sha256: 80487e36652d91452cd03168c2542c541416afadefa7cf04275b61577ae6b197
+  consumers: [18, 7, 8, 9]
+- artifact: apps/api-internal/tsconfig.json
+  sha256: 33d9385555b5b06983f6395bd14a7a1a43f6b002b0f5be9963c57002d09fd68a
+  consumers: [18, 7, 8, 9]
+- artifact: apps/api-public/package.json
+  sha256: fb2d0985d6c3f2d9fb50ce13d9f86f79d74ffc83fc2a21e3446820359c9bbb73
+  consumers: [18, 7, 8, 9]
+- artifact: apps/api-public/src/index.ts
+  sha256: 9c03b19ab6ab0fb9a03010de8dc5dc801b9de287ad748b11e1cbbe45c35b2fe4
+  consumers: [18, 7, 8, 9]
+- artifact: apps/api-public/src/main.ts
+  sha256: c403aaf65d95700069dd0894e1c8d03577ccfebf5c07a6aedafc31218a32e4dc
+  consumers: [18, 7, 8, 9]
+- artifact: apps/api-public/tsconfig.json
+  sha256: 53e5937320c681cf058dbe1c637cc581f60b69497ae213b44781018cc4275af4
+  consumers: [18, 7, 8, 9]
+- artifact: apps/catalog-service/package.json
+  sha256: 5b70747d817925d91adc68c7641baa333df5a1f04c24f4003e52b05fcbf40f43
+  consumers: [18, 7, 8, 9]
+- artifact: apps/catalog-service/src/application/search-catalog.ts
+  sha256: 10df7600cb5421b45ad33521486ea28988c3d5627425eb50e1a2e262d6b87d34
+  consumers: [18, 7, 8, 9]
+- artifact: apps/catalog-service/src/http/index.ts
+  sha256: 8abbc7c44d7e9f8e1c8db8c7ec66756949deb6440548cce5645e3fa66d577065
+  consumers: [18, 7, 8, 9]
+- artifact: apps/catalog-service/src/infrastructure/postgres/catalog-repository.ts
+  sha256: 24f6b54ea93fac702c510a16075d036e4c860754644d6e8fe9e3915a02c5e29c
+  consumers: [18, 7, 8, 9]
+- artifact: apps/catalog-service/src/infrastructure/postgres/catalog-store.ts
+  sha256: 36eb1ac900a9e3fb1bd13c3126b542ceb3bc339eecba25437f41c615bd6406a6
+  consumers: [18, 7, 8, 9]
+- artifact: apps/catalog-service/src/main.ts
+  sha256: b7acd03875ecebf13daf827f21ba73f4d6861fff4aaadc9eec9252e4bfc1b96b
+  consumers: [18, 7, 8, 9]
+- artifact: apps/catalog-service/tsconfig.json
+  sha256: 9b6b3f6a837e6be3f792d1afee30855349f42577f617494543ab77d99913b1be
+  consumers: [18, 7, 8, 9]
+- artifact: config/platform.yaml
+  sha256: 6521ef0c06f29e766dfcf37732f6b17623460c8072de44a1c2c4a19c1142362f
+  consumers: [18, 7, 8, 9]
+- artifact: config/service-catalog.json
+  sha256: e567db85a83d1a8aa3a494fb2874c62bc932e7f363ab46ad63c406757e44364e
+  consumers: [18, 7, 8, 9]
+- artifact: contracts/fixtures/positive/http/problems.json
+  sha256: 157bd69fa5e713d8f309aaa9f7ead83588b60e9fd76dcbd02f743f5954c1c664
+  consumers: []
+- artifact: contracts/openapi/client-v1.yaml
+  sha256: 9ebfe14985cd356177d38f7eb20a1f6838805a2ec674c8487d2e4307cd68a3ac
+  consumers: [18, 7, 8, 9]
+- artifact: contracts/openapi/internal-v1.yaml
+  sha256: c53a64ec779e1d2b6d1c5d5bd30ae252f013bb967b93cf317e9c3918f69d7090
+  consumers: [18, 7, 8, 9]
+- artifact: docs/launch/03_HTTP_API_CONTRACT.md
+  sha256: e7b0c2d6aa53528c2437e1f5de8329b146285af6fa6d228631d810407095273d
+  consumers: [18, 7, 8, 9]
+- artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
+  sha256: c695c9e33bed1bff69c729d6e913f791ea1a7f6029d5f41a659d26275f4dfdd2
+  consumers: [18, 7, 8, 9]
+- artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md
+  sha256: ffbd10adb87b1e37c322a553580b5de16569192436ea7f929961b3a0e76662c7
+  consumers: [18, 7, 8, 9]
+- artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+  sha256: 656a0572acbf7fb0b6df46e3fe04892575dea58721ca0712397213925b27412b
+  consumers: [18, 7, 8, 9]
+- artifact: packages/contracts/catalog-v1/src/index.ts
+  sha256: 24fd9e844f4c43b26f4c8d252a623a3e3e3897714a32de9b9f64570add14126d
+  consumers: [18, 7, 8, 9]
+- artifact: packages/generated/client-v1/src/types.gen.ts
+  sha256: 113cd670f5da1b0b48fc3a7e7d26cb6087dd2ff823e29709600340b47861c75d
+  consumers: [18, 7, 8, 9]
+- artifact: packages/generated/internal-v1/src/index.ts
+  sha256: 72a8a046f7eb2882650acf0d4eaad16ee28d307d760e5a33e659136bf726d874
+  consumers: [18, 7, 8, 9]
+- artifact: packages/generated/internal-v1/src/types.gen.ts
+  sha256: e4250f52593be19aeb817b42d0033875f54b09635610966a46c17b6e15ccaa53
+  consumers: [18, 7, 8, 9]
+- artifact: platform/launch-v1-runtime-profile.json
+  sha256: f2405619d30d664371428bf09694f51fc5dadfb68e3cd7075ec7f75638da1072
+  consumers: [18, 7, 8, 9]
+- artifact: pnpm-lock.yaml
+  sha256: 7b9114e667f53dd1f894ec5f9c3c8ab05ce17ec17e0c182b35f1fb2dc6452ef6
+  consumers: []
+- artifact: scripts/check-architecture.mjs
+  sha256: c29771da7d3f903575a1b1fcdd75cabc4e23e7b2eb20d311c2f794b87e2ccaff
+  consumers: []
+- artifact: scripts/check-service-catalog.mjs
+  sha256: e56b100e7cfc9a28812d6ae72975df36fbb3f8fe5c85c00c9095ccdca101748e
+  consumers: []
+- artifact: scripts/contracts-breaking.mjs
+  sha256: a3a10aaa747ab3a61e552f7c3b6ba141e17281a0d583b6d271b47418fceec5bf
+  consumers: []
+- artifact: scripts/db-live-proof.mjs
+  sha256: 6b0826652a14d8b226889b2786732a437275420b8a4725e3c7e2761498e45522
+  consumers: []
+- artifact: secrets/platform-secrets.schema.json
+  sha256: 6f16c682d4166fda9b707d2e0ec054a41b7d689155ea08914223f8a43491bd81
+  consumers: []
+- artifact: secrets/platform.secrets.sops.yaml
+  sha256: 9933b302078e3165842a70266818c991c7f5f58460beabd26ed2b24fb1160d54
+  consumers: []
+- artifact: tests/architecture/checks.test.mjs
+  sha256: 22ce9e5538895e1fceeefd7cc9ede3070bc9647c85708f928d81b75da2b75c96
+  consumers: []
+- artifact: tests/catalog/activation-live.test.mjs
+  sha256: 16b6293eb5534911c3785eacda1615858c0ada5ebd0670e2692278d4d62699dc
+  consumers: []
+- artifact: tests/catalog/catalog-owner.test.mjs
+  sha256: a9a6f2c9447aa1f11ded230ceb63ca9e7cc2ae82cc56154f9fa3384d2d87f126
+  consumers: []
+- artifact: tests/catalog/catalog-root.test.mjs
+  sha256: abb1d16af7519b594a8db7d4af7769eb8436d543660d09acab47896f762c5983
+  consumers: []
+- artifact: tests/contracts/breaking.test.mjs
+  sha256: 5bc9bd8b75f623d2bfc2020329f613c7e8e90f89a130abb0a4980a05cecfda76
+  consumers: []
+- artifact: tests/contracts/catalog-http.test.mjs
+  sha256: c270ea47de514d4f5c5f2210fa0810180115d07d5957029b244ea9b2455ac65f
+  consumers: []
+verification:
+- command: "pnpm contracts:generate && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:lint && pnpm contracts:test"
+  result: passed
+  exitCode: 0
+  detail: "source OpenAPI, детерминированная генерация и совместимость пройдены"
+- command: "pnpm lint"
+  result: passed
+  exitCode: 0
+  detail: "прошло"
+- command: "pnpm typecheck"
+  result: passed
+  exitCode: 0
+  detail: "прошло"
+- command: "pnpm test"
+  result: passed
+  exitCode: 0
+  detail: "493 теста; 471 пройден, 22 opt-in пропущены"
+- command: "pnpm check"
+  result: passed
+  exitCode: 0
+  detail: "493 теста; 471 пройден, 22 opt-in пропущены; контракты, архитектура, security и config пройдены"
+- command: "pnpm test:catalog-activation-live"
+  result: passed
+  exitCode: 0
+  detail: "26/26 на disposable PostgreSQL; первоначальный параллельный запуск дал ECONNRESET, отдельный повтор прошёл"
+- command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/catalog/activation-*.test.mjs"
+  result: passed
+  exitCode: 0
+  detail: "26/26 на disposable PostgreSQL при последовательном прогоне"
+- command: "pnpm db:live-proof"
+  result: passed
+  exitCode: 0
+  detail: "disposable PostgreSQL; чтение active views ролью Catalog API, запрет staging write и подключения к чужим DB"
+- command: "git diff --check"
+  result: passed
+  exitCode: 0
+  detail: "прошло"
+limitations:
+- "Постоянная БД и её migration ledger не проверены: возможен checksum drift 0004 для промежуточного head #16; автоматически не исправлять и не обходить."
+- "Реальный Gateway mTLS, production Kafka broker и deployment не запускались; disposable PostgreSQL и mock sender не являются production end-to-end proof."
+- "Первый pnpm test:catalog-activation-live завершился ECONNRESET в двух параллельных тестах; последовательный запуск и повтор стандартной команды прошли. Причина сброса соединений не установлена."
+- "GitHub CI и приёмка владельца не подменяются локальными тестами; live checks следует проверять после публикации PR."

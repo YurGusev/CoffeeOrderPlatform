@@ -284,6 +284,11 @@ export type ErrorCatalogSnapshotIncomplete = ProblemDetailsV1SchemaProblemDetail
   code?: 'CATALOG_SNAPSHOT_INCOMPLETE';
 };
 
+export type ErrorCatalogUnavailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'CATALOG_UNAVAILABLE';
+};
+
 export type ErrorPricingPolicyUnavailable = ProblemDetailsV1SchemaProblemDetails & {
   status?: 503;
   code?: 'PRICING_POLICY_UNAVAILABLE';
@@ -480,9 +485,9 @@ export type GetCatalogPricingInputErrors = {
    */
   404: ErrorCatalogProductNotFound;
   /**
-   * No complete active catalog snapshot is available.
+   * Active Catalog snapshot is incomplete or the owner is unavailable.
    */
-  503: ErrorCatalogSnapshotIncomplete;
+  503: ErrorCatalogSnapshotIncomplete | ErrorCatalogUnavailable;
 };
 
 export type GetCatalogPricingInputError = GetCatalogPricingInputErrors[keyof GetCatalogPricingInputErrors];

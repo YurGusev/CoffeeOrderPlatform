@@ -41,7 +41,7 @@
       "networkZone": "internal-api",
       "dbPrincipal": null,
       "httpSurfaces": ["internal-v1"],
-      "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceVerificationKeys.orders-service", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
+      "secretRefs": ["security.apiInternalDelegationSigningPrivateKey", "security.serviceVerificationKeys.orders-service", "security.serviceVerificationKeys.pricing-service", "security.serviceTransportKeys.api-internal", "telemetry.exporterToken"],
       "implemented": false
     },
     {
@@ -74,7 +74,7 @@
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_catalog_api_ro",
       "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
-      "secretRefs": ["postgres.catalogApi", "security.catalogCursorSigningPrivateKey", "security.serviceTransportKeys.catalog-service", "telemetry.exporterToken"],
+      "secretRefs": ["postgres.catalogApi", "security.catalogCursorSigningPrivateKey", "security.delegationVerificationKeys.api-public", "security.delegationVerificationKeys.api-internal", "security.serviceTransportKeys.catalog-service", "telemetry.exporterToken"],
       "implemented": false
     },
     {
@@ -107,7 +107,7 @@
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_pricing_rw",
       "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
-      "secretRefs": ["postgres.pricing", "security.serviceTransportKeys.pricing-service", "telemetry.exporterToken"],
+      "secretRefs": ["postgres.pricing", "security.pricingServiceDelegationSigningPrivateKey", "security.serviceTransportKeys.pricing-service", "telemetry.exporterToken"],
       "implemented": false
     },
     {

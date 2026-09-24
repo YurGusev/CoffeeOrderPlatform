@@ -92,7 +92,13 @@ paths:
         '404':
           $ref: '#/components/responses/CatalogProductNotFound'
         '503':
-          $ref: '#/components/responses/CatalogSnapshotIncomplete'
+          description: Active Catalog snapshot is incomplete or the owner is unavailable.
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorCatalogSnapshotIncomplete'
+                  - $ref: '#/components/schemas/ErrorCatalogUnavailable'
   /api/internal-v1/pricing/quotes:verify:
     post:
       tags: [pricing]
@@ -1055,6 +1061,13 @@ components:
           properties:
             status: { const: 503 }
             code: { const: CATALOG_SNAPSHOT_INCOMPLETE }
+    ErrorCatalogUnavailable:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 503 }
+            code: { const: CATALOG_UNAVAILABLE }
     ErrorPricingPolicyUnavailable:
       allOf:
         - $ref: '#/components/schemas/ProblemDetails'

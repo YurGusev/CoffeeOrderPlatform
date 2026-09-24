@@ -153,14 +153,16 @@ legacy `postgres/postgres` запрещены.
 Inventory authority — это encrypted paths в `secrets/platform.secrets.sops.yaml`,
 а runtime получает только refs, перечисленные одновременно в
 `config/platform.yaml`, `config/service-catalog.json` и
-`platform/launch-v1-runtime-profile.json`. Production wiring для трёх runtime:
+`platform/launch-v1-runtime-profile.json`. Production wiring для затронутых runtime:
 
 | Runtime | Secret refs |
 |---|---|
 | `edge-gateway` | `edge.tlsPrivateKey`, `edge.tlsCertificate`, `edge.oidcClientSecret`, `security.actorContextEdgeSigningPrivateKey`, `security.serviceTransportKeys.edge-gateway`, `telemetry.exporterToken` |
 | `api-public` | `security.apiPublicDelegationSigningPrivateKey`, `security.actorContextEdgeVerificationPublicKeys`, `security.serviceTransportKeys.api-public`, `telemetry.exporterToken` |
-| `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
+| `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceVerificationKeys.pricing-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
 | `customer-service` | `postgres.customer`, `security.customerCursorSigningPrivateKey`, `security.customerCursorVerificationPublicKeys`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.customer-service`, `telemetry.exporterToken` |
+| `catalog-service` | `postgres.catalogApi`, `security.catalogCursorSigningPrivateKey`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.catalog-service`, `telemetry.exporterToken` |
+| `pricing-service` | `postgres.pricing`, `security.pricingServiceDelegationSigningPrivateKey`, `security.serviceTransportKeys.pricing-service`, `telemetry.exporterToken` |
 
 `edge-gateway` использует `public-tls`: его публичный listener предъявляет
 `edge.tlsCertificate` с парой `edge.tlsPrivateKey`, проверяет срок и hostname
@@ -176,6 +178,10 @@ Inventory authority — это encrypted paths в `secrets/platform.secrets.sops
 
 `security.customerCursorSigningPrivateKey` — отдельный Customer-scoped ключ;
 он не переиспользуется для Catalog cursor, actor context, delegation или mTLS.
+`security.pricingServiceDelegationSigningPrivateKey` используется только
+`pricing-service` для исходящего signed service delegation. `api-internal`
+получает лишь active/previous public verification keys: caller по mTLS без
+действительной подписи и правильного `operationId` не авторизуется.
 `catalog-activation-worker` использует только собственные scoped
 `postgres.catalogActivate` и `security.serviceTransportKeys.catalog-activation-worker`:
 последний устанавливает mTLS до allowlisted `api-internal` для Gateway binding.

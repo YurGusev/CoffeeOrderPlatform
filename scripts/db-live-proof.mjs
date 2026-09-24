@@ -2034,8 +2034,18 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
       fail("API role must see the committed Catalog pointer and decimal-string revision");
     }
     outcomes.apiActiveViewsSelect = true;
+    const activeProduct = await api.query(
+      "SELECT metadata.snapshot_revision, product.product_ref FROM catalog.active_snapshot_metadata AS metadata JOIN catalog.active_products AS product ON product.snapshot_ref = metadata.snapshot_ref WHERE product.product_ref=$1",
+      [productRef],
+    );
+    if (activeProduct.rows.length !== 1 || activeProduct.rows[0].product_ref !== productRef || activeProduct.rows[0].snapshot_revision !== "1") {
+      fail("API role must read only the committed active product and revision");
+    }
+    outcomes.apiActiveProjectionRead = true;
     await expectDenied(api, "apiCatalogStateSelect", "SELECT * FROM catalog.catalog_state");
     await expectDenied(api, "apiStagingSelect", "SELECT * FROM catalog.supplier_snapshots");
+    await expectDenied(api, "apiStagingInsert", `INSERT INTO catalog.supplier_snapshots (snapshot_ref,supplier_ref) VALUES ('${snapshotRef}','${supplierRef}')`);
+    await expectDenied(api, "apiStagingUpdate", `UPDATE catalog.supplier_snapshots SET state='Rejected' WHERE snapshot_ref='${snapshotRef}'`);
     await expectDenied(api, "apiActiveInsert", `INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('${snapshotRef}','prd_00000000000000000000000001','Denied','denied')`);
     await expectDenied(api, "apiActiveUpdate", "UPDATE catalog.catalog_state SET active_snapshot_revision=2 WHERE id=true");
     await expectDenied(importer, "importActiveSelect", "SELECT * FROM catalog.active_products");
@@ -2046,26 +2056,30 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
     await expectDenied(importer, "importOutboxUpdate", "UPDATE catalog.outbox_messages SET state='Published' WHERE message_id='missing'");
 
     const foreignConnect = {};
+    const apiForeignConnect = {};
     for (const database of ["coffee_platform_customer", "coffee_platform_pricing", "coffee_platform_orders", "coffee_platform_integration"]) {
-      const client = new Client({
-        connectionString: replaceDatabase(adminUrl, database, {
-          user: "coffee_catalog_activate_rw", password: rolePasswords.coffee_catalog_activate_rw,
-        }), connectionTimeoutMillis: 1000, query_timeout: 2000,
-      });
-      client.on("error", () => {});
-      try {
-        await client.connect();
-        foreignConnect[database] = { denied: false, sqlstate: null };
-        fail(`activation role unexpectedly connected to ${database}`);
-      } catch (error) {
-        foreignConnect[database] = { denied: error.code === "42501", sqlstate: error.code ?? null };
-        if (error.code !== "42501") fail(`activation CONNECT ${database}: expected SQLSTATE 42501, got ${error.code ?? "none"}`);
-      } finally {
-        await client.end().catch(() => undefined);
+      for (const {role, checks} of [{role: "coffee_catalog_activate_rw", checks: foreignConnect}, {role: "coffee_catalog_api_ro", checks: apiForeignConnect}]) {
+        const client = new Client({
+          connectionString: replaceDatabase(adminUrl, database, {
+            user: role, password: rolePasswords[role],
+          }), connectionTimeoutMillis: 1000, query_timeout: 2000,
+        });
+        client.on("error", () => {});
+        try {
+          await client.connect();
+          checks[database] = { denied: false, sqlstate: null };
+          fail(`${role} unexpectedly connected to ${database}`);
+        } catch (error) {
+          checks[database] = { denied: error.code === "42501", sqlstate: error.code ?? null };
+          if (error.code !== "42501") fail(`${role} CONNECT ${database}: expected SQLSTATE 42501, got ${error.code ?? "none"}`);
+        } finally {
+          await client.end().catch(() => undefined);
+        }
       }
     }
     outcomes.connectDeniedToForeignDatabases = Object.values(foreignConnect).every((entry) => entry.denied);
-    return { appliedMigrations, outcomes, sqlstates, foreignConnect };
+    outcomes.apiConnectDeniedToForeignDatabases = Object.values(apiForeignConnect).every((entry) => entry.denied);
+    return { appliedMigrations, outcomes, sqlstates, foreignConnect, apiForeignConnect };
   } finally {
     await importer.end();
     await api.end();

@@ -1,1 +1,1 @@
-{"name":"@coffee-platform/catalog-service","version":"0.0.0","private":true,"type":"module","scripts":{"start":"node dist/main.js"},"dependencies":{"@coffee-platform/runtime":"workspace:*"}}
+{"name":"@coffee-platform/catalog-service","version":"0.0.0","private":true,"type":"module","scripts":{"start":"node dist/main.js"},"dependencies":{"@coffee-platform/contracts-catalog-v1":"workspace:*","@coffee-platform/database":"workspace:*","@coffee-platform/runtime":"workspace:*","@coffee-platform/security":"workspace:*"}}

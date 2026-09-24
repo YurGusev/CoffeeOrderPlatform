@@ -212,7 +212,7 @@ services:
     database: null
     kafka: { producers: [], consumers: [] }
     outbound: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301]
-    secretRefs: [security.apiInternalDelegationSigningPrivateKey, security.serviceVerificationKeys.orders-service, security.serviceTransportKeys.api-internal, telemetry.exporterToken]
+    secretRefs: [security.apiInternalDelegationSigningPrivateKey, security.serviceVerificationKeys.orders-service, security.serviceVerificationKeys.pricing-service, security.serviceTransportKeys.api-internal, telemetry.exporterToken]
     permissions: {manifest: config/permissions/api-internal.json, net: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
@@ -260,7 +260,7 @@ services:
     database: coffee_platform_catalog
     kafka: { producers: [], consumers: [] }
     outbound: []
-    secretRefs: [postgres.catalogApi, security.catalogCursorSigningPrivateKey, security.serviceTransportKeys.catalog-service, telemetry.exporterToken]
+    secretRefs: [postgres.catalogApi, security.catalogCursorSigningPrivateKey, security.delegationVerificationKeys.api-public, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.catalog-service, telemetry.exporterToken]
     permissions: {manifest: config/permissions/catalog-service.json, net: [coffee_postgres:5432], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
@@ -313,7 +313,7 @@ services:
     database: coffee_platform_pricing
     kafka: { producers: [], consumers: [] }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.pricing, security.serviceTransportKeys.pricing-service, telemetry.exporterToken]
+    secretRefs: [postgres.pricing, security.pricingServiceDelegationSigningPrivateKey, security.serviceTransportKeys.pricing-service, telemetry.exporterToken]
     permissions: {manifest: config/permissions/pricing-service.json, net: [coffee_postgres:5432, api-internal:4051], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 

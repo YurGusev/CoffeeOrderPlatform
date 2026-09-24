@@ -137,7 +137,9 @@ body/version по-прежнему невалидна. GET/SSE/provider/internal
 - item: `productRef`, `variantRef`, `displayName`, `unit` enum
   `piece|gram|kilogram`, `availability`, `mappingAvailable` boolean,
   `imageUrl?`; provider offer/session identifiers не возвращаются;
-- errors: `400 VALIDATION_FAILED`, `503 CATALOG_SNAPSHOT_INCOMPLETE`.
+- errors: `400 VALIDATION_FAILED`, `400 INVALID_CURSOR`,
+  `503 CATALOG_SNAPSHOT_INCOMPLETE` (нет complete active revision),
+  `503 CATALOG_UNAVAILABLE` (недоступен owner/БД или нарушен контракт ответа).
 
 ### 3.3 PricingQuote
 

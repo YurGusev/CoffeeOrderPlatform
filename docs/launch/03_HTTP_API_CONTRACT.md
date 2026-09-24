@@ -21,6 +21,14 @@ GET  /api/client-v1/orders/{orderRef}
 GET  /events
 ```
 
+Поиск Catalog маршрутизируется через `api-public` в `catalog-service`: API-root
+проверяет actor/delegation и контракт, а owner читает только active projection
+под `coffee_catalog_api_ro`. Неверный подписанный cursor возвращает
+`400 INVALID_CURSOR`; отсутствие active revision — `503 CATALOG_SNAPSHOT_INCOMPLETE`.
+Отказ транспорта Catalog или БД — `503 CATALOG_UNAVAILABLE`, не ложный incomplete snapshot.
+Private Pricing input доступен только через `api-internal` для подписанного
+`pricing-service`, не публикуется через `client-v1`.
+
 ## Требования к командам
 
 Команды, изменяющие состояние, требуют:
