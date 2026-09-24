@@ -18,7 +18,7 @@ outputs:
     sha256: f0f22d32a9a1db3a297b6b707ba6a2a1aa7c3c9bf0e87dcb5ca8a4fed189ff0d
     consumers: [76, 77, 121, 122, 97]
   - artifact: docs/wave-2/02_RUNTIME_TOPOLOGY.md
-    sha256: 6a2a2c2336e183a41a4914cd2ecaf62c6fbefc77a29434e53d37ce3438dd65c9
+    sha256: 8d16a0511b65927882a8b4b295ac5e72ecf30e9e458363e97cefc0cd006c65e2
     consumers: [76, 77, 78, 90, 97, 121, 122]
   - artifact: docs/wave-2/README.md
     sha256: b40ef0eb0709afe1750bd7534513c222a6b4d75828598dd0c0c43e1ca5e47f6d
