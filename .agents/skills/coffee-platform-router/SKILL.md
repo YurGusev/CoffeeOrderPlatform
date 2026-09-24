@@ -27,6 +27,7 @@ ADR-0025, prerequisites — `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`.
 | Draft, Confirm, Order, Desired/Observed | `orders-lifecycle` |
 | AROMA Gateway, convergence, unsafe mutation | `aroma-cart-integration` |
 | React/operator UI/client-v1 | `react-operator-frontend` |
+| макеты сайта, прототип экрана, сравнение визуальных направлений | `web-mockup-workflow`; `react-operator-frontend` для интерфейса платформы |
 | invoice, allocation, reconciliation | `invoices-service`; `artifact-processing` при изменении документов |
 | payment intent, webhook, refund, provider proof | `payments-service` |
 | VK/channel identity/media, production Hermes-channel | `channel-hermes-platform` |
@@ -36,7 +37,6 @@ ADR-0025, prerequisites — `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`.
 | failures, recovery, security, SLO | `reliability-verification` |
 | issue authoring/audit | `issue-authoring` |
 | handoff, PR, merge, closure | `issue-delivery-closure` |
-| независимые сложные подзадачи, запрос делегирования | `astra-orchestrator` с разделом текущего runtime |
 
 При пересечении границ применять несколько владеющих навыков. Пересматривать
 маршрут только при обнаружении новой области задачи. Неоднозначность владельца,

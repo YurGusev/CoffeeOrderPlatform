@@ -52,6 +52,7 @@
 28. [Выбранный versioned frontend-прототип и границы fixture](../frontend/prototypes/README.md)
 29. [Исторические UX-макеты #136 (ранее приняты, теперь заменены)](../frontend/ux/README.md)
 30. [Исследованный HTTP-протокол AROMA и открытые вопросы](27_AROMA_PROVIDER_PROTOCOL.md)
+31. [Почасовой каталог AROMA, цены и недельные акции](28_AROMA_CATALOG_PRICING_POLICY.md)
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
 
