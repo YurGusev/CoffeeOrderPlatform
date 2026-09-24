@@ -49,6 +49,7 @@
     "versions:check": "node scripts/check-toolchain-versions.mjs",
     "nginx:check": "node tools/nginx/generate-config.mjs --fixture tests/nginx/fixtures/profile.json --output apps/edge-nginx/generated/nginx.conf && node tools/nginx/check-config.mjs && node tests/nginx/image.test.mjs --check-only",
     "test:nginx-image": "node tests/nginx/image.test.mjs",
+    "test:edge-auth": "pnpm exec tsc -b apps/edge-gateway --pretty false && node --experimental-strip-types --test tests/edge-auth/*.test.mjs packages/platform-security/test/actor-context.test.mjs",
     "ui:build": "pnpm --filter @coffee-platform/ui build",
     "web:build": "pnpm ui:build && pnpm --filter @coffee-platform/web build:browser",
     "dev:browser": "pnpm --filter @coffee-platform/web dev:browser",

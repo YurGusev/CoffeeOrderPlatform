@@ -85,6 +85,7 @@ function routeBlock(route, profile) {
       auth_request /_edge/authorize;
       auth_request_set $edge_auth_status $upstream_status;
       auth_request_set $edge_actor_context $upstream_http_x_actor_context;
+      auth_request_set $edge_auth_correlation $upstream_http_x_correlation_id;
       proxy_pass ${variable};
       proxy_http_version 1.1;
       proxy_request_buffering off;
@@ -130,10 +131,11 @@ http {
   client_max_body_size ${l.bodyBytes};
   large_client_header_buffers 4 ${l.headerBytes};
   client_header_buffer_size 1k;
-  map "$edge_auth_status:$edge_actor_context" $api_auth_target { default http://127.0.0.1:18080; ~^204:.+ https://api_public; }
-  map "$edge_auth_status:$edge_actor_context" $realtime_auth_target { default http://127.0.0.1:18080; ~^204:.+ https://realtime_gateway; }
+  map "$edge_auth_status:$edge_actor_context:$edge_auth_correlation" $api_auth_target { default http://127.0.0.1:18080; ~^204:[^:]+:[^:]+$ https://api_public; }
+  map "$edge_auth_status:$edge_actor_context:$edge_auth_correlation" $realtime_auth_target { default http://127.0.0.1:18080; ~^204:[^:]+:[^:]+$ https://realtime_gateway; }
   map $http_cookie $edge_session_cookie { default ''; '~*(?:^|;\\s*)(?<edge_session_cookie_value>__Host-coffee-session=[^;]+)' $edge_session_cookie_value; }
   map $http_cookie $edge_csrf_cookie { default ''; '~*(?:^|;\\s*)(?<edge_csrf_cookie_value>__Host-coffee-csrf=[^;]+)' $edge_csrf_cookie_value; }
+  map $http_cookie $edge_login_cookie { default ''; '~*(?:^|;\\s*)(?<edge_login_cookie_value>__Host-coffee-login=[^;]+)' $edge_login_cookie_value; }
   map "$edge_session_cookie|$edge_csrf_cookie" $edge_allowed_cookie { default ''; "~^([^|]+)\\|([^|]+)$" "$1; $2"; "~^([^|]+)\\|" "$1"; "~^\\|([^|]+)$" "$1"; }
   map $http_idempotency_key $bad_idempotency_key { ~, 1; default 0; }
   limit_conn_zone $server_name zone=edge_api_admission:1m;
@@ -161,7 +163,7 @@ http {
     location ^~ /assets/ { limit_except GET HEAD { deny all; } try_files $uri =404; add_header Cache-Control 'public, max-age=31536000, immutable' always; }
     location = /auth/session { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/session; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header X-Request-Id $request_id; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Forwarded-Host ${profile.publicHost}; proxy_set_header Authorization ''; proxy_set_header Cache-Control no-store; proxy_hide_header Cache-Control; add_header Cache-Control no-store always; include /etc/nginx/snippets/upstream-tls.conf; }
     location = /auth/login { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/login; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header X-Request-Id $request_id; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Forwarded-Host ${profile.publicHost}; include /etc/nginx/snippets/upstream-tls.conf; }
-    location = /auth/callback { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/callback; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
+    location = /auth/callback { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/callback; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_login_cookie; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
     location = /auth/logout { limit_except POST { deny all; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/logout; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
     if ($edge_oversized_raw_target) { return 414; }
     location = /_edge/authorize { internal; limit_conn edge_auth_admission 320; proxy_pass https://edge_gateway/_edge/authorize; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_pass_request_body off; proxy_set_header Content-Length ''; proxy_set_header X-Original-Method $request_method; proxy_set_header X-Original-URI $request_uri; proxy_set_header X-Request-Id $request_id; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header Authorization ''; proxy_set_header X-Actor-Context ''; include /etc/nginx/snippets/upstream-tls.conf; }

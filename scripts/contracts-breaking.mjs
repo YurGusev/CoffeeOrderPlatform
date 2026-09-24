@@ -11,7 +11,7 @@ const repositoryRoot = resolve(import.meta.dirname, '..');
 const valueAfter = (name) => process.argv[process.argv.indexOf(name) + 1];
 const root = process.argv.includes('--current') ? resolve(valueAfter('--current')) : repositoryRoot;
 const baseRoot = process.argv.includes('--base') ? resolve(valueAfter('--base')) : null;
-const fixedSources = ['contracts/openapi/client-v1.yaml', 'contracts/openapi/internal-v1.yaml', 'contracts/manifest.yaml'];
+const fixedSources = ['contracts/openapi/client-v1.yaml', 'contracts/openapi/internal-v1.yaml', 'contracts/openapi/edge-auth-v1.yaml', 'contracts/manifest.yaml'];
 
 async function schemaSources(directory, prefix = 'contracts/schemas') {
   const path = resolve(directory, prefix);

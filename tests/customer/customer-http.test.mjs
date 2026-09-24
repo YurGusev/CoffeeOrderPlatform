@@ -3,10 +3,11 @@ import {generateKeyPairSync, randomUUID} from "node:crypto";
 import test from "node:test";
 import {isCustomerProblem} from "../../packages/contracts/customer-v1/dist/index.js";
 import {createRuntime} from "../../packages/platform-runtime/src/index.ts";
+import {signActorContext} from "../../packages/platform-security/src/index.ts";
 import {createEd25519CustomerCursorSigner, decodeCustomerCursor, encodeCustomerCursor, searchCustomers} from "../../apps/customer-service/dist/application/search-customers.js";
 import {normalizeCustomerCreate, normalizeSearchQuery} from "../../apps/customer-service/dist/domain/customer.js";
 import {createCustomerOwner, registerCustomerRoutes} from "../../apps/customer-service/dist/http/index.js";
-import {createHttpCustomerClient, registerPublicRoutes} from "../../apps/api-public/dist/index.js";
+import {createConfiguredPublicAdapters, createHttpCustomerClient, registerPublicRoutes} from "../../apps/api-public/dist/index.js";
 
 const customerRef = "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const timestamp = "2026-09-05T00:00:00Z";
@@ -57,6 +58,89 @@ function customerAdapters(calls, permissions = ["customer:create", "customer:rea
 function publicClaims(operationId, permissions = ["customer:create", "customer:read"]) {
   return {...claims(operationId, permissions), iss: "edge-gateway", aud: "api-public", originalIssuer: "edge-gateway"};
 }
+
+void test("api-public requires edge-nginx transport identity for browser ingress", async (t) => {
+  const calls = {create: 0, transportCaller: undefined};
+  const app = await runtime(t, (value) => registerPublicRoutes(value, {
+    expectedIngressCaller: "edge-nginx",
+    verifyTransport: (_request, caller) => { calls.transportCaller = caller; return caller === "edge-nginx"; },
+    verifyActor: (_token, operationId) => publicClaims(operationId),
+    customer: {create: async () => { calls.create += 1; return {status: 201, body: response()}; }, search: async () => ({status: 200, body: {items: [], nextCursor: null}})},
+    catalog: {search: async () => ({status: 200, body: {items: [], nextCursor: null}})},
+  }));
+  const result = await app.inject({method: "GET", url: "/api/client-v1/customers?query=test", headers: {"x-actor-context": "signed-test"}});
+  assert.equal(calls.transportCaller, "edge-nginx");
+  assert.equal(result.statusCode, 200);
+  assert.equal(calls.create, 0);
+});
+
+void test("api-public retains the sole legacy ingress until nginx cutover", async (t) => {
+  let expectedCaller;
+  const app = await runtime(t, (value) => registerPublicRoutes(value, {
+    verifyTransport: (_request, caller) => { expectedCaller = caller; return caller === "edge-gateway"; },
+    verifyActor: (_token, operationId) => publicClaims(operationId),
+    customer: {create: async () => ({status: 201, body: response()}), search: async () => ({status: 200, body: {items: [], nextCursor: null}})},
+    catalog: {search: async () => ({status: 200, body: {items: [], nextCursor: null}})},
+  }));
+  const result = await app.inject({method: "GET", url: "/api/client-v1/customers?query=test", headers: {"x-actor-context": "signed-test"}});
+  assert.equal(expectedCaller, "edge-gateway");
+  assert.equal(result.statusCode, 200);
+});
+
+void test("configured api-public verifies nginx peer and Edge signature, audience, operation and correlated request", async (t) => {
+  const active = generateKeyPairSync("ed25519");
+  const previous = generateKeyPairSync("ed25519");
+  const other = generateKeyPairSync("ed25519");
+  const publicPem = (pair) => pair.publicKey.export({type: "spki", format: "pem"});
+  const context = {
+    config: {services: {"edge-nginx": {}, "api-public": {outbound: []}}},
+    secrets: {security: {
+      apiPublicDelegationSigningPrivateKey: active.privateKey.export({type: "pkcs8", format: "pem"}),
+      actorContextEdgeVerificationPublicKeys: {active: publicPem(active), previous: publicPem(previous)},
+    }},
+  };
+  const adapters = createConfiguredPublicAdapters(context, {fetch: async () => { throw new Error("no owner calls expected"); }});
+  assert.equal(adapters.expectedIngressCaller, "edge-nginx");
+  assert.equal(adapters.verifyTransport({runtimeContext: {transportIdentity: {runtime: "edge-nginx"}}}, "edge-nginx"), true);
+  assert.equal(adapters.verifyTransport({runtimeContext: {transportIdentity: {runtime: "edge-gateway"}}}, "edge-nginx"), false);
+  assert.equal(adapters.verifyTransport({runtimeContext: {}}, "edge-nginx"), false);
+
+  const correlationId = randomUUID();
+  const now = Math.floor(Date.now() / 1_000);
+  const proof = {...publicClaims("searchCatalogProducts", ["catalog:read"]), correlationId, iat: now, exp: now + 45, kid: "edge-actor-context-v1"};
+  const signal = new AbortController().signal;
+  const verify = (token, expectedCorrelationId = correlationId) => adapters.verifyActor(token, "searchCatalogProducts", signal, expectedCorrelationId);
+  assert.equal(verify(signActorContext(proof, active.privateKey)).sub, proof.sub);
+  assert.equal(verify(signActorContext(proof, previous.privateKey)).sub, proof.sub, "previous key is accepted during rotation");
+  for (const malformed of [
+    signActorContext(proof, other.privateKey),
+    signActorContext({...proof, iss: "untrusted"}, active.privateKey),
+    signActorContext({...proof, aud: "other-service"}, active.privateKey),
+    signActorContext({...proof, operationId: "createCustomer"}, active.privateKey),
+    signActorContext({...proof, exp: now + 61}, active.privateKey),
+    signActorContext({...proof, exp: now - 1, iat: now - 100}, active.privateKey),
+  ]) assert.throws(() => verify(malformed));
+  assert.throws(() => verify(signActorContext(proof, active.privateKey), randomUUID()), "assertion correlation must match the nginx-forwarded request");
+  assert.throws(() => verify(`${signActorContext(proof, active.privateKey)}tampered`));
+  let ownerCalls = 0;
+  const app = await runtime(t, (value) => registerPublicRoutes(value, {
+    ...adapters,
+    // The configured peer check is tested above; injection has no mTLS socket identity.
+    verifyTransport: () => true,
+    customer: {...adapters.customer, search: async () => {
+      ownerCalls += 1;
+      return {status: 200, body: {items: [], nextCursor: null}};
+    }},
+  }));
+  const route = "/api/client-v1/customers?query=test";
+  assertProblem(await app.inject({method: "GET", url: route}), 401, "AUTHENTICATION_REQUIRED");
+  assertProblem(await app.inject({method: "GET", url: route, headers: {"x-actor-context": "forged"}}), 403, "ACTOR_CONTEXT_INVALID");
+  const customerProof = signActorContext({...proof, operationId: "searchCustomers", permissions: ["customer:read"]}, active.privateKey);
+  assertProblem(await app.inject({method: "GET", url: route, headers: {"x-actor-context": customerProof, "x-correlation-id": randomUUID()}}), 403, "ACTOR_CONTEXT_INVALID");
+  assert.equal(ownerCalls, 0, "caller identity alone or an unmatched signed assertion cannot invoke the owner");
+  assert.equal((await app.inject({method: "GET", url: route, headers: {"x-actor-context": customerProof, "x-correlation-id": correlationId}})).statusCode, 200);
+  assert.equal(ownerCalls, 1);
+});
 
 function assertProblem(result, status, code) {
   const body = result.json();

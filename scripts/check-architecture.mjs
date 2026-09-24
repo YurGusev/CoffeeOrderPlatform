@@ -101,6 +101,11 @@ function moduleSpecifiers(source) {
     .filter(Boolean);
 }
 
+function hasExplicitAny(source) {
+  const withoutQuotedLiterals = source.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""');
+  return /(?:\bas\s+any\b|:\s*any\b|<any>)/m.test(withoutQuotedLiterals);
+}
+
 function isTypeScriptSource(path) {
   return /\.(?:ts|tsx|mts|cts)$/.test(path) && !/(?:[\\/])(dist|node_modules|provenance)(?:[\\/])/.test(path);
 }
@@ -389,7 +394,7 @@ function checkStaticSource(path, source) {
     if (!moduleName.endsWith('.js') && !moduleName.endsWith('.css')) fail('TS7-ESM', `${label}: relative import ${moduleName} must use a .js runtime specifier`);
   }
   if (/\benum\s+[A-Za-z_$][\w$]*/m.test(source)) fail('TS7-ERASABLE', `${label}: enum is non-erasable syntax; use a literal union`);
-  if (/(?:\bas\s+any\b|:\s*any\b|<any>)/m.test(source)) fail('TS7-UNSAFE-ANY', `${label}: explicit any is forbidden`);
+  if (hasExplicitAny(source)) fail('TS7-UNSAFE-ANY', `${label}: explicit any is forbidden`);
   if (/\bas\s+[A-Z][A-Za-z0-9_$]*(?:Ref|Version)\b/m.test(source)) fail('TS7-BRAND-CAST', `${label}: direct identifier brand cast is forbidden; parse and validate at the boundary`);
 
   if (/\beval\s*\(|\bnew\s+Function\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*["']/m.test(source)) {

@@ -17,7 +17,8 @@ try {
   const [generated, repeated] = await Promise.all([readFile(configPath, 'utf8'), readFile(tempConfig, 'utf8')]);
   assert.equal(repeated, generated, 'generator output must be byte-identical');
   assert.match(generated, /^error_log \/dev\/null;$/m, 'raw request-bearing error logs must not reach Collector');
-  assert.match(generated, /map "\$edge_auth_status:\$edge_actor_context" \$api_auth_target \{ default http:\/\/127\.0\.0\.1:18080; ~\^204:\.\+ https:\/\/api_public; \}/);
+  assert.ok(generated.includes('map "$edge_auth_status:$edge_actor_context:$edge_auth_correlation" $api_auth_target { default http://127.0.0.1:18080; ~^204:[^:]+:[^:]+$ https://api_public; }'));
+  assert.match(generated, /auth_request_set \$edge_auth_correlation \$upstream_http_x_correlation_id;/);
   assert.equal((generated.match(/location = \/api\/client-v1\/customers/g) ?? []).length, 1);
   assert.match(generated, /location = \/api\/client-v1\/customers \{\s+limit_except GET POST/);
   assert.match(generated, /location ~ \^\/api\/client-v1\/orders\/\[A-Za-z0-9_-\]\+\/items\/\[A-Za-z0-9_-\]\+\$ \{\s+limit_except DELETE PUT/);
@@ -25,6 +26,8 @@ try {
   assert.match(generated, /proxy_next_upstream off;/);
   assert.match(generated, /proxy_cache off;/);
   assert.match(generated, /proxy_pass_request_headers off;/);
+  assert.match(generated, /map \$http_cookie \$edge_login_cookie \{[^\n]*__Host-coffee-login=/);
+  assert.match(generated, /location = \/auth\/callback \{[^\n]*proxy_set_header Cookie \$edge_login_cookie;/);
   assert.match(generated, /location = \/_edge\/authorize \{ internal;/);
   assert.match(generated, /location \^~ \/app\//);
   assert.doesNotMatch(generated, /location \^~ \/api\/ \{[^}]*proxy_pass/s);
