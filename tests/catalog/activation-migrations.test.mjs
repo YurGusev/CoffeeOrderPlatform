@@ -21,6 +21,7 @@ const MIGRATION_IDS = [
   "0005_catalog_identity",
   "0006_catalog_outbox",
   "0007_catalog_grants",
+  "0008_catalog_active_read",
 ];
 const pool = {max: 4, checkoutTimeoutMs: 1_000, lockTimeoutMs: 1_000, interactiveStatementTimeoutMs: 5_000,
   backgroundStatementTimeoutMs: 10_000, terminalTimeoutMs: 5_000, transactionTimeoutMs: 20_000,
@@ -28,7 +29,7 @@ const pool = {max: 4, checkoutTimeoutMs: 1_000, lockTimeoutMs: 1_000, interactiv
 
 async function loadMigrations() {
   const names = (await readdir(MIGRATIONS_DIR)).filter(name => name.endsWith(".sql")).sort();
-  assert.deepEqual(names, MIGRATION_IDS.map(id => `${id}.sql`), "Catalog migration sequence must be exactly 0001–0007");
+  assert.deepEqual(names, MIGRATION_IDS.map(id => `${id}.sql`), "Catalog migration sequence must be exactly 0001–0008");
   return Promise.all(MIGRATION_IDS.map(async id => {
     const sql = await readFile(join(MIGRATIONS_DIR, `${id}.sql`), "utf8");
     return {id, sql, checksum: migrationChecksum(sql)};
@@ -79,6 +80,7 @@ void test("Catalog activation migrations match role-map least privilege and pres
   const roles = Object.fromEntries(catalog.runtimeRoles.map(role => [role.role, role]));
   assert.deepEqual(roles.coffee_catalog_api_ro.tables, {
     active_products: ["SELECT"], active_variants: ["SELECT"], active_offer_mappings: ["SELECT"], active_availability: ["SELECT"],
+    active_snapshot_metadata: ["SELECT"],
   });
   assert.deepEqual(roles.coffee_catalog_import_rw.tables, {
     supplier_snapshots: ["SELECT", "INSERT", "UPDATE"], snapshot_batches: ["SELECT", "INSERT"],
@@ -95,6 +97,15 @@ void test("Catalog activation migrations match role-map least privilege and pres
   });
   const migrations = await loadMigrations();
   assert.equal(migrations.every(migration => migration.checksum === migrationChecksum(migration.sql)), true);
+  assert.equal(migrations.find(migration => migration.id === "0004_catalog_active")?.checksum,
+    "8a0a460dbe540e26ab4f5946245069616c441f38c8b9dd8f3e1f274a31d7381a",
+    "published 0004 must remain checksum-compatible with existing migration ledgers");
+});
+
+void test("binding acknowledgement reread selects one row by composite key", async () => {
+  const source = await readFile(join(ROOT, "apps/catalog-activation-worker/src/activation-store.ts"), "utf8");
+  assert.match(source, /FROM catalog\.offer_binding_acks WHERE snapshot_ref=\$1 AND source_offer_key_hash=\$2/u);
+  assert.doesNotMatch(source, /bound\(tx,\[snapshot\.snapshot_ref\]\)\)\.rows\.find/u);
 });
 
 void test("disposable PostgreSQL applies Catalog migrations and proves active schema, SqlOutboxStore, and grants", {
@@ -149,12 +160,38 @@ void test("disposable PostgreSQL applies Catalog migrations and proves active sc
   assert.match(baseByName.supplier_snapshots_check1, /declared_batch_count IS NOT NULL/u);
   assert.match(baseByName.supplier_snapshots_check2, /failure_code IS NOT NULL/u);
   await baseCatalog.end();
-  const migrationRun = await applyMigrations(migrator, migrations, migrationOptions);
-  assert.deepEqual(migrationRun, MIGRATION_IDS.slice(1));
+  const migrationRun = await applyMigrations(migrator, migrations.slice(0, 7), migrationOptions);
+  assert.deepEqual(migrationRun, MIGRATION_IDS.slice(1, 7));
+  const legacyCatalog = new Client({host: "127.0.0.1", port, user: "postgres", password: "activation-migrations-test", database: "coffee_platform_catalog"});
+  await legacyCatalog.connect();
+  try {
+    await legacyCatalog.query("INSERT INTO catalog.supplier_snapshots(snapshot_ref,supplier_ref,provider_snapshot_ref,state,declared_batch_count,declared_product_count,declared_variant_count,declared_offer_count,content_hash,received_at) VALUES ('snp_00000000000000000000000009','sup_00000000000000000000000000','legacy-export','Active',0,1,1,0,repeat('a',64),clock_timestamp())");
+    await legacyCatalog.query("INSERT INTO catalog.products(snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('snp_00000000000000000000000009','prd_00000000000000000000000009','Before upgrade','before upgrade')");
+    await legacyCatalog.query("INSERT INTO catalog.variants(snapshot_ref,variant_ref,product_ref,unit) VALUES ('snp_00000000000000000000000009','var_00000000000000000000000009','prd_00000000000000000000000009','piece')");
+    await legacyCatalog.query("UPDATE catalog.catalog_state SET active_snapshot_ref='snp_00000000000000000000000009',active_snapshot_revision=1,active_content_hash=repeat('a',64) WHERE id=true");
+    assert.deepEqual((await legacyCatalog.query("SELECT variant_ref FROM catalog.active_variants")).rows,
+      [{variant_ref:"var_00000000000000000000000009"}]);
+  } finally { await legacyCatalog.end(); }
+  assert.deepEqual(await applyMigrations(migrator, migrations, migrationOptions), MIGRATION_IDS.slice(7));
   assert.deepEqual(await applyMigrations(migrator, migrations, migrationOptions), []);
 
   const migrationClient = new Client({host: "127.0.0.1", port, user: "postgres", password: "activation-migrations-test", database: "coffee_platform_catalog"});
   await migrationClient.connect();
+  assert.deepEqual((await migrationClient.query("SELECT grind_options FROM catalog.variants WHERE variant_ref='var_00000000000000000000000009'")).rows,
+    [{grind_options:null}], "forward migration must preserve existing variants as unknown grind options");
+  const legacyApi = new Client(roleUrl("coffee_platform_catalog", "coffee_catalog_api_ro", "api-pass", port));
+  await legacyApi.connect();
+  try {
+    assert.deepEqual((await legacyApi.query("SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata")).rows,
+      [{snapshot_ref:"snp_00000000000000000000000009",snapshot_revision:"1"}]);
+    assert.deepEqual((await legacyApi.query("SELECT variant_ref,grind_options FROM catalog.active_variants")).rows,
+      [{variant_ref:"var_00000000000000000000000009",grind_options:null}],
+      "forward migration must retain the API grant and visibility of the previously active generation");
+  } finally { await legacyApi.end(); }
+  await migrationClient.query("UPDATE catalog.catalog_state SET active_snapshot_ref=NULL,active_snapshot_revision=NULL,active_content_hash=NULL WHERE id=true");
+  await migrationClient.query("DELETE FROM catalog.variants WHERE variant_ref='var_00000000000000000000000009'");
+  await migrationClient.query("DELETE FROM catalog.products WHERE product_ref='prd_00000000000000000000000009'");
+  await migrationClient.query("DELETE FROM catalog.supplier_snapshots WHERE snapshot_ref='snp_00000000000000000000000009'");
   const checks = await migrationClient.query("SELECT table_name FROM information_schema.tables WHERE table_schema='catalog' AND table_type='BASE TABLE' AND table_name <> 'platform_schema_migrations' ORDER BY table_name");
   assert.deepEqual(checks.rows.map(row => row.table_name), ["catalog_state", "offer_binding_acks", "offer_mappings", "outbox_messages", "products", "snapshot_availability", "snapshot_batches", "snapshot_offers", "snapshot_products", "snapshot_variants", "source_identities", "supplier_snapshots", "variants", "availability"].sort());
   const stageConstraint = await migrationClient.query("SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='catalog.supplier_snapshots'::regclass AND contype='c'");

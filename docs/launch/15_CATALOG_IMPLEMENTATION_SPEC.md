@@ -389,7 +389,9 @@ provider identifiers и session data публично не возвращают�
 
 Единый Catalog migration root последовательно применяет
 `0001_supplier_snapshots.sql`–`0003_snapshot_staging.sql` (#6), затем
-`0004_catalog_active.sql`–`0007_catalog_grants.sql` (#16).
+`0004_catalog_active.sql`–`0008_catalog_active_read.sql` (#16). `0008`
+дополняет активные variants и read-модель без изменения checksum уже
+опубликованной `0004`; существующий ledger `0001`–`0007` обновляется вперёд.
 Active-таблицы generation-
 scoped и не перезаписываются «на месте»:
 
@@ -418,8 +420,10 @@ scoped и не перезаписываются «на месте»:
   `state`, lease/fence token и publisher attempts. Owner business state и Outbox
   фиксируются в одной транзакции.
 
-Все client/internal reads join через единственную строку `catalog_state`; один
-response не смешивает generations. Activation блокирует state, проверяет
+`active_snapshot_metadata` возвращает pointer и decimal-string revision одной
+строкой даже без активного поколения или товаров. API-role не читает напрямую
+`catalog_state`; #17 выполняет чтения metadata и active rows в одном согласованном
+снимке PostgreSQL, чтобы один response не смешивал generations. Activation блокирует state, проверяет
 FK/count/hash/enums, переключает pointer и пишет Outbox в одной transaction.
 `coffee_catalog_import_rw` имеет DML только на staging,
 `coffee_catalog_activate_rw` — staging read + active/Outbox write,
@@ -446,7 +450,8 @@ provider stop — `Stopped`, неизменённая identity/ref не публ
 ## 7. Обязательная проверка
 
 - contract fixtures для всех NDJSON records и HTTP responses;
-- поток из 100 000 offers не буферизуется целиком; RSS budget фиксируется в CI;
+- входящий NDJSON-поток из 100 000 offers (#6 ingestion) не буферизуется целиком;
+  RSS budget фиксируется в CI; это не утверждение о bounded-memory активации #16;
 - oversized batch, gap, duplicate identity, conflicting hash/count/content hash
   завершаются точным code и не активируют generation;
 - повтор того же batch/hash и повтор activation не создают дублей;

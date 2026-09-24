@@ -43,6 +43,7 @@ export function createCatalogActivationStore(database:Database): Readonly<{
     (supplier_ref,entity_type,source_identity_scheme,source_identity_hash,stable_ref,semantic_fingerprint,first_seen_snapshot_ref,last_seen_snapshot_ref,state)
     VALUES($1,$2,$3,$4,$5,$6,$7,$7,'Present')`);
   const bound = query<BindingRow>("SELECT source_offer_key_hash,offer_ref,first_snapshot_ref FROM catalog.offer_binding_acks WHERE snapshot_ref=$1");
+  const boundOffer = query<BindingRow>("SELECT source_offer_key_hash,offer_ref,first_snapshot_ref FROM catalog.offer_binding_acks WHERE snapshot_ref=$1 AND source_offer_key_hash=$2");
   const insertAck = query<never>(`INSERT INTO catalog.offer_binding_acks(snapshot_ref,source_offer_key_hash,offer_ref,state,first_snapshot_ref,acked_at)
     VALUES($1,$2,$3,'Bound',$4,clock_timestamp()) ON CONFLICT (snapshot_ref,source_offer_key_hash) DO NOTHING`);
   const rejectRow = query<never>(`UPDATE catalog.supplier_snapshots SET state='Rejected',failure_code=$2,
@@ -277,7 +278,7 @@ export function createCatalogActivationStore(database:Database): Readonly<{
         throw new CatalogActivationError("ACTIVATION_BINDING_MISMATCH");
       }
       await withTransaction(database,options(signal),async tx => {
-        const existing=(await bound(tx,[snapshot.snapshot_ref])).rows.find(row => row.source_offer_key_hash===offer.source_offer_key_hash);
+        const existing=(await boundOffer(tx,[snapshot.snapshot_ref,offer.source_offer_key_hash])).rows[0];
         if (existing !== undefined) {
           if (existing.offer_ref!==response.offerRef || existing.first_snapshot_ref!==response.firstSnapshotRef) {
             throw new CatalogActivationError("ACTIVATION_BINDING_MISMATCH");

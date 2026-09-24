@@ -53,7 +53,7 @@ void test("activation commits pointer and Outbox together; reuses refs; rejects 
   const result = await withCatalogPostgres(async ({adminClient,port,databaseName}) => {
     await adminClient.query("CREATE ROLE coffee_catalog_activate_rw LOGIN PASSWORD 'activate-proof'");
     await adminClient.query("CREATE ROLE coffee_catalog_api_ro LOGIN PASSWORD 'api-proof'");
-    for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants"]) {
+    for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants","0008_catalog_active_read"]) {
       await adminClient.query(await readFile(resolve("apps/catalog-service/migrations",`${name}.sql`),"utf8"));
     }
     const database = createDatabase({owner:"catalog-activation-worker",database:databaseName,allowedDatabase:databaseName,
@@ -70,7 +70,7 @@ void test("immutable binding keeps the earliest snapshot when two generations re
   await withCatalogPostgres(async ({adminClient,port,databaseName}) => {
     await adminClient.query("CREATE ROLE coffee_catalog_activate_rw LOGIN PASSWORD 'activate-proof'");
     await adminClient.query("CREATE ROLE coffee_catalog_api_ro LOGIN PASSWORD 'api-proof'");
-    for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants"])
+    for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants","0008_catalog_active_read"])
       await adminClient.query(await readFile(resolve("apps/catalog-service/migrations",`${name}.sql`),"utf8"));
     const first="snp_00000000000000000000000021";
     const second="snp_00000000000000000000000022";
@@ -107,13 +107,13 @@ void test("immutable binding keeps the earliest snapshot when two generations re
   });
 });
 
-void test("API role reads active grind options after activation and after a missing-offer snapshot", {
+void test("API role reads active grind options and snapshot revision after activation and an empty snapshot", {
   timeout:180_000, skip:process.env.COFFEE_DB_LIVE_PROOF !== "1" ? "disposable PostgreSQL required" : false,
 }, async () => {
   await withCatalogPostgres(async ({adminClient,port,databaseName}) => {
     await adminClient.query("CREATE ROLE coffee_catalog_activate_rw LOGIN PASSWORD 'activate-proof'");
     await adminClient.query("CREATE ROLE coffee_catalog_api_ro LOGIN PASSWORD 'api-proof'");
-    for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants"])
+    for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants","0008_catalog_active_read"])
       await adminClient.query(await readFile(resolve("apps/catalog-service/migrations",`${name}.sql`),"utf8"));
     const first="snp_00000000000000000000000031";
     const empty="snp_00000000000000000000000032";
@@ -129,10 +129,17 @@ void test("API role reads active grind options after activation and after a miss
       await api.connect();
       const store=createCatalogActivationStore(database);
       const bind=async request => ({...request,firstSnapshotRef:first,state:"Bound"});
+      assert.deepEqual((await api.query("SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata")).rows,
+        [{snapshot_ref:null,snapshot_revision:null}]);
+      await assert.rejects(api.query("SELECT * FROM catalog.catalog_state"),error=>error.code==="42501");
       assert.equal((await store.runSnapshot(first,bind)).kind,"activated");
+      assert.deepEqual((await api.query("SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata")).rows,
+        [{snapshot_ref:first,snapshot_revision:"1"}]);
       assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:grindOptions}]);
       await stageEmpty(adminClient,empty);
       assert.equal((await store.runSnapshot(empty,async()=>{throw new Error("empty generation must not bind");})).kind,"activated");
+      assert.deepEqual((await api.query("SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata")).rows,
+        [{snapshot_ref:empty,snapshot_revision:"2"}]);
       assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:grindOptions}]);
       await stage(adminClient,noOptions);
       assert.equal((await store.runSnapshot(noOptions,bind)).kind,"activated");

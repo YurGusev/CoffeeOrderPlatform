@@ -18,7 +18,7 @@ outputs:
   sha256: 9874c9958b24dff47f861bf5f519d0895bd6ac14d5a552f3fbac0c818792f800
   consumers: []
 - artifact: apps/catalog-activation-worker/src/activation-store.ts
-  sha256: 80c0cb40161844836b1a8cc3b0b0a2e97cc7d07c0760721a9c83f717bfbe2ffe
+  sha256: 37de817061c9e37c9ae765121a943612843753865f265d48aa575ef06caf1017
   consumers: [17, 18, 8, 11]
 - artifact: apps/catalog-activation-worker/src/events.ts
   sha256: 091a30c8e7b8ff8fdf80eac121f845f2ab3ddccc7b60fee0b7ea6507bd1e8bcf
@@ -39,7 +39,7 @@ outputs:
   sha256: 71319f795c2400f8225be73d7d589cea10717817c4ac328786d2231bbf46b0b2
   consumers: []
 - artifact: apps/catalog-service/migrations/0004_catalog_active.sql
-  sha256: 86efa13c22789e1a5586fa2c114b2f555152572f80f983ae415392407a129ca6
+  sha256: 8a0a460dbe540e26ab4f5946245069616c441f38c8b9dd8f3e1f274a31d7381a
   consumers: [17, 18, 8, 11]
 - artifact: apps/catalog-service/migrations/0005_catalog_identity.sql
   sha256: a9a7d8df620c3f920e3cf4d81e41f7794959a582b174fdfdca773fb91ba406bf
@@ -50,11 +50,14 @@ outputs:
 - artifact: apps/catalog-service/migrations/0007_catalog_grants.sql
   sha256: 2e9c466b838d5b938015bcd3e6e1811df675f0f5ac72562da3014fa38a242a1d
   consumers: [17, 18, 8, 11]
+- artifact: apps/catalog-service/migrations/0008_catalog_active_read.sql
+  sha256: 987fc468722fe54cb19cea00f047bd0968e8a935b98eb41bf45e237803b6eca7
+  consumers: [17, 18, 8, 11]
 - artifact: config/database-role-map.json
-  sha256: bbdb128eb8abe42dc0232fa40e8299b7448718fc51aca965e830d64a036ebbe5
+  sha256: d30edb42a74ad1d79a4ecd5d8481ba82d1e9cb50640e464edc0781e64a3def63
   consumers: [17, 18]
 - artifact: docs/launch/05_DATA_OWNERSHIP.md
-  sha256: 9e70955cd0f02690ef61a0057d0bd5225cee9e4f377271b6dc62c2c183726155
+  sha256: 322a77119fe8ad6388346f7a28e3dbeefc5bbf90a211a0032db30596ac6972c8
   consumers: [17, 18]
 - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
   sha256: d48817fe9aa44b726d854e94c1dc1a291b921de0dbb7bbc77bb1df91d481c796
@@ -63,7 +66,7 @@ outputs:
   sha256: e9ab79effcd2dd6f9d880a8d9f4e655e617482c7cefd3160ecd4b3b11b91ad8e
   consumers: [17, 18]
 - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
-  sha256: 2d041a65d7fd7555b46a2c2a2480f3588366e76c8d817c627f256aa5f9dc0e56
+  sha256: 8dbc4ab01545e8820ca9de48223e8d7dab89e91fefb6ff427f2b24c81bf953a5
   consumers: [17, 18]
 - artifact: package.json
   sha256: 6bffae25b7c9de192a241fda8ad285ae76714eabd61ce93096206c618fde945d
@@ -75,7 +78,7 @@ outputs:
   sha256: eed64ab567e3d0d51163e1fb93fe582d0e8ec7c7d008944a26ca94f09d77ca58
   consumers: []
 - artifact: scripts/db-live-proof.mjs
-  sha256: 7add41e8d525fe090530138aa7f7f0e131705138413958d496bc45c1ac2ee10a
+  sha256: 75624d2584db927f47480bc89ba8db0644b6bf9d837fae948a06175ea6f3fde5
   consumers: []
 - artifact: tests/architecture/checks.test.mjs
   sha256: 6fbb4d4ae8c5b210f35a738d720807cb693020aeb67c446b16e4c668567336c1
@@ -90,7 +93,7 @@ outputs:
   sha256: 64b5c289cc74a2550d51eb67e901e1d6acac6ee193f692928179358e338fedd7
   consumers: []
 - artifact: tests/catalog/activation-crash-live.test.mjs
-  sha256: ef829f76bea57a746ffaa25f3f8dec6efd5a884b02de2541f90a9bf98cb24c8c
+  sha256: 6313683b2ebcd677ecbefc16055cb3ae4fb4724a5bc20e1e2b0defbfe8ef8cae
   consumers: []
 - artifact: tests/catalog/activation-events.test.mjs
   sha256: 569a2287623f63f14529b0412a7a17f6c28b5775dad45a7c91c77b9532a7d6ac
@@ -99,10 +102,10 @@ outputs:
   sha256: ec4a77027718ca4c7180a566d7f8e06aebc2af0d1ad92b5696e2ee6e6920702c
   consumers: []
 - artifact: tests/catalog/activation-live.test.mjs
-  sha256: b67eb7c1acb33fe606af048d70b9fc134b53736b9c815fa27eaaf1f6def0d033
+  sha256: 333fbeb145b50846002d22de83a6861668b0a3341fe9f8ac6a9a7387b2f5cd04
   consumers: []
 - artifact: tests/catalog/activation-migrations.test.mjs
-  sha256: 2aad2dac0d4a004ce27f5ed7894ba053c3b8d2a96868516d760802fe67734e26
+  sha256: 48f5934077378727810294949be6cc464a0b405267c7faf5a0214646f6c7edb8
   consumers: []
 - artifact: tests/catalog/activation-validation.test.mjs
   sha256: 2966e64cd1ffdf68df68b9639fe53678dbe2c31d0742e22de0691f0c5655efb5
@@ -114,15 +117,19 @@ verification:
 - command: pnpm check
   result: passed
   exitCode: 0
-  detail: "467 тестов; 445 пройдены, 22 opt-in пропущены; architecture, authority, config, contracts, lint и typecheck пройдены"
+  detail: "468 тестов; 446 пройдены, 22 opt-in пропущены; architecture, authority, config, contracts, lint и typecheck пройдены"
 - command: pnpm db:live-proof
   result: passed
   exitCode: 0
-  detail: "disposable PostgreSQL; миграции Catalog 0001..0007, права ролей, четыре запрета CONNECT с SQLSTATE 42501"
+  detail: "disposable PostgreSQL; миграции Catalog 0001..0008, API-role metadata view, запрет catalog_state и четыре запрета CONNECT с SQLSTATE 42501"
 - command: pnpm test:catalog-activation-live
   result: passed
   exitCode: 0
-  detail: "25/25 тестов на disposable PostgreSQL; до/после COMMIT SIGKILL, конкуренция binding двух поколений и чтение grind options через API-role"
+  detail: "26/26 на disposable PostgreSQL; forward migration 0007→0008 сохраняет Active и API-role grants, пустой active revision, точечный ack lookup и SIGKILL"
+- command: node --expose-gc tests/catalog/stream-capacity-proof.mjs
+  result: passed
+  exitCode: 0
+  detail: "ingestion #6: 196608 offers, 168344938 bytes, peak RSS growth 69771264 bytes, upstream paused during persistence"
 - command: node --test tests/aroma/binding-live.test.mjs
   result: passed
   exitCode: 0
@@ -136,5 +143,6 @@ verification:
 limitations:
 - "Production Compose с реальным api-internal mTLS/Gateway binding и Kafka broker для #16 не запускался: Gateway binding store проверен отдельно на PostgreSQL, durable relay — PostgreSQL с тестовым sender."
 - "Статический architecture-check не исключает SQL, собранный динамически за пределами обнаруживаемого шаблона."
-- "Миграция 0004 изменена до merge PR #147; не установлено, применялась ли предыдущая версия вне disposable PostgreSQL. При checksum drift нужен отдельный forward migration до rollout."
-- "PR #147 открыт, но актуальность handoff относительно финального head требует GitHub readback; merge, CI и приемка владельцем не подтверждены."
+- "Миграция 0004 восстановлена до checksum первого head PR #147; 0008 добавляет grind options и active metadata впереди. Если версия 0004 из промежуточного head cbfd42a была применена в постоянной БД, её ledger будет конфликтовать: это нужно проверить до rollout и согласовать отдельное восстановление; автоматически не обходим drift."
+- "Бюджет 100 000 offers / RSS §7 относится к ingestion #6. Activation сохраняет полное поколение в памяти; нагрузка и задержка Outbox relay при долгой активации отдельно не измерялись."
+- "Локальные проверки и handoff не заменяют GitHub CI, merge и приемку владельцем; опубликованный head PR #147 проверяется отдельно после push."

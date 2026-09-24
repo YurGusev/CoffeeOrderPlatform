@@ -19,7 +19,8 @@
 используют события или явные owner API; межвладельческий SQL запрещён.
 
 Catalog API читает только pointer-selected `active_*` views через
-`coffee_catalog_api_ro`; миграции `0001`–`0007` принадлежат одному
+`coffee_catalog_api_ro`, включая `active_snapshot_metadata` для revision и
+пустого поколения; миграции `0001`–`0008` принадлежат одному
 `catalog-service` migrator. `Received` staging не виден клиенту до commit,
 переключение `catalog_state` и запись owner Outbox атомарны; Gateway binding
 проходит вне этой транзакции через `api-internal`.

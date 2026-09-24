@@ -35,7 +35,8 @@
             "active_products": ["SELECT"],
             "active_variants": ["SELECT"],
             "active_offer_mappings": ["SELECT"],
-            "active_availability": ["SELECT"]
+            "active_availability": ["SELECT"],
+            "active_snapshot_metadata": ["SELECT"]
           }
         },
         {

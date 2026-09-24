@@ -1940,7 +1940,7 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
   const migrationNames = [
     "0001_supplier_snapshots.sql", "0002_snapshot_batches.sql", "0003_snapshot_staging.sql",
     "0004_catalog_active.sql", "0005_catalog_identity.sql", "0006_catalog_outbox.sql",
-    "0007_catalog_grants.sql",
+    "0007_catalog_grants.sql", "0008_catalog_active_read.sql",
   ];
   const migrationDirectory = join(REPO_ROOT, "apps/catalog-service/migrations");
   const migrator = await createClient(replaceDatabase(adminUrl, catalog.name, {
@@ -2026,10 +2026,15 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
     outcomes.activationOutboxInsert = true;
     outcomes.activationOutboxUpdate = true;
 
-    for (const view of ["active_products", "active_variants", "active_offer_mappings", "active_availability"]) {
+    for (const view of ["active_products", "active_variants", "active_offer_mappings", "active_availability", "active_snapshot_metadata"]) {
       await api.query(`SELECT * FROM catalog.${view}`);
     }
+    const metadata = await api.query("SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata");
+    if (metadata.rows.length !== 1 || metadata.rows[0].snapshot_ref !== snapshotRef || metadata.rows[0].snapshot_revision !== "1") {
+      fail("API role must see the committed Catalog pointer and decimal-string revision");
+    }
     outcomes.apiActiveViewsSelect = true;
+    await expectDenied(api, "apiCatalogStateSelect", "SELECT * FROM catalog.catalog_state");
     await expectDenied(api, "apiStagingSelect", "SELECT * FROM catalog.supplier_snapshots");
     await expectDenied(api, "apiActiveInsert", `INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('${snapshotRef}','prd_00000000000000000000000001','Denied','denied')`);
     await expectDenied(api, "apiActiveUpdate", "UPDATE catalog.catalog_state SET active_snapshot_revision=2 WHERE id=true");
