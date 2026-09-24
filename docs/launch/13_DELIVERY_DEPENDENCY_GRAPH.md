@@ -128,6 +128,11 @@ collector.
 | #64 | #4, #61, #62, #63, #12 | Pino/OTel, Collector/OpenObserve, alerts/storage/redaction → G14 #13 |
 | #13 | все outputs выше, #119 | verified release evidence → закрытие #1 |
 
+При выполнении #18 отдельно приняты owner-исправления #153 (конкурентный
+PostgreSQL checkout) и #155 (сборка clean clone до contract tests). Их
+`evidence/handoffs/issue-{153,155}.yaml` — дополнительные проверенные inputs
+verification-ветки, но не замена прямых бизнес-предшественников #18.
+
 ## История Effect
 
 #48 / PR #56 и #49 / PR #59 остаются завершённой историей. Их ADR/handoff

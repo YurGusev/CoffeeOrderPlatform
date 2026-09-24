@@ -279,6 +279,13 @@ attempt. `finalize` переводит запись в `Published` только 
 `Pending` с bounded exponential retry. Broker acknowledgement не заменяет
 owner transaction и не является доказательством `Published` до finalize.
 
+Проверка #18 разделяет forced SIGKILL до finalize COMMIT и после известного
+COMMIT `Published` на disposable Catalog PostgreSQL: прежний Outbox `messageId`
+должен сохраниться при recovery, а durable row не раздваивается. Sender-fixture
+фиксирует тот же `messageId`, но не выдаётся за Kafka broker acknowledgement;
+при неизвестном исходе реальной отправки at-least-once допускает повтор
+wire record с **тем же** `messageId`, а не «exactly once» транспорта.
+
 Stable identity сохраняется на всех этапах: producer передаёт caller-provided
 `messageId`, relay повторно использует Outbox `message_id`, Inbox уникален по
 `message_id`, quarantine — по `(topic, partition, offset)`, а Outbox — по
