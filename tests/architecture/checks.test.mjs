@@ -173,6 +173,13 @@ void test("GREEN: Catalog importer implementation stays in owner infrastructure"
   assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
 });
 
+void test("GREEN: Catalog activation SQL stays in owner infrastructure", async () => {
+  const ownerPath = join(REPO_ROOT, "apps/catalog-activation-worker/src/infrastructure/activation-store.ts");
+  const legacyPath = join(REPO_ROOT, "apps/catalog-activation-worker/src/activation-store.ts");
+  assert.equal(existsSync(legacyPath), false, "Catalog activation SQL must not remain in the application root");
+  assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
+});
+
 void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {
   const result = run("check-architecture.mjs", join(FIXTURES, "valid-import"));
   assert.equal(result.status, 0, output(result));
@@ -634,4 +641,96 @@ void test("RED ARCH-GENERIC-RETRY: generic retry wrapper is forbidden", () => {
   const result = run("check-architecture.mjs", join(FIXTURES, "invalid-generic-retry-wrapper"));
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-GENERIC-RETRY/);
+});
+
+void test("RED ARCH-TYPED-PROVIDER-HTTP: provider transport imports stay in the typed HTTP client", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-provider-http-import-"));
+  try {
+    const directory = join(root, "apps/aroma-gateway/src/application");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "provider.ts"), 'import { Agent } from "undici";\nvoid Agent;\n');
+    const result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+    assert.match(output(result), /undici/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("RED BOUND-IMPORT: a runtime cannot import a foreign owner's database URL module", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-foreign-db-url-import-"));
+  try {
+    const orders = join(root, "apps/orders-service/src");
+    const catalog = join(root, "apps/catalog-service/src");
+    await mkdir(orders, { recursive: true });
+    await mkdir(catalog, { recursive: true });
+    await writeFile(join(catalog, "database-url.ts"), "export const databaseUrl = process.env.DATABASE_URL;\n");
+    await writeFile(join(orders, "main.ts"), 'import { databaseUrl } from "../../catalog-service/src/database-url.js";\nvoid databaseUrl;\n');
+    const result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /BOUND-IMPORT/);
+    assert.match(output(result), /orders-service.*catalog-service/s);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("RED ARCH-CATALOG-WRITER: foreign app cannot mutate active Catalog tables", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-second-catalog-writer-"));
+  try {
+    const directory = join(root, "apps/orders-service/src/infrastructure");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "rogue-writer.ts"), 'const query = "UPDATE catalog.catalog_state SET active_snapshot_ref = $1";\nvoid query;\n');
+    const result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /ARCH-CATALOG-WRITER/);
+    assert.match(output(result), /orders-service/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("RED ARCH-CATALOG-WRITER: packages rogue writer is rejected while catalog-service migrations remain allowed", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-packages-catalog-writer-"));
+  const migrationRoot = await mkdtemp(join(tmpdir(), "coffee-catalog-migration-owner-"));
+  try {
+    const directory = join(root, "packages/rogue/src");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "writer.ts"), 'const query = "UPDATE catalog.catalog_state SET active_snapshot_ref = $1";\nvoid query;\n');
+    const result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /ARCH-CATALOG-WRITER/);
+    assert.ok(output(result).includes("packages/rogue/src/writer.ts"), output(result));
+
+    const migrations = join(migrationRoot, "apps/catalog-service/migrations");
+    await mkdir(migrations, { recursive: true });
+    await writeFile(join(migrations, "0001-catalog.sql"), 'CREATE TABLE catalog.products (id text PRIMARY KEY);\n');
+    const acceptedMigration = run("check-architecture.mjs", migrationRoot);
+    assert.equal(acceptedMigration.status, 0, output(acceptedMigration));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(migrationRoot, { recursive: true, force: true });
+  }
+});
+
+void test("RED ARCH-CATALOG-EVENT-ROWS: Catalog event schemas cannot publish full Catalog rows", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-catalog-event-rows-"));
+  try {
+    const directory = join(root, "contracts/schemas/events");
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "catalog-snapshot-activated.v1.schema.json"), JSON.stringify({
+      title: "CatalogSnapshotActivated.v1",
+      properties: { payload: { type: "object", properties: {
+        snapshotRef: { type: "string" },
+        products: { type: "array", items: { type: "object", properties: { productRef: { type: "string" } } },
+      } } },
+    } }));
+    const result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /ARCH-CATALOG-EVENT-ROWS/);
+    assert.match(output(result), /products/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

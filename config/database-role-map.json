@@ -32,11 +32,11 @@
           "role": "coffee_catalog_api_ro",
           "temporaryTables": true,
           "tables": {
-            "catalog_state": ["SELECT"],
-            "products": ["SELECT"],
-            "variants": ["SELECT"],
-            "offer_mappings": ["SELECT"],
-            "availability": ["SELECT"]
+            "active_products": ["SELECT"],
+            "active_variants": ["SELECT"],
+            "active_offer_mappings": ["SELECT"],
+            "active_availability": ["SELECT"],
+            "active_snapshot_metadata": ["SELECT"]
           }
         },
         {
@@ -65,11 +65,12 @@
             "snapshot_availability": ["SELECT"],
             "source_identities": ["SELECT", "INSERT", "UPDATE"],
             "catalog_state": ["SELECT", "INSERT", "UPDATE"],
-            "products": ["SELECT", "INSERT", "UPDATE"],
-            "variants": ["SELECT", "INSERT", "UPDATE"],
-            "offer_mappings": ["SELECT", "INSERT", "UPDATE"],
-            "availability": ["SELECT", "INSERT", "UPDATE"],
-            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+            "products": ["SELECT", "INSERT"],
+            "variants": ["SELECT", "INSERT"],
+            "offer_mappings": ["SELECT", "INSERT"],
+            "availability": ["SELECT", "INSERT"],
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"],
+            "offer_binding_acks": ["SELECT", "INSERT", "UPDATE"]
           }
         }
       ]

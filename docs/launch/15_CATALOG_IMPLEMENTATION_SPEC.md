@@ -114,6 +114,9 @@ facts remain absent/unknown and are not defaulted to a known value.
 transaction, а активация разрешена только после durable ack для каждого
 required binding. Потерянный ответ повторяет тот же request и возвращает
 immutable row.
+При повторном использовании source identity запрос binding использует её
+`first_seen_snapshot_ref`, а не текущий snapshot: параллельные поколения не
+меняют immutable `firstSnapshotRef` в зависимости от порядка HTTP-вызовов.
 
 Binding сохраняет identity proof и не означает mutation-ready. Dispatch требует
 configured supplier, подтверждённую variant/packing/grind policy и свежий exact
@@ -319,7 +322,14 @@ load proof. Точные наблюдения и ограничения: `eviden
 `Received` generation с `FOR UPDATE SKIP LOCKED`.
 
 До изменения active state worker повторно проверяет batches, hashes, counts,
-уникальность, foreign keys и допустимые enum/money values. Затем в одной
+уникальность, foreign keys и допустимые enum/money values. Подготовка durable
+source identities и `offer_binding_acks` отделена от commit: Gateway binding
+выполняется только через типизированный `api-internal` mTLS client без provider
+HTTP. Ответ сверяется с исходным `offerRef`, source hash и `firstSnapshotRef`;
+неизвестный ответ или deadline не активирует поколение. После restart worker
+повторно читает ack, а не предполагает успех внешнего вызова. Устаревшее
+`Received` поколение, завершившее подготовку после более нового Active,
+переходит в `Superseded` без повторного переключения pointer. Затем в одной
 PostgreSQL-транзакции:
 
 1. сопоставляет source identity hashes со стабильными `productRef`,
@@ -375,12 +385,13 @@ provider identifiers и session data публично не возвращают�
 `availability`, `mappingRevision`, `displayName`. Pricing не читает Catalog DB
 напрямую; `displayName` становится частью immutable quote/order snapshot.
 
-## 7. Обязательная проверка
-
 ### 6.3. Точная active-модель
 
-Миграции называются `001_catalog_import.sql`, `002_catalog_active.sql`,
-`003_catalog_identity.sql`, `004_catalog_outbox.sql`, `005_catalog_grants.sql`.
+Единый Catalog migration root последовательно применяет
+`0001_supplier_snapshots.sql`–`0003_snapshot_staging.sql` (#6), затем
+`0004_catalog_active.sql`–`0008_catalog_active_read.sql` (#16). `0008`
+дополняет активные variants и read-модель без изменения checksum уже
+опубликованной `0004`; существующий ledger `0001`–`0007` обновляется вперёд.
 Active-таблицы generation-
 scoped и не перезаписываются «на месте»:
 
@@ -389,6 +400,7 @@ scoped и не перезаписываются «на месте»:
 - `catalog.products(snapshot_ref, product_ref, display_name,
   display_name_sort_key, created_at, PK(snapshot_ref,product_ref))`;
 - `catalog.variants(snapshot_ref, variant_ref, product_ref, unit, image_url,
+  grind_options jsonb (NULL для отсутствующего поля, [] для пустого набора),
   PK(snapshot_ref,variant_ref), FK(snapshot_ref,product_ref))`;
 - `catalog.offer_mappings(snapshot_ref, variant_ref, offer_ref,
   mapping_revision bigint, mapping_state, supplier_unit_minor bigint CHECK
@@ -400,12 +412,18 @@ scoped и не перезаписываются «на месте»:
   source_identity_hash,stable_ref,semantic_fingerprint,first_seen_snapshot_ref,
   last_seen_snapshot_ref,state, PRIMARY KEY(supplier_ref,entity_type,
   source_identity_scheme,source_identity_hash), UNIQUE(entity_type,stable_ref))`;
-- `catalog.outbox_messages(message_id PK,message_type,aggregate_ref,
-  aggregate_version,partition_key,schema_version,payload,publish_state,
-  attempts,next_attempt_at,occurred_at)`.
+- `catalog.offer_binding_acks(snapshot_ref,source_offer_key_hash,offer_ref,
+  state,first_snapshot_ref,acked_at, PK(snapshot_ref,source_offer_key_hash))`;
+- `catalog.outbox_messages` с полным SQL-контрактом
+  `packages/platform-outbox/src/index.ts`: `message_id`,
+  `aggregate_ref`/`aggregate_sequence`, `envelope`/`payload`/`payload_hash`,
+  `state`, lease/fence token и publisher attempts. Owner business state и Outbox
+  фиксируются в одной транзакции.
 
-Все client/internal reads join через единственную строку `catalog_state`; один
-response не смешивает generations. Activation блокирует state, проверяет
+`active_snapshot_metadata` возвращает pointer и decimal-string revision одной
+строкой даже без активного поколения или товаров. API-role не читает напрямую
+`catalog_state`; #17 выполняет чтения metadata и active rows в одном согласованном
+снимке PostgreSQL, чтобы один response не смешивал generations. Activation блокирует state, проверяет
 FK/count/hash/enums, переключает pointer и пишет Outbox в одной transaction.
 `coffee_catalog_import_rw` имеет DML только на staging,
 `coffee_catalog_activate_rw` — staging read + active/Outbox write,
@@ -432,7 +450,8 @@ provider stop — `Stopped`, неизменённая identity/ref не публ
 ## 7. Обязательная проверка
 
 - contract fixtures для всех NDJSON records и HTTP responses;
-- поток из 100 000 offers не буферизуется целиком; RSS budget фиксируется в CI;
+- входящий NDJSON-поток из 100 000 offers (#6 ingestion) не буферизуется целиком;
+  RSS budget фиксируется в CI; это не утверждение о bounded-memory активации #16;
 - oversized batch, gap, duplicate identity, conflicting hash/count/content hash
   завершаются точным code и не активируют generation;
 - повтор того же batch/hash и повтор activation не создают дублей;
@@ -440,8 +459,8 @@ provider stop — `Stopped`, неизменённая identity/ref не публ
 - forced crash до/после commit подтверждает atomicity и Outbox recovery;
 - `pnpm architecture:check` запрещает cross-owner imports, чужие DB URLs,
   provider credentials в Catalog и полные Catalog rows в Kafka schemas;
-- `pnpm db:smoke` подтверждает allowlist каждой роли и `permission denied` на
-  чужие DB/tables;
+- `pnpm db:smoke` подтверждает структурный allowlist; живые `permission denied`
+  и owner-транзакции проверяются отдельно в disposable `pnpm db:live-proof`;
 - generated OpenAPI/JSON Schema и breaking-change checks проходят.
 
 ## 8. Не входит

@@ -87,6 +87,7 @@ const AROMA_GATEWAY_SOURCE_RE = /(?:^|\/)apps\/aroma-gateway\//;
 const TYPED_PROVIDER_HTTP_CLIENT_RE = /(?:^|\/)apps\/aroma-gateway\/src\/infrastructure\/provider\/http-client\.(?:cts|mts|ts)$/;
 const ALTERNATE_PROVIDER_HTTP_MODULE_RE = /^(?:node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
 const GENERIC_PROVIDER_HTTP_MODULE_RE = /^(?:@fastify\/http-proxy|http-proxy|node:(?:http|http2|https|net|tls)|(?:http|http2|https|net|tls)|undici|node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
+const CATALOG_SQL_MUTATION_RE = /\b(?:insert\s+into|update|delete\s+from|truncate(?:\s+table)?|create\s+table|alter\s+table|drop\s+table)\s+"?catalog"?\s*\.\s*"?(?:catalog_state|products|variants|offer_mappings|availability)"?\b/i;
 const GENERIC_PROVIDER_PROXY_RE = /(?<![.\w])(?:forward(?:Request|Response)?|passThrough|proxy)\s*(?:<[^;\n]*?>\s*)?(?:=|\()/i;
 const MODULE_SPECIFIER_RE = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]|\brequire\s*\(\s*['"]([^'"]+)['"]/g;
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
@@ -408,6 +409,55 @@ async function checkStaticSources(root) {
   for (const path of sourceFiles) checkStaticSource(path, await readFile(path, 'utf8'));
 }
 
+async function checkCatalogActiveWriters(root) {
+  const sourceFiles = (await Promise.all(['apps', 'packages'].map((target) => walk(join(root, target))))).flat();
+  for (const path of sourceFiles) {
+    const label = path.slice(root.length + 1).replaceAll('\\', '/');
+    const isMigration = /\.sql$/i.test(path);
+    const isRuntimeSource = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/i.test(path);
+    if (!isMigration && !isRuntimeSource) continue;
+    if (!CATALOG_SQL_MUTATION_RE.test(await readFile(path, 'utf8'))) continue;
+    const allowed = isMigration
+      ? label.startsWith('apps/catalog-service/migrations/')
+      : isRuntimeSource && label.startsWith('apps/catalog-activation-worker/');
+    if (!allowed) {
+      fail('ARCH-CATALOG-WRITER', `${label}: active Catalog tables may only be mutated by catalog-activation-worker; schema migrations belong to catalog-service`);
+    }
+  }
+}
+
+function findCatalogRowsArray(schema, propertyName = null) {
+  if (!schema || typeof schema !== 'object') return null;
+  if (schema.type === 'array' && schema.items && typeof schema.items === 'object') {
+    const item = schema.items;
+    if (item.type === 'object' || (item.properties && typeof item.properties === 'object') || /(?:product|variant|offer|catalog)[-_ ]?(?:row|record|item)/i.test(item.$ref ?? '')) return propertyName ?? 'array';
+  }
+  for (const [key, value] of Object.entries(schema)) {
+    const found = Array.isArray(value)
+      ? value.map((entry) => findCatalogRowsArray(entry, key)).find(Boolean)
+      : findCatalogRowsArray(value, key);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function checkCatalogEventSchemas(root) {
+  const eventsRoot = join(root, 'contracts/schemas/events');
+  for (const path of await walk(eventsRoot)) {
+    if (!/^catalog.*\.schema\.json$/i.test(path.slice(eventsRoot.length + 1))) continue;
+    let schema;
+    try {
+      schema = JSON.parse(await readFile(path, 'utf8'));
+    } catch (error) {
+      fail('ARCH-CATALOG-EVENT-ROWS', `${path.slice(root.length + 1)}: invalid Catalog event schema: ${error.message}`);
+    }
+    const rowsProperty = findCatalogRowsArray(schema);
+    if (rowsProperty) {
+      fail('ARCH-CATALOG-EVENT-ROWS', `${path.slice(root.length + 1)}: Catalog Kafka events must publish references/revisions, not full Catalog row arrays (found ${rowsProperty})`);
+    }
+  }
+}
+
 async function checkPermissionManifests(root) {
   const appEntries = existsSync(join(root, 'apps'))
     ? (await readdir(join(root, 'apps'), { withFileTypes: true })).filter((entry) => entry.isDirectory())
@@ -509,6 +559,8 @@ export async function checkArchitecture(root = SCRIPT_ROOT) {
   }
   await checkPackageDependencies(resolvedRoot);
   await checkStaticSources(resolvedRoot);
+  await checkCatalogActiveWriters(resolvedRoot);
+  await checkCatalogEventSchemas(resolvedRoot);
   await checkPermissionManifests(resolvedRoot);
   const configPath = resolve(SCRIPT_ROOT, '.dependency-cruiser.cjs');
   if (!existsSync(configPath) || !(await stat(configPath)).isFile()) fail('BOUND-IMPORT', '.dependency-cruiser.cjs is missing');
