@@ -103,7 +103,7 @@ void test("Catalog activation migrations match role-map least privilege and pres
 });
 
 void test("binding acknowledgement reread selects one row by composite key", async () => {
-  const source = await readFile(join(ROOT, "apps/catalog-activation-worker/src/activation-store.ts"), "utf8");
+  const source = await readFile(join(ROOT, "apps/catalog-activation-worker/src/infrastructure/activation-store.ts"), "utf8");
   assert.match(source, /FROM catalog\.offer_binding_acks WHERE snapshot_ref=\$1 AND source_offer_key_hash=\$2/u);
   assert.doesNotMatch(source, /bound\(tx,\[snapshot\.snapshot_ref\]\)\)\.rows\.find/u);
 });

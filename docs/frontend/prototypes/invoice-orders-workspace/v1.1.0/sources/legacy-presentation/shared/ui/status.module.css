@@ -1,0 +1,106 @@
+.badge {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cos-space-1);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 2px var(--cos-space-2);
+  color: var(--cos-text-primary);
+  font-size: var(--cos-type-caption-size);
+  font-weight: var(--cos-font-weight-strong);
+  line-height: var(--cos-type-caption-line);
+  white-space: nowrap;
+}
+
+.badge[data-size="sm"] {
+  min-height: 22px;
+  font-size: 11px;
+}
+
+.badge[data-size="lg"] {
+  min-height: 30px;
+  padding-inline: var(--cos-space-3);
+  font-size: var(--cos-type-body-size);
+}
+
+.badge[data-variant="solid"] {
+  color: var(--cos-text-on-action);
+  background: var(--cos-surface-elevated);
+}
+
+.badge[data-variant="soft"] {
+  border-color: var(--cos-border-default);
+  background: var(--cos-selection-hover);
+}
+
+.badge[data-variant="outline"] {
+  border-color: var(--cos-border-default);
+  background: transparent;
+}
+
+.badge[data-tone="neutral"] {
+  border-color: var(--cos-border-default);
+  color: var(--cos-text-secondary);
+}
+
+.badge[data-tone="primary"] {
+  border-color: var(--cos-border-active);
+  color: var(--cos-action-hover);
+  background: var(--cos-selection-selected);
+}
+
+.badge[data-tone="success"] {
+  border-color: var(--cos-status-success);
+  color: var(--cos-status-success);
+  background: color-mix(in srgb, var(--cos-status-success) 14%, transparent);
+}
+
+.badge[data-tone="warning"] {
+  border-color: var(--cos-status-warning);
+  color: var(--cos-status-warning);
+  background: color-mix(in srgb, var(--cos-status-warning) 14%, transparent);
+}
+
+.badge[data-tone="danger"] {
+  border-color: var(--cos-status-error);
+  color: var(--cos-status-error);
+  background: color-mix(in srgb, var(--cos-status-error) 14%, transparent);
+}
+
+.badge[data-tone="info"] {
+  border-color: var(--cos-status-info);
+  color: var(--cos-status-info);
+  background: color-mix(in srgb, var(--cos-status-info) 14%, transparent);
+}
+
+.badge[data-state="disabled"] {
+  border-color: var(--cos-border-subtle);
+  color: var(--cos-text-disabled);
+  background: transparent;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.withIcon {
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (forced-colors: active) {
+  .badge,
+  .badge[data-tone="neutral"],
+  .badge[data-tone="primary"],
+  .badge[data-tone="success"],
+  .badge[data-tone="warning"],
+  .badge[data-tone="danger"],
+  .badge[data-tone="info"] {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+  }
+}

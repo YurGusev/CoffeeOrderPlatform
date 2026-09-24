@@ -1,5 +1,5 @@
 import {canonicalCatalogJson, catalogBatchBytes, catalogBatchHash, catalogContentHash, isAromaCatalogExportRecord} from "../packages/contracts/aroma-v1/dist/index.js";
-import {createCatalogImportStore} from "../apps/catalog-supplier-sync/dist/catalog-import-store.js";
+import {createCatalogImportStore} from "../apps/catalog-supplier-sync/dist/infrastructure/catalog-import-store.js";
 import {runCatalogImport} from "../apps/catalog-supplier-sync/dist/run-catalog-import.js";
 import {withCatalogPostgres, proveCatalogForeignConnect} from "./catalog-live-harness.mjs";
 import assert from "node:assert/strict";

@@ -22,6 +22,7 @@
     { "path": "packages/platform-migrations" },
     { "path": "packages/platform-observability" },
     { "path": "packages/platform-outbox" },
+    { "path": "packages/platform-ui" },
     { "path": "packages/platform-security" },
     { "path": "packages/platform-testing" },
     { "path": "packages/platform-time" },

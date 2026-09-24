@@ -17,8 +17,8 @@ outputs:
 - artifact: apps/catalog-activation-worker/package.json
   sha256: 9874c9958b24dff47f861bf5f519d0895bd6ac14d5a552f3fbac0c818792f800
   consumers: []
-- artifact: apps/catalog-activation-worker/src/activation-store.ts
-  sha256: 37de817061c9e37c9ae765121a943612843753865f265d48aa575ef06caf1017
+- artifact: apps/catalog-activation-worker/src/infrastructure/activation-store.ts
+  sha256: 9cd49d5c2f0702c1cdf3111c1777ec9d18040fd29938d64b985c6249dcf4769f
   consumers: [17, 18, 8, 11]
 - artifact: apps/catalog-activation-worker/src/events.ts
   sha256: 091a30c8e7b8ff8fdf80eac121f845f2ab3ddccc7b60fee0b7ea6507bd1e8bcf
@@ -30,7 +30,7 @@ outputs:
   sha256: daa481b61a90a67746bb191161985be2216fdd9784564af221e74e171305e9f5
   consumers: [17, 18, 8, 11]
 - artifact: apps/catalog-activation-worker/src/main.ts
-  sha256: cb4fa93994a5eae5f30b84fa663e2a36d56d591e98ba5c94ae9f66c47fd806fe
+  sha256: 9e6ffe08bc4a69efe2e56f5aab771d808da30e85ba917488a48aff0af9655bbf
   consumers: [17, 18]
 - artifact: apps/catalog-activation-worker/src/verify-generation.ts
   sha256: 5cd51db04ffc7b9263d5cf3b166e2f3cda2d538d65f144695e74026205514b8e
@@ -69,19 +69,19 @@ outputs:
   sha256: 8dbc4ab01545e8820ca9de48223e8d7dab89e91fefb6ff427f2b24c81bf953a5
   consumers: [17, 18]
 - artifact: package.json
-  sha256: 6bffae25b7c9de192a241fda8ad285ae76714eabd61ce93096206c618fde945d
+  sha256: 44a87e3d5c247d3f7eb1400cd0fc5a7e1ef572f86c4cb080d4573083e6ab1568
   consumers: []
 - artifact: pnpm-lock.yaml
-  sha256: 07d38bbb5a5a792c8aacfaac2a1316c8a63baba6ff9741fe0b8f9a1e598b4444
+  sha256: 29958a161fcad921489ba89516569ab7eea7b67de0c285657723914694ef2f16
   consumers: []
 - artifact: scripts/check-architecture.mjs
-  sha256: eed64ab567e3d0d51163e1fb93fe582d0e8ec7c7d008944a26ca94f09d77ca58
+  sha256: 3dc9c96b4594abb28d7214e316d95d2726b5fc0886b0801dfd54d89850bbda1d
   consumers: []
 - artifact: scripts/db-live-proof.mjs
   sha256: 75624d2584db927f47480bc89ba8db0644b6bf9d837fae948a06175ea6f3fde5
   consumers: []
 - artifact: tests/architecture/checks.test.mjs
-  sha256: 6fbb4d4ae8c5b210f35a738d720807cb693020aeb67c446b16e4c668567336c1
+  sha256: 02b435579a5a4cb7138623c1de7e239318a010ea0e55d88f6b4fdd0a632f697b
   consumers: []
 - artifact: tests/catalog/activation-binding-client.test.mjs
   sha256: 25a4a3b8776a105b4fd55956be939e74a4b2cf452f9dc37fa15b4ebf8ee12c16
@@ -90,7 +90,7 @@ outputs:
   sha256: 2873770ca314eeec6dad7da3eb9a090b377c5ea2d9657f9d3bf7401b6e94dfb5
   consumers: []
 - artifact: tests/catalog/activation-crash-child.mjs
-  sha256: 64b5c289cc74a2550d51eb67e901e1d6acac6ee193f692928179358e338fedd7
+  sha256: 0f1ddf1a90f5165af87cc430f1fa041c57ef8574de159fcbee5e9739a0dcb740
   consumers: []
 - artifact: tests/catalog/activation-crash-live.test.mjs
   sha256: 6313683b2ebcd677ecbefc16055cb3ae4fb4724a5bc20e1e2b0defbfe8ef8cae
@@ -102,22 +102,26 @@ outputs:
   sha256: ec4a77027718ca4c7180a566d7f8e06aebc2af0d1ad92b5696e2ee6e6920702c
   consumers: []
 - artifact: tests/catalog/activation-live.test.mjs
-  sha256: 333fbeb145b50846002d22de83a6861668b0a3341fe9f8ac6a9a7387b2f5cd04
+  sha256: 0627a3f68bf7ab9d233a4a1929b8919a5cac478f81f74bf9aab0182ebb828507
   consumers: []
 - artifact: tests/catalog/activation-migrations.test.mjs
-  sha256: 48f5934077378727810294949be6cc464a0b405267c7faf5a0214646f6c7edb8
+  sha256: cbe61da42d81ec6a94b304c3ba56c59f96366b765b9990c27b01953cdb6a7dcf
   consumers: []
 - artifact: tests/catalog/activation-validation.test.mjs
   sha256: 2966e64cd1ffdf68df68b9639fe53678dbe2c31d0742e22de0691f0c5655efb5
   consumers: []
 verification:
-- command: pnpm install --offline --frozen-lockfile
+- command: pnpm install --frozen-lockfile
   result: passed
   exitCode: 0
 - command: pnpm check
   result: passed
   exitCode: 0
-  detail: "468 тестов; 446 пройдены, 22 opt-in пропущены; architecture, authority, config, contracts, lint и typecheck пройдены"
+  detail: "472 теста; 450 пройдены, 22 opt-in пропущены; architecture, authority, config, contracts, lint, typecheck, web build и UI checks пройдены после интеграции develop"
+- command: node --test tests/architecture/checks.test.mjs tests/architecture/frontend-boundary.test.mjs
+  result: passed
+  exitCode: 0
+  detail: "51/51; SQL owner Catalog activation находится в infrastructure, сохранены проверки provider HTTP и frontend boundaries"
 - command: pnpm db:live-proof
   result: passed
   exitCode: 0
@@ -129,7 +133,7 @@ verification:
 - command: node --expose-gc tests/catalog/stream-capacity-proof.mjs
   result: passed
   exitCode: 0
-  detail: "ingestion #6: 196608 offers, 168344938 bytes, peak RSS growth 69771264 bytes, upstream paused during persistence"
+  detail: "ingestion #6: 196608 offers, 168344938 bytes, peak RSS growth 68538368 bytes, upstream paused during persistence"
 - command: node --test tests/aroma/binding-live.test.mjs
   result: passed
   exitCode: 0
@@ -141,6 +145,7 @@ verification:
   result: passed
   exitCode: 0
 limitations:
+- "После интеграции develop offline install в текущем workspace остановился из-за отсутствующей pnpm metadata magic-string; pnpm install --frozen-lockfile повторён с доступным registry и прошёл."
 - "Production Compose с реальным api-internal mTLS/Gateway binding и Kafka broker для #16 не запускался: Gateway binding store проверен отдельно на PostgreSQL, durable relay — PostgreSQL с тестовым sender."
 - "Статический architecture-check не исключает SQL, собранный динамически за пределами обнаруживаемого шаблона."
 - "Миграция 0004 восстановлена до checksum первого head PR #147; 0008 добавляет grind options и active metadata впереди. Если версия 0004 из промежуточного head cbfd42a была применена в постоянной БД, её ledger будет конфликтовать: это нужно проверить до rollout и согласовать отдельное восстановление; автоматически не обходим drift."

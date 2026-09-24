@@ -1,0 +1,129 @@
+.text,
+.heading,
+.label {
+  margin: 0;
+  color: var(--cos-text-primary);
+}
+
+.text {
+  font-family: var(--cos-font-body);
+  font-size: var(--cos-type-body-size);
+  line-height: var(--cos-type-body-line);
+}
+
+.text[data-size="caption"] {
+  font-size: var(--cos-type-caption-size);
+  line-height: var(--cos-type-caption-line);
+}
+
+.text[data-size="lead"] {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.text[data-size="heading"] {
+  font-family: var(--cos-font-heading);
+  font-size: var(--cos-type-h2-size);
+  line-height: var(--cos-type-h2-line);
+}
+
+.text[data-tone="primary"],
+.heading[data-tone="primary"] {
+  color: var(--cos-action-hover);
+}
+
+.text[data-tone="success"],
+.heading[data-tone="success"] {
+  color: var(--cos-status-success);
+}
+
+.text[data-tone="warning"],
+.heading[data-tone="warning"] {
+  color: var(--cos-status-warning);
+}
+
+.text[data-tone="danger"],
+.heading[data-tone="danger"] {
+  color: var(--cos-status-error);
+}
+
+.text[data-tone="info"],
+.heading[data-tone="info"] {
+  color: var(--cos-status-info);
+}
+
+.text[data-tone="neutral"] {
+  color: var(--cos-text-secondary);
+}
+
+.text[data-weight="medium"] {
+  font-weight: var(--cos-font-weight-number);
+}
+
+.text[data-weight="strong"],
+.heading[data-weight="strong"] {
+  font-weight: var(--cos-font-weight-strong);
+}
+
+.heading {
+  font-family: var(--cos-font-heading);
+  letter-spacing: -0.002em;
+}
+
+.heading[data-level="1"] {
+  font-size: var(--cos-type-h1-size);
+  line-height: var(--cos-type-h1-line);
+}
+
+.heading[data-level="2"] {
+  font-size: var(--cos-type-h2-size);
+  line-height: var(--cos-type-h2-line);
+}
+
+.heading[data-level="3"] {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.heading[data-weight="medium"] {
+  font-weight: var(--cos-font-weight-heading);
+}
+
+.label {
+  display: inline-flex;
+  gap: var(--cos-space-1);
+  align-items: baseline;
+  color: var(--cos-text-primary);
+  font-size: var(--cos-type-caption-size);
+  font-weight: var(--cos-font-weight-strong);
+  line-height: var(--cos-type-caption-line);
+}
+
+.required {
+  color: var(--cos-status-error);
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (forced-colors: active) {
+  .text,
+  .heading,
+  .label,
+  .text[data-tone="neutral"],
+  .text[data-tone="primary"],
+  .text[data-tone="success"],
+  .text[data-tone="warning"],
+  .text[data-tone="danger"],
+  .text[data-tone="info"],
+  .heading[data-tone="primary"],
+  .heading[data-tone="success"],
+  .heading[data-tone="warning"],
+  .heading[data-tone="danger"],
+  .heading[data-tone="info"] {
+    color: CanvasText;
+  }
+}

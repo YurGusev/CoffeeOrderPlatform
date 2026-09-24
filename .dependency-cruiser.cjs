@@ -22,6 +22,27 @@ module.exports = {
   forbidden: [
     ...crossRuntimeRules,
     {
+      name: 'BOUND-IMPORT:browser-node-graph',
+      severity: 'error',
+      comment: 'Browser source never imports the Node entry or server runtime.',
+      from: { path: '^apps/web/src/browser/' },
+      to: { path: '^(apps/web/src/main\.ts|packages/platform-runtime/|@coffee-platform/runtime$)' },
+    },
+    {
+      name: 'BOUND-IMPORT:server-ui-graph',
+      severity: 'error',
+      comment: 'Server runtimes never import the browser UI package.',
+      from: { path: '^apps/(?!web/)' },
+      to: { path: '^@coffee-platform/ui$' },
+    },
+    {
+      name: 'BOUND-IMPORT:ui-runtime-graph',
+      severity: 'error',
+      comment: 'UI package never imports runtime, contracts or generated business code.',
+      from: { path: '^packages/platform-ui/' },
+      to: { path: '^(apps/|packages/(contracts|generated|platform-runtime)/|@coffee-platform/(runtime|contracts-|generated-))' },
+    },
+    {
       name: 'BOUND-IMPORT:shared-business-package',
       severity: 'error',
       from: { path: '^(apps|packages)/' },

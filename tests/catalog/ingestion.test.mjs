@@ -69,7 +69,7 @@ void test("generated record guard accepts only the four typed variants", () => {
 });
 
 void test("Catalog rejects negative money before acquiring a transaction", async () => {
-  const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/catalog-import-store.js");
+  const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/infrastructure/catalog-import-store.js");
   const items=[{...ITEM,supplierUnitMinor:"-1"}];
   const record={streamVersion:"1",recordType:"snapshot-batch",snapshotRef:"snp_01ARZ3NDEKTSV4RRFFQ69G5FAV",batchNumber:0,
     offerCount:1,uncompressedBytes:hashes.catalogBatchBytes(items),batchHash:catalogBatchHash(items),previousBatchHash:null,items};
@@ -79,7 +79,7 @@ void test("Catalog rejects negative money before acquiring a transaction", async
 });
 
 void test("reject accepts only closed durable codes even from untyped callers", async () => {
-  const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/catalog-import-store.js");
+  const {createCatalogImportStore} = await import("../../apps/catalog-supplier-sync/dist/infrastructure/catalog-import-store.js");
   const store=createCatalogImportStore({});
   for (const code of ["SECRET_SQL", "SNAPSHOT_NOT_FOUND", "TERMINAL_REPLAY_CONFLICT", "BATCH_REPLAY_CONFLICT"]) {
     await assert.rejects(() => store.reject("snp_01ARZ3NDEKTSV4RRFFQ69G5FAV",code), error => error.code === "INVALID_FAILURE_CODE");

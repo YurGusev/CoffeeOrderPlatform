@@ -1,0 +1,105 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--cos-surface-canvas);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--cos-text-primary);
+  background:
+    radial-gradient(circle at 82% 6%, var(--cos-effect-canvas-glow-violet), transparent 32rem),
+    radial-gradient(circle at 18% 0%, var(--cos-effect-canvas-glow-blue), transparent 28rem),
+    var(--cos-surface-canvas);
+  font-family: var(--cos-font-body);
+  font-size: var(--cos-type-body-size);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--cos-type-body-line);
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-family: var(--cos-font-heading);
+  font-weight: 600;
+}
+
+h1 {
+  font-size: var(--cos-type-h1-size);
+  line-height: var(--cos-type-h1-line);
+  letter-spacing: var(--cos-type-h1-spacing);
+}
+
+h2 {
+  font-size: var(--cos-type-h2-size);
+  line-height: var(--cos-type-h2-line);
+  letter-spacing: var(--cos-type-h2-spacing);
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--cos-focus-ring);
+}
+
+.foundation-fallback {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cos-space-3);
+  color: var(--cos-text-secondary);
+}
+
+.foundation-fallback__mark {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--cos-border-active);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: foundation-spin 800ms linear infinite;
+}
+
+.foundation-error {
+  width: min(720px, calc(100% - 32px));
+  margin: 12vh auto;
+  padding: var(--cos-space-7);
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-lg);
+  background: var(--cos-surface-panel);
+  box-shadow: var(--cos-elevation-3);
+}
+
+.foundation-error__eyebrow {
+  color: var(--cos-action-primary);
+  font-weight: var(--cos-font-weight-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes foundation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

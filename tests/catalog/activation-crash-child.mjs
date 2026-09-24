@@ -1,6 +1,6 @@
 import {Client} from "pg";
 import {createDatabase} from "../../packages/platform-database/dist/index.js";
-import {createCatalogActivationStore} from "../../apps/catalog-activation-worker/dist/activation-store.js";
+import {createCatalogActivationStore} from "../../apps/catalog-activation-worker/dist/infrastructure/activation-store.js";
 
 const port=Number(process.env.CRASH_DB_PORT);
 const databaseName=process.env.CRASH_DB_NAME;

@@ -7,7 +7,7 @@ import {catalogBatchBytes, catalogBatchHash, catalogContentHash} from "../../pac
 import {createDatabase} from "../../packages/platform-database/dist/index.js";
 import {createSqlOutboxStore,relayOutboxBatch} from "../../packages/platform-outbox/dist/index.js";
 import {withCatalogPostgres} from "../../scripts/catalog-live-harness.mjs";
-import {createCatalogActivationStore} from "../../apps/catalog-activation-worker/dist/activation-store.js";
+import {createCatalogActivationStore} from "../../apps/catalog-activation-worker/dist/infrastructure/activation-store.js";
 
 const SUPPLIER = "sup_00000000000000000000000001";
 const P = "1".repeat(64);

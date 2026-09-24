@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -163,6 +164,20 @@ void test("GREEN: Catalog importer uses allowed contract and platform packages",
     assert.equal(result.status,0,output(result));
     assert.match(output(result),/passed with Dependency Cruiser/u);
   } finally { await rm(root,{recursive:true,force:true}); }
+});
+
+void test("GREEN: Catalog importer implementation stays in owner infrastructure", async () => {
+  const ownerPath = join(REPO_ROOT, "apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts");
+  const legacyPath = join(REPO_ROOT, "apps/catalog-supplier-sync/src/catalog-import-store.ts");
+  assert.equal(existsSync(legacyPath), false, "SQL owner imports must not remain in the application root");
+  assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
+});
+
+void test("GREEN: Catalog activation SQL stays in owner infrastructure", async () => {
+  const ownerPath = join(REPO_ROOT, "apps/catalog-activation-worker/src/infrastructure/activation-store.ts");
+  const legacyPath = join(REPO_ROOT, "apps/catalog-activation-worker/src/activation-store.ts");
+  assert.equal(existsSync(legacyPath), false, "Catalog activation SQL must not remain in the application root");
+  assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
 });
 
 void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {
@@ -586,6 +601,34 @@ void test("RED ARCH-TYPED-PROVIDER-HTTP: AROMA Gateway cannot add a generic prox
   const result = run("check-architecture.mjs", join(FIXTURES, "invalid-provider-proxy"));
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+});
+
+void test("RED ARCH-TYPED-PROVIDER-HTTP: alternate HTTP clients cannot bypass the typed provider client", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-provider-http-"));
+  const directory = join(root, "apps/aroma-gateway/src");
+  try {
+    await mkdir(directory, {recursive: true});
+    for (const moduleName of ["node-fetch", "cross-fetch", "got", "ky", "superagent", "node:http2"]) {
+      await writeFile(join(directory, "bad.ts"), `import * as client from ${JSON.stringify(moduleName)};\nvoid client;\n`);
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+    }
+    await rm(join(directory, "bad.ts"));
+    const typedClient = join(directory, "infrastructure/provider/http-client.ts");
+    await mkdir(join(directory, "infrastructure/provider"), {recursive: true});
+    await writeFile(typedClient, 'import * as client from "node-fetch";\nvoid client;\n');
+    let result = run("check-architecture.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+    await rm(typedClient);
+    for (const bucket of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+      await writeFile(join(root, "apps/aroma-gateway/package.json"), JSON.stringify({[bucket]: {"cross-fetch": "1.0.0"}}));
+      result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, `${bucket}: ${output(result)}`);
+      assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
+    }
+  } finally {await rm(root, {recursive: true, force: true});}
 });
 
 void test("RED ARCH-GENERIC-RETRY: generic retry dependency is forbidden", () => {

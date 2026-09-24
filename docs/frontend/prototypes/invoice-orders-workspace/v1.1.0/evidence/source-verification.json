@@ -1,0 +1,317 @@
+{
+  "sourceRepository": "https://github.com/YurGusev/CoffeeOrderSystem",
+  "sourceCommit": "3d4b30b1eaac14c77f41d8779f5e03c54cfacbef",
+  "sourceRoot": "/home/yurgusev/CoffeeOrderPlatform/docs/frontend/prototypes/invoice-orders-workspace/v1.1.0/sources/legacy-presentation",
+  "checked": 29,
+  "matches": 29,
+  "embeddedFontCount": 13,
+  "manifestFontCount": 13,
+  "transformedModules": 14,
+  "mismatches": [],
+  "missingTransforms": [],
+  "entries": [
+    {
+      "kind": "css-source",
+      "path": "app/styles/tokens.css",
+      "expected": "53f6217b7f552db075fe4112ff35c8e9d4ca956c6e6b6df6a9f2275eea9f518e",
+      "actual": "53f6217b7f552db075fe4112ff35c8e9d4ca956c6e6b6df6a9f2275eea9f518e",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "app/styles/global.css",
+      "expected": "c6321333f43aa1eef75200b384c2b69610a2bc55c3db8d95840543809ff5b565",
+      "actual": "c6321333f43aa1eef75200b384c2b69610a2bc55c3db8d95840543809ff5b565",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "app/shell/OperatorShell.module.css",
+      "expected": "341e8d677bbead5db4bfe4071502d10c2b4cf15ffa5bbd887da9cb5d21361fda",
+      "actual": "341e8d677bbead5db4bfe4071502d10c2b4cf15ffa5bbd887da9cb5d21361fda",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/AppLogo.module.css",
+      "expected": "53989e31ba264edb0eb4ebd9ef0de85bf1c21581c8aba61d051f90615a94ff5e",
+      "actual": "53989e31ba264edb0eb4ebd9ef0de85bf1c21581c8aba61d051f90615a94ff5e",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "features/orders/components/OrdersWorkspace.module.css",
+      "expected": "d5616f7ebc2805ef9ad6431d16b4b644bfa8824f6aa8fd706e5dab45dcde552a",
+      "actual": "d5616f7ebc2805ef9ad6431d16b4b644bfa8824f6aa8fd706e5dab45dcde552a",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "features/orders/components/OrdersTable.module.css",
+      "expected": "25a81ad64ddd1784ccd63d93da6c0b99bb7f83cde599b4788214503ca0af8868",
+      "actual": "25a81ad64ddd1784ccd63d93da6c0b99bb7f83cde599b4788214503ca0af8868",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "features/orders/components/OrdersFiniteVariants.module.css",
+      "expected": "8e8d7169b21f878db1c6c181d375eb4e4a18edc874662fec0fac643a47e6a344",
+      "actual": "8e8d7169b21f878db1c6c181d375eb4e4a18edc874662fec0fac643a47e6a344",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/action.module.css",
+      "expected": "6c725e4071a4ee490c84bc68ea529e418e06af5f4655028bdd97658e88ececac",
+      "actual": "6c725e4071a4ee490c84bc68ea529e418e06af5f4655028bdd97658e88ececac",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/layout.module.css",
+      "expected": "07efad4abe3df0110dbd323336da84d040dc58bc0106034ea8862934bc6d9ac6",
+      "actual": "07efad4abe3df0110dbd323336da84d040dc58bc0106034ea8862934bc6d9ac6",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/text.module.css",
+      "expected": "1da6073b26c17426bb190aa00ee7b5dafc69f02b6e174f70018f860e1f349c75",
+      "actual": "1da6073b26c17426bb190aa00ee7b5dafc69f02b6e174f70018f860e1f349c75",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/status.module.css",
+      "expected": "0678a5b2279e9c3fb5a2251657917e42af0d4f30c27c3336093f4bdeee9d0547",
+      "actual": "0678a5b2279e9c3fb5a2251657917e42af0d4f30c27c3336093f4bdeee9d0547",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/overlay.module.css",
+      "expected": "e66f10cf8dc88aa6620ae8ce2525e4b0424073c2000cd43918815410d92ef243",
+      "actual": "e66f10cf8dc88aa6620ae8ce2525e4b0424073c2000cd43918815410d92ef243",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/field.module.css",
+      "expected": "2a4606d28e993fcb6ab33cd9b0a5375d9e65c622758288d4df3e5c39d2b2af4b",
+      "actual": "2a4606d28e993fcb6ab33cd9b0a5375d9e65c622758288d4df3e5c39d2b2af4b",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/select.module.css",
+      "expected": "a05c4d1c3ba4098c580ff935b6488de358cad45643e42c0a96e2b39c18467ba3",
+      "actual": "a05c4d1c3ba4098c580ff935b6488de358cad45643e42c0a96e2b39c18467ba3",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/dialog.module.css",
+      "expected": "ad26c821606f207200718703ae0b561873216568eb6ef8c8fbda869137218199",
+      "actual": "ad26c821606f207200718703ae0b561873216568eb6ef8c8fbda869137218199",
+      "match": true
+    },
+    {
+      "kind": "css-source",
+      "path": "shared/ui/scrollArea.module.css",
+      "expected": "916cd2a25b4ef3e1c193d13ad0ddaaa519f5b5c57478a007563446f7ee51c703",
+      "actual": "916cd2a25b4ef3e1c193d13ad0ddaaa519f5b5c57478a007563446f7ee51c703",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/inter@5.3.0/./files/inter-cyrillic-ext-wght-normal.woff2",
+      "expected": "ca157063339ac4ad418f214f3abfed119b0798ab4d377386ce5c9e5a7a435ebd",
+      "actual": "ca157063339ac4ad418f214f3abfed119b0798ab4d377386ce5c9e5a7a435ebd",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/inter@5.3.0/./files/inter-cyrillic-wght-normal.woff2",
+      "expected": "71d5ee93cc1e9f1d520a3a8b66456de18c7879d8df09d57fcd2eaff75fef0075",
+      "actual": "71d5ee93cc1e9f1d520a3a8b66456de18c7879d8df09d57fcd2eaff75fef0075",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/inter@5.3.0/./files/inter-greek-ext-wght-normal.woff2",
+      "expected": "6e9e020a25f9b56d418f2c085b1d3c09725a4da23fe693a5b463064606732190",
+      "actual": "6e9e020a25f9b56d418f2c085b1d3c09725a4da23fe693a5b463064606732190",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/inter@5.3.0/./files/inter-greek-wght-normal.woff2",
+      "expected": "1be3448e292fbf05ffe176fe1e43f135013d50b1e7d324ad1a558f623d3bb6f6",
+      "actual": "1be3448e292fbf05ffe176fe1e43f135013d50b1e7d324ad1a558f623d3bb6f6",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/inter@5.3.0/./files/inter-vietnamese-wght-normal.woff2",
+      "expected": "5c66f9e07e90c6d4ac4922cc68d60de26c17b1858e677fb5e603fce3952b3ff2",
+      "actual": "5c66f9e07e90c6d4ac4922cc68d60de26c17b1858e677fb5e603fce3952b3ff2",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/inter@5.3.0/./files/inter-latin-ext-wght-normal.woff2",
+      "expected": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956",
+      "actual": "34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/inter@5.3.0/./files/inter-latin-wght-normal.woff2",
+      "expected": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "actual": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/manrope@5.3.0/./files/manrope-cyrillic-ext-wght-normal.woff2",
+      "expected": "de37de877dc17e4577341fa68bb5cb526b53d54cb29721e674208546a3c7849d",
+      "actual": "de37de877dc17e4577341fa68bb5cb526b53d54cb29721e674208546a3c7849d",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/manrope@5.3.0/./files/manrope-cyrillic-wght-normal.woff2",
+      "expected": "c268b459a9329e59fecf39a17618efd44c71735532048d60b12aab76a8c14914",
+      "actual": "c268b459a9329e59fecf39a17618efd44c71735532048d60b12aab76a8c14914",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/manrope@5.3.0/./files/manrope-greek-wght-normal.woff2",
+      "expected": "2fb2e8cbfd52ae46179a8b6024eb162f1f9c6de3d22d6e3a30d8f395de7220be",
+      "actual": "2fb2e8cbfd52ae46179a8b6024eb162f1f9c6de3d22d6e3a30d8f395de7220be",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/manrope@5.3.0/./files/manrope-vietnamese-wght-normal.woff2",
+      "expected": "6bbb044ab420e07edb0a3042d2eb314b85e83a0182e945a15ab3b9092668dfd5",
+      "actual": "6bbb044ab420e07edb0a3042d2eb314b85e83a0182e945a15ab3b9092668dfd5",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/manrope@5.3.0/./files/manrope-latin-ext-wght-normal.woff2",
+      "expected": "3911b66d9f2e005a4b989223405d0e5032619c668597ba467cc76a23c8fffcfb",
+      "actual": "3911b66d9f2e005a4b989223405d0e5032619c668597ba467cc76a23c8fffcfb",
+      "match": true
+    },
+    {
+      "kind": "embedded-font",
+      "path": "@fontsource-variable/manrope@5.3.0/./files/manrope-latin-wght-normal.woff2",
+      "expected": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+      "actual": "a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972",
+      "match": true
+    }
+  ],
+  "transforms": [
+    {
+      "path": "app/shell/OperatorShell.module.css",
+      "prefix": "operator-shell",
+      "declaredClassCount": 35,
+      "marker": ".operator-shell_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/AppLogo.module.css",
+      "prefix": "app-logo",
+      "declaredClassCount": 6,
+      "marker": ".app-logo_",
+      "present": true
+    },
+    {
+      "path": "features/orders/components/OrdersWorkspace.module.css",
+      "prefix": "orders-workspace",
+      "declaredClassCount": 53,
+      "marker": ".orders-workspace_",
+      "present": true
+    },
+    {
+      "path": "features/orders/components/OrdersTable.module.css",
+      "prefix": "orders-table",
+      "declaredClassCount": 44,
+      "marker": ".orders-table_",
+      "present": true
+    },
+    {
+      "path": "features/orders/components/OrdersFiniteVariants.module.css",
+      "prefix": "orders-finite",
+      "declaredClassCount": 60,
+      "marker": ".orders-finite_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/action.module.css",
+      "prefix": "ui-action",
+      "declaredClassCount": 5,
+      "marker": ".ui-action_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/layout.module.css",
+      "prefix": "ui-layout",
+      "declaredClassCount": 4,
+      "marker": ".ui-layout_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/text.module.css",
+      "prefix": "ui-text",
+      "declaredClassCount": 5,
+      "marker": ".ui-text_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/status.module.css",
+      "prefix": "ui-status",
+      "declaredClassCount": 3,
+      "marker": ".ui-status_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/overlay.module.css",
+      "prefix": "ui-overlay",
+      "declaredClassCount": 21,
+      "marker": ".ui-overlay_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/field.module.css",
+      "prefix": "ui-field",
+      "declaredClassCount": 13,
+      "marker": ".ui-field_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/select.module.css",
+      "prefix": "ui-select",
+      "declaredClassCount": 12,
+      "marker": ".ui-select_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/dialog.module.css",
+      "prefix": "ui-dialog",
+      "declaredClassCount": 10,
+      "marker": ".ui-dialog_",
+      "present": true
+    },
+    {
+      "path": "shared/ui/scrollArea.module.css",
+      "prefix": "ui-scroll",
+      "declaredClassCount": 1,
+      "marker": ".ui-scroll_",
+      "present": true
+    }
+  ]
+}

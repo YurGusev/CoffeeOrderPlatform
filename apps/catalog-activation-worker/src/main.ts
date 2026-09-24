@@ -4,7 +4,7 @@ import {startConfiguredRuntime, type RuntimeComposition, type RuntimeComposition
 import {createHttpClient, type HttpClient} from "@coffee-platform/platform-http";
 import {parseServiceTransportMaterial} from "@coffee-platform/security";
 import {createSqlOutboxStore} from "@coffee-platform/outbox";
-import {createCatalogActivationStore} from "./activation-store.js";
+import {createCatalogActivationStore} from "./infrastructure/activation-store.js";
 import {CatalogActivationBindingClient} from "./gateway-binding-client.js";
 
 function transportSecret(context:RuntimeCompositionContext):unknown {

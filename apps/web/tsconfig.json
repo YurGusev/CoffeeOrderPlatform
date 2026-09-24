@@ -5,8 +5,10 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ES2025", "DOM", "DOM.Iterable"],
-    "types": ["worker-threads-compat"],
+    "jsx": "react-jsx",
+
     "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "references": [{ "path": "../../packages/platform-ui" }],
+  "include": ["src/browser/**/*.ts", "src/browser/**/*.tsx", "src/vite-env.d.ts"]
 }

@@ -20,7 +20,7 @@ const diagnostics = [];
 mock.module("../../packages/platform-runtime/dist/index.js", {namedExports:{startConfiguredRuntime:async (_name, value) => {composition=value;}}});
 mock.module("../../packages/platform-security/dist/index.js", {namedExports:{parseServiceTransportMaterial:() => ({})}});
 mock.module("../../packages/platform-http/dist/index.js", {namedExports:{createHttpClient:() => ({close:async () => {}})}});
-mock.module("../../apps/catalog-supplier-sync/dist/catalog-import-store.js", {namedExports:{createCatalogImportStore:() => ({
+mock.module("../../apps/catalog-supplier-sync/dist/infrastructure/catalog-import-store.js", {namedExports:{createCatalogImportStore:() => ({
   listIncomplete:async () => {events.push("recover"); if (unavailable) throw new Error("DB_CONNECTION_LOST"); return incomplete ? [{snapshot_ref:"old"}] : [];},
   reject:async () => {events.push("reject-old"); incomplete=false;},
 })}});

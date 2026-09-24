@@ -1,0 +1,228 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  vertical-align: middle;
+  anchor-name: --cos-overlay-trigger;
+  anchor-scope: --cos-overlay-trigger;
+}
+
+.surface {
+  z-index: 10;
+  box-sizing: border-box;
+  max-block-size: min(32rem, calc(100dvh - 2 * var(--cos-space-5)));
+  overflow: auto;
+  border: 1px solid var(--cos-border-default);
+  border-radius: var(--cos-radius-sm);
+  color: var(--cos-text-primary);
+  background: var(--cos-surface-elevated);
+  box-shadow: var(--cos-elevation-overlay);
+  overscroll-behavior: contain;
+}
+
+.surface:focus-visible {
+  outline: none;
+  box-shadow: var(--cos-focus-ring), var(--cos-elevation-overlay);
+}
+
+.native {
+  position: fixed;
+  inset: auto;
+  position-anchor: --cos-overlay-trigger;
+  position-try-order: most-height;
+  position-try-fallbacks: --cos-overlay-flip-block, --cos-overlay-flip-inline;
+}
+
+@position-try --cos-overlay-flip-block {
+  position-area: block-start;
+}
+
+@position-try --cos-overlay-flip-inline {
+  position-area: block-end span-inline-start;
+}
+
+.placementTop {
+  position-area: block-start;
+}
+
+.placementTopStart {
+  position-area: block-start span-inline-start;
+}
+
+.placementTopEnd {
+  position-area: block-start span-inline-end;
+}
+
+.placementBottom {
+  position-area: block-end;
+}
+
+.placementBottomStart {
+  position-area: block-end span-inline-start;
+}
+
+.placementBottomEnd {
+  position-area: block-end span-inline-end;
+}
+
+.placementLeft {
+  position-area: inline-start;
+}
+
+.placementRight {
+  position-area: inline-end;
+}
+
+.sizeSm {
+  inline-size: 12rem;
+}
+
+.sizeMd {
+  inline-size: 16rem;
+}
+
+.sizeLg {
+  inline-size: 24rem;
+}
+
+.fallback {
+  position: absolute;
+  inset: auto;
+  margin: 0;
+}
+
+.fallback.placementTop,
+.fallback.placementTopStart,
+.fallback.placementTopEnd {
+  inset-block-end: calc(100% + var(--cos-space-2));
+}
+
+.fallback.placementBottom,
+.fallback.placementBottomStart,
+.fallback.placementBottomEnd {
+  inset-block-start: calc(100% + var(--cos-space-2));
+}
+
+.fallback.placementLeft {
+  inset-inline-end: calc(100% + var(--cos-space-2));
+  inset-block-start: 0;
+}
+
+.fallback.placementRight {
+  inset-inline-start: calc(100% + var(--cos-space-2));
+  inset-block-start: 0;
+}
+
+.fallback.placementTopStart,
+.fallback.placementBottomStart {
+  inset-inline-start: 0;
+}
+
+.fallback.placementTopEnd,
+.fallback.placementBottomEnd {
+  inset-inline-end: 0;
+}
+
+.fallback.placementTop,
+.fallback.placementBottom {
+  inset-inline-start: 50%;
+  translate: -50% 0;
+}
+
+.dialogFallback {
+  position: fixed;
+  inset: 0;
+  max-inline-size: calc(100% - 2 * var(--cos-space-5));
+  max-block-size: min(32rem, calc(100dvh - 2 * var(--cos-space-5)));
+  margin: auto;
+}
+
+.menu {
+  padding: var(--cos-space-2);
+}
+
+.menuLabel {
+  display: block;
+  padding: var(--cos-space-2) var(--cos-space-3);
+  color: var(--cos-text-secondary);
+  font-size: var(--cos-type-caption-size);
+  font-weight: var(--cos-font-weight-strong);
+  line-height: var(--cos-type-caption-line);
+}
+
+.menuItem {
+  display: flex;
+  width: 100%;
+  min-block-size: 36px;
+  align-items: center;
+  gap: var(--cos-space-2);
+  padding: var(--cos-space-2) var(--cos-space-3);
+  border: 0;
+  border-radius: var(--cos-radius-sm);
+  color: var(--cos-text-primary);
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.menuItem:hover,
+.menuItem:focus-visible {
+  outline: none;
+  color: var(--cos-text-primary);
+  background: var(--cos-selection-hover);
+}
+
+.menuItem[data-tone="danger"] {
+  color: var(--cos-action-danger);
+}
+
+.menuItem:disabled,
+.menuItem[data-disabled="true"] {
+  color: var(--cos-text-disabled);
+  cursor: not-allowed;
+}
+
+.menuItemIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.tooltip {
+  padding: var(--cos-space-2) var(--cos-space-3);
+  border-radius: var(--cos-radius-sm);
+  color: var(--cos-text-on-action);
+  background: var(--cos-palette-canvas-raised);
+  font-size: var(--cos-type-caption-size);
+  line-height: var(--cos-type-caption-line);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface,
+  .menuItem {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .surface,
+  .menuItem {
+    border: 1px solid CanvasText;
+    box-shadow: none;
+  }
+
+  .menuItem:hover,
+  .menuItem:focus-visible {
+    outline: 2px solid Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .tooltip {
+    border: 1px solid CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+}

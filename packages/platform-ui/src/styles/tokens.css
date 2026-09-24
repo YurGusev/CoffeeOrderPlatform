@@ -1,0 +1,196 @@
+:root {
+  color-scheme: dark;
+
+  /*
+   * Primitive palette
+   *
+   * These values are implementation details of the Neon Violet direction. CSS
+   * Modules and project-owned UI primitives consume the semantic tokens below;
+   * they should not reference these primitives directly.
+   */
+  --cos-palette-canvas: #050915;
+  --cos-palette-canvas-raised: #091225;
+  --cos-palette-panel: #091326;
+  --cos-palette-panel-elevated: #0f1b34;
+  --cos-palette-table-header: #0d1a33;
+  --cos-palette-row: #0b1730;
+  --cos-palette-group-start: #101a37;
+  --cos-palette-group-mid: #111b40;
+  --cos-palette-overlay-rgb: 2 7 18;
+  --cos-palette-shadow-rgb: 0 0 0;
+  --cos-palette-border-rgb: 125 146 190;
+  --cos-palette-violet-rgb: 124 77 255;
+  --cos-palette-violet-strong-rgb: 109 61 245;
+  --cos-palette-violet-hover-rgb: 139 92 246;
+  --cos-palette-violet-strong: #6d3df5;
+  --cos-palette-violet: #7c4dff;
+  --cos-palette-violet-hover: #9269ff;
+  --cos-palette-neon-violet-0: #f4efff;
+  --cos-palette-neon-violet-1: #e5dbff;
+  --cos-palette-neon-violet-2: #cbb7ff;
+  --cos-palette-neon-violet-3: #ae8fff;
+  --cos-palette-neon-violet-4: #9269ff;
+  --cos-palette-neon-violet-5: #7c4dff;
+  --cos-palette-neon-violet-6: #6d3df5;
+  --cos-palette-neon-violet-7: #592fd4;
+  --cos-palette-neon-violet-8: #4826ad;
+  --cos-palette-neon-violet-9: #391f87;
+  --cos-palette-cyan: #1fe5ff;
+  --cos-palette-blue-glow-rgb: 37 99 235;
+  --cos-palette-text-primary: #f4f6ff;
+  --cos-palette-text-secondary: #98a7c7;
+  --cos-palette-text-disabled: #7686a7;
+  --cos-palette-text-on-action: #ffffff;
+  --cos-palette-success: #3ddc97;
+  --cos-palette-success-action: #17724f;
+  --cos-palette-warning: #ffb84d;
+  --cos-palette-warning-action: #a06513;
+  --cos-palette-error: #ff6577;
+  --cos-palette-error-action: #b42d42;
+  --cos-palette-error-hover: #ff8090;
+  --cos-palette-info: #73b9ff;
+  --cos-palette-info-action: #246ca3;
+
+  /* Surface */
+  --cos-surface-canvas: var(--cos-palette-canvas);
+  --cos-surface-canvas-raised: var(--cos-palette-canvas-raised);
+  --cos-surface-panel: var(--cos-palette-panel);
+  --cos-surface-elevated: var(--cos-palette-panel-elevated);
+  --cos-surface-table-header: var(--cos-palette-table-header);
+  --cos-surface-row: var(--cos-palette-row);
+  --cos-surface-row-hover: rgb(var(--cos-palette-violet-rgb) / 0.08);
+  --cos-surface-group: var(--cos-palette-row);
+  --cos-surface-group-expanded: linear-gradient(
+    90deg,
+    var(--cos-palette-group-start),
+    var(--cos-palette-group-mid) 58%,
+    var(--cos-palette-row)
+  );
+
+  /* Text */
+  --cos-text-primary: var(--cos-palette-text-primary);
+  --cos-text-secondary: var(--cos-palette-text-secondary);
+  --cos-text-disabled: var(--cos-palette-text-disabled);
+  --cos-text-on-action: var(--cos-palette-text-on-action);
+
+  /* Borders and dividers */
+  --cos-border-default: rgb(var(--cos-palette-border-rgb) / 0.22);
+  --cos-border-active: rgb(var(--cos-palette-violet-hover-rgb) / 0.72);
+  --cos-border-subtle: rgb(var(--cos-palette-border-rgb) / 0.13);
+  --cos-border-divider: rgb(var(--cos-palette-border-rgb) / 0.18);
+
+  /* Actions */
+  /* The lighter primary keeps accent text at WCAG AA on the canvas. */
+  --cos-action-primary: var(--cos-palette-violet-hover);
+  --cos-action-primary-strong: var(--cos-palette-violet);
+  --cos-action-hover: var(--cos-palette-neon-violet-3);
+  --cos-action-danger: var(--cos-status-error);
+  --cos-action-danger-hover: var(--cos-palette-error-hover);
+  /* Solid action surfaces carry light text, so they use dedicated dark
+     semantic values instead of the brighter status/text colors. */
+  --cos-action-primary-surface: var(--cos-action-primary-strong);
+  --cos-action-primary-surface-hover: var(--cos-palette-violet-strong);
+  --cos-action-success-surface: var(--cos-palette-success-action);
+  --cos-action-success-surface-hover: color-mix(
+    in srgb,
+    var(--cos-palette-success-action) 82%,
+    black
+  );
+  --cos-action-warning-surface: var(--cos-palette-warning-action);
+  --cos-action-warning-surface-hover: color-mix(
+    in srgb,
+    var(--cos-palette-warning-action) 82%,
+    black
+  );
+  --cos-action-danger-surface: var(--cos-palette-error-action);
+  --cos-action-danger-surface-hover: color-mix(in srgb, var(--cos-palette-error-action) 82%, black);
+  --cos-action-info-surface: var(--cos-palette-info-action);
+  --cos-action-info-surface-hover: color-mix(in srgb, var(--cos-palette-info-action) 82%, black);
+  /* Soft action variants are dark semantic surfaces in the Neon Violet
+     operator theme. Keep these values in the token layer so CSP-safe finite
+     classes preserve the approved visual contract without runtime props. */
+  --cos-action-primary-soft: color-mix(in srgb, var(--cos-palette-neon-violet-9), black 50%);
+  --cos-action-primary-soft-text: var(--cos-palette-neon-violet-0);
+
+  /* Status */
+  --cos-status-success: var(--cos-palette-success);
+  --cos-status-warning: var(--cos-palette-warning);
+  --cos-status-error: var(--cos-palette-error);
+  --cos-status-info: var(--cos-palette-info);
+  --cos-status-success-soft: color-mix(in srgb, var(--cos-status-success), black 50%);
+  --cos-status-warning-soft: color-mix(in srgb, var(--cos-status-warning), black 50%);
+  --cos-status-error-soft: color-mix(in srgb, var(--cos-status-error), black 50%);
+  --cos-status-info-soft: color-mix(in srgb, var(--cos-status-info), black 50%);
+
+  /* Selection and focus */
+  --cos-selection-selected: rgb(var(--cos-palette-violet-rgb) / 0.18);
+  --cos-selection-hover: rgb(var(--cos-palette-violet-rgb) / 0.09);
+  /* Opaque focus paint keeps the 3px keyboard indicator legible on dark surfaces. */
+  --cos-selection-focus: var(--cos-palette-violet-hover);
+  --cos-selection-overlay: rgb(var(--cos-palette-overlay-rgb) / 0.72);
+  --cos-focus-ring: 0 0 0 3px var(--cos-selection-focus);
+
+  /* Elevation: level 0 is flat, levels 1–3 progressively lift a surface. */
+  --cos-elevation-0: none;
+  --cos-elevation-1: 0 8px 24px rgb(var(--cos-palette-shadow-rgb) / 0.2);
+  --cos-elevation-2: 0 16px 46px rgb(var(--cos-palette-shadow-rgb) / 0.24);
+  --cos-elevation-3: 0 24px 80px rgb(var(--cos-palette-shadow-rgb) / 0.32);
+  --cos-elevation-overlay: 0 24px 68px rgb(var(--cos-palette-shadow-rgb) / 0.28);
+
+  /* Control and table density (Variant 1: compact operator workspace). */
+  --cos-density-control-height: 36px;
+  --cos-density-control-height-compact: 32px;
+  --cos-density-control-padding-inline: 12px;
+  --cos-density-control-gap: 8px;
+  --cos-density-table-row-height: 48px;
+  --cos-density-table-header-height: 40px;
+  --cos-density-table-cell-padding-block: 12px;
+  --cos-density-table-cell-padding-inline: 16px;
+  --cos-density-table-gap: 8px;
+
+  /* Shared responsive breakpoints for route-level responsive layouts. */
+  --cos-breakpoint-xs: 36em;
+  --cos-breakpoint-sm: 48em;
+  --cos-breakpoint-md: 64em;
+  --cos-breakpoint-lg: 82em;
+  --cos-breakpoint-xl: 88em;
+
+  /* Typography */
+  --cos-font-heading: "Manrope Variable", Manrope, system-ui, sans-serif;
+  --cos-font-body: "Inter Variable", Inter, system-ui, sans-serif;
+  --cos-font-monospace: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --cos-font-weight-body: 400;
+  --cos-font-weight-number: 500;
+  --cos-font-weight-heading: 600;
+  --cos-font-weight-strong: 700;
+  --cos-type-h1-size: 28px;
+  --cos-type-h1-line: 36px;
+  --cos-type-h1-spacing: -0.003em;
+  --cos-type-h2-size: 20px;
+  --cos-type-h2-line: 28px;
+  --cos-type-h2-spacing: -0.002em;
+  --cos-type-body-size: 14px;
+  --cos-type-body-line: 20px;
+  --cos-type-caption-size: 12px;
+  --cos-type-caption-line: 16px;
+  --cos-type-number-size: 14px;
+  --cos-type-number-line: 20px;
+
+  /* Shared shape, spacing and motion primitives. */
+  --cos-radius-sm: 8px;
+  --cos-radius-md: 14px;
+  --cos-radius-lg: 20px;
+  --cos-space-1: 4px;
+  --cos-space-2: 8px;
+  --cos-space-3: 12px;
+  --cos-space-4: 16px;
+  --cos-space-5: 24px;
+  --cos-space-6: 32px;
+  --cos-space-7: 48px;
+  --cos-motion-fast: 120ms;
+  --cos-motion-normal: 180ms;
+
+  /* Foundation effects are semantic aliases too, so global.css stays token-only. */
+  --cos-effect-canvas-glow-violet: rgb(var(--cos-palette-violet-strong-rgb) / 0.24);
+  --cos-effect-canvas-glow-blue: rgb(var(--cos-palette-blue-glow-rgb) / 0.14);
+}

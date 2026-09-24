@@ -4,9 +4,11 @@
 routes, query keys, mutation retry, conflict recovery или UI states заново.
 [Восстановление browser commands](26_BROWSER_COMMAND_RECOVERY.md) определяет
 read-only lookup, terminal outcomes и единый порядок принятия Order Card.
-[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет foundation,
-границу `@coffee-platform/ui` и dependency ownership; визуальные tokens и
-editable mockups находятся в [UX-контракте](../frontend/ux/README.md).
+[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет техническую
+foundation, границу `@coffee-platform/ui` и dependency ownership. Текущий
+визуальный ориентир — [ADR-0029](../adr/ADR-0029-selected-frontend-prototype.md)
+и [прототип v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md).
+Светлые [SVG #136](../frontend/ux/README.md) сохранены только как история.
 
 ## 1. Граница приложения
 
@@ -224,19 +226,23 @@ server-provided reconciliation action.
 
 ## 8. Формы, primitives, focus и narrow layout
 
-Public props/events/ref/composition, validation, pending, dismissal и focus для
+Публичные props/events/ref/composition, validation, pending, dismissal и focus для
 `Button`, `Link`, `Dialog`, `Field/Input`, `Alert`, `Badge`, `Loading`, `Empty`
-зафиксированы в таблице [UX-контракта](../frontend/ux/README.md). #137 реализует
-этот API без второго локального набора primitives; #9 композирует business forms,
-Router и Query поверх него.
+сохраняют техническую boundary ADR-0027; #137 реализует один набор primitives,
+#9 композирует business forms, Router и Query поверх него. Исторические цвета,
+шрифты и размеры [UX-документа #136](../frontend/ux/README.md) не применять.
 
-- visual contract один: operational/restrained console, IBM Plex Sans с
-  Russian/Cyrillic, self-hosted будущим #137 WOFF2 через
-  `@font-face`/`font-display: swap` и OFL/source revision/SHA-256 evidence;
-  remote font CDN запрещён;
-- colors, 4px spacing scale, 36/40/44px control sizes, 6px radius, 1px border и
-  2px `#1D4ED8` focus ring берутся без переопределения из UX-контракта; status не
-  передаётся только цветом;
+- Визуальная система одна: `--cos-*` из `exact-source.css` выбранного
+  [v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md),
+  self-hosted Inter Variable для body и Manrope Variable для headings, source
+  revision/SHA-256/licence evidence; remote font CDN запрещён;
+- Геометрию desktop controls и focus брать из versioned `DESIGN.md`/исходного
+  CSS; минимальные hit targets и keyboard/focus проверить в #137/#13. Ширины
+  375/430 у прототипа — диагностика, не mobile PASS; старые 36/40/44px,
+  `#1D4ED8` и белую палитру не объявлять текущим визуальным контрактом;
+- Invoice/orders registry, invoice/payment drawer и `/app/orders` в этой версии
+  только fixture. Production Order Card остаётся `/app/orders/:orderRef`, другие
+  маршруты не добавлять до принятых owner projections;
 - каждый input имеет visible `<label>` и связанный error через
   `aria-describedby`;
 - после failed submit field `VALIDATION_FAILED` фокус получает первое invalid
@@ -264,23 +270,20 @@ Router и Query поверх него.
 - money форматируется `Intl.NumberFormat('ru-RU',{style:'currency',currency:'RUB'})`
   только из authoritative minor-unit decimal string через bigint-safe helper.
 
-Responsive contract имеет ровно три диапазона, подробно определённые в
-UX-контракте и обязательные для #137/#9:
+Desktop layout для `>=1024px` задаёт v1.1.0: навигация и плотность таблиц,
+панели и controls берутся из versioned `DESIGN.md`/`exact-source.css`.
+Прежние breakpoint layouts, ширины dialog и sticky action bars из UX #136
+не являются действующим визуальным контрактом. Прототип на `375/430px` даёт
+диагностику, а не готовую мобильную компоновку.
 
-- `375–767px`: верхняя modal navigation вместо sidebar; Customers/Catalog/Order
-  tables становятся карточками без изменения DOM order; dialog имеет
-  `width:calc(100vw - 32px)` и внутренний vertical scroll; action bar sticky и
-  складывается в одну колонку; page horizontal overflow запрещён;
-- `768–1279px`: compact top navigation; secondary cell metadata переносится, но
-  quantity/actions не скрываются; dialog не шире `min(640px, calc(100vw - 48px))`;
-  action bars wrap; только table wrapper может иметь keyboard-accessible
-  horizontal scroll;
-- `>=1280px`: постоянная sidebar, полные columns, inline action bars; command
-  dialogs не шире 640px, Customer dialog — 1000px; обязательный action text не
-  обрезается и не заменяется ellipsis.
-
-Widths 375, 768 и 1280, а также 400% zoom/reflow наблюдает #13. Эти требования не
-являются заявлением WCAG/browser PASS до materialized UI и фактических проверок.
+#137 проверяет доступный shell на измеренных ширинах без заявления о готовности
+business-экранов. #9 определяет и проверяет reflow экранов на `375px`/`768px`
+в новом стиле: все нормативные routes и actions доступны без hover-only UI,
+обязательный текст не обрезан, DOM/reading/Tab order согласованы, focus не
+теряется, page horizontal overflow отсутствует; dialog остаётся доступным
+без прокрутки фона, а table overflow при необходимости доступен с клавиатуры.
+#13 проверяет `375px`, `768px`, `1280px` и 400% zoom/reflow по фактическому UI.
+Это не заявление WCAG/browser PASS до materialized экранов и проверок.
 
 ## 9. Доставка и граница сессии
 

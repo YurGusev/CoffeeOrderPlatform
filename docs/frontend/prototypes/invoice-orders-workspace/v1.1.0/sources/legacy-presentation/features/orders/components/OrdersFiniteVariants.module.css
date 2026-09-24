@@ -1,0 +1,297 @@
+/*
+ * Orders-only finite presentation variants.
+ *
+ * These classes keep the values finite and reviewable while avoiding
+ * per-instance CSS variables in the rendered DOM. Shared controls and
+ * overlays use the project-owned primitives from shared/ui.
+ */
+
+.textMuted {
+  color: var(--cos-text-secondary);
+}
+
+.textError {
+  color: var(--cos-status-error);
+}
+
+.textWarning {
+  color: var(--cos-status-warning);
+}
+
+.textSuccess {
+  color: var(--cos-status-success);
+}
+
+.textInfo {
+  color: var(--cos-status-info);
+}
+
+.textStrong {
+  font-weight: var(--cos-font-weight-strong);
+}
+
+.textWeight600 {
+  font-weight: 600;
+}
+.textWeight650 {
+  font-weight: 650;
+}
+.textWeight700 {
+  font-weight: 700;
+}
+.textWeight750 {
+  font-weight: 750;
+}
+.textWeight800 {
+  font-weight: 800;
+}
+.textWeight850 {
+  font-weight: 850;
+}
+
+.textHeading {
+  font-family: var(--cos-font-heading);
+  font-weight: var(--cos-font-weight-heading);
+}
+
+.textNumber {
+  font-variant-numeric: tabular-nums;
+}
+
+.textMonospace {
+  font-family: var(--cos-font-monospace);
+}
+
+.textRight {
+  text-align: right;
+}
+
+.marginBottomSm {
+  margin-bottom: var(--cos-space-3);
+}
+
+.marginBottomMd {
+  margin-bottom: var(--cos-space-4);
+}
+
+.marginBottomXs {
+  margin-bottom: var(--cos-space-1);
+}
+
+.marginMd {
+  margin: var(--cos-space-4);
+}
+
+.paddingNone {
+  padding: 0;
+}
+
+.paddingSm {
+  padding: var(--cos-space-2);
+}
+
+.paddingMd {
+  padding: var(--cos-space-4);
+}
+
+.paddingXlY {
+  padding-block: var(--cos-space-6);
+}
+
+.radiusSm {
+  border-radius: var(--cos-radius-sm);
+}
+.radiusMd {
+  border-radius: var(--cos-radius-md);
+}
+.radiusXl {
+  border-radius: var(--cos-radius-lg);
+}
+
+.feedbackIcon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--cos-radius-lg);
+  background: var(--cos-selection-selected);
+  color: var(--cos-action-hover);
+}
+
+.feedbackIcon[data-tone="error"] {
+  background: color-mix(in srgb, var(--cos-status-error) 16%, transparent);
+  color: var(--cos-status-error);
+}
+
+/* Native status/count badges used by the read surface. */
+.nativeBadgeStatus {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cos-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--cos-radius-sm);
+  padding: 2px var(--cos-space-2);
+  color: var(--cos-text-primary);
+  font-size: 11px;
+  font-weight: var(--cos-font-weight-strong);
+  line-height: var(--cos-type-caption-line);
+  white-space: nowrap;
+}
+
+.nativeBadgeToneError {
+  border-color: var(--cos-status-error);
+  color: var(--cos-status-error);
+  background: var(--cos-status-error-soft);
+}
+
+.nativeBadgeToneWarning {
+  border-color: var(--cos-status-warning);
+  color: var(--cos-text-primary);
+  background: var(--cos-status-warning-soft);
+}
+
+.nativeBadgeToneSuccess {
+  border-color: var(--cos-status-success);
+  color: var(--cos-status-success);
+  background: var(--cos-status-success-soft);
+}
+
+.nativeBadgeToneAccent {
+  border-color: var(--cos-action-primary);
+  color: var(--cos-action-primary-soft-text);
+  background: var(--cos-action-primary-soft);
+}
+
+.nativeBadgeToneNeutral {
+  border-color: var(--cos-border-default);
+  color: var(--cos-text-secondary);
+  background: color-mix(in srgb, var(--cos-text-secondary) 16%, transparent);
+}
+
+@media (forced-colors: active) {
+  .nativeBadgeStatus,
+  .nativeBadgeToneError,
+  .nativeBadgeToneWarning,
+  .nativeBadgeToneSuccess,
+  .nativeBadgeToneAccent,
+  .nativeBadgeToneNeutral {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+  }
+}
+
+.width110 {
+  width: 110px;
+}
+
+.width150 {
+  width: 150px;
+}
+
+.width160 {
+  width: 160px;
+}
+
+.scrollHeight360 {
+  height: 360px;
+}
+
+.skeletonInlineTitle {
+  width: 34%;
+  height: 24px;
+  border-radius: var(--cos-radius-sm);
+}
+
+.skeletonInlineBody {
+  height: 122px;
+  border-radius: var(--cos-radius-md);
+}
+
+.skeletonDetailsSummary {
+  height: 72px;
+  border-radius: var(--cos-radius-md);
+}
+
+.skeletonDetailsBody {
+  height: 148px;
+  border-radius: var(--cos-radius-md);
+}
+
+.skeletonDetailsItems {
+  height: 260px;
+  border-radius: var(--cos-radius-md);
+}
+
+.skeletonPricingQuote {
+  height: 64px;
+  border-radius: var(--cos-radius-sm);
+}
+
+.skeletonPricingPreview {
+  height: 116px;
+  border-radius: var(--cos-radius-sm);
+}
+
+.skeletonLoadingRow {
+  height: 62px;
+  border-radius: 0;
+}
+
+.gridColumnExpand {
+  width: 46px;
+}
+
+.gridColumnSelect {
+  width: 42px;
+}
+
+.gridColumnOrder {
+  width: 150px;
+}
+
+.gridColumnCustomer {
+  width: 215px;
+}
+
+.gridColumnInvoice {
+  width: 130px;
+}
+
+.gridColumnDate {
+  width: 148px;
+}
+
+.gridColumnItemCount {
+  width: 88px;
+}
+
+.gridColumnTotal {
+  width: 128px;
+}
+
+.gridColumnStatus {
+  width: 156px;
+}
+
+.gridColumnAvailability {
+  width: 126px;
+}
+
+.gridColumnPayment {
+  width: 142px;
+}
+
+.gridColumnAction {
+  width: 184px;
+}
+
+.transitionReducedMotion {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transitionFinite {
+    transition: none;
+  }
+}

@@ -1,0 +1,582 @@
+issue: 137
+baseCommit: 44e25d435fb8a77ab273111cbf27fc431d35c88c
+branch: feature/137-frontend-ui-foundation
+status: local-verified
+changedFiles:
+- .dependency-cruiser.cjs
+- .gitattributes
+- apps/web/index.html
+- apps/web/package.json
+- apps/web/src/browser/App.tsx
+- apps/web/src/browser/main.tsx
+- apps/web/src/browser/styles.css
+- apps/web/src/vite-env.d.ts
+- apps/web/test/ui-foundation.fixture.html
+- apps/web/test/ui-foundation.fixture.tsx
+- apps/web/test/ui-foundation.spec.ts
+- apps/web/tsconfig.json
+- apps/web/vite.config.ts
+- config/toolchain-versions.json
+- config/toolchain-versions.schema.json
+- docs/adr/ADR-0027-frontend-ui-foundation.md
+- evidence/handoffs/issue-137.yaml
+- package.json
+- packages/platform-ui/README.md
+- packages/platform-ui/THIRD_PARTY_NOTICES.md
+- packages/platform-ui/package.json
+- packages/platform-ui/provenance/shadcn/README.md
+- packages/platform-ui/provenance/shadcn/aria/button.tsx
+- packages/platform-ui/provenance/shadcn/aria/dialog.tsx
+- packages/platform-ui/provenance/shadcn/aria/field.tsx
+- packages/platform-ui/provenance/shadcn/aria/input.tsx
+- packages/platform-ui/src/cn.ts
+- packages/platform-ui/src/components/alert.tsx
+- packages/platform-ui/src/components/badge.tsx
+- packages/platform-ui/src/components/button.tsx
+- packages/platform-ui/src/components/dialog.tsx
+- packages/platform-ui/src/components/empty.tsx
+- packages/platform-ui/src/components/field.tsx
+- packages/platform-ui/src/components/input.tsx
+- packages/platform-ui/src/components/link.tsx
+- packages/platform-ui/src/components/loading.tsx
+- packages/platform-ui/src/icons.tsx
+- packages/platform-ui/src/index.ts
+- packages/platform-ui/src/styles/font-faces.css
+- packages/platform-ui/src/styles/fonts/Inter-OFL.txt
+- packages/platform-ui/src/styles/fonts/Manrope-OFL.txt
+- packages/platform-ui/src/styles/fonts/inter-cyrillic-ext.woff2
+- packages/platform-ui/src/styles/fonts/inter-cyrillic-wght.woff2
+- packages/platform-ui/src/styles/fonts/inter-greek-ext.woff2
+- packages/platform-ui/src/styles/fonts/inter-greek-wght.woff2
+- packages/platform-ui/src/styles/fonts/inter-latin-ext.woff2
+- packages/platform-ui/src/styles/fonts/inter-latin-wght.woff2
+- packages/platform-ui/src/styles/fonts/inter-vietnamese-wght.woff2
+- packages/platform-ui/src/styles/fonts/manrope-cyrillic-ext.woff2
+- packages/platform-ui/src/styles/fonts/manrope-cyrillic-wght.woff2
+- packages/platform-ui/src/styles/fonts/manrope-greek-wght.woff2
+- packages/platform-ui/src/styles/fonts/manrope-latin-ext.woff2
+- packages/platform-ui/src/styles/fonts/manrope-latin-wght.woff2
+- packages/platform-ui/src/styles/fonts/manrope-vietnamese-wght.woff2
+- packages/platform-ui/src/styles/fonts/prototype-font-manifest.json
+- packages/platform-ui/src/styles/global.css
+- packages/platform-ui/src/styles/index.css
+- packages/platform-ui/src/styles/tokens.css
+- packages/platform-ui/test/components.test.tsx
+- packages/platform-ui/tsconfig.json
+- packages/platform-ui/vitest.config.ts
+- patches/@react-types__shared@3.36.1.patch
+- pnpm-lock.yaml
+- pnpm-workspace.yaml
+- scripts/check-architecture.mjs
+- scripts/check-browser-bundle.mjs
+- scripts/check-toolchain-versions.mjs
+- tests/architecture/checks.test.mjs
+- tests/architecture/fixtures/negative/frontend/browser-console-node-helper.ts
+- tests/architecture/fixtures/negative/frontend/browser-console-node-root.ts
+- tests/architecture/fixtures/negative/frontend/browser-node.ts
+- tests/architecture/fixtures/negative/frontend/browser-transitive-helper.ts
+- tests/architecture/fixtures/negative/frontend/browser-transitive-root.ts
+- tests/architecture/fixtures/negative/frontend/node-browser.ts
+- tests/architecture/fixtures/negative/frontend/server-ui-relative-root.ts
+- tests/architecture/fixtures/negative/frontend/server-ui-relative-target.ts
+- tests/architecture/fixtures/negative/frontend/server-ui.ts
+- tests/architecture/fixtures/negative/frontend/ui-network.ts
+- tests/architecture/fixtures/negative/frontend/ui-node-transitive-helper.ts
+- tests/architecture/fixtures/negative/frontend/ui-node-transitive-root.ts
+- tests/architecture/fixtures/negative/frontend/ui-query-transitive-helper.ts
+- tests/architecture/fixtures/negative/frontend/ui-query-transitive-root.ts
+- tests/architecture/frontend-boundary.test.mjs
+- tsconfig.json
+inputs:
+- issue: 136
+  acceptedMergeCommit: 7ef4b94e16b7cf68e45861f75be4de477e24c8a7
+  artifact: evidence/handoffs/issue-136.yaml
+  sha256: d0bbb5ca4317b2ebe73df1908e191d05ad831b797e954729dbf53105db65b806
+- issue: 148
+  acceptedMergeCommit: 177c65a25887210e7b64777422523b2eecd1ca48
+  artifact: evidence/handoffs/issue-148.yaml
+  sha256: 0956ca85b673202541ed1e4365f0050bb7a00313c86dd638595e3c580ce1c757
+- issue: 148
+  acceptedMergeCommit: 177c65a25887210e7b64777422523b2eecd1ca48
+  artifact: docs/adr/ADR-0029-selected-frontend-prototype.md
+  sha256: a93e478994e36210075a09e28b73d54e9b90d73dd086d9e5b8ed81597f91fb01
+- issue: 149
+  acceptedMergeCommit: 44e25d435fb8a77ab273111cbf27fc431d35c88c
+  artifact: evidence/handoffs/issue-149.yaml
+  sha256: a47baa82f6af38f401e386bbf5a4b7566d0e55760f9127da522e5978cd82b781
+outputs:
+- artifact: .dependency-cruiser.cjs
+  sha256: 8bdb79b49bd9a053190f972a169a820c33feecebead786a9b7f9e640d284995f
+  generated: false
+  consumers:
+  - 9
+- artifact: .gitattributes
+  sha256: efb8cc5b0e55424d875b5eccbad69ef414f1676f7e6414a45cafc2ccfd424c26
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/index.html
+  sha256: e68a96745839bc85dd2530459b8b8572875d3e9670e2b07e57207c2f62e102df
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/package.json
+  sha256: 02a52967232836723fdd0ee241b3202838950efa57b61cd82e0aaacd4e245d7c
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/src/browser/App.tsx
+  sha256: f71fb19c18f4cb595233922f661f0e52e882f46ce9bb6b136cb4dbe629e14529
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/src/browser/main.tsx
+  sha256: e6ce003fee39080e535604a440bbd5cb22b789cbace22662ac46d2a7084e1e71
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/src/browser/styles.css
+  sha256: 01906fd027a18158c626b3f22a5a7b9c1afbaee9b9eef89d6ef42f52aac7561c
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/src/vite-env.d.ts
+  sha256: 65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/test/ui-foundation.fixture.html
+  sha256: 386d28a59f2da679dc3195b847c5cfd61a392755e3bb087222ec5be5d633c747
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/test/ui-foundation.fixture.tsx
+  sha256: 0c5f01304ed190aca2e1299c655347e4e0dfe63fc77bbc00598f87a9ba21af5d
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/test/ui-foundation.spec.ts
+  sha256: e10210d5faa63fcf14c510987d532e55b31b6a04483904b56e6f01d7411c881e
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/tsconfig.json
+  sha256: 0d833bf0637c9ad8924434403fb15c6dec9575558512ad20f405136bfd1803ca
+  generated: false
+  consumers:
+  - 9
+- artifact: apps/web/vite.config.ts
+  sha256: 6c20a1f9ce00ad74b7fe6bb00a5a96ce6a11007cd4c6b6845b60a117fde050b8
+  generated: false
+  consumers:
+  - 9
+- artifact: config/toolchain-versions.json
+  sha256: 09a1be80cafa6976b935c746424427d67499d4adc30e5ac9f4b61614364a2984
+  generated: false
+  consumers:
+  - 9
+- artifact: config/toolchain-versions.schema.json
+  sha256: 61ed58a34376cc72d97e59db2a3190ff34f8481633860a5a73a5740c74c42d8f
+  generated: false
+  consumers:
+  - 9
+- artifact: docs/adr/ADR-0027-frontend-ui-foundation.md
+  sha256: 0b5840d8f4fd8bb0accaf246d9852f3b6ec0284aebe8a8778bd165a8ba04b22e
+  generated: false
+  consumers:
+  - 9
+- artifact: package.json
+  sha256: 5093d58c673a1f8560a5768f67d8082f817f502492b1e44abe7beb282f53e0f2
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/README.md
+  sha256: 4eb8ed33171bb80cc1a753a23dc86e78b91bfaa757d11bebf0bc67fc9899593d
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/THIRD_PARTY_NOTICES.md
+  sha256: 6078c7c27c4d779ea273040fc5321b6764220afa70a3668e93758d34c8995eb8
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/package.json
+  sha256: 121468a1ba73fe8a4eea8cbd88b586c1fb05ed28b3c68f8acac5598992105121
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/provenance/shadcn/README.md
+  sha256: 613e6e7331e14fded494a7ffdff3a675984ce97fdfca181e028b2516f11d31d2
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/provenance/shadcn/aria/button.tsx
+  sha256: 8bcff6f70522e6e6cb0ff67f050830ea1a93596403d2d9b035f3b543c7a42e2c
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/provenance/shadcn/aria/dialog.tsx
+  sha256: ff8a8e6b372e7eb06c931975d8ac1ea59d9271051ac178a62c95f6acae20bb35
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/provenance/shadcn/aria/field.tsx
+  sha256: 1019104c41eaef8ffae109e2ece95be87a7a637e3a9bac049d7a9fb54bfb7275
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/provenance/shadcn/aria/input.tsx
+  sha256: b9596748b7238b5605f558474e9d50afc1535c5832c57134055e4bbde5fa804f
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/cn.ts
+  sha256: 53f3d3d070f0a9082934da25b875f9499855c2b0693868dd28be8c23d8730f68
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/alert.tsx
+  sha256: 57418c8021d397acac0e347e16bc0cc8a547ea4979b32aa7146d5a1503d4e71f
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/badge.tsx
+  sha256: 1233532448560f482822e6177c7ccbb8cfb48d568c71ce25df6a449a64baed1a
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/button.tsx
+  sha256: 8278417d0c2f504952dc60230dcea270db460db49e3a9025070de9731a52562a
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/dialog.tsx
+  sha256: d9f2c4050744ddb4e56e7aa8cd660b507acfafc64bd1d010a9b59a3ab911690d
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/empty.tsx
+  sha256: 5beeef27b68812e036e6b5a7fc8f76e1113f8b3c239467e6fcbe8765a458ab7b
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/field.tsx
+  sha256: f2ff4ac617547b954e9347f80e268576203e8503580baa495873e4b343ea4b7e
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/input.tsx
+  sha256: da6dc390ef8eda69ff7469e20d2601f15af77d05b9409ffb89528415be141cf5
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/link.tsx
+  sha256: 3adf550f261cac4ddd656c89381181cdafb9c94b09a1a5e103a9f0b14d0d012a
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/components/loading.tsx
+  sha256: 10472c4409a5e6834cd081937fa0ee9a7f84b0fd530d509eeab26797ec4500a3
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/icons.tsx
+  sha256: bfd3848ca26d1ef541c95e3d88d734cd2ee77d19df58fefdb7fc773187c10aa4
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/index.ts
+  sha256: 31d7e6cf107611ccf4589b7bb2ea7f7a16ba17754c67e88394a189b2fe3c79e2
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/font-faces.css
+  sha256: 11732436c9f2d69f349caa33f07340973dfabd7ff62cc5da2288b18feef1fdde
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/Inter-OFL.txt
+  sha256: 262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/Manrope-OFL.txt
+  sha256: 58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/inter-cyrillic-ext.woff2
+  sha256: ca157063339ac4ad418f214f3abfed119b0798ab4d377386ce5c9e5a7a435ebd
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/inter-cyrillic-wght.woff2
+  sha256: 71d5ee93cc1e9f1d520a3a8b66456de18c7879d8df09d57fcd2eaff75fef0075
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/inter-greek-ext.woff2
+  sha256: 6e9e020a25f9b56d418f2c085b1d3c09725a4da23fe693a5b463064606732190
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/inter-greek-wght.woff2
+  sha256: 1be3448e292fbf05ffe176fe1e43f135013d50b1e7d324ad1a558f623d3bb6f6
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/inter-latin-ext.woff2
+  sha256: 34b9c504cab7a73e37b746343a449132e56cf7b5481af2cb81dc74dcff25c956
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/inter-latin-wght.woff2
+  sha256: 3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/inter-vietnamese-wght.woff2
+  sha256: 5c66f9e07e90c6d4ac4922cc68d60de26c17b1858e677fb5e603fce3952b3ff2
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/manrope-cyrillic-ext.woff2
+  sha256: de37de877dc17e4577341fa68bb5cb526b53d54cb29721e674208546a3c7849d
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/manrope-cyrillic-wght.woff2
+  sha256: c268b459a9329e59fecf39a17618efd44c71735532048d60b12aab76a8c14914
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/manrope-greek-wght.woff2
+  sha256: 2fb2e8cbfd52ae46179a8b6024eb162f1f9c6de3d22d6e3a30d8f395de7220be
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/manrope-latin-ext.woff2
+  sha256: 3911b66d9f2e005a4b989223405d0e5032619c668597ba467cc76a23c8fffcfb
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/manrope-latin-wght.woff2
+  sha256: a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/manrope-vietnamese-wght.woff2
+  sha256: 6bbb044ab420e07edb0a3042d2eb314b85e83a0182e945a15ab3b9092668dfd5
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/fonts/prototype-font-manifest.json
+  sha256: 3d155791fa42d314e187c14e267247de220036c6bf86a100cf898b81f0643b63
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/global.css
+  sha256: c6321333f43aa1eef75200b384c2b69610a2bc55c3db8d95840543809ff5b565
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/index.css
+  sha256: 5a0b371bff62275c1e080f4a1db2394a6e2fcac9e4d6784aee0dda1241325e51
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/src/styles/tokens.css
+  sha256: 53f6217b7f552db075fe4112ff35c8e9d4ca956c6e6b6df6a9f2275eea9f518e
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/test/components.test.tsx
+  sha256: 41a15e6351db15e3de2f443a2dbde1cee024fdb17ce9e956a91cad00d927b9f0
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/tsconfig.json
+  sha256: b6dc802898b956141b7ccbc5f3e6f539ebec441937eacbc38ed7ddd893b753b5
+  generated: false
+  consumers:
+  - 9
+- artifact: packages/platform-ui/vitest.config.ts
+  sha256: dd14d2bfad983677474a1d413672da4131374d16af172fba205139cd4d83f07d
+  generated: false
+  consumers:
+  - 9
+- artifact: patches/@react-types__shared@3.36.1.patch
+  sha256: 6d2be2fb416b65bc3a4aafe22d74cefc9b9b51cbb486031b96d70cd089a5bcfd
+  generated: false
+  consumers:
+  - 9
+- artifact: pnpm-lock.yaml
+  sha256: d60441881a90c29586202586923520569f0f457e7f5f32f66a5bf80347f69417
+  generated: false
+  consumers:
+  - 9
+- artifact: pnpm-workspace.yaml
+  sha256: 16be206f84f819ea2075fc154d88f41660e98db812165838b1393aedf1b2a769
+  generated: false
+  consumers:
+  - 9
+- artifact: scripts/check-architecture.mjs
+  sha256: 81efbe9cbee98b36e92da632c8a6b6c3cc258c4d4b062c22a09881708d7ccf1d
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: scripts/check-browser-bundle.mjs
+  sha256: e3b061e4aaa89bab106f8a981757812fb3d7dbd2cb87cb8d869188c0bef21987
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: scripts/check-toolchain-versions.mjs
+  sha256: 0bd9cc8d20c42dfafd705863defcaae5ad19c3e8231df34d467791c14bb44547
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/checks.test.mjs
+  sha256: 94815fc891bd17e26d87976d68a6fb4b2c10d09b7c6801c3449c9b7cc033c001
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/browser-console-node-helper.ts
+  sha256: 71b33d37ec9d648de1446edae678702ddd7862fd7107e93b4cd4b96b46a7fd0f
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/browser-console-node-root.ts
+  sha256: 51dd53c717c19127a66b274573003e384938bee9f2493df7ceabf2425ebc18e6
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/browser-node.ts
+  sha256: 0c6a5d0ef13a925e0fd5f4748146832f28f840e6b96defb8260c63553c90e09d
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/browser-transitive-helper.ts
+  sha256: 495eee5ed074f607574953ec4a9a61f9dd474fb49ffccf8805e3a1538c776a97
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/browser-transitive-root.ts
+  sha256: 32dbe5f1b9bd2e2ae6a2d183e1b254ece1a10f81dda70393bb12a7eb55b5b637
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/node-browser.ts
+  sha256: 662d0c5a00aab56abee9162baf2d0abce75b0afd8ff306dd9615de015fe75a63
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/server-ui-relative-root.ts
+  sha256: 8a4feac0436b2928ce95d7ce328db841d345a3834060fbe38f74edb92803944e
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/server-ui-relative-target.ts
+  sha256: 8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/server-ui.ts
+  sha256: 8617d641ce9e8f92c3ab19f2879c350e1f5b86ee7f798e745ebd2d9b22b4a619
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/ui-network.ts
+  sha256: eb2a1412ac8e6b01ad5eeaf5b519dc85c55caa34e8006ff55417ad59ca188732
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/ui-node-transitive-helper.ts
+  sha256: 495eee5ed074f607574953ec4a9a61f9dd474fb49ffccf8805e3a1538c776a97
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/ui-node-transitive-root.ts
+  sha256: b468ff4ba752b5f03674c128052dc0643c6c4d49ed43d3f0741faa7d01236c07
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/ui-query-transitive-helper.ts
+  sha256: 7d1e9f562a2ca6d459699bb11b7245a33015953eefe9fd764d7d8559c7dfa3e5
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/fixtures/negative/frontend/ui-query-transitive-root.ts
+  sha256: 8bcff5ae7f4a0e4371a4460a449c458574828e52945577f9e770e9f864be27c7
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tests/architecture/frontend-boundary.test.mjs
+  sha256: 4e64689c5363d430d0948af6cadc3794c4d7e4ca0f9ebc3a76190bb961e9a82a
+  generated: false
+  consumers:
+  - 9
+  - 13
+- artifact: tsconfig.json
+  sha256: ab7e804ea0ef53820fc1cf1adcfc6f3d1bc4e07151932d718272b688302b247b
+  generated: false
+  consumers:
+  - 9
+budget:
+  productionInitialJavaScriptGzip:
+    baselineBytes: 83820
+    maxBytes: 256000
+    command: pnpm browser:bundle:check
+    method: gzipSync UTF-8 bytes summed over apps/web/dist/browser/**/*.js
+verification:
+- command: pnpm install --frozen-lockfile
+  result: passed
+  exitCode: 0
+- command: pnpm check
+  result: passed
+  exitCode: 0
+  detail: 'Full local gate after review fixes; pnpm test: 424 passed, 16 skipped, 0 failed; browser bundle 83820B/256000B.'
+- command: pnpm exec tsc --noEmit -p packages/platform-ui/tsconfig.json --pretty false && pnpm exec tsc --noEmit -p apps/web/tsconfig.json
+    --pretty false
+  result: passed
+  exitCode: 0
+- command: pnpm exec tsc -b apps/web/tsconfig.runtime.json --pretty false
+  result: passed
+  exitCode: 0
+- command: node --test tests/architecture/frontend-boundary.test.mjs
+  result: passed
+  exitCode: 0
+- command: node --test --test-name-pattern='alternate HTTP clients' tests/architecture/checks.test.mjs
+  result: passed
+  exitCode: 0
+- command: git diff --check && git diff --cached origin/develop --check
+  result: passed
+  exitCode: 0
+limitations:
+- 'Владелец подтвердил прежнюю приёмку четырёх светлых SVG, дата/источник первоначального решения ожидаются; опубликованный
+  handoff #136 остаётся без изменений с contentAcceptance: NOT_RUN. Текущий visual — v1.1.0 из #148.'
+- 'Реестр счетов/оплаты в прототипе только fixture; #137 не добавляет production business routes, owner API или browser join.
+  Экраны #9 и launch gate #13 остаются отдельными.'
+- Локальные browser tests и axe без serious/critical violations на проверенных состояниях не равны полной mobile/WCAG или
+  production UX-приёмке.
+- 'Live PostgreSQL/COPY proofs для отдельного исправления Catalog #149 здесь не повторялись.'
+- 'Первый полный повтор pnpm check дал пограничный fail в неизменённом AROMA timer-тесте: 249.999675 ms при минимуме 250 ms; отдельный тест и повторный полный pnpm check прошли без изменения AROMA-кода.'
+- 'По решению владельца 2026-09-23 CI/GitHub Actions и GitHub review для этой поставки не используются; локальные PASS не
+  являются CI или GitHub Approve. Два раунда независимого read-only review #137 выявили три P2; исправления прошли targeted review без оставшихся P1/P2. Визуальный review снимков также не выявил P1/P2, но не является полной mobile/WCAG-приёмкой; merge evidence отсутствует.'

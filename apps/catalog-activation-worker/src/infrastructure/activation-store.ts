@@ -3,9 +3,9 @@ import {defineStatement} from "@coffee-platform/database/owner";
 import {createSqlOutboxStore} from "@coffee-platform/outbox";
 import {nowInstant} from "@coffee-platform/platform-time";
 import type {AromaOfferBindingRequest, AromaOfferBindingResponse} from "@coffee-platform/contracts-aroma-v1";
-import {newCatalogRef, snapshotActivatedMessage, mappingChangedMessage} from "./events.js";
-import {semanticFingerprint, type SourceIdentity} from "./identity.js";
-import {CatalogActivationError, verifyReceivedGeneration, type ReceivedGeneration, type VerifiedGeneration} from "./verify-generation.js";
+import {newCatalogRef, snapshotActivatedMessage, mappingChangedMessage} from "../events.js";
+import {semanticFingerprint, type SourceIdentity} from "../identity.js";
+import {CatalogActivationError, verifyReceivedGeneration, type ReceivedGeneration, type VerifiedGeneration} from "../verify-generation.js";
 
 type Snapshot = ReceivedGeneration["snapshot"];
 type IdentityRow = Readonly<{entity_type:string;source_identity_hash:string;stable_ref:string;semantic_fingerprint:string;first_seen_snapshot_ref:string}>;

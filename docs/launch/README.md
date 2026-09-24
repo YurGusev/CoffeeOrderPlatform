@@ -49,8 +49,9 @@
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 27. [Восстановление команд браузера](26_BROWSER_COMMAND_RECOVERY.md)
-28. [UX-контракт и редактируемые frontend-макеты](../frontend/ux/README.md)
-29. [Исследованный HTTP-протокол AROMA и открытые вопросы](27_AROMA_PROVIDER_PROTOCOL.md)
+28. [Выбранный versioned frontend-прототип и границы fixture](../frontend/prototypes/README.md)
+29. [Исторические UX-макеты #136 (ранее приняты, теперь заменены)](../frontend/ux/README.md)
+30. [Исследованный HTTP-протокол AROMA и открытые вопросы](27_AROMA_PROVIDER_PROTOCOL.md)
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
 
@@ -72,13 +73,15 @@ superseding ADR-0018 только в перечисленной области. 
 [ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md); TS5/6 compatibility lane и
 второй compiler для этого greenfield launch запрещены.
 
-[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет future
-presentation package `packages/platform-ui` / `@coffee-platform/ui`, разделение
-browser/Node build graphs и точное dependency ownership #137/#9/#12.
-[UX-контракт](../frontend/ux/README.md) фиксирует одну visual direction,
-React Aria/Tailwind v4 primitives, self-hosted IBM Plex Sans и состояния экранов.
-Эти документы не означают materialized frontend, выполнение #9/#12/#13,
-browser rendering или accessibility PASS.
+[ADR-0027](../adr/ADR-0027-frontend-ui-foundation.md) определяет техническую
+границу `packages/platform-ui` / `@coffee-platform/ui`, browser/Node graphs и
+ownership #137/#9/#12. После решения владельца заменить светлые SVG #136 текущий
+визуальный выбор всей SPA — [ADR-0029](../adr/ADR-0029-selected-frontend-prototype.md)
+и [versioned прототип v1.1.0](../frontend/prototypes/invoice-orders-workspace/v1.1.0/README.md):
+Inter/Manrope и `--cos-*` с verified source identity. Реестр счетов и оплата
+пока **fixture-only**: owner projections/API не добавлены. Ни документы, ни
+прототип не означают materialized frontend, выполнение #9/#12/#13, browser
+rendering production или accessibility PASS.
 
 ## Текущая техническая authority
 
