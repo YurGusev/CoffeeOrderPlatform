@@ -46,6 +46,19 @@ config-bootstrap и restart всех затронутых runtime; отдель�
 3. Owner требует одновременно SAN caller=`api-public`, correct issuer/audience,
    allowlisted operation и permission. Client headers удаляются Edge.
 
+#160 материализует isolated authorizer и receiver: `GET /_edge/authorize` принимает
+только transport identity `edge-nginx`, выводит операцию и право из `client-v1`
+и выпускает текущий compact Ed25519 actor assertion с отдельным scoped signing
+key и expiry ≤60s/конец session. nginx не подписывает assertion, а передаёт
+полученный `X-Actor-Context` и тот же `X-Correlation-ID`; `api-public` проверяет
+transport caller, issuer, audience, operation, correlation, permission и TTL до
+owner delegation. Пока #162 не включила `edge-nginx` в active `config/platform.yaml`,
+действующий receiver ожидает прежнего `edge-gateway` caller; переключение не
+происходит по одному заголовку и требует атомарной конфигурации. Для SSE
+назначение assertion — `realtime-gateway`, а его receiver/reauth — задача #12.
+Fixture tests и ограничения передаются через `evidence/handoffs/issue-160.yaml`;
+production trust, IdP и scope PEM остаются NOT_RUN до #162.
+
 ## Internal service delegation
 
 Caller устанавливает mTLS к `api-internal`. Root проверяет SAN+operation matrix

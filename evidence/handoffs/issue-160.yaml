@@ -1,0 +1,63 @@
+issue: 160
+baseCommit: 3b980fd7ce61ad364b76ed059ec644e51e51ed3e
+inputs:
+  - issue: 161
+    acceptedMergeCommit: 3b980fd7ce61ad364b76ed059ec644e51e51ed3e
+    artifact: evidence/handoffs/issue-161.yaml
+    sha256: cf47f3d3c3a7bdeb5819e3e34cb676f0e280033b1af48a40c1ac7c23f1cc6dae
+outputs:
+  - {artifact: contracts/openapi/edge-auth-v1.yaml, sha256: e42580de0dadf24ebd4a65d8680575316f5c90af30f54e37845180febd2547bd, consumers: [162, 12]}
+  - {artifact: apps/edge-gateway/src/oidc-auth.ts, sha256: 7a3eba0ac787c47bf0cfc16ef79ba261ff066897f96a55999b980ac1f1920c85, consumers: [162]}
+  - {artifact: apps/edge-gateway/src/routes.ts, sha256: 9eb564315d76c1d42665fcd6c53c6673c23dda15513b28801d29236efd036ccc, consumers: [162]}
+  - {artifact: apps/edge-gateway/src/index.ts, sha256: fa8631ac66c44c071c781b2592d50b0e9705273ebe806ffebb584d6b47412e61, consumers: [162]}
+  - {artifact: apps/edge-gateway/src/client-operations.gen.ts, sha256: 9e32983874f5a1fcafbc75d1b2994afc825a0f3c0a9ee9435963c82409dfd39e, consumers: [162, 12]}
+  - {artifact: apps/api-public/src/index.ts, sha256: c2ae53a209fc49059548bc0a700f204ccab1309b0b8ee858a840507b76bbccb0, consumers: [162]}
+  - {artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md, sha256: 25832f5029b37381c67a72463f03463a6e5735f91299fb321a7adc3195799692, consumers: [162, 12]}
+  - {artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md, sha256: e21087fa75092f5cd8f900e83e2ea81a256374041de8a7d4bfdf5aac6831ee82, consumers: [162, 12]}
+  - {artifact: tools/nginx/generate.mjs, sha256: ecbe6c05bfa244cb86ce85007fe3f345123d8fa2dc98b0a94366509cb654cbff, consumers: [162]}
+  - {artifact: tools/nginx/check-config.mjs, sha256: b35fea373083e21e764cf1365ef35999a79e36ee7a6605041c6b9be2144a233f, consumers: [162]}
+acceptanceEvidence:
+  1: 'accepted #159 / ADR-0031 и сохранённый handoff issue-159; baseCommit #161 содержит #159'
+  2: 'apps/edge-gateway/package.json: нет DB/Kafka и владельческого состояния'
+  3: 'index.ts/routes.ts, edge-auth-v1.yaml, customer-http и nginx image fixtures; composition исполняется с injected adapters'
+  4: 'docs/launch/24 и 29: только isolated fixtures; config/platform.yaml и active scopes не переключались'
+  5: 'index.ts signActorContext и customer-http.test.mjs: Ed25519 iss/originalIssuer=edge-gateway'
+  6: 'apps/api-public/src/index.ts и customer-http.test.mjs: caller/issuer/aud/operation/permission/TTL'
+  7: 'apps/api-public/src/index.ts сохраняет owner delegation и api-internal; customer-http.test.mjs'
+  8: 'tests/edge-auth/operations.test.mjs: import/egress guard; никакого owner proxy'
+  9: 'apps/edge-gateway/src/main.ts, index.ts, routes.ts; routes.test.mjs'
+  10: 'contracts/manifest.yaml, openapi/edge-auth-v1.yaml, packages/generated/edge-auth-v1 и contracts generator'
+  11: 'routes.ts и routes.test.mjs: verified nginx peer и trusted original method/URI, без browser actor claims'
+  12: 'client-operations.gen.ts из client-v1.yaml, operations.test.mjs: 11 routes, 7 без права fail-closed'
+  13: 'routes.ts, routes.test.mjs и tests/nginx/image.test.mjs: exact 204/assertion/correlation/no-store; negative 2xx'
+  14: 'oidc-auth.ts, routes.ts и edge-auth tests: PKCE/state/JWKS, browser-bound login cookie, typed provider outage, Origin/CSRF; provider fixture только'
+  15: 'api-public/src/index.ts и customer-http.test.mjs: peer, signed actor, exact request correlation/operation'
+  16: 'platform-security/src/index.ts reused unchanged; platform-security/test/actor-context.test.mjs охраняет compact claims'
+  17: 'client-operations.gen.ts: GET /events audience realtime-gateway, permission orders:read:any; receiver остаётся #12'
+  18: 'tests/edge-auth/oidc-auth.test.mjs и routes.test.mjs: identity, audience/azp, expiry, callback without/with wrong browser binding, CSRF, local returnTo'
+  19: 'tests/customer/customer-http.test.mjs и tests/nginx/image.test.mjs: forged/missing/wrong proof, wrong peer и correlation'
+  20: 'customer-http.test.mjs: реальные Ed25519 keys, missing/forged assertion не вызывает owner adapter'
+  21: 'nginx fixture material не содержит signing key; injected Edge context содержит только signing key; active public TLS scope до #162 НЕ проверен'
+  22: 'operations.test.mjs import/egress guard + OIDC fetcher fixtures ограничены tokenUrl/JWKS; Edge не вызывает owners'
+  23: 'pnpm check включает contracts lint/check-generated/breaking/test; pnpm contracts:generate запускался отдельно'
+  24: 'pnpm check включает typecheck/lint/architecture; git diff --check exit 0'
+  25: 'customer-http.test.mjs и platform-security/test/actor-context.test.mjs; catalog-http/platform-http не менялись и не требуют дублирования'
+  26: 'package.json test:edge-auth: 36/36 tests; receiver cases сохраняются в существующем customer-unit target'
+  27: 'docs/launch/24, docs/launch/29 и данный handoff; consumer #12/#162'
+  28: 'git diff --stat: нет новых IdP/Redis/DB/nginx service/OTel/provider/business implementations'
+  29: 'limitations ниже: real IdP/production session НЕ проверены'
+  30: 'pending remote PR feature/160-edge-application-auth -> develop; отметить только после проверки PR'
+verification:
+  - {command: 'pnpm install --frozen-lockfile --offline', exitCode: 0, result: 'offline frozen installation smoke'}
+  - {command: 'pnpm test:edge-auth', exitCode: 0, result: '36 tests, 36 pass, 0 fail'}
+  - {command: 'pnpm check', exitCode: 0, result: '544 tests, 516 pass, 28 skipped, 0 fail; contracts/typecheck/lint/architecture/web gates passed'}
+  - {command: 'pnpm nginx:check', exitCode: 0, result: 'generated config includes browser-bound callback cookie allowlist'}
+  - {command: 'pnpm test:nginx-image', exitCode: 0, result: 'Docker fixture proves callback cookie forwarding and no session/tracking cookie forwarding'}
+  - {command: 'NGINX_TLS_NEGATIVE=1 pnpm test:nginx-image', exitCode: 0, result: 'Docker image/TLS-negative fixtures passed'}
+  - {command: 'node --test tests/architecture/checks.test.mjs', exitCode: 0, result: '56 tests, 56 pass, 0 fail'}
+  - {command: 'git diff --check', exitCode: 0, result: 'no whitespace errors before handoff creation'}
+limitations:
+  - 'Без IdP issuer/client ID/JWKS/actor mapping и #162 active config main.ts остаётся fail-closed; production login, mTLS cutover и внешний аккаунт NOT_RUN.'
+  - 'До #162 active edge-gateway сохраняет public TLS secretRefs и legacy inbound/outbound; #160 проверяет только isolated target scopes, не production scope materialization.'
+  - 'SSE audience/operation inventory готов, но realtime receiver, EventSource и fanout реализует #12; nginxTransport и old Node proxy removal — #162.'
+  - 'Docker/nginx и OIDC tests используют контролируемые сертификаты/IdP fixtures, не production certificates/provider.'

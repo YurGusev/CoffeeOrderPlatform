@@ -15,6 +15,10 @@ const runtimeSchemaSelection = {
     components: ['CustomerOrderInput', 'CustomerRef', 'ProblemDetails', 'AromaCatalogExportRequest', 'AromaCatalogExportRecord', 'AromaOfferBindingRequest', 'AromaOfferBindingResponse', 'AromaMutationResponse', 'AromaCartSnapshotReadRequest', 'AromaCartSnapshot', 'AromaSetQuantityRequest', 'AromaRemoveLineRequest'],
     parameters: ['CustomerRef'],
   },
+  'edge-auth': {
+    components: ['BrowserSession', 'ProblemDetails'],
+    parameters: [],
+  },
 };
 
 async function loadDocument(path) {
@@ -57,11 +61,32 @@ async function writeRuntimeSchemas(surface) {
   }
   const target = resolve(root, `packages/generated/${surface}-v1/src/runtime-schemas.gen.ts`);
   await mkdir(dirname(target), { recursive: true });
-  const source = `// This file is auto-generated from contracts/openapi/${surface}-v1.yaml.\n\nexport const ${surface}V1Schemas = ${JSON.stringify(schemas, null, 2)} as const;\n\nexport const ${surface}V1ParameterSchemas = ${JSON.stringify(parameters, null, 2)} as const;\n`;
+  const prefix = surface === 'edge-auth' ? 'edgeAuth' : surface;
+  const source = `// This file is auto-generated from contracts/openapi/${surface}-v1.yaml.\n\nexport const ${prefix}V1Schemas = ${JSON.stringify(schemas, null, 2)} as const;\n\nexport const ${prefix}V1ParameterSchemas = ${JSON.stringify(parameters, null, 2)} as const;\n`;
   await writeFile(target, source);
 }
 
-for (const surface of ['client', 'internal']) {
+async function writeClientV1BrowserOperations() {
+  const document = await loadDocument(resolve(root, 'contracts/openapi/client-v1.yaml'));
+  const methods = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']);
+  const operations = Object.entries(document.paths ?? {})
+    .flatMap(([path, pathItem]) => Object.entries(pathItem ?? {})
+      .filter(([method]) => methods.has(method.toLowerCase()))
+      .map(([method, operation]) => ({
+        method: method.toUpperCase(),
+        path,
+        operationId: operation.operationId,
+        audience: operation['x-audience'],
+        ...(operation['x-permission'] === undefined ? {} : { permission: operation['x-permission'] }),
+      })))
+    .sort((left, right) => left.operationId.localeCompare(right.operationId));
+  const target = resolve(root, 'apps/edge-gateway/src/client-operations.gen.ts');
+  await mkdir(dirname(target), { recursive: true });
+  const source = `// This file is auto-generated from contracts/openapi/client-v1.yaml.\n\nexport const clientV1BrowserOperations = ${JSON.stringify(operations, null, 2)} as const;\n`;
+  await writeFile(target, source);
+}
+
+for (const surface of ['client', 'internal', 'edge-auth']) {
   await createClient({
     input: resolve(root, `contracts/openapi/${surface}-v1.yaml`),
     output: {
@@ -74,3 +99,5 @@ for (const surface of ['client', 'internal']) {
   });
   await writeRuntimeSchemas(surface);
 }
+
+await writeClientV1BrowserOperations();

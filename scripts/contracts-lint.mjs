@@ -71,7 +71,8 @@ for (const { path, value } of schemas) {
 
 const operationIds = new Set();
 const operations = new Map();
-for (const path of await files(openApiRoot, ['.yaml', '.yml'])) {
+const openApiFiles = await files(openApiRoot, ['.yaml', '.yml']);
+for (const path of openApiFiles) {
   const document = await load(path);
   if (document?.openapi !== '3.2.0') throw new Error(`${path}: OpenAPI 3.2.0 required`);
   if (!document.info?.title || !document.info?.version || !document.paths || !document.components?.schemas) throw new Error(`${path}: incomplete OpenAPI document`);
@@ -84,6 +85,7 @@ for (const path of await files(openApiRoot, ['.yaml', '.yml'])) {
       operationIds.add(operation.operationId);
       if (!operation.responses || Object.keys(operation.responses).length === 0) throw new Error(`${path}: ${operation.operationId} has no responses`);
       for (const field of ['x-owner', 'x-audience', 'x-exposure']) if (!operation[field]) throw new Error(`${path}: ${operation.operationId} missing ${field}`);
+      if (path.includes('client-v1') && operation['x-permission'] !== undefined && !/^[a-z]+:[a-z]+(?::[a-z]+)?$/.test(operation['x-permission'])) throw new Error(`${path}: ${operation.operationId} has invalid x-permission`);
       if (!operation.security?.length) throw new Error(`${path}: ${operation.operationId} missing security`);
       if (path.includes('client-v1') && operation['x-exposure'] === 'public' && !operation['x-caller']) throw new Error(`${path}: ${operation.operationId} missing x-caller`);
       if (path.includes('internal-v1') && (!operation['x-auth'] || !operation['x-callers']?.length)) throw new Error(`${path}: ${operation.operationId} incomplete internal trust metadata`);
@@ -112,4 +114,4 @@ for (const entry of entries.filter((item) => ['http', 'sse', 'ndjson'].includes(
     if (JSON.stringify(entry[field]) !== JSON.stringify(source[field])) throw new Error(`${manifestPath}: ${entry.id} ${field} drift; OpenAPI=${JSON.stringify(source[field])}`);
   }
 }
-console.log(`contracts lint passed: ${schemas.length} JSON Schemas, 2 OpenAPI documents`);
+console.log(`contracts lint passed: ${schemas.length} JSON Schemas, ${openApiFiles.length} OpenAPI documents`);

@@ -50,8 +50,9 @@ export type CustomerClient = Readonly<{
 }>;
 
 export type PublicApiAdapters = Readonly<{
-  verifyTransport: (request: Request, expectedCaller: "edge-gateway") => boolean;
-  verifyActor: (token: string, operationId: string, signal: AbortSignal) => Promise<ActorContextClaims> | ActorContextClaims;
+  expectedIngressCaller?: "edge-gateway" | "edge-nginx";
+  verifyTransport: (request: Request, expectedCaller: "edge-gateway" | "edge-nginx") => boolean;
+  verifyActor: (token: string, operationId: string, signal: AbortSignal, correlationId: string) => Promise<ActorContextClaims> | ActorContextClaims;
   customer: CustomerClient;
   catalog: Readonly<{search: (query: CatalogSearchQuery, context: CatalogForwardContext) => Promise<CatalogForwardResult>}>;
 }>;
@@ -139,7 +140,7 @@ async function catalogActor(request: Request, adapters: PublicApiAdapters, signa
   if (spoofed(request)) throw new Error("ACTOR_CONTEXT_INVALID");
   const token = oneHeader(header(request, "x-actor-context"));
   if (token === undefined) throw new Error("AUTHENTICATION_REQUIRED");
-  const claims = await adapters.verifyActor(token, "searchCatalogProducts", signal);
+  const claims = await adapters.verifyActor(token, "searchCatalogProducts", signal, request.runtimeContext?.correlationId ?? request.id);
   if (claims.iss !== "edge-gateway" || claims.aud !== "api-public" || claims.originalIssuer !== "edge-gateway" || claims.operationId !== "searchCatalogProducts" || claims.sub.length === 0 || !claims.permissions.includes("catalog:read")) throw new Error("ACTOR_CONTEXT_INVALID");
   return claims;
 }
@@ -165,7 +166,7 @@ async function actor(request: Request, adapters: PublicApiAdapters, operationId:
   if (spoofed(request)) throw new Error("ACTOR_CONTEXT_INVALID");
   const token = oneHeader(header(request, "x-actor-context"));
   if (token === undefined) throw new Error("AUTHENTICATION_REQUIRED");
-  const claims = await adapters.verifyActor(token, operationId, signal);
+  const claims = await adapters.verifyActor(token, operationId, signal, request.runtimeContext?.correlationId ?? request.id);
   if (claims.iss !== "edge-gateway" || claims.aud !== "api-public" || claims.operationId !== operationId || claims.originalIssuer !== "edge-gateway" || claims.sub.length === 0 || !hasCustomerPermission(claims.permissions, operationId as "createCustomer" | "searchCustomers")) throw new Error("ACTOR_CONTEXT_INVALID");
   return claims;
 }
@@ -177,7 +178,7 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
     errorHandler: (error, request, reply) => frameworkError(request, reply, error),
     schema: {response: customerResponseSchema(customerContractSchemas.response, 201, [400, 401, 403, 409, 410, 500, 503])},
     handler: async (request, reply) => {
-      if (!adapters.verifyTransport(request, "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
       const requestContext = context(request);
       let claims: ActorContextClaims;
       try { claims = await actor(request, adapters, "createCustomer", requestContext.signal); }
@@ -205,7 +206,7 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
     config: {runtimeDeadlineProfile: "defaultMs"},
     schema: {response: customerResponseSchema(customerContractSchemas.searchResponse, 200, [400, 401, 403, 500, 503])},
     handler: async (request, reply) => {
-      if (!adapters.verifyTransport(request, "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
       const requestContext = context(request, 1_000);
       let claims: ActorContextClaims;
       try { claims = await actor(request, adapters, "searchCustomers", requestContext.signal); }
@@ -233,7 +234,7 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
     schema: {response: catalogResponseSchema(catalogContractSchemas.searchResponse, 200, [400, 401, 403, 503])},
     handler: async (request, rawReply) => {
       const reply = rawReply as unknown as Reply;
-      if (!adapters.verifyTransport(request, "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
       const requestContext = context(request, 1_000);
       let claims: ActorContextClaims;
       try { claims = await catalogActor(request, adapters, requestContext.signal); }
@@ -375,11 +376,13 @@ export function createConfiguredPublicAdapters(context: RuntimeCompositionContex
     }, signingKey);
   };
   return {
+    // Exactly one caller is allowed at a time; #162 materializes the native runtime profile.
+    expectedIngressCaller: Object.hasOwn(context.config.services, "edge-nginx") ? "edge-nginx" : "edge-gateway",
     verifyTransport: (request, expectedCaller) => request.runtimeContext?.transportIdentity?.runtime === expectedCaller,
-    verifyActor: (token, operationId, signal) => {
+    verifyActor: (token, operationId, signal, correlationId) => {
       signal.throwIfAborted();
       const claims = verifyActorContextWithKeySet(token, {publicKeys: actorVerificationKeys, issuer: "edge-gateway", audience: "api-public", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5});
-      if (claims.operationId !== operationId) throw new Error("ACTOR_CONTEXT_INVALID");
+      if (claims.operationId !== operationId || claims.correlationId !== correlationId || claims.exp - claims.iat > 60) throw new Error("ACTOR_CONTEXT_INVALID");
       return claims;
     },
     customer: createHttpCustomerClient({fetch: (path, options) => client.fetch(path, options)}, sign),

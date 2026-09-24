@@ -35,6 +35,7 @@ paths:
       tags: [customers]
       operationId: createCustomer
       summary: Create a customer
+      x-permission: customer:create
       x-owner: customer-service
       x-audience: api-public
       x-caller: edge-gateway
@@ -113,6 +114,7 @@ paths:
       tags: [customers]
       operationId: searchCustomers
       summary: Search active customers
+      x-permission: customer:read
       x-owner: customer-service
       x-audience: api-public
       x-caller: edge-gateway
@@ -156,6 +158,7 @@ paths:
       tags: [catalog]
       operationId: searchCatalogProducts
       summary: Search the active catalog snapshot
+      x-permission: catalog:read
       x-owner: catalog-service
       x-audience: api-public
       x-caller: edge-gateway
@@ -724,6 +727,7 @@ paths:
       summary: Stream order invalidations
       x-owner: realtime-gateway
       x-audience: realtime-gateway
+      x-permission: orders:read:any
       x-caller: edge-gateway
       x-exposure: public
       x-deadline: connection

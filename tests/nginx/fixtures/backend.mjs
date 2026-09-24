@@ -12,12 +12,13 @@ async function start(port, role) {
     if (role === 'edge' && req.url === '/_edge/authorize') {
       const mode = /(?:^|;\s*)__Host-coffee-session=([^;]+)/.exec(req.headers.cookie ?? '')?.[1];
       const authorize = async (status, headers = {}) => {
-        await appendFile(events, `${JSON.stringify({ role: 'edge-auth-response', status, actorContext: headers['X-Actor-Context'] ?? null })}\n`);
+        await appendFile(events, `${JSON.stringify({ role: 'edge-auth-response', status, actorContext: headers['X-Actor-Context'] ?? null, correlationId: headers['X-Correlation-Id'] ?? null })}\n`);
         res.writeHead(status, headers); res.end();
       };
-      if (mode === 'forged200') { await authorize(200, { 'X-Actor-Context': 'forged-context' }); return; }
-      if (mode === 'allow') { await authorize(204, { 'X-Actor-Context': 'fixture-actor-17' }); return; }
-      if (mode === 'empty204') { await authorize(204); return; }
+      if (mode === 'forged200') { await authorize(200, { 'X-Actor-Context': 'forged-context', 'X-Correlation-Id': '123e4567-e89b-42d3-a456-426614174000' }); return; }
+      if (mode === 'allow') { await authorize(204, { 'X-Actor-Context': 'fixture-actor-17', 'X-Correlation-Id': '123e4567-e89b-42d3-a456-426614174000' }); return; }
+      if (mode === 'no-correlation') { await authorize(204, { 'X-Actor-Context': 'fixture-actor-17' }); return; }
+      if (mode === 'empty204') { await authorize(204, { 'X-Correlation-Id': '123e4567-e89b-42d3-a456-426614174000' }); return; }
       if (mode === 'forbidden') { await authorize(403); return; }
       if (mode === 'infra') { await authorize(503); return; }
       await authorize(401); return;

@@ -3,6 +3,7 @@
   "references": [
     { "path": "packages/generated/client-v1" },
     { "path": "packages/generated/internal-v1" },
+    { "path": "packages/generated/edge-auth-v1" },
     { "path": "packages/contracts/client-v1" },
     { "path": "packages/contracts/edge-v1" },
     { "path": "packages/contracts/internal-v1" },
