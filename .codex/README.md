@@ -1,11 +1,11 @@
-# Astra и Luna для CoffeeOrderPlatform
+# Sol и Luna для CoffeeOrderPlatform
 
 Локальная адаптация [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator).
 
-| Режим | Astra и reviewer | Luna | Лимит субагентов |
+| Режим | Root и reviewer | Luna | Лимит субагентов |
 |---|---|---|---|
-| Обычный | root — выбор пользователя; reviewer — low | medium | 4 |
-| Большой | root — выбор пользователя, reasoning medium; reviewer — Astra medium | high | 8 |
+| Обычный | root — Sol по умолчанию; reviewer — Sol low | medium | 4 |
+| Большой | root — Sol medium; reviewer — Sol medium | high | 8 |
 
 Лимит исключает корневого агента; это потолок, а не обязательное число.
 Начинать с одного Luna для содержательной подзадачи; добавлять остальных только
@@ -14,7 +14,7 @@
 Из корня проекта:
 
 ```bash
-codex # Модель root из пользовательских настроек
+codex # Root Sol из конфигурации проекта
 bash .codex/large.sh # Большой
 ```
 
@@ -25,23 +25,23 @@ CLI overrides, включая отдельный файл reviewer. Глобал
 режимов не создаются.
 [Документация профилей](https://developers.openai.com/codex/config-advanced/#profiles).
 
-Модель и reasoning root выбираются в Desktop или параметрами запуска.
-Проект не закрепляет их; без явного выбора действуют глобальные defaults.
-Для схемы с корневым Astra выбери Astra / low; Luna также может быть root. Для воспроизводимого большого
-режима использовать команду выше в терминале. Она не переключает открытые задачи
-Desktop. Явный выбор модели/reasoning при запуске или spawn имеет приоритет.
+Проект задаёт Sol как модель root по умолчанию; reasoning берётся из выбора
+пользователя или его настроек. В Desktop и параметрами запуска модель можно
+переопределить; тогда фактическая модель root может отличаться от схемы ниже,
+а reviewer останется Sol. Для воспроизводимого большого режима использовать
+команду выше в терминале. Она не переключает открытые задачи Desktop.
 
 Навык `$astra-orchestrator` находится в `.agents/skills/astra-orchestrator`;
 после изменения конфигурации агентов использовать новую сессию. Глобальные
 настройки не изменяются.
-Роли explorer, worker, tester и researcher закреплены на Luna, reasoning
-наследуют от agents; reviewer закреплён на Astra с настройкой для каждого режима.
+Роли explorer, worker, tester и researcher закреплены на GPT-6 Luna, reasoning
+наследуют от agents; reviewer закреплён на GPT-6 Sol с настройкой для каждого режима.
 Глобальная luna_worker в проекте использует worker без фиксированного xhigh.
 
 ## Передача работы и возврат замечаний
 
 ```text
-                  GPT-6 Astra
+                   GPT-6 Sol
                root / orchestrator
                        |
        +---------------+---------------+
@@ -54,13 +54,13 @@ Desktop. Явный выбор модели/reasoning при запуске ил
                       Luna
                        |
                     reviewer
-                     Astra
+                      Sol
                        |
-                  GPT-6 Astra
+                   GPT-6 Sol
                integrate + verify
 ```
 
-Root — основной агент задачи; reviewer — отдельный субагент Astra.
+Root — основной агент задачи; reviewer — отдельный субагент Sol.
 Reviewer сообщает root замечания, рекомендуемую роль и критерии приёмки.
 Root организует исправления, tester проверяет их, reviewer повторяет ревью.
 Подробные правила — в [навыке оркестратора](../.agents/skills/astra-orchestrator/SKILL.md#цикл-ревью-и-исправлений).
@@ -71,12 +71,12 @@ Root организует исправления, tester проверяет их
 *Merge PR и закрытие issue выполняет root после обязательных проверок и при
 явном разрешении пользователя.
 
-## Экономия Astra
+## Экономия Sol
 
 Root выполняет краткую первичную проверку и передаёт подробный поиск explorer,
 реализацию worker, проверки tester. Внешние источники изучает researcher.
-Astra принимает архитектурные решения и результат независимого reviewer;
+Sol принимает архитектурные решения и результат независимого reviewer;
 не повторяет весь поиск, тестовый прогон и ревью без новых оснований.
-Точные границы: [правила Codex](../.agents/skills/astra-orchestrator/references/codex.md#границы-и-экономия-astra).
+Точные границы: [правила Codex](../.agents/skills/astra-orchestrator/references/codex.md#границы-и-экономия-sol).
 Настройка задаёт поведение, а не жёсткий бюджет токенов и не автоматический
-маршрутизатор. Для применения в Desktop открыть новую задачу с Astra / low.
+маршрутизатор. Для применения в Desktop открыть новую задачу с Sol.
