@@ -1,0 +1,96 @@
+issue: 18
+baseCommit: 72305d67d2066cce317af33bf6ee78fd35789451
+inputs:
+- issue: 10
+  acceptedMergeCommit: 4b2cad1dab30af66ad0b2fe64da280222e506574
+  artifact: evidence/handoffs/issue-10.yaml
+  sha256: 4d23f7ca941bbfbe3d02505a887d6750babfd04ed7ced7b398ccd46fdad67b37
+- issue: 6
+  acceptedMergeCommit: 76c2d580c86bbd2b272369859cbecf97815e2b8e
+  artifact: evidence/handoffs/issue-6.yaml
+  sha256: 032b0a73a07e92cc1d870177505035257ac3e3ac8abd7b2e5e09c89897c4d685
+- issue: 16
+  acceptedMergeCommit: 63be432f2a452d4159abc32183678ca91819c013
+  artifact: evidence/handoffs/issue-16.yaml
+  sha256: b3be754dcfa806bc4703682883b7be7e7c660dc8cb5fef9c8ec6a9e5d0547dc4
+- issue: 17
+  acceptedMergeCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4
+  artifact: evidence/handoffs/issue-17.yaml
+  sha256: bb593fe72358c832768de1cfb75a36a48062e72866c2df0988bf268b7871ca61
+- issue: 153
+  acceptedMergeCommit: 94a43c1a7d6184b6df3983c32ec06c28d2d99ea2
+  artifact: evidence/handoffs/issue-153.yaml
+  sha256: d21da50268db053c361d1d2068a5f8c69a4fa02dcaf748b82544b4171397ad23
+- issue: 155
+  acceptedMergeCommit: 5e19c949b3ab72e1d390687564f34161f922ca68
+  artifact: evidence/handoffs/issue-155.yaml
+  sha256: 82e91bcaba76b59c05d90a8687d669dc36f631a1b7e8e1673e87ffe8ee83c811
+outputs:
+- artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+  sha256: a1ad004a23128e34cf228900752df766b6bc91e8d672b3650de1d784417ad04c
+  consumers: [7, 8, 9, 11, 13]
+- artifact: docs/launch/06_EVENTS_AND_RECOVERY.md
+  sha256: c899bc5bca631b08b03308e057a7a399ce0161a89f5ac1e9ea2f26c1ccb12504
+  consumers: [7, 8, 9, 11, 13]
+- artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+  sha256: 9dab90a0a84ed14212c49246ea436b9fb084246d24dfd07be1da81e30dd6618b
+  consumers: [7, 8, 9, 11, 13]
+- artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+  sha256: 99e8b770dc7d052cc3644dae41835dbfa98b5ba6ac5a9dde760ba633af902fce
+  consumers: [7, 8, 9, 11, 13]
+- artifact: package.json
+  sha256: f6c9b314c1ff62bbc5283e8a213174af8e5f5e432ad0b294aeaf8c5f7458ab02
+  consumers: [7, 8, 9, 11, 13]
+- artifact: evidence/catalog-pipeline/README.md
+  sha256: 5fc83f94970d5e9e94781556078c35602922e16a42d7abdf467580f16bdfb7bd
+  consumers: [7, 8, 9, 11, 13]
+- artifact: tests/catalog-pipeline/capacity-child.mjs
+  sha256: 50aeb44c2136b2624516283b360533e698b7a39a59b7b07b07b6f1f4f835a9bf
+  consumers: [7, 8, 9, 11, 13]
+- artifact: tests/catalog-pipeline/capacity.test.mjs
+  sha256: 877e784ca94afd5c162eacad004f5d269d720694a89379a3799dbd922ca0ccb9
+  consumers: [7, 8, 9, 11, 13]
+- artifact: tests/catalog-pipeline/pipeline-live.test.mjs
+  sha256: 65d8558d12260a46d4427c5fc160a161665a8a6612afc3172fb08356ab3b6e0c
+  consumers: [7, 8, 9, 11, 13]
+- artifact: tests/catalog-pipeline/publisher-child.mjs
+  sha256: 5997c698ac04af942777477aa95b6631cc01f0ee14770b764b523a6d548fcfc5
+  consumers: [7, 8, 9, 11, 13]
+- artifact: tests/catalog-pipeline/publisher-live.test.mjs
+  sha256: 0a24b7de552663398ba654d9791d161dd3d209fbc4ba28923480369c7d7ac98e
+  consumers: [7, 8, 9, 11, 13]
+- artifact: tests/catalog-pipeline/recovery-live.test.mjs
+  sha256: 4231ae4c88b5f96a462a0503ec612b2304c504006061b5ffe8529e3ac5e1f981
+  consumers: [7, 8, 9, 11, 13]
+- artifact: tests/catalog-pipeline/security-live.test.mjs
+  sha256: 73b5ffedb812e107de12c87dd40890814ca1b17b67d294d9c58af9db86ad3907
+  consumers: [7, 8, 9, 11, 13]
+verification:
+- command: pnpm contracts:check-generated
+  result: passed; 0 skipped
+- command: pnpm contracts:breaking
+  result: passed; 0 skipped
+- command: pnpm contracts:test
+  result: passed; 43 tests, 0 skipped
+- command: pnpm architecture:check
+  result: passed; 0 skipped
+- command: pnpm db:smoke
+  result: passed; 0 skipped
+- command: pnpm test:catalog-pipeline
+  result: passed; 38 tests, 0 skipped, 31.9 s; live PostgreSQL + API + producer contracts
+- command: pnpm test:catalog-recovery
+  result: passed; 6 tests, 0 skipped, 78.1 s; importer/activation/publisher SIGKILL and restart
+- command: pnpm test:catalog-capacity
+  result: passed; 58 tests, 0 skipped, 45 s; 100000 distinct offers in 200 batches
+- command: node --test tests/catalog-pipeline/capacity.test.mjs
+  result: passed; 1 test, 0 skipped; baseline RSS 84402176 bytes; peak RSS 189026304 bytes; growth 104624128 bytes vs 134217728 budget; peak heap 69971048 bytes; wire SHA256 b3ca13b37223c7de177805ba72e6175081d466791a2433080048d6eb7858c898
+- command: pnpm check
+  result: passed; 475 tests, 28 existing opt-in skipped; includes lint and typecheck; 120 s
+- command: pnpm db:live-proof
+  result: passed; disposable PostgreSQL proof; 10 s
+limitations:
+- Deterministic fake provider and sender; neither production Gateway nor actual Kafka broker/offset/rebalance is exercised.
+- The 100000-offer fixture measures streaming reader/importer and backpressure, not 100000 rows persisted in PostgreSQL or activation peak RSS.
+- No production PostgreSQL migration ledger, observability Collector or trace exporter is exercised.
+- Caller cancellation after started keeps durable Receiving, but does not switch the previous active revision.
+- Owner fixes #153 and #155 landed before this verification; rollback or deployment remains a separate operator decision.

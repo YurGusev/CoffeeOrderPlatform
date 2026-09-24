@@ -480,6 +480,18 @@ provider stop — `Stopped`, неизменённая identity/ref не публ
   и owner-транзакции проверяются отдельно в disposable `pnpm db:live-proof`;
 - generated OpenAPI/JSON Schema и breaking-change checks проходят.
 
+Проверка #18 (`tests/catalog-pipeline/**`) разделяет независимые доказательства:
+100 000 различных offers проходят 200 NDJSON batches по 500 через production
+reader/importer с ограниченным fixture store; при остановленном persistence
+upstream останавливается после не более двух batches, а child с 96 MiB V8 heap
+измеряет RSS. Для этой новой fixture budget прироста RSS — 128 MiB; прежний
+96 MiB budget для иного большого stream fixture не меняется. Это **не**
+100 000 записей в PostgreSQL и не proof памяти во время SQL activation.
+Отдельные live-тесты проверяют staging/activation/API и restart на disposable
+PostgreSQL. Точные размеры, длительности и ограничения — в
+`evidence/catalog-pipeline/README.md`; production Gateway, постоянная БД,
+Kafka broker и Collector/trace backend не объявляются проверенными.
+
 ## 8. Не входит
 
 Elasticsearch, Redis, S3/MinIO, CDC/Debezium, универсальная ETL-платформа,

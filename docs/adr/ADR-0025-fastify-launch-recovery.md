@@ -88,6 +88,10 @@ Business writers ждут нужные foundation handoffs; общий Effect ad
 - одна физическая AROMA-корзина сохраняет один fenced mutation lane; увеличение
   replicas не снимает provider serialization;
 - #18 измеряет Catalog capacity на реальном dataset; timeout не заменяет замер;
+- #18 раздельно фиксирует размер детерминированного NDJSON dataset, RSS и
+  backpressure во время ingestion и подтверждает live recovery/API на
+  disposable PostgreSQL. Замер ingestion не доказывает RSS SQL activation,
+  а sender-fixture не доказывает доставку реальным Kafka broker;
 - development Compose с single broker не считается production durability/HA.
   #13 требует доказанный persistence/restart и backup/restore в launch environment.
 
