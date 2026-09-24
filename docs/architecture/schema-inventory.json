@@ -1,0 +1,1116 @@
+{
+  "repository": "CoffeeOrderPlatform",
+  "source_commit": "4b2cad1dab30af66ad0b2fe64da280222e506574",
+  "verified": "2026-09-22",
+  "audit_mode": "read-only code audit; no deployed database introspection",
+  "summary": {
+    "owner_databases": 5,
+    "owner_schemas": 5,
+    "migration_files_present": 9,
+    "migration_files_by_owner": {
+      "customer": 2,
+      "catalog": 0,
+      "pricing": 0,
+      "orders": 0,
+      "integration": 7
+    },
+    "actual_ddl_tables_in_sql": 13,
+    "actual_ddl_tables_by_owner": {
+      "customer": 5,
+      "integration": 8
+    },
+    "actual_fk_count": 10,
+    "named_secondary_index_count": 14,
+    "deployed_table_count": null,
+    "deployed_state_reason": "No PostgreSQL connection was made; migration ledger and grants were not introspected.",
+    "platform_schema_migrations": {
+      "status": "runtime-created-only-not-proven",
+      "source": "packages/platform-migrations/src/index.ts:100-129",
+      "default_name": "platform_schema_migrations",
+      "counts_as_service_local_migration_table": false,
+      "counts_in_actual_ddl_tables": false,
+      "note": "Общая техническая ledger-таблица runner-а; не service-local migration table и не одна из 13 таблиц, созданных девятью прикладными SQL migrations."
+    }
+  },
+  "databases": [
+    {
+      "name": "coffee_platform_customer",
+      "schema": "customer",
+      "logical_owner": "customer-service",
+      "migration_owner": "customer-service",
+      "migrator_role": "coffee_customer_migrator",
+      "migration_path": "apps/customer-service/migrations",
+      "runtime_roles": [
+        {
+          "runtime": "customer-service",
+          "role": "coffee_customer_rw",
+          "access": "owner writer"
+        }
+      ],
+      "status": "actual_sql_present_deployed_state_unknown",
+      "migration_files": [
+        "apps/customer-service/migrations/0001_customer_schema.sql",
+        "apps/customer-service/migrations/0002_customer_indexes.sql"
+      ],
+      "tables": [
+        "customer.customers",
+        "customer.addresses",
+        "customer.channel_links",
+        "customer.idempotency_records",
+        "customer.audit_log"
+      ],
+      "physical_fk_count": 3,
+      "cross_owner_fk_count": 0,
+      "source_refs": [
+        "config/database-ownership.json:6",
+        "config/database-role-map.json:5-23",
+        "docs/launch/05_DATA_OWNERSHIP.md:10-19"
+      ]
+    },
+    {
+      "name": "coffee_platform_catalog",
+      "schema": "catalog",
+      "logical_owner": "catalog-service",
+      "migration_owner": "catalog-service",
+      "migrator_role": "coffee_catalog_migrator",
+      "migration_path": "apps/catalog-service/migrations",
+      "runtime_roles": [
+        {
+          "runtime": "catalog-service",
+          "role": "coffee_catalog_api_ro",
+          "access": "active catalog read-only"
+        },
+        {
+          "runtime": "catalog-supplier-sync",
+          "role": "coffee_catalog_import_rw",
+          "access": "staging writer"
+        },
+        {
+          "runtime": "catalog-activation-worker",
+          "role": "coffee_catalog_activate_rw",
+          "access": "activation/active/outbox writer"
+        }
+      ],
+      "status": "designed_not_created_in_current_source",
+      "migration_files": [],
+      "tables": [],
+      "designed_tables": [
+        "catalog.catalog_state",
+        "catalog.source_identities",
+        "catalog.products",
+        "catalog.variants",
+        "catalog.offer_mappings",
+        "catalog.availability",
+        "catalog.supplier_snapshots",
+        "catalog.snapshot_batches",
+        "catalog.snapshot_products",
+        "catalog.snapshot_variants",
+        "catalog.snapshot_offers",
+        "catalog.snapshot_availability",
+        "catalog.outbox_messages"
+      ],
+      "source_refs": [
+        "config/database-role-map.json:25-75",
+        "docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md",
+        "apps/catalog-service/src/main.ts:1-3"
+      ]
+    },
+    {
+      "name": "coffee_platform_pricing",
+      "schema": "pricing",
+      "logical_owner": "pricing-service",
+      "migration_owner": "pricing-service",
+      "migrator_role": "coffee_pricing_migrator",
+      "migration_path": "apps/pricing-service/migrations",
+      "runtime_roles": [
+        {
+          "runtime": "pricing-service",
+          "role": "coffee_pricing_rw",
+          "access": "quote writer"
+        }
+      ],
+      "status": "designed_not_created_in_current_source",
+      "migration_files": [],
+      "tables": [],
+      "designed_tables": [
+        "pricing.pricing_policy_versions",
+        "pricing.pricing_quotes",
+        "pricing.pricing_quote_lines",
+        "pricing.pricing_idempotency_records",
+        "pricing.pricing_audit_records"
+      ],
+      "source_refs": [
+        "config/database-role-map.json:77-95",
+        "docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md",
+        "apps/pricing-service/src/main.ts:1-3"
+      ]
+    },
+    {
+      "name": "coffee_platform_orders",
+      "schema": "orders",
+      "logical_owner": "orders-service",
+      "migration_owner": "orders-service",
+      "migrator_role": "coffee_orders_migrator",
+      "migration_path": "apps/orders-service/migrations",
+      "runtime_roles": [
+        {
+          "runtime": "orders-service",
+          "role": "coffee_orders_service_rw",
+          "access": "core order writer"
+        },
+        {
+          "runtime": "orders-aroma-preparation",
+          "role": "coffee_orders_prepare_rw",
+          "access": "Desired/mapping/inbox/outbox writer"
+        },
+        {
+          "runtime": "aroma-observer",
+          "role": "coffee_orders_observer_rw",
+          "access": "Observed/inbox/outbox writer"
+        },
+        {
+          "runtime": "aroma-convergence",
+          "role": "coffee_orders_convergence_rw",
+          "access": "attempt/lease/reservation/observed/inbox/outbox writer"
+        }
+      ],
+      "status": "designed_not_created_in_current_source",
+      "migration_files": [],
+      "tables": [],
+      "designed_tables": [
+        "orders.orders",
+        "orders.order_items",
+        "orders.order_history",
+        "orders.order_desired_contributions",
+        "orders.order_desired_lines",
+        "orders.idempotency_records",
+        "orders.outbox_messages",
+        "orders.catalog_mapping_projection",
+        "orders.cart_desired_revisions",
+        "orders.cart_desired_lines",
+        "orders.cart_desired_blockers",
+        "orders.inbox_messages",
+        "orders.inbox_quarantine",
+        "orders.cart_observed_revisions",
+        "orders.cart_observed_lines",
+        "orders.convergence_attempts",
+        "orders.convergence_leases",
+        "orders.mutation_reservations",
+        "orders.cart_desired_order_facts",
+        "orders.order_aroma_projections"
+      ],
+      "source_refs": [
+        "config/database-role-map.json:97-163",
+        "docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md:6-29",
+        "docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md:28-94",
+        "apps/orders-service/src/main.ts:1-3"
+      ]
+    },
+    {
+      "name": "coffee_platform_integration",
+      "schema": "integration",
+      "logical_owner": "aroma-gateway",
+      "migration_owner": "aroma-gateway",
+      "migrator_role": "coffee_integration_migrator",
+      "migration_path": "apps/aroma-gateway/migrations",
+      "runtime_roles": [
+        {
+          "runtime": "aroma-gateway",
+          "role": "coffee_aroma_gateway_rw",
+          "access": "integration writer"
+        }
+      ],
+      "status": "actual_sql_present_deployed_state_unknown",
+      "migration_files": [
+        "apps/aroma-gateway/migrations/0001_provider_sessions.sql",
+        "apps/aroma-gateway/migrations/0002_provider_mutation_journal.sql",
+        "apps/aroma-gateway/migrations/0003_offer_bindings.sql",
+        "apps/aroma-gateway/migrations/0004_provider_offer_identity.sql",
+        "apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql",
+        "apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql",
+        "apps/aroma-gateway/migrations/0007_provider_mutation_grind.sql"
+      ],
+      "tables": [
+        "integration.provider_sessions",
+        "integration.provider_mutation_journal",
+        "integration.provider_catalog_exports",
+        "integration.provider_source_offers",
+        "integration.provider_export_offers",
+        "integration.provider_offer_bindings",
+        "integration.provider_export_batches",
+        "integration.provider_export_batch_offers"
+      ],
+      "physical_fk_count": 7,
+      "cross_owner_fk_count": 0,
+      "source_refs": [
+        "config/database-ownership.json:10",
+        "config/database-role-map.json:165-186",
+        "docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md:7-21"
+      ]
+    }
+  ],
+  "actual_migrations": [
+    {
+      "owner": "customer",
+      "id": "0001_customer_schema",
+      "path": "apps/customer-service/migrations/0001_customer_schema.sql",
+      "creates": [
+        "customer.customers",
+        "customer.addresses",
+        "customer.channel_links",
+        "customer.idempotency_records",
+        "customer.audit_log"
+      ],
+      "alters": [],
+      "indexes": [],
+      "grants": [
+        "coffee_customer_rw"
+      ],
+      "source": "apps/customer-service/migrations/0001_customer_schema.sql:1-104"
+    },
+    {
+      "owner": "customer",
+      "id": "0002_customer_indexes",
+      "path": "apps/customer-service/migrations/0002_customer_indexes.sql",
+      "creates": [],
+      "alters": [],
+      "indexes": [
+        "customers_active_phone_uq",
+        "customers_active_email_uq",
+        "channel_links_active_subject_uq",
+        "addresses_active_delivery_customer_uq",
+        "customers_display_name_search_idx",
+        "customers_phone_idx",
+        "customers_email_idx",
+        "idempotency_records_expires_at_idx"
+      ],
+      "grants": [],
+      "source": "apps/customer-service/migrations/0002_customer_indexes.sql:1-27"
+    },
+    {
+      "owner": "integration",
+      "id": "0001_provider_sessions",
+      "path": "apps/aroma-gateway/migrations/0001_provider_sessions.sql",
+      "creates": [
+        "integration.provider_sessions"
+      ],
+      "alters": [],
+      "indexes": [
+        "provider_sessions_expiry_idx"
+      ],
+      "grants": [
+        "coffee_aroma_gateway_rw"
+      ],
+      "source": "apps/aroma-gateway/migrations/0001_provider_sessions.sql:1-20"
+    },
+    {
+      "owner": "integration",
+      "id": "0002_provider_mutation_journal",
+      "path": "apps/aroma-gateway/migrations/0002_provider_mutation_journal.sql",
+      "creates": [
+        "integration.provider_mutation_journal"
+      ],
+      "alters": [],
+      "indexes": [
+        "provider_mutation_journal_reservation_idx",
+        "provider_mutation_journal_dispatch_idx"
+      ],
+      "grants": [
+        "coffee_aroma_gateway_rw"
+      ],
+      "source": "apps/aroma-gateway/migrations/0002_provider_mutation_journal.sql:1-72"
+    },
+    {
+      "owner": "integration",
+      "id": "0003_offer_bindings",
+      "path": "apps/aroma-gateway/migrations/0003_offer_bindings.sql",
+      "creates": [
+        "integration.provider_catalog_exports",
+        "integration.provider_source_offers",
+        "integration.provider_export_offers",
+        "integration.provider_offer_bindings"
+      ],
+      "alters": [],
+      "indexes": [],
+      "grants": [
+        "coffee_aroma_gateway_rw"
+      ],
+      "source": "apps/aroma-gateway/migrations/0003_offer_bindings.sql:1-72"
+    },
+    {
+      "owner": "integration",
+      "id": "0004_provider_offer_identity",
+      "path": "apps/aroma-gateway/migrations/0004_provider_offer_identity.sql",
+      "creates": [],
+      "alters": [
+        "integration.provider_source_offers.raw_provider_product_id",
+        "integration.provider_source_offers.raw_provider_variant_id",
+        "integration.provider_source_offers.provider_packing",
+        "integration.provider_source_offers.provider_grind_id",
+        "integration.provider_source_offers.*_check constraints"
+      ],
+      "indexes": [
+        "provider_source_offers_identity_idx"
+      ],
+      "grants": [],
+      "source": "apps/aroma-gateway/migrations/0004_provider_offer_identity.sql:1-16"
+    },
+    {
+      "owner": "integration",
+      "id": "0005_catalog_export_attempts",
+      "path": "apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql",
+      "creates": [
+        "integration.provider_export_batches",
+        "integration.provider_export_batch_offers"
+      ],
+      "alters": [
+        "integration.provider_source_offers.source_product_key_hash",
+        "integration.provider_source_offers.source_variant_key_hash",
+        "integration.provider_catalog_exports.batch_count",
+        "integration.provider_catalog_exports.product_count",
+        "integration.provider_catalog_exports.variant_count",
+        "integration.provider_catalog_exports.offer_count",
+        "integration.provider_catalog_exports.next_batch_number",
+        "integration.provider_catalog_exports.last_batch_hash"
+      ],
+      "indexes": [
+        "provider_export_batch_offers_source_idx"
+      ],
+      "grants": [
+        "coffee_aroma_gateway_rw"
+      ],
+      "source": "apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql:1-57"
+    },
+    {
+      "owner": "integration",
+      "id": "0006_provider_mutation_retention",
+      "path": "apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql",
+      "creates": [],
+      "alters": [
+        "integration.provider_mutation_journal.retention_until"
+      ],
+      "indexes": [
+        "provider_mutation_journal_retention_idx"
+      ],
+      "grants": [
+        "coffee_aroma_gateway_rw"
+      ],
+      "source": "apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql:1-16"
+    },
+    {
+      "owner": "integration",
+      "id": "0007_provider_mutation_grind",
+      "path": "apps/aroma-gateway/migrations/0007_provider_mutation_grind.sql",
+      "creates": [],
+      "alters": [
+        "integration.provider_mutation_journal.source_grind_key_hash"
+      ],
+      "indexes": [],
+      "grants": [],
+      "source": "apps/aroma-gateway/migrations/0007_provider_mutation_grind.sql:1-3"
+    }
+  ],
+  "actual_tables": [
+    {
+      "qualified_name": "customer.customers",
+      "owner": "customer-service",
+      "database": "coffee_platform_customer",
+      "schema": "customer",
+      "migration": "apps/customer-service/migrations/0001_customer_schema.sql:3-21",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "customer_ref varchar(30) NOT NULL",
+        "version bigint NOT NULL DEFAULT 1",
+        "display_name varchar(200) NOT NULL",
+        "display_name_search varchar(200) NOT NULL",
+        "phone_e164 varchar(16) NULL",
+        "email_normalized varchar(254) NULL",
+        "status varchar(16) NOT NULL DEFAULT Active",
+        "created_at timestamptz NOT NULL",
+        "updated_at timestamptz NOT NULL",
+        "created_by_actor_ref varchar(128) NOT NULL",
+        "updated_by_actor_ref varchar(128) NOT NULL"
+      ],
+      "pk": [
+        "customer_ref"
+      ],
+      "fk": [],
+      "unique": [
+        "customers_active_phone_uq (phone_e164) WHERE status=Active",
+        "customers_active_email_uq (email_normalized) WHERE status=Active"
+      ],
+      "checks": [
+        "customer_ref matches cus_ ULID-like regex",
+        "version > 0",
+        "status IN (Active,Inactive)",
+        "phone_e164 OR email_normalized is present",
+        "phone is E.164",
+        "display_name_search = lower(display_name)",
+        "actor refs non-empty"
+      ],
+      "indexes": [
+        "customers_active_phone_uq",
+        "customers_active_email_uq",
+        "customers_display_name_search_idx",
+        "customers_phone_idx",
+        "customers_email_idx"
+      ],
+      "transactional_invariants": [
+        "active normalized phone/email unique",
+        "create participates in Customer aggregate transaction",
+        "version is optimistic token"
+      ],
+      "idempotency_inbox_outbox": "Customer idempotency_records same transaction; no Inbox/Outbox FK"
+    },
+    {
+      "qualified_name": "customer.addresses",
+      "owner": "customer-service",
+      "database": "coffee_platform_customer",
+      "schema": "customer",
+      "migration": "apps/customer-service/migrations/0001_customer_schema.sql:23-42",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "address_ref varchar(30) NOT NULL",
+        "customer_ref varchar(30) NOT NULL",
+        "kind varchar(16) NOT NULL",
+        "line1 varchar(200) NOT NULL",
+        "line2 varchar(200) NULL",
+        "city varchar(120) NOT NULL",
+        "postal_code varchar(20) NULL",
+        "country_code char(2) NOT NULL DEFAULT RU",
+        "version bigint NOT NULL DEFAULT 1",
+        "is_active boolean NOT NULL DEFAULT true",
+        "created_at timestamptz NOT NULL",
+        "updated_at timestamptz NOT NULL",
+        "created_by_actor_ref varchar(128) NOT NULL",
+        "updated_by_actor_ref varchar(128) NOT NULL"
+      ],
+      "pk": [
+        "address_ref"
+      ],
+      "fk": [
+        "customer_ref -> customer.customers(customer_ref) ON DELETE RESTRICT"
+      ],
+      "unique": [
+        "addresses_active_delivery_customer_uq (customer_ref) WHERE kind=Delivery AND is_active"
+      ],
+      "checks": [
+        "address_ref matches adr_ ULID-like regex",
+        "kind = Delivery",
+        "line1 and city non-empty",
+        "country_code uppercase ISO-like two letters",
+        "version > 0",
+        "actor refs non-empty"
+      ],
+      "indexes": [
+        "addresses_active_delivery_customer_uq"
+      ],
+      "transactional_invariants": [
+        "at most one active Delivery address per customer",
+        "parent delete restricted"
+      ],
+      "idempotency_inbox_outbox": "same Customer aggregate transaction; no local Inbox/Outbox"
+    },
+    {
+      "qualified_name": "customer.channel_links",
+      "owner": "customer-service",
+      "database": "coffee_platform_customer",
+      "schema": "customer",
+      "migration": "apps/customer-service/migrations/0001_customer_schema.sql:44-58",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "channel_link_ref varchar(30) NOT NULL",
+        "customer_ref varchar(30) NOT NULL",
+        "provider varchar(16) NOT NULL",
+        "external_subject_hash char(64) NOT NULL",
+        "status varchar(16) NOT NULL",
+        "created_at timestamptz NOT NULL",
+        "updated_at timestamptz NOT NULL",
+        "created_by_actor_ref varchar(128) NOT NULL",
+        "updated_by_actor_ref varchar(128) NOT NULL"
+      ],
+      "pk": [
+        "channel_link_ref"
+      ],
+      "fk": [
+        "customer_ref -> customer.customers(customer_ref) ON DELETE RESTRICT"
+      ],
+      "unique": [
+        "channel_links_active_subject_uq (provider, external_subject_hash) WHERE status=Active"
+      ],
+      "checks": [
+        "channel_link_ref matches chl_ ULID-like regex",
+        "provider IN (Web,VK)",
+        "external_subject_hash lowercase 64 hex",
+        "status IN (Active,Revoked)",
+        "actor refs non-empty"
+      ],
+      "indexes": [
+        "channel_links_active_subject_uq"
+      ],
+      "transactional_invariants": [
+        "one active external subject per provider"
+      ],
+      "idempotency_inbox_outbox": "Customer-owned; no generic Inbox/Outbox"
+    },
+    {
+      "qualified_name": "customer.idempotency_records",
+      "owner": "customer-service",
+      "database": "coffee_platform_customer",
+      "schema": "customer",
+      "migration": "apps/customer-service/migrations/0001_customer_schema.sql:60-83",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "actor_ref varchar(64) NOT NULL",
+        "scope varchar(64) NOT NULL",
+        "idempotency_key uuid NOT NULL",
+        "request_hash char(64) NOT NULL",
+        "state varchar(16) NOT NULL",
+        "lease_owner uuid NOT NULL",
+        "lease_until timestamptz NOT NULL",
+        "created_at timestamptz NOT NULL",
+        "expires_at timestamptz NOT NULL",
+        "completed_at timestamptz NULL",
+        "response_status smallint NULL",
+        "response_body jsonb NULL",
+        "resource_ref varchar(30) NULL"
+      ],
+      "pk": [
+        "actor_ref",
+        "scope",
+        "idempotency_key"
+      ],
+      "fk": [],
+      "unique": [
+        "composite PK is idempotency identity"
+      ],
+      "checks": [
+        "hash lowercase 64 hex",
+        "state Acquired or Completed",
+        "expires_at >= lease_until > created_at",
+        "Acquired has no terminal response",
+        "Completed has valid status/body/completed_at",
+        "actor/scope non-empty"
+      ],
+      "indexes": [
+        "idempotency_records_expires_at_idx"
+      ],
+      "transactional_invariants": [
+        "acquire, business write, and complete are one transaction",
+        "same hash replays; mismatch conflicts",
+        "unfinished rows are not acquire-cleaned"
+      ],
+      "idempotency_inbox_outbox": "actual Idempotency; no Inbox/Outbox"
+    },
+    {
+      "qualified_name": "customer.audit_log",
+      "owner": "customer-service",
+      "database": "coffee_platform_customer",
+      "schema": "customer",
+      "migration": "apps/customer-service/migrations/0001_customer_schema.sql:85-97",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "audit_ref varchar(30) NOT NULL",
+        "customer_ref varchar(30) NOT NULL",
+        "operation varchar(32) NOT NULL",
+        "actor_ref varchar(128) NOT NULL",
+        "correlation_id uuid NOT NULL",
+        "occurred_at timestamptz NOT NULL",
+        "before_hash char(64) NULL",
+        "after_hash char(64) NOT NULL"
+      ],
+      "pk": [
+        "audit_ref"
+      ],
+      "fk": [
+        "customer_ref -> customer.customers(customer_ref) ON DELETE RESTRICT"
+      ],
+      "unique": [
+        "audit_ref PK"
+      ],
+      "checks": [
+        "audit_ref matches aud_ ULID-like regex",
+        "operation = CustomerCreated",
+        "actor non-empty",
+        "before/after hashes lowercase 64 hex"
+      ],
+      "indexes": [],
+      "transactional_invariants": [
+        "append audit row in same transaction as Customer create"
+      ],
+      "idempotency_inbox_outbox": "none"
+    },
+    {
+      "qualified_name": "integration.provider_sessions",
+      "owner": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "schema": "integration",
+      "migration": "apps/aroma-gateway/migrations/0001_provider_sessions.sql:6-13",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "scope_hash char(64) NOT NULL",
+        "encrypted_cookie_material bytea NOT NULL",
+        "expires_at timestamptz NULL",
+        "created_at timestamptz NOT NULL",
+        "updated_at timestamptz NOT NULL"
+      ],
+      "pk": [
+        "scope_hash"
+      ],
+      "fk": [],
+      "unique": [
+        "scope_hash PK"
+      ],
+      "checks": [
+        "scope_hash lowercase 64 hex",
+        "encrypted_cookie_material 32..65536 bytes"
+      ],
+      "indexes": [
+        "provider_sessions_expiry_idx WHERE expires_at IS NOT NULL"
+      ],
+      "transactional_invariants": [
+        "only encrypted session envelope durable",
+        "decrypted cookies memory-only"
+      ],
+      "idempotency_inbox_outbox": "none"
+    },
+    {
+      "qualified_name": "integration.provider_mutation_journal",
+      "owner": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "schema": "integration",
+      "migration": "apps/aroma-gateway/migrations/0002_provider_mutation_journal.sql:3-63; 0006:1-13; 0007:1-3",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "operation_ref varchar(30) NOT NULL",
+        "cart_scope_ref varchar(64) NOT NULL",
+        "operation_kind varchar(32) NOT NULL",
+        "offer_ref varchar(30) NOT NULL",
+        "quantity_milli bigint NULL",
+        "source_grind_key_hash char(64) NULL",
+        "request_hash char(64) NOT NULL",
+        "caller_identity varchar(64) NOT NULL",
+        "original_caller varchar(64) NOT NULL",
+        "operation_id varchar(128) NOT NULL",
+        "correlation_id uuid NOT NULL",
+        "traceparent varchar(128) NULL",
+        "state varchar(20) NOT NULL",
+        "reservation_owner uuid NOT NULL",
+        "lease_until timestamptz NOT NULL",
+        "provider_status_code integer NULL",
+        "outcome_hash char(64) NULL",
+        "failure_code varchar(64) NULL",
+        "response_status smallint NULL",
+        "response_body_bytes bytea NULL",
+        "created_at timestamptz NOT NULL",
+        "started_at timestamptz NOT NULL",
+        "dispatched_at timestamptz NULL",
+        "completed_at timestamptz NULL",
+        "last_seen_at timestamptz NOT NULL",
+        "retention_until timestamptz NOT NULL"
+      ],
+      "pk": [
+        "operation_ref"
+      ],
+      "fk": [],
+      "unique": [
+        "operation_ref PK"
+      ],
+      "checks": [
+        "cart_scope_ref = aroma-primary",
+        "operation kind/quantity pairing",
+        "all ref/hash/caller formats",
+        "lease_until > created_at",
+        "Reserved has no dispatched_at",
+        "state-specific terminal fields",
+        "provider/status/body bounds"
+      ],
+      "indexes": [
+        "provider_mutation_journal_reservation_idx",
+        "provider_mutation_journal_dispatch_idx WHERE state=Dispatched",
+        "provider_mutation_journal_retention_idx WHERE state IN (Acknowledged,Rejected,UnknownOutcome)"
+      ],
+      "transactional_invariants": [
+        "reserve CAS before dispatch",
+        "Dispatched timeout becomes UnknownOutcome",
+        "same operation_ref is never blind redispatched",
+        "Terminal retention is 90 days; actual cleanup includes Acknowledged, Rejected and UnknownOutcome after retention_until",
+        "Cross-owner recovery horizon compatibility was not runtime-tested"
+      ],
+      "idempotency_inbox_outbox": "technical provider idempotency journal; no Kafka Inbox/Outbox"
+    },
+    {
+      "qualified_name": "integration.provider_catalog_exports",
+      "owner": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "schema": "integration",
+      "migration": "apps/aroma-gateway/migrations/0003_offer_bindings.sql:3-18; 0005:13-20",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "snapshot_ref varchar(30) NOT NULL",
+        "supplier_ref varchar(30) NOT NULL",
+        "source_identity_scheme varchar(32) NOT NULL",
+        "state varchar(16) NOT NULL",
+        "content_hash char(64) NULL",
+        "created_at timestamptz NOT NULL",
+        "updated_at timestamptz NOT NULL",
+        "batch_count integer NOT NULL",
+        "product_count integer NOT NULL",
+        "variant_count integer NOT NULL",
+        "offer_count integer NOT NULL",
+        "next_batch_number integer NOT NULL",
+        "last_batch_hash char(64) NULL"
+      ],
+      "pk": [
+        "snapshot_ref"
+      ],
+      "fk": [],
+      "unique": [
+        "(snapshot_ref,supplier_ref,source_identity_scheme)"
+      ],
+      "checks": [
+        "scheme = hmac-sha256-v1",
+        "state Exporting/Completed/Failed",
+        "Completed requires content_hash",
+        "counts >= 0",
+        "hashes lowercase 64 hex"
+      ],
+      "indexes": [
+        "PK",
+        "explicit composite UNIQUE"
+      ],
+      "transactional_invariants": [
+        "Completed export has content hash",
+        "batch counters are nonnegative"
+      ],
+      "idempotency_inbox_outbox": "none"
+    },
+    {
+      "qualified_name": "integration.provider_source_offers",
+      "owner": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "schema": "integration",
+      "migration": "apps/aroma-gateway/migrations/0003_offer_bindings.sql:20-31; 0004:1-16; 0005:1-11",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "supplier_ref varchar(30) NOT NULL",
+        "source_identity_scheme varchar(32) NOT NULL",
+        "source_offer_key_hash char(64) NOT NULL",
+        "raw_provider_offer_id varchar(256) NOT NULL",
+        "created_at timestamptz NOT NULL",
+        "raw_provider_product_id varchar(256) NULL",
+        "raw_provider_variant_id varchar(256) NULL",
+        "provider_packing varchar(256) NULL",
+        "provider_grind_id varchar(256) NULL",
+        "source_product_key_hash char(64) NULL",
+        "source_variant_key_hash char(64) NULL"
+      ],
+      "pk": [
+        "supplier_ref",
+        "source_identity_scheme",
+        "source_offer_key_hash"
+      ],
+      "fk": [],
+      "unique": [
+        "(supplier_ref,source_identity_scheme,raw_provider_offer_id)"
+      ],
+      "checks": [
+        "supplier/scheme/hash formats",
+        "raw offer non-empty",
+        "optional raw IDs non-empty",
+        "optional source hashes lowercase 64 hex"
+      ],
+      "indexes": [
+        "provider_source_offers_identity_idx"
+      ],
+      "transactional_invariants": [
+        "source identity immutable and unique per supplier/scheme",
+        "raw provider IDs stay integration-owned"
+      ],
+      "idempotency_inbox_outbox": "none"
+    },
+    {
+      "qualified_name": "integration.provider_export_offers",
+      "owner": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "schema": "integration",
+      "migration": "apps/aroma-gateway/migrations/0003_offer_bindings.sql:33-45",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "snapshot_ref varchar(30) NOT NULL",
+        "supplier_ref varchar(30) NOT NULL",
+        "source_identity_scheme varchar(32) NOT NULL",
+        "source_offer_key_hash char(64) NOT NULL"
+      ],
+      "pk": [
+        "snapshot_ref",
+        "supplier_ref",
+        "source_identity_scheme",
+        "source_offer_key_hash"
+      ],
+      "fk": [
+        "(snapshot_ref,supplier_ref,scheme) -> provider_catalog_exports RESTRICT",
+        "(supplier_ref,scheme,source_offer_key_hash) -> provider_source_offers RESTRICT"
+      ],
+      "unique": [
+        "composite PK"
+      ],
+      "checks": [],
+      "indexes": [
+        "PK"
+      ],
+      "transactional_invariants": [
+        "snapshot membership references known export and source offer"
+      ],
+      "idempotency_inbox_outbox": "none"
+    },
+    {
+      "qualified_name": "integration.provider_offer_bindings",
+      "owner": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "schema": "integration",
+      "migration": "apps/aroma-gateway/migrations/0003_offer_bindings.sql:47-67",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "offer_ref varchar(30) NOT NULL",
+        "supplier_ref varchar(30) NOT NULL",
+        "source_identity_scheme varchar(32) NOT NULL",
+        "source_offer_key_hash char(64) NOT NULL",
+        "first_snapshot_ref varchar(30) NOT NULL",
+        "state varchar(16) NOT NULL DEFAULT Bound",
+        "created_at timestamptz NOT NULL"
+      ],
+      "pk": [
+        "offer_ref"
+      ],
+      "fk": [
+        "(supplier_ref,scheme,source_offer_key_hash) -> provider_source_offers RESTRICT",
+        "(first_snapshot_ref,supplier_ref,scheme,source_offer_key_hash) -> provider_export_offers RESTRICT"
+      ],
+      "unique": [
+        "(supplier_ref,scheme,source_offer_key_hash)"
+      ],
+      "checks": [
+        "offer/supplier/snapshot/hash formats",
+        "scheme = hmac-sha256-v1",
+        "state = Bound"
+      ],
+      "indexes": [
+        "PK",
+        "unique source identity"
+      ],
+      "transactional_invariants": [
+        "one stable offer_ref per source identity",
+        "first snapshot contains bound source offer"
+      ],
+      "idempotency_inbox_outbox": "none"
+    },
+    {
+      "qualified_name": "integration.provider_export_batches",
+      "owner": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "schema": "integration",
+      "migration": "apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql:22-33",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "snapshot_ref varchar(30) NOT NULL",
+        "batch_number integer NOT NULL",
+        "offer_count integer NOT NULL",
+        "uncompressed_bytes integer NOT NULL",
+        "batch_hash char(64) NOT NULL",
+        "previous_batch_hash char(64) NULL",
+        "created_at timestamptz NOT NULL"
+      ],
+      "pk": [
+        "snapshot_ref",
+        "batch_number"
+      ],
+      "fk": [
+        "snapshot_ref -> provider_catalog_exports(snapshot_ref) ON DELETE CASCADE"
+      ],
+      "unique": [
+        "composite PK"
+      ],
+      "checks": [
+        "batch_number >= 0",
+        "offer_count 1..500",
+        "uncompressed_bytes 2..2097152",
+        "hashes lowercase 64 hex"
+      ],
+      "indexes": [
+        "PK"
+      ],
+      "transactional_invariants": [
+        "batch belongs to export; hash chain is explicit",
+        "export deletion cascades batches"
+      ],
+      "idempotency_inbox_outbox": "none"
+    },
+    {
+      "qualified_name": "integration.provider_export_batch_offers",
+      "owner": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "schema": "integration",
+      "migration": "apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql:35-52",
+      "status": "ddl_present_deployed_unknown",
+      "columns": [
+        "snapshot_ref varchar(30) NOT NULL",
+        "batch_number integer NOT NULL",
+        "ordinal integer NOT NULL",
+        "supplier_ref varchar(30) NOT NULL",
+        "source_identity_scheme varchar(32) NOT NULL",
+        "source_offer_key_hash char(64) NOT NULL"
+      ],
+      "pk": [
+        "snapshot_ref",
+        "batch_number",
+        "ordinal"
+      ],
+      "fk": [
+        "(snapshot_ref,batch_number) -> provider_export_batches CASCADE",
+        "(supplier_ref,scheme,source_offer_key_hash) -> provider_source_offers RESTRICT"
+      ],
+      "unique": [
+        "(snapshot_ref,source_offer_key_hash)"
+      ],
+      "checks": [
+        "ordinal 0..499",
+        "source hash lowercase 64 hex"
+      ],
+      "indexes": [
+        "provider_export_batch_offers_source_idx",
+        "PK",
+        "snapshot/source unique"
+      ],
+      "transactional_invariants": [
+        "source offer occurs once per snapshot",
+        "batch ordinal bounded"
+      ],
+      "idempotency_inbox_outbox": "none"
+    }
+  ],
+  "designed_not_created": {
+    "catalog": [
+      "catalog_state",
+      "source_identities",
+      "products",
+      "variants",
+      "offer_mappings",
+      "availability",
+      "supplier_snapshots",
+      "snapshot_batches",
+      "snapshot_products",
+      "snapshot_variants",
+      "snapshot_offers",
+      "snapshot_availability",
+      "outbox_messages"
+    ],
+    "pricing": [
+      "pricing_policy_versions",
+      "pricing_quotes",
+      "pricing_quote_lines",
+      "pricing_idempotency_records",
+      "pricing_audit_records"
+    ],
+    "orders_core": [
+      "orders",
+      "order_items",
+      "order_history",
+      "order_desired_contributions",
+      "order_desired_lines",
+      "idempotency_records",
+      "outbox_messages"
+    ],
+    "orders_preparation": [
+      "catalog_mapping_projection",
+      "cart_desired_revisions",
+      "cart_desired_lines",
+      "cart_desired_blockers",
+      "inbox_messages",
+      "inbox_quarantine",
+      "outbox_messages"
+    ],
+    "orders_observer": [
+      "cart_observed_revisions",
+      "cart_observed_lines",
+      "inbox_messages",
+      "outbox_messages"
+    ],
+    "orders_convergence": [
+      "convergence_attempts",
+      "convergence_leases",
+      "mutation_reservations",
+      "inbox_messages",
+      "outbox_messages"
+    ],
+    "orders_projection": [
+      "cart_desired_order_facts",
+      "order_aroma_projections"
+    ],
+    "planned_constraints": [
+      "Order.version optimistic concurrency",
+      "unique active convergence lease per cart scope",
+      "monotonic fence_epoch",
+      "unique provider operation reference in Orders reservation",
+      "Inbox message_id + payload_hash conflict protection",
+      "Outbox aggregate sequence predecessor barrier + lease token",
+      "immutable PricingQuote/line and Catalog mapping snapshots"
+    ],
+    "source_refs": [
+      "config/database-role-map.json:25-163",
+      "docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md",
+      "docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md",
+      "docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md:6-29",
+      "docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md:28-94,137-195",
+      "docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md:71-89"
+    ]
+  },
+  "fk_summary": {
+    "actual_fk_count": 10,
+    "customer_fk_count": 3,
+    "integration_fk_count": 7,
+    "cross_owner_fk_count": 0,
+    "logical_refs_are_not_sql_fks": true,
+    "source": [
+      "apps/customer-service/migrations/0001_customer_schema.sql:23-27,44-48,85-89",
+      "apps/aroma-gateway/migrations/0003_offer_bindings.sql:33-45,61-66",
+      "apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql:31-33,43-49"
+    ]
+  },
+  "retention_review": {
+    "documented_policy": "Terminal retention at least 90 days; Orders keeps operationRef at least 90 days. No explicit indefinite UnknownOutcome retention rule was found.",
+    "source": "docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md:67-84",
+    "migration_evidence": [
+      "apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql:4-16"
+    ],
+    "runtime_evidence": [
+      "apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts:469-489"
+    ],
+    "finding": "Actual cleanup includes Acknowledged, Rejected and UnknownOutcome after retention_until. This is not labeled a spec violation without a supporting requirement. End-to-end recovery horizon was not exercised."
+  },
+  "pool_admission": {
+    "current_config": {
+      "max_connections": 96,
+      "reserved_connections": 32,
+      "rollout_replicas": 1,
+      "steady_connections": 56,
+      "largest_pool": 8,
+      "rollout_connections": 8,
+      "required_connections": 96,
+      "orders_service_pool": 4
+    },
+    "stale_doc_conflict": {
+      "path": "docs/launch/11_CONFIGURATION_AND_SECRETS.md:233-241",
+      "orders_service_pool": 12,
+      "steady_connections": 64,
+      "note": "recorded discrepancy; repository not modified"
+    },
+    "matrix": {
+      "path": "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md:33,138-162",
+      "orders_service_pool": 4,
+      "steady_connections": 56,
+      "required_connections": 96
+    },
+    "algorithm_source": "packages/platform-config/src/index.ts:987-1075"
+  }
+}

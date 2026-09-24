@@ -1,0 +1,1082 @@
+{
+  "schema": "coffee-architecture-source-manifest/v1",
+  "repository": "YurGusev/CoffeeOrderPlatform",
+  "source_commit": "4b2cad1dab30af66ad0b2fe64da280222e506574",
+  "verified": "2026-09-22",
+  "scope": "Статический срез исходников accepted develop; не runtime acceptance",
+  "publication_refresh": [
+    {
+      "path": "docs/launch/README.md",
+      "reason": "Исключена локальная дополнительная строка навигации; source spans и hash приведены к accepted develop. Семантика архитектуры не изменена."
+    }
+  ],
+  "sources": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "4c52cc847d092e5862c1842d9630c688252e05e4322172face37718016c6c36e",
+      "lines": 145,
+      "kind": "governance"
+    },
+    {
+      "path": "Dockerfile",
+      "sha256": "3420448e3562802e164cf09e319cd331edafa8554f247cc4281a830fd2c49ca0",
+      "lines": 139,
+      "kind": "documentation"
+    },
+    {
+      "path": "apps/api-internal/src/index.ts",
+      "sha256": "13e99d28efe8deb7e8db1ec582cd8a4d93722ad30303504555696b09ab73dd5c",
+      "lines": 484,
+      "kind": "source"
+    },
+    {
+      "path": "apps/api-internal/src/main.ts",
+      "sha256": "52dd54a3edfc75e22b821bc365ed13c1eb19290706f68a790da93e093868721a",
+      "lines": 22,
+      "kind": "source"
+    },
+    {
+      "path": "apps/api-public/src/index.ts",
+      "sha256": "71665234e9a3101abec9507e364f51d752656628d4bf23f5648e185f9a1c09cb",
+      "lines": 320,
+      "kind": "source"
+    },
+    {
+      "path": "apps/api-public/src/main.ts",
+      "sha256": "161592983cead8d62b1cfe0eeda5240c16fcca46a1bc39ca8915c0fb6e506af4",
+      "lines": 20,
+      "kind": "source"
+    },
+    {
+      "path": "apps/aroma-convergence/package.json",
+      "sha256": "7d60a3756c8aca3e47f0375b8206497a548877402d5e7257390a8a53811a55d3",
+      "lines": 1,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-convergence/src/main.ts",
+      "sha256": "7fe243168c9fad7043f05a3ed187e0e8c7bc9afac1d1d666198e69e1423a9f43",
+      "lines": 3,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/migrations/0001_provider_sessions.sql",
+      "sha256": "41a8936bd3fd75160d2b44ecaa82e00fd15c0d3a3c5c5fd73cccbc4583b35aff",
+      "lines": 20,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/migrations/0002_provider_mutation_journal.sql",
+      "sha256": "5ba627ed7256557c47682a3ef6beafe770d8f9da6217364f19236fe76d9c801b",
+      "lines": 72,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/migrations/0003_offer_bindings.sql",
+      "sha256": "19d4ff0aeabf71ea0ef952aa286f2a0ae261060b1a7e1229c20d75daf0d4dd6b",
+      "lines": 72,
+      "kind": "migration-sql"
+    },
+    {
+      "path": "apps/aroma-gateway/migrations/0004_provider_offer_identity.sql",
+      "sha256": "8c45935ef9e5f592056e7756bdb562759ecfcbd0ff33ab3ca59d4805e7fa295d",
+      "lines": 16,
+      "kind": "migration-sql"
+    },
+    {
+      "path": "apps/aroma-gateway/migrations/0005_catalog_export_attempts.sql",
+      "sha256": "3652392ee45bdf02621c60d84b808171bf32c834b070dcef15cb5d2cdaab940c",
+      "lines": 57,
+      "kind": "migration-sql"
+    },
+    {
+      "path": "apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql",
+      "sha256": "9590251d2b8889843e0a2f84e14dacc659d81279a9cc1f97c64afafcf231ccd9",
+      "lines": 16,
+      "kind": "migration-sql"
+    },
+    {
+      "path": "apps/aroma-gateway/migrations/0007_provider_mutation_grind.sql",
+      "sha256": "f55734e3a6b50708bc4262a023192912ea86aeee64d814bcc25b7f9753a48a69",
+      "lines": 3,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/application/cart-reader.ts",
+      "sha256": "ce266bb3126cb3eb6e66b262c54c9eb231cd360bc3796d6020dbe98a2ba462da",
+      "lines": 159,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/application/catalog-export.ts",
+      "sha256": "2c664c06bbb84052ead913ef425db338859dce88d5eca10fdef8e440fe642249",
+      "lines": 1567,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/application/provider-cart-mutator.ts",
+      "sha256": "236ff6bf7e24785499f9d9b81d3bacc1de56e1e4979749460ede8481e6672a82",
+      "lines": 184,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/application/provider-catalog-source.ts",
+      "sha256": "fdc4a2cd2f0de02b8d6491dd8239f19b1406c7fa82b68708da47a5fd55c9916c",
+      "lines": 244,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/application/provider-grinds.ts",
+      "sha256": "038b8200eec6c7f241a31a781cc788994907afd8d9fa3b5faaa6eab7f026c042",
+      "lines": 73,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/domain/mutation-journal.ts",
+      "sha256": "bacbdb3097efde69f66d30066047b0340cf6c7ab13d917e4c6cbb1c1a880afd8",
+      "lines": 459,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/domain/provider-errors.ts",
+      "sha256": "65f2b15fdac5a39e47726e5705b76a3b44b15255890e09529fc19f9a2876e30e",
+      "lines": 31,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/domain/source-identity.ts",
+      "sha256": "8a5688030c1f26823efbc3d9c293cf0c23c6c9788dabf164c5d2873d8e2c18a4",
+      "lines": 151,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/infrastructure/database/offer-binding-store.ts",
+      "sha256": "bc8b9a41db77036ae839ba2285a6dab13f887826497f7f4d29862d67c9569fc9",
+      "lines": 346,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts",
+      "sha256": "679171a3fb570be7dc25ae70c027baa734d4bbbfb68e77ebb1e671f93f3646a9",
+      "lines": 874,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/infrastructure/database/provider-session-store.ts",
+      "sha256": "19711c403ab1a1c94a978a25232358befe7a94de6c7cde0f63923abe9bd7036a",
+      "lines": 175,
+      "kind": "actual-writer"
+    },
+    {
+      "path": "apps/aroma-gateway/src/infrastructure/observability.ts",
+      "sha256": "8f4ca1a34f75b4d4f5a74fa1077ec4bbf9207fe1d4cae45183eb3eb190c6ec0e",
+      "lines": 139,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/infrastructure/provider/decoder.ts",
+      "sha256": "394075596e804164fc770ad9c591bcb327d2599788020b68896255193eca2467",
+      "lines": 362,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/infrastructure/provider/http-client.ts",
+      "sha256": "8e54bfa607339d305d39d307230d2eb772a9613548a22c673abbef44cd4dddc7",
+      "lines": 627,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/infrastructure/provider/session.ts",
+      "sha256": "1d76679f4d7030774d609b1355a3b539315cdd535f82e0e6bb2d6a995cd124f9",
+      "lines": 593,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/main.ts",
+      "sha256": "5baba8fcd3c78fba27a858bde59e80df929bcbe297178193212efa749c426266",
+      "lines": 162,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-gateway/src/transport/http/index.ts",
+      "sha256": "84b9a56a325ee178c9f92c740fe9e3cb5832861bbba75206495f9f9681903a2e",
+      "lines": 241,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/aroma-observer/src/main.ts",
+      "sha256": "3cf7a648f728b36efcbbb7f2801b7d7660486259e09a2e46b214cd38c244b265",
+      "lines": 3,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/catalog-activation-worker/src/main.ts",
+      "sha256": "fe32bc25bd176e0705da9d6a95462251dc06e67ec8d0873966a4aa8a95d25593",
+      "lines": 3,
+      "kind": "code",
+      "supports": "Catalog activation shell-only entrypoint"
+    },
+    {
+      "path": "apps/catalog-service/src/main.ts",
+      "sha256": "21415cdebaf4f8cae595d51f02d8b91e1b9121a49ada72ec1fb2a2c026ea8a16",
+      "lines": 3,
+      "kind": "runtime-stub"
+    },
+    {
+      "path": "apps/catalog-supplier-sync/src/main.ts",
+      "sha256": "a8cab344acda8c94f4372f4f1e18db867a354079b0197db50065a7d3456ff48f",
+      "lines": 3,
+      "kind": "code",
+      "supports": "Catalog sync shell-only entrypoint"
+    },
+    {
+      "path": "apps/customer-service/migrations/0001_customer_schema.sql",
+      "sha256": "2b8b0a818c4305b34ed853f7f7cc72743741bcb2dbce8513f8376bc4cd8d86e8",
+      "lines": 104,
+      "kind": "migration-sql"
+    },
+    {
+      "path": "apps/customer-service/migrations/0002_customer_indexes.sql",
+      "sha256": "00968f5ed219d9384646e2ea2888aab0d2b5a8ad2c22d1a823e35279feb6e723",
+      "lines": 27,
+      "kind": "migration-sql"
+    },
+    {
+      "path": "apps/customer-service/src/application/create-customer.ts",
+      "sha256": "1f0f7ee6aef753f714fd3b545a0ccdfd35b40632a89a19b1105468e18307e884",
+      "lines": 40,
+      "kind": "code",
+      "supports": "Customer create command validation"
+    },
+    {
+      "path": "apps/customer-service/src/application/search-customers.ts",
+      "sha256": "42c64e8bec5fb4361f3443fa01b9299bcbfcb538ed2d02953a61df22b331c9e9",
+      "lines": 228,
+      "kind": "code",
+      "supports": "Customer search application path"
+    },
+    {
+      "path": "apps/customer-service/src/http/index.ts",
+      "sha256": "37ad14e994e687e903bd40213f1c715ac26ac6d9ab09c727e6e1451557791f65",
+      "lines": 443,
+      "kind": "source"
+    },
+    {
+      "path": "apps/customer-service/src/infrastructure/postgres/customer-repository.ts",
+      "sha256": "d4587c5ed8bdc63d7af00e516ce7f1daf2241901b8d0f11ae03507ac7789cfab",
+      "lines": 291,
+      "kind": "actual-writer"
+    },
+    {
+      "path": "apps/customer-service/src/infrastructure/postgres/customer-store.ts",
+      "sha256": "1d1fb4f98b5d5b97c77498fb1b0812d102a677929bf698ef0710bc5d3e48d627",
+      "lines": 150,
+      "kind": "actual-writer"
+    },
+    {
+      "path": "apps/customer-service/src/infrastructure/postgres/idempotency-repository.ts",
+      "sha256": "fb5dd156d3ff593a06fe010b0565bc023809e806da59cf08ba4c4571450e1883",
+      "lines": 16,
+      "kind": "actual-writer"
+    },
+    {
+      "path": "apps/customer-service/src/main.ts",
+      "sha256": "d111b06cda4ccff477aa5f165729c47f74b8e34d2f9acfc1ebbdf77655814ba9",
+      "lines": 82,
+      "kind": "source"
+    },
+    {
+      "path": "apps/orders-aroma-preparation/package.json",
+      "sha256": "d3b35bdf8dd4ad34ba43a6c10bd18cbc48ee1a2e982447c3cc981c780d7f037f",
+      "lines": 1,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/orders-aroma-preparation/src/main.ts",
+      "sha256": "7f99ee3021fd9138bcb4bc3228699f4015742ad1a9bdde1dc697065143797253",
+      "lines": 3,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "apps/orders-service/src/main.ts",
+      "sha256": "d29d454338379d1284aab64967df67dd1086a8e438525813fa2551442f1ec88f",
+      "lines": 3,
+      "kind": "runtime-stub"
+    },
+    {
+      "path": "apps/pricing-service/src/main.ts",
+      "sha256": "0b35337f73b12b364c2861fcec80c8a7888eade910d8f52663e854dfb5f1ba0a",
+      "lines": 3,
+      "kind": "runtime-stub"
+    },
+    {
+      "path": "apps/realtime-gateway/src/main.ts",
+      "sha256": "c992df894b2d97d28e596bada6a52b3f038b6266912ede6ccff4dcd6a7621b75",
+      "lines": 3,
+      "kind": "code",
+      "supports": "realtime shell-only entrypoint"
+    },
+    {
+      "path": "apps/web/package.json",
+      "sha256": "14a1fa9a118051065b817eda0565e805e12e78ebcc52297d729ad59318f465b8",
+      "lines": 1,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "apps/web/src/main.ts",
+      "sha256": "00dba198a7e4a0f9e1e9749344ac752a546b69fc3d3b0c9bcabe494170cdeee0",
+      "lines": 3,
+      "kind": "source"
+    },
+    {
+      "path": "compose.yaml",
+      "sha256": "fa6d17c4ba93221b3c0a6ca9343d57f58f002259786e2bc70d4dc76475c9f063",
+      "lines": 547,
+      "kind": "configuration",
+      "supports": "runtime packaging only; not business acceptance"
+    },
+    {
+      "path": "config/database-ownership.json",
+      "sha256": "0e9a9f4574a0fd3930dc1e6ec9ff37a8ba08615cb50b21000062d011d3ba76b3",
+      "lines": 49,
+      "kind": "actual-config"
+    },
+    {
+      "path": "config/database-role-map.json",
+      "sha256": "fcba7637e40b73258e90f3de1292a70713134320761c9bd161b5c7a86675f657",
+      "lines": 186,
+      "kind": "actual-config"
+    },
+    {
+      "path": "config/platform.yaml",
+      "sha256": "115efccc357bced3ea4bd68eff07ceffff0438d01c52a500752ec1faab920f58",
+      "lines": 453,
+      "kind": "config"
+    },
+    {
+      "path": "config/service-catalog.json",
+      "sha256": "92a13e7cb762b378743445c832e02d65b94fe693dd13586cba3c1c2293d9964c",
+      "lines": 169,
+      "kind": "config"
+    },
+    {
+      "path": "config/service-interactions.json",
+      "sha256": "eecad8154a08caa83030d9590bd5262ee41a60467130b70a016a0c6963aa8e56",
+      "lines": 48,
+      "kind": "config"
+    },
+    {
+      "path": "config/toolchain-versions.json",
+      "sha256": "77c01dc7a2e01fbf2d501cf84bf6ce1859f591d30b9309bd4c8409c26eb18aae",
+      "lines": 44,
+      "kind": "configuration"
+    },
+    {
+      "path": "contracts/manifest.yaml",
+      "sha256": "aa98189817c7c4f512c9d28b393bed7663c81bae93d705cac7cae39cf9735b5f",
+      "lines": 46,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "contracts/openapi/client-v1.yaml",
+      "sha256": "0768184f0d0c3a84fa3602e830b09b910554867651b48395eceab10a91090e06",
+      "lines": 1670,
+      "kind": "openapi"
+    },
+    {
+      "path": "contracts/openapi/internal-v1.yaml",
+      "sha256": "62c578651f5bfedead5451c49a7b5e72a73acde9e0cc5ae8cc18e5eac0c12206",
+      "lines": 1127,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "contracts/schemas/common/message-envelope.v1.schema.json",
+      "sha256": "326e082a6c09af8c8214bda4274a7d6e93a152c0eebf4708fc911529c1c9e50b",
+      "lines": 68,
+      "kind": "json-schema"
+    },
+    {
+      "path": "contracts/schemas/common/money-version-time.v1.schema.json",
+      "sha256": "80f6173914262b6a07d4181c6b6bf5a6e4493c67849c6152464930b57672674d",
+      "lines": 46,
+      "kind": "contract-primary"
+    },
+    {
+      "path": "contracts/schemas/events/aroma-convergence-changed.v1.schema.json",
+      "sha256": "a37f79e576dcc8bfb22dbd2cc20e0dd974340effad36c3a35de47c6072e895e9",
+      "lines": 38,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "contracts/schemas/events/aroma-convergence-requested.v1.schema.json",
+      "sha256": "281589f87483d5a9b772ae0c2fba15e3bb278e9d8fd054fe0d761bd6de71fb19",
+      "lines": 32,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "contracts/schemas/events/aroma-observation-changed.v1.schema.json",
+      "sha256": "ef4de23f7489870ec49c5ed9dcc243f281af732b5214407fb7a01f8e4a087869",
+      "lines": 28,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "contracts/schemas/events/catalog-mapping-changed.v2.schema.json",
+      "sha256": "0d49726f73b1ff20df2ff77b09bc5c5ee0d2712d6f317402e05af1c2c2cb5be4",
+      "lines": 65,
+      "kind": "json-schema"
+    },
+    {
+      "path": "contracts/schemas/events/catalog-snapshot-activated.v1.schema.json",
+      "sha256": "0b3eca2ba4f6985dbb3ab67f7dfdfa3ac2a6c67cb0bf72a97200989986bb3c30",
+      "lines": 42,
+      "kind": "json-schema"
+    },
+    {
+      "path": "contracts/schemas/events/order-confirmed.v1.schema.json",
+      "sha256": "c3c8a973d084d28545a0ff0239d4b4e968fa6da84b9d64a0e828f0d42977bce5",
+      "lines": 28,
+      "kind": "json-schema"
+    },
+    {
+      "path": "contracts/schemas/events/realtime-invalidated.v1.schema.json",
+      "sha256": "c2bc7c6d441c7ad48e8414ec13260dc0dd8ad5845b316a3fb108c3bb93a5dbf0",
+      "lines": 27,
+      "kind": "json-schema"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22/M19_API_ARCHITECTURE/API_ROUTE_AUTHORITY.md",
+      "sha256": "d417a65ccc4ec0c13b4ab28dd516dfe6280f1794ead0ad0a33dcda59398f8496",
+      "lines": 32,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22/M19_API_ARCHITECTURE/README.md",
+      "sha256": "a3b3b3894dbc797f41933e222da44199e50a6d95c6615b179ce65a1ceccb4cde",
+      "lines": 23,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22/M20_SERVICE_ORCHESTRATION/RUNTIME_AND_INTERACTION_AUTHORITY.md",
+      "sha256": "10b09de3b2b8f25f92f9b29e632468d9d0e44549e2875efce11040f83ec0147f",
+      "lines": 40,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22/M20_SERVICE_ORCHESTRATION/service-interaction-policy.closure.json",
+      "sha256": "092218088851a95846b001db8fbb7ddeb5d44b6516bc9973430cb7913939cabc",
+      "lines": 491,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_ContractClosure_RU_2026-08-22/M21_OPERATOR_WORK_CENTER/OWNER_COMMAND_ALLOWLIST_AND_AUDIT.md",
+      "sha256": "0122c3eeb03bb81297dcdcca1f83e41f871244d52853587e2cf170cbf562ca39",
+      "lines": 83,
+      "kind": "normative-doc",
+      "supports": "Work Center read-model ownership and typed owner command allowlist"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M04_TYPESCRIPT_PLATFORM/02_BOUNDED_CONTEXTS_AND_SERVICE_OWNERSHIP.md",
+      "sha256": "48192825da1c96070494fa55c79ebce15ac56bd2c25303e3bc466dc65d4523ff",
+      "lines": 142,
+      "kind": "normative-doc",
+      "supports": "canonical owner boundaries, Orders Desired/Observed, no direct Browser/AROMA writes"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M04_TYPESCRIPT_PLATFORM/03_NODEJS_TYPESCRIPT_EVENT_PLATFORM.md",
+      "sha256": "73150b43734ba72370d76cc12f9eada011928d4e235a413348859d98a45a2bb3",
+      "lines": 118,
+      "kind": "normative-doc",
+      "supports": "canonical Kafka to realtime to SSE invalidation path"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M04_TYPESCRIPT_PLATFORM/04_API_SURFACES_AND_CONTRACTS.md",
+      "sha256": "3ffd003317ac2afcd6761509cd110e1c4946e5e501ce658ae2d606df8098543d",
+      "lines": 30,
+      "kind": "normative-doc",
+      "supports": "canonical client/agent/internal trust surfaces"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M04_TYPESCRIPT_PLATFORM/06_NODEJS_RUNTIME_ARCHITECTURE.md",
+      "sha256": "db2225551e6af459687d9694c5b85a3d7e1933f0ae45eb6ebe0465bcababa2ce",
+      "lines": 495,
+      "kind": "normative-doc",
+      "supports": "canonical process, deadlines, pool and graceful-drain rules"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M04_TYPESCRIPT_PLATFORM/07_ARTIFACT_STORAGE_BOUNDARY.md",
+      "sha256": "5eb0a5604feb91f05d2d979a7fcdd5c3e0fddc8d57880c4f74cde84c8aa4e7bf",
+      "lines": 82,
+      "kind": "normative-doc",
+      "supports": "ArtifactRef ownership, hash/size/schema verification and scan boundary"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M07_CUSTOMER_CATALOG/05_AROMA_MAPPING_LIFECYCLE.md",
+      "sha256": "d8fb9e6ef68be2f920d5802ab5c97405d2e4312086370ca91afd8a8cc6c5073f",
+      "lines": 162,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M07_CUSTOMER_CATALOG/07_CATALOG_TO_ORDERS_AROMA_CART_REACTION.md",
+      "sha256": "35137f218a70ca8ea325883c01cca4d46dc77be6068ca2a53d78fc099cb70c90",
+      "lines": 164,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M08_PAYMENTS/01_PAYMENTS_ARCHITECTURE.md",
+      "sha256": "e9aaf22ac67334cc04574e854509d965c5b36e033f3d6977cf8a76c1ae75870f",
+      "lines": 92,
+      "kind": "normative-doc",
+      "supports": "Payments owner, amount authority, hosted payment proof and UnknownOutcome"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M08_PAYMENTS/02_ORDER_PAYMENT_HANDOFF_AND_MANUAL_FALLBACK.md",
+      "sha256": "ac908064b84bb2cb9a14e1bfc67ac533615d27e97ddd5f1823dc70cdf7bfb864",
+      "lines": 45,
+      "kind": "normative-doc",
+      "supports": "OrderPaymentRequired identity and idempotent Orders payment consumer"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M08_PAYMENTS/03_REFUND_CANCELLATION_AND_COMPENSATION.md",
+      "sha256": "19226f25044222982a11a84a7cbe03f3fed24692aaebf60e42f34fe03e2a1475",
+      "lines": 63,
+      "kind": "normative-doc",
+      "supports": "cancel/refund/late-success compensation and effectively-once provider effects"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M08_PAYMENTS/04_PAYMENT_RUNTIME_TOPOLOGY_AND_WEBHOOK.md",
+      "sha256": "9e44e32d0999ee0f856d6227a1516bc25e05424a99575c334b8c6c866b5da8ba",
+      "lines": 38,
+      "kind": "normative-doc",
+      "supports": "authenticated webhook ingress and payment worker separation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M09_HERMES_VK/01_HERMES_AGENT_RUNTIME.md",
+      "sha256": "d4597cc83eee7d22807faca41c401a933cbe83cb0abdc507bfe315c9b53bda11",
+      "lines": 83,
+      "kind": "normative-doc",
+      "supports": "Hermes adapter boundary and business-truth ownership"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M09_HERMES_VK/02_VK_TO_HERMES_FLOW.md",
+      "sha256": "9e0eb924d8827bcd5902d58b45c0fede221323e5e06b12160616eb4a5e33a347",
+      "lines": 97,
+      "kind": "normative-doc",
+      "supports": "VK ingress/egress, Kafka intake and Hermes dispatcher flow"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M09_HERMES_VK/04_CHANNEL_IDENTITY_AND_CUSTOMER_RESOLUTION.md",
+      "sha256": "2b8cc9a0951740f5659eb5cfb9e910ee22a68b375eaad7c99757798e3c668275",
+      "lines": 125,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M09_HERMES_VK/06_EDA8_HERMES_RUNTIME_INTEGRATION.md",
+      "sha256": "37c3823bcaa814fea77912f26f1ca3ca91548bb0cfc0d1dfe42f7335f6a228d4",
+      "lines": 104,
+      "kind": "normative-doc",
+      "supports": "Hermes event outcomes, ordering, dedupe and runtime requirements"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M09_HERMES_VK/07_AI_VK_CONFIRMATION_AND_APPROVAL_PROOF.md",
+      "sha256": "5fa0e2d747c4ae6098b38ffd817629f0de64cbfba6522d64e1aae57383811a4a",
+      "lines": 105,
+      "kind": "normative-doc",
+      "supports": "trusted channel confirmation proof; LLM cannot self-authorize"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M09_HERMES_VK/08_CHANNEL_IDENTITY_BROKER_CONTRACT.md",
+      "sha256": "3693f94e03a891c705b23369331e815635fd3db09df70bf6d1277d38c1cee2fc",
+      "lines": 56,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M09_HERMES_VK/README.md",
+      "sha256": "cd3098a81a20213951a1195ef1ef677ee7c21bb72912298bf6c2945894e841f3",
+      "lines": 50,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M10_INVOICES/01_INVOICES_MIGRATION.md",
+      "sha256": "269e1e6478b256ca8125749fc8d12593a0340f246d7fb9ebc9d2c49447a69b01",
+      "lines": 82,
+      "kind": "normative-doc",
+      "supports": "Invoices ownership and materialization trigger"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M10_INVOICES/02_CHECKOUT_MATERIALIZATION_AND_PRICE_PROOF.md",
+      "sha256": "3c12c1d71a49e2e16c7f7fac615202aa7a5b10cf3667fd4ad08377ef6e7f6e71",
+      "lines": 44,
+      "kind": "normative-doc",
+      "supports": "invoice price proof and Confirmed to AwaitingCustomerPayment gate"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M10_INVOICES/03_ALLOCATION_MANIFEST_AND_PRICE_PROOF_CONTRACT.md",
+      "sha256": "8ee8393af6fbe5dbe09b9ce197d64c724367d0e35993fb9ae2f140d9c770e0c3",
+      "lines": 106,
+      "kind": "normative-doc",
+      "supports": "immutable allocation manifest, ArtifactRef and per-order proof validation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M10_INVOICES/04_INVOICE_COMPENSATION_STATE_MACHINE.md",
+      "sha256": "3c9491a2b91b23dd9b31e8191ec6e6988e62fa688e0f58dde24476cf4ceb6a2e",
+      "lines": 35,
+      "kind": "normative-doc",
+      "supports": "invoice compensation and ManualReview semantics"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M11_AROMA_GATEWAY/01_AROMA_MIGRATION_AND_SAFETY.md",
+      "sha256": "2b88b235bddc5423589ecc80cadc7db632a49c2ec315c917075dbc139ef6ad2f",
+      "lines": 96,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M11_AROMA_GATEWAY/02_AROMA_GATEWAY_PROVIDER_CONTRACT.md",
+      "sha256": "8753be4b61a3b3b1db9411e4c741b9b96a6135d8e2533d50f0f60996ec4e1e3c",
+      "lines": 71,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M11_AROMA_GATEWAY/03_AUTHORITATIVE_CART_DESIRED_OBSERVED_CONVERGENCE.md",
+      "sha256": "eb7632c12e88a640ecb706211c7725047a48f4a74b46fcf2334373f82533c1be",
+      "lines": 145,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M12_ORDERS/01_ORDERS_MIGRATION_AND_INVARIANTS.md",
+      "sha256": "42f4ce9ec6da7b13617b1ee0acc4a3ec9676f95452e04fcba4546eba1351aa0f",
+      "lines": 90,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M12_ORDERS/02_ORDER_LIFECYCLE_STATE_MACHINE.md",
+      "sha256": "7866e0f6bf5432b99a7937cf8e29a796c70bcabf37c7aebfcf9ba05195671f27",
+      "lines": 91,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M19_API_ARCHITECTURE/11_ORDER_AROMA_API_CONTRACTS.md",
+      "sha256": "58a29fef145ed53cea615d3ea8a49bef8de95c4bce93afc3819df59c6cb298ae",
+      "lines": 22,
+      "kind": "architecture-contract"
+    },
+    {
+      "path": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
+      "sha256": "606dcd5ac4ca63c8c2f1b1b3625eee5400f241c8095a264a7cad85c2b9e65029",
+      "lines": 212,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/adr/ADR-0025-fastify-launch-recovery.md",
+      "sha256": "108de7042b7546cae60e4fe807fe1bb8640d464e37caed1bb5a147f0c1abc141",
+      "lines": 106,
+      "kind": "normative-doc",
+      "supports": "historical Fastify decision only; not remote issue-status evidence"
+    },
+    {
+      "path": "docs/adr/ADR-0027-frontend-ui-foundation.md",
+      "sha256": "50f9d1dafe5d9598ac302325486a16746ee757531937e015f73fb336bf83d9a0",
+      "lines": 188,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/frontend/ux/README.md",
+      "sha256": "7858c358141126f55424896322dff84c358bbacacf5e08e691c47f3176c26c0b",
+      "lines": 228,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/launch/00_SCOPE_AND_DECISIONS.md",
+      "sha256": "7c40c4a82e40bf9c8321750c7a1c1ba09896e8f9c22f73dd1b788a008025fc54",
+      "lines": 57,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/launch/01_RUNTIME_ARCHITECTURE.md",
+      "sha256": "2f17f279c1ab63b6446932c354320ed8d8f61c1ff4bc65d292cf3de5b03be02a",
+      "lines": 188,
+      "kind": "normative-doc",
+      "supports": "runtime roles, Edge/api-public boundary and launch exclusions"
+    },
+    {
+      "path": "docs/launch/02_FIRST_VERTICAL_SLICE.md",
+      "sha256": "219b8eac64c5335376c35825e469a52c6ccabe4e3af661218462dda3d51141d2",
+      "lines": 50,
+      "kind": "normative-doc",
+      "supports": "frontend order: Draft before Catalog/quote; post-commit Desired and realtime refetch"
+    },
+    {
+      "path": "docs/launch/03_HTTP_API_CONTRACT.md",
+      "sha256": "47ab0ea93d6085b0bc314f05071c54f7fe0dada6764f5e7afb547f45313de907",
+      "lines": 83,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/launch/04_AROMA_CART_SAFETY.md",
+      "sha256": "013f4ed0e8231a63c6ca14c55179176dabc10d0d0aab850b8310d8abca1fad20",
+      "lines": 64,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/launch/05_DATA_OWNERSHIP.md",
+      "sha256": "22efaeddc8d46a8e06d63913cbf61bbfd41877138c7d48054811e24148c6b8f9",
+      "lines": 141,
+      "kind": "spec"
+    },
+    {
+      "path": "docs/launch/06_EVENTS_AND_RECOVERY.md",
+      "sha256": "e3b4bc349a987d75a33e4ad741db4fc6a6d0c0e0cb4e9484d95504fbf5aaa0e6",
+      "lines": 330,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/launch/07_FRONTEND_CONTRACT.md",
+      "sha256": "43dbfcc6b8c14fb15ac6b8b963af588e7b15922d1eee5dee761f0db558f3b398",
+      "lines": 119,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/launch/09_EXISTING_DATABASE_AND_VERSIONS.md",
+      "sha256": "ebe2b218ab3d102f7d5c437d1daf58ca075d2c235511b2b98c0f8a4d8c5d7531",
+      "lines": 204,
+      "kind": "spec"
+    },
+    {
+      "path": "docs/launch/10_RUNTIME_CATALOG.md",
+      "sha256": "36094ed25ce2181e479431c17ffad30190113bd16c29b38b2379b11cbe2026a3",
+      "lines": 241,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/launch/11_CONFIGURATION_AND_SECRETS.md",
+      "sha256": "91e79f2e28c2bf7230e0aa9bb6ed2fe71e4ba07c44eec1ca307cb1b89ee7101b",
+      "lines": 330,
+      "kind": "conflict-source"
+    },
+    {
+      "path": "docs/launch/12_LAUNCH_CONTRACT_CATALOG.md",
+      "sha256": "2f66a5da35f9704ea1724ad58b8e5149e441b45177c6dae0363153f849416b9f",
+      "lines": 349,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md",
+      "sha256": "98d958f04ea5172b526f2cddd2d9bf3547692517dfbc09b022c44c358165bce0",
+      "lines": 162,
+      "kind": "delivery-contract"
+    },
+    {
+      "path": "docs/launch/14_CUSTOMER_IMPLEMENTATION_SPEC.md",
+      "sha256": "3d122d932092714cf9809fd4a99171b732b3697119800491ce3d5c958b860800",
+      "lines": 330,
+      "kind": "design-spec"
+    },
+    {
+      "path": "docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md",
+      "sha256": "82692def05d3955d5ed6c10fe12f53e4bd4a4ad01a3846a8b4e39099cca40233",
+      "lines": 312,
+      "kind": "design-spec"
+    },
+    {
+      "path": "docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md",
+      "sha256": "9679e8b116b919839a74e251de36906000169ffe98ecc552eb94645585bdc410",
+      "lines": 226,
+      "kind": "design-spec"
+    },
+    {
+      "path": "docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md",
+      "sha256": "ea24a8bdc0bd1493e03593375afebb531ee17c99a782f7b4244222bf2f424c1d",
+      "lines": 263,
+      "kind": "design-spec"
+    },
+    {
+      "path": "docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md",
+      "sha256": "66298fc0898dd74ea0fab0bdb4671c71d723c6ad139e89984e9dac19a051aeae",
+      "lines": 331,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md",
+      "sha256": "f7c3aab096f9ab8ee9ba2ba9e2c93568ab975af7d3a0dcd69088ad9d69e603d9",
+      "lines": 274,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md",
+      "sha256": "802a3203d79758e3eed0cafd1f2691ad3385eb38fc751d9531df52c17140db9b",
+      "lines": 196,
+      "kind": "adr-or-doc"
+    },
+    {
+      "path": "docs/launch/21_LAUNCH_VERIFICATION_SPEC.md",
+      "sha256": "91e7a36f7b1ba334e4c7566993308cb85c9cf58a93e5e0a674815d039b1af5f6",
+      "lines": 369,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md",
+      "sha256": "98c969094686c548d8b5627b24e14c589d27f43234647ea578488fccc09b44d1",
+      "lines": 114,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md",
+      "sha256": "95e9d3bdc643a4101aabc45d5071c67be036f4c3f35691fbcd8db8f47beff7ae",
+      "lines": 171,
+      "kind": "config-spec"
+    },
+    {
+      "path": "docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md",
+      "sha256": "3ded6c893e0e32430fce9931b6f77067731782ad52158ee318d5041151a3737f",
+      "lines": 66,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/launch/27_AROMA_PROVIDER_PROTOCOL.md",
+      "sha256": "192291832cc9322180fc5415eb97a818125196a9f934c335d583027f8c52a43e",
+      "lines": 622,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md",
+      "sha256": "e6edd67b49613c194b7e3158f7e6bc06e4e1f1cc3cdaa9396e62e2c8c5237ebf",
+      "lines": 208,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/launch/README.md",
+      "sha256": "31332739e5d8c5b3c6478b9ed004dc321cfc8ae636399ccee6fc09211e6e8b94",
+      "lines": 89,
+      "kind": "authority-index"
+    },
+    {
+      "path": "docs/platform/LOCAL_PLATFORM.md",
+      "sha256": "221f1e320c2d29b563bb65eaa1df78c3ed642c9658d929292ac9f6a1446f241a",
+      "lines": 219,
+      "kind": "documentation"
+    },
+    {
+      "path": "docs/wave-2/01_AROMA_SUPPLIER_INVOICES.md",
+      "sha256": "7f4264a949dda418ef76cf86b0bebb904bc8608ff4e2d852317b7928baf8e163",
+      "lines": 464,
+      "kind": "normative-doc",
+      "supports": "W2 supplier invoice planning inputs"
+    },
+    {
+      "path": "docs/wave-2/README.md",
+      "sha256": "ae6dbc47654420556a5312dc830d24f70929283e3ab258c8a01b190afb0d4b7a",
+      "lines": 183,
+      "kind": "normative-doc",
+      "supports": "W2 scope, unresolved inputs, M10/M08/M21 references and Hermes/VK mandatory-cycle exclusion"
+    },
+    {
+      "path": "evidence/aroma-provider/2026-09-12-cart-mutations/README.md",
+      "sha256": "12719a455e8f76865e36c92b21fbe7361a603447d38ad9f2ec6892854fbd99f4",
+      "lines": 87,
+      "kind": "historical-evidence"
+    },
+    {
+      "path": "evidence/aroma-provider/2026-09-12/README.md",
+      "sha256": "1ebcdcc0f44492886921c805e55f1df0104c9a3c9de4276d25e7c13ef22c0833",
+      "lines": 61,
+      "kind": "historical-evidence"
+    },
+    {
+      "path": "evidence/aroma-provider/2026-09-14-pricing-observations.json",
+      "sha256": "c581596331eb1d248a965ef3979bcb5a904e647090f72775ecea4d9a6e642c92",
+      "lines": 468,
+      "kind": "historical-evidence"
+    },
+    {
+      "path": "evidence/aroma-provider/2026-09-18-complete-catalog-export.json",
+      "sha256": "4345f9cf31bdce69a10a8309a3374df7323af06a6f745e8ff9f8036f21f9101c",
+      "lines": 222,
+      "kind": "historical-evidence"
+    },
+    {
+      "path": "evidence/aroma-provider/2026-09-18-login-probe-correction.json",
+      "sha256": "fe27aee360a1d9a337752ab5ba2e53043836694621502511540304f5d17bd68a",
+      "lines": 51,
+      "kind": "historical-evidence"
+    },
+    {
+      "path": "evidence/aroma-provider/2026-09-18-read-only-unit-identity-observations.json",
+      "sha256": "867907c60bb425bc10b6b9fcccb1a99262ff492f4759d05c04fb4de1ff1e7e02",
+      "lines": 103,
+      "kind": "historical-evidence"
+    },
+    {
+      "path": "evidence/aroma-provider/README.md",
+      "sha256": "72455c04dc230c4ade6715574da957bdb2a1a0baf1e6eb78083909dcce70b680",
+      "lines": 48,
+      "kind": "historical-evidence"
+    },
+    {
+      "path": "package.json",
+      "sha256": "a742ac547eaf5124585c6aa979e3de66a8dccffb116a11ed8bf27066089ee404",
+      "lines": 67,
+      "kind": "configuration"
+    },
+    {
+      "path": "packages/contracts/aroma-v1/src/index.ts",
+      "sha256": "95167aa61fffaf64a8b85dfe209f9f0012069a74c17ad98d6399bc98f02cf0cc",
+      "lines": 60,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "packages/contracts/client-v1/src/index.ts",
+      "sha256": "4238272e4a2a9097d891d57dc64981e75c17805f1abdd6876ea8b9b16177ccf2",
+      "lines": 44,
+      "kind": "source"
+    },
+    {
+      "path": "packages/contracts/realtime-v1/src/index.ts",
+      "sha256": "c6d86064895ecf41529b43754d8385a372eb0634c6e182af24b0fe6ec8e87b99",
+      "lines": 10,
+      "kind": "source"
+    },
+    {
+      "path": "packages/platform-config/src/index.ts",
+      "sha256": "d33c4a9fdf06dab5b1aa4ec3020d601cf59244a9adf250076892920a45b9b4dd",
+      "lines": 1173,
+      "kind": "actual-source"
+    },
+    {
+      "path": "packages/platform-database/src/owner.ts",
+      "sha256": "c9b8b059ff8b3fb810b9ce6389e2110e26fa7587b62bde19d2a33a26fd9d5bd7",
+      "lines": 68,
+      "kind": "actual-source"
+    },
+    {
+      "path": "packages/platform-idempotency/src/index.ts",
+      "sha256": "79d15bba99d679e8dd2aa095a02735b017a5f7a1db9ff129433c9729b98e67ca",
+      "lines": 258,
+      "kind": "actual-source-contract"
+    },
+    {
+      "path": "packages/platform-inbox/src/index.ts",
+      "sha256": "bd4d42c2876ce1ee88d23508b4a6fa6e88d43736d2aa3ef2f00089dfa5f00d2b",
+      "lines": 350,
+      "kind": "actual-source-contract"
+    },
+    {
+      "path": "packages/platform-kafka-runtime/src/index.ts",
+      "sha256": "d3d6b4f1229d0a792ed2d2c2981bf06adaf2dd87414d0dac47a841354f61fc95",
+      "lines": 1260,
+      "kind": "source"
+    },
+    {
+      "path": "packages/platform-migrations/src/index.ts",
+      "sha256": "d40b74bf3f06b3111ba3f19b64fc48f0d05a27b5122f1fd641171a181e0ec656",
+      "lines": 129,
+      "kind": "actual-source"
+    },
+    {
+      "path": "packages/platform-observability/src/index.ts",
+      "sha256": "2b1c8141524eb785fe685bc90b5889e800b6021fc85228a67f25492bd8b87752",
+      "lines": 221,
+      "kind": "code"
+    },
+    {
+      "path": "packages/platform-outbox/src/index.ts",
+      "sha256": "ee2fdc08653d7cdae09cbaefa51f8ce0f4a45917f596d7e3c38e388c6331c71d",
+      "lines": 419,
+      "kind": "actual-source-contract"
+    },
+    {
+      "path": "packages/platform-runtime/src/index.ts",
+      "sha256": "a8326986c8e6d68b09038f4c46d7c0cf68b1a0fef1d765a87d00688967c35272",
+      "lines": 1009,
+      "kind": "source"
+    },
+    {
+      "path": "platform/launch-v1-connectivity-policy.json",
+      "sha256": "223b6698626f197526dbd6089816e7666ef9cb83356b96905877d5d37c8f5b92",
+      "lines": 276,
+      "kind": "configuration"
+    },
+    {
+      "path": "scripts/permission-audit.mjs",
+      "sha256": "1afbc1fffab4340c2a50f67c3c26e1ee46b8153c487c6b714d341000d8b6f26c",
+      "lines": 199,
+      "kind": "code"
+    },
+    {
+      "path": "scripts/permission-enforce.mjs",
+      "sha256": "0f3867277d8faf6a6db8d7fbb2a5ac687c217a8187ba7e5b600da71b48c6eb71",
+      "lines": 17,
+      "kind": "code"
+    },
+    {
+      "path": "tests/aroma/api-internal-operations.test.mjs",
+      "sha256": "8aa818aa559fd9a971d493fede579d39a5aae1deaa7a4d7dafe858d3997aeabc",
+      "lines": 166,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/cart-reader.test.mjs",
+      "sha256": "b8a97082fb99f459acae492a885f27c35d9f7e771efbe9d47bf01cfaa93a284e",
+      "lines": 191,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/catalog-export.test.mjs",
+      "sha256": "907014d961b36f4a6892a1ca2b34f9ef8dc51ed5ff1a43cc17ff8fb50b69d9b2",
+      "lines": 1146,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/gateway-operations-http.test.mjs",
+      "sha256": "53c6aa162dc153592a94356d7f040b963c0f0749f1ad82ca0e74d0006a5a45ea",
+      "lines": 149,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/mutation-journal.test.mjs",
+      "sha256": "0661cc2f3ca067e8d4a71cf06a888b31ec8e780d8fc83b23e850ffe45ca222b6",
+      "lines": 874,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/provider-cart-mutator.test.mjs",
+      "sha256": "2b3be7d9e688dfe1f862c2bc9398fb86035cc67b374dff784240a8a907e2fa10",
+      "lines": 178,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/provider-decoder.test.mjs",
+      "sha256": "d9ceb307fd7aa707bc1185286c7865b9b50f7578b0745b125e131ecfb6b73a1b",
+      "lines": 104,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/provider-http.test.mjs",
+      "sha256": "3f14c018e72de502b72d2811605ea7e6350590506ca32401416960c9e58dee5d",
+      "lines": 563,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/provider-session.test.mjs",
+      "sha256": "2412f613985f2fb29412ebdec95ea066d6421ba3a992f3931aad6742227e9c5a",
+      "lines": 929,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/safe-read-http.test.mjs",
+      "sha256": "576d1a3894b01c3e74db462168b776bd6885bef3a9858544619d74951f0037dd",
+      "lines": 98,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tests/aroma/source-identity.test.mjs",
+      "sha256": "613d7b5b7e16f1a81eba46efe2be7333e72d892155532cd4b74e9393eb166d41",
+      "lines": 136,
+      "kind": "source-or-test"
+    },
+    {
+      "path": "tools/config-bootstrap/index.mjs",
+      "sha256": "3d82a3e927946a2b7eb58f1c93e6f1d75db07e13249f2a28e6f997f55800b22a",
+      "lines": 148,
+      "kind": "code"
+    }
+  ]
+}
