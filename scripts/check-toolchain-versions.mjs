@@ -61,6 +61,7 @@ const EXPECTED = Object.freeze({
   age: "1.3.2",
   docker: "29.7.2",
   compose: "5.4.0",
+  nginxVersion: "1.31.6",
 });
 
 const ROOT_DEV_DEPENDENCIES = Object.freeze({
@@ -386,6 +387,14 @@ async function checkManifest(root) {
     "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
     "config/toolchain-versions.json.kafkaImage",
   );
+  exact(
+    manifest.nginxImage,
+    "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
+    "config/toolchain-versions.json.nginxImage",
+  );
+  exact(manifest.nginxImageIndexDigest, "sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7", "nginx OCI index digest");
+  exact(manifest.nginxLinuxAmd64Digest, "sha256:9c0f39aa1c46f5062ba080555a067ebb82d5f63a8cf4d63f6ef2e76fc9ff2d0c", "nginx linux/amd64 manifest digest");
+  exact(manifest.nginxSourceRevision, "a16f1329e13e7273c4103f75d863ca625b75109e", "nginx official image source revision");
   if (
     !/^node:26\.8\.1-bookworm-slim@sha256:[0-9a-f]{64}$/.test(
       manifest.nodeImage,

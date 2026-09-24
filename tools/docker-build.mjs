@@ -86,6 +86,9 @@ ensureNetwork(mtu);
 ensureBuilder();
 
 const extraArgs = process.argv.slice(2);
+if (extraArgs.includes('edge-nginx') && extraArgs.includes('--target') && !extraArgs.includes('--file') && !extraArgs.includes('-f')) {
+  extraArgs.unshift('--file', 'apps/edge-nginx/Dockerfile');
+}
 const args = [
   "buildx",
   "build",

@@ -472,7 +472,12 @@ async function checkCatalogEventSchemas(root) {
 
 async function checkPermissionManifests(root) {
   const appEntries = existsSync(join(root, 'apps'))
-    ? (await readdir(join(root, 'apps'), { withFileTypes: true })).filter((entry) => entry.isDirectory())
+    ? (await readdir(join(root, 'apps'), { withFileTypes: true })).filter((entry) => {
+        if (!entry.isDirectory()) return false;
+        const appRoot = join(root, 'apps', entry.name);
+        // Native images have no Node Permission Model; keep the check for all Node sources.
+        return existsSync(join(appRoot, 'src')) || existsSync(join(appRoot, 'package.json'));
+      })
     : [];
   const candidates = ['permission-manifest.json', 'permissions.json', 'permission.json'];
   const centralRoot = join(root, 'config', 'permissions');

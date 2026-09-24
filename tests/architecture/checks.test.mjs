@@ -406,6 +406,20 @@ void test("RED ARCH-PERMISSION: every materialized runtime must declare all perm
   assert.match(output(result), /missing/);
 });
 
+void test("GREEN ARCH-PERMISSION: native nginx image needs no Node permission manifest", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-native-permission-"));
+  try {
+    await mkdir(join(root, "apps", "edge-nginx"), {recursive: true});
+    await mkdir(join(root, "config"));
+    await writeFile(join(root, "apps", "edge-nginx", "Dockerfile"), "FROM scratch\n");
+    await writeFile(join(root, "config", "platform.yaml"), "schemaVersion: 1\n");
+    const result = run("check-architecture.mjs", root);
+    assert.equal(result.status, 0, output(result));
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
 void test("GREEN: exact TS7 toolchain manifest, lockfile and config baseline passes", () => {
   const result = run("check-toolchain-versions.mjs");
   assert.equal(result.status, 0, output(result));

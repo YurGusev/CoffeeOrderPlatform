@@ -46,6 +46,11 @@
   "compose": "5.4.0",
   "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
   "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+  "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
+  "nginxVersion": "1.31.6",
+  "nginxImageIndexDigest": "sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
+  "nginxLinuxAmd64Digest": "sha256:9c0f39aa1c46f5062ba080555a067ebb82d5f63a8cf4d63f6ef2e76fc9ff2d0c",
+  "nginxSourceRevision": "a16f1329e13e7273c4103f75d863ca625b75109e",
   "pgCopyStreams": "7.0.0",
   "typesPg": "8.23.1",
   "typesPgCopyStreams": "1.2.5"
