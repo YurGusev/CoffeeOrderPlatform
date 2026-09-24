@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkDatabaseOwnership } from './check-database-ownership.mjs';
 
 const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ACCEPTED_DEPENDENCY_CRUISER = '18.2.0';
@@ -88,6 +89,8 @@ const TYPED_PROVIDER_HTTP_CLIENT_RE = /(?:^|\/)apps\/aroma-gateway\/src\/infrast
 const ALTERNATE_PROVIDER_HTTP_MODULE_RE = /^(?:node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
 const GENERIC_PROVIDER_HTTP_MODULE_RE = /^(?:@fastify\/http-proxy|http-proxy|node:(?:http|http2|https|net|tls)|(?:http|http2|https|net|tls)|undici|node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
 const CATALOG_SQL_MUTATION_RE = /\b(?:insert\s+into|update|delete\s+from|truncate(?:\s+table)?|create\s+table|alter\s+table|drop\s+table)\s+"?catalog"?\s*\.\s*"?(?:catalog_state|products|variants|offer_mappings|availability)"?\b/i;
+const CATALOG_API_PRIVATE_TABLE_RE = /\b(?:from|join|into|update|table)\s+"?catalog"?\s*\.\s*"?(?:catalog_state|supplier_snapshots|snapshot_[a-z_]+|products|variants|offer_mappings|availability|source_identities|offer_binding_acks|outbox_messages)"?\b/i;
+const CATALOG_API_OUTBOUND_RE = /\b(?:from|import\s*\()\s*['"](?:@coffee-platform\/platform-http|node:(?:http|https|net|tls)|(?:http|https|net|tls))\b|\b(?:globalThis\.)?fetch\s*\(/i;
 const GENERIC_PROVIDER_PROXY_RE = /(?<![.\w])(?:forward(?:Request|Response)?|passThrough|proxy)\s*(?:<[^;\n]*?>\s*)?(?:=|\()/i;
 const MODULE_SPECIFIER_RE = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]|\brequire\s*\(\s*['"]([^'"]+)['"]/g;
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
@@ -426,6 +429,15 @@ async function checkCatalogActiveWriters(root) {
   }
 }
 
+async function checkCatalogApiBoundary(root) {
+  for (const path of (await walk(join(root, 'apps/catalog-service/src'))).filter(isTypeScriptSource)) {
+    const source = await readFile(path, 'utf8');
+    const label = sourceLabel(path, root);
+    if (CATALOG_API_PRIVATE_TABLE_RE.test(source)) fail('ARCH-CATALOG-API-BOUNDARY', `${label}: Catalog API may SELECT only active views`);
+    if (CATALOG_API_OUTBOUND_RE.test(source)) fail('ARCH-CATALOG-API-BOUNDARY', `${label}: Catalog owner cannot import outbound/provider HTTP clients`);
+  }
+}
+
 function findCatalogRowsArray(schema, propertyName = null) {
   if (!schema || typeof schema !== 'object') return null;
   if (schema.type === 'array' && schema.items && typeof schema.items === 'object') {
@@ -560,7 +572,11 @@ export async function checkArchitecture(root = SCRIPT_ROOT) {
   await checkPackageDependencies(resolvedRoot);
   await checkStaticSources(resolvedRoot);
   await checkCatalogActiveWriters(resolvedRoot);
+  await checkCatalogApiBoundary(resolvedRoot);
   await checkCatalogEventSchemas(resolvedRoot);
+  if (existsSync(join(resolvedRoot, 'config/database-ownership.json')) && existsSync(join(resolvedRoot, 'config/service-catalog.json'))) {
+    await checkDatabaseOwnership(resolvedRoot);
+  }
   await checkPermissionManifests(resolvedRoot);
   const configPath = resolve(SCRIPT_ROOT, '.dependency-cruiser.cjs');
   if (!existsSync(configPath) || !(await stat(configPath)).isFile()) fail('BOUND-IMPORT', '.dependency-cruiser.cjs is missing');

@@ -1,6 +1,8 @@
 import {createPrivateKey, createPublicKey, randomUUID} from "node:crypto";
 import {aromaContractSchemas, isAromaCatalogExportRequest, isAromaCartSnapshot, isAromaCartSnapshotReadRequest, isAromaOfferBindingRequest, isAromaOfferBindingResponse, isAromaProblem, isAromaMutationResponse, isAromaRemoveLineRequest, isAromaSetQuantityRequest, type AromaCatalogExportRequest, type AromaCartSnapshotReadRequest, type AromaOfferBindingRequest, type AromaRemoveLineRequest, type AromaSetQuantityRequest} from "@coffee-platform/contracts-aroma-v1";
 import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, customerResponseSchema, isCustomerOrderInput, isCustomerProblem, isCustomerRef} from "@coffee-platform/contracts-customer-v1";
+import {catalogContractSchemas, catalogResponseSchema, isCatalogOperationProblem, isCatalogPricingInput, isCatalogProductRef, isCatalogVariantRef} from "@coffee-platform/contracts-catalog-v1";
+import type {CatalogPricingInput} from "@coffee-platform/contracts-catalog-v1";
 import type {CustomerOrderInput} from "@coffee-platform/contracts-customer-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
 import {parseServiceTransportMaterial, signServiceDelegation, verifyServiceDelegationWithKeySet, type ServiceTransportMaterial} from "@coffee-platform/security";
@@ -26,6 +28,7 @@ type HttpClient = Readonly<{fetch: (path: string, options?: RequestInit) => Prom
 type Context = Readonly<{correlationId: string; traceparent?: string; signal: AbortSignal}>;
 type ForwardResult = Readonly<{status: number; body: unknown}>;
 type CatalogForwardResult = Readonly<{status: number; body: ReadableStream<Uint8Array> | Record<string, unknown>}>;
+type CatalogPricingForwardResult = Readonly<{status: 200; body: CatalogPricingInput} | {status: 404 | 503; body: unknown}>;
 type Problem = Readonly<{
   type: "about:blank";
   title: string;
@@ -38,6 +41,7 @@ type Problem = Readonly<{
 }>;
 
 type AromaCaller = "orders-service" | "catalog-activation-worker" | "catalog-supplier-sync" | "aroma-observer" | "aroma-convergence";
+type InternalTransportCaller = AromaCaller | "pricing-service";
 type CartMutationCaller = "aroma-convergence";
 export type InternalCallerClaims = Readonly<{
   iss: string;
@@ -53,12 +57,12 @@ export type InternalCallerClaims = Readonly<{
 }>;
 
 export type InternalApiAdapters = Readonly<{
-  verifyTransport: (request: Request, expectedCaller: AromaCaller) => boolean;
+  verifyTransport: (request: Request, expectedCaller: InternalTransportCaller) => boolean;
   verifyCallerDelegation: (token: string, request: Request, operationId: string, signal: AbortSignal) => Promise<InternalCallerClaims> | InternalCallerClaims;
   signDelegation: (claims: Readonly<{originalCaller: string; operationId: string; context: Context}>) => string;
   customer: Readonly<{orderInput: (customerRef: string, context: Context, delegation: string) => Promise<ForwardResult>}>;
   binding: Readonly<{register: (body: AromaOfferBindingRequest, context: Context, delegation: string) => Promise<ForwardResult>}>;
-  catalog: Readonly<{export: (body: AromaCatalogExportRequest, context: Context, delegation: string) => Promise<CatalogForwardResult>}>;
+  catalog: Readonly<{export: (body: AromaCatalogExportRequest, context: Context, delegation: string) => Promise<CatalogForwardResult>; pricingInput: (productRef: string, variantRef: string, context: Context, delegation: string) => Promise<CatalogPricingForwardResult>}>;
   cart: Readonly<{
     read: (body: AromaCartSnapshotReadRequest, context: Context, delegation: string) => Promise<ForwardResult>;
     setQuantity: (offerRef: string, body: AromaSetQuantityRequest, context: Context, delegation: string) => Promise<ForwardResult>;
@@ -129,6 +133,15 @@ function sendBindingForward(request: Request, reply: Reply, result: ForwardResul
 }
 
 const AROMA_MUTATION_ERROR_CODES = new Set(["AROMA_CART_ITEM_NOT_FOUND", "AROMA_OPERATION_REF_CONFLICT", "AROMA_OPERATION_IN_PROGRESS", "AROMA_OPERATION_UNKNOWN_OUTCOME", "AROMA_PROVIDER_UNAVAILABLE"]);
+function sendCatalogPricingForward(request: Request, reply: Reply, result: CatalogPricingForwardResult): Reply {
+  reply.header("cache-control", "no-store");
+  if (result.status === 200 && isCatalogPricingInput(result.body)) return reply.code(200).send(result.body as CatalogPricingInput);
+  if (isCatalogOperationProblem(result.body, "pricing", result.status)) {
+    return sendProblem(reply, problem(request, result.status, result.body.code, "catalog pricing request failed"));
+  }
+  return sendProblem(reply, problem(request, 503, "CATALOG_UNAVAILABLE", "catalog owner returned an invalid response"));
+}
+
 function sendAromaMutationForward(request: Request, reply: Reply, result: ForwardResult): Reply {
   reply.header("cache-control", "no-store");
   if (result.status >= 400) {
@@ -217,6 +230,31 @@ export function registerInternalRoutes(app: RuntimeApp, adapters: InternalApiAda
       const delegation = adapters.signDelegation({originalCaller: "orders-service", operationId: "getCustomerOrderInput", context: requestContext});
       try { return sendForward(request, reply, await adapters.customer.orderInput(customerRef, requestContext, delegation)); }
       catch { return sendProblem(reply, problem(request, 503, "CUSTOMER_UNAVAILABLE", "customer service is unavailable")); }
+    },
+  });
+
+  app.get("/api/internal-v1/catalog/products/:productRef/variants/:variantRef/pricing-input", {
+    config: {runtimeDeadlineProfile: "defaultMs"},
+    schema: {response: catalogResponseSchema(catalogContractSchemas.pricingInput, 200, [400, 401, 403, 404, 503])},
+    handler: async (request, rawReply) => {
+      const reply = rawReply as unknown as Reply;
+      if (spoofed(request) || !adapters.verifyTransport(request, "pricing-service")) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "pricing service identity is required"));
+      const token = oneHeader(header(request, "x-service-delegation"));
+      if (token === undefined) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "signed service delegation is required"));
+      const requestContext = context(request, 2_000);
+      let claims: InternalCallerClaims;
+      try { claims = await adapters.verifyCallerDelegation(token, request, "getCatalogPricingInput", requestContext.signal); }
+      catch { return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed")); }
+      if (claims.iss !== "pricing-service" || claims.aud !== "api-internal" || claims.originalCaller !== "pricing-service" || claims.operationId !== "getCatalogPricingInput") return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed"));
+      const params = paramsRecord(request);
+      const rawProductRef = params["productRef"];
+      const rawVariantRef = params["variantRef"];
+      if (!isCatalogProductRef(rawProductRef) || !isCatalogVariantRef(rawVariantRef)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+      const productRef = rawProductRef as string;
+      const variantRef = rawVariantRef as string;
+      const delegation = adapters.signDelegation({originalCaller: "pricing-service", operationId: "getCatalogPricingInput", context: requestContext});
+      try { return sendCatalogPricingForward(request, reply, await adapters.catalog.pricingInput(productRef, variantRef, requestContext, delegation)); }
+      catch { return sendProblem(reply, problem(request, 503, "CATALOG_UNAVAILABLE", "catalog owner is unavailable")); }
     },
   });
 
@@ -316,6 +354,10 @@ export function createHttpCustomerClient(client: HttpClient): InternalApiAdapter
   };
 }
 
+function mediaType(response: Response): string | undefined {
+  return response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+}
+
 async function boundedJson(response: Response, maxBytes: number): Promise<unknown> {
   if (response.body === null) throw new Error("empty response body");
   const reader = response.body.getReader();
@@ -348,7 +390,7 @@ export function createHttpAromaBindingClient(client: HttpClient): InternalApiAda
   };
 }
 
-export function createHttpAromaCatalogClient(client: HttpClient): InternalApiAdapters["catalog"] {
+export function createHttpAromaCatalogClient(client: HttpClient): Pick<InternalApiAdapters["catalog"], "export"> {
   return {
     export: async (body, requestContext, delegation) => {
       const response = await client.fetch("/api/internal-v1/aroma/catalog-exports", {method: "POST", headers: requestHeaders(requestContext, delegation, "application/x-ndjson"), body: JSON.stringify(body), signal: requestContext.signal});
@@ -359,6 +401,24 @@ export function createHttpAromaCatalogClient(client: HttpClient): InternalApiAda
       const parsed = await boundedJson(response, 64 * 1024);
       if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid catalog export error response");
       return {status: response.status, body: parsed as Record<string, unknown>};
+    },
+  };
+}
+
+export function createHttpCatalogPricingClient(client: HttpClient): Pick<InternalApiAdapters["catalog"], "pricingInput"> {
+  return {
+    pricingInput: async (productRef, variantRef, requestContext, delegation) => {
+      const headers = requestHeaders(requestContext, delegation, "application/json, application/problem+json");
+      delete headers["content-type"];
+      const path = `/api/internal-v1/catalog/products/${encodeURIComponent(productRef)}/variants/${encodeURIComponent(variantRef)}/pricing-input`;
+      const response = await client.fetch(path, {method: "GET", headers, signal: requestContext.signal});
+      if (response.status !== 200 && response.status !== 404 && response.status !== 503) throw new Error("catalog owner returned an unsupported status");
+      const expectedMediaType = response.status === 200 ? "application/json" : "application/problem+json";
+      if (mediaType(response) !== expectedMediaType) throw new Error("catalog owner returned an unsupported media type");
+      const body = await boundedJson(response, 64 * 1024);
+      if (response.status === 200 && isCatalogPricingInput(body)) return {status: 200, body: body as CatalogPricingInput};
+      if ((response.status === 404 || response.status === 503) && isCatalogOperationProblem(body, "pricing", response.status)) return {status: response.status, body};
+      throw new Error("catalog owner returned an invalid response");
     },
   };
 }
@@ -410,22 +470,25 @@ function customerOrigin(context: RuntimeCompositionContext): string {
   return `https://${target}`;
 }
 
-export function createConfiguredInternalAdapters(context: RuntimeCompositionContext, client: HttpClient, bindingClient: HttpClient = client): InternalApiAdapters {
+export function createConfiguredInternalAdapters(context: RuntimeCompositionContext, client: HttpClient, bindingClient: HttpClient = client, catalogClient: HttpClient = client): InternalApiAdapters {
   const signingKey = privateKey(context, "security.apiInternalDelegationSigningPrivateKey");
-  const callerVerificationKeys = verificationKeys(context, "security.serviceVerificationKeys.orders-service");
+  const ordersVerificationKeys = verificationKeys(context, "security.serviceVerificationKeys.orders-service");
+  const pricingVerificationKeys = verificationKeys(context, "security.serviceVerificationKeys.pricing-service");
   return {
     verifyTransport: (request, expectedCaller) => request.runtimeContext?.transportIdentity?.runtime === expectedCaller,
-    verifyCallerDelegation: (token, _request, _operationId, signal) => {
+    verifyCallerDelegation: (token, _request, operationId, signal) => {
       signal.throwIfAborted();
-      return verifyServiceDelegationWithKeySet(token, {publicKeys: callerVerificationKeys, issuer: "orders-service", audience: "api-internal", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5});
+      if (operationId === "getCatalogPricingInput") return verifyServiceDelegationWithKeySet(token, {publicKeys: pricingVerificationKeys, issuer: "pricing-service", audience: "api-internal", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5});
+      return verifyServiceDelegationWithKeySet(token, {publicKeys: ordersVerificationKeys, issuer: "orders-service", audience: "api-internal", nowEpochSeconds: epochSeconds(), clockSkewSeconds: 5});
     },
     signDelegation: ({originalCaller, operationId, context: requestContext}) => {
       const iat = epochSeconds();
       const gatewayOperation = operationId === "registerAromaOfferBinding" || operationId === "readAromaCartSnapshot" || operationId === "exportAromaCatalog" || operationId === "setAromaCartLineQuantity" || operationId === "removeAromaCartLine";
-      const ttl = operationId === "exportAromaCatalog" ? 905 : operationId === "getCustomerOrderInput" ? 10 : 15;
+      const ttl = operationId === "exportAromaCatalog" ? 905 : operationId === "getCatalogPricingInput" ? 6 : operationId === "getCustomerOrderInput" ? 10 : 15;
+      const audience = operationId === "getCatalogPricingInput" ? "catalog-service" : gatewayOperation ? "aroma-gateway" : "customer-service";
       return signServiceDelegation({
         iss: "api-internal",
-        aud: gatewayOperation ? "aroma-gateway" : "customer-service",
+        aud: audience,
         originalCaller,
         operationId,
         correlationId: requestContext.correlationId,
@@ -438,7 +501,7 @@ export function createConfiguredInternalAdapters(context: RuntimeCompositionCont
     },
     customer: createHttpCustomerClient({fetch: (path, options) => client.fetch(path, options)}),
     binding: createHttpAromaBindingClient({fetch: (path, options) => bindingClient.fetch(path, options)}),
-    catalog: createHttpAromaCatalogClient({fetch: (path, options) => bindingClient.fetch(path, options)}),
+    catalog: {...createHttpAromaCatalogClient({fetch: (path, options) => bindingClient.fetch(path, options)}), ...createHttpCatalogPricingClient({fetch: (path, options) => catalogClient.fetch(path, options)})},
     cart: createHttpAromaCartClient({fetch: (path, options) => bindingClient.fetch(path, options)}),
   };
 }
@@ -453,6 +516,16 @@ export function configuredCustomerTls(context: RuntimeCompositionContext) {
 
 export function configuredCustomerOrigin(context: RuntimeCompositionContext): string {
   return customerOrigin(context);
+}
+
+export function configuredCatalogOrigin(context: RuntimeCompositionContext): string {
+  const target = context.config.services["api-internal"].outbound.find((entry) => entry.startsWith("catalog-service:"));
+  if (target === undefined) throw new Error("INTERNAL_API_CATALOG_ORIGIN_NOT_CONFIGURED");
+  return `https://${target}`;
+}
+
+export function configuredCatalogTls(context: RuntimeCompositionContext) {
+  return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "catalog-service"};
 }
 
 export function configuredAromaGatewayOrigin(context: RuntimeCompositionContext): string {
@@ -472,7 +545,7 @@ export function createUnavailableInternalAdapters(): InternalApiAdapters {
     signDelegation: () => { throw new Error("INTERNAL_API_SECURITY_NOT_CONFIGURED"); },
     customer: {orderInput: async () => { throw new Error("INTERNAL_API_CUSTOMER_CLIENT_NOT_CONFIGURED"); }},
     binding: {register: async () => { throw new Error("INTERNAL_API_BINDING_CLIENT_NOT_CONFIGURED"); }},
-    catalog: {export: async () => { throw new Error("INTERNAL_API_CATALOG_CLIENT_NOT_CONFIGURED"); }},
+    catalog: {export: async () => { throw new Error("INTERNAL_API_CATALOG_CLIENT_NOT_CONFIGURED"); }, pricingInput: async () => { throw new Error("INTERNAL_API_CATALOG_CLIENT_NOT_CONFIGURED"); }},
     cart: {
       read: async () => { throw new Error("INTERNAL_API_CART_CLIENT_NOT_CONFIGURED"); },
       setQuantity: async () => { throw new Error("INTERNAL_API_CART_CLIENT_NOT_CONFIGURED"); },

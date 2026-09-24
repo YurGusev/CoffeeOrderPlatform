@@ -3,11 +3,13 @@ import test from "node:test";
 import {Client} from "pg";
 import {readFile} from "node:fs/promises";
 import {resolve} from "node:path";
+import {createHash} from "node:crypto";
 import {catalogBatchBytes, catalogBatchHash, catalogContentHash} from "../../packages/contracts/aroma-v1/dist/index.js";
 import {createDatabase} from "../../packages/platform-database/dist/index.js";
 import {createSqlOutboxStore,relayOutboxBatch} from "../../packages/platform-outbox/dist/index.js";
 import {withCatalogPostgres} from "../../scripts/catalog-live-harness.mjs";
 import {createCatalogActivationStore} from "../../apps/catalog-activation-worker/dist/infrastructure/activation-store.js";
+import {CatalogStore} from "../../apps/catalog-service/dist/infrastructure/postgres/catalog-store.js";
 
 const SUPPLIER = "sup_00000000000000000000000001";
 const P = "1".repeat(64);
@@ -124,7 +126,10 @@ void test("API role reads active grind options and snapshot revision after activ
     const database=createDatabase({owner:"catalog-activation-worker",database:databaseName,allowedDatabase:databaseName,
       host:"127.0.0.1",port,user:"coffee_catalog_activate_rw",password:"activate-proof",ssl:false,pool,shutdownGraceMs:40_000});
     const api=new Client({host:"127.0.0.1",port,user:"coffee_catalog_api_ro",password:"api-proof",database:databaseName});
+    const apiDatabase=createDatabase({owner:"catalog-service",database:databaseName,allowedDatabase:databaseName,
+      host:"127.0.0.1",port,user:"coffee_catalog_api_ro",password:"api-proof",ssl:false,pool,shutdownGraceMs:40_000});
     await database.resource.start(new AbortController().signal);
+    await apiDatabase.resource.start(new AbortController().signal);
     try {
       await api.connect();
       const store=createCatalogActivationStore(database);
@@ -136,10 +141,33 @@ void test("API role reads active grind options and snapshot revision after activ
       assert.deepEqual((await api.query("SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata")).rows,
         [{snapshot_ref:first,snapshot_revision:"1"}]);
       assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:grindOptions}]);
+      const catalog=new CatalogStore(apiDatabase);
+      const firstPage=await catalog.search({query:"кофе",availability:null,after:null,limit:2});
+      assert.equal(firstPage.snapshotRevision,"1");
+      assert.equal(firstPage.rows.length,1);
+      assert.equal(firstPage.rows[0].displayName,"Кофе");
+      assert.equal(firstPage.rows[0].supplierUnitMinor,"123");
+      const after={sortKeyHash:createHash("sha256").update(firstPage.rows[0].displayNameSortKey).digest("hex"),
+        productRef:firstPage.rows[0].productRef,variantRef:firstPage.rows[0].variantRef};
+      const nextPage=await catalog.search({query:"кофе",availability:null,after,limit:2});
+      assert.equal(nextPage.cursorValid,true);
+      assert.deepEqual(nextPage.rows,[]);
+      const forged=await catalog.search({query:"кофе",availability:null,after:{...after,sortKeyHash:"0".repeat(64)},limit:2});
+      assert.equal(forged.cursorValid,false);
+      assert.deepEqual(forged.rows,[]);
+      const pricing=await catalog.pricingInput(firstPage.rows[0].productRef,firstPage.rows[0].variantRef);
+      assert.equal(pricing.snapshotRevision,"1");
+      assert.equal(pricing.offerRef,firstPage.rows[0].offerRef);
       await stageEmpty(adminClient,empty);
       assert.equal((await store.runSnapshot(empty,async()=>{throw new Error("empty generation must not bind");})).kind,"activated");
       assert.deepEqual((await api.query("SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata")).rows,
         [{snapshot_ref:empty,snapshot_revision:"2"}]);
+      const emptyPage=await catalog.search({query:"кофе",availability:null,after:null,limit:2});
+      assert.equal(emptyPage.snapshotRevision,"2");
+      assert.equal(emptyPage.rows.length,1);
+      assert.equal(emptyPage.rows[0].availability,"Unavailable");
+      assert.equal(emptyPage.rows[0].mappingAvailable,false);
+      assert.equal(emptyPage.rows[0].offerRef,null);
       assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:grindOptions}]);
       await stage(adminClient,noOptions);
       assert.equal((await store.runSnapshot(noOptions,bind)).kind,"activated");
@@ -147,7 +175,7 @@ void test("API role reads active grind options and snapshot revision after activ
       await stage(adminClient,absentOptions,"123","Available",null);
       assert.equal((await store.runSnapshot(absentOptions,bind)).kind,"activated");
       assert.deepEqual((await api.query("SELECT grind_options FROM catalog.active_variants")).rows,[{grind_options:null}]);
-    } finally {await api.end().catch(()=>{}); await database.resource.stop(AbortSignal.timeout(5_000));}
+    } finally {await api.end().catch(()=>{}); await apiDatabase.resource.stop(AbortSignal.timeout(5_000)); await database.resource.stop(AbortSignal.timeout(5_000));}
   });
 });
 

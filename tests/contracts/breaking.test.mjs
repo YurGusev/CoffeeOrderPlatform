@@ -81,6 +81,41 @@ void test('breaking guard admits optional expansion only with fixture and policy
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
 
+void test('Catalog search 400 admits only the source INVALID_CURSOR branch', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'contracts-catalog-cursor-'));
+  const base = join(directory, 'base');
+  const current = join(directory, 'current');
+  const sourcePath = 'contracts/openapi/client-v1.yaml';
+  try {
+    for (const path of [base, current]) await mkdir(join(path, 'contracts/openapi'), {recursive: true});
+    const previous = structuredClone(baseline);
+    const route = previous.paths['/items'];
+    delete previous.paths['/items'];
+    previous.paths['/api/client-v1/catalog/products'] = route;
+    route.get.operationId = 'searchCatalogProducts';
+    route.get.responses[400] = {$ref: '#/components/responses/ValidationFailed'};
+    previous.components.responses = {ValidationFailed: {description: 'Invalid request'}};
+    await writeFile(join(base, sourcePath), yaml.dump(previous));
+    const next = structuredClone(previous);
+    const variant = {$ref: '#/components/schemas/ErrorInvalidCursor'};
+    next.paths['/api/client-v1/catalog/products'].get.responses[400] = {
+      description: 'Invalid query or cursor.', content: {'application/problem+json': {schema: {oneOf: [
+        {$ref: '#/components/schemas/ErrorValidationFailed'}, variant,
+      ]}}},
+    };
+    const runVariant = async () => {
+      await writeFile(join(current, sourcePath), yaml.dump(next));
+      return spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], {cwd: root, encoding: 'utf8'});
+    };
+    const accepted = await runVariant();
+    assert.equal(accepted.status, 0, `${accepted.stdout}\n${accepted.stderr}`);
+    variant.$ref = '#/components/schemas/ErrorInternalError';
+    const rejected = await runVariant();
+    assert.notEqual(rejected.status, 0, `${rejected.stdout}\n${rejected.stderr}`);
+    assert.match(rejected.stderr, /response \$ref changed/u);
+  } finally { await rm(directory, {recursive: true, force: true}); }
+});
+
 void test('breaking guard admits only an exact narrowing correction with migration evidence', async () => {
   const accepted = await red((document) => { document.components.schemas.Item.properties.id.pattern = '^[1-9]$'; }, false, true);
   assert.equal(accepted.status, 0, `${accepted.stdout}\n${accepted.stderr}`);

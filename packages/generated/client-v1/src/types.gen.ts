@@ -447,6 +447,9 @@ export type IfMatchVersion = IdentifiersV1SchemaVersion;
 
 export type CustomerQuery = string;
 
+/**
+ * Trim, Unicode NFKC, then lowercase; the normalized result must contain 2–200 Unicode code points.
+ */
 export type CatalogQuery = string;
 
 export type Availability = 'Available' | 'Unavailable' | 'Stopped';
@@ -574,6 +577,9 @@ export type SearchCatalogProductsData = {
   };
   path?: never;
   query: {
+    /**
+     * Trim, Unicode NFKC, then lowercase; the normalized result must contain 2–200 Unicode code points.
+     */
     query: string;
     availability?: 'Available' | 'Unavailable' | 'Stopped';
     limit?: number;
@@ -584,9 +590,9 @@ export type SearchCatalogProductsData = {
 
 export type SearchCatalogProductsErrors = {
   /**
-   * Request, query, or header validation failed.
+   * Invalid query or cursor.
    */
-  400: ErrorValidationFailed;
+  400: ErrorValidationFailed | ErrorInvalidCursor;
   /**
    * No valid authenticated actor context was supplied.
    */
@@ -596,9 +602,9 @@ export type SearchCatalogProductsErrors = {
    */
   403: ErrorActorContextInvalid;
   /**
-   * No complete active catalog snapshot is available.
+   * Active Catalog snapshot is incomplete or the owner is unavailable.
    */
-  503: ErrorCatalogSnapshotIncomplete;
+  503: ErrorCatalogSnapshotIncomplete | ErrorCatalogUnavailable;
 };
 
 export type SearchCatalogProductsError = SearchCatalogProductsErrors[keyof SearchCatalogProductsErrors];

@@ -159,8 +159,18 @@ function compareMedia(before, after, at, sourcePath) {
   }
 }
 
-function compareResponse(before, after, at, sourcePath) {
-  if (before.$ref !== after.$ref) fail(`${at}: response $ref changed`);
+function compareResponse(before, after, at, sourcePath, route) {
+  // #17 extends exactly these Catalog error responses while retaining their old branch.
+  const catalogExtensions = [
+    {route: '/api/client-v1/catalog/products', at: 'contracts/openapi/client-v1.yaml:searchCatalogProducts:400', oldName: 'ValidationFailed', variants: ['ErrorValidationFailed', 'ErrorInvalidCursor']},
+    {route: '/api/client-v1/catalog/products', at: 'contracts/openapi/client-v1.yaml:searchCatalogProducts:503', oldName: 'CatalogSnapshotIncomplete', variants: ['ErrorCatalogSnapshotIncomplete', 'ErrorCatalogUnavailable']},
+    {route: '/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input', at: 'contracts/openapi/internal-v1.yaml:getCatalogPricingInput:503', oldName: 'CatalogSnapshotIncomplete', variants: ['ErrorCatalogSnapshotIncomplete', 'ErrorCatalogUnavailable']},
+  ];
+  const catalogExtension = catalogExtensions.some(({route: expectedRoute, at: expectedAt, oldName, variants}) =>
+    route === expectedRoute && at === expectedAt && before.$ref === `#/components/responses/${oldName}` && after.$ref === undefined &&
+    JSON.stringify(after.content) === JSON.stringify({'application/problem+json': {schema: {oneOf:
+      variants.map((name) => ({$ref: `#/components/schemas/${name}`}))}}}));
+  if (before.$ref !== after.$ref && !catalogExtension) fail(`${at}: response $ref changed`);
   compareMedia(before.content, after.content, `${at}.content`, sourcePath);
   for (const [name, header] of Object.entries(before.headers ?? {})) {
     if (!after.headers?.[name]) fail(`${at}: response header ${name} removed`);
@@ -220,7 +230,7 @@ function compareOpenApi(before, after, path) {
       if (Boolean(operation.requestBody?.required) !== Boolean(next.requestBody?.required)) fail(`${path}: ${operation.operationId} request body required changed`);
       for (const [status, response] of Object.entries(operation.responses ?? {})) {
         if (!next.responses?.[status]) fail(`${path}: ${operation.operationId} status ${status} removed`);
-        compareResponse(response, next.responses[status], `${path}:${operation.operationId}:${status}`, path);
+        compareResponse(response, next.responses[status], `${path}:${operation.operationId}:${status}`, path, route);
       }
       compareMedia(operation.requestBody?.content, next.requestBody?.content, `${path}:${operation.operationId}:request`, path);
     }

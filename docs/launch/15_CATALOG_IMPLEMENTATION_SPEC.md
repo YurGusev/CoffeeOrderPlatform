@@ -366,9 +366,13 @@ JSON Schema требует: `mappingState=Active` только с non-null `offe
 - `cursor`: opaque base64url, max 512.
 
 Поиск читает ровно одну active revision. Keyset cursor подписан server key и
-содержит `snapshotRevision`, SHA-256 нормализованных query/filter, последнее
-`displayNameSortKey`, `productRef`, `variantRef`. Cursor другой revision или
-другого запроса возвращает `400 INVALID_CURSOR`; offset pagination запрещена.
+содержит `snapshotRevision`, SHA-256 нормализованных query/filter, последние
+`productRef` и `variantRef`, а также SHA-256 последнего `displayNameSortKey`.
+Так размер cursor остаётся ≤512 даже при имени длиной 200 Unicode-символов.
+Catalog восстанавливает полный sort key по refs из той же active revision и
+сверяет digest **в одном SQL statement** с чтением страницы. Отсутствующая
+позиция, несовпадающий digest, другая revision или другой query/filter
+возвращают `400 INVALID_CURSOR`; offset pagination запрещена.
 
 Response: `{snapshotRevision, items, nextCursor}`. Item содержит только
 `productRef`, `variantRef`, `displayName`, `unit`, `availability`,
@@ -376,6 +380,15 @@ Response: `{snapshotRevision, items, nextCursor}`. Item содержит тол�
 provider identifiers и session data публично не возвращаются.
 
 Если active generation отсутствует: `503 CATALOG_SNAPSHOT_INCOMPLETE`.
+Если недоступны owner/БД или ответ owner не соответствует контракту:
+`503 CATALOG_UNAVAILABLE`; этот отказ не означает отсутствия complete snapshot.
+
+Исполнение #17: `api-public` проверяет actor и делегирует
+`searchCatalogProducts` только `catalog-service`; owner выполняет
+параметризованное чтение active views под `coffee_catalog_api_ro` без staging
+fallback. Подпись cursor проверяется в Catalog, не в API-root. Разрешение
+позиции cursor, чтение поисковой страницы и active metadata выполняются одним
+SQL statement для исключения смешения ревизий при конкурентной активации.
 
 ### 6.2 Pricing input
 
@@ -384,6 +397,10 @@ provider identifiers и session data публично не возвращают�
 `offerRef`, `snapshotRevision`, `supplierUnitMinor`, `currency`, `unit`,
 `availability`, `mappingRevision`, `displayName`. Pricing не читает Catalog DB
 напрямую; `displayName` становится частью immutable quote/order snapshot.
+
+`api-internal` проверяет signed original caller `pricing-service` и делегирует
+`getCatalogPricingInput` владельцу; browser audience и чужой caller отклоняются
+до доступа к owner store. Этот endpoint не имеет Kafka producer или DML-пути.
 
 ### 6.3. Точная active-модель
 
