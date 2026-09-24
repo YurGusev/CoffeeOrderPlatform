@@ -1,5 +1,14 @@
 # Архитектура исполнения
 
+**Граница редакций:** таблица ниже описывает действующий Node-профиль #19/#3.
+[ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md) и
+[контракт #159](29_NGINX_TRANSPORT_AND_AUTH.md) задают target после #162:
+`edge-nginx` принимает public TLS/static/SSE proxy, `edge-gateway` остаётся
+private Node authorizer, `web` исчезает только из runtime (не из `apps/web`
+browser build). До атомарного #162 таблица и active manifests не меняются;
+после переключения ровно 14 Node runtime + один native nginx и те же 5 owner DB.
+Все owner, API, event и durable boundaries ниже сохраняются.
+
 ## Единицы развёртывания
 
 Точные HTTP/event contracts, исходящие вызовы, БД, роли, секреты и публичность

@@ -1,5 +1,17 @@
 # Service identity, actor и delegation
 
+**Текущий baseline до #162:** описанные далее public TLS Edge и его outbound
+SAN действуют без изменения. [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
+и [contract #159](29_NGINX_TRANSPORT_AND_AUTH.md) задают target:
+`edge-nginx` как отдельный mTLS caller и держатель public TLS key, private
+`edge-gateway` как единственный `iss=edge-gateway`/actor signer. nginx→Edge
+auth request и nginx→api-public/realtime используют scoped transport identity
+с URI SAN + exact runtime/environment DNS SAN у nginx targets; receiver
+требует SAN `edge-nginx` и подписанный issuer/audience/operation одновременно.
+Edge→api-public direct transport после cutover запрещён; api-public→owner-hop
+и все internal delegation ниже остаются прежними. Rotation/failure negatives
+и distinct scopes закреплены contract #159, materialization только #162.
+
 Статус: нормативный security contract #19/#3/#4.
 
 ## Transport identity

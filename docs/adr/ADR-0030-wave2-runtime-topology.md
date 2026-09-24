@@ -1,5 +1,11 @@
 # ADR-0030: отдельная физическая топология второй волны
 
+Позднее [ADR-0031](ADR-0031-nginx-transport-and-application-auth.md) уточняет
+только public transport launch base для W2 после #162: private application
+`edge-gateway` и native `edge-nginx` вместо прежнего Node proxy/`web` runtime.
+Target роли W2, их DB/owners/provider contracts и исторический #71 handoff
+не меняются; точный PSP ingress остаётся за #76/#77.
+
 - Статус: target-решение #71; становится принятым после merge PR в `develop`; **не runtime admission**.
 - Дата: 2026-09-24. Владелец: Platform Architecture.
 - Вход: #66 / PR #67, merge `6934221dc1162af706d73e9d3c230bd51c3e4243`, `evidence/handoffs/issue-66.yaml`.

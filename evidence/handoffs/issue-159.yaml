@@ -1,0 +1,115 @@
+issue: 159
+baseCommit: 4962aee76617f42980631c6b7062259d84809dd3
+inputs:
+  - issue: 19
+    acceptedMergeCommit: 81aa403e682478ebdf3fb6b555ebcc969d4273f0
+    artifact: evidence/handoffs/issue-19.yaml
+    sha256: 9e5b43b80792a95417a3ef8db56243cadc9e0879e7a03243564700ddcde49c3d
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 60
+    acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: evidence/handoffs/issue-60.yaml
+    sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+  - issue: 61
+    acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+  - issue: 137
+    acceptedMergeCommit: 15ff4cb294b68e98cbe7f8b3212381baee7f96a4
+    artifact: evidence/handoffs/issue-137.yaml
+    sha256: 01c0c9f1ffc77a42508ea75301243ef45388e03b72ac7d8110560682f58ce95b
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: contracts/openapi/client-v1.yaml
+    sha256: 0f9698cfbd3de2b3960be33a12afdd77671da4b6021c7644704ca57bc77f2f97
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: docs/launch/26_BROWSER_COMMAND_RECOVERY.md
+    sha256: 094d6e47dd095299e5190c58f36ce9b7ecaddd87e2f2c81fa17de308bf23eb31
+outputs:
+  - artifact: docs/adr/ADR-0030-wave2-runtime-topology.md
+    sha256: 89ab0ac36a4d8dd4d16908d6bbfffaef218024f4efa3319459ac7b7188f1de12
+    consumers: [76, 77, 97, 98, 99]
+  - artifact: docs/adr/ADR-0031-nginx-transport-and-application-auth.md
+    sha256: 3d5dfb6b352de70ccfaff34826c1c29be6ca7de27aba5e93677f461f7c356c53
+    consumers: [160, 161, 162, 9, 12, 64, 13, 76, 77, 97, 98, 99]
+  - artifact: docs/launch/01_RUNTIME_ARCHITECTURE.md
+    sha256: 83147e361ef76b23e6131d0cb08a31087644e915de279b1d6506d3002db68884
+    consumers: [160, 161, 162, 13]
+  - artifact: docs/launch/10_RUNTIME_CATALOG.md
+    sha256: 279b8d63efcd7e2154e18537980aba02b60beaec06dd5152c37a0fd09c6fac89
+    consumers: [160, 161, 162]
+  - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
+    sha256: fc53e958e0eba61b6ca66fcaa703382868aeb9622a604e1f5c46794b257cfa7b
+    consumers: [160, 161, 162]
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: e1d167d45af11f97d9c176aed30875e1c20bc8c2c4ddd0d5357f22f7ee195e91
+    consumers: [160, 161, 162, 9, 12, 64, 13]
+  - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: 78bdda42815cd859110bc0425ea720aea910de0a500122f0231542869d225e8b
+    consumers: [9, 13]
+  - artifact: docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md
+    sha256: e875898a6b045afed7e0f7e5e1b4fb05b7df34d25809a02f9dcb7a88a8e13f38
+    consumers: [12, 64, 13]
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: 4af3a3b52e81fbb93ec3084ab7345e4278fc943b2d4e87047fd48dbc7d21ed0f
+    consumers: [13]
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: 7273d54b0db6898f8ac58895aae739f77b79dcaa2e26188725ab6e674560241d
+    consumers: [161, 162, 13]
+  - artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md
+    sha256: a18295acfae0b26f9fd7458e44b6d0135624c6f8927f090551de05408e5e8951
+    consumers: [160, 161, 162, 12]
+  - artifact: docs/launch/26_BROWSER_COMMAND_RECOVERY.md
+    sha256: 88a8c65cad3c30379822eafb6e6f0ae16300e339eae4c54565ef8cbcf6ca8cbc
+    consumers: [160, 9, 12, 13]
+  - artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md
+    sha256: ec378f11005ad2dee56da46056fcbb1217afb3eea9f947db547a3e08ce1cf120
+    consumers: [160, 161, 162, 9, 12, 64, 13, 76, 77, 97, 98, 99]
+  - artifact: docs/launch/README.md
+    sha256: ea2edfd1253aea1ef671962674b7c959441a9ad2c1219d56437fc7e4746719c7
+    consumers: [160, 161, 162]
+  - artifact: docs/wave-2/02_RUNTIME_TOPOLOGY.md
+    sha256: f6218896669c4c65dd109f51e4616f89c385915a340cdb73163b055978fd8090
+    consumers: [76, 77, 97, 98, 99]
+ownerAcceptance: '2026-09-24: владелец подтвердил W1 browser auth, стартовые budgets и точный GET /auth/session с actor-bound read-only recovery как target; не подтверждал production/runtime admission'
+verification:
+  - command: pnpm authority:check
+    result: passed
+    exitCode: 0
+    detail: 'launch authority positive acceptance; 5 unittest passed на docs diff'
+  - command: git diff --check
+    result: passed
+    exitCode: 0
+    detail: 'Проверен diff со всеми 15 docs outputs, включая intent-to-add новые файлы; после записи handoff повторить staged diff check.'
+  - command: python3 -
+    result: passed
+    exitCode: 0
+    detail: 'Inline read-only verifier: 11 OpenAPI method/path/operation rows; GET /auth/session и negatives; 25 DAG nodes без NGX cycle; 89 локальных ссылок; actor-bound recovery.'
+  - command: |
+      python3 - <<'PY'
+      import hashlib, pathlib, subprocess, yaml
+      h = yaml.safe_load(pathlib.Path('evidence/handoffs/issue-159.yaml').read_text())
+      subprocess.run(['git', 'merge-base', '--is-ancestor', h['baseCommit'], 'HEAD'], check=True)
+      for row in h['inputs']:
+          data = subprocess.check_output(['git', 'show', f"{row['acceptedMergeCommit']}:{row['artifact']}"])
+          assert hashlib.sha256(data).hexdigest() == row['sha256'], row['artifact']
+      for row in h['outputs']:
+          assert hashlib.sha256(pathlib.Path(row['artifact']).read_bytes()).hexdigest() == row['sha256'], row['artifact']
+      print(f"PASS: {len(h['inputs'])} accepted input hashes; {len(h['outputs'])} output hashes; base ancestry")
+      PY
+    result: passed
+    exitCode: 0
+    detail: 'Все inputs проверены по SHA-256 на accepted merge, outputs по файлам финального diff; base ancestor; self SHA отсутствует.'
+limitations:
+  - 'Документальная authority: nginx/Edge authorizer, public TLS, OIDC, active Compose, native config, scoped PEM и production login не материализованы в #159.'
+  - 'Реальные IdP issuer/client ID/JWKS, permissions mapping и credential binding отсутствуют; production login, моментальная revocation, browser E2E, 5000 SSE capacity, reload overlap, измеренный SLA и deployment остаются NOT_RUN.'
+  - 'После #162 требуется отдельный receipt #160/#161/#162 и измерения #9/#12/#64/#13; target 512 initial SSE и лимиты ресурсов не являются PASS capacity. W2/W3 provider ingress не разрешён.'
+  - 'Self commit SHA намеренно отсутствует; исторические handoffs не переписаны, input hashes проверены на принятом merge.'

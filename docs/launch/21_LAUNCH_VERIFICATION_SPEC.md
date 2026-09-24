@@ -1,5 +1,15 @@
 # Исполнимая спецификация итогового launch gate
 
+При принятом [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
+действующий ниже exact-15 Node/Edge→web baseline остаётся исходным состоянием
+до #162. После cutover #13 обязан проверять 14 Node + 1 native nginx, private
+authorizer, отсутствие Node `web` runtime и второго public path. Negative
+route/auth/TLS/SSE/static/CSRF/rotation cases, real IdP admission,
+capacity/reload overlap и новый измеренный end-to-end SLA заданы
+[контрактом #159](29_NGINX_TRANSPORT_AND_AUTH.md); целевые пределы не равны
+прошедшему production/browser/SSE evidence. #160/#161/#162 публикуют
+собственные проверки до launch gate; #64 отвечает за native observability.
+
 Статус: нормативная спецификация issue #13. Задача проверяет принятый scope и
 не исправляет найденные дефекты внутри verification PR.
 

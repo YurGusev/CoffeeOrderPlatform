@@ -1,5 +1,13 @@
 # Нормативный каталог runtime первого запуска
 
+Текущие строки ниже — accepted launch authority до #162. Target supersession
+только для `edge-gateway`/`web` приведён в [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
+и [контракте #159](29_NGINX_TRANSPORT_AND_AUTH.md): private authorizer
+`edge-gateway`, native public `edge-nginx`, static `apps/web` без Node runtime.
+Остальные роли и их API/DB/Kafka/owner semantics не меняются. После #162
+нельзя одновременно держать старый Node proxy или `web` runtime; exact active
+catalog/config обновляет только #162.
+
 Исполнитель не выбирает значения этого каталога. Он переносит их в
 `config/service-catalog.json`, Compose, OpenAPI, event schemas и ownership
 manifests без изменения смысла. Любое отклонение требует отдельного ADR и issue.
