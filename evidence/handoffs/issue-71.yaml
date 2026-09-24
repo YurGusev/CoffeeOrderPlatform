@@ -1,0 +1,48 @@
+issue: 71
+baseCommit: 5e19c949b3ab72e1d390687564f34161f922ca68
+inputs:
+  - issue: 66
+    acceptedMergeCommit: 6934221dc1162af706d73e9d3c230bd51c3e4243
+    artifact: evidence/handoffs/issue-66.yaml
+    sha256: b9f086cb758029f97cd19e76c4b3d94c727630b6de184b006413f261adfee128
+  - issue: 66
+    acceptedMergeCommit: 6934221dc1162af706d73e9d3c230bd51c3e4243
+    artifact: docs/wave-2/README.md
+    sha256: ae6dbc47654420556a5312dc830d24f70929283e3ab258c8a01b190afb0d4b7a
+  - issue: 66
+    acceptedMergeCommit: 6934221dc1162af706d73e9d3c230bd51c3e4243
+    artifact: docs/wave-2/01_AROMA_SUPPLIER_INVOICES.md
+    sha256: 7f4264a949dda418ef76cf86b0bebb904bc8608ff4e2d852317b7928baf8e163
+outputs:
+  - artifact: docs/adr/ADR-0030-wave2-runtime-topology.md
+    sha256: f0f22d32a9a1db3a297b6b707ba6a2a1aa7c3c9bf0e87dcb5ca8a4fed189ff0d
+    consumers: [76, 77, 121, 122, 97]
+  - artifact: docs/wave-2/02_RUNTIME_TOPOLOGY.md
+    sha256: 6a2a2c2336e183a41a4914cd2ecaf62c6fbefc77a29434e53d37ce3438dd65c9
+    consumers: [76, 77, 78, 90, 97, 121, 122]
+  - artifact: docs/wave-2/README.md
+    sha256: b40ef0eb0709afe1750bd7534513c222a6b4d75828598dd0c0c43e1ca5e47f6d
+    consumers: [76, 77, 78, 87, 90, 97, 120, 121, 122, 123, 124]
+verification:
+  - command: pnpm authority:check
+    result: passed
+    exitCode: 0
+    detail: 'launch authority positive acceptance; 5 tests passed; no launch authority changed'
+  - command: git diff --cached --check
+    result: passed
+    exitCode: 0
+    detail: 'All four staged artifacts, including new ADR/topology/handoff, have no whitespace errors.'
+  - command: git diff --check
+    result: passed
+    exitCode: 0
+    detail: 'No remaining unstaged whitespace errors; full staged diff checked separately.'
+  - command: >-
+      python3 -c 'import hashlib,pathlib,subprocess,yaml; h=yaml.safe_load(pathlib.Path("evidence/handoffs/issue-71.yaml").read_text()); check=lambda b,s:hashlib.sha256(b).hexdigest()==s; assert all(check(subprocess.check_output(["git","show",i["acceptedMergeCommit"]+":"+i["artifact"]]),i["sha256"]) for i in h["inputs"]); assert all(check(pathlib.Path(o["artifact"]).read_bytes(),o["sha256"]) for o in h["outputs"]); print("PASS: 3 accepted input hashes and 3 current output hashes")'
+    result: passed
+    exitCode: 0
+    detail: 'Three predecessor hashes checked at accepted #66 merge; three final outputs checked in working tree.'
+limitations:
+  - 'Документационная поставка: ни одна из 19 новых ролей, новые DB, object storage/scan, PSP, live AROMA read, конфигурация и deployment в #71 не материализованы.'
+  - 'Target budgets и RPO/RTO не измерены; #72 подтверждает provider capabilities, #73 — PSP, #76 — contracts, #77/#78/#79/#80/#81/#82/#83/#84/#85/#86/#87/#120/#121/#122/#123/#124 производят свои evidence, #90 выполняет W2 acceptance и restore.'
+  - 'Принятие #13 и #64 является будущим gate W2 runtime; status successors и отдельные provider mutations не утверждаются этим handoff.'
+  - 'Исторические hashes #66 сверены только в accepted merge #67; актуальные файлы не заменяют исторический snapshot. Self commit SHA намеренно отсутствует.'

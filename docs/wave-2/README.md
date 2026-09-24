@@ -22,29 +22,11 @@ Invoices и Payments исключены из неё
 готовность этих бизнес-процессов. Их нельзя переносить во вторую волну для
 формального завершения первого запуска.
 
-Документы второй волны можно готовить сейчас. Эксплуатационный допуск её
-бизнес-пути требует принятого #13 с observability #64 и собственных W2 gates.
-#66 не добавляет prerequisite к #4 или #61–#64 и не меняет статусы существующих
-issues. Реализация доменов принимает только merged handoffs своих зависимостей.
-
-При подготовке пакета #61 выполняется отдельно в задаче «Настрой параметры
-GPT-6 Astra» (`01a06fae-bce6-7ac0-9e84-35b1ad1f79b8`), ветка
-`feature/61-runtime-recovery`. #66 не изменяет её runtime/tests и launch
-документы `01_RUNTIME_ARCHITECTURE.md`, `06_EVENTS_AND_RECOVERY.md`,
-`21_LAUNCH_VERIFICATION_SPEC.md`; их последующее принятие проверяется по GitHub.
-
-Состояние ниже относится к входному commit #60, а не к незакоммиченной работе
-других задач. Изменение колонки реализации требует ссылки на accepted handoff.
-
-| Возможность | Специфицировано | Реализовано на входном commit | Проверено |
-|---|---|---|---|
-| Fastify foundation | ADR-0025 | Recovery/scaffold #60 | Foundation evidence #60, не business admission |
-| Durable runtime/DB/Kafka | #61–#63 | Полный durable path отсутствует | Приёмка successors не получена |
-| Confirm → общая корзина → InSync | Launch #8/#10/#11 | Бизнес-цепочка отсутствует | E2E/provider proof отсутствует |
-| Checkout → wholesale link | Канон M11, этап W2-checkout | Нет | Нет |
-| Реквизиты счёта и связи с Orders | Логический контракт #66; provider read inputs открыты | Нет | Только документальные примеры, не live AROMA |
-| Invoice proof → customer payment | Канон M10/M08; W2 contracts ещё не материализованы | Нет | Нет |
-| Actual margin и Work Center | Канон M22/M21, границы ниже | Нет | Нет |
+Документы второй волны можно готовить заранее. Этот план описывает ожидаемую
+последовательность задач, но не подтверждает, что какая-либо задача уже
+реализована или принята. #66 — исходная историческая колонка и контекст
+планирования; актуальные статусы #61–#64 и остальных issues проверяются по
+GitHub и принятым handoffs, а не фиксируются этим документом.
 
 ## Результат и граф поставки
 
@@ -52,19 +34,36 @@ GPT-6 Astra» (`01a06fae-bce6-7ac0-9e84-35b1ad1f79b8`), ветка
 поставщика, проверенного распределения и оплаты клиента. Каждый остановленный
 процесс имеет owner, сохранённую причину и допустимую команду восстановления.
 
-```text
-W2-contracts (включая отдельное topology/roles решение)
-    → W2-artifacts → W2-checkout → W2-invoices
-                                      → W2-payment-requirement → W2-payments
-                                      → W2-pricing
-факты реализованных owners             → W2-work-center
-все этапы + принятый launch #13         → W2-acceptance
-```
+Порядок ниже — последовательность зависимостей из [epic #70](https://github.com/YurGusev/CoffeeOrderPlatform/issues/70),
+а не отчёт о выполнении. Решения #71/#72/#75 — обязательные входы #76;
+#73 задаёт политику PSP для последующей Payments-поставки, но **не** объявляется
+дополнительным prerequisite #76. Topology handoff #71 раскрывается в [документе runtime topology](02_RUNTIME_TOPOLOGY.md)
+и [ADR-0030](../adr/ADR-0030-wave2-runtime-topology.md).
 
-Это коды этапов плана, не номера GitHub issues. В будущей декомпозиции каждый
-owner output получает отдельный delivery issue и PR; таблица не разрешает
-реализовать все домены одним PR. Payments можно разрабатывать с contract fixtures
-после W2-contracts; его сквозная приёмка требует W2-payment-requirement.
+Точный порядок и зависимости:
+
+1. Решения #71 (topology/DB/runtime), #72 (AROMA evidence) и #75
+   (quantity/money) подготавливают #76; #73 (PSP) требуется платежным owner paths.
+2. #76 публикует contracts после принятых #4/#13/#66/#71/#72/#75.
+3. #77 материализует core platform после #12/#13/#61–#64 и #71/#76.
+   #120 (realtime) и #121 (telemetry) подключаются после #77 и не являются его
+   prerequisites.
+4. #78 создаёт core Artifact Storage после #76/#77. Ранние #80/#81 требуют
+   #78, но не требуют PDF scan/delivery; #88 принимает их результаты и
+   realtime #120.
+5. #79 реализует safe AROMA read transport после #10/#72/#76/#77. #80 реализует
+   checkout после #8/#11/#76–#79.
+6. #122 добавляет bounded PDF scan после #71/#76–#78. #123 доставляет supplier
+   PDF через Orders в Invoices после #76–#80 и #122; #82 принимает #81,
+   #122 и #123 для полного документного/денежного proof.
+7. #87 поставляет ранние checkout/header queues; его входы — #11/#76/#77/#80/#81.
+   #124 подключает поздние financial sources после #76/#77/#82–#87.
+   #84/#85 могут проверять contract fixtures #76 до реализации #83,
+   но живой финансовый путь принимается только в #90.
+
+Это план зависимостей из #70, а не отчёт о выполнении: ни готовность, ни
+принятие handoffs здесь не утверждаются. Каждый owner output остаётся отдельной
+поставкой; общий PR на все домены не подразумевается.
 
 | Этап / владелец | Вход → выход | Критерий приёмки и восстановление |
 |---|---|---|
@@ -117,13 +116,13 @@ Work Center поставляется вместе с подключаемыми 
 | Payment provider / Payments и владелец продукта | Выбранный PSP, методы оплаты, подписанный webhook contract, create/refund idempotency/lookup, условия partial/over/under-payment | Live Payments; fixtures не подтверждают работу PSP |
 | Quantity/money/распределение / Invoices, Orders, Pricing | Единицы provider quantity, точный масштаб, minor units, согласованные правила скидок/доставки/округления и примеры с совпадающими суммами | Allocation/proof и payment requirement |
 | Invoice document matching / Invoices | Обезличенные документы/ответы, доказанная связь с header/lines, правила проверки, manual-review критерии | Автоматическое применение invoice prices |
-| W2 topology / Platform Architecture и Operations | Отдельное ADR/issue с exact runtime set, owner DB/roles, ACL/networks, scoped secrets, pools/limits, storage/scan и workload mappings | Развёртывание новых владельцев и workers |
+| W2 topology / Platform Architecture и Operations | [ADR-0030](../adr/ADR-0030-wave2-runtime-topology.md) и [target matrix](02_RUNTIME_TOPOLOGY.md) задают роли, DB/ACL, бюджеты и future gates #76/#77/#78/#90 | Решение #71 не даёт разрешения на развёртывание: materialization и evidence остаются за successors |
 
 Текущие пять owner DB и 15 runtime не расширяются этим пакетом. Invoices и
 Payments требуют изолированных БД/ролей; Work Center — собственной projection
 границы. Artifact storage является инфраструктурой, не общей бизнес-БД.
-Физическое число новых процессов определяется принятой topology задачей, а не
-неявным объединением canonical runtime roles. Несекретные значения остаются
+Target #71 — 19 новых ролей после #13 и отдельных implementation handoffs;
+canonical роли не превращаются в них неявно. Несекретные значения остаются
 в `config/platform.yaml`, exact pins — в toolchain registry, секреты — в SOPS
 с существующей scoped materialization. Новые значения здесь не вводятся.
 
