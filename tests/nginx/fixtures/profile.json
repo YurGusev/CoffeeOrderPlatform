@@ -1,0 +1,27 @@
+{
+  "listen": 8443,
+  "publicHost": "edge-fixture.invalid",
+  "upstreams": {
+    "edge": {"host": "edge.fixture.internal", "port": 9443, "serverName": "edge.fixture.internal"},
+    "apiPublic": {"host": "api.fixture.internal", "port": 9444, "serverName": "api.fixture.internal"},
+    "realtime": {"host": "realtime.fixture.internal", "port": 9445, "serverName": "realtime.fixture.internal"}
+  },
+  "tls": {
+    "publicCertificate": "/run/secrets/edge-nginx/public.crt",
+    "publicPrivateKey": "/run/secrets/edge-nginx/public.key",
+    "upstreamCa": "/run/secrets/edge-nginx/upstream-ca.crt",
+    "clientCertificate": "/run/secrets/edge-nginx/client.crt",
+    "clientPrivateKey": "/run/secrets/edge-nginx/client.key"
+  },
+  "limits": {
+    "bodyBytes": 1048576,
+    "headerBytes": 16384,
+    "targetBytes": 2048,
+    "apiConnectSeconds": 1,
+    "apiReadSeconds": 6,
+    "apiSendSeconds": 6,
+    "authConnectSeconds": 1,
+    "authReadSeconds": 1,
+    "sseReadSeconds": 45
+  }
+}

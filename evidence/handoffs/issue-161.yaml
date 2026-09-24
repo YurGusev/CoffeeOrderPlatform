@@ -1,0 +1,154 @@
+issue: 161
+baseCommit: d4e60a00f8faa9e74de09d452b0cb31d0b3a56f1
+status: locally-verified
+scope: >-
+  Standalone native NGINX W1 transport artifact and isolated image fixtures only;
+  no production topology activation or application-auth implementation.
+inputs:
+  - artifact: evidence/handoffs/issue-159.yaml
+    revision: d4e60a00f8faa9e74de09d452b0cb31d0b3a56f1
+    sha256: 7b7c26c370ad60001ccc145c048ab648d2e877dc7b5c03e1a0ec2755f40841d5
+  - artifact: evidence/handoffs/issue-137.yaml
+    revision: d4e60a00f8faa9e74de09d452b0cb31d0b3a56f1
+    sha256: 01c0c9f1ffc77a42508ea75301243ef45388e03b72ac7d8110560682f58ce95b
+outputs:
+  - artifact: apps/edge-nginx/Dockerfile
+    sha256: ce3a2e5f99937e44a9ec533414bbbce86058ba51bfd649b8b94be404d5d67329
+    consumers: [platform-delivery, issue-162]
+  - artifact: apps/edge-nginx/snippets/business-headers.conf
+    sha256: dad7759f6ae2a4dfb958a3ec3710459104d0f726d3f2257f50825a7cc5004bc7
+    consumers: [edge-nginx-image, issue-162]
+  - artifact: apps/edge-nginx/snippets/upstream-tls.conf
+    sha256: 38ffb65e847748661347dff27c8d9a3772348de912bf45bfae2b148451e1b655
+    consumers: [edge-nginx-image, issue-162]
+  - artifact: tools/nginx/generate.mjs
+    sha256: 61f552f498027946b38807fbb1432d294257637bf5e4790b580f692035fe350f
+    consumers: [issue-162]
+  - artifact: tools/nginx/generate-config.mjs
+    sha256: e2e91b70c2e1dd35baaee45dd641a043ace398d99d046e955af143425f429bcf
+    consumers: [issue-162]
+  - artifact: config/nginx-profile.schema.json
+    sha256: 972008856a149d7e02d01412661713e966f2c87dd0b0c120267852fcb38acaca
+    consumers: [issue-162]
+  - artifact: config/toolchain-versions.json
+    sha256: 458c402b311d5f906e410640a597f845bd498d2abf45aaa34765826c8ab75b68
+    consumers: [toolchain-version-check, edge-nginx-build]
+  - artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md
+    sha256: ae0250cba81cf223b78de9e02d056ff68edb11742fe3670d97788dbca90c226d
+    consumers: [issue-162]
+checkboxEvidence:
+  - area: reproducible-artifact-and-toolchain-pin
+    status: passed
+    evidence: >-
+      Multi-stage Dockerfile builds web assets with pinned Node builder; final stage
+      uses pinned NGINX, USER 101:101, and contains no Node, compiler, package manager,
+      private key, or certificate per image scan.
+  - area: nginx-auth-request-module
+    status: passed
+    evidence: >-
+      Exact pinned base image nginx -V reports nginx/1.31.6 and
+      --with-http_auth_request_module. Official NGINX docs specify that any 2xx
+      authorizer response grants access; the generated transport captures the
+      subrequest status separately from its assertion and only maps 204 + nonempty
+      assertion to the business API. Image-level tests exercise both outcomes.
+    source: https://nginx.org/en/docs/http/ngx_http_auth_request_module.html
+  - area: deterministic-generator-schema-and-injection
+    status: passed
+    evidence: >-
+      pnpm nginx:check confirms byte-identical generation, schema/injection rejection,
+      W1 routes, and refusal to source a second active config when config/platform.yaml
+      lacks nginxTransport.
+  - area: auth-status-and-assertion
+    status: passed
+    evidence: >-
+      Built-image fixture explicitly returns HTTP 200 with nonempty forged X-Actor-Context;
+      client request carries unique idempotency marker; recorded API requests contain
+      zero such marker. HTTP 204 with nonempty auth-fixture assertion reaches API exactly
+      once; API receives fixture assertion, not client assertion. Status and assertion
+      are independently captured and checked.
+  - area: auth-problems-and-internal-paths
+    status: passed
+    evidence: >-
+      Image fixture observes typed 401/403/503; empty 204 fails closed; internal
+      authorization endpoint and private/agent paths are inaccessible externally.
+  - area: web-assets-sse-and-mutation
+    status: passed
+    evidence: >-
+      Image fixture checks root redirect, app deep link, immutable assets, missing
+      asset/API/event paths, exact mutation body and Idempotency-Key/If-Match, stripped
+      browser credentials, SSE >5 seconds with Last-Event-ID and concurrent API,
+      disconnect cleanup, and one upstream attempt after connection loss. GET-only
+      API/auth/SSE refuse implicit HEAD before proxy admission.
+  - area: tls-negative-matrix
+    status: passed
+    evidence: >-
+      NGINX_TLS_NEGATIVE=1 pnpm test:nginx-image passed against the built image:
+      an isolated HTTPS fixture rejected untrusted CA, wrong SNI, missing client
+      certificate, expired upstream certificate, and wrong-runtime DNS resolved
+      to a trusted-CA-signed certificate for a different runtime; no HTTP request
+      reached the rejected backends.
+  - area: required-build-and-lint-commands
+    status: passed
+    evidence: >-
+      web:build, browser:bundle:check, versions:check, nginx:check,
+      test:nginx-image, architecture:check, lint, git diff --check, and
+      pnpm check (505 tests; 477 passed, 28 skipped, 0 failed) passed locally.
+  - area: docs-and-handoff
+    status: passed
+    evidence: >-
+      docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md records artifact behavior; this handoff
+      records digests, module inventory, test commands, and fixture limits. Production
+      consumer remains issue-162.
+verification:
+  - command: pnpm nginx:check && pnpm test:nginx-image
+    result: passed
+    exitCode: 0
+    detail: >-
+      Local fixture image ID sha256:6a8d96038cfa6270942e663c1f40dd815585e63db862f03a27973871f6ac6f37;
+      generated fixture nginx.conf SHA-256 f9a5d39d6a690aad60104679dd66962fa99978648d6a9db78ccb6c0fdf002497;
+      neither is committed or pushed. Exact 200+forged assertion rejection and
+      204+nonempty assertion acceptance.
+  - command: pnpm versions:check && git diff --check && node --check tests/nginx/image.test.mjs && node --check tests/nginx/fixtures/backend.mjs && node --check tools/nginx/generate.mjs && node --check tools/nginx/generate-config.mjs && node --check tools/nginx/check-config.mjs && node --check tools/docker-build.mjs
+    result: passed
+    exitCode: 0
+  - command: pnpm web:build && pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      Local immutable asset tree: 15 files, 597656 bytes; sorted relative paths
+      and per-file SHA-256 yield tree SHA-256
+      23f6b40357c68f56503dbb03ce1d6a695ab950e025da129997e635ac7bd49762.
+      Recreated by web:build, not committed.
+  - command: docker run --rm --entrypoint nginx nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7 -V
+    result: passed
+    exitCode: 0
+    detail: >-
+      nginx/1.31.6; linux/amd64 manifest
+      sha256:9c0f39aa1c46f5062ba080555a067ebb82d5f63a8cf4d63f6ef2e76fc9ff2d0c;
+      module configure flags: --with-http_addition_module
+      --with-http_auth_request_module --with-http_dav_module --with-http_flv_module
+      --with-http_gunzip_module --with-http_gzip_static_module --with-http_json_module
+      --with-http_mp4_module --with-http_random_index_module --with-http_realip_module
+      --with-http_secure_link_module --with-http_slice_module --with-http_ssl_module
+      --with-http_stub_status_module --with-http_sub_module --with-http_v2_module
+      --with-http_v3_module --with-mail_ssl_module --with-stream_realip_module
+      --with-stream_ssl_module --with-stream_ssl_preread_module.
+  - command: pnpm architecture:check
+    result: passed
+    exitCode: 0
+    detail: Native nginx has no Node permission manifest; Node runtimes retain the permission check.
+  - command: NGINX_TLS_NEGATIVE=1 pnpm test:nginx-image
+    result: passed
+    exitCode: 0
+    detail: >-
+      Untrusted CA, wrong SNI, missing client certificate, expired certificate,
+      and wrong runtime DNS mapped to a valid certificate for another runtime
+      each failed before an upstream HTTP request.
+  - command: pnpm check
+    result: passed
+    exitCode: 0
+    detail: 505 tests; 477 passed, 28 skipped, 0 failed.
+limitations:
+  - Production config/profile/PEM integration and topology activation belong to issue-162; no active Compose or secret cutover was made. The fixture-only generated nginx.conf and local image are not committed artifacts.
+  - Tests use isolated fixture certificates; production CA/URI SAN, rotation and deployment were not exercised.
+  - No live application-auth implementation, deployment, registry push or capacity/soak proof was performed.

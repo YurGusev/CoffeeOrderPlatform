@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coffee-platform.invalid/schemas/nginx-profile.schema.json",
+  "title": "NGINX W1 native transport profile fragment (for config/platform.yaml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["listen", "publicHost", "upstreams", "tls", "limits"],
+  "properties": {
+    "listen": {"type": "integer", "const": 8443},
+    "publicHost": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"},
+    "upstreams": {
+      "type": "object", "additionalProperties": false,
+      "required": ["edge", "apiPublic", "realtime"],
+      "properties": {
+        "edge": {"$ref": "#/$defs/upstream"},
+        "apiPublic": {"$ref": "#/$defs/upstream"},
+        "realtime": {"$ref": "#/$defs/upstream"}
+      }
+    },
+    "tls": {
+      "type": "object", "additionalProperties": false,
+      "required": ["publicCertificate", "publicPrivateKey", "upstreamCa", "clientCertificate", "clientPrivateKey"],
+      "properties": {
+        "publicCertificate": {"type": "string", "const": "/run/secrets/edge-nginx/public.crt"},
+        "publicPrivateKey": {"type": "string", "const": "/run/secrets/edge-nginx/public.key"},
+        "upstreamCa": {"type": "string", "const": "/run/secrets/edge-nginx/upstream-ca.crt"},
+        "clientCertificate": {"type": "string", "const": "/run/secrets/edge-nginx/client.crt"},
+        "clientPrivateKey": {"type": "string", "const": "/run/secrets/edge-nginx/client.key"}
+      }
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bodyBytes", "headerBytes", "targetBytes", "apiConnectSeconds", "apiReadSeconds", "apiSendSeconds", "authConnectSeconds", "authReadSeconds", "sseReadSeconds"],
+      "properties": {
+        "bodyBytes": {"type": "integer", "const": 1048576},
+        "headerBytes": {"type": "integer", "const": 16384},
+        "targetBytes": {"type": "integer", "const": 2048},
+        "apiConnectSeconds": {"type": "integer", "const": 1},
+        "apiReadSeconds": {"type": "integer", "const": 6},
+        "apiSendSeconds": {"type": "integer", "const": 6},
+        "authConnectSeconds": {"type": "integer", "const": 1},
+        "authReadSeconds": {"type": "integer", "const": 1},
+        "sseReadSeconds": {"type": "integer", "minimum": 45}
+      }
+    }
+  },
+  "$defs": {
+    "upstream": {
+      "type": "object", "additionalProperties": false,
+      "required": ["host", "port", "serverName"],
+      "properties": {
+        "host": {"type": "string", "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "serverName": {"type": "string", "pattern": "^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$"}
+      }
+    }
+  }
+}
