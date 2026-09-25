@@ -4,13 +4,14 @@
   "authorityRef": "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md",
   "logicalZones": [
     "public-ingress",
+    "private-edge-backend",
     "public-api-backend",
     "internal-api",
     "provider-egress"
   ],
   "dockerNetworks": [
     { "name": "coffee_host_ingress", "internal": false, "external": false },
-    { "name": "coffee_public_ingress", "internal": true, "external": false },
+
     { "name": "coffee_edge_backend", "internal": true, "external": false },
     {
       "name": "coffee_public_api_backend",
@@ -26,18 +27,15 @@
   "runtimePolicies": [
     {
       "runtime": "edge-gateway",
-      "dockerNetworks": ["coffee_host_ingress", "coffee_public_ingress", "coffee_edge_backend"],
+      "dockerNetworks": ["coffee_edge_backend"],
       "hostPortPolicy": {
         "default": "deny",
-        "allowedPublishedHostPorts": [4000]
+        "allowedPublishedHostPorts": []
       },
-      "allowedHostPorts": [
-        "web:3000",
-        "api-public:4050",
-        "realtime-gateway:4401"
-      ],
+      "allowedHostPorts": [],
       "allowedExternalEgress": [],
       "denyAssertions": [
+        "no-public-ingress",
         "no-owner-service-route",
         "no-api-internal-route",
         "no-postgres",
@@ -83,17 +81,16 @@
       ]
     },
     {
-      "runtime": "web",
-      "dockerNetworks": ["coffee_public_ingress"],
-      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": [],
+      "runtime": "edge-nginx",
+      "dockerNetworks": ["coffee_host_ingress", "coffee_edge_backend"],
+      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [8443] },
+      "allowedHostPorts": ["edge-gateway:4000", "api-public:4050", "realtime-gateway:4401"],
       "allowedExternalEgress": [],
       "denyAssertions": [
-        "no-direct-host-publish",
-        "no-owner-route",
+        "no-provider-egress",
         "no-postgres",
         "no-kafka",
-        "no-provider-egress"
+        "no-unapproved-upstream"
       ]
     },
     {

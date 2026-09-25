@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "runtime": "edge-gateway",
-  "allowNet": ["web:3000", "api-public:4050", "realtime-gateway:4401"],
+  "allowNet": [],
   "allowFsRead": ["/app/config/platform.yaml", "/app/apps", "/app/dist", "/app/node_modules", "/app/packages", "/app/package.json", "/run/secrets/coffee-platform.yaml"],
   "allowFsWrite": [],
   "allowChildProcess": false,

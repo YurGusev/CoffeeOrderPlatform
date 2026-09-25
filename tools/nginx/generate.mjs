@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, rename, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -114,11 +115,14 @@ function render(profile, routes) {
     grouped.set(route.path, group);
   }
   const blocks = [...grouped.values()].map(route => routeBlock(route, profile)).join('\n');
+  const authTimeouts = `proxy_connect_timeout ${l.authConnectSeconds}s; proxy_read_timeout ${l.authReadSeconds}s;`;
   return `worker_processes 1;
 error_log /dev/null;
 pid /tmp/nginx.pid;
 events { worker_connections 1024; }
 http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
   log_format edge_safe escape=json '{"method":"$request_method","status":$status,"request_id":"$request_id","route":"$edge_route","request_bytes":$request_length,"response_bytes":$bytes_sent}';
   access_log /dev/stdout edge_safe;
   map $uri $edge_route { default "unmatched"; ~^/api/client-v1/customers$ "client.customers"; ~^/api/client-v1/catalog/products$ "client.catalog.products"; ~^/api/client-v1/pricing/quotes$ "client.pricing.quotes"; ~^/api/client-v1/orders/ "client.orders"; =/events "events"; =/auth/session "auth.session"; =/auth/login "auth.login"; =/auth/callback "auth.callback"; =/auth/logout "auth.logout"; }
@@ -161,12 +165,12 @@ http {
     location ^~ /app/ { limit_except GET HEAD { deny all; } try_files $uri $uri/ /index.html; add_header Cache-Control 'no-cache, no-store, must-revalidate' always; }
     location = /index.html { internal; default_type text/html; add_header Cache-Control 'no-cache, no-store, must-revalidate' always; }
     location ^~ /assets/ { limit_except GET HEAD { deny all; } try_files $uri =404; add_header Cache-Control 'public, max-age=31536000, immutable' always; }
-    location = /auth/session { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/session; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header X-Request-Id $request_id; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Forwarded-Host ${profile.publicHost}; proxy_set_header Authorization ''; proxy_set_header Cache-Control no-store; proxy_hide_header Cache-Control; add_header Cache-Control no-store always; include /etc/nginx/snippets/upstream-tls.conf; }
-    location = /auth/login { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/login; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header X-Request-Id $request_id; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Forwarded-Host ${profile.publicHost}; include /etc/nginx/snippets/upstream-tls.conf; }
-    location = /auth/callback { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/callback; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_login_cookie; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
-    location = /auth/logout { limit_except POST { deny all; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/logout; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
+    location = /auth/session { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/session; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header X-Request-Id $request_id; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Forwarded-Host ${profile.publicHost}; proxy_set_header Authorization ''; proxy_set_header Cache-Control no-store; proxy_hide_header Cache-Control; add_header Cache-Control no-store always; include /etc/nginx/snippets/upstream-tls.conf; }
+    location = /auth/login { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/login; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header X-Request-Id $request_id; proxy_set_header X-Forwarded-Proto https; proxy_set_header X-Forwarded-Host ${profile.publicHost}; include /etc/nginx/snippets/upstream-tls.conf; }
+    location = /auth/callback { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/callback; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_login_cookie; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
+    location = /auth/logout { limit_except POST { deny all; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/logout; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
     if ($edge_oversized_raw_target) { return 414; }
-    location = /_edge/authorize { internal; limit_conn edge_auth_admission 320; proxy_pass https://edge_gateway/_edge/authorize; proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_pass_request_body off; proxy_set_header Content-Length ''; proxy_set_header X-Original-Method $request_method; proxy_set_header X-Original-URI $request_uri; proxy_set_header X-Request-Id $request_id; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header Authorization ''; proxy_set_header X-Actor-Context ''; include /etc/nginx/snippets/upstream-tls.conf; }
+    location = /_edge/authorize { internal; limit_conn edge_auth_admission 320; proxy_pass https://edge_gateway/_edge/authorize; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_pass_request_body off; proxy_set_header Content-Length ''; proxy_set_header X-Original-Method $request_method; proxy_set_header X-Original-URI $request_uri; proxy_set_header X-Request-Id $request_id; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header Authorization ''; proxy_set_header X-Actor-Context ''; include /etc/nginx/snippets/upstream-tls.conf; }
     location = /health/ready { return 404; }
     location = /metrics { return 404; }
     location ^~ /api/internal-v1/ { ${problem(404, 'ROUTE_NOT_FOUND', 'Not found')} }
@@ -178,9 +182,15 @@ http {
     error_page 401 = @auth_401;
     error_page 403 = @auth_403;
     error_page 500 = @auth_503;
+    error_page 502 = @upstream_502;
+    error_page 503 = @upstream_503;
+    error_page 504 = @upstream_504;
     location @auth_401 { ${problem(401, 'AUTHENTICATION_REQUIRED', 'Authentication required')} }
     location @auth_403 { ${problem(403, 'AUTHORIZATION_FORBIDDEN', 'Forbidden')} }
     location @auth_503 { ${problem(503, 'AUTHORIZER_UNAVAILABLE', 'Authorization unavailable')} }
+    location @upstream_502 { ${problem(502, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
+    location @upstream_503 { ${problem(503, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
+    location @upstream_504 { ${problem(504, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
   }
 }
 `;
@@ -199,7 +209,13 @@ export async function generate({ args = parseArgs(process.argv.slice(2)), root =
   const output = resolve(root, args.output ?? 'apps/edge-nginx/generated/nginx.conf');
   must(output.startsWith(`${resolve(root, 'apps/edge-nginx')}/`), 'output must be under apps/edge-nginx');
   await mkdir(dirname(output), { recursive: true });
-  await writeFile(output, text, { mode: 0o644 });
+  const temporary = `${output}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, text, { mode: 0o644 });
+    await rename(temporary, output);
+  } finally {
+    await rm(temporary, { force: true });
+  }
   return { output: relative(root, output), routes: 11, bytes: Buffer.byteLength(text), source: args.fixture ? 'isolated-fixture' : 'config/platform.yaml' };
 }
 

@@ -21,6 +21,11 @@ async function start(port, role) {
       if (mode === 'empty204') { await authorize(204, { 'X-Correlation-Id': '123e4567-e89b-42d3-a456-426614174000' }); return; }
       if (mode === 'forbidden') { await authorize(403); return; }
       if (mode === 'infra') { await authorize(503); return; }
+      if (mode === 'slow') {
+        await new Promise((resolve) => setTimeout(resolve, 1600));
+        await authorize(204, { 'X-Actor-Context': 'fixture-actor-17', 'X-Correlation-Id': '123e4567-e89b-42d3-a456-426614174000' });
+        return;
+      }
       await authorize(401); return;
     }
     if (role === 'edge' && req.url === '/auth/session') {
@@ -31,6 +36,15 @@ async function start(port, role) {
         res.writeHead(401, { 'Content-Type': 'application/problem+json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify({ type: 'about:blank', title: 'Authentication required', status: 401, code: 'AUTHENTICATION_REQUIRED' }));
       }
+      return;
+    }
+    if (role === 'edge' && req.url === '/auth/logout') {
+      const allowed = req.method === 'POST' && req.headers.origin === 'https://edge-fixture.invalid'
+        && req.headers['x-csrf-token'] === 'csrf-test'
+        && (req.headers.cookie ?? '').includes('__Host-coffee-session=allow')
+        && (req.headers.cookie ?? '').includes('__Host-coffee-csrf=csrf-test');
+      res.writeHead(allowed ? 204 : 403, { 'Cache-Control': 'no-store' });
+      res.end();
       return;
     }
     if (role === 'realtime' && req.url === '/events') {

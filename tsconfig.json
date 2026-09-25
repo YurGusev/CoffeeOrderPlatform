@@ -31,7 +31,6 @@
     { "path": "apps/api-public" },
     { "path": "apps/api-internal" },
     { "path": "apps/web" },
-    { "path": "apps/web/tsconfig.runtime.json" },
     { "path": "apps/customer-service" },
     { "path": "apps/catalog-service" },
     { "path": "apps/catalog-supplier-sync" },

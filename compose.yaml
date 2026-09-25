@@ -82,6 +82,70 @@ services:
       start_period: 30s
       retries: 12
 
+  edge-nginx:
+    image: coffee-platform-edge-nginx:local
+    build:
+      context: .
+      dockerfile: apps/edge-nginx/Dockerfile
+    cpus: 2.0
+    mem_limit: 512m
+    ulimits:
+      nofile:
+        soft: 16384
+        hard: 16384
+    depends_on:
+      edge-gateway:
+        condition: service_healthy
+      api-public:
+        condition: service_healthy
+      realtime-gateway:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    user: "101:101"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=8m
+    ports:
+      - target: 8443
+        published: "8443"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    networks:
+      - coffee_host_ingress
+      - coffee_edge_backend
+    secrets:
+      - source: edge-nginx-public-cert
+        target: /run/secrets/edge-nginx/public.crt
+        uid: "101"
+        gid: "101"
+        mode: 0400
+      - source: edge-nginx-public-key
+        target: /run/secrets/edge-nginx/public.key
+        uid: "101"
+        gid: "101"
+        mode: 0400
+      - source: edge-nginx-upstream-ca
+        target: /run/secrets/edge-nginx/upstream-ca.crt
+        uid: "101"
+        gid: "101"
+        mode: 0400
+      - source: edge-nginx-client-cert
+        target: /run/secrets/edge-nginx/client.crt
+        uid: "101"
+        gid: "101"
+        mode: 0400
+      - source: edge-nginx-client-key
+        target: /run/secrets/edge-nginx/client.key
+        uid: "101"
+        gid: "101"
+        mode: 0400
+
   edge-gateway:
     <<: *runtime-defaults
     build:
@@ -94,17 +158,10 @@ services:
       RUNTIME_NAME: edge-gateway
       PORT: "4000"
       OTEL_SERVICE_NAME: edge-gateway
-    ports:
-      - target: 4000
-        published: "4000"
-        host_ip: 127.0.0.1
-        protocol: tcp
     expose:
       - "4000"
     networks:
-      coffee_host_ingress:
-      coffee_public_ingress:
-      coffee_edge_backend:
+      - coffee_edge_backend
     secrets:
       - source: runtime-edge-gateway
         target: /run/secrets/coffee-platform.yaml
@@ -168,28 +225,6 @@ services:
         gid: "1000"
         mode: 0400
 
-  web:
-    <<: *runtime-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        RUNTIME: web
-    environment:
-      <<: *runtime-environment
-      RUNTIME_NAME: web
-      PORT: "3000"
-      OTEL_SERVICE_NAME: web
-    expose:
-      - "3000"
-    networks:
-      - coffee_public_ingress
-    secrets:
-      - source: runtime-web
-        target: /run/secrets/coffee-platform.yaml
-        uid: "1000"
-        gid: "1000"
-        mode: 0400
 
   customer-service:
     <<: *runtime-defaults
@@ -492,8 +527,7 @@ secrets:
     file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/api-public.yaml
   runtime-api-internal:
     file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/api-internal.yaml
-  runtime-web:
-    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/web.yaml
+
   runtime-customer-service:
     file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/customer-service.yaml
   runtime-catalog-service:
@@ -516,14 +550,21 @@ secrets:
     file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/aroma-gateway.yaml
   runtime-realtime-gateway:
     file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/realtime-gateway.yaml
+  edge-nginx-public-cert:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/edge-nginx/public.crt
+  edge-nginx-public-key:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/edge-nginx/public.key
+  edge-nginx-upstream-ca:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/edge-nginx/upstream-ca.crt
+  edge-nginx-client-cert:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/edge-nginx/client.crt
+  edge-nginx-client-key:
+    file: ${COFFEE_COMPOSE_SECRETS_DIR:-/dev/shm/coffee-platform-secrets}/edge-nginx/client.key
 
 networks:
   coffee_host_ingress:
     name: coffee_host_ingress
     internal: false
-  coffee_public_ingress:
-    name: coffee_public_ingress
-    internal: true
   coffee_edge_backend:
     name: coffee_edge_backend
     internal: true

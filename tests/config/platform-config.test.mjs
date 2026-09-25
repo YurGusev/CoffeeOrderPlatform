@@ -15,6 +15,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 
+import { parsePlatformConfig, PlatformConfigError, RUNTIME_NAMES } from "../../packages/platform-config/src/index.ts";
+import { validateAllPermissionManifests } from "../../scripts/permission-audit.mjs";
+
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 async function configRoot() {
@@ -50,6 +53,105 @@ function run(root, env = {}) {
     },
   );
 }
+
+void test("GREEN: platform parser preserves a null or fully explicit browser OIDC profile", async () => {
+  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  assert.equal(document.browserOidc, null);
+  assert.equal(parsePlatformConfig(document).browserOidc, null);
+
+  const profile = {
+    issuer: "https://issuer.invalid",
+    clientId: "test-client-id",
+    authorizationUrl: "https://issuer.invalid/authorize",
+    tokenUrl: "https://issuer.invalid/token",
+    jwksUrl: "https://issuer.invalid/jwks",
+    redirectUri: "https://localhost/auth/callback",
+    allowedAlgorithms: ["RS256"],
+    actorRefClaim: "claim-ref-from-verified-profile",
+    permissionsClaim: "permissions-claim-from-verified-profile",
+  };
+  assert.deepEqual(parsePlatformConfig({...document, browserOidc: profile}).browserOidc, profile);
+  assert.throws(
+    () => parsePlatformConfig({...document, browserOidc: {...profile, actorRefClaim: undefined}}),
+    PlatformConfigError,
+  );
+  assert.throws(
+    () => parsePlatformConfig({...document, browserOidc: {...profile, allowedAlgorithms: ["none"]}}),
+    PlatformConfigError,
+  );
+});
+
+void test("RED: non-null browser OIDC requires the exact explicit claims and RS256", async () => {
+  const cases = [
+    ["missing actor claim source", (profile) => { delete profile.actorRefClaim; }],
+    ["missing permissions claim source", (profile) => { delete profile.permissionsClaim; }],
+    ["unsupported algorithm", (profile) => { profile.allowedAlgorithms = ["none"]; }],
+    ["unrecognized profile field", (profile) => { profile.defaultActor = "invented"; }],
+  ];
+  for (const [label, mutate] of cases) {
+    const root = await configRoot();
+    try {
+      const path = join(root, "config/platform.yaml");
+      const document = parseYaml(await readFile(path, "utf8"), {json: true});
+      document.browserOidc = {
+        issuer: "https://issuer.invalid",
+        clientId: "test-client-id",
+        authorizationUrl: "https://issuer.invalid/authorize",
+        tokenUrl: "https://issuer.invalid/token",
+        jwksUrl: "https://issuer.invalid/jwks",
+        redirectUri: "https://localhost/auth/callback",
+        allowedAlgorithms: ["RS256"],
+        actorRefClaim: "claim-ref-from-verified-profile",
+        permissionsClaim: "permissions-claim-from-verified-profile",
+      };
+      mutate(document.browserOidc);
+      await writeFile(path, dumpYaml(document), "utf8");
+      const result = run(root);
+      assert.notEqual(result.status, 0, label);
+      assert.match(`${result.stdout}\\n${result.stderr}`, /CONFIG-SCHEMA/, label);
+    } finally {
+      await rm(root, {recursive: true, force: true});
+    }
+  }
+});
+
+void test("GREEN: launch inventory is 14 Node runtimes plus native nginx with Edge egress denied", async () => {
+  const platform = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const catalog = JSON.parse(await readFile(join(REPO_ROOT, "config/service-catalog.json"), "utf8"));
+  const inventorySchema = JSON.parse(await readFile(join(REPO_ROOT, "secrets/platform-secrets.schema.json"), "utf8"));
+  const connectivity = JSON.parse(await readFile(join(REPO_ROOT, "platform/launch-v1-connectivity-policy.json"), "utf8"));
+  const edgePermissions = JSON.parse(await readFile(join(REPO_ROOT, "config/permissions/edge-gateway.json"), "utf8"));
+  assert.equal(RUNTIME_NAMES.length, 14);
+  assert.deepEqual(Object.keys(platform.services).sort(), [...RUNTIME_NAMES].sort());
+  assert.deepEqual(catalog.runtimes.map(({name}) => name).sort(), [...RUNTIME_NAMES, "edge-nginx"].sort());
+  assert.equal(catalog.runtimes.some(({name}) => name === "web"), false);
+  const transportKeys = inventorySchema.$defs.security.properties.serviceTransportKeys;
+  assert.equal(transportKeys.required.includes("web"), false);
+  assert.equal(transportKeys.required.includes("edge-nginx"), false, "inventory schema must permit an unprovisioned native identity while bootstrap fails closed");
+  assert.equal(transportKeys.properties["edge-nginx"].$ref, "#/$defs/encrypted");
+  assert.deepEqual(platform.services["edge-gateway"].outbound, []);
+  assert.deepEqual(platform.services["edge-gateway"].permissions.net, []);
+  assert.deepEqual(edgePermissions.allowNet, []);
+  const nodePermissionManifests = await validateAllPermissionManifests(REPO_ROOT);
+  assert.equal(nodePermissionManifests.length, 14);
+  assert.equal(nodePermissionManifests.some(({runtime}) => runtime === "edge-nginx"), false);
+  const edgePolicy = connectivity.runtimePolicies.find(({runtime}) => runtime === "edge-gateway");
+  assert.deepEqual(edgePolicy.allowedHostPorts, []);
+  assert.deepEqual(edgePolicy.allowedExternalEgress, []);
+  const nginxPolicy = connectivity.runtimePolicies.find(({runtime}) => runtime === "edge-nginx");
+  assert.deepEqual(nginxPolicy.allowedHostPorts, ["edge-gateway:4000", "api-public:4050", "realtime-gateway:4401"]);
+  assert.deepEqual(nginxPolicy.allowedExternalEgress, []);
+  assert.equal(platform.services["edge-gateway"].transportMode, "mtls");
+  assert.equal(platform.services["edge-gateway"].listen.port, 4000);
+  assert.equal(platform.nginxTransport.listen, 8443);
+  assert.equal(new URL(platform.platform.publicBaseUrl).origin,
+    `https://${platform.nginxTransport.publicHost}:${platform.nginxTransport.listen}`);
+  assert.deepEqual(platform.nginxTransport.upstreams, {
+    edge: {host: "edge-gateway", port: 4000, serverName: "edge-gateway.development.svc.coffee-platform.internal"},
+    apiPublic: {host: "api-public", port: 4050, serverName: "api-public.development.svc.coffee-platform.internal"},
+    realtime: {host: "realtime-gateway", port: 4401, serverName: "realtime-gateway.development.svc.coffee-platform.internal"},
+  });
+});
 
 void test("GREEN: canonical config and encrypted secrets pass the foundation checker", () => {
   const result = run(REPO_ROOT);
@@ -208,7 +310,7 @@ void test("RED: foreign database secret cannot be granted to a stateless runtime
   try {
     const path = join(root, "config/platform.yaml");
     const document = parseYaml(await readFile(path, "utf8"), { json: true });
-    document.services.web.secretRefs.push("postgres.customer");
+    document.services["realtime-gateway"].secretRefs.push("postgres.customer");
     await writeFile(path, dumpYaml(document), "utf8");
     const result = run(root);
     assert.notEqual(result.status, 0);

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {execFileSync} from 'node:child_process';
+import {createPrivateKey, createPublicKey, X509Certificate} from 'node:crypto';
 import {chmod, mkdir, unlink, writeFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -7,6 +8,8 @@ import {checkPlatformConfig, ConfigError, loadEncryptedSecrets, loadPlatformConf
 import {load as parseYaml, dump as dumpYaml} from 'js-yaml';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const NODE_IMAGE = 'node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae';
+const NGINX_SECRET_FILES = ['public.crt', 'public.key', 'upstream-ca.crt', 'client.crt', 'client.key'];
 const LOCATOR_ENV = new Set(['COFFEE_CONFIG_FILE', 'COFFEE_RUNTIME_SECRETS_FILE']);
 const BOOTSTRAP_LOCATOR_ENV = new Set([...LOCATOR_ENV, 'SOPS_AGE_KEY_FILE']);
 
@@ -77,18 +80,45 @@ function assertPlainSecretDocument(encrypted, decrypted) {
   return decrypted;
 }
 
+export async function ensureNginxSecretOwnership(directory) {
+  const sourceDir = resolve(directory);
+  const secretMountArgs = NGINX_SECRET_FILES.flatMap((name) => [
+    '--mount', `type=bind,source=${join(sourceDir, name)},target=/secret-input/${name}`,
+  ]);
+  const ownershipScript = `set -eu; for name in ${NGINX_SECRET_FILES.join(' ')}; do path="/secret-input/$name"; test -f "$path"; test ! -L "$path"; chown 101:101 "$path"; chmod 0400 "$path"; done`;
+  execFileSync('docker', [
+    'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0',
+    '--cap-drop', 'ALL', '--cap-add', 'CHOWN', '--cap-add', 'FOWNER',
+    ...secretMountArgs, NODE_IMAGE, 'sh', '-ceu', ownershipScript,
+  ], {stdio: 'ignore'});
+  const probe = `const fs=require('node:fs'); for (const name of ${JSON.stringify(NGINX_SECRET_FILES)}) { const path='/run/secrets/edge-nginx/'+name; const s=fs.statSync(path); if (s.uid!==101 || s.gid!==101 || (s.mode&0o777)!==0o400) process.exit(3); fs.readFileSync(path); } console.log('edge-nginx PEM ownership/readability verified');`;
+  const probeMountArgs = NGINX_SECRET_FILES.flatMap((name) => [
+    '--mount', `type=bind,source=${join(sourceDir, name)},target=/run/secrets/edge-nginx/${name},readonly`,
+  ]);
+  execFileSync('docker', [
+    'run', '--rm', '--network', 'none', '--read-only', '--user', '101:101',
+    '--cap-drop', 'ALL', ...probeMountArgs, NODE_IMAGE, 'node', '-e', probe,
+  ], {stdio: 'ignore'});
+}
+
 export async function materializeRuntimeSecrets({root = REPO_ROOT, runtime, outputDir = '/run/secrets', env = process.env} = {}) {
   if (!runtime || typeof runtime !== 'string') fail('CONFIG-RUNTIME', 'runtime is required');
   assertLocatorEnv(env, true);
   const secretPath = join(root, 'secrets/platform.secrets.sops.yaml');
   const configPath = env.COFFEE_CONFIG_FILE ? resolve(env.COFFEE_CONFIG_FILE) : join(root, 'config/platform.yaml');
   const config = await loadPlatformConfig(root, configPath);
-  if (!config.services[runtime]) fail('CONFIG-RUNTIME', `${runtime}: unknown runtime`);
+  const nativeNginx = runtime === 'edge-nginx';
+  if (!nativeNginx && !config.services[runtime]) fail('CONFIG-RUNTIME', `${runtime}: unknown runtime`);
+  if (nativeNginx && (!config.nginxTransport || config.nginxTransport.tls?.publicCertificate !== '/run/secrets/edge-nginx/public.crt' || config.nginxTransport.tls?.publicPrivateKey !== '/run/secrets/edge-nginx/public.key')) {
+    fail('CONFIG-NGINX-SECRET', 'edge-nginx secret paths do not match the native runtime contract');
+  }
   const encrypted = await loadEncryptedSecrets(root);
   const decrypted = assertPlainSecretDocument(encrypted, decryptInMemory(secretPath, env));
   const environment = decrypted.environments[config.environment];
-  const refs = config.services[runtime].secretRefs;
-  const optionalRefs = config.services[runtime].optionalSecretRefs ?? [];
+  const refs = nativeNginx
+    ? ['edge.tlsPrivateKey', 'edge.tlsCertificate', 'security.serviceTransportKeys.edge-nginx']
+    : config.services[runtime].secretRefs;
+  const optionalRefs = nativeNginx ? [] : config.services[runtime].optionalSecretRefs ?? [];
   const scoped = {};
   for (const ref of refs) {
     const value = secretValueAt(environment, ref);
@@ -98,6 +128,55 @@ export async function materializeRuntimeSecrets({root = REPO_ROOT, runtime, outp
   for (const ref of optionalRefs) {
     const value = secretValueAt(environment, ref);
     if (value !== undefined) setSecretAt(scoped, ref, value);
+  }
+  if (runtime === 'edge-nginx') {
+    const publicKey = secretValueAt(scoped, 'edge.tlsPrivateKey');
+    const publicCert = secretValueAt(scoped, 'edge.tlsCertificate');
+    const clientRaw = secretValueAt(scoped, 'security.serviceTransportKeys.edge-nginx');
+    if (typeof publicKey !== 'string' || typeof publicCert !== 'string' || typeof clientRaw !== 'string') {
+      fail('CONFIG-NGINX-SECRET', 'edge-nginx TLS and service identity material are required');
+    }
+    const transport = JSON.parse(clientRaw);
+    if (!transport || Object.keys(transport).sort().join(',') !== 'caPem,certPem,keyPem' ||
+        ['caPem', 'certPem', 'keyPem'].some((key) => typeof transport[key] !== 'string' || !transport[key])) {
+      fail('CONFIG-NGINX-SECRET', 'edge-nginx service identity material is invalid');
+    }
+    try {
+      const privateKey = createPrivateKey(publicKey);
+      const certificate = new X509Certificate(publicCert);
+      if (createPublicKey(privateKey).export({type: 'spki', format: 'der'}).compare(certificate.publicKey.export({type: 'spki', format: 'der'})) !== 0 ||
+          !certificate.checkHost(config.nginxTransport.publicHost)) {
+        fail('CONFIG-NGINX-SECRET', 'edge-nginx public TLS key/certificate does not match configured host');
+      }
+      const clientKey = createPrivateKey(transport.keyPem);
+      const clientCert = new X509Certificate(transport.certPem);
+      if (createPublicKey(clientKey).export({type: 'spki', format: 'der'}).compare(clientCert.publicKey.export({type: 'spki', format: 'der'})) !== 0 ||
+          !clientCert.subjectAltName?.split(',').map((name) => name.trim()).includes(`URI:spiffe://coffee-platform/${config.environment}/edge-nginx`)) {
+        fail('CONFIG-NGINX-SECRET', 'edge-nginx service identity certificate is invalid');
+      }
+      new X509Certificate(transport.caPem);
+    } catch (error) {
+      if (error instanceof ConfigError) throw error;
+      fail('CONFIG-NGINX-SECRET', 'edge-nginx PEM material is invalid');
+    }
+    const directory = env.COFFEE_RUNTIME_SECRETS_FILE ?? join(outputDir, 'edge-nginx');
+    await mkdir(directory, {recursive: true, mode: 0o700});
+    await chmod(directory, 0o700);
+    const files = {
+      'public.crt': publicCert,
+      'public.key': publicKey,
+      'upstream-ca.crt': transport.caPem,
+      'client.crt': transport.certPem,
+      'client.key': transport.keyPem,
+    };
+    for (const [name, value] of Object.entries(files)) {
+      const path = join(directory, name);
+      await unlink(path).catch((error) => { if (error.code !== 'ENOENT') throw error; });
+      await writeFile(path, value, {encoding: 'utf8', mode: 0o400});
+      await chmod(path, 0o400);
+    }
+    await ensureNginxSecretOwnership(directory);
+    return {path: directory, runtime, secretRefs: [...refs], files: Object.keys(files)};
   }
   const destination = env.COFFEE_RUNTIME_SECRETS_FILE ?? join(outputDir, 'coffee-platform.yaml');
   await mkdir(dirname(destination), {recursive: true, mode: 0o700});

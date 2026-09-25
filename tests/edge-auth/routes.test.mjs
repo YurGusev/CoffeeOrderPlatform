@@ -33,10 +33,10 @@ function fixture({peer = true, operation = {operationId: "getOrderCard", audienc
   return {calls, sessions, adapters};
 }
 
-async function makeApp(t, f, composition) {
+async function makeApp(t, f, composition, context) {
   const app = await createRuntime({name: "edge-auth-test", host: "127.0.0.1", port: 0, shutdownGraceMs: 500, deadlineMs: 5_000});
   if (composition === undefined) registerEdgeAuthRoutes(app, f.adapters);
-  else await composition.configure(app, new AbortController().signal);
+  else await composition.configure(app, new AbortController().signal, undefined, undefined, context);
   await app.runtimeController.start();
   t.after(() => app.runtimeController.closeRuntime("SIGTERM"));
   return app;
@@ -101,12 +101,34 @@ void test("runtime composition registers routes and signs a verifiable Ed25519 a
 });
 
 void test("default edge composition registers routes but has no active authentication profile", async (t) => {
-  const app = await makeApp(t, fixture(), createEdgeAuthComposition());
+  const app = await makeApp(t, fixture(), createEdgeAuthComposition(), {config: {browserOidc: null}});
   assert.equal((await app.inject({method: "GET", url: "/auth/login"})).statusCode, 503);
   const denied = await app.inject({method: "GET", url: "/_edge/authorize", headers: {
     "x-original-method": "GET", "x-original-uri": "/api/client-v1/orders/order-1", cookie: sessionCookie,
   }});
   assert.equal(denied.statusCode, 401);
+});
+
+void test("runtime Edge enables OIDC only with an explicit provider and actor claim mapping", async (t) => {
+  const {privateKey} = generateKeyPairSync("ed25519");
+  const app = await makeApp(t, fixture(), createEdgeAuthComposition(), {
+    config: {
+      platform: {publicBaseUrl: ORIGIN},
+      browserOidc: {
+        issuer: "https://idp.fixture.invalid", clientId: "client-fixture",
+        authorizationUrl: "https://idp.fixture.invalid/authorize",
+        tokenUrl: "https://idp.fixture.invalid/token",
+        jwksUrl: "https://idp.fixture.invalid/jwks",
+        redirectUri: `${ORIGIN}/auth/callback`, allowedAlgorithms: ["RS256"],
+        actorRefClaim: "actor_ref", permissionsClaim: "platform_permissions",
+      },
+    },
+    secrets: {security: {actorContextEdgeSigningPrivateKey: privateKey.export({type: "pkcs8", format: "pem"})}},
+  });
+  const login = await app.inject({method: "GET", url: "/auth/login"});
+  assert.equal(login.statusCode, 303);
+  assert.match(login.headers.location, /^https:\/\/idp\.fixture\.invalid\/authorize\?/u);
+  assert.equal(new URL(login.headers.location).searchParams.get("client_id"), "client-fixture");
 });
 
 void test("configured Edge authorizer uses generated operation permission before signing", async (t) => {

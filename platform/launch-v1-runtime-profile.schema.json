@@ -5,282 +5,715 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "$schema", "schemaVersion", "authority", "exactDeployableRuntimeCount",
-    "runtimes", "specialRoles", "routeMounts", "surfaceIsolation",
-    "internalOperationAllowlist", "delegation", "transportIdentity",
-    "catalogIdentity", "ordersAuthority"
+    "$schema",
+    "schemaVersion",
+    "authority",
+    "exactDeployableRuntimeCount",
+    "runtimes",
+    "specialRoles",
+    "routeMounts",
+    "surfaceIsolation",
+    "internalOperationAllowlist",
+    "delegation",
+    "transportIdentity",
+    "catalogIdentity",
+    "ordersAuthority"
   ],
   "properties": {
-    "$schema": { "const": "./launch-v1-runtime-profile.schema.json" },
-    "schemaVersion": { "const": 1 },
+    "$schema": {
+      "const": "./launch-v1-runtime-profile.schema.json"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
     "authority": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["runtimeDecisionRef", "contractDecisionRef", "identityRef", "runtimeCatalogRef", "catalogIdentityRef"],
+      "required": [
+        "runtimeDecisionRef",
+        "contractDecisionRef",
+        "identityRef",
+        "runtimeCatalogRef",
+        "catalogIdentityRef"
+      ],
       "properties": {
-        "runtimeDecisionRef": { "const": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md" },
-        "contractDecisionRef": { "const": "docs/adr/ADR-0020-launch-contract-closure.md" },
-        "identityRef": { "const": "docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md" },
-        "runtimeCatalogRef": { "const": "docs/launch/10_RUNTIME_CATALOG.md" },
-        "catalogIdentityRef": { "const": "docs/adr/ADR-0028-gateway-source-identity-authority.md" }
+        "runtimeDecisionRef": {
+          "const": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md"
+        },
+        "contractDecisionRef": {
+          "const": "docs/adr/ADR-0020-launch-contract-closure.md"
+        },
+        "identityRef": {
+          "const": "docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md"
+        },
+        "runtimeCatalogRef": {
+          "const": "docs/launch/10_RUNTIME_CATALOG.md"
+        },
+        "catalogIdentityRef": {
+          "const": "docs/adr/ADR-0028-gateway-source-identity-authority.md"
+        }
       }
     },
-    "exactDeployableRuntimeCount": { "const": 15 },
+    "exactDeployableRuntimeCount": {
+      "const": 15
+    },
     "runtimes": {
       "type": "array",
       "minItems": 15,
       "maxItems": 15,
-      "items": { "$ref": "#/$defs/runtime" }
+      "items": {
+        "$ref": "#/$defs/runtime"
+      }
     },
     "specialRoles": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["api-agent", "config-bootstrap"],
+      "required": [
+        "api-agent",
+        "config-bootstrap"
+      ],
       "properties": {
         "api-agent": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["classification", "state", "implemented", "deployedInFirstLaunch", "composeEntryAllowed"],
+          "required": [
+            "classification",
+            "state",
+            "implemented",
+            "deployedInFirstLaunch",
+            "composeEntryAllowed"
+          ],
           "properties": {
-            "classification": { "const": "deployable-runtime-role" },
-            "state": { "const": "planned" },
-            "implemented": { "const": false },
-            "deployedInFirstLaunch": { "const": false },
-            "composeEntryAllowed": { "const": false }
+            "classification": {
+              "const": "deployable-runtime-role"
+            },
+            "state": {
+              "const": "planned"
+            },
+            "implemented": {
+              "const": false
+            },
+            "deployedInFirstLaunch": {
+              "const": false
+            },
+            "composeEntryAllowed": {
+              "const": false
+            }
           }
         },
         "config-bootstrap": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["classification", "lifecycle", "longRunning", "listenerAllowed", "replicasAllowed"],
+          "required": [
+            "classification",
+            "lifecycle",
+            "longRunning",
+            "listenerAllowed",
+            "replicasAllowed"
+          ],
           "properties": {
-            "classification": { "const": "trusted-initialization-provisioning-role" },
-            "lifecycle": { "const": "init-only" },
-            "longRunning": { "const": false },
-            "listenerAllowed": { "const": false },
-            "replicasAllowed": { "const": false }
+            "classification": {
+              "const": "trusted-initialization-provisioning-role"
+            },
+            "lifecycle": {
+              "const": "init-only"
+            },
+            "longRunning": {
+              "const": false
+            },
+            "listenerAllowed": {
+              "const": false
+            },
+            "replicasAllowed": {
+              "const": false
+            }
           }
         }
       }
     },
     "routeMounts": {
       "type": "array",
-      "minItems": 5,
-      "maxItems": 5,
-      "items": { "$ref": "#/$defs/routeMount" }
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "$ref": "#/$defs/routeMount"
+      }
     },
     "surfaceIsolation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["api-public", "api-internal", "edgeDirectOwnerRoutingAllowed", "ownerHostPortPublishingAllowed", "webHostPortPublishingAllowed"],
+      "required": [
+        "api-public",
+        "api-internal",
+        "edgeDirectOwnerRoutingAllowed",
+        "ownerHostPortPublishingAllowed",
+        "nativeNginxPublishedBind"
+      ],
       "properties": {
-        "api-public": { "const": ["client-v1"] },
-        "api-internal": { "const": ["internal-v1"] },
-        "edgeDirectOwnerRoutingAllowed": { "const": false },
-        "ownerHostPortPublishingAllowed": { "const": false },
-        "webHostPortPublishingAllowed": { "const": false }
+        "api-public": {
+          "const": [
+            "client-v1"
+          ]
+        },
+        "api-internal": {
+          "const": [
+            "internal-v1"
+          ]
+        },
+        "edgeDirectOwnerRoutingAllowed": {
+          "const": false
+        },
+        "ownerHostPortPublishingAllowed": {
+          "const": false
+        },
+        "nativeNginxPublishedBind": {"const": "127.0.0.1:8443"}
       }
     },
     "internalOperationAllowlist": {
       "type": "array",
       "minItems": 8,
       "maxItems": 9,
-      "items": { "$ref": "#/$defs/internalOperation" }
+      "items": {
+        "$ref": "#/$defs/internalOperation"
+      }
     },
     "delegation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["publicActor", "internalService"],
+      "required": [
+        "publicActor",
+        "internalService"
+      ],
       "properties": {
-        "publicActor": { "$ref": "#/$defs/publicDelegation" },
-        "internalService": { "$ref": "#/$defs/internalDelegation" }
+        "publicActor": {
+          "$ref": "#/$defs/publicDelegation"
+        },
+        "internalService": {
+          "$ref": "#/$defs/internalDelegation"
+        }
       }
     },
     "transportIdentity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "sanTemplate", "certificateTtlHours", "rotateBeforeExpiryHours", "trustBundleOverlapHours", "trustBundleRef", "privateMaterialDelivery", "activePreviousTrustRequired", "caPrivateKeyRuntimeAccess", "composeRotation", "revocationMode", "invalidIdentityReadinessStatus", "identities"],
+      "required": [
+        "algorithm",
+        "sanTemplate",
+        "certificateTtlHours",
+        "rotateBeforeExpiryHours",
+        "trustBundleOverlapHours",
+        "trustBundleRef",
+        "privateMaterialDelivery",
+        "activePreviousTrustRequired",
+        "caPrivateKeyRuntimeAccess",
+        "composeRotation",
+        "revocationMode",
+        "invalidIdentityReadinessStatus",
+        "identities"
+      ],
       "properties": {
-        "algorithm": { "const": "Ed25519" },
-        "sanTemplate": { "const": "spiffe://coffee-platform/{environment}/{runtime}" },
-        "certificateTtlHours": { "const": 24 },
-        "rotateBeforeExpiryHours": { "const": 6 },
-        "trustBundleOverlapHours": { "const": 12 },
-        "trustBundleRef": { "const": "platform.security.serviceTrustBundles" },
-        "privateMaterialDelivery": { "const": "per-runtime-scoped-tmpfs" },
-        "activePreviousTrustRequired": { "const": true },
-        "caPrivateKeyRuntimeAccess": { "const": false },
-        "composeRotation": { "const": "config-bootstrap-plus-restart" },
-        "revocationMode": { "const": "config-bootstrap-reissue-trust-update-restart" },
-        "invalidIdentityReadinessStatus": { "const": 503 },
+        "algorithm": {
+          "const": "Ed25519"
+        },
+        "sanTemplate": {
+          "const": "spiffe://coffee-platform/{environment}/{runtime}"
+        },
+        "certificateTtlHours": {
+          "const": 24
+        },
+        "rotateBeforeExpiryHours": {
+          "const": 6
+        },
+        "trustBundleOverlapHours": {
+          "const": 12
+        },
+        "trustBundleRef": {
+          "const": "platform.security.serviceTrustBundles"
+        },
+        "privateMaterialDelivery": {
+          "const": "per-runtime-scoped-tmpfs"
+        },
+        "activePreviousTrustRequired": {
+          "const": true
+        },
+        "caPrivateKeyRuntimeAccess": {
+          "const": false
+        },
+        "composeRotation": {
+          "const": "config-bootstrap-plus-restart"
+        },
+        "revocationMode": {
+          "const": "config-bootstrap-reissue-trust-update-restart"
+        },
+        "invalidIdentityReadinessStatus": {
+          "const": 503
+        },
         "identities": {
           "type": "array",
           "minItems": 15,
           "maxItems": 15,
           "uniqueItems": true,
-          "items": { "$ref": "#/$defs/runtimeName" }
+          "items": {
+            "$ref": "#/$defs/runtimeName"
+          }
         }
       }
     },
     "catalogIdentity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "secretRef", "keyInput", "inputEncoding", "input", "separatorByte", "entityTypes", "supplierRefPolicy", "rawProviderIdentifierPolicy", "outputEncoding", "variantIdPolicy", "collisionPolicy", "rotationPolicy"],
+      "required": [
+        "algorithm",
+        "secretRef",
+        "keyInput",
+        "inputEncoding",
+        "input",
+        "separatorByte",
+        "entityTypes",
+        "supplierRefPolicy",
+        "rawProviderIdentifierPolicy",
+        "outputEncoding",
+        "variantIdPolicy",
+        "collisionPolicy",
+        "rotationPolicy"
+      ],
       "properties": {
-        "algorithm": { "const": "hmac-sha256-v1" },
-        "secretRef": { "const": "aroma.catalogIdentityKeyV1" },
-        "keyInput": { "const": "dedicated-secret-ref-no-logging" },
-        "inputEncoding": { "const": "UTF-8" },
-        "input": { "const": ["hmac-sha256-v1", "0x00", "supplierRef", "0x00", "entityType", "0x00", "NFC(rawProviderIdentifier)"] },
-        "separatorByte": { "const": 0 },
-        "entityTypes": { "const": ["product", "variant", "offer", "grind"] },
-        "supplierRefPolicy": { "const": "canonical-sup-ulid" },
-        "rawProviderIdentifierPolicy": { "const": "non-empty-nul-free-nfc-no-trim-no-case-fold" },
-        "outputEncoding": { "const": "lowercase-hex" },
-        "variantIdPolicy": { "const": "never-generated" },
-        "collisionPolicy": { "const": "quarantine-generation" },
-        "rotationPolicy": { "const": "versioned-key-new-snapshots-only-existing-identities-remain-stable" }
+        "algorithm": {
+          "const": "hmac-sha256-v1"
+        },
+        "secretRef": {
+          "const": "aroma.catalogIdentityKeyV1"
+        },
+        "keyInput": {
+          "const": "dedicated-secret-ref-no-logging"
+        },
+        "inputEncoding": {
+          "const": "UTF-8"
+        },
+        "input": {
+          "const": [
+            "hmac-sha256-v1",
+            "0x00",
+            "supplierRef",
+            "0x00",
+            "entityType",
+            "0x00",
+            "NFC(rawProviderIdentifier)"
+          ]
+        },
+        "separatorByte": {
+          "const": 0
+        },
+        "entityTypes": {
+          "const": [
+            "product",
+            "variant",
+            "offer",
+            "grind"
+          ]
+        },
+        "supplierRefPolicy": {
+          "const": "canonical-sup-ulid"
+        },
+        "rawProviderIdentifierPolicy": {
+          "const": "non-empty-nul-free-nfc-no-trim-no-case-fold"
+        },
+        "outputEncoding": {
+          "const": "lowercase-hex"
+        },
+        "variantIdPolicy": {
+          "const": "never-generated"
+        },
+        "collisionPolicy": {
+          "const": "quarantine-generation"
+        },
+        "rotationPolicy": {
+          "const": "versioned-key-new-snapshots-only-existing-identities-remain-stable"
+        }
       }
     },
     "ordersAuthority": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["confirmedOfferPolicy", "blockers", "projectionRepositoryOwner", "projectionRepositoryCount", "ownerVersionSource", "commandVersionSource", "versionsIndependent", "desiredObservedComparison", "terminalInSyncProof"],
+      "required": [
+        "confirmedOfferPolicy",
+        "blockers",
+        "projectionRepositoryOwner",
+        "projectionRepositoryCount",
+        "ownerVersionSource",
+        "commandVersionSource",
+        "versionsIndependent",
+        "desiredObservedComparison",
+        "terminalInSyncProof"
+      ],
       "properties": {
-        "confirmedOfferPolicy": { "const": "frozen-no-automatic-remap" },
+        "confirmedOfferPolicy": {
+          "const": "frozen-no-automatic-remap"
+        },
         "blockers": {
           "type": "array",
           "minItems": 4,
           "maxItems": 4,
           "uniqueItems": true,
-          "items": { "enum": ["MAPPING_CHANGED", "MAPPING_MISSING", "MAPPING_STOPPED", "PRODUCT_UNAVAILABLE"] }
+          "items": {
+            "enum": [
+              "MAPPING_CHANGED",
+              "MAPPING_MISSING",
+              "MAPPING_STOPPED",
+              "PRODUCT_UNAVAILABLE"
+            ]
+          }
         },
-        "projectionRepositoryOwner": { "const": "orders-service" },
-        "projectionRepositoryCount": { "const": 1 },
-        "ownerVersionSource": { "const": "OrderCard.projectionVersion" },
-        "commandVersionSource": { "const": "Order.version" },
-        "versionsIndependent": { "const": true },
-        "desiredObservedComparison": { "const": "semantic-state-only-never-revision-equality" },
-        "terminalInSyncProof": { "const": "observed matches desired for frozen offers and no unresolved blocker or unknown outcome" }
+        "projectionRepositoryOwner": {
+          "const": "orders-service"
+        },
+        "projectionRepositoryCount": {
+          "const": 1
+        },
+        "ownerVersionSource": {
+          "const": "OrderCard.projectionVersion"
+        },
+        "commandVersionSource": {
+          "const": "Order.version"
+        },
+        "versionsIndependent": {
+          "const": true
+        },
+        "desiredObservedComparison": {
+          "const": "semantic-state-only-never-revision-equality"
+        },
+        "terminalInSyncProof": {
+          "const": "observed matches desired for frozen offers and no unresolved blocker or unknown outcome"
+        }
       }
     }
   },
   "$defs": {
     "runtimeName": {
       "enum": [
-        "edge-gateway", "api-public", "api-internal", "web", "customer-service",
-        "catalog-service", "catalog-supplier-sync", "catalog-activation-worker",
-        "pricing-service", "orders-service", "orders-aroma-preparation",
-        "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
+        "edge-gateway",
+        "api-public",
+        "api-internal",
+        "edge-nginx",
+        "customer-service",
+        "catalog-service",
+        "catalog-supplier-sync",
+        "catalog-activation-worker",
+        "pricing-service",
+        "orders-service",
+        "orders-aroma-preparation",
+        "aroma-observer",
+        "aroma-convergence",
+        "aroma-gateway",
+        "realtime-gateway"
       ]
     },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented", "transportMode"],
+      "required": [
+        "name",
+        "owner",
+        "m20Traceability",
+        "networkZone",
+        "dbPrincipal",
+        "httpSurfaces",
+        "secretRefs",
+        "implemented",
+        "transportMode"
+      ],
       "properties": {
-        "name": { "$ref": "#/$defs/runtimeName" },
-        "transportMode": { "enum": ["public-tls", "mtls"] },
-        "owner": { "enum": ["platform", "frontend", "customer", "catalog", "pricing", "orders", "integration", "realtime"] },
+        "name": {
+          "$ref": "#/$defs/runtimeName"
+        },
+        "transportMode": {
+          "enum": [
+            "public-tls",
+            "mtls"
+          ]
+        },
+        "owner": {
+          "enum": [
+            "platform",
+            "frontend",
+            "customer",
+            "catalog",
+            "pricing",
+            "orders",
+            "integration",
+            "realtime"
+          ]
+        },
         "m20Traceability": {
           "oneOf": [
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["classification", "roleRef"],
+              "required": [
+                "classification",
+                "roleRef"
+              ],
               "properties": {
-                "classification": { "const": "launch-v1-only" },
-                "roleRef": { "type": "null" }
+                "classification": {
+                  "const": "launch-v1-only"
+                },
+                "roleRef": {
+                  "type": "null"
+                }
               }
             },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["classification", "roleRef"],
+              "required": [
+                "classification",
+                "roleRef"
+              ],
               "properties": {
-                "classification": { "const": "exact-role-ref" },
-                "roleRef": { "type": "string", "minLength": 1 }
+                "classification": {
+                  "const": "exact-role-ref"
+                },
+                "roleRef": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             }
           ]
         },
-        "networkZone": { "enum": ["public-ingress", "public-api-backend", "internal-api", "provider-egress"] },
-        "dbPrincipal": { "type": ["string", "null"] },
+        "networkZone": {
+          "enum": [
+            "public-ingress",
+            "public-api-backend",
+            "internal-api",
+            "provider-egress",
+            "private-edge-backend"
+          ]
+        },
+        "dbPrincipal": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "httpSurfaces": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "enum": ["public-edge", "client-v1", "internal-v1", "web-assets", "client-v1-owner", "internal-v1-owner", "health-only", "provider-outbound", "events"] }
+          "items": {
+            "enum": [
+              "public-edge",
+              "client-v1",
+              "internal-v1",
+              "web-assets",
+              "client-v1-owner",
+              "internal-v1-owner",
+              "health-only",
+              "provider-outbound",
+              "events"
+            ]
+          }
         },
         "secretRefs": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "optionalSecretRefs": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
-        "implemented": { "const": false }
+        "implemented": {
+          "const": false
+        },
+        "runtimeKind": {
+          "const": "native-nginx"
+        }
       }
     },
     "routeMount": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source", "method", "path", "target", "targetPort"],
+      "required": [
+        "source",
+        "method",
+        "path",
+        "target",
+        "targetPort"
+      ],
       "properties": {
-        "source": { "const": "edge-gateway" },
-        "method": { "enum": ["GET", "ANY"] },
-        "path": { "enum": ["/", "/app/**", "/assets/**", "/api/client-v1/**", "/events"] },
-        "target": { "enum": ["web", "api-public", "realtime-gateway"] },
-        "targetPort": { "enum": [3000, 4050, 4401] }
+        "source": {
+          "const": "edge-nginx"
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "ANY"
+          ]
+        },
+        "path": {
+          "enum": [
+            "/",
+            "/app/**",
+            "/assets/**",
+            "/api/client-v1/**",
+            "/events"
+          ]
+        },
+        "target": {
+          "enum": [
+            "edge-nginx",
+            "api-public",
+            "realtime-gateway"
+          ]
+        },
+        "targetPort": {
+          "enum": [
+            8443,
+            4050,
+            4401
+          ]
+        }
       }
     },
     "internalOperation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["originalCaller", "target", "method", "path", "operationId", "mutation"],
+      "required": [
+        "originalCaller",
+        "target",
+        "method",
+        "path",
+        "operationId",
+        "mutation"
+      ],
       "properties": {
-        "originalCaller": { "$ref": "#/$defs/runtimeName" },
-        "target": { "$ref": "#/$defs/runtimeName" },
-        "method": { "enum": ["GET", "POST"] },
-        "path": { "type": "string", "pattern": "^/api/internal-v1/" },
-        "operationId": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]+$" },
-        "mutation": { "type": "boolean" }
+        "originalCaller": {
+          "$ref": "#/$defs/runtimeName"
+        },
+        "target": {
+          "$ref": "#/$defs/runtimeName"
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/api/internal-v1/"
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][A-Za-z0-9]+$"
+        },
+        "mutation": {
+          "type": "boolean"
+        }
       }
     },
     "claims": {
       "type": "array",
       "uniqueItems": true,
-      "items": { "enum": ["iss", "aud", "originalIssuer", "sub", "permissions", "originalCaller", "operationId", "correlationId", "traceparent", "iat", "exp", "jti", "kid"] }
+      "items": {
+        "enum": [
+          "iss",
+          "aud",
+          "originalIssuer",
+          "sub",
+          "permissions",
+          "originalCaller",
+          "operationId",
+          "correlationId",
+          "traceparent",
+          "iat",
+          "exp",
+          "jti",
+          "kid"
+        ]
+      }
     },
     "publicDelegation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["edgeAssertionIssuer", "edgeAssertionAudience", "ownerAssertionIssuer", "transportCallerAtOwner", "signingKeyRef", "transportKeyReuseAllowed", "requiredClaims", "edgeAssertionMaxTtlSeconds", "clockSkewSeconds"],
+      "required": [
+        "edgeAssertionIssuer",
+        "edgeAssertionAudience",
+        "ownerAssertionIssuer",
+        "transportCallerAtOwner",
+        "signingKeyRef",
+        "transportKeyReuseAllowed",
+        "requiredClaims",
+        "edgeAssertionMaxTtlSeconds",
+        "clockSkewSeconds"
+      ],
       "properties": {
-        "edgeAssertionIssuer": { "const": "edge-gateway" },
-        "edgeAssertionAudience": { "const": "api-public" },
-        "ownerAssertionIssuer": { "const": "api-public" },
-        "transportCallerAtOwner": { "const": "api-public" },
-        "signingKeyRef": { "const": "security.apiPublicDelegationSigningPrivateKey" },
-        "transportKeyReuseAllowed": { "const": false },
-        "requiredClaims": { "$ref": "#/$defs/claims" },
-        "edgeAssertionMaxTtlSeconds": { "const": 60 },
-        "clockSkewSeconds": { "const": 5 }
+        "edgeAssertionIssuer": {
+          "const": "edge-gateway"
+        },
+        "edgeAssertionAudience": {
+          "const": "api-public"
+        },
+        "ownerAssertionIssuer": {
+          "const": "api-public"
+        },
+        "transportCallerAtOwner": {
+          "const": "api-public"
+        },
+        "signingKeyRef": {
+          "const": "security.apiPublicDelegationSigningPrivateKey"
+        },
+        "transportKeyReuseAllowed": {
+          "const": false
+        },
+        "requiredClaims": {
+          "$ref": "#/$defs/claims"
+        },
+        "edgeAssertionMaxTtlSeconds": {
+          "const": 60
+        },
+        "clockSkewSeconds": {
+          "const": 5
+        }
       }
     },
     "internalDelegation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["issuer", "transportCallerAtTarget", "signingKeyRef", "requiredClaims", "maxTtlRule", "gatewayMutationOriginalCaller"],
+      "required": [
+        "issuer",
+        "transportCallerAtTarget",
+        "signingKeyRef",
+        "requiredClaims",
+        "maxTtlRule",
+        "gatewayMutationOriginalCaller"
+      ],
       "properties": {
-        "issuer": { "const": "api-internal" },
-        "transportCallerAtTarget": { "const": "api-internal" },
-        "signingKeyRef": { "const": "security.apiInternalDelegationSigningPrivateKey" },
-        "requiredClaims": { "$ref": "#/$defs/claims" },
-        "maxTtlRule": { "const": "remaining-request-deadline-plus-5s-skew" },
-        "gatewayMutationOriginalCaller": { "const": "aroma-convergence" }
+        "issuer": {
+          "const": "api-internal"
+        },
+        "transportCallerAtTarget": {
+          "const": "api-internal"
+        },
+        "signingKeyRef": {
+          "const": "security.apiInternalDelegationSigningPrivateKey"
+        },
+        "requiredClaims": {
+          "$ref": "#/$defs/claims"
+        },
+        "maxTtlRule": {
+          "const": "remaining-request-deadline-plus-5s-skew"
+        },
+        "gatewayMutationOriginalCaller": {
+          "const": "aroma-convergence"
+        }
       }
     }
   }

@@ -4,7 +4,6 @@ export const RUNTIME_NAMES = [
   "edge-gateway",
   "api-public",
   "api-internal",
-  "web",
   "customer-service",
   "catalog-service",
   "catalog-supplier-sync",
@@ -190,6 +189,17 @@ export type AromaConfig = Readonly<{
   redirectsAllowed: false;
   defaultPacking: typeof AROMA_DEFAULT_PACKING;
 }>;
+export type BrowserOidcProfile = Readonly<{
+  issuer: string;
+  clientId: string;
+  authorizationUrl: string;
+  tokenUrl: string;
+  jwksUrl: string;
+  redirectUri: string;
+  allowedAlgorithms: readonly ["RS256"];
+  actorRefClaim: string;
+  permissionsClaim: string;
+}>;
 export type PlatformConfig = Readonly<{
   $schema: "./platform.schema.json";
   schemaVersion: 1;
@@ -199,6 +209,8 @@ export type PlatformConfig = Readonly<{
   postgres: PostgresConfig;
   kafka: KafkaConfig;
   aroma: AromaConfig;
+  browserOidc: BrowserOidcProfile | null;
+  nginxTransport: Readonly<Record<string, unknown>>;
   security: Readonly<Record<string, unknown>>;
   services: Readonly<Record<RuntimeName, RuntimeConfig>>;
 }>;
@@ -309,7 +321,6 @@ const EXPECTED_KAFKA_PRODUCERS: Readonly<
   "edge-gateway": [],
   "api-public": [],
   "api-internal": [],
-  web: [],
   "customer-service": [],
   "catalog-service": [],
   "catalog-supplier-sync": [],
@@ -342,7 +353,6 @@ const EXPECTED_KAFKA_CONSUMERS: Readonly<
   "edge-gateway": [],
   "api-public": [],
   "api-internal": [],
-  web: [],
   "customer-service": [],
   "catalog-service": [],
   "catalog-supplier-sync": [],
@@ -1095,6 +1105,29 @@ export function assertDatabaseAdmissionBudget(
   return budget;
 }
 
+function browserOidcProfile(value: unknown, path: string): BrowserOidcProfile | null {
+  if (value === null) return null;
+  const source = record(value, path);
+  exactKeys(source, [
+    "issuer", "clientId", "authorizationUrl", "tokenUrl", "jwksUrl",
+    "redirectUri", "allowedAlgorithms", "actorRefClaim", "permissionsClaim",
+  ], path);
+  const algorithms = stringArray(source["allowedAlgorithms"], `${path}.allowedAlgorithms`);
+  if (algorithms.length !== 1 || algorithms[0] !== "RS256")
+    throw new PlatformConfigError(`${path}.allowedAlgorithms`, "разрешён только RS256");
+  return Object.freeze({
+    issuer: stringValue(source["issuer"], `${path}.issuer`),
+    clientId: stringValue(source["clientId"], `${path}.clientId`),
+    authorizationUrl: stringValue(source["authorizationUrl"], `${path}.authorizationUrl`),
+    tokenUrl: stringValue(source["tokenUrl"], `${path}.tokenUrl`),
+    jwksUrl: stringValue(source["jwksUrl"], `${path}.jwksUrl`),
+    redirectUri: stringValue(source["redirectUri"], `${path}.redirectUri`),
+    allowedAlgorithms: ["RS256"] as const,
+    actorRefClaim: stringValue(source["actorRefClaim"], `${path}.actorRefClaim`),
+    permissionsClaim: stringValue(source["permissionsClaim"], `${path}.permissionsClaim`),
+  });
+}
+
 export function parsePlatformConfig(value: unknown): PlatformConfig {
   const source = record(value, "config");
   exactKeys(
@@ -1109,9 +1142,11 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       "kafka",
       "aroma",
       "security",
+      "nginxTransport",
       "services",
     ],
     "config",
+    ["browserOidc"],
   );
   if (source["$schema"] !== "./platform.schema.json")
     throw new PlatformConfigError(
@@ -1167,6 +1202,8 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     ]),
   ) as Record<RuntimeName, RuntimeConfig>;
   const postgres = postgresConfig(source["postgres"], "config.postgres");
+  const browserOidc = browserOidcProfile(source["browserOidc"] ?? null, "config.browserOidc");
+  const nginxTransport = opaqueObject(source["nginxTransport"], "config.nginxTransport");
   assertDatabaseAdmissionBudget({services: typedServices, postgres});
   return Object.freeze({
     schemaVersion: 1,
@@ -1177,6 +1214,8 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     postgres,
     kafka,
     aroma: aromaConfig(source["aroma"], "config.aroma"),
+    browserOidc,
+    nginxTransport,
     security: opaqueObject(source["security"], "config.security"),
     services: Object.freeze(typedServices),
   });

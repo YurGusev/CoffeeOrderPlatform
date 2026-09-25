@@ -4,7 +4,7 @@
   "title": "CoffeeOrderPlatform launch configuration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "schemaVersion", "environment", "toolchainRef", "platform", "postgres", "kafka", "aroma", "security", "services"],
+  "required": ["$schema", "schemaVersion", "environment", "toolchainRef", "platform", "postgres", "kafka", "aroma", "security", "nginxTransport", "services"],
   "properties": {
     "$schema": {"type": "string", "const": "./platform.schema.json"},
     "schemaVersion": {"type": "integer", "const": 1},
@@ -15,11 +15,13 @@
     "kafka": {"$ref": "#/$defs/kafka"},
     "aroma": {"$ref": "#/$defs/aroma"},
     "security": {"$ref": "#/$defs/security"},
+    "nginxTransport": {"$ref": "./nginx-profile.schema.json"},
+    "browserOidc": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/browserOidcProfile"}]},
     "services": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "edge-gateway", "api-public", "api-internal", "web", "customer-service",
+        "edge-gateway", "api-public", "api-internal", "customer-service",
         "catalog-service", "catalog-supplier-sync", "catalog-activation-worker",
         "pricing-service", "orders-service", "orders-aroma-preparation",
         "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
@@ -28,7 +30,6 @@
         "edge-gateway": {"$ref": "#/$defs/service"},
         "api-public": {"$ref": "#/$defs/service"},
         "api-internal": {"$ref": "#/$defs/service"},
-        "web": {"$ref": "#/$defs/service"},
         "customer-service": {"$ref": "#/$defs/service"},
         "catalog-service": {"$ref": "#/$defs/service"},
         "catalog-supplier-sync": {"$ref": "#/$defs/service"},
@@ -46,6 +47,22 @@
   "$defs": {
     "positiveInteger": {"type": "integer", "minimum": 1},
     "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "browserOidcProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer", "clientId", "authorizationUrl", "tokenUrl", "jwksUrl", "redirectUri", "allowedAlgorithms", "actorRefClaim", "permissionsClaim"],
+      "properties": {
+        "issuer": {"type": "string", "minLength": 1},
+        "clientId": {"type": "string", "minLength": 1},
+        "authorizationUrl": {"type": "string", "minLength": 1},
+        "tokenUrl": {"type": "string", "minLength": 1},
+        "jwksUrl": {"type": "string", "minLength": 1},
+        "redirectUri": {"type": "string", "minLength": 1},
+        "allowedAlgorithms": {"const": ["RS256"]},
+        "actorRefClaim": {"type": "string", "minLength": 1},
+        "permissionsClaim": {"type": "string", "minLength": 1}
+      }
+    },
     "stringArray": {
       "type": "array",
       "items": {"type": "string", "minLength": 1},
@@ -333,12 +350,12 @@
             "overlapHours": {"type": "integer", "const": 12},
             "publicKeys": {
               "type": "object", "additionalProperties": false, "required": [
-                "edge-gateway", "api-public", "api-internal", "web", "customer-service", "catalog-service",
+                "edge-gateway", "api-public", "api-internal", "edge-nginx", "customer-service", "catalog-service",
                 "catalog-supplier-sync", "catalog-activation-worker", "pricing-service", "orders-service",
                 "orders-aroma-preparation", "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
               ],
               "properties": {
-                "edge-gateway": {"$ref": "#/$defs/publicKeyPair"}, "api-public": {"$ref": "#/$defs/publicKeyPair"}, "api-internal": {"$ref": "#/$defs/publicKeyPair"}, "web": {"$ref": "#/$defs/publicKeyPair"}, "customer-service": {"$ref": "#/$defs/publicKeyPair"}, "catalog-service": {"$ref": "#/$defs/publicKeyPair"}, "catalog-supplier-sync": {"$ref": "#/$defs/publicKeyPair"}, "catalog-activation-worker": {"$ref": "#/$defs/publicKeyPair"}, "pricing-service": {"$ref": "#/$defs/publicKeyPair"}, "orders-service": {"$ref": "#/$defs/publicKeyPair"}, "orders-aroma-preparation": {"$ref": "#/$defs/publicKeyPair"}, "aroma-observer": {"$ref": "#/$defs/publicKeyPair"}, "aroma-convergence": {"$ref": "#/$defs/publicKeyPair"}, "aroma-gateway": {"$ref": "#/$defs/publicKeyPair"}, "realtime-gateway": {"$ref": "#/$defs/publicKeyPair"}
+                "edge-gateway": {"$ref": "#/$defs/publicKeyPair"}, "api-public": {"$ref": "#/$defs/publicKeyPair"}, "api-internal": {"$ref": "#/$defs/publicKeyPair"}, "edge-nginx": {"$ref": "#/$defs/publicKeyPair"}, "customer-service": {"$ref": "#/$defs/publicKeyPair"}, "catalog-service": {"$ref": "#/$defs/publicKeyPair"}, "catalog-supplier-sync": {"$ref": "#/$defs/publicKeyPair"}, "catalog-activation-worker": {"$ref": "#/$defs/publicKeyPair"}, "pricing-service": {"$ref": "#/$defs/publicKeyPair"}, "orders-service": {"$ref": "#/$defs/publicKeyPair"}, "orders-aroma-preparation": {"$ref": "#/$defs/publicKeyPair"}, "aroma-observer": {"$ref": "#/$defs/publicKeyPair"}, "aroma-convergence": {"$ref": "#/$defs/publicKeyPair"}, "aroma-gateway": {"$ref": "#/$defs/publicKeyPair"}, "realtime-gateway": {"$ref": "#/$defs/publicKeyPair"}
               }
             }
           }

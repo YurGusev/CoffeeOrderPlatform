@@ -1,39 +1,50 @@
 # Нормативный каталог runtime первого запуска
 
-Текущие строки ниже — accepted launch authority до #162. Target supersession
-только для `edge-gateway`/`web` приведён в [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
-и [контракте #159](29_NGINX_TRANSPORT_AND_AUTH.md): private authorizer
+Reference-топология #162 следует [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
+и [контракту #159](29_NGINX_TRANSPORT_AND_AUTH.md): private authorizer
 `edge-gateway`, native public `edge-nginx`, static `apps/web` без Node runtime.
-Остальные роли и их API/DB/Kafka/owner semantics не меняются. После #162
-нельзя одновременно держать старый Node proxy или `web` runtime; exact active
-catalog/config обновляет только #162.
+Итого 14 Node runtime и один native nginx; остальные роли и их API/DB/Kafka/owner
+semantics не меняются. Старый Node proxy и `web` runtime не являются fallback.
+Этот каталог не доказывает production IdP, сертификаты, capacity или deployment.
 
 Исполнитель не выбирает значения этого каталога. Он переносит их в
 `config/service-catalog.json`, Compose, OpenAPI, event schemas и ownership
 manifests без изменения смысла. Любое отклонение требует отдельного ADR и issue.
 
-## 1. `edge-gateway`
+## 1. `edge-nginx`
 
-- **Назначение:** единственная публичная точка входа; завершает TLS, проверяет
-  пользовательскую сессию/JWT, формирует trusted actor context, применяет
-  request-size/rate/deadline limits и маршрутизирует `client-v1` только в
-  `api-public`, а `/events` только в `realtime-gateway`.
+- **Назначение:** единственный публичный HTTPS transport; прямые immutable SPA
+  assets, exact auth routes к private Edge, protected `client-v1` к `api-public`
+  и `/events` к `realtime-gateway` только после private auth subrequest.
+- **Владелец:** Platform Delivery/Security; прикладная identity принадлежит Edge.
+- **Входящие HTTP:** только route/method inventory
+  [контракта nginx](29_NGINX_TRANSPORT_AND_AUTH.md); unknown/internal/provider
+  пути не получают SPA fallback.
+- **Исходящие:** mTLS к `edge-gateway`, `api-public`, `realtime-gateway`;
+  произвольный owner, Kafka, PostgreSQL и provider egress отсутствуют.
+- **Секреты:** public TLS key/certificate и собственная scoped transport
+  identity; actor signing/OIDC secret и CA private key запрещены.
+- **Transport:** native non-root nginx; host publish только loopback `8443`.
+
+## 1.1. `edge-gateway`
+
+- **Назначение:** private application authorizer; проверяет OIDC/browser session,
+  exact operation/permission/CSRF и подписывает actor assertion. Не проксирует
+  business HTTP, SSE или статику.
 - **Владелец:** Platform.
-- **Входящие HTTP:** публичные `GET /`, `GET /app/**`, `GET /assets/**`,
-  `/api/client-v1/**`, `/events`, `/health/live`.
+- **Входящие HTTP:** exact `/auth/login`, `/auth/callback`, `/auth/session`,
+  `/auth/logout` и private `/_edge/authorize` только от nginx; health private.
 - **Входящие события:** нет.
-- **Исходящие вызовы:** HTTP к `web` для `/`/`app/**`/`assets/**`, к `api-public` для
-  client API; SSE proxy к `realtime-gateway`. Direct owner/API-internal route отсутствует.
+- **Исходящие вызовы:** только утверждённый OIDC provider/JWKS при наличии
+  проверенного профиля; к business runtime исходящего транспорта нет.
 - **Хранилище:** нет БД, нет persistent cache.
-- **Секреты:** отдельные public TLS private key/certificate, matching
-  `platform.publicBaseUrl`, optional public CA bundle для выделенного test
-  environment, OIDC/JWT verification configuration и собственная service
-  transport identity для внутренних outbound соединений.
-- **Transport:** `public-tls`; браузерный ingress не предъявляет service
-  certificate, а внутренние outbound соединения используют mTLS.
-- **Публичность:** public internet; `internal-v1` и `aroma-gateway` не маршрутизирует.
+- **Секреты:** OIDC client secret и отдельный actor signing key, собственная
+  private service identity; public TLS private key ему не выдаётся.
+- **Transport:** private mTLS listener; отсутствие утверждённого IdP profile
+  означает fail-closed login/authorize, а не fallback на публичный Node Edge.
+- **Публичность:** host port отсутствует.
 
-## 1.1. `api-public`
+## 1.2. `api-public`
 
 - **Назначение:** stateless composition root только для `client-v1`: actor и
   request/response schema validation, cancellation/deadline/trace propagation,
@@ -47,7 +58,7 @@ manifests без изменения смысла. Любое отклонени�
   delegation signing key, telemetry.
 - **Публичность:** private backend; browser/host port отсутствует.
 
-## 1.2. `api-internal`
+## 1.3. `api-internal`
 
 - **Назначение:** stateless composition root только для `internal-v1`; проверяет
   mTLS caller/operation allowlist и подписывает delegation context.
@@ -62,18 +73,8 @@ manifests без изменения смысла. Любое отклонени�
   telemetry; provider credentials отсутствуют.
 - **Публичность:** только private `internal-api` network.
 
-## 2. `web`
-
-- **Назначение:** раздача immutable assets нового React SPA.
-- **Владелец:** Frontend.
-- **Входящие HTTP:** публичные `GET /`, `/app/**`, `/assets/**`; SPA fallback только для app paths.
-- **Входящие события:** нет.
-- **Исходящие вызовы:** серверный runtime не выполняет; браузер вызывает только
-  same-origin `client-v1` и `/events` через `edge-gateway`.
-- **Хранилище:** нет.
-- **Секреты:** только собственная service transport identity; runtime environment
-  не содержит API/DB/provider credentials.
-- **Публичность:** public internet через edge/CDN.
+`apps/web` остаётся исходником и browser build graph; отдельного `web` runtime,
+Node entrypoint, listener или service transport secret scope больше нет.
 
 ## 3. `customer-service`
 

@@ -13,7 +13,7 @@
     {"runtime": "edge-gateway", "database": null, "role": null, "secretRef": null},
     {"runtime": "api-public", "database": null, "role": null, "secretRef": null},
     {"runtime": "api-internal", "database": null, "role": null, "secretRef": null},
-    {"runtime": "web", "database": null, "role": null, "secretRef": null},
+    {"runtime": "edge-nginx", "database": null, "role": null, "secretRef": null},
     {"runtime": "customer-service", "database": "coffee_platform_customer", "role": "coffee_customer_rw", "secretRef": "postgres.customer"},
     {"runtime": "catalog-service", "database": "coffee_platform_catalog", "role": "coffee_catalog_api_ro", "secretRef": "postgres.catalogApi"},
     {"runtime": "catalog-supplier-sync", "database": "coffee_platform_catalog", "role": "coffee_catalog_import_rw", "secretRef": "postgres.catalogImport"},

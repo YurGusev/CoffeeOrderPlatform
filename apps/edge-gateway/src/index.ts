@@ -5,6 +5,8 @@ import type {ActorContextClaims} from "@coffee-platform/security";
 import {registerEdgeAuthRoutes} from "./routes.js";
 import type {EdgeActorClaims, EdgeAuthAdapters, EdgeAuthAuthority, EdgeOperation} from "./routes.js";
 import {clientV1BrowserOperations} from "./client-operations.gen.js";
+import {createOidcAuthority} from "./oidc-auth.js";
+import type {OidcProfile} from "./oidc-auth.js";
 
 const ZERO_TRACEPARENT = "00-00000000000000000000000000000000-0000000000000000-00";
 const ACTOR_CONTEXT_KID = "edge-actor-context-v1";
@@ -102,9 +104,46 @@ function unavailableAdapters(): EdgeAuthAdapters {
   };
 }
 
+function runtimeAdapters(context: RuntimeCompositionContext): EdgeAuthAdapters {
+  const oidc = context.config.browserOidc;
+  if (oidc === null) return unavailableAdapters();
+  const baseUrl = context.config.platform["publicBaseUrl"];
+  if (typeof baseUrl !== "string") throw new Error("EDGE_PUBLIC_ORIGIN_NOT_CONFIGURED");
+  const origin = new URL(baseUrl).origin;
+  if (oidc.redirectUri !== `${origin}/auth/callback`) {
+    throw new Error("EDGE_OIDC_REDIRECT_ORIGIN_MISMATCH");
+  }
+  const profile: OidcProfile = {
+    issuer: oidc.issuer,
+    clientId: oidc.clientId,
+    authorizationUrl: oidc.authorizationUrl,
+    tokenUrl: oidc.tokenUrl,
+    jwksUrl: oidc.jwksUrl,
+    redirectUri: oidc.redirectUri,
+    allowedAlgorithms: ["RS256"],
+  };
+  const permissions: ReadonlySet<string> = new Set(clientV1BrowserOperations.flatMap((operation) =>
+    "permission" in operation ? [operation.permission] : []));
+  const authority = createOidcAuthority({
+    profile,
+    resolveActor: (claims) => {
+      const actorRef = claims[oidc.actorRefClaim];
+      const rights = claims[oidc.permissionsClaim];
+      if (typeof actorRef !== "string" || actorRef.length === 0 || actorRef.length > 256
+        || !Array.isArray(rights) || rights.length > 256
+        || !rights.every((right) => typeof right === "string" && permissions.has(right))) {
+        throw new Error("EDGE_OIDC_ACTOR_MAPPING_REJECTED");
+      }
+      return {actorRef, permissions: rights as string[]};
+    },
+  });
+  return createConfiguredEdgeAuthAdapters(context, authority, origin);
+}
+
 /** Register edge auth routes in the platform runtime composition lifecycle. */
-export function createEdgeAuthComposition(adapters: EdgeAuthAdapters = unavailableAdapters()): RuntimeComposition {
+export function createEdgeAuthComposition(adapters?: EdgeAuthAdapters): RuntimeComposition {
   return {
-    configure: (app) => registerEdgeAuthRoutes(app, adapters),
+    configure: (app, _signal, _database, _kafka, context) =>
+      registerEdgeAuthRoutes(app, adapters ?? (context ? runtimeAdapters(context) : unavailableAdapters())),
   };
 }

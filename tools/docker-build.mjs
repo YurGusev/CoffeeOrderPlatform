@@ -81,13 +81,23 @@ function ensureBuilder() {
   });
 }
 
+const extraArgs = process.argv.slice(2);
+const nginxBuild = extraArgs.some((argument) => argument.includes('apps/edge-nginx/Dockerfile')) || extraArgs.includes('edge-nginx');
+if (nginxBuild) {
+  execFileSync('pnpm', ['nginx:check'], {stdio: 'inherit'});
+}
+
 const mtu = detectedMtu();
 ensureNetwork(mtu);
 ensureBuilder();
 
-const extraArgs = process.argv.slice(2);
-if (extraArgs.includes('edge-nginx') && extraArgs.includes('--target') && !extraArgs.includes('--file') && !extraArgs.includes('-f')) {
+const hasExplicitDockerfile = extraArgs.includes('--file') || extraArgs.includes('-f');
+if (extraArgs.includes('edge-nginx') && !hasExplicitDockerfile) {
   extraArgs.unshift('--file', 'apps/edge-nginx/Dockerfile');
+}
+const targetIndex = extraArgs.indexOf('--target');
+if (extraArgs.includes('edge-nginx') && targetIndex >= 0 && extraArgs[targetIndex + 1] === 'runtime') {
+  extraArgs[targetIndex + 1] = 'edge-nginx';
 }
 const args = [
   "buildx",

@@ -42,9 +42,10 @@ import { createTestClock } from "../src/index.ts";
 
 void test("config rejects unknown keys and requires the exact runtime set", () => {
   const parsed = parsePlatformConfig(parseYaml(readFileSync(new URL("../../../config/platform.yaml", import.meta.url), "utf8")));
-  assert.equal(Object.keys(parsed.services).length, 15);
+  assert.equal(Object.keys(parsed.services).length, 14);
+  assert.equal(parsed.services.web, undefined);
+  assert.equal(parsed.nginxTransport.listen, 8443);
   assert.deepEqual(parsed.services["edge-gateway"].optionalSecretRefs, ["edge.tlsCaBundle"]);
-  assert.deepEqual(parsed.services.web.optionalSecretRefs, []);
   assert.throws(() => parsePlatformConfig({...parsed, unknown: true}), PlatformConfigError);
 });
 

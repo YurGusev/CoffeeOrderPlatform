@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OWNERSHIP_DIGEST = '7a9e10b221d855294627c663aae28d39b7410e043f4858dea390394f89f67356';
+const OWNERSHIP_DIGEST = '4c2cc9268534b1bfc35322d64e7dd98aaabe0a39db4d435ffcc3b6c858769dc2';
 
 function fail(message) {
   const error = new Error(`BOUND-DB-CLAIM ${message}`);

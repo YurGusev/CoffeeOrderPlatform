@@ -35,10 +35,9 @@ pnpm web:build
 pnpm dev:browser
 ```
 
-`dev:browser` запускает Vite browser shell. Существующий Node entry остаётся в
-`apps/web/src/main.ts` и отдельно собирается в `apps/web/dist/main.js`.
-Browser bundle выводится в `apps/web/dist/browser`; generated `dist` — только
-локальный результат проверки, его не коммитить.
+`dev:browser` запускает Vite browser shell. Отдельный Node runtime для `web`
+удалён: browser bundle из `apps/web/dist/browser` входит в native nginx image.
+Generated `dist` — только локальный результат проверки, его не коммитить.
 
 Стили пакета экспортируются как `@coffee-platform/ui/styles.css`: tokens
 выбранного прототипа v1.1.0 адаптированы к Tailwind CSS v4 и границам React Aria.

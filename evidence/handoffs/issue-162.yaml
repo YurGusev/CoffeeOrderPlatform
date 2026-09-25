@@ -1,0 +1,99 @@
+issue: 162
+baseCommit: deffca7b60c4588c8a3843a75c284963fb1c8324
+status: locally-verified
+scope: >-
+  Active reference cutover на native nginx с private Edge authorizer;
+  production IdP, provider ingress, сертификаты production PKI и capacity не принимаются.
+inputs:
+  - {issue: 159, artifact: evidence/handoffs/issue-159.yaml, sha256: 7b7c26c370ad60001ccc145c048ab648d2e877dc7b5c03e1a0ec2755f40841d5}
+  - {issue: 161, artifact: evidence/handoffs/issue-161.yaml, sha256: cf47f3d3c3a7bdeb5819e3e34cb676f0e280033b1af48a40c1ac7c23f1cc6dae}
+  - {issue: 160, artifact: evidence/handoffs/issue-160.yaml, sha256: 332b94d31fe6c6cab8bfce2a03e95ab8d1a1b9bf261e969812e7a4e2ae9ca061}
+outputs:
+  - {artifact: .dockerignore, sha256: 4778c2694804c4ecc33e97b808d8e4cabafc6b31c601ae3381db7e1fbd8afbbd, consumers: [13]}
+  - {artifact: compose.yaml, sha256: 4bf84397a21eeee19baf753aaa378e336d5b6c48f7552d5e7f759ae605e61203, consumers: [9, 12, 13, 64]}
+  - {artifact: config/platform.yaml, sha256: 05389a59a1e024cf32bc9b33945c8e7b48598bb0939ed093dce10abb96ba39ae, consumers: [13]}
+  - {artifact: config/service-catalog.json, sha256: 1de9fc43d38f73d66c92ea5a2ea880624fcf4d3f44ad6cbffa053a85bd767bf4, consumers: [13, 64]}
+  - {artifact: config/service-interactions.json, sha256: e0fb87adb843b1c2542070e1972642d77798471a1641d415e21dad10a75e2b18, consumers: [13]}
+  - {artifact: config/database-ownership.json, sha256: 3acd204a9f87660a3c8268be58f886ebe34901e1e7993949b6471532690cba0a, consumers: [13]}
+  - {artifact: platform/launch-v1-runtime-profile.json, sha256: 79df5fc60515ce63decf13a9d2e94b8dcf485bfbc1085733bda3676f932d1749, consumers: [13, 64]}
+  - {artifact: platform/launch-v1-connectivity-policy.json, sha256: 4b9c320c30767d902cb0fa54dade16606b68d0ca6bf7fa535b5988647f82c368, consumers: [13]}
+  - {artifact: secrets/platform-secrets.schema.json, sha256: 46a94e4c7b963567e4ea394b43f1eca73d0ed86ec3ae0d0f27031d442aa279b4, consumers: [13]}
+  - {artifact: tools/config-bootstrap/index.mjs, sha256: 771593fc6bc6014f3676007964b3343fac6cf6a2550801f62ca4ba6ee66ec35a, consumers: [13]}
+  - {artifact: tools/compose-smoke.mjs, sha256: a8a16fa6aab5dc93b802411799c0a2cb023d5582c036b6679f0d13d615943527, consumers: [13]}
+  - {artifact: tools/nginx/check-config.mjs, sha256: d082784d5937cded9dfcf42367b235b2be392161e4f469b115e44546a37de7be, consumers: [13]}
+  - {artifact: tools/nginx/generate.mjs, sha256: ed352b8dd9fe6ed1984451a1bdb5f5a1f775dc010ba02a66925997ce8bbcd8ce, consumers: [9, 12, 64]}
+  - {artifact: apps/edge-nginx/Dockerfile, sha256: 1153e839670da79466b1f0e22f89afdf0c0a49f55c0a039790ec5cf3f253db54, consumers: [13]}
+  - {artifact: apps/edge-gateway/src/index.ts, sha256: 6eb39d439179415f1fb75b9f7902ed86bc90e96a10553c35cb760bf0de7fdd96, consumers: [13]}
+  - {artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md, sha256: 6dc1da71791137a3dda5d36c1c8ae6099012e4d210e4eeddcf224e7e9214f43f, consumers: [9, 12, 13, 64]}
+  - {artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md, sha256: 69f5184c127eb17585e4979a43fa77b2b7e5f898853d2f46dd603a1df262a0cc, consumers: [13]}
+  - {artifact: docs/platform/LOCAL_PLATFORM.md, sha256: a0152154a9408bfa1aa3c601739fafec1e1eaed143bff617d20a44d71eff506d, consumers: [13]}
+  - {artifact: Dockerfile, sha256: f876f3a78bfdf05cea9ab8d4e75eada718fdcd3fa0dbd89c9cae8e75dcad2516, consumers: [13]}
+localArtifacts:
+  generatedNginxConfig: {sha256: 983e5797d59ad7251531a17877c16a0908f4d3f69e5fc81919a2d281e3da344e, committed: false}
+  edgeNginxImage: {localImageId: 'sha256:68454586f463b8525fc5745e8739a60697bb68864b430315e775ac209cd446c4', published: false}
+  edgeGatewayImage: {localImageId: 'sha256:537d96ccd330e50259ce905eb741b49f25698fe49a9fd64d30ef64949a7de36a', published: false}
+verification:
+  - command: pnpm nginx:check && pnpm test:nginx-image
+    result: passed
+    exitCode: 0
+    detail: >-
+      Isolated image fixture проверяет JavaScript MIME, logout Origin, auth transport
+      timeout и сохранение mTLS. Active cutover проверяется отдельной командой.
+  - command: pnpm test:nginx-cutover && NGINX_TLS_NEGATIVE=1 pnpm test:nginx-image
+    result: passed
+    exitCode: 0
+    detail: >-
+      Active fixture проверяет signed Ed25519 assertion, exact API path, mTLS,
+      SSE >5s, rejected reload, rotation и rollback; synthetic issuer withdrawal
+      не доказывает CRL. Negative TLS fixture выполнялся после active test.
+  - command: node --test tests/compose/topology.test.mjs && git diff --check
+    result: passed
+    exitCode: 0
+    detail: Compose объявляет 2 vCPU, 512 MiB memory, 16384 nofile и 8 MiB tmpfs только для nginx.
+  - command: pnpm image:build --target runtime --build-arg RUNTIME=edge-gateway --tag coffee-platform-edge-gateway:local --load .
+    result: passed
+    exitCode: 0
+    detail: Локальная Node image собрана с lockfile patch input, без registry publication.
+  - command: pnpm image:build --target edge-nginx --tag coffee-platform-edge-nginx:local --load .
+    result: passed
+    exitCode: 0
+    detail: Локальная native nginx image собрана через generator и nginx:check, без публикации.
+  - command: pnpm lint && pnpm typecheck && pnpm config:check && pnpm architecture:check && pnpm security:secrets && pnpm versions:check && docker compose config --quiet && git diff --check
+    result: passed
+    exitCode: 0
+  - command: pnpm install --frozen-lockfile && pnpm check
+    result: passed
+    exitCode: 0
+    detail: Локально 549 тестов (521 passed, 28 skipped); проверка не равна GitHub CI.
+  - command: NGINX_TLS_NEGATIVE=1 pnpm test:nginx-image
+    result: passed
+    exitCode: 0
+    detail: Отдельно проверены untrusted CA, wrong SNI, отсутствующий client cert, истёкший и wrong-runtime upstream cert.
+  - command: pnpm test:compose-smoke --recovery-proof --provision-empty-postgres-network --no-build --project-name coffee-issue162-debug
+    result: passed
+    exitCode: 0
+    detail: >-
+      Все 14 Node runtimes и native nginx стали healthy; synthetic recovery
+      PostgreSQL/Kafka, loopback-only 8443 и route/auth probes прошли. --no-build
+      использовал локально предварительно собранные images; project/volume/network
+      и временные scoped secrets удалены после выхода.
+      Перед этим отдельный запуск упал с Query read timeout; повтор под существующим
+      project image tag завершился exit 0. Другой project с --no-build не имел images.
+limitations:
+  - >-
+    config/platform.yaml.browserOidc остаётся null и fail-closed: реальный issuer,
+    actor mapping, production IdP и browser login здесь НЕ проверены.
+  - >-
+    Production SOPS не расшифровывали и не меняли. Схема допускает исторический
+    encrypted web leaf только как данные, но не как действующий runtime scope;
+    native edge-nginx identity необязательна в inventory до отдельного provisioning,
+    bootstrap при отсутствии material fail-closed.
+  - >-
+    Synthetic trust-bundle withdrawal доказывает отказ для изъятого issuer,
+    не CRL-based revocation; реальная PKI issuance/6h rotation/12h overlap
+    и production certificate trust здесь НЕ проверены.
+  - >-
+    5000-stream capacity и browser EventSource остаются за #12; business UI за #9,
+    native telemetry applicability за #64, final launch/security admission за #13,
+    W2/W3 ingress за #77/#99. Не выполнялись deployment, DNS/firewall,
+    registry publication и provider callbacks.

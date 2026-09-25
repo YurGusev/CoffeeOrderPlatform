@@ -45,7 +45,7 @@
 21. [Исполнимая спецификация realtime SSE](20_REALTIME_SSE_IMPLEMENTATION_SPEC.md)
 22. [Исполнимая спецификация итогового launch gate](21_LAUNCH_VERIFICATION_SPEC.md)
 23. [AROMA Gateway: журнал mutation](22_AROMA_GATEWAY_OPERATION_JOURNAL.md)
-24. [Матрица конфигурации 15 runtime](23_RUNTIME_CONFIGURATION_MATRIX.md)
+24. [Матрица конфигурации 14 Node runtime и native nginx](23_RUNTIME_CONFIGURATION_MATRIX.md)
 25. [Service identity и delegation](24_SERVICE_IDENTITY_AND_DELEGATION.md)
 26. [Rule parity Oxlint и tsgolint](25_TS7_LINT_RULE_PARITY.md)
 27. [Восстановление команд браузера](26_BROWSER_COMMAND_RECOVERY.md)

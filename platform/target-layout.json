@@ -7,7 +7,7 @@
     { "name": "edge-gateway", "path": "apps/edge-gateway", "classification": "deployable-runtime", "state": "planned", "implemented": false },
     { "name": "api-public", "path": "apps/api-public", "classification": "deployable-runtime", "state": "planned", "implemented": false },
     { "name": "api-internal", "path": "apps/api-internal", "classification": "deployable-runtime", "state": "planned", "implemented": false },
-    { "name": "web", "path": "apps/web", "classification": "deployable-runtime", "state": "planned", "implemented": false },
+    { "name": "edge-nginx", "path": "apps/edge-nginx", "classification": "deployable-runtime", "state": "planned", "implemented": false },
     { "name": "customer-service", "path": "apps/customer-service", "classification": "deployable-runtime", "state": "planned", "implemented": false },
     { "name": "catalog-service", "path": "apps/catalog-service", "classification": "deployable-runtime", "state": "planned", "implemented": false },
     { "name": "catalog-supplier-sync", "path": "apps/catalog-supplier-sync", "classification": "deployable-runtime", "state": "planned", "implemented": false },

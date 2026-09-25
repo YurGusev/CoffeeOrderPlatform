@@ -481,6 +481,7 @@ async function checkPermissionManifests(root) {
         if (!entry.isDirectory()) return false;
         const appRoot = join(root, 'apps', entry.name);
         // Native images have no Node Permission Model; keep the check for all Node sources.
+        if (entry.name === 'web') return existsSync(join(appRoot, 'src/main.ts'));
         return existsSync(join(appRoot, 'src')) || existsSync(join(appRoot, 'package.json'));
       })
     : [];
