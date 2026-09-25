@@ -48,7 +48,7 @@ RUNTIME_NAMES = (
     "edge-gateway",
     "api-public",
     "api-internal",
-    "web",
+    "edge-nginx",
     "customer-service",
     "catalog-service",
     "catalog-supplier-sync",
@@ -62,13 +62,13 @@ RUNTIME_NAMES = (
     "realtime-gateway",
 )
 RUNTIME_SET = frozenset(RUNTIME_NAMES)
-ZONES = frozenset({"public-ingress", "public-api-backend", "internal-api", "provider-egress"})
+ZONES = frozenset({"public-ingress", "private-edge-backend", "public-api-backend", "internal-api", "provider-egress"})
 
 OWNERS = {
     "edge-gateway": "platform",
     "api-public": "platform",
     "api-internal": "platform",
-    "web": "frontend",
+    "edge-nginx": "platform",
     "customer-service": "customer",
     "catalog-service": "catalog",
     "catalog-supplier-sync": "catalog",
@@ -97,7 +97,7 @@ DB_PRINCIPALS = {
     "edge-gateway": None,
     "api-public": None,
     "api-internal": None,
-    "web": None,
+    "edge-nginx": None,
     "customer-service": "coffee_customer_rw",
     "catalog-service": "coffee_catalog_api_ro",
     "catalog-supplier-sync": "coffee_catalog_import_rw",
@@ -112,10 +112,10 @@ DB_PRINCIPALS = {
 }
 
 NETWORK_ZONES = {
-    "edge-gateway": "public-ingress",
+    "edge-gateway": "private-edge-backend",
     "api-public": "public-api-backend",
     "api-internal": "internal-api",
-    "web": "public-ingress",
+    "edge-nginx": "public-ingress",
     "customer-service": "internal-api",
     "catalog-service": "internal-api",
     "catalog-supplier-sync": "internal-api",
@@ -126,14 +126,14 @@ NETWORK_ZONES = {
     "aroma-observer": "internal-api",
     "aroma-convergence": "internal-api",
     "aroma-gateway": "provider-egress",
-    "realtime-gateway": "public-ingress",
+    "realtime-gateway": "private-edge-backend",
 }
 
 SURFACES = {
     "edge-gateway": ["public-edge"],
     "api-public": ["client-v1"],
     "api-internal": ["internal-v1"],
-    "web": ["web-assets"],
+    "edge-nginx": ["public-edge", "web-assets"],
     "customer-service": ["client-v1-owner", "internal-v1-owner"],
     "catalog-service": ["client-v1-owner", "internal-v1-owner"],
     "catalog-supplier-sync": ["health-only"],
@@ -300,9 +300,11 @@ def validate_runtime_profile(profile: dict[str, Any]) -> None:
 
     for entry in entries:
         name = string(entry.get("name"), "profile.runtime.name")
-        required_keys(entry, {"name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented", "transportMode"}, f"profile.runtimes.{name}", {"optionalSecretRefs"})
+        required_keys(entry, {"name", "owner", "m20Traceability", "networkZone", "dbPrincipal", "httpSurfaces", "secretRefs", "implemented", "transportMode"}, f"profile.runtimes.{name}", {"optionalSecretRefs", "runtimeKind"})
         require(entry["owner"] == OWNERS[name], f"profile.runtimes.{name}.owner: owner changed")
-        expected_transport = "public-tls" if name == "edge-gateway" else "mtls"
+        require(entry.get("runtimeKind") == ("native-nginx" if name == "edge-nginx" else None), f"profile.runtimes.{name}.runtimeKind: native ingress only")
+        require(name == "edge-nginx" or "runtimeKind" not in entry, f"profile.runtimes.{name}.runtimeKind: Node runtimes cannot be native")
+        expected_transport = "public-tls" if name == "edge-nginx" else "mtls"
         require(entry["transportMode"] == expected_transport, f"profile.runtimes.{name}.transportMode: expected {expected_transport}")
         trace = entry["m20Traceability"]
         require(isinstance(trace, dict), f"profile.runtimes.{name}.m20Traceability: object required")
@@ -318,6 +320,8 @@ def validate_runtime_profile(profile: dict[str, Any]) -> None:
         optional_refs = entry.get("optionalSecretRefs", [])
         require(isinstance(optional_refs, list) and all(isinstance(ref, str) and ref for ref in optional_refs), f"profile.runtimes.{name}.optionalSecretRefs: string array required")
         require(optional_refs == (["edge.tlsCaBundle"] if name == "edge-gateway" else []), f"profile.runtimes.{name}.optionalSecretRefs: unexpected optional refs")
+        if name == "edge-nginx":
+            exact_list(entry["secretRefs"], ["edge.tlsPrivateKey", "edge.tlsCertificate", "security.serviceTransportKeys.edge-nginx"], f"profile.runtimes.{name}.secretRefs")
         require(entry["implemented"] is False, f"profile.runtimes.{name}.implemented: authority profile cannot claim implementation")
 
         if name in {"edge-gateway", "api-public", "api-internal"}:
@@ -370,11 +374,8 @@ def validate_runtime_profile(profile: dict[str, Any]) -> None:
 
 def validate_routes(route_mounts: Any, isolation: Any) -> None:
     expected_routes = [
-        {"source": "edge-gateway", "method": "GET", "path": "/", "target": "web", "targetPort": 3000},
-        {"source": "edge-gateway", "method": "GET", "path": "/app/**", "target": "web", "targetPort": 3000},
-        {"source": "edge-gateway", "method": "GET", "path": "/assets/**", "target": "web", "targetPort": 3000},
-        {"source": "edge-gateway", "method": "ANY", "path": "/api/client-v1/**", "target": "api-public", "targetPort": 4050},
-        {"source": "edge-gateway", "method": "GET", "path": "/events", "target": "realtime-gateway", "targetPort": 4401},
+        {"source": "edge-nginx", "method": "ANY", "path": "/api/client-v1/**", "target": "api-public", "targetPort": 4050},
+        {"source": "edge-nginx", "method": "GET", "path": "/events", "target": "realtime-gateway", "targetPort": 4401},
     ]
     require(route_mounts == expected_routes, "profile.routeMounts: public route mounting changed")
     require(isolation == {
@@ -382,10 +383,10 @@ def validate_routes(route_mounts: Any, isolation: Any) -> None:
         "api-internal": ["internal-v1"],
         "edgeDirectOwnerRoutingAllowed": False,
         "ownerHostPortPublishingAllowed": False,
-        "webHostPortPublishingAllowed": False,
+        "nativeNginxPublishedBind": "127.0.0.1:8443",
     }, "profile.surfaceIsolation: trust surface isolation changed")
     for item in route_mounts:
-        require(item["target"] in {"web", "api-public", "realtime-gateway"}, "profile.routeMounts: Edge-to-owner route is forbidden")
+        require(item["target"] in {"api-public", "realtime-gateway"}, "profile.routeMounts: Nginx-to-owner route is forbidden")
 
 
 def validate_allowlist(value: Any) -> None:
@@ -458,11 +459,10 @@ def validate_connectivity(policy: dict[str, Any]) -> None:
     required_keys(policy, {"$schema", "schemaVersion", "authorityRef", "logicalZones", "dockerNetworks", "forbiddenNetworks", "runtimePolicies", "globalDenyAssertions"}, "connectivity")
     require(policy["$schema"] == "./launch-v1-connectivity-policy.schema.json", "connectivity.$schema: wrong companion schema")
     require(policy["schemaVersion"] == 1 and policy["authorityRef"] == "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md", "connectivity: authority reference changed")
-    exact_list(policy["logicalZones"], ["public-ingress", "public-api-backend", "internal-api", "provider-egress"], "connectivity.logicalZones")
+    exact_list(policy["logicalZones"], ["public-ingress", "private-edge-backend", "public-api-backend", "internal-api", "provider-egress"], "connectivity.logicalZones")
     require(policy["forbiddenNetworks"] == ["coffee_network"], "connectivity.forbiddenNetworks: legacy coffee_network must remain forbidden")
     expected_networks = {
         "coffee_host_ingress": (False, False),
-        "coffee_public_ingress": (True, False),
         "coffee_edge_backend": (True, False),
         "coffee_public_api_backend": (True, False),
         "coffee_internal_api": (True, False),
@@ -478,10 +478,10 @@ def validate_connectivity(policy: dict[str, Any]) -> None:
         require((item["internal"], item["external"]) == expected_networks[item["name"]], f"connectivity.dockerNetworks.{item['name']}: network flags changed")
 
     expected_attachments = {
-        "edge-gateway": ["coffee_host_ingress", "coffee_public_ingress", "coffee_edge_backend"],
+        "edge-gateway": ["coffee_edge_backend"],
         "api-public": ["coffee_edge_backend", "coffee_public_api_backend"],
         "api-internal": ["coffee_internal_api"],
-        "web": ["coffee_public_ingress"],
+        "edge-nginx": ["coffee_host_ingress", "coffee_edge_backend"],
         "customer-service": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data"],
         "catalog-service": ["coffee_public_api_backend", "coffee_internal_api", "coffee_postgres_data"],
         "catalog-supplier-sync": ["coffee_internal_api", "coffee_postgres_data"],
@@ -508,7 +508,7 @@ def validate_connectivity(policy: dict[str, Any]) -> None:
         item = by_runtime[name]
         require(item["dockerNetworks"] == expected_attachments[name], f"connectivity.runtimePolicies.{name}.dockerNetworks: attachments changed")
         host_policy = item["hostPortPolicy"]
-        require(host_policy == {"default": "deny", "allowedPublishedHostPorts": ([4000] if name == "edge-gateway" else [])}, f"connectivity.runtimePolicies.{name}.hostPortPolicy: default-deny or published port changed")
+        require(host_policy == {"default": "deny", "allowedPublishedHostPorts": ([8443] if name == "edge-nginx" else [])}, f"connectivity.runtimePolicies.{name}.hostPortPolicy: default-deny or published port changed")
         require(isinstance(item["allowedHostPorts"], list) and all(isinstance(port, str) for port in item["allowedHostPorts"]), f"connectivity.runtimePolicies.{name}.allowedHostPorts: invalid allowlist")
         require(isinstance(item["allowedExternalEgress"], list) and all(isinstance(host, str) for host in item["allowedExternalEgress"]), f"connectivity.runtimePolicies.{name}.allowedExternalEgress: invalid egress")
         if name == "aroma-gateway":

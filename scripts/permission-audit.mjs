@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {readFile} from "node:fs/promises";
+import {access, readFile} from "node:fs/promises";
 import {spawn} from "node:child_process";
 import {dirname, join, resolve, relative} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -16,6 +16,16 @@ const PERMISSION_FIELDS = new Set([
   "allowAddons",
   "allowFfi",
 ]);
+const NATIVE_NGINX_RUNTIME = "edge-nginx";
+const DEPLOYABLE_RUNTIMES = [
+  "edge-gateway", "api-public", "api-internal", "edge-nginx", "customer-service",
+  "catalog-service", "catalog-supplier-sync", "catalog-activation-worker",
+  "pricing-service", "orders-service", "orders-aroma-preparation",
+  "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway",
+];
+const NGINX_ALLOWED_HOST_PORTS = ["edge-gateway:4000", "api-public:4050", "realtime-gateway:4401"];
+const NGINX_NETWORKS = ["coffee_host_ingress", "coffee_edge_backend"];
+
 const KAFKA_RUNTIMES = new Set([
   "catalog-activation-worker",
   "orders-service",
@@ -81,6 +91,25 @@ async function expectedNetworkAllowlist(root, runtime) {
   return [...row.allowedHostPorts, ...row.allowedExternalEgress];
 }
 
+async function validateNativeNginxPolicy(root, policy) {
+  const row = policy.runtimePolicies.find((entry) => entry.runtime === NATIVE_NGINX_RUNTIME);
+  if (!row) fail("edge-nginx: connectivity policy is missing");
+  if (JSON.stringify(row.dockerNetworks) !== JSON.stringify(NGINX_NETWORKS))
+    fail("edge-nginx: native upstream network allowlist differs from the approved topology");
+  if (JSON.stringify(row.allowedHostPorts) !== JSON.stringify(NGINX_ALLOWED_HOST_PORTS))
+    fail("edge-nginx: upstream allowlist differs from the approved topology");
+  if (JSON.stringify(row.allowedExternalEgress) !== "[]")
+    fail("edge-nginx: external egress is forbidden");
+  if (JSON.stringify(row.hostPortPolicy) !== JSON.stringify({default: "deny", allowedPublishedHostPorts: [8443]}))
+    fail("edge-nginx: only the loopback public 8443 listener may be published");
+  try {
+    await access(join(root, "config/permissions/edge-nginx.json"));
+    fail("edge-nginx: native runtime must not carry a Node permissions manifest");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
 export async function validatePermissionManifest(root, runtime) {
   const manifest = await loadPermissionManifest(root, runtime);
   const expected = await expectedNetworkAllowlist(root, runtime);
@@ -101,11 +130,19 @@ export async function validatePermissionManifest(root, runtime) {
 export async function validateAllPermissionManifests(root = SCRIPT_ROOT) {
   const policy = await readJson(join(root, "platform", "launch-v1-connectivity-policy.json"));
   const runtimes = policy.runtimePolicies?.map((entry) => entry.runtime);
-  if (!Array.isArray(runtimes) || runtimes.length !== 15 || new Set(runtimes).size !== 15) {
-    fail("connectivity policy must contain the exact 15 runtime set");
+  if (
+    !Array.isArray(runtimes) ||
+    JSON.stringify(runtimes) !== JSON.stringify(DEPLOYABLE_RUNTIMES) ||
+    new Set(runtimes).size !== DEPLOYABLE_RUNTIMES.length
+  ) {
+    fail("connectivity policy must contain the exact 14 Node + native nginx runtime set");
   }
+  await validateNativeNginxPolicy(root, policy);
   const manifests = [];
-  for (const runtime of runtimes) manifests.push(await validatePermissionManifest(root, runtime));
+  for (const runtime of runtimes) {
+    if (runtime === NATIVE_NGINX_RUNTIME) continue;
+    manifests.push(await validatePermissionManifest(root, runtime));
+  }
   return manifests;
 }
 

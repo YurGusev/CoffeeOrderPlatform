@@ -21,7 +21,7 @@
     }
   },
   "$defs": {
-    "runtimeName": {"enum": ["edge-gateway", "api-public", "api-internal", "web", "customer-service", "catalog-service", "catalog-supplier-sync", "catalog-activation-worker", "pricing-service", "orders-service", "orders-aroma-preparation", "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"]},
+    "runtimeName": {"enum": ["edge-gateway", "api-public", "api-internal", "edge-nginx", "customer-service", "catalog-service", "catalog-supplier-sync", "catalog-activation-worker", "pricing-service", "orders-service", "orders-aroma-preparation", "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"]},
     "databaseName": {"enum": ["coffee_platform_customer", "coffee_platform_catalog", "coffee_platform_pricing", "coffee_platform_orders", "coffee_platform_integration"]},
     "database": {
       "type": "object", "additionalProperties": false,

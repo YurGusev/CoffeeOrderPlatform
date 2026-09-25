@@ -1,11 +1,10 @@
 # Единая конфигурация и единое хранилище секретов
 
-Следующая структура описывает active Node launch profile до #162. Целевая
-native схема #159 определена в [29_NGINX_TRANSPORT_AND_AUTH.md](29_NGINX_TRANSPORT_AND_AUTH.md):
-public TLS scope переходит `edge-nginx`, signing/OIDC — private
-`edge-gateway`, `web` runtime исчезает, `apps/web` build остаётся.
-Новые non-secret поля, scopes/PEM и schema изменяет только #162 при одном
-cutover; до этого никакой пример ниже не служит вторым источником настроек.
+Reference-профиль #162 содержит 14 Node runtime и один native nginx по
+[29_NGINX_TRANSPORT_AND_AUTH.md](29_NGINX_TRANSPORT_AND_AUTH.md): public TLS scope
+принадлежит `edge-nginx`, signing/OIDC — private `edge-gateway`, `web` runtime
+исчезает, `apps/web` browser build остаётся. Примеры ниже не являются вторым
+источником значений или доказательством production IdP/сертификатов.
 Единственные value authorities остаются `config/platform.yaml` и зашифрованный
 `secrets/platform.secrets.sops.yaml`.
 
@@ -33,7 +32,7 @@ environment: development
 toolchainRef: config/toolchain-versions.json
 
 platform:
-  publicBaseUrl: https://localhost
+  publicBaseUrl: https://localhost:8443
   shutdownGraceMs: 30000
   requestDeadlineMs: 5000
   bodyLimitBytes: 1048576
@@ -58,7 +57,8 @@ services:
     permissions: {net: [coffee_postgres:5432], fsRead: [], fsWrite: []}
 ```
 
-Файл обязан содержать точное множество 15 runtime из `10_RUNTIME_CATALOG.md`.
+Файл обязан содержать точное множество 15 runtime из `10_RUNTIME_CATALOG.md`:
+14 Node и один native nginx, без `web`.
 `api-agent` присутствует только в authority как planned/implemented=false и не
 входит в `services`/Compose. `config-bootstrap` описывается как initialization
 role, а не runtime. Для каждого runtime
@@ -105,10 +105,9 @@ environments:
       sessionEncryptionKey: ENC[...]
       catalogIdentityKeyV1: ENC[...]
     edge:
-      tlsPrivateKey: ENC[...]
-      tlsCertificate: ENC[...]
-      tlsCaBundle: ENC[...] # optional; public trust override for dedicated test environment
-      oidcClientSecret: ENC[...]
+      tlsPrivateKey: ENC[...] # только edge-nginx, public TLS
+      tlsCertificate: ENC[...] # только edge-nginx
+      oidcClientSecret: ENC[...] # только edge-gateway
     security:
       actorContextEdgeSigningPrivateKey: ENC[...]
       actorContextEdgeVerificationPublicKeys:
@@ -136,7 +135,7 @@ environments:
         edge-gateway: ENC[...]
         api-public: ENC[...]
         api-internal: ENC[...]
-        web: ENC[...]
+        edge-nginx: ENC[...] # требуется до реального запуска; provisioning отдельно
         customer-service: ENC[...]
         catalog-service: ENC[...]
         pricing-service: ENC[...]
@@ -166,24 +165,27 @@ Inventory authority — это encrypted paths в `secrets/platform.secrets.sops
 
 | Runtime | Secret refs |
 |---|---|
-| `edge-gateway` | `edge.tlsPrivateKey`, `edge.tlsCertificate`, `edge.oidcClientSecret`, `security.actorContextEdgeSigningPrivateKey`, `security.serviceTransportKeys.edge-gateway`, `telemetry.exporterToken` |
+| `edge-nginx` | `edge.tlsPrivateKey`, `edge.tlsCertificate`, `security.serviceTransportKeys.edge-nginx` — public pair и собственная mTLS identity; нового ключа пока нет в зашифрованном source, до provisioning startup fail-closed |
+| `edge-gateway` | `edge.oidcClientSecret`, `security.actorContextEdgeSigningPrivateKey`, `security.serviceTransportKeys.edge-gateway`, `telemetry.exporterToken` |
 | `api-public` | `security.apiPublicDelegationSigningPrivateKey`, `security.actorContextEdgeVerificationPublicKeys`, `security.serviceTransportKeys.api-public`, `telemetry.exporterToken` |
 | `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceVerificationKeys.pricing-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
 | `customer-service` | `postgres.customer`, `security.customerCursorSigningPrivateKey`, `security.customerCursorVerificationPublicKeys`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.customer-service`, `telemetry.exporterToken` |
 | `catalog-service` | `postgres.catalogApi`, `security.catalogCursorSigningPrivateKey`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.catalog-service`, `telemetry.exporterToken` |
 | `pricing-service` | `postgres.pricing`, `security.pricingServiceDelegationSigningPrivateKey`, `security.serviceTransportKeys.pricing-service`, `telemetry.exporterToken` |
 
-`edge-gateway` использует `public-tls`: его публичный listener предъявляет
-`edge.tlsCertificate` с парой `edge.tlsPrivateKey`, проверяет срок и hostname
-`platform.publicBaseUrl`, но не требует service certificate от браузера. Его
-`security.serviceTransportKeys.edge-gateway` — отдельная service identity для
-внутренних outbound соединений и не может использоваться публичным listener. Все
-остальные HTTP runtime используют `mtls`; их listener и outbound client
-проверяют service identity по scoped CA и SPIFFE SAN.
-`edge.tlsCaBundle` является optional scoped ref, а не обязательным
-`secretRefs`: при его отсутствии healthcheck и host smoke используют системное
-доверие Node.js; при наличии проверяют только этот PEM bundle. `edge.tlsCertificate`
-не используется как trust store, а internal service CA не является fallback.
+`edge-nginx` использует `public-tls`: его публичный listener предъявляет
+`edge.tlsCertificate` с парой `edge.tlsPrivateKey`, но не требует service
+certificate от браузера. К private targets он обращается только со своей
+`security.serviceTransportKeys.edge-nginx` identity; public pair не является
+внутренней client identity. `edge-gateway` использует только private mTLS и
+отдельную actor signing identity; его OIDC secret не попадает в nginx. Остальные
+HTTP Node runtime продолжают проверять scoped CA и SPIFFE SAN.
+Наличие legacy ciphertext (например, прежнего web transport) в общем encrypted
+source не даёт доступа runtime: `web` отсутствует в `services` и materialization
+scope. Удаление/ротация исторического encrypted material требует отдельного
+разрешения и не имитируется правкой документации. Новый nginx transport key
+должен быть отдельно provisioned до реального запуска; fixture tests используют
+только одноразовые материалы.
 
 `security.customerCursorSigningPrivateKey` — отдельный Customer-scoped ключ;
 он не переиспользуется для Catalog cursor, actor context, delegation или mTLS.
@@ -217,7 +219,7 @@ material остаётся в SOPS inventory и materializes только для 
    stdout, logs, artifacts, crash reports или shell history.
 
 `config-bootstrap` — единственный процесс, имеющий право decrypt общего файла.
-`web`, `edge-gateway`, `api-public`, `api-internal` и `realtime-gateway` не
+`edge-nginx`, `edge-gateway`, `api-public`, `api-internal` и `realtime-gateway` не
 получают DB passwords. Bootstrap
 admin password доступен только отдельной одноразовой provisioning-команде и не
 попадает в runtime containers.
@@ -247,11 +249,11 @@ SAN binding из service identity contract и текущий environment. Runtim
 ## 5.1. Обязательный launch-профиль без скрытых defaults
 
 Полная field-by-field authority находится в
-[матрице 15 runtime](23_RUNTIME_CONFIGURATION_MATRIX.md); `platform.yaml` не
+[матрице 14 Node + 1 native runtime](23_RUNTIME_CONFIGURATION_MATRIX.md); `platform.yaml` не
 может заменять её значением «по умолчанию».
 
 Порты/DB pool: `edge-gateway 4000/0`, `api-public 4050/0`,
-`api-internal 4051/0`, `web 3000/0`,
+`api-internal 4051/0`, `edge-nginx 8443/native`,
 `customer-service 4101/8`, `catalog-service 4102/8`,
 `catalog-supplier-sync 4201/4`, `catalog-activation-worker 4202/4`,
 `pricing-service 4103/8`, `orders-service 4104/12`,

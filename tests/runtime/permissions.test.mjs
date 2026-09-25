@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
+import {access} from "node:fs/promises";
 import {fileURLToPath} from "node:url";
 import test from "node:test";
-import {loadPermissionManifest, permissionFlags, validateAllPermissionManifests, validatePermissionManifest} from "../../scripts/permission-audit.mjs";
+import {permissionFlags, validateAllPermissionManifests, validatePermissionManifest} from "../../scripts/permission-audit.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 
-void test("all 15 runtime permission manifests match the connectivity policy", async () => {
+void test("all 14 Node permission manifests match the connectivity policy; native nginx and removed web have none", async () => {
   const manifests = await validateAllPermissionManifests(root);
-  assert.equal(manifests.length, 15);
-  assert.equal(new Set(manifests.map((manifest) => manifest.runtime)).size, 15);
+  assert.equal(manifests.length, 14);
+  assert.equal(new Set(manifests.map((manifest) => manifest.runtime)).size, 14);
+  await assert.rejects(access(new URL("../../config/permissions/web.json", import.meta.url)), {code: "ENOENT"});
 });
 
 void test("enforce flags allow addons only for Kafka runtimes", async () => {
@@ -19,13 +21,6 @@ void test("enforce flags allow addons only for Kafka runtimes", async () => {
   assert.equal(permissionFlags(manifest, "enforce", root).some((flag) => flag.startsWith("--allow-child")), false);
   const kafkaManifest = await validatePermissionManifest(root, "orders-service");
   assert.ok(permissionFlags(kafkaManifest, "enforce", root).includes("--allow-addons"));
-
-  const webManifest = await loadPermissionManifest(root, "web");
-  assert.ok(
-    permissionFlags(webManifest, "enforce", root, "3000").includes(
-      "--allow-net=0.0.0.0:3000",
-    ),
-  );
 });
 
 void test("Node Permission Model audit permits an operation while enforce denies it", () => {

@@ -10,11 +10,10 @@ import {
 } from "../packages/platform-config/src/index.ts";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const RUNTIMES = [
+const NODE_RUNTIMES = [
   "edge-gateway",
   "api-public",
   "api-internal",
-  "web",
   "customer-service",
   "catalog-service",
   "catalog-supplier-sync",
@@ -27,6 +26,7 @@ const RUNTIMES = [
   "aroma-gateway",
   "realtime-gateway",
 ];
+const DEPLOYABLE_RUNTIMES = [...NODE_RUNTIMES, "edge-nginx"];
 const KAFKA_TOPICS = [
   "coffee.catalog.snapshot.v1",
   "coffee.catalog.mapping.v2",
@@ -36,7 +36,7 @@ const KAFKA_TOPICS = [
   "coffee.realtime.invalidate.v1",
 ];
 const EXPECTED_KAFKA_PRODUCERS = {
-  "edge-gateway": [], "api-public": [], "api-internal": [], web: [],
+  "edge-gateway": [], "api-public": [], "api-internal": [],
   "customer-service": [], "catalog-service": [], "catalog-supplier-sync": [],
   "catalog-activation-worker": ["coffee.catalog.snapshot.v1", "coffee.catalog.mapping.v2"],
   "pricing-service": [],
@@ -47,7 +47,7 @@ const EXPECTED_KAFKA_PRODUCERS = {
   "aroma-gateway": [], "realtime-gateway": [],
 };
 const EXPECTED_KAFKA_CONSUMERS = {
-  "edge-gateway": [], "api-public": [], "api-internal": [], web: [],
+  "edge-gateway": [], "api-public": [], "api-internal": [],
   "customer-service": [], "catalog-service": [], "catalog-supplier-sync": [],
   "catalog-activation-worker": [], "pricing-service": [], "orders-service": [],
   "orders-aroma-preparation": [
@@ -110,16 +110,6 @@ const SERVICE_BASELINE = {
     replicas: 1,
     deadlineMs: null,
     concurrency: 300,
-    database: null,
-    pool: null,
-    terminalTimeoutMs: null,
-    transactionTimeoutMs: null,
-  },
-  web: {
-    port: 3000,
-    replicas: 1,
-    deadlineMs: 5000,
-    concurrency: 500,
     database: null,
     pool: null,
     terminalTimeoutMs: null,
@@ -265,11 +255,13 @@ async function readJson(path) {
   }
 }
 
-function validate(schema, document, label) {
+function validate(schema, document, label, linkedSchemas = []) {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
-  const valid = ajv.compile(schema)(document);
+  for (const linked of linkedSchemas) ajv.addSchema(linked);
+  const validator = ajv.compile(schema);
+  const valid = validator(document);
   if (!valid) {
-    const details = ajv.errorsText(ajv.errors, { separator: "; " });
+    const details = ajv.errorsText(validator.errors, { separator: "; " });
     fail("CONFIG-SCHEMA", `${label}: ${details}`);
   }
 }
@@ -305,8 +297,10 @@ function walk(value, visit, path = []) {
 }
 
 function checkConfigKeys(document) {
-  walk(document, (_value, path) => {
+  walk(document, (value, path) => {
     const key = path.at(-1);
+    if (isNginxPemPath(path, value)) return;
+    if (path.length === 2 && path[0] === "browserOidc" && path[1] === "tokenUrl") return;
     if (isSecretLikeKey(key)) {
       fail(
         "CONFIG-PLAINTEXT-KEY",
@@ -320,7 +314,7 @@ function checkKafkaConfiguration(config) {
   const configuredTopics = Object.values(config.kafka.topics).map((topic) => topic.name);
   if (JSON.stringify(sorted(configuredTopics)) !== JSON.stringify(sorted(KAFKA_TOPICS)))
     fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", "Kafka topic registry differs from launch allowlist");
-  for (const runtime of RUNTIMES) {
+  for (const runtime of NODE_RUNTIMES) {
     const access = config.services[runtime].kafka;
     const expectedProducers = EXPECTED_KAFKA_PRODUCERS[runtime];
     if (JSON.stringify(access.producers) !== JSON.stringify(expectedProducers))
@@ -339,6 +333,12 @@ function checkKafkaConfiguration(config) {
     if (JSON.stringify(access.consumers) !== JSON.stringify(EXPECTED_KAFKA_CONSUMERS[runtime]))
       fail("CONFIG-KAFKA-DIRECTION", `${runtime}.kafka.consumers differs from launch mapping`);
   }
+}
+
+function isNginxPemPath(path, value) {
+  if (path.length !== 3 || path[0] !== "nginxTransport" || path[1] !== "tls") return false;
+  return (path[2] === "publicPrivateKey" && value === "/run/secrets/edge-nginx/public.key") ||
+    (path[2] === "clientPrivateKey" && value === "/run/secrets/edge-nginx/client.key");
 }
 
 function isSecretLikeKey(key) {
@@ -370,12 +370,21 @@ function checkOpenConfigurationText(text, label) {
     /(?:^|[{,\s-])(?:"([A-Za-z0-9_.-]+)"|'([A-Za-z0-9_.-]+)'|([A-Za-z0-9_.-]+))\s*:/gu;
   const assignmentPattern =
     /(?:^|[\s"'`])([A-Za-z_][A-Za-z0-9_.-]*(?:password|token|private[_-]?key|secret)[A-Za-z0-9_.-]*)\s*=/giu;
+  let browserOidcIndent = null;
   for (const [index, line] of lines.entries()) {
     const trimmed = line.trim();
+    const indentation = line.length - line.trimStart().length;
+    if (label === "config/platform.yaml") {
+      if (line.trim() === "browserOidc:" || line.trim() === "browserOidc: null") browserOidcIndent = indentation;
+      else if (browserOidcIndent !== null && trimmed && indentation <= browserOidcIndent) browserOidcIndent = null;
+    }
     if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//"))
       continue;
     for (const match of trimmed.matchAll(keyPattern)) {
       const key = match[1] ?? match[2] ?? match[3];
+      if (label === "config/platform.yaml" &&
+          isNginxPemPath(["nginxTransport", "tls", key], trimmed.split(/:\s*/u, 2)[1])) continue;
+      if (label === "config/platform.yaml" && key === "tokenUrl" && browserOidcIndent !== null && indentation > browserOidcIndent) continue;
       if (isSecretLikeKey(key))
         fail(
           "CONFIG-PLAINTEXT-KEY",
@@ -518,10 +527,11 @@ export async function loadPlatformConfig(
 ) {
   const path = configPath;
   const schema = await readJson(join(root, "config/platform.schema.json"));
+  const nginxSchema = await readJson(join(root, "config/nginx-profile.schema.json"));
   const config = await readYaml(path);
-  validate(schema, config, path);
+  validate(schema, config, path, [nginxSchema]);
   checkConfigKeys(config);
-  exactSet(config.services, RUNTIMES, "platform.yaml services");
+  exactSet(config.services, NODE_RUNTIMES, "platform.yaml Node services");
   checkKafkaConfiguration(config);
   try {
     assertDatabaseAdmissionBudget({services: config.services, postgres: config.postgres});
@@ -540,13 +550,27 @@ export async function loadPlatformConfig(
   const profileByName = new Map(
     profile.runtimes.map((runtime) => [runtime.name, runtime]),
   );
-  exactSet(Object.fromEntries(catalogByName), RUNTIMES, "service catalog");
+  exactSet(Object.fromEntries(catalogByName), DEPLOYABLE_RUNTIMES, "service catalog");
   exactSet(
     Object.fromEntries(profileByName),
-    RUNTIMES,
+    DEPLOYABLE_RUNTIMES,
     "launch-v1 runtime profile",
   );
-  for (const runtime of RUNTIMES) {
+  const nginxCatalog = catalogByName.get("edge-nginx");
+  const nginxProfile = profileByName.get("edge-nginx");
+  if (
+    nginxCatalog?.runtimeKind !== "native-nginx" ||
+    nginxProfile?.runtimeKind !== "native-nginx" ||
+    nginxCatalog.transportMode !== "public-tls" ||
+    nginxProfile.transportMode !== "public-tls" ||
+    JSON.stringify(nginxCatalog.secretRefs) !== JSON.stringify(["edge.tlsPrivateKey", "edge.tlsCertificate", "security.serviceTransportKeys.edge-nginx"]) ||
+    JSON.stringify(nginxProfile.secretRefs) !== JSON.stringify(nginxCatalog.secretRefs) ||
+    (nginxCatalog.optionalSecretRefs ?? []).length !== 0 ||
+    (nginxProfile.optionalSecretRefs ?? []).length !== 0
+  ) {
+    fail("CONFIG-NGINX-RUNTIME", "edge-nginx must be native public TLS with required scoped public TLS and private mTLS material");
+  }
+  for (const runtime of NODE_RUNTIMES) {
     const configured = config.services[runtime];
     const accepted = catalogByName.get(runtime);
     const authority = profileByName.get(runtime);
@@ -645,7 +669,7 @@ export async function checkPlatformConfig(root = REPO_ROOT) {
     }
   }
   return {
-    runtimeCount: Object.keys(config.services).length,
+    runtimeCount: DEPLOYABLE_RUNTIMES.length,
     environment: config.environment,
   };
 }

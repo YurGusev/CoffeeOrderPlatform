@@ -1,6 +1,6 @@
 # Локальный запуск platform foundation
 
-Foundation запускает ровно 15 Node.js процессов и Kafka KRaft. PostgreSQL в
+Reference topology запускает 14 Node.js процессов, native nginx и Kafka KRaft. PostgreSQL в
 Compose не создаётся: используется существующий PostgreSQL 17.11 через заранее
 созданную external network `coffee_postgres_data`.
 
@@ -171,8 +171,9 @@ Kafka хранит журнал в именованном Compose volume `kafka_
 node tools/compose-smoke.mjs --project-name coffee-recovery-foundation
 ```
 
-На host публикуется только Edge `4000`. Owner services, `api-internal`, web,
-Kafka и AROMA Gateway host ports не публикуют. Production deployment, registry
+На host публикуется только native nginx `127.0.0.1:8443`. Private
+`edge-gateway`, owner services, `api-internal`, Kafka и AROMA Gateway host ports
+не публикуют. Отдельного Node `web` runtime и запасного Edge ingress нет. Production deployment, registry
 publication и изменение существующего PostgreSQL этой инструкцией не разрешены.
 
 Для проверки DB foundation используйте отдельный изолированный режим:
@@ -184,8 +185,8 @@ pnpm test:compose-smoke --database-proof
 Он поднимает только `customer-service` и одноразовый PostgreSQL на уникальной
 project-scoped сети `<project>_coffee_postgres_data`, проверяет переход
 readiness `200 → 503 → 200` при остановке и восстановлении DB и удаляет
-контейнер, сеть и Compose volumes после проверки. Общий compose gate с 15
-runtime и Kafka остаётся отдельной проверкой и включает зависимости,
+контейнер, сеть и Compose volumes после проверки. Общий compose gate с 14 Node runtime, native nginx
+и Kafka остаётся отдельной проверкой и включает зависимости,
 реализуемые в #63.
 
 Для полного recovery proof #63 используйте отдельный режим с disposable
@@ -217,3 +218,47 @@ fixtures в tmpfs, применяет миграции ролью `coffee_custom
 напрямую в БД, а дочерний Customer — через fault proxy. Контейнеры, сети,
 volumes и временные secrets удаляются после проверки. Этот режим не читает
 SOPS и не подтверждает credentials внешних провайдеров.
+
+## Reference nginx cutover и возврат
+
+Перед переключением сохранить единый release bundle: SHA коммита,
+`config/platform.yaml`, сгенерированного `nginx.conf`, browser assets,
+точные image IDs всех затронутых ролей, идентификаторы сертификатов и CA
+(без private keys), версии scoped secret materialization, результаты
+`pnpm config:check`, `pnpm nginx:check`, `pnpm security:secrets`,
+`pnpm test:edge-auth`, `pnpm test:nginx-image`, `pnpm test:nginx-cutover`,
+`pnpm test:compose-smoke` и сборки image. Локальный image ID не выдавать за
+registry digest; production release потребует отдельного допуска и OCI digests.
+Ни тесты с synthetic peer, ни `docker compose config --quiet` не подтверждают
+production IdP, DNS/SAN или доступ non-root процесса к PEM: это отдельные
+preflight проверки на выбранном target.
+
+Новая конфигурация immutable: generator получает её только из
+`config/platform.yaml`, `nginx:check` подтверждает совпадение, затем config
+встраивается в новый nginx image. Новые scoped сертификаты материализуются
+trusted bootstrap в tmpfs с проверкой пары, CA и SAN. Кандидат проверяется
+через `nginx -t` **с теми же mounted PEM и UID 101**, а затем через private
+auth/API/SSE probes без второго публичного listener. Если любой gate отвергает
+кандидата, действующий bundle не менять. TLS-сертификат или CA ротировать как
+новую версию bundle: на время перехода сохранить согласованное доверие старого
+и нового peer, не переиспользовать private keys между ролями.
+
+При переключении сначала запретить новые admissions старому ingress и дать
+его HTTP/SSE соединениям ограниченный drain (Compose `stop_grace_period: 30s`);
+после освобождения **единственного** loopback binding запустить новый
+nginx/Edge bundle и проверить private authorizer, API и SSE отдельно от
+статического 200. Если проверки не проходят, остановить новую версию,
+восстановить прежние image IDs, config и согласованный cert/CA bundle,
+повторить preflight и вернуть только прежний listener. Новые бизнес-команды
+при auth/transport отказе не replay-ятся автоматически, upstream mutation
+не повторяется nginx. Если срок безопасности старого сертификата или ключа
+истёк/отозван, возврат к нему запрещён: оставить fail-closed и устранить
+причину новой версии. Порядок относится к reference runbook, а не разрешению
+выполнить deployment на этой машине.
+
+Fixture HUP/reload проверяет, что отвергнутая конфигурация не заменяет
+действующие workers и что принятая конфигурация допускает bounded drain.
+Для active image файл `nginx.conf` встроен в image: изменение config или
+сертификатов выполняется новой версией bundle, не незаметной правкой файла
+в текущем контейнере. Доступность настоящего IdP и конечная приёмка запуска
+остаются за отдельными delivery gates.

@@ -4,7 +4,7 @@ environment: development
 toolchainRef: config/toolchain-versions.json
 
 platform:
-  publicBaseUrl: https://localhost
+  publicBaseUrl: https://localhost:8443
   shutdownGraceMs: 30000
   requestDeadlineMs: 5000
   bodyLimitBytes: 1048576
@@ -95,6 +95,8 @@ aroma:
   redirectsAllowed: false
   defaultPacking: Aroma
 
+browserOidc: null
+
 security:
   actorContext:
     algorithm: Ed25519
@@ -135,7 +137,7 @@ security:
       edge-gateway: {active: ed25519-public-edge-gateway-v1, previous: ed25519-public-edge-gateway-v0}
       api-public: {active: ed25519-public-api-public-v1, previous: ed25519-public-api-public-v0}
       api-internal: {active: ed25519-public-api-internal-v1, previous: ed25519-public-api-internal-v0}
-      web: {active: ed25519-public-web-v1, previous: ed25519-public-web-v0}
+      edge-nginx: {active: ed25519-public-edge-nginx-v1, previous: ed25519-public-edge-nginx-v0}
       customer-service: {active: ed25519-public-customer-service-v1, previous: ed25519-public-customer-service-v0}
       catalog-service: {active: ed25519-public-catalog-service-v1, previous: ed25519-public-catalog-service-v0}
       catalog-supplier-sync: {active: ed25519-public-catalog-supplier-sync-v1, previous: ed25519-public-catalog-supplier-sync-v0}
@@ -158,9 +160,33 @@ security:
       maxTtlRule: remaining-request-deadline-plus-5s-skew
       gatewayMutationCaller: aroma-convergence
 
+nginxTransport:
+  listen: 8443
+  publicHost: localhost
+  upstreams:
+    edge: {host: edge-gateway, port: 4000, serverName: edge-gateway.development.svc.coffee-platform.internal}
+    apiPublic: {host: api-public, port: 4050, serverName: api-public.development.svc.coffee-platform.internal}
+    realtime: {host: realtime-gateway, port: 4401, serverName: realtime-gateway.development.svc.coffee-platform.internal}
+  tls:
+    publicCertificate: /run/secrets/edge-nginx/public.crt
+    publicPrivateKey: /run/secrets/edge-nginx/public.key
+    upstreamCa: /run/secrets/edge-nginx/upstream-ca.crt
+    clientCertificate: /run/secrets/edge-nginx/client.crt
+    clientPrivateKey: /run/secrets/edge-nginx/client.key
+  limits:
+    bodyBytes: 1048576
+    headerBytes: 16384
+    targetBytes: 2048
+    apiConnectSeconds: 1
+    apiReadSeconds: 6
+    apiSendSeconds: 6
+    authConnectSeconds: 1
+    authReadSeconds: 1
+    sseReadSeconds: 45
+
 services:
   edge-gateway:
-    transportMode: public-tls
+    transportMode: mtls
     listen: {host: 0.0.0.0, port: 4000}
     health: &health
       livePath: /health/live
@@ -178,10 +204,10 @@ services:
     dbPool: null
     database: null
     kafka: { producers: [], consumers: [] }
-    outbound: [web:3000, api-public:4050, realtime-gateway:4401]
-    secretRefs: [edge.tlsPrivateKey, edge.tlsCertificate, edge.oidcClientSecret, security.actorContextEdgeSigningPrivateKey, security.serviceTransportKeys.edge-gateway, telemetry.exporterToken]
+    outbound: []
+    secretRefs: [edge.oidcClientSecret, security.actorContextEdgeSigningPrivateKey, security.serviceTransportKeys.edge-gateway, telemetry.exporterToken]
     optionalSecretRefs: [edge.tlsCaBundle]
-    permissions: {manifest: config/permissions/edge-gateway.json, net: [web:3000, api-public:4050, realtime-gateway:4401], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
+    permissions: {manifest: config/permissions/edge-gateway.json, net: [], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
   api-public:
@@ -214,22 +240,6 @@ services:
     outbound: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301]
     secretRefs: [security.apiInternalDelegationSigningPrivateKey, security.serviceVerificationKeys.orders-service, security.serviceVerificationKeys.pricing-service, security.serviceTransportKeys.api-internal, telemetry.exporterToken]
     permissions: {manifest: config/permissions/api-internal.json, net: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
-    mutationCapability: false
-
-  web:
-    transportMode: mtls
-    listen: {host: 0.0.0.0, port: 3000}
-    health: *health
-    deadlineMs: 5000
-    deadlineProfiles: {defaultMs: 5000}
-    concurrency: 500
-    replicas: 1
-    dbPool: null
-    database: null
-    kafka: { producers: [], consumers: [] }
-    outbound: []
-    secretRefs: [security.serviceTransportKeys.web]
-    permissions: {manifest: config/permissions/web.json, net: [], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 
   customer-service:

@@ -19,8 +19,9 @@ import { join, resolve } from "node:path";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
-import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../packages/platform-security/src/index.ts";
+import {parsePublicTlsHostname} from "../packages/platform-security/src/index.ts";
 import {createDatabase} from "../packages/platform-database/dist/index.js";
+import {ensureNginxSecretOwnership} from "./config-bootstrap/index.mjs";
 import {applyMigrations, migrationChecksum} from "../packages/platform-migrations/dist/index.js";
 import {OfferBindingStore} from "../apps/aroma-gateway/dist/infrastructure/database/offer-binding-store.js";
 import {createSourceIdentity} from "../apps/aroma-gateway/dist/domain/source-identity.js";
@@ -47,7 +48,6 @@ const EXTERNAL_POSTGRES_NETWORK = "coffee_postgres_data";
 const DATABASE_PROOF_RUNTIME = "customer-service";
 const COMPOSE_NETWORKS = [
   "coffee_host_ingress",
-  "coffee_public_ingress",
   "coffee_edge_backend",
   "coffee_public_api_backend",
   "coffee_internal_api",
@@ -63,7 +63,6 @@ const RUNTIMES = [
   "edge-gateway",
   "api-public",
   "api-internal",
-  "web",
   "customer-service",
   "catalog-service",
   "catalog-supplier-sync",
@@ -94,7 +93,7 @@ function usage() {
     "  --stub-secrets                     use empty, non-secret scoped stubs for topology-only smoke",
     "  --database-proof                  run the isolated customer PostgreSQL readiness proof",
     "  --customer-proof                 run the isolated Customer integration suite",
-    "  --recovery-proof                  run the isolated full 15-runtime PostgreSQL/Kafka recovery proof",
+    "  --recovery-proof                  run the isolated 14-Node plus native-nginx PostgreSQL/Kafka recovery proof",
     "  --aroma-binding-proof             run the isolated native HTTPS AROMA offer-binding proof",
     "  --aroma-cart-proof                run the isolated native mTLS safe cart-read proof with a local provider fixture",
     "  --provision-empty-postgres-network create coffee_postgres_data only when absent; never starts PostgreSQL",
@@ -260,6 +259,18 @@ function buildRuntimeImages(projectName, runtimes = RUNTIMES) {
       { cwd: ROOT, env: process.env, stdio: "inherit" },
     );
   }
+  execFileSync(
+    process.execPath,
+    [
+      join(ROOT, "tools/docker-build.mjs"),
+      "--file", "apps/edge-nginx/Dockerfile",
+      "--target", "edge-nginx",
+      "--load",
+      "-t", "coffee-platform-edge-nginx:local",
+      ROOT,
+    ],
+    {cwd: ROOT, env: process.env, stdio: "inherit"},
+  );
 }
 
 async function writeStubSecret(
@@ -337,15 +348,20 @@ function createStubSecurityMaterial() {
   const apiPublicDelegation = createEd25519KeySet();
   const apiInternalDelegation = createEd25519KeySet();
   const ordersService = createEd25519KeySet();
+  const pricingService = createEd25519KeySet();
   const customerCursor = createEd25519KeySet();
+  const catalogCursor = createEd25519KeySet();
   return {
     "security.actorContextEdgeSigningPrivateKey": actor.privateKey,
     "security.actorContextEdgeVerificationPublicKeys": actor.verificationKeys,
     "security.apiPublicDelegationSigningPrivateKey": apiPublicDelegation.privateKey,
     "security.apiInternalDelegationSigningPrivateKey": apiInternalDelegation.privateKey,
     "security.serviceVerificationKeys.orders-service": ordersService.verificationKeys,
+    "security.serviceVerificationKeys.pricing-service": pricingService.verificationKeys,
+    "security.pricingServiceDelegationSigningPrivateKey": pricingService.privateKey,
     "security.customerCursorSigningPrivateKey": customerCursor.privateKey,
     "security.customerCursorVerificationPublicKeys": customerCursor.verificationKeys,
+    "security.catalogCursorSigningPrivateKey": catalogCursor.privateKey,
     "security.delegationVerificationKeys.api-public": apiPublicDelegation.verificationKeys,
     "security.delegationVerificationKeys.api-internal": apiInternalDelegation.verificationKeys,
   };
@@ -380,14 +396,14 @@ async function createStubTransportMaterials(secretsDir, environment, publicHostn
   ], {stdio: "ignore"});
   const caPem = await readFile(caCert, "utf8");
   const materials = new Map();
-  for (const [index, runtime] of RUNTIMES.entries()) {
+  for (const [index, runtime] of [...RUNTIMES, "edge-nginx"].entries()) {
     const prefix = join(directory, runtime);
     const key = `${prefix}.key`;
     const csr = `${prefix}.csr`;
     const cert = `${prefix}.crt`;
     const ext = `${prefix}.ext`;
     await writeFile(ext, [
-      `subjectAltName=URI:spiffe://coffee-platform/${environment}/${runtime}`,
+      `subjectAltName=URI:spiffe://coffee-platform/${environment}/${runtime},DNS:${runtime}.${environment}.svc.coffee-platform.internal`,
       "extendedKeyUsage=serverAuth,clientAuth",
       "",
     ].join("\n"), {encoding: "utf8", mode: 0o400});
@@ -400,6 +416,9 @@ async function createStubTransportMaterials(secretsDir, environment, publicHostn
       ...(index === 0 ? ["-CAcreateserial"] : ["-CAserial", serial]),
       "-out", cert, "-days", "1", "-sha256", "-extfile", ext,
     ], {stdio: "ignore"});
+    const sanOutput = execFileSync("openssl", ["x509", "-in", cert, "-noout", "-ext", "subjectAltName"], {encoding: "utf8"});
+    assert.match(sanOutput, new RegExp(`URI:spiffe://coffee-platform/${environment}/${runtime}(?:,|\\s)`));
+    assert.match(sanOutput, new RegExp(`DNS:${runtime}\\.${environment}\\.svc\\.coffee-platform\\.internal`));
     materials.set(runtime, JSON.stringify({
       caPem,
       certPem: await readFile(cert, "utf8"),
@@ -590,6 +609,50 @@ async function materializeSecrets(secretsDir, options) {
       1000,
       `${runtime} scoped secret group must be GID 1000`,
     );
+  }
+  const nginxPath = join(secretsDir, "edge-nginx");
+  if (options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
+    const runtime = "edge-nginx";
+    const service = platformConfig.services[runtime];
+    const refs = service?.secretRefs ?? ["edge.tlsPrivateKey", "edge.tlsCertificate", "security.serviceTransportKeys.edge-nginx"];
+    const optionalRefs = service?.optionalSecretRefs ?? [];
+    const documentPath = join(secretsDir, "edge-nginx.yaml");
+    await writeStubSecret(
+      documentPath,
+      runtime,
+      platformConfig.environment,
+      refs,
+      optionalRefs,
+      undefined,
+      undefined,
+      stubTransportMaterials.service.get(runtime),
+      stubTransportMaterials.publicTls,
+      stubSecurityMaterial,
+    );
+    const document = parseYaml(await readFile(documentPath, "utf8"), {json: true});
+    const transport = JSON.parse(document.secrets.security.serviceTransportKeys[runtime]);
+    const files = {
+      "public.crt": document.secrets.edge.tlsCertificate,
+      "public.key": document.secrets.edge.tlsPrivateKey,
+      "upstream-ca.crt": transport.caPem,
+      "client.crt": transport.certPem,
+      "client.key": transport.keyPem,
+    };
+    await mkdir(nginxPath, {recursive: true, mode: 0o700});
+    for (const [name, content] of Object.entries(files)) {
+      const path = join(nginxPath, name);
+      await writeFile(path, content, {encoding: "utf8", mode: 0o400});
+      await chmod(path, 0o400);
+    }
+    await ensureNginxSecretOwnership(nginxPath);
+    await rm(documentPath, {force: true});
+  } else {
+    execFileSync(process.execPath, [BOOTSTRAP, "--runtime", "edge-nginx"], {
+      cwd: ROOT,
+      env: bootstrapEnvironment(nginxPath),
+      encoding: "utf8",
+      stdio: ["ignore", "ignore", "pipe"],
+    });
   }
   return {kafkaCredential, securityMaterial: stubSecurityMaterial, transportMaterials: stubTransportMaterials};
 }
@@ -1184,6 +1247,11 @@ async function applyCatalogMigrations(port, credentials, platformConfig) {
       "0001_supplier_snapshots",
       "0002_snapshot_batches",
       "0003_snapshot_staging",
+      "0004_catalog_active",
+      "0005_catalog_identity",
+      "0006_catalog_outbox",
+      "0007_catalog_grants",
+      "0008_catalog_active_read",
     ];
     const migrations = [];
     for (const id of migrationIds) {
@@ -1614,7 +1682,7 @@ function serviceRows(projectName, secretsDir, composeFile = COMPOSE_FILE) {
 function assertHealthy(projectName, secretsDir, composeFile = COMPOSE_FILE) {
   const rows = serviceRows(projectName, secretsDir, composeFile);
   const byService = new Map(rows.map((row) => [row.Service, row]));
-  for (const service of [...RUNTIMES, "kafka"]) {
+  for (const service of [...RUNTIMES, "edge-nginx", "kafka"]) {
     const row = byService.get(service);
     assert.ok(row, `${service} is absent from Compose ps`);
     assert.equal(row.State, "running", `${service} is not running`);
@@ -1705,6 +1773,25 @@ function assertSecretMounts(
       `${runtime} scoped secret ownership/mode/tmpfs mismatch`,
     );
   }
+  const nginx = rows.get("edge-nginx");
+  const nginxContainer = JSON.parse(runDocker(["inspect", nginx.ID]))[0];
+  const nginxSecretFiles = [
+    "public.crt", "public.key", "upstream-ca.crt", "client.crt", "client.key",
+  ];
+  assert.equal(nginxContainer.Config.User, "101:101");
+  assert.equal(nginxContainer.Mounts.some((mount) => mount.Destination === "/run/secrets/coffee-platform.yaml"), false);
+  for (const name of nginxSecretFiles) {
+    const destination = `/run/secrets/edge-nginx/${name}`;
+    const mount = nginxContainer.Mounts.find((candidate) => candidate.Destination === destination);
+    assert.ok(mount, `edge-nginx scoped secret ${destination} is absent`);
+    assert.equal(mount.RW, false, `${destination} must be read-only`);
+    assert.equal(resolve(mount.Source), resolve(join(secretsDir, "edge-nginx", name)));
+  }
+  const nginxSecretReadback = runCompose(projectName, secretsDir, [
+    "exec", "-T", "edge-nginx", "sh", "-ceu",
+    "for path in /run/secrets/edge-nginx/public.crt /run/secrets/edge-nginx/public.key /run/secrets/edge-nginx/upstream-ca.crt /run/secrets/edge-nginx/client.crt /run/secrets/edge-nginx/client.key; do test -r \"$path\"; test ! -w \"$path\"; test \"$(stat -c '%u:%g:%a' \"$path\")\" = 101:101:400; done",
+  ], {composeFile});
+  assert.equal(nginxSecretReadback.trim(), "");
 }
 
 function assertKafkaDurableRetention(
@@ -2576,105 +2663,34 @@ async function runKafkaBlackholeProof(
   }
 }
 
-async function assertReadiness(
-  projectName,
-  secretsDir,
-  composeFile = COMPOSE_FILE,
-) {
-  const publicTlsConfig = await readPublicTlsConfig();
+async function assertReadiness(projectName, secretsDir, composeFile = COMPOSE_FILE) {
   for (const runtime of RUNTIMES) {
-    const output = runCompose(
-      projectName,
-      secretsDir,
-      [
-        "exec",
-        "-T",
-        runtime,
-        ...RUNTIME_HEALTHCHECK,
-        "/health/live",
-        "/health/ready",
-        "/metrics",
-      ],
-      {composeFile},
-    ).trim();
-    void output;
+    runCompose(projectName, secretsDir, [
+      "exec", "-T", runtime, ...RUNTIME_HEALTHCHECK,
+      "/health/live", "/health/ready", "/metrics",
+    ], {composeFile});
   }
-  for (const path of ["/health/live", "/health/ready", "/metrics"]) {
-    assert.equal(
-      await hostRuntimeHealthStatus(secretsDir, "edge-gateway", path, 4000, publicTlsConfig),
-      200,
-      `edge host endpoint ${path} is not available`,
-    );
-  }
+  runCompose(projectName, secretsDir, ["exec", "-T", "edge-nginx", "nginx", "-t", "-q"], {composeFile});
 }
 
-async function readPublicTlsConfig() {
-  const config = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
-  const hostname = parsePublicTlsHostname(config.platform?.publicBaseUrl);
-  const optionalRefs = config.services?.["edge-gateway"]?.optionalSecretRefs;
-  if (optionalRefs !== undefined && (!Array.isArray(optionalRefs) || optionalRefs.some((ref) => typeof ref !== "string"))) {
-    throw new Error("edge-gateway optional public TLS refs are invalid");
-  }
-  return {hostname, hasCaBundle: optionalRefs?.includes("edge.tlsCaBundle") === true};
-}
-
-async function hostRuntimeTransport(secretsDir, runtime, publicTlsConfig) {
-  const document = parseYaml(
-    await readFile(join(secretsDir, `${runtime}.yaml`), "utf8"),
-    {json: true},
-  );
-  const material = parseServiceTransportMaterial(
-    document.secrets?.security?.serviceTransportKeys?.[runtime],
-    document.environment,
-    runtime,
-  );
-  const publicTls = runtime === "edge-gateway"
-    ? parsePublicTlsMaterial(
-      document.secrets?.edge?.tlsPrivateKey,
-      document.secrets?.edge?.tlsCertificate,
-      publicTlsConfig.hostname,
-      publicTlsConfig.hasCaBundle ? document.secrets?.edge?.tlsCaBundle : undefined,
-    )
-    : undefined;
-  return {
-    environment: document.environment,
-    material,
-    publicTls,
-  };
-}
-
-function hostRuntimeHealthStatus(secretsDir, runtime, path, port, publicTlsConfig) {
-  return hostRuntimeTransport(secretsDir, runtime, publicTlsConfig).then(({environment, material, publicTls}) => new Promise((resolvePromise, reject) => {
-    const isPublic = runtime === "edge-gateway";
-    const publicTrust = isPublic && publicTls?.caPem !== undefined ? {ca: publicTls.caPem} : {};
+async function assertNginxIngress(publicHost, caPem) {
+  const probe = (path) => new Promise((resolveProbe, reject) => {
     const request = httpsRequest({
-      host: "127.0.0.1",
-      port,
-      path,
-      method: "GET",
-      ...(isPublic ? publicTrust : {ca: material.caPem}),
-      ...(isPublic ? {} : {cert: material.certPem, key: material.keyPem}),
-      minVersion: "TLSv1.3",
-      rejectUnauthorized: true,
-      ...(isPublic ? {servername: publicTls.hostname} : {}),
+      hostname: "127.0.0.1", port: 8443, path, method: "GET", servername: publicHost,
+      ...(caPem ? {ca: caPem} : {}), minVersion: "TLSv1.3", rejectUnauthorized: true,
       timeout: 5_000,
-      ...(isPublic ? {} : {checkServerIdentity: (_hostname, certificate) => {
-        try {
-          verifyTransportPeer(certificate, environment, runtime);
-          return undefined;
-        } catch (error) {
-          return error instanceof Error ? error : new Error("transport peer identity is invalid");
-        }
-      },
-      }),
     }, (response) => {
       response.resume();
-      response.once("end", () => resolvePromise(response.statusCode ?? 0));
+      response.once("end", () => resolveProbe({status: response.statusCode, contentType: response.headers["content-type"]}));
     });
-    request.once("timeout", () => request.destroy(new Error("host healthcheck timed out")));
+    request.once("timeout", () => request.destroy(new Error("nginx ingress probe timed out")));
     request.once("error", reject);
     request.end();
-  }));
+  });
+  assert.equal((await probe("/health/live")).status, 200, "nginx TLS live route is unavailable");
+  const session = await probe("/auth/session");
+  assert.equal(session.status, 401, "nginx did not reach the private Edge session route");
+  assert.match(session.contentType ?? "", /^application\/problem\+json/, "session denial must remain typed");
 }
 
 function runtimeHealthStatus(
@@ -2803,49 +2819,27 @@ function assertHostExposure(
   rows,
   composeFile = COMPOSE_FILE,
 ) {
-  const edgeContainer = JSON.parse(
-    runDocker(["inspect", rows.get("edge-gateway").ID]),
-  )[0];
+  const nginxContainer = JSON.parse(runDocker(["inspect", rows.get("edge-nginx").ID]))[0];
+  const edgeContainer = JSON.parse(runDocker(["inspect", rows.get("edge-gateway").ID]))[0];
   const effectiveCompose = JSON.parse(runCompose(projectName, secretsDir, ["config", "--format", "json"], {composeFile}));
-  const hostIngress = JSON.parse(
-    runDocker(["network", "inspect", effectiveCompose.networks.coffee_host_ingress.name]),
-  )[0];
-  assert.deepEqual(
-    Object.keys(hostIngress.Containers ?? {}),
-    [edgeContainer.Id],
-    "coffee_host_ingress must contain only edge-gateway",
-  );
+  const hostNetwork = JSON.parse(runDocker(["network", "inspect", effectiveCompose.networks.coffee_host_ingress.name]))[0];
+  assert.deepEqual(Object.keys(hostNetwork.Containers ?? {}), [nginxContainer.Id], "coffee_host_ingress must contain only edge-nginx");
+  const edgeNetwork = JSON.parse(runDocker(["network", "inspect", effectiveCompose.networks.coffee_edge_backend.name]))[0];
+  assert.ok(Object.hasOwn(edgeNetwork.Containers ?? {}, nginxContainer.Id), "edge-nginx must join coffee_edge_backend");
+  assert.ok(Object.hasOwn(edgeNetwork.Containers ?? {}, edgeContainer.Id), "edge-gateway must join coffee_edge_backend");
   assert.equal(
-    runCompose(
-      projectName,
-      secretsDir,
-      ["port", "edge-gateway", "4000"],
-      {composeFile},
-    ).trim(),
-    "127.0.0.1:4000",
-    "edge-gateway must expose the actual loopback host mapping",
+    runCompose(projectName, secretsDir, ["port", "edge-nginx", "8443"], {composeFile}).trim(),
+    "127.0.0.1:8443",
+    "edge-nginx must expose only the loopback HTTPS binding",
   );
-  const edgeBindings =
-    edgeContainer.HostConfig.PortBindings?.["4000/tcp"] ?? [];
-  assert.deepEqual(
-    edgeBindings.map((binding) => binding.HostPort),
-    ["4000"],
-    "edge-gateway must publish only host port 4000",
-  );
-  for (const runtime of RUNTIMES.filter(
-    (candidate) => candidate !== "edge-gateway",
-  )) {
-    const container = JSON.parse(
-      runDocker(["inspect", rows.get(runtime).ID]),
-    )[0];
-    const bindings = Object.values(
-      container.HostConfig.PortBindings ?? {},
-    ).flat();
-    assert.deepEqual(
-      bindings,
-      [],
-      `${runtime} unexpectedly publishes a host port`,
-    );
+  const nginxBindings = nginxContainer.HostConfig.PortBindings?.["8443/tcp"] ?? [];
+  assert.deepEqual(nginxBindings.map((binding) => ({hostIp: binding.HostIp, hostPort: binding.HostPort})), [
+    {hostIp: "127.0.0.1", hostPort: "8443"},
+  ]);
+  for (const runtime of RUNTIMES) {
+    const container = JSON.parse(runDocker(["inspect", rows.get(runtime).ID]))[0];
+    const bindings = Object.values(container.HostConfig.PortBindings ?? {}).flat();
+    assert.deepEqual(bindings, [], `${runtime} unexpectedly publishes a host port`);
   }
 }
 
@@ -3426,6 +3420,8 @@ async function main() {
       assertSecretMounts(projectName, secretsDir, rows, composeFile);
       await assertReadiness(projectName, secretsDir, composeFile);
       assertHostExposure(projectName, secretsDir, rows, composeFile);
+      await assertNginxIngress(platformConfig.nginxTransport.publicHost,
+        options.stubSecrets || options.recoveryProof ? materialized.transportMaterials.publicTls.caPem : undefined);
       if (options.recoveryProof) {
         assert.ok(aromaCartProviderFixture, "recovery proof local provider fixture is missing");
         const providerFixtureCalls = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
@@ -3508,6 +3504,7 @@ async function main() {
       JSON.stringify({
         project: projectName,
         runtimes: options.aromaBindingProof || options.aromaCartProof ? ["api-internal", "aroma-gateway"] : options.databaseProof || options.customerProof ? 1 : RUNTIMES.length,
+        nativeIngress: options.databaseProof || options.customerProof ? undefined : "edge-nginx",
         kafka: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
         kafkaCompatibility: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
         ephemeralKafkaBroker: !(options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof),
@@ -3529,7 +3526,7 @@ async function main() {
         stubSecrets: options.stubSecrets || options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof,
         dbIntegrationProof: options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof,
         customerIntegrationProof: options.customerProof,
-        hostPublish: options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof ? [] : ["4000:4000"],
+        hostPublish: options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof ? [] : ["127.0.0.1:8443:8443"],
         gracefulShutdown: true,
       }),
     );

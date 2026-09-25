@@ -260,9 +260,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@coffee-platform/runtime':
-        specifier: workspace:*
-        version: link:../../packages/platform-runtime
       '@coffee-platform/ui':
         specifier: workspace:*
         version: link:../../packages/platform-ui

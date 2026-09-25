@@ -1,22 +1,22 @@
-# Матрица конфигурации 15 runtime
+# Матрица конфигурации 14 Node runtime и native nginx
 
-Это **active** exact-15 Node profile до #162, не target нативного транспорта.
-После принятых [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
-и [29_NGINX_TRANSPORT_AND_AUTH.md](29_NGINX_TRANSPORT_AND_AUTH.md) #162
-атомарно заменяет public Node Edge proxy и `web` runtime на `edge-nginx`
-transport + private `edge-gateway` authorizer, пересчитывает exact set,
-network attachments, secret refs, ports, native health и validators. Остальные
-13 Node roles не меняются; итог — 14 Node + native nginx и прежние 5 owner DB.
-Пока #162 не принят, приведённые ниже host/network матрицы не применяются к
-несуществующему `edge-nginx`; не создавать параллельный public path.
+Reference-профиль #162 по
+[ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md) и
+[контракту nginx](29_NGINX_TRANSPORT_AND_AUTH.md) заменяет public Node Edge proxy
+и `web` runtime на native `edge-nginx` и private `edge-gateway` authorizer.
+Остальные 13 Node ролей и прежние 5 owner DB не меняются. Это точное множество
+из 15 runtime **разных типов**, а не «15 Node»; production admission принимает
+#13, а не наличие строки в матрице.
 
 Статус: нормативный input #19/#2/#3. Пустое значение записывается как `null` или
 `[]`; скрытые defaults запрещены. Общие health paths: `/health/live`,
 `/health/ready`, `/metrics`; shutdown grace `30000ms`. Для каждой строки
-`listen.host=0.0.0.0` внутри container, metrics обслуживается на том же port по
-`/metrics`; host publish разрешён только edge, а web доступен через Edge proxy.
-Node Permission manifest —
-`config/permissions/<runtime>.json`; отсутствие файла блокирует startup.
+`listen.host=0.0.0.0` внутри container; host publish только у nginx, на
+`127.0.0.1:8443`. Node Permission manifest —
+`config/permissions/<runtime>.json` только для Node ролей. У native nginx
+health/live — лишь transport; readiness и metrics имеют отдельную applicability
+по [контракту](29_NGINX_TRANSPORT_AND_AUTH.md), static 200 не доказывает
+готовность API/auth/SSE.
 
 Общий outbound HTTP pool для разрешённой пары: max connections 32, pipelining 1,
 connect timeout 1s, idle timeout 30s; Gateway provider pool max 8. Kafka
@@ -25,16 +25,17 @@ partitions/retention берутся только из `06_EVENTS_AND_RECOVERY.md
 не допускаются, а topics и groups обязаны совпадать с таблицей ниже.
 Mutation capability `true` только у `aroma-convergence` delegation и Gateway
 transport handler; у остальных runtime explicit `false`.
-Transport mode задан явно: только `edge-gateway` использует `public-tls` для
-браузерного ingress; остальные 14 runtime используют `mtls` для внутренних
-listener/client соединений.
+Transport mode задан явно: только `edge-nginx` использует `public-tls` для
+браузерного ingress и отдельную mTLS identity к upstream. Все 14 Node runtime,
+включая `edge-gateway`, используют private `mtls` для внутренних соединений.
 
 | Runtime                   | Port | Deadline / concurrency             | DB pool | Kafka                 | Secret refs                                                                                    | Разрешённые host:port / egress                                                                                    |
 | ------------------------- | ---: | ---------------------------------- | ------: | --------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| edge-gateway              | 4000 | 5s / 500                           |       0 | none                  | public TLS key/certificate, optional public CA bundle, OIDC, actor signing, service transport, telemetry | web:3000, api-public:4050, realtime-gateway:4401                                                                  |
+| edge-nginx                | 8443 | API 1s connect / 6s idle; auth 1s; SSE 45s idle | — | none | public TLS pair, own service transport only | edge-gateway:4000, api-public:4050, realtime-gateway:4401 |
+| edge-gateway              | 4000 | 500ms auth / 320 admission           |       0 | none                  | OIDC client secret, actor signing, own service transport, telemetry | только проверенный OIDC issuer/JWKS; business egress нет |
 | api-public                | 4050 | 4.5s / 400                         |       0 | none                  | service identity, actor verify, public delegation signing, telemetry                           | customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104                            |
 | api-internal              | 4051 | caller deadline / 300              |       0 | none                  | service identity, delegation signing/verify, telemetry                                         | customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301; route allowlist обязателен |
-| web                       | 3000 | 5s / 500                           |       0 | none                  | service transport identity                                                                     | none                                                                                                              |
+
 | customer-service          | 4101 | 2s / 100                           |       8 | none                  | postgres.customer, service identity, telemetry                                                 | coffee_postgres:5432                                                                                              |
 | catalog-service           | 4102 | 2s / 150                           |       8 | none                  | postgres.catalogApi, service identity, cursor signing, telemetry                               | coffee_postgres:5432                                                                                              |
 | catalog-supplier-sync     | 4201 | 15m / 1 export                     |       4 | none                  | postgres.catalogImport, service identity, telemetry                                            | coffee_postgres:5432, api-internal:4051                                                                           |
@@ -90,9 +91,9 @@ adjacency. Это разные поля policy. #19 фиксирует след�
 
 | Docker network              | `internal`                   | Участники / назначение                                                                        |
 | --------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------- |
-| `coffee_host_ingress`       | `false`                      | только `edge-gateway`; transport-only интерфейс для локальной публикации `127.0.0.1:4000`     |
-| `coffee_public_ingress`     | `true`                       | ingress bridge для `edge-gateway` и `web`; host publish только у Edge                         |
-| `coffee_edge_backend`       | `true`                       | `edge-gateway`, `api-public`, `realtime-gateway`                                              |
+| `coffee_host_ingress`       | `false`                      | только `edge-nginx`; loopback host publish `127.0.0.1:8443`                               |
+
+| `coffee_edge_backend`       | `true`                       | `edge-nginx`, `edge-gateway`, `api-public`, `realtime-gateway`                              |
 | `coffee_public_api_backend` | `true`                       | `api-public`, Customer, Catalog, Pricing и Orders HTTP owners                                 |
 | `coffee_internal_api`       | `true`                       | `api-internal` и только allowlisted callers/targets                                           |
 | `coffee_postgres_data`      | `true`, external/pre-created | существующий `coffee_postgres`, разрешённые DB runtime и одноразовые migration/bootstrap jobs |
@@ -104,10 +105,11 @@ platform policy и не указывается ни у одного нового
 
 | Runtime                     | Exact Docker network attachments                                                                 |
 | --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `edge-gateway`              | `coffee_host_ingress`, `coffee_public_ingress`, `coffee_edge_backend`                            |
+| `edge-nginx`                | `coffee_host_ingress`, `coffee_edge_backend`                                                      |
+| `edge-gateway`              | `coffee_edge_backend`                                                                             |
 | `api-public`                | `coffee_edge_backend`, `coffee_public_api_backend`                                               |
 | `api-internal`              | `coffee_internal_api`                                                                            |
-| `web`                       | `coffee_public_ingress`                                                                          |
+
 | `customer-service`          | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data`                       |
 | `catalog-service`           | `coffee_public_api_backend`, `coffee_internal_api`, `coffee_postgres_data`                       |
 | `catalog-supplier-sync`     | `coffee_internal_api`, `coffee_postgres_data`                                                    |
@@ -127,12 +129,13 @@ platform policy и не указывается ни у одного нового
 
 ## Permission/network invariants
 
-- edge: public ingress + web/api-public/realtime; owner/internal/provider запрещены;
+- nginx: только public ingress, private Edge/api-public/realtime; owner/internal/provider запрещены;
+- Edge authorizer: только private nginx caller и утверждённый OIDC outbound; business egress запрещён;
 - api-public: public-api-backend; internal/provider/Kafka/Postgres запрещены;
 - api-internal: internal-api targets; provider origin/Kafka/Postgres запрещены;
 - owner runtime: только своя DB/роль и перечисленные HTTP/Kafka связи;
 - Gateway: Integration DB + provider egress; Kafka и business DB запрещены;
-- web/realtime: business DB запрещены.
+- realtime: business DB запрещена.
 - новый runtime в `coffee_network`, неизвестная network или неописанный
   host:port запрещены.
 

@@ -1,8 +1,8 @@
 # Исполнимая спецификация итогового launch gate
 
 При принятом [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
-действующий ниже exact-15 Node/Edge→web baseline остаётся исходным состоянием
-до #162. После cutover #13 обязан проверять 14 Node + 1 native nginx, private
+reference baseline #162 содержит 14 Node + 1 native nginx. #13 обязан проверить
+фактический состав, private
 authorizer, отсутствие Node `web` runtime и второго public path. Negative
 route/auth/TLS/SSE/static/CSRF/rotation cases, real IdP admission,
 capacity/reload overlap и новый измеренный end-to-end SLA заданы
@@ -164,7 +164,7 @@ predecessor #13. Он поставляет Collector/OpenObserve, exporters, ale
 `orderRef` и correlation связывают долгоживущий order с несколькими traces.
 Бесконечный span на весь lifecycle заказа не требуется.
 
-Для каждого из 15 runtime проверить:
+Для каждого из 14 Node runtime проверить:
 
 - `/health/live` 200 при живом process;
 - `/health/ready` 200 только при готовых обязательных зависимостях и 503 при их
@@ -178,12 +178,18 @@ predecessor #13. Он поставляет Collector/OpenObserve, exporters, ale
 - canary secret/PII отсутствует в logs, traces, metrics labels, alerts, artifacts
   и browser bundle.
 
+Для native nginx отдельно проверить transport `/health/live`, конфигурацию и
+реальный private auth/API/SSE dependency path; static 200 или `nginx -t` не
+заменяет full-system readiness. Native access allowlist и collector/alerts
+принимает #64, transport-inclusive capacity и reconnect — #12/#13.
+
 Topology gate отдельно доказывает: `api-public` монтирует только `client-v1`,
 `api-internal` — только `internal-v1`; Edge→owner и Browser→owner запрещены;
 оба API root не имеют DB/Kafka/provider secrets; forged delegation и mutation
 не от original `aroma-convergence` получают 403. `api-agent` остаётся authority
 role `implemented=false` и отсутствует в Compose. Node 26.8.1 используется для
-всех 15 production images и foundation/CI; Node 24 считается version drift.
+14 Node runtime images и foundation/CI; native nginx использует отдельный pinned
+image по `config/toolchain-versions.json`. Node 24 считается version drift.
 
 ## 9. Rollback mutation-disable
 

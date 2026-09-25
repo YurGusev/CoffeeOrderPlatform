@@ -524,14 +524,7 @@ async function checkTsConfigs(root) {
         }
       }
     }
-    if (label === "apps/web/tsconfig.runtime.json") {
-      if (document.extends !== "../../tsconfig.base.json")
-        fail("TS7-BACKEND", `${label} must extend ../../tsconfig.base.json`);
-      if (options.noEmit === true)
-        fail("TS7-BACKEND", `${label} must emit the runnable web shell`);
-      if (options.composite !== true)
-        fail("TS7-BACKEND", `${label}.compilerOptions.composite must be true`);
-    }
+
     if (label.startsWith("packages/")) {
       const base = relative(dirname(path), join(root, "tsconfig.base.json")).replaceAll("\\", "/");
       if (document.extends !== base)

@@ -20,7 +20,7 @@ import {
 } from "../../packages/platform-runtime/src/index.ts";
 import {createHttpClient} from "../../packages/platform-http/src/index.ts";
 import {readRuntimeHealthStatuses, runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
-import {parsePublicTlsHostname, parsePublicTlsMaterial, parseServiceTransportMaterial} from "../../packages/platform-security/src/index.ts";
+import {parsePublicTlsMaterial, parseServiceTransportMaterial} from "../../packages/platform-security/src/index.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const health = {
@@ -106,7 +106,7 @@ async function tlsMaterial(t, hostname = "edge.test", serviceRuntime = "edge-gat
   const serviceAuthority = await certificateAuthority(directory, "service-ca", "/CN=coffee-runtime-service-ca");
   const wrongAuthority = await certificateAuthority(directory, "wrong-ca", "/CN=coffee-runtime-wrong-ca");
   const publicKey = await signedCertificate(directory, "public", `/CN=${hostname}`, `DNS:${hostname}`, publicAuthority);
-  const serviceKey = await signedCertificate(directory, "service", `/CN=${serviceRuntime}`, `URI:spiffe://coffee-platform/development/${serviceRuntime},DNS=${serviceRuntime}`, serviceAuthority, "serverAuth,clientAuth");
+  const serviceKey = await signedCertificate(directory, "service", `/CN=${serviceRuntime}`, `URI:spiffe://coffee-platform/development/${serviceRuntime},DNS:${serviceRuntime}`, serviceAuthority, "serverAuth,clientAuth");
   return {
     publicTls: parsePublicTlsMaterial(publicKey.keyPem, publicKey.certPem, hostname, publicAuthority.certPem),
     publicCaPath: publicAuthority.certPath,
@@ -226,17 +226,17 @@ async function freePort() {
   return port;
 }
 
-void test("configured Edge startup uses public TLS material and validates hostname", async (t) => {
-  const hostname = "edge.test";
+void test("configured private Edge startup requires mTLS and validates its service hostname", async (t) => {
+  const hostname = "edge-gateway";
   const material = await tlsMaterial(t, hostname);
   const directory = await mkdtemp(join(tmpdir(), "coffee-configured-edge-"));
   t.after(() => rm(directory, {recursive: true, force: true}));
   const port = await freePort();
   const source = await readFile(join(root, "config/platform.yaml"), "utf8");
   const configPath = join(directory, "platform.yaml");
-  await writeFile(configPath, source.replace("publicBaseUrl: https://localhost", `publicBaseUrl: https://${hostname}`).replace("listen: {host: 0.0.0.0, port: 4000}", `listen: {host: 0.0.0.0, port: ${port}}`));
+  await writeFile(configPath, source.replace("listen: {host: 0.0.0.0, port: 4000}", `listen: {host: 0.0.0.0, port: ${port}}`));
   const config = await loadPlatformConfig(configPath, (text) => parseYaml(text, {json: true}));
-  assert.equal(parsePublicTlsHostname(config.platform.publicBaseUrl), hostname);
+  assert.equal(config.services["edge-gateway"].transportMode, "mtls");
   const secrets = {};
   for (const ref of [...config.services["edge-gateway"].secretRefs, ...config.services["edge-gateway"].optionalSecretRefs]) {
     const segments = ref.split(".");
@@ -245,13 +245,9 @@ void test("configured Edge startup uses public TLS material and validates hostna
       current[segment] ??= {};
       current = current[segment];
     }
-    current[segments.at(-1)] = ref === "edge.tlsPrivateKey"
-      ? material.publicTls.keyPem
-      : ref === "edge.tlsCertificate"
-        ? material.publicTls.certPem
-        : ref === "edge.tlsCaBundle"
-          ? material.publicTls.caPem
-        : ref === "security.serviceTransportKeys.edge-gateway"
+    current[segments.at(-1)] = ref === "edge.tlsCaBundle"
+      ? material.publicTls.caPem
+      : ref === "security.serviceTransportKeys.edge-gateway"
           ? JSON.stringify({keyPem: material.serviceTls.keyPem, certPem: material.serviceTls.certPem, caPem: material.serviceTls.caPem})
           : "test-secret";
   }
@@ -265,10 +261,11 @@ void test("configured Edge startup uses public TLS material and validates hostna
   process.env.COFFEE_RUNTIME_SECRETS_FILE = secretsPath;
   try {
     app = await startConfiguredRuntime("edge-gateway");
-    assert.equal(await requestHttps(port, {path: "/health/live", ca: material.publicTls.caPem, servername: hostname}), 200);
-    await assert.rejects(requestHttps(port, {path: "/health/live", ca: material.publicLeafCaPem, servername: hostname}));
-    await assert.rejects(requestHttps(port, {path: "/health/live", ca: material.wrongCaPem, servername: hostname}));
-    await assert.rejects(requestHttps(port, {path: "/health/live", ca: material.publicTls.caPem, servername: "wrong.edge.test"}));
+    const peer = {path: "/health/live", ca: material.serviceTls.caPem, cert: material.serviceTls.certPem, key: material.serviceTls.keyPem, servername: hostname};
+    assert.equal(await requestHttps(port, peer), 200);
+    await assert.rejects(requestHttps(port, {path: "/health/live", ca: material.serviceTls.caPem, servername: hostname}));
+    await assert.rejects(requestHttps(port, {...peer, ca: material.wrongCaPem}));
+    await assert.rejects(requestHttps(port, {...peer, servername: "wrong.edge.test"}));
     assert.deepEqual(await runRuntimeHealthcheck(["/health/live"], {
       COFFEE_CONFIG_FILE: configPath,
       COFFEE_RUNTIME_SECRETS_FILE: secretsPath,
@@ -285,7 +282,6 @@ void test("configured Edge startup uses public TLS material and validates hostna
     childEnvironment.COFFEE_RUNTIME_SECRETS_FILE = withoutOptionalCaPath;
     childEnvironment.RUNTIME_NAME = "edge-gateway";
     childEnvironment.PORT = String(port);
-    childEnvironment.NODE_EXTRA_CA_CERTS = material.publicCaPath;
     const noBundleResult = await runHealthcheckChild(childEnvironment);
     assert.equal(noBundleResult.code, 0, noBundleResult.output);
     assert.equal(noBundleResult.signal, null);
@@ -847,7 +843,7 @@ void test("startRuntime removes its process signal listeners after normal stop",
   await waitFor(() => process.listenerCount("SIGTERM") === before.term && process.listenerCount("SIGINT") === before.int);
 });
 
-void test("all 15 configured roots use one real listen/controller lifecycle and dependency matrix", async () => {
+void test("all 14 configured Node roots use one real listen/controller lifecycle and dependency matrix", async () => {
   const config = await loadPlatformConfig(join(root, "config/platform.yaml"), (text) => parseYaml(text, {json: true}));
   const serverCount = () => process.getActiveResourcesInfo().filter((resource) => resource === "TCPServerWrap").length;
   await waitFor(() => serverCount() === 0);
@@ -870,7 +866,6 @@ void test("all 15 configured roots use one real listen/controller lifecycle and 
     "edge-gateway": [],
     "api-public": [],
     "api-internal": [],
-    web: [],
     "customer-service": ["database"],
     "catalog-service": ["database"],
     "catalog-supplier-sync": ["database"],
@@ -883,7 +878,8 @@ void test("all 15 configured roots use one real listen/controller lifecycle and 
     "aroma-gateway": ["database"],
     "realtime-gateway": ["kafka"],
   };
-  assert.equal(RUNTIME_NAMES.length, 15);
+  assert.equal(RUNTIME_NAMES.length, 14);
+  assert.equal(config.nginxTransport.listen, 8443);
   for (const name of RUNTIME_NAMES) {
     const base = configuredRuntimeIdentity(config, name);
     const required = expectedDependencies[name];

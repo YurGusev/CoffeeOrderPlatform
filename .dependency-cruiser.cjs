@@ -1,6 +1,6 @@
 // AST import authority for Dependency Cruiser 18.2.0. The package/lock pin is owned by issue #3.
 const runtimes = [
-  'edge-gateway', 'api-public', 'api-internal', 'web', 'customer-service',
+  'edge-gateway', 'api-public', 'api-internal', 'customer-service',
   'catalog-service', 'catalog-supplier-sync', 'catalog-activation-worker',
   'pricing-service', 'orders-service', 'orders-aroma-preparation',
   'aroma-observer', 'aroma-convergence', 'aroma-gateway', 'realtime-gateway',
@@ -26,7 +26,7 @@ module.exports = {
       severity: 'error',
       comment: 'Browser source never imports the Node entry or server runtime.',
       from: { path: '^apps/web/src/browser/' },
-      to: { path: '^(apps/web/src/main\.ts|packages/platform-runtime/|@coffee-platform/runtime$)' },
+      to: { path: '^(apps/web/src/main\\.ts|packages/platform-runtime/|@coffee-platform/runtime$)' },
     },
     {
       name: 'BOUND-IMPORT:server-ui-graph',

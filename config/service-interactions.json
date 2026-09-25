@@ -9,9 +9,8 @@
   "defaultPolicy": "deny",
   "databaseEdgesAcrossOwnersAllowed": false,
   "interactions": [
-    {"id": "edge-web-root", "from": "edge-gateway", "to": "web", "mode": "http", "contract": "edge-v1", "operations": ["GET /", "GET /assets/**"], "timeout": "5s", "retryOwner": "edge-gateway", "dataExposure": "immutable-web-assets"},
-    {"id": "edge-client-api", "from": "edge-gateway", "to": "api-public", "mode": "http", "contract": "client-v1", "operations": ["ANY /api/client-v1/**"], "timeout": "5s", "retryOwner": "edge-gateway", "dataExposure": "validated-actor-and-client-payload"},
-    {"id": "edge-realtime", "from": "edge-gateway", "to": "realtime-gateway", "mode": "http", "contract": "realtime-v1", "operations": ["GET /events"], "timeout": "stream", "retryOwner": "browser", "dataExposure": "bounded-invalidation-only"},
+    {"id": "edge-client-api", "from": "edge-nginx", "to": "api-public", "mode": "http", "contract": "client-v1", "operations": ["ANY /api/client-v1/**"], "timeout": "5s", "retryOwner": "edge-nginx", "dataExposure": "validated-actor-and-client-payload"},
+    {"id": "edge-realtime", "from": "edge-nginx", "to": "realtime-gateway", "mode": "http", "contract": "realtime-v1", "operations": ["GET /events"], "timeout": "stream", "retryOwner": "browser", "dataExposure": "bounded-invalidation-only"},
 
     {"id": "public-customer", "from": "api-public", "to": "customer-service", "mode": "http", "contract": "customer-v1", "operations": ["POST /api/client-v1/customers", "GET /api/client-v1/customers"], "timeout": "4.5s", "retryOwner": "api-public", "dataExposure": "delegated-actor-customer-contract"},
     {"id": "public-catalog", "from": "api-public", "to": "catalog-service", "mode": "http", "contract": "catalog-v1", "operations": ["GET /api/client-v1/catalog/products"], "timeout": "4.5s", "retryOwner": "api-public", "dataExposure": "delegated-actor-catalog-contract"},

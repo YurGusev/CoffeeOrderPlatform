@@ -12,7 +12,6 @@ const RUNTIMES = [
   "edge-gateway",
   "api-public",
   "api-internal",
-  "web",
   "customer-service",
   "catalog-service",
   "catalog-supplier-sync",
@@ -27,14 +26,10 @@ const RUNTIMES = [
 ];
 
 const NETWORKS = {
-  "edge-gateway": [
-    "coffee_host_ingress",
-    "coffee_public_ingress",
-    "coffee_edge_backend",
-  ],
+  "edge-gateway": ["coffee_edge_backend"],
   "api-public": ["coffee_edge_backend", "coffee_public_api_backend"],
   "api-internal": ["coffee_internal_api"],
-  web: ["coffee_public_ingress"],
+
   "customer-service": [
     "coffee_public_api_backend",
     "coffee_internal_api",
@@ -77,7 +72,14 @@ const NETWORKS = {
   "realtime-gateway": ["coffee_edge_backend", "coffee_kafka_event"],
 };
 
-const SCOPED_SECRET_NAMES = RUNTIMES.map((runtime) => `runtime-${runtime}`);
+const SCOPED_SECRET_NAMES = [
+  ...RUNTIMES.map((runtime) => `runtime-${runtime}`),
+  "edge-nginx-public-cert",
+  "edge-nginx-public-key",
+  "edge-nginx-upstream-ca",
+  "edge-nginx-client-cert",
+  "edge-nginx-client-key",
+];
 
 function composeConfig(projectName) {
   const result = spawnSync(
@@ -105,17 +107,40 @@ function composeConfig(projectName) {
   return JSON.parse(result.stdout);
 }
 
-void test("Compose materializes exactly 15 runtime processes and Kafka", () => {
+void test("Compose materializes 14 Node runtimes, native nginx, and Kafka", () => {
   const config = composeConfig();
   assert.deepEqual(
     Object.keys(config.services).sort((left, right) =>
       left.localeCompare(right),
     ),
-    [...RUNTIMES, "kafka"].sort((left, right) => left.localeCompare(right)),
+    [...RUNTIMES, "edge-nginx", "kafka"].sort((left, right) => left.localeCompare(right)),
   );
   assert.equal(config.services["api-agent"], undefined);
   assert.equal(config.services["config-bootstrap"], undefined);
   assert.equal(config.services.postgres, undefined);
+  const nginx = config.services["edge-nginx"];
+  assert.equal(nginx.build.dockerfile, "apps/edge-nginx/Dockerfile");
+  assert.deepEqual(Object.keys(nginx.depends_on).sort(), ["api-public", "edge-gateway", "realtime-gateway"]);
+  for (const dependency of Object.values(nginx.depends_on)) assert.equal(dependency.condition, "service_healthy");
+  assert.equal(nginx.user, "101:101");
+  assert.equal(nginx.read_only, true);
+  assert.equal(nginx.init, true);
+  assert.equal(nginx.volumes, undefined);
+  assert.equal(nginx.cpus, 2, "native nginx must have the accepted CPU bound");
+  assert.equal(nginx.mem_limit, "536870912", "native nginx must have the accepted 512 MiB memory bound");
+  assert.deepEqual(nginx.ulimits?.nofile, {soft: 16384, hard: 16384});
+  assert.deepEqual(nginx.tmpfs, ["/tmp:rw,noexec,nosuid,nodev,size=8m"]);
+  assert.deepEqual(Object.keys(nginx.networks).sort(), ["coffee_edge_backend", "coffee_host_ingress"]);
+  assert.deepEqual(nginx.ports.map(({target, published, host_ip}) => ({target, published, host_ip})), [
+    {target: 8443, published: "8443", host_ip: "127.0.0.1"},
+  ]);
+  assert.deepEqual(nginx.secrets.map(({target, uid, gid, mode}) => ({target, uid, gid, mode})), [
+    {target: "/run/secrets/edge-nginx/public.crt", uid: "101", gid: "101", mode: "0400"},
+    {target: "/run/secrets/edge-nginx/public.key", uid: "101", gid: "101", mode: "0400"},
+    {target: "/run/secrets/edge-nginx/upstream-ca.crt", uid: "101", gid: "101", mode: "0400"},
+    {target: "/run/secrets/edge-nginx/client.crt", uid: "101", gid: "101", mode: "0400"},
+    {target: "/run/secrets/edge-nginx/client.key", uid: "101", gid: "101", mode: "0400"},
+  ]);
 
   for (const runtime of RUNTIMES) {
     const service = config.services[runtime];
@@ -181,19 +206,7 @@ void test("Compose materializes exactly 15 runtime processes and Kafka", () => {
       ],
       runtime,
     );
-    if (runtime === "edge-gateway") {
-      assert.deepEqual(
-        service.ports.map(({ target, published, host_ip }) => ({
-          target,
-          published,
-          host_ip,
-        })),
-        [{ target: 4000, published: "4000", host_ip: "127.0.0.1" }],
-        runtime,
-      );
-    } else {
-      assert.equal(service.ports, undefined, runtime);
-    }
+    assert.equal(service.ports, undefined, runtime);
   }
   assert.deepEqual(
     Object.keys(config.secrets).sort((left, right) =>
@@ -226,7 +239,6 @@ void test("Compose networks enforce the launch planes and external PostgreSQL at
     "coffee_postgres_data",
     "coffee_provider_egress",
     "coffee_public_api_backend",
-    "coffee_public_ingress",
   ]);
   assert.equal(config.networks.coffee_postgres_data.external, true);
   assert.equal(
@@ -234,10 +246,16 @@ void test("Compose networks enforce the launch planes and external PostgreSQL at
     "coffee_postgres_data",
   );
   assert.equal(config.networks.coffee_postgres_data.internal, undefined);
-  assert.notEqual(config.networks.coffee_provider_egress.internal, true);
   assert.equal(config.networks.coffee_host_ingress.name, "coffee_host_ingress");
   assert.notEqual(config.networks.coffee_host_ingress.internal, true);
-  assert.equal(config.networks.coffee_public_ingress.internal, true);
+  assert.deepEqual(
+    Object.entries(config.services)
+      .filter(([, service]) => Object.hasOwn(service.networks, "coffee_host_ingress"))
+      .map(([name]) => name),
+    ["edge-nginx"],
+    "only edge-nginx may join the host-reachable ingress network",
+  );
+  assert.notEqual(config.networks.coffee_provider_egress.internal, true);
   for (const name of [
     "coffee_edge_backend",
     "coffee_public_api_backend",
@@ -265,7 +283,6 @@ void test("Compose keeps forbidden trust-plane connections absent (negative topo
       "coffee_provider_egress",
     ],
     "api-internal": [
-      "coffee_public_ingress",
       "coffee_public_api_backend",
       "coffee_postgres_data",
       "coffee_kafka_event",

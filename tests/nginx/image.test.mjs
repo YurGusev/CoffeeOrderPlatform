@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, chmod, writeFile, readFile, rm } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import https from 'node:https';
@@ -9,6 +10,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const activeProfileConfig = resolve(root, 'apps/edge-nginx/generated/nginx.conf');
+const profileConfig = resolve(root, `apps/edge-nginx/generated/.image-fixture-${process.pid}.conf`);
 const image = 'coffee-edge-nginx:issue161-test';
 const backendImage = 'coffee-edge-fixture:issue161-test';
 const network = `edge161-${process.pid}`;
@@ -41,9 +44,12 @@ try {
   for (const file of ['ca.crt','server.crt','server.key','client.crt','client.key']) await chmod(join(certDir,file), 0o644);
   for (const [dst,src] of [['upstream-ca.crt','ca.crt'],['public.crt','server.crt'],['public.key','server.key']]) await writeFile(join(certDir,dst),await readFile(join(certDir,src)));
   await chmod(requestsFile, 0o666);
-  const profileConfig = resolve(root, 'apps/edge-nginx/generated/nginx.conf');
-  run(process.execPath, ['tools/nginx/generate-config.mjs', '--fixture', 'tests/nginx/fixtures/profile.json', '--output', 'apps/edge-nginx/generated/nginx.conf']);
+  run(process.execPath, ['tools/nginx/generate-config.mjs', '--fixture', 'tests/nginx/fixtures/profile.json', '--output', 'apps/edge-nginx/generated/.image-fixture-' + process.pid + '.conf']);
   run('pnpm',['image:build','--target','edge-nginx','--tag',image,'--load','.']);
+  const activeProfile = await readFile(activeProfileConfig, 'utf8');
+  const bakedHash = docker('run','--rm','--entrypoint','sha256sum',image,'/etc/nginx/nginx.conf').trim().split(/\s+/u)[0];
+  assert.equal(bakedHash, createHash('sha256').update(activeProfile).digest('hex'), 'image must bake the active generated nginx config');
+  for (const token of ['server edge-gateway:4000;', 'server api-public:4050;', 'server realtime-gateway:4401;', 'edge-gateway.development.svc.coffee-platform.internal']) assert.ok(activeProfile.includes(token), `image build must derive active config/platform.yaml profile, missing ${token}`);
   docker('build','--file','tests/nginx/fixtures/Dockerfile','--tag',backendImage,'tests/nginx/fixtures');
   const finalToolsCheck="for t in node npm pnpm corepack gcc g++ clang cc make apt-get dpkg; do command -v \"$t\" >/dev/null 2>&1 && exit 44; done; ! grep -R -E 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|BEGIN CERTIFICATE' /etc/nginx /usr/share/nginx/html";
   docker('run','--rm','--entrypoint','sh',image,'-c',finalToolsCheck);
@@ -52,7 +58,7 @@ try {
   backendId = docker('run','--detach','--network',network,'--network-alias','edge.fixture.internal','--network-alias','api.fixture.internal','--network-alias','realtime.fixture.internal','--mount',`type=bind,src=${certDir},dst=/run/fixture-certs,readonly`,'--mount',`type=bind,src=${requestsFile},dst=/run/requests.jsonl`,'--env','REQUEST_LOG=/run/requests.jsonl',backendImage).trim();
   docker('run','--rm','--network',network,'--user','101:101','--mount',`type=bind,src=${profileConfig},dst=/etc/nginx/nginx.conf,readonly`,'--mount',`type=bind,src=${certDir},dst=/run/secrets/edge-nginx,readonly`,'--entrypoint','nginx',image,'-t','-c','/etc/nginx/nginx.conf');
   const missingConfig = spawnSync('docker',['run','--rm','--entrypoint','nginx',image,'-t','-c','/etc/nginx/nginx.conf'],{cwd:root,encoding:'utf8'});
-  assert.notEqual(missingConfig.status,0,'image must fail closed without a mounted runtime config');
+  assert.notEqual(missingConfig.status,0,'image must fail closed without the mounted runtime secrets required by its active config');
   if(process.argv.includes('--check-only')) { console.log(`PASS image check-only: nginx -t; final image ${imageId}; no Node/compiler/package manager/private key/certificate.`); }
   else {
   nginxId = docker('run','--detach','--read-only','--user','101:101','--network',network,'--publish',`127.0.0.1:${hostPort}:8443`,'--tmpfs','/tmp:rw,noexec,nosuid,mode=1777','--mount',`type=bind,src=${profileConfig},dst=/etc/nginx/nginx.conf,readonly`,'--mount',`type=bind,src=${certDir},dst=/run/secrets/edge-nginx,readonly`,image).trim();
@@ -102,6 +108,7 @@ try {
     try { response=await request('/auth/session',{port}); }
     catch(error) { const id=variants.get(port); console.error('TLS variant failed before HTTPS response',port,docker('inspect','--format','{{json .State}} {{json .Config.Cmd}} {{json .Config.Entrypoint}} {{.HostConfig.ReadonlyRootfs}}',id),docker('logs',id)); throw error; }
     assert.equal(response.status,502,'untrusted/mismatched/missing upstream TLS identity must fail');
+    assertTypedProblem(response,'UPSTREAM_UNAVAILABLE');
     await delay(100); assert.equal(await readFile(backendLog,'utf8'),before,'failed upstream TLS must send no HTTP request');
   };
   const badCaDir=join(scratch,'bad-ca-secrets'); await mkdir(badCaDir,{mode:0o755});
@@ -111,8 +118,9 @@ try {
   await writeFile(join(badCaDir,'upstream-ca.crt'),await readFile(badCaCrt));
   docker('run','--rm','--network',network,'--user','101:101','--mount',`type=bind,src=${profileConfig},dst=/etc/nginx/nginx.conf,readonly`,'--mount',`type=bind,src=${badCaDir},dst=/run/secrets/edge-nginx,readonly`,'--entrypoint','nginx',image,'-t','-c','/etc/nginx/nginx.conf');
   variant(hostPort+1,{secrets:badCaDir});
-  const generated=await readFile(join(root,'apps/edge-nginx/generated/nginx.conf'),'utf8');
+  const generated=await readFile(profileConfig,'utf8');
   const wrongSniConfig=join(scratch,'wrong-sni.conf');
+  assert.match(generated, /proxy_ssl_name edge\.fixture\.internal;/);
   await writeFile(wrongSniConfig,generated.replaceAll('proxy_ssl_name edge.fixture.internal;','proxy_ssl_name wrong.fixture.internal;'));
   variant(hostPort+2,{config:wrongSniConfig});
   const clientlessSnippet=join(scratch,'upstream-no-client.conf');
@@ -143,6 +151,9 @@ try {
   assert.equal(JSON.parse(session.body).actorRef,'fixture-actor-17'); assert.ok(JSON.parse(session.body).expiresAt);
   const missingSession=await request('/auth/session'); assert.equal(missingSession.status,401);
   assert.equal(missingSession.headers['cache-control'],'no-store'); assert.equal(JSON.parse(missingSession.body).code,'AUTHENTICATION_REQUIRED');
+  const logoutHeaders={cookie:'__Host-coffee-session=allow; __Host-coffee-csrf=csrf-test',origin:'https://edge-fixture.invalid','x-csrf-token':'csrf-test'};
+  const logout=await request('/auth/logout',{method:'POST',headers:logoutHeaders}); assert.equal(logout.status,204,'nginx must forward the browser Origin needed for Edge logout CSRF validation');
+  const crossOriginLogout=await request('/auth/logout',{method:'POST',headers:{...logoutHeaders,origin:'https://evil.invalid'}}); assert.equal(crossOriginLogout.status,403,'Edge must reject a cross-origin logout');
   assert.equal((await readFile(requestsFile,'utf8')).split('\n').filter(line=>line.includes('edge-auth-response')).length,0,'session lookup does not invoke auth_request');
   const callback=await request('/auth/callback?state=fixture&code=fixture',{headers:{cookie:'__Host-coffee-login=browser-bound; __Host-coffee-session=allow; tracking=not-for-edge'}});
   assert.equal(callback.status,200);
@@ -155,7 +166,15 @@ try {
   assert.equal((await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=no-correlation'}})).status,503,'204 without signed correlation must fail closed');
   const unauth=await request('/api/client-v1/orders/drafts',{method:'POST'}); assert.equal(unauth.status,401); assert.equal(JSON.parse(unauth.body).code,'AUTHENTICATION_REQUIRED');
   assertTypedProblem(unauth,'AUTHENTICATION_REQUIRED');
+  const leakCanary='issue162-raw-query-and-cookie-canary';
+  const guardedCanary=await request(`/api/client-v1/orders/drafts?raw=${leakCanary}`,{method:'POST',headers:{cookie:`__Host-coffee-session=${leakCanary}`}});
+  assert.equal(guardedCanary.status,401);
+  assert.equal(guardedCanary.body.includes(leakCanary),false,'problem response must not include raw request or cookie');
+  assert.equal(docker('logs',nginxId).includes(leakCanary),false,'native nginx traffic logs must not expose raw request or cookie');
   const infra=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=infra'}}); assert.equal(infra.status,503); assert.equal(JSON.parse(infra.body).code,'AUTHORIZER_UNAVAILABLE');
+  const slow=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=slow','idempotency-key':'fixture-slow'}});
+  assert.equal(slow.status,503,'a stalled authorizer must time out before reaching the API');
+  assert.equal(JSON.parse(slow.body).code,'AUTHORIZER_UNAVAILABLE');
   const allowed=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow; __Host-coffee-csrf=csrf-safe; tracking=raw-cookie-marker','x-actor-context':'forged-client','x-correlation-id':'00000000-0000-4000-8000-000000000000','authorization':'Bearer forged','origin':'https://evil.invalid','x-csrf-token':'browser-csrf','content-type':'application/json','idempotency-key':'fixture-1','if-match':'"7"'},body:'{"x":1}'});
   assert.equal(allowed.status,200,'204 + nonempty assertion must reach API');
   const api=JSON.parse(allowed.body); assert.equal(api.role,'api'); assert.equal(api.method,'POST'); assert.equal(api.body,'{"x":1}'); assert.equal(api.headers['x-actor-context'],'fixture-actor-17'); assert.notEqual(api.headers['x-actor-context'],'forged-client'); assert.equal(api.headers.cookie,undefined); assert.equal(api.headers.authorization,undefined); assert.equal(api.headers.origin,undefined); assert.equal(api.headers['x-csrf-token'],undefined); assert.equal(api.headers['idempotency-key'],'fixture-1'); assert.equal(api.headers['if-match'],'"7"'); assert.equal(api.clientAuthorized,true);
@@ -172,6 +191,7 @@ try {
   const app=await request('/app/'); assert.equal(app.status,200); assert.match(app.body,/CoffeeOrderPlatform/);
   const assetPath=/src="([^"]+\.js)"/.exec(app.body)?.[1]; assert.ok(assetPath,'built app has an immutable JS asset');
   const asset=await request(assetPath); assert.equal(asset.status,200); assert.match(asset.headers['cache-control'],/immutable/);
+  assert.match(asset.headers['content-type'] ?? '', /^application\/javascript(?:;|$)/, 'browser module asset must have a JavaScript MIME type');
   const deepLink=await request('/app/customers'); assert.equal(deepLink.status,200); assert.match(deepLink.body,/CoffeeOrderPlatform/);
   const duplicate=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow','idempotency-key':['duplicate-a','duplicate-b']}}); assert.equal(duplicate.status,400);
   const disconnected=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow','idempotency-key':'fixture-disconnect'},body:'{"fail":true}'}); assert.equal(disconnected.status,502);
@@ -203,5 +223,6 @@ try {
   for(const extraNetwork of extraNetworks) spawnSync('docker',['network','rm',extraNetwork],{stdio:'ignore'});
   spawnSync('docker',['network','rm',network],{stdio:'ignore'});
   spawnSync('docker',['image','rm','-f',image,backendImage],{stdio:'ignore'});
+  await rm(profileConfig,{force:true});
   await rm(scratch,{recursive:true,force:true});
 }

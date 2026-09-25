@@ -66,6 +66,7 @@ RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0 \
 
 # Только входы установки влияют на кэш зависимостей и native addon.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 COPY --from=workspace-manifests /manifests/ ./
 
 # Node 26 has no Confluent 1.10.0 prebuilt addon. Keep pnpm lifecycle scripts
@@ -90,9 +91,9 @@ RUN node scripts/check-node26-compatibility.mjs \
   && pnpm typecheck
 
 # Runtime selection must not invalidate dependency installation, native addon
-# compilation or the common typecheck when Compose materializes all 15 images.
+# compilation or the common typecheck when Compose materializes all 14 Node images.
 ARG RUNTIME=edge-gateway
-RUN pnpm --filter "@coffee-platform/${RUNTIME}" deploy --prod --legacy /runtime
+RUN test "${RUNTIME}" != "web" && pnpm --filter "@coffee-platform/${RUNTIME}" deploy --prod --legacy /runtime
 
 # pnpm deploy copies package-store files, so carry the explicitly built addon
 # into the deployed dependency and verify that the production tree loads it.

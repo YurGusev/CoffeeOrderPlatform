@@ -1,16 +1,16 @@
 # Service identity, actor и delegation
 
-**Текущий baseline до #162:** описанные далее public TLS Edge и его outbound
-SAN действуют без изменения. [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
-и [contract #159](29_NGINX_TRANSPORT_AND_AUTH.md) задают target:
+**Reference baseline #162:** [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md)
+и [contract #159](29_NGINX_TRANSPORT_AND_AUTH.md) задают
 `edge-nginx` как отдельный mTLS caller и держатель public TLS key, private
 `edge-gateway` как единственный `iss=edge-gateway`/actor signer. nginx→Edge
 auth request и nginx→api-public/realtime используют scoped transport identity
 с URI SAN + exact runtime/environment DNS SAN у nginx targets; receiver
 требует SAN `edge-nginx` и подписанный issuer/audience/operation одновременно.
-Edge→api-public direct transport после cutover запрещён; api-public→owner-hop
-и все internal delegation ниже остаются прежними. Rotation/failure negatives
-и distinct scopes закреплены contract #159, materialization только #162.
+Edge→api-public direct transport запрещён; api-public→owner-hop и все internal
+delegation ниже остаются прежними. Rotation/failure negatives и distinct scopes
+закреплены contract #159. Reference wiring не доказывает реальные production
+IdP credentials/сертификаты и не заменяет admission #13.
 
 Статус: нормативный security contract #19/#3/#4.
 
@@ -21,13 +21,12 @@ Edge→api-public direct transport после cutover запрещён; api-publ
 certificate с SPIFFE-like SAN `spiffe://coffee-platform/<environment>/<runtime>`.
 Certificate TTL — 24h, rotation начинается за 6h, overlap active/previous trust
 bundle — 12h. Runtime получает только свой key/cert в scoped tmpfs; public trust
-bundle находится в `platform.yaml`. `edge-gateway` использует public TLS
-listener без требования client certificate: его `edge.tlsPrivateKey` и
+bundle находится в `platform.yaml`. `edge-nginx` использует public TLS listener
+без требования client certificate от браузера: его `edge.tlsPrivateKey` и
 `edge.tlsCertificate` — отдельная серверная пара с hostname из
-`platform.publicBaseUrl`; optional `edge.tlsCaBundle` применяется только как
-явный trust override для dedicated test environment, иначе используется
-системное доверие Node.js. `security.serviceTransportKeys.edge-gateway` остаётся
-внутренней service identity для outbound mTLS. Остальные runtime используют
+`platform.publicBaseUrl`. Для upstream nginx использует **свою** mTLS identity,
+не public pair и не actor signing key. `edge-gateway` получает только свой
+private listener mTLS identity, OIDC secret и actor signing key. Остальные runtime используют
 mTLS listener и client. Expired/unknown SAN делает readiness 503 на internal
 trust surface.
 Для первого Compose launch rotation/revocation применяется повторным
@@ -52,12 +51,11 @@ config-bootstrap и restart всех затронутых runtime; отдель�
 key и expiry ≤60s/конец session. nginx не подписывает assertion, а передаёт
 полученный `X-Actor-Context` и тот же `X-Correlation-ID`; `api-public` проверяет
 transport caller, issuer, audience, operation, correlation, permission и TTL до
-owner delegation. Пока #162 не включила `edge-nginx` в active `config/platform.yaml`,
-действующий receiver ожидает прежнего `edge-gateway` caller; переключение не
-происходит по одному заголовку и требует атомарной конфигурации. Для SSE
+owner delegation. В reference-профиле #162 receiver ожидает `edge-nginx`
+caller: один заголовок без verified transport peer не даёт доступ. Для SSE
 назначение assertion — `realtime-gateway`, а его receiver/reauth — задача #12.
 Fixture tests и ограничения передаются через `evidence/handoffs/issue-160.yaml`;
-production trust, IdP и scope PEM остаются NOT_RUN до #162.
+production trust и IdP не подтверждены наличием reference-конфигурации.
 
 ## Internal service delegation
 
