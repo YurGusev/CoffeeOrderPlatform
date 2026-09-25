@@ -166,6 +166,11 @@ try {
   assert.equal((await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=no-correlation'}})).status,503,'204 without signed correlation must fail closed');
   const unauth=await request('/api/client-v1/orders/drafts',{method:'POST'}); assert.equal(unauth.status,401); assert.equal(JSON.parse(unauth.body).code,'AUTHENTICATION_REQUIRED');
   assertTypedProblem(unauth,'AUTHENTICATION_REQUIRED');
+  const leakCanary='issue162-raw-query-and-cookie-canary';
+  const guardedCanary=await request(`/api/client-v1/orders/drafts?raw=${leakCanary}`,{method:'POST',headers:{cookie:`__Host-coffee-session=${leakCanary}`}});
+  assert.equal(guardedCanary.status,401);
+  assert.equal(guardedCanary.body.includes(leakCanary),false,'problem response must not include raw request or cookie');
+  assert.equal(docker('logs',nginxId).includes(leakCanary),false,'native nginx traffic logs must not expose raw request or cookie');
   const infra=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=infra'}}); assert.equal(infra.status,503); assert.equal(JSON.parse(infra.body).code,'AUTHORIZER_UNAVAILABLE');
   const slow=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=slow','idempotency-key':'fixture-slow'}});
   assert.equal(slow.status,503,'a stalled authorizer must time out before reaching the API');
