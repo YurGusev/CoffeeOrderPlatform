@@ -33,6 +33,9 @@ async function configRoot() {
   });
   await cp(join(REPO_ROOT, "compose.yaml"), join(root, "compose.yaml"));
   await cp(join(REPO_ROOT, ".sops.yaml"), join(root, ".sops.yaml"));
+  await mkdir(join(root, "apps/pricing-service/migrations"), {recursive: true});
+  await cp(join(REPO_ROOT, "apps/pricing-service/migrations/0001_create_pricing_policy_versions.sql"),
+    join(root, "apps/pricing-service/migrations/0001_create_pricing_policy_versions.sql"));
   return root;
 }
 
@@ -79,6 +82,38 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
     () => parsePlatformConfig({...document, browserOidc: {...profile, allowedAlgorithms: ["none"]}}),
     PlatformConfigError,
   );
+});
+
+void test("GREEN: Pricing bootstrap policy matches the immutable migration seed", async () => {
+  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const policy = parsePlatformConfig(document).pricingPolicy;
+  assert.deepEqual(policy, {
+    policyVersionRef: "pvr_00000000000000000000000001",
+    version: "1",
+    currency: "RUB",
+    markupBasisPoints: 3000,
+    minimumMarginMinor: "0",
+    quoteTtlSeconds: 900,
+    quantityScale: 3,
+    roundingMode: "CEILING",
+  });
+  const migration = await readFile(join(REPO_ROOT, "apps/pricing-service/migrations/0001_create_pricing_policy_versions.sql"), "utf8");
+  assert.match(migration, /VALUES\s*\('pvr_00000000000000000000000001', 1, 'RUB', 3000, 0,\s*900, 3, 'CEILING', 'Active'/u);
+  assert.throws(() => parsePlatformConfig({...document, pricingPolicy: {...document.pricingPolicy, minimumMarginMinor: "01"}}), PlatformConfigError);
+  assert.throws(() => parsePlatformConfig({...document, pricingPolicy: undefined}), PlatformConfigError);
+});
+
+void test("RED: config:check rejects mismatched Pricing policy and immutable seed", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const source = await readFile(path, "utf8");
+    assert.match(source, /markupBasisPoints: 3000/u);
+    await writeFile(path, source.replace("markupBasisPoints: 3000", "markupBasisPoints: 3001"));
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-PRICING-POLICY/u);
+  } finally { await rm(root, {recursive: true, force: true}); }
 });
 
 void test("RED: non-null browser OIDC requires the exact explicit claims and RS256", async () => {

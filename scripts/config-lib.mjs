@@ -657,6 +657,15 @@ export async function loadEncryptedSecrets(root = REPO_ROOT) {
 export async function checkPlatformConfig(root = REPO_ROOT) {
   await checkForbiddenFiles(root);
   const config = await loadPlatformConfig(root);
+  const seed = await readFile(join(root, "apps/pricing-service/migrations/0001_create_pricing_policy_versions.sql"), "utf8")
+    .catch(() => fail("CONFIG-PRICING-POLICY", "Pricing bootstrap migration is missing"));
+  const values = seed.match(/VALUES\s*\(\s*'(pvr_[0-9A-HJKMNP-TV-Z]{26})'\s*,\s*(\d+)\s*,\s*'([A-Z]{3})'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*'([A-Z]+)'\s*,\s*'Active'/u);
+  const policy = config.pricingPolicy;
+  if (values === null || values[1] !== policy.policyVersionRef || values[2] !== policy.version || values[3] !== policy.currency ||
+      values[4] !== String(policy.markupBasisPoints) || values[5] !== policy.minimumMarginMinor ||
+      values[6] !== String(policy.quoteTtlSeconds) || values[7] !== String(policy.quantityScale) || values[8] !== policy.roundingMode) {
+    fail("CONFIG-PRICING-POLICY", "Pricing bootstrap policy differs from immutable migration seed");
+  }
   const secrets = await loadEncryptedSecrets(root);
   const environment = secrets.environments[config.environment];
   for (const [runtime, service] of Object.entries(config.services)) {

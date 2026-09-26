@@ -19,6 +19,16 @@ Pricing не читает Customer, Catalog или Orders DB, не приним�
 не изменяет цену: `customerRef` сохраняется как основание и проверяется Orders,
 но никаких скидок или customer-tier нет.
 
+Исполнимая композиция — `apps/pricing-service/src/main.ts`: общий Node/Fastify
+runtime регистрирует owner routes из `http/index.ts`, scoped PostgreSQL pool и
+типизированный HTTPS client с mTLS и подписанной service delegation до
+`api-internal`. Входящие public actor context и internal service delegation
+проверяются до вызова application; бизнес-расчёт и сохранение не исполняются в
+API roots. Readiness зависит от owner DB, настроенного Catalog HTTPS client и доступности
+активной версии policy с поддерживаемой формулой;
+недоступность Catalog остаётся отказом отдельного quote request, а не
+переключением на устаревшие supplier facts.
+
 ## 2. Политика первого запуска
 
 В БД существует ровно одна активная policy для `RUB`. Bootstrap policy первого
@@ -57,10 +67,10 @@ floating point, banker's rounding и локаль-зависимое форма�
 
 Файлы миграций:
 
-1. `001_create_pricing_policy_versions.sql`;
-2. `002_create_pricing_quotes.sql`;
-3. `003_create_pricing_idempotency.sql`;
-4. `004_create_pricing_audit.sql`.
+1. `0001_create_pricing_policy_versions.sql`;
+2. `0002_create_pricing_quotes.sql`;
+3. `0003_create_pricing_idempotency.sql`;
+4. `0004_create_pricing_audit.sql`.
 
 ### `pricing_policy_versions`
 
@@ -95,7 +105,7 @@ Catalog tables.
 
 PK `(actor_ref,scope,idempotency_key)`, где scope — 64-символьный command scope
 по `26_BROWSER_COMMAND_RECOVERY.md`; `request_hash`, `state` check
-`Acquired|Completed`, `lease_until`, `quote_ref`, `response_status`,
+`Acquired|Completed`, `lease_until`, `resource_ref` (ссылка на `quote_ref`), `response_status`,
 `response_body jsonb`, `created_at`, `completed_at`. Completed response хранится
 24 часа; cleanup не удаляет `pricing_quotes`.
 
@@ -148,6 +158,13 @@ mapping существует, currency `RUB`, decimal strings/refs валидн�
    сохранить quoteRef как resourceRef. Unknown commit проверяется owner recovery,
    а не новым запуском quote effect. Unresolved Acquired не удаляется по возрасту.
 
+`application/create-pricing-quote.ts` нормализует запрос и завершает bounded
+Catalog calls до owner transaction. Чистые `domain/pricing-formula.ts` и
+`domain/quote-proof.ts` вычисляют bigint-суммы и canonical hashes;
+`infrastructure/database/pricing-store.ts` использует scoped `Database`,
+`defineStatement` и `withTransaction` платформенного pg adapter, а не raw `pg`
+в application. Runtime role не может обновить или удалить immutable quotes.
+
 Bodyless `Idempotency-Replay-Only: true` использует только owner lookup по
 [browser recovery](26_BROWSER_COMMAND_RECOVERY.md), без Catalog read, acquire
 или новой quote. Истёкший quote replay остаётся фактом старого результата;
@@ -156,8 +173,13 @@ Bodyless `Idempotency-Replay-Only: true` использует только owner
 Response `201 PricingQuoteResponse`: `quoteRef`, `policyVersionRef`,
 `catalogSnapshotRevision`, `customerRef`, `createdAt`, `expiresAt`, `currency`,
 `lines`, `totalMinor`, `hash`. Line: `lineNumber`, `productRef`, `variantRef`,
-`quantity`, `unit`, `unitMinor`, `lineTotalMinor`. Supplier cost, offerRef и
+`productDisplayName`, `quantity`, `unit`, `unitMinor`, `lineTotalMinor`. Supplier cost, offerRef и
 policy internals публично не возвращаются.
+
+При отсутствии активной policy create возвращает типизированный
+`503 PRICING_POLICY_UNAVAILABLE`. Неизвестный исход DB COMMIT не вызывает
+автоматический повтор бизнес-эффекта; клиент проверяет тот же ключ через
+bodyless recovery. RFC 9457 ошибки не раскрывают supplier facts или SQL.
 
 ## 5. Canonical hash
 
@@ -204,7 +226,15 @@ lines, пересчитывает hash, проверяет exact expected facts 
 `503 PRICING_POLICY_UNAVAILABLE`, а также общие auth/validation codes. Ошибка не
 возвращает сохранённый hash или правильные ожидаемые значения.
 
-## 7. Проверки
+## 7. Наблюдаемость и проверки
+
+Owner публикует через общий runtime `/metrics` только фиксированные outcome
+create, verify, Catalog read/retry и DB, время операции и bucket количества
+строк. Span names фиксированы для precheck, policy lookup, Catalog child,
+calculation, persistence и verify. Ни actor/customer/quote refs, ни supplier
+cost, raw body или private proof не становятся metric labels или span
+attributes. Реальные экспортеры и production-доставка telemetry проверяются
+отдельно от локальных тестов.
 
 - property/table tests формулы на boundary values и bigint overflow guards;
 - одна policy race: partial unique index не допускает две Active policies;

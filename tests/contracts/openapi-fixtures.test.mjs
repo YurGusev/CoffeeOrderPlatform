@@ -7,6 +7,7 @@ import test from "node:test";
 import yaml from "js-yaml";
 import { contractAjv } from "../../scripts/contracts-ajv.mjs";
 import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
+import {pricingContractSchemas, isPricingQuoteCreateRequest, isPricingQuoteResponse, isPricingQuoteVerifyRequest, isPricingQuoteVerificationResponse, isPricingProblem, pricingResponseSchema} from "../../packages/contracts/pricing-v1/dist/index.js";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const OPENAPI_ROOT = join(ROOT, "contracts/openapi");
@@ -157,7 +158,24 @@ async function loadCorpus() {
     }
   }
   const ajv = contractAjv({strictRequired: false});
-  return {ajv, success: await jsonFixture(join(POSITIVE_ROOT, "http/success.json")), problems: await jsonFixture(join(POSITIVE_ROOT, "http/problems.json"))};
+  const problems = await jsonFixture(join(POSITIVE_ROOT, "http/problems.json"));
+  problems.push({
+    document: "client-v1",
+    operationId: "createPricingQuote",
+    status: 503,
+    schema: "ErrorPricingPolicyUnavailable",
+    body: {
+      type: "about:blank",
+      title: "PRICING_POLICY_UNAVAILABLE",
+      status: 503,
+      code: "PRICING_POLICY_UNAVAILABLE",
+      detail: "Pricing policy is unavailable",
+      instance: "/api/client-v1/pricing/quotes",
+      correlationId: "11111111-1111-4111-8111-111111111111",
+      errors: [],
+    },
+  });
+  return {ajv, success: await jsonFixture(join(POSITIVE_ROOT, "http/success.json")), problems};
 }
 
 function successOperations() {
@@ -200,6 +218,45 @@ void test("CustomerCreateRequest requires at least one contact from the source s
     {displayName: "Клиент", phone: "+79991234567", email: "client@example.test"},
   ]) assert.equal(validate(body), true, JSON.stringify(validate.errors));
   assert.equal(validate({displayName: "Клиент"}), false);
+});
+
+void test("Pricing runtime guards use generated OpenAPI schemas and reject private leakage", async () => {
+  const {success, problems} = await loadCorpus();
+  const publicQuote = success.find((item) => item.operationId === "createPricingQuote").body;
+  const verifiedQuote = success.find((item) => item.operationId === "verifyPricingQuote").body;
+  const line = publicQuote.lines[0];
+  const create = {customerRef: publicQuote.customerRef, lines: [{productRef: line.productRef, variantRef: line.variantRef, quantity: line.quantity}]};
+  const verify = {quoteRef: publicQuote.quoteRef, hash: publicQuote.hash, customerRef: publicQuote.customerRef, lines: create.lines};
+  const problem = problems.find((item) => item.document === "client-v1").body;
+
+  assert.equal(isPricingQuoteCreateRequest(create), true);
+  assert.equal(isPricingQuoteCreateRequest({...create, lines: [create.lines[0], {...create.lines[0], variantRef: "var_01ARZ3NDEKTSV4RRFFQ69G5FAZ"}]}), true, "same product with distinct variant");
+  assert.equal(isPricingQuoteResponse(publicQuote), true);
+  assert.equal(isPricingQuoteVerifyRequest(verify), true);
+  assert.equal(isPricingQuoteVerificationResponse(verifiedQuote), true);
+  assert.equal(isPricingProblem(problem), true);
+  assert.equal(pricingContractSchemas.createRequest.properties.lines.items.properties.quantity.type, "string");
+  assert.equal(pricingContractSchemas.verifyRequest.properties.lines.items.properties.quantity.type, "string");
+  assert.deepEqual(pricingResponseSchema(pricingContractSchemas.response, 201, [400, 409]), {
+    201: pricingContractSchemas.response, 400: pricingContractSchemas.problem, 409: pricingContractSchemas.problem,
+  });
+  assert.equal(pricingContractSchemas.idempotencyKey.type, "string");
+  assert.equal(pricingContractSchemas.replayOnly.const, true);
+  assert.equal(pricingContractSchemas.quoteRef.type, "string");
+
+  assert.equal(isPricingQuoteCreateRequest({...create, lines: [create.lines[0], {...create.lines[0]}]}), false, "duplicate product/variant pair");
+  assert.equal(isPricingQuoteCreateRequest({...create, lines: []}), false);
+  assert.equal(isPricingQuoteCreateRequest({...create, lines: [{...create.lines[0], quantity: 1.5}]}), false);
+  assert.equal(isPricingQuoteCreateRequest({...create, supplierUnitMinor: "900"}), false);
+  assert.equal(isPricingQuoteCreateRequest({...create, lines: [{...create.lines[0], offerRef: verifiedQuote.lines[0].offerRef}]}), false);
+  assert.equal(isPricingQuoteResponse({...publicQuote, lines: [{...line, supplierUnitMinor: "900"}]}), false);
+  assert.equal(isPricingQuoteResponse({...publicQuote, internalProofHash: verifiedQuote.lines[0].internalProofHash}), false);
+  assert.equal(isPricingQuoteResponse({...publicQuote, totalMinor: 1800}), false);
+  assert.equal(isPricingQuoteVerifyRequest({...verify, hash: "invalid"}), false);
+  assert.equal(isPricingQuoteVerifyRequest({...verify, lines: [{...verify.lines[0], supplierUnitMinor: "900"}]}), false);
+  assert.equal(isPricingQuoteVerificationResponse({...verifiedQuote, valid: false}), false);
+  assert.equal(isPricingQuoteVerificationResponse({...verifiedQuote, lines: [{...verifiedQuote.lines[0], supplierUnitMinor: 900}]}), false);
+  assert.equal(isPricingProblem({...problem, supplierUnitMinor: "900"}), false);
 });
 
 void test("Problem fixtures cover every operation response variant and exact status/code", async () => {

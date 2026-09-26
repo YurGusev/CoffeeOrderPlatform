@@ -200,6 +200,17 @@ export type BrowserOidcProfile = Readonly<{
   actorRefClaim: string;
   permissionsClaim: string;
 }>;
+export type PricingPolicyConfig = Readonly<{
+  policyVersionRef: string;
+  version: string;
+  currency: "RUB";
+  markupBasisPoints: number;
+  minimumMarginMinor: string;
+  quoteTtlSeconds: number;
+  quantityScale: 3;
+  roundingMode: "CEILING";
+}>;
+
 export type PlatformConfig = Readonly<{
   $schema: "./platform.schema.json";
   schemaVersion: 1;
@@ -209,6 +220,7 @@ export type PlatformConfig = Readonly<{
   postgres: PostgresConfig;
   kafka: KafkaConfig;
   aroma: AromaConfig;
+  pricingPolicy: PricingPolicyConfig;
   browserOidc: BrowserOidcProfile | null;
   nginxTransport: Readonly<Record<string, unknown>>;
   security: Readonly<Record<string, unknown>>;
@@ -1141,6 +1153,7 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       "postgres",
       "kafka",
       "aroma",
+      "pricingPolicy",
       "security",
       "nginxTransport",
       "services",
@@ -1169,6 +1182,20 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     );
   }
   const platform = record(source["platform"], "config.platform");
+  const pricingSource = record(source["pricingPolicy"], "config.pricingPolicy");
+  exactKeys(pricingSource, ["policyVersionRef", "version", "currency", "markupBasisPoints", "minimumMarginMinor", "quoteTtlSeconds", "quantityScale", "roundingMode"], "config.pricingPolicy");
+  const pricingRef = stringValue(pricingSource["policyVersionRef"], "config.pricingPolicy.policyVersionRef");
+  const pricingVersion = stringValue(pricingSource["version"], "config.pricingPolicy.version");
+  const pricingMargin = stringValue(pricingSource["minimumMarginMinor"], "config.pricingPolicy.minimumMarginMinor");
+  const pricingMarkup = integerValue(pricingSource["markupBasisPoints"], "config.pricingPolicy.markupBasisPoints");
+  const pricingTtl = positiveIntegerValue(pricingSource["quoteTtlSeconds"], "config.pricingPolicy.quoteTtlSeconds");
+  if (!/^pvr_[0-9A-HJKMNP-TV-Z]{26}$/u.test(pricingRef) || !/^[1-9][0-9]*$/u.test(pricingVersion) ||
+    !/^(0|[1-9][0-9]*)$/u.test(pricingMargin) || BigInt(pricingMargin) > 9_223_372_036_854_775_807n ||
+    pricingMarkup > 100_000 || pricingTtl < 60 || pricingTtl > 3_600 ||
+    pricingSource["currency"] !== "RUB" || pricingSource["quantityScale"] !== 3 || pricingSource["roundingMode"] !== "CEILING") {
+    throw new PlatformConfigError("config.pricingPolicy", "некорректные значения версии или формулы Pricing");
+  }
+  const pricingPolicy: PricingPolicyConfig = Object.freeze({policyVersionRef: pricingRef, version: pricingVersion, currency: "RUB", markupBasisPoints: pricingMarkup, minimumMarginMinor: pricingMargin, quoteTtlSeconds: pricingTtl, quantityScale: 3, roundingMode: "CEILING"});
   const shutdownGraceMs = positiveIntegerValue(
     platform["shutdownGraceMs"],
     "config.platform.shutdownGraceMs",
@@ -1214,6 +1241,7 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     postgres,
     kafka,
     aroma: aromaConfig(source["aroma"], "config.aroma"),
+    pricingPolicy,
     browserOidc,
     nginxTransport,
     security: opaqueObject(source["security"], "config.security"),

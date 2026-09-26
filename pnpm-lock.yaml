@@ -71,6 +71,9 @@ importers:
       '@coffee-platform/contracts-customer-v1':
         specifier: workspace:*
         version: link:../../packages/contracts/customer-v1
+      '@coffee-platform/contracts-pricing-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/pricing-v1
       '@coffee-platform/platform-http':
         specifier: workspace:*
         version: link:../../packages/platform-http
@@ -89,6 +92,9 @@ importers:
       '@coffee-platform/contracts-customer-v1':
         specifier: workspace:*
         version: link:../../packages/contracts/customer-v1
+      '@coffee-platform/contracts-pricing-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/pricing-v1
       '@coffee-platform/platform-http':
         specifier: workspace:*
         version: link:../../packages/platform-http
@@ -248,9 +254,36 @@ importers:
 
   apps/pricing-service:
     dependencies:
+      '@coffee-platform/contracts-catalog-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/catalog-v1
+      '@coffee-platform/contracts-pricing-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/pricing-v1
+      '@coffee-platform/database':
+        specifier: workspace:*
+        version: link:../../packages/platform-database
+      '@coffee-platform/idempotency':
+        specifier: workspace:*
+        version: link:../../packages/platform-idempotency
+      '@coffee-platform/platform-http':
+        specifier: workspace:*
+        version: link:../../packages/platform-http
       '@coffee-platform/runtime':
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      '@coffee-platform/security':
+        specifier: workspace:*
+        version: link:../../packages/platform-security
+      '@js-temporal/polyfill':
+        specifier: 0.5.1
+        version: 0.5.1
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
 
   apps/realtime-gateway:
     dependencies:
@@ -354,6 +387,9 @@ importers:
       '@coffee-platform/generated-internal-v1':
         specifier: workspace:*
         version: link:../../generated/internal-v1
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
 
   packages/contracts/realtime-v1:
     dependencies:

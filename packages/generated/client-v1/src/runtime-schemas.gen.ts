@@ -421,6 +421,167 @@ export const clientV1Schemas = {
         }
       }
     }
+  },
+  "PricingQuoteCreateRequest": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "customerRef",
+      "lines"
+    ],
+    "properties": {
+      "customerRef": {
+        "type": "string",
+        "pattern": "^cus_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "lines": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "productRef",
+            "variantRef",
+            "quantity"
+          ],
+          "properties": {
+            "productRef": {
+              "type": "string",
+              "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "variantRef": {
+              "type": "string",
+              "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "quantity": {
+              "type": "string",
+              "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
+            }
+          }
+        }
+      }
+    }
+  },
+  "PricingQuoteResponse": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "quoteRef",
+      "policyVersionRef",
+      "catalogSnapshotRevision",
+      "customerRef",
+      "createdAt",
+      "expiresAt",
+      "currency",
+      "lines",
+      "totalMinor",
+      "hash"
+    ],
+    "properties": {
+      "quoteRef": {
+        "type": "string",
+        "pattern": "^prq_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "policyVersionRef": {
+        "type": "string",
+        "pattern": "^pvr_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "catalogSnapshotRevision": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$"
+      },
+      "customerRef": {
+        "type": "string",
+        "pattern": "^cus_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+      },
+      "expiresAt": {
+        "type": "string",
+        "format": "date-time",
+        "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?Z$"
+      },
+      "currency": {
+        "type": "string",
+        "const": "RUB"
+      },
+      "lines": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 100,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lineNumber",
+            "productRef",
+            "variantRef",
+            "productDisplayName",
+            "quantity",
+            "unit",
+            "unitMinor",
+            "lineTotalMinor"
+          ],
+          "properties": {
+            "lineNumber": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "productRef": {
+              "type": "string",
+              "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "variantRef": {
+              "type": "string",
+              "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "productDisplayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "quantity": {
+              "type": "string",
+              "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "piece",
+                "gram",
+                "kilogram"
+              ]
+            },
+            "unitMinor": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)$"
+            },
+            "lineTotalMinor": {
+              "type": "string",
+              "pattern": "^-?(0|[1-9][0-9]*)$"
+            }
+          }
+        }
+      },
+      "totalMinor": {
+        "type": "string",
+        "pattern": "^-?(0|[1-9][0-9]*)$"
+      },
+      "hash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    }
+  },
+  "QuoteRef": {
+    "type": "string",
+    "pattern": "^prq_[0-9A-HJKMNP-TV-Z]{26}$"
   }
 } as const;
 

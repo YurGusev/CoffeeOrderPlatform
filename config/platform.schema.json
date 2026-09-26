@@ -4,7 +4,7 @@
   "title": "CoffeeOrderPlatform launch configuration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "schemaVersion", "environment", "toolchainRef", "platform", "postgres", "kafka", "aroma", "security", "nginxTransport", "services"],
+  "required": ["$schema", "schemaVersion", "environment", "toolchainRef", "platform", "postgres", "kafka", "aroma", "pricingPolicy", "security", "nginxTransport", "services"],
   "properties": {
     "$schema": {"type": "string", "const": "./platform.schema.json"},
     "schemaVersion": {"type": "integer", "const": 1},
@@ -14,6 +14,7 @@
     "postgres": {"$ref": "#/$defs/postgres"},
     "kafka": {"$ref": "#/$defs/kafka"},
     "aroma": {"$ref": "#/$defs/aroma"},
+    "pricingPolicy": {"$ref": "#/$defs/pricingPolicy"},
     "security": {"$ref": "#/$defs/security"},
     "nginxTransport": {"$ref": "./nginx-profile.schema.json"},
     "browserOidc": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/browserOidcProfile"}]},
@@ -45,6 +46,20 @@
     }
   },
   "$defs": {
+    "pricingPolicy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policyVersionRef", "version", "currency", "markupBasisPoints", "minimumMarginMinor", "quoteTtlSeconds", "quantityScale", "roundingMode"],
+      "properties": {
+        "policyVersionRef": {"type": "string", "pattern": "^pvr_[0-9A-HJKMNP-TV-Z]{26}$"},
+        "version": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "currency": {"const": "RUB"},
+        "markupBasisPoints": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "minimumMarginMinor": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
+        "quoteTtlSeconds": {"type": "integer", "minimum": 60, "maximum": 3600},
+        "quantityScale": {"const": 3},
+        "roundingMode": {"const": "CEILING"}
+      }
+    },
     "positiveInteger": {"type": "integer", "minimum": 1},
     "nonNegativeInteger": {"type": "integer", "minimum": 0},
     "browserOidcProfile": {
