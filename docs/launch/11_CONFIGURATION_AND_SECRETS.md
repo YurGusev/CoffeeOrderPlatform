@@ -171,7 +171,7 @@ Inventory authority — это encrypted paths в `secrets/platform.secrets.sops
 | `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceVerificationKeys.pricing-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
 | `customer-service` | `postgres.customer`, `security.customerCursorSigningPrivateKey`, `security.customerCursorVerificationPublicKeys`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.customer-service`, `telemetry.exporterToken` |
 | `catalog-service` | `postgres.catalogApi`, `security.catalogCursorSigningPrivateKey`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.catalog-service`, `telemetry.exporterToken` |
-| `pricing-service` | `postgres.pricing`, `security.pricingServiceDelegationSigningPrivateKey`, `security.serviceTransportKeys.pricing-service`, `telemetry.exporterToken` |
+| `pricing-service` | `postgres.pricing`, `security.pricingServiceDelegationSigningPrivateKey`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.pricing-service`, `telemetry.exporterToken` |
 
 `edge-nginx` использует `public-tls`: его публичный listener предъявляет
 `edge.tlsCertificate` с парой `edge.tlsPrivateKey`, но не требует service

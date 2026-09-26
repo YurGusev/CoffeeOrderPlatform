@@ -41,6 +41,8 @@
     "test:catalog-capacity": "pnpm exec tsc -b --pretty false && node --test --test-concurrency=1 tests/catalog-pipeline/capacity.test.mjs tests/catalog/stream.test.mjs tests/catalog/copy-live.test.mjs",
     "test:customer-unit": "node --experimental-strip-types --test tests/customer/customer-normalization.test.mjs tests/customer/customer-http.test.mjs",
     "test:customer-integration": "CUSTOMER_INTEGRATION_REQUIRED=1 node --experimental-strip-types --test tests/customer/customer-normalization.test.mjs tests/customer/customer-schema.test.mjs tests/customer/customer-live.test.mjs",
+    "test:pricing-property": "pnpm exec tsc -b apps/pricing-service --pretty false && node --test tests/pricing/pricing-formula.test.mjs",
+    "test:pricing-integration": "pnpm exec tsc -b --pretty false && COFFEE_DB_LIVE_PROOF=1 node --test tests/pricing/*.test.mjs",
     "security:secrets": "node scripts/check-security-material.mjs",
     "db:bootstrap": "node scripts/db-bootstrap.mjs",
     "db:smoke": "node scripts/db-smoke.mjs",

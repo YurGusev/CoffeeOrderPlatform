@@ -1,0 +1,52 @@
+issue: 7
+baseCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+status: locally-verified
+scope: >-
+  Pricing владеет versioned policy, immutable quotes, atomic idempotency/audit и private verify;
+  public/internal API roots передают только типизированные запросы и проверенную делегацию.
+inputs:
+  - {issue: 3, acceptedMergeCommit: 91c6ed927029604c82a25b2208371a98c4b62237, artifact: evidence/handoffs/issue-3.yaml, sha256: 890fa7da030702bab6c858d8069e0d50336e41d16ce1b628b96ecc2816ec09e2}
+  - {issue: 4, acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213, artifact: evidence/handoffs/issue-4.yaml, sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a}
+  - {issue: 17, acceptedMergeCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4, artifact: evidence/handoffs/issue-17.yaml, sha256: bb593fe72358c832768de1cfb75a36a48062e72866c2df0988bf268b7871ca61}
+  - {issue: 18, acceptedMergeCommit: cd8cb2d8122622fd385b25944ebe9701f90f56e2, artifact: evidence/handoffs/issue-18.yaml, sha256: e91e59128844131e7011087bbdd9be3f315d48df1a38d76837d0f1e9186b31cb}
+  - {issue: 62, acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6, artifact: evidence/handoffs/issue-62.yaml, sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76}
+  - {issue: 119, acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909, artifact: evidence/handoffs/issue-119.yaml, sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc}
+outputs:
+  - {artifact: config/platform.yaml, sha256: c54d991c840802766d5a5aebefd692b50ef2fc86b5c5b2b0249a31387121934b, consumers: [8, 9, 13]}
+  - {artifact: config/service-catalog.json, sha256: 8e88cfbdcb984971c858bdedddab8625b6ba750019ad299a898c086e65e0bf52, consumers: [8, 9, 13]}
+  - {artifact: platform/launch-v1-runtime-profile.json, sha256: 3b28e7692190c1b8004d926830ebcb2aded679be170a7305b8364ee5526625b5, consumers: [8, 9, 13]}
+  - {artifact: contracts/openapi/client-v1.yaml, sha256: a65cd660897c7f1781216877736badda413ea172d03047e539e4e71d29fb29e6, consumers: [8, 9]}
+  - {artifact: packages/contracts/pricing-v1/src/index.ts, sha256: eb29347231334fd375c751f3bebb0cb89e4d8cdb50f3736ce4cb2355115769f3, consumers: [8, 9]}
+  - {artifact: packages/generated/client-v1/src/types.gen.ts, sha256: c7fe31a797f12f6ef018e40867f473536d6fb33c35f6b2a1ce454bca0855e690, consumers: [9]}
+  - {artifact: packages/generated/internal-v1/src/runtime-schemas.gen.ts, sha256: 0415323fc8d485e8fae1fa8928e16e252b315373450a2c17975ac04877afabf0, consumers: [8]}
+  - {artifact: apps/pricing-service/src/main.ts, sha256: 77702c9418dbb00fb7ae5ae9bd5782052f706f151d0831d1bdc4970258e00f3f, consumers: [8, 9, 13]}
+  - {artifact: apps/pricing-service/src/observability.ts, sha256: f37fee2c025abe3337c2147ac903018cde04d3b037f28ba3947ea23692100581, consumers: [13, 64]}
+  - {artifact: apps/pricing-service/src/http/index.ts, sha256: b13b4d13b1de6c56c03ab5fdc9c0ec4bde078f9b47a986d801d9bad7535d66ae, consumers: [8, 9]}
+  - {artifact: apps/pricing-service/src/application/create-pricing-quote.ts, sha256: e1cf512f5be741ae9fbbf703b215d756e00c0cade76c5e132ab6c3653e3c0057, consumers: [8, 9]}
+  - {artifact: apps/pricing-service/src/domain/pricing-formula.ts, sha256: 51c9ffba79a05fdab6b50cd070c117b7de1e5958b7fa5b0cae7a80a31cd69c3e, consumers: [8, 9]}
+  - {artifact: apps/pricing-service/src/domain/quote-proof.ts, sha256: 92a1c9043bd93da8db159a23ee19168559a58dbc03098357530f82a61fdd563f, consumers: [8]}
+  - {artifact: apps/pricing-service/src/infrastructure/catalog-client.ts, sha256: 9c47482c754ec397b8940e395c9ae60641f0d871ef53e76bbe27751200bf142f, consumers: [8, 13]}
+  - {artifact: apps/pricing-service/src/infrastructure/database/pricing-store.ts, sha256: fd4e410aab4f7aa7f40cae2fe9a0bfcb269d2767f0e4b50e03027c68d571d8a4, consumers: [8, 9]}
+  - {artifact: apps/pricing-service/migrations/0001_create_pricing_policy_versions.sql, sha256: 4717d106a45147c867edede4fce70dfbd814cf62ff84be7985ba2eaeab267e9e, consumers: [8, 13]}
+  - {artifact: apps/pricing-service/migrations/0002_create_pricing_quotes.sql, sha256: 1ea8451e245d46daa7f1908d24f8f3e753c56a14030db266771764bc5caad466, consumers: [8, 13]}
+  - {artifact: apps/pricing-service/migrations/0003_create_pricing_idempotency.sql, sha256: c571d631c824d8dbc67d704c57330cbff336d6444645f424556920a6da12ffb9, consumers: [8, 13]}
+  - {artifact: apps/pricing-service/migrations/0004_create_pricing_audit.sql, sha256: b7b2a5c4065e628958ab4fc16b3257de31bb804fcd4ff94f9c72922dc8abc889, consumers: [8, 13]}
+  - {artifact: apps/api-public/src/index.ts, sha256: 640b55fed2021760c60c63447899fc6f13a822e4c8361a2309d9354194bcffdb, consumers: [9]}
+  - {artifact: apps/api-internal/src/index.ts, sha256: 4c22ac1d36ea47bf37c9dff664f68b6697a7e55a798ec855888d0441b04eabaa, consumers: [8]}
+  - {artifact: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md, sha256: ffec8fe2c88b9ee74123d01e3c05b3f6ea597d7f52f730c4685e89500cececcd, consumers: [8, 9, 13]}
+  - {artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md, sha256: 908cdcd340b32e36d3caa0fd5887d32141cbe56079b2732691460b0f21b1a62d, consumers: [13]}
+  - {artifact: tools/compose-smoke.mjs, sha256: b6f01cf1eae70d5e72686ddc7e615b8fef741cc5307cebfed3629a62ca88d015, consumers: [13]}
+verification:
+  - {command: 'pnpm install --frozen-lockfile --ignore-scripts', result: passed, exitCode: 0}
+  - {command: 'node -e import(@coffee-platform/contracts-pricing-v1) from apps/pricing-service', result: passed, exitCode: 0}
+  - {command: 'pnpm check', result: passed, exitCode: 0, detail: '605 tests: 574 passed, 31 skipped; typecheck, lint, contracts, architecture, web и test'}
+  - {command: 'pnpm test:pricing-property && pnpm test:pricing-integration', result: passed, exitCode: 0, detail: '9 property и 49 integration tests; 0 skipped'}
+  - {command: 'pnpm db:smoke', result: passed, exitCode: 0}
+  - {command: 'COFFEE_DB_LIVE_PROOF=1 node --test --test-reporter=spec tests/pricing/pricing-recovery-live.test.mjs', result: passed, exitCode: 0, detail: 'PostgreSQL rollback на каждой границе записи и потерянный COMMIT acknowledgement с повторным read/replay без второго quote'}
+  - {command: 'pnpm test:compose-smoke --recovery-proof --keep --project-name coffee_issue7_rc', result: passed, exitCode: 0, detail: 'Synthetic PostgreSQL/Kafka recovery; 17 Compose services/fixture healthy; временные ресурсы затем удалены'}
+  - {command: 'pnpm test:compose-smoke --recovery-proof --no-build --keep --project-name coffee_issue7_rc', result: passed, exitCode: 0, detail: 'После пересборки текущего api-public image: 17/17 healthy, recovery proof, isolated project/volume/secrets удалены'}
+  - {command: 'pnpm test:compose-smoke --recovery-proof --no-build --project-name coffee_issue7_rc', result: passed, exitCode: 0, detail: 'После пересборки Pricing и api-internal image: 14 runtime, PostgreSQL/Kafka recovery proof; isolated containers/network/volume удалены'}
+  - {command: 'git diff --check', result: passed, exitCode: 0}
+limitations:
+  - 'Synthetic fixture не проверяет production IdP, PKI/CRL, real provider mutations или нагрузку SSE.'
+  - 'Локальная проверка не равна GitHub CI или приёмке владельцем; self commit SHA намеренно отсутствует.'

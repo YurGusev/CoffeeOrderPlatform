@@ -1268,6 +1268,43 @@ async function applyCatalogMigrations(port, credentials, platformConfig) {
   }
 }
 
+async function applyPricingMigrations(port, credentials, platformConfig) {
+  const service = platformConfig.services["pricing-service"];
+  const database = service?.database;
+  assert.equal(database, "coffee_platform_pricing", "Pricing recovery proof database is missing");
+  const pricing = credentials.roleMap.databases.find((candidate) => candidate.name === database);
+  assert.ok(pricing, "Pricing recovery proof role map is missing");
+  const migratorPassword = credentials.rolePasswords[pricing.migratorRole];
+  assert.ok(migratorPassword, "Pricing recovery proof migrator password is missing");
+  const migrator = createDatabase(proofDatabaseOptions(
+    "pricing-compose-migrator",
+    service,
+    port,
+    {username: pricing.migratorRole, password: migratorPassword},
+  ));
+  await migrator.resource.start(AbortSignal.timeout(10_000));
+  try {
+    const migrationIds = [
+      "0001_create_pricing_policy_versions",
+      "0002_create_pricing_quotes",
+      "0003_create_pricing_idempotency",
+      "0004_create_pricing_audit",
+    ];
+    const migrations = [];
+    for (const id of migrationIds) {
+      const sql = await readFile(join(ROOT, `apps/pricing-service/migrations/${id}.sql`), "utf8");
+      migrations.push({id, sql, checksum: migrationChecksum(sql)});
+    }
+    await applyMigrations(migrator, migrations, {
+      schema: "pricing",
+      ledgerTable: "platform_schema_migrations",
+      lockKey: "compose-smoke-pricing-recovery-proof",
+    });
+  } finally {
+    await migrator.resource.stop(AbortSignal.timeout(10_000));
+  }
+}
+
 async function seedAromaBindingSnapshot(port, credentials, platformConfig, runId) {
   const service = platformConfig.services["aroma-gateway"];
   const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
@@ -3287,6 +3324,8 @@ async function main() {
         );
         await applyAromaBindingMigration(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
         await applyCatalogMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
+        if (options.recoveryProof)
+          await applyPricingMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
         const deliveryDatabase = recoveryProofCredentials.roleMap.databases.find(
           (candidate) => candidate.name === "coffee_platform_orders",
         );

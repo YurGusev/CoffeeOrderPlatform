@@ -4,6 +4,7 @@ import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, 
 import {catalogContractSchemas, catalogResponseSchema, isCatalogOperationProblem, isCatalogPricingInput, isCatalogProductRef, isCatalogVariantRef} from "@coffee-platform/contracts-catalog-v1";
 import type {CatalogPricingInput} from "@coffee-platform/contracts-catalog-v1";
 import type {CustomerOrderInput} from "@coffee-platform/contracts-customer-v1";
+import {isPricingProblem, isPricingQuoteVerificationResponse, isPricingQuoteVerifyRequest, pricingContractSchemas, pricingResponseSchema, type PricingQuoteVerifyRequest} from "@coffee-platform/contracts-pricing-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
 import {parseServiceTransportMaterial, signServiceDelegation, verifyServiceDelegationWithKeySet, type ServiceTransportMaterial} from "@coffee-platform/security";
 
@@ -61,6 +62,7 @@ export type InternalApiAdapters = Readonly<{
   verifyCallerDelegation: (token: string, request: Request, operationId: string, signal: AbortSignal) => Promise<InternalCallerClaims> | InternalCallerClaims;
   signDelegation: (claims: Readonly<{originalCaller: string; operationId: string; context: Context}>) => string;
   customer: Readonly<{orderInput: (customerRef: string, context: Context, delegation: string) => Promise<ForwardResult>}>;
+  pricing: Readonly<{verify: (body: PricingQuoteVerifyRequest, context: Context, delegation: string) => Promise<ForwardResult>}>;
   binding: Readonly<{register: (body: AromaOfferBindingRequest, context: Context, delegation: string) => Promise<ForwardResult>}>;
   catalog: Readonly<{export: (body: AromaCatalogExportRequest, context: Context, delegation: string) => Promise<CatalogForwardResult>; pricingInput: (productRef: string, variantRef: string, context: Context, delegation: string) => Promise<CatalogPricingForwardResult>}>;
   cart: Readonly<{
@@ -122,6 +124,21 @@ function sendForward(request: Request, reply: Reply, result: ForwardResult): Rep
 }
 
 const BINDING_ERROR_CODES = new Set(["AROMA_BINDING_CONFLICT", "AROMA_BINDING_SOURCE_NOT_FOUND", "AROMA_BINDING_SNAPSHOT_INCOMPLETE"]);
+const PRICING_VERIFY_ERRORS: Readonly<Record<string, number>> = {
+  PRICING_QUOTE_NOT_FOUND: 404,
+  PRICING_QUOTE_HASH_MISMATCH: 409,
+  PRICING_QUOTE_EXPIRED: 409,
+  PRICING_QUOTE_SCOPE_MISMATCH: 409,
+  PRICING_POLICY_UNAVAILABLE: 503,
+};
+function sendPricingVerifyForward(request: Request, reply: Reply, result: ForwardResult): Reply {
+  reply.header("cache-control", "no-store");
+  if (result.status === 200 && isPricingQuoteVerificationResponse(result.body)) return reply.code(200).send(result.body);
+  if (isPricingProblem(result.body) && PRICING_VERIFY_ERRORS[result.body.code] === result.status && result.body.status === result.status) {
+    return sendProblem(reply, problem(request, result.status, result.body.code, "pricing quote verification failed"));
+  }
+  return sendProblem(reply, problem(request, 503, "PRICING_POLICY_UNAVAILABLE", "pricing service is unavailable"));
+}
 function sendBindingForward(request: Request, reply: Reply, result: ForwardResult): Reply {
   reply.header("cache-control", "no-store");
   if (result.status >= 400) {
@@ -195,6 +212,29 @@ function operationSchemaResponse(): Readonly<Record<number, unknown>> {
 }
 
 export function registerInternalRoutes(app: RuntimeApp, adapters: InternalApiAdapters): void {
+  app.post("/api/internal-v1/pricing/quotes:verify", {
+    config: {runtimeDeadlineProfile: "defaultMs"},
+    bodyLimit: 16 * 1024,
+    errorHandler: (_error, request, rawReply) => sendProblem(rawReply as unknown as Reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed")),
+    schema: {response: pricingResponseSchema(pricingContractSchemas.verifyResponse, 200, [400, 401, 403, 404, 409, 503])},
+    handler: async (request, rawReply) => {
+      const reply = rawReply as unknown as Reply;
+      if (spoofed(request) || !adapters.verifyTransport(request, "orders-service")) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "service identity is required"));
+      if (header(request, "idempotency-key") !== undefined || header(request, "idempotency-replay-only") !== undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Idempotency headers are forbidden"));
+      const token = oneHeader(header(request, "x-service-delegation"));
+      if (token === undefined) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "signed service delegation is required"));
+      const requestContext = context(request, 1_000);
+      let claims: InternalCallerClaims;
+      try { claims = await adapters.verifyCallerDelegation(token, request, "verifyPricingQuote", requestContext.signal); }
+      catch { return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed")); }
+      if (claims.iss !== "orders-service" || claims.aud !== "api-internal" || claims.originalCaller !== "orders-service" || claims.operationId !== "verifyPricingQuote") return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed"));
+      if (!isPricingQuoteVerifyRequest(request.body)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+      const delegation = adapters.signDelegation({originalCaller: "orders-service", operationId: "verifyPricingQuote", context: requestContext});
+      try { return sendPricingVerifyForward(request, reply, await adapters.pricing.verify(request.body, requestContext, delegation)); }
+      catch { return sendProblem(reply, problem(request, 503, "PRICING_POLICY_UNAVAILABLE", "pricing service is unavailable")); }
+    },
+  });
+
   app.post("/api/internal-v1/aroma/offer-bindings", {
     config: {runtimeDeadlineProfile: "defaultMs"},
     bodyLimit: 64 * 1024,
@@ -470,7 +510,7 @@ function customerOrigin(context: RuntimeCompositionContext): string {
   return `https://${target}`;
 }
 
-export function createConfiguredInternalAdapters(context: RuntimeCompositionContext, client: HttpClient, bindingClient: HttpClient = client, catalogClient: HttpClient = client): InternalApiAdapters {
+export function createConfiguredInternalAdapters(context: RuntimeCompositionContext, client: HttpClient, bindingClient: HttpClient = client, catalogClient: HttpClient = client, pricingClient: HttpClient = client): InternalApiAdapters {
   const signingKey = privateKey(context, "security.apiInternalDelegationSigningPrivateKey");
   const ordersVerificationKeys = verificationKeys(context, "security.serviceVerificationKeys.orders-service");
   const pricingVerificationKeys = verificationKeys(context, "security.serviceVerificationKeys.pricing-service");
@@ -484,8 +524,8 @@ export function createConfiguredInternalAdapters(context: RuntimeCompositionCont
     signDelegation: ({originalCaller, operationId, context: requestContext}) => {
       const iat = epochSeconds();
       const gatewayOperation = operationId === "registerAromaOfferBinding" || operationId === "readAromaCartSnapshot" || operationId === "exportAromaCatalog" || operationId === "setAromaCartLineQuantity" || operationId === "removeAromaCartLine";
-      const ttl = operationId === "exportAromaCatalog" ? 905 : operationId === "getCatalogPricingInput" ? 6 : operationId === "getCustomerOrderInput" ? 10 : 15;
-      const audience = operationId === "getCatalogPricingInput" ? "catalog-service" : gatewayOperation ? "aroma-gateway" : "customer-service";
+      const ttl = operationId === "exportAromaCatalog" ? 905 : operationId === "getCatalogPricingInput" || operationId === "verifyPricingQuote" ? 6 : operationId === "getCustomerOrderInput" ? 10 : 15;
+      const audience = operationId === "getCatalogPricingInput" ? "catalog-service" : operationId === "verifyPricingQuote" ? "pricing-service" : gatewayOperation ? "aroma-gateway" : "customer-service";
       return signServiceDelegation({
         iss: "api-internal",
         aud: audience,
@@ -500,6 +540,7 @@ export function createConfiguredInternalAdapters(context: RuntimeCompositionCont
       }, signingKey);
     },
     customer: createHttpCustomerClient({fetch: (path, options) => client.fetch(path, options)}),
+    pricing: createHttpPricingVerifyClient({fetch: (path, options) => pricingClient.fetch(path, options)}),
     binding: createHttpAromaBindingClient({fetch: (path, options) => bindingClient.fetch(path, options)}),
     catalog: {...createHttpAromaCatalogClient({fetch: (path, options) => bindingClient.fetch(path, options)}), ...createHttpCatalogPricingClient({fetch: (path, options) => catalogClient.fetch(path, options)})},
     cart: createHttpAromaCartClient({fetch: (path, options) => bindingClient.fetch(path, options)}),
@@ -528,6 +569,16 @@ export function configuredCatalogTls(context: RuntimeCompositionContext) {
   return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "catalog-service"};
 }
 
+export function configuredPricingOrigin(context: RuntimeCompositionContext): string {
+  const target = context.config.services["api-internal"].outbound.find((entry) => entry.startsWith("pricing-service:"));
+  if (target === undefined) throw new Error("INTERNAL_API_PRICING_ORIGIN_NOT_CONFIGURED");
+  return `https://${target}`;
+}
+
+export function configuredPricingTls(context: RuntimeCompositionContext) {
+  return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "pricing-service"};
+}
+
 export function configuredAromaGatewayOrigin(context: RuntimeCompositionContext): string {
   const target = context.config.services["api-internal"].outbound.find((entry) => entry.startsWith("aroma-gateway:"));
   if (target === undefined) throw new Error("INTERNAL_API_AROMA_GATEWAY_ORIGIN_NOT_CONFIGURED");
@@ -544,6 +595,7 @@ export function createUnavailableInternalAdapters(): InternalApiAdapters {
     verifyCallerDelegation: () => { throw new Error("INTERNAL_API_SECURITY_NOT_CONFIGURED"); },
     signDelegation: () => { throw new Error("INTERNAL_API_SECURITY_NOT_CONFIGURED"); },
     customer: {orderInput: async () => { throw new Error("INTERNAL_API_CUSTOMER_CLIENT_NOT_CONFIGURED"); }},
+    pricing: {verify: async () => { throw new Error("INTERNAL_API_PRICING_CLIENT_NOT_CONFIGURED"); }},
     binding: {register: async () => { throw new Error("INTERNAL_API_BINDING_CLIENT_NOT_CONFIGURED"); }},
     catalog: {export: async () => { throw new Error("INTERNAL_API_CATALOG_CLIENT_NOT_CONFIGURED"); }, pricingInput: async () => { throw new Error("INTERNAL_API_CATALOG_CLIENT_NOT_CONFIGURED"); }},
     cart: {
@@ -555,3 +607,20 @@ export function createUnavailableInternalAdapters(): InternalApiAdapters {
 }
 
 export type {CustomerOrderInput};
+
+export function createHttpPricingVerifyClient(client: HttpClient): InternalApiAdapters["pricing"] {
+  return {
+    verify: async (body, requestContext, delegation) => {
+      const response = await client.fetch("/api/internal-v1/pricing/quotes:verify", {
+        method: "POST", headers: requestHeaders(requestContext, delegation, "application/json, application/problem+json"),
+        body: JSON.stringify(body), signal: requestContext.signal,
+      });
+      if (response.status !== 200 && response.status !== 404 && response.status !== 409 && response.status !== 503) throw new Error("pricing owner returned an unsupported status");
+      if (mediaType(response) !== (response.status === 200 ? "application/json" : "application/problem+json")) throw new Error("pricing owner returned an unsupported media type");
+      const parsed = await boundedJson(response, 256 * 1024);
+      if (response.status === 200 && isPricingQuoteVerificationResponse(parsed)) return {status: 200, body: parsed};
+      if (isPricingProblem(parsed) && PRICING_VERIFY_ERRORS[parsed.code] === response.status && parsed.status === response.status) return {status: response.status, body: parsed};
+      throw new Error("pricing owner returned an invalid response");
+    },
+  };
+}

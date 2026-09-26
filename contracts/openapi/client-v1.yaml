@@ -274,6 +274,7 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/ErrorCatalogUnavailable'
                   - $ref: '#/components/schemas/ErrorIdempotencyLookupUnavailable'
+                  - $ref: '#/components/schemas/ErrorPricingPolicyUnavailable'
         '410':
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
@@ -1578,6 +1579,13 @@ components:
           properties:
             status: { const: 503 }
             code: { const: CATALOG_UNAVAILABLE }
+    ErrorPricingPolicyUnavailable:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 503 }
+            code: { const: PRICING_POLICY_UNAVAILABLE }
     ErrorCustomerNotFound:
       allOf:
         - $ref: '#/components/schemas/ProblemDetails'

@@ -8,11 +8,11 @@ const root = resolve(import.meta.dirname, '..');
 
 const runtimeSchemaSelection = {
   client: {
-    components: ['CustomerAddress', 'CustomerCreateRequest', 'CustomerResponse', 'CustomerSummary', 'CustomerSearchResponse', 'CustomerRef', 'ProblemDetails'],
+    components: ['CustomerAddress', 'CustomerCreateRequest', 'CustomerResponse', 'CustomerSummary', 'CustomerSearchResponse', 'CustomerRef', 'ProblemDetails', 'PricingQuoteCreateRequest', 'PricingQuoteResponse', 'QuoteRef'],
     parameters: ['CustomerQuery', 'PageLimit', 'CustomerCursor', 'Cursor', 'IdempotencyKey', 'ReplayOnly'],
   },
   internal: {
-    components: ['CustomerOrderInput', 'CustomerRef', 'ProblemDetails', 'AromaCatalogExportRequest', 'AromaCatalogExportRecord', 'AromaOfferBindingRequest', 'AromaOfferBindingResponse', 'AromaMutationResponse', 'AromaCartSnapshotReadRequest', 'AromaCartSnapshot', 'AromaSetQuantityRequest', 'AromaRemoveLineRequest'],
+    components: ['CustomerOrderInput', 'CustomerRef', 'ProblemDetails', 'AromaCatalogExportRequest', 'AromaCatalogExportRecord', 'AromaOfferBindingRequest', 'AromaOfferBindingResponse', 'AromaMutationResponse', 'AromaCartSnapshotReadRequest', 'AromaCartSnapshot', 'AromaSetQuantityRequest', 'AromaRemoveLineRequest', 'PricingQuoteVerifyRequest', 'PricingQuoteVerificationResponse'],
     parameters: ['CustomerRef'],
   },
   'edge-auth': {

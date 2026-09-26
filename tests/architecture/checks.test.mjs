@@ -147,6 +147,24 @@ for (const targetRuntime of ["catalog-activation-worker","api-internal","orders-
   });
 }
 
+for (const targetRuntime of ["catalog-service","customer-service","orders-service","aroma-gateway"]) {
+  void test(`RED BOUND-IMPORT: pricing-service -> ${targetRuntime}`, async () => {
+    const root=await mkdtemp(join(tmpdir(),"coffee-pricing-boundary-"));
+    const source="apps/pricing-service/src/application/boundary.ts";
+    const target=`apps/${targetRuntime}/src/internal.ts`;
+    try {
+      await mkdir(join(root,"apps/pricing-service/src/application"),{recursive:true});
+      await mkdir(join(root,`apps/${targetRuntime}/src`),{recursive:true});
+      await writeFile(join(root,target),'export const internal = "private";\n');
+      await writeFile(join(root,source),`import {internal} from "../../../${targetRuntime}/src/internal.js";\nvoid internal;\n`);
+      const result=run("check-architecture.mjs",root);
+      assert.notEqual(result.status,0,output(result));
+      assert.match(output(result),/BOUND-IMPORT/u);
+      assert.ok(output(result).includes(`${source} -> ${target}`),output(result));
+    } finally {await rm(root,{recursive:true,force:true});}
+  });
+}
+
 void test("GREEN: Catalog importer uses allowed contract and platform packages", async () => {
   const root=await mkdtemp(join(tmpdir(),"coffee-catalog-packages-"));
   try {

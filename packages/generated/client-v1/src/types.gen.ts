@@ -303,6 +303,11 @@ export type ErrorCatalogUnavailable = ProblemDetailsV1SchemaProblemDetails & {
   code?: 'CATALOG_UNAVAILABLE';
 };
 
+export type ErrorPricingPolicyUnavailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 503;
+  code?: 'PRICING_POLICY_UNAVAILABLE';
+};
+
 export type ErrorCustomerNotFound = ProblemDetailsV1SchemaProblemDetails & {
   status?: 404;
   code?: 'CUSTOMER_NOT_FOUND';
@@ -666,7 +671,7 @@ export type CreatePricingQuoteErrors = {
   /**
    * Catalog owner or idempotency lookup is unavailable.
    */
-  503: ErrorCatalogUnavailable | ErrorIdempotencyLookupUnavailable;
+  503: ErrorCatalogUnavailable | ErrorIdempotencyLookupUnavailable | ErrorPricingPolicyUnavailable;
 };
 
 export type CreatePricingQuoteError = CreatePricingQuoteErrors[keyof CreatePricingQuoteErrors];

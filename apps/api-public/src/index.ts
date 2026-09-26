@@ -3,6 +3,8 @@ import {customerContractSchemas, customerErrorPolicy, customerErrorPolicyEntry, 
 import {catalogContractSchemas, catalogResponseSchema, catalogSearchQueryError, decodeCatalogSearchQuery, isCatalogOperationProblem, isCatalogSearchResponse} from "@coffee-platform/contracts-catalog-v1";
 import type {CatalogSearchResponse} from "@coffee-platform/contracts-catalog-v1";
 import type {CustomerCreateRequest, CustomerResponse, CustomerSearchResponse} from "@coffee-platform/contracts-customer-v1";
+import {isPricingProblem, isPricingQuoteCreateRequest, isPricingQuoteResponse, pricingContractSchemas, pricingResponseSchema} from "@coffee-platform/contracts-pricing-v1";
+import type {PricingQuoteCreateRequest, PricingQuoteResponse} from "@coffee-platform/contracts-pricing-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
 import {parseServiceTransportMaterial, signActorContext, verifyActorContextWithKeySet, type ActorContextClaims, type ServiceTransportMaterial} from "@coffee-platform/security";
 
@@ -33,6 +35,7 @@ type CatalogSearchQuery = Readonly<{query: string; availability?: string; limit?
 type CatalogForwardResult = Readonly<{status: 200; body: CatalogSearchResponse} | {status: 400 | 401 | 403 | 503; body: unknown}>;
 type ForwardContext = Readonly<{actor: ActorContextClaims; context: Context; idempotencyKey: string; replayOnly: boolean}>;
 type CatalogForwardContext = Readonly<{actor: ActorContextClaims; context: Context}>;
+type PricingForwardResult = Readonly<{status: number; body: unknown; replayed?: boolean}>;
 type Problem = Readonly<{
   type: "about:blank";
   title: string;
@@ -55,6 +58,7 @@ export type PublicApiAdapters = Readonly<{
   verifyActor: (token: string, operationId: string, signal: AbortSignal, correlationId: string) => Promise<ActorContextClaims> | ActorContextClaims;
   customer: CustomerClient;
   catalog: Readonly<{search: (query: CatalogSearchQuery, context: CatalogForwardContext) => Promise<CatalogForwardResult>}>;
+  pricing?: Readonly<{create: (request: PricingQuoteCreateRequest | undefined, context: ForwardContext) => Promise<PricingForwardResult>}>;
 }>;
 
 function header(request: Request, name: string): HeaderValue {
@@ -136,6 +140,42 @@ function sendCatalogForward(request: Request, reply: Reply, result: CatalogForwa
   return sendProblem(reply, problem(request, 503, "CATALOG_UNAVAILABLE", "catalog owner returned an invalid response"));
 }
 
+const pricingErrorCodes: Readonly<Record<number, readonly string[]>> = Object.freeze({
+  400: ["VALIDATION_FAILED"],
+  401: ["AUTHENTICATION_REQUIRED"],
+  403: ["ACTOR_CONTEXT_INVALID"],
+  404: ["CATALOG_PRODUCT_NOT_FOUND"],
+  409: ["CATALOG_PRODUCT_UNAVAILABLE", "CATALOG_REVISION_CHANGED", "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_REQUEST_IN_PROGRESS"],
+  410: ["IDEMPOTENCY_RESULT_NOT_RETAINED"],
+  500: ["INTERNAL_ERROR", "IDEMPOTENCY_RESULT_INVALID"],
+  503: ["CATALOG_UNAVAILABLE", "PRICING_POLICY_UNAVAILABLE", "IDEMPOTENCY_LOOKUP_UNAVAILABLE"],
+});
+
+function pricingUnavailable(request: Request): Problem {
+  return problem(request, 503, "CATALOG_UNAVAILABLE", "pricing service is unavailable");
+}
+
+function sendPricingForward(request: Request, reply: Reply, result: PricingForwardResult): Reply {
+  reply.header("cache-control", "no-store");
+  if (result.status === 201 && isPricingQuoteResponse(result.body)) {
+    if (result.replayed === true) reply.header("idempotency-replayed", "true");
+    return reply.code(201).send(result.body as PricingQuoteResponse);
+  }
+  if (result.status >= 400 && isPricingProblem(result.body) && pricingErrorCodes[result.status]?.includes(result.body.code) && result.body.status === result.status) {
+    return sendProblem(reply, problem(request, result.status, result.body.code, "pricing request failed"));
+  }
+  return sendProblem(reply, pricingUnavailable(request));
+}
+
+async function pricingActor(request: Request, adapters: PublicApiAdapters, signal: AbortSignal): Promise<ActorContextClaims> {
+  if (spoofed(request)) throw new Error("ACTOR_CONTEXT_INVALID");
+  const token = oneHeader(header(request, "x-actor-context"));
+  if (token === undefined) throw new Error("AUTHENTICATION_REQUIRED");
+  const claims = await adapters.verifyActor(token, "createPricingQuote", signal, request.runtimeContext?.correlationId ?? request.id);
+  if (claims.iss !== "edge-gateway" || claims.aud !== "api-public" || claims.originalIssuer !== "edge-gateway" || claims.operationId !== "createPricingQuote" || claims.sub.length === 0 || !claims.permissions.includes("pricing:create")) throw new Error("ACTOR_CONTEXT_INVALID");
+  return claims;
+}
+
 async function catalogActor(request: Request, adapters: PublicApiAdapters, signal: AbortSignal): Promise<ActorContextClaims> {
   if (spoofed(request)) throw new Error("ACTOR_CONTEXT_INVALID");
   const token = oneHeader(header(request, "x-actor-context"));
@@ -172,6 +212,34 @@ async function actor(request: Request, adapters: PublicApiAdapters, operationId:
 }
 
 export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapters): void {
+  app.post("/api/client-v1/pricing/quotes", {
+    config: {runtimeDeadlineProfile: "defaultMs"},
+    bodyLimit: MAX_BODY_BYTES,
+    errorHandler: (error, request, reply) => frameworkError(request, reply, error),
+    schema: {response: pricingResponseSchema(pricingContractSchemas.response, 201, [400, 401, 403, 404, 409, 410, 500, 503])},
+    handler: async (request, reply) => {
+      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+      const requestContext = context(request);
+      let claims: ActorContextClaims;
+      try { claims = await pricingActor(request, adapters, requestContext.signal); }
+      catch (error) {
+        const code = error instanceof Error ? error.message : "ACTOR_CONTEXT_INVALID";
+        return sendProblem(reply, problem(request, code === "AUTHENTICATION_REQUIRED" ? 401 : 403, code === "AUTHENTICATION_REQUIRED" ? code : "ACTOR_CONTEXT_INVALID", "signed actor context is invalid"));
+      }
+      if (exceedsBodyLimit(request)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+      const replay = replayOnly(request);
+      if (typeof replay !== "boolean") return sendProblem(reply, replay);
+      const key = idempotencyKey(request);
+      if (typeof key !== "string") return sendProblem(reply, key);
+      const body = isPricingQuoteCreateRequest(request.body) ? request.body : undefined;
+      if (!replay && body === undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+      try {
+        if (adapters.pricing === undefined) throw new Error("pricing client is not configured");
+        return sendPricingForward(request, reply, await adapters.pricing.create(replay ? undefined : body, {actor: claims, context: requestContext, idempotencyKey: key, replayOnly: replay}));
+      } catch { return sendProblem(reply, pricingUnavailable(request)); }
+    },
+  });
+
   app.post("/api/client-v1/customers", {
     config: {runtimeDeadlineProfile: "defaultMs"},
     bodyLimit: MAX_BODY_BYTES,
@@ -296,6 +364,30 @@ export function createHttpCatalogClient(client: HttpClient, sign: (actor: ActorC
   };
 }
 
+export function createHttpPricingClient(client: HttpClient, sign: (actor: ActorContextClaims, owner: string, operationId: string, context: Context) => string): NonNullable<PublicApiAdapters["pricing"]> {
+  return {
+    create: async (body, requestContext) => {
+      const path = "/api/client-v1/pricing/quotes";
+      const headers: Record<string, string> = {
+        "x-actor-context": sign(requestContext.actor, "pricing-service", "createPricingQuote", requestContext.context),
+        "x-correlation-id": requestContext.context.correlationId,
+        "idempotency-key": requestContext.idempotencyKey,
+        accept: "application/json, application/problem+json",
+      };
+      if (requestContext.context.traceparent !== undefined) headers["traceparent"] = requestContext.context.traceparent;
+      if (requestContext.replayOnly) headers["idempotency-replay-only"] = "true";
+      if (body !== undefined) headers["content-type"] = "application/json";
+      const response = await client.fetch(path, {method: "POST", headers, ...(body === undefined ? {} : {body: JSON.stringify(body)}), signal: requestContext.context.signal});
+      if (response.status !== 201 && pricingErrorCodes[response.status] === undefined) throw new Error("pricing owner returned unsupported status");
+      if (mediaType(response) !== (response.status === 201 ? "application/json" : "application/problem+json")) throw new Error("pricing owner returned unsupported media type");
+      const result = await boundedCatalogJson(response, 1_048_576);
+      if (response.status === 201 && !isPricingQuoteResponse(result)) throw new Error("pricing owner returned invalid quote");
+      if (response.status !== 201 && (!isPricingProblem(result) || result.status !== response.status || !pricingErrorCodes[response.status]?.includes(result.code))) throw new Error("pricing owner returned invalid problem");
+      return {status: response.status, body: result, ...(response.headers.get("idempotency-replayed") === "true" ? {replayed: true} : {})};
+    },
+  };
+}
+
 function mediaType(response: Response): string | undefined {
   return response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
 }
@@ -355,7 +447,7 @@ function customerOrigin(context: RuntimeCompositionContext): string {
   return `https://${target}`;
 }
 
-export function createConfiguredPublicAdapters(context: RuntimeCompositionContext, client: HttpClient, catalogClient: HttpClient = client): PublicApiAdapters {
+export function createConfiguredPublicAdapters(context: RuntimeCompositionContext, client: HttpClient, catalogClient: HttpClient = client, pricingClient: HttpClient = client): PublicApiAdapters {
   const signingKey = privateKey(context, "security.apiPublicDelegationSigningPrivateKey");
   const actorVerificationKeys = verificationKeys(context, "security.actorContextEdgeVerificationPublicKeys");
   const sign = (actor: ActorContextClaims, owner: string, operationId: string, requestContext: Context): string => {
@@ -387,6 +479,7 @@ export function createConfiguredPublicAdapters(context: RuntimeCompositionContex
     },
     customer: createHttpCustomerClient({fetch: (path, options) => client.fetch(path, options)}, sign),
     catalog: createHttpCatalogClient({fetch: (path, options) => catalogClient.fetch(path, options)}, sign),
+    pricing: createHttpPricingClient({fetch: (path, options) => pricingClient.fetch(path, options)}, sign),
   };
 }
 
@@ -417,12 +510,23 @@ export function configuredCatalogTls(context: RuntimeCompositionContext) {
   return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "catalog-service"};
 }
 
+export function configuredPricingOrigin(context: RuntimeCompositionContext): string {
+  const target = context.config.services["api-public"].outbound.find((entry) => entry.startsWith("pricing-service:"));
+  if (target === undefined) throw new Error("PUBLIC_API_PRICING_ORIGIN_NOT_CONFIGURED");
+  return `https://${target}`;
+}
+
+export function configuredPricingTls(context: RuntimeCompositionContext) {
+  return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "pricing-service"};
+}
+
 export function createUnavailablePublicAdapters(): PublicApiAdapters {
   return {
     verifyTransport: () => false,
     verifyActor: () => { throw new Error("PUBLIC_API_SECURITY_NOT_CONFIGURED"); },
     customer: {create: async () => { throw new Error("PUBLIC_API_CUSTOMER_CLIENT_NOT_CONFIGURED"); }, search: async () => { throw new Error("PUBLIC_API_CUSTOMER_CLIENT_NOT_CONFIGURED"); }},
     catalog: {search: async () => { throw new Error("PUBLIC_API_CATALOG_CLIENT_NOT_CONFIGURED"); }},
+    pricing: {create: async () => { throw new Error("PUBLIC_API_PRICING_CLIENT_NOT_CONFIGURED"); }},
   };
 }
 

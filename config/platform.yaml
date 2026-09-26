@@ -95,6 +95,16 @@ aroma:
   redirectsAllowed: false
   defaultPacking: Aroma
 
+pricingPolicy:
+  policyVersionRef: pvr_00000000000000000000000001
+  version: '1'
+  currency: RUB
+  markupBasisPoints: 3000
+  minimumMarginMinor: '0'
+  quoteTtlSeconds: 900
+  quantityScale: 3
+  roundingMode: CEILING
+
 browserOidc: null
 
 security:
@@ -323,7 +333,7 @@ services:
     database: coffee_platform_pricing
     kafka: { producers: [], consumers: [] }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.pricing, security.pricingServiceDelegationSigningPrivateKey, security.serviceTransportKeys.pricing-service, telemetry.exporterToken]
+    secretRefs: [postgres.pricing, security.pricingServiceDelegationSigningPrivateKey, security.delegationVerificationKeys.api-public, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.pricing-service, telemetry.exporterToken]
     permissions: {manifest: config/permissions/pricing-service.json, net: [coffee_postgres:5432, api-internal:4051], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 

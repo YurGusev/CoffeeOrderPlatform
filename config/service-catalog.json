@@ -266,6 +266,8 @@
       "secretRefs": [
         "postgres.pricing",
         "security.pricingServiceDelegationSigningPrivateKey",
+        "security.delegationVerificationKeys.api-public",
+        "security.delegationVerificationKeys.api-internal",
         "security.serviceTransportKeys.pricing-service",
         "telemetry.exporterToken"
       ],
