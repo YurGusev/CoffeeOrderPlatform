@@ -25,26 +25,27 @@ outputs:
   - {artifact: apps/pricing-service/src/application/create-pricing-quote.ts, sha256: e1cf512f5be741ae9fbbf703b215d756e00c0cade76c5e132ab6c3653e3c0057, consumers: [8, 9]}
   - {artifact: apps/pricing-service/src/domain/pricing-formula.ts, sha256: 51c9ffba79a05fdab6b50cd070c117b7de1e5958b7fa5b0cae7a80a31cd69c3e, consumers: [8, 9]}
   - {artifact: apps/pricing-service/src/domain/quote-proof.ts, sha256: 92a1c9043bd93da8db159a23ee19168559a58dbc03098357530f82a61fdd563f, consumers: [8]}
-  - {artifact: apps/pricing-service/src/infrastructure/catalog-client.ts, sha256: 45c067247af6bddb6a045293183cae27843c3089e0dfa55d0577fc4454e42766, consumers: [8, 13]}
+  - {artifact: apps/pricing-service/src/infrastructure/catalog-client.ts, sha256: 9c47482c754ec397b8940e395c9ae60641f0d871ef53e76bbe27751200bf142f, consumers: [8, 13]}
   - {artifact: apps/pricing-service/src/infrastructure/database/pricing-store.ts, sha256: fd4e410aab4f7aa7f40cae2fe9a0bfcb269d2767f0e4b50e03027c68d571d8a4, consumers: [8, 9]}
   - {artifact: apps/pricing-service/migrations/0001_create_pricing_policy_versions.sql, sha256: 4717d106a45147c867edede4fce70dfbd814cf62ff84be7985ba2eaeab267e9e, consumers: [8, 13]}
   - {artifact: apps/pricing-service/migrations/0002_create_pricing_quotes.sql, sha256: 1ea8451e245d46daa7f1908d24f8f3e753c56a14030db266771764bc5caad466, consumers: [8, 13]}
   - {artifact: apps/pricing-service/migrations/0003_create_pricing_idempotency.sql, sha256: c571d631c824d8dbc67d704c57330cbff336d6444645f424556920a6da12ffb9, consumers: [8, 13]}
   - {artifact: apps/pricing-service/migrations/0004_create_pricing_audit.sql, sha256: b7b2a5c4065e628958ab4fc16b3257de31bb804fcd4ff94f9c72922dc8abc889, consumers: [8, 13]}
   - {artifact: apps/api-public/src/index.ts, sha256: 640b55fed2021760c60c63447899fc6f13a822e4c8361a2309d9354194bcffdb, consumers: [9]}
-  - {artifact: apps/api-internal/src/index.ts, sha256: 5866e4131ac47bd135ede82cf20c7b8ac327711323019cc940957fa7202a390e, consumers: [8]}
-  - {artifact: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md, sha256: a6220976a500aab1c49b6a8b3baa95147754b64c40c0e4d3422d2fdc10205944, consumers: [8, 9, 13]}
+  - {artifact: apps/api-internal/src/index.ts, sha256: 4c22ac1d36ea47bf37c9dff664f68b6697a7e55a798ec855888d0441b04eabaa, consumers: [8]}
+  - {artifact: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md, sha256: ffec8fe2c88b9ee74123d01e3c05b3f6ea597d7f52f730c4685e89500cececcd, consumers: [8, 9, 13]}
   - {artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md, sha256: 908cdcd340b32e36d3caa0fd5887d32141cbe56079b2732691460b0f21b1a62d, consumers: [13]}
   - {artifact: tools/compose-smoke.mjs, sha256: b6f01cf1eae70d5e72686ddc7e615b8fef741cc5307cebfed3629a62ca88d015, consumers: [13]}
 verification:
   - {command: 'pnpm install --frozen-lockfile --ignore-scripts', result: passed, exitCode: 0}
   - {command: 'node -e import(@coffee-platform/contracts-pricing-v1) from apps/pricing-service', result: passed, exitCode: 0}
-  - {command: 'pnpm check', result: passed, exitCode: 0, detail: '603 tests: 572 passed, 31 skipped; typecheck, lint, contracts, architecture, web и test'}
-  - {command: 'pnpm test:pricing-property && pnpm test:pricing-integration', result: passed, exitCode: 0}
+  - {command: 'pnpm check', result: passed, exitCode: 0, detail: '605 tests: 574 passed, 31 skipped; typecheck, lint, contracts, architecture, web и test'}
+  - {command: 'pnpm test:pricing-property && pnpm test:pricing-integration', result: passed, exitCode: 0, detail: '9 property и 49 integration tests; 0 skipped'}
   - {command: 'pnpm db:smoke', result: passed, exitCode: 0}
   - {command: 'COFFEE_DB_LIVE_PROOF=1 node --test --test-reporter=spec tests/pricing/pricing-recovery-live.test.mjs', result: passed, exitCode: 0, detail: 'PostgreSQL rollback на каждой границе записи и потерянный COMMIT acknowledgement с повторным read/replay без второго quote'}
   - {command: 'pnpm test:compose-smoke --recovery-proof --keep --project-name coffee_issue7_rc', result: passed, exitCode: 0, detail: 'Synthetic PostgreSQL/Kafka recovery; 17 Compose services/fixture healthy; временные ресурсы затем удалены'}
   - {command: 'pnpm test:compose-smoke --recovery-proof --no-build --keep --project-name coffee_issue7_rc', result: passed, exitCode: 0, detail: 'После пересборки текущего api-public image: 17/17 healthy, recovery proof, isolated project/volume/secrets удалены'}
+  - {command: 'pnpm test:compose-smoke --recovery-proof --no-build --project-name coffee_issue7_rc', result: passed, exitCode: 0, detail: 'После пересборки Pricing и api-internal image: 14 runtime, PostgreSQL/Kafka recovery proof; isolated containers/network/volume удалены'}
   - {command: 'git diff --check', result: passed, exitCode: 0}
 limitations:
   - 'Synthetic fixture не проверяет production IdP, PKI/CRL, real provider mutations или нагрузку SSE.'

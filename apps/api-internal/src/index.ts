@@ -617,7 +617,7 @@ export function createHttpPricingVerifyClient(client: HttpClient): InternalApiAd
       });
       if (response.status !== 200 && response.status !== 404 && response.status !== 409 && response.status !== 503) throw new Error("pricing owner returned an unsupported status");
       if (mediaType(response) !== (response.status === 200 ? "application/json" : "application/problem+json")) throw new Error("pricing owner returned an unsupported media type");
-      const parsed = await boundedJson(response, 64 * 1024);
+      const parsed = await boundedJson(response, 256 * 1024);
       if (response.status === 200 && isPricingQuoteVerificationResponse(parsed)) return {status: 200, body: parsed};
       if (isPricingProblem(parsed) && PRICING_VERIFY_ERRORS[parsed.code] === response.status && parsed.status === response.status) return {status: response.status, body: parsed};
       throw new Error("pricing owner returned an invalid response");

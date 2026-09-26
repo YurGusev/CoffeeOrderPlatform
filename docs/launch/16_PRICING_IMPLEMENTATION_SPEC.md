@@ -143,6 +143,8 @@ Catalog input принимается только если refs совпали, 
 mapping существует, currency `RUB`, decimal strings/refs валидны. Все строки
 одного quote должны иметь одну `snapshotRevision`; иначе один bounded повтор
 всего Catalog read, затем `409 CATALOG_REVISION_CHANGED`.
+Ответ Catalog читается потоком с лимитом 64 KiB; превышение закрывает body и
+возвращает безопасный `CATALOG_UNAVAILABLE` без расчёта или записи quote.
 
 Алгоритм Idempotency:
 
@@ -220,6 +222,8 @@ lines, пересчитывает hash, проверяет exact expected facts 
 `productDisplayName`, `offerRef`, mapping revision, `internalProofHash` и
 `totalMinor`. Pricing пересчитывает оба hash из сохранённых DB facts; Orders не
 конструирует доказательство из данных браузера.
+`api-internal` читает ответ с лимитом 256 KiB: валидные 100 строк с именами
+до 200 символов проходят, более крупный ответ отклоняется до forwarding.
 
 Ошибки: `404 PRICING_QUOTE_NOT_FOUND`, `409 PRICING_QUOTE_HASH_MISMATCH`,
 `409 PRICING_QUOTE_EXPIRED`, `409 PRICING_QUOTE_SCOPE_MISMATCH`,

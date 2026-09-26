@@ -84,3 +84,20 @@ void test("Pricing abort closes an in-flight Catalog HTTP response body", async 
   await assert.rejects(pending, {code:"CATALOG_UNAVAILABLE"});
   await Promise.race([closed, delay(1_500).then(() => {throw new Error("Catalog body connection did not close");})]);
 });
+
+void test("Pricing stops reading and cancels an oversized Catalog response", async () => {
+  let chunks = 0;
+  let canceled = false;
+  const body = new ReadableStream({
+    pull(controller) {
+      chunks += 1;
+      controller.enqueue(new Uint8Array(8 * 1024).fill(32));
+      if (chunks === 128) controller.close();
+    },
+    cancel() {canceled = true;},
+  });
+  const owner = createCatalogPricingClient({fetch: async () => new Response(body, {status: 200})});
+  await assert.rejects(() => owner.getPricingInput(request), {code: "CATALOG_UNAVAILABLE"});
+  assert.ok(chunks < 128, `read all ${chunks} chunks`);
+  assert.equal(canceled, true);
+});

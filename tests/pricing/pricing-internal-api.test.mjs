@@ -82,4 +82,22 @@ void test("internal Pricing HTTP client validates status, media type and bounds 
   await assert.rejects(bad.verify(request, context, "signed"), /invalid response/u);
   const wrongType = createHttpPricingVerifyClient({fetch: async () => new Response(JSON.stringify(verified), {status: 200, headers: {"content-type": "text/html"}})});
   await assert.rejects(wrongType.verify(request, context, "signed"), /unsupported media type/u);
+  const tooLarge = createHttpPricingVerifyClient({fetch: async () => Response.json({...verified, extra: "x".repeat(256 * 1024)})});
+  await assert.rejects(tooLarge.verify(request, context, "signed"), /response too large/u);
+});
+
+void test("internal Pricing HTTP client accepts a valid 100-line verification response", async () => {
+  const lines = Array.from({length: 100}, (_, index) => ({
+    ...verified.lines[0], lineNumber: index + 1,
+    productRef: `prd_${String(index + 1).padStart(26, "0")}`,
+    variantRef: `var_${String(index + 1).padStart(26, "0")}`,
+    productDisplayName: "К".repeat(200),
+  }));
+  const largeVerified = {...verified, lines};
+  const largeRequest = {...request, lines: lines.map(({productRef, variantRef, quantity}) => ({productRef, variantRef, quantity}))};
+  assert.ok(Buffer.byteLength(JSON.stringify(largeRequest), "utf8") < 16 * 1024);
+  assert.ok(Buffer.byteLength(JSON.stringify(largeVerified), "utf8") > 64 * 1024);
+  const client = createHttpPricingVerifyClient({fetch: async () => Response.json(largeVerified)});
+  const context = {correlationId: randomUUID(), signal: new AbortController().signal};
+  assert.deepEqual(await client.verify(largeRequest, context, "signed"), {status: 200, body: largeVerified});
 });

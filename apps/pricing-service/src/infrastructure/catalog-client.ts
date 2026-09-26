@@ -1,6 +1,7 @@
 import {isCatalogPricingInput, isCatalogProductRef, isCatalogVariantRef, type CatalogPricingInput} from "@coffee-platform/contracts-catalog-v1";
 
 type HttpClient = Readonly<{fetch: (path: string, options?: RequestInit) => Promise<Response>}>;
+const MAX_CATALOG_BODY_BYTES = 64 * 1024;
 
 export type CatalogPricingErrorCode = "CATALOG_PRODUCT_NOT_FOUND" | "CATALOG_PRODUCT_UNAVAILABLE" | "CATALOG_UNAVAILABLE";
 
@@ -55,9 +56,30 @@ export function createCatalogPricingClient(client: HttpClient): Readonly<{
         await response.body?.cancel();
         throw new CatalogPricingError("CATALOG_UNAVAILABLE");
       }
+      if (response.body === null) throw new CatalogPricingError("CATALOG_UNAVAILABLE");
+      const reader = response.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      const cancel = () => {void reader.cancel().catch(() => undefined);};
+      signal.addEventListener("abort", cancel, {once: true});
       let body: unknown;
-      try { body = await response.json(); }
-      catch { throw new CatalogPricingError("CATALOG_UNAVAILABLE"); }
+      try {
+        while (true) {
+          signal.throwIfAborted();
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          size += chunk.value.byteLength;
+          if (size > MAX_CATALOG_BODY_BYTES) throw new CatalogPricingError("CATALOG_UNAVAILABLE");
+          chunks.push(chunk.value);
+        }
+        signal.throwIfAborted();
+        body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+      } catch { throw new CatalogPricingError("CATALOG_UNAVAILABLE"); }
+      finally {
+        signal.removeEventListener("abort", cancel);
+        try {await reader.cancel();} catch { /* response may already be aborted */ }
+        reader.releaseLock();
+      }
       if (!isCatalogPricingInput(body) || body.productRef !== request.productRef || body.variantRef !== request.variantRef ||
         body.currency !== "RUB" || !/^(0|[1-9][0-9]*)$/u.test(body.supplierUnitMinor) ||
         body.availability !== "Available") {
