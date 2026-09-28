@@ -8,8 +8,8 @@ const root = resolve(import.meta.dirname, '..');
 
 const runtimeSchemaSelection = {
   client: {
-    components: ['CustomerAddress', 'CustomerCreateRequest', 'CustomerResponse', 'CustomerSummary', 'CustomerSearchResponse', 'CustomerRef', 'ProblemDetails', 'PricingQuoteCreateRequest', 'PricingQuoteResponse', 'QuoteRef'],
-    parameters: ['CustomerQuery', 'PageLimit', 'CustomerCursor', 'Cursor', 'IdempotencyKey', 'ReplayOnly'],
+    components: ['CustomerAddress', 'CustomerCreateRequest', 'CustomerResponse', 'CustomerSummary', 'CustomerSearchResponse', 'CustomerRef', 'ProblemDetails', 'PricingQuoteCreateRequest', 'PricingQuoteResponse', 'QuoteRef', 'OrderDraftCreateRequest', 'OrderItemPutRequest', 'OrderConfirmRequest', 'ReconciliationRequest', 'OrderCardResponse', 'ReconciliationAcceptedResponse', 'OrderRef', 'ItemRef', 'ProductRef', 'VariantRef', 'ErrorOrderConfirmationRejected', 'ErrorOrderEmpty', 'ErrorOrderDesiredOverflow', 'ErrorOrderItemLimitExceeded', 'ErrorOrderQuoteScopeMismatch'],
+    parameters: ['CustomerQuery', 'PageLimit', 'CustomerCursor', 'Cursor', 'IdempotencyKey', 'ReplayOnly', 'IfMatchVersion'],
   },
   internal: {
     components: ['CustomerOrderInput', 'CustomerRef', 'ProblemDetails', 'AromaCatalogExportRequest', 'AromaCatalogExportRecord', 'AromaOfferBindingRequest', 'AromaOfferBindingResponse', 'AromaMutationResponse', 'AromaCartSnapshotReadRequest', 'AromaCartSnapshot', 'AromaSetQuantityRequest', 'AromaRemoveLineRequest', 'PricingQuoteVerifyRequest', 'PricingQuoteVerificationResponse'],
@@ -86,7 +86,9 @@ async function writeClientV1BrowserOperations() {
   await writeFile(target, source);
 }
 
-for (const surface of ['client', 'internal', 'edge-auth']) {
+const requestedSurface = process.argv.includes('--surface') ? process.argv[process.argv.indexOf('--surface') + 1] : undefined;
+if (requestedSurface && !['client', 'internal', 'edge-auth'].includes(requestedSurface)) throw new Error(`unsupported contract surface: ${requestedSurface}`);
+for (const surface of requestedSurface ? [requestedSurface] : ['client', 'internal', 'edge-auth']) {
   await createClient({
     input: resolve(root, `contracts/openapi/${surface}-v1.yaml`),
     output: {
@@ -100,4 +102,4 @@ for (const surface of ['client', 'internal', 'edge-auth']) {
   await writeRuntimeSchemas(surface);
 }
 
-await writeClientV1BrowserOperations();
+if (!requestedSurface) await writeClientV1BrowserOperations();

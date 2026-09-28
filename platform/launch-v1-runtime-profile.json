@@ -205,6 +205,8 @@
       "secretRefs": [
         "postgres.ordersService",
         "kafka.orders",
+        "security.ordersServiceDelegationSigningPrivateKey",
+        "security.delegationVerificationKeys.api-public",
         "security.serviceTransportKeys.orders-service",
         "telemetry.exporterToken"
       ],

@@ -43,8 +43,8 @@ async function fixtures(directory) {
 
 void test("common and event schemas compile as strict JSON Schema 2020-12", async () => {
   const { schemas } = await loadSchemas();
-  assert.equal(schemas.length, 11);
-  assert.equal(schemas.filter((schema) => schema.$id.includes("/events/")).length, 7);
+  assert.equal(schemas.length, 12);
+  assert.equal(schemas.filter((schema) => schema.$id.includes("/events/")).length, 8);
   for (const schema of schemas) assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
 });
 
@@ -94,11 +94,11 @@ void test("event schemas reference common definitions instead of copying them", 
   for (const schema of schemas.filter((item) => item.$id.includes("/events/"))) visit(schema, schema.$id);
 });
 
-void test("all seven launch event positive fixtures validate", async () => {
+void test("all eight launch event positive fixtures validate", async () => {
   const { ajv, schemas } = await loadSchemas();
   const validators = eventValidators(ajv, schemas);
   const valid = await fixtures(POSITIVE_ROOT);
-  assert.equal(valid.length, 7);
+  assert.equal(valid.length, 8);
   for (const { name, value } of valid) {
     const validate = validators.get(value.messageType);
     assert.ok(validate, `${name}: unknown message type`);
@@ -110,12 +110,31 @@ void test("negative event fixtures fail closed", async () => {
   const { ajv, schemas } = await loadSchemas();
   const validators = eventValidators(ajv, schemas);
   const invalid = await fixtures(NEGATIVE_ROOT);
-  assert.equal(invalid.length, 7);
+  assert.equal(invalid.length, 8);
   for (const { name, value } of invalid) {
     const validate = validators.get(value.messageType);
     assert.ok(validate, `${name}: unknown message type`);
     assert.equal(validate(value), false, `${name}: unexpectedly valid`);
   }
+});
+
+void test("OrderReconciliationRequested.v1 carries only order-level intent", async () => {
+  const { ajv, schemas } = await loadSchemas();
+  const validate = eventValidators(ajv, schemas).get("OrderReconciliationRequested.v1");
+  assert.ok(validate, "missing reconciliation event schema");
+  const event = JSON.parse(await readFile(join(POSITIVE_ROOT, "order-reconciliation-requested.v1.json"), "utf8"));
+  assert.equal(validate(event), true, JSON.stringify(validate.errors));
+  assert.deepEqual(Object.keys(event.payload).sort(), ["orderRef", "orderVersion", "requestedAt"]);
+  assert.deepEqual(event.aggregate, {type: "Order", ref: event.payload.orderRef, version: event.payload.orderVersion});
+  for (const changed of [
+    {...event, producer: "orders-aroma-preparation"},
+    {...event, aggregate: {...event.aggregate, type: "Cart"}},
+    {...event, payload: {...event.payload, reason: "OperatorRequested"}},
+    {...event, payload: {...event.payload, actorRef: "operator"}},
+    {...event, payload: {...event.payload, orderVersion: 7}},
+    {...event, payload: {...event.payload, requestedAt: "2026-02-31T00:00:00Z"}},
+    {...event, payload: {orderRef: event.payload.orderRef, orderVersion: event.payload.orderVersion}},
+  ]) assert.equal(validate(changed), false, `accepted ${JSON.stringify(changed)}`);
 });
 
 void test("shared numeric, identity, hash, timestamp and traceparent definitions reject unsafe values", async () => {

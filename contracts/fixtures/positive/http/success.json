@@ -270,8 +270,7 @@
       "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
       "expiresAt": "2026-09-05T10:30:00Z",
       "currency": "RUB",
-      "lines": [
-        {
+      "line": {
           "lineNumber": 1,
           "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
           "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
@@ -286,8 +285,6 @@
           "currency": "RUB",
           "internalProofHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         }
-      ],
-      "totalMinor": "1800"
     }
   },
   {

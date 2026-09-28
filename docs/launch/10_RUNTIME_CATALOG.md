@@ -153,17 +153,19 @@ Node entrypoint, listener или service transport secret scope больше н�
 
 ## 7. `orders-service`
 
-- **Назначение:** Draft/items, quote proof, атомарный Confirm, Order contribution, history,
-  idempotency и server-derived Order Card.
+- **Назначение:** Draft/items, quote proof, атомарный Confirm, order-level
+  reconciliation intent, Order contribution, history, idempotency и
+  server-derived Order Card.
 - **Владелец:** Orders.
 - **Входящие HTTP:** draft/item/confirm/reconciliation/Order Card routes из
   `docs/launch/03_HTTP_API_CONTRACT.md`.
 - **Входящие события:** нет; AROMA events принимает projection worker.
 - **Исходящие вызовы:** перед Draft — private Customer order-input; перед
   PUT item — private quote verification у `pricing-service`; Kafka
-  `OrderConfirmed.v1`, `AromaConvergenceRequested.v1`,
-  `RealtimeInvalidated.v1`. Все private HTTP идут через `api-internal`;
-  `Confirm` не выполняет HTTP.
+  `OrderConfirmed.v1`, `OrderReconciliationRequested.v1`. Cart-level
+  `AromaConvergenceRequested.v1` и `RealtimeInvalidated.v1` публикует
+  projection/preparation worker #11. Все private HTTP идут через
+  `api-internal`; `Confirm` не выполняет HTTP.
 - **Хранилище:** `coffee_platform_orders`, role `coffee_orders_service_rw`,
   allowlist core Order/Item/History/Desired/Idempotency/Outbox.
 - **Секреты:** Orders DB, Kafka и service-to-service identity.
@@ -175,7 +177,8 @@ Node entrypoint, listener или service transport secret scope больше н�
   преобразует Order/Catalog/Observation/Convergence facts и запускает workflow.
 - **Владелец:** Orders.
 - **Входящие HTTP:** только health.
-- **Входящие события:** `OrderConfirmed.v1`, `CatalogMappingChanged.v2`,
+- **Входящие события:** `OrderConfirmed.v1`,
+  `OrderReconciliationRequested.v1`, `CatalogMappingChanged.v2`,
   `AromaObservationChanged.v1`, `AromaConvergenceChanged.v1`.
 - **Исходящие вызовы:** Kafka `AromaConvergenceRequested.v1`,
   `RealtimeInvalidated.v1`; HTTP отсутствует.

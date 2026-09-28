@@ -43,6 +43,8 @@
     "test:customer-integration": "CUSTOMER_INTEGRATION_REQUIRED=1 node --experimental-strip-types --test tests/customer/customer-normalization.test.mjs tests/customer/customer-schema.test.mjs tests/customer/customer-live.test.mjs",
     "test:pricing-property": "pnpm exec tsc -b apps/pricing-service --pretty false && node --test tests/pricing/pricing-formula.test.mjs",
     "test:pricing-integration": "pnpm exec tsc -b --pretty false && COFFEE_DB_LIVE_PROOF=1 node --test tests/pricing/*.test.mjs",
+    "test:orders-concurrency": "pnpm exec tsc -b apps/orders-service --pretty false && COFFEE_DB_LIVE_PROOF=1 node --test tests/orders/order-store-faults.test.mjs",
+    "test:orders-faults": "pnpm exec tsc -b apps/orders-service --pretty false && COFFEE_DB_LIVE_PROOF=1 node --test tests/orders/order-store.test.mjs tests/orders/order-store-faults.test.mjs",
     "security:secrets": "node scripts/check-security-material.mjs",
     "db:bootstrap": "node scripts/db-bootstrap.mjs",
     "db:smoke": "node scripts/db-smoke.mjs",

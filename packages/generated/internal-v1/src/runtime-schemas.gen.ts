@@ -680,7 +680,10 @@ export const internalV1Schemas = {
       "quoteRef",
       "hash",
       "customerRef",
-      "lines"
+      "quoteLineNumber",
+      "productRef",
+      "variantRef",
+      "quantity"
     ],
     "properties": {
       "quoteRef": {
@@ -695,33 +698,22 @@ export const internalV1Schemas = {
         "type": "string",
         "pattern": "^cus_[0-9A-HJKMNP-TV-Z]{26}$"
       },
-      "lines": {
-        "type": "array",
-        "minItems": 1,
-        "maxItems": 100,
-        "items": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "productRef",
-            "variantRef",
-            "quantity"
-          ],
-          "properties": {
-            "productRef": {
-              "type": "string",
-              "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
-            },
-            "variantRef": {
-              "type": "string",
-              "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
-            },
-            "quantity": {
-              "type": "string",
-              "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
-            }
-          }
-        }
+      "quoteLineNumber": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100
+      },
+      "productRef": {
+        "type": "string",
+        "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "variantRef": {
+        "type": "string",
+        "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "quantity": {
+        "type": "string",
+        "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
       }
     }
   },
@@ -736,8 +728,7 @@ export const internalV1Schemas = {
       "customerRef",
       "expiresAt",
       "currency",
-      "lines",
-      "totalMinor"
+      "line"
     ],
     "properties": {
       "valid": {
@@ -768,93 +759,84 @@ export const internalV1Schemas = {
         "type": "string",
         "const": "RUB"
       },
-      "lines": {
-        "type": "array",
-        "minItems": 1,
-        "maxItems": 100,
-        "items": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "lineNumber",
-            "productRef",
-            "variantRef",
-            "productDisplayName",
-            "offerRef",
-            "mappingRevision",
-            "quantity",
-            "unit",
-            "supplierUnitMinor",
-            "unitMinor",
-            "lineTotalMinor",
-            "currency",
-            "internalProofHash"
-          ],
-          "properties": {
-            "lineNumber": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            },
-            "productRef": {
-              "type": "string",
-              "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
-            },
-            "variantRef": {
-              "type": "string",
-              "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
-            },
-            "productDisplayName": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            },
-            "offerRef": {
-              "type": "string",
-              "pattern": "^off_[0-9A-HJKMNP-TV-Z]{26}$"
-            },
-            "mappingRevision": {
-              "type": "string",
-              "pattern": "^(0|[1-9][0-9]*)$"
-            },
-            "quantity": {
-              "type": "string",
-              "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
-            },
-            "unit": {
-              "type": "string",
-              "enum": [
-                "piece",
-                "gram",
-                "kilogram"
-              ]
-            },
-            "supplierUnitMinor": {
-              "type": "string",
-              "pattern": "^-?(0|[1-9][0-9]*)$"
-            },
-            "unitMinor": {
-              "type": "string",
-              "pattern": "^-?(0|[1-9][0-9]*)$"
-            },
-            "lineTotalMinor": {
-              "type": "string",
-              "pattern": "^-?(0|[1-9][0-9]*)$"
-            },
-            "currency": {
-              "type": "string",
-              "const": "RUB"
-            },
-            "internalProofHash": {
-              "type": "string",
-              "pattern": "^[a-f0-9]{64}$"
-            }
+      "line": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "lineNumber",
+          "productRef",
+          "variantRef",
+          "productDisplayName",
+          "offerRef",
+          "mappingRevision",
+          "quantity",
+          "unit",
+          "supplierUnitMinor",
+          "unitMinor",
+          "lineTotalMinor",
+          "currency",
+          "internalProofHash"
+        ],
+        "properties": {
+          "lineNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "productRef": {
+            "type": "string",
+            "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "variantRef": {
+            "type": "string",
+            "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "productDisplayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "offerRef": {
+            "type": "string",
+            "pattern": "^off_[0-9A-HJKMNP-TV-Z]{26}$"
+          },
+          "mappingRevision": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "quantity": {
+            "type": "string",
+            "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "piece",
+              "gram",
+              "kilogram"
+            ]
+          },
+          "supplierUnitMinor": {
+            "type": "string",
+            "pattern": "^-?(0|[1-9][0-9]*)$"
+          },
+          "unitMinor": {
+            "type": "string",
+            "pattern": "^-?(0|[1-9][0-9]*)$"
+          },
+          "lineTotalMinor": {
+            "type": "string",
+            "pattern": "^-?(0|[1-9][0-9]*)$"
+          },
+          "currency": {
+            "type": "string",
+            "const": "RUB"
+          },
+          "internalProofHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
           }
         }
-      },
-      "totalMinor": {
-        "type": "string",
-        "pattern": "^-?(0|[1-9][0-9]*)$"
       }
     }
   }

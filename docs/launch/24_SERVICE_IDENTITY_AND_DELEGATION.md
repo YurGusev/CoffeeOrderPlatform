@@ -59,6 +59,43 @@ production trust и IdP не подтверждены наличием reference
 
 ## Internal service delegation
 
+### Orders-service: ключи и delegation #8
+
+Утверждено владельцем 27 сентября 2026; подлежит материализации в #8:
+
+- `security.ordersServiceDelegationSigningPrivateKey` — отдельный Ed25519
+  private key только `orders-service` для исходящих calls в `api-internal`.
+  Он не совпадает с mTLS key и не заимствуется у Edge/api-public/Pricing.
+- Caller assertion: `iss=orders-service`, `aud=api-internal`,
+  `originalCaller=orders-service`, точный `operationId`, correlation/trace,
+  `iat/exp/jti/kid`. Разрешены только `getCustomerOrderInput` и
+  `verifyPricingQuote`; TTL ограничен оставшимся deadline + существующий 5s skew.
+- `api-internal` одновременно проверяет mTLS SAN Orders, claims и операцию
+  через `security.serviceVerificationKeys.orders-service` (active/previous),
+  затем выпускает собственную delegation к exact owner. Orders private key
+  не передаётся `api-internal` или целевому owner.
+- Входящий actor context Orders проверяет публичными
+  `security.delegationVerificationKeys.api-public` (active/previous):
+  mTLS caller/issuer=`api-public`, audience=`orders-service`,
+  originalIssuer=`edge-gateway`, actor/operation/correlation/trace/TTL и permission
+  из [карты Orders](17_ORDERS_IMPLEMENTATION_SPEC.md#права-browser-операций).
+- Собственные `security.serviceTransportKeys.orders-service` остаются отдельным
+  transport scope. Новый private key хранится только в encrypted
+  `secrets/platform.secrets.sops.yaml`; trusted config-bootstrap выдаёт его
+  только Orders в scoped tmpfs. Ни общий decrypted файл, ни private keys
+  соседних runtime Orders не получает.
+
+В реализации обновить secret schema, exact secretRefs/config checks,
+bootstrap/provisioning и тесты по существующему Pricing pattern. Отсутствие
+нужного signing/verification material закрывается ошибкой конфигурации, без
+фиктивных ключей, shared fallback или запуска небезопасного handler.
+Проверить active/previous rotation, missing/wrong key, wrong SAN/issuer/audience/
+operation/originalCaller, истёкший assertion и запрет выдачи чужого private key.
+Запись этого решения не означает наличия production material и не разрешает
+публиковать секреты или менять production.
+
+### Общая цепочка и матрица операций
+
 Caller устанавливает mTLS к `api-internal`. Root проверяет SAN+operation matrix
 и выпускает assertion `iss=api-internal`, `aud=<target>`, `originalCaller`,
 `operationId`, correlation/trace/iat/exp/jti/kid. Target требует transport SAN

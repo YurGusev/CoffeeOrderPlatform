@@ -49,16 +49,16 @@ void test("PostgreSQL PricingStore atomic create, replay, conflict and private v
       await admin.query("UPDATE pricing.pricing_policy_versions SET markup_basis_points=3000 WHERE policy_version_ref=$1",[policy.policyVersionRef]);
       await admin.query("ALTER TABLE pricing.pricing_policy_versions ADD CONSTRAINT pricing_policy_versions_markup_basis_points_check CHECK (markup_basis_points BETWEEN 0 AND 100000)");
       const id = identity();
-      const input = {identity:id,requestHash:"b".repeat(64),correlationId:randomUUID(),policy,customerRef:ref("cus"),catalogSnapshotRevision:"1",lines:[{productRef:ref("prd"),variantRef:ref("var"),productDisplayName:"Кофе",quantity:"2.5",unit:"piece",offerRef:ref("off"),mappingRevision:"1",supplierUnitMinor:"100",catalogSnapshotRevision:"1"}]};
+      const input = {identity:id,requestHash:"b".repeat(64),correlationId:randomUUID(),policy,customerRef:ref("cus"),catalogSnapshotRevision:"1",lines:[{productRef:ref("prd"),variantRef:ref("var"),productDisplayName:"Кофе",quantity:"2.5",unit:"piece",offerRef:ref("off"),mappingRevision:"1",supplierUnitMinor:"100",catalogSnapshotRevision:"1"},{productRef:ref("prd",2),variantRef:ref("var",2),productDisplayName:"Чай",quantity:"2",unit:"piece",offerRef:ref("off",2),mappingRevision:"1",supplierUnitMinor:"100",catalogSnapshotRevision:"1"}]};
       assert.equal((await store.precheck(id,input.requestHash)).kind,"not_retained");
       const line = input.lines[0];
       let preparedOutsideTransaction = false;
       const observedLine = {...line,get supplierUnitMinor() { assert.equal(database.metrics().active,0); preparedOutsideTransaction = true; return line.supplierUnitMinor; }};
-      const created = await store.create({...input,lines:[observedLine]});
+      const created = await store.create({...input,lines:[observedLine,input.lines[1]]});
       assert.equal(preparedOutsideTransaction,true);
       assert.equal(created.status,201);
       assert.equal(created.replayed,false);
-      assert.equal(created.body.totalMinor,"325");
+      assert.equal(created.body.totalMinor,"585");
       assert.equal(created.body.lines[0].unitMinor,"130");
       assert.equal("supplierUnitMinor" in created.body.lines[0],false);
       for (const statement of [
@@ -77,11 +77,12 @@ void test("PostgreSQL PricingStore atomic create, replay, conflict and private v
       assert.deepEqual((await store.precheck(id,input.requestHash)).body,created.body);
       assert.equal((await store.precheck(id,"c".repeat(64))).kind,"conflict");
       await assert.rejects(store.create({...input,requestHash:"c".repeat(64)}),{code:"IDEMPOTENCY_CONFLICT"});
-      const request = {quoteRef:created.body.quoteRef,hash:created.body.hash,customerRef:input.customerRef,lines:input.lines.map(({productRef,variantRef,quantity}) => ({productRef,variantRef,quantity}))};
+      const request = {quoteRef:created.body.quoteRef,hash:created.body.hash,customerRef:input.customerRef,quoteLineNumber:2,productRef:input.lines[1].productRef,variantRef:input.lines[1].variantRef,quantity:input.lines[1].quantity};
       const verification = await store.verify({request,actorRef:"orders-service",correlationId:randomUUID()});
       assert.equal(verification.valid,true);
-      assert.equal(verification.lines[0].supplierUnitMinor,"100");
-      assert.match(verification.lines[0].internalProofHash,/^[0-9a-f]{64}$/u);
+      assert.equal(verification.line.lineNumber,2);
+      assert.equal(verification.line.supplierUnitMinor,"100");
+      assert.match(verification.line.internalProofHash,/^[0-9a-f]{64}$/u);
       await assert.rejects(store.verify({request:{...request,hash:"f".repeat(64)},actorRef:"orders-service",correlationId:randomUUID()}),{code:"PRICING_QUOTE_HASH_MISMATCH"});
       assert.equal((await admin.query("SELECT count(*)::int n FROM pricing.pricing_quotes")).rows[0].n,1);
       assert.equal((await admin.query("SELECT count(*)::int n FROM pricing.pricing_audit_records WHERE action='QuoteRejected'")).rows[0].n,1);
@@ -111,7 +112,10 @@ void test("PostgreSQL PricingStore atomic create, replay, conflict and private v
       assert.equal((await admin.query("SELECT count(*)::int n FROM pricing.pricing_quotes")).rows[0].n,1);
       const check = request => store.verify({request,actorRef:"orders-service",correlationId:randomUUID()});
       await assert.rejects(check({...request,customerRef:ref("cus",2)}),{code:"PRICING_QUOTE_SCOPE_MISMATCH"});
-      await assert.rejects(check({...request,lines:[{...request.lines[0],quantity:"2.500"}]}),{code:"PRICING_QUOTE_SCOPE_MISMATCH"});
+      await assert.rejects(check({...request,quoteLineNumber:1}),{code:"PRICING_QUOTE_SCOPE_MISMATCH"});
+      await assert.rejects(check({...request,quantity:"2.500"}),{code:"PRICING_QUOTE_SCOPE_MISMATCH"});
+      await assert.rejects(check({...request,productRef:input.lines[0].productRef}),{code:"PRICING_QUOTE_SCOPE_MISMATCH"});
+      await assert.rejects(check({...request,variantRef:input.lines[0].variantRef}),{code:"PRICING_QUOTE_SCOPE_MISMATCH"});
       await assert.rejects(check({...request,quoteRef:ref("prq",99)}),{code:"PRICING_QUOTE_NOT_FOUND"});
       await admin.query("ALTER TABLE pricing.pricing_quotes DROP CONSTRAINT pricing_quotes_currency_check");
       await admin.query("UPDATE pricing.pricing_quotes SET currency='USD' WHERE quote_ref=$1",[request.quoteRef]);
@@ -131,9 +135,9 @@ void test("PostgreSQL PricingStore atomic create, replay, conflict and private v
       await admin.query("UPDATE pricing.pricing_quotes SET canonical_hash=$2 WHERE quote_ref=$1",[request.quoteRef,"0".repeat(64)]);
       await assert.rejects(check({...request,hash:"0".repeat(64)}),{code:"PRICING_QUOTE_HASH_MISMATCH"});
       await admin.query("UPDATE pricing.pricing_quotes SET canonical_hash=$2 WHERE quote_ref=$1",[request.quoteRef,created.body.hash]);
-      await admin.query("UPDATE pricing.pricing_quote_lines SET product_display_name='tampered' WHERE quote_ref=$1",[request.quoteRef]);
+      await admin.query("UPDATE pricing.pricing_quote_lines SET product_display_name='tampered' WHERE quote_ref=$1 AND line_number=1",[request.quoteRef]);
       await assert.rejects(check(request),{code:"PRICING_QUOTE_HASH_MISMATCH"});
-      await admin.query("UPDATE pricing.pricing_quote_lines SET product_display_name='Кофе' WHERE quote_ref=$1",[request.quoteRef]);
+      await admin.query("UPDATE pricing.pricing_quote_lines SET product_display_name='Кофе' WHERE quote_ref=$1 AND line_number=1",[request.quoteRef]);
       // Replay's closed decoder must not expose extra private JSONB keys, or accept a non-201 result.
       await admin.query("UPDATE pricing.pricing_idempotency_records SET response_body=response_body || '{\"supplierUnitMinor\":\"SECRET-CANARY\"}'::jsonb WHERE idempotency_key=$1",[id.key]);
       await assert.rejects(store.precheck(id,input.requestHash),error => error.code === "IDEMPOTENCY_RESULT_INVALID" && !error.message.includes("SECRET-CANARY"));
@@ -143,7 +147,7 @@ void test("PostgreSQL PricingStore atomic create, replay, conflict and private v
       const {hashPublicQuote,hashInternalQuote} = await import("../../apps/pricing-service/dist/domain/quote-proof.js");
       const aged = {...created.body,createdAt:new Date(Date.parse(created.body.createdAt)-3_600_000).toISOString(),expiresAt:new Date(Date.parse(created.body.expiresAt)-3_600_000).toISOString()};
       aged.hash = hashPublicQuote(aged);
-      const agedProof = hashInternalQuote(aged,policy,[{lineNumber:1,offerRef:ref("off"),mappingRevision:"1",supplierUnitMinor:"100",catalogSnapshotRevision:"1",markupBasisPoints:String(policy.markupBasisPoints),minimumMarginMinor:policy.minimumMarginMinor}]);
+      const agedProof = hashInternalQuote(aged,policy,input.lines.map((item,index)=>({lineNumber:index+1,offerRef:item.offerRef,mappingRevision:item.mappingRevision,supplierUnitMinor:item.supplierUnitMinor,catalogSnapshotRevision:item.catalogSnapshotRevision,markupBasisPoints:String(policy.markupBasisPoints),minimumMarginMinor:policy.minimumMarginMinor})));
       await admin.query("UPDATE pricing.pricing_quotes SET created_at=$2,expires_at=$3,canonical_hash=$4,internal_proof_hash=$5 WHERE quote_ref=$1",[request.quoteRef,aged.createdAt,aged.expiresAt,aged.hash,agedProof]);
       await assert.rejects(check({...request,hash:aged.hash}),{code:"PRICING_QUOTE_EXPIRED"});
       // Replay is the original persisted 201, never a reprice or a validity check.

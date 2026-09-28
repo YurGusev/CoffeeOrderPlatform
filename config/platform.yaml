@@ -358,7 +358,7 @@ services:
         consumers: [],
       }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.ordersService, kafka.orders, security.serviceTransportKeys.orders-service, telemetry.exporterToken]
+    secretRefs: [postgres.ordersService, kafka.orders, security.ordersServiceDelegationSigningPrivateKey, security.delegationVerificationKeys.api-public, security.serviceTransportKeys.orders-service, telemetry.exporterToken]
     permissions: {manifest: config/permissions/orders-service.json, net: [coffee_postgres:5432, api-internal:4051, kafka:9092], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false
 

@@ -189,7 +189,7 @@ export type OrderPricing = {
 };
 
 export type OrderBlocker = {
-  code: 'MAPPING_CHANGED' | 'MAPPING_MISSING' | 'MAPPING_STOPPED' | 'PRODUCT_UNAVAILABLE';
+  code: 'MAPPING_CHANGED' | 'MAPPING_MISSING' | 'MAPPING_STOPPED' | 'PRODUCT_UNAVAILABLE' | 'ORDER_STATE_INCONSISTENT';
   message: string;
   productRef?: IdentifiersV1SchemaProductRef;
 };
@@ -348,9 +348,29 @@ export type ErrorOrderNotEditable = ProblemDetailsV1SchemaProblemDetails & {
   code?: 'ORDER_NOT_EDITABLE';
 };
 
+export type ErrorOrderItemLimitExceeded = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'ORDER_ITEM_LIMIT_EXCEEDED';
+};
+
+export type ErrorOrderQuoteScopeMismatch = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 409;
+  code?: 'ORDER_QUOTE_SCOPE_MISMATCH';
+};
+
 export type ErrorOrderConfirmationRejected = ProblemDetailsV1SchemaProblemDetails & {
   status?: 422;
   code?: 'ORDER_CONFIRMATION_REJECTED';
+};
+
+export type ErrorOrderEmpty = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 422;
+  code?: 'ORDER_EMPTY';
+};
+
+export type ErrorOrderDesiredOverflow = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 422;
+  code?: 'ORDER_DESIRED_OVERFLOW';
 };
 
 export type ErrorAromaReconciliationNotAllowed = ProblemDetailsV1SchemaProblemDetails & {
@@ -855,7 +875,7 @@ export type UpsertOrderItemErrors = {
   /**
    * Order or idempotency conflict.
    */
-  409: ErrorOrderVersionConflict | ErrorOrderQuoteStale | ErrorOrderNotEditable | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress;
+  409: ErrorOrderVersionConflict | ErrorOrderQuoteStale | ErrorOrderNotEditable | ErrorIdempotencyConflict | ErrorIdempotencyRequestInProgress | ErrorOrderItemLimitExceeded | ErrorOrderQuoteScopeMismatch;
   /**
    * The completed response is outside retention; no new command was run.
    */
@@ -927,7 +947,7 @@ export type ConfirmOrderErrors = {
   /**
    * Confirmation is rejected, or the completed rejection is replayed.
    */
-  422: ErrorOrderConfirmationRejected;
+  422: ErrorOrderConfirmationRejected | ErrorOrderEmpty | ErrorOrderDesiredOverflow;
   /**
    * Safe unexpected error or invalid stored terminal response.
    */

@@ -24,6 +24,31 @@ optionalExpansions:
     property: sourceGrindKeyHash
     fixture: contracts/fixtures/positive/http/success.json
 
+# Владелец утвердил замену приватного verify-контракта без старого endpoint.
+# Хеши фиксируют прежнюю и новую схемы; любые последующие изменения запрещены.
+approvedInternalReplacements:
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    schema: PricingQuoteVerifyLine
+    beforeSha256: 88051a187ee069945363107d6a30a3ed8a4752d5a49f7468af27e706631b5a0d
+    afterSha256: 74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b
+    issue: 8
+    migration: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md
+    proof: tests/pricing/pricing-store.test.mjs
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    schema: PricingQuoteVerifyRequest
+    beforeSha256: 290253e3159e9e4ef7eb69b942c624ef33e649a00ba9cabf20bb5069736feb5d
+    afterSha256: 9859937abed786231d66c553694a2a2e7524ac18e2c71183c2f0b0fc8093f3db
+    issue: 8
+    migration: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md
+    proof: tests/pricing/pricing-store.test.mjs
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    schema: PricingQuoteVerificationResponse
+    beforeSha256: d4df71dee87fdb68e1bffbcf76aba480041b15e8ca2f6584cb5aa6dc8357432c
+    afterSha256: f28eadcd4726cd4df16021b7d0c260b43eaf87409bd3d9bf6446ef60d160f8ff
+    issue: 8
+    migration: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md
+    proof: tests/pricing/pricing-store.test.mjs
+
 narrowingCorrections:
   - schemaPath: contracts/schemas/common/problem-details.v1.schema.json
     location: contracts/schemas/common/problem-details.v1.schema.json.$defs.ProblemDetails.instance
@@ -73,3 +98,20 @@ narrowingCorrections:
     fixtureCase: zero-provider-quantity
     fixtureValuePointer: /body/quantity
     expectedKeyword: pattern
+
+approvedResponseExpansions:
+  - schemaPath: contracts/openapi/client-v1.yaml
+    route: /api/client-v1/orders/{orderRef}/commands/confirm
+    operationId: confirmOrder
+    status: 422
+    beforeRef: '#/components/responses/RecoveryOrderConfirmationRejected'
+    afterRefs:
+      - '#/components/schemas/ErrorOrderConfirmationRejected'
+      - '#/components/schemas/ErrorOrderEmpty'
+      - '#/components/schemas/ErrorOrderDesiredOverflow'
+    issue: 8
+    fixture: contracts/fixtures/positive/http/problems.json
+    fixtureCases:
+      - ErrorOrderConfirmationRejected
+      - ErrorOrderEmpty
+      - ErrorOrderDesiredOverflow

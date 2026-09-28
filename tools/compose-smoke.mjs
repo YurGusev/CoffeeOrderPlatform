@@ -20,10 +20,12 @@ import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import {parsePublicTlsHostname} from "../packages/platform-security/src/index.ts";
-import {createDatabase} from "../packages/platform-database/dist/index.js";
+import {createDatabase, withTransaction} from "../packages/platform-database/dist/index.js";
+import {defineStatement} from "../packages/platform-database/dist/owner.js";
 import {ensureNginxSecretOwnership} from "./config-bootstrap/index.mjs";
 import {applyMigrations, migrationChecksum} from "../packages/platform-migrations/dist/index.js";
 import {OfferBindingStore} from "../apps/aroma-gateway/dist/infrastructure/database/offer-binding-store.js";
+import {OrderStore} from "../apps/orders-service/dist/infrastructure/database/order-store.js";
 import {createSourceIdentity} from "../apps/aroma-gateway/dist/domain/source-identity.js";
 import pg from "pg";
 import {
@@ -356,6 +358,7 @@ function createStubSecurityMaterial() {
     "security.actorContextEdgeVerificationPublicKeys": actor.verificationKeys,
     "security.apiPublicDelegationSigningPrivateKey": apiPublicDelegation.privateKey,
     "security.apiInternalDelegationSigningPrivateKey": apiInternalDelegation.privateKey,
+    "security.ordersServiceDelegationSigningPrivateKey": ordersService.privateKey,
     "security.serviceVerificationKeys.orders-service": ordersService.verificationKeys,
     "security.serviceVerificationKeys.pricing-service": pricingService.verificationKeys,
     "security.pricingServiceDelegationSigningPrivateKey": pricingService.privateKey,
@@ -1302,6 +1305,109 @@ async function applyPricingMigrations(port, credentials, platformConfig) {
     });
   } finally {
     await migrator.resource.stop(AbortSignal.timeout(10_000));
+  }
+}
+
+async function applyOrdersMigrations(port, credentials, platformConfig) {
+  const service = platformConfig.services["orders-service"];
+  const database = service?.database;
+  assert.equal(database, "coffee_platform_orders", "Orders recovery proof database is missing");
+  const orders = credentials.roleMap.databases.find((candidate) => candidate.name === database);
+  assert.ok(orders, "Orders recovery proof role map is missing");
+  const migratorPassword = credentials.rolePasswords[orders.migratorRole];
+  assert.ok(migratorPassword, "Orders recovery proof migrator password is missing");
+  const migrator = createDatabase(proofDatabaseOptions(
+    "orders-compose-migrator",
+    service,
+    port,
+    {username: orders.migratorRole, password: migratorPassword},
+  ));
+  await migrator.resource.start(AbortSignal.timeout(10_000));
+  try {
+    const migrationIds = [
+      "0001_create_orders", "0002_create_order_items", "0003_create_order_history",
+      "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox",
+    ];
+    const migrations = [];
+    for (const id of migrationIds) {
+      const sql = await readFile(join(ROOT, `apps/orders-service/migrations/${id}.sql`), "utf8");
+      migrations.push({id, sql, checksum: migrationChecksum(sql)});
+    }
+    await applyMigrations(migrator, migrations, {
+      schema: "orders",
+      ledgerTable: "platform_schema_migrations",
+      lockKey: "compose-smoke-orders-recovery-proof",
+    });
+  } finally {
+    await migrator.resource.stop(AbortSignal.timeout(10_000));
+  }
+}
+
+function readOrdersBrokerMessages(projectName, secretsDir, composeFile) {
+  const group = `orders-proof-${randomUUID().replaceAll("-", "")}`;
+  const script = [
+    "/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic coffee.orders.lifecycle.v1",
+    `  --group ${group} --from-beginning --max-messages 100 --timeout-ms 5000 2>/dev/null || true`,
+  ].join(" ");
+  const output = runCompose(projectName, secretsDir, ["exec", "-T", "kafka", "sh", "-ec", script], {composeFile});
+  return output.split("\n").flatMap((line) => {
+    try { return [JSON.parse(line)]; } catch { return []; }
+  });
+}
+
+async function assertOrdersOutboxBrokerRecovery(projectName, secretsDir, composeFile, port, credentials, platformConfig) {
+  const service = platformConfig.services["orders-service"];
+  const credential = credentials.databaseCredentialsByRuntime["orders-service"];
+  assert.ok(service && credential, "Orders recovery proof runtime credentials are missing");
+  const database = createDatabase(proofDatabaseOptions("orders-service", service, port, credential));
+  await database.resource.start(AbortSignal.timeout(10_000));
+  const readOutbox = defineStatement(database, "SELECT state, message_id FROM orders.outbox_messages WHERE aggregate_ref=$1");
+  let stopped = false;
+  try {
+    runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "orders-service"], {composeFile});
+    stopped = true;
+    const store = new OrderStore(database);
+    const actorRef = "compose-orders-actor";
+    const meta = () => ({actorRef, identity:{actorRef, scope:"a".repeat(64), key:randomUUID()}, correlationId:randomUUID(),
+      traceparent:"00-11111111111111111111111111111111-2222222222222222-01"});
+    const ref = (prefix) => `${prefix}_00000000000000000000000001`;
+    const customerRef = ref("cus");
+    const draft = await store.createDraft({...meta(), customer:{customerRef, customerVersion:"1", displayName:"Compose owner proof", state:"Active"}});
+    const orderRef = draft.body.orderRef;
+    const item = {productRef:ref("prd"), variantRef:ref("var"), productDisplayName:"Compose coffee", unit:"piece",
+      quantityMilli:"1000", quoteRef:ref("prq"), quoteLineNumber:1, quoteHash:"d".repeat(64), internalProofHash:"e".repeat(64),
+      quoteExpiresAt:Temporal.Now.instant().add({hours:1}).toString(), policyVersionRef:ref("pvr"), catalogSnapshotRevision:"1",
+      mappingRevision:"1", offerRef:ref("off"), unitMinor:"150", lineTotalMinor:"150", currency:"RUB"};
+    const updated = await store.putItem({...meta(), orderRef, itemRef:ref("itm"), expectedVersion:draft.body.version,
+      request:{expectedVersion:draft.body.version, productRef:item.productRef, variantRef:item.variantRef, quantity:"1",
+        quoteRef:item.quoteRef, quoteLineNumber:1, quoteHash:item.quoteHash}, item});
+    const confirmed = await store.confirm({...meta(), orderRef, expectedVersion:updated.body.version});
+    assert.equal(confirmed.body.status, "Confirmed", "Orders did not persist Confirm before relay restart");
+    const read = () => withTransaction(database, {mode:"background"}, async (tx) => (await readOutbox(tx, [orderRef])).rows[0]);
+    const pending = await read();
+    assert.equal(pending?.state, "Pending", "OrderConfirmed must be pending while Orders runtime is stopped");
+    const messageId = pending.message_id;
+    assert.equal(readOrdersBrokerMessages(projectName, secretsDir, composeFile).filter((event) => event.messageId === messageId).length,
+      0, "OrderConfirmed was published before the Orders relay restarted");
+    runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile});
+    stopped = false;
+    assert.equal((await read())?.state, "Published", "Orders relay did not finalize the broker-acknowledged event");
+    const matched = () => readOrdersBrokerMessages(projectName, secretsDir, composeFile).filter((event) =>
+      event.messageId === messageId && event.messageType === "OrderConfirmed.v1" && event.payload?.orderRef === orderRef);
+    assert.equal(matched().length, 1, "Kafka did not retain exactly one published OrderConfirmed event");
+    runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "orders-service"], {composeFile});
+    stopped = true;
+    runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile});
+    stopped = false;
+    assert.equal((await read())?.state, "Published", "Orders restart changed terminal Outbox state");
+    assert.equal(matched().length, 1, "Orders restart published a duplicate of a finalized Outbox event");
+    return {pendingBeforeRestart:true, brokerAcknowledged:true, publishedAfterRestart:true, duplicateAfterFinalize:false};
+  } finally {
+    if (stopped) {
+      try { runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile}); }
+      catch { /* preserve the original proof error; outer recovery cleanup owns the stack */ }
+    }
+    await database.resource.stop(AbortSignal.timeout(10_000));
   }
 }
 
@@ -3324,8 +3430,10 @@ async function main() {
         );
         await applyAromaBindingMigration(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
         await applyCatalogMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
-        if (options.recoveryProof)
+        if (options.recoveryProof) {
           await applyPricingMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
+          await applyOrdersMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
+        }
         const deliveryDatabase = recoveryProofCredentials.roleMap.databases.find(
           (candidate) => candidate.name === "coffee_platform_orders",
         );
@@ -3504,6 +3612,14 @@ async function main() {
           }
           nativeFoundation = {
             ...normalEvidence,
+            ordersOutbox: await assertOrdersOutboxBrokerRecovery(
+              projectName,
+              secretsDir,
+              composeFile,
+              recoveryDatabaseProof.port,
+              recoveryProofCredentials,
+              platformConfig,
+            ),
             blackhole: await runKafkaBlackholeProof(
               projectName,
               secretsDir,

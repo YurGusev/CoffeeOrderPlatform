@@ -76,7 +76,7 @@ transport caller, issuer/audience, route allowlist и permission.
 |---|---|---|
 | Ref/Money/Version/Timestamp | `schemas/common/identifiers` и `money-version-time` | все HTTP/events/frontend |
 | ProblemDetails | `schemas/common/problem-details` | все HTTP services и project-owned clients; `type` и `instance` — URI-reference |
-| MessageEnvelope | `schemas/common/message-envelope` | все семь event schemas |
+| MessageEnvelope | `schemas/common/message-envelope` | все восемь event schemas |
 | CustomerResponse/Summary | `client-v1.yaml#/components/schemas` | Customer provider, Orders customer snapshot, React |
 | CatalogProductSummary | `client-v1.yaml#/components/schemas` | Catalog provider, Pricing request UI, React |
 | PricingQuoteResponse | `client-v1.yaml#/components/schemas` | Pricing provider, Orders quote proof, React |
@@ -252,8 +252,10 @@ fanout/backpressure и frontend invalidation заданы в
   `customerRef`, `customerVersion`, `displayName`, `state`, audience
   `orders-service`, без contacts/addresses;
 - `POST /api/internal-v1/pricing/quotes:verify`; request содержит `quoteRef`,
-  `hash`, `customerRef`, ожидаемые `productRef`/`variantRef`/`quantity`, response
-  возвращает authoritative immutable quote facts; точная семантика задана в
+  `hash`, `customerRef`, `quoteLineNumber`, ожидаемые `productRef`/`variantRef`/`quantity`;
+  response возвращает выбранную authoritative `line` и общие quote proof facts
+  после проверки целостности всей котировки (решение #8 от 27 сентября 2026);
+  прежний full-lines verify заменяется без второго пути. Точная семантика задана в
   `docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md`, раздел 6;
 - `POST /api/internal-v1/aroma/catalog-exports` с response
   `application/x-ndjson`; точные request, record types, batch/hash limits,
@@ -302,6 +304,7 @@ provider response и secret data запрещены.
 | `CatalogSnapshotActivated.v1` | catalog-activation-worker | supplierRef | `supplierRef`, `snapshotRef`, `snapshotRevision`, `activatedAt`, `productCount`, `variantCount`, `offerCount`, `batchCount`, `contentHash` |
 | `CatalogMappingChanged.v2` | catalog-activation-worker | productRef | `productRef`, `variantRef`, `offerRef|null`, `catalogSnapshotRevision`, `mappingRevision`, `mappingState: Active|Missing|Stopped`, `availability`, `effectiveAt` |
 | `OrderConfirmed.v1` | orders-service | orderRef | `orderRef`, `orderVersion`, `customerRef`, `confirmedAt`, `contributionRevision` |
+| `OrderReconciliationRequested.v1` | orders-service | orderRef | `orderRef`, `orderVersion`, `requestedAt` (строго; без cart-level Desired, actor и текста `reason`) |
 | `AromaConvergenceRequested.v1` | Orders | cartScopeRef | `cartScopeRef`, `desiredRevision`, `reason: OrderConfirmed|CatalogChanged|OperatorRequested|Recovery`, `orderRef|null` |
 | `AromaObservationChanged.v1` | aroma-observer/aroma-convergence | cartScopeRef | `cartScopeRef`, `observedRevision`, `observedAt`, `observationState: Complete`, `cartFingerprint` |
 | `AromaConvergenceChanged.v1` | aroma-convergence | cartScopeRef | `cartScopeRef`, `desiredRevision`, `observedRevision`, `attemptRef`, `attemptState: NoOpInSync|VerifiedInSync|OutOfSync|Blocked|UnknownOutcome|Failed`, `changedAt`, `blockerCodes[]` |
@@ -314,6 +317,14 @@ Catalog пишет оба события в owner Outbox **в той же тра
 при повторной доставке. Полные `products`/`variants`/`offers` передавать в
 envelope или payload нельзя. Стабильные `productRef`/`variantRef`/`offerRef`
 назначаются по scoped Gateway source identity, а не по порядку batch.
+
+`OrderReconciliationRequested.v1` фиксирует только принятое намерение по Order:
+`aggregate={type:Order,ref:orderRef,version:orderVersion}`. Orders пишет его
+вместе с версией Order, History и completed idempotency в одной транзакции;
+publisher работает после COMMIT. `orders-aroma-preparation` #11 проверяет
+текущие cart-level факты перед отдельным `AromaConvergenceRequested.v1`;
+приём `202` в #8 не доказывает эффект провайдера. Граница —
+[ADR-0032](../adr/ADR-0032-order-reconciliation-intent.md).
 
 Дополнительные ограничения payload:
 

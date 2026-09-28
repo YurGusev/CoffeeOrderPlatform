@@ -280,15 +280,14 @@ export class PricingStore {
         return reject("PRICING_QUOTE_HASH_MISMATCH");
       }
       if (body.hash !== input.request.hash) return reject("PRICING_QUOTE_HASH_MISMATCH");
-      if (body.customerRef !== input.request.customerRef || body.lines.length !== input.request.lines.length || body.lines.some((line,index) => {
-        const expected = input.request.lines[index];
-        return expected === undefined || line["productRef"] !== expected.productRef || line["variantRef"] !== expected.variantRef || line["quantity"] !== expected.quantity;
-      })) return reject("PRICING_QUOTE_SCOPE_MISMATCH");
+      const selectedIndex = body.lines.findIndex(line => line.lineNumber === input.request.quoteLineNumber);
+      const selectedLine = body.lines[selectedIndex];
+      if (body.customerRef !== input.request.customerRef || selectedLine === undefined ||
+        selectedLine.productRef !== input.request.productRef || selectedLine.variantRef !== input.request.variantRef ||
+        selectedLine.quantity !== input.request.quantity) return reject("PRICING_QUOTE_SCOPE_MISMATCH");
       if (!row["unexpired"]) return reject("PRICING_QUOTE_EXPIRED");
-      const verified: PricingQuoteVerificationResponse = {valid:true,quoteRef:body.quoteRef,policyVersionRef:body.policyVersionRef,catalogSnapshotRevision:body.catalogSnapshotRevision,customerRef:body.customerRef,expiresAt:body.expiresAt,currency:body.currency,totalMinor:body.totalMinor,lines:body.lines.map((line,index) => {
-        const proof = proofs[index]; if (proof === undefined) return invalid();
-        return {...line,offerRef:proof.offerRef,mappingRevision:proof.mappingRevision,supplierUnitMinor:proof.supplierUnitMinor,currency:"RUB",internalProofHash:internalHash};
-      })};
+      const proof = proofs[selectedIndex]; if (proof === undefined) return reject("PRICING_QUOTE_HASH_MISMATCH");
+      const verified: PricingQuoteVerificationResponse = {valid:true,quoteRef:body.quoteRef,policyVersionRef:body.policyVersionRef,catalogSnapshotRevision:body.catalogSnapshotRevision,customerRef:body.customerRef,expiresAt:body.expiresAt,currency:body.currency,line:{...selectedLine,offerRef:proof.offerRef,mappingRevision:proof.mappingRevision,supplierUnitMinor:proof.supplierUnitMinor,currency:"RUB",internalProofHash:internalHash}};
       if (!isPricingQuoteVerificationResponse(verified)) return reject("PRICING_QUOTE_HASH_MISMATCH");
       await this.audit(tx,"QuoteVerified",body.quoteRef,input.actorRef,input.correlationId,null);
       return {ok:true as const,body:verified};

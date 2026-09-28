@@ -4,7 +4,7 @@ import {createConnection} from "node:net";
 import test from "node:test";
 import {createRuntime} from "../../packages/platform-runtime/src/index.ts";
 import {verifyActorContextWithKeySet} from "../../packages/platform-security/src/index.ts";
-import {createConfiguredEdgeAuthAdapters, createEdgeAuthComposition} from "../../apps/edge-gateway/dist/index.js";
+import {createConfiguredEdgeAuthAdapters, createEdgeAuthComposition, resolveBrowserOperation} from "../../apps/edge-gateway/dist/index.js";
 import {OidcDependencyUnavailableError} from "../../apps/edge-gateway/dist/oidc-auth.js";
 import {registerEdgeAuthRoutes} from "../../apps/edge-gateway/dist/routes.js";
 
@@ -260,4 +260,36 @@ void test("mutation authorization caps signed expiry at session expiry and requi
   }});
   assert.equal(denied.statusCode, 403);
   assert.equal(f.calls.claims, undefined);
+});
+
+void test("Edge enforces every accepted client-v1 permission from the contract map", async (t) => {
+  const operations = [
+    ["POST", "/api/client-v1/orders/drafts", "orders:create", "createOrderDraft"],
+    ["GET", "/api/client-v1/orders/order-1", "orders:read:any", "getOrderCard"],
+    ["PUT", "/api/client-v1/orders/order-1/items/item-1", "orders:edit:any", "upsertOrderItem"],
+    ["DELETE", "/api/client-v1/orders/order-1/items/item-1", "orders:edit:any", "removeOrderItem"],
+    ["POST", "/api/client-v1/orders/order-1/commands/confirm", "orders:confirm:any", "confirmOrder"],
+    ["POST", "/api/client-v1/orders/order-1/commands/request-aroma-reconciliation", "orders:reconcile:any", "requestAromaReconciliation"],
+    ["POST", "/api/client-v1/pricing/quotes", "pricing:create", "createPricingQuote"],
+  ];
+  for (const [method, path, permission, operationId] of operations) {
+    assert.deepEqual(resolveBrowserOperation(method, path), {operationId, audience: "api-public", requiredPermission: permission});
+    for (const permissions of [[], [permission]]) {
+      const f = fixture({
+        operation: undefined,
+        session: {actorRef: "actor:fixture", permissions, csrf: "csrf-fixture", expiresAt: NOW + 120_000},
+      });
+      f.adapters.resolveOperation = resolveBrowserOperation;
+      const app = await makeApp(t, f);
+      const headers = {"x-original-method": method, "x-original-uri": path, cookie: sessionCookie};
+      if (method !== "GET") Object.assign(headers, {cookie: `${sessionCookie}; ${csrfCookie}`, origin: ORIGIN, "x-csrf-token": "csrf-fixture"});
+      const response = await app.inject({method: "GET", url: "/_edge/authorize", headers});
+      assert.equal(response.statusCode, permissions.length === 0 ? 403 : 204, `${operationId} with ${permissions.join(",")}`);
+      if (permissions.length === 0) assert.equal(f.calls.claims, undefined);
+      else {
+        assert.equal(f.calls.claims.operationId, operationId);
+        assert.deepEqual(f.calls.claims.permissions, [permission]);
+      }
+    }
+  }
 });

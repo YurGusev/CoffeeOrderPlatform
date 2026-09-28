@@ -1,0 +1,392 @@
+issue: 8
+baseCommit: c88c62c91e5a6833d26c8368e3f45e78948f051c
+status: locally-verified
+scope: >-
+  Orders владеет Draft/items/Confirm/Desired/Order Card и owner-local PostgreSQL,
+  Pricing — проверкой полной котировки и выбранной строки; client-v1/Edge обеспечивают
+  закрытые права и authorisation-before-replay.
+inputs:
+  - {issue: 4, acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213, artifact: evidence/handoffs/issue-4.yaml, sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a}
+  - {issue: 5, acceptedMergeCommit: 7db7bc97b41962c0592b82853ebd7dc9bc43c290, artifact: evidence/handoffs/issue-5.yaml, sha256: f801608e05ca43243eb9258f58ae25b31a7fcfb943ba01f2afe370810998cbdb}
+  - {issue: 7, acceptedMergeCommit: c88c62c91e5a6833d26c8368e3f45e78948f051c, artifact: evidence/handoffs/issue-7.yaml, sha256: 692e3e7a6920e2e9203b7f8582636aeb692e4a6478a5473a95b8f2fa6395fc08}
+  - {issue: 17, acceptedMergeCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4, artifact: evidence/handoffs/issue-17.yaml, sha256: bb593fe72358c832768de1cfb75a36a48062e72866c2df0988bf268b7871ca61}
+  - {issue: 18, acceptedMergeCommit: cd8cb2d8122622fd385b25944ebe9701f90f56e2, artifact: evidence/handoffs/issue-18.yaml, sha256: e91e59128844131e7011087bbdd9be3f315d48df1a38d76837d0f1e9186b31cb}
+  - {issue: 62, acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6, artifact: evidence/handoffs/issue-62.yaml, sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76}
+  - {issue: 63, acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7, artifact: evidence/handoffs/issue-63.yaml, sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c}
+  - {issue: 119, acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909, artifact: evidence/handoffs/issue-119.yaml, sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc}
+outputs:
+  - {artifact: package.json, sha256: bd534c7116fa7fad06b370f4c849a5fcf02dbd831e46e8dde049bd185ae939a0, consumers: [13]}
+  - {artifact: pnpm-lock.yaml, sha256: f61d3c2e2498421bcc3738660914a290a587ea330d877b2b3fca6326b187b8e3, consumers: [13]}
+  - {artifact: apps/api-public/package.json, sha256: 2bab6222f636016c9610b295e5b03b38f8cfff56da73a8ab1e31f8a1c369deb4, consumers: [9, 13]}
+  - {artifact: apps/orders-service/package.json, sha256: 5cc3a895c00d298fe09078c198e3d541119459caa9a91438cb2a8347863bb959, consumers: [11, 13]}
+  - {artifact: apps/orders-service/tsconfig.json, sha256: 3386b7560e6fd1a2a5b5c7eef911d0c16d6a1bfadf1c25127a275ad79d150ba2, consumers: [13]}
+  - {artifact: packages/contracts/orders-v1/package.json, sha256: 8fa64b1008ba90ab9387a4078990541dc4721ab4aff80f7e69abc70ceb144933, consumers: [9, 11, 13]}
+  - {artifact: config/platform.yaml, sha256: b5df656bb0fd7288f0363aa21a1f57d67273b691172b16b022fa03dfc6f918c9, consumers: [9, 11, 12, 13]}
+  - {artifact: config/service-catalog.json, sha256: bd2ce496bf23695091b8fe42470df7f579983b60e98236bbe80ad1a6512b1e41, consumers: [9, 11, 12, 13]}
+  - {artifact: platform/launch-v1-runtime-profile.json, sha256: 67c78eda885e6a69e52b3f0eb8ed7a054f9ca2ceb4ad1c9450a25daa56b6d7d9, consumers: [9, 11, 12, 13]}
+  - {artifact: secrets/platform-secrets.schema.json, sha256: c5e4c53b1713f38b085f902a5f52d86ef5b5220c2c80d0478a0d4ee09c724cc0, consumers: [9, 11, 12, 13]}
+  - {artifact: secrets/platform.secrets.sops.yaml, sha256: ba06572e426e3d0d3dba56e1e54a095bf6784ecb438e292c08f740a71743204d, consumers: [9, 11, 12, 13]}
+  - {artifact: contracts/openapi/client-v1.yaml, sha256: 7f8b9c9a260d55f9d79563cdfc69e53877b443d265e167852a883dc0fae6a36f, consumers: [9, 12, 13]}
+  - {artifact: contracts/openapi/internal-v1.yaml, sha256: f1b687f9afb3d7c8ea22c4ff88ef37c4c4b004807823bd2384256da735cedb5e, consumers: [11, 12, 13]}
+  - {artifact: contracts/fixtures/positive/http/success.json, sha256: 38799f4fd4f570898e990a0cf44535c1156d49fadecc8f75a7d979f97a21edd1, consumers: [11, 13]}
+  - {artifact: contracts/fixtures/positive/http/problems.json, sha256: 23c34ff76c683b242953cd06d5999692c44bc727653e2999d582d0071a8efe17, consumers: [9, 13]}
+  - {artifact: contracts/fixtures/negative/http/rejections.json, sha256: c9cb84066f6d42b6b0d0487c598d55027f61045194c6d062eddd7ec534538111, consumers: [9, 13]}
+  - {artifact: contracts/compatibility-evidence.yaml, sha256: 7682874649e056e1f84bc9724028b0fbe5a83481b5d7ef27216ddf5d87c2707f, consumers: [9, 11, 12, 13]}
+  - {artifact: packages/generated/client-v1/src/index.ts, sha256: eefb7f6f205ca0487cb31b80afa6e37cb00a1589cce2919789c323dc11e9a3fd, consumers: [9, 12, 13]}
+  - {artifact: packages/generated/client-v1/src/types.gen.ts, sha256: 3d6f231c1df620a4cbf7485da348aba02a9e0814901eec841bb2d9887f230101, consumers: [9, 12, 13]}
+  - {artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts, sha256: 278280f5ec8142fb2a25417f8b752ec8ea7777e1c2227cbebf0f20ac72f50ff0, consumers: [9, 12, 13]}
+  - {artifact: packages/generated/internal-v1/src/types.gen.ts, sha256: b79ba65927f151820f09fd630685adb5adc408db691623b0e7e3389442a12521, consumers: [11, 12, 13]}
+  - {artifact: packages/generated/internal-v1/src/runtime-schemas.gen.ts, sha256: dd555ceb9b707a52a9ad216989906b323ef0067bc9816094ba96800b78dcc9e7, consumers: [11, 12, 13]}
+  - {artifact: packages/generated/internal-v1/src/index.ts, sha256: 8cb1b6abe5585d5de86357d9119f36ddf1070fe855df4e23625c6d92c9c3b579, consumers: [11, 13]}
+  - {artifact: packages/contracts/orders-v1/src/index.ts, sha256: 35df9b610e0e05c8f41bd7a273a2e01d4e06183cfc9d4bdd296a7a1f755c9e2f, consumers: [9, 11, 12, 13]}
+  - {artifact: apps/orders-service/migrations/0001_create_orders.sql, sha256: 2f8383ffd8dc46ee43dfab4fe9deeb74f8d642326c4d6bf05c9e3052dc0b0cfc, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/migrations/0002_create_order_items.sql, sha256: 464f39f99955f8630f56cff34980578ffad4c8fe2258c52b1b43d9c9ab689e7b, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/migrations/0003_create_order_history.sql, sha256: 82701109e746a8cefcdfd3c9ef18ac77071e5bd247f33a843a50e34121c086fc, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/migrations/0004_create_order_contributions.sql, sha256: dea7f23cd00134c4fe09d2a41dbc36bd9d75c5fa07a2f405fbe417a2417be3d5, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/migrations/0005_create_orders_idempotency.sql, sha256: 872775a342b592c5cc3fbd5750a5d3deabc78d8f0b2b81342edb6714bbf49b72, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/migrations/0006_create_orders_outbox.sql, sha256: e12a816e3f9ea5923c292a0a1203db34e450f2390f56ec9ef0a2a2a2d362688e, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/domain/order-card.ts, sha256: 1e6fc1bc0ab99329e742958d6412b9acdb5393e2fa95654f2d4739596de5aa23, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/domain/order-contribution.ts, sha256: 0d27adac08f57ecdb9d5ac02025382dded2c9f5cbb9c4a98f323f5458edd8e70, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/domain/order-state.ts, sha256: 753281b04253a1227c37c5f5c1f21cd20d464f70b84c27986c89785668f5a226, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/infrastructure/database/order-store.ts, sha256: 87c41449e0b099b62b87dd53c9dfb12ac359758419c1e186cd133939f3e12013, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/infrastructure/internal-api-readiness.ts, sha256: 4c9f4174a853bfd5a9bb8c172f6e3dca4a4b97dc0d699fe835195cf297c5ab06, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/infrastructure/database/row-schemas.ts, sha256: e296017899fdc665932a5f793bcd82ee09ac56eeea34ad6b5f1dc073ddc56b0e, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/infrastructure/order-security.ts, sha256: c18b13a21a22e9ce02548b0d0b1526047f665b0b6e66e0c0af144d982a190673, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/infrastructure/pricing-client.ts, sha256: 7e0788bfbad015fa0cd4b2488b118a4b4f0da302085d4febffe91fc49ac60e4b, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/infrastructure/customer-client.ts, sha256: 829b9b836d7d83d074923e1e77151839173812e6b6583ee4b27015a0b3459f48, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/http/index.ts, sha256: 692947d80448ef3cecefc3b9eed60c4933e459cbcfb42768eb30ed51f2f3d024, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/main.ts, sha256: 4a3d19e6ad4bafb5ce41337583a72f3725da1b1b9724bc13eea51f9e2283d0bf, consumers: [11, 12, 13]}
+  - {artifact: apps/pricing-service/src/infrastructure/database/pricing-store.ts, sha256: 80db6b2d31b23587f9b1dc1e56fa8883f1b6186093f8f0d34823571c7a974b06, consumers: [11, 12, 13]}
+  - {artifact: apps/api-public/src/index.ts, sha256: ca13e936d92fe063755c24cbac5586222f7170452c235a613731c3f650421f5d, consumers: [9, 12, 13]}
+  - {artifact: apps/api-public/src/main.ts, sha256: 1ca92c2020e75ada30c4e6856dce97b2a2f8e50a2421871e5a59e763b913efb9, consumers: [9, 12, 13]}
+  - {artifact: apps/edge-gateway/src/client-operations.gen.ts, sha256: f9660334951bc6fedb6e8fec53d81fd51d33f5d72599a08eade5a76cf92ca6cf, consumers: [9, 12, 13]}
+  - {artifact: packages/platform-database/src/owner.ts, sha256: e202b10e7231d29f0000666a68c3894640b41c272687e4b0654d79854b99fc05, consumers: [11, 13]}
+  - {artifact: packages/platform-idempotency/src/index.ts, sha256: 577554a23684941bd29afca0f6501de6cb4ed22592a5c62d4cb52a9fd7385b1e, consumers: [9, 11, 13]}
+  - {artifact: tools/compose-smoke.mjs, sha256: 504bef5478f463fdc49d47bee5aa7956f177dd687722cea2e53ba851c5015dfe, consumers: [11, 13]}
+  - {artifact: scripts/check-service-catalog.mjs, sha256: a136254b1d09d0157f9fa85bc36b6369931a0ede9b53e85849ea4215ff706739, consumers: [11, 13]}
+  - {artifact: scripts/check-architecture.mjs, sha256: 80c6572ca53ce33a4825853ab0d7513cdcf6071af4c74399ffd05a402cb24089, consumers: [11, 13]}
+  - {artifact: scripts/contracts-breaking.mjs, sha256: b47a3456cf3fa401ff857d9779ef2c935978afd3dd3d80666a73e0faad873542, consumers: [11, 13]}
+  - {artifact: scripts/contracts-generate.mjs, sha256: 3d957faa4c00477704395dc909b52667beac23f6bb3204e8fa62975a27aeb68c, consumers: [9, 11, 13]}
+  - {artifact: docs/launch/12_LAUNCH_CONTRACT_CATALOG.md, sha256: ec5191d114e06b4810e6e71cd23ce1b119ed527825260ee959c3358e503625b3, consumers: [9, 11, 12, 13]}
+  - {artifact: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md, sha256: 6976a733193294d6d88570363ab60117041c4e4665984b0c6a374a48dfc9b1e2, consumers: [9, 11, 12, 13]}
+  - {artifact: docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md, sha256: 3ddebce187d031fbe8f9642a757b1c138a01ea89a7576b4df27bb1d82cd854c2, consumers: [9, 11, 12, 13]}
+  - {artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md, sha256: 8940a49ceca967628dd7df0f5846e5ae8483e5681c5ba7da00bb15797558f2dc, consumers: [9, 11, 12, 13]}
+  - {artifact: docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md, sha256: 747c87b80307d34dbd60000c0a818260f0345f75cbcb1166d3d8a5c99ee6b923, consumers: [9, 11, 12, 13]}
+  - {artifact: config/service-interactions.json, sha256: 559c3e82302da4ec28da6269358760d8a2a94c97a1390db5754fc64ae32a366a, consumers: [11, 13]}
+  - {artifact: contracts/manifest.yaml, sha256: 2d0502c6e7cb755885dbf4d1e7119557f946b16fd8d4f5f2fe650ed9b6fe1970, consumers: [11, 12, 13]}
+  - {artifact: contracts/schemas/events/order-reconciliation-requested.v1.schema.json, sha256: 043954cd23ee702894061ccc3fb139b24f188fd20dd1e7074c0dac6584a27394, consumers: [11, 12, 13]}
+  - {artifact: contracts/fixtures/positive/events/order-reconciliation-requested.v1.json, sha256: ec89d32f7b4abe268e6f4c116b731106c9b2de8879f78d6fee87186e8a9287f0, consumers: [11, 13]}
+  - {artifact: contracts/fixtures/negative/events/order-reconciliation-requested-additional-field.v1.json, sha256: aa71e974dd8a37f487062679e92c4721682c2465025f64ef2b8acc14ce51b5be, consumers: [11, 13]}
+  - {artifact: scripts/contracts-lint.mjs, sha256: e2494357a4aadda950582b81cb2daf5064a68253345f9e14d793f62bef95d7f2, consumers: [11, 13]}
+  - {artifact: docs/launch/06_EVENTS_AND_RECOVERY.md, sha256: 0d78902aa53f73bd0db61d78c9c194db1ec92ad505d94a6c7e21548ee8ead2b2, consumers: [11, 12, 13]}
+  - {artifact: docs/launch/10_RUNTIME_CATALOG.md, sha256: 91ad019d272e28b9667353fa0e1fc8274f60dca39e4adcd039aaba36e4cd373f, consumers: [11, 12, 13]}
+  - {artifact: docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md, sha256: e5bb6e1d142cf1cddd001f79868f5dcd1c1b070c22b43a3d7bc6f833e60f594b, consumers: [11, 13]}
+  - {artifact: docs/adr/ADR-0032-order-reconciliation-intent.md, sha256: 33e6f0c12e1b7e85cf6d35b56eaec789e483c2b19ce360fe23e0beef6e4c53d6, consumers: [11, 12, 13]}
+  - {artifact: apps/orders-service/src/observability.ts, sha256: 32757e849176ddfeb7d897a5fc5e5f78be43db16e23880d25f2238493d3b26f4, consumers: [11, 13]}
+  - {artifact: apps/orders-service/src/application/create-draft.ts, sha256: 6d4fdbb6be9c0f71ff08e1a32e601ebad622080b31c18061a0e5049d84d9c687, consumers: [11, 13]}
+  - {artifact: apps/orders-service/src/application/upsert-item.ts, sha256: 5118c2392207e4f720f00345b07a1e9164e4f201b2c6500c7db219849aa881ee, consumers: [11, 13]}
+  - {artifact: apps/orders-service/src/application/delete-item.ts, sha256: f0aee6740f7fbf1555df44c56f5a27bb347e45ed1fbcb3adb8d249904f2fb01a, consumers: [11, 13]}
+  - {artifact: apps/orders-service/src/application/confirm-order.ts, sha256: d3d233ea34210f72a4bde81db026f359fb10dbe167fcb7337f859f960ef1005d, consumers: [11, 13]}
+  - {artifact: apps/orders-service/src/application/get-order-card.ts, sha256: 6d37d67dd2fed6f6d48c04802640f674da258ffa99af25e5aa1b387356479f26, consumers: [11, 13]}
+  - {artifact: apps/orders-service/src/application/request-aroma-reconciliation.ts, sha256: 591d274c37e7f089518d5af0745e5aa2597348186fb3550ba3400d03c2554c62, consumers: [11, 13]}
+  - {artifact: tests/runtime/lifecycle.test.mjs, sha256: 6a9ec276e8abd6aaf2c5e2e6de8e923b3c17c30d321629d838d5a58d24b179cf, consumers: [11, 13]}
+  - {artifact: tests/orders/owner-live.test.mjs, sha256: 5032e57747e017840839ef407e03d2fdfdcb60b34c8cb4d7b0e7635e3f195ee8, consumers: [9, 11, 13]}
+acceptance:
+  - criterion: "Draft guards не принимают чужие customerRef/orderRef и сохраняют bodyless replay"
+    code: "apps/api-public/src/index.ts, tests/orders/public-api.test.mjs"
+    command: "node --test tests/edge-auth/*.test.mjs tests/orders/public-api.test.mjs tests/orders/owner-http.test.mjs tests/pricing/pricing-public-api.test.mjs"
+    result: verified
+  - criterion: "Семь permissions на contract/Edge/api-public/owner, включая Pricing и replay"
+    code: "contracts/openapi/client-v1.yaml, apps/edge-gateway/src/client-operations.gen.ts, apps/orders-service/src/http/index.ts"
+    command: "node --test tests/edge-auth/*.test.mjs tests/orders/public-api.test.mjs tests/orders/owner-http.test.mjs tests/pricing/pricing-public-api.test.mjs"
+    result: verified
+  - criterion: "Выбранная строка PricingQuote verify с проверкой всей сохранённой котировки"
+    code: "contracts/openapi/internal-v1.yaml, apps/pricing-service/src/infrastructure/database/pricing-store.ts, apps/orders-service/src/infrastructure/pricing-client.ts"
+    command: "COFFEE_DB_LIVE_PROOF=1 node --test tests/pricing/*.test.mjs"
+    result: verified
+  - criterion: "Orders scoped signing key и fail-closed секреты без production мутаций"
+    code: "config/platform.yaml, secrets/platform.secrets.sops.yaml, apps/orders-service/src/infrastructure/order-security.ts"
+    command: "pnpm config:check && pnpm security:secrets && git diff --check"
+    result: verified-development-only
+  - criterion: "Owner Draft/items/Confirm/Card/Desired, атомарный Confirm без внешних вызовов под SQL locks"
+    code: "apps/orders-service/src/application/confirm-order.ts, apps/orders-service/src/infrastructure/database/order-store.ts, tests/orders/order-store.test.mjs, tests/orders/owner-live.test.mjs"
+    command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/*.test.mjs tests/database/*.test.mjs"
+    result: verified-synthetic-identity
+    detail: "85/85 live без skipped после исправления stdout capture; оба owner-live теста видны по имени. Aggregate money guard, duplicate quote line, DB-time expiry, согласованный Card, DELETE bodyless replay, смешанная PUT/DELETE/Confirm race и allowedActions проверены на PostgreSQL."
+  - criterion: "Первый запуск: чистые переходы Draft/Confirmed, таблица команд и exhaustive allowedActions"
+    code: "apps/orders-service/src/domain/order-state.ts, apps/orders-service/src/domain/order-card.ts, apps/orders-service/src/infrastructure/database/order-store.ts, tests/orders/order-card.test.mjs"
+    command: "pnpm typecheck && node --test tests/orders/order-card.test.mjs"
+    result: verified-local
+    detail: "CreateDraft, UpsertItem, DeleteItem, Confirm и RequestReconciliation используют pure nextOrderStatus; разрешения actions перечислены типизированным Record<allowedAction, permission>. Таблица переходов/permissions прошла, SQL пути покрыты live тестами."
+  - criterion: "Orders readiness зависит от доступности required InternalApi"
+    code: "apps/orders-service/src/main.ts, apps/orders-service/src/infrastructure/internal-api-readiness.ts, tests/orders/owner-http.test.mjs, tests/runtime/lifecycle.test.mjs"
+    command: "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='Orders InternalApi readiness rejects' tests/runtime/lifecycle.test.mjs"
+    result: verified-local-transport
+    detail: "main.ts подключает scoped Orders→api-internal client к checkInternalApiReady. Отдельный тест выполняет этот helper через реальный mTLS HttpClient и runtime health: wrong peer с доверенным CA → 503 до HTTP; успешный peer → 200; blackhole → deadline/503 и закрытие запроса; shutdown → RUNTIME_DRAINING/503 и stopped без pending. Негативный тест не запускает production main с настоящим peer; positive Compose запускает собранный main."
+  - criterion: "Точные typed errors owner → api-public без сведения причин к общей ошибке"
+    code: "contracts/openapi/client-v1.yaml, packages/generated/client-v1/src/runtime-schemas.gen.ts, apps/orders-service/src/http/index.ts, apps/orders-service/src/infrastructure/database/order-store.ts, apps/api-public/src/index.ts, tests/orders/owner-http.test.mjs, tests/orders/public-api.test.mjs, tests/orders/order-store.test.mjs"
+    command: "node --test tests/edge-auth/*.test.mjs tests/orders/public-api.test.mjs tests/orders/owner-http.test.mjs tests/pricing/pricing-public-api.test.mjs"
+    result: verified-local-status-code-pairs
+    detail: "PUT 409 ORDER_ITEM_LIMIT_EXCEEDED/ORDER_QUOTE_SCOPE_MISMATCH; Confirm 422 ORDER_EMPTY/ORDER_DESIRED_OVERFLOW. Baseline public PUT request/parameters/security/operationId unchanged; неверные пары fail-closed."
+  - criterion: "Атомарный reconciliation 202 shell и exact replay"
+    code: "apps/orders-service/src/application/request-aroma-reconciliation.ts, apps/orders-service/src/infrastructure/database/order-store.ts, contracts/schemas/events/order-reconciliation-requested.v1.schema.json, tests/orders/reconciliation-live.test.mjs"
+    command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/*.test.mjs tests/database/*.test.mjs"
+    result: verified-test-only-projection-fixture
+    reason: "Положительный 202/History/Outbox/replay проверены только с контролируемой read-only projection fixture на PostgreSQL. Production до #11 не имеет projection и остаётся fail-closed при PendingObservation; cart-level convergence не реализован."
+  - criterion: "#11-only physical InSync/terminal proof, cart-level projection, Inbox и consumer recovery"
+    code: "docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md, docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md"
+    command: "критерий реализации issue #11, не исполнять как PASS issue #8"
+    result: deferred-to-11-not-pass
+    reason: "В #8 обязательны Card contract/fail-closed PendingObservation, OrderReconciliationRequested.v1, атомарный order-level intent и exact/bodyless 202 replay; read-only fixture не доказывает production projection."
+  - criterion: "Transport/application boundary и OpenTelemetry API spans/ограниченные metrics"
+    code: "apps/orders-service/src/application/, apps/orders-service/src/observability.ts, tests/orders/owner-http.test.mjs, tests/orders/observability.test.mjs"
+    command: "pnpm exec tsc -b apps/orders-service --pretty false && node --test tests/orders/observability.test.mjs"
+    result: verified-in-process-provider-only
+    detail: "Шесть use cases, fixed route/use-case/proof/transaction/Outbox spans и operation/result/state metrics с белым списком состояний; conflict/in_progress/invalid/not_retained дают error, completed — success. In-process context/provider, конкуренция и failure/abort; production exporter/context manager — #64."
+  - criterion: "Bodyless и обычный completed replay принимают только исходный status операции"
+    code: "apps/orders-service/src/http/index.ts, tests/orders/owner-http.test.mjs"
+    command: "pnpm exec tsc -b apps/orders-service --pretty false && node --test --test-name-pattern='Card replay rejects a stored status|bodyless DELETE replays' tests/orders/owner-http.test.mjs"
+    result: verified-red-green
+    detail: "Чужой 200 для Draft и чужой 201 для PUT/DELETE/Confirm дают IDEMPOTENCY_RESULT_INVALID вместо ответа из иной команды."
+  - criterion: "Replay-only §3 для пяти команд на PostgreSQL owner после restart: Completed, active/expired Acquired, missing/expired/invalid result и DB failure"
+    code: "tests/orders/owner-live.test.mjs, apps/orders-service/src/infrastructure/database/order-store.ts, packages/platform-idempotency/src/index.ts"
+    command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/owner-live.test.mjs tests/orders/reconciliation-live.test.mjs tests/orders/owner-http.test.mjs tests/orders/observability.test.mjs"
+    result: verified-live-postgresql-synthetic-identity
+    detail: "30/30, 0 skipped после исправления stdout capture (включая ранее скрытый HTTP lifecycle). После restart Draft/PUT/DELETE/Confirm/reconciliation вернули exact body/resourceRef и 201/200/200/200/202 с Idempotency-Replayed: true. Active/expired Acquired → 409; missing/expired, чужой actor или concrete path → 410; другой method 410 проверен для PUT↔DELETE. Stored malformed body и допускаемые SQL constraints, но невалидные expiry/lease=infinity → 500 IDEMPOTENCY_RESULT_INVALID (RED 503 до исправления); отказ SELECT → 503 IDEMPOTENCY_LOOKUP_UNAVAILABLE. Revoked permission → 403 до lookup; replay body/version и bodyless обычная команда → 400. Точные correlation/no-store/marker проверены для всех ответов."
+  - criterion: "Негативные owner lookup не меняют бизнес-данные и не раскрывают key/PII в логах/telemetry"
+    code: "tests/orders/owner-live.test.mjs"
+    command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/owner-live.test.mjs tests/orders/reconciliation-live.test.mjs tests/orders/owner-http.test.mjs tests/orders/observability.test.mjs"
+    result: verified-local-in-process-telemetry
+    detail: "Перед/после каждого запроса равны снимки Orders, items, History, Desired и lines, Outbox, idempotency; Customer/Pricing/signing не повторяются. Каждый отказ даёт HTTP span и Fastify/Pino request log с correlation id; если запрос дошёл до owner lookup, отдельно наблюдаются replay span и metric. Отказы 403/400 до lookup не создают его span или бизнес-эффекта. Synthetic customer PII и все idempotency keys, включая canaries внутри malformed stored response, отсутствуют в error body/logs/OTel spans/metrics; History/Outbox без key/PII. Захват stdout теперь передаёт записи исходному stream; совместный TAP вывод показывает оба теста, а контрольный failing test остаётся видимым и даёт exit 1. Штатный key в idempotency store и Customer snapshot в Orders допустимы. Test-only reconciliation projection не production #11, OTel exporter не проверен."
+  - criterion: "Негативные архитектурные гарантии Orders: без внешнего Confirm, прямой Kafka-публикации, remap offerRef и revision-equality InSync"
+    code: "scripts/check-architecture.mjs, tests/architecture/checks.test.mjs"
+    command: "node --test --test-name-pattern='RED ARCH-ORDERS' tests/architecture/checks.test.mjs && pnpm architecture:check"
+    result: verified-eight-negative-fixtures
+    detail: "Все восемь прямых и алиасных нарушений отвергнуты; реальные Orders source проходят checker."
+  - criterion: "Aggregate money guard и Kafka canonical envelope bytes при Confirm"
+    code: "apps/orders-service/src/infrastructure/database/order-store.ts, tests/orders/order-store.test.mjs"
+    command: "COFFEE_DB_LIVE_PROOF=1 node --test tests/orders/order-store.test.mjs"
+    result: verified-live-postgresql
+    detail: "RED воспроизвёл разные stored/Kafka bytes; GREEN подтвердил canonical bytes/hash. Два individually valid больших item отвергаются на PUT; ранее сохранённый inconsistent Draft не Confirm и не Outbox."
+  - criterion: "Concurrency, SQL fault rollback, потерянное подтверждение COMMIT и exact replay"
+    code: "tests/orders/order-store-faults.test.mjs, tests/orders/order-store.test.mjs"
+    command: "pnpm test:orders-faults"
+    result: verified-live-postgresql
+  - criterion: "Миграции через штатный checksum runner; PL/pgSQL lexer guard не разрешает внешние команды"
+    code: "packages/platform-database/src/owner.ts, tests/database/live-db-proof.test.mjs, tests/orders/order-store.test.mjs"
+    command: "COFFEE_DB_LIVE_PROOF=1 node --test tests/database/live-db-proof.test.mjs tests/orders/order-store.test.mjs"
+    result: verified-live-postgresql
+  - criterion: "Outbox и restart recovery"
+    code: "apps/orders-service/src/main.ts, tests/orders/order-store.test.mjs, tests/orders/owner-live.test.mjs, tools/compose-smoke.mjs"
+    command: "node tools/compose-smoke.mjs --recovery-proof --no-build --project-name coffee-compose-smoke-5ee6451a82"
+    result: verified-isolated-local-gate
+  - criterion: "Compose health/recovery после локальной пересборки"
+    code: "tools/compose-smoke.mjs"
+    command: "node tools/compose-smoke.mjs --recovery-proof --no-build --project-name coffee-compose-smoke-5ee6451a82"
+    result: verified-isolated-local-gate
+    detail: "После изменения SQL projection и owner replay перекомпилированы затронутые Orders, Customer и Pricing runtime images: sha256:810cf28b2713bf53e85e719067ac73252d45ac80b210ceae42d4c129afc59753, sha256:1f093a20276df26c3aee25344315a4bd434a9d4fe5109f3996487f1cc590846e, sha256:9ced86eea020c387a26a6f58909faa43b46776e76e11eb95cb01a7a9a5f0651c. Все 36 Orders dist файлов совпали с локальным dist: SHA-256(sorted relativePath:sha256(file), join newline)=b7f2e02fa0ae326a30e2234eb37a8aedaf603cf569c8901a2664f611d64b0bab. Shared idempotency dist hash a037b9666c613963047929a8ef4702f358cae9cda584a0fce3cd1d9dcf5ea713 совпал во всех трёх образах. Повторный изолированный proof: 14 runtimes; Outbox Pending/ACK/Published после restart/no duplicate; dbIntegrationProof=true, customerIntegrationProof=false. Это локальный gate, не production; реальная credentials/существующая PostgreSQL-сеть не использованы."
+verification:
+  - command: "pnpm install --frozen-lockfile"
+    result: passed
+    exitCode: 0
+    detail: "Установка workspace dependencies; package-local import smoke @opentelemetry/api и @coffee-platform/outbox успешно."
+  - command: "pnpm typecheck && pnpm lint && pnpm architecture:check"
+    result: passed
+    exitCode: 0
+    detail: "TS7/type-aware lint и Dependency Cruiser."
+  - command: "pnpm config:check && pnpm security:secrets && git diff --check"
+    result: passed
+    exitCode: 0
+    detail: "Проверен scoped зашифрованный материал разработки; разделы staging/production не менялись."
+  - command: "pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test"
+    result: passed
+    exitCode: 0
+    detail: "47 контрактных тестов без пропусков, generated byte-identical; Confirm 422 expansion и новый OrderReconciliationRequested.v1 закрытый wire-пейлоад проверены."
+  - command: "node --test tests/edge-auth/*.test.mjs tests/orders/public-api.test.mjs tests/orders/owner-http.test.mjs tests/pricing/pricing-public-api.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "65 тестов, 0 skipped; семь permissions, fail-closed replay status, 403, чужой customerRef/orderRef и четыре точные error-пары через owner HTTP-клиент api-public."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test tests/pricing/*.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "49 live/contract тестов, 0 skipped; полная целостность котировки при выбранной строке."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/*.test.mjs tests/database/*.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "84 теста, 0 skipped на прежнем post-architect срезе; после него исправлен Orders replay и shared idempotency SQL projection. Позднейший replay-only прогон с отчётом 84/84 скрывал имя HTTP lifecycle из-за stdout capture; полный результат 85/85 указан ниже."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test tests/database/live-db-proof.test.mjs tests/orders/order-store.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "9 тестов, 0 skipped; dollar-quote guard, шесть Orders migrations штатным checksum runner, repeat-noop и SQL-fault rollback ledger."
+  - command: "pnpm test:orders-concurrency"
+    result: passed
+    exitCode: 0
+    detail: "1 live PostgreSQL тест, 0 skipped."
+  - command: "pnpm test:orders-faults"
+    result: passed
+    exitCode: 0
+    detail: "5 live PostgreSQL тестов, 0 skipped; семь атомарных этапов Confirm с injected fault, rollback и повтором тем же ключом."
+  - command: "pnpm db:smoke"
+    result: passed-offline-only
+    exitCode: 0
+    detail: "50 структурных role cases и owner-local SQL contract; liveDatabase=false, realKafka=false. Это не live проверка PostgreSQL ролей."
+  - command: "PATH=\"$TMPDIR/coffee8-schema-venv/bin:$PATH\" node --test tests/architecture/checks.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "68 тестов, 0 skipped; в том числе 8 отрицательных Orders architecture fixtures."
+  - command: "pnpm exec tsc -b apps/orders-service --pretty false && node --test tests/orders/observability.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "5 in-process тестов, 0 skipped; возвращаемые idempotency rejections отмечаются как error в use-case spans и metrics."
+  - command: "pnpm exec tsc -b apps/orders-service --pretty false && node --test --test-name-pattern='Card replay rejects a stored status|bodyless DELETE replays' tests/orders/owner-http.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "2 targeted теста, 0 skipped; до исправления отрицательный тест отвечал 200 вместо fail-closed 500."
+  - command: "pnpm test:compose-smoke"
+    result: failed-preflight
+    exitCode: 1
+    detail: "SOPS_AGE_KEY_FILE отсутствует в окружении. Не запускали с ключом против существующей PostgreSQL сети; ниже полная изолированная recovery-проверка."
+  - command: "node tools/docker-build.mjs --build-arg RUNTIME=orders-service --target runtime --load -t coffee-compose-smoke-2954157-6959f9db-orders-service:latest . && node tools/docker-build.mjs --build-arg RUNTIME=api-public --target runtime --load -t coffee-compose-smoke-2954157-6959f9db-api-public:latest ."
+    result: passed
+    exitCode: 0
+    detail: "Два затронутых runtime образа пересобраны после четырёх typed error-ветвей; docker image inspect подтвердил оба tag/image ID."
+  - command: "pnpm test:compose-smoke -- --recovery-proof --no-build --keep --project-name coffee-compose-smoke-2954157-6959f9db"
+    result: passed-prior-slice
+    exitCode: 0
+    detail: "Изолированные PostgreSQL/Kafka и 14 runtime, Orders Outbox restart; этот прогон предшествовал application/use-case, OTel и money/bytes исправлениям."
+  - command: "pnpm test:compose-smoke -- --recovery-proof --project-name coffee-compose-smoke-2954157-6959f9db"
+    result: failed-prior-slice
+    exitCode: 1
+    detail: "Первый bootstrap упал с Query read timeout; после него отдельный --no-build --keep recovery-proof того же проекта завершился с exit 0, но оба прогона предшествовали финальному коду."
+  - command: "pnpm test:compose-smoke -- --recovery-proof --project-name coffee-compose-smoke-5ee6451a82"
+    result: passed-prior-slice
+    exitCode: 0
+    detail: "Более ранний срез: полная локальная сборка 14 runtime, PostgreSQL/Kafka recovery и Orders Outbox restart без дубля; после этого менялся Orders HTTP replay и observability."
+  - command: "node tools/docker-build.mjs --build-arg RUNTIME=orders-service --target runtime --load -t coffee-compose-smoke-5ee6451a82-orders-service:latest . && pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-compose-smoke-5ee6451a82"
+    result: passed-prior-slice
+    exitCode: 0
+    detail: "Пересборка Orders и recovery после удаления мёртвого HTTP adapter, но до финальной проверки некорректного replay status."
+  - command: "pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-compose-smoke-issue8-final-4c02d9"
+    result: failed-missing-images
+    exitCode: 1
+    detail: "Новый project name не имел образа api-internal:latest; --no-build остановился до recovery. Повторили на ранее собранном полном изолированном project с пересборкой Orders."
+  - command: "node tools/docker-build.mjs --build-arg RUNTIME=orders-service --target runtime --load -t coffee-compose-smoke-5ee6451a82-orders-service:latest . && pnpm test:compose-smoke -- --recovery-proof --no-build --project-name coffee-compose-smoke-5ee6451a82"
+    result: passed-prior-slice
+    exitCode: 0
+    detail: "После HTTP replay status и OTel правок пересобран Orders image и повторён изолированный recovery proof: PostgreSQL/Kafka, Orders Outbox Pending до restart, broker ACK, Published после restart, duplicateAfterFinalize=false; customerIntegrationProof=false. Это предшествовало изменениям readiness и state-machine."
+  - command: "node tools/docker-build.mjs --build-arg RUNTIME=orders-service --target runtime --load -t coffee-compose-smoke-5ee6451a82-orders-service:latest ."
+    result: passed
+    exitCode: 0
+    detail: "После readiness/state-machine правок сборка дошла до DONE, образ проверен docker image inspect и затем использован изолированным recovery proof; первоначальный общий shell был прерван во время Compose, не во время сборки."
+  - command: "node tools/compose-smoke.mjs --recovery-proof --no-build --project-name coffee-compose-smoke-5ee6451a82"
+    result: passed-isolated-local-gate
+    exitCode: 0
+    detail: "После scoped cleanup остатков изолированного проекта и пересборки Orders image: 14 runtimes, PostgreSQL/Kafka, /health/ready, ordersOutbox.pendingBeforeRestart=true, brokerAcknowledged=true, publishedAfterRestart=true, duplicateAfterFinalize=false; dbIntegrationProof=true, customerIntegrationProof=false. Два прежних повтора exit 1 до proof из-за оставшейся сети, отдельный проект exit 1 без api-internal image; текущий запуск exit 0."
+  - command: "docker run --rm --network none --entrypoint sha256sum coffee-compose-smoke-5ee6451a82-orders-service:latest dist/main.js dist/infrastructure/internal-api-readiness.js dist/domain/order-state.js && sha256sum apps/orders-service/dist/main.js apps/orders-service/dist/infrastructure/internal-api-readiness.js apps/orders-service/dist/domain/order-state.js"
+    result: passed-image-parity
+    exitCode: 0
+    detail: "Исторический до replay/SQL исправления срез: три пары SHA-256 byte-identical; image sha256:c559483397fbd08307217d76d0ba05f28355f32235c33877640cde5061012eec. После него production runtime изменился; актуальная пересборка и parity указаны ниже."
+  - command: |-
+      script='const fs=require("node:fs"),crypto=require("node:crypto"),path=require("node:path");const root=process.argv[1];const files=[];function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())walk(p);else files.push(p)}}walk(root);const hash=crypto.createHash("sha256");for(const file of files.sort()){hash.update(path.relative(root,file));hash.update("\0");hash.update(fs.readFileSync(file))}console.log(files.length,hash.digest("hex"))'; node -e "$script" apps/orders-service/dist && docker run --rm --network none --entrypoint node coffee-compose-smoke-5ee6451a82-orders-service:latest -e "$script" dist
+    result: passed-full-orders-dist-parity
+    exitCode: 0
+    detail: "Исторический до replay/SQL исправления срез: оба вывода 36 файлов, digest 6c4a5d7aa8e287be1c4b6f62d7110fce9c5c83c6c29715011f480cd44a36999b. Алгоритм: относительный путь в отсортированном порядке, NUL, сырые байты каждого файла. Для новых images ниже отдельно указан manifest digest sorted path:sha256; не сравнивать эти значения между разными алгоритмами."
+  - command: "pnpm exec tsc -b --pretty false && node --test --test-name-pattern='Orders InternalApi readiness rejects' tests/runtime/lifecycle.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "1 targeted, 0 skipped: peer другого runtime с доверенным CA → 503 без HTTP, healthy peer → 200, blackhole abort по RUNTIME_READINESS_DEADLINE с закрытием socket, shutdown abort по RUNTIME_DRAINING и stopped без pending."
+  - command: "pnpm test"
+    result: failed-missing-test-dependency
+    exitCode: 1
+    detail: "Новая первая попытка: 693 total, 651 pass, 1 fail, 41 skipped; архитектурный JSON Schema test требует Python jsonschema, отсутствующий в системном PATH. Исправлено только окружение через существующий временный venv, без изменения dependency/кода."
+  - command: "PATH=\"$TMPDIR/coffee8-schema-venv/bin:$PATH\" pnpm test"
+    result: passed
+    exitCode: 0
+    detail: "Предыдущий срез до replay-only расширения: 693 total, 652 pass, 0 fail, 41 skipped. Из skips: 12 Catalog/AROMA, 14 Customer, 12 Database/Orders, 3 Pricing. Отдельные live прогоны DB/Orders 84/84 и Pricing 49/49 закрывали пропуски их набора; Customer live остаётся непроверенным, Compose customerIntegrationProof=false; остальные Catalog/AROMA не становятся PASS #8."
+  - command: "PATH=\"$TMPDIR/coffee8-schema-venv/bin:$PATH\" pnpm check"
+    result: passed
+    exitCode: 0
+    detail: "Предыдущий срез до replay-only расширения: contracts 47/47, общий suite 693 total, 652 pass, 0 fail, 41 skipped; Orders/Database live отдельно 84/84. Python jsonschema — временный venv вне репозитория; check не выполняет live Customer proof. После нового runtime fix запущены указанные ниже узкие живые проверки, повторный полный pnpm check не запускался без необходимости."
+  - command: "node --check tests/orders/owner-live.test.mjs && pnpm lint"
+    result: passed
+    exitCode: 0
+    detail: "Предыдущий срез: параметризованный owner integration test синтаксически корректен и oxlint type-aware без замечаний. После независимого ревью обнаружен и исправлен runtime дефект; новый lint, пересборка затронутых images и Compose proof записаны ниже."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/owner-live.test.mjs tests/orders/reconciliation-live.test.mjs tests/orders/owner-http.test.mjs tests/orders/observability.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "29/29 live/owner/observability, 0 skipped на предыдущем срезе без production правок. Первый совмещённый прогон 28/29 из-за совпадения alternative path с исходным orderRef в fixture; после исправления fixture — 29/29. Позже независимое ревью выявило ещё не покрытый corrupt-expiry path; RED→GREEN и новые runtime изменения записаны ниже."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-name-pattern='live owner replay-only matrix' tests/orders/owner-live.test.mjs"
+    result: failed-before-fix
+    exitCode: 1
+    detail: "RED: после добавления schema-valid SQL fixture Completed с lease_until/expires_at=infinity Draft lookup вернул 503 IDEMPOTENCY_LOOKUP_UNAVAILABLE вместо ожидаемого 500 IDEMPOTENCY_RESULT_INVALID. Локальный журнал: $TMPDIR/issue8-replay-corrupt-red.log; данные только синтетические."
+  - command: "pnpm exec tsc -b packages/platform-idempotency apps/orders-service --pretty false && COFFEE_DB_LIVE_PROOF=1 node --test --test-name-pattern='live owner replay-only matrix' tests/orders/owner-live.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "GREEN 1/1: generic SQL projection больше не падает при infinite timestamp; owner отличает IDEMPOTENCY_RECORD_INVALID (500) от ошибки БД (503). Исправление не меняет публичный API, схему и нормальные terminal responses."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/owner-live.test.mjs tests/orders/reconciliation-live.test.mjs tests/orders/owner-http.test.mjs tests/orders/observability.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "Предыдущий replay-only/owner/observability профиль: runner сообщил 29/29, 0 skipped, но stdout capture скрывал HTTP lifecycle из TAP. Повторный полный профиль после исправления capture — 30/30 ниже."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/*.test.mjs tests/database/*.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "Предыдущий Orders/Database live: runner сообщил 84/84, 0 skipped после исправления runtime и shared SQL projection, но stdout capture скрывал HTTP lifecycle; повторный полный прогон — 85/85 ниже."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test tests/pricing/*.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "Затронутый shared idempotency путь Pricing: 49/49, 0 skipped; Customer live требует отдельные mTLS/DB fixtures и не заявлен пройденным."
+  - command: "pnpm lint && pnpm exec tsc -b packages/platform-idempotency apps/orders-service --pretty false && git diff --check"
+    result: passed
+    exitCode: 0
+    detail: "Типы и oxlint type-aware после runtime исправления прошли; для untracked новых файлов дополнительно проверены YAML parsing, syntax и отсутствие trailing whitespace."
+  - command: "node tools/docker-build.mjs --build-arg RUNTIME=orders-service --target runtime --load -t coffee-compose-smoke-5ee6451a82-orders-service:latest ."
+    result: passed
+    exitCode: 0
+    detail: "Orders image sha256:810cf28b2713bf53e85e719067ac73252d45ac80b210ceae42d4c129afc59753; 36 dist файлов локально и в image имеют общий manifest digest b7f2e02fa0ae326a30e2234eb37a8aedaf603cf569c8901a2664f611d64b0bab."
+  - command: "node tools/docker-build.mjs --build-arg RUNTIME=customer-service --target runtime --load -t coffee-compose-smoke-5ee6451a82-customer-service:latest ."
+    result: passed
+    exitCode: 0
+    detail: "Customer image sha256:1f093a20276df26c3aee25344315a4bd434a9d4fe5109f3996487f1cc590846e; idempotency dist hash a037b9666c613963047929a8ef4702f358cae9cda584a0fce3cd1d9dcf5ea713 совпадает с локальным."
+  - command: "node tools/docker-build.mjs --build-arg RUNTIME=pricing-service --target runtime --load -t coffee-compose-smoke-5ee6451a82-pricing-service:latest ."
+    result: passed
+    exitCode: 0
+    detail: "Pricing image sha256:9ced86eea020c387a26a6f58909faa43b46776e76e11eb95cb01a7a9a5f0651c; shared idempotency dist hash a037b9666c613963047929a8ef4702f358cae9cda584a0fce3cd1d9dcf5ea713 совпадает с локальным и Orders image."
+  - command: "node tools/compose-smoke.mjs --recovery-proof --no-build --project-name coffee-compose-smoke-5ee6451a82"
+    result: passed
+    exitCode: 0
+    detail: "После пересборки трёх затронутых images: 14 runtimes, local-fixture, Orders Outbox pending-before-restart=true, broker-acknowledged=true, published-after-restart=true, duplicate-after-finalize=false, dbIntegrationProof=true, customerIntegrationProof=false; scoped Compose resources очищены."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-reporter=tap tests/orders/owner-live.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "После test-only исправления stdout capture TAP показал оба имени: HTTP lifecycle и replay-only matrix; 2/2, 0 skipped. До исправления тот же совместный запуск показывал только matrix (1/1)."
+  - command: "node --test --test-reporter=tap $TMPDIR/issue8-stdout-reporter-forward-control.mjs"
+    result: expected-failure-visible
+    exitCode: 1
+    detail: "Отдельная scratch-проба с тем же forwarding capture показывает имя и сообщение первого намеренно падающего теста, имя второго теста и итог 1 pass / 1 fail; wrapper проверил ожидаемый exit 1. Scratch-проба не является тестом репозитория."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-reporter=tap --test-concurrency=1 tests/orders/owner-live.test.mjs tests/orders/reconciliation-live.test.mjs tests/orders/owner-http.test.mjs tests/orders/observability.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "После исправления capture — 30/30, 0 skipped, оба owner-live имени присутствуют в TAP; replay-only canaries остались включены."
+  - command: "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/*.test.mjs tests/database/*.test.mjs"
+    result: passed
+    exitCode: 0
+    detail: "После исправления capture — 85/85, 0 skipped, оба owner-live имени видны в runner."
+  - command: "PATH=\"$TMPDIR/coffee8-schema-venv/bin:$PATH\" pnpm test"
+    result: passed
+    exitCode: 0
+    detail: "После исправления capture — 694 total, 652 pass, 0 fail, 42 skipped (13 DB/Orders, 3 Pricing, 14 Customer, 12 Catalog/AROMA; последние два набора не заявлены пройденными)."
+  - command: "node --check tests/orders/owner-live.test.mjs && pnpm lint && git diff --check"
+    result: passed
+    exitCode: 0
+    detail: "Синтаксис test-only capture и type-aware oxlint после исправления прошли без замечаний."
+limitations:
+  - "pnpm db:smoke без --execute — безопасный offline-план на 50 role cases, а не live proof изолированных прав PostgreSQL; live owner-local тесты Orders/Database указаны отдельно."
+  - "Владелец утвердил OrderReconciliationRequested.v1 и границу #8/#11. Атомарный 202/History/Outbox/Completed/replay проверен с read-only test fixture OutOfSync; в production до #11 нет состояния, допускающего команду, поэтому PendingObservation остаётся 409. Проверка полного #11 Inbox/cart convergence не проводилась; фиктивных Desired/Observed нет."
+  - "Изолированный штатный --recovery-proof повторён после последней replay/SQL правки и пересборки затронутых Orders/Customer/Pricing runtime images; Orders dist и shared idempotency dist сверены с images. Буквальная команда pnpm test:compose-smoke без параметров не проходила: preflight exit 1 из-за отсутствующего SOPS_AGE_KEY_FILE, с реальными credentials или существующей PostgreSQL-сетью её не запускать."
+  - "Обычный pnpm test:compose-smoke без изолированного recovery fixture не запускался с реальным SOPS age ключом: штатный запуск требует SOPS_AGE_KEY_FILE и может подключить существующую PostgreSQL сеть; вместо него выполнен полный --recovery-proof с пересборкой."
+  - "Kafka broker ACK OrderConfirmed.v1 после подтверждённого Orders Confirm проверен только на изолированных синтетических PostgreSQL/Kafka fixtures; production broker/IdP и реальные provider effects не проверялись."
+  - "Синтетические actor/mTLS fixtures не доказывают production IdP, PKI/CRL, provider mutation AROMA или физическую сходимость корзины (#11)."
+  - "Негативы проверены реальным локальным TLS peer с общей доверенной CA, scoped HttpClient и Orders readiness helper в createRuntime; отдельный тест не запускает production main, а positive Compose проверяет собранный main. Production PKI/CRL, зависшая настоящая служба и внешняя сеть не проверялись."
+  - "Это локальный verification handoff: его результаты не подтверждают GitHub CI, приёмку владельцем, публикацию PR или merge; remote-состояние проверяется отдельно после соответствующего действия."
+  - "Изменение shared platform-database ограничено лексическим разбором SQL миграции перед исполнением; владение транзакциями, checksums, rollback и public API не менялись."
+  - "Browser helper itemRef, отображение server allowedActions и terminal classifier для pending intent относятся к #9; в #8 локально доказаны server validation, owner Card allowedActions и точные recovery marker/status/body, но не browser implementation. Live issue #8 теперь содержит разделённую acceptance-матрицу; оставшиеся процессные пункты проверяются отдельно после PR/merge."

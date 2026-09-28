@@ -11,7 +11,9 @@
 потому что он перезаписывал бы вклад остальных заказов.
 
 #8 при Confirm сохраняет immutable `order_desired_contributions` и публикует
-только `OrderConfirmed.v1`. #11 агрегирует все актуальные contributions в
+`OrderConfirmed.v1`. Отдельный public reconciliation command #8 публикует
+`OrderReconciliationRequested.v1` только после принятия order-level намерения.
+#11 агрегирует все актуальные contributions в
 `cart_desired_revisions`; только после commit новой cart revision публикуется
 `AromaConvergenceRequested.v1`.
 
@@ -197,13 +199,26 @@ expires_at = transaction_timestamp() + 30s
 ## 9. Reconciliation command
 
 `POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation`
-реализуется в `orders-service`, но входит в #11.
+реализуется и принимается в #8 через `orders-service`; #11 не реализует
+второй public handler.
 
 Body `{expectedVersion,reason}`; Idempotency-Key обязателен. Transaction:
 Order lock, Confirmed/status/version/action check, version +1, History
-`ReconciliationRequested`, Outbox `AromaConvergenceRequested.v1` reason
-`OperatorRequested`, completed idempotency. Команда не меняет Desired/Observed,
-не получает lease и не вызывает Gateway. Exact replay возвращает исходный 202.
+`ReconciliationRequested`, Outbox `OrderReconciliationRequested.v1` с
+`{orderRef,orderVersion,requestedAt}`, completed idempotency. Команда не меняет
+Desired/Observed, не получает lease и не вызывает Gateway. Exact replay
+возвращает исходный 202. Пока owner-local projection не подтверждает
+`OutOfSync|Blocked|UnknownOutcome`, в том числе при `PendingObservation`,
+команда отказывает без эффекта.
+
+В #11 `orders-aroma-preparation` принимает order-level событие в прежней
+`orders-aroma-preparation-v1` Inbox, связывает его с Orders History/Outbox и
+проверяет **текущие** cart Desired/projection до создания отдельного
+`AromaConvergenceRequested.v1(reason=OperatorRequested)` с настоящими
+`cartScopeRef` и `desiredRevision`. Не потерять ожидающий intent при временном
+отсутствии cart facts, duplicate/restart и Kafka retention: восстановление
+через существующие History/Outbox/Inbox, без новой таблицы. Корректность
+сканирования/дедупликации и cart-effect — acceptance #11, не proof #8.
 
 ## 10. Events и Order Card
 

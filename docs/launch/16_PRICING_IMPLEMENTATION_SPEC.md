@@ -123,6 +123,10 @@ Headers: `Authorization`, `Idempotency-Key` UUID, optional
 `X-Correlation-ID`, `traceparent`. Trusted `actorRef` формирует edge; request
 body не содержит actor или денежных значений.
 
+Операция `createPricingQuote` требует `x-permission: pricing:create` в OpenAPI,
+Edge inventory и проверках api-public/Pricing, включая replay-only. Это часть
+[утверждённой browser-карты #8](17_ORDERS_IMPLEMENTATION_SPEC.md#права-browser-операций).
+
 Request:
 
 ```json
@@ -212,18 +216,45 @@ leading zeros. JSON сериализуется compact, UTF-8, без whitespace
 `orders-service`, deadline 1s, без `Idempotency-Key` и без side effects кроме
 append-only audit.
 
-Request содержит `quoteRef`, `hash`, `customerRef` и `lines[]` с
-`productRef`, `variantRef`, canonical `quantity`. Pricing загружает quote и
-lines, пересчитывает hash, проверяет exact expected facts и `expiresAt > now()`.
+Решение владельца от 27 сентября 2026 для #8: **проверка одной выбранной строки
+с обязательной проверкой целостности всей сохранённой котировки**. Это заменяет
+прежний full-lines verify request; не добавляет второй endpoint или режим.
 
-`200 PricingQuoteVerificationResponse`:
+Закрытый `PricingQuoteVerifyRequest` содержит обязательные поля `quoteRef`,
+`hash`, `customerRef`, `quoteLineNumber` (integer 1..100), `productRef`,
+`variantRef`, canonical `quantity`. `lines[]` и другие поля запрещены.
+Public `OrderItemPutRequest` не меняется: его `quoteHash` передаётся как `hash`.
+
+Pricing загружает полную сохранённую quote и все lines, декодирует их,
+пересчитывает и проверяет public hash и internal proof hash; затем проверяет
+Customer, срок действия на DB time и выбирает строку по сохранённому
+`lineNumber=quoteLineNumber`. Товар, вариант и количество обязаны совпасть.
+Отсутствующий/подменённый номер или несовпадение expected facts — scope mismatch.
+Повреждение любой строки, в том числе невыбранной, не может дать успешный proof.
+Просто ослабить сравнение числа строк до произвольного подмножества запрещено.
+
+Закрытый `200 PricingQuoteVerificationResponse` содержит обязательные
 `valid:true`, `quoteRef`, `policyVersionRef`, `catalogSnapshotRevision`,
-`customerRef`, `expiresAt`, `currency`, authoritative lines, включая
-`productDisplayName`, `offerRef`, mapping revision, `internalProofHash` и
-`totalMinor`. Pricing пересчитывает оба hash из сохранённых DB facts; Orders не
-конструирует доказательство из данных браузера.
-`api-internal` читает ответ с лимитом 256 KiB: валидные 100 строк с именами
-до 200 символов проходят, более крупный ответ отклоняется до forwarding.
+`customerRef`, `expiresAt`, `currency` и **`line`**, не `lines`/`totalMinor`.
+`line` имеет существующий состав `PricingQuoteAuthoritativeLine`: `lineNumber`,
+`productRef`, `variantRef`, `productDisplayName`, `offerRef`, `mappingRevision`,
+`quantity`, `unit`, `supplierUnitMinor`, `unitMinor`, `lineTotalMinor`, `currency`,
+`internalProofHash`. `lineNumber` сохраняет исходный номер, не перенумеровывается
+в 1; `internalProofHash` относится ко всей проверенной котировке, не к новому
+hash подмножества. Общий quote total не является суммой позиции Orders.
+
+Orders сверяет quote/customer/line/product/variant/quantity/currency/expiry
+с исходным запросом и сохраняет authoritative proof; private supplier/mapping
+facts не выдаются браузеру. Полный quote не восстанавливается из browser body.
+Лимит чтения private ответа 256 KiB сохраняется; новый ответ содержит одну
+строку, превышение/невалидный JSON/shape закрываются до forwarding.
+
+В #8 согласованно заменить OpenAPI internal-v1, runtime schemas/types,
+api-internal forwarding, Pricing provider и Orders client с их тестами.
+Старую реализацию и fixtures full-lines verify удалить; не вводить compatibility
+union или fallback. Пока это не выполнено, действующий код старого verify не
+считается реализацией утверждённого контракта. Confirm проверяет только
+persisted Orders proof и не вызывает Pricing внутри транзакции.
 
 Ошибки: `404 PRICING_QUOTE_NOT_FOUND`, `409 PRICING_QUOTE_HASH_MISMATCH`,
 `409 PRICING_QUOTE_EXPIRED`, `409 PRICING_QUOTE_SCOPE_MISMATCH`,
@@ -249,6 +280,11 @@ attributes. Реальные экспортеры и production-доставка
 - idempotency: replay, conflict, in-progress, expired lease и crash recovery;
 - Catalog unavailable/timeout/mixed revision не создаёт quote;
 - verify: valid, unknown, altered hash, expired и scope mismatch;
+- selected-line verify #8: не первая строка многопозиционной котировки,
+  неправильный номер/product/variant/quantity/customer, corruption невыбранной
+  строки, отказ старому `lines[]` body и отсутствие private facts в public API;
+- уникальность `(productRef,variantRef)` при создании quote сохраняется:
+  дубли являются негативным/corruption fixture, не допустимой новой котировкой;
 - OpenAPI positive/negative fixtures и breaking-change gate;
 - architecture checker запрещает Customer/Catalog/Orders imports и DB URLs;
 - redaction canary отсутствует в logs/traces/errors/audit.

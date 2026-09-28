@@ -4,6 +4,8 @@ import {catalogContractSchemas, catalogResponseSchema, catalogSearchQueryError, 
 import type {CatalogSearchResponse} from "@coffee-platform/contracts-catalog-v1";
 import type {CustomerCreateRequest, CustomerResponse, CustomerSearchResponse} from "@coffee-platform/contracts-customer-v1";
 import {isPricingProblem, isPricingQuoteCreateRequest, isPricingQuoteResponse, pricingContractSchemas, pricingResponseSchema} from "@coffee-platform/contracts-pricing-v1";
+import {isIfMatchVersion, isItemRef, isOrderCardResponse, isOrderConfirmRequest, isOrderDraftCreateRequest, isOrderItemPutRequest, isOrderRef, isOrdersIdempotencyKey, isOrdersProblem, isOrdersReplayOnly, isReconciliationAcceptedResponse, isReconciliationRequest, ordersContractSchemas} from "@coffee-platform/contracts-orders-v1";
+import type {OrderCardResponse} from "@coffee-platform/contracts-orders-v1";
 import type {PricingQuoteCreateRequest, PricingQuoteResponse} from "@coffee-platform/contracts-pricing-v1";
 import type {RuntimeComposition, RuntimeCompositionContext, RuntimeRequestContext} from "@coffee-platform/runtime";
 import {parseServiceTransportMaterial, signActorContext, verifyActorContextWithKeySet, type ActorContextClaims, type ServiceTransportMaterial} from "@coffee-platform/security";
@@ -21,6 +23,7 @@ type Request = Readonly<{
   url: string;
   body: unknown;
   query: unknown;
+  params?: unknown;
 }>;
 type Reply = {
   header: (name: string, value: string) => Reply;
@@ -36,6 +39,18 @@ type CatalogForwardResult = Readonly<{status: 200; body: CatalogSearchResponse} 
 type ForwardContext = Readonly<{actor: ActorContextClaims; context: Context; idempotencyKey: string; replayOnly: boolean}>;
 type CatalogForwardContext = Readonly<{actor: ActorContextClaims; context: Context}>;
 type PricingForwardResult = Readonly<{status: number; body: unknown; replayed?: boolean}>;
+type OrdersOperationId = "createOrderDraft" | "upsertOrderItem" | "removeOrderItem" | "confirmOrder" | "requestAromaReconciliation" | "getOrderCard";
+const ordersPermissionByOperation = {
+  createOrderDraft: "orders:create",
+  getOrderCard: "orders:read:any",
+  upsertOrderItem: "orders:edit:any",
+  removeOrderItem: "orders:edit:any",
+  confirmOrder: "orders:confirm:any",
+  requestAromaReconciliation: "orders:reconcile:any",
+} as const satisfies Record<OrdersOperationId, string>;
+type OrdersForwardContext = Readonly<{actor: ActorContextClaims; context: Context; idempotencyKey?: string; ifMatchVersion?: string; replayOnly?: boolean}>;
+type OrdersForwardResult = Readonly<{status: number; body: unknown; replayed?: boolean}>;
+type OrdersClient = Readonly<{forward: (operationId: OrdersOperationId, method: "GET" | "POST" | "PUT" | "DELETE", path: string, body: unknown, forwardContext: OrdersForwardContext) => Promise<OrdersForwardResult>}>;
 type Problem = Readonly<{
   type: "about:blank";
   title: string;
@@ -59,6 +74,7 @@ export type PublicApiAdapters = Readonly<{
   customer: CustomerClient;
   catalog: Readonly<{search: (query: CatalogSearchQuery, context: CatalogForwardContext) => Promise<CatalogForwardResult>}>;
   pricing?: Readonly<{create: (request: PricingQuoteCreateRequest | undefined, context: ForwardContext) => Promise<PricingForwardResult>}>;
+  orders?: OrdersClient;
 }>;
 
 function header(request: Request, name: string): HeaderValue {
@@ -165,6 +181,100 @@ function sendPricingForward(request: Request, reply: Reply, result: PricingForwa
     return sendProblem(reply, problem(request, result.status, result.body.code, "pricing request failed"));
   }
   return sendProblem(reply, pricingUnavailable(request));
+}
+
+const ordersAllowedProblemCodes: Readonly<Record<OrdersOperationId, Readonly<Record<number, readonly string[]>>>> = Object.freeze({
+  createOrderDraft: {400: ["VALIDATION_FAILED"], 401: ["AUTHENTICATION_REQUIRED"], 403: ["ACTOR_CONTEXT_INVALID"], 404: ["CUSTOMER_NOT_FOUND"], 409: ["CUSTOMER_NOT_ACTIVE", "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_REQUEST_IN_PROGRESS"], 410: ["IDEMPOTENCY_RESULT_NOT_RETAINED"], 500: ["INTERNAL_ERROR", "IDEMPOTENCY_RESULT_INVALID"], 503: ["CUSTOMER_UNAVAILABLE", "IDEMPOTENCY_LOOKUP_UNAVAILABLE"]},
+  upsertOrderItem: {400: ["VALIDATION_FAILED"], 401: ["AUTHENTICATION_REQUIRED"], 403: ["ACTOR_CONTEXT_INVALID"], 404: ["ORDER_NOT_FOUND", "CATALOG_PRODUCT_NOT_FOUND"], 409: ["ORDER_VERSION_CONFLICT", "ORDER_QUOTE_STALE", "ORDER_QUOTE_SCOPE_MISMATCH", "ORDER_ITEM_LIMIT_EXCEEDED", "ORDER_NOT_EDITABLE", "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_REQUEST_IN_PROGRESS"], 410: ["IDEMPOTENCY_RESULT_NOT_RETAINED"], 500: ["INTERNAL_ERROR", "IDEMPOTENCY_RESULT_INVALID"], 503: ["IDEMPOTENCY_LOOKUP_UNAVAILABLE"]},
+  removeOrderItem: {400: ["VALIDATION_FAILED"], 401: ["AUTHENTICATION_REQUIRED"], 403: ["ACTOR_CONTEXT_INVALID"], 404: ["ORDER_NOT_FOUND", "ORDER_ITEM_NOT_FOUND"], 409: ["ORDER_VERSION_CONFLICT", "ORDER_NOT_EDITABLE", "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_REQUEST_IN_PROGRESS"], 410: ["IDEMPOTENCY_RESULT_NOT_RETAINED"], 500: ["INTERNAL_ERROR", "IDEMPOTENCY_RESULT_INVALID"], 503: ["IDEMPOTENCY_LOOKUP_UNAVAILABLE"]},
+  confirmOrder: {400: ["VALIDATION_FAILED"], 401: ["AUTHENTICATION_REQUIRED"], 403: ["ACTOR_CONTEXT_INVALID"], 404: ["ORDER_NOT_FOUND"], 409: ["ORDER_VERSION_CONFLICT", "ORDER_QUOTE_STALE", "ORDER_NOT_EDITABLE", "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_REQUEST_IN_PROGRESS"], 410: ["IDEMPOTENCY_RESULT_NOT_RETAINED"], 422: ["ORDER_CONFIRMATION_REJECTED", "ORDER_EMPTY", "ORDER_DESIRED_OVERFLOW"], 500: ["INTERNAL_ERROR", "IDEMPOTENCY_RESULT_INVALID"], 503: ["IDEMPOTENCY_LOOKUP_UNAVAILABLE"]},
+  requestAromaReconciliation: {400: ["VALIDATION_FAILED"], 401: ["AUTHENTICATION_REQUIRED"], 403: ["ACTOR_CONTEXT_INVALID"], 404: ["ORDER_NOT_FOUND"], 409: ["ORDER_VERSION_CONFLICT", "AROMA_RECONCILIATION_NOT_ALLOWED", "IDEMPOTENCY_CONFLICT", "IDEMPOTENCY_REQUEST_IN_PROGRESS"], 410: ["IDEMPOTENCY_RESULT_NOT_RETAINED"], 500: ["INTERNAL_ERROR", "IDEMPOTENCY_RESULT_INVALID"], 503: ["IDEMPOTENCY_LOOKUP_UNAVAILABLE"]},
+  getOrderCard: {401: ["AUTHENTICATION_REQUIRED"], 403: ["ACTOR_CONTEXT_INVALID"], 404: ["ORDER_NOT_FOUND"], 500: ["INTERNAL_ERROR"]},
+});
+
+function sendOrdersForward(request: Request, reply: Reply, result: OrdersForwardResult, operationId: OrdersOperationId): Reply {
+  reply.header("cache-control", "no-store").header("x-correlation-id", request.runtimeContext?.correlationId ?? request.id);
+  const successStatus: Readonly<Record<OrdersOperationId, number>> = {
+    createOrderDraft: 201, upsertOrderItem: 200, removeOrderItem: 200,
+    confirmOrder: 200, requestAromaReconciliation: 202, getOrderCard: 200,
+  };
+  if (result.status === successStatus[operationId]) {
+    const validBody = operationId === "requestAromaReconciliation"
+      ? isReconciliationAcceptedResponse(result.body)
+      : isOrderCardResponse(result.body);
+    if (!validBody) return sendProblem(reply, problem(request, 503, "ORDERS_UNAVAILABLE", "orders owner returned an invalid response"));
+    const requestedRef = orderParams(request)["orderRef"];
+    if (typeof requestedRef === "string" && (result.body as {orderRef: string}).orderRef !== requestedRef) {
+      return sendProblem(reply, problem(request, 503, "ORDERS_UNAVAILABLE", "orders owner returned an invalid response"));
+    }
+    if (operationId === "createOrderDraft" && !ordersReplayOnly(request) && (result.body as OrderCardResponse).customer.customerRef !== (request.body as {customerRef: string}).customerRef) {
+      return sendProblem(reply, problem(request, 503, "ORDERS_UNAVAILABLE", "orders owner returned an invalid response"));
+    }
+    if (result.replayed === true && operationId !== "getOrderCard") reply.header("idempotency-replayed", "true");
+    return reply.code(result.status).send(result.body);
+  }
+  if (isOrdersProblem(result.body) && result.body.status === result.status && ordersAllowedProblemCodes[operationId][result.status]?.includes(result.body.code)) {
+    return sendProblem(reply, problem(request, result.status, result.body.code, "orders request failed"));
+  }
+  return sendProblem(reply, problem(request, 503, "ORDERS_UNAVAILABLE", "orders owner is unavailable"));
+}
+
+async function ordersActor(request: Request, adapters: PublicApiAdapters, operationId: OrdersOperationId, signal: AbortSignal): Promise<ActorContextClaims> {
+  if (spoofed(request)) throw new Error("ACTOR_CONTEXT_INVALID");
+  const rawToken = header(request, "x-actor-context");
+  const token = Array.isArray(rawToken) ? rawToken.length === 1 ? rawToken[0] : undefined : rawToken;
+  if (token === undefined) throw new Error("AUTHENTICATION_REQUIRED");
+  const correlationId = request.runtimeContext?.correlationId ?? request.id;
+  if (!isOrdersIdempotencyKey(correlationId)) throw new Error("ACTOR_CONTEXT_INVALID");
+  const suppliedCorrelation = header(request, "x-correlation-id");
+  if (suppliedCorrelation !== undefined && (Array.isArray(suppliedCorrelation) ? suppliedCorrelation.length !== 1 || suppliedCorrelation[0] !== correlationId : suppliedCorrelation !== correlationId)) throw new Error("ACTOR_CONTEXT_INVALID");
+  const claims = await adapters.verifyActor(token, operationId, signal, correlationId);
+  if (claims.iss !== "edge-gateway" || claims.aud !== "api-public" || claims.originalIssuer !== "edge-gateway" || claims.operationId !== operationId || claims.correlationId !== correlationId || claims.sub.length === 0 || !claims.permissions.includes(ordersPermissionByOperation[operationId]) || (request.runtimeContext?.traceparent !== undefined && claims.traceparent !== request.runtimeContext.traceparent)) throw new Error("ACTOR_CONTEXT_INVALID");
+  return claims;
+}
+
+function ordersSingleHeader(request: Request, name: string): string | undefined | null {
+  const value = header(request, name);
+  return Array.isArray(value) ? value.length === 1 ? value[0] ?? null : null : value;
+}
+
+function ordersHasNoQuery(request: Request): boolean {
+  return request.query === null || typeof request.query !== "object" || Object.keys(request.query).length === 0;
+}
+
+function ordersReplayOnly(request: Request): boolean | Problem {
+  const raw = header(request, "idempotency-replay-only");
+  const value = Array.isArray(raw) ? raw.length === 1 ? raw[0] : null : raw;
+  if (value === undefined) return false;
+  if (value === null || !isOrdersReplayOnly(value === "true") || request.body !== undefined || header(request, "if-match-version") !== undefined) return problem(request, 400, "VALIDATION_FAILED", "replay-only requires true and an empty body");
+  return true;
+}
+
+function ordersIdempotencyKey(request: Request): string | Problem {
+  const raw = header(request, "idempotency-key");
+  const value = Array.isArray(raw) ? raw.length === 1 ? raw[0] : undefined : raw;
+  return value !== undefined && isOrdersIdempotencyKey(value) ? value : problem(request, 400, "VALIDATION_FAILED", "Idempotency-Key must be a UUID");
+}
+
+function orderParams(request: Request): Record<string, unknown> {
+  return request.params !== null && typeof request.params === "object" ? request.params as Record<string, unknown> : {};
+}
+
+async function forwardOrder(request: Request, reply: Reply, adapters: PublicApiAdapters, operationId: OrdersOperationId, method: "GET" | "POST" | "PUT" | "DELETE", path: string, body: unknown, extra: Readonly<{idempotencyKey?: string; ifMatchVersion?: string; replayOnly?: boolean}> = {}): Promise<Reply> {
+  if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+  const requestContext = context(request, operationId === "getOrderCard" ? 1_000 : undefined);
+  let claims: ActorContextClaims;
+  try { claims = await ordersActor(request, adapters, operationId, requestContext.signal); }
+  catch (error) {
+    const code = error instanceof Error ? error.message : "ACTOR_CONTEXT_INVALID";
+    return sendProblem(reply, problem(request, code === "AUTHENTICATION_REQUIRED" ? 401 : 403, code === "AUTHENTICATION_REQUIRED" ? code : "ACTOR_CONTEXT_INVALID", "signed actor context is invalid"));
+  }
+  if (exceedsBodyLimit(request) || exceedsUrlLimit(request)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+  try {
+    if (adapters.orders === undefined) throw new Error("orders client is not configured");
+    const result = await adapters.orders.forward(operationId, method, path, body, {actor: claims, context: requestContext, ...extra});
+    return sendOrdersForward(request, reply, result, operationId);
+  } catch { return sendProblem(reply, problem(request, 503, "ORDERS_UNAVAILABLE", "orders service is unavailable")); }
 }
 
 async function pricingActor(request: Request, adapters: PublicApiAdapters, signal: AbortSignal): Promise<ActorContextClaims> {
@@ -317,6 +427,99 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
       catch { return sendProblem(reply, problem(request, 503, "CATALOG_UNAVAILABLE", "catalog owner is unavailable")); }
     },
   });
+
+  const orderSchema = (successStatus: number) => ({
+    response: {[successStatus]: successStatus === 202 ? ordersContractSchemas.reconciliationAcceptedResponse : ordersContractSchemas.cardResponse, 400: ordersContractSchemas.problem, 401: ordersContractSchemas.problem, 403: ordersContractSchemas.problem, 404: ordersContractSchemas.problem, 409: ordersContractSchemas.problem, 410: ordersContractSchemas.problem, 422: ordersContractSchemas.problem, 500: ordersContractSchemas.problem, 503: ordersContractSchemas.problem},
+  });
+  const commandOptions = {config: {runtimeDeadlineProfile: "defaultMs"}, bodyLimit: MAX_BODY_BYTES, errorHandler: (error: Error, request: Request, reply: Reply) => frameworkError(request, reply, error)};
+
+  app.post("/api/client-v1/orders/drafts", {
+    ...commandOptions,
+    schema: orderSchema(201),
+    handler: async (request, rawReply) => {
+      const reply = rawReply as unknown as Reply;
+      if (!ordersHasNoQuery(request) || header(request, "if-match-version") !== undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Query parameters and If-Match-Version are not supported"));
+      const replay = ordersReplayOnly(request);
+      if (typeof replay !== "boolean") return sendProblem(reply, replay);
+      const key = ordersIdempotencyKey(request);
+      if (typeof key !== "string") return sendProblem(reply, key);
+      const body = replay ? undefined : isOrderDraftCreateRequest(request.body) ? request.body : undefined;
+      if (!replay && body === undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+      return forwardOrder(request, reply, adapters, "createOrderDraft", "POST", "/api/client-v1/orders/drafts", body, {idempotencyKey: key, replayOnly: replay});
+    },
+  });
+
+  app.put("/api/client-v1/orders/:orderRef/items/:itemRef", {
+    ...commandOptions,
+    schema: orderSchema(200),
+    handler: async (request, rawReply) => {
+      const reply = rawReply as unknown as Reply;
+      const {orderRef, itemRef} = orderParams(request);
+      if (!isOrderRef(orderRef) || !isItemRef(itemRef) || header(request, "if-match-version") !== undefined || !ordersHasNoQuery(request)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request path or headers are invalid"));
+      const replay = ordersReplayOnly(request);
+      if (typeof replay !== "boolean") return sendProblem(reply, replay);
+      const key = ordersIdempotencyKey(request);
+      if (typeof key !== "string") return sendProblem(reply, key);
+      const body = replay ? undefined : isOrderItemPutRequest(request.body) ? request.body : undefined;
+      if (!replay && body === undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+      return forwardOrder(request, reply, adapters, "upsertOrderItem", "PUT", `/api/client-v1/orders/${orderRef}/items/${itemRef}`, body, {idempotencyKey: key, replayOnly: replay});
+    },
+  });
+
+  app.delete("/api/client-v1/orders/:orderRef/items/:itemRef", {
+    ...commandOptions,
+    schema: orderSchema(200),
+    handler: async (request, rawReply) => {
+      const reply = rawReply as unknown as Reply;
+      const {orderRef, itemRef} = orderParams(request);
+      if (!isOrderRef(orderRef) || !isItemRef(itemRef) || request.body !== undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request path or body is invalid"));
+      const replay = ordersReplayOnly(request);
+      if (typeof replay !== "boolean") return sendProblem(reply, replay);
+      const key = ordersIdempotencyKey(request);
+      if (typeof key !== "string") return sendProblem(reply, key);
+      const match = ordersSingleHeader(request, "if-match-version");
+      if (match === null) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "If-Match-Version must appear once"));
+      if (!replay && (match === undefined || !isIfMatchVersion(match))) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "If-Match-Version is required and must be a decimal version"));
+      if (!ordersHasNoQuery(request)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Query parameters are not supported"));
+      return forwardOrder(request, reply, adapters, "removeOrderItem", "DELETE", `/api/client-v1/orders/${orderRef}/items/${itemRef}`, undefined, {idempotencyKey: key, ...(!replay && match !== undefined ? {ifMatchVersion: match} : {}), replayOnly: replay});
+    },
+  });
+
+  for (const command of [
+    {operationId: "confirmOrder" as const, suffix: "confirm"},
+    {operationId: "requestAromaReconciliation" as const, suffix: "request-aroma-reconciliation"},
+  ]) {
+    const isAroma = command.operationId === "requestAromaReconciliation";
+    app.post(`/api/client-v1/orders/:orderRef/commands/${command.suffix}`, {
+      ...commandOptions,
+      schema: orderSchema(isAroma ? 202 : 200),
+      handler: async (request, rawReply) => {
+        const reply = rawReply as unknown as Reply;
+        const {orderRef} = orderParams(request);
+        if (!isOrderRef(orderRef) || header(request, "if-match-version") !== undefined || !ordersHasNoQuery(request)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request path or headers are invalid"));
+        const replay = ordersReplayOnly(request);
+        if (typeof replay !== "boolean") return sendProblem(reply, replay);
+        const key = ordersIdempotencyKey(request);
+        if (typeof key !== "string") return sendProblem(reply, key);
+        const body = replay ? undefined : isAroma
+          ? isReconciliationRequest(request.body) ? request.body : undefined
+          : isOrderConfirmRequest(request.body) ? request.body : undefined;
+        if (!replay && body === undefined) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
+        return forwardOrder(request, reply, adapters, command.operationId, "POST", `/api/client-v1/orders/${orderRef}/commands/${command.suffix}`, body, {idempotencyKey: key, replayOnly: replay});
+      },
+    });
+  }
+
+  app.get("/api/client-v1/orders/:orderRef", {
+    config: {runtimeDeadlineProfile: "defaultMs"},
+    schema: {response: {200: ordersContractSchemas.cardResponse, 400: ordersContractSchemas.problem, 401: ordersContractSchemas.problem, 403: ordersContractSchemas.problem, 404: ordersContractSchemas.problem, 500: ordersContractSchemas.problem, 503: ordersContractSchemas.problem}},
+    handler: async (request, rawReply) => {
+      const reply = rawReply as unknown as Reply;
+      const {orderRef} = orderParams(request);
+      if (!isOrderRef(orderRef) || request.body !== undefined || !ordersHasNoQuery(request) || ["idempotency-key", "idempotency-replay-only", "if-match-version"].some((name) => header(request, name) !== undefined)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request path or headers are invalid"));
+      return forwardOrder(request, reply, adapters, "getOrderCard", "GET", `/api/client-v1/orders/${orderRef}`, undefined);
+    },
+  });
 }
 
 export function createHttpCustomerClient(client: HttpClient, sign: (actor: ActorContextClaims, owner: string, operationId: string, context: Context) => string): CustomerClient {
@@ -388,6 +591,40 @@ export function createHttpPricingClient(client: HttpClient, sign: (actor: ActorC
   };
 }
 
+export function createHttpOrdersClient(client: HttpClient, sign: (actor: ActorContextClaims, owner: string, operationId: string, context: Context) => string): OrdersClient {
+  return {
+    forward: async (operationId, method, path, body, forwardContext) => {
+      const headers: Record<string, string> = {
+        "x-actor-context": sign(forwardContext.actor, "orders-service", operationId, forwardContext.context),
+        "x-correlation-id": forwardContext.context.correlationId,
+        accept: "application/json, application/problem+json",
+      };
+      if (forwardContext.context.traceparent !== undefined) headers["traceparent"] = forwardContext.context.traceparent;
+      if (forwardContext.idempotencyKey !== undefined) headers["idempotency-key"] = forwardContext.idempotencyKey;
+      if (forwardContext.ifMatchVersion !== undefined) headers["if-match-version"] = forwardContext.ifMatchVersion;
+      if (forwardContext.replayOnly === true) headers["idempotency-replay-only"] = "true";
+      if (body !== undefined) headers["content-type"] = "application/json";
+      const response = await client.fetch(path, {method, headers, ...(body === undefined ? {} : {body: JSON.stringify(body)}), signal: forwardContext.context.signal});
+      const supportedStatus = response.status === ({createOrderDraft: 201, upsertOrderItem: 200, removeOrderItem: 200, confirmOrder: 200, requestAromaReconciliation: 202, getOrderCard: 200} satisfies Record<OrdersOperationId, number>)[operationId]
+        || ordersAllowedProblemCodes[operationId][response.status] !== undefined;
+      if (!supportedStatus) throw new Error("orders owner returned unsupported status");
+      const isSuccess = response.status === ({createOrderDraft: 201, upsertOrderItem: 200, removeOrderItem: 200, confirmOrder: 200, requestAromaReconciliation: 202, getOrderCard: 200} satisfies Record<OrdersOperationId, number>)[operationId];
+      if (mediaType(response) !== (isSuccess ? "application/json" : "application/problem+json")) throw new Error("orders owner returned unsupported media type");
+      if (response.headers.get("x-correlation-id") !== forwardContext.context.correlationId || response.headers.get("cache-control")?.toLowerCase() !== "no-store") throw new Error("orders owner returned invalid response headers");
+      const replayHeader = response.headers.get("idempotency-replayed");
+      if (replayHeader !== null && replayHeader !== "true") throw new Error("orders owner returned invalid replay header");
+      const responseBody = await boundedCatalogJson(response, 1_048_576);
+      if (isSuccess) {
+        const valid = operationId === "requestAromaReconciliation" ? isReconciliationAcceptedResponse(responseBody) : isOrderCardResponse(responseBody);
+        if (!valid) throw new Error("orders owner returned invalid response body");
+      } else if (!isOrdersProblem(responseBody) || responseBody.status !== response.status || !ordersAllowedProblemCodes[operationId][response.status]?.includes(responseBody.code)) {
+        throw new Error("orders owner returned invalid problem body");
+      }
+      return {status: response.status, body: responseBody, ...(replayHeader === "true" ? {replayed: true} : {})};
+    },
+  };
+}
+
 function mediaType(response: Response): string | undefined {
   return response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
 }
@@ -447,7 +684,7 @@ function customerOrigin(context: RuntimeCompositionContext): string {
   return `https://${target}`;
 }
 
-export function createConfiguredPublicAdapters(context: RuntimeCompositionContext, client: HttpClient, catalogClient: HttpClient = client, pricingClient: HttpClient = client): PublicApiAdapters {
+export function createConfiguredPublicAdapters(context: RuntimeCompositionContext, client: HttpClient, catalogClient: HttpClient = client, pricingClient: HttpClient = client, ordersClient: HttpClient = client): PublicApiAdapters {
   const signingKey = privateKey(context, "security.apiPublicDelegationSigningPrivateKey");
   const actorVerificationKeys = verificationKeys(context, "security.actorContextEdgeVerificationPublicKeys");
   const sign = (actor: ActorContextClaims, owner: string, operationId: string, requestContext: Context): string => {
@@ -480,6 +717,7 @@ export function createConfiguredPublicAdapters(context: RuntimeCompositionContex
     customer: createHttpCustomerClient({fetch: (path, options) => client.fetch(path, options)}, sign),
     catalog: createHttpCatalogClient({fetch: (path, options) => catalogClient.fetch(path, options)}, sign),
     pricing: createHttpPricingClient({fetch: (path, options) => pricingClient.fetch(path, options)}, sign),
+    orders: createHttpOrdersClient({fetch: (path, options) => ordersClient.fetch(path, options)}, sign),
   };
 }
 
@@ -518,6 +756,16 @@ export function configuredPricingOrigin(context: RuntimeCompositionContext): str
 
 export function configuredPricingTls(context: RuntimeCompositionContext) {
   return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "pricing-service"};
+}
+
+export function configuredOrdersOrigin(context: RuntimeCompositionContext): string {
+  const target = context.config.services["api-public"].outbound.find((entry) => entry.startsWith("orders-service:"));
+  if (target === undefined) throw new Error("PUBLIC_API_ORDERS_ORIGIN_NOT_CONFIGURED");
+  return `https://${target}`;
+}
+
+export function configuredOrdersTls(context: RuntimeCompositionContext) {
+  return {material: configuredTransportMaterial(context), targetEnvironment: context.config.environment, targetRuntime: "orders-service"};
 }
 
 export function createUnavailablePublicAdapters(): PublicApiAdapters {
