@@ -197,7 +197,7 @@ verification:
   - command: "pnpm config:check && pnpm security:secrets && git diff --check"
     result: passed
     exitCode: 0
-    detail: "Scoped encrypted development material; staging/production sections не менялись."
+    detail: "Проверен scoped зашифрованный материал разработки; разделы staging/production не менялись."
   - command: "pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test"
     result: passed
     exitCode: 0
