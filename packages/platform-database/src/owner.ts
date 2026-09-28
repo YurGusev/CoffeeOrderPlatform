@@ -78,7 +78,82 @@ export function defineTemporaryTable(database: Database, table: string, columns:
 }
 
 // Только checksum runner platform-migrations может импортировать эту DDL capability.
+function validateMigrationSql(sql: string): void {
+  const invalid = (): never => {throw new DatabaseTransactionError("DB_INVALID_CONFIGURATION");};
+  const wordStart = (c: string | undefined): boolean => c !== undefined && /[A-Za-z_\u0080-\uffff]/u.test(c);
+  const wordPart = (c: string | undefined): boolean => c !== undefined && /[A-Za-z0-9_$\u0080-\uffff]/u.test(c);
+  const transactionCommand = (words: readonly string[]): boolean => {
+    const [first, second] = words;
+    if (first === "BEGIN" || first === "COMMIT" || first === "ROLLBACK" || first === "ABORT" ||
+        first === "END" || first === "SAVEPOINT" || first === "RELEASE") return true;
+    if ((first === "START" || first === "PREPARE") && second === "TRANSACTION") return true;
+    return first === "SET" && (second === "TRANSACTION" ||
+      words.slice(1, 5).join(" ") === "SESSION CHARACTERISTICS AS TRANSACTION");
+  };
+  let statementWords: string[] = [];
+  let readingStatementHead = true;
+  let i = 0;
+  while (i < sql.length) {
+    const char = sql[i];
+    const next = sql[i + 1];
+    if (/\s/u.test(char ?? "")) {i++; continue;}
+    if (char === "-" && next === "-") {
+      i += 2;
+      while (i < sql.length && sql[i] !== "\n") i++;
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      i += 2;
+      let depth = 1;
+      while (i < sql.length && depth > 0) {
+        if (sql[i] === "/" && sql[i + 1] === "*") {depth++; i += 2;}
+        else if (sql[i] === "*" && sql[i + 1] === "/") {depth--; i += 2;}
+        else i++;
+      }
+      if (depth !== 0) invalid();
+      continue;
+    }
+    if (char === ";") {statementWords = []; readingStatementHead = true; i++; continue;}
+    if (char === "'" || char === '"') {
+      const escapeBackslash = char === "'" && sql[i - 1]?.toUpperCase() === "E" && !wordPart(sql[i - 2]);
+      const quote = char;
+      i++;
+      let closed = false;
+      while (i < sql.length) {
+        if (escapeBackslash && sql[i] === "\\") {i += 2; continue;}
+        if (sql[i] === quote && sql[i + 1] === quote) {i += 2; continue;}
+        if (sql[i] === quote) {i++; closed = true; break;}
+        i++;
+      }
+      if (!closed) invalid();
+      readingStatementHead = false;
+      continue;
+    }
+    if (char === "$") {
+      const delimiter = /^\$(?:[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*)?\$/u.exec(sql.slice(i))?.[0];
+      if (delimiter !== undefined) {
+        const close = sql.indexOf(delimiter, i + delimiter.length);
+        if (close === -1) invalid();
+        i = close + delimiter.length;
+        readingStatementHead = false;
+        continue;
+      }
+    }
+    if (wordStart(char)) {
+      const start = i++;
+      while (wordPart(sql[i])) i++;
+      if (readingStatementHead && statementWords.length < 5) {
+        statementWords.push(sql.slice(start, i).toUpperCase());
+        if (transactionCommand(statementWords)) invalid();
+      }
+      continue;
+    }
+    readingStatementHead = false;
+    i++;
+  }
+}
+
 export function defineMigration(database: Database, sql: string): (transaction: Transaction) => Promise<void> {
-  if (/\b(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|END|PREPARE\s+TRANSACTION)\b/i.test(sql)) throw new DatabaseTransactionError("DB_INVALID_CONFIGURATION");
+  validateMigrationSql(sql);
   return async transaction => {await execute(database, transaction, sql, [], true);};
 }

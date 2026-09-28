@@ -5,7 +5,8 @@ export const clientV1BrowserOperations = [
     "method": "POST",
     "path": "/api/client-v1/orders/{orderRef}/commands/confirm",
     "operationId": "confirmOrder",
-    "audience": "api-public"
+    "audience": "api-public",
+    "permission": "orders:confirm:any"
   },
   {
     "method": "POST",
@@ -18,31 +19,36 @@ export const clientV1BrowserOperations = [
     "method": "POST",
     "path": "/api/client-v1/orders/drafts",
     "operationId": "createOrderDraft",
-    "audience": "api-public"
+    "audience": "api-public",
+    "permission": "orders:create"
   },
   {
     "method": "POST",
     "path": "/api/client-v1/pricing/quotes",
     "operationId": "createPricingQuote",
-    "audience": "api-public"
+    "audience": "api-public",
+    "permission": "pricing:create"
   },
   {
     "method": "GET",
     "path": "/api/client-v1/orders/{orderRef}",
     "operationId": "getOrderCard",
-    "audience": "api-public"
+    "audience": "api-public",
+    "permission": "orders:read:any"
   },
   {
     "method": "DELETE",
     "path": "/api/client-v1/orders/{orderRef}/items/{itemRef}",
     "operationId": "removeOrderItem",
-    "audience": "api-public"
+    "audience": "api-public",
+    "permission": "orders:edit:any"
   },
   {
     "method": "POST",
     "path": "/api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation",
     "operationId": "requestAromaReconciliation",
-    "audience": "api-public"
+    "audience": "api-public",
+    "permission": "orders:reconcile:any"
   },
   {
     "method": "GET",
@@ -69,6 +75,7 @@ export const clientV1BrowserOperations = [
     "method": "PUT",
     "path": "/api/client-v1/orders/{orderRef}/items/{itemRef}",
     "operationId": "upsertOrderItem",
-    "audience": "api-public"
+    "audience": "api-public",
+    "permission": "orders:edit:any"
   }
 ] as const;

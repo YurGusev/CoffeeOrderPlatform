@@ -616,21 +616,10 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-    PricingQuoteVerifyLine:
-      type: object
-      additionalProperties: false
-      required: [productRef, variantRef, quantity]
-      properties:
-        productRef:
-          $ref: '#/components/schemas/ProductRef'
-        variantRef:
-          $ref: '#/components/schemas/VariantRef'
-        quantity:
-          $ref: '#/components/schemas/QuantityDecimal'
     PricingQuoteVerifyRequest:
       type: object
       additionalProperties: false
-      required: [quoteRef, hash, customerRef, lines]
+      required: [quoteRef, hash, customerRef, quoteLineNumber, productRef, variantRef, quantity]
       properties:
         quoteRef:
           $ref: '#/components/schemas/QuoteRef'
@@ -638,12 +627,16 @@ components:
           $ref: '#/components/schemas/Hash'
         customerRef:
           $ref: '#/components/schemas/CustomerRef'
-        lines:
-          type: array
-          minItems: 1
-          maxItems: 100
-          items:
-            $ref: '#/components/schemas/PricingQuoteVerifyLine'
+        quoteLineNumber:
+          type: integer
+          minimum: 1
+          maximum: 100
+        productRef:
+          $ref: '#/components/schemas/ProductRef'
+        variantRef:
+          $ref: '#/components/schemas/VariantRef'
+        quantity:
+          $ref: '#/components/schemas/QuantityDecimal'
     PricingQuoteAuthoritativeLine:
       type: object
       additionalProperties: false
@@ -683,7 +676,7 @@ components:
     PricingQuoteVerificationResponse:
       type: object
       additionalProperties: false
-      required: [valid, quoteRef, policyVersionRef, catalogSnapshotRevision, customerRef, expiresAt, currency, lines, totalMinor]
+      required: [valid, quoteRef, policyVersionRef, catalogSnapshotRevision, customerRef, expiresAt, currency, line]
       properties:
         valid:
           const: true
@@ -699,14 +692,8 @@ components:
           $ref: '#/components/schemas/Timestamp'
         currency:
           $ref: '#/components/schemas/Currency'
-        lines:
-          type: array
-          minItems: 1
-          maxItems: 100
-          items:
-            $ref: '#/components/schemas/PricingQuoteAuthoritativeLine'
-        totalMinor:
-          $ref: '#/components/schemas/MoneyMinor'
+        line:
+          $ref: '#/components/schemas/PricingQuoteAuthoritativeLine'
     AromaCatalogExportRequest:
       type: object
       additionalProperties: false

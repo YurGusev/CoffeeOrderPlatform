@@ -174,8 +174,8 @@ function rowRecord<Response extends IdempotencyResponse>(row: IdempotencyRow): I
 }
 
 const rowProjection = `actor_ref, scope, idempotency_key, request_hash, state, lease_owner,
-  (extract(epoch from lease_until) * 1000)::bigint AS lease_until_ms,
-  (extract(epoch from expires_at) * 1000)::bigint AS expires_at_ms,
+  CASE WHEN isfinite(lease_until) THEN round(extract(epoch from lease_until) * 1000)::text ELSE 'invalid' END AS lease_until_ms,
+  CASE WHEN isfinite(expires_at) THEN round(extract(epoch from expires_at) * 1000)::text ELSE 'invalid' END AS expires_at_ms,
   response_status, response_body, resource_ref`;
 
 export type IdempotencyStoreOptions = Readonly<{

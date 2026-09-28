@@ -92,6 +92,9 @@ importers:
       '@coffee-platform/contracts-customer-v1':
         specifier: workspace:*
         version: link:../../packages/contracts/customer-v1
+      '@coffee-platform/contracts-orders-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/orders-v1
       '@coffee-platform/contracts-pricing-v1':
         specifier: workspace:*
         version: link:../../packages/contracts/pricing-v1
@@ -248,9 +251,39 @@ importers:
 
   apps/orders-service:
     dependencies:
+      '@coffee-platform/contracts-customer-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/customer-v1
+      '@coffee-platform/contracts-orders-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/orders-v1
+      '@coffee-platform/contracts-pricing-v1':
+        specifier: workspace:*
+        version: link:../../packages/contracts/pricing-v1
+      '@coffee-platform/database':
+        specifier: workspace:*
+        version: link:../../packages/platform-database
+      '@coffee-platform/idempotency':
+        specifier: workspace:*
+        version: link:../../packages/platform-idempotency
+      '@coffee-platform/outbox':
+        specifier: workspace:*
+        version: link:../../packages/platform-outbox
+      '@coffee-platform/platform-http':
+        specifier: workspace:*
+        version: link:../../packages/platform-http
       '@coffee-platform/runtime':
         specifier: workspace:*
         version: link:../../packages/platform-runtime
+      '@coffee-platform/security':
+        specifier: workspace:*
+        version: link:../../packages/platform-security
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
 
   apps/pricing-service:
     dependencies:
@@ -378,6 +411,9 @@ importers:
       '@coffee-platform/generated-client-v1':
         specifier: workspace:*
         version: link:../../generated/client-v1
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
 
   packages/contracts/pricing-v1:
     dependencies:

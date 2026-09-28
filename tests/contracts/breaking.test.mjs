@@ -76,6 +76,16 @@ void test('breaking guard rejects endpoint/schema/status/operation rename and sc
   }
 });
 
+void test('issue-8 Confirm response expansion guard rejects an unapproved ref replacement', async () => {
+  const result = await realClientRed((document) => {
+    document.paths['/api/client-v1/orders/{orderRef}/commands/confirm'].post.responses['422'] = {
+      $ref: '#/components/responses/SomeOtherResponse',
+    };
+  });
+  assert.notEqual(result.status, 0, `${result.stdout}\\n${result.stderr}`);
+  assert.match(result.stderr, /breaking contract.*response \$ref changed/);
+});
+
 void test('breaking guard admits optional expansion only with fixture and policy evidence', async () => {
   const result = await red((document) => { document.components.schemas.Item.properties.note = { type: 'string' }; }, true);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
@@ -125,6 +135,35 @@ void test('breaking guard admits only an exact narrowing correction with migrati
   const ineffective = await red((document) => { document.components.schemas.Item.properties.id.pattern = '^[1-9]$'; }, false, true, '7');
   assert.notEqual(ineffective.status, 0, `${ineffective.stdout}\n${ineffective.stderr}`);
   assert.match(ineffective.stderr, /breaking contract/);
+});
+
+void test('approved #8 private Pricing verify replacement permits only the pinned contract', async () => {
+  const sourcePath = 'contracts/openapi/internal-v1.yaml';
+  const baseText = spawnSync('git', ['show', `origin/develop:${sourcePath}`], {cwd: root, encoding: 'utf8'});
+  assert.equal(baseText.status, 0, baseText.stderr);
+  const currentText = await readFile(join(root, sourcePath), 'utf8');
+  const evidence = yaml.load(await readFile(join(root, 'contracts/compatibility-evidence.yaml'), 'utf8'));
+  const directory = await mkdtemp(join(tmpdir(), 'contracts-orders-verify-'));
+  const base = join(directory, 'base'), current = join(directory, 'current');
+  const run = () => spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], {cwd: root, encoding: 'utf8'});
+  try {
+    for (const path of [base, current]) await mkdir(join(path, 'contracts/openapi'), {recursive: true});
+    await mkdir(join(current, 'docs/launch'), {recursive: true});
+    await mkdir(join(current, 'tests/pricing'), {recursive: true});
+    await writeFile(join(base, sourcePath), baseText.stdout);
+    await writeFile(join(current, sourcePath), currentText);
+    await writeFile(join(current, 'contracts/compatibility-evidence.yaml'), yaml.dump({approvedInternalReplacements: evidence.approvedInternalReplacements ?? []}));
+    await writeFile(join(current, 'docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md'), await readFile(join(root, 'docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md'), 'utf8'));
+    await writeFile(join(current, 'tests/pricing/pricing-store.test.mjs'), await readFile(join(root, 'tests/pricing/pricing-store.test.mjs'), 'utf8'));
+    const accepted = run();
+    assert.equal(accepted.status, 0, `${accepted.stdout}\n${accepted.stderr}`);
+    const tampered = yaml.load(currentText);
+    tampered.components.schemas.PricingQuoteVerifyRequest.properties.quoteLineNumber.maximum = 99;
+    await writeFile(join(current, sourcePath), yaml.dump(tampered));
+    const rejected = run();
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /breaking contract/u);
+  } finally { await rm(directory, {recursive: true, force: true}); }
 });
 
 void test('breaking guard admits a same-wire parameter ref replacement with a wider schema', async () => {

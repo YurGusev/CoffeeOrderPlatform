@@ -64,17 +64,14 @@ export type CatalogPricingInput = {
   displayName: string;
 };
 
-export type PricingQuoteVerifyLine = {
-  productRef: IdentifiersV1SchemaProductRef;
-  variantRef: IdentifiersV1SchemaVariantRef;
-  quantity: MoneyVersionTimeV1SchemaQuantityDecimal;
-};
-
 export type PricingQuoteVerifyRequest = {
   quoteRef: IdentifiersV1SchemaQuoteRef;
   hash: HashSha256;
   customerRef: IdentifiersV1SchemaCustomerRef;
-  lines: Array<PricingQuoteVerifyLine>;
+  quoteLineNumber: number;
+  productRef: IdentifiersV1SchemaProductRef;
+  variantRef: IdentifiersV1SchemaVariantRef;
+  quantity: MoneyVersionTimeV1SchemaQuantityDecimal;
 };
 
 export type PricingQuoteAuthoritativeLine = {
@@ -101,8 +98,7 @@ export type PricingQuoteVerificationResponse = {
   customerRef: IdentifiersV1SchemaCustomerRef;
   expiresAt: MoneyVersionTimeV1SchemaTimestamp;
   currency: MoneyVersionTimeV1SchemaCurrency;
-  lines: Array<PricingQuoteAuthoritativeLine>;
-  totalMinor: MoneyVersionTimeV1SchemaMoneyMinor;
+  line: PricingQuoteAuthoritativeLine;
 };
 
 export type AromaCatalogExportRequest = {

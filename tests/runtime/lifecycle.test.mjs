@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {chmod, mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
 import {request as httpRequest} from "node:http";
-import {request as httpsRequest} from "node:https";
+import {createServer as createHttpsServer, request as httpsRequest} from "node:https";
 import {execFileSync, spawn} from "node:child_process";
 import {createServer} from "node:net";
 import {fileURLToPath} from "node:url";
@@ -20,7 +20,8 @@ import {
 } from "../../packages/platform-runtime/src/index.ts";
 import {createHttpClient} from "../../packages/platform-http/src/index.ts";
 import {readRuntimeHealthStatuses, runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
-import {parsePublicTlsMaterial, parseServiceTransportMaterial} from "../../packages/platform-security/src/index.ts";
+import {parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../../packages/platform-security/src/index.ts";
+import {checkInternalApiReady} from "../../apps/orders-service/src/infrastructure/internal-api-readiness.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const health = {
@@ -777,6 +778,94 @@ void test("readiness blackhole is bounded and does not start new probes while pe
   assert.equal(stopped.status, "fail-stop");
   assert.deepEqual(stopped.pending, ["readiness:database"]);
   assert.equal(app.server.listening, false);
+});
+
+void test("Orders InternalApi readiness rejects wrong mTLS peer and cancels blackhole on deadline/shutdown", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "coffee-orders-readiness-"));
+  t.after(() => rm(directory, {recursive: true, force: true}));
+  const authority = await certificateAuthority(directory, "service-ca", "/CN=coffee-orders-test-ca");
+  const issue = async (runtime) => {
+    const leaf = await signedCertificate(directory, runtime, `/CN=${runtime}`,
+      `URI:spiffe://coffee-platform/development/${runtime},DNS:${runtime}`, authority, "serverAuth,clientAuth");
+    return parseServiceTransportMaterial(JSON.stringify({...leaf, caPem: authority.certPem}), "development", runtime);
+  };
+  const [orders, internal, wrongPeer] = await Promise.all([
+    issue("orders-service"), issue("api-internal"), issue("customer-service"),
+  ]);
+  let blackhole = false;
+  let readyRequests = 0;
+  let wrongRequests = 0;
+  let canceledResponses = 0;
+  const server = (material, onRequest) => createHttpsServer({
+    key: material.keyPem, cert: material.certPem, ca: material.caPem,
+    requestCert: true, rejectUnauthorized: true,
+  }, (request, response) => {
+    verifyTransportPeer(request.socket.getPeerCertificate(), "development", "orders-service");
+    onRequest(request, response);
+  });
+  const internalServer = server(internal, (_request, response) => {
+    readyRequests += 1;
+    if (blackhole) {
+      response.once("close", () => { canceledResponses += 1; });
+      return;
+    }
+    response.writeHead(200).end();
+  });
+  const wrongServer = server(wrongPeer, (_request, response) => {
+    wrongRequests += 1;
+    response.writeHead(200).end();
+  });
+  const listen = async (listener) => {
+    await new Promise(resolve => listener.listen(0, "127.0.0.1", resolve));
+    return listener.address().port;
+  };
+  const [port, wrongPort] = await Promise.all([listen(internalServer), listen(wrongServer)]);
+  const scopedClient = (targetPort) => createHttpClient({
+    origin: `https://127.0.0.1:${targetPort}`,
+    tls: {material: orders, targetEnvironment: "development", targetRuntime: "api-internal"},
+    connections: 1,
+  });
+  const internalClient = scopedClient(port);
+  const rejectedClient = scopedClient(wrongPort);
+  let activeClient = rejectedClient;
+  const signals = [];
+  let app;
+  try {
+    app = await startApp(identity("orders-service", {
+      health: {...health, timeoutMs: 150},
+      readinessChecks: [{name: "orders-internal-api", check: signal => {
+        signals.push(signal);
+        return checkInternalApiReady(activeClient, signal);
+      }}],
+    }));
+    assert.equal((await app.inject("/health/ready")).statusCode, 503);
+    assert.equal(wrongRequests, 0, "valid CA with wrong service identity must not reach HTTP");
+    activeClient = internalClient;
+    assert.equal((await app.inject("/health/ready")).statusCode, 200);
+
+    blackhole = true;
+    assert.equal((await app.inject("/health/ready")).statusCode, 503);
+    assert.equal(signals.at(-1).reason.code, "RUNTIME_READINESS_DEADLINE");
+    await waitFor(() => canceledResponses === 1);
+    blackhole = false;
+    assert.equal((await app.inject("/health/ready")).statusCode, 200);
+
+    blackhole = true;
+    const inFlight = app.inject("/health/ready");
+    await waitFor(() => readyRequests === 4);
+    const stop = app.runtimeController.closeRuntime("SIGTERM");
+    assert.equal((await inFlight).statusCode, 503);
+    assert.equal(signals.at(-1).reason.code, "RUNTIME_DRAINING");
+    assert.deepEqual(await stop, {status: "stopped", pending: []});
+    await waitFor(() => canceledResponses === 2);
+  } finally {
+    await app?.runtimeController.closeRuntime("SIGTERM");
+    await Promise.allSettled([internalClient.close(), rejectedClient.close()]);
+    for (const listener of [internalServer, wrongServer]) {
+      listener.closeAllConnections();
+      await new Promise(resolve => listener.close(resolve));
+    }
+  }
 });
 
 void test("concurrency admission cap keeps health endpoints available", async () => {

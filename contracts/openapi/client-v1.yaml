@@ -208,6 +208,7 @@ paths:
     post:
       tags: [pricing]
       operationId: createPricingQuote
+      x-permission: pricing:create
       summary: Create an immutable pricing quote
       x-owner: pricing-service
       x-audience: api-public
@@ -290,6 +291,7 @@ paths:
     post:
       tags: [orders]
       operationId: createOrderDraft
+      x-permission: orders:create
       summary: Create an order draft
       x-owner: orders-service
       x-audience: api-public
@@ -373,6 +375,7 @@ paths:
     put:
       tags: [orders]
       operationId: upsertOrderItem
+      x-permission: orders:edit:any
       summary: Add or replace one draft order item
       x-owner: orders-service
       x-audience: api-public
@@ -439,6 +442,8 @@ paths:
                   - $ref: '#/components/schemas/ErrorOrderNotEditable'
                   - $ref: '#/components/schemas/ErrorIdempotencyConflict'
                   - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+                  - $ref: '#/components/schemas/ErrorOrderItemLimitExceeded'
+                  - $ref: '#/components/schemas/ErrorOrderQuoteScopeMismatch'
         '410':
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '500':
@@ -455,6 +460,7 @@ paths:
     delete:
       tags: [orders]
       operationId: removeOrderItem
+      x-permission: orders:edit:any
       summary: Remove one draft order item
       x-owner: orders-service
       x-audience: api-public
@@ -534,6 +540,7 @@ paths:
     post:
       tags: [orders]
       operationId: confirmOrder
+      x-permission: orders:confirm:any
       summary: Confirm a draft order
       x-owner: orders-service
       x-audience: api-public
@@ -594,7 +601,15 @@ paths:
                   - $ref: '#/components/schemas/ErrorIdempotencyConflict'
                   - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
         '422':
-          $ref: '#/components/responses/RecoveryOrderConfirmationRejected'
+          description: Confirmation is rejected, or the completed rejection is replayed.
+          headers: *command-recovery-response-headers
+          content:
+            application/problem+json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorOrderConfirmationRejected'
+                  - $ref: '#/components/schemas/ErrorOrderEmpty'
+                  - $ref: '#/components/schemas/ErrorOrderDesiredOverflow'
         '410':
           $ref: '#/components/responses/IdempotencyResultNotRetained'
         '503':
@@ -614,6 +629,7 @@ paths:
     post:
       tags: [orders]
       operationId: requestAromaReconciliation
+      x-permission: orders:reconcile:any
       summary: Request Orders-owned AROMA reconciliation
       x-owner: orders-service
       x-audience: api-public
@@ -691,6 +707,7 @@ paths:
     get:
       tags: [orders]
       operationId: getOrderCard
+      x-permission: orders:read:any
       summary: Get the current Order Card
       x-owner: orders-service
       x-audience: api-public
@@ -1381,7 +1398,7 @@ components:
       properties:
         code:
           type: string
-          enum: [MAPPING_CHANGED, MAPPING_MISSING, MAPPING_STOPPED, PRODUCT_UNAVAILABLE]
+          enum: [MAPPING_CHANGED, MAPPING_MISSING, MAPPING_STOPPED, PRODUCT_UNAVAILABLE, ORDER_STATE_INCONSISTENT]
         message:
           type: string
           minLength: 1
@@ -1642,6 +1659,20 @@ components:
           properties:
             status: { const: 409 }
             code: { const: ORDER_NOT_EDITABLE }
+    ErrorOrderItemLimitExceeded:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: ORDER_ITEM_LIMIT_EXCEEDED }
+    ErrorOrderQuoteScopeMismatch:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 409 }
+            code: { const: ORDER_QUOTE_SCOPE_MISMATCH }
     ErrorOrderConfirmationRejected:
       allOf:
         - $ref: '#/components/schemas/ProblemDetails'
@@ -1649,6 +1680,20 @@ components:
           properties:
             status: { const: 422 }
             code: { const: ORDER_CONFIRMATION_REJECTED }
+    ErrorOrderEmpty:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 422 }
+            code: { const: ORDER_EMPTY }
+    ErrorOrderDesiredOverflow:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 422 }
+            code: { const: ORDER_DESIRED_OVERFLOW }
     ErrorAromaReconciliationNotAllowed:
       allOf:
         - $ref: '#/components/schemas/ProblemDetails'

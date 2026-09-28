@@ -1,20 +1,23 @@
 # События и восстановление
 
-Исполнимые envelope/payload definitions семи launch messages находятся в
+Исполнимые envelope/payload definitions восьми launch messages находятся в
 `contracts/schemas/{common,events}` и перечислены в `contracts/manifest.yaml`.
 Kafka runtime валидирует их до Inbox/business effect; отдельной wire-схемы нет.
 
 ## Контракты первого запуска
 
-Точные envelope и payload schemas семи сообщений определены в
+Точные envelope и payload schemas восьми сообщений определены в
 [нормативном каталоге контрактов](12_LAUNCH_CONTRACT_CATALOG.md). Дополнительные
-launch-сообщения нельзя вводить без изменения каталога и ADR.
+launch-сообщения нельзя вводить без изменения каталога и ADR. Границу
+`OrderReconciliationRequested.v1` определяет
+[ADR-0032](../adr/ADR-0032-order-reconciliation-intent.md).
 
 | Сообщение | Вид | Producer | Consumer | Ключ |
 |---|---|---|---|---|
 | `CatalogSnapshotActivated` | event | catalog-activation-worker | production consumer отсутствует | supplierRef |
 | `CatalogMappingChanged` | event | catalog-activation-worker | orders-aroma-preparation | productRef |
 | `OrderConfirmed` | event | orders-service | orders-aroma-preparation | orderRef |
+| `OrderReconciliationRequested` | event | orders-service | orders-aroma-preparation | orderRef |
 | `AromaConvergenceRequested` | command | Orders preparation/service | aroma-convergence | cartScopeRef |
 | `AromaObservationChanged` | event | aroma-observer/convergence | Orders projections | cartScopeRef |
 | `AromaConvergenceChanged` | event | aroma-convergence | orders-aroma-preparation | cartScopeRef |
@@ -30,6 +33,7 @@ causation, correlation and owner-defined aggregate version where applicable.
 | `CatalogSnapshotActivated.v1` | `coffee.catalog.snapshot.v1` | 12 / 2160h | none; owner/audit fact retained |
 | `CatalogMappingChanged.v2` | `coffee.catalog.mapping.v2` | 12 / 2160h | `orders-catalog-mapping-v2` |
 | `OrderConfirmed.v1` | `coffee.orders.lifecycle.v1` | 12 / 2160h | `orders-aroma-preparation-v1` |
+| `OrderReconciliationRequested.v1` | `coffee.orders.lifecycle.v1` | 12 / 2160h | `orders-aroma-preparation-v1` |
 | `AromaConvergenceRequested.v1` | `coffee.aroma.cart.commands.v1` | 24 / 168h | `aroma-convergence-v1` |
 | `AromaObservationChanged.v1` | `coffee.aroma.cart.events.v1` | 24 / 720h | `orders-aroma-projection-v1` |
 | `AromaConvergenceChanged.v1` | `coffee.aroma.cart.events.v1` | 24 / 720h | `orders-aroma-projection-v1` |

@@ -128,6 +128,62 @@ void test("RED BOUND-IMPORT: Catalog cannot import Orders infrastructure DB", ()
   assert.match(output(result), /catalog-service.*orders-service/s);
 });
 
+for (const {name, path, source, rule} of [
+  {
+    name: "external Confirm requirement", path: "apps/orders-service/src/application/confirm-order.ts",
+    source: "export async function confirmOrder(customerClient) { return customerClient.getOrderInput(); }",
+    rule: "ARCH-ORDERS-CONFIRM-BOUNDARY",
+  },
+  {
+    name: "unnamed third Confirm requirement", path: "apps/orders-service/src/application/confirm-order.ts",
+    source: "export async function confirmOrder(store: Pick<OrderStore, 'replay'|'precheck'|'confirm'>, input: CommandContext&Readonly<{orderRef:string}>, external: unknown) { return store.confirm(input); }",
+    rule: "ARCH-ORDERS-CONFIRM-BOUNDARY",
+  },
+  {
+    name: "Kafka publish in owner transaction", path: "apps/orders-service/src/infrastructure/database/order-store.ts",
+    source: "export async function confirm(tx, kafkaProducer) { await kafkaProducer.publish({messageType: 'OrderConfirmed.v1'}); }",
+    rule: "ARCH-ORDERS-OUTBOX",
+  },
+  {
+    name: "aliased broker publish in owner transaction", path: "apps/orders-service/src/infrastructure/database/order-store.ts",
+    source: "export async function confirm(tx, broker) { await broker.publish({messageType: 'OrderConfirmed.v1'}); }",
+    rule: "ARCH-ORDERS-OUTBOX",
+  },
+  {
+    name: "automatic frozen-offer remapping", path: "apps/orders-service/src/domain/order-contribution.ts",
+    source: "export function remap(items, catalog) { return items.map(item => ({...item, offerRef: catalog[item.productRef]})); }",
+    rule: "ARCH-ORDERS-FROZEN-OFFER",
+  },
+  {
+    name: "aliased frozen-offer remapping", path: "apps/orders-service/src/domain/order-contribution.ts",
+    source: "export function remap(items, lookup) { return items.map(item => ({...item, offerRef: lookup[item.productRef]})); }",
+    rule: "ARCH-ORDERS-FROZEN-OFFER",
+  },
+  {
+    name: "revision-equality InSync", path: "apps/orders-service/src/domain/order-card.ts",
+    source: "export const isInSync = (desiredRevision, observedRevision) => desiredRevision === observedRevision;",
+    rule: "ARCH-ORDERS-INSYNC-PROOF",
+  },
+  {
+    name: "aliased revision-equality InSync", path: "apps/orders-service/src/domain/order-card.ts",
+    source: "export const isInSync = (desired, observed) => desired.version === observed.version;",
+    rule: "ARCH-ORDERS-INSYNC-PROOF",
+  },
+]) {
+  void test(`RED ${rule}: Orders rejects ${name}`, async () => {
+    const root = await mkdtemp(join(tmpdir(), "coffee-orders-boundary-"));
+    try {
+      await mkdir(join(root, path, ".."), {recursive:true});
+      await writeFile(join(root, path), source);
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(output(result), new RegExp(rule));
+    } finally {
+      await rm(root, {recursive:true, force:true});
+    }
+  });
+}
+
 for (const targetRuntime of ["catalog-activation-worker","api-internal","orders-service","pricing-service","customer-service"]) {
   void test(`RED BOUND-IMPORT: catalog-supplier-sync -> ${targetRuntime}`, async () => {
     const root=await mkdtemp(join(tmpdir(),"coffee-catalog-boundary-"));

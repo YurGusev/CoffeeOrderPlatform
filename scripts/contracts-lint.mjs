@@ -104,7 +104,7 @@ for (const path of openApiFiles) {
 const manifest = await load(manifestPath);
 const entries = manifest.contracts ?? [];
 const eventEntries = entries.filter((entry) => entry.kind === 'event' || entry.kind === 'command');
-if (eventEntries.length !== 7 || new Set(eventEntries.map((entry) => entry.id)).size !== 7) throw new Error(`${manifestPath}: exactly seven message types required`);
+if (eventEntries.length !== 8 || new Set(eventEntries.map((entry) => entry.id)).size !== 8) throw new Error(`${manifestPath}: exactly eight message types required`);
 for (const entry of eventEntries) if (!entry.key) throw new Error(`${manifestPath}: ${entry.id} message key required`);
 for (const operationId of operationIds) if (!entries.some((entry) => entry.id === operationId)) throw new Error(`${manifestPath}: missing operation ${operationId}`);
 for (const entry of entries.filter((item) => ['http', 'sse', 'ndjson'].includes(item.kind))) {

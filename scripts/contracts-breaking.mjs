@@ -36,6 +36,9 @@ const evidencePath = resolve(root, 'contracts/compatibility-evidence.yaml');
 const compatibilityEvidence = existsSync(evidencePath) ? yaml.load(readFileSync(evidencePath, 'utf8')) ?? {} : {};
 const optionalEvidence = compatibilityEvidence.optionalExpansions ?? [];
 const narrowingEvidence = compatibilityEvidence.narrowingCorrections ?? [];
+const privateVerifyReplacements = compatibilityEvidence.approvedInternalReplacements ?? [];
+const approvedResponseExpansions = compatibilityEvidence.approvedResponseExpansions ?? [];
+const privateVerifySchemas = new Set(['PricingQuoteVerifyLine', 'PricingQuoteVerifyRequest', 'PricingQuoteVerificationResponse']);
 
 function fromBase(path) {
   if (baseRoot) {
@@ -83,6 +86,22 @@ function proveNarrowing(evidence, at, keyword, before, after) {
 
 function evidenceValueHash(value) {
   return createHash('sha256').update(JSON.stringify(value === undefined ? null : value)).digest('hex');
+}
+
+function approvedPrivateVerifyReplacement(path, name, before, after) {
+  if (path !== 'contracts/openapi/internal-v1.yaml' || !privateVerifySchemas.has(name)) return false;
+  const evidence = privateVerifyReplacements.find((entry) => entry.schemaPath === path && entry.schema === name);
+  if (evidence === undefined) return false;
+  if (privateVerifyReplacements.length !== privateVerifySchemas.size ||
+      new Set(privateVerifyReplacements.map((entry) => entry.schema)).size !== privateVerifySchemas.size ||
+      evidence.issue !== 8 || evidence.migration !== 'docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md' ||
+      evidence.proof !== 'tests/pricing/pricing-store.test.mjs' ||
+      !existsSync(resolve(root, evidence.migration)) || !existsSync(resolve(root, evidence.proof)) ||
+      evidence.beforeSha256 !== evidenceValueHash(before) || evidence.afterSha256 !== evidenceValueHash(after) ||
+      (name === 'PricingQuoteVerifyLine' && after !== undefined)) {
+    fail(`${path}#${name}: approved private verify replacement evidence is incomplete or has drifted`);
+  }
+  return true;
 }
 
 function requireNarrowingEvidence(sourcePath, at, keyword, before, after) {
@@ -159,6 +178,33 @@ function compareMedia(before, after, at, sourcePath) {
   }
 }
 
+function allowConfirmResponseExpansion(sourcePath, route, at, before, after) {
+  const expectedPath = 'contracts/openapi/client-v1.yaml';
+  const expectedRoute = '/api/client-v1/orders/{orderRef}/commands/confirm';
+  const expectedAt = 'contracts/openapi/client-v1.yaml:confirmOrder:422';
+  const beforeRef = '#/components/responses/RecoveryOrderConfirmationRejected';
+  const variants = ['ErrorOrderConfirmationRejected', 'ErrorOrderEmpty', 'ErrorOrderDesiredOverflow'];
+  if (sourcePath !== expectedPath || route !== expectedRoute || at !== expectedAt || before.$ref !== beforeRef || after.$ref !== undefined) return false;
+  const evidence = approvedResponseExpansions.find((entry) => entry.schemaPath === expectedPath && entry.route === expectedRoute && entry.operationId === 'confirmOrder' && entry.status === 422);
+  if (approvedResponseExpansions.length !== 1 || !evidence || evidence.issue !== 8 || evidence.beforeRef !== beforeRef ||
+      JSON.stringify(evidence.afterRefs) !== JSON.stringify(variants.map((name) => `#/components/schemas/${name}`)) ||
+      evidence.fixture !== 'contracts/fixtures/positive/http/problems.json' || JSON.stringify(evidence.fixtureCases) !== JSON.stringify(variants)) {
+    fail(`${at}: issue-8 response expansion evidence is incomplete or has drifted`);
+  }
+  const fixturePath = resolve(root, evidence.fixture);
+  if (!existsSync(fixturePath)) fail(`${at}: response expansion fixture is missing`);
+  const fixtures = JSON.parse(readFileSync(fixturePath, 'utf8'));
+  for (const schema of variants) {
+    const fixture = fixtures.find((entry) => entry.document === 'client-v1' && entry.operationId === 'confirmOrder' && entry.status === 422 && entry.schema === schema);
+    if (!fixture || fixture.body?.status !== 422 || fixture.body?.code !== schema.replace(/^Error/, '').replace(/[A-Z]/g, (letter, index) => `${index ? '_' : ''}${letter}`).toUpperCase()) fail(`${at}: response expansion fixture is incomplete for ${schema}`);
+  }
+  const currentDocument = yaml.load(readFileSync(resolve(root, sourcePath), 'utf8'));
+  const recoveryHeaders = currentDocument.components?.responses?.RecoveryOrderConfirmationRejected?.headers;
+  const expectedContent = {'application/problem+json': {schema: {oneOf: variants.map((name) => ({$ref: `#/components/schemas/${name}`}))}}};
+  if (JSON.stringify(after.content) !== JSON.stringify(expectedContent) || JSON.stringify(after.headers) !== JSON.stringify(recoveryHeaders) || after.description !== 'Confirmation is rejected, or the completed rejection is replayed.') fail(`${at}: issue-8 response expansion does not match the approved branches`);
+  return true;
+}
+
 function compareResponse(before, after, at, sourcePath, route) {
   // #17 extends exactly these Catalog error responses while retaining their old branch.
   const catalogExtensions = [
@@ -170,7 +216,8 @@ function compareResponse(before, after, at, sourcePath, route) {
     route === expectedRoute && at === expectedAt && before.$ref === `#/components/responses/${oldName}` && after.$ref === undefined &&
     JSON.stringify(after.content) === JSON.stringify({'application/problem+json': {schema: {oneOf:
       variants.map((name) => ({$ref: `#/components/schemas/${name}`}))}}}));
-  if (before.$ref !== after.$ref && !catalogExtension) fail(`${at}: response $ref changed`);
+  const issue8Expansion = allowConfirmResponseExpansion(sourcePath, route, at, before, after);
+  if (before.$ref !== after.$ref && !catalogExtension && !issue8Expansion) fail(`${at}: response $ref changed`);
   compareMedia(before.content, after.content, `${at}.content`, sourcePath);
   for (const [name, header] of Object.entries(before.headers ?? {})) {
     if (!after.headers?.[name]) fail(`${at}: response header ${name} removed`);
@@ -236,6 +283,7 @@ function compareOpenApi(before, after, path) {
     }
   }
   for (const [name, schema] of Object.entries(before.components?.schemas ?? {})) {
+    if (approvedPrivateVerifyReplacement(path, name, schema, after.components?.schemas?.[name])) continue;
     if (!after.components?.schemas?.[name]) fail(`${path}: schema ${name} removed`);
     compareSchema(schema, after.components.schemas[name], `${path}#${name}`, path);
   }

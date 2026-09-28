@@ -320,6 +320,25 @@ function checkStaticSource(path, source) {
   const label = path.replaceAll('\\', '/');
   const isUiPackage = label.includes('/packages/platform-ui/');
   const isBrowserSource = label.includes('/apps/web/src/browser/');
+  if (label.endsWith('/apps/orders-service/src/application/confirm-order.ts')) {
+    const parameters = /\bfunction\s+confirmOrder\s*\(([^)]*)\)/u.exec(source)?.[1] ?? '';
+    if (!/^\s*store\s*:\s*Pick<\s*OrderStore\s*,\s*["']replay["']\s*\|\s*["']precheck["']\s*\|\s*["']confirm["']\s*>\s*,\s*input\s*:\s*CommandContext\s*&\s*Readonly<\s*\{[^}]*\}\s*>\s*$/u.test(parameters) ||
+      /\b(?:fetch|setTimeout)\s*\(|\.\s*(?:publish|send|getOrderInput|verify)\s*\(/u.test(source)) {
+      fail('ARCH-ORDERS-CONFIRM-BOUNDARY', `${label}: Confirm application requirements must contain only the owner Store and command context`);
+    }
+  }
+  if (label.endsWith('/apps/orders-service/src/infrastructure/database/order-store.ts') &&
+    /\.\s*(?:publish|produce|send|relay)\s*\(/iu.test(source)) {
+    fail('ARCH-ORDERS-OUTBOX', `${label}: owner transaction cannot publish to Kafka directly`);
+  }
+  if (label.endsWith('/apps/orders-service/src/domain/order-contribution.ts') &&
+    /\bofferRef\s*(?::|=)\s*\w+\s*(?:\[|\.get\s*\()/iu.test(source)) {
+    fail('ARCH-ORDERS-FROZEN-OFFER', `${label}: persisted contribution must not remap the frozen offer`);
+  }
+  if (label.endsWith('/apps/orders-service/src/domain/order-card.ts') &&
+    /\b(?:desired(?:Revision|\.revision|\.version)\s*={2,3}\s*observed(?:Revision|\.revision|\.version)|observed(?:Revision|\.revision|\.version)\s*={2,3}\s*desired(?:Revision|\.revision|\.version))\b/iu.test(source)) {
+    fail('ARCH-ORDERS-INSYNC-PROOF', `${label}: revision equality cannot prove InSync`);
+  }
   if (/(?:^|\/)apps\//.test(label) && LITERAL_POSTGRES_URL_RE.test(source)) {
     fail('ARCH-POSTGRES-URL', `${label}: literal PostgreSQL connection URL is forbidden in app source; use scoped platform configuration`);
   }

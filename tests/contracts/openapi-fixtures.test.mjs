@@ -226,7 +226,7 @@ void test("Pricing runtime guards use generated OpenAPI schemas and reject priva
   const verifiedQuote = success.find((item) => item.operationId === "verifyPricingQuote").body;
   const line = publicQuote.lines[0];
   const create = {customerRef: publicQuote.customerRef, lines: [{productRef: line.productRef, variantRef: line.variantRef, quantity: line.quantity}]};
-  const verify = {quoteRef: publicQuote.quoteRef, hash: publicQuote.hash, customerRef: publicQuote.customerRef, lines: create.lines};
+  const verify = {quoteRef: publicQuote.quoteRef, hash: publicQuote.hash, customerRef: publicQuote.customerRef, quoteLineNumber: verifiedQuote.line.lineNumber, productRef: verifiedQuote.line.productRef, variantRef: verifiedQuote.line.variantRef, quantity: verifiedQuote.line.quantity};
   const problem = problems.find((item) => item.document === "client-v1").body;
 
   assert.equal(isPricingQuoteCreateRequest(create), true);
@@ -236,7 +236,10 @@ void test("Pricing runtime guards use generated OpenAPI schemas and reject priva
   assert.equal(isPricingQuoteVerificationResponse(verifiedQuote), true);
   assert.equal(isPricingProblem(problem), true);
   assert.equal(pricingContractSchemas.createRequest.properties.lines.items.properties.quantity.type, "string");
-  assert.equal(pricingContractSchemas.verifyRequest.properties.lines.items.properties.quantity.type, "string");
+  assert.equal(pricingContractSchemas.verifyRequest.properties.quoteLineNumber.minimum, 1);
+  assert.equal(pricingContractSchemas.verifyRequest.properties.quoteLineNumber.maximum, 100);
+  assert.equal(pricingContractSchemas.verifyRequest.properties.quantity.type, "string");
+  assert.equal(pricingContractSchemas.verifyRequest.additionalProperties, false);
   assert.deepEqual(pricingResponseSchema(pricingContractSchemas.response, 201, [400, 409]), {
     201: pricingContractSchemas.response, 400: pricingContractSchemas.problem, 409: pricingContractSchemas.problem,
   });
@@ -248,14 +251,17 @@ void test("Pricing runtime guards use generated OpenAPI schemas and reject priva
   assert.equal(isPricingQuoteCreateRequest({...create, lines: []}), false);
   assert.equal(isPricingQuoteCreateRequest({...create, lines: [{...create.lines[0], quantity: 1.5}]}), false);
   assert.equal(isPricingQuoteCreateRequest({...create, supplierUnitMinor: "900"}), false);
-  assert.equal(isPricingQuoteCreateRequest({...create, lines: [{...create.lines[0], offerRef: verifiedQuote.lines[0].offerRef}]}), false);
+  assert.equal(isPricingQuoteCreateRequest({...create, lines: [{...create.lines[0], offerRef: verifiedQuote.line.offerRef}]}), false);
   assert.equal(isPricingQuoteResponse({...publicQuote, lines: [{...line, supplierUnitMinor: "900"}]}), false);
-  assert.equal(isPricingQuoteResponse({...publicQuote, internalProofHash: verifiedQuote.lines[0].internalProofHash}), false);
+  assert.equal(isPricingQuoteResponse({...publicQuote, internalProofHash: verifiedQuote.line.internalProofHash}), false);
   assert.equal(isPricingQuoteResponse({...publicQuote, totalMinor: 1800}), false);
   assert.equal(isPricingQuoteVerifyRequest({...verify, hash: "invalid"}), false);
-  assert.equal(isPricingQuoteVerifyRequest({...verify, lines: [{...verify.lines[0], supplierUnitMinor: "900"}]}), false);
+  assert.equal(isPricingQuoteVerifyRequest({...verify, quoteLineNumber: 0}), false);
+  assert.equal(isPricingQuoteVerifyRequest({...verify, quoteLineNumber: 101}), false);
+  assert.equal(isPricingQuoteVerifyRequest({...verify, lines: create.lines}), false, "legacy full-lines verification is rejected");
   assert.equal(isPricingQuoteVerificationResponse({...verifiedQuote, valid: false}), false);
-  assert.equal(isPricingQuoteVerificationResponse({...verifiedQuote, lines: [{...verifiedQuote.lines[0], supplierUnitMinor: 900}]}), false);
+  assert.equal(isPricingQuoteVerificationResponse({...verifiedQuote, line: {...verifiedQuote.line, supplierUnitMinor: 900}}), false);
+  assert.equal(isPricingQuoteVerificationResponse({...verifiedQuote, lines: [verifiedQuote.line]}), false);
   assert.equal(isPricingProblem({...problem, supplierUnitMinor: "900"}), false);
 });
 
@@ -367,7 +373,7 @@ void test("negative HTTP fixtures fail closed across trust and representation bo
   const negatives = await jsonFixture(join(NEGATIVE_ROOT, "http/rejections.json"));
   const successByKey = new Map(success.map((fixture) => [`${fixture.document}|${fixture.operationId}|${fixture.status}|${fixture.schema}`, fixture]));
   const problemByKey = new Map(problems.map((fixture) => [`${fixture.document}|${fixture.operationId}|${fixture.status}|${fixture.schema}`, fixture]));
-  const requiredCases = new Set(["missing-field", "additional-field", "invalid-ref-ulid", "invalid-uuid", "invalid-hash", "invalid-traceparent", "invalid-timestamp", "invalid-calendar-timestamp", "numeric-version", "numeric-money", "numeric-quantity", "noncanonical-decimal", "invalid-enum", "invalid-cross-field", "actor-provider-credentials-public", "wrong-problem-status", "wrong-problem-code", "invalid-problem-instance", "invalid-problem-instance-leading-digit-scheme", "invalid-problem-instance-empty-scheme", "invalid-problem-instance-path-brackets", "invalid-problem-instance-space", "invalid-problem-type-leading-digit-scheme", "invalid-problem-type-empty-scheme", "invalid-problem-type-path-brackets", "invalid-problem-type-space", "zero-provider-quantity", "unsupported-representation", "pii-secret-provider-body-sse", "binding-additional-field"]);
+  const requiredCases = new Set(["missing-field", "additional-field", "invalid-ref-ulid", "invalid-uuid", "invalid-hash", "invalid-traceparent", "invalid-timestamp", "invalid-calendar-timestamp", "numeric-version", "numeric-money", "numeric-quantity", "noncanonical-decimal", "invalid-enum", "invalid-cross-field", "actor-provider-credentials-public", "wrong-problem-status", "wrong-problem-code", "invalid-problem-instance", "invalid-problem-instance-leading-digit-scheme", "invalid-problem-instance-empty-scheme", "invalid-problem-instance-path-brackets", "invalid-problem-instance-space", "invalid-problem-type-leading-digit-scheme", "invalid-problem-type-empty-scheme", "invalid-problem-type-path-brackets", "invalid-problem-type-space", "zero-provider-quantity", "unsupported-representation", "pii-secret-provider-body-sse", "binding-additional-field", "wrong-order-empty-code", "wrong-order-item-limit-status"]);
   assert.deepEqual(new Set(negatives.map((fixture) => fixture.case)), requiredCases);
   for (const fixture of negatives) {
     if (fixture.case === "unsupported-representation") {

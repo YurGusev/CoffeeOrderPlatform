@@ -10,8 +10,8 @@ const CREATE = "/api/client-v1/pricing/quotes";
 const VERIFY = "/api/internal-v1/pricing/quotes:verify";
 const request = {customerRef:ref("cus"),lines:[{productRef:ref("prd"),variantRef:ref("var"),quantity:"2.5"}]};
 const quote = {quoteRef:ref("prq"),policyVersionRef:ref("pvr"),catalogSnapshotRevision:"1",customerRef:ref("cus"),createdAt:"2026-09-26T01:00:00.000Z",expiresAt:"2026-09-26T01:15:00.000Z",currency:"RUB",lines:[{lineNumber:1,productRef:ref("prd"),variantRef:ref("var"),productDisplayName:"Coffee",quantity:"2.5",unit:"piece",unitMinor:"130",lineTotalMinor:"325"}],totalMinor:"325",hash:"a".repeat(64)};
-const verifyRequest = {quoteRef:quote.quoteRef,hash:quote.hash,customerRef:quote.customerRef,lines:request.lines};
-const verified = {valid:true,quoteRef:quote.quoteRef,policyVersionRef:quote.policyVersionRef,catalogSnapshotRevision:"1",customerRef:quote.customerRef,expiresAt:quote.expiresAt,currency:"RUB",totalMinor:"325",lines:[{...quote.lines[0],currency:"RUB",offerRef:ref("off"),mappingRevision:"1",supplierUnitMinor:"100",internalProofHash:"b".repeat(64)}]};
+const verifyRequest = {quoteRef:quote.quoteRef,hash:quote.hash,customerRef:quote.customerRef,quoteLineNumber:1,productRef:request.lines[0].productRef,variantRef:request.lines[0].variantRef,quantity:request.lines[0].quantity};
+const verified = {valid:true,quoteRef:quote.quoteRef,policyVersionRef:quote.policyVersionRef,catalogSnapshotRevision:"1",customerRef:quote.customerRef,expiresAt:quote.expiresAt,currency:"RUB",line:{...quote.lines[0],currency:"RUB",offerRef:ref("off"),mappingRevision:"1",supplierUnitMinor:"100",internalProofHash:"b".repeat(64)}};
 function adapters(calls, changes={}) {
   return {
     verifyTransport:(_request,caller)=>{calls.transport.push(caller); return changes.transport !== false;},
@@ -91,7 +91,7 @@ void test("invalid audience, permissions, payloads and owner responses reject wi
   assert.equal(denied.calls.create.length+denied.calls.verify.length,0);
   const missing=await setup(t,{permissions:[]});
   problem(await missing.client(),403,"ACTOR_CONTEXT_INVALID");
-  const malformed=await setup(t,{createResult:{status:201,body:{...quote,supplierUnitMinor:"SECRET"},replayed:false},verifyResult:{...verified,lines:[{...verified.lines[0],internalProofHash:"bad"}]}});
+  const malformed=await setup(t,{createResult:{status:201,body:{...quote,supplierUnitMinor:"SECRET"},replayed:false},verifyResult:{...verified,line:{...verified.line,internalProofHash:"bad"}}});
   problem(await malformed.client(),500,"INTERNAL_ERROR");
   problem(await malformed.internal(),500,"INTERNAL_ERROR");
   problem(await malformed.internal({...verifyRequest,hash:"bad"}),400,"VALIDATION_FAILED");
