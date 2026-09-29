@@ -1,0 +1,1110 @@
+import assert from "node:assert/strict";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { preview, type PreviewServer } from "vite";
+import { chromium, type Browser, type BrowserContext, type Page, type Route } from "playwright";
+import { AxeBuilder } from "@axe-core/playwright";
+
+const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+const appRoot = resolve(repoRoot, "apps/web");
+const port = Number(process.env.WEB_OPERATOR_PORT ?? "4175");
+const origin = `http://localhost:${port}`;
+const customerRef = "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const orderRef = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const productRef = "prd_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const variantRef = "var_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const quoteRef = "prq_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const policyVersionRef = "pvr_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const timestamp = "2026-09-28T12:00:00.000Z";
+const correlationPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const hash = "a".repeat(64);
+const screenshotDir = process.env.WEB_SCREENSHOT_DIR;
+
+async function capture(page: Page, name: string): Promise<void> {
+  if (!screenshotDir) return;
+  await mkdir(screenshotDir, { recursive: true });
+  await page.screenshot({ fullPage: true, path: resolve(screenshotDir, name) });
+}
+
+function customerSummary() {
+  return { customerRef, version: "1", displayName: "Иван Петров", phone: "+79999994567" };
+}
+
+function customerResponse() {
+  return { ...customerSummary(), createdAt: timestamp, updatedAt: timestamp };
+}
+
+function orderCard(
+  version = "1",
+  status: "Draft" | "Confirmed" = "Draft",
+  withItem = false,
+  aromaState: "NotRequested" | "PendingObservation" | "OutOfSync" | "Converging" | "InSync" | "Blocked" | "UnknownOutcome" = status === "Confirmed" ? "PendingObservation" : "NotRequested",
+) {
+  return {
+    orderRef,
+    version,
+    projectionVersion: version,
+    status,
+    customer: { customerRef, displayName: "Иван Петров" },
+    items: withItem ? [{
+      itemRef: "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      linePosition: 1,
+      productRef,
+      variantRef,
+      displayName: "Капучино",
+      quantity: "2",
+      unit: "piece",
+      quoteRef,
+      quoteLineNumber: 1,
+      unitMinor: "25000",
+      lineTotalMinor: "50000",
+    }] : [],
+    pricing: withItem ? { totalMinor: "50000", currency: "RUB", quoteProofs: [{ quoteRef, hash, expiresAt: "2030-01-01T00:10:00.000Z" }] } : null,
+    aroma: {
+      state: aromaState,
+      desiredRevision: status === "Confirmed" ? "1" : "0",
+      observedRevision: "0",
+      blockers: aromaState === "Blocked" ? [{ code: "MAPPING_MISSING", message: "Для позиции отсутствует безопасное сопоставление" }] : [],
+    },
+    allowedActions: status === "Draft"
+      ? ["edit-items", "confirm"]
+      : ["Blocked", "UnknownOutcome"].includes(aromaState) ? [] : ["request-aroma-reconciliation"],
+  };
+}
+
+async function fulfillJson(route: Route, body: unknown, status = 200, headers: Record<string, string> = {}): Promise<void> {
+  await route.fulfill({ body: JSON.stringify(body), contentType: "application/json", headers, status });
+}
+
+async function captureBrowserTelemetry(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const scope = window as Window & { __coffeeTelemetry?: unknown[] };
+    scope.__coffeeTelemetry = [];
+    window.addEventListener("coffee:browser-telemetry", (event) => {
+      scope.__coffeeTelemetry?.push((event as CustomEvent).detail);
+    });
+  });
+}
+
+type BrowserTelemetryEvent = Readonly<{
+  correlationId: string;
+  durationMs: number;
+  endpoint: string;
+  name: string;
+  result: string;
+  route: string;
+}>;
+
+async function browserTelemetry(page: Page): Promise<BrowserTelemetryEvent[]> {
+  return page.evaluate(() => (window as Window & { __coffeeTelemetry?: BrowserTelemetryEvent[] }).__coffeeTelemetry ?? []);
+}
+
+type MockTelemetry = Readonly<{
+  correlationFailures: string[];
+  draftRequests: Array<Readonly<{ body: string | null; key: string | undefined; replayOnly: boolean }>>;
+  logoutRequests: string[];
+  reconciliationReasons: string[];
+  releaseReconciliationRefresh: () => void;
+  setSessionAvailable: (available: boolean) => void;
+  switchActor: () => void;
+}>;
+
+async function installCommonMocks(page: Page, options: {
+  abortFirstDraft?: boolean;
+  aromaScenario?: "Blocked" | "UnknownOutcome";
+  catalogUnavailable?: boolean;
+  conflictPut?: boolean;
+  customersUnavailable?: boolean;
+  customerValidationError?: boolean;
+  draftStatusMismatch?: boolean;
+  expiredSession?: boolean;
+  forbiddenCustomers?: boolean;
+  holdReconciliationRefresh?: boolean;
+  initialItem?: boolean;
+  malformedCustomers?: boolean;
+  orderNotFound?: boolean;
+  orderUnavailable?: boolean;
+  pricingUnavailable?: boolean;
+  reconciliationRefreshFails?: boolean;
+  replayWrongTerminal?: boolean;
+  sessionUnavailable?: boolean;
+  stalePut?: boolean;
+} = {}): Promise<MockTelemetry> {
+  let draftAttempt = 0;
+  let current = options.aromaScenario
+    ? orderCard("5", "Confirmed", true, options.aromaScenario)
+    : options.initialItem ? orderCard("2", "Draft", true) : orderCard();
+  let reconciliationAccepted = false;
+  let activeActor = "operator-1";
+  let sessionAvailable = true;
+  let loggedOut = false;
+  let releaseReconciliationRefresh = (): void => undefined;
+  const reconciliationRefreshGate = options.holdReconciliationRefresh
+    ? new Promise<void>((resolve) => { releaseReconciliationRefresh = resolve; })
+    : Promise.resolve();
+  const telemetry: MockTelemetry = {
+    correlationFailures: [],
+    draftRequests: [],
+    logoutRequests: [],
+    reconciliationReasons: [],
+    releaseReconciliationRefresh: () => releaseReconciliationRefresh(),
+    setSessionAvailable: (available) => { sessionAvailable = available; },
+    switchActor: () => { activeActor = "operator-2"; },
+  };
+  await page.route("**/auth/session", (route) => {
+    if (!correlationPattern.test(route.request().headers()["x-correlation-id"] ?? "")) telemetry.correlationFailures.push("/auth/session");
+    if (options.sessionUnavailable) return fulfillJson(route, {
+      type: "about:blank",
+      title: "Authorization unavailable",
+      status: 503,
+      code: "AUTHORIZATION_UNAVAILABLE",
+      detail: "Session service unavailable",
+      instance: "/auth/session",
+      correlationId: "00000000-0000-4000-8000-000000000008",
+      errors: [],
+    }, 503);
+    return loggedOut || !sessionAvailable ? fulfillJson(route, {
+      type: "about:blank",
+      title: "Authentication required",
+      status: 401,
+      code: "AUTHENTICATION_REQUIRED",
+      detail: "Session ended",
+      instance: "/auth/session",
+      correlationId: "00000000-0000-4000-8000-000000000005",
+      errors: [],
+    }, 401)
+    : fulfillJson(route, {
+      actorRef: activeActor,
+      expiresAt: options.expiredSession ? "2020-01-01T00:00:00.000Z" : "2030-01-01T00:00:00.000Z",
+    });
+  });
+  await page.route("**/auth/logout", async (route) => {
+    if (!correlationPattern.test(route.request().headers()["x-correlation-id"] ?? "")) telemetry.correlationFailures.push("/auth/logout");
+    telemetry.logoutRequests.push(route.request().method());
+    loggedOut = true;
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/client-v1/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (!correlationPattern.test(request.headers()["x-correlation-id"] ?? "")) telemetry.correlationFailures.push(url.pathname);
+    const method = request.method();
+    if (url.pathname === "/api/client-v1/customers" && method === "GET") {
+      if (options.customersUnavailable) return fulfillJson(route, {
+        type: "about:blank",
+        title: "Customer unavailable",
+        status: 503,
+        code: "CUSTOMER_UNAVAILABLE",
+        detail: "Поиск клиентов временно недоступен",
+        instance: url.pathname,
+        correlationId: "00000000-0000-4000-8000-000000000010",
+        errors: [],
+      }, 503);
+      if (options.forbiddenCustomers) return fulfillJson(route, {
+        type: "about:blank",
+        title: "Forbidden",
+        status: 403,
+        code: "AUTHORIZATION_FORBIDDEN",
+        detail: "Actor cannot read customers",
+        instance: url.pathname,
+        correlationId: "00000000-0000-4000-8000-000000000009",
+        errors: [],
+      }, 403);
+      if (options.malformedCustomers) return fulfillJson(route, { items: "invalid", nextCursor: null });
+      return fulfillJson(route, { items: [customerSummary()], nextCursor: null });
+    }
+    if (url.pathname === "/api/client-v1/customers" && method === "POST") {
+      if (options.customerValidationError) {
+        return fulfillJson(route, {
+          type: "about:blank",
+          title: "Validation failed",
+          status: 400,
+          code: "VALIDATION_FAILED",
+          detail: "Некорректное имя клиента",
+          instance: url.pathname,
+          correlationId: "00000000-0000-4000-8000-000000000002",
+          errors: [{ field: "/displayName", code: "INVALID", message: "Исправьте имя клиента" }],
+        }, 400);
+      }
+      return fulfillJson(route, customerResponse(), 201);
+    }
+    if (url.pathname === "/api/client-v1/orders/drafts" && method === "POST") {
+      draftAttempt += 1;
+      telemetry.draftRequests.push({
+        body: request.postData(),
+        key: request.headers()["idempotency-key"],
+        replayOnly: request.headers()["idempotency-replay-only"] === "true",
+      });
+      if (options.abortFirstDraft && draftAttempt === 1) return route.abort("connectionfailed");
+      if (options.draftStatusMismatch) {
+        return fulfillJson(route, {
+          type: "about:blank",
+          title: "Validation failed",
+          status: 400,
+          code: "VALIDATION_FAILED",
+          detail: "Mismatched transport status",
+          instance: url.pathname,
+          correlationId: "00000000-0000-4000-8000-000000000006",
+          errors: [],
+        }, 500);
+      }
+      const replayed = request.headers()["idempotency-replay-only"] === "true";
+      if (options.replayWrongTerminal && replayed) {
+        return fulfillJson(route, {
+          type: "about:blank",
+          title: "Item not found",
+          status: 404,
+          code: "ORDER_ITEM_NOT_FOUND",
+          detail: "Сохранённый ответ не соответствует команде создания заказа",
+          instance: url.pathname,
+          correlationId: "00000000-0000-4000-8000-000000000014",
+          errors: [],
+        }, 404, { "Idempotency-Replayed": "true" });
+      }
+      current = orderCard();
+      return fulfillJson(route, current, 201, replayed ? { "Idempotency-Replayed": "true" } : {});
+    }
+    if (url.pathname === `/api/client-v1/orders/${orderRef}` && method === "GET") {
+      if (options.holdReconciliationRefresh && reconciliationAccepted) await reconciliationRefreshGate;
+      if (options.orderNotFound) return fulfillJson(route, {
+        type: "about:blank",
+        title: "Order not found",
+        status: 404,
+        code: "ORDER_NOT_FOUND",
+        detail: "Заказ не найден",
+        instance: url.pathname,
+        correlationId: "00000000-0000-4000-8000-000000000013",
+        errors: [],
+      }, 404);
+      if (options.orderUnavailable || (options.reconciliationRefreshFails && reconciliationAccepted)) {
+        return fulfillJson(route, {
+          type: "about:blank",
+          title: "Order unavailable",
+          status: 503,
+          code: "ORDER_UNAVAILABLE",
+          detail: "Текущее состояние заказа временно недоступно",
+          instance: url.pathname,
+          correlationId: "00000000-0000-4000-8000-000000000007",
+          errors: [],
+        }, 503);
+      }
+      return fulfillJson(route, current);
+    }
+    if (url.pathname === "/api/client-v1/catalog/products" && method === "GET") {
+      if (options.catalogUnavailable) return fulfillJson(route, {
+        type: "about:blank",
+        title: "Catalog unavailable",
+        status: 503,
+        code: "CATALOG_UNAVAILABLE",
+        detail: "Каталог временно недоступен",
+        instance: url.pathname,
+        correlationId: "00000000-0000-4000-8000-000000000011",
+        errors: [],
+      }, 503);
+      return fulfillJson(route, {
+      snapshotRevision: "7",
+      items: [{ productRef, variantRef, displayName: "Капучино", unit: "piece", availability: "Available", mappingAvailable: true }],
+      nextCursor: null,
+      });
+    }
+    if (url.pathname === "/api/client-v1/pricing/quotes" && method === "POST") {
+      if (options.pricingUnavailable) return fulfillJson(route, {
+        type: "about:blank",
+        title: "Pricing unavailable",
+        status: 503,
+        code: "PRICING_POLICY_UNAVAILABLE",
+        detail: "Расчёт цены временно недоступен",
+        instance: url.pathname,
+        correlationId: "00000000-0000-4000-8000-000000000012",
+        errors: [],
+      }, 503);
+      return fulfillJson(route, {
+      quoteRef,
+      policyVersionRef,
+      catalogSnapshotRevision: "7",
+      customerRef,
+      createdAt: timestamp,
+      expiresAt: "2030-01-01T00:10:00.000Z",
+      currency: "RUB",
+      lines: [{ lineNumber: 1, productRef, variantRef, productDisplayName: "Капучино", quantity: "2", unit: "piece", unitMinor: "25000", lineTotalMinor: "50000" }],
+      totalMinor: "50000",
+      hash,
+      }, 201);
+    }
+    if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "PUT") {
+      if (options.stalePut) {
+        return fulfillJson(route, {
+          type: "about:blank",
+          title: "Quote is stale",
+          status: 409,
+          code: "ORDER_QUOTE_STALE",
+          detail: "Получите новую цену",
+          instance: url.pathname,
+          correlationId: "00000000-0000-4000-8000-000000000003",
+          errors: [],
+        }, 409);
+      }
+      if (options.conflictPut) {
+        current = orderCard("4", "Draft", true);
+        return fulfillJson(route, {
+          type: "about:blank",
+          title: "Order changed",
+          status: 409,
+          code: "ORDER_VERSION_CONFLICT",
+          detail: "Заказ изменился на сервере",
+          instance: url.pathname,
+          correlationId: "00000000-0000-4000-8000-000000000004",
+          errors: [],
+        }, 409);
+      }
+      current = orderCard("2", "Draft", true);
+      return fulfillJson(route, current);
+    }
+    if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "DELETE") {
+      current = orderCard("3", "Draft", false);
+      return fulfillJson(route, current);
+    }
+    if (url.pathname === `/api/client-v1/orders/${orderRef}/commands/confirm` && method === "POST") {
+      current = orderCard("3", "Confirmed", true, "OutOfSync");
+      return fulfillJson(route, current);
+    }
+    if (url.pathname === `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation` && method === "POST") {
+      const body = request.postDataJSON() as { reason?: string };
+      telemetry.reconciliationReasons.push(body.reason ?? "");
+      reconciliationAccepted = true;
+      return fulfillJson(route, { orderRef, orderVersion: current.version, requestedAt: "2026-09-28T18:00:00.000Z", aromaState: "PendingObservation" }, 202);
+    }
+    await fulfillJson(route, { type: "about:blank", title: "Not found", status: 404, code: "ORDER_NOT_FOUND", detail: "Not found", instance: url.pathname, correlationId: "00000000-0000-4000-8000-000000000001", errors: [] }, 404);
+  });
+  return telemetry;
+}
+
+async function assertNoSeriousA11y(page: Page, label: string): Promise<void> {
+  const results = await new AxeBuilder({ page }).analyze();
+  const violations = results.violations.filter((item) => item.impact === "serious" || item.impact === "critical");
+  assert.deepEqual(violations, [], `${label}: ${JSON.stringify(violations)}`);
+}
+
+async function happyPath(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await captureBrowserTelemetry(page);
+  const telemetry = await installCommonMocks(page);
+  await page.goto(`${origin}/`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Клиенты" }).waitFor();
+  assert.equal(new URL(page.url()).pathname, "/app/customers");
+  const desktopSurface = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const body = getComputedStyle(document.body);
+    const heading = getComputedStyle(document.querySelector("h1") as HTMLElement);
+    const surface = getComputedStyle(document.querySelector(".surface") as HTMLElement);
+    return {
+      bodyFont: body.fontFamily,
+      fontStatus: document.fonts.status,
+      headingFont: heading.fontFamily,
+      radius: Number.parseFloat(surface.borderRadius),
+    };
+  });
+  assert.equal(desktopSurface.fontStatus, "loaded");
+  assert.match(desktopSurface.bodyFont, /Inter/u);
+  assert.match(desktopSurface.headingFont, /Manrope/u);
+  assert.ok(desktopSurface.radius > 0);
+  const focusedHeading = await page.evaluate(() => {
+    const heading = document.querySelector(".page-header h1") as HTMLElement;
+    const style = getComputedStyle(heading);
+    return { active: heading === document.activeElement, boxShadow: style.boxShadow };
+  });
+  assert.equal(focusedHeading.active, true);
+  assert.notEqual(focusedHeading.boxShadow, "none", "route heading focus должен быть видимым");
+  const newCustomerTarget = await page.getByRole("button", { name: "Новый клиент" }).boundingBox();
+  assert.ok(newCustomerTarget && newCustomerTarget.height >= 44, `desktop target bounds: ${JSON.stringify(newCustomerTarget)}`);
+  await capture(page, "customers-1280.png");
+  const skipLink = page.getByRole("link", { name: "К основному содержимому" });
+  await skipLink.focus();
+  assert.equal(await skipLink.evaluate((node) => node === document.activeElement), true);
+  await page.keyboard.press("Enter");
+  assert.equal(await page.locator(":focus").getAttribute("id"), "route-content");
+  const newCustomerButton = page.getByRole("button", { name: "Новый клиент" });
+  await newCustomerButton.click();
+  const customerDialog = page.getByRole("dialog", { name: "Новый клиент" });
+  const customerName = customerDialog.getByRole("textbox", { name: "Имя", exact: true });
+  await customerName.waitFor();
+  assert.equal(await customerName.evaluate((node) => node === document.activeElement), true);
+  await customerName.fill("Иван Петров");
+  await page.keyboard.press("Escape");
+  assert.equal(await customerDialog.isVisible(), true, "dirty Customer dialog не должен закрываться по Escape");
+  await customerDialog.getByRole("textbox", { name: "Телефон", exact: true }).fill("+79999994567");
+  await page.getByRole("button", { name: "Создать и выбрать" }).click();
+  await page.getByRole("heading", { name: "Новый заказ" }).waitFor();
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  await page.getByRole("link", { name: "Открыть каталог" }).click();
+  await page.getByRole("heading", { name: "Поиск товаров" }).waitFor();
+  await page.getByRole("textbox", { name: "Название товара" }).fill("капучино");
+  await page.getByRole("button", { name: "Найти" }).click();
+  try {
+    await page.getByRole("heading", { name: "Капучино" }).waitFor({ timeout: 5_000 });
+  } catch {
+    throw new Error(`Каталог не показал товар: ${(await page.locator("body").textContent()) ?? ""}`);
+  }
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const size = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+    assert.ok(size.scroll <= size.client + 1, `catalog ${width}px overflow: ${JSON.stringify(size)}`);
+    if (width === 375) {
+      const addButton = page.getByRole("button", { name: "Добавить" });
+      const box = await addButton.boundingBox();
+      assert.ok(box && box.height >= 44 && box.x >= 0 && box.x + box.width <= width, `catalog primary action bounds: ${JSON.stringify(box)}`);
+      assert.equal(await addButton.evaluate((node) => document.elementFromPoint(node.getBoundingClientRect().x + (node.getBoundingClientRect().width / 2), node.getBoundingClientRect().y + (node.getBoundingClientRect().height / 2)) === node || node.contains(document.elementFromPoint(node.getBoundingClientRect().x + (node.getBoundingClientRect().width / 2), node.getBoundingClientRect().y + (node.getBoundingClientRect().height / 2)))), true);
+    }
+    await capture(page, `catalog-${width}.png`);
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("textbox", { name: "Количество для Капучино" }).fill("2");
+  await page.getByRole("button", { name: "Добавить" }).click();
+  await page.getByRole("link", { name: "К заказу" }).first().click();
+  await page.getByText("500,00 ₽").first().waitFor();
+  await page.getByRole("button", { name: "Удалить", exact: true }).click();
+  const deleteDialog = page.getByRole("dialog", { name: "Удалить позицию?" });
+  await deleteDialog.waitFor();
+  await deleteDialog.getByRole("button", { name: "Отмена" }).click();
+  const confirmTrigger = page.getByRole("button", { name: "Подтвердить заказ" });
+  await confirmTrigger.click();
+  const confirmDialog = page.getByRole("dialog", { name: "Подтвердить заказ?" });
+  const confirmCancel = confirmDialog.getByRole("button", { name: "Отмена" });
+  assert.equal(await confirmCancel.evaluate((node) => node === document.activeElement), true);
+  await page.keyboard.press("Escape");
+  await confirmDialog.waitFor({ state: "hidden" });
+  assert.equal(await confirmTrigger.evaluate((node) => node === document.activeElement), true);
+  await confirmTrigger.click();
+  await confirmDialog.getByRole("button", { name: "Подтвердить", exact: true }).click();
+  await page.getByText("Подтверждён").waitFor();
+  await page.getByText("Есть расхождение").waitFor();
+  try {
+    await page.getByRole("button", { name: "Запросить сверку AROMA" }).click({ timeout: 5_000 });
+  } catch {
+    throw new Error(`Действие сверки не появилось: ${(await page.locator("body").textContent()) ?? ""}`);
+  }
+  const reconciliationDialog = page.getByRole("dialog", { name: "Запросить сверку AROMA?" });
+  const reconciliationReason = reconciliationDialog.getByRole("textbox", { name: "Причина" });
+  assert.equal(await reconciliationReason.evaluate((node) => node === document.activeElement), true);
+  await reconciliationReason.fill("Проверка расхождения оператором");
+  await page.keyboard.press("Escape");
+  assert.equal(await reconciliationDialog.isVisible(), true, "dirty reconciliation dialog не должен закрываться по Escape");
+  await reconciliationDialog.getByRole("button", { name: "Отправить запрос" }).click();
+  try {
+    await reconciliationDialog.waitFor({ state: "hidden", timeout: 5_000 });
+  } catch {
+    throw new Error(`Диалог сверки не закрылся: ${(await page.locator("body").textContent()) ?? ""}`);
+  }
+  assert.deepEqual(telemetry.reconciliationReasons, ["Проверка расхождения оператором"]);
+  await assertNoSeriousA11y(page, "happy path");
+  for (const width of [375, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const size = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+    assert.ok(size.scroll <= size.client + 1, `${width}px overflow: ${JSON.stringify(size)}`);
+    if (width === 375 || width === 1280) await capture(page, `order-${width}.png`);
+  }
+  const events = await browserTelemetry(page);
+  assert.equal(telemetry.correlationFailures.length, 0, `requests without valid X-Correlation-ID: ${telemetry.correlationFailures.join(", ")}`);
+  assert.equal(events.some((event) => event.name === "ui.query.result"), true);
+  assert.equal(events.some((event) => event.name === "ui.command.result"), true);
+  assert.equal(events.every((event) => correlationPattern.test(event.correlationId) && event.durationMs >= 0), true);
+  assert.equal(events.some((event) => /\/(?:ord|itm|cus|prd|var|prq|pvr)_/u.test(`${event.endpoint}${event.route}`)), false);
+  await page.close();
+}
+
+async function ambiguousRecovery(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await captureBrowserTelemetry(page);
+  const telemetry = await installCommonMocks(page, { abortFirstDraft: true });
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("Исход команды неизвестен").waitFor();
+  assert.equal(telemetry.draftRequests.length, 1);
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText(/уже есть неподтверждённый результат/u).waitFor();
+  assert.equal(telemetry.draftRequests.length, 1, "повторное обычное создание черновика не должно отправляться");
+  await page.getByRole("button", { name: "Проверить результат команды" }).click();
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  assert.equal(telemetry.draftRequests.length, 2);
+  assert.equal(telemetry.draftRequests[0]?.key, telemetry.draftRequests[1]?.key);
+  assert.equal(telemetry.draftRequests[0]?.replayOnly, false);
+  assert.equal(telemetry.draftRequests[1]?.replayOnly, true);
+  assert.notEqual(telemetry.draftRequests[0]?.body, null);
+  assert.equal(telemetry.draftRequests[1]?.body, null);
+  assert.equal(new URL(page.url()).pathname, `/app/orders/${orderRef}`);
+  assert.equal(await page.getByText("Исход команды неизвестен").count(), 0);
+  assert.equal((await browserTelemetry(page)).some((event) => event.name === "ui.recovery.result" && event.result === "http:201"), true);
+  assert.equal(telemetry.correlationFailures.length, 0);
+  await page.close();
+}
+
+async function actorSwitchBlocksRecovery(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { abortFirstDraft: true });
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("Исход команды неизвестен").waitFor();
+  telemetry.switchActor();
+  await page.evaluate(() => window.dispatchEvent(new Event("coffee:session-invalidated")));
+  await page.getByText("operator-2").waitFor();
+  assert.equal(new URL(page.url()).pathname, "/app/customers");
+  await page.getByText("Восстановление прежней сессии недоступно").waitFor();
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
+  assert.equal(await page.getByRole("button", { name: "Проверить результат команды" }).count(), 0);
+  assert.equal(telemetry.draftRequests.length, 1);
+  await page.close();
+}
+
+async function replayFreshSessionBlocksActorConfusion(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { abortFirstDraft: true });
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("Исход команды неизвестен").waitFor();
+  telemetry.switchActor();
+  await page.getByRole("button", { name: "Проверить результат команды" }).click();
+  await page.getByText("operator-2").waitFor();
+  assert.equal(new URL(page.url()).pathname, "/app/customers");
+  assert.equal(telemetry.draftRequests.length, 1, "replay lookup не должен уходить после server-side смены actor");
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
+  await page.close();
+}
+
+async function replayRejectsTerminalFromAnotherOperation(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { abortFirstDraft: true, replayWrongTerminal: true });
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("Исход команды неизвестен").waitFor();
+  await page.getByRole("button", { name: "Проверить результат команды" }).click();
+  await page.getByText("Сохранённый ответ не соответствует команде создания заказа").waitFor();
+  assert.equal(telemetry.draftRequests.length, 2);
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 1);
+  assert.equal(await page.getByRole("button", { name: "Проверить результат команды" }).count(), 1);
+  await page.close();
+}
+
+async function sameActorReauthPreservesExplicitRecovery(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { abortFirstDraft: true });
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("Исход команды неизвестен").waitFor();
+  telemetry.setSessionAvailable(false);
+  await page.evaluate(() => window.dispatchEvent(new Event("coffee:session-invalidated")));
+  await page.getByText("Требуется вход").waitFor();
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 1);
+  telemetry.setSessionAvailable(true);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Проверить результат команды" }).waitFor();
+  assert.equal(telemetry.draftRequests.length, 1, "reauth не должен автоматически повторять команду или lookup");
+  await page.getByRole("button", { name: "Проверить результат команды" }).click();
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  assert.equal(telemetry.draftRequests.length, 2);
+  assert.equal(telemetry.draftRequests[0]?.key, telemetry.draftRequests[1]?.key);
+  assert.equal(telemetry.draftRequests[1]?.replayOnly, true);
+  await page.close();
+}
+
+async function missingCsrfBlocksMutation(context: BrowserContext): Promise<void> {
+  const browser = context.browser();
+  assert.ok(browser, "Playwright browser is unavailable");
+  const isolated = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await isolated.clearCookies();
+  const page = await isolated.newPage();
+  await captureBrowserTelemetry(page);
+  const telemetry = await installCommonMocks(page);
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  assert.equal((await page.evaluate(() => document.cookie)).includes("__Host-coffee-csrf="), false);
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  const alert = page.getByRole("alert").filter({ hasText: "CSRF-токен сессии отсутствует" });
+  await alert.waitFor();
+  assert.match((await alert.textContent()) ?? "", /CSRF-токен сессии отсутствует/u);
+  assert.equal(telemetry.draftRequests.length, 0);
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
+  assert.equal(await page.getByText("Исход команды неизвестен").count(), 0);
+  assert.equal((await browserTelemetry(page)).some((event) => event.name === "ui.command.result" && event.result === "blocked:csrf"), true);
+  await isolated.close();
+}
+
+async function freshSessionBlocksActorConfusion(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page);
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  telemetry.switchActor();
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("operator-2").waitFor();
+  assert.equal(new URL(page.url()).pathname, "/app/customers");
+  assert.equal(telemetry.draftRequests.length, 0, "смена server session перед командой не должна отправлять POST");
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
+  await page.close();
+}
+
+async function csrfChangeDuringIntentPreparationBlocksMutation(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    const original = Storage.prototype.setItem.bind(sessionStorage);
+    let switched = false;
+    Storage.prototype.setItem = function setItem(key: string, value: string): void {
+      original(key, value);
+      if (!switched && key.startsWith("coffee-platform:intent:v1:")) {
+        switched = true;
+        document.cookie = "__Host-coffee-csrf=switched-csrf-token; Path=/; Secure; SameSite=Strict";
+      }
+    };
+  });
+  const telemetry = await installCommonMocks(page);
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("Требуется вход").waitFor();
+  assert.equal(telemetry.draftRequests.length, 0);
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
+  await page.close();
+  await context.addCookies([{ domain: "localhost", name: "__Host-coffee-csrf", path: "/", secure: true, value: "test-csrf-token" }]);
+}
+
+async function logoutDuringFingerprintDoesNotCreateIntent(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    const scope = window as Window & { __coffeeDigestWaiting?: boolean; __coffeeReleaseDigest?: () => void };
+    const originalDigest = crypto.subtle.digest.bind(crypto.subtle);
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    scope.__coffeeReleaseDigest = () => release();
+    Object.defineProperty(crypto.subtle, "digest", {
+      configurable: true,
+      value: async (...args: Parameters<SubtleCrypto["digest"]>) => {
+        scope.__coffeeDigestWaiting = true;
+        await gate;
+        return originalDigest(...args);
+      },
+    });
+  });
+  const telemetry = await installCommonMocks(page);
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.waitForFunction(() => (window as Window & { __coffeeDigestWaiting?: boolean }).__coffeeDigestWaiting === true);
+  await page.getByRole("button", { name: "Выйти" }).click();
+  await page.getByRole("dialog", { name: "Выйти из операторской платформы?" }).getByRole("button", { name: "Завершить сессию" }).click();
+  await page.getByText("Требуется вход").waitFor();
+  await page.evaluate(() => (window as Window & { __coffeeReleaseDigest?: () => void }).__coffeeReleaseDigest?.());
+  await page.waitForTimeout(50);
+  assert.equal(telemetry.draftRequests.length, 0);
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
+  await page.close();
+}
+
+async function mismatchedProblemStatusRetainsIntent(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { draftStatusMismatch: true });
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText(/HTTP status 500 не совпадает/u).waitFor();
+  await page.getByText("Исход команды неизвестен").waitFor();
+  assert.equal(telemetry.draftRequests.length, 1);
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText(/уже есть неподтверждённый результат/u).waitFor();
+  assert.equal(telemetry.draftRequests.length, 1, "несогласованный Problem Details не должен разблокировать новый эффект");
+  await page.close();
+}
+
+async function reconciliationAcceptanceCannotBeResubmitted(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { initialItem: true, reconciliationRefreshFails: true });
+  await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Подтвердить заказ" }).click();
+  await page.getByRole("dialog", { name: "Подтвердить заказ?" }).getByRole("button", { name: "Подтвердить", exact: true }).click();
+  await page.getByRole("button", { name: "Запросить сверку AROMA" }).click();
+  const dialog = page.getByRole("dialog", { name: "Запросить сверку AROMA?" });
+  await dialog.getByRole("textbox", { name: "Причина" }).fill("Проверка после подтверждения");
+  await dialog.getByRole("button", { name: "Отправить запрос" }).click();
+  await dialog.waitFor({ state: "hidden" });
+  try {
+    await page.getByText("Не удалось проверить актуальность карточки").waitFor({ timeout: 10_000 });
+  } catch {
+    throw new Error(`Не показано предупреждение после принятой сверки и failed GET: ${(await page.locator("body").textContent()) ?? ""}`);
+  }
+  assert.deepEqual(telemetry.reconciliationReasons, ["Проверка после подтверждения"]);
+  assert.equal(await page.getByRole("button", { name: "Запросить сверку AROMA" }).count(), 0);
+  await page.close();
+}
+
+async function reconciliationStaysBlockedDuringOwnerRefresh(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { holdReconciliationRefresh: true, initialItem: true });
+  await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Подтвердить заказ" }).click();
+  await page.getByRole("dialog", { name: "Подтвердить заказ?" }).getByRole("button", { name: "Подтвердить", exact: true }).click();
+  await page.getByRole("button", { name: "Запросить сверку AROMA" }).click();
+  const dialog = page.getByRole("dialog", { name: "Запросить сверку AROMA?" });
+  await dialog.getByRole("textbox", { name: "Причина" }).fill("Проверка блокировки повтора");
+  await dialog.getByRole("button", { name: "Отправить запрос" }).click();
+  await dialog.waitFor({ state: "hidden" });
+  const trigger = page.getByRole("button", { name: "Запросить сверку AROMA" });
+  await trigger.waitFor();
+  assert.equal(await trigger.isDisabled(), true);
+  assert.deepEqual(telemetry.reconciliationReasons, ["Проверка блокировки повтора"]);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    const geometry = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
+    assert.ok(geometry.scrollWidth <= geometry.clientWidth + 1, `${width}px reconciliation pending overflow: ${JSON.stringify(geometry)}`);
+    assert.equal(await trigger.isDisabled(), true);
+    await capture(page, `reconciliation-pending-${width}.png`);
+  }
+  const violations = await new AxeBuilder({ page }).analyze();
+  assert.equal(violations.violations.filter(({ impact }) => impact === "serious" || impact === "critical").length, 0);
+  telemetry.releaseReconciliationRefresh();
+  await page.waitForTimeout(50);
+  await page.close();
+}
+
+async function replayDoesNotPublishHistoricalCard(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { abortFirstDraft: true, orderUnavailable: true });
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("Исход команды неизвестен").waitFor();
+  await page.getByRole("button", { name: "Проверить результат команды" }).click();
+  try {
+    await page.getByText("Результат найден, но текущая карточка недоступна").waitFor({ timeout: 10_000 });
+  } catch {
+    throw new Error(`Не показана ошибка authoritative GET после replay: ${(await page.locator("body").textContent()) ?? ""}`);
+  }
+  assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0, "historical replay не должен становиться current Order Card");
+  await page.close();
+}
+
+async function explicitLogoutClearsRecovery(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { abortFirstDraft: true });
+  await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByText("Исход команды неизвестен").waitFor();
+  await page.getByRole("button", { name: "Выйти" }).click();
+  const dialog = page.getByRole("dialog", { name: "Выйти из операторской платформы?" });
+  await dialog.getByText("Есть незавершённые команды").waitFor();
+  await dialog.getByRole("button", { name: "Завершить сессию" }).click();
+  await page.getByText("Требуется вход").waitFor();
+  assert.deepEqual(telemetry.logoutRequests, ["POST"]);
+  assert.equal(telemetry.correlationFailures.length, 0);
+  assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
+  assert.equal(await page.getByRole("heading", { name: "Новый заказ" }).count(), 0);
+  await page.close();
+}
+
+async function expiredSessionHidesPrivateRoutes(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { expiredSession: true });
+  await page.goto(`${origin}/app/customers`, { waitUntil: "networkidle" });
+  await page.getByText("Требуется вход").waitFor();
+  assert.equal(await page.getByRole("heading", { name: "Клиенты" }).count(), 0);
+  await page.close();
+}
+
+async function unavailableSessionHidesPrivateRoutes(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { sessionUnavailable: true });
+  await page.goto(`${origin}/app/customers`, { waitUntil: "networkidle" });
+  await page.getByText("Не удалось проверить сессию").waitFor();
+  assert.equal(await page.getByText("Session service unavailable").count(), 0);
+  assert.equal(await page.getByText("AUTHORIZATION_UNAVAILABLE").count(), 0);
+  assert.equal(await page.getByText(/Correlation ID/iu).count(), 0);
+  const retry = page.getByRole("button", { name: "Повторить проверку" });
+  await retry.waitFor();
+  assert.equal(await page.getByRole("link", { name: "Войти через защищённый контур" }).count(), 0);
+  assert.equal(await page.getByRole("heading", { name: "Клиенты" }).count(), 0);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    const size = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+    assert.ok(size.scroll <= size.client + 1, `${width}px auth-unavailable overflow: ${JSON.stringify(size)}`);
+    const retryBox = await retry.boundingBox();
+    assert.ok(retryBox && retryBox.height >= 44, `${width}px auth retry target must be at least 44px high`);
+    await capture(page, `auth-unavailable-${width}.png`);
+  }
+  const violations = await new AxeBuilder({ page }).analyze();
+  assert.deepEqual(violations.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? "")), []);
+  await retry.click();
+  await page.getByText("Не удалось проверить сессию").waitFor();
+  await page.close();
+}
+
+async function forbiddenResourceKeepsSessionAndShowsRightsError(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { forbiddenCustomers: true });
+  await page.goto(`${origin}/app/customers?q=иван`, { waitUntil: "networkidle" });
+  await page.getByText("Недостаточно прав").waitFor();
+  await page.getByText("СЕССИЯ АКТИВНА").waitFor();
+  assert.equal(await page.getByText("Actor cannot read customers").count(), 0);
+  assert.equal(await page.getByText("AUTHORIZATION_FORBIDDEN").count(), 0);
+  assert.equal(await page.getByText(/Correlation ID/iu).count(), 0);
+  assert.equal(await page.getByText("Требуется вход").count(), 0);
+  const refresh = page.getByRole("button", { name: "Обновить данные" });
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    const size = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+    assert.ok(size.scroll <= size.client + 1, `${width}px forbidden overflow: ${JSON.stringify(size)}`);
+    const refreshBox = await refresh.boundingBox();
+    assert.ok(refreshBox && refreshBox.height >= 44, `${width}px forbidden refresh target must be at least 44px high`);
+    await capture(page, `customers-forbidden-${width}.png`);
+  }
+  const violations = await new AxeBuilder({ page }).analyze();
+  assert.deepEqual(violations.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? "")), []);
+  await refresh.click();
+  await page.getByText("Недостаточно прав").waitFor();
+  await page.close();
+}
+
+async function unavailableDependenciesPreserveOperatorContext(context: BrowserContext): Promise<void> {
+  const customersPage = await context.newPage();
+  await installCommonMocks(customersPage, { customersUnavailable: true });
+  await customersPage.goto(`${origin}/app/customers?q=иван`, { waitUntil: "networkidle" });
+  await customersPage.getByText("Сервис временно недоступен").waitFor();
+  assert.equal(await customersPage.getByRole("textbox", { name: "Поиск клиента" }).inputValue(), "иван");
+  await customersPage.getByRole("button", { name: "Обновить данные" }).waitFor();
+  await customersPage.close();
+
+  const catalogPage = await context.newPage();
+  await installCommonMocks(catalogPage, { catalogUnavailable: true });
+  await catalogPage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+  await catalogPage.getByText("Сервис временно недоступен").waitFor();
+  assert.equal(await catalogPage.getByRole("textbox", { name: "Название товара" }).inputValue(), "капучино");
+  await catalogPage.close();
+
+  const pricingPage = await context.newPage();
+  await installCommonMocks(pricingPage, { pricingUnavailable: true });
+  await pricingPage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+  const quantity = pricingPage.getByRole("textbox", { name: "Количество для Капучино" });
+  await quantity.fill("2");
+  await pricingPage.getByRole("button", { name: "Добавить" }).click();
+  await pricingPage.getByText("Сервис временно недоступен").waitFor();
+  assert.equal(await quantity.inputValue(), "2");
+  await pricingPage.close();
+}
+
+async function aromaBlockedAndUnknownOutcomeUseOwnerActions(context: BrowserContext): Promise<void> {
+  const unknownPage = await context.newPage();
+  await installCommonMocks(unknownPage, { aromaScenario: "UnknownOutcome" });
+  await unknownPage.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  await unknownPage.getByText("Результат неизвестен").waitFor();
+  await unknownPage.getByText("Исход AROMA неизвестен").waitFor();
+  await unknownPage.getByRole("button", { name: "Проверить состояние" }).waitFor();
+  assert.equal(await unknownPage.getByRole("button", { name: "Запросить сверку AROMA" }).count(), 0);
+  await unknownPage.close();
+
+  const blockedPage = await context.newPage();
+  await installCommonMocks(blockedPage, { aromaScenario: "Blocked" });
+  await blockedPage.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  await blockedPage.getByText("Заблокировано").waitFor();
+  await blockedPage.getByText("Для позиции отсутствует безопасное сопоставление").waitFor();
+  assert.equal(await blockedPage.getByRole("button", { name: "Запросить сверку AROMA" }).count(), 0);
+  await blockedPage.close();
+}
+
+async function malformedResponse(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { malformedCustomers: true });
+  await page.goto(`${origin}/app/customers?q=иван`, { waitUntil: "networkidle" });
+  await page.getByText(/ответ не прошёл runtime validation/u).waitFor();
+  await page.close();
+}
+
+async function serverValidationIsAssociated(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { customerValidationError: true });
+  await page.goto(`${origin}/app/customers`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Новый клиент" }).click();
+  const displayName = page.getByRole("textbox", { name: "Имя", exact: true });
+  await displayName.fill("Некорректное имя");
+  await page.getByRole("textbox", { name: "Телефон", exact: true }).fill("+79999994567");
+  await page.getByRole("button", { name: "Создать и выбрать" }).click();
+  await page.getByText("Исправьте имя клиента").first().waitFor();
+  assert.equal(await displayName.getAttribute("aria-invalid"), "true");
+  assert.equal(await displayName.evaluate((node) => node === document.activeElement), true);
+  await page.close();
+}
+
+async function routeSemantics(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page);
+  await page.goto(`${origin}/app/customers`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Начните поиск клиента" }).waitFor();
+
+  await page.goto(`${origin}/app/customers?q=%20иван%20`, { waitUntil: "networkidle" });
+  try {
+    await page.getByRole("heading", { name: "Иван Петров" }).waitFor({ timeout: 10_000 });
+  } catch {
+    throw new Error(`Нормализованный Customer deep link не показал результат: ${(await page.locator("body").textContent()) ?? ""}`);
+  }
+  assert.equal(new URL(page.url()).searchParams.get("q"), "иван");
+  await page.getByText("+799••••4567").waitFor();
+  assert.equal(await page.getByText("+79999994567", { exact: true }).count(), 0);
+
+  await page.goto(`${origin}/app/orders/new?customerRef=invalid`, { waitUntil: "networkidle" });
+  await page.getByText(/корректный идентификатор клиента/u).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Создать черновик" }).count(), 0);
+  assert.equal(telemetry.draftRequests.length, 0);
+
+  await page.goto(`${origin}/app/catalog`, { waitUntil: "networkidle" });
+  await page.getByText(/создайте черновик заказа/u).waitFor();
+
+  await page.goto(`${origin}/app/catalog?orderRef=${orderRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Начните поиск товара" }).waitFor();
+
+  await page.goto(`${origin}/app/orders/invalid`, { waitUntil: "networkidle" });
+  await page.getByText(/Некорректный orderRef/u).waitFor();
+
+  await page.goto(`${origin}/app/unknown`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Маршрут не найден" }).waitFor();
+  await page.close();
+}
+
+async function missingOrderUsesRouteRecovery(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { orderNotFound: true });
+  await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  const heading = page.getByRole("heading", { name: "Заказ не найден" });
+  const recoveryLink = page.getByRole("link", { name: "Перейти к клиентам" });
+  await heading.waitFor();
+  await recoveryLink.waitFor();
+  assert.equal(await page.getByRole("button", { name: "Обновить данные" }).count(), 0);
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    const geometry = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    assert.ok(geometry.scrollWidth <= geometry.clientWidth + 1, `${width}px missing order overflow: ${JSON.stringify(geometry)}`);
+    const headingBox = await heading.boundingBox();
+    assert.ok(headingBox && headingBox.x >= 0 && headingBox.x + headingBox.width <= width, `${width}px missing order heading clipped`);
+    await capture(page, `order-not-found-${width}.png`);
+  }
+  const violations = await new AxeBuilder({ page }).analyze();
+  assert.equal(violations.violations.filter(({ impact }) => impact === "serious" || impact === "critical").length, 0);
+  await page.close();
+}
+
+async function browserBackDoesNotRepeatDraft(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page);
+  await page.goto(`${origin}/app/customers?q=иван`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Выбрать" }).click();
+  await page.getByRole("heading", { name: "Новый заказ" }).waitFor();
+  await page.getByRole("button", { name: "Создать черновик" }).click();
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  assert.equal(new URL(page.url()).pathname, `/app/orders/${orderRef}`);
+  assert.equal(telemetry.draftRequests.length, 1);
+  await page.goBack({ waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  assert.equal(new URL(page.url()).pathname, "/app/customers");
+  assert.equal(telemetry.draftRequests.length, 1, "Browser Back не должен повторять POST создания Draft");
+  await page.close();
+}
+
+async function staleQuoteAndConcurrentChange(context: BrowserContext): Promise<void> {
+  const stalePage = await context.newPage();
+  await installCommonMocks(stalePage, { initialItem: true, stalePut: true });
+  await stalePage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+  await stalePage.getByRole("heading", { name: "Капучино" }).waitFor();
+  const addQuantity = stalePage.getByRole("textbox", { name: "Количество для Капучино" });
+  await addQuantity.fill("2");
+  await stalePage.getByRole("button", { name: "Добавить" }).click();
+  await stalePage.getByText("Цена устарела").waitFor();
+  assert.equal(await addQuantity.inputValue(), "2");
+  await stalePage.close();
+
+  const conflictPage = await context.newPage();
+  await installCommonMocks(conflictPage, { conflictPut: true, initialItem: true });
+  await conflictPage.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  const updateQuantity = conflictPage.getByRole("textbox", { name: "Количество Капучино" });
+  await updateQuantity.fill("3");
+  await conflictPage.getByRole("button", { name: "Обновить" }).click();
+  const conflictDialog = conflictPage.getByRole("dialog", { name: "Заказ изменился на сервере" });
+  await conflictDialog.waitFor();
+  assert.equal(await updateQuantity.inputValue(), "3");
+  await conflictDialog.getByRole("button", { name: "Обновить карточку" }).click();
+  await conflictDialog.waitFor({ state: "hidden" });
+  await conflictPage.getByText("Версия заказа").locator("..").getByText("4", { exact: true }).waitFor();
+  await conflictPage.close();
+}
+
+async function deleteItemReturnsFocusToItemsHeading(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { initialItem: true });
+  await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Удалить", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Удалить позицию?" });
+  const cancel = dialog.getByRole("button", { name: "Отмена" });
+  assert.equal(await cancel.evaluate((node) => node === document.activeElement), true);
+  await dialog.getByRole("button", { name: "Удалить", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await page.getByRole("heading", { name: "Черновик пока пуст" }).waitFor();
+  const itemsHeading = page.getByRole("heading", { name: "Состав заказа" });
+  const itemsHeadingHandle = await itemsHeading.elementHandle();
+  assert.ok(itemsHeadingHandle);
+  await page.waitForFunction((node) => node === document.activeElement, itemsHeadingHandle);
+  await page.close();
+}
+
+async function main(): Promise<void> {
+  const server: PreviewServer = await preview({ configFile: resolve(appRoot, "vite.config.ts"), preview: { host: "127.0.0.1", port, strictPort: true }, root: appRoot });
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const browserErrors: string[] = [];
+    const externalRequests: string[] = [];
+    context.on("page", (page) => {
+      page.on("console", (message) => {
+        if (message.type() === "error" && !message.text().includes("Failed to load resource")) browserErrors.push(message.text());
+      });
+      page.on("pageerror", (error) => browserErrors.push(error.message));
+      page.on("request", (request) => {
+        const requestUrl = new URL(request.url());
+        if (requestUrl.origin !== origin) externalRequests.push(request.url());
+      });
+    });
+    await context.addCookies([{ domain: "localhost", name: "__Host-coffee-csrf", path: "/", secure: true, value: "test-csrf-token" }]);
+    const group = process.env.WEB_TEST_GROUP ?? "all";
+    if (["all", "accessibility", "routes"].includes(group)) await happyPath(context);
+    if (["all", "routes"].includes(group)) {
+      await routeSemantics(context);
+      await missingOrderUsesRouteRecovery(context);
+      await browserBackDoesNotRepeatDraft(context);
+      await staleQuoteAndConcurrentChange(context);
+      await deleteItemReturnsFocusToItemsHeading(context);
+      await unavailableSessionHidesPrivateRoutes(context);
+      await forbiddenResourceKeepsSessionAndShowsRightsError(context);
+      await unavailableDependenciesPreserveOperatorContext(context);
+      await aromaBlockedAndUnknownOutcomeUseOwnerActions(context);
+    }
+    if (["all", "idempotency"].includes(group)) {
+      await ambiguousRecovery(context);
+      await actorSwitchBlocksRecovery(context);
+      await replayFreshSessionBlocksActorConfusion(context);
+      await replayRejectsTerminalFromAnotherOperation(context);
+      await sameActorReauthPreservesExplicitRecovery(context);
+      await missingCsrfBlocksMutation(context);
+      await freshSessionBlocksActorConfusion(context);
+      await csrfChangeDuringIntentPreparationBlocksMutation(context);
+      await logoutDuringFingerprintDoesNotCreateIntent(context);
+      await mismatchedProblemStatusRetainsIntent(context);
+      await reconciliationAcceptanceCannotBeResubmitted(context);
+      await reconciliationStaysBlockedDuringOwnerRefresh(context);
+      await replayDoesNotPublishHistoricalCard(context);
+      await explicitLogoutClearsRecovery(context);
+      await expiredSessionHidesPrivateRoutes(context);
+    }
+    if (["all", "routes"].includes(group)) await malformedResponse(context);
+    if (["all", "accessibility"].includes(group)) await serverValidationIsAssociated(context);
+    assert.deepEqual(browserErrors, [], `unexpected browser errors: ${browserErrors.join(" | ")}`);
+    assert.deepEqual(externalRequests, [], `unexpected external requests: ${externalRequests.join(" | ")}`);
+    await context.close();
+  } finally {
+    await browser?.close();
+    await server.close();
+  }
+}
+
+await main();

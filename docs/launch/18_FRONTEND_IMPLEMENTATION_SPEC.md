@@ -187,7 +187,7 @@ success (включая empty), recoverable error, route-fatal error. Стары
 
 | Code/ситуация | Точный UI |
 |---|---|
-| field `VALIDATION_FAILED` | inline errors по `errors[].pointer`, focus первого поля |
+| field `VALIDATION_FAILED` | inline errors по `errors[].field`, focus первого поля |
 | `IDEMPOTENCY_CONFLICT` | alert «Этот ключ уже использован для другой команды», без retry |
 | `IDEMPOTENCY_REQUEST_IN_PROGRESS` | сохранить pending key; «Проверить результат команды», без новой команды |
 | `IDEMPOTENCY_RESULT_NOT_RETAINED` | unresolved intent; owner recovery, без нового key |
@@ -247,7 +247,7 @@ server-provided reconciliation action.
   `aria-describedby`;
 - после failed submit field `VALIDATION_FAILED` фокус получает первое invalid
   поле в DOM order; summary объявляется, но получает programmatic focus только
-  если `errors[].pointer` не даёт focusable field target;
+  если `errors[].field` не даёт focusable field target;
 - Customer create dialog: initial focus на первом пустом required поле; return на
   «Создать клиента», а после success route focus переходит на `<h1>` New Order;
 - Confirm dialog: initial focus на «Отмена»; return на «Подтвердить заказ»;

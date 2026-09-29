@@ -99,7 +99,8 @@ SQL/Kafka или provider code. Browser graph не импортирует Node `
 Exact pins и compatibility checks остаются работой #137. Icon runtime, RHF,
 Zod, Radix, Base UI, второй `QueryClient`, второй transport path и generated
 SDK/client запрещены. Формы используют local React state; server validation
-связывается по `errors[].pointer`.
+связывается по contract-defined `errors[].field` (`/displayName`, `/phone`,
+`/email`, `/reason`); неизвестный field остаётся в общем Problem Details.
 
 React Aria владеет semantic/keyboard/focus behavior; Tailwind v4 и tokens —
 styling. Иконки `search`, `add`, `chevron`, `close`, `warning`, `refresh`

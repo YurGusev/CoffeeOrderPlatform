@@ -16,7 +16,7 @@
   --color-muted: var(--cos-text-secondary);
   --color-on-accent: var(--cos-text-on-action);
   --color-on-primary: var(--cos-text-on-action);
-  --color-primary: var(--cos-action-primary-strong);
+  --color-primary: var(--cos-action-primary-surface-hover);
   --color-accent: var(--cos-palette-cyan);
   --color-success-bg: var(--cos-status-success-soft);
   --color-success-border: var(--cos-status-success);
@@ -25,7 +25,7 @@
   --color-surface-muted: var(--cos-surface-elevated);
   --color-warning-bg: var(--cos-status-warning-soft);
   --color-warning-border: var(--cos-status-warning);
-  --color-warning-text: var(--cos-status-warning);
+  --color-warning-text: var(--cos-text-primary);
   --font-sans: var(--cos-font-body);
   --radius-control: var(--cos-radius-sm);
   --radius-panel: var(--cos-radius-md);
