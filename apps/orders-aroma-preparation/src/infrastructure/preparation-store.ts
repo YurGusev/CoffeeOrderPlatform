@@ -114,13 +114,14 @@ export function createAromaPreparationStore(database: Database, options: AromaPr
       'verified_observed_revision',snapshot->>'verified_observed_revision','fence_epoch',snapshot->>'fence_epoch') AS snapshot
     FROM orders.write_card_projection($1,$2::jsonb)`, decodePreparationWrittenRow);
   const history = command("INSERT INTO orders.order_aroma_projection_history(order_ref,projection_version,projection) VALUES($1,$2::bigint,$3::jsonb)");
+  // Orders serializes timestamps to milliseconds; DB facts retain microseconds.
   const confirm = sql(`SELECT EXISTS(SELECT 1 FROM orders.order_desired_contributions c JOIN orders.orders o USING(order_ref)
     WHERE c.order_ref=$1 AND c.contribution_revision=$2::bigint AND c.order_version=$3::bigint AND c.state='Current'
-      AND o.status='Confirmed' AND o.customer_ref=$4 AND o.confirmed_at=$5::timestamptz) AS valid`, decodePreparationBooleanRow);
+      AND o.status='Confirmed' AND o.customer_ref=$4 AND date_trunc('milliseconds',o.confirmed_at)=$5::timestamptz) AS valid`, decodePreparationBooleanRow);
   const validIntent = sql(`SELECT EXISTS(SELECT 1 FROM orders.orders o JOIN orders.order_history h USING(order_ref)
     JOIN orders.outbox_messages b ON b.aggregate_ref=o.order_ref AND b.owner_version=h.order_version::text
     WHERE o.order_ref=$1 AND o.status='Confirmed' AND o.version >= $2::bigint AND h.event_type='ReconciliationRequested'
-      AND h.order_version=$2::bigint AND h.occurred_at=$3::timestamptz AND b.message_id=$4
+      AND h.order_version=$2::bigint AND date_trunc('milliseconds',h.occurred_at)=$3::timestamptz AND b.message_id=$4
       AND b.message_type='OrderReconciliationRequested.v1' AND b.envelope=$5::jsonb) AS valid`, decodePreparationBooleanRow);
   // Accepted intent is recoverable even if Kafka/Inbox retention removed a delivery.
   // Causation in the immutable cart Outbox is the durable per-intent dedup marker.

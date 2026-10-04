@@ -18,6 +18,11 @@
 #8 при Confirm сохраняет immutable `order_desired_contributions` и публикует
 `OrderConfirmed.v1`. Отдельный public reconciliation command #8 публикует
 `OrderReconciliationRequested.v1` только после принятия order-level намерения.
+Orders producer сериализует `confirmedAt` и `requestedAt` до миллисекунд без
+округления; сохранённые `confirmed_at` и History `occurred_at` сохраняют
+микросекунды. Preparation сравнивает `date_trunc('milliseconds', stored_at)`
+с timestamp из события. Version/contribution/source identity и exact immutable
+Outbox envelope продолжают проверяться; History/Outbox bytes не переписываются.
 #11 агрегирует все актуальные contributions в
 `cart_desired_revisions`; wake-up новой revision публикуется через owner Outbox.
 По [ADR-0032](../adr/ADR-0032-order-reconciliation-intent.md) order-level
@@ -346,6 +351,10 @@ facts без source message/timestamp metadata и увеличивает еди�
 `orders-service` использует тот же entry point без material argument для
 видимых Order commands. Неизменившаяся AROMA material projection не увеличивает
 counter и не требует History/Realtime.
+В таком no-op entry point возвращает текущий Card counter и прежний AROMA
+snapshot, чей counter может быть меньше после Order command. Decoder требует
+равенства counters для material change и `snapshot counter <= Card counter`
+для no-op; snapshot из будущего всегда отклоняется.
 
 Impacted Orders — объединение order refs прежней и новой Desired revision;
 поэтому remap/remove не теряет заказ, исчезнувший из Current. Единственный

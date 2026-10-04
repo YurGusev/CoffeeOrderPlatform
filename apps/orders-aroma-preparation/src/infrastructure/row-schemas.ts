@@ -144,7 +144,9 @@ export const decodePreparationWrittenRow = decoder<WrittenRow>(object(["projecti
 }), row => {
   const snapshot = row["snapshot"] as Record<string, unknown>;
   const isSync = snapshot["state"] === "InSync";
-  return snapshot["projection_version"] === row["projection_version"] &&
+  const snapshotVersion = BigInt(snapshot["projection_version"] as string);
+  const cardVersion = BigInt(row["projection_version"] as string);
+  return (row["material_change"] ? snapshotVersion === cardVersion : snapshotVersion <= cardVersion) &&
     (snapshot["desired_revision"] === "0") === (snapshot["desired_hash"] === null) &&
     (snapshot["observed_revision"] === "0") === (snapshot["observed_cart_fingerprint"] === null) &&
     (snapshot["verified_desired_revision"] === null) === (snapshot["verified_desired_hash"] === null) &&

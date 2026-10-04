@@ -201,7 +201,7 @@ async function fixture(run, options = {}) {
           rows.push({itemRef, offer: item.offer, grind, quantity, hash});
         }
         const saved = await read("UPDATE orders.orders SET status='Confirmed',version=2,projection_version=2,confirmed_at=clock_timestamp() WHERE order_ref=$1 RETURNING confirmed_at::text", [order]);
-        const confirmedAt = toInstant(saved[0].confirmed_at.replace(" ", "T")).toString();
+        const confirmedAt = toInstant(saved[0].confirmed_at.replace(" ", "T")).toString({fractionalSecondDigits: 3});
         const addContribution = async () => {
           await query("INSERT INTO orders.order_desired_contributions(order_ref,contribution_revision,order_version) VALUES($1,1,2)", [order]);
           for (const row of rows) await query(`INSERT INTO orders.order_desired_contribution_lines(order_ref,contribution_revision,offer_ref,quantity_milli,contribution_hash,item_refs,source_grind_key_hash)
@@ -255,7 +255,7 @@ async function fixture(run, options = {}) {
       const acceptIntent = async order => {
         const saved = (await read("UPDATE orders.orders SET version=version+1 WHERE order_ref=$1 RETURNING version::text", [order]))[0];
         const requestedAt = (await read("SELECT clock_timestamp()::text AS now"))[0].now;
-        const at = toInstant(requestedAt.replace(" ","T")).toString();
+        const at = toInstant(requestedAt.replace(" ","T")).toString({fractionalSecondDigits: 3});
         const event = envelope("OrderReconciliationRequested.v1", {orderRef: order,orderVersion: saved.version,requestedAt: at}, {type: "Order",ref: order,version: saved.version}, "orders-service");
         await query(`INSERT INTO orders.order_history(history_ref,order_ref,order_version,event_type,actor_ref,correlation_id,occurred_at,facts) VALUES($1,$2,$3,'ReconciliationRequested','fixture',$4,$5,'{"requestKind":"OperatorRequested"}')`, [ref("htr"),order,saved.version,event.correlationId,at]);
         const bytes = Buffer.from(canonicalJson(event));
@@ -387,10 +387,30 @@ void test("Confirm, preparation Realtime and repeated public reconciliation shar
     await f.query(`INSERT INTO orders.order_items(order_ref,item_ref,line_position,product_ref,variant_ref,product_display_name,unit,quantity_milli,quote_ref,quote_line_number,quote_hash,internal_proof_hash,quote_expires_at,policy_version_ref,catalog_snapshot_revision,mapping_revision,offer_ref,unit_minor,line_total_minor,currency)
       VALUES($1,$2,1,$3,$4,'fixture','piece',1000,$5,1,$6,$6,clock_timestamp()+interval '1 hour',$7,1,1,$8,100,100,'RUB')`,
     [orderRef, itemRef, item.product, item.variant, quoteRef, quoteHash, ref("pvr"), item.offer]);
+    // Deterministic sub-millisecond DB facts; the real OrderStore still serializes its own events.
+    await f.query(`CREATE FUNCTION orders.fixture_source_time() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF TG_TABLE_NAME='orders' THEN
+          NEW.confirmed_at='2026-10-04T12:00:00.123456Z'::timestamptz;
+          NEW.updated_at=NEW.confirmed_at;
+        ELSE NEW.occurred_at='2026-10-04T12:00:00.123456Z'::timestamptz;
+        END IF;
+        RETURN NEW;
+      END $$;
+      CREATE TRIGGER fixture_order_source_time BEFORE UPDATE ON orders.orders
+        FOR EACH ROW WHEN (NEW.status='Confirmed') EXECUTE FUNCTION orders.fixture_source_time();
+      CREATE TRIGGER fixture_history_source_time BEFORE INSERT ON orders.order_history
+        FOR EACH ROW EXECUTE FUNCTION orders.fixture_source_time()`);
     const confirmed = await orders.confirm({actorRef,identity:{actorRef,scope:"a".repeat(64),key:randomUUID()},correlationId:randomUUID(),cardPermissions:["orders:confirm:any"],orderRef,expectedVersion:"2"});
     assert.equal(confirmed.body.version,"3");
     const confirmedEnvelope = (await f.read("SELECT envelope FROM orders.outbox_messages WHERE message_type='OrderConfirmed.v1' AND aggregate_ref=$1",[orderRef]))[0].envelope;
+    assert.equal(confirmedEnvelope.payload.confirmedAt,"2026-10-04T12:00:00.123Z");
+    assert.deepEqual(await f.read("SELECT confirmed_at <> $2::timestamptz AS sub_millisecond FROM orders.orders WHERE order_ref=$1",[orderRef,confirmedEnvelope.payload.confirmedAt]),[{sub_millisecond:true}]);
     await f.deliver(confirmedEnvelope);
+    assert.deepEqual(await f.read("SELECT state FROM orders.inbox_messages WHERE message_id=$1",[confirmedEnvelope.messageId]),[{state:"Processed"}]);
+    const wrongConfirmedAt={...confirmedEnvelope,messageId:ref("msg"),payload:{...confirmedEnvelope.payload,confirmedAt:"2026-10-04T12:00:00.124Z"}};
+    await f.deliver(wrongConfirmedAt);
+    assert.deepEqual(await f.read("SELECT state,quarantine_reason FROM orders.inbox_messages WHERE message_id=$1",[wrongConfirmedAt.messageId]),[{state:"Quarantined",quarantine_reason:"AROMA_CONFIRMATION_SOURCE_INVALID"}]);
     await f.deliver(mapping(item,"1"));
     await f.observe();
     await f.deliver(mapping(item,"2",{mappingState:"Missing",availability:"Available",offerRef:null}));
@@ -413,6 +433,20 @@ void test("Confirm, preparation Realtime and repeated public reconciliation shar
       const first = await app.inject(request(firstKey,confirmed.body.version));
       assert.equal(first.statusCode,202,first.body);
       assert.equal(first.json().orderVersion,"4");
+      assert.equal(first.json().requestedAt,"2026-10-04T12:00:00.123Z");
+      const firstIntent=(await f.read("SELECT envelope FROM orders.outbox_messages WHERE aggregate_ref=$1 AND message_type='OrderReconciliationRequested.v1'",[orderRef]))[0].envelope;
+      assert.deepEqual(await f.read("SELECT occurred_at <> $2::timestamptz AS sub_millisecond FROM orders.order_history WHERE order_ref=$1 AND event_type='ReconciliationRequested'",[orderRef,firstIntent.payload.requestedAt]),[{sub_millisecond:true}]);
+      const previousCard=await f.card(orderRef);
+      const {decodePreparationWrittenRow}=await import("../../apps/orders-aroma-preparation/dist/infrastructure/row-schemas.js");
+      const snapshot={...previousCard,updated_at:previousCard.updated_at.toISOString(),last_observed_at:previousCard.last_observed_at?.toISOString()??null};
+      delete snapshot.business_version; delete snapshot.card_version;
+      const unchanged={projection_version:previousCard.card_version,material_change:false,snapshot};
+      assert.ok(BigInt(snapshot.projection_version)<BigInt(unchanged.projection_version));
+      assert.strictEqual(decodePreparationWrittenRow(unchanged),unchanged);
+      assert.throws(()=>decodePreparationWrittenRow({...unchanged,material_change:true}),/AROMA_PREPARATION_DATABASE_ROW_INVALID/u);
+      assert.throws(()=>decodePreparationWrittenRow({...unchanged,snapshot:{...snapshot,projection_version:(BigInt(unchanged.projection_version)+1n).toString()}}),/AROMA_PREPARATION_DATABASE_ROW_INVALID/u);
+      await f.deliver(firstIntent);
+      assert.deepEqual(await f.read("SELECT state FROM orders.inbox_messages WHERE message_id=$1",[firstIntent.messageId]),[{state:"Processed"}]);
       const replay = await app.inject(request(firstKey,confirmed.body.version));
       assert.equal(replay.statusCode,202,replay.body);
       assert.deepEqual(replay.json(),first.json());
@@ -420,6 +454,18 @@ void test("Confirm, preparation Realtime and repeated public reconciliation shar
       const second = await app.inject(request(randomUUID(),first.json().orderVersion));
       assert.equal(second.statusCode,202,second.body);
       assert.equal(second.json().orderVersion,"5");
+      const sourceFacts=await f.read("SELECT history_ref,occurred_at::text,facts FROM orders.order_history WHERE order_ref=$1 ORDER BY order_version",[orderRef]);
+      const sourceOutbox=await f.read("SELECT message_id,envelope_bytes,envelope_hash FROM orders.outbox_messages WHERE aggregate_ref=$1 AND message_type IN ('OrderConfirmed.v1','OrderReconciliationRequested.v1') ORDER BY aggregate_sequence",[orderRef]);
+      await f.restart();
+      await f.store.recover(new AbortController().signal);
+      const recoveredIntent=(await f.read("SELECT envelope FROM orders.outbox_messages WHERE aggregate_ref=$1 AND message_type='OrderReconciliationRequested.v1' AND owner_version='5'",[orderRef]))[0].envelope;
+      await f.deliver(recoveredIntent);
+      await f.store.runOnce(new AbortController().signal);
+      assert.deepEqual(await f.read("SELECT causation_id,count(*)::int AS n FROM orders.outbox_messages WHERE message_type='AromaConvergenceRequested.v1' AND causation_id=ANY($1::text[]) GROUP BY causation_id ORDER BY causation_id",[[firstIntent.messageId,recoveredIntent.messageId]]),[firstIntent.messageId,recoveredIntent.messageId].sort((a,b)=>a<b?-1:a>b?1:0).map(causation_id=>({causation_id,n:1})));
+      assert.deepEqual(await f.read("SELECT state FROM orders.inbox_messages WHERE message_id=ANY($1::text[]) ORDER BY message_id",[[firstIntent.messageId,recoveredIntent.messageId]]),[{state:"Processed"},{state:"Processed"}]);
+      assert.equal((await f.read("SELECT count(*)::int AS n FROM orders.inbox_quarantine WHERE message_id=ANY($1::text[])",[[confirmedEnvelope.messageId,firstIntent.messageId,recoveredIntent.messageId]]))[0].n,0);
+      assert.deepEqual(await f.read("SELECT history_ref,occurred_at::text,facts FROM orders.order_history WHERE order_ref=$1 ORDER BY order_version",[orderRef]),sourceFacts);
+      assert.deepEqual(await f.read("SELECT message_id,envelope_bytes,envelope_hash FROM orders.outbox_messages WHERE aggregate_ref=$1 AND message_type IN ('OrderConfirmed.v1','OrderReconciliationRequested.v1') ORDER BY aggregate_sequence",[orderRef]),sourceOutbox);
       const messages = await f.read("SELECT message_type,aggregate_sequence::text,owner_version,envelope FROM orders.outbox_messages WHERE aggregate_ref=$1 ORDER BY aggregate_sequence",[orderRef]);
       assert.equal(new Set(messages.map(message=>message.aggregate_sequence)).size,messages.length);
       assert.deepEqual(messages.map(message=>message.aggregate_sequence),messages.map((_,index)=>String(index+1)));

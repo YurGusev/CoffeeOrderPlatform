@@ -173,12 +173,12 @@ outputs:
       - 12
       - 13
   - artifact: apps/orders-aroma-preparation/src/infrastructure/preparation-store.ts
-    sha256: 45250041acab5128ee40710c58462789438d24f69c9eb41eca9fa5e80e5588c1
+    sha256: 7e643733392abaa8a861b113c8dd32d9829ae924e3b22d6870014b4169024009
     consumers:
       - 12
       - 13
   - artifact: apps/orders-aroma-preparation/src/infrastructure/row-schemas.ts
-    sha256: 8c76af4a4761811e3160164bd5bccf0be7a0d9d35b5343c1cf793fe4fb7ffa72
+    sha256: fe1a588c4aea3d1d2af84491415d797c1b90cfd4d15730f34ab8f377abceaa2f
     consumers:
       - 12
       - 13
@@ -429,7 +429,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md
-    sha256: 86c6d9d62c36ff47b8f41c9e39997d60fd00f46039832b0eb2356cafb988b07f
+    sha256: 8f048d0667ba33e2a6598b1856e4169c2f28e46f26b44345b3a3e76c92e3a1eb
     consumers:
       - 12
       - 13
@@ -450,7 +450,7 @@ outputs:
       - 12
       - 13
   - artifact: evidence/issue-11-analysis.md
-    sha256: 1ec2e421765a0a82082d9bbb40d49e33a0c0ea9a722fe768df17e6a3003fbd64
+    sha256: 4161764a6256ad668877c7e2b2c0aca24bbd7a299a6fe388b358af91c317e1f7
     consumers:
       - 12
       - 13
@@ -660,7 +660,7 @@ outputs:
       - 12
       - 13
   - artifact: tests/orders/aroma-preparation-live.test.mjs
-    sha256: fb0e760d1872a2f8b7917bea771f0720e68b63bbb2f7c4c307cc85b072944b6b
+    sha256: 3247921bc04ab445e5b07be785399be6850b3d87c2777f366a1893868735fc2a
     consumers:
       - 12
       - 13
@@ -735,7 +735,7 @@ outputs:
       - 12
       - 13
 verifiedSourceSubset:
-  sha256: 282f53393ecebd81bc5afda02e6f74be66bc10bbc9604713176126746d23e9ea
+  sha256: 32b225a86bf4b06d24ac1f9257129a7b4359e459b617c4884f650d03eadf9bea
   files:
     - apps/aroma-convergence/src/application/messages.ts
     - apps/aroma-convergence/src/cart-plan.ts
@@ -746,6 +746,7 @@ verifiedSourceSubset:
     - apps/catalog-service/src/http/index.ts
     - apps/catalog-service/src/infrastructure/postgres/catalog-repository.ts
     - apps/orders-aroma-preparation/src/infrastructure/preparation-store.ts
+    - apps/orders-aroma-preparation/src/infrastructure/row-schemas.ts
     - apps/orders-aroma-preparation/src/runtime-composition.ts
     - apps/orders-service/migrations/0023_ascii_observed_identity.sql
     - apps/orders-service/src/infrastructure/database/order-store.ts
@@ -759,7 +760,7 @@ verifiedSourceSubset:
     - packages/platform-runtime/src/index.ts
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: 3b2c3dec7979c48ed6beb8b13733b7a9d8fbfad4064d7165b4f2ab6a67c48e93
+  sha256: 0cac070e2924fb5594766bdd16859d4c23bff8921b155c94c59fcb55b4a26b24
 providerCallCounts:
   proof: Controlled fake Gateway, не real provider; assertions in receipt047
   noOp:
@@ -1176,6 +1177,30 @@ verification:
       Rootindependent containers/networks0,proofPG/Kafkavolume/overrideabsent;
       restoredrunnerSHA2f11b2c698de9376b9b5d805dd71cc12b972c8a4c0b531ec07147f6582217b69,syntax/diffPASS.
       EarlierPrep2die/start cause/exit/OOMunknown; finalstatesnotretroactiveproof
+  - command: >-
+      pnpm exec tsc -b --pretty false && COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1
+      --test-name-pattern="Confirm, preparation Realtime" tests/orders/aroma-preparation-live.test.mjs
+    result: failed-before-fix-then-passed
+    detail: >-
+      P1 regression: deterministic PG .123456, real OrderStore .123. red Confirm quarantine; partialfix red
+      reconciliation quarantine; timestamp fix revealed no-op row counter mismatch. Final green1/1 after
+      decoder fix; History/source Outbox preserved, direct Inbox and restart recovery, wake dedup/negative
+      timestamp/counter guards PASS. Logs /tmp/coffee-issue11-timestamp-fix.
+  - command: pnpm test:aroma-preparation && pnpm test:aroma-recovery
+    result: passed-after-p1-fix
+    detail: >-
+      67/67 и183/183,0skip/0cancel,embeddedtsc PASS. Prep1876.573599/1944.458597ms<=2000;
+      convergence464.217610ms<=500,provider10.804549,total475.022159. Existing workload/cardinality/thresholds
+      unchanged.
+  - command: >-
+      pnpm lint; COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 --test-name-pattern="Confirm,
+      preparation Realtime" tests/orders/aroma-preparation-live.test.mjs; git diff --check; node --check
+      tests/orders/aroma-preparation-live.test.mjs
+    result: passed-after-test-comparator-fix
+    detail: >-
+      Первый lint require-array-sort-compare FAIL сохранён. После explicit ASCII test comparator final
+      lint0/selectedregression1PASS/diffcheck/nodecheck PASS. Runtime не менялся после полных67/183 suites.
+      Independent read-only reviewer: no confirmed findings.
 limitations:
   - >-
     Convergence final164/165/166 PASS456.387/439.868/449.080ms<=500. Historical145892.607218ms spike
@@ -1211,3 +1236,7 @@ limitations:
     Raw receipts в /tmp/coffee-issue11-final-checks доступны только локально. Публикуемые
     evidence/issue-11-analysis.md и evidence/issue-9-11-consumer.md содержат команды, результаты, hashes и
     ограничения; raw logs не входят в PR.
+  - >-
+    После P1 timestamp/no-op decoder fix current PostgreSQL Preparation67/67 и recovery183/183 PASS;
+    Compose167–169 и consumer browser proofs относятся к предыдущему source и после fix не повторялись.
+    Production/runtime deployment не выполнялся; old generic DB cause остаётся UNKNOWN.

@@ -27,6 +27,24 @@ runtime/recovery-контракта: false/timeout readiness и bounded restart/
 подтверждены. Публикация не означает acceptance. Remote checkbox не менялись;
 все327 пунктов сопоставлены ниже. UI delta #9 остаётся отдельным delivery.
 
+## Исправление P1 после review PR #171 — 4 октября 2026
+
+Проверки `confirmedAt` и `requestedAt` согласованы с миллисекундной
+сериализацией настоящего Orders producer через `date_trunc` сохранённого DB
+значения; exact History/version/contribution/Outbox guards сохранены. Regression
+на детерминированных DB микросекундах сначала воспроизвёл оба source-invalid
+quarantine. Он также выявил несовместимость no-op Card counters; decoder теперь
+следует существующему SQL return contract, не принимает snapshot из будущего
+и сохраняет равенство при material change.
+
+Текущие проверки: Preparation67/67 и recovery183/183 PASS, без skipped/cancelled;
+convergence464,218ms<=500; Preparation1876,574/1944,459ms<=2000. Final lint и
+узкий regression PASS после явного ASCII sort comparator в test assertion.
+Независимый read-only reviewer не обнаружил существенных замечаний. Исторические
+Compose167–169/browser proofs не повторялись после этого fix; current proof —
+реальный PostgreSQL и существующие полные business/recovery suites. F57–F59
+содержат команды, результаты и границы; это не production acceptance.
+
 ## Завершённый план локальных доработок — 4 октября 2026
 
 1. Convergence≤500ms: final164/165/166 PASS с неизменными нагрузкой/guards.
@@ -64,7 +82,7 @@ runtime/recovery-контракта: false/timeout readiness и bounded restart/
 | 56 | #9 потребляет согласованные поля из generated contracts, не создаёт свою wire-форму. Финальная приёмка выбора помола в UI требует интегрированного handoff A; независимые UI-маршруты можно реализовывать до него. | Локальный consumer compatibility proof PASS; remote acceptance отсутствует | E16; F29/F32 |
 | 57 | Корневые manifest/lock/config изменяются только для заявленной части; перед интеграцией сверить с #9. Нельзя копировать целиком чужой manifest/lockfile и переписывать чужую рабочую директорию. | Local three-way integration manifest/lock/generator проверена; исходная #9 директория сохранена | E16; F29/F32 |
 | 58 | Backend работа идёт в отдельном worktree `/home/yurgusev/CoffeeOrderPlatform-issue-11`, ветка `feature/11-aroma-convergence`, база `e278aeb10e57d37485542f8668f078456074b038`; основная рабочая директория занята #9. | Предпосылка отмечена в issue | E11 |
-| 63 | `OrderReconciliationRequested.v1` принимается через durable Inbox по ADR-0032; `OperatorRequested` создаёт cart-level wake-up даже при прежнем Desired hash, без выдуманных refs/revisions и без потери намерения при недостатке фактов. | Локальные Inbox/replay/reconciliation проверки PASS; общий gate остаётся RED | E01; F02 |
+| 63 | `OrderReconciliationRequested.v1` принимается через durable Inbox по ADR-0032; `OperatorRequested` создаёт cart-level wake-up даже при прежнем Desired hash, без выдуманных refs/revisions и без потери намерения при недостатке фактов. | Реальный Orders producer, direct Inbox и restart/runOnce recovery PASS после P1 fix; accepted merge отсутствует | E01; F02; F57–F59 |
 | 69 | Для одного physical cart действует общий барьер незавершённой MutationReservation, а не только уникальность reservation на Attempt. Новый fence не разрешает следующую mutation при Mutating/UnknownOutcome другой Attempt. Определяющий контракт: [M11 reservation/fencing](https://github.com/YurGusev/CoffeeOrderPlatform/blob/develop/docs/CoffeeOrderSystem_CANONICAL_Architecture_EndToEndHardened_RU_2026-08-19/M11_AROMA_GATEWAY/07_MUTATION_RESERVATION_AND_FENCING.md). | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B02; F01–F07 |
 | 71 | Orders владеет всеми business decisions convergence. | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B03; F01–F07 |
 | 72 | Gateway владеет только provider transport/session/journal. | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B03; F01–F07 |
@@ -152,7 +170,7 @@ runtime/recovery-контракта: false/timeout readiness и bounded restart/
 | 225 | Version/revision/fence/quantity not converted to unsafe number. | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B12; F01–F07 |
 | 226 | Expected errors use tagged Schema types. | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B14; F01–F07 |
 | 227 | Invalid internal row/event/response fails closed and cannot mutate projection/physical cart. | Локальные row-schema/owner проверки PASS; общий gate остаётся RED | E03; F01/F02 |
-| 233 | `OrderConfirmed.v1`. | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B15; F01–F07 |
+| 233 | `OrderConfirmed.v1`. | Реальный Confirm event с DB микросекундами обработан; неверный timestamp отклонён | B15; F01–F07; F57–F59 |
 | 234 | `CatalogMappingChanged.v2`. | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B15; F01–F07 |
 | 235 | `AromaObservationChanged.v1`. | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B15; F01–F07 |
 | 236 | `AromaConvergenceChanged.v1`. | Код и соответствующие локальные сценарии проверены; общий gate остаётся RED | B15; F01–F07 |
@@ -1151,3 +1169,36 @@ Receipts последующих проверок: `/tmp/coffee-issue11-final-che
   Primary tracked diff byte-identical initialsnapshotSHA970d4a9e…; backend
   иmanaged diffchecksPASS. UIpatch7files/SHAcce43a231… сохранён отдельно.
   Handoff currentoutputs пересчитаны; canonicalroots/remotecheckbox untouched.
+
+- **F57:** P1 review PR171: Orders сохраняет DB timestamp с микросекундами,
+  но `to_char(...SS.MS...)`/Temporal сериализуют confirmedAt/requestedAt до
+  миллисекунд. Исправлены две SQL equality в Preparation через
+  date_trunc('milliseconds',stored_at), без округления/tolerance и без изменения
+  producer, immutable History/Outbox, wire/schema/migrations. Существующие seed
+  fixtures также используют producer millisecond precision. Детерминированный
+  isolated PG trigger задаёт `.123456`; настоящий OrderStore выдаёт `.123`.
+  red.log воспроизвёл Quarantined Confirm вместо Processed; после первого SQL fix
+  red-reconciliation.log воспроизвёл Quarantined intent вместо Processed.
+
+- **F58:** После timestamp fix regression выявил AROMA_PREPARATION_DATABASE_ROW_INVALID:
+  существующий write_card_projection no-op возвращает текущий Card counter и
+  старый snapshot counter после core command. Row decoder следует этому contract:
+  material_change=true требует equality, false допускает snapshot<=Card; positive
+  int64 Schema и BigInt сохраняются, future snapshot отклонён. Existing real-store
+  regression проверяет delivery двух типов, public request/replay, undelivered
+  второй intent → restart/recover/runOnce, одну cart wake на каждый intent,
+  Processed Inbox/0 quarantine для genuine событий, unchanged immutable History
+  и source Outbox bytes/hashes. Wrong confirmedAt и несовместимые counters rejected.
+  Independent read-only reviewer: существенных findings нет; tests/build не запускал.
+
+- **F59:** /tmp/coffee-issue11-timestamp-fix: pnpm test:aroma-preparation67/67 PASS,
+  pnpm test:aroma-recovery183/183 PASS,0skip/0cancel; обе команды включали tsc.
+  Preparation1876.573599ms/samehash710.977253; recovery Preparation1944.458597ms/
+  samehash681.570955; convergence local464.217610/provider10.804549/total475.022159ms.
+  Нагрузка10000lines/1000wakes/1workrow/peak1 и thresholds unchanged. Первый lint
+  FAIL require-array-sort-compare; добавлен только explicit ASCII comparator в
+  assertion, runtime без изменений. pnpm lint final PASS, selected real-store
+  regression green-final1/1 PASS; git diff --check и node --check PASS.
+  red/failed receipts сохранены. Fresh Compose/browser после fix не повторялись;
+  old167–169 proof относится к предыдущему source. Историческая generic DB error
+  не классифицируется задним числом. Unsafe/provider/production mutations отсутствуют.
