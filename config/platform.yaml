@@ -276,6 +276,7 @@ services:
     deadlineProfiles: {defaultMs: 2000}
     concurrency: 150
     replicas: 1
+    catalogSnapshotProof: {maxAgeMs: 7200000}
     dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_catalog
     kafka: { producers: [], consumers: [] }
@@ -370,6 +371,7 @@ services:
     deadlineProfiles: {defaultMs: 5000}
     concurrency: 16
     replicas: 1
+    aromaPreparation: {pollIntervalMs: 1000, batchSize: 100, maxOrders: 10000, maxLines: 10000}
     dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_orders
     kafka:
@@ -403,6 +405,7 @@ services:
     deadlineProfiles: {defaultMs: 15000}
     concurrency: 4
     replicas: 1
+    aromaObservation: {pollIntervalMs: 1000, intervalMs: 5000, leaseMs: 30000, maxSnapshotAgeMs: 15000, maxLines: 10000, maxResponseBytes: 2097152}
     dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_orders
     kafka: { producers: [coffee.aroma.cart.events.v1], consumers: [] }
@@ -419,6 +422,8 @@ services:
     deadlineProfiles: {defaultMs: 30000}
     concurrency: 4
     replicas: 1
+    mutationsEnabled: false
+    aromaConvergence: {pollIntervalMs: 1000, leaseMs: 30000, heartbeatIntervalMs: 10000, providerDeadlineMs: 10000, safetyMarginMs: 5000, retryBackoffMs: 5000, maxSnapshotAgeMs: 15000, maxLines: 10000, maxResponseBytes: 2097152}
     dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_orders
     kafka:

@@ -1,4 +1,48 @@
 optionalExpansions:
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#CatalogProductSummary
+    property: grindOptions
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#PricingQuoteCreateLine
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#PricingQuoteLine
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#PricingQuoteLine
+    property: grindDisplayName
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#OrderItemPutRequest
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#OrderItem
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#OrderItem
+    property: grindDisplayName
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#CatalogPricingInput
+    property: grindOptions
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#PricingQuoteVerifyRequest
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#PricingQuoteAuthoritativeLine
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    location: contracts/openapi/internal-v1.yaml#PricingQuoteAuthoritativeLine
+    property: grindDisplayName
+    fixture: contracts/fixtures/positive/http/success.json
   - schemaPath: contracts/openapi/internal-v1.yaml
     location: contracts/openapi/internal-v1.yaml#AromaCatalogItem
     property: supplierPromotions
@@ -115,3 +159,33 @@ approvedResponseExpansions:
       - ErrorOrderConfirmationRejected
       - ErrorOrderEmpty
       - ErrorOrderDesiredOverflow
+
+# #11 admits convergence to the existing read-only Catalog pricing-input owner path.
+# The breaking guard pins the exact caller/auth transition; no other trust widening is admitted.
+approvedInternalCallerExpansions:
+  - schemaPath: contracts/openapi/internal-v1.yaml
+    route: /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input
+    operationId: getCatalogPricingInput
+    operationBefore:
+      x-audience: pricing-service
+      x-caller: pricing-service
+      x-callers: [pricing-service]
+      x-auth: mTLS-and-signed-delegation
+    operationAfter:
+      x-audience: [pricing-service, aroma-convergence]
+      x-caller: null
+      x-callers: [pricing-service, aroma-convergence]
+      x-auth: 'mTLS; signed-delegation for pricing-service; scoped-mTLS identity for aroma-convergence'
+    manifestBefore: pricing-service
+    manifestAfter: [pricing-service, aroma-convergence]
+    issue: 11
+    migration: docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md
+    proof: tests/catalog/catalog-root.test.mjs
+
+approvedCommandRecoveryExpansions:
+  - schemaPath: contracts/openapi/client-v1.yaml
+    operationId: createPricingQuote
+    addedTerminalSchema: ErrorPricingGrindNotAvailable
+    issue: 11
+    fixture: contracts/fixtures/positive/http/problems.json
+    fixtureCase: ErrorPricingGrindNotAvailable

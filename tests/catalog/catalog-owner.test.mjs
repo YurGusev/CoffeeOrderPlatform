@@ -44,6 +44,7 @@ function adapters(owner, counters = {verify: 0}, overrides = {}) {
     verifyTransport: overrides.verifyTransport ?? ((_request, expected) => expected === "api-public" || expected === "api-internal"),
     verifyPublicDelegation: overrides.verifyPublicDelegation ?? ((_token, operationId) => { counters.verify += 1; return claims(operationId); }),
     verifyInternalDelegation: overrides.verifyInternalDelegation ?? ((_token, operationId) => ({iss: "api-internal", aud: "catalog-service", originalCaller: "pricing-service", operationId, correlationId: "correlation-test", traceparent: "00-00000000000000000000000000000000-0000000000000000-00", iat: 1_000, exp: 2_000, jti: "jti-test", kid: "test"})),
+    ...(overrides.snapshotProofMaxAgeMs === undefined ? {} : {snapshotProofMaxAgeMs: overrides.snapshotProofMaxAgeMs}),
     owner,
   };
 }
@@ -77,6 +78,19 @@ void test("catalog search normalizes query and binds signed keyset cursor to rev
   await assert.rejects(() => searchCatalog(changedRevisionStore, {query: "coffee", availability: "Available", limit: 1, cursor: first.nextCursor}, signer), {code: "INVALID_CURSOR"});
   const expiredSigner = createCatalogCursorSigner(active.privateKey, active.publicKey, {activeKid: "catalog-v1", nowEpochSeconds: () => 100_000});
   await assert.rejects(() => searchCatalog(store, {query: "coffee", availability: "Available", limit: 1, cursor: first.nextCursor}, expiredSigner), {code: "INVALID_CURSOR"});
+});
+
+void test("Catalog exposes only complete persisted grind options and rejects duplicate hashes", async () => {
+  const keys = generateKeyPairSync("ed25519");
+  const signer = createCatalogCursorSigner(keys.privateKey, keys.publicKey);
+  const option = {sourceGrindKeyHash: "a".repeat(64), displayName: "Средний помол"};
+  const store = {search: async () => ({snapshotRevision: "17", cursorValid: true, rows: [row({grindOptions: [option]})]})};
+  const page = await searchCatalog(store, {query: "coffee"}, signer);
+  assert.deepEqual(page.items[0].grindOptions, [option]);
+  assert.equal("offerRef" in page.items[0], false);
+  for (const options of [[option, option], [{...option, displayName: ""}], [{...option, sourceGrindKeyHash: "raw-id"}]]) {
+    await assert.rejects(searchCatalog({search: async () => ({snapshotRevision: "17", rows: [row({grindOptions: options})]})}, {query: "coffee"}, signer), {code: "CATALOG_UNAVAILABLE"});
+  }
 });
 
 void test("keyset drains equal display names by product and variant refs without duplicates", async () => {
@@ -145,6 +159,10 @@ void test("catalog owner reads only active views in one parameterized SELECT and
   assert.deepEqual(seen[0].after, null);
   const incomplete = createCatalogOwner({search: async () => ({snapshotRevision: null, rows: []}), pricingInput: async () => null}, signer);
   await assert.rejects(() => incomplete.search({query: "coffee", limit: 20, context: {signal: new AbortController().signal, correlationId: "test"}}), {code: "CATALOG_SNAPSHOT_INCOMPLETE"});
+  const stale = createCatalogOwner({search: async () => ({snapshotRevision: "17", rows: []}), pricingInput: async () => ({...row(), snapshotFresh: false})});
+  await assert.rejects(() => stale.pricingInput({productRef, variantRef, maxSnapshotAgeMs: 60_000, context: {signal: new AbortController().signal, correlationId: "test"}}), {code: "CATALOG_UNAVAILABLE"});
+  const missing = createCatalogOwner({search: async () => ({snapshotRevision: null, rows: []}), pricingInput: async () => undefined});
+  await assert.rejects(() => missing.pricingInput({productRef, variantRef, maxSnapshotAgeMs: 60_000, context: {signal: new AbortController().signal, correlationId: "test"}}), {code: "CATALOG_UNAVAILABLE"});
 });
 
 void test("catalog routes enforce verified public and pricing audiences before owner calls", async (t) => {
@@ -172,6 +190,27 @@ void test("catalog routes enforce verified public and pricing audiences before o
   const wrongCaller = await runtime(t, (value) => registerCatalogRoutes(value, adapters(owner, undefined, {verifyInternalDelegation: (_token, operationId) => ({iss: "api-internal", aud: "catalog-service", originalCaller: "catalog-supplier-sync", operationId})})));
   assert.equal((await wrongCaller.inject({method: "GET", url: `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`, headers: {"x-service-delegation": "signed-test"}})).statusCode, 403);
   assert.equal(calls.pricingInput, 1);
+});
+
+void test("Catalog pricing-input accepts exact convergence delegation only from api-internal mTLS", async (t) => {
+  const {registerCatalogRoutes} = await import("../../apps/catalog-service/dist/http/index.js");
+  let reads = 0;
+  let freshnessThreshold;
+  const owner = {search: async () => ({status: 200, body: {snapshotRevision: "17", items: [], nextCursor: null}}), pricingInput: async (input) => { reads += 1; freshnessThreshold = input.maxSnapshotAgeMs; return {status: 200, body: {productRef, variantRef, offerRef: row().offerRef, snapshotRevision: "17", supplierUnitMinor: "1200", currency: "RUB", unit: "gram", availability: "Available", mappingRevision: "2", displayName: "Coffee Arabica"}}; }};
+  const path = `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`;
+  const unconfigured = await runtime(t, (value) => registerCatalogRoutes(value, adapters(owner, undefined, {verifyInternalDelegation: (_token, operationId) => ({iss: "api-internal", aud: "catalog-service", originalCaller: "aroma-convergence", operationId})})));
+  assert.equal((await unconfigured.inject({method: "GET", url: path, headers: {"x-service-delegation": "signed-convergence"}})).statusCode, 503);
+  assert.equal(reads, 0);
+  const convergence = await runtime(t, (value) => registerCatalogRoutes(value, adapters(owner, undefined, {snapshotProofMaxAgeMs: 60_000, verifyInternalDelegation: (_token, operationId) => ({iss: "api-internal", aud: "catalog-service", originalCaller: "aroma-convergence", operationId})})));
+  assert.equal((await convergence.inject({method: "GET", url: path, headers: {"x-service-delegation": "signed-convergence"}})).statusCode, 200);
+  assert.equal(freshnessThreshold, 60_000);
+  const observer = await runtime(t, (value) => registerCatalogRoutes(value, adapters(owner, undefined, {verifyInternalDelegation: (_token, operationId) => ({iss: "api-internal", aud: "catalog-service", originalCaller: "aroma-observer", operationId})})));
+  assert.equal((await observer.inject({method: "GET", url: path, headers: {"x-service-delegation": "signed-observer"}})).statusCode, 403);
+  const forged = await runtime(t, (value) => registerCatalogRoutes(value, adapters(owner, undefined, {verifyInternalDelegation: (_token, operationId) => ({iss: "pricing-service", aud: "catalog-service", originalCaller: "aroma-convergence", operationId})})));
+  assert.equal((await forged.inject({method: "GET", url: path, headers: {"x-service-delegation": "forged-issuer"}})).statusCode, 403);
+  const noCertificate = await runtime(t, (value) => registerCatalogRoutes(value, adapters(owner, undefined, {verifyTransport: () => false})));
+  assert.equal((await noCertificate.inject({method: "GET", url: path, headers: {"x-service-delegation": "signed-convergence"}})).statusCode, 401);
+  assert.equal(reads, 1);
 });
 
 void test("catalog owner maps database failures without leaking details", async (t) => {

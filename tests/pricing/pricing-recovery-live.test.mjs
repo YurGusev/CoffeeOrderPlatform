@@ -15,6 +15,7 @@ const migrationNames = [
   "0002_create_pricing_quotes.sql",
   "0003_create_pricing_idempotency.sql",
   "0004_create_pricing_audit.sql",
+  "0005_quote_grind_selection.sql",
 ];
 const scope = createHash("sha256").update("POST\n/api/client-v1/pricing/quotes", "utf8").digest("hex");
 const actorRef = "pricing-live-recovery-actor";

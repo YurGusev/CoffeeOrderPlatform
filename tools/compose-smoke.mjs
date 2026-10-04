@@ -1255,6 +1255,7 @@ async function applyCatalogMigrations(port, credentials, platformConfig) {
       "0006_catalog_outbox",
       "0007_catalog_grants",
       "0008_catalog_active_read",
+      "0009_active_snapshot_freshness",
     ];
     const migrations = [];
     for (const id of migrationIds) {
@@ -1292,6 +1293,7 @@ async function applyPricingMigrations(port, credentials, platformConfig) {
       "0002_create_pricing_quotes",
       "0003_create_pricing_idempotency",
       "0004_create_pricing_audit",
+      "0005_quote_grind_selection",
     ];
     const migrations = [];
     for (const id of migrationIds) {
@@ -1327,6 +1329,11 @@ async function applyOrdersMigrations(port, credentials, platformConfig) {
     const migrationIds = [
       "0001_create_orders", "0002_create_order_items", "0003_create_order_history",
       "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox",
+      "0007_order_grind_selection", "0008_create_orders_inbox", "0009_create_catalog_mapping_projection",
+      "0010_create_cart_desired", "0011_create_cart_observed", "0012_create_convergence_attempts",
+      "0013_create_convergence_leases", "0014_create_mutation_reservations", "0015_create_order_aroma_projections",
+      "0016_create_aroma_work_schedules", "0017_allow_cart_outbox", "0018_guard_order_card_projection",
+      "0019_read_guarded_aroma_card","0020_guard_cart_fact_batches","0021_optimize_observed_format_checks","0022_terminal_cart_item_rejection","0023_ascii_observed_identity",
     ];
     const migrations = [];
     for (const id of migrationIds) {
@@ -2032,6 +2039,26 @@ function assertKafkaDurableRetention(
     retainedRecord: true,
     replicationFactor: 1,
   };
+}
+
+function prepareRecoveryKafkaBootstrap(projectName, secretsDir, platformConfig, composeFile) {
+  runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "kafka"], {composeFile, inherit: true});
+  const client = "--bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties";
+  const script = [];
+  for (const topic of Object.values(platformConfig.kafka.topics)) {
+    for (const name of [topic.name, topic.dlq]) {
+      script.push(`/opt/kafka/bin/kafka-topics.sh ${client} --create --if-not-exists --topic ${JSON.stringify(name)} --partitions ${topic.partitions} --replication-factor 1 >/dev/null`);
+    }
+  }
+  for (const service of Object.values(platformConfig.services)) {
+    for (const consumer of service.kafka.consumers.filter(entry => entry.processing === "durable")) {
+      for (const topic of consumer.topics) {
+        // Только новый изолированный broker: durable runtime не выбирает offset сам.
+        script.push(`/opt/kafka/bin/kafka-consumer-groups.sh ${client} --group ${JSON.stringify(consumer.groupId)} --topic ${JSON.stringify(topic)} --reset-offsets --to-earliest --execute >/dev/null`);
+      }
+    }
+  }
+  runCompose(projectName, secretsDir, ["exec", "-T", "kafka", "sh", "-ec", script.join("\n")], {composeFile});
 }
 
 async function prepareKafkaNativeFixture(
@@ -2808,9 +2835,10 @@ async function runKafkaBlackholeProof(
 
 async function assertReadiness(projectName, secretsDir, composeFile = COMPOSE_FILE) {
   for (const runtime of RUNTIMES) {
+    await waitForRuntimeReadiness(projectName, secretsDir, runtime, 200, 10_000, composeFile);
     runCompose(projectName, secretsDir, [
       "exec", "-T", runtime, ...RUNTIME_HEALTHCHECK,
-      "/health/live", "/health/ready", "/metrics",
+      "/health/live", "/metrics",
     ], {composeFile});
   }
   runCompose(projectName, secretsDir, ["exec", "-T", "edge-nginx", "nginx", "-t", "-q"], {composeFile});
@@ -2883,13 +2911,21 @@ async function waitForRuntimeReadiness(
 ) {
   const deadline = Date.now() + timeoutMs;
   let status = 0;
+  let failure;
   while (Date.now() < deadline) {
-    status = runtimeReadinessStatus(projectName, secretsDir, runtime, composeFile);
+    try {
+      status = runtimeReadinessStatus(projectName, secretsDir, runtime, composeFile);
+      failure = undefined;
+    } catch (error) {
+      status = 0;
+      failure = error;
+    }
     if (status === expected) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(
     `${runtime} readiness did not reach ${expected}; last status was ${status}`,
+    {cause: failure},
   );
 }
 
@@ -3002,7 +3038,7 @@ function assertStopped(projectName, secretsDir, composeFile = COMPOSE_FILE) {
   }
 }
 
-async function prepareAromaCartProviderFixture(secretsDir) {
+async function prepareAromaCartProviderFixture(secretsDir, initialCartFixture = "add-one-get.json") {
   const directory = join(secretsDir, "aroma-cart-proof");
   await mkdir(directory, {recursive: true, mode: 0o700});
   const caKey = join(directory, "provider-ca.key");
@@ -3015,7 +3051,7 @@ async function prepareAromaCartProviderFixture(secretsDir) {
   await writeFile(ext, "subjectAltName=DNS:aromateacoffee.ru\nextendedKeyUsage=serverAuth\n", {encoding: "utf8", mode: 0o400});
   execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", csr, "-subj", "/CN=aromateacoffee.ru"], {stdio: "ignore"});
   execFileSync("openssl", ["x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey, "-CAcreateserial", "-out", cert, "-days", "1", "-sha256", "-extfile", ext], {stdio: "ignore"});
-  await writeFile(join(directory, "add-one-get.json"), await readFile(join(ROOT, "evidence/aroma-provider/2026-09-12-cart-mutations/add-one-get.json"), "utf8"), {encoding: "utf8", mode: 0o400});
+  await writeFile(join(directory, "add-one-get.json"), await readFile(join(ROOT, "evidence/aroma-provider/2026-09-12-cart-mutations", initialCartFixture), "utf8"), {encoding: "utf8", mode: 0o400});
   const scopedGateway = parseYaml(await readFile(join(secretsDir, "aroma-gateway.yaml"), "utf8"), {json: true});
   const supplierRef = "sup_00000000000000000000000001";
   const catalogIdentityKey = Buffer.from(scopedGateway.secrets.aroma.catalogIdentityKeyV1, "utf8");
@@ -3333,6 +3369,11 @@ async function main() {
   let aromaCartCleanupReceipt;
   const platformConfig = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
   try {
+    if (options.recoveryProof) {
+      const kafkaVolume = `${projectName}_kafka_data`;
+      const existingVolumes = runDocker(["volume", "ls", "--format", "{{.Name}}", "--filter", `name=${kafkaVolume}`]).trim().split("\n");
+      assert.equal(existingVolumes.includes(kafkaVolume), false, "recovery proof requires a fresh Kafka volume before offset bootstrap");
+    }
     const databaseProofCredentials = options.databaseProof || options.customerProof
       ? await readDatabaseProofCredentials()
       : undefined;
@@ -3366,7 +3407,7 @@ async function main() {
     });
     if (options.aromaBindingProof) aromaBindingTlsObserver = await prepareAromaBindingTlsObserver(secretsDir);
     if (options.aromaCartProof || options.recoveryProof) {
-      aromaCartProviderFixture = await prepareAromaCartProviderFixture(secretsDir);
+      aromaCartProviderFixture = await prepareAromaCartProviderFixture(secretsDir, options.recoveryProof ? "remove-owned-get.json" : "add-one-get.json");
     }
     if (options.aromaCartProof) {
       const directory = join(secretsDir, "aroma-cart-proof");
@@ -3476,6 +3517,7 @@ async function main() {
         ? ["up", "--detach", "--wait", "--no-build", "api-internal", "aroma-gateway", ...(options.aromaCartProof ? ["aroma-provider-fixture"] : [])]
         : ["up", "--detach", "--wait", "--no-build"];
     composeAttempted = true;
+    if (options.recoveryProof) prepareRecoveryKafkaBootstrap(projectName, secretsDir, platformConfig, composeFile);
     runCompose(projectName, secretsDir, upArguments, {composeFile, inherit: true});
     const rows = options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof
       ? new Map(

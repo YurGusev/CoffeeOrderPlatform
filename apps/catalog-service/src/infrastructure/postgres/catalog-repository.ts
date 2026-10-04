@@ -1,10 +1,10 @@
 import {defineStatement, type OwnerStatement} from "@coffee-platform/database/owner";
 import type {Database, Transaction} from "@coffee-platform/database";
-import type {CatalogAvailability, CatalogCursorPosition, CatalogSearchRow} from "../../application/search-catalog.js";
+import type {CatalogAvailability, CatalogCursorPosition, CatalogPricingInputRow, CatalogSearchRow} from "../../application/search-catalog.js";
 
-export type CatalogPricingRow = CatalogSearchRow;
+export type CatalogPricingRow = CatalogPricingInputRow;
 type SearchParameters = readonly [string, CatalogAvailability | null, string | null, string | null, string | null, number];
-type PricingParameters = readonly [string, string];
+type PricingParameters = readonly [string, string, number | null];
 type SearchDbRow = CatalogSearchRow & Readonly<{cursorValid: boolean}>;
 type PricingDbRow = CatalogPricingRow;
 
@@ -22,6 +22,7 @@ const SEARCH_SQL = `WITH metadata AS (
          product.display_name_sort_key AS "displayNameSortKey", variant.unit AS "unit",
          availability.state AS "availability",
          COALESCE(mapping.mapping_state = 'Active', false) AS "mappingAvailable", variant.image_url AS "imageUrl",
+         variant.grind_options AS "grindOptions",
          mapping.offer_ref AS "offerRef", mapping.supplier_unit_minor::text AS "supplierUnitMinor",
          mapping.currency AS "currency", mapping.mapping_revision::text AS "mappingRevision"
     FROM metadata
@@ -43,19 +44,24 @@ SELECT metadata.snapshot_revision AS "snapshotRevision",
        candidates."productRef", candidates."variantRef",
        candidates."displayName", candidates."displayNameSortKey", candidates."unit", candidates."availability",
        candidates."mappingAvailable", candidates."imageUrl", candidates."offerRef", candidates."supplierUnitMinor",
-       candidates."currency", candidates."mappingRevision"
+       candidates."currency", candidates."mappingRevision", candidates."grindOptions"
   FROM metadata LEFT JOIN candidates ON true
  ORDER BY candidates."displayNameSortKey" NULLS LAST, candidates."productRef" NULLS LAST, candidates."variantRef" NULLS LAST`;
 
 const PRICING_SQL = `WITH metadata AS (
-  SELECT snapshot_ref, snapshot_revision FROM catalog.active_snapshot_metadata
+  SELECT snapshot_ref, snapshot_revision, snapshot_created_at FROM catalog.active_snapshot_metadata
 )
 SELECT metadata.snapshot_revision AS "snapshotRevision", product.product_ref AS "productRef",
        variant.variant_ref AS "variantRef", product.display_name AS "displayName", variant.unit AS "unit",
        availability.state AS "availability", mapping.offer_ref AS "offerRef",
        mapping.supplier_unit_minor::text AS "supplierUnitMinor", mapping.currency AS "currency",
        mapping.mapping_revision::text AS "mappingRevision", variant.image_url AS "imageUrl",
-       product.display_name_sort_key AS "displayNameSortKey", COALESCE(mapping.mapping_state = 'Active', false) AS "mappingAvailable"
+       product.display_name_sort_key AS "displayNameSortKey", COALESCE(mapping.mapping_state = 'Active', false) AS "mappingAvailable",
+       variant.grind_options AS "grindOptions",
+       CASE WHEN $3::bigint IS NULL THEN true ELSE COALESCE(
+         metadata.snapshot_created_at <= statement_timestamp() AND
+         metadata.snapshot_created_at >= statement_timestamp() - ($3::bigint * interval '1 millisecond'), false
+       ) END AS "snapshotFresh"
   FROM metadata
   LEFT JOIN catalog.active_products AS product ON product.snapshot_ref = metadata.snapshot_ref AND product.product_ref = $1
   LEFT JOIN catalog.active_variants AS variant ON variant.snapshot_ref = product.snapshot_ref AND variant.product_ref = product.product_ref AND variant.variant_ref = $2
@@ -74,7 +80,7 @@ export class CatalogRepository {
     const result = await this.#search(transaction, [input.query, input.availability, after?.sortKeyHash ?? null, after?.productRef ?? null, after?.variantRef ?? null, input.limit] as SearchParameters);
     return result.rows;
   }
-  public async pricingInput(transaction: Transaction, productRef: string, variantRef: string): Promise<PricingDbRow | undefined> {
-    return (await this.#pricing(transaction, [productRef, variantRef])).rows[0];
+  public async pricingInput(transaction: Transaction, productRef: string, variantRef: string, maxSnapshotAgeMs?: number): Promise<PricingDbRow | undefined> {
+    return (await this.#pricing(transaction, [productRef, variantRef, maxSnapshotAgeMs ?? null])).rows[0];
   }
 }

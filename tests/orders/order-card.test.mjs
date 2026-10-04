@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {projectOrderCard} from "../../apps/orders-service/dist/domain/order-card.js";
 import {nextOrderStatus} from "../../apps/orders-service/dist/domain/order-state.js";
+import {isOrderCardResponse} from "../../packages/contracts/orders-v1/dist/index.js";
 
 void test("first-launch state machine is a pure, exhaustive command table", () => {
   const cases = [
@@ -100,7 +101,28 @@ void test("Draft uses persisted quote facts for RUB total/proof and only allows 
   assert.deepEqual(expired.allowedActions, ["edit-items"]);
 });
 
-void test("confirmed card is PendingObservation without #11; version and projectionVersion stay separate", () => {
+void test("confirmed card exposes only persisted public AROMA fields and gates reconciliation by state and permission", () => {
+  for(const state of ["PendingObservation","Converging","InSync","OutOfSync","Blocked","UnknownOutcome"]){
+    const aroma={state,desiredRevision:"8",observedRevision:"9",lastObservedAt:"2026-10-03T00:00:00Z",
+      blockers:state==="Blocked"?[{code:"MAPPING_CHANGED",message:"Сопоставление изменилось"}]:[],operationRef:"must-not-leak",desiredHash:"must-not-leak"};
+    const card=projectOrderCard({order:order({status:"Confirmed"}),items:[item()],nowEpochMs,permissions:["orders:reconcile:any"],aroma});
+    assert.equal(card.aroma.state,state);assert.equal(card.aroma.desiredRevision,"8");assert.equal(card.aroma.observedRevision,"9");
+    assert.equal(card.aroma.operationRef,undefined);assert.equal(card.aroma.desiredHash,undefined);
+    assert.deepEqual(card.allowedActions,["OutOfSync","Blocked","UnknownOutcome"].includes(state)?["request-aroma-reconciliation"]:[]);
+    assert.deepEqual(projectOrderCard({order:order({status:"Confirmed"}),items:[item()],nowEpochMs,permissions:[],aroma}).allowedActions,[]);
+    assert.equal(projectOrderCard({order:order(),items:[item()],nowEpochMs,permissions:[],aroma}).aroma.state,"NotRequested");
+  }
+});
+
+void test("approved stable AROMA blockers validate in the generated public Card contract without exposing proof internals", () => {
+  for(const code of ["AROMA_UNKNOWN_OUTCOME","AROMA_WORKER_INTERRUPTED","AROMA_OBSERVATION_UNAVAILABLE","AROMA_OBSERVATION_INVALID","AROMA_EXTERNAL_CHANGE","AROMA_QUANTITY_NOT_SUPPORTED","AROMA_MUTATIONS_DISABLED","AROMA_MAPPING_NOT_AVAILABLE","AROMA_OPERATION_UNKNOWN_OUTCOME","AROMA_VERIFICATION_UNAVAILABLE","AROMA_VERIFICATION_INVALID","AROMA_CART_ITEM_NOT_FOUND"]){
+    const card=projectOrderCard({order:order({status:"Confirmed"}),items:[item()],nowEpochMs,permissions:["orders:reconcile:any"],
+      aroma:{state:"Blocked",desiredRevision:"8",observedRevision:"9",blockers:[{code,message:"Сходимость корзины требует проверки"}]}});
+    assert.equal(isOrderCardResponse(card),true,code);assert.equal(card.aroma.blockers[0].code,code);
+  }
+});
+
+void test("confirmed card is PendingObservation without an AROMA projection; version and projectionVersion stay separate", () => {
   const card = projectOrderCard({order: order({status: "Confirmed", version: "3", projectionVersion: "9"}), items: [item()], nowEpochMs, permissions: ["orders:edit:any", "orders:confirm:any"]});
   assert.equal(card.version, "3");
   assert.equal(card.projectionVersion, "9");

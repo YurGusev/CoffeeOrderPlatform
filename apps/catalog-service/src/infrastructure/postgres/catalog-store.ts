@@ -1,9 +1,9 @@
 import {withTransaction, type Database} from "@coffee-platform/database";
-import type {CatalogAvailability, CatalogCursorPosition, CatalogPageStore, CatalogSearchRow} from "../../application/search-catalog.js";
+import type {CatalogAvailability, CatalogCursorPosition, CatalogPageStore, CatalogPricingInputRow, CatalogSearchRow} from "../../application/search-catalog.js";
 import {CatalogRepository} from "./catalog-repository.js";
 
 export type CatalogOwnerStore = CatalogPageStore & Readonly<{
-  pricingInput: (productRef: string, variantRef: string, signal?: AbortSignal, correlationId?: string) => Promise<CatalogSearchRow | undefined>;
+  pricingInput: (productRef: string, variantRef: string, signal?: AbortSignal, correlationId?: string, maxSnapshotAgeMs?: number) => Promise<CatalogPricingInputRow | undefined>;
 }>;
 
 export class CatalogStore implements CatalogOwnerStore {
@@ -14,7 +14,7 @@ export class CatalogStore implements CatalogOwnerStore {
     const rows = await withTransaction(this.#database, {mode: "interactive", ...(input.signal === undefined ? {} : {signal: input.signal}), ...(input.correlationId === undefined ? {} : {correlationId: input.correlationId})}, transaction => this.#repository.search(transaction, input));
     return {snapshotRevision: rows[0]?.snapshotRevision ?? null, cursorValid: rows[0]?.cursorValid === true, rows: rows.filter((row) => row.productRef !== null)};
   }
-  public async pricingInput(productRef: string, variantRef: string, signal?: AbortSignal, correlationId?: string): Promise<CatalogSearchRow | undefined> {
-    return withTransaction(this.#database, {mode: "interactive", ...(signal === undefined ? {} : {signal}), ...(correlationId === undefined ? {} : {correlationId})}, transaction => this.#repository.pricingInput(transaction, productRef, variantRef));
+  public async pricingInput(productRef: string, variantRef: string, signal?: AbortSignal, correlationId?: string, maxSnapshotAgeMs?: number): Promise<CatalogPricingInputRow | undefined> {
+    return withTransaction(this.#database, {mode: "interactive", ...(signal === undefined ? {} : {signal}), ...(correlationId === undefined ? {} : {correlationId})}, transaction => this.#repository.pricingInput(transaction, productRef, variantRef, maxSnapshotAgeMs));
   }
 }

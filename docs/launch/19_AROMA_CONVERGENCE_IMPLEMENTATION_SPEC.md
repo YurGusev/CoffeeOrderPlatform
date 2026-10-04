@@ -3,6 +3,11 @@
 Статус: нормативная спецификация issue #11. Исполнитель не выбирает scope,
 таблицы, lease/fence, порядок внешних вызовов или recovery semantics заново.
 
+Первый этап #11 замыкает backend-контракт помола по
+[утверждённым границам #9/#11](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md).
+Выбор в proof/Order, физическая идентичность и дополнительные обязательные
+проверки из этого документа применяются к таблицам и алгоритмам ниже.
+
 ## 1. Один physical cart scope
 
 В первом запуске существует один scope `cartScopeRef="aroma-primary"`,
@@ -14,8 +19,15 @@
 `OrderConfirmed.v1`. Отдельный public reconciliation command #8 публикует
 `OrderReconciliationRequested.v1` только после принятия order-level намерения.
 #11 агрегирует все актуальные contributions в
-`cart_desired_revisions`; только после commit новой cart revision публикуется
-`AromaConvergenceRequested.v1`.
+`cart_desired_revisions`; wake-up новой revision публикуется через owner Outbox.
+По [ADR-0032](../adr/ADR-0032-order-reconciliation-intent.md) order-level
+operator intent создаёт durable `AromaConvergenceRequested.v1` с причиной
+`OperatorRequested` также при неизменившемся Desired hash: новая revision
+для этого не требуется, а successful no-op вместо wake-up запрещён.
+`aggregate.version`/Outbox `owner_version` такого wake-up обозначают его
+уникальную позицию в owner stream и могут отличаться от `payload.desiredRevision`.
+Convergence использует revision из payload только как hint и будит работу лишь
+при совпадении с текущим Orders-owned `convergence_work.desired_revision`.
 
 ## 2. Runtime и роли
 
@@ -29,15 +41,43 @@
 
 ## 3. Миграции #11
 
-1. `007_create_orders_inbox.sql`;
-2. `008_create_catalog_mapping_projection.sql`;
-3. `009_create_cart_desired.sql`;
-4. `010_create_cart_observed.sql`;
-5. `011_create_convergence_attempts.sql`;
-6. `012_create_convergence_leases.sql`;
-7. `013_create_mutation_reservations.sql`.
-8. `014_create_order_aroma_projections.sql`.
+После `0007_order_grind_selection.sql` из этапа A, без переименования уже опубликованных миграций:
 
+1. `0008_create_orders_inbox.sql`;
+2. `0009_create_catalog_mapping_projection.sql`;
+3. `0010_create_cart_desired.sql`;
+4. `0011_create_cart_observed.sql`;
+5. `0012_create_convergence_attempts.sql`;
+6. `0013_create_convergence_leases.sql`;
+7. `0014_create_mutation_reservations.sql`;
+8. `0015_create_order_aroma_projections.sql`;
+9. `0016_create_aroma_work_schedules.sql`;
+10. `0017_allow_cart_outbox.sql`;
+11. `0018_guard_order_card_projection.sql`;
+12. `0019_read_guarded_aroma_card.sql`;
+13. `0020_guard_cart_fact_batches.sql`;
+14. `0021_optimize_observed_format_checks.sql`;
+15. `0022_terminal_cart_item_rejection.sql`;
+16. `0023_ascii_observed_identity.sql`.
+
+`0023` задаёт `COLLATE "C"` для трёх ASCII-полей Observed:
+`offer_ref`, `source_grind_key_hash` и `sanitized_line_hash`. Типы, accepted
+bytes и форматные проверки не меняются; UNIQUE-индекс перестраивается только
+для двух полей ключа, FK, append-only и Current/xmin guards сохраняются.
+В rollback-пробе на одинаковом 10 000-line/1 000-wakeup NoOp workload два
+замера дали медиану local Attempt 494.1 мс при default collation и 448.5 мс
+при `C`; медиана только COPY составила 274.4 и 257.6 мс соответственно.
+Корпус принял одинаковые 3 345 owner assignments и 52 assignment errors;
+проверка 1 112 063 UTF-8 scalar values нашла ноль различий regex. Все четыре
+timing samples использовали одну и ту же сборку с выключенными phase counters;
+финальная сборка выполняется из production source без instrumentation. Это
+сравнение малой выборки подтверждает выбранное узкое изменение, но не является
+заявлением, что каждый Attempt укладывается в SLO.
+
+Normalizer использует штатный one-shot SHA-256 с прежними canonical JSON
+bytes. Evaluator выбирает lexicographic minimum среди всех различий линейным
+проходом; входы по-прежнему полностью проверяются независимо от порядка строк,
+включая все количества Desired.
 ### Inbox и mapping projection
 
 `inbox_messages`: PK `(consumer_name,message_id)`, message type/key/version,
@@ -50,15 +90,28 @@ nullable, `mapping_revision`, `catalog_snapshot_revision`, `mapping_state`
 `effective_at`, `source_message_id`. Update только если incoming revision больше;
 equal+same payload = no-op, lower = stale no-op, equal+different = quarantine.
 
+Permanent/invalid owner rejection откатывает всю обработку сообщения, включая
+частичные owner effects и Inbox acquisition. Только после подтверждённого
+rollback Kafka coordinator открывает отдельную transaction: повторно получает
+Inbox lease, фиксирует terminal `Quarantined` и source-keyed quarantine с полным
+envelope и причиной. `consumer_name` берётся из настроенного consumer group,
+а topic/partition/offset — из реального record. Offset commit допустим только
+после известного COMMIT этой transaction. Transient error, failed quarantine и
+неизвестный COMMIT/ROLLBACK не разрешают offset commit; replay terminal rejection
+не выполняет owner handler повторно. Ловить permanent error внутри owner
+transaction и коммитить её частичные изменения запрещено.
+
 ### Cart Desired
 
 `cart_desired_revisions`: PK `(cart_scope_ref,desired_revision bigint)`,
 `state Current|Superseded`, `desired_hash`, `source_max_order_version`,
 `created_at`; partial unique один Current на scope.
 
-`cart_desired_lines`: PK `(cart_scope_ref,desired_revision,offer_ref)`,
-`quantity_milli bigint >0`, `contribution_hash`, `contributing_order_refs jsonb`.
-Refs в JSON отсортированы; rows сортируются по `offer_ref` для hash.
+`cart_desired_lines`: unique key `NULLS NOT DISTINCT`
+`(cart_scope_ref,desired_revision,offer_ref,source_grind_key_hash)`, optional
+hash nullable; `quantity_milli bigint >0`, `contribution_hash`,
+`contributing_order_refs jsonb`. Refs в JSON отсортированы; rows сортируются
+по `offer_ref`, затем absence-before-hash и hash для canonical identity.
 
 Blocked contributions хранятся в `cart_desired_blockers`: product/variant/order,
 code `MAPPING_CHANGED|MAPPING_MISSING|MAPPING_STOPPED|PRODUCT_UNAVAILABLE`, mapping revision.
@@ -74,9 +127,18 @@ code `MAPPING_CHANGED|MAPPING_MISSING|MAPPING_STOPPED|PRODUCT_UNAVAILABLE`, mapp
 требует оба NULL. `complete` всегда true:
 partial/failed GET вообще не создаёт revision.
 
-`cart_observed_lines`: PK `(cart_scope_ref,observed_revision,offer_ref)`,
-`quantity_milli bigint >0`, sanitized line hash. Отсутствующий offer означает
-quantity zero только после complete snapshot.
+`cart_observed_lines`: unique key `NULLS NOT DISTINCT`
+`(cart_scope_ref,observed_revision,offer_ref,source_grind_key_hash)`, optional
+hash nullable; `quantity_milli bigint >0`, sanitized line hash. Отсутствующий
+полный line key означает quantity zero только после complete snapshot.
+Convergence сохраняет нормализованный вектор одной `COPY` непосредственно в
+эту таблицу, в той же transaction: FK, unique key и statement guards остаются
+на пути записи. Для `NoOpInSync` Orders сравнивает полный Desired/Observed
+вектор одним SQL `FULL JOIN` по ASCII offer/hash identity и exact quantity;
+отсутствующий grind hash сопоставляется отдельным пустым sentinel, который
+невозможен для валидного hash. Строгий boolean decoder и проверки допустимого
+provider quantity обязательны. При mismatch остаётся обычный strict row decode
+и бизнес-diff; ошибки SQL или декодирования не считаются равенством.
 
 ### Attempt, lease/fence и reservation
 
@@ -91,7 +153,8 @@ selected offer/action, failure/blockers, timestamps. Terminal state immutable.
 
 `mutation_reservations`: `operation_ref` PK (`op_<ULID>`), unique
 `(attempt_ref)`, scope/desired revision/fence, action `SetQuantity|Remove`,
-`offer_ref`, `observed_before_milli`, `desired_milli`, `request_hash`, state
+`offer_ref`, optional `source_grind_key_hash`, `observed_before_milli`,
+`desired_milli`, `request_hash`, state
 `Reserved|Dispatched|Acknowledged|Verified|RecoveredApplied|RecoveredNotApplied|UnknownOutcome`,
 Gateway outcome hash и timestamps. Одна Attempt имеет максимум одну reservation.
 
@@ -112,7 +175,8 @@ recompute и optional Desired/Outbox.
    Order. Текущий mapping с тем же offer и Active/Available разрешает строку;
    другой non-null offer → `MAPPING_CHANGED`; null/Missing → `MAPPING_MISSING`;
    Stopped → `MAPPING_STOPPED`; Unavailable → `PRODUCT_UNAVAILABLE`;
-3. агрегировать `quantityMilli` по offerRef с bigint overflow guard;
+3. агрегировать `quantityMilli` по `(offerRef,sourceGrindKeyHash-or-absence)`
+   с bigint overflow guard и точной проверкой представимости целыми упаковками;
 4. сформировать blockers для недопустимых положительных quantities;
 5. вычислить canonical Desired hash;
 6. если hash совпал с Current — завершить Inbox без новой revision/event;
@@ -135,17 +199,31 @@ Observer валидирует schema, uniqueness, count/fingerprint и сохр�
 Observed revision одной transaction вместе с Inbox/Outbox
 `AromaObservationChanged.v1`. Failed/partial/invalid/timeout GET записывает
 sanitized operational failure, но не создаёт пустой Observed и не меняет Current.
+Для `AromaObservationChanged.v1` оба writer-а (observer и convergence) ставят
+`aggregate.version` и Outbox `owner_version` равными payload `observedRevision`;
+`aggregate_sequence` независимо увеличивает порядок событий этого scope.
+
+Wire `AromaCartLine.quantity` использует `QuantityDecimal`. Общий snapshot
+normalizer переводит whole/fraction отдельно через bigint в exact milli,
+без floating point и округления; исходные wire quantities и fingerprint не
+переписываются. Поддержка decimal observation не разрешает fractional mutation:
+`providerQuantity` для Desired по-прежнему требует точного целого числа упаковок.
 
 ## 6. Lease и fence
 
 Acquire выполняется одной SQL statement/transaction только если lease отсутствует
-или `expires_at <= transaction_timestamp()`:
+или `expires_at <= clock_timestamp()`:
 
 ```text
 owner_instance_id = новый UUID
 fence_epoch = previous + 1 (или 1)
-expires_at = transaction_timestamp() + 30s
+acquired_at = heartbeat_at = один clock_timestamp() statement
+expires_at = тот же clock_timestamp() + 30s
 ```
+
+Acquire и heartbeat материализуют одну DB clock value для всех записываемых
+timestamps в statement. Условные expiry/fence/current-Desired проверки используют
+актуальный `clock_timestamp()` после ожидания блокировки.
 
 Если lease активен у другого owner, command считается coalesced wake-up и worker
 не ждёт lock/sleep. Heartbeat каждые 10s продлевает до now+30s условным UPDATE
@@ -182,6 +260,32 @@ expires_at = transaction_timestamp() + 30s
     wake-up. В этой Attempt второй diff не исправляется.
 13. Terminal Attempt + reservation + Observed(optional) + Outbox пишутся одной
     transaction; lease освобождается conditional UPDATE.
+
+Уменьшение количества и remove используют прежний physical key и свежий cart GET;
+недоступность товара в Catalog не блокирует cleanup.
+
+Полный cart GET ограничен owning `aromaObservation.maxResponseBytes` либо
+`aromaConvergence.maxResponseBytes` — 2 097 152 байта, как в InternalApi.
+Это допускает 10 000 строк с выбранным помолом. Превышение bound остаётся
+invalid response и не создаёт пустой или частичный Observed; общий HTTP request
+limit не используется как лимит ответа.
+
+Перед reservation `SetQuantity`, увеличивающего физическое количество, convergence делает read-only
+owner call в Catalog `getCatalogPricingInput` и требует proof из latest complete
+активного snapshot: точные product/variant/offer, `Available`, snapshot revision
+не ниже локальной и точное совпадение mapping revision; выбранный grind hash должен ровно
+один раз присутствовать в options. Ошибка, неполный или устаревший proof закрывает
+путь в `Blocked` без mutation. Этот вызов не читает чужую БД и не обращается к
+провайдеру; Orders использует только Catalog owner API.
+
+Catalog проверяет возраст активного snapshot по DB clock относительно начала
+импорта, до provider export. Порог —
+`services.catalog-service.catalogSnapshotProof.maxAgeMs`; его отсутствие,
+будущий timestamp, отсутствие или превышение возраста дают
+`503 CATALOG_UNAVAILABLE`. Ответ не раскрывает timestamp. Проверка включается
+для подписанного `originalCaller=aroma-convergence`; Pricing сохраняет прежнюю
+семантику. В текущем YAML порог ещё не задан и ожидает решения владельца:
+положительные mutations закрыты до настройки.
 
 ## 8. Recovery UnknownOutcome
 
@@ -234,20 +338,34 @@ verified_desired_revision,verified_desired_hash,verified_observed_revision,
 verified_cart_fingerprint,attempt_ref,verified_attempt_ref,fence_epoch,state,
 blocker_codes jsonb,last_observed_at,updated_at,source_message_id)`. Unique
 `(order_ref,projection_version)` хранится в append-only projection history;
-current row обновляется guarded SQL только при canonical hash change.
+Current row обновляется только через `orders.write_card_projection(orderRef,material)`.
+Forward migration `0018` закрывает прямые INSERT/UPDATE projection table для
+runtime-роли. Entry point сериализует изменения по Order, сравнивает material
+facts без source message/timestamp metadata и увеличивает единый
+`orders.orders.projection_version`; business `version` не меняется.
+`orders-service` использует тот же entry point без material argument для
+видимых Order commands. Неизменившаяся AROMA material projection не увеличивает
+counter и не требует History/Realtime.
 
 Impacted Orders — объединение order refs прежней и новой Desired revision;
-поэтому remap/remove не теряет заказ, исчезнувший из Current. В terminal
-transaction worker пересчитывает каждую проекцию, увеличивает её собственный
-`projection_version` только при material change и пишет по одному
+поэтому remap/remove не теряет заказ, исчезнувший из Current. Единственный
+writer per-Order projection/invalidation — `orders-aroma-preparation`.
+Convergence атомарно фиксирует terminal Attempt и Outbox
+`AromaConvergenceChanged.v1`; preparation consumer в terminal Inbox
+transaction читает актуальные Orders-owned факты, пересчитывает каждую
+проекцию через этот общий entry point, сохраняет его
+`projection_version` в projection history только при material change и пишет по одному
 `RealtimeInvalidated.v1` с `subjectRef=orderRef` и
 `ownerVersion=projectionVersion`. Это не `Order.version`: AROMA меняется без
 команды над aggregate.
 
 `InSync` допустим только для terminal `NoOpInSync|VerifiedInSync`, когда current
 Desired revision/hash совпадают с verified Desired, complete Current Observed
-revision/fingerprint — с verified Observed, fence относится к Attempt, нет
-blocker/UnknownOutcome, а contribution revision/hash конкретного Order актуальны.
+revision/fingerprint — с verified Observed, epoch/owner Attempt совпадают с
+сохранённым текущим fence, нет blocker конкретного Order и scope-wide reservation
+`Reserved|Dispatched|Acknowledged|UnknownOutcome`, а contribution revision/hash
+конкретного Order актуальны. Освобождение lease после terminal commit не меняет
+epoch и само по себе не отменяет proof; takeover с новым epoch его отменяет.
 Числовое равенство Desired и Observed revisions ничего не доказывает.
 
 `AromaObservationChanged.v1` публикуется только после complete Observed commit.
@@ -265,6 +383,37 @@ terminal proof пересчитывается по Card precedence и сама �
 Order Card использует precedence и `allowedActions` из Orders specification.
 `InSync` разрешён только для current Desired + complete Current Observed +
 current fence terminal proof.
+
+Forward migration `0019` даёт `orders-service` только EXECUTE на guarded
+`orders.read_card_projection(orderRef,maxSnapshotAgeMs)`, без SELECT на private
+lease/reservation/Attempt tables. Проверка выполняется при каждом read: новая
+Current Observation, takeover epoch, active lease, unresolved reservation,
+устаревшая observation или изменившаяся Desired отменяют старый persisted
+`InSync` даже до следующего preparation poll. Shared Card counter читается под
+тем же parent Order lock, что и business facts. Reconciliation gate использует
+этот persisted read и expected business version; test-only projection Map удалён.
+
+Preparation и Orders API используют `aromaConvergence.maxSnapshotAgeMs` из
+единого `config/platform.yaml` как окно terminal verification. Отсутствующая
+composition config не разрешает `InSync`. Публичный `OrderBlocker.code` дополнен
+только уже сохраняемыми stable AROMA reasons; владелец явно разрешил расширение
+enum 3 октября 2026. Поля и формат Card не меняются; refs операций, hashes,
+fence и raw provider bodies публично не выдаются. Codegen и repository
+compatibility checks обязательны; результат этих checks не означает, что
+старый strict consumer с прежним enum принимает новые значения.
+Definitive Gateway rejection `404 AROMA_CART_ITEM_NOT_FOUND` сохраняется как
+terminal `Blocked` с тем же публичным blocker code; generated Card validator
+обязан принимать этот уже сохраняемый результат.
+
+Все три executable `main.ts` подключают собственную composition root:
+consumer-scoped Inbox по реальным configured groups, durable recover/runOnce,
+bounded non-overlapping poll, scoped api-internal mTLS только для observer и
+convergence, явную readiness и drain/close HTTP. `handleWake` получает Transaction
+первым аргументом. Mutation capability остаётся false по умолчанию.
+Каждый shared Orders Outbox relay ограничивает claim своими configured producer
+topics; predecessor barrier остаётся общим по aggregate для всех topics, поэтому
+другой publisher не может пропустить старое сообщение того же cart stream.
+Ошибка нового owner/provider cycle не останавливает relay уже committed events.
 
 ## 11. Failure tests
 

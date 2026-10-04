@@ -404,6 +404,7 @@
       "sourceRoot": "apps/aroma-convergence",
       "purpose": "Lease/fence/reservation GET-mutate-GET state machine",
       "contractPackages": [
+        "packages/contracts/catalog-v1",
         "packages/contracts/aroma-v1",
         "packages/contracts/internal-v1"
       ],
@@ -417,6 +418,7 @@
       "schedules": [],
       "outgoingHttp": [
         "api-internal:readAromaCartSnapshot",
+        "api-internal:getCatalogPricingInput",
         "api-internal:setAromaCartLineQuantity",
         "api-internal:removeAromaCartLine"
       ],

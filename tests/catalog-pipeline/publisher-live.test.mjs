@@ -102,7 +102,7 @@ void test("Outbox publisher restart before finalize COMMIT and after Published C
     try {
       await adminClient.query("CREATE ROLE coffee_catalog_activate_rw LOGIN PASSWORD 'publisher-proof-pass'");
       await adminClient.query("CREATE ROLE coffee_catalog_api_ro LOGIN PASSWORD 'api-proof-pass'");
-      for (const name of ["0004_catalog_active", "0005_catalog_identity", "0006_catalog_outbox", "0007_catalog_grants", "0008_catalog_active_read"])
+      for (const name of ["0004_catalog_active", "0005_catalog_identity", "0006_catalog_outbox", "0007_catalog_grants", "0008_catalog_active_read", "0009_active_snapshot_freshness"])
         await adminClient.query(await readFile(resolve(root, "apps/catalog-service/migrations", `${name}.sql`), "utf8"));
 
       publisherDatabase = createDatabase({owner: "catalog-outbox-publisher-parent", database: databaseName,

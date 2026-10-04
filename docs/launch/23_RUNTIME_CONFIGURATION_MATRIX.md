@@ -156,6 +156,58 @@ non-Gateway→AROMA origin и любого нового runtime→`coffee_networ
 `pnpm config:check` сравнивает эту таблицу с `platform.yaml`, service catalog,
 Compose, Permission manifests и SOPS secretRef allowlists поле-в-поле.
 
+## Настройки долговечных AROMA workers
+
+Единственный источник несекретных настроек — `config/platform.yaml`. Поля
+`aromaPreparation`, `aromaObservation`, `aromaConvergence` обязательны только
+для соответствующих runtime; их передача другой роли запрещена и JSON Schema,
+и runtime-парсером. У каждой группы настроек закрытый список ключей и конечные
+положительные целочисленные пределы.
+
+| Runtime | Настройки | Назначение |
+|---|---|---|
+| `orders-aroma-preparation` | `aromaPreparation.pollIntervalMs`, `batchSize`, `maxOrders`, `maxLines` | Период durable recovery/dirty-scope scan и пределы keyset batch/агрегации |
+| `aroma-observer` | `aromaObservation.pollIntervalMs`, `intervalMs`, `leaseMs`, `maxSnapshotAgeMs`, `maxLines`, `maxResponseBytes` | Проверка сохранённого расписания, interval следующего наблюдения, claim lease и границы полного снимка |
+| `aroma-convergence` | `aromaConvergence.pollIntervalMs`, `leaseMs`, `heartbeatIntervalMs`, `providerDeadlineMs`, `safetyMarginMs`, `retryBackoffMs`, `maxSnapshotAgeMs`, `maxLines`, `maxResponseBytes` | Durable wake-up/retry, удержание fence/reservation и bounded provider step |
+
+`aromaConvergence.maxSnapshotAgeMs` также задаёт terminal-proof freshness для
+preparation projection writer и Orders Card reader: composition roots читают
+это значение из той же полной несекретной platform config, не создавая
+service-local override или скрытый default. Полная группа `aromaConvergence`
+не переносится в runtime config другой роли. HTTP cart response bound workers —
+owning `maxResponseBytes: 2097152`, как в существующем InternalApi: полный
+снимок 10 000 строк с optional grind hash помещается в 2 MiB. Общий request
+`platform.bodyLimitBytes` остаётся 1 MiB. Observer deadline — из своего `deadlineMs`,
+convergence provider deadline — из `aromaConvergence.providerDeadlineMs`.
+
+Catalog владеет отдельным необязательным полем
+`services.catalog-service.catalogSnapshotProof.maxAgeMs`: положительное safe
+integer без default. Оно ограничивает возраст supplier snapshot для proof,
+запрошенного convergence; не заменяет `aromaConvergence.maxSnapshotAgeMs`
+физической корзины. При отсутствии значения Catalog возвращает convergence
+`503 CATALOG_UNAVAILABLE`; Pricing caller не использует этот порог. В reference
+config задано `7200000` ms (2 часа), утверждённое владельцем 4 октября 2026 года:
+импорт запускается ежечасно, окно активации составляет до 15 минут, а возраст
+считается от `supplier_snapshots.created_at` — начала импорта. Активация не
+обновляет timestamp. Удаление поля из config оставляет его отсутствующим в
+runtime-парсере и сохраняет fail-closed ответ; default не подставляется.
+
+`services.aroma-convergence.mutationsEnabled` — обязательный отдельный boolean,
+по умолчанию в reference config **`false`**. `mutationCapability: true` лишь
+описывает доверенную роль и не включает физические изменения. Другим runtime
+поле `mutationsEnabled` запрещено. Включение требует отдельного разрешения
+владельца и доказанного launch gate; commit, CI или наличие typed клиента
+не являются этим разрешением.
+
+Runtime-парсер отклоняет observer lease, не покрывающий deadline чтения, и
+convergence-настройки без безопасного окна lease/heartbeat/provider deadline.
+Для первого запуска convergence lease равна 30 000 ms, heartbeat — 10 000 ms
+по issue #11; JSON Schema и runtime-парсер отклоняют другие значения.
+Настройка lease сама по себе не доказывает fencing: атомарные проверки времени
+исполняются owning store по часам PostgreSQL. Durable schedule хранится в
+Orders, а process timer только будит проверку сохранённого `next_*_at`;
+restart не создаёт новое намерение и не теряет прежний pending intent.
+
 ## Бюджет replicas первого запуска
 
 Первый запуск использует `replicas: 1` для каждого из 15 deployable runtime.

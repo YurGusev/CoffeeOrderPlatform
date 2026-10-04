@@ -1,0 +1,1213 @@
+issue: 11
+baseCommit: e278aeb10e57d37485542f8668f078456074b038
+status: ready-for-review
+branch: feature/11-aroma-convergence
+scope: >-
+  Реализация #11 подготовлена к PR в develop; локальные gates PASS, совместимость consumer #9 проверена
+  отдельно; accepted delivery отсутствует
+inputs:
+  - issue: 10
+    acceptedMergeCommit: 4b2cad1dab30af66ad0b2fe64da280222e506574
+    artifact: evidence/handoffs/issue-10.yaml
+    sha256: 4d23f7ca941bbfbe3d02505a887d6750babfd04ed7ced7b398ccd46fdad67b37
+  - issue: 16
+    acceptedMergeCommit: 63be432f2a452d4159abc32183678ca91819c013
+    artifact: evidence/handoffs/issue-16.yaml
+    sha256: b3be754dcfa806bc4703682883b7be7e7c660dc8cb5fef9c8ec6a9e5d0547dc4
+  - issue: 18
+    acceptedMergeCommit: cd8cb2d8122622fd385b25944ebe9701f90f56e2
+    artifact: evidence/handoffs/issue-18.yaml
+    sha256: e91e59128844131e7011087bbdd9be3f315d48df1a38d76837d0f1e9186b31cb
+  - issue: 8
+    acceptedMergeCommit: e278aeb10e57d37485542f8668f078456074b038
+    artifact: evidence/handoffs/issue-8.yaml
+    sha256: 7d793e9ffaa5030ea941323d1fa525427c3ff2ed903108fc6b5b884802ead411
+  - issue: 63
+    acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+    artifact: evidence/handoffs/issue-63.yaml
+    sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+outputs:
+  - artifact: apps/api-internal/src/index.ts
+    sha256: 6dda95fd85764b27794c6faba73180eb576420088c21ba09e25019da3eed822a
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/package.json
+    sha256: 53963211033859f130d00b796e127ba5bf3db9610bb34402b94e148e44342359
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/src/application/messages.ts
+    sha256: 0805b55168dc700a728012d4c8992a413635b105ecb45f7b4fb744567c25c4f8
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/src/cart-plan.ts
+    sha256: 2e386eaf9e4f3d62f9cd2511bbc363d37b5ace2cd1987abb49eb7ec9dee20ff8
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/src/gateway-client.ts
+    sha256: ec6e3616711e6cd7c2a6e2b2b7f55dff4ba087d4fa2c1d412b7e8af047a44df4
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/src/infrastructure/convergence-store.ts
+    sha256: 58f1c180840a3f029301c5377d4c02c677300a536bc1a84771d55d4d3c56ff09
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/src/infrastructure/row-schemas.ts
+    sha256: a1f4289575ed7e4422d89b89d4ebfeec335deae19142d6410b760cffe5c3151f
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/src/main.ts
+    sha256: e95846573ff3683cbd3391b007a39cb714b5a89c57058813230d2e1969e2c693
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/src/observability.ts
+    sha256: f1c3c497ad19bae1767c1ea8d6c6e211aed454c7f4ba4563188cd9675220985e
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/src/runtime-composition.ts
+    sha256: faf27105ee9ec7ca8a69d9e19f3327fcb41a4a9caf92aaff7011c6c1e282c9b5
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-convergence/tsconfig.json
+    sha256: 97aacbf77023d26cc0b62374fbe6124b3fb0c9356bdc629749f52dfe8f1c1443
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-observer/package.json
+    sha256: 11fdd84ad6b241ccf8cb5409d0f6ee6eb46860a3b615c7368a337e6cb95bf046
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-observer/src/gateway-client.ts
+    sha256: 6e78df3e299a76b82c280e586cc6a2dc76f4657ae4302ff14ed8d26e427b5929
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-observer/src/infrastructure/observation-store.ts
+    sha256: 6ebaa9ef1a43c96c50944798aecc189744f0707b4dfb04c0a16cfa31f2e8e17d
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-observer/src/infrastructure/row-schemas.ts
+    sha256: 7a1fd883deb846ed25fa6cb83585256a092f89750061ee75df17ee5615e6f630
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-observer/src/main.ts
+    sha256: 7fb7b6cde77492b084909d0e8da08f9cd257d3f4bc39d3921ee650ba8a96f600
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-observer/src/observability.ts
+    sha256: c81e1ab23c47b9950a12bc086b0259d24051e830cafe660f9791156bc7f50884
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-observer/src/runtime-composition.ts
+    sha256: 7de8d6049c860c68c5ed01d6f03b6601f14949dcb05d1406711b6210ca7d21fb
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/aroma-observer/tsconfig.json
+    sha256: 52c7cfe2ef8db70d5e52ea60216ec7cf46d3a843ba1cc60a139695164551fb11
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/catalog-service/migrations/0009_active_snapshot_freshness.sql
+    sha256: b6ba5876213fdc5e12c20a51636d618ab1141e3f607357e9fc3d032910279c1e
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/catalog-service/src/application/search-catalog.ts
+    sha256: fee090b9916b8bf52c26b18b707922dbb0161a545b587e474b735d07d71ebc43
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/catalog-service/src/http/index.ts
+    sha256: 64ba48e9bbcba66b6220357cd0b91b74e8a50f89b1f545a64e3a4bfb551bf1e3
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/catalog-service/src/infrastructure/postgres/catalog-repository.ts
+    sha256: ac417b130557e1fdaef08a6632f3e605e1b64e861470ee0b3639e56964f138d2
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/catalog-service/src/infrastructure/postgres/catalog-store.ts
+    sha256: 88a2f35d2e50e519fe9bbac49e168ba9bca8c7b92b432237cb344d93329856a3
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/catalog-service/src/main.ts
+    sha256: 405b596a341c8beb1bc7688111f6dabb8cf4da35e562cefa3e7bf7f645d96134
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/package.json
+    sha256: 03ddbd40ee4f94f150b77873796ca9ad42f71f8d2b27fd32475f19cb2a751abb
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/src/application/messages.ts
+    sha256: accc0c28d528d058244f68fc832f863b9e66b44ea3a7d189ee116a5bd00fb6bc
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/src/domain/desired.ts
+    sha256: 55c4139ff3f87357b84251c20fb1c806eb8aadf7aefe255a3741b86fdf54a1bb
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/src/domain/projection.ts
+    sha256: f2d98f76132117ac33f5b04391985c72096df9a1359a13309303ae5e37d535dc
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/src/infrastructure/preparation-store.ts
+    sha256: 45250041acab5128ee40710c58462789438d24f69c9eb41eca9fa5e80e5588c1
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/src/infrastructure/row-schemas.ts
+    sha256: 8c76af4a4761811e3160164bd5bccf0be7a0d9d35b5343c1cf793fe4fb7ffa72
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/src/main.ts
+    sha256: efad959201325819878307eff1297b6ed1878b64e87d84294fef77f629245833
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/src/observability.ts
+    sha256: 877692ce226207d810cd3d469215addf510c136057adb022f2ceca0ba7b596b5
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/src/runtime-composition.ts
+    sha256: e3c74567ef0f31b13f753f9f5e736c212604b6d5366e47350b91126a20ec8c94
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-aroma-preparation/tsconfig.json
+    sha256: cf1013694e352416b02ac2f653e688c426148198f67953638a1544ad10bc0b50
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0007_order_grind_selection.sql
+    sha256: 7b6a84375b4e992c648efb13e05e69fd01877996b5e11385b67d3194f1843342
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0008_create_orders_inbox.sql
+    sha256: c9725fef54c6f50d24d408b0e2f91efdd2d2d983efba234d9d0467b9a5cb56b7
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0009_create_catalog_mapping_projection.sql
+    sha256: 8faea5289c243be4d0de018fcdc569b340ddf7c75fa94d326c4ab4e2a7750038
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0010_create_cart_desired.sql
+    sha256: c8f94964cde4c7e2c399e2a5517a82971d9b096d337d0e4c3cef061178ea655c
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0011_create_cart_observed.sql
+    sha256: f64794d629bfccfc3c1da4dae659049f1a5fea862415a2f98819dbc509c23678
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0012_create_convergence_attempts.sql
+    sha256: 65b683bb3975bb0db961aeb939e7c37fdf0ca4fcd35c6a5296d668609fcaae4b
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0013_create_convergence_leases.sql
+    sha256: 3836f65de3624e23d9473142bd0f39d0e98f9acb6f5a1c9477f09ba8d71969dc
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0014_create_mutation_reservations.sql
+    sha256: b6a121b9f92f093818aaba38d6cc80609926056ba282879f3b71ca5c31b27045
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0015_create_order_aroma_projections.sql
+    sha256: 3febcaa1f9fef906dfde2d3d8f7091773f85f5ebcedcbcdfbf673ecc7857f44c
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0016_create_aroma_work_schedules.sql
+    sha256: dc27630759dcf1b790468efa979a479999a45b5e60996f51573ef0d1a12cadf9
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0017_allow_cart_outbox.sql
+    sha256: 10f7c8f9fc0318b21f6e5150f6bbefc09937b662b06edef7d4a53946cebfc647
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0018_guard_order_card_projection.sql
+    sha256: e1e7360720cb711bf7297565de159a86ab18c995ca83594830df452f14754af6
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0019_read_guarded_aroma_card.sql
+    sha256: cf83f316cbc81533026dd3338e468319839ab7a5cecc3f82f012e7523001dec2
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0020_guard_cart_fact_batches.sql
+    sha256: ccef06b14cdc27122e2255f8af72b1255fffe4811af6179c67bf28420a28d25d
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0021_optimize_observed_format_checks.sql
+    sha256: 2d36f13d5f1260f238ec637e624ea6b53af566bdd71077a16f02d959e95cad94
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0022_terminal_cart_item_rejection.sql
+    sha256: e98318273a8a2b81b1bd60af90401a68d222966d45c07dade52dde6ee56411f9
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/migrations/0023_ascii_observed_identity.sql
+    sha256: 5db599c2fdd378029a66a32f34320987aac057cf537eddbf521c0ba5e1a0386b
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/src/application/upsert-item.ts
+    sha256: 3537360a52c2f6ccf46e4210e770fb36618edf0f53a975802a21e86ed9f81a61
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/src/domain/order-card.ts
+    sha256: 8679f67b27c9b0086227c90a35ec145793301db6fbce8f559a2cf8838c4edf79
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/src/domain/order-contribution.ts
+    sha256: ec58d68855e5483329f3bf46580e3653b3d0afbe862657cdc9eaff66ecb2d584
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/src/infrastructure/database/order-store.ts
+    sha256: 421c4bcbb6c69e39328a3960b9dffed66c0cd924197b41c03d80d51f39bc35c3
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/src/infrastructure/database/row-schemas.ts
+    sha256: 91a5f5968a35bc20653701e438dd11ca303188090d21fbcec6de705b6bd10bdc
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/src/infrastructure/pricing-client.ts
+    sha256: 90e596fe8b12331e54f59c3dc1ea761284a0bef28a226e0e4ae95986d9a8eec1
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/orders-service/src/main.ts
+    sha256: f8a8a7b36220071cdffcbaf6969da7dbfd610a5ac8ee10be30eda9ec7b37af5b
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/pricing-service/migrations/0005_quote_grind_selection.sql
+    sha256: bf9dc96380722d9ee7c95395eaf5ef5821ffc3d672b7ad15a2508b29a6d4cc44
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/pricing-service/src/application/create-pricing-quote.ts
+    sha256: a3c3f91de4a79a5714443da67994f08404b1f716e002f53911ea27dab5d68397
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/pricing-service/src/domain/quote-proof.ts
+    sha256: 9cd492251b05e7018b9273c87a929001c1603cbe36ae22098eab4ba7161f5d69
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/pricing-service/src/http/index.ts
+    sha256: 7f10e93621e9b852f45ac765bcd90bd9726fa8652522f1b6ec46039e4e738191
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/pricing-service/src/infrastructure/database/pricing-store.ts
+    sha256: cadee2cd4a5644f08aedf4c4f74a2eecc22ce61d15fc445a3cc7e52b2a1c1b59
+    consumers:
+      - 12
+      - 13
+  - artifact: config/platform.schema.json
+    sha256: e265dca2b3f99377616f801743b35d75068ed3970926a45db003a2d925ca7f55
+    consumers:
+      - 12
+      - 13
+  - artifact: config/platform.yaml
+    sha256: 7fe86520025c3dabe90cbb653eab7c018479de2806a056146971cf807c18fb40
+    consumers:
+      - 12
+      - 13
+  - artifact: config/service-catalog.json
+    sha256: 9e3bc426322b21f28d547494419dc414cff5b49fa57fbc1088fb1595e7bd27b8
+    consumers:
+      - 12
+      - 13
+  - artifact: config/service-interactions.json
+    sha256: 92121c24a45e8e695ee867b0d942b6b2d664a6de58342b8d8f66559cc69d3be4
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/compatibility-evidence.yaml
+    sha256: 1d628031a4229d83262ef14ad917614d7a29280a4e4cfb404400d10bb33c95e7
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: contracts/fixtures/positive/http/problems.json
+    sha256: 3a53684664b8abc87afbb8382687ec4b28b36aaf32e91d531463f27cd9f0f387
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: contracts/fixtures/positive/http/success.json
+    sha256: dd2a5527398e64477a3c1a2907d58c2e5bb62abc332e91bb86d1e5b5809df5aa
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: contracts/manifest.yaml
+    sha256: f87ce42f1947bdd10a8e1443e74fe2b15a99bcb4e286e977d66af8f392e54a46
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: 69b4ae3c7522abcb3e8a0927552507219bbab2b5bfd34bc0c28538384c921974
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: contracts/openapi/internal-v1.yaml
+    sha256: 5c3591e3273c81673a8eccbf247cee2f3c7897ee94fffbaab7644a0d180a4f23
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: docs/launch/04_AROMA_CART_SAFETY.md
+    sha256: a157b687c4e09e06825a7716a3790efc2d944dd189bfe824d8055fb94624141a
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: e14de8383da86fc96e8aa4c5143b4cbdda709415ba84ebb793a2a11826baf0c1
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/15_CATALOG_IMPLEMENTATION_SPEC.md
+    sha256: 836626d9d7d03ed3f83f074d29bd7816b5e116b884dd324b94c643da52799201
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md
+    sha256: 0a0758518718cb501cd04e42e5020a4d811f900a28455cafb9bd043a06344e12
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md
+    sha256: 74a0c2d8fa1a980914c4a61cee0d19f997683350c7a40f5df208b6031ef0206c
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md
+    sha256: 86c6d9d62c36ff47b8f41c9e39997d60fd00f46039832b0eb2356cafb988b07f
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: 585c55f4d6d34af5100e296f2b57fb13122ca4a164683bb4d088969575dc664f
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md
+    sha256: df9a556f428edefc824594239bd590aa63b94f5d04cdeafb5025caf539c2d60b
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: docs/launch/README.md
+    sha256: 9f2f69d3ee424fea96054bb03383ed1f7da15134f6d2cc4d90cc936250c893f8
+    consumers:
+      - 12
+      - 13
+  - artifact: evidence/issue-11-analysis.md
+    sha256: 1ec2e421765a0a82082d9bbb40d49e33a0c0ea9a722fe768df17e6a3003fbd64
+    consumers:
+      - 12
+      - 13
+  - artifact: evidence/issue-9-11-consumer.md
+    sha256: 2f1aaab7307182f9c32a018b84294e8ae0630c0c8cc93d527026a0c34688e47b
+    consumers:
+      - 12
+      - 13
+  - artifact: package.json
+    sha256: bd67ef4c1743a563982b686cdcf828270f63129fc46acc2f046981a1af58cb07
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: packages/contracts/aroma-v1/src/cart-snapshot.ts
+    sha256: 0b5b9a82a0f5e2d0cfa0dbbdf5d464a16d7f59e6acc2a5660fd76aa25abd2858
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/contracts/aroma-v1/src/index.ts
+    sha256: bbff8f298723e14aa104d00fef552f9098c5411a894b760ec64b70e514a334b0
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/contracts/catalog-v1/src/index.ts
+    sha256: ffb33ab3da83c134942ed80ab4a76b86307b102a603ae63aa64c6d4a641ea64c
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/contracts/pricing-v1/src/index.ts
+    sha256: 9ea10c0a3861694bbdef6e7221ac0e4afd3b59a928c6002cd96896d7fefaaf5c
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/client-v1/src/index.ts
+    sha256: aa46f5b86f8ead20442a47ca02dcc6c5f065b398805e30b1c9b35fa20b32e41d
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
+    sha256: b3fc8084009e55835e42cf1ba181bd34fb0e52b38b74df4e5c1ad1909aab0398
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: 7e1aabbed1355a2e37f97fa142c24495febcbf5323a386a59d19012e9e6cb42e
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: packages/generated/internal-v1/package.json
+    sha256: 3e83c9b473f37349aca80159a993522c6370146cd99375592239195414e7d8ef
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/internal-v1/src/message-schemas.gen.ts
+    sha256: 340cd3166f42741583271633d3d86e378f40cc063705e2ec3c96ed21c718d9de
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/internal-v1/src/runtime-schemas.gen.ts
+    sha256: c7017d05a3b4eb17436c2b3f8e44c5373fcac2517aeb360b3f3e7d3573e81368
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/internal-v1/src/types.gen.ts
+    sha256: ed4b6341338b92eea89124214fb97e5b6f3084b633eb1739f5ab58218940a58e
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-config/src/index.ts
+    sha256: 7e7b7187daf4adcaed1b48b5144db792abc13d563a145d42ec24f226c633db22
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-inbox/src/index.ts
+    sha256: 3d7d11f54bb5452abc1d58afc971b4ce32c57828559749c1d196d1cff72cf5b6
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-kafka-runtime/src/index.ts
+    sha256: b96357f65e2b1dab1d228cd887c251b28fea9909cd91e65be99a69e49ac548d9
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-outbox/src/index.ts
+    sha256: bc9de4ee66e528477e0f46f525efe58ec3f0d9f3e81a2feb91fd3d1ac48e4193
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-runtime/src/index.ts
+    sha256: 0e31719ac6924364336cedc5149b3d35b0a9f39bf10a6f98481d70dbcedb4640
+    consumers:
+      - 12
+      - 13
+  - artifact: pnpm-lock.yaml
+    sha256: dcd42d20cb12d67eb259aa80d37eb271a8b0602d7bf0581695bcff13d2aa2ab6
+    consumers:
+      - 9
+      - 12
+      - 13
+  - artifact: scripts/contracts-breaking.mjs
+    sha256: ec7fe114e91029de25905b9e1be41a8aa04bf2cf0c9e17adea7896b6bb5eccf7
+    consumers:
+      - 12
+      - 13
+  - artifact: scripts/contracts-generate.mjs
+    sha256: 5728c8ebdacbbc5ba8a3616637ce402dd5362b1868dc67c10b551883631d41d9
+    consumers:
+      - 12
+      - 13
+  - artifact: scripts/db-live-proof.mjs
+    sha256: a544914e396304a126fa74c2c017766715b90047854c24f7e14193404ecd0bb1
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/architecture/checks.test.mjs
+    sha256: 2c40e66e55ae2ffc10b0627ae0a13446efc6721af03f8f886ce3d09d034ca0e9
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/architecture/fixtures/invalid-generic-retry-wrapper/apps/aroma-gateway/src/retry.ts
+    sha256: 13d7d15d14b30d92e68d145750a213a7d993062a446687dd083865b9313f5fed
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/aroma/convergence-domain.test.mjs
+    sha256: 1b7e5efe191f2f0e34eab07f9562fccc03e54bc55ccef48c960b6c5e8f61b23c
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/aroma/convergence-live.test.mjs
+    sha256: 91cae465570109e882d1f8cccb0ec2534bcad7e0532bd6ba91edc7585734d989
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/aroma/observer-live.test.mjs
+    sha256: c5b3fbc03533c6672d5419c1223f3beda798a870b7bc7f555b7465fd00a8a61e
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/aroma/safe-read-http.test.mjs
+    sha256: bc3e367aa2d4fedcee94c592edfc557ada7baaa92b32a1c986dc4e76faab05ec
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/aroma/worker-gateway-client.test.mjs
+    sha256: 97a55ed72e84f74be279df19fd9e21c74f99a5597ec6b54560fa409f10132b60
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/catalog-pipeline/pipeline-live.test.mjs
+    sha256: fbf84a3296587e81072d9424d573067ff0ebade6c9afbbc497d027b528e2bef9
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/catalog-pipeline/publisher-live.test.mjs
+    sha256: d8bc3846547e49dec87a71a593cb270b9847021fb39688a944534ed721b53d1c
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/catalog-pipeline/recovery-live.test.mjs
+    sha256: 724a006028e2172d0326e1e4f9e49b9b9d0a3a4fafc27ae4e173ca605d0c9093
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/catalog/activation-crash-live.test.mjs
+    sha256: 847072e971321aaf09d9c4a0a30a66967c15b5a714fea19040698445eb701691
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/catalog/activation-live.test.mjs
+    sha256: 1e6f28c288781d87ffbddf0058386b79a10a591f088d13a65fac452da4e31c03
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/catalog/activation-migrations.test.mjs
+    sha256: 90b083967d39065a5851bf5eaead9533f2344517ab382f72c5e9c267bbd4d48e
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/catalog/catalog-owner.test.mjs
+    sha256: bc8e6f55f42e0f8b88b9753194ea0518a79beb75482c6b8ada6c09d275cc5624
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/catalog/catalog-root.test.mjs
+    sha256: 8da83adbd74a041c5dfdb294f246efdd9949614c80803ac0d816e470671836a5
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: 23015886ad44e4c8b7b72ad076069c4397bbb954012d72912a41aeff64946800
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/contracts/breaking.test.mjs
+    sha256: 3f870e9799264e76ab45c446b16e52a077e8f7f360bea33306ac8d0e379b0bbd
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/kafka/orders-inbox-live.test.mjs
+    sha256: c1f64acf65ccc2063e5f0f8c8b48f5d5a501ab0664ef5186a95aecce4ed9fb9f
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/aroma-preparation-live.test.mjs
+    sha256: fb0e760d1872a2f8b7917bea771f0720e68b63bbb2f7c4c307cc85b072944b6b
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/aroma-schema.test.mjs
+    sha256: 5e8f7b0e675c5281786a4989ee934aba2994cd660ca45a6bdd190d593f50335f
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/order-card.test.mjs
+    sha256: f2084a54592455f60efde6083e8bbb67ee80cc4d3306cfd18220616db3e061b4
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/order-contribution.test.mjs
+    sha256: 5ce55ea3a5508a531b8260d5dfa321447aeab843cb8d344e4b1c04460d56139f
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/order-store-faults.test.mjs
+    sha256: 1fd60b108018153a44593e3307d45321fd92aca5802570b39d0d6c78d4d92b9e
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/order-store.test.mjs
+    sha256: 09fd65fe3b2188592a244917abf193841a29991c9baf1de456789edf93a03d18
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/owner-live.test.mjs
+    sha256: 988e6267fe19b9636e3c2b4243087a8e8943b2346c87d217fe81b3fe4195c9cf
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/reconciliation-live.test.mjs
+    sha256: 96cf91e90a9bba2fae2c59a185d7d52f038e2352e79c0bda6d950137d2da67c3
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/orders/row-schemas.test.mjs
+    sha256: 0f823946c1bfb07973b76f9243e111449134b3c1d71429a85ef2d1f900babe51
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/pricing/create-pricing-quote.test.mjs
+    sha256: a8fa85fdc5475b94b573e30d7171c0e5b83646b66559eb203dc9df32349f1d32
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/pricing/pricing-recovery-live.test.mjs
+    sha256: a77e2f098ed71a5d1462d7201f59e862aac96891834eebef78aeab60256f0daf
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/pricing/pricing-store.test.mjs
+    sha256: fa03aafbe0f253b31738fb7516da75a499c2ec55c72979b5f070a6ce775b5ab2
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/pricing/quote-proof.test.mjs
+    sha256: d548138ba7426fa6d51780065b5d24ce33168c5c82c665dff997cf22ec210a53
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/runtime/lifecycle.test.mjs
+    sha256: 40e622e26b397672b3aab3bd27e5b134df0057bc8a40b5c0e3a2d5200ba7328c
+    consumers:
+      - 12
+      - 13
+  - artifact: tools/compose-smoke.mjs
+    sha256: 2f11b2c698de9376b9b5d805dd71cc12b972c8a4c0b531ec07147f6582217b69
+    consumers:
+      - 12
+      - 13
+verifiedSourceSubset:
+  sha256: 282f53393ecebd81bc5afda02e6f74be66bc10bbc9604713176126746d23e9ea
+  files:
+    - apps/aroma-convergence/src/application/messages.ts
+    - apps/aroma-convergence/src/cart-plan.ts
+    - apps/aroma-convergence/src/infrastructure/convergence-store.ts
+    - apps/aroma-convergence/src/runtime-composition.ts
+    - apps/aroma-observer/src/infrastructure/observation-store.ts
+    - apps/aroma-observer/src/runtime-composition.ts
+    - apps/catalog-service/src/http/index.ts
+    - apps/catalog-service/src/infrastructure/postgres/catalog-repository.ts
+    - apps/orders-aroma-preparation/src/infrastructure/preparation-store.ts
+    - apps/orders-aroma-preparation/src/runtime-composition.ts
+    - apps/orders-service/migrations/0023_ascii_observed_identity.sql
+    - apps/orders-service/src/infrastructure/database/order-store.ts
+    - config/platform.schema.json
+    - config/platform.yaml
+    - contracts/openapi/client-v1.yaml
+    - packages/contracts/aroma-v1/src/cart-snapshot.ts
+    - packages/generated/client-v1/src/runtime-schemas.gen.ts
+    - packages/generated/client-v1/src/types.gen.ts
+    - packages/platform-config/src/index.ts
+    - packages/platform-runtime/src/index.ts
+sourceFingerprint:
+  algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
+  sha256: 3b2c3dec7979c48ed6beb8b13733b7a9d8fbfad4064d7165b4f2ab6a67c48e93
+providerCallCounts:
+  proof: Controlled fake Gateway, не real provider; assertions in receipt047
+  noOp:
+    cartGet: 1
+    unsafe: 0
+  verifiedSetOrRemove:
+    cartGet: 2
+    unsafe: 1
+  definitive404:
+    cartGet: 1
+    unsafe: 1
+    verificationGet: 0
+  invalidCatalogProof:
+    cartGet: 1
+    catalogGet: 1
+    unsafe: 0
+failureMatrix:
+  initialOrPartialGet: Сохраняется последнее complete Observed, mutation отсутствует
+  beforeAfterDurableCommit: >-
+    Attempt/initial Observed/reservation/dispatch/ACK/verification+terminal+Outbox: restart не повторяет
+    прежний operationRef
+  unknownMutationOutcome: >-
+    Сначала barrier expiry и свежий GET; Applied -> reconcile-only; NotApplied допускает только новый
+    operationRef после разрешения старого; drift блокируется
+  httpCapacity: >-
+    Оба настоящих HTTP clients принимают full10000 selected-grindlines+fingerprint; validJSON2MiB+1
+    отвергается
+  ownershipLost: Fake10s heartbeat/30s DB lease; abort heldGET; stale fence не пишет ACK/success
+  definitive404: >-
+    Только Rejected/status404/AROMA_CART_ITEM_NOT_FOUND -> terminal reservationRejected и Blocked, без
+    verification GET
+  catalogProof: >-
+    HTTP вне transaction; увеличение требует exact fresh owner proof; decline/remove используют прежний key и
+    freshGET
+  ownerCounters: >-
+    Observation owner_version и aggregate.version равны observedRevision; transport sequence независима.
+    Версия command intent независима от Desired. Actual Kafka/Inbox Processed без quarantine и payload Desired
+    provenance проверены 083/084
+verification:
+  - command: >-
+      pnpm contracts:generate && pnpm contracts:lint && pnpm contracts:breaking && pnpm
+      contracts:check-generated && pnpm contracts:test
+    result: passed
+    detail: '035–039: contracts 48/48, 0 skipped'
+  - command: pnpm typecheck && pnpm lint && pnpm architecture:check && pnpm config:check
+    result: passed
+    detail: '040–044; последующие правки: fixture revision и документация'
+  - command: >-
+      node --test tests/config/platform-config.test.mjs tests/orders/row-schemas.test.mjs
+      tests/aroma/worker-gateway-client.test.mjs tests/catalog/catalog-root.test.mjs
+      tests/catalog/catalog-owner.test.mjs
+    result: passed
+    detail: '043: 54/54, 0 skipped'
+  - command: pnpm test:aroma-preparation
+    result: passed
+    detail: '046: 67/67, 0 skipped; 100 contributions/10000 lines/100 cards 1851.95ms <=2000; same-hash748ms'
+  - command: pnpm test:pricing-integration
+    result: passed
+    detail: '048: 51/51, 0 skipped'
+  - command: pnpm test:catalog-activation-live
+    result: passed
+    detail: '049: 26/26, 0 skipped; active freshness view, grants, upgrade'
+  - command: COFFEE_DB_LIVE_PROOF=1 node --test tests/orders/owner-live.test.mjs
+    result: passed
+    detail: '050: 4/4, 0 skipped; перед запуском tsc'
+  - command: pnpm test:orders-faults
+    result: passed
+    detail: '030: 5/5, 0 skipped'
+  - command: pnpm test:aroma-recovery
+    result: failed
+    detail: >-
+      028: 175/179, 0 skipped; capacity685.29ms >500; observer TRANSACTION_OUTCOME_UNKNOWN. 029 observer
+      parent25/25 проходит; полный suite не объявлен PASS
+  - command: pnpm test:aroma-capacity
+    result: failed
+    detail: >-
+      045: local676.43ms >500, total687.71/provider11.28,10000lines/1000wakes/1workrow/peak1. Новый proof
+      fixture конфликтовал с equal revision; исправлен, child PASS в047
+  - command: >-
+      COFFEE_DB_LIVE_PROOF=1 node --test --test-reporter=tap --test-name-pattern='convergence owner-role
+      PostgreSQL|positive mutation needs fresh Catalog proof' tests/aroma/convergence-live.test.mjs
+    result: failed
+    detail: >-
+      047: regex включил весь parent: 70/72, все функциональные children PASS; capacity1197.77ms >500. Порог и
+      нагрузка не менялись
+  - command: pnpm db:smoke
+    result: passed-offline
+    detail: Первоначальный структурный SQL proof 50 assertions; не live deployment/CONNECT proof
+  - command: pnpm test:compose-smoke -- --recovery-proof
+    result: failed
+    detail: >-
+      051: build прошёл, all-healthy startup не достигнут; Prep unhealthy, recovery assertions не запускались.
+      First edge image pre-response-bound; source-consistent proof не получен
+  - command: git diff --check
+    result: passed
+    detail: Текущий локальный diff
+  - command: >-
+      pnpm test:compose-smoke -- --recovery-proof --no-build --keep --project-name
+      coffee-compose-smoke-2123017-35933c79
+    result: failed
+    detail: >-
+      060/061: Prep/Convergence restart fail-stop, KafkaRuntimeError при stop без initial code; Observer
+      running readiness503; PG healthy/Customer ready200. Exact owned project/proofDB/tmpfs/networks cleanup
+      verified; real provider/prod отсутствуют
+  - command: node --check tools/compose-smoke.mjs
+    result: passed
+    detail: Последние bootstrap+volume guard+existing empty-cart fixture changes; синтаксис runner
+  - command: pnpm lint
+    result: passed
+    detail: 066 после последнего fixture/guard изменения
+  - command: >-
+      node tools/compose-smoke.mjs -- --recovery-proof --no-build --project-name
+      coffee-compose-smoke-2123017-35933c79
+    result: expected-refusal
+    detail: >-
+      065: existing exact Kafka volume отклонён до provisioning/offset reset; negative guard proof;069:
+      pre/post 17 container IDs и 7 network IDs совпали, volume сохранён, новых ресурсов нет; затем owned
+      cleanup verified
+  - command: >-
+      pnpm test:compose-smoke -- --recovery-proof --no-build --keep --project-name
+      coffee-compose-smoke-2123017-35933c79
+    result: failed
+    detail: >-
+      063/064 после stagedbootstrap: Prep/Convergence healthy; Observer running503
+      fromProviderCartMappingMissing,bindingcount0; InternalApi ready200. Recovery fakecart
+      nowexistingemptyfixture, повтор ожидается
+  - command: >-
+      node tools/docker-build.mjs --build-arg RUNTIME=edge-gateway --target runtime --load -t
+      coffee-compose-smoke-2123017-35933c79-edge-gateway:latest /home/yurgusev/CoffeeOrderPlatform-issue-11
+    result: passed
+    detail: >-
+      067: only ранний edge image rebuilt;14/14 config/runtime modules/app-dist parity в068; не full recovery
+      receipt
+  - command: pnpm exec tsc -b --pretty false
+    result: passed
+    detail: 052 после response bound изменения
+  - command: pnpm config:check
+    result: passed
+    detail: 053 после response bound изменения
+  - command: node --test tests/config/platform-config.test.mjs
+    result: passed
+    detail: '059: 24/24'
+  - command: >-
+      node --test tests/aroma/worker-gateway-client.test.mjs tests/aroma/safe-read-http.test.mjs
+      tests/runtime/lifecycle.test.mjs
+    result: failed
+    detail: >-
+      054: 49/50; все HTTP clients/safe-read PASS, lifecycle direct transitive import не разрешился. Исправлен
+      canonical nowInstant test path; отдельный повтор057 PASS
+  - command: node --test tests/runtime/lifecycle.test.mjs
+    result: passed
+    detail: 057:31/31 после исправления test-only import
+  - command: pnpm lint
+    result: passed
+    detail: 058 после финального test-only исправления
+  - command: pnpm architecture:check
+    result: passed
+    detail: 056 после owning response bound изменения
+  - command: >-
+      pnpm test:compose-smoke -- --recovery-proof --no-build --keep --project-name
+      coffee-compose-smoke-2123017-35933c79
+    result: protocol-passed-readiness-failed
+    detail: >-
+      070: fresh volume protocol assertions passed, post-run Observer readiness503/live200/metrics200. 071:
+      all14runtime exit0, Kafka requestedTERM143, exactownedcleanup verified; sharednetwork preserved
+  - command: node --test tests/runtime/lifecycle.test.mjs && pnpm lint
+    result: passed
+    detail: '072/073: lifecycle31/31; typed Observer failure code/filteredSQLSTATE, no rawdatabaseerror output'
+  - command: pnpm exec tsc -b --pretty false && pnpm architecture:check
+    result: passed
+    detail: Root checks after typed Observer diagnosis logging
+  - command: >-
+      node tools/docker-build.mjs --build-arg RUNTIME=aroma-observer --target runtime --load -t
+      coffee-compose-smoke-2123017-35933c79-aroma-observer:latest /home/yurgusev/CoffeeOrderPlatform-issue-11
+    result: passed
+    detail: '074: onlyObserver rebuilt with typed logging'
+  - command: >-
+      pnpm test:compose-smoke -- --recovery-proof --no-build --keep --project-name
+      coffee-compose-smoke-2123017-35933c79
+    result: protocol-passed-readiness-failed
+    detail: >-
+      075/076: fresh recovery protocol assertions passed; Observer503, DB_QUERY_FAILED SQLSTATE23505.
+      Scopedread-only DB diagnostic confirmed unique(message_type,aggregate_ref,owner_version),
+      ObservationownerVersion41/observedRevision40/transportsequence41
+  - command: >-
+      COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 --test-skip-pattern='capacity:'
+      tests/aroma/convergence-live.test.mjs
+    result: passed-functional-capacity-filtered
+    detail: >-
+      081:72PASS/0FAIL, sharedObserver/Convergence regression PASS. NodeTAP skipped0, but
+      capacitychildfiltered and workloadnotrun; не acceptance capacity/fullsuite
+  - command: pnpm exec tsc -b apps/aroma-convergence apps/aroma-observer --pretty false
+    result: passed
+    detail: >-
+      Worker after Observation ownerVersion fix; initialfixtureCONNECT corrected. Aborted
+      parent-name-filterruns не suitePASS
+  - command: exact 075 project stop/down and proof DB/network/tmpfs cleanup
+    result: passed
+    detail: >-
+      080:all14runtimeexit0;Kafka requestedTERM143;projectresources0,sharednetwork preserved. Immutable
+      conflicting proof data not rewritten
+  - command: pnpm lint
+    result: passed
+    detail: 082 after Observation ownerVersion correction
+  - command: >-
+      COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 --test-skip-pattern='capacity:'
+      tests/aroma/convergence-live.test.mjs
+    result: passed-functional-capacity-filtered
+    detail: >-
+      083:73PASS/0FAIL. Actual processKafkaRecord/SQLInbox/handleWake seq!=Desired
+      processed,noquarantine,currentDBguard,terminal correlation/causation PASS; capacitynotrun
+  - command: pnpm test:aroma-preparation
+    result: passed
+    detail: >-
+      084:67/67 no skips; repeated realemittedOperatorRequested unchangedDesired afterobservation
+      streamadvance strictdecoder/Processed/noquarantine PASS.
+      Fullcapacity1907.09ms<=2000,100contributions/10000lines/100cards,0blockers,samehash710.34ms
+  - command: pnpm lint
+    result: passed
+    detail: 085 after I11-REV-005 consumer/provenance correction
+  - command: >-
+      node tools/docker-build.mjs --build-arg RUNTIME=aroma-convergence --target runtime --load -t
+      coffee-compose-smoke-2123017-35933c79-aroma-convergence:latest
+      /home/yurgusev/CoffeeOrderPlatform-issue-11
+    result: passed
+    detail: >-
+      086:onlyConvergenceimage rebuilt aftercounter+consumerfix;087
+      currentplatformconfig/compiledconfig/runtime/appdist4/4hashparity.
+      Sourcechainprior06814/14+074Observerrebuild
+  - command: >-
+      pnpm test:compose-smoke -- --recovery-proof --no-build --keep --project-name
+      coffee-compose-smoke-2123017-35933c79
+    result: failed-final-readiness
+    detail: >-
+      088 current Convergence image: Kafka retention завершён,17 services healthy; Preparation readiness
+      checkpoint900ms timeout ДО native foundation/OutboxACK/paused-broker assertions. Полного protocolPASS
+      нет. Observer ready/live/metrics200, noDB23505. 089/090:4ownerKafka groupsStable/assigned/lag0;
+      Preparation diagnostic3s probes503/1042ms,200/561ms,200/1008ms. Extendeddeadline не acceptance
+  - command: node --check tools/compose-smoke.mjs && pnpm lint
+    result: passed
+    detail: >-
+      091 after smoke-only reuse existing10s readiness polling; actual200 required, probeexceptions0
+      retainedcause; live/metrics/nginx checks remain. Independent review no findings; productionbudgets
+      unchanged
+  - command: exact 088 project stop/down and proof DB/network/tmpfs cleanup
+    result: passed
+    detail: >-
+      094:14 runtime exit0; Kafka requestedTERM143/OOMfalse; project resources0, shared coffee_postgres_data
+      сохранена
+  - command: >-
+      pnpm test:compose-smoke -- --recovery-proof --no-build --keep --project-name
+      coffee-compose-smoke-2123017-35933c79
+    result: passed-synthetic-protocol
+    detail: >-
+      095:full JSON exit0, Kafka retainedrecord afterrecreate;5DB/10roles/idempotent migrations;
+      nativeordered/rebalance/quarantine/SIGTERM/Outbox/paused-broker recovery PASS; localfake
+      login1/catalog1/cart14/post0/put0/delete0; no stub secrets, no realprovider. Post-protocol096 all14
+      live/ready/metrics200, observer noDB23505;099 exact cleanup verified
+  - command: post-protocol mTLS bounded health checks + structured failure-log filter
+    result: passed-eventual-readiness
+    detail: >-
+      096:all14runtime live/ready/metrics200 onfirstattempt, Prep776ms;all17containershealthy.
+      ObserverDB/relay/readiness failures0,23505=0. Prep7Kafka readiness warnings+1genericDBerror;
+      causeunknown, notclaimedfixed; no sustainedavailability proof
+  - command: exact 095 project stop/down and proof DB/network/tmpfs cleanup
+    result: passed
+    detail: >-
+      099:14runtimeexit0;Kafka requestedTERM143/OOMfalse;projectresources0; proofDB/tmpfs/override deleted,
+      shared coffee_postgres_data preserved
+  - command: pnpm typecheck && node --test tests/runtime/lifecycle.test.mjs
+    result: passed
+    detail: >-
+      101/102: typecheck0, lifecycle31/31; Preparation typedstage/code/filteredSQLSTATE and
+      readinessdeadlinecode, budgets unchanged
+  - command: COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 tests/orders/aroma-schema.test.mjs
+    result: passed
+    detail: >-
+      120:40/40; 0023ObservedASCIIcollation, exactcorpus/constraints/guards/upgrade;
+      117initialfixtureFAILretained
+  - command: pnpm test:aroma-capacity
+    result: failed
+    detail: >-
+      118:Ccollation+one-shotSHA+linearmin
+      candidate;72PASS3FAIL,Convergence581.169798>500,Preparation2064.250401>2000. 122phase536.022>500;
+      fullrecovery119notrun
+  - command: pnpm install --frozen-lockfile && pnpm contracts:generate && pnpm contracts:check-generated
+    result: passed-local-integration
+    detail: >-
+      105–107:separatemanagedcheckout #9HEADadfca3+backend#11delta;42projects,byte-identicalgeneratedcheck;
+      primaryuserworkpreserved
+  - command: pnpm test:web-queries && pnpm test:web-idempotency && pnpm test:web-routes
+    result: passed-local-consumer-proof
+    detail: >-
+      110:15/15query/schema;114:6/6idempotency+browser;126:routes/browser/buildPASS;
+      I9-11REV001closedindependentreview. Historical108/109/113/121/124FAILretained. Sourcehashes/inputs in
+      evidence/issue-9-11-consumer.md
+  - command: >-
+      pnpm config:check && node --test tests/config/platform-config.test.mjs && pnpm
+      test:catalog-activation-live
+    result: passed
+    detail: >-
+      132/133:referenceCatalog7200000ownerapproved4Oct,config24/24,activation/freshness26/26,typecheck0;missingfieldexplicitfailclosed
+  - command: pnpm test:aroma-capacity
+    result: passed-local-candidate
+    detail: >-
+      134:76/76 no skips; local424.583453/provider10.280494/total434.863947ms,
+      10000lines/1000wakes/1workrow/peak1; Prep1998.981045ms/100contributions/100cards/0blockers. Current full
+      gate137 RED, not final acceptance
+  - command: pnpm contracts:generate && pnpm contracts:check-generated
+    result: passed-local-integration
+    detail: >-
+      135: managed #9+#11; authoritative client OpenAPI/types bytes unchanged, generated
+      fingerprint2dc10a161cc7cf86492edb6ebcfaa3915e69152a3f2f34d00cfff5220639a6ff
+  - command: pnpm test:aroma-recovery
+    result: failed
+    detail: >-
+      136:181/183, sole fake-clock child30000.001 vs30000ms; Convergence418.330831/Prep1883.290786ms PASS.
+      MATERIALIZED oneDBclock fix followed
+  - command: pnpm test:aroma-recovery
+    result: failed
+    detail: >-
+      137:180/183, local508.128842>500ms and before-verification terminal seam; Prep1965.766340ms PASS; exact
+      clock test PASS. Named138/139 notrun
+  - command: diagnostic nested selection / parent regex / isolated tests / profile
+    result: partial-diagnostic
+    detail: >-
+      140a/b no nested tests;140c capacity441.061ms then fake-clock180s timeout; root cause heartbeat UPDATE
+      precedes COMMIT/next timer; explicit recursive registration barrier isolated87ms PASS. Seam
+      isolated1.234s PASS, 137cause not reproduced.141profile normalize131.64ms/COPY290.22ms/equality15.98ms;
+      temporary instrumentation removed, store58f1 restored
+  - command: >-
+      pnpm contracts:lint && pnpm contracts:breaking && pnpm contracts:test && pnpm versions:check && pnpm
+      architecture:check && pnpm db:smoke
+    result: passed-local-integration
+    detail: >-
+      142:all6 PASS; contracts48/48, exactNode26.8.1/TS7.0.2; dbsmoke structural
+      only/liveDatabasefalse/realKafkafalse; current immutable contract inputs135
+  - command: controlled sanitized_line_hash C-collation probe + existing full schema suite
+    result: passed-candidate-parity
+    detail: >-
+      143/F41-F42:3345ownerassignments/1112063UTF8scalars parity,40/40 schema clean/populated forward;3 C
+      columns in unpublished0023. Temporary phase counters removed/forced clean build
+  - command: pnpm test:aroma-recovery
+    result: passed
+    detail: >-
+      144:183/183,0skip; local433.641ms/provider10.444/total444.085; Prep1857.720/samehash724.713; all fault
+      seams/exactfakeclock/lostCOMMIT PASS
+  - command: pnpm test:aroma-convergence
+    result: failed
+    detail: >-
+      145:91/93,solecapacitychild892.607218ms>500;workload10000lines/1000wakes/1workrow/peak1;causeunknown,nextboundedCPU/SQL/waitcapture.144PASSdoesnotclosegate
+  - command: pnpm test:aroma-projections
+    result: failed-then-passed-after-contract-fix
+    detail: >-
+      146:112/113 missing public stable AROMA_CART_ITEM_NOT_FOUND;154
+      nativegen;155typecheck/Card10/10;156fullprojections113/113PASS. AdditiveexistingBlockedreason;
+      primary9untouched
+  - command: pnpm test:aroma-preparation && pnpm test:aroma-observer
+    result: passed
+    detail: >-
+      147:67/67 Prep1880.348/samehash714.213ms;148:40/40
+      ObserverlostCOMMIT/freshness/fence/ownerrolePASS;0skips
+  - command: >-
+      pnpm lint && pnpm contracts:lint && pnpm contracts:breaking && pnpm contracts:test && pnpm
+      contracts:check-generated && pnpm config:check
+    result: passed
+    detail: >-
+      150afterfix
+      testrejectioncallback:allPASS,48contracttests,generated260e58a4f5db7bae8178d2d60b32abbfdffec0d556d128606458ad7b3c2dadb1,15runtimes;old150lintFAILretained
+  - command: pnpm test:web-accessibility && pnpm test:playwright
+    result: accessibility-passed-browser-failed
+    detail: >-
+      151accessibility/buildPASS;152browserFAIL30stimeout CSRFchangeDuringIntentPreparation
+      expectedТребуетсявход,line698;causeunderinvestigation;153bundleNOTRUN. Independent enum/test delta
+      review nofindings
+  - command: pnpm test:web-idempotency && pnpm test:playwright && pnpm test:web-bundle && pnpm lint
+    result: passed-local-consumer-proof
+    detail: >-
+      1586/6+browsergroup;159fullbrowserPASS;153bundle139524B/256000;160lintPASS;I9-11REV002testonlyinvalidationoraclefixclosedreview.
+      CurrentUI7FP98bb2c30774b3e2480caebbd19c21a26996fda7a044b9cbbcc7c995e72c5e232
+  - command: single bounded capacity CPU/SQL/wait diagnostic
+    result: partial-diagnostic
+    detail: >-
+      157local450.598967ms/COPY264.234/sql349.594/CPU168.031;145spikenotreproduced/causeunknown;temporaryselector/timers
+      exactrestoretest91cae465+forcebuildPASS;notfullnamedgate
+  - command: START_PROOF=YES fresh full-build Compose recovery script
+    result: failed-before-build-runtime
+    detail: >-
+      161plainQueryreadtimeout in direct proofDBbootstrap/migration
+      afterreadyloopbeforebuild.162windowNOTRUN,163exactownedresiduechecksPASS/noexitOOMsnapshotavailable;sharednetworkpreserved;nextstagecapturepending
+  - command: pnpm test:aroma-convergence && pnpm test:aroma-capacity && pnpm test:aroma-recovery
+    result: passed-local-final-business-proof
+    detail: >-
+      16493/93local456.387ms;16576/76local439.868/Prep1887.330;166183/183local449.080/provider11.051/total460.131/Prep1858.619ms.
+      AllnoSkip,noCancel,embeddedtscPASS;allfaults/exactfakeclock/lostCOMMIT/ownerrolesPASS. Workload/guards
+      unchanged
+  - command: START_PROOF=YES /tmp/coffee-issue11-fresh-recovery-proof.sh [flock; fresh project; full build]
+    result: passed-local-synthetic-recovery
+    detail: >-
+      167: observed runnerexit0,14runtimes/fullbuild/dbIntegrationProof; Kafka retainedrecord afterrecreate
+      and native ordered/rebalance/quarantine/SIGTERM/DB-before-offset/OutboxACK/pausedbroker recovery PASS.
+      Fakeproviderlogin1/catalog1/cart13/post0/put0/delete0; no realprovider/production
+  - command: 7 rounds of scoped mTLS /health/live /health/ready /metrics on 14 runtimes
+    result: passed-bounded-post-protocol-health
+    detail: >-
+      168:98runtime rows/294HTTP200,17/17healthy eachround;timestamps06:32:06–06:33:42UTC,10spause
+      plusactualprobe execution. CapturedPrepDBfailures0/readiness14RUNTIME_READINESS_DEADLINE
+      dependencykafka;windowflaps0. Temporalphasecounts10recreateneighborhood/2pause/2Prepstartup; causal
+      attribution notclaimed; historical096DBUNKNOWN
+  - command: exact project stop/down/proof DB/network/tmpfs cleanup; exact temporary runner restore
+    result: passed
+    detail: >-
+      169:14finalruntimeexit0/Kafka143,15OOMfalse; exact resourcesabsent/sharednetworkunchanged.
+      Rootindependent containers/networks0,proofPG/Kafkavolume/overrideabsent;
+      restoredrunnerSHA2f11b2c698de9376b9b5d805dd71cc12b972c8a4c0b531ec07147f6582217b69,syntax/diffPASS.
+      EarlierPrep2die/start cause/exit/OOMunknown; finalstatesnotretroactiveproof
+limitations:
+  - >-
+    Convergence final164/165/166 PASS456.387/439.868/449.080ms<=500. Historical145892.607218ms spike
+    causeunknown;157notreproduced. Localproof
+    notunboundedSLO/remoteCI;FK,Current/xmin,fence,hashes,cardinality/threshold unchanged.
+  - >-
+    catalogSnapshotProof.maxAgeMs=7200000 утверждён владельцем4окт и задан в referenceYAML. При явном
+    отсутствии fail-closed сохраняется; 132configcheck/24tests и133Catalogactivation/freshness26tests PASS.
+    mutationsEnabled остаётсяfalse.
+  - >-
+    Consumer #9 managedlocalintegration
+    PASS150contracts/151accessibility/158idempotency/159fullbrowser/153bundle/160lint;existingCSRFfixtureoracle
+    I9-11REV002closedreview. UI paths #11 andprimary9 untouched;remoteacceptance/CI/merge absent. Current
+    inputs/hashes evidence/issue-9-11-consumer.md.
+  - >-
+    Final166 recovery183/183 PASS и167freshfullbuildsyntheticprotocol
+    PASS;168294mTLS200/17healthy/7rounds,169exactcleanupPASS. Captured14readiness deadlines
+    Kafka:10near-recreate/2pause/2Prepafterrestart, causal reasonunknown. Prep2earlydie/start
+    earlierexit/OOMunknown; final15stateschecked. Historical096genericDBUNKNOWN;Новый DB failure не
+    воспроизведён. Boundedwindow is not productionavailabilitySLO.
+  - >-
+    Recovery-only runner bootstrap создаёт configured topics/DLQ и начальные durable offsets до consumers;
+    guard отклоняет existing volume. Empty recovery cart использует existing fixture при empty Catalog export;
+    cart mutation proof unchanged. Никаких real provider/production данных.
+  - >-
+    Новый Observer revision инвалидирует terminal proof; unchanged Desired сам по себе не создаёт automatic
+    wake, policy не задаётся заново.
+  - >-
+    Commit/push/PR разрешены владельцем 4 октября 2026. Статус ready-for-review подтверждает локальные gates;
+    GitHub CI, review, accepted merge, deployment и реальные provider/production mutations не подтверждены. UI
+    delta #9 остаётся отдельным delivery.
+  - >-
+    Raw receipts в /tmp/coffee-issue11-final-checks доступны только локально. Публикуемые
+    evidence/issue-11-analysis.md и evidence/issue-9-11-consumer.md содержат команды, результаты, hashes и
+    ограничения; raw logs не входят в PR.

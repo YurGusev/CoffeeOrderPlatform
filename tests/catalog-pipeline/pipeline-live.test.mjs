@@ -53,7 +53,7 @@ function ndjsonSource(recordsOrBytes) {
   return readNdjson(Readable.from(chunks,{highWaterMark:1}));
 }
 async function migrate(adminClient) {
-  for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants","0008_catalog_active_read"])
+  for (const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants","0008_catalog_active_read","0009_active_snapshot_freshness"])
     await adminClient.query(await readFile(resolve("apps/catalog-service/migrations",`${name}.sql`),"utf8"));
 }
 function binding(request) {

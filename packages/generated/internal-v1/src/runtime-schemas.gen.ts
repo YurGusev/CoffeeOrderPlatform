@@ -714,6 +714,10 @@ export const internalV1Schemas = {
       "quantity": {
         "type": "string",
         "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
+      },
+      "sourceGrindKeyHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
       }
     }
   },
@@ -762,6 +766,14 @@ export const internalV1Schemas = {
       "line": {
         "type": "object",
         "additionalProperties": false,
+        "dependentRequired": {
+          "sourceGrindKeyHash": [
+            "grindDisplayName"
+          ],
+          "grindDisplayName": [
+            "sourceGrindKeyHash"
+          ]
+        },
         "required": [
           "lineNumber",
           "productRef",
@@ -835,6 +847,15 @@ export const internalV1Schemas = {
           "internalProofHash": {
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceGrindKeyHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "grindDisplayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
           }
         }
       }

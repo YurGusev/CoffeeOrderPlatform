@@ -755,7 +755,7 @@ void test("RED ARCH-GENERIC-RETRY: generic retry dependency is forbidden", () =>
   assert.match(output(result), /ARCH-GENERIC-RETRY/);
 });
 
-void test("RED ARCH-GENERIC-RETRY: generic retry wrapper is forbidden", () => {
+void test("RED ARCH-GENERIC-RETRY: unsafe provider mutation cannot use a generic retry wrapper", () => {
   const result = run("check-architecture.mjs", join(FIXTURES, "invalid-generic-retry-wrapper"));
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-GENERIC-RETRY/);

@@ -62,6 +62,10 @@ export type CatalogPricingInput = {
   availability: 'Available' | 'Unavailable' | 'Stopped';
   mappingRevision: IdentifiersV1SchemaVersion;
   displayName: string;
+  grindOptions?: Array<{
+    sourceGrindKeyHash: HashSha256;
+    displayName: string;
+  }>;
 };
 
 export type PricingQuoteVerifyRequest = {
@@ -72,6 +76,7 @@ export type PricingQuoteVerifyRequest = {
   productRef: IdentifiersV1SchemaProductRef;
   variantRef: IdentifiersV1SchemaVariantRef;
   quantity: MoneyVersionTimeV1SchemaQuantityDecimal;
+  sourceGrindKeyHash?: HashSha256;
 };
 
 export type PricingQuoteAuthoritativeLine = {
@@ -88,6 +93,8 @@ export type PricingQuoteAuthoritativeLine = {
   lineTotalMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   currency: MoneyVersionTimeV1SchemaCurrency;
   internalProofHash: HashSha256;
+  sourceGrindKeyHash?: HashSha256;
+  grindDisplayName?: string;
 };
 
 export type PricingQuoteVerificationResponse = {

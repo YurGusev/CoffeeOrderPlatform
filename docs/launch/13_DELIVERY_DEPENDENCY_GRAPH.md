@@ -143,10 +143,15 @@ collector.
 | #161 | #159, #137 | native nginx image/static/transport fixture → #162, #9, #64 |
 | #162 | #160, #161 | один active cutover/removal old transport, trust/config/rollback evidence → #9, #12, #64, #13 |
 | #9 | #4, #5, #7, #8, #17, #18, #119, #137, #162 | один `QueryClient`, project-owned fetch/client-v1 runtime validation + React operator flow → #12, #13 |
-| #11 | #10, #16, #18, #8, #63 | observer/convergence/UnknownOutcome → #12, #13 |
+| #11 | #10, #16, #18, #8, #63 | этап A: backend grind contract → integration gate #9; этап B: observer/convergence/UnknownOutcome → #12, #13 |
 | #12 | #8, #9, #11, #63, #119, #160, #162 | single-instance SSE invalidation/refetch → #64, #13 |
 | #64 | #4, #61, #62, #63, #12, #162 | Pino/OTel + native applicability, Collector/OpenObserve, alerts/storage/redaction → G14 #13 |
 | #13 | все outputs выше, #119, #162 | verified release evidence → закрытие #1 |
+
+Для #9/#11 действует [контракт параллельной разработки](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md):
+полный #11 не блокирует старт #9; этап A #11 поставляет общий контракт помола
+для интеграционной приёмки соответствующего browser flow. Это частичный
+handoff, не циклическая зависимость между задачами.
 
 При выполнении #18 отдельно приняты owner-исправления #153 (конкурентный
 PostgreSQL checkout) и #155 (сборка clean clone до contract tests). Их

@@ -20,7 +20,9 @@ export type CatalogSearchRow = Readonly<{
   supplierUnitMinor: string | null;
   currency: string | null;
   mappingRevision: string | null;
+  grindOptions?: unknown;
 }>;
+export type CatalogPricingInputRow = CatalogSearchRow & Readonly<{snapshotFresh: boolean}>;
 export type CatalogPageStore = Readonly<{
   search: (input: Readonly<{query: string; availability: CatalogAvailability | null; after: CatalogCursorPosition | null; limit: number; signal?: AbortSignal; correlationId?: string}>) => Promise<Readonly<{snapshotRevision: string | null; cursorValid: boolean; rows: readonly CatalogSearchRow[]}>>;
 }>;
@@ -83,7 +85,23 @@ function validRow(row: CatalogSearchRow): row is CatalogSearchRow & Readonly<{pr
     ["piece", "gram", "kilogram"].includes(row.unit ?? "") && ["Available", "Unavailable", "Stopped"].includes(row.availability ?? "") && typeof row.mappingAvailable === "boolean";
 }
 
-export async function searchCatalog(store: CatalogPageStore, input: Readonly<{query: string; availability?: CatalogAvailability; limit?: number; cursor?: string; signal?: AbortSignal; correlationId?: string}>, signer: CatalogCursorSigner): Promise<Readonly<{snapshotRevision: string; items: readonly Readonly<{productRef: string; variantRef: string; displayName: string; unit: "piece" | "gram" | "kilogram"; availability: CatalogAvailability; mappingAvailable: boolean; imageUrl?: string | null}>[]; nextCursor: string | null}>> {
+export function validatedGrindOptions(value: unknown): readonly Readonly<{sourceGrindKeyHash: string; displayName: string}>[] | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 100) throw new CatalogOwnerError("CATALOG_UNAVAILABLE");
+  const seen = new Set<string>();
+  return value.map((entry: unknown) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) throw new CatalogOwnerError("CATALOG_UNAVAILABLE");
+    const option = entry as Record<string, unknown>;
+    if (Object.keys(option).sort().join(",") !== "displayName,sourceGrindKeyHash" ||
+      typeof option["sourceGrindKeyHash"] !== "string" || !/^[0-9a-f]{64}$/u.test(option["sourceGrindKeyHash"]) ||
+      typeof option["displayName"] !== "string" || option["displayName"].length === 0 ||
+      Array.from(option["displayName"]).length > 200 || seen.has(option["sourceGrindKeyHash"])) throw new CatalogOwnerError("CATALOG_UNAVAILABLE");
+    seen.add(option["sourceGrindKeyHash"]);
+    return {sourceGrindKeyHash: option["sourceGrindKeyHash"], displayName: option["displayName"]};
+  });
+}
+
+export async function searchCatalog(store: CatalogPageStore, input: Readonly<{query: string; availability?: CatalogAvailability; limit?: number; cursor?: string; signal?: AbortSignal; correlationId?: string}>, signer: CatalogCursorSigner): Promise<Readonly<{snapshotRevision: string; items: readonly Readonly<{productRef: string; variantRef: string; displayName: string; unit: "piece" | "gram" | "kilogram"; availability: CatalogAvailability; mappingAvailable: boolean; imageUrl?: string | null; grindOptions?: readonly Readonly<{sourceGrindKeyHash: string; displayName: string}>[]}>[]; nextCursor: string | null}>> {
   const query = normalizeQuery(input.query);
   const limit = input.limit ?? 20;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new CatalogOwnerError("VALIDATION_FAILED");
@@ -98,7 +116,8 @@ export async function searchCatalog(store: CatalogPageStore, input: Readonly<{qu
   const rows = hasNext ? page.rows.slice(0, limit) : page.rows;
   const items = rows.map((row) => {
     if (!validRow(row)) throw new CatalogOwnerError("CATALOG_UNAVAILABLE");
-    return {productRef: row.productRef, variantRef: row.variantRef, displayName: row.displayName, unit: row.unit, availability: row.availability, mappingAvailable: row.mappingAvailable, ...(row.imageUrl === null ? {} : {imageUrl: row.imageUrl})};
+    const grindOptions = validatedGrindOptions(row.grindOptions);
+    return {productRef: row.productRef, variantRef: row.variantRef, displayName: row.displayName, unit: row.unit, availability: row.availability, mappingAvailable: row.mappingAvailable, ...(row.imageUrl === null ? {} : {imageUrl: row.imageUrl}), ...(grindOptions === undefined ? {} : {grindOptions})};
   });
   const last = rows.at(-1);
   const issuedAt = signer.nowEpochSeconds();

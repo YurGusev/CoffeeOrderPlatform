@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {decodeOrderItemRow, decodeOrderRow, OrderRowDecodeError} from "../../apps/orders-service/src/infrastructure/database/row-schemas.ts";
+import {decodePreparationDesiredRow, AromaPreparationRowDecodeError} from "../../apps/orders-aroma-preparation/src/infrastructure/row-schemas.ts";
+import {decodeObserverPermitRow, AromaObserverRowDecodeError} from "../../apps/aroma-observer/src/infrastructure/row-schemas.ts";
+import {decodeConvergenceLineRow, AromaConvergenceRowDecodeError} from "../../apps/aroma-convergence/src/infrastructure/row-schemas.ts";
 
 const order = {
   order_ref: `ord_${"0".repeat(26)}`,
@@ -39,6 +42,8 @@ const item = {
   mapping_revision: "0",
   offer_ref: `off_${"7".repeat(26)}`,
   unit_minor: "100",
+  source_grind_key_hash: null,
+  grind_display_name: null,
   line_total_minor: "250",
   currency: "RUB",
   created_at: new Date("2026-01-01T00:00:00.000Z"),
@@ -73,6 +78,8 @@ void test("orders row decoder rejects invalid persisted status, identities, mone
 
 void test("decodes complete PostgreSQL orders.order_items row and rejects unknown/missing columns", () => {
   assert.deepEqual(decodeOrderItemRow(item), item);
+  assert.deepEqual(decodeOrderItemRow({...item, source_grind_key_hash: "a".repeat(64), grind_display_name: "Espresso"}),
+    {...item, source_grind_key_hash: "a".repeat(64), grind_display_name: "Espresso"});
   for (const row of [
     {...item, surprise: true},
     Object.fromEntries(Object.entries(item).filter(([key]) => key !== "updated_at")),
@@ -94,7 +101,27 @@ void test("item decoder enforces schema checks and exact persisted arithmetic wi
     {...item, line_total_minor: "249"},
     {...item, currency: "USD"},
     {...item, quote_expires_at: "not a timestamp"},
+    {...item, source_grind_key_hash: "a".repeat(64)},
+    {...item, grind_display_name: "Espresso"},
   ]) {
     assert.throws(() => decodeOrderItemRow(row), (error) => error instanceof OrderRowDecodeError && error.code === "ORDER_DATABASE_DECODE_ERROR" && error.message === "ORDER_DATABASE_DECODE_ERROR" && !error.message.includes(JSON.stringify(row)));
+  }
+});
+
+void test("owner worker row decoders preserve exact SQL values and fail closed on corrupt rows", () => {
+  const desired = {desired_revision: "9223372036854775807", desired_hash: "d".repeat(64), created_at: "2026-10-03 12:30:00+05"};
+  const lease = {lease_until: "2026-10-03 12:31:00+05"};
+  const line = {offer_ref: `off_${"7".repeat(26)}`, source_grind_key_hash: null, quantity_milli: "9223372036854775807"};
+  assert.equal(decodePreparationDesiredRow(desired).desired_revision, desired.desired_revision);
+  assert.equal(decodeObserverPermitRow(lease).lease_until, lease.lease_until);
+  assert.deepEqual(decodeConvergenceLineRow(line), line);
+  for (const [decode, ErrorType, row] of [
+    [decodePreparationDesiredRow, AromaPreparationRowDecodeError, {...desired, created_at: "yesterday"}],
+    [decodeObserverPermitRow, AromaObserverRowDecodeError, {...lease, extra: true}],
+    [decodeConvergenceLineRow, AromaConvergenceRowDecodeError, {...line, quantity_milli: Number(9_223_372_036_854_775_807n)}],
+    [decodeConvergenceLineRow, AromaConvergenceRowDecodeError, {...line, source_grind_key_hash: "g".repeat(64)}],
+  ]) {
+    assert.throws(() => decode(row), failure => failure instanceof ErrorType && typeof failure.code === "string" &&
+      failure.code.endsWith("DATABASE_ROW_INVALID") && failure.message === failure.code);
   }
 });

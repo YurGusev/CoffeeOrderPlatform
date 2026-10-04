@@ -56,6 +56,46 @@ async function realSourceRed(sourcePath, mutator) {
   return result;
 }
 
+async function runCatalogCallerExpansion(mutateOpenApi = () => {}, mutateAudience = () => {}) {
+  const directory = await mkdtemp(join(tmpdir(), 'contracts-breaking-catalog-caller-'));
+  const base = join(directory, 'base');
+  const current = join(directory, 'current');
+  const route = '/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input';
+  const before = {'x-audience': 'pricing-service', 'x-caller': 'pricing-service', 'x-callers': ['pricing-service'], 'x-auth': 'mTLS-and-signed-delegation'};
+  const after = {'x-audience': ['pricing-service', 'aroma-convergence'], 'x-caller': null, 'x-callers': ['pricing-service', 'aroma-convergence'], 'x-auth': 'mTLS; signed-delegation for pricing-service; scoped-mTLS identity for aroma-convergence'};
+  const document = (trust) => ({
+    openapi: '3.2.0', info: {title: 'internal', version: '1'},
+    paths: {[route]: {get: {operationId: 'getCatalogPricingInput', ...trust, security: [{serviceMTLS: []}], responses: {200: {description: 'ok'}}}}},
+    components: {schemas: {}, parameters: {}, responses: {}, headers: {}, securitySchemes: {}},
+  });
+  const manifestEntry = (audience) => ({id: 'getCatalogPricingInput', kind: 'http', owner: 'catalog', operation: `GET ${route}`, statuses: [200], audience, producers: ['api-internal'], consumers: ['catalog-service'], pii: 'none', secrets: 'forbidden', compatibility: 'additive'});
+  const evidence = {approvedInternalCallerExpansions: [{
+    schemaPath: 'contracts/openapi/internal-v1.yaml', route, operationId: 'getCatalogPricingInput',
+    operationBefore: before, operationAfter: after,
+    manifestBefore: 'pricing-service', manifestAfter: ['pricing-service', 'aroma-convergence'],
+    issue: 11, migration: 'docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md', proof: 'tests/catalog/catalog-root.test.mjs',
+  }]};
+  try {
+    for (const root of [base, current]) await mkdir(join(root, 'contracts/openapi'), {recursive: true});
+    await mkdir(join(current, 'contracts'), {recursive: true});
+    await mkdir(join(current, 'docs/launch'), {recursive: true});
+    await mkdir(join(current, 'tests/catalog'), {recursive: true});
+    const oldDocument = document(before);
+    const newDocument = document(after);
+    const nextManifest = {contracts: [manifestEntry(['pricing-service', 'aroma-convergence'])]};
+    mutateOpenApi(newDocument.paths[route].get);
+    mutateAudience(nextManifest.contracts[0]);
+    await writeFile(join(base, 'contracts/openapi/internal-v1.yaml'), yaml.dump(oldDocument));
+    await writeFile(join(base, 'contracts/manifest.yaml'), yaml.dump({contracts: [manifestEntry('pricing-service')]}));
+    await writeFile(join(current, 'contracts/openapi/internal-v1.yaml'), yaml.dump(newDocument));
+    await writeFile(join(current, 'contracts/manifest.yaml'), yaml.dump(nextManifest));
+    await writeFile(join(current, 'contracts/compatibility-evidence.yaml'), yaml.dump(evidence));
+    await writeFile(join(current, 'docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md'), '# Approved Catalog owner proof\n');
+    await writeFile(join(current, 'tests/catalog/catalog-root.test.mjs'), 'test proof\n');
+    return spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], {cwd: root, encoding: 'utf8'});
+  } finally { await rm(directory, {recursive: true, force: true}); }
+}
+
 const realClientRed = (mutator) => realSourceRed('contracts/openapi/client-v1.yaml', mutator);
 
 void test('breaking guard rejects endpoint/schema/status/operation rename and schema narrowing', async () => {
@@ -150,20 +190,49 @@ void test('approved #8 private Pricing verify replacement permits only the pinne
     for (const path of [base, current]) await mkdir(join(path, 'contracts/openapi'), {recursive: true});
     await mkdir(join(current, 'docs/launch'), {recursive: true});
     await mkdir(join(current, 'tests/pricing'), {recursive: true});
+    await mkdir(join(current, 'tests/catalog'), {recursive: true});
     await writeFile(join(base, sourcePath), baseText.stdout);
     await writeFile(join(current, sourcePath), currentText);
-    await writeFile(join(current, 'contracts/compatibility-evidence.yaml'), yaml.dump({approvedInternalReplacements: evidence.approvedInternalReplacements ?? []}));
+    await writeFile(join(current, 'contracts/compatibility-evidence.yaml'), yaml.dump(evidence));
+    for (const fixture of new Set((evidence.optionalExpansions ?? []).map(entry => entry.fixture))) {
+      await mkdir(join(current, dirname(fixture)), {recursive: true});
+      await writeFile(join(current, fixture), await readFile(join(root, fixture), 'utf8'));
+    }
     await writeFile(join(current, 'docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md'), await readFile(join(root, 'docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md'), 'utf8'));
+    await writeFile(join(current, 'docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md'), await readFile(join(root, 'docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md'), 'utf8'));
     await writeFile(join(current, 'tests/pricing/pricing-store.test.mjs'), await readFile(join(root, 'tests/pricing/pricing-store.test.mjs'), 'utf8'));
+    await writeFile(join(current, 'tests/catalog/catalog-root.test.mjs'), await readFile(join(root, 'tests/catalog/catalog-root.test.mjs'), 'utf8'));
     const accepted = run();
     assert.equal(accepted.status, 0, `${accepted.stdout}\n${accepted.stderr}`);
-    const tampered = yaml.load(currentText);
-    tampered.components.schemas.PricingQuoteVerifyRequest.properties.quoteLineNumber.maximum = 99;
-    await writeFile(join(current, sourcePath), yaml.dump(tampered));
-    const rejected = run();
-    assert.notEqual(rejected.status, 0);
-    assert.match(rejected.stderr, /breaking contract/u);
+    for (const mutation of [
+      schema => {schema.properties.quoteLineNumber.maximum = 99;},
+      schema => {schema.properties.sourceGrindKeyHash = {type: 'number'};},
+      schema => {schema.properties.sourceGrindKeyHash = {$ref: '#/components/schemas/Quantity'};},
+      schema => {schema.required.push('sourceGrindKeyHash');},
+    ]) {
+      const tampered = yaml.load(currentText);
+      mutation(tampered.components.schemas.PricingQuoteVerifyRequest);
+      await writeFile(join(current, sourcePath), yaml.dump(tampered));
+      const rejected = run();
+      assert.notEqual(rejected.status, 0, `${rejected.stdout}\n${rejected.stderr}`);
+      assert.match(rejected.stderr, /breaking contract/u);
+    }
   } finally { await rm(directory, {recursive: true, force: true}); }
+});
+
+void test('approved #11 Catalog pricing caller expansion admits only convergence and rejects trust drift', async () => {
+  const accepted = await runCatalogCallerExpansion();
+  assert.equal(accepted.status, 0, `${accepted.stdout}\n${accepted.stderr}`);
+  for (const [mutateOpenApi, mutateAudience] of [
+    [(operation) => { operation['x-callers'].push('aroma-observer'); }, () => {}],
+    [(operation) => { operation['x-callers'].push('future-service'); }, () => {}],
+    [(operation) => { operation['x-auth'] = 'mTLS; signed-delegation for pricing-service; mTLS identity for any caller'; }, () => {}],
+    [() => {}, (entry) => { entry.audience.push('future-service'); }],
+  ]) {
+    const rejected = await runCatalogCallerExpansion(mutateOpenApi, mutateAudience);
+    assert.notEqual(rejected.status, 0, `trust metadata mutation was accepted: ${rejected.stdout}\n${rejected.stderr}`);
+    assert.match(rejected.stderr, /breaking contract/u);
+  }
 });
 
 void test('breaking guard admits a same-wire parameter ref replacement with a wider schema', async () => {

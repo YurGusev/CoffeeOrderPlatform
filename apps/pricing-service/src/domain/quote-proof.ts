@@ -41,6 +41,7 @@ function orderedPublicQuote(quote: PublicQuote) {
       unit: line.unit,
       unitMinor: line.unitMinor,
       lineTotalMinor: line.lineTotalMinor,
+      ...(line.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash:line.sourceGrindKeyHash,grindDisplayName:line.grindDisplayName}),
     })),
     totalMinor: quote.totalMinor,
   };

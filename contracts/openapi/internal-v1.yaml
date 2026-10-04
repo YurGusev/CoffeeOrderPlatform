@@ -3,7 +3,7 @@ jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: CoffeeOrderPlatform Internal API
   version: 1.0.0
-  description: Private service-to-service contract. All routes require mTLS and signed delegation.
+  description: Private service-to-service contract. Routes require scoped mTLS and the operation-specific delegation stated by each operation.
 servers:
   - url: /
 tags:
@@ -61,11 +61,10 @@ paths:
       operationId: getCatalogPricingInput
       summary: Read authoritative pricing facts for one catalog variant
       x-owner: catalog-service
-      x-audience: pricing-service
-      x-caller: pricing-service
-      x-callers: [pricing-service]
+      x-audience: [pricing-service, aroma-convergence]
+      x-callers: [pricing-service, aroma-convergence]
       x-exposure: internal
-      x-auth: mTLS-and-signed-delegation
+      x-auth: mTLS; signed-delegation for pricing-service; scoped-mTLS identity for aroma-convergence
       x-deadline: 2s
       x-side-effects: none
       security:
@@ -616,6 +615,20 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        grindOptions:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [sourceGrindKeyHash, displayName]
+            properties:
+              sourceGrindKeyHash:
+                $ref: '#/components/schemas/Hash'
+              displayName:
+                type: string
+                minLength: 1
+                maxLength: 200
     PricingQuoteVerifyRequest:
       type: object
       additionalProperties: false
@@ -637,9 +650,14 @@ components:
           $ref: '#/components/schemas/VariantRef'
         quantity:
           $ref: '#/components/schemas/QuantityDecimal'
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
     PricingQuoteAuthoritativeLine:
       type: object
       additionalProperties: false
+      dependentRequired:
+        sourceGrindKeyHash: [grindDisplayName]
+        grindDisplayName: [sourceGrindKeyHash]
       required: [lineNumber, productRef, variantRef, productDisplayName, offerRef, mappingRevision, quantity, unit, supplierUnitMinor, unitMinor, lineTotalMinor, currency, internalProofHash]
       properties:
         lineNumber:
@@ -673,6 +691,12 @@ components:
           $ref: '#/components/schemas/Currency'
         internalProofHash:
           $ref: '#/components/schemas/Hash'
+        sourceGrindKeyHash:
+          $ref: '#/components/schemas/Hash'
+        grindDisplayName:
+          type: string
+          minLength: 1
+          maxLength: 200
     PricingQuoteVerificationResponse:
       type: object
       additionalProperties: false

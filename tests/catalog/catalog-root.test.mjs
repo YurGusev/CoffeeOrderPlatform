@@ -12,7 +12,7 @@ const problem404 = {type: "about:blank", title: "CATALOG_PRODUCT_NOT_FOUND", sta
 
 async function runtime(t, register, transportCaller) {
   const app = await createRuntime({name: "catalog-root-test", host: "127.0.0.1", port: 0, shutdownGraceMs: 500, deadlineMs: 5_000, deadlineProfiles: {defaultMs: 5_000}});
-  app.addHook("preHandler", async (request) => { request.runtimeContext.transportIdentity = {runtime: transportCaller, environment: "test", san: `spiffe://test/${transportCaller}`}; });
+  if (transportCaller !== null) app.addHook("preHandler", async (request) => { request.runtimeContext.transportIdentity = {runtime: transportCaller, environment: "test", san: `spiffe://test/${transportCaller}`}; });
   register(app);
   await app.runtimeController.start();
   t.after(() => app.runtimeController.closeRuntime("SIGTERM"));
@@ -33,6 +33,7 @@ function internalAdapters(state) {
     verifyTransport: (request, caller) => request.runtimeContext?.transportIdentity?.runtime === caller,
     verifyCallerDelegation: (token, _request, operationId) => {
       state.incomingToken = token;
+      state.verificationCalls = (state.verificationCalls ?? 0) + 1;
       return state.claims ?? {iss: "pricing-service", aud: "api-internal", originalCaller: "pricing-service", operationId};
     },
     signDelegation: (claims) => { state.outgoing = claims; return "signed-api-internal-to-catalog"; },
@@ -120,6 +121,25 @@ void test("internal Catalog pricing route requires pricing mTLS and exact delega
   const acceptedError = await app.inject({method: "GET", url: path, headers: {"x-service-delegation": "pricing-token"}});
   assert.equal(acceptedError.json().code, "CATALOG_UNAVAILABLE");
   assert.equal(JSON.stringify(acceptedError.json()).includes("private-canary"), false);
+});
+
+void test("internal Catalog pricing route accepts only scoped convergence mTLS without caller delegation", async (t) => {
+  const state = {};
+  const path = `/api/internal-v1/catalog/products/${productRef}/variants/${variantRef}/pricing-input`;
+  const convergence = await runtime(t, (value) => registerInternalRoutes(value, internalAdapters(state)), "aroma-convergence");
+  const response = await convergence.inject({method: "GET", url: path});
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(state.outgoing, {originalCaller: "aroma-convergence", operationId: "getCatalogPricingInput", context: state.outgoing.context});
+  assert.equal(state.verificationCalls, undefined, "api-internal signs its downstream delegation from the verified transport identity");
+
+  const observer = await runtime(t, (value) => registerInternalRoutes(value, internalAdapters(state)), "aroma-observer");
+  assert.equal((await observer.inject({method: "GET", url: path})).statusCode, 401);
+  const forged = await convergence.inject({method: "GET", url: path, headers: {"x-transport-caller": "aroma-convergence"}});
+  assert.equal(forged.statusCode, 401);
+  const callerDelegation = await convergence.inject({method: "GET", url: path, headers: {"x-service-delegation": "caller-supplied"}});
+  assert.equal(callerDelegation.statusCode, 403);
+  const noCertificate = await runtime(t, (value) => registerInternalRoutes(value, internalAdapters(state)), null);
+  assert.equal((await noCertificate.inject({method: "GET", url: path})).statusCode, 401);
 });
 
 void test("internal Catalog owner client validates status and response schema before accepting DTO", async () => {

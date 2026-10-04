@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import {readFile} from "node:fs/promises";
+import {mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
+import {spawnSync} from "node:child_process";
+import {createRequire,stripTypeScriptTypes} from "node:module";
+import {tmpdir} from "node:os";
+import {dirname, join, resolve} from "node:path";
+import {pathToFileURL} from "node:url";
+
 import {createHash, randomUUID} from "node:crypto";
 import test from "node:test";
 import {metrics, trace} from "@opentelemetry/api";
@@ -17,6 +23,11 @@ const migrations = [
   "0004_create_order_contributions.sql",
   "0005_create_orders_idempotency.sql",
   "0006_create_orders_outbox.sql",
+  "0007_order_grind_selection.sql",
+  "0008_create_orders_inbox.sql","0009_create_catalog_mapping_projection.sql","0010_create_cart_desired.sql",
+  "0011_create_cart_observed.sql","0012_create_convergence_attempts.sql","0013_create_convergence_leases.sql",
+  "0014_create_mutation_reservations.sql","0015_create_order_aroma_projections.sql","0016_create_aroma_work_schedules.sql",
+  "0017_allow_cart_outbox.sql","0018_guard_order_card_projection.sql","0019_read_guarded_aroma_card.sql","0020_guard_cart_fact_batches.sql","0021_optimize_observed_format_checks.sql","0022_terminal_cart_item_rejection.sql","0023_ascii_observed_identity.sql",
 ];
 const pool = {
   max: 4,
@@ -72,7 +83,7 @@ function tokenActor(token) {
 }
 
 async function createOwnerApp(database, counters, options = {}) {
-  const store = new OrderStore(database, options.projection === undefined ? undefined : {testOnlyReconciliationProjection: options.projection});
+  const store = options.store ?? new OrderStore(database,{maxSnapshotAgeMs:15000});
   let replayLookups = 0;
   const countedStore = new Proxy(store, {
     get(target, property, receiver) {
@@ -122,7 +133,7 @@ async function createOwnerApp(database, counters, options = {}) {
           return {customerRef, customerVersion: "3", displayName: options.customerDisplayName ?? "Live owner customer", state: "Active"};
         },
       },
-      pricing: {
+      pricing: options.pricing ?? {
         async verify(request) {
           counters.pricing += 1;
           assert.deepEqual({
@@ -169,6 +180,211 @@ function requestHeaders(token, key = randomUUID()) {
   };
 }
 
+// Load the immutable pre-#11 owner writers into a scratch module graph. This
+// proves migration of real old writes, rather than data from the upgraded writer.
+async function withLegacyOwners(run) {
+  const revision="e278aeb10e57d37485542f8668f078456074b038";
+  const paths=[
+    "apps/orders-service/src/infrastructure/database/order-store.ts","apps/orders-service/src/infrastructure/database/row-schemas.ts",
+    "apps/orders-service/src/domain/order-card.ts","apps/orders-service/src/domain/order-contribution.ts","apps/orders-service/src/domain/order-state.ts","apps/orders-service/src/observability.ts",
+    "apps/pricing-service/src/infrastructure/database/pricing-store.ts","apps/pricing-service/src/domain/pricing-formula.ts","apps/pricing-service/src/domain/quote-proof.ts","apps/pricing-service/src/observability.ts",
+    "apps/pricing-service/src/application/create-pricing-quote.ts",
+  ];
+  const scratch=await mkdtemp(join(tmpdir(),"grind-upgrade-"));
+  const modules=new Map(paths.map((file,index)=>[resolve(root.pathname,file),join(scratch,`${index}.mjs`)]));
+  try {
+    for(const file of paths) {
+      const old=spawnSync("git",["show",`${revision}:${file}`],{cwd:root,encoding:"utf8"});
+      assert.equal(old.status,0,old.stderr);
+      const absolute=resolve(root.pathname,file);
+      const require=createRequire(absolute.replace("/src/","/dist/").replace(/\.ts$/u,".js"));
+      const compiled=stripTypeScriptTypes(old.stdout);
+      await writeFile(modules.get(absolute),compiled.replace(/from\s+(["'])([^"']+)\1/gu,(_match,_quote,specifier)=>{
+        if(specifier.startsWith("node:"))return `from "${specifier}"`;
+        const legacy=specifier.startsWith(".")?modules.get(resolve(dirname(absolute),specifier).replace(/\.js$/u,".ts")):undefined;
+        return `from "${pathToFileURL(legacy??require.resolve(specifier)).href}"`;
+      }));
+    }
+    const orders=await import(pathToFileURL(modules.get(resolve(root.pathname,paths[0]))).href);
+    const pricing=await import(pathToFileURL(modules.get(resolve(root.pathname,paths[6]))).href);
+    const application=await import(pathToFileURL(modules.get(resolve(root.pathname,paths[10]))).href);
+    await run(orders.OrderStore,pricing.PricingStore,application.createPricingQuote);
+  } finally {await rm(scratch,{recursive:true,force:true});}
+}
+
+void test("LIVE: nullable upgrades preserve real legacy hashes, snapshots and exact/bodyless replay without repeating Confirm", {
+  timeout:180_000,skip:process.env.COFFEE_DB_LIVE_PROOF!=="1"?"disposable PostgreSQL required":false,
+},async()=>{
+  const {PricingStore}=await import("../../apps/pricing-service/dist/infrastructure/database/pricing-store.js");
+  const {hashPublicQuote,hashInternalQuote}=await import("../../apps/pricing-service/dist/domain/quote-proof.js");
+  const {computeOrderContribution}=await import("../../apps/orders-service/dist/domain/order-contribution.js");
+  const {createPricingQuote}=await import("../../apps/pricing-service/dist/application/create-pricing-quote.js");
+  await withLegacyOwners(async(LegacyOrderStore,LegacyPricingStore,legacyCreatePricingQuote)=>withCatalogPostgres(async({adminClient:admin,port,databaseName})=>{
+    await admin.query("CREATE ROLE coffee_orders_service_rw LOGIN PASSWORD 'orders-upgrade'; CREATE ROLE coffee_pricing_rw LOGIN PASSWORD 'pricing-upgrade'");
+    for(const role of ["coffee_orders_prepare_rw","coffee_orders_observer_rw","coffee_orders_convergence_rw"]) await admin.query(`CREATE ROLE ${role} NOLOGIN`);
+    for(const id of migrations.filter(id=>id<"0007_order_grind_selection.sql"))await admin.query(await readFile(new URL(`apps/orders-service/migrations/${id}`,root),"utf8"));
+    for(const id of ["0001_create_pricing_policy_versions","0002_create_pricing_quotes","0003_create_pricing_idempotency","0004_create_pricing_audit"])
+      await admin.query(await readFile(new URL(`apps/pricing-service/migrations/${id}.sql`,root),"utf8"));
+    const db=(owner,user,password)=>createDatabase({owner,database:databaseName,allowedDatabase:databaseName,host:"127.0.0.1",port,user,password,ssl:false,pool,shutdownGraceMs:40_000});
+    const database=db("orders-upgrade","coffee_orders_service_rw","orders-upgrade"),pricingDatabase=db("pricing-upgrade","coffee_pricing_rw","pricing-upgrade");
+    let runtime;
+    try {
+      const oldPricing=new LegacyPricingStore(pricingDatabase),policy=await oldPricing.readActivePolicy();
+      const identity={actorRef:"pricing-upgrade",scope:hash("c"),key:randomUUID()};
+      const request={customerRef,lines:[{productRef,variantRef,quantity:"1.500"}]};
+      const command={identity,request,correlationId,signDelegation:()=>"synthetic-delegation"};
+      const quote=await legacyCreatePricingQuote(oldPricing,{async getPricingInput(){return {productRef,variantRef,displayName:"Legacy coffee",unit:"kilogram",offerRef,mappingRevision:"7",supplierUnitMinor:"900",snapshotRevision:"11",currency:"RUB",availability:"Available"};}},command);
+      const counters={customer:0,pricing:0};
+      runtime=await createOwnerApp(database,counters,{store:new LegacyOrderStore(database)});
+      const actor="synthetic-api-public-actor-a";
+      const draft=await runtime.app.inject({method:"POST",url:"/api/client-v1/orders/drafts",headers:requestHeaders(actor),payload:{customerRef}});
+      assert.equal(draft.statusCode,201,draft.body);
+      const orderRef=draft.json().orderRef,putKey=randomUUID(),confirmKey=randomUUID();
+      const putUrl=`${orderPath(orderRef)}/items/${ref("itm")}`;
+      const payload={expectedVersion:"1",productRef,variantRef,quantity:selectedLine.quantity,quoteRef,quoteLineNumber:selectedLine.lineNumber,quoteHash:hash("a")};
+      const put=await runtime.app.inject({method:"PUT",url:putUrl,headers:requestHeaders(actor,putKey),payload});
+      assert.equal(put.statusCode,200,put.body);
+      const confirmed=await runtime.app.inject({method:"POST",url:confirmPath(orderRef),headers:requestHeaders(actor,confirmKey),payload:{expectedVersion:"2"}});
+      assert.equal(confirmed.statusCode,200,confirmed.body);
+      assert.deepEqual(counters,{customer:1,pricing:1},"Confirm performs no network calls");
+      const oldPutReplay=await runtime.app.inject({method:"PUT",url:putUrl,headers:{...requestHeaders(actor,putKey),"idempotency-replay-only":"true"}});
+      const oldConfirmReplay=await runtime.app.inject({method:"POST",url:confirmPath(orderRef),headers:{...requestHeaders(actor,confirmKey),"idempotency-replay-only":"true"}});
+      assert.equal(oldPutReplay.statusCode,200,oldPutReplay.body);assert.equal(oldConfirmReplay.statusCode,200,oldConfirmReplay.body);
+      assert.deepEqual(oldPutReplay.json(),put.json());assert.deepEqual(oldConfirmReplay.json(),confirmed.json());
+      const snapshot=async(schema,tables)=>{
+        const result={};for(const table of tables)result[table]=(await admin.query(`SELECT (to_jsonb(t)-'source_grind_key_hash'-'grind_display_name'-'line_id'${table==="outbox_messages"?"-'order_ref'":""})::text AS bytes FROM ${schema}.${table} t ORDER BY 1`)).rows;
+        return result;
+      };
+      const orderTables=["orders","order_items","order_history","order_desired_contributions","order_desired_contribution_lines","idempotency_records","outbox_messages"];
+      const priceTables=["pricing_quotes","pricing_quote_lines","pricing_idempotency_records","pricing_audit_records"];
+      const oldOrders=await snapshot("orders",orderTables),oldPrices=await snapshot("pricing",priceTables);
+      await runtime.app.runtimeController.closeRuntime("SIGTERM");runtime=undefined;
+      for(const id of migrations.filter(id=>id>="0007_order_grind_selection.sql"))await admin.query(await readFile(new URL(`apps/orders-service/migrations/${id}`,root),"utf8"));
+      await admin.query(await readFile(new URL("apps/pricing-service/migrations/0005_quote_grind_selection.sql",root),"utf8"));
+      assert.deepEqual(await snapshot("orders",orderTables),oldOrders,"all old Orders/History/Desired/Outbox/idempotency bytes remain unchanged");
+      assert.deepEqual(await snapshot("pricing",priceTables),oldPrices,"all old quote/proof/audit/idempotency bytes remain unchanged");
+      for(const table of ["orders.order_items","pricing.pricing_quote_lines"])
+        assert.deepEqual((await admin.query(`SELECT source_grind_key_hash,grind_display_name FROM ${table}`)).rows,[{source_grind_key_hash:null,grind_display_name:null}]);
+      const contribution=(await admin.query("SELECT contribution_hash FROM orders.order_desired_contribution_lines")).rows[0].contribution_hash;
+      assert.equal(computeOrderContribution([{itemRef:ref("itm"),offerRef,productRef,variantRef,quantityMilli:"1500",quoteRef,quoteLineNumber:2}]).hash,contribution);
+      assert.equal(hashPublicQuote(quote.body),quote.body.hash);
+      assert.equal(hashInternalQuote(quote.body,policy,[{lineNumber:1,offerRef,mappingRevision:"7",supplierUnitMinor:"900",catalogSnapshotRevision:"11",markupBasisPoints:"3000",minimumMarginMinor:"0"}]),(await admin.query("SELECT internal_proof_hash FROM pricing.pricing_quotes")).rows[0].internal_proof_hash);
+      const prices=new PricingStore(pricingDatabase);
+      assert.deepEqual((await prices.precheck(identity,undefined)).body,quote.body,"Pricing bodyless replay preserves old shape/hash");
+      assert.deepEqual(await createPricingQuote(prices,{async getPricingInput(){assert.fail("no-selection idempotency hash changed: unexpected Catalog read");}},command),{...quote,replayed:true});
+      runtime=await createOwnerApp(database,counters);
+      for(const [url,key,original] of [[putUrl,putKey,oldPutReplay],[confirmPath(orderRef),confirmKey,oldConfirmReplay]]) {
+        const method=url===putUrl?"PUT":"POST";
+        const replay=await runtime.app.inject({method,url,headers:{...requestHeaders(actor,key),"idempotency-replay-only":"true"}});
+        assert.equal(replay.statusCode,200,replay.body);assert.equal(replay.headers["idempotency-replayed"],"true");
+        assert.equal(replay.body,original.body,"old HTTP response bytes are not recalculated or extended with null fields");
+      }
+      const replay=await runtime.app.inject({method:"PUT",url:putUrl,headers:requestHeaders(actor,putKey),payload});
+      assert.equal(replay.body,oldPutReplay.body);assert.equal(replay.headers["idempotency-replayed"],"true");
+      assert.deepEqual(counters,{customer:1,pricing:1});
+      assert.deepEqual(await snapshot("orders",orderTables),oldOrders,"replay does not repeat Confirm, events or historical writes");
+      assert.deepEqual(await snapshot("pricing",priceTables),oldPrices);
+      const verified=await prices.verify({request:{quoteRef:quote.body.quoteRef,hash:quote.body.hash,customerRef,quoteLineNumber:1,productRef,variantRef,quantity:"1.5"},actorRef:"orders-service",correlationId});
+      assert.equal("sourceGrindKeyHash" in verified.line,false);
+      for(const [role,table] of [["coffee_orders_service_rw","pricing.pricing_quotes"],["coffee_pricing_rw","orders.order_items"]]) {
+        await admin.query("BEGIN");try{await admin.query(`SET LOCAL ROLE ${role}`);await assert.rejects(admin.query(`SELECT * FROM ${table}`),{code:"42501"});}finally{await admin.query("ROLLBACK");}
+      }
+    }finally{
+      if(runtime)await runtime.app.runtimeController.closeRuntime("SIGTERM");
+      await database.resource.stop(AbortSignal.timeout(5_000));await pricingDatabase.resource.stop(AbortSignal.timeout(5_000));
+    }
+  }));
+});
+
+void test("LIVE: selected Catalog facts flow through Pricing verify transport and Orders HTTP/Card/contribution with tamper and isolation rejection", {
+  timeout:180_000,skip:process.env.COFFEE_DB_LIVE_PROOF!=="1"?"disposable PostgreSQL required":false,
+},async()=>{
+  const {PricingStore}=await import("../../apps/pricing-service/dist/infrastructure/database/pricing-store.js");
+  const {createPricingQuote}=await import("../../apps/pricing-service/dist/application/create-pricing-quote.js");
+  const {createPricingQuoteClient}=await import("../../apps/orders-service/dist/infrastructure/pricing-client.js");
+  await withCatalogPostgres(async({adminClient:admin,port,databaseName})=>{
+    await admin.query("CREATE ROLE coffee_orders_service_rw LOGIN PASSWORD 'orders-selected'; CREATE ROLE coffee_pricing_rw LOGIN PASSWORD 'pricing-selected'");
+    for(const role of ["coffee_orders_prepare_rw","coffee_orders_observer_rw","coffee_orders_convergence_rw"]) await admin.query(`CREATE ROLE ${role} NOLOGIN`);
+    for(const id of migrations)await admin.query(await readFile(new URL(`apps/orders-service/migrations/${id}`,root),"utf8"));
+    for(const id of ["0001_create_pricing_policy_versions","0002_create_pricing_quotes","0003_create_pricing_idempotency","0004_create_pricing_audit","0005_quote_grind_selection"])
+      await admin.query(await readFile(new URL(`apps/pricing-service/migrations/${id}.sql`,root),"utf8"));
+    const db=(owner,user,password)=>createDatabase({owner,database:databaseName,allowedDatabase:databaseName,host:"127.0.0.1",port,user,password,ssl:false,pool,shutdownGraceMs:40_000});
+    const database=db("orders-selected","coffee_orders_service_rw","orders-selected"),pricingDatabase=db("pricing-selected","coffee_pricing_rw","pricing-selected");
+    const counters={customer:0,pricing:0,catalog:0};let runtime;
+    try {
+      const prices=new PricingStore(pricingDatabase),actor="synthetic-api-public-actor-a";
+      const grindOptions=[{sourceGrindKeyHash:hash("a"),displayName:"Средний"},{sourceGrindKeyHash:hash("b"),displayName:"Крупный"}];
+      const catalog={async getPricingInput(){counters.catalog++;return {productRef,variantRef,displayName:"Coffee",offerRef,mappingRevision:"7",snapshotRevision:"11",supplierUnitMinor:"900",currency:"RUB",unit:"kilogram",availability:"Available",grindOptions};}};
+      const request={customerRef,lines:[{productRef,variantRef,quantity:"1.5"},...grindOptions.map(option=>({productRef,variantRef,quantity:"1.5",sourceGrindKeyHash:option.sourceGrindKeyHash}))]};
+      const identity={actorRef:"selected-pricing",scope:hash("c"),key:randomUUID()};
+      const command={request,identity,correlationId,signDelegation:()=>"synthetic-delegation"};
+      const quote=await createPricingQuote(prices,catalog,command);
+      assert.deepEqual(quote.body.lines.map(line=>[line.sourceGrindKeyHash,line.grindDisplayName]),[[undefined,undefined],[hash("a"),"Средний"],[hash("b"),"Крупный"]]);
+      const noCatalog=counters.catalog;
+      assert.deepEqual(await createPricingQuote(prices,catalog,command),{...quote,replayed:true});
+      await assert.rejects(createPricingQuote(prices,catalog,{...command,request:{...request,lines:[request.lines[0],request.lines[2]]}}),{code:"IDEMPOTENCY_CONFLICT"});
+      assert.equal(counters.catalog,noCatalog,"same key/different selected line rejected before external reads");
+      await assert.rejects(createPricingQuote(prices,catalog,{...command,identity:{...identity,key:randomUUID()},request:{customerRef,lines:[{productRef,variantRef,quantity:"1.5",sourceGrindKeyHash:hash("f")}]}}),{code:"PRICING_GRIND_NOT_AVAILABLE"});
+      const pricing=createPricingQuoteClient({async fetch(path,options){
+        counters.pricing++;assert.equal(path,"/api/internal-v1/pricing/quotes:verify");
+        try {return Response.json(await prices.verify({request:JSON.parse(options.body),actorRef:"orders-service",correlationId,signal:options.signal}));}
+        catch(error){if(error.code!=="PRICING_QUOTE_SCOPE_MISMATCH")throw error;
+          return new Response(JSON.stringify({type:"about:blank",title:error.code,status:409,code:error.code,detail:"Scope mismatch",instance:path,correlationId,errors:[]}),{status:409,headers:{"content-type":"application/problem+json"}});}
+      }});
+      runtime=await createOwnerApp(database,counters,{pricing});
+      const newDraft=async()=>{
+        const result=await runtime.app.inject({method:"POST",url:"/api/client-v1/orders/drafts",headers:requestHeaders(actor),payload:{customerRef}});
+        assert.equal(result.statusCode,201,result.body);return result.json().orderRef;
+      };
+      const orderRef=await newDraft();
+      const payload=(index,version)=>({expectedVersion:version,productRef,variantRef,quantity:"1.5",quoteRef:quote.body.quoteRef,quoteLineNumber:index+1,quoteHash:quote.body.hash,...(index===0?{}:{sourceGrindKeyHash:grindOptions[index-1].sourceGrindKeyHash})});
+      const target=`${orderPath(orderRef)}/items/${ref("itm")}`;
+      const beforeMalformed={...counters};
+      const malformed=await runtime.app.inject({method:"PUT",url:target,headers:requestHeaders(actor),payload:{...payload(1,"1"),grindDisplayName:"Browser assigned"}});
+      assert.equal(malformed.statusCode,400,malformed.body);assert.deepEqual(counters,beforeMalformed);
+      for(const wrong of [{...payload(1,"1"),sourceGrindKeyHash:undefined},{...payload(0,"1"),sourceGrindKeyHash:hash("a")},{...payload(1,"1"),sourceGrindKeyHash:hash("b")}]) {
+        const response=await runtime.app.inject({method:"PUT",url:target,headers:requestHeaders(actor),payload:wrong});
+        assert.equal(response.statusCode,409,response.body);assert.equal(response.json().code,"ORDER_QUOTE_SCOPE_MISMATCH");
+        assert.equal((await admin.query("SELECT count(*)::int n FROM orders.order_items WHERE order_ref=$1",[orderRef])).rows[0].n,0);
+      }
+      let card;
+      for(let index=0;index<3;index++) {
+        const response=await runtime.app.inject({method:"PUT",url:`${orderPath(orderRef)}/items/itm_${String(index+1).padStart(26,"0")}`,headers:requestHeaders(actor),payload:payload(index,String(index+1))});
+        assert.equal(response.statusCode,200,response.body);card=response.json();
+      }
+      assert.deepEqual(card.items.map(line=>[line.sourceGrindKeyHash,line.grindDisplayName]),[[undefined,undefined],[hash("a"),"Средний"],[hash("b"),"Крупный"]]);
+      const beforeConfirm={...counters};
+      const confirmed=await runtime.app.inject({method:"POST",url:confirmPath(orderRef),headers:requestHeaders(actor),payload:{expectedVersion:"4"}});
+      assert.equal(confirmed.statusCode,200,confirmed.body);assert.deepEqual(counters,beforeConfirm,"Confirm has no external calls");
+      await runtime.app.runtimeController.closeRuntime("SIGTERM");runtime=undefined;
+      runtime=await createOwnerApp(database,counters,{pricing});
+      const restarted=await runtime.app.inject({method:"GET",url:orderPath(orderRef),headers:requestHeaders(actor)});
+      assert.equal(restarted.statusCode,200,restarted.body);assert.deepEqual(restarted.json().items,confirmed.json().items);
+      const otherOrder=await newDraft();
+      const put=await runtime.app.inject({method:"PUT",url:`${orderPath(otherOrder)}/items/${ref("itm")}`,headers:requestHeaders(actor),payload:payload(1,"1")});
+      assert.equal(put.statusCode,200,put.body);
+      const otherConfirm=await runtime.app.inject({method:"POST",url:confirmPath(otherOrder),headers:requestHeaders(actor),payload:{expectedVersion:"2"}});
+      assert.equal(otherConfirm.statusCode,200,otherConfirm.body);
+      const physical=(await admin.query("SELECT offer_ref,source_grind_key_hash,sum(quantity_milli)::text quantity_milli FROM orders.order_desired_contribution_lines GROUP BY offer_ref,source_grind_key_hash ORDER BY source_grind_key_hash NULLS FIRST")).rows;
+      assert.deepEqual(physical,[{offer_ref:offerRef,source_grind_key_hash:null,quantity_milli:"1500"},{offer_ref:offerRef,source_grind_key_hash:hash("a"),quantity_milli:"3000"},{offer_ref:offerRef,source_grind_key_hash:hash("b"),quantity_milli:"1500"}]);
+      await assert.rejects(admin.query("UPDATE pricing.pricing_quote_lines SET source_grind_key_hash=NULL,grind_display_name=NULL WHERE quote_ref=$1 AND line_number=2",[quote.body.quoteRef]),{code:"23505"});
+      await assert.rejects(admin.query("UPDATE pricing.pricing_quote_lines SET grind_display_name=NULL WHERE quote_ref=$1 AND line_number=2",[quote.body.quoteRef]),{code:"23514"});
+      await assert.rejects(admin.query(`INSERT INTO orders.order_desired_contribution_lines(order_ref,contribution_revision,offer_ref,quantity_milli,contribution_hash,item_refs)
+        SELECT order_ref,contribution_revision,offer_ref,quantity_milli,contribution_hash,item_refs FROM orders.order_desired_contribution_lines WHERE order_ref=$1 AND source_grind_key_hash IS NULL`,[orderRef]),{code:"23505"});
+      const verify={request:{quoteRef:quote.body.quoteRef,hash:quote.body.hash,customerRef,quoteLineNumber:2,productRef,variantRef,quantity:"1.5",sourceGrindKeyHash:hash("a")},actorRef:"orders-service",correlationId};
+      for(const [column,changed,original] of [["source_grind_key_hash",hash("f"),hash("a")],["grind_display_name","Tampered","Средний"]]) {
+        await admin.query(`UPDATE pricing.pricing_quote_lines SET ${column}=$2 WHERE quote_ref=$1 AND line_number=2`,[quote.body.quoteRef,changed]);
+        await assert.rejects(prices.verify(verify),{code:"PRICING_QUOTE_HASH_MISMATCH"});
+        await admin.query(`UPDATE pricing.pricing_quote_lines SET ${column}=$2 WHERE quote_ref=$1 AND line_number=2`,[quote.body.quoteRef,original]);
+      }
+      assert.equal((await prices.verify(verify)).line.grindDisplayName,"Средний");
+    }finally{
+      if(runtime)await runtime.app.runtimeController.closeRuntime("SIGTERM");
+      await database.resource.stop(AbortSignal.timeout(5_000));await pricingDatabase.resource.stop(AbortSignal.timeout(5_000));
+    }
+  });
+});
+
 void test("live owner HTTP lifecycle and durable confirm replay after response loss and app restart", {
   timeout: 180_000,
   skip: process.env.COFFEE_DB_LIVE_PROOF !== "1" ? "set COFFEE_DB_LIVE_PROOF=1 to run isolated PostgreSQL owner proof" : false,
@@ -176,6 +392,7 @@ void test("live owner HTTP lifecycle and durable confirm replay after response l
   await withCatalogPostgres(async ({adminClient, port, databaseName}) => {
     const password = `orders-live-${randomUUID().replaceAll("-", "")}`;
     await adminClient.query(`CREATE ROLE coffee_orders_service_rw LOGIN PASSWORD '${password}'`);
+    for(const role of ["coffee_orders_prepare_rw","coffee_orders_observer_rw","coffee_orders_convergence_rw"]) await adminClient.query(`CREATE ROLE ${role} NOLOGIN`);
     for (const migration of migrations) {
       await adminClient.query(await readFile(new URL(`apps/orders-service/migrations/${migration}`, root), "utf8"));
     }
@@ -423,6 +640,7 @@ void test("live owner replay-only matrix preserves five command results and reje
     await withCatalogPostgres(async ({adminClient, port, databaseName}) => {
       const password = `orders-live-${randomUUID().replaceAll("-", "")}`;
       await adminClient.query(`CREATE ROLE coffee_orders_service_rw LOGIN PASSWORD '${password}'`);
+      for(const role of ["coffee_orders_prepare_rw","coffee_orders_observer_rw","coffee_orders_convergence_rw"]) await adminClient.query(`CREATE ROLE ${role} NOLOGIN`);
       for (const migration of migrations) {
         await adminClient.query(await readFile(new URL(`apps/orders-service/migrations/${migration}`, root), "utf8"));
       }
@@ -431,7 +649,7 @@ void test("live owner replay-only matrix preserves five command results and reje
         ssl: false, pool, shutdownGraceMs: 40_000});
       await database.resource.start(AbortSignal.timeout(5_000));
       const counters = {customer: 0, pricing: 0};
-      const projection = new Map();
+
       let signs = 0;
       let runtime;
       const snapshot = async () => {
@@ -442,7 +660,7 @@ void test("live owner replay-only matrix preserves five command results and reje
         return Object.fromEntries(rows);
       };
       try {
-        runtime = await createOwnerApp(database, counters, {projection, customerDisplayName: piiCanary,
+        runtime = await createOwnerApp(database, counters, {customerDisplayName: piiCanary,
           onSign: () => {signs += 1;}});
         const {app} = runtime;
         const actor = "synthetic-api-public-actor-a";
@@ -469,17 +687,17 @@ void test("live owner replay-only matrix preserves five command results and reje
         const confirmed = await app.inject({method: "POST", url: confirmPath(orderRef),
           headers: requestHeaders(actor, confirmKey), payload: {expectedVersion: "4"}});
         assert.equal(confirmed.statusCode, 200, confirmed.body);
-        projection.set(orderRef, {orderVersion: "5", state: "OutOfSync"});
+        await adminClient.query("SELECT * FROM orders.write_card_projection($1,$2::jsonb)",[orderRef,JSON.stringify({order_ref:orderRef,cart_scope_ref:"aroma-primary",desired_revision:"0",desired_hash:null,observed_revision:"0",observed_cart_fingerprint:null,verified_desired_revision:null,verified_desired_hash:null,verified_observed_revision:null,verified_cart_fingerprint:null,attempt_ref:null,verified_attempt_ref:null,fence_epoch:null,state:"OutOfSync",blocker_codes:[],last_observed_at:null,source_message_id:"persisted-replay-fixture"})]);
         const reconcileUrl = `${orderPath(orderRef)}/commands/request-aroma-reconciliation`;
         const reconcileKey = randomUUID();
         const reconciled = await app.inject({method: "POST", url: reconcileUrl,
           headers: requestHeaders(actor, reconcileKey), payload: {expectedVersion: "5", reason: "operator request"}});
         assert.equal(reconciled.statusCode, 202, reconciled.body);
-        projection.clear();
+
         // Model lost replies: every operation was committed by the first process,
         // while all bodyless lookups run against a fresh owner process/store.
         await app.runtimeController.closeRuntime("SIGTERM");
-        runtime = await createOwnerApp(database, counters, {projection, customerDisplayName: piiCanary,
+        runtime = await createOwnerApp(database, counters, {customerDisplayName: piiCanary,
           onSign: () => {signs += 1;}});
         const replayApp = runtime.app;
 
