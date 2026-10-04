@@ -1,97 +1,378 @@
 issue: 9
 baseCommit: e278aeb10e57d37485542f8668f078456074b038
-status: locally-verified-with-environment-limitations
+status: draft-awaiting-contract-integration
 scope: >-
-  React SPA оператора первого запуска использует generated client-v1/edge-auth-v1 contracts,
-  server-derived browser session, CSRF, idempotency recovery, monotonic Order Card cache,
-  доступные deep links и explicit Confirm/Delete/AROMA actions; прежний browser App bootstrap удалён.
+  React operator flow #9 и проверенный grind consumer; ветка готова к публикации Draft PR, самостоятельная
+  сборка блокируется непринятыми contract outputs A #11
 inputs:
-  - {issue: 4, acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213, artifact: evidence/handoffs/issue-4.yaml, sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a}
-  - {issue: 5, acceptedMergeCommit: 7db7bc97b41962c0592b82853ebd7dc9bc43c290, artifact: evidence/handoffs/issue-5.yaml, sha256: f801608e05ca43243eb9258f58ae25b31a7fcfb943ba01f2afe370810998cbdb}
-  - {issue: 7, acceptedMergeCommit: c88c62c91e5a6833d26c8368e3f45e78948f051c, artifact: evidence/handoffs/issue-7.yaml, sha256: 692e3e7a6920e2e9203b7f8582636aeb692e4a6478a5473a95b8f2fa6395fc08}
-  - {issue: 8, acceptedMergeCommit: e278aeb10e57d37485542f8668f078456074b038, artifact: evidence/handoffs/issue-8.yaml, sha256: 7d793e9ffaa5030ea941323d1fa525427c3ff2ed903108fc6b5b884802ead411}
-  - {issue: 17, acceptedMergeCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4, artifact: evidence/handoffs/issue-17.yaml, sha256: bb593fe72358c832768de1cfb75a36a48062e72866c2df0988bf268b7871ca61}
-  - {issue: 18, acceptedMergeCommit: cd8cb2d8122622fd385b25944ebe9701f90f56e2, artifact: evidence/handoffs/issue-18.yaml, sha256: e91e59128844131e7011087bbdd9be3f315d48df1a38d76837d0f1e9186b31cb}
-  - {issue: 119, acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909, artifact: evidence/handoffs/issue-119.yaml, sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc}
-  - {issue: 137, acceptedMergeCommit: 15ff4cb294b68e98cbe7f8b3212381baee7f96a4, artifact: evidence/handoffs/issue-137.yaml, sha256: 01c0c9f1ffc77a42508ea75301243ef45388e03b72ac7d8110560682f58ce95b}
-  - {issue: 162, acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f, artifact: evidence/handoffs/issue-162.yaml, sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54}
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 5
+    acceptedMergeCommit: 7db7bc97b41962c0592b82853ebd7dc9bc43c290
+    artifact: evidence/handoffs/issue-5.yaml
+    sha256: f801608e05ca43243eb9258f58ae25b31a7fcfb943ba01f2afe370810998cbdb
+  - issue: 7
+    acceptedMergeCommit: c88c62c91e5a6833d26c8368e3f45e78948f051c
+    artifact: evidence/handoffs/issue-7.yaml
+    sha256: 692e3e7a6920e2e9203b7f8582636aeb692e4a6478a5473a95b8f2fa6395fc08
+  - issue: 8
+    acceptedMergeCommit: e278aeb10e57d37485542f8668f078456074b038
+    artifact: evidence/handoffs/issue-8.yaml
+    sha256: 7d793e9ffaa5030ea941323d1fa525427c3ff2ed903108fc6b5b884802ead411
+  - issue: 17
+    acceptedMergeCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4
+    artifact: evidence/handoffs/issue-17.yaml
+    sha256: bb593fe72358c832768de1cfb75a36a48062e72866c2df0988bf268b7871ca61
+  - issue: 18
+    acceptedMergeCommit: cd8cb2d8122622fd385b25944ebe9701f90f56e2
+    artifact: evidence/handoffs/issue-18.yaml
+    sha256: e91e59128844131e7011087bbdd9be3f315d48df1a38d76837d0f1e9186b31cb
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+  - issue: 137
+    acceptedMergeCommit: 15ff4cb294b68e98cbe7f8b3212381baee7f96a4
+    artifact: evidence/handoffs/issue-137.yaml
+    sha256: 01c0c9f1ffc77a42508ea75301243ef45388e03b72ac7d8110560682f58ce95b
+  - issue: 162
+    acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
 outputs:
-  - {artifact: apps/web/index.html, sha256: 7d5c3044c5ef1566be47b7ecbb1976ee0fce948ee8faee916c525645fbf6a0f7, consumers: [12, 13]}
-  - {artifact: apps/web/package.json, sha256: 34ef5fcd25c29446dbc99d83e9645bab6d1c947682e7bb057e5715aadff3a8a9, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/client.ts, sha256: ff42d0f11d916a0eab5dff120a38b98bc9238ae1afeb8501fbb6ffa40078ccef, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/format.ts, sha256: 5b9c6c15c4f6820d8fd6595d30856e99c4555c878796e687db49ea65c97cd2b2, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/idempotency.ts, sha256: 01313c8a7ad2e4df5daf6004916e31953b01f047fdd23df7ca64722d71d7372c, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/order-card.ts, sha256: bdc62f3501021017696a261f6f258d6881cf2c3c6dde022de620ffd8e0b84a0f, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/problem.tsx, sha256: d45589666248c96c2f0fdc188ed382dc8b463320288622a18cf224dbc567db36, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/remote.ts, sha256: cf68c7b2341502f3f72a7dc3432399db1b2286b55b0c8fd972f076154baf52f3, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/schema.ts, sha256: fd6a42bf0fcb72629dcef070a18d3db0de5e21145fa71024b8bc714ac4d85fd7, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/session-identity.ts, sha256: 7ac0eca61a7d83f4c4ba9ce3a5a5b58f14423eb9d77b86645e8c89f2d6f2cd1c, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/time.ts, sha256: 6a9844e931c148d09fe965be06466ef508ef38c5c99eaa8fbb49b957b70ed194, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/api/ulid.ts, sha256: fbbc6e223d8f2079c3c36539ebaf4641ac9b57e2b179143fae7eb1579087ede8, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/app/AppShell.tsx, sha256: ea494abda3f81890e0079019e8cde78225fabf638508c50dc5c2e003d4b27af2, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/app/App.tsx, sha256: 48e72f1c1383ae749b0cb08f8db539634d6bd2cf4212f771a371cf4863ca5cef, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/app/PageHeader.tsx, sha256: 1131810c32ec1494aadc13f4f20fceb885fc624d7ca3f3f8134cf6f364404d33, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/app/PendingRecovery.tsx, sha256: 8aa583acf41a0866d9c30dfb3d0c25ef914e2d3b64f27bba5e9863ce2444a0b0, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/app/query-client.ts, sha256: 0895406448ff16935e861b717767cb9dd317f3f94b058778c7a65dfb4e68da47, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/app/query-keys.ts, sha256: 457b551b198b5fb0a0b7ac40612f874062de844ad0467cd747efcc5094465356, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/app/session.tsx, sha256: 6a4b148f3926c4cdb20131a5e9a4dd1894445cb0dc36e764d1c8d5b9972fb7ca, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/main.tsx, sha256: e0d02a38247e74460d08c41aef23382870fcd8199f895cabffa952a15e374e02, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/routes/CatalogPage.tsx, sha256: 546e6ada33a694b4951f0c374262d19c7dac5f1b5f20142355967173ee21d315, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/routes/CustomersPage.tsx, sha256: cc602347d5f8caaa5160f1a80cb950b0ef393ddd32e709e870ff72a0464ee015, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/routes/NewOrderPage.tsx, sha256: 7e54ca2bb9dd6e8e24186ed33f8a2bba14d341449a89446272d562b6295025ef, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/routes/NotFoundPage.tsx, sha256: 7a80c2a924f2d96422ca0eb2a435d587fd7ca0e49cbe0467923bf0ed3155b834, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/routes/OrderCardPage.tsx, sha256: daf80fcbdde7a0a9b81351ba52b5f35b2ff0398e836c7d1f9b04da808dc243f1, consumers: [12, 13]}
-  - {artifact: apps/web/src/browser/styles.css, sha256: 2d09ced61b00727b918efce44649073905871aa7b0353fbc2f433dfe622102c2, consumers: [12, 13]}
-  - {artifact: apps/web/test/format.test.ts, sha256: 09c676fa7d763f615cf924e29dd051892315251c3e28354aa915e3d3ce7cdfb0, consumers: [12, 13]}
-  - {artifact: apps/web/test/idempotency.test.ts, sha256: 238efc7b941a1352e3f735683a5ef0132c6146beaa6a9f340a31cd195b82661b, consumers: [12, 13]}
-  - {artifact: apps/web/test/operator-flow.spec.ts, sha256: 51e1f92a8087d84e4e1ec5ac3d3a24bc0fcb5d18b32d7d908f6da61a7aab0e8d, consumers: [12, 13]}
-  - {artifact: apps/web/test/order-cache.test.ts, sha256: 0f77b866cfe11334fe878bb75d80b64eb51e6bb130d2b17b43134ba82552b0f9, consumers: [12, 13]}
-  - {artifact: apps/web/test/query-policy.test.ts, sha256: a9ad3e23a4883186031943ffc3d3ce6cfde6bdbab69864ac30438b0aa27ee275, consumers: [12, 13]}
-  - {artifact: apps/web/test/schema.test.ts, sha256: b91255aa35c7a4556422c31136164eb715009f950e489e5d9d4bdcb0fa5e1893, consumers: [12, 13]}
-  - {artifact: apps/web/test/time.test.ts, sha256: e4ae501475d776dfcbedbcc983b76833f2dcbc2aa9a8f2a61949efba969d8906, consumers: [12, 13]}
-  - {artifact: apps/web/test/ui-foundation.spec.ts, sha256: 27eee46de6b84ee8fee46c5d68ab1c88f457c663bdb81f9a30d44f905382cec5, consumers: [12, 13]}
-  - {artifact: apps/web/test/ulid.test.ts, sha256: 43a8192db55a8a39790eff8695726393940bd42e83c3fd677ce98bcf79c5aca5, consumers: [12, 13]}
-  - {artifact: apps/web/tsconfig.json, sha256: b8430cadc132e8dea26917752a191bf17034e5d2a58480d2b93f88ef373c2a65, consumers: [12, 13]}
-  - {artifact: docs/launch/07_FRONTEND_CONTRACT.md, sha256: 5207c657d4c60ea9b2b9053ddeefcbd7a5f4d3d3d100557e9dcb11d88d37e820, consumers: [12, 13]}
-  - {artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md, sha256: 9b7b38094dbbbeddf220fdfccc9bb0419c0ef9c0ad130e53465bb336b412705a, consumers: [12, 13]}
-  - {artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md, sha256: 7407665535a6a43f84e2765038a0ca1f848677adf63949ec6d80e66af7b8663a, consumers: [12, 13]}
-  - {artifact: docs/launch/README.md, sha256: 1508bf92edb8eecc16927d87b0665a37306890f0b921107fe275b682b61e8e28, consumers: [12, 13]}
-  - {artifact: package.json, sha256: 3551fd571353e55b2a1abcff045ffabdb84ab9dc39a38d164e7c4470c0cde252, consumers: [12, 13]}
-  - {artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts, sha256: 184061c7bcf38bbaf05d871fb25923f73ae0026f06f3db6ec0012c60eb9e7885, consumers: [12, 13]}
-  - {artifact: packages/platform-ui/src/components/alert.tsx, sha256: 760d3b256a7738e3e1107f46b3652a118582e6cc8cef4bd062de4ed3c31b486a, consumers: [12, 13]}
-  - {artifact: packages/platform-ui/src/components/badge.tsx, sha256: 6062bed175122b7c124e60c038c189684c5c098408c6673d8d5d0c8548759d21, consumers: [12, 13]}
-  - {artifact: packages/platform-ui/src/components/button.tsx, sha256: 467ba4d3192d15650d9406308bb541b36b66ea3f02e2198c03b0e18bb78bb848, consumers: [12, 13]}
-  - {artifact: packages/platform-ui/src/styles/index.css, sha256: a2c50d52bf0d64a9355dac5b3d3ad53ef3295fd94b5dbd0237c967e5b372ae72, consumers: [12, 13]}
-  - {artifact: pnpm-lock.yaml, sha256: 9f7474491b22d63b2fe717cf806c225b0a369739038899d72bfc7f4537a49b8e, consumers: [12, 13]}
-  - {artifact: scripts/check-browser-bundle.mjs, sha256: 457dbfa915dfe2a5a4ace246f60d6a453fa72a458d979f3e5bac78973d97e2ef, consumers: [12, 13]}
-  - {artifact: scripts/contracts-generate.mjs, sha256: b27e2f9ec657d8c74c4aae0718b8045a13296b2ac4f47b83ec0abad4d85c52c6, consumers: [12, 13]}
+  - artifact: apps/web/index.html
+    sha256: 7d5c3044c5ef1566be47b7ecbb1976ee0fce948ee8faee916c525645fbf6a0f7
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/package.json
+    sha256: 34ef5fcd25c29446dbc99d83e9645bab6d1c947682e7bb057e5715aadff3a8a9
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/client.ts
+    sha256: f8e0f68fdfd7727988810dca043bc6ba55568d15d0888732af423c0b752a72fb
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/format.ts
+    sha256: 5b9c6c15c4f6820d8fd6595d30856e99c4555c878796e687db49ea65c97cd2b2
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/idempotency.ts
+    sha256: 01313c8a7ad2e4df5daf6004916e31953b01f047fdd23df7ca64722d71d7372c
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/order-card.ts
+    sha256: bdc62f3501021017696a261f6f258d6881cf2c3c6dde022de620ffd8e0b84a0f
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/problem.tsx
+    sha256: d45589666248c96c2f0fdc188ed382dc8b463320288622a18cf224dbc567db36
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/remote.ts
+    sha256: 51939cc53c3aae9dcfc4536f1a1c0ac2145bdf49386b1fa5f806d9737727ba37
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/schema.ts
+    sha256: 15bc7f12ee2041186d9e56df7b694c6b11fae899477b443516d3f544618bd1fb
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/session-identity.ts
+    sha256: 7ac0eca61a7d83f4c4ba9ce3a5a5b58f14423eb9d77b86645e8c89f2d6f2cd1c
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/time.ts
+    sha256: 6a9844e931c148d09fe965be06466ef508ef38c5c99eaa8fbb49b957b70ed194
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/ulid.ts
+    sha256: fbbc6e223d8f2079c3c36539ebaf4641ac9b57e2b179143fae7eb1579087ede8
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/AppShell.tsx
+    sha256: ea494abda3f81890e0079019e8cde78225fabf638508c50dc5c2e003d4b27af2
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/App.tsx
+    sha256: 48e72f1c1383ae749b0cb08f8db539634d6bd2cf4212f771a371cf4863ca5cef
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/PageHeader.tsx
+    sha256: 1131810c32ec1494aadc13f4f20fceb885fc624d7ca3f3f8134cf6f364404d33
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/PendingRecovery.tsx
+    sha256: 8aa583acf41a0866d9c30dfb3d0c25ef914e2d3b64f27bba5e9863ce2444a0b0
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/query-client.ts
+    sha256: 0895406448ff16935e861b717767cb9dd317f3f94b058778c7a65dfb4e68da47
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/query-keys.ts
+    sha256: 457b551b198b5fb0a0b7ac40612f874062de844ad0467cd747efcc5094465356
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/session.tsx
+    sha256: 6a4b148f3926c4cdb20131a5e9a4dd1894445cb0dc36e764d1c8d5b9972fb7ca
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/main.tsx
+    sha256: e0d02a38247e74460d08c41aef23382870fcd8199f895cabffa952a15e374e02
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/CatalogPage.tsx
+    sha256: 24098c0eda500c911a3bc56a2ca52879381409652d0bf37934b7d745caccbd69
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/CustomersPage.tsx
+    sha256: cc602347d5f8caaa5160f1a80cb950b0ef393ddd32e709e870ff72a0464ee015
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/NewOrderPage.tsx
+    sha256: 7e54ca2bb9dd6e8e24186ed33f8a2bba14d341449a89446272d562b6295025ef
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/NotFoundPage.tsx
+    sha256: 7a80c2a924f2d96422ca0eb2a435d587fd7ca0e49cbe0467923bf0ed3155b834
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/OrderCardPage.tsx
+    sha256: 364eba479ed8bc3917a4186d2fc590bde2483cc7308894ab7f68e3f1d0aa279f
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/styles.css
+    sha256: 2d09ced61b00727b918efce44649073905871aa7b0353fbc2f433dfe622102c2
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/format.test.ts
+    sha256: 09c676fa7d763f615cf924e29dd051892315251c3e28354aa915e3d3ce7cdfb0
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/idempotency.test.ts
+    sha256: 238efc7b941a1352e3f735683a5ef0132c6146beaa6a9f340a31cd195b82661b
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/operator-flow.spec.ts
+    sha256: 218c2e55cedf5ab07870e963600442979c8e8de41b397dd9f25da2e5966b0f26
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/order-cache.test.ts
+    sha256: 0f77b866cfe11334fe878bb75d80b64eb51e6bb130d2b17b43134ba82552b0f9
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/query-policy.test.ts
+    sha256: a9ad3e23a4883186031943ffc3d3ce6cfde6bdbab69864ac30438b0aa27ee275
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/schema.test.ts
+    sha256: 80c8f51d97fcd47168241c16b4ce9f26a4051231c09ab4234f65ba99b3f35dd6
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/time.test.ts
+    sha256: e4ae501475d776dfcbedbcc983b76833f2dcbc2aa9a8f2a61949efba969d8906
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/ui-foundation.spec.ts
+    sha256: 27eee46de6b84ee8fee46c5d68ab1c88f457c663bdb81f9a30d44f905382cec5
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/ulid.test.ts
+    sha256: 43a8192db55a8a39790eff8695726393940bd42e83c3fd677ce98bcf79c5aca5
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/tsconfig.json
+    sha256: b8430cadc132e8dea26917752a191bf17034e5d2a58480d2b93f88ef373c2a65
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/07_FRONTEND_CONTRACT.md
+    sha256: 5207c657d4c60ea9b2b9053ddeefcbd7a5f4d3d3d100557e9dcb11d88d37e820
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: 9b7b38094dbbbeddf220fdfccc9bb0419c0ef9c0ad130e53465bb336b412705a
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
+    sha256: 76b7073e19164c2a593bc70f4a2cb1aab859ddb9aa9e665b5791f0ec838486e9
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/README.md
+    sha256: 1508bf92edb8eecc16927d87b0665a37306890f0b921107fe275b682b61e8e28
+    consumers:
+      - 12
+      - 13
+  - artifact: package.json
+    sha256: 3551fd571353e55b2a1abcff045ffabdb84ab9dc39a38d164e7c4470c0cde252
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
+    sha256: 184061c7bcf38bbaf05d871fb25923f73ae0026f06f3db6ec0012c60eb9e7885
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-ui/src/components/alert.tsx
+    sha256: 760d3b256a7738e3e1107f46b3652a118582e6cc8cef4bd062de4ed3c31b486a
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-ui/src/components/badge.tsx
+    sha256: 6062bed175122b7c124e60c038c189684c5c098408c6673d8d5d0c8548759d21
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-ui/src/components/button.tsx
+    sha256: 467ba4d3192d15650d9406308bb541b36b66ea3f02e2198c03b0e18bb78bb848
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-ui/src/styles/index.css
+    sha256: a2c50d52bf0d64a9355dac5b3d3ad53ef3295fd94b5dbd0237c967e5b372ae72
+    consumers:
+      - 12
+      - 13
+  - artifact: pnpm-lock.yaml
+    sha256: 9f7474491b22d63b2fe717cf806c225b0a369739038899d72bfc7f4537a49b8e
+    consumers:
+      - 12
+      - 13
+  - artifact: scripts/check-browser-bundle.mjs
+    sha256: 457dbfa915dfe2a5a4ace246f60d6a453fa72a458d979f3e5bac78973d97e2ef
+    consumers:
+      - 12
+      - 13
+  - artifact: scripts/contracts-generate.mjs
+    sha256: b27e2f9ec657d8c74c4aae0718b8045a13296b2ac4f47b83ec0abad4d85c52c6
+    consumers:
+      - 12
+      - 13
 verification:
-  - command: 'pnpm versions:check && pnpm contracts:check-generated && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm browser:bundle:check && pnpm test:ui && pnpm test:web-foundation && pnpm test:web-queries && WEB_OPERATOR_PORT=4176 pnpm test:web-idempotency && WEB_OPERATOR_PORT=4176 pnpm test:web-accessibility && WEB_OPERATOR_PORT=4176 pnpm test:web-operator && git diff --check'
+  - command: >-
+      pnpm versions:check && pnpm contracts:check-generated && pnpm architecture:check && pnpm
+      rule-parity:check && pnpm lint && pnpm browser:bundle:check && pnpm test:ui && pnpm test:web-foundation
+      && pnpm test:web-queries && WEB_OPERATOR_PORT=4176 pnpm test:web-idempotency && WEB_OPERATOR_PORT=4176
+      pnpm test:web-accessibility && WEB_OPERATOR_PORT=4176 pnpm test:web-operator && git diff --check
     result: passed
     exitCode: 0
     detail: >-
+      Историческая проверка baseline #9 до grind delta, commit adfca3f9df79a180ce84539c12c956e55c7e3b41.
       Current-tree type/build, generated drift, architecture, lint, UI foundation, browser bundle,
-      query/cache/time/format/schema/ULID units, route, idempotency, accessibility and full operator flows passed.
-  - command: 'WEB_SCREENSHOT_DIR=$TMPDIR/issue-9-served-surface-final15 WEB_OPERATOR_PORT=4176 pnpm test:web-operator'
+      query/cache/time/format/schema/ULID units, route, idempotency, accessibility and full operator flows
+      passed.
+  - command: WEB_SCREENSHOT_DIR=$TMPDIR/issue-9-served-surface-final15 WEB_OPERATOR_PORT=4176 pnpm test:web-operator
     result: passed
     exitCode: 0
     detail: >-
-      Captured desktop/mobile happy, auth-unavailable and forbidden surfaces; Playwright proved no
-      horizontal overflow, serious/critical axe findings, or active action target below 44 px.
-  - command: 'node --test --test-reporter=spec tests/contracts/breaking.test.mjs'
+      Историческая проверка baseline #9 до grind delta, commit adfca3f9df79a180ce84539c12c956e55c7e3b41.
+      Captured desktop/mobile happy, auth-unavailable and forbidden surfaces; Playwright proved no horizontal
+      overflow, serious/critical axe findings, or active action target below 44 px.
+  - command: node --test --test-reporter=spec tests/contracts/breaking.test.mjs
     result: baseline-failed
     exitCode: 1
     detail: >-
-      The same failure is reproduced in detached origin/develop worktree; issue #9 does not change
-      client-v1 OpenAPI and does not hide this pre-existing baseline defect.
-  - command: 'node tools/compose-smoke.mjs --stub-secrets --keep --project-name coffee-issue9-debug2'
+      The same failure is reproduced in detached origin/develop worktree; issue #9 does not change client-v1
+      OpenAPI and does not hide this pre-existing baseline defect.
+  - command: node tools/compose-smoke.mjs --stub-secrets --keep --project-name coffee-issue9-debug2
     result: environment-blocked
     exitCode: 1
     detail: >-
-      Images built, but owner readiness returned 503 because external network coffee_postgres_data
-      had no coffee_postgres endpoint. The diagnostic stack and tmpfs secret directory were removed.
+      Images built, but owner readiness returned 503 because external network coffee_postgres_data had no
+      coffee_postgres endpoint. The diagnostic stack and tmpfs secret directory were removed.
+  - command: pnpm exec tsc -b apps/web --pretty false
+    result: failed-missing-pending-contract
+    exitCode: 1
+    detail: >-
+      4 октября 2026, самостоятельная ветка #9: 7 diagnostics для
+      grindOptions/grindDisplayName/sourceGrindKeyHash в старых generated client-v1 types; contract outputs A
+      находятся в открытом PR #171. Лог /tmp/coffee-issue9-publish-checks/01-typecheck.log
+  - command: pnpm test:web-queries
+    result: failed-missing-pending-contract
+    exitCode: 1
+    detail: >-
+      4 октября 2026: 14/15 PASS, один schema test FAIL: старый OrderItem запрещает grind hash вместо
+      dependentRequired проверки пары. Лог /tmp/coffee-issue9-publish-checks/02-queries.log
+  - command: >-
+      pnpm test:web-queries; pnpm test:web-routes; pnpm test:web-idempotency; pnpm test:web-accessibility;
+      pnpm test:playwright; pnpm test:web-bundle; pnpm lint; pnpm contracts:check-generated
+    result: passed-local-integration-only
+    detail: >-
+      Ранее выполненные receipts 107/110/114/126/150/151/153/158/159/160 в отдельном managed #9+#11 checkout.
+      Текущий UI7 fingerprint 98bb2c30774b3e2480caebbd19c21a26996fda7a044b9cbbcc7c995e72c5e232 совпадает; 15
+      query tests, 6 idempotency units, full browser PASS, gzip139524B. Не является PASS самостоятельной ветки
+      #9.
 limitations:
-  - Full Edge/Compose served-surface acceptance remains blocked until the required external PostgreSQL endpoint is attached to coffee_postgres_data.
-  - AROMA producer/grind integration remains fixture-only until issue #11 supplies the production consumer evidence.
-  - Production IdP, production TLS/PKI, live provider mutation, deployment, capacity and owner acceptance were not exercised.
-  - Screenshot evidence is local under $TMPDIR/issue-9-served-surface-final15 and is not a committed artifact.
+  - >-
+    PR #9 публикуется как Draft. До merge необходимы accepted contract outputs A из PR #171, согласование с
+    develop, native generation и повтор обязательных frontend checks. #11 ещё не accepted predecessor; его
+    backend не входит в этот PR.
+  - >-
+    Исторический baseline #9 был проверен отдельно. Текущие typecheck/query failures самостоятельной ветки
+    зафиксированы; PASS browser suites относится только к совместному integration checkout с побайтно тем же
+    UI source.
+  - >-
+    Full Edge/Compose browser served-surface acceptance в историческом #9 proof не завершена: запуск
+    блокировался отсутствующим external PostgreSQL endpoint. Последующий Compose #11 protocol/health proof не
+    заменяет browser-through-Edge acceptance.
+  - >-
+    Production IdP, production TLS/PKI, live provider mutation, deployment, capacity и owner acceptance
+    frontend не проверялись. Скриншоты/raw receipts доступны только локально; GitHub CI/review/accepted merge
+    не подтверждены.
+  - >-
+    Пользовательские uncommitted agent settings и local container tooling исключены из коммита #9 и сохранены
+    побайтно.
+pendingContractInput:
+  issue: 11
+  pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171
+  headCommit: 14ae10ea500adf2e4da4f62fa00a2676ad754503
+  accepted: false
+  artifacts:
+    - artifact: contracts/openapi/client-v1.yaml
+      sha256: 69b4ae3c7522abcb3e8a0927552507219bbab2b5bfd34bc0c28538384c921974
+    - artifact: packages/generated/client-v1/src/types.gen.ts
+      sha256: 7e1aabbed1355a2e37f97fa142c24495febcbf5323a386a59d19012e9e6cb42e
+sourceFingerprint:
+  algorithm: >-
+    sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded; README taken from HEAD to
+    exclude unrelated user edit)
+  sha256: 752de40e090eeaf4390085937fb6a5c7d0ec4d5305ad71d56f6fa1078e38d08e

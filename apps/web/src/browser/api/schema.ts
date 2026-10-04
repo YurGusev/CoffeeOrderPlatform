@@ -3,6 +3,7 @@ type JsonSchema = Readonly<{
   allOf?: readonly JsonSchema[];
   anyOf?: readonly JsonSchema[];
   const?: unknown;
+  dependentRequired?: Readonly<Record<string, readonly string[]>>;
   enum?: readonly unknown[];
   format?: string;
   items?: JsonSchema;
@@ -94,6 +95,13 @@ function validate(schema: JsonSchema, value: unknown, path: string): string[] {
     const record = value as Record<string, unknown>;
     for (const key of schema.required ?? []) {
       if (!(key in record)) return [`${path}/${key}: обязательное поле отсутствует`];
+    }
+    for (const [key, dependencies] of Object.entries(schema.dependentRequired ?? {})) {
+      if (key in record) {
+        for (const dependency of dependencies) {
+          if (!(dependency in record)) return [`${path}/${dependency}: обязательное поле отсутствует вместе с ${key}`];
+        }
+      }
     }
     if (schema.additionalProperties === false && schema.properties) {
       for (const key of Object.keys(record)) {

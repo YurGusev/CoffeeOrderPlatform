@@ -27,6 +27,10 @@ function isStaleQuote(error: unknown): boolean {
   return error instanceof ApiError && error.problem.code === "ORDER_QUOTE_STALE";
 }
 
+function isGrindUnavailable(error: unknown): boolean {
+  return error instanceof ApiError && error.problem.code === "PRICING_GRIND_NOT_AVAILABLE";
+}
+
 export function CatalogPage(): ReactElement {
   const session = useSession();
   const navigate = useNavigate();
@@ -43,6 +47,7 @@ export function CatalogPage(): ReactElement {
   const [draftQuery, setDraftQuery] = useState(query);
   const [draftAvailability, setDraftAvailability] = useState(availability);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [grindSelections, setGrindSelections] = useState<Record<string, string>>({});
   const [added, setAdded] = useState<string>();
   const order = useOrderCard(session.actorRef, orderRef);
   const editable = order.data?.status === "Draft" && order.data.allowedActions.includes("edit-items");
@@ -104,6 +109,7 @@ export function CatalogPage(): ReactElement {
       <PageHeader description={`Добавление товаров в заказ ${orderRef}`} eyebrow="ШАГ 3 · КАТАЛОГ">Поиск товаров</PageHeader>
       {added ? <Alert title="Товар добавлен" tone="success">Карточка заказа обновлена. <Link href={`/app/orders/${added}`}>К заказу</Link></Alert> : null}
       {isStaleQuote(addItem.error) ? <Alert title="Цена устарела" tone="warning">Товар не добавлен. Обновите поиск и получите новую цену.</Alert> : null}
+      {isGrindUnavailable(addItem.error) ? <Alert title="Помол недоступен" tone="warning">Товар не добавлен. Выберите подтверждённый вариант помола и повторите действие.</Alert> : null}
       <section className="surface search-surface">
         <div className="search-row catalog-search-row">
           <Field aria-label="Поиск товара" label="Название товара" maxLength={200} onChange={setDraftQuery} value={draftQuery} />
@@ -122,20 +128,30 @@ export function CatalogPage(): ReactElement {
         {query.length === 0 ? <Empty description="Введите название — поиск начнётся через 300 мс после ввода." title="Начните поиск товара" /> : null}
         {products.isPending && query.length >= 2 ? <Loading label="Ищем товары" /> : null}
         {products.isError ? <ProblemAlert error={products.error} /> : null}
-        {addItem.isError && !isStaleQuote(addItem.error) ? <ProblemAlert error={addItem.error} /> : null}
+        {addItem.isError && !isStaleQuote(addItem.error) && !isGrindUnavailable(addItem.error) ? <ProblemAlert error={addItem.error} /> : null}
         {products.isSuccess && products.data.items.length === 0 ? <Empty description="Измените запрос или фильтр доступности." title="Товары не найдены" /> : null}
         <div className="product-grid">
           {products.data?.items.map((product) => {
             const key = `${product.productRef}:${product.variantRef}`;
             const quantity = quantities[key] ?? "1";
+            const grindOptions = product.grindOptions ?? [];
+            const selectedGrindHash = grindSelections[key] ?? "";
+            const selectedGrindUnavailable = selectedGrindHash !== "" && !grindOptions.some((option) => option.sourceGrindKeyHash === selectedGrindHash);
             return (
               <article className="product-card" key={key}>
                 <div className="product-card-heading"><Badge tone={product.availability === "Available" ? "success" : "warning"}>{availabilityLabels[product.availability]}</Badge><span>{unitLabels[product.unit]}</span></div>
                 <h2>{product.displayName}</h2>
                 <small>{product.mappingAvailable ? "Привязка к AROMA доступна" : "Нет привязки к AROMA"}</small>
                 <Field aria-label={`Количество для ${product.displayName}`} label="Количество" onChange={(value) => setQuantities((current) => ({ ...current, [key]: value }))} value={quantity} />
+                {grindOptions.length > 0 || selectedGrindUnavailable ? <label className="select-field">Помол
+                  <select aria-label={`Помол для ${product.displayName}`} onChange={(event) => setGrindSelections((current) => ({ ...current, [key]: event.target.value }))} value={selectedGrindHash}>
+                    <option value="">Без выбора</option>
+                    {selectedGrindUnavailable ? <option disabled value={selectedGrindHash}>Выбранный помол недоступен</option> : null}
+                    {grindOptions.map((option) => <option key={option.sourceGrindKeyHash} value={option.sourceGrindKeyHash}>{option.displayName}</option>)}
+                  </select>
+                </label> : null}
                 <Button isDisabled={product.availability !== "Available" || !product.mappingAvailable || !quantity.trim()} isPending={addItem.isPending} onPress={() => addItem.mutate(
-                  { itemRef: newUlidRef("itm"), product, quantity },
+                  { itemRef: newUlidRef("itm"), product, quantity, ...(grindSelections[key] ? { sourceGrindKeyHash: grindSelections[key] } : {}) },
                   { onSuccess: (next) => setAdded(next.orderRef) },
                 )}>Добавить</Button>
               </article>

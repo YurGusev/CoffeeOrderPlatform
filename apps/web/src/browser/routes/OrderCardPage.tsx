@@ -153,10 +153,10 @@ export function OrderCardPage(): ReactElement {
             const quantity = quantities[item.itemRef] ?? item.quantity;
             return (
               <article aria-label={`Позиция заказа ${item.itemRef}`} className="order-item" key={item.itemRef}>
-                <div><h3>{item.displayName}</h3><p>{formatMoney(item.lineTotalMinor, card.pricing?.currency)}</p><small>Позиция {item.linePosition}</small></div>
+                <div><h3>{item.displayName}</h3><p>{formatMoney(item.lineTotalMinor, card.pricing?.currency)}</p><small>Позиция {item.linePosition}</small>{item.grindDisplayName ? <small>Помол: {item.grindDisplayName}</small> : null}</div>
                 <Field aria-label={`Количество ${item.displayName}`} isDisabled={!editable || pending} label="Количество" onChange={(value) => setQuantities((current) => ({ ...current, [item.itemRef]: value }))} value={quantity} />
                 <div className="item-actions">
-                  <Button isDisabled={!editable || pending || quantity === item.quantity} onPress={() => quoteAndPut.mutate({ itemRef: item.itemRef, product: productForItem(item), quantity })} size="compact" variant="secondary">Обновить</Button>
+                  <Button isDisabled={!editable || pending || quantity === item.quantity} onPress={() => quoteAndPut.mutate({ itemRef: item.itemRef, product: productForItem(item), quantity, ...(item.sourceGrindKeyHash ? { sourceGrindKeyHash: item.sourceGrindKeyHash } : {}) })} size="compact" variant="secondary">Обновить</Button>
                   <Button isDisabled={!editable || pending} onPress={(event) => {
                     dialogReturnFocusRef.current = event.target as HTMLButtonElement;
                     setDeleteTarget(item);

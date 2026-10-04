@@ -160,3 +160,53 @@ bundle внутри образа.
 
 Deployment, registry publication и выбор production digest остаются отдельным решением
 оператора.
+
+## 8. Публикация #9 и согласованный consumer #11 — 4 октября 2026
+
+Ветка `feature/9-react-operator-flow` основана на accepted
+`develop@e278aeb10e57d37485542f8668f078456074b038`. Базовая реализация находится
+в локальном коммите `adfca3f9df79a180ce84539c12c956e55c7e3b41`; дополнительно
+в ветку перенесены ровно семь проверенных UI files из отдельного integration
+checkout #9 + #11. Backend, миграции и public contract changes #11 остаются в
+[PR #171](https://github.com/YurGusev/CoffeeOrderPlatform/pull/171), commit
+`14ae10ea500adf2e4da4f62fa00a2676ad754503`.
+
+UI предлагает Catalog grindOptions, передаёт optional sourceGrindKeyHash в quote
+и PUT и сохраняет его при изменении количества. Card показывает frozen
+grindDisplayName. При исчезновении варианта stale selection остаётся видимым,
+а явный сброс возвращает omission. PRICING_GRIND_NOT_AVAILABLE завершает intent
+без PUT. Validator проверяет dependentRequired hash/displayName. Исправление
+CSRF browser fixture проверяет invalidation event и cleanup intent вместо
+кратковременного alert; production session flow не менялся.
+
+Fingerprint семи UI files (sorted path + NUL + sha256(file), joined LF):
+`98bb2c30774b3e2480caebbd19c21a26996fda7a044b9cbbcc7c995e72c5e232`.
+Он совпадает с integration source, для которого ранее получены:
+
+- `pnpm test:web-queries`: 15/15 PASS;
+- `pnpm test:web-routes`: PASS;
+- `pnpm test:web-idempotency`: 6/6 unit и browser group PASS;
+- `pnpm test:web-accessibility` и `pnpm test:playwright`: PASS;
+- `pnpm test:web-bundle`: PASS, initial JS gzip 139524 B ≤ 256000 B;
+- `pnpm lint` и `pnpm contracts:check-generated`: PASS.
+
+Evidence integration опубликовано в
+[PR #171](https://github.com/YurGusev/CoffeeOrderPlatform/blob/14ae10ea500adf2e4da4f62fa00a2676ad754503/evidence/issue-9-11-consumer.md).
+Raw logs находятся локально в `/tmp/coffee-issue11-final-checks`; это mock browser
+proof, а не production IdP/provider или full browser-through-Edge acceptance.
+
+Проверка самостоятельной ветки #9 на 4 октября:
+`pnpm exec tsc -b apps/web --pretty false` — FAIL (7 diagnostics: отсутствуют
+grindOptions, grindDisplayName и sourceGrindKeyHash в старых generated types);
+`pnpm test:web-queries` — 14/15 PASS, 1 FAIL из-за старой OrderItem schema,
+которая запрещает hash вместо проверки связанного displayName. Логи:
+`/tmp/coffee-issue9-publish-checks/{01-typecheck,02-queries}.log`. Это известная
+зависимость нового grind consumer от ещё не merged contract delta #11.
+
+PR #9 публикуется как Draft. Для готовности к merge после принятия #171 нужно
+согласовать #9 с актуальной develop, разрешить shared manifest/lock/generator
+и runtime-schema пересечения, выполнить native contracts generation/check и
+повторить обязательные frontend checks на итоговой ветке. Не копировать backend
+#11 или чужой manifest целиком в PR #9. Полный #11 не становится новым
+первоначальным prerequisite #9; здесь требуется его конкретный contract output A.
+GitHub CI, review, accepted merge и deployment этой публикацией не подтверждаются.

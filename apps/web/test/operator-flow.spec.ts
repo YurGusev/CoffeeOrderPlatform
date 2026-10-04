@@ -19,6 +19,8 @@ const policyVersionRef = "pvr_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const timestamp = "2026-09-28T12:00:00.000Z";
 const correlationPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const hash = "a".repeat(64);
+const grindHash = "b".repeat(64);
+const replacementGrindHash = "c".repeat(64);
 const screenshotDir = process.env.WEB_SCREENSHOT_DIR;
 
 async function capture(page: Page, name: string): Promise<void> {
@@ -40,6 +42,8 @@ function orderCard(
   status: "Draft" | "Confirmed" = "Draft",
   withItem = false,
   aromaState: "NotRequested" | "PendingObservation" | "OutOfSync" | "Converging" | "InSync" | "Blocked" | "UnknownOutcome" = status === "Confirmed" ? "PendingObservation" : "NotRequested",
+  sourceGrindKeyHash?: string,
+  aromaBlockerCode: "MAPPING_MISSING" | "AROMA_QUANTITY_NOT_SUPPORTED" = "MAPPING_MISSING",
 ) {
   return {
     orderRef,
@@ -59,13 +63,14 @@ function orderCard(
       quoteLineNumber: 1,
       unitMinor: "25000",
       lineTotalMinor: "50000",
+      ...(sourceGrindKeyHash ? { sourceGrindKeyHash, grindDisplayName: "Мелкий помол" } : {}),
     }] : [],
     pricing: withItem ? { totalMinor: "50000", currency: "RUB", quoteProofs: [{ quoteRef, hash, expiresAt: "2030-01-01T00:10:00.000Z" }] } : null,
     aroma: {
       state: aromaState,
       desiredRevision: status === "Confirmed" ? "1" : "0",
       observedRevision: "0",
-      blockers: aromaState === "Blocked" ? [{ code: "MAPPING_MISSING", message: "Для позиции отсутствует безопасное сопоставление" }] : [],
+      blockers: aromaState === "Blocked" ? [{ code: aromaBlockerCode, message: aromaBlockerCode === "AROMA_QUANTITY_NOT_SUPPORTED" ? "Количество нельзя безопасно передать в AROMA" : "Для позиции отсутствует безопасное сопоставление" }] : [],
     },
     allowedActions: status === "Draft"
       ? ["edit-items", "confirm"]
@@ -104,6 +109,8 @@ type MockTelemetry = Readonly<{
   correlationFailures: string[];
   draftRequests: Array<Readonly<{ body: string | null; key: string | undefined; replayOnly: boolean }>>;
   logoutRequests: string[];
+  quoteRequests: string[];
+  putRequests: string[];
   reconciliationReasons: string[];
   releaseReconciliationRefresh: () => void;
   setSessionAvailable: (available: boolean) => void;
@@ -112,16 +119,19 @@ type MockTelemetry = Readonly<{
 
 async function installCommonMocks(page: Page, options: {
   abortFirstDraft?: boolean;
+  aromaBlocker?: "MAPPING_MISSING" | "AROMA_QUANTITY_NOT_SUPPORTED";
   aromaScenario?: "Blocked" | "UnknownOutcome";
   catalogUnavailable?: boolean;
   conflictPut?: boolean;
   customersUnavailable?: boolean;
+  grindSelectionRefresh?: boolean;
   customerValidationError?: boolean;
   draftStatusMismatch?: boolean;
   expiredSession?: boolean;
   forbiddenCustomers?: boolean;
   holdReconciliationRefresh?: boolean;
   initialItem?: boolean;
+  initialItemGrind?: boolean;
   malformedCustomers?: boolean;
   orderNotFound?: boolean;
   orderUnavailable?: boolean;
@@ -129,16 +139,20 @@ async function installCommonMocks(page: Page, options: {
   reconciliationRefreshFails?: boolean;
   replayWrongTerminal?: boolean;
   sessionUnavailable?: boolean;
+  staleGrind?: boolean;
   stalePut?: boolean;
 } = {}): Promise<MockTelemetry> {
   let draftAttempt = 0;
+  let grindOptionSearchCount = 0;
   let current = options.aromaScenario
-    ? orderCard("5", "Confirmed", true, options.aromaScenario)
-    : options.initialItem ? orderCard("2", "Draft", true) : orderCard();
+    ? orderCard("5", "Confirmed", true, options.aromaScenario, options.initialItemGrind ? grindHash : undefined, options.aromaBlocker)
+    : options.initialItem ? orderCard("2", "Draft", true, "NotRequested", options.initialItemGrind ? grindHash : undefined) : orderCard();
   let reconciliationAccepted = false;
   let activeActor = "operator-1";
   let sessionAvailable = true;
   let loggedOut = false;
+  const quoteRequests: string[] = [];
+  const putRequests: string[] = [];
   let releaseReconciliationRefresh = (): void => undefined;
   const reconciliationRefreshGate = options.holdReconciliationRefresh
     ? new Promise<void>((resolve) => { releaseReconciliationRefresh = resolve; })
@@ -147,6 +161,8 @@ async function installCommonMocks(page: Page, options: {
     correlationFailures: [],
     draftRequests: [],
     logoutRequests: [],
+    quoteRequests,
+    putRequests,
     reconciliationReasons: [],
     releaseReconciliationRefresh: () => releaseReconciliationRefresh(),
     setSessionAvailable: (available) => { sessionAvailable = available; },
@@ -302,13 +318,30 @@ async function installCommonMocks(page: Page, options: {
         correlationId: "00000000-0000-4000-8000-000000000011",
         errors: [],
       }, 503);
+      let grindOptions = [{ sourceGrindKeyHash: grindHash, displayName: "Мелкий помол" }];
+      if (options.grindSelectionRefresh) {
+        grindOptionSearchCount += 1;
+        if (grindOptionSearchCount === 2) grindOptions = [];
+        else if (grindOptionSearchCount > 2) grindOptions = [{ sourceGrindKeyHash: replacementGrindHash, displayName: "Крупный помол B" }];
+      }
       return fulfillJson(route, {
       snapshotRevision: "7",
-      items: [{ productRef, variantRef, displayName: "Капучино", unit: "piece", availability: "Available", mappingAvailable: true }],
+      items: [{ productRef, variantRef, displayName: "Капучино", unit: "piece", availability: "Available", mappingAvailable: true, grindOptions }],
       nextCursor: null,
       });
     }
     if (url.pathname === "/api/client-v1/pricing/quotes" && method === "POST") {
+      quoteRequests.push(request.postData() ?? "");
+      if (options.staleGrind) return fulfillJson(route, {
+        type: "about:blank",
+        title: "Grind unavailable",
+        status: 422,
+        code: "PRICING_GRIND_NOT_AVAILABLE",
+        detail: "Выбранный помол больше недоступен",
+        instance: url.pathname,
+        correlationId: "00000000-0000-4000-8000-000000000015",
+        errors: [],
+      }, 422);
       if (options.pricingUnavailable) return fulfillJson(route, {
         type: "about:blank",
         title: "Pricing unavailable",
@@ -319,6 +352,8 @@ async function installCommonMocks(page: Page, options: {
         correlationId: "00000000-0000-4000-8000-000000000012",
         errors: [],
       }, 503);
+      const quoteRequest = request.postDataJSON() as { lines?: Array<{ sourceGrindKeyHash?: string }> };
+      const sourceGrindKeyHash = quoteRequest.lines?.[0]?.sourceGrindKeyHash;
       return fulfillJson(route, {
       quoteRef,
       policyVersionRef,
@@ -327,12 +362,13 @@ async function installCommonMocks(page: Page, options: {
       createdAt: timestamp,
       expiresAt: "2030-01-01T00:10:00.000Z",
       currency: "RUB",
-      lines: [{ lineNumber: 1, productRef, variantRef, productDisplayName: "Капучино", quantity: "2", unit: "piece", unitMinor: "25000", lineTotalMinor: "50000" }],
+      lines: [{ lineNumber: 1, productRef, variantRef, productDisplayName: "Капучино", quantity: "2", unit: "piece", unitMinor: "25000", lineTotalMinor: "50000", ...(sourceGrindKeyHash ? { sourceGrindKeyHash, grindDisplayName: "Мелкий помол" } : {}) }],
       totalMinor: "50000",
       hash,
       }, 201);
     }
     if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "PUT") {
+      putRequests.push(request.postData() ?? "");
       if (options.stalePut) {
         return fulfillJson(route, {
           type: "about:blank",
@@ -358,7 +394,8 @@ async function installCommonMocks(page: Page, options: {
           errors: [],
         }, 409);
       }
-      current = orderCard("2", "Draft", true);
+      const putRequest = request.postDataJSON() as { sourceGrindKeyHash?: string };
+      current = orderCard("2", "Draft", true, "NotRequested", putRequest.sourceGrindKeyHash);
       return fulfillJson(route, current);
     }
     if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "DELETE") {
@@ -645,6 +682,8 @@ async function freshSessionBlocksActorConfusion(context: BrowserContext): Promis
 async function csrfChangeDuringIntentPreparationBlocksMutation(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   await page.addInitScript(() => {
+    const scope = window as Window & { __coffeeCsrfInvalidated?: boolean };
+    window.addEventListener("coffee:session-invalidated", () => { scope.__coffeeCsrfInvalidated = true; }, { once: true });
     const original = Storage.prototype.setItem.bind(sessionStorage);
     let switched = false;
     Storage.prototype.setItem = function setItem(key: string, value: string): void {
@@ -658,7 +697,11 @@ async function csrfChangeDuringIntentPreparationBlocksMutation(context: BrowserC
   const telemetry = await installCommonMocks(page);
   await page.goto(`${origin}/app/orders/new?customerRef=${customerRef}`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Создать черновик" }).click();
-  await page.getByText("Требуется вход").waitFor();
+  await page.waitForFunction(() => {
+    const scope = window as Window & { __coffeeCsrfInvalidated?: boolean };
+    return scope.__coffeeCsrfInvalidated === true
+      && Object.keys(sessionStorage).every((key) => !key.startsWith("coffee-platform:intent:v1:"));
+  });
   assert.equal(telemetry.draftRequests.length, 0);
   assert.equal(await page.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
   await page.close();
@@ -894,12 +937,100 @@ async function aromaBlockedAndUnknownOutcomeUseOwnerActions(context: BrowserCont
   await unknownPage.close();
 
   const blockedPage = await context.newPage();
-  await installCommonMocks(blockedPage, { aromaScenario: "Blocked" });
+  await installCommonMocks(blockedPage, { aromaBlocker: "AROMA_QUANTITY_NOT_SUPPORTED", aromaScenario: "Blocked" });
   await blockedPage.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
   await blockedPage.getByText("Заблокировано").waitFor();
-  await blockedPage.getByText("Для позиции отсутствует безопасное сопоставление").waitFor();
+  await blockedPage.getByText("Количество нельзя безопасно передать в AROMA").waitFor();
   assert.equal(await blockedPage.getByRole("button", { name: "Запросить сверку AROMA" }).count(), 0);
   await blockedPage.close();
+}
+
+async function grindSelectionFlows(context: BrowserContext): Promise<void> {
+  const selectedPage = await context.newPage();
+  const selected = await installCommonMocks(selectedPage);
+  await selectedPage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+  await selectedPage.getByRole("combobox", { name: "Помол для Капучино" }).selectOption(grindHash);
+  await selectedPage.getByRole("button", { name: "Добавить" }).click();
+  await selectedPage.getByText("Товар добавлен").waitFor();
+  assert.equal(JSON.parse(selected.quoteRequests[0] ?? "{}").lines[0].sourceGrindKeyHash, grindHash);
+  assert.equal(JSON.parse(selected.putRequests[0] ?? "{}").sourceGrindKeyHash, grindHash);
+  await selectedPage.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  await selectedPage.getByText("Помол: Мелкий помол").waitFor();
+  await selectedPage.close();
+
+  const unselectedPage = await context.newPage();
+  const unselected = await installCommonMocks(unselectedPage);
+  await unselectedPage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+  assert.equal(await unselectedPage.getByRole("combobox", { name: "Помол для Капучино" }).inputValue(), "");
+  await unselectedPage.getByRole("button", { name: "Добавить" }).click();
+  await unselectedPage.getByText("Товар добавлен").waitFor();
+  assert.equal("sourceGrindKeyHash" in JSON.parse(unselected.quoteRequests[0] ?? "{}").lines[0], false);
+  assert.equal("sourceGrindKeyHash" in JSON.parse(unselected.putRequests[0] ?? "{}"), false);
+  await unselectedPage.close();
+
+  const refreshedPage = await context.newPage();
+  const refreshed = await installCommonMocks(refreshedPage, { grindSelectionRefresh: true });
+  await refreshedPage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+  const grindSelect = refreshedPage.getByRole("combobox", { name: "Помол для Капучино" });
+  await grindSelect.selectOption(grindHash);
+  const searchFor = async (query: string): Promise<void> => {
+    const response = refreshedPage.waitForResponse((candidate) => {
+      const url = new URL(candidate.url());
+      return url.pathname === "/api/client-v1/catalog/products" && url.searchParams.get("query") === query;
+    });
+    await refreshedPage.getByRole("textbox", { name: "Название товара" }).fill(query);
+    await refreshedPage.getByRole("button", { name: "Найти" }).click();
+    await response;
+  };
+  await searchFor("кофе");
+  const unavailableOption = refreshedPage.getByRole("option", { name: "Выбранный помол недоступен" });
+  await unavailableOption.waitFor({ state: "attached" });
+  assert.equal(await grindSelect.inputValue(), grindHash);
+  assert.notEqual(await unavailableOption.getAttribute("disabled"), null);
+  await grindSelect.selectOption("");
+  await grindSelect.waitFor({ state: "detached" });
+  assert.equal(await grindSelect.count(), 0, "явное отсутствие выбора должно сбрасывать устаревший hash");
+  const clearedQuoteResponse = refreshedPage.waitForResponse((response) => response.url().endsWith("/api/client-v1/pricing/quotes") && response.request().method() === "POST");
+  const clearedPutResponse = refreshedPage.waitForResponse((response) => /\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(new URL(response.url()).pathname) && response.request().method() === "PUT");
+  await refreshedPage.getByRole("button", { name: "Добавить" }).click();
+  await Promise.all([clearedQuoteResponse, clearedPutResponse]);
+  assert.equal("sourceGrindKeyHash" in JSON.parse(refreshed.quoteRequests[0] ?? "{}").lines[0], false);
+  assert.equal("sourceGrindKeyHash" in JSON.parse(refreshed.putRequests[0] ?? "{}"), false);
+  await searchFor("кофе b");
+  await grindSelect.selectOption(replacementGrindHash);
+  const replacementQuoteResponse = refreshedPage.waitForResponse((response) => response.url().endsWith("/api/client-v1/pricing/quotes") && response.request().method() === "POST");
+  const replacementPutResponse = refreshedPage.waitForResponse((response) => /\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(new URL(response.url()).pathname) && response.request().method() === "PUT");
+  await refreshedPage.getByRole("button", { name: "Добавить" }).click();
+  await Promise.all([replacementQuoteResponse, replacementPutResponse]);
+  assert.equal(JSON.parse(refreshed.quoteRequests[1] ?? "{}").lines[0].sourceGrindKeyHash, replacementGrindHash);
+  assert.equal(JSON.parse(refreshed.putRequests[1] ?? "{}").sourceGrindKeyHash, replacementGrindHash);
+  await refreshedPage.close();
+
+  const unavailablePage = await context.newPage();
+  const unavailable = await installCommonMocks(unavailablePage, { staleGrind: true });
+  await unavailablePage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+  await unavailablePage.getByRole("combobox", { name: "Помол для Капучино" }).selectOption(grindHash);
+  await unavailablePage.getByRole("button", { name: "Добавить" }).click();
+  await unavailablePage.getByText("Помол недоступен", { exact: true }).waitFor();
+  assert.equal(unavailable.quoteRequests.length, 1);
+  assert.equal(JSON.parse(unavailable.quoteRequests[0] ?? "{}").lines[0].sourceGrindKeyHash, grindHash);
+  assert.equal(unavailable.putRequests.length, 0);
+  assert.equal(await unavailablePage.getByRole("region", { name: "Восстановление команд" }).count(), 0);
+  assert.equal(await unavailablePage.evaluate(() => Object.keys(sessionStorage).filter((key) => key.startsWith("coffee-platform:intent:v1:")).length), 0);
+  await unavailablePage.close();
+
+  const quantityPage = await context.newPage();
+  const quantity = await installCommonMocks(quantityPage, { initialItem: true, initialItemGrind: true });
+  await quantityPage.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  await quantityPage.getByText("Помол: Мелкий помол").waitFor();
+  await quantityPage.getByRole("textbox", { name: "Количество Капучино" }).fill("3");
+  const quoteResponse = quantityPage.waitForResponse((response) => response.url().endsWith("/api/client-v1/pricing/quotes") && response.request().method() === "POST");
+  const putResponse = quantityPage.waitForResponse((response) => /\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(new URL(response.url()).pathname) && response.request().method() === "PUT");
+  await quantityPage.getByRole("button", { name: "Обновить" }).click();
+  await Promise.all([quoteResponse, putResponse]);
+  assert.equal(JSON.parse(quantity.quoteRequests[0] ?? "{}").lines[0].sourceGrindKeyHash, grindHash);
+  assert.equal(JSON.parse(quantity.putRequests[0] ?? "{}").sourceGrindKeyHash, grindHash);
+  await quantityPage.close();
 }
 
 async function malformedResponse(context: BrowserContext): Promise<void> {
@@ -1077,6 +1208,7 @@ async function main(): Promise<void> {
       await unavailableSessionHidesPrivateRoutes(context);
       await forbiddenResourceKeepsSessionAndShowsRightsError(context);
       await unavailableDependenciesPreserveOperatorContext(context);
+      await grindSelectionFlows(context);
       await aromaBlockedAndUnknownOutcomeUseOwnerActions(context);
     }
     if (["all", "idempotency"].includes(group)) {

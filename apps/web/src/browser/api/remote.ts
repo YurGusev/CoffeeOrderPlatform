@@ -133,6 +133,7 @@ export type QuoteAndPutInput = Readonly<{
   itemRef: string;
   product: Pick<CatalogProductSummary, "productRef" | "variantRef">;
   quantity: string;
+  sourceGrindKeyHash?: string;
 }>;
 
 export function useQuoteAndPutItem(actorRef: string, orderRef: string) {
@@ -146,7 +147,12 @@ export function useQuoteAndPutItem(actorRef: string, orderRef: string) {
       }
       const quote = await api.createQuote(actorRef, {
         customerRef: current.customer.customerRef,
-        lines: [{ productRef: input.product.productRef, quantity: input.quantity, variantRef: input.product.variantRef }],
+        lines: [{
+          productRef: input.product.productRef,
+          quantity: input.quantity,
+          variantRef: input.product.variantRef,
+          ...(input.sourceGrindKeyHash ? { sourceGrindKeyHash: input.sourceGrindKeyHash } : {}),
+        }],
       });
       const line = quote.lines[0];
       if (!line) throw new ProtocolError("Сервис Pricing вернул цену без строки товара");
@@ -158,6 +164,7 @@ export function useQuoteAndPutItem(actorRef: string, orderRef: string) {
         quoteLineNumber: line.lineNumber,
         quoteRef: quote.quoteRef,
         variantRef: input.product.variantRef,
+        ...(input.sourceGrindKeyHash ? { sourceGrindKeyHash: input.sourceGrindKeyHash } : {}),
       });
     },
     onMutate: () => queryClient.cancelQueries({ queryKey: orderKey }),
