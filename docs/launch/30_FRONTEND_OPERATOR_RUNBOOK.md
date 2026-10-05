@@ -210,3 +210,41 @@ PR #9 публикуется как Draft. Для готовности к merge 
 #11 или чужой manifest целиком в PR #9. Полный #11 не становится новым
 первоначальным prerequisite #9; здесь требуется его конкретный contract output A.
 GitHub CI, review, accepted merge и deployment этой публикацией не подтверждаются.
+
+
+## 9. Исправления review #172 — 5 октября 2026
+
+В рабочую ветку #9 интегрирован согласованный public `client-v1` contract output A
+из #171: optional grind options/hash/displayName, связанная пара полей и terminal
+`PRICING_GRIND_NOT_AVAILABLE`. Runtime schemas и transport types создаются штатной
+генерацией из OpenAPI. InternalApi, backend и миграции #11 остаются в #171.
+Эта интеграция не означает accepted merge #11: production consumer требует
+принятого backend producer; PR #172 остаётся Draft до принятия этого provider.
+
+Отсутствие `availability` в URL означает исходный фильтр `Available`; явный
+`availability=` означает «Все» и отсутствие availability filter в API. Submit
+и debounce сохраняют это различие; Back/Forward синхронизируют select с URL.
+Order Card скрывает cached snapshot и действия после 403/404; временный 503
+сохраняет карточку с предупреждением о свежести. Catalog также прекращает
+вывод действий при ошибке чтения заказа.
+
+`projectionVersion` защищает business representation. Orders вычисляет
+`allowedActions` при чтении, поэтому истечение quote законно убирает `confirm`
+без новой версии. Consumer принимает изменение только `allowedActions` при той
+же версии; расхождение остальных полей отклоняет, более старую версию игнорирует.
+Foundation fixture использует session expiry на час позже текущего времени.
+
+На самостоятельной ветке #9 после исправлений прошли `pnpm versions:check`,
+`pnpm typecheck`, `pnpm contracts:lint`, `pnpm contracts:check-generated`,
+`pnpm contracts:breaking`, `pnpm contracts:test` (48/48),
+`pnpm architecture:check`, `pnpm lint`, `pnpm test:web-queries` (15/15),
+`pnpm test:web-idempotency` (6/6 unit и browser group),
+`pnpm test:web-accessibility`, `pnpm test:web-foundation`,
+`pnpm test:web-routes` и итоговый `pnpm test:playwright`.
+`pnpm test:web-bundle`: gzip 139612 B при лимите 256000 B.
+Итоговый браузерный прогон покрывает «Все» после submit/debounce/Back/Forward,
+скрытие cached Card при 403/404 и сохранение карточки при 503.
+Логи находятся в `/tmp/coffee-pr171-172-fixes-20261005/ui/`; предыдущие
+неуспешные прогоны сохранены как история исправления тестовой синхронизации.
+Это локальный browser proof с mock API. Browser-through-Edge/Compose,
+production IdP/provider, deployment и accepted merge этим прогоном не проверены.

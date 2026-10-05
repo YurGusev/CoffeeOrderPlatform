@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { preview, type PreviewServer } from "vite";
 import { chromium, type Browser, type BrowserContext, type Page, type Route } from "playwright";
+import { expect } from "playwright/test";
 import { AxeBuilder } from "@axe-core/playwright";
 
 const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -113,6 +114,7 @@ type MockTelemetry = Readonly<{
   putRequests: string[];
   reconciliationReasons: string[];
   releaseReconciliationRefresh: () => void;
+  armOrderFailure: () => void;
   setSessionAvailable: (available: boolean) => void;
   switchActor: () => void;
 }>;
@@ -135,6 +137,7 @@ async function installCommonMocks(page: Page, options: {
   malformedCustomers?: boolean;
   orderNotFound?: boolean;
   orderUnavailable?: boolean;
+  orderFailureOnRefetch?: 403 | 404;
   pricingUnavailable?: boolean;
   reconciliationRefreshFails?: boolean;
   replayWrongTerminal?: boolean;
@@ -143,6 +146,8 @@ async function installCommonMocks(page: Page, options: {
   stalePut?: boolean;
 } = {}): Promise<MockTelemetry> {
   let draftAttempt = 0;
+  let orderCardReads = 0;
+  let orderFailureArmed = false;
   let grindOptionSearchCount = 0;
   let current = options.aromaScenario
     ? orderCard("5", "Confirmed", true, options.aromaScenario, options.initialItemGrind ? grindHash : undefined, options.aromaBlocker)
@@ -165,6 +170,7 @@ async function installCommonMocks(page: Page, options: {
     putRequests,
     reconciliationReasons: [],
     releaseReconciliationRefresh: () => releaseReconciliationRefresh(),
+    armOrderFailure: () => { orderFailureArmed = true; },
     setSessionAvailable: (available) => { sessionAvailable = available; },
     switchActor: () => { activeActor = "operator-2"; },
   };
@@ -282,6 +288,20 @@ async function installCommonMocks(page: Page, options: {
       return fulfillJson(route, current, 201, replayed ? { "Idempotency-Replayed": "true" } : {});
     }
     if (url.pathname === `/api/client-v1/orders/${orderRef}` && method === "GET") {
+      orderCardReads += 1;
+      if (orderFailureArmed && orderCardReads > 1 && options.orderFailureOnRefetch) {
+        const status = options.orderFailureOnRefetch;
+        return fulfillJson(route, {
+          type: "about:blank",
+          title: status === 403 ? "Forbidden" : "Order not found",
+          status,
+          code: status === 403 ? "AUTHORIZATION_FORBIDDEN" : "ORDER_NOT_FOUND",
+          detail: status === 403 ? "Actor cannot read order" : "Заказ не найден",
+          instance: url.pathname,
+          correlationId: "00000000-0000-4000-8000-000000000016",
+          errors: [],
+        }, status);
+      }
       if (options.holdReconciliationRefresh && reconciliationAccepted) await reconciliationRefreshGate;
       if (options.orderNotFound) return fulfillJson(route, {
         type: "about:blank",
@@ -769,6 +789,7 @@ async function reconciliationAcceptanceCannotBeResubmitted(context: BrowserConte
   } catch {
     throw new Error(`Не показано предупреждение после принятой сверки и failed GET: ${(await page.locator("body").textContent()) ?? ""}`);
   }
+  assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 1, "503 refetch should keep the cached Card visible");
   assert.deepEqual(telemetry.reconciliationReasons, ["Проверка после подтверждения"]);
   assert.equal(await page.getByRole("button", { name: "Запросить сверку AROMA" }).count(), 0);
   await page.close();
@@ -1082,6 +1103,39 @@ async function routeSemantics(context: BrowserContext): Promise<void> {
 
   await page.goto(`${origin}/app/catalog?orderRef=${orderRef}`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Начните поиск товара" }).waitFor();
+  assert.equal(new URL(page.url()).searchParams.has("availability"), false, "default Available should stay implicit in the URL");
+  await page.getByLabel("Доступность").selectOption("");
+  await page.getByRole("button", { name: "Найти" }).click();
+  assert.equal(new URL(page.url()).searchParams.has("availability"), true, "All should be explicit in the URL");
+  assert.equal(new URL(page.url()).searchParams.get("availability"), "");
+  const availabilityFilter = page.getByLabel("Доступность");
+  const waitForCatalogRequest = (query: string, availability?: string) => page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === "/api/client-v1/catalog/products" && url.searchParams.get("query") === query && (availability === undefined ? !url.searchParams.has("availability") : url.searchParams.get("availability") === availability);
+  });
+  const initialAllRequest = waitForCatalogRequest("капучино");
+  await page.getByRole("textbox", { name: "Название товара" }).fill("капучино");
+  await initialAllRequest;
+  await page.getByLabel("Доступность").selectOption("Stopped");
+  const stoppedRequest = waitForCatalogRequest("капучино", "Stopped");
+  await page.getByRole("button", { name: "Найти" }).click();
+  await stoppedRequest;
+  assert.equal(new URL(page.url()).searchParams.get("availability"), "Stopped", "Stopped should be committed before history navigation");
+  await page.goBack({ waitUntil: "networkidle" });
+  await expect(page).toHaveURL((url) => url.searchParams.get("availability") === "");
+  assert.equal(new URL(page.url()).searchParams.get("availability"), "", "Back should restore All in the URL");
+  await expect(availabilityFilter, "Back should restore All in the filter").toHaveValue("");
+  await page.goForward({ waitUntil: "networkidle" });
+  await expect(page).toHaveURL((url) => url.searchParams.get("availability") === "Stopped");
+  await expect(availabilityFilter, "Forward should restore the committed filter").toHaveValue("Stopped");
+  await page.goBack({ waitUntil: "networkidle" });
+  await expect(page).toHaveURL((url) => url.searchParams.get("availability") === "");
+  const debounceAllRequest = waitForCatalogRequest("латте");
+  await page.getByRole("textbox", { name: "Название товара" }).fill("латте");
+  await debounceAllRequest;
+  await page.getByRole("heading", { name: "Капучино" }).waitFor();
+  assert.equal(new URL(page.url()).searchParams.get("availability"), "", "debounced search must preserve All");
+  assert.equal(new URL(page.url()).searchParams.get("q"), "латте");
 
   await page.goto(`${origin}/app/orders/invalid`, { waitUntil: "networkidle" });
   await page.getByText(/Некорректный orderRef/u).waitFor();
@@ -1114,6 +1168,27 @@ async function missingOrderUsesRouteRecovery(context: BrowserContext): Promise<v
   const violations = await new AxeBuilder({ page }).analyze();
   assert.equal(violations.violations.filter(({ impact }) => impact === "serious" || impact === "critical").length, 0);
   await page.close();
+}
+
+async function fatalOrderRefetchHidesCachedCard(context: BrowserContext): Promise<void> {
+  for (const status of [403, 404] as const) {
+    const page = await context.newPage();
+    const telemetry = await installCommonMocks(page, { aromaScenario: "UnknownOutcome", orderFailureOnRefetch: status });
+    await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+    try {
+      await page.getByRole("heading", { name: "Иван Петров" }).waitFor({ timeout: 5_000 });
+    } catch {
+      throw new Error(`Initial Order Card missing for refetch ${status}: ${(await page.locator("body").textContent()) ?? ""}`);
+    }
+    telemetry.armOrderFailure();
+    await page.getByRole("button", { name: "Проверить состояние" }).click();
+    if (status === 403) await page.getByText("Недостаточно прав").waitFor();
+    else await page.getByRole("heading", { name: "Заказ не найден" }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Проверить состояние" }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Запросить сверку AROMA" }).count(), 0);
+    await page.close();
+  }
 }
 
 async function browserBackDoesNotRepeatDraft(context: BrowserContext): Promise<void> {
@@ -1202,6 +1277,7 @@ async function main(): Promise<void> {
     if (["all", "routes"].includes(group)) {
       await routeSemantics(context);
       await missingOrderUsesRouteRecovery(context);
+      await fatalOrderRefetchHidesCachedCard(context);
       await browserBackDoesNotRepeatDraft(context);
       await staleQuoteAndConcurrentChange(context);
       await deleteItemReturnsFocusToItemsHeading(context);

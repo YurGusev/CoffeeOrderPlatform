@@ -23,7 +23,10 @@ test("order cache rejects stale and divergent equal-version cards", () => {
   const current = card("3");
   assert.equal(acceptOrderCard(current, card("2")), current);
   assert.equal(acceptOrderCard(current, card("3")), current);
+  const expiredQuote = { ...card("3"), allowedActions: ["edit-items"] as const };
+  assert.equal(acceptOrderCard(current, expiredQuote), expiredQuote);
   assert.throws(() => acceptOrderCard(current, { ...card("3"), status: "Confirmed" }), OrderCardProtocolError);
+  assert.throws(() => acceptOrderCard(current, { ...expiredQuote, version: "4" }), OrderCardProtocolError);
   const newer = card("4");
   assert.equal(acceptOrderCard(current, newer), newer);
 });

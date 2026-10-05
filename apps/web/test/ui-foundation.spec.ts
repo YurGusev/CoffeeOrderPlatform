@@ -155,7 +155,7 @@ async function testProductionShell(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   const signals = observePage(page);
   await page.route("**/auth/session", (route) => route.fulfill({
-    body: JSON.stringify({ actorRef: "operator-foundation", expiresAt: "2026-09-29T12:00:00.000Z" }),
+    body: JSON.stringify({ actorRef: "operator-foundation", expiresAt: Temporal.Now.instant().add({ hours: 1 }).toString() }),
     contentType: "application/json",
     status: 200,
   }));

@@ -1,9 +1,9 @@
 issue: 9
 baseCommit: e278aeb10e57d37485542f8668f078456074b038
-status: draft-awaiting-contract-integration
+status: draft-awaiting-provider-acceptance
 scope: >-
-  React operator flow #9 и проверенный grind consumer; ветка готова к публикации Draft PR, самостоятельная
-  сборка блокируется непринятыми contract outputs A #11
+  React operator flow #9: пять замечаний review исправлены, public grind contract output A #11 интегрирован и
+  сгенерирован штатно; самостоятельные build/runtime/browser gates проходят, producer #171 ещё не принят
 inputs:
   - issue: 4
     acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
@@ -68,7 +68,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/api/order-card.ts
-    sha256: bdc62f3501021017696a261f6f258d6881cf2c3c6dde022de620ffd8e0b84a0f
+    sha256: bfb68cef6930934a822981a9d6e96fd19d0334d995b33293b9cdd112b56a4b9c
     consumers:
       - 12
       - 13
@@ -102,13 +102,13 @@ outputs:
     consumers:
       - 12
       - 13
-  - artifact: apps/web/src/browser/app/AppShell.tsx
-    sha256: ea494abda3f81890e0079019e8cde78225fabf638508c50dc5c2e003d4b27af2
+  - artifact: apps/web/src/browser/app/App.tsx
+    sha256: 48e72f1c1383ae749b0cb08f8db539634d6bd2cf4212f771a371cf4863ca5cef
     consumers:
       - 12
       - 13
-  - artifact: apps/web/src/browser/app/App.tsx
-    sha256: 48e72f1c1383ae749b0cb08f8db539634d6bd2cf4212f771a371cf4863ca5cef
+  - artifact: apps/web/src/browser/app/AppShell.tsx
+    sha256: ea494abda3f81890e0079019e8cde78225fabf638508c50dc5c2e003d4b27af2
     consumers:
       - 12
       - 13
@@ -143,7 +143,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/CatalogPage.tsx
-    sha256: 24098c0eda500c911a3bc56a2ca52879381409652d0bf37934b7d745caccbd69
+    sha256: 7c40ab49820b224d89384f515cdc62838ec6c33ddb225a00cda19f9f864b9b74
     consumers:
       - 12
       - 13
@@ -163,7 +163,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/OrderCardPage.tsx
-    sha256: 364eba479ed8bc3917a4186d2fc590bde2483cc7308894ab7f68e3f1d0aa279f
+    sha256: 48ee57bdd7c2d1be1f50e36e7cce98cb6970a0442879e0914b4e4e46b880d9e7
     consumers:
       - 12
       - 13
@@ -183,12 +183,12 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: 218c2e55cedf5ab07870e963600442979c8e8de41b397dd9f25da2e5966b0f26
+    sha256: ea2ddca1f2d309b7b3afd20e1e38dd2cb37c6ac8bed188e9fb6ccca781e41059
     consumers:
       - 12
       - 13
   - artifact: apps/web/test/order-cache.test.ts
-    sha256: 0f77b866cfe11334fe878bb75d80b64eb51e6bb130d2b17b43134ba82552b0f9
+    sha256: c95492b8ec1784a3d98ecee9118030696720ec75bc66fc7fab76e4eff4d1af00
     consumers:
       - 12
       - 13
@@ -208,7 +208,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/ui-foundation.spec.ts
-    sha256: 27eee46de6b84ee8fee46c5d68ab1c88f457c663bdb81f9a30d44f905382cec5
+    sha256: 32820eb53313e1bc6ae9a94c71af2ccaa2d55c0a3f7e084fb44c70a67ecfbe2c
     consumers:
       - 12
       - 13
@@ -219,6 +219,31 @@ outputs:
       - 13
   - artifact: apps/web/tsconfig.json
     sha256: b8430cadc132e8dea26917752a191bf17034e5d2a58480d2b93f88ef373c2a65
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/compatibility-evidence.yaml
+    sha256: e4ad4e8213c7ca20df4ef06a49686dc26883450a1f047fe8cfaf139aa1fd9a22
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/fixtures/positive/http/problems.json
+    sha256: 3a53684664b8abc87afbb8382687ec4b28b36aaf32e91d531463f27cd9f0f387
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/fixtures/positive/http/success.json
+    sha256: dd2a5527398e64477a3c1a2907d58c2e5bb62abc332e91bb86d1e5b5809df5aa
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/manifest.yaml
+    sha256: a0edb168ce7db130376825710e1ccf80c6e5c83d7df9ff1767bfd0009e2c1e9f
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: 69b4ae3c7522abcb3e8a0927552507219bbab2b5bfd34bc0c28538384c921974
     consumers:
       - 12
       - 13
@@ -233,7 +258,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: 76b7073e19164c2a593bc70f4a2cb1aab859ddb9aa9e665b5791f0ec838486e9
+    sha256: 3f8da75b68fbdda6ccfc61389cc161132ebd10fffe04be81e642468832a0dea5
     consumers:
       - 12
       - 13
@@ -247,8 +272,18 @@ outputs:
     consumers:
       - 12
       - 13
+  - artifact: packages/generated/client-v1/src/index.ts
+    sha256: aa46f5b86f8ead20442a47ca02dcc6c5f065b398805e30b1c9b35fa20b32e41d
+    consumers:
+      - 12
+      - 13
   - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
-    sha256: 184061c7bcf38bbaf05d871fb25923f73ae0026f06f3db6ec0012c60eb9e7885
+    sha256: 369d395e54f53f63b79f935bc52e8d28ca94f3b4eca7f174a1916f1440358c26
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: 7e1aabbed1355a2e37f97fa142c24495febcbf5323a386a59d19012e9e6cb42e
     consumers:
       - 12
       - 13
@@ -282,8 +317,18 @@ outputs:
     consumers:
       - 12
       - 13
+  - artifact: scripts/contracts-breaking.mjs
+    sha256: fc1b15c3d90bdc2f64486546092277d1e16a0865aae890d200e6104062079269
+    consumers:
+      - 12
+      - 13
   - artifact: scripts/contracts-generate.mjs
     sha256: b27e2f9ec657d8c74c4aae0718b8045a13296b2ac4f47b83ec0abad4d85c52c6
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/contracts/breaking.test.mjs
+    sha256: 81bcbd0bddcc53ef5c44a22c8c8d74fef4e8573e3881db0f030697964c53d801
     consumers:
       - 12
       - 13
@@ -341,38 +386,129 @@ verification:
       Текущий UI7 fingerprint 98bb2c30774b3e2480caebbd19c21a26996fda7a044b9cbbcc7c995e72c5e232 совпадает; 15
       query tests, 6 idempotency units, full browser PASS, gzip139524B. Не является PASS самостоятельной ветки
       #9.
+  - command: pnpm versions:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/versions.log
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/typecheck-final.log
+  - command: pnpm contracts:lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/contracts-lint.log
+  - command: pnpm contracts:check-generated
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/contracts-generated.log
+  - command: pnpm contracts:breaking
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/contracts-breaking.log
+  - command: pnpm contracts:test
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/contracts-test.log
+  - command: pnpm architecture:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/architecture-final.log
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/lint-final.log
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-queries.log
+  - command: pnpm test:web-idempotency
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-idempotency.log
+  - command: pnpm test:web-accessibility
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-accessibility.log
+  - command: pnpm test:web-foundation
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-foundation.log
+  - command: pnpm test:playwright
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/playwright-final.log
+  - command: pnpm test:web-bundle
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-bundle-final.log
+  - command: pnpm test:web-routes
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, worker: свежая сборка и routes group PASS; окончательный tester pnpm test:playwright
+      повторно покрывает те же route regressions, cached 403/404 и transient 503.
 limitations:
   - >-
-    PR #9 публикуется как Draft. До merge необходимы accepted contract outputs A из PR #171, согласование с
-    develop, native generation и повтор обязательных frontend checks. #11 ещё не accepted predecessor; его
-    backend не входит в этот PR.
+    PR #172 остаётся Draft до принятия producer #171 и согласования с актуальной develop. Public contract
+    output A интегрирован локально; backend #11 и InternalApi в PR #172 не перенесены. #11 пока не accepted
+    predecessor.
   - >-
-    Исторический baseline #9 был проверен отдельно. Текущие typecheck/query failures самостоятельной ветки
-    зафиксированы; PASS browser suites относится только к совместному integration checkout с побайтно тем же
-    UI source.
+    Неуспешные baseline и 4 октября typecheck/query результаты выше — история; финальные самостоятельные gates
+    5 октября прошли. Более ранние route/full browser failures при отладке тестовой синхронизации сохранены в
+    локальных receipts; окончательный full Playwright PASS.
   - >-
-    Full Edge/Compose browser served-surface acceptance в историческом #9 proof не завершена: запуск
-    блокировался отсутствующим external PostgreSQL endpoint. Последующий Compose #11 protocol/health proof не
-    заменяет browser-through-Edge acceptance.
+    Browser-through-Edge/Compose served-surface acceptance не повторялась. Исторический запуск #9 блокировался
+    отсутствующим external PostgreSQL endpoint; последующий Compose #11 proof не заменяет browser-through-Edge
+    acceptance.
   - >-
-    Production IdP, production TLS/PKI, live provider mutation, deployment, capacity и owner acceptance
-    frontend не проверялись. Скриншоты/raw receipts доступны только локально; GitHub CI/review/accepted merge
-    не подтверждены.
+    Production IdP, TLS/PKI, live provider mutation, deployment и owner acceptance frontend не проверялись.
+    GitHub CI, review и accepted merge локальными проверками не подтверждены.
   - >-
     Пользовательские uncommitted agent settings и local container tooling исключены из коммита #9 и сохранены
-    побайтно.
+    побайтно. README в outputs берётся из HEAD.
 pendingContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171
-  headCommit: 14ae10ea500adf2e4da4f62fa00a2676ad754503
+  headCommit: 3abdd4a7f937225af3d2e6cdcb5bd1b76744a796
   accepted: false
   artifacts:
     - artifact: contracts/openapi/client-v1.yaml
       sha256: 69b4ae3c7522abcb3e8a0927552507219bbab2b5bfd34bc0c28538384c921974
     - artifact: packages/generated/client-v1/src/types.gen.ts
       sha256: 7e1aabbed1355a2e37f97fa142c24495febcbf5323a386a59d19012e9e6cb42e
+  integratedLocally: true
+  integratedFromCommit: 3384569711553b7d860e459d56e4c302df4c6d7f
 sourceFingerprint:
   algorithm: >-
     sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded; README taken from HEAD to
     exclude unrelated user edit)
-  sha256: 752de40e090eeaf4390085937fb6a5c7d0ec4d5305ad71d56f6fa1078e38d08e
+  sha256: 1e0c3b8e8b2cd20947a93698a1720487b2639df49fe8c77212a95ac08c5e5b8c

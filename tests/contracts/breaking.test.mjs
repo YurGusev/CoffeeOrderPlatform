@@ -86,6 +86,39 @@ void test('issue-8 Confirm response expansion guard rejects an unapproved ref re
   assert.match(result.stderr, /breaking contract.*response \$ref changed/);
 });
 
+void test('approved #11 pricing grind terminal schema expands command recovery only with its 422 fixture', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'contracts-breaking-pricing-recovery-'));
+  const base = join(directory, 'base');
+  const current = join(directory, 'current');
+  const sourcePath = 'contracts/openapi/client-v1.yaml';
+  const operationId = 'createPricingQuote';
+  const previous = {openapi: '3.2.0', info: {title: 'client', version: '1'}, 'x-command-recovery': {terminalSchemas: {[operationId]: ['PricingQuoteResponse']}}};
+  const next = structuredClone(previous);
+  next['x-command-recovery'].terminalSchemas[operationId].push('ErrorPricingGrindNotAvailable');
+  const evidence = {approvedCommandRecoveryExpansions: [{
+    schemaPath: sourcePath, operationId, addedTerminalSchema: 'ErrorPricingGrindNotAvailable', issue: 11,
+    fixture: 'contracts/fixtures/positive/http/problems.json', fixtureCase: 'ErrorPricingGrindNotAvailable',
+  }]};
+  try {
+    for (const path of [base, current]) await mkdir(join(path, 'contracts/openapi'), {recursive: true});
+    await mkdir(join(current, 'contracts/fixtures/positive/http'), {recursive: true});
+    await writeFile(join(base, sourcePath), yaml.dump(previous));
+    await writeFile(join(current, sourcePath), yaml.dump(next));
+    await writeFile(join(current, 'contracts/compatibility-evidence.yaml'), yaml.dump(evidence));
+    const fixture = [{document: 'client-v1', operationId, status: 422, schema: 'ErrorPricingGrindNotAvailable'}];
+    const fixturePath = join(current, evidence.approvedCommandRecoveryExpansions[0].fixture);
+    await writeFile(fixturePath, JSON.stringify(fixture));
+    const run = () => spawnSync(process.execPath, ['scripts/contracts-breaking.mjs', '--base', base, '--current', current], {cwd: root, encoding: 'utf8'});
+    const accepted = run();
+    assert.equal(accepted.status, 0, `${accepted.stdout}\n${accepted.stderr}`);
+    next['x-command-recovery'].terminalSchemas[operationId].push('ErrorFuturePricingFailure');
+    await writeFile(join(current, sourcePath), yaml.dump(next));
+    const rejected = run();
+    assert.notEqual(rejected.status, 0, `${rejected.stdout}\n${rejected.stderr}`);
+    assert.match(rejected.stderr, /command recovery (protocol changed|expansion lacks matching evidence)/u);
+  } finally { await rm(directory, {recursive: true, force: true}); }
+});
+
 void test('breaking guard admits optional expansion only with fixture and policy evidence', async () => {
   const result = await red((document) => { document.components.schemas.Item.properties.note = { type: 'string' }; }, true);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);

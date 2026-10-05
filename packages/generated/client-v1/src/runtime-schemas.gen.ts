@@ -389,6 +389,29 @@ export const clientV1Schemas = {
         "type": "string",
         "format": "uri",
         "maxLength": 2048
+      },
+      "grindOptions": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sourceGrindKeyHash",
+            "displayName"
+          ],
+          "properties": {
+            "sourceGrindKeyHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        }
       }
     }
   },
@@ -456,6 +479,29 @@ export const clientV1Schemas = {
               "type": "string",
               "format": "uri",
               "maxLength": 2048
+            },
+            "grindOptions": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sourceGrindKeyHash",
+                  "displayName"
+                ],
+                "properties": {
+                  "sourceGrindKeyHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              }
             }
           }
         }
@@ -586,6 +632,10 @@ export const clientV1Schemas = {
             "quantity": {
               "type": "string",
               "pattern": "^(?:[1-9][0-9]{0,5})(?:\\.[0-9]{1,3})?$|^0\\.(?!0{1,3}$)[0-9]{1,3}$"
+            },
+            "sourceGrindKeyHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
             }
           }
         }
@@ -645,6 +695,14 @@ export const clientV1Schemas = {
         "items": {
           "type": "object",
           "additionalProperties": false,
+          "dependentRequired": {
+            "sourceGrindKeyHash": [
+              "grindDisplayName"
+            ],
+            "grindDisplayName": [
+              "sourceGrindKeyHash"
+            ]
+          },
           "required": [
             "lineNumber",
             "productRef",
@@ -693,6 +751,15 @@ export const clientV1Schemas = {
             "lineTotalMinor": {
               "type": "string",
               "pattern": "^-?(0|[1-9][0-9]*)$"
+            },
+            "sourceGrindKeyHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "grindDisplayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         }
@@ -763,6 +830,10 @@ export const clientV1Schemas = {
         "maximum": 100
       },
       "quoteHash": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "sourceGrindKeyHash": {
         "type": "string",
         "pattern": "^[a-f0-9]{64}$"
       }
@@ -859,6 +930,14 @@ export const clientV1Schemas = {
         "items": {
           "type": "object",
           "additionalProperties": false,
+          "dependentRequired": {
+            "sourceGrindKeyHash": [
+              "grindDisplayName"
+            ],
+            "grindDisplayName": [
+              "sourceGrindKeyHash"
+            ]
+          },
           "required": [
             "itemRef",
             "linePosition",
@@ -923,6 +1002,15 @@ export const clientV1Schemas = {
             "lineTotalMinor": {
               "type": "string",
               "pattern": "^-?(0|[1-9][0-9]*)$"
+            },
+            "sourceGrindKeyHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "grindDisplayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           }
         }
@@ -1037,7 +1125,19 @@ export const clientV1Schemas = {
                     "MAPPING_MISSING",
                     "MAPPING_STOPPED",
                     "PRODUCT_UNAVAILABLE",
-                    "ORDER_STATE_INCONSISTENT"
+                    "ORDER_STATE_INCONSISTENT",
+                    "AROMA_UNKNOWN_OUTCOME",
+                    "AROMA_WORKER_INTERRUPTED",
+                    "AROMA_OBSERVATION_UNAVAILABLE",
+                    "AROMA_OBSERVATION_INVALID",
+                    "AROMA_EXTERNAL_CHANGE",
+                    "AROMA_QUANTITY_NOT_SUPPORTED",
+                    "AROMA_MUTATIONS_DISABLED",
+                    "AROMA_MAPPING_NOT_AVAILABLE",
+                    "AROMA_OPERATION_UNKNOWN_OUTCOME",
+                    "AROMA_VERIFICATION_UNAVAILABLE",
+                    "AROMA_VERIFICATION_INVALID",
+                    "AROMA_CART_ITEM_NOT_FOUND"
                   ]
                 },
                 "message": {

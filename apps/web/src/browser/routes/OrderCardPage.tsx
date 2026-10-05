@@ -89,12 +89,13 @@ export function OrderCardPage(): ReactElement {
 
   if (!/^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(orderRef)) return <ProblemAlert error={new Error("Некорректный orderRef в deep link")} />;
   if (order.isPending) return <Loading label="Загружаем Order Card" />;
-  if (order.isError && !order.data && order.error instanceof ApiError && order.error.problem.status === 404) return (
+  if (order.isError && order.error instanceof ApiError && order.error.problem.status === 404) return (
     <>
       <PageHeader description="Карточка не найдена или больше недоступна текущему оператору." eyebrow="ЗАКАЗ">Заказ не найден</PageHeader>
       <Alert title="Заказ не найден" tone="warning">Вернитесь к клиентам и начните создание заказа заново. <Link href="/app/customers">Перейти к клиентам</Link></Alert>
     </>
   );
+  if (order.isError && order.error instanceof ApiError && order.error.problem.status === 403) return <ProblemAlert error={order.error} />;
   if (order.isError && !order.data) return <ProblemAlert error={order.error} onRefresh={() => void order.refetch()} />;
   if (!order.data) return <Loading label="Загружаем Order Card" />;
   const card = order.data;

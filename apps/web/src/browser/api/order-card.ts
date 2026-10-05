@@ -21,10 +21,12 @@ export function acceptOrderCard(
   const order = compareDecimalVersion(previous.projectionVersion, next.projectionVersion);
   if (order > 0) return previous;
   if (order === 0) {
-    if (JSON.stringify(previous) !== JSON.stringify(next)) {
+    const { allowedActions: previousActions, ...previousCard } = previous;
+    const { allowedActions: nextActions, ...nextCard } = next;
+    if (JSON.stringify(previousCard) !== JSON.stringify(nextCard)) {
       throw new OrderCardProtocolError("Одинаковая версия представления содержит разные данные");
     }
-    return previous;
+    return JSON.stringify(previousActions) === JSON.stringify(nextActions) ? previous : next;
   }
   return next;
 }

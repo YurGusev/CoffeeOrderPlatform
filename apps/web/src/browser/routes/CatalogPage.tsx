@@ -68,11 +68,15 @@ export function CatalogPage(): ReactElement {
   }, [query]);
 
   useEffect(() => {
+    setDraftAvailability(availability);
+  }, [availability]);
+
+  useEffect(() => {
     if (rawQuery === query && rawAvailability === availability) return;
     const next = new URLSearchParams(params);
     if (query) next.set("q", query);
     else next.delete("q");
-    if (availability) next.set("availability", availability);
+    if (params.has("availability") || availability !== "Available") next.set("availability", availability);
     else next.delete("availability");
     next.delete("cursor");
     setParams(next, { replace: true });
@@ -84,7 +88,8 @@ export function CatalogPage(): ReactElement {
     const timer = window.setTimeout(() => {
       const next = new URLSearchParams({ orderRef });
       if (normalized) next.set("q", normalized);
-      if (draftAvailability) next.set("availability", draftAvailability);
+      if (draftAvailability === "") next.set("availability", "");
+      else if (draftAvailability !== "Available") next.set("availability", draftAvailability);
       setParams(next);
     }, 300);
     return () => window.clearTimeout(timer);
@@ -93,7 +98,8 @@ export function CatalogPage(): ReactElement {
   const submitSearch = (): void => {
     const next = new URLSearchParams({ orderRef });
     if (draftQuery.trim()) next.set("q", draftQuery.trim());
-    if (draftAvailability) next.set("availability", draftAvailability);
+    if (draftAvailability === "") next.set("availability", "");
+    else if (draftAvailability !== "Available") next.set("availability", draftAvailability);
     setParams(next);
   };
 

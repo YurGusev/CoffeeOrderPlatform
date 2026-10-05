@@ -57,7 +57,8 @@
           "unit": "kilogram",
           "availability": "Available",
           "mappingAvailable": true,
-          "imageUrl": "https://catalog.example.test/coffee.png"
+          "imageUrl": "https://catalog.example.test/coffee.png",
+          "grindOptions": [{"sourceGrindKeyHash":"4444444444444444444444444444444444444444444444444444444444444444","displayName":"Средний помол"}]
         }
       ],
       "nextCursor": null
@@ -86,7 +87,9 @@
           "quantity": "1.5",
           "unit": "kilogram",
           "unitMinor": "1200",
-          "lineTotalMinor": "1800"
+          "lineTotalMinor": "1800",
+          "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444",
+          "grindDisplayName": "Средний помол"
         }
       ],
       "totalMinor": "1800",
@@ -117,6 +120,8 @@
           "displayName": "Кофе зерновой",
           "quantity": "1",
           "unit": "kilogram",
+          "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444",
+          "grindDisplayName": "Средний помол",
           "quoteRef": "prq_01ARZ3NDEKTSV4RRFFQ69G5FB0",
           "quoteLineNumber": 1,
           "unitMinor": "1200",

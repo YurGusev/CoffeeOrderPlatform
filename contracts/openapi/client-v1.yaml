@@ -23,7 +23,7 @@ x-command-recovery:
   lookupErrorSchemas: [ErrorIdempotencyConflict, ErrorIdempotencyRequestInProgress, ErrorIdempotencyResultNotRetained, ErrorIdempotencyResultInvalid, ErrorIdempotencyLookupUnavailable]
   terminalSchemas:
     createCustomer: [CustomerResponse, ErrorCustomerPhoneConflict, ErrorCustomerEmailConflict]
-    createPricingQuote: [PricingQuoteResponse, ErrorCatalogProductNotFound, ErrorCatalogProductUnavailable, ErrorCatalogRevisionChanged]
+    createPricingQuote: [PricingQuoteResponse, ErrorCatalogProductNotFound, ErrorCatalogProductUnavailable, ErrorCatalogRevisionChanged, ErrorPricingGrindNotAvailable]
     createOrderDraft: [OrderCardResponse, ErrorCustomerNotFound, ErrorCustomerNotActive]
     upsertOrderItem: [OrderCardResponse, ErrorOrderNotFound, ErrorCatalogProductNotFound, ErrorOrderVersionConflict, ErrorOrderQuoteStale, ErrorOrderNotEditable]
     removeOrderItem: [OrderCardResponse, ErrorOrderNotFound, ErrorOrderItemNotFound, ErrorOrderVersionConflict, ErrorOrderNotEditable]
@@ -266,6 +266,13 @@ paths:
                   - $ref: '#/components/schemas/ErrorCatalogRevisionChanged'
                   - $ref: '#/components/schemas/ErrorIdempotencyConflict'
                   - $ref: '#/components/schemas/ErrorIdempotencyRequestInProgress'
+        '422':
+          description: Grind selection is not in the current Catalog snapshot.
+          headers: *command-recovery-response-headers
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ErrorPricingGrindNotAvailable'
         '503':
           description: Catalog owner or idempotency lookup is unavailable.
           headers: *command-recovery-lookup-response-headers
@@ -1181,6 +1188,22 @@ components:
           type: string
           format: uri
           maxLength: 2048
+        grindOptions:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/GrindOption'
+    GrindOption:
+      type: object
+      additionalProperties: false
+      required: [sourceGrindKeyHash, displayName]
+      properties:
+        sourceGrindKeyHash:
+          $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
     CatalogSearchResponse:
       type: object
       additionalProperties: false
@@ -1207,6 +1230,8 @@ components:
           $ref: '#/components/schemas/VariantRef'
         quantity:
           $ref: '#/components/schemas/QuantityDecimal'
+        sourceGrindKeyHash:
+          $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
     PricingQuoteCreateRequest:
       type: object
       additionalProperties: false
@@ -1223,6 +1248,9 @@ components:
     PricingQuoteLine:
       type: object
       additionalProperties: false
+      dependentRequired:
+        sourceGrindKeyHash: [grindDisplayName]
+        grindDisplayName: [sourceGrindKeyHash]
       required: [lineNumber, productRef, variantRef, productDisplayName, quantity, unit, unitMinor, lineTotalMinor]
       properties:
         lineNumber:
@@ -1246,6 +1274,12 @@ components:
           $ref: '#/components/schemas/MoneyMinor'
         lineTotalMinor:
           $ref: '#/components/schemas/MoneyMinor'
+        sourceGrindKeyHash:
+          $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
+        grindDisplayName:
+          type: string
+          minLength: 1
+          maxLength: 200
     PricingQuoteResponse:
       type: object
       additionalProperties: false
@@ -1303,6 +1337,8 @@ components:
           maximum: 100
         quoteHash:
           $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
+        sourceGrindKeyHash:
+          $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
     OrderConfirmRequest:
       type: object
       additionalProperties: false
@@ -1335,6 +1371,9 @@ components:
     OrderItem:
       type: object
       additionalProperties: false
+      dependentRequired:
+        sourceGrindKeyHash: [grindDisplayName]
+        grindDisplayName: [sourceGrindKeyHash]
       required: [itemRef, linePosition, productRef, variantRef, displayName, quantity, unit, quoteRef, quoteLineNumber, unitMinor, lineTotalMinor]
       properties:
         itemRef:
@@ -1366,6 +1405,12 @@ components:
           $ref: '#/components/schemas/MoneyMinor'
         lineTotalMinor:
           $ref: '#/components/schemas/MoneyMinor'
+        sourceGrindKeyHash:
+          $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
+        grindDisplayName:
+          type: string
+          minLength: 1
+          maxLength: 200
     QuoteProof:
       type: object
       additionalProperties: false
@@ -1398,7 +1443,7 @@ components:
       properties:
         code:
           type: string
-          enum: [MAPPING_CHANGED, MAPPING_MISSING, MAPPING_STOPPED, PRODUCT_UNAVAILABLE, ORDER_STATE_INCONSISTENT]
+          enum: [MAPPING_CHANGED, MAPPING_MISSING, MAPPING_STOPPED, PRODUCT_UNAVAILABLE, ORDER_STATE_INCONSISTENT, AROMA_UNKNOWN_OUTCOME, AROMA_WORKER_INTERRUPTED, AROMA_OBSERVATION_UNAVAILABLE, AROMA_OBSERVATION_INVALID, AROMA_EXTERNAL_CHANGE, AROMA_QUANTITY_NOT_SUPPORTED, AROMA_MUTATIONS_DISABLED, AROMA_MAPPING_NOT_AVAILABLE, AROMA_OPERATION_UNKNOWN_OUTCOME, AROMA_VERIFICATION_UNAVAILABLE, AROMA_VERIFICATION_INVALID, AROMA_CART_ITEM_NOT_FOUND]
         message:
           type: string
           minLength: 1
@@ -1582,6 +1627,13 @@ components:
           properties:
             status: { const: 409 }
             code: { const: CATALOG_REVISION_CHANGED }
+    ErrorPricingGrindNotAvailable:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            status: { const: 422 }
+            code: { const: PRICING_GRIND_NOT_AVAILABLE }
     ErrorCatalogSnapshotIncomplete:
       allOf:
         - $ref: '#/components/schemas/ProblemDetails'

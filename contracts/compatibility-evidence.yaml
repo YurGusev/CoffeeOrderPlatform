@@ -1,4 +1,32 @@
 optionalExpansions:
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#CatalogProductSummary
+    property: grindOptions
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#PricingQuoteCreateLine
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#PricingQuoteLine
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#PricingQuoteLine
+    property: grindDisplayName
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#OrderItemPutRequest
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#OrderItem
+    property: sourceGrindKeyHash
+    fixture: contracts/fixtures/positive/http/success.json
+  - schemaPath: contracts/openapi/client-v1.yaml
+    location: contracts/openapi/client-v1.yaml#OrderItem
+    property: grindDisplayName
+    fixture: contracts/fixtures/positive/http/success.json
   - schemaPath: contracts/openapi/internal-v1.yaml
     location: contracts/openapi/internal-v1.yaml#AromaCatalogItem
     property: supplierPromotions
@@ -115,3 +143,11 @@ approvedResponseExpansions:
       - ErrorOrderConfirmationRejected
       - ErrorOrderEmpty
       - ErrorOrderDesiredOverflow
+
+approvedCommandRecoveryExpansions:
+  - schemaPath: contracts/openapi/client-v1.yaml
+    operationId: createPricingQuote
+    addedTerminalSchema: ErrorPricingGrindNotAvailable
+    issue: 11
+    fixture: contracts/fixtures/positive/http/problems.json
+    fixtureCase: ErrorPricingGrindNotAvailable

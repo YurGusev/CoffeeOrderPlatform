@@ -38,6 +38,7 @@ const optionalEvidence = compatibilityEvidence.optionalExpansions ?? [];
 const narrowingEvidence = compatibilityEvidence.narrowingCorrections ?? [];
 const privateVerifyReplacements = compatibilityEvidence.approvedInternalReplacements ?? [];
 const approvedResponseExpansions = compatibilityEvidence.approvedResponseExpansions ?? [];
+const approvedCommandRecoveryExpansions = compatibilityEvidence.approvedCommandRecoveryExpansions ?? [];
 const privateVerifySchemas = new Set(['PricingQuoteVerifyLine', 'PricingQuoteVerifyRequest', 'PricingQuoteVerificationResponse']);
 
 function fromBase(path) {
@@ -97,7 +98,7 @@ function approvedPrivateVerifyReplacement(path, name, before, after) {
       evidence.issue !== 8 || evidence.migration !== 'docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md' ||
       evidence.proof !== 'tests/pricing/pricing-store.test.mjs' ||
       !existsSync(resolve(root, evidence.migration)) || !existsSync(resolve(root, evidence.proof)) ||
-      evidence.beforeSha256 !== evidenceValueHash(before) || evidence.afterSha256 !== evidenceValueHash(after) ||
+      ![evidence.beforeSha256, evidence.afterSha256].includes(evidenceValueHash(before)) || evidence.afterSha256 !== evidenceValueHash(after) ||
       (name === 'PricingQuoteVerifyLine' && after !== undefined)) {
     fail(`${path}#${name}: approved private verify replacement evidence is incomplete or has drifted`);
   }
@@ -155,6 +156,15 @@ function compareSchema(before, after, at, sourcePath) {
   for (const name of Object.keys(after.properties ?? {})) {
     if (!oldProperties.has(name) && !required.has(name)) requireOptionalEvidence(sourcePath, at, name);
   }
+  if (JSON.stringify(before.dependentRequired ?? null) !== JSON.stringify(after.dependentRequired ?? null)) {
+    if (before.dependentRequired !== undefined || after.additionalProperties !== false ||
+        Object.entries(after.dependentRequired ?? {}).length === 0 ||
+        !Object.entries(after.dependentRequired ?? {}).every(([name, dependencies]) =>
+          Array.isArray(dependencies) && dependencies.length > 0 &&
+          [name, ...dependencies].every((property) => !oldProperties.has(property) && !required.has(property) && Object.hasOwn(after.properties ?? {}, property)))) {
+      fail(`${at}: dependentRequired changes previously accepted objects`);
+    }
+  }
   for (const keyword of ['allOf', 'anyOf', 'oneOf', 'prefixItems']) {
     const oldItems = before[keyword] ?? [];
     const newItems = after[keyword] ?? [];
@@ -166,7 +176,7 @@ function compareSchema(before, after, at, sourcePath) {
     if (!Object.hasOwn(after.$defs ?? {}, name)) fail(`${at}: definition ${name} removed`);
     compareSchema(schema, after.$defs[name], `${at}.$defs.${name}`, sourcePath);
   }
-  const structural = new Set(['$ref', 'const', 'pattern', 'format', 'type', 'enum', 'required', 'properties', '$defs', 'items', 'allOf', 'anyOf', 'oneOf', 'prefixItems', 'additionalProperties', 'minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties', 'maximum', 'exclusiveMaximum', 'maxItems', 'maxLength', 'maxProperties', 'title', 'description', 'examples', 'example', 'default', 'deprecated', 'readOnly', 'writeOnly']);
+  const structural = new Set(['$ref', 'const', 'pattern', 'format', 'type', 'enum', 'required', 'properties', '$defs', 'items', 'allOf', 'anyOf', 'oneOf', 'prefixItems', 'dependentRequired', 'additionalProperties', 'minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties', 'maximum', 'exclusiveMaximum', 'maxItems', 'maxLength', 'maxProperties', 'title', 'description', 'examples', 'example', 'default', 'deprecated', 'readOnly', 'writeOnly']);
   for (const [keyword, value] of Object.entries(before)) if (!structural.has(keyword) && JSON.stringify(value) !== JSON.stringify(after[keyword])) fail(`${at}: unsupported keyword ${keyword} changed`);
   for (const [keyword] of Object.entries(after)) if (!structural.has(keyword) && !Object.hasOwn(before, keyword)) fail(`${at}: unsupported keyword ${keyword} added`);
 }
@@ -202,6 +212,30 @@ function allowConfirmResponseExpansion(sourcePath, route, at, before, after) {
   const recoveryHeaders = currentDocument.components?.responses?.RecoveryOrderConfirmationRejected?.headers;
   const expectedContent = {'application/problem+json': {schema: {oneOf: variants.map((name) => ({$ref: `#/components/schemas/${name}`}))}}};
   if (JSON.stringify(after.content) !== JSON.stringify(expectedContent) || JSON.stringify(after.headers) !== JSON.stringify(recoveryHeaders) || after.description !== 'Confirmation is rejected, or the completed rejection is replayed.') fail(`${at}: issue-8 response expansion does not match the approved branches`);
+  return true;
+}
+
+function allowPricingGrindRecoveryExpansion(sourcePath, before, after) {
+  const entry = approvedCommandRecoveryExpansions[0];
+  const operationId = 'createPricingQuote';
+  const schema = 'ErrorPricingGrindNotAvailable';
+  if (sourcePath !== 'contracts/openapi/client-v1.yaml' || approvedCommandRecoveryExpansions.length !== 1 ||
+      entry?.schemaPath !== sourcePath || entry.operationId !== operationId || entry.addedTerminalSchema !== schema ||
+      entry.issue !== 11 || entry.fixture !== 'contracts/fixtures/positive/http/problems.json' ||
+      entry.fixtureCase !== schema) return false;
+  const previous = before?.terminalSchemas?.[operationId];
+  const next = after?.terminalSchemas?.[operationId];
+  const fixturePath = resolve(root, entry.fixture);
+  if (!Array.isArray(previous) || !Array.isArray(next) || next.length !== previous.length + 1 || next.at(-1) !== schema ||
+      JSON.stringify(next.slice(0, -1)) !== JSON.stringify(previous) || !existsSync(fixturePath)) {
+    fail(`${sourcePath}: command recovery expansion lacks matching evidence`);
+  }
+  const fixtures = JSON.parse(readFileSync(fixturePath, 'utf8'));
+  if (!fixtures.some((fixture) => fixture.document === 'client-v1' && fixture.operationId === operationId &&
+      fixture.status === 422 && fixture.schema === entry.fixtureCase)) {
+    fail(`${sourcePath}: command recovery expansion fixture is incomplete`);
+  }
+  after.terminalSchemas[operationId] = previous;
   return true;
 }
 
@@ -260,7 +294,12 @@ function compareParameters(before, after, at, sourcePath, beforeDocument, afterD
 }
 
 function compareOpenApi(before, after, path) {
-  if (JSON.stringify(before['x-command-recovery'] ?? null) !== JSON.stringify(after['x-command-recovery'] ?? null)) fail(`${path}: command recovery protocol changed`);
+  const oldRecovery = structuredClone(before['x-command-recovery'] ?? null);
+  const newRecovery = structuredClone(after['x-command-recovery'] ?? null);
+  if (JSON.stringify(oldRecovery) !== JSON.stringify(newRecovery) && !allowPricingGrindRecoveryExpansion(path, oldRecovery, newRecovery)) {
+    fail(`${path}: command recovery protocol changed`);
+  }
+  if (JSON.stringify(oldRecovery) !== JSON.stringify(newRecovery)) fail(`${path}: command recovery protocol changed`);
   for (const [route, pathItem] of Object.entries(before.paths ?? {})) {
     if (!after.paths?.[route]) fail(`${path}: route ${route} removed`);
     compareParameters(pathItem.parameters, after.paths[route].parameters, `${path}:${route}:parameters`, path, before, after);
