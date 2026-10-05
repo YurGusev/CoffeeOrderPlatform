@@ -1,7 +1,7 @@
 import {catalogContractSchemas, catalogResponseSchema, isCatalogOperationProblem, isCatalogPricingInput, isCatalogProductRef, isCatalogSearchResponse, isCatalogVariantRef, decodeCatalogSearchQuery, catalogSearchQueryError} from "@coffee-platform/contracts-catalog-v1";
 import type {RuntimeComposition, RuntimeRequestContext} from "@coffee-platform/runtime";
 import type {Database} from "@coffee-platform/database";
-import {searchCatalog, CatalogOwnerError, type CatalogAvailability, type CatalogCursorSigner} from "../application/search-catalog.js";
+import {searchCatalog, validatedGrindOptions, CatalogOwnerError, type CatalogAvailability, type CatalogCursorSigner} from "../application/search-catalog.js";
 import {CatalogStore, type CatalogOwnerStore} from "../infrastructure/postgres/catalog-store.js";
 
 type RuntimeApp = Parameters<NonNullable<RuntimeComposition["configure"]>>[0];
@@ -16,10 +16,11 @@ type InternalClaims = Readonly<{iss: string; aud: string; originalCaller: string
 
 export type CatalogOwner = Readonly<{
   search: (input: Readonly<{query: string; availability?: CatalogAvailability; limit: number; cursor?: string; context: Context}>) => Promise<OwnerResult>;
-  pricingInput: (input: Readonly<{productRef: string; variantRef: string; context: Context}>) => Promise<OwnerResult>;
+  pricingInput: (input: Readonly<{productRef: string; variantRef: string; context: Context; maxSnapshotAgeMs?: number}>) => Promise<OwnerResult>;
 }>;
 export type CatalogHttpAdapters = Readonly<{
   owner: CatalogOwner;
+  snapshotProofMaxAgeMs?: number;
   verifyTransport: (request: Request, expectedCaller: "api-public" | "api-internal") => boolean;
   verifyPublicDelegation: (token: string, operationId: string, signal: AbortSignal) => Promise<PublicClaims> | PublicClaims;
   verifyInternalDelegation: (token: string, operationId: string, signal: AbortSignal) => Promise<InternalClaims> | InternalClaims;
@@ -69,7 +70,7 @@ async function internalClaims(request: Request, adapters: CatalogHttpAdapters): 
   const token = single(header(request, "x-service-delegation"));
   if (token === undefined) throw new Error("SERVICE_AUTHENTICATION_REQUIRED");
   const claims = await adapters.verifyInternalDelegation(token, "getCatalogPricingInput", requestContext(request, 1_500).signal);
-  if (claims.iss !== "api-internal" || claims.aud !== "catalog-service" || claims.originalCaller !== "pricing-service" || claims.operationId !== "getCatalogPricingInput") throw new Error("SERVICE_DELEGATION_INVALID");
+  if (claims.iss !== "api-internal" || claims.aud !== "catalog-service" || !["pricing-service", "aroma-convergence"].includes(claims.originalCaller) || claims.operationId !== "getCatalogPricingInput") throw new Error("SERVICE_DELEGATION_INVALID");
   return claims;
 }
 function authProblem(request: Request, error: unknown, kind: "public" | "internal"): Problem {
@@ -96,15 +97,17 @@ export function createCatalogOwner(store: CatalogOwnerStore, cursorSigner?: Cata
       return {status: 200, body: await searchCatalog(store, input, cursorSigner)};
     },
     pricingInput: async (input) => {
-      const row = await store.pricingInput(input.productRef, input.variantRef, input.context.signal, input.context.correlationId);
-      if (row === undefined || row.snapshotRevision === null) throw new CatalogOwnerError("CATALOG_SNAPSHOT_INCOMPLETE");
+      const row = await store.pricingInput(input.productRef, input.variantRef, input.context.signal, input.context.correlationId, input.maxSnapshotAgeMs);
+      if (row === undefined || row.snapshotRevision === null) throw new CatalogOwnerError(input.maxSnapshotAgeMs === undefined ? "CATALOG_SNAPSHOT_INCOMPLETE" : "CATALOG_UNAVAILABLE");
+      if (input.maxSnapshotAgeMs !== undefined && row.snapshotFresh !== true) throw new CatalogOwnerError("CATALOG_UNAVAILABLE");
       if (row.productRef === null || row.variantRef === null) throw new CatalogOwnerError("CATALOG_PRODUCT_NOT_FOUND");
       if (row.mappingAvailable !== true || row.offerRef === null || row.supplierUnitMinor === null || row.currency !== "RUB" || row.mappingRevision === null || row.availability === null || row.unit === null || row.displayName === null) throw new CatalogOwnerError("CATALOG_PRODUCT_NOT_FOUND");
-      return {status: 200, body: {productRef: row.productRef, variantRef: row.variantRef, offerRef: row.offerRef, snapshotRevision: row.snapshotRevision, supplierUnitMinor: row.supplierUnitMinor, currency: row.currency, unit: row.unit, availability: row.availability, mappingRevision: row.mappingRevision, displayName: row.displayName}};
+      const grindOptions = validatedGrindOptions(row.grindOptions);
+      return {status: 200, body: {productRef: row.productRef, variantRef: row.variantRef, offerRef: row.offerRef, snapshotRevision: row.snapshotRevision, supplierUnitMinor: row.supplierUnitMinor, currency: row.currency, unit: row.unit, availability: row.availability, mappingRevision: row.mappingRevision, displayName: row.displayName, ...(grindOptions === undefined ? {} : {grindOptions})}};
     },
   };
 }
-export function createCatalogAdapters(database: Database, security: Readonly<{verifyTransport: CatalogHttpAdapters["verifyTransport"]; verifyPublicDelegation: CatalogHttpAdapters["verifyPublicDelegation"]; verifyInternalDelegation: CatalogHttpAdapters["verifyInternalDelegation"]}>, signer: CatalogCursorSigner): CatalogHttpAdapters {return {owner: createCatalogOwner(new CatalogStore(database), signer), ...security};}
+export function createCatalogAdapters(database: Database, security: Readonly<{verifyTransport: CatalogHttpAdapters["verifyTransport"]; verifyPublicDelegation: CatalogHttpAdapters["verifyPublicDelegation"]; verifyInternalDelegation: CatalogHttpAdapters["verifyInternalDelegation"]}>, signer: CatalogCursorSigner, snapshotProofMaxAgeMs?: number): CatalogHttpAdapters {return {owner: createCatalogOwner(new CatalogStore(database), signer), ...(snapshotProofMaxAgeMs === undefined ? {} : {snapshotProofMaxAgeMs}), ...security};}
 export function registerCatalogRoutes(app: RuntimeApp, adapters: CatalogHttpAdapters): void {
   app.setErrorHandler((error, request, reply) => frameworkError(request, reply, error));
   app.get("/api/client-v1/catalog/products", {config: {runtimeDeadlineProfile: "defaultMs"}, schema: {querystring: catalogContractSchemas.query, response: catalogResponseSchema(catalogContractSchemas.searchResponse, 200, [400, 401, 403, 503])}, handler: async (request, reply) => {
@@ -117,9 +120,11 @@ export function registerCatalogRoutes(app: RuntimeApp, adapters: CatalogHttpAdap
   }});
   app.get("/api/internal-v1/catalog/products/:productRef/variants/:variantRef/pricing-input", {config: {runtimeDeadlineProfile: "defaultMs"}, schema: {params: {type: "object", additionalProperties: false, required: ["productRef", "variantRef"], properties: {productRef: catalogContractSchemas.productRef, variantRef: catalogContractSchemas.variantRef}}, response: catalogResponseSchema(catalogContractSchemas.pricingInput, 200, [400, 401, 403, 404, 503])}, handler: async (request, reply) => {
     if (!adapters.verifyTransport(request, "api-internal")) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "api-internal transport identity is required"));
-    try {await internalClaims(request, adapters);} catch (error) {return sendProblem(reply, authProblem(request, error, "internal"));}
+    let claims: InternalClaims;
+    try {claims = await internalClaims(request, adapters);} catch (error) {return sendProblem(reply, authProblem(request, error, "internal"));}
     const params = request.params as Record<string, unknown>;
     if (!isCatalogProductRef(params["productRef"]) || !isCatalogVariantRef(params["variantRef"])) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "product or variant reference is invalid"));
-    return ownerResult(request, reply, () => adapters.owner.pricingInput({productRef: params["productRef"] as string, variantRef: params["variantRef"] as string, context: requestContext(request, 1_500)}), "pricing");
+    if (claims.originalCaller === "aroma-convergence" && adapters.snapshotProofMaxAgeMs === undefined) return sendProblem(reply, problem(request, 503, "CATALOG_UNAVAILABLE", "catalog is temporarily unavailable"));
+    return ownerResult(request, reply, () => adapters.owner.pricingInput({productRef: params["productRef"] as string, variantRef: params["variantRef"] as string, context: requestContext(request, 1_500), ...(claims.originalCaller === "aroma-convergence" ? {maxSnapshotAgeMs: adapters.snapshotProofMaxAgeMs} : {})}), "pricing");
   }});
 }

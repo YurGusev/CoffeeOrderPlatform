@@ -164,6 +164,10 @@ export type CatalogSchedulerConfig = Readonly<{
   startupImport: true;
   overlapPolicy: "skip";
 }>;
+export type CatalogSnapshotProofConfig = Readonly<{maxAgeMs: number}>;
+export type AromaPreparationConfig = Readonly<{pollIntervalMs: number; batchSize: number; maxOrders: number; maxLines: number}>;
+export type AromaObservationConfig = Readonly<{pollIntervalMs: number; intervalMs: number; leaseMs: number; maxSnapshotAgeMs: number; maxLines: number; maxResponseBytes: number}>;
+export type AromaConvergenceConfig = Readonly<{pollIntervalMs: number; leaseMs: number; heartbeatIntervalMs: number; providerDeadlineMs: number; safetyMarginMs: number; retryBackoffMs: number; maxSnapshotAgeMs: number; maxLines: number; maxResponseBytes: number}>;
 export type RuntimeConfig = Readonly<{
   transportMode: TransportMode;
   listen: ListenConfig;
@@ -181,6 +185,11 @@ export type RuntimeConfig = Readonly<{
   permissions: PermissionConfig;
   mutationCapability: boolean;
   scheduler: CatalogSchedulerConfig | null;
+  catalogSnapshotProof?: CatalogSnapshotProofConfig;
+  mutationsEnabled?: boolean;
+  aromaPreparation?: AromaPreparationConfig;
+  aromaObservation?: AromaObservationConfig;
+  aromaConvergence?: AromaConvergenceConfig;
 }>;
 export type AromaConfig = Readonly<{
   supplierRef: typeof AROMA_SUPPLIER_REF;
@@ -809,6 +818,21 @@ function deadlineProfiles(
   return Object.freeze(result);
 }
 
+function aromaSettings<T extends string>(value: unknown, path: string, names: readonly T[]): Readonly<Record<T, number>> {
+  const source = record(value, path);
+  exactKeys(source, names, path);
+  const result = {} as Record<T, number>;
+  for (const name of names) {
+    const setting = positiveIntegerValue(source[name], `${path}.${name}`);
+    if (name === "maxResponseBytes" && setting !== 2_097_152)
+      throw new PlatformConfigError(`${path}.${name}`, "допустим только лимит ответа 2 MiB");
+    const maximum = name === "maxResponseBytes" ? 2_097_152 : name === "maxLines" || name === "maxOrders" ? 10_000 : name === "batchSize" ? 1000 : 300_000;
+    if (setting > maximum) throw new PlatformConfigError(`${path}.${name}`, "значение превышает допустимый предел");
+    result[name] = setting;
+  }
+  return Object.freeze(result);
+}
+
 function runtimeConfig(
   value: unknown,
   path: string,
@@ -835,8 +859,38 @@ function runtimeConfig(
       "mutationCapability",
     ],
     path,
-    ["optionalSecretRefs", "scheduler"],
+    ["optionalSecretRefs", "scheduler", "catalogSnapshotProof", "mutationsEnabled", "aromaPreparation", "aromaObservation", "aromaConvergence"],
   );
+  if (runtime !== "catalog-service" && Object.hasOwn(source, "catalogSnapshotProof"))
+    throw new PlatformConfigError(`${path}.catalogSnapshotProof`, "настройка разрешена только для catalog-service");
+  let catalogSnapshotProof: CatalogSnapshotProofConfig | undefined;
+  if (source["catalogSnapshotProof"] !== undefined) {
+    const configured = record(source["catalogSnapshotProof"], `${path}.catalogSnapshotProof`);
+    exactKeys(configured, ["maxAgeMs"], `${path}.catalogSnapshotProof`);
+    catalogSnapshotProof = Object.freeze({maxAgeMs: positiveIntegerValue(configured["maxAgeMs"], `${path}.catalogSnapshotProof.maxAgeMs`)});
+  }
+  const owners = {mutationsEnabled: "aroma-convergence", aromaPreparation: "orders-aroma-preparation",
+    aromaObservation: "aroma-observer", aromaConvergence: "aroma-convergence"} as const;
+  for (const [property, owner] of Object.entries(owners)) {
+    if (runtime === owner && source[property] === undefined)
+      throw new PlatformConfigError(`${path}.${property}`, "обязательное значение отсутствует");
+    if (runtime !== owner && Object.hasOwn(source, property))
+      throw new PlatformConfigError(`${path}.${property}`, "настройка запрещена для этой роли");
+  }
+  if (runtime === "aroma-convergence" && typeof source["mutationsEnabled"] !== "boolean")
+    throw new PlatformConfigError(`${path}.mutationsEnabled`, "ожидался explicit boolean");
+  const aromaPreparation = runtime === "orders-aroma-preparation" ? aromaSettings(source["aromaPreparation"], `${path}.aromaPreparation`,
+    ["pollIntervalMs", "batchSize", "maxOrders", "maxLines"]) : undefined;
+  const aromaObservation = runtime === "aroma-observer" ? aromaSettings(source["aromaObservation"], `${path}.aromaObservation`,
+    ["pollIntervalMs", "intervalMs", "leaseMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"]) : undefined;
+  const aromaConvergence = runtime === "aroma-convergence" ? aromaSettings(source["aromaConvergence"], `${path}.aromaConvergence`,
+    ["pollIntervalMs", "leaseMs", "heartbeatIntervalMs", "providerDeadlineMs", "safetyMarginMs", "retryBackoffMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"]) : undefined;
+  if (aromaObservation !== undefined && aromaObservation.leaseMs <= Number(source["deadlineMs"]))
+    throw new PlatformConfigError(`${path}.aromaObservation.leaseMs`, "lease должен покрывать deadline чтения");
+  if (aromaConvergence !== undefined && (aromaConvergence.leaseMs !== 30_000 || aromaConvergence.heartbeatIntervalMs !== 10_000 ||
+    aromaConvergence.leaseMs <= aromaConvergence.providerDeadlineMs + aromaConvergence.safetyMarginMs ||
+    aromaConvergence.heartbeatIntervalMs * 2 >= aromaConvergence.leaseMs || aromaConvergence.providerDeadlineMs > Number(source["deadlineMs"])))
+    throw new PlatformConfigError(`${path}.aromaConvergence`, "lease/heartbeat/provider deadline не образуют безопасное окно");
   const schedulerValue = source["scheduler"];
   if (runtime === "catalog-supplier-sync" && schedulerValue === undefined)
     throw new PlatformConfigError(`${path}.scheduler`, "scheduler обязателен для catalog-supplier-sync");
@@ -927,6 +981,11 @@ function runtimeConfig(
     }),
     mutationCapability: source["mutationCapability"],
     scheduler,
+    ...(catalogSnapshotProof === undefined ? {} : {catalogSnapshotProof}),
+    ...(runtime === "aroma-convergence" ? {mutationsEnabled: source["mutationsEnabled"] as boolean} : {}),
+    ...(aromaPreparation === undefined ? {} : {aromaPreparation}),
+    ...(aromaObservation === undefined ? {} : {aromaObservation}),
+    ...(aromaConvergence === undefined ? {} : {aromaConvergence}),
   });
 }
 

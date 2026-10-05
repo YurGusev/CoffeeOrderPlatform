@@ -49,6 +49,23 @@ void test("invalid quantity and duplicate pair reject before precheck",async()=>
   assert.equal(calls.precheck.length,0);
 });
 
+void test("grind membership is checked against Catalog and distinguishes idempotency and quote lines", async () => {
+  const option = {sourceGrindKeyHash:"a".repeat(64),displayName:"Средний"};
+  const selected = {productRef:ref("prd"),variantRef:ref("var"),quantity:"2.500",sourceGrindKeyHash:option.sourceGrindKeyHash};
+  const input = {...command(),request:{customerRef:ref("cus"),lines:[selected,{...selected,sourceGrindKeyHash:undefined,quantity:"1"}]}};
+  delete input.request.lines[1].sourceGrindKeyHash;
+  const {store,catalog,calls}=fixture();
+  catalog.getPricingInput = async request => ({...fact(request),grindOptions:[option]});
+  await createPricingQuote(store,catalog,input);
+  assert.equal(calls.create[0].lines[0].grindDisplayName,"Средний");
+  assert.equal("sourceGrindKeyHash" in calls.create[0].lines[1],false);
+  assert.notEqual(calls.precheck[0][1],canonicalRequestHash({...input.request,lines:input.request.lines.map(line=>({productRef:line.productRef,variantRef:line.variantRef,quantity:line.quantity}))}));
+  const unknown=fixture();
+  unknown.catalog.getPricingInput=async request=>({...fact(request),grindOptions:[]});
+  await assert.rejects(createPricingQuote(unknown.store,unknown.catalog,{...command(),request:{customerRef:ref("cus"),lines:[selected]}}),{code:"PRICING_GRIND_NOT_AVAILABLE"});
+  assert.equal(unknown.calls.create.length,0);
+});
+
 void test("bounds simultaneous Catalog requests to eight and retains order",async()=>{
   const {calls,store,catalog}=fixture();
   let active=0,max=0;

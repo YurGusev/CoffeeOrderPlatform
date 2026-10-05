@@ -715,6 +715,7 @@ export async function createRuntime(
               event: "runtime.readiness.failed",
               dependency: dependency.name,
               reason: errorName(error),
+              ...(error instanceof RuntimeError ? {code: error.code} : {}),
             },
             "runtime readiness failed",
           );

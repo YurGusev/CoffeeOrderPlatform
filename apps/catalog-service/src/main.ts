@@ -62,6 +62,6 @@ await startConfiguredRuntime("catalog-service", {
         if (claims.operationId !== operationId) throw new Error("SERVICE_DELEGATION_INVALID");
         return claims;
       },
-    }, cursorSigner));
+    }, cursorSigner, context.config.services["catalog-service"].catalogSnapshotProof?.maxAgeMs));
   },
 });

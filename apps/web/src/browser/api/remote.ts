@@ -44,7 +44,7 @@ export function useBrowserSession() {
         markRecoveryDiscarded();
       }
       if (previousActor && previousActor !== next.actorRef) {
-        void queryClient.cancelQueries();
+        void queryClient.cancelQueries({ predicate: (query) => query.queryKey[0] !== "browser-session" });
         queryClient.getMutationCache().clear();
         queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "browser-session" });
       }

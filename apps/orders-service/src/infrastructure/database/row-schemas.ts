@@ -44,6 +44,8 @@ export type OrderItemRow = Readonly<{
   mapping_revision: string;
   offer_ref: string;
   unit_minor: string;
+  source_grind_key_hash: string | null;
+  grind_display_name: string | null;
   line_total_minor: string;
   currency: "RUB";
   created_at: Date;
@@ -94,7 +96,7 @@ const orderItemRowSchema = {
     "product_display_name", "unit", "quantity_milli", "quote_ref",
     "quote_line_number", "quote_hash", "internal_proof_hash", "quote_expires_at",
     "policy_version_ref", "catalog_snapshot_revision", "mapping_revision",
-    "offer_ref", "unit_minor", "line_total_minor", "currency", "created_at", "updated_at",
+    "offer_ref", "unit_minor", "source_grind_key_hash", "grind_display_name", "line_total_minor", "currency", "created_at", "updated_at",
   ],
   properties: {
     order_ref: {type: "string", pattern: REF("ord"), maxLength: 30},
@@ -114,6 +116,8 @@ const orderItemRowSchema = {
     catalog_snapshot_revision: {type: "string", pattern: INT64_NONNEGATIVE, format: "nonnegative-int64"},
     mapping_revision: {type: "string", pattern: INT64_NONNEGATIVE, format: "nonnegative-int64"},
     offer_ref: {type: "string", pattern: REF("off"), maxLength: 30},
+    source_grind_key_hash: {type: ["string", "null"], pattern: HASH},
+    grind_display_name: {type: ["string", "null"], minLength: 1, maxLength: 200},
     unit_minor: {type: "string", pattern: INT64_NONNEGATIVE, format: "nonnegative-int64"},
     line_total_minor: {type: "string", pattern: INT64_NONNEGATIVE, format: "nonnegative-int64"},
     currency: {type: "string", const: "RUB"},
@@ -161,6 +165,7 @@ export function decodeOrderItemRow(value: unknown): OrderItemRow {
   if (!validateOrderItemRow(value)) invalidRow();
   const row = value as OrderItemRow;
   if (!isValidDate(row.quote_expires_at) || !isValidDate(row.created_at) || !isValidDate(row.updated_at)) invalidRow();
+  if ((row.source_grind_key_hash === null) !== (row.grind_display_name === null)) invalidRow();
   if (BigInt(row.quantity_milli) > 999_999_999n) invalidRow();
   const expectedTotal = (BigInt(row.unit_minor) * BigInt(row.quantity_milli) + 999n) / 1000n;
   if (BigInt(row.line_total_minor) !== expectedTotal) invalidRow();

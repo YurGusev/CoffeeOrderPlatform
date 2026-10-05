@@ -45,3 +45,12 @@ void test("contribution refuses one persisted quote line under two distinct item
   assert.throws(() => computeOrderContribution([a, {...b, quoteLineNumber:a.quoteLineNumber}]),
     {code:"ORDER_STATE_INCONSISTENT"});
 });
+
+void test("physical contribution separates grind choices from the unselected line", () => {
+  const first = "a".repeat(64), second = "b".repeat(64);
+  const lines = computeOrderContribution([a,{...b,sourceGrindKeyHash:first},{...c,offerRef:a.offerRef,sourceGrindKeyHash:second}]).lines;
+  assert.deepEqual(lines.map(line => [line.offerRef,line.sourceGrindKeyHash,line.quantityMilli]), [
+    [a.offerRef,undefined,"1500"], [a.offerRef,first,"2500"], [a.offerRef,second,"1000"],
+  ]);
+  assert.notEqual(computeOrderContribution([a]).hash,computeOrderContribution([{...a,sourceGrindKeyHash:first}]).hash);
+});

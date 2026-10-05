@@ -19,6 +19,7 @@ import {
   startRuntime,
 } from "../../packages/platform-runtime/src/index.ts";
 import {createHttpClient} from "../../packages/platform-http/src/index.ts";
+import {nowInstant} from "../../packages/platform-time/src/index.ts";
 import {readRuntimeHealthStatuses, runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
 import {parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../../packages/platform-security/src/index.ts";
 import {checkInternalApiReady} from "../../apps/orders-service/src/infrastructure/internal-api-readiness.ts";
@@ -752,6 +753,7 @@ void test("blackhole resource stop is bounded and force-destroyed", async () => 
 void test("readiness blackhole is bounded and does not start new probes while pending", async () => {
   let probes = 0;
   let checkSignal;
+  const logs = [];
   const app = await startApp(identity("readiness-blackhole-test", {
     health: {...health, timeoutMs: 30},
     requiredDependencies: ["database"],
@@ -764,6 +766,7 @@ void test("readiness blackhole is bounded and does not start new probes while pe
       },
     }],
   }));
+  app.log.warn = (fields, message) => logs.push({fields, message});
   const started = performance.now();
   const first = await app.inject("/health/ready");
   assert.ok(performance.now() - started < 500, "readiness blackhole must return within the bounded probe allowance");
@@ -771,6 +774,8 @@ void test("readiness blackhole is bounded and does not start new probes while pe
   assert.equal(probes, 1);
   assert.equal(checkSignal.aborted, true);
   assert.equal(checkSignal.reason.code, "RUNTIME_READINESS_DEADLINE");
+  assert.deepEqual(logs, [{fields:{event:"runtime.readiness.failed",dependency:"database",reason:"RuntimeError",code:"RUNTIME_READINESS_DEADLINE"},message:"runtime readiness failed"}]);
+  assert.equal("message" in logs[0].fields, false);
   const second = await app.inject("/health/ready");
   assert.equal(second.statusCode, 503);
   assert.equal(probes, 1);
@@ -865,6 +870,42 @@ void test("Orders InternalApi readiness rejects wrong mTLS peer and cancels blac
       listener.closeAllConnections();
       await new Promise(resolve => listener.close(resolve));
     }
+  }
+});
+
+void test("AROMA worker compositions preserve consumer bindings and fail readiness on an unavailable DB", async t => {
+  const {createDatabase}=await import("../../packages/platform-database/dist/index.js");
+  const config=await loadPlatformConfig(join(root,"config/platform.yaml"),parseYaml);
+  for(const [runtime,factory] of [["aroma-observer","createAromaObserverComposition"],["aroma-convergence","createAromaConvergenceComposition"],["orders-aroma-preparation","createAromaPreparationComposition"]]){
+    const tls=runtime==="orders-aroma-preparation"?undefined:await tlsMaterial(t,"edge.test",runtime);
+    const module=await import(`../../apps/${runtime}/dist/runtime-composition.js`);
+    const composition=module[factory]();
+    const database=createDatabase({owner:runtime,database:"coffee_platform_orders",allowedDatabase:"coffee_platform_orders",host:"127.0.0.1",port:9,
+      user:"synthetic-unavailable",password:"synthetic-not-production",ssl:false,pool:config.services[runtime].dbPool,shutdownGraceMs:40000});
+    const bindings=new Map();const errors=[];let relayDone;let usedSignal;
+    const relayed=new Promise(resolve=>{relayDone=resolve;});
+    const kafka={bind:(groupId,binding)=>bindings.set(groupId,binding),relay:async(_outbox,db,signal)=>{
+      assert.strictEqual(db,database);usedSignal=signal;relayDone();}};
+    const processSignal=new AbortController();const resource=composition.resources[0];
+    try{
+      await composition.configure({log:{error:entry=>errors.push(entry)}},processSignal.signal,database,kafka,
+        {config,secrets:tls===undefined?{}:{security:{serviceTransportKeys:{[runtime]:JSON.stringify({keyPem:tls.serviceTls.keyPem,certPem:tls.serviceTls.certPem,caPem:tls.serviceTls.caPem})}}}});
+      assert.deepEqual([...bindings.keys()],config.services[runtime].kafka.consumers.map(entry=>entry.groupId));
+      if(runtime==="aroma-convergence"){
+        const rejection=new Error("revoked before wake");const signal=AbortSignal.abort(rejection);
+        await assert.rejects(bindings.values().next().value.handle({},null,{},signal),error=>error===rejection);
+      }
+      await resource.start(processSignal.signal);await relayed;
+      assert.equal(composition.readinessChecks[0].check(),false);
+      assert.equal(errors.length,1);assert.equal(errors[0].reason,"DatabaseTransactionError");
+      if(runtime==="aroma-observer"){assert.equal(errors[0].code,"DB_CONNECTION_LOST");assert.equal(errors[0].sqlState,undefined);assert.deepEqual(Object.keys(errors[0]).sort(),["code","event","reason"]);}
+      if(runtime==="orders-aroma-preparation"){
+        assert.equal(errors[0].stage,"recover");assert.equal(errors[0].code,"DB_CONNECTION_LOST");assert.equal(errors[0].sqlState,undefined);
+        assert.deepEqual(Object.keys(errors[0]).sort(),["code","event","reason","stage"]);
+      }
+      assert.ok(!JSON.stringify(errors).includes("synthetic-not-production"));
+    }finally{await resource.stop(AbortSignal.timeout(5000));resource.destroy();database.resource.destroy();}
+    assert.equal(usedSignal.aborted,true);assert.equal(composition.readinessChecks[0].check(),false);
   }
 });
 
@@ -1140,4 +1181,61 @@ void test("runtime metrics endpoint appends bounded composition metrics", async 
   assert.equal(response.statusCode, 200);
   assert.match(response.body, /runtime_admission_rejected_total 0/);
   assert.match(response.body, /aroma_gateway_safe_read_attempts_total 1/);
+});
+
+void test("AROMA worker telemetry keeps span names and metric series bounded and redacted", async () => {
+  const {trace} = await import("@opentelemetry/api");
+  const original = trace.getTracer.bind(trace);
+  const spans = [];
+  trace.getTracer = () => ({startSpan: (name) => {
+    const attributes = [];
+    spans.push({name, attributes});
+    return {setAttribute: (key, value) => attributes.push([key, value]), setStatus() {}, end() {}};
+  }});
+  try {
+    const [{AromaPreparationTelemetry}, {AromaObserverTelemetry}, {AromaConvergenceTelemetry}] = await Promise.all([
+      import("../../apps/orders-aroma-preparation/src/observability.ts"),
+      import("../../apps/aroma-observer/src/observability.ts"),
+      import("../../apps/aroma-convergence/src/observability.ts"),
+    ]);
+    const preparation = new AromaPreparationTelemetry();
+    const observer = new AromaObserverTelemetry();
+    const convergence = new AromaConvergenceTelemetry();
+    const capturedAt = nowInstant().subtract({milliseconds: 1_000}).toString();
+    preparation.desired("123", capturedAt);
+    observer.observed(capturedAt);
+    convergence.observed(capturedAt);
+    await preparation.observe("orders.aroma_preparation.inbox", async () => {});
+    await observer.observe("aroma.observer.provider.read", async () => {});
+    await convergence.observe("aroma.convergence.provider.mutation", async () => {});
+    await assert.rejects(preparation.observe("order_ref_secret", async () => {}), /Unsupported preparation span/);
+    observer.result("observed");
+    preparation.result("inbox", "order_ref_secret");
+    observer.result("order_ref_secret");
+    convergence.attempt("operation_ref_secret");
+    convergence.attempt("unknown_outcome");
+    convergence.blocker(2);
+    convergence.mutation("remove");
+    convergence.providerFailure();
+    assert.equal(convergence.ready, false);
+    convergence.providerSuccess();
+    assert.equal(convergence.ready, true);
+    const metrics = [...preparation.render(), ...observer.render(), ...convergence.render()].join("\n");
+    assert.deepEqual(spans.map(({name}) => name), [
+      "orders.aroma_preparation.inbox", "aroma.observer.provider.read", "aroma.convergence.provider.mutation",
+    ]);
+    assert.ok(spans.every(({attributes}) => attributes.length === 0));
+    assert.doesNotMatch(metrics, /order_ref_secret|operation_ref_secret/);
+    assert.match(metrics, /coffee_aroma_preparation_desired_revision 123/);
+    const desiredAge = Number(metrics.match(/coffee_aroma_preparation_desired_age_ms (\d+)/)?.[1]);
+    const observedAge = Number(metrics.match(/coffee_aroma_observed_age_ms (\d+)/)?.[1]);
+    assert.ok(Number.isFinite(desiredAge) && Number.isFinite(observedAge));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(Number(preparation.render().at(-1)?.split(" ").at(-1)) > desiredAge);
+    assert.ok(Number(observer.render().at(-1)?.split(" ").at(-1)) > observedAge);
+    assert.match(metrics, /coffee_aroma_observation_results_total\{result="observed"\} 1/);
+    assert.match(metrics, /coffee_aroma_unknown_outcomes_total 1/);
+    assert.match(metrics, /coffee_aroma_blockers_total 2/);
+    assert.match(metrics, /coffee_aroma_mutation_calls_total\{action="remove"\} 1/);
+  } finally {trace.getTracer = original;}
 });

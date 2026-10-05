@@ -20,7 +20,7 @@ const proof = n => ({
 });
 const request = (expectedVersion, item) => ({expectedVersion, productRef:item.productRef, variantRef:item.variantRef, quantity:"2.5", quoteRef:item.quoteRef, quoteLineNumber:item.quoteLineNumber, quoteHash:item.quoteHash});
 const meta = (key = identity()) => ({actorRef:"orders-fault-test", identity:key, correlationId:randomUUID(), cardPermissions:["orders:edit:any", "orders:confirm:any"]});
-const migrations = ["0001_create_orders", "0002_create_order_items", "0003_create_order_history", "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox"];
+const migrations = ["0001_create_orders", "0002_create_order_items", "0003_create_order_history", "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox", "0007_order_grind_selection","0008_create_orders_inbox","0009_create_catalog_mapping_projection","0010_create_cart_desired","0011_create_cart_observed","0012_create_convergence_attempts","0013_create_convergence_leases","0014_create_mutation_reservations","0015_create_order_aroma_projections","0016_create_aroma_work_schedules","0017_allow_cart_outbox","0018_guard_order_card_projection","0019_read_guarded_aroma_card","0020_guard_cart_fact_batches","0021_optimize_observed_format_checks","0022_terminal_cart_item_rejection","0023_ascii_observed_identity"];
 const closeDatabase = async database => {
   if (!database) return;
   await database.resource.stop(AbortSignal.timeout(5_000)).catch(() => database.resource.destroy());
@@ -36,6 +36,7 @@ void test("PostgreSQL Orders same-key concurrency, stale expectedVersion, transa
   await withCatalogPostgres(async ({adminClient:admin, port, databaseName}) => {
     const runtimePassword = randomBytes(24).toString("hex");
     await admin.query(`CREATE ROLE coffee_orders_service_rw LOGIN PASSWORD '${runtimePassword}'`);
+    for(const role of ["coffee_orders_prepare_rw","coffee_orders_observer_rw","coffee_orders_convergence_rw"]) await admin.query(`CREATE ROLE ${role} NOLOGIN`);
     for (const migration of migrations) {
       await admin.query(await readFile(new URL(`../../apps/orders-service/migrations/${migration}.sql`, import.meta.url), "utf8"));
     }

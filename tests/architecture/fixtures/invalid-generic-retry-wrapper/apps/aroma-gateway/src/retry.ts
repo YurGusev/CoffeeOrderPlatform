@@ -1,3 +1,3 @@
-export async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
-  return operation();
+export function setCartQuantityWithRetry(gateway: Gateway, request: Request): Promise<Acknowledgement> {
+  return withRetry(() => gateway.setQuantity(request));
 }

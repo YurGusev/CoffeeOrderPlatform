@@ -79,7 +79,7 @@ void test("LIVE: Orders migrations use the checksum runner, repeat without write
     const database = createDatabase({owner:"orders-migrator-proof",database:databaseName,allowedDatabase:databaseName,
       host:"127.0.0.1",port,user:"coffee_orders_service_migrator",password:rolePassword,ssl:false,pool,shutdownGraceMs:40_000});
     const ids = ["0001_create_orders", "0002_create_order_items", "0003_create_order_history",
-      "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox"];
+      "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox", "0007_order_grind_selection"];
     const set = await Promise.all(ids.map(async id => {
       const sql = await readFile(new URL(`../../apps/orders-service/migrations/${id}.sql`, import.meta.url), "utf8");
       return {id,sql,checksum:migrationChecksum(sql)};
@@ -91,7 +91,7 @@ void test("LIVE: Orders migrations use the checksum runner, repeat without write
       assert.deepEqual(await applyMigrations(database,set,options),[]);
       const faultySql = "CREATE TABLE orders.migration_partial_probe (id integer); SELECT 1/0;";
       await assert.rejects(
-        applyMigrations(database,[...set,{id:"0007_intentionally_fail",sql:faultySql,checksum:migrationChecksum(faultySql)}],options),
+        applyMigrations(database,[...set,{id:"0008_intentionally_fail",sql:faultySql,checksum:migrationChecksum(faultySql)}],options),
         error => error?.code === "DB_QUERY_FAILED" && error?.sqlState === "22012",
         "the SQL must reach the second statement and fail after creating the temporary migration table",
       );
@@ -113,7 +113,8 @@ void test("PostgreSQL OrderStore atomically persists commands, prechecks before 
   const {OrderStore, hashOrderDraftRequest, hashOrderItemPutRequest, customerSnapshotProofHash} = await import("../../apps/orders-service/dist/infrastructure/database/order-store.js");
   await withCatalogPostgres(async ({adminClient:admin, port, databaseName}) => {
     await admin.query("CREATE ROLE coffee_orders_service_rw LOGIN PASSWORD 'orders-proof'");
-    for (const migration of ["0001_create_orders", "0002_create_order_items", "0003_create_order_history", "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox"]) {
+    for(const role of ["coffee_orders_prepare_rw","coffee_orders_observer_rw","coffee_orders_convergence_rw"]) await admin.query(`CREATE ROLE ${role} NOLOGIN`);
+    for (const migration of ["0001_create_orders", "0002_create_order_items", "0003_create_order_history", "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox", "0007_order_grind_selection","0008_create_orders_inbox","0009_create_catalog_mapping_projection","0010_create_cart_desired","0011_create_cart_observed","0012_create_convergence_attempts","0013_create_convergence_leases","0014_create_mutation_reservations","0015_create_order_aroma_projections","0016_create_aroma_work_schedules","0017_allow_cart_outbox","0018_guard_order_card_projection","0019_read_guarded_aroma_card","0020_guard_cart_fact_batches","0021_optimize_observed_format_checks","0022_terminal_cart_item_rejection","0023_ascii_observed_identity"]) {
       await admin.query(await readFile(new URL(`../../apps/orders-service/migrations/${migration}.sql`, import.meta.url), "utf8"));
     }
     const database = createDatabase({owner:"orders-service", database:databaseName, allowedDatabase:databaseName, host:"127.0.0.1", port, user:"coffee_orders_service_rw", password:"orders-proof", ssl:false, pool, shutdownGraceMs:40_000});
@@ -186,7 +187,7 @@ void test("PostgreSQL OrderStore atomically persists commands, prechecks before 
       assert.equal(storedEvent.topic, "coffee.orders.lifecycle.v1");
       assert.equal(storedEvent.message_type, "OrderConfirmed.v1");
       assert.match(storedEvent.message_id, /^msg_[0-9A-HJKMNP-TV-Z]{26}$/u);
-      assert.equal(storedEvent.aggregate_sequence, "7");
+      assert.equal(storedEvent.aggregate_sequence, "1");
       assert.equal(orderConfirmedSchema(storedEvent.envelope), true, JSON.stringify(orderConfirmedSchema.errors));
       assert.equal(storedEvent.payload_hash, canonicalRequestHash(storedEvent.envelope), "SqlOutboxStore.claim must accept the persisted canonical envelope");
       assert.deepEqual(storedEvent.envelope_bytes, Buffer.from(canonicalJson(storedEvent.envelope)), "immutable Outbox bytes must match Kafka's canonical serialization");
@@ -215,6 +216,20 @@ void test("PostgreSQL OrderStore atomically persists commands, prechecks before 
       assert.equal(replay.kind, "completed");
       assert.equal(replay.response.status, 200);
       assert.equal(replay.response.resourceRef, draft.body.orderRef);
+
+      const groundDraft=await store.createDraft({...commandMeta(),customer});
+      const grain={sourceGrindKeyHash:"a".repeat(64),grindDisplayName:"Средний помол"};
+      const groundProofs=[proof(31),{...proof(32),offerRef:proof(31).offerRef,...grain},{...proof(33),offerRef:proof(31).offerRef,...grain}];
+      for(const [index,item] of groundProofs.entries()) {
+        const version=String(index+1);
+        const expected={...request(version,item),...(item.sourceGrindKeyHash===undefined?{}:{sourceGrindKeyHash:item.sourceGrindKeyHash})};
+        const put=await store.putItem({...commandMeta(),orderRef:groundDraft.body.orderRef,itemRef:ref("itm",31+index),expectedVersion:version,request:expected,item});
+        assert.equal(put.body.items[index].sourceGrindKeyHash,item.sourceGrindKeyHash);
+        if(index===1) await assert.rejects(store.putItem({...commandMeta(),orderRef:groundDraft.body.orderRef,itemRef:ref("itm",39),expectedVersion:put.body.version,request:{...expected,expectedVersion:put.body.version,sourceGrindKeyHash:"b".repeat(64)},item}),{code:"ORDER_VALIDATION_FAILED"});
+      }
+      await store.confirm({...commandMeta(),orderRef:groundDraft.body.orderRef,expectedVersion:"4"});
+      const groundLines=(await admin.query("SELECT offer_ref, source_grind_key_hash, quantity_milli::text FROM orders.order_desired_contribution_lines WHERE order_ref=$1 ORDER BY offer_ref, source_grind_key_hash NULLS FIRST",[groundDraft.body.orderRef])).rows;
+      assert.deepEqual(groundLines,[{offer_ref:groundProofs[0].offerRef,source_grind_key_hash:null,quantity_milli:"2500"},{offer_ref:groundProofs[0].offerRef,source_grind_key_hash:grain.sourceGrindKeyHash,quantity_milli:"5000"}]);
 
       const expiredDraft = await store.createDraft({...commandMeta(), customer});
       const expiredProof = {...proof(9), quoteExpiresAt:Temporal.Now.instant().subtract({hours:1}).toString()};

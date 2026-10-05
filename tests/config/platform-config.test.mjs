@@ -103,6 +103,81 @@ void test("GREEN: Pricing bootstrap policy matches the immutable migration seed"
   assert.throws(() => parsePlatformConfig({...document, pricingPolicy: undefined}), PlatformConfigError);
 });
 
+void test("Catalog snapshot proof threshold keeps missing config fail-closed and strictly parses the approved value", async () => {
+  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const withoutThreshold = structuredClone(document);
+  delete withoutThreshold.services["catalog-service"].catalogSnapshotProof;
+  assert.equal(parsePlatformConfig(withoutThreshold).services["catalog-service"].catalogSnapshotProof, undefined);
+  assert.deepEqual(parsePlatformConfig(document).services["catalog-service"].catalogSnapshotProof, {maxAgeMs: 7_200_000});
+  const configured = structuredClone(document);
+  configured.services["catalog-service"].catalogSnapshotProof = {maxAgeMs: 123_456};
+  assert.deepEqual(parsePlatformConfig(configured).services["catalog-service"].catalogSnapshotProof, {maxAgeMs: 123_456});
+  for (const invalid of [{maxAgeMs: 0}, {maxAgeMs: 1.5}, {maxAgeMs: Number.MAX_SAFE_INTEGER + 1}, {maxAgeMs: 1, extra: true}]) {
+    const changed = structuredClone(document);
+    changed.services["catalog-service"].catalogSnapshotProof = invalid;
+    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+  }
+  const wrongOwner = structuredClone(document);
+  wrongOwner.services["pricing-service"].catalogSnapshotProof = {maxAgeMs: 123_456};
+  assert.throws(() => parsePlatformConfig(wrongOwner), PlatformConfigError);
+});
+
+void test("AROMA workflow: mutation switch is explicit, convergence-only and independent of capability", async () => {
+  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const runtime = document.services["aroma-convergence"];
+  assert.equal(runtime.mutationsEnabled, false);
+  assert.equal(runtime.mutationCapability, true);
+  assert.equal(parsePlatformConfig(document).services["aroma-convergence"].mutationsEnabled, false);
+  const enabled = structuredClone(document);
+  enabled.services["aroma-convergence"].mutationsEnabled = true;
+  assert.equal(parsePlatformConfig(enabled).services["aroma-convergence"].mutationsEnabled, true);
+  for (const invalid of [undefined, null, "false", 0]) {
+    const changed = structuredClone(document);
+    changed.services["aroma-convergence"].mutationsEnabled = invalid;
+    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+  }
+  const observer = structuredClone(document);
+  observer.services["aroma-observer"].mutationsEnabled = true;
+  assert.throws(() => parsePlatformConfig(observer), PlatformConfigError);
+});
+
+void test("AROMA workflow: durable schedule limits are explicit, bounded and role-specific", async () => {
+  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const parsed = parsePlatformConfig(document);
+  const settings = [
+    ["orders-aroma-preparation", "aromaPreparation"],
+    ["aroma-observer", "aromaObservation"],
+    ["aroma-convergence", "aromaConvergence"],
+  ];
+  for (const [runtime, property] of settings) {
+    assert.ok(document.services[runtime][property]);
+    assert.deepEqual(parsed.services[runtime][property], document.services[runtime][property]);
+    const invalidSettings = [undefined, {...document.services[runtime][property], pollIntervalMs: 0},
+      {...document.services[runtime][property], maxLines: Number.MAX_SAFE_INTEGER},
+      {...document.services[runtime][property], unknown: 1}];
+    if (property !== "aromaPreparation") invalidSettings.push({...document.services[runtime][property], maxResponseBytes: 2_097_153});
+    for (const invalid of invalidSettings) {
+      const changed = structuredClone(document);
+      changed.services[runtime][property] = invalid;
+      assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+    }
+  }
+  assert.equal(parsed.services["aroma-observer"].aromaObservation.maxResponseBytes, 2_097_152);
+  assert.equal(parsed.services["aroma-convergence"].aromaConvergence.maxResponseBytes, 2_097_152);
+  assert.equal(parsed.services["aroma-convergence"].aromaConvergence.leaseMs,30_000);
+  assert.equal(parsed.services["aroma-convergence"].aromaConvergence.heartbeatIntervalMs,10_000);
+  for(const patch of [{leaseMs:45_000},{heartbeatIntervalMs:5_000}]) {
+    const changed=structuredClone(document);Object.assign(changed.services["aroma-convergence"].aromaConvergence,patch);
+    assert.throws(()=>parsePlatformConfig(changed),PlatformConfigError);
+  }
+  const staleLease = structuredClone(document);
+  staleLease.services["aroma-convergence"].aromaConvergence.leaseMs = 1000;
+  assert.throws(() => parsePlatformConfig(staleLease), PlatformConfigError);
+  const wrongRole = structuredClone(document);
+  wrongRole.services["orders-service"].aromaObservation = document.services["aroma-observer"].aromaObservation;
+  assert.throws(() => parsePlatformConfig(wrongRole), PlatformConfigError);
+});
+
 void test("RED: config:check rejects mismatched Pricing policy and immutable seed", async () => {
   const root = await configRoot();
   try {

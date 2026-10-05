@@ -1940,7 +1940,7 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
   const migrationNames = [
     "0001_supplier_snapshots.sql", "0002_snapshot_batches.sql", "0003_snapshot_staging.sql",
     "0004_catalog_active.sql", "0005_catalog_identity.sql", "0006_catalog_outbox.sql",
-    "0007_catalog_grants.sql", "0008_catalog_active_read.sql",
+    "0007_catalog_grants.sql", "0008_catalog_active_read.sql", "0009_active_snapshot_freshness.sql",
   ];
   const migrationDirectory = join(REPO_ROOT, "apps/catalog-service/migrations");
   const migrator = await createClient(replaceDatabase(adminUrl, catalog.name, {

@@ -112,6 +112,7 @@ type MockTelemetry = Readonly<{
   logoutRequests: string[];
   quoteRequests: string[];
   putRequests: string[];
+  putIntentKeys: string[];
   reconciliationReasons: string[];
   releaseReconciliationRefresh: () => void;
   armCustomerFailure: () => void;
@@ -155,13 +156,14 @@ async function installCommonMocks(page: Page, options: {
   let grindOptionSearchCount = 0;
   let current = options.aromaScenario
     ? orderCard("5", "Confirmed", true, options.aromaScenario, options.initialItemGrind ? grindHash : undefined, options.aromaBlocker)
-    : options.initialItem ? orderCard("2", "Draft", true, "NotRequested", options.initialItemGrind ? grindHash : undefined) : orderCard();
+    : options.initialItem ? orderCard(options.conflictPut ? "1" : "2", "Draft", true, "NotRequested", options.initialItemGrind ? grindHash : undefined) : orderCard();
   let reconciliationAccepted = false;
   let activeActor = "operator-1";
   let sessionAvailable = true;
   let loggedOut = false;
   const quoteRequests: string[] = [];
   const putRequests: string[] = [];
+  const putIntentKeys: string[] = [];
   let releaseReconciliationRefresh = (): void => undefined;
   const reconciliationRefreshGate = options.holdReconciliationRefresh
     ? new Promise<void>((resolve) => { releaseReconciliationRefresh = resolve; })
@@ -172,6 +174,7 @@ async function installCommonMocks(page: Page, options: {
     logoutRequests: [],
     quoteRequests,
     putRequests,
+    putIntentKeys,
     reconciliationReasons: [],
     releaseReconciliationRefresh: () => releaseReconciliationRefresh(),
     armCustomerFailure: () => { customerFailureArmed = true; },
@@ -396,6 +399,7 @@ async function installCommonMocks(page: Page, options: {
     }
     if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "PUT") {
       putRequests.push(request.postData() ?? "");
+      putIntentKeys.push(request.headers()["idempotency-key"] ?? "");
       if (options.stalePut) {
         return fulfillJson(route, {
           type: "about:blank",
@@ -408,7 +412,8 @@ async function installCommonMocks(page: Page, options: {
           errors: [],
         }, 409);
       }
-      if (options.conflictPut) {
+      const putRequest = request.postDataJSON() as { expectedVersion?: string; sourceGrindKeyHash?: string };
+      if (options.conflictPut && putRequest.expectedVersion === "1") {
         current = orderCard("4", "Draft", true);
         return fulfillJson(route, {
           type: "about:blank",
@@ -421,8 +426,7 @@ async function installCommonMocks(page: Page, options: {
           errors: [],
         }, 409);
       }
-      const putRequest = request.postDataJSON() as { sourceGrindKeyHash?: string };
-      current = orderCard("2", "Draft", true, "NotRequested", putRequest.sourceGrindKeyHash);
+      current = orderCard(options.conflictPut ? "5" : "2", "Draft", true, "NotRequested", putRequest.sourceGrindKeyHash);
       return fulfillJson(route, current);
     }
     if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "DELETE") {
@@ -874,6 +878,28 @@ async function expiredSessionHidesPrivateRoutes(context: BrowserContext): Promis
   await page.close();
 }
 
+async function actorChangeClearsCustomerFormAfterPeriodicSessionCheck(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await page.clock.install();
+  const telemetry = await installCommonMocks(page);
+  await page.goto(`${origin}/app/customers`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Новый клиент" }).click();
+  const customerDialog = page.getByRole("dialog", { name: "Новый клиент" });
+  await customerDialog.getByRole("textbox", { name: "Имя", exact: true }).fill("Иван Петров");
+  await customerDialog.getByRole("textbox", { name: "Телефон", exact: true }).fill("+79999994567");
+  await customerDialog.getByRole("textbox", { name: "Email", exact: true }).fill("ivan@example.test");
+  telemetry.switchActor();
+  const switchedSession = page.waitForRequest((request) => new URL(request.url()).pathname === "/auth/session");
+  await page.clock.fastForward(31_000);
+  await switchedSession;
+  await page.getByText("operator-2").waitFor();
+  await customerDialog.waitFor({ state: "detached" });
+  assert.equal(await page.getByRole("textbox", { name: "Имя", exact: true }).count(), 0);
+  assert.equal(await page.getByRole("textbox", { name: "Телефон", exact: true }).count(), 0);
+  assert.equal(await page.getByRole("textbox", { name: "Email", exact: true }).count(), 0);
+  await page.close();
+}
+
 async function unavailableSessionHidesPrivateRoutes(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   await installCommonMocks(page, { sessionUnavailable: true });
@@ -1265,6 +1291,38 @@ async function staleQuoteAndConcurrentChange(context: BrowserContext): Promise<v
   await conflictDialog.waitFor({ state: "hidden" });
   await conflictPage.getByText("Версия заказа").locator("..").getByText("4", { exact: true }).waitFor();
   await conflictPage.close();
+
+  const catalogConflictPage = await context.newPage();
+  const catalogConflict = await installCommonMocks(catalogConflictPage, { conflictPut: true, initialItem: true });
+  await catalogConflictPage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+  const catalogQuantity = catalogConflictPage.getByRole("textbox", { name: "Количество для Капучино" });
+  const catalogGrind = catalogConflictPage.getByRole("combobox", { name: "Помол для Капучино" });
+  await catalogQuantity.fill("3");
+  await catalogGrind.selectOption(grindHash);
+  await catalogConflictPage.getByRole("button", { name: "Добавить" }).click();
+  const catalogConflictDialog = catalogConflictPage.getByRole("dialog", { name: "Заказ изменился на сервере" });
+  await catalogConflictDialog.waitFor();
+  assert.equal(catalogConflict.putRequests.length, 1);
+  const firstCatalogPut = JSON.parse(catalogConflict.putRequests[0] ?? "{}") as { expectedVersion?: string; quantity?: string; sourceGrindKeyHash?: string };
+  assert.equal(firstCatalogPut.expectedVersion, "1");
+  assert.equal(firstCatalogPut.quantity, "3");
+  assert.equal(firstCatalogPut.sourceGrindKeyHash, grindHash);
+  assert.ok(catalogConflict.putIntentKeys[0]);
+  await catalogConflictDialog.getByRole("button", { name: "Обновить карточку" }).click();
+  await catalogConflictDialog.waitFor({ state: "hidden" });
+  assert.equal(catalogConflict.putRequests.length, 1, "fresh GET must not automatically retry the failed PUT");
+  assert.equal(catalogConflict.quoteRequests.length, 1, "fresh GET must not automatically create another quote");
+  assert.equal(await catalogQuantity.inputValue(), "3");
+  assert.equal(await catalogGrind.inputValue(), grindHash);
+  await catalogConflictPage.getByRole("button", { name: "Добавить" }).click();
+  await catalogConflictPage.getByText("Товар добавлен").waitFor();
+  assert.equal(catalogConflict.putRequests.length, 2, "only an explicit Add starts another PUT");
+  const refreshedCatalogPut = JSON.parse(catalogConflict.putRequests[1] ?? "{}") as { expectedVersion?: string; quantity?: string; sourceGrindKeyHash?: string };
+  assert.equal(refreshedCatalogPut.expectedVersion, "4");
+  assert.equal(refreshedCatalogPut.quantity, "3");
+  assert.equal(refreshedCatalogPut.sourceGrindKeyHash, grindHash);
+  assert.notEqual(catalogConflict.putIntentKeys[1], catalogConflict.putIntentKeys[0], "manual retry must use a fresh idempotency key");
+  await catalogConflictPage.close();
 }
 
 async function deleteItemReturnsFocusToItemsHeading(context: BrowserContext): Promise<void> {
@@ -1313,6 +1371,7 @@ async function main(): Promise<void> {
       await browserBackDoesNotRepeatDraft(context);
       await staleQuoteAndConcurrentChange(context);
       await deleteItemReturnsFocusToItemsHeading(context);
+      await actorChangeClearsCustomerFormAfterPeriodicSessionCheck(context);
       await unavailableSessionHidesPrivateRoutes(context);
       await forbiddenResourceKeepsSessionAndShowsRightsError(context);
       await cachedCustomersAreHiddenAfterForbiddenRefetch(context);

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactElement } from "react";
-import { Alert, Badge, Button, Empty, Field, Icon, Link, Loading } from "@coffee-platform/ui";
+import { useQueryClient } from "@tanstack/react-query";
+import { Alert, Badge, Button, Dialog, Empty, Field, Icon, Link, Loading } from "@coffee-platform/ui";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { CatalogProductSummary } from "@coffee-platform/generated-client-v1";
 import { ApiError } from "../api/client.js";
@@ -7,6 +8,7 @@ import { ProblemAlert } from "../api/problem.js";
 import { newUlidRef } from "../api/ulid.js";
 import { useCatalogSearch, useOrderCard, useQuoteAndPutItem } from "../api/remote.js";
 import { PageHeader } from "../app/PageHeader.js";
+import { queryKeys } from "../app/query-keys.js";
 import { useSession } from "../app/session.js";
 
 
@@ -33,6 +35,7 @@ function isGrindUnavailable(error: unknown): boolean {
 
 export function CatalogPage(): ReactElement {
   const session = useSession();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const orderRef = params.get("orderRef") ?? "";
@@ -49,6 +52,7 @@ export function CatalogPage(): ReactElement {
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [grindSelections, setGrindSelections] = useState<Record<string, string>>({});
   const [added, setAdded] = useState<string>();
+  const orderKey = queryKeys.orderDetail(orderRef);
   const order = useOrderCard(session.actorRef, orderRef);
   const editable = order.data?.status === "Draft" && order.data.allowedActions.includes("edit-items");
   const products = useCatalogSearch(session.actorRef, {
@@ -58,6 +62,15 @@ export function CatalogPage(): ReactElement {
     q: editable ? query : "",
   });
   const addItem = useQuoteAndPutItem(session.actorRef, orderRef);
+  const conflictError = addItem.error instanceof ApiError && addItem.error.problem.code === "ORDER_VERSION_CONFLICT"
+    ? addItem.error
+    : undefined;
+
+  const refreshOrder = (): void => {
+    void queryClient.invalidateQueries({ exact: true, queryKey: orderKey, refetchType: "none" }).then(() => order.refetch()).then((result) => {
+      if (result.isSuccess && conflictError) addItem.reset();
+    });
+  };
 
   useEffect(() => {
     if (order.data && !editable) void navigate(`/app/orders/${order.data.orderRef}?notice=catalog-unavailable`, { replace: true });
@@ -107,7 +120,7 @@ export function CatalogPage(): ReactElement {
     return <Alert title="Не выбран заказ" tone="warning">Откройте <Link href="/app/customers">поиск клиентов</Link> и создайте черновик заказа.</Alert>;
   }
   if (order.isPending) return <Loading label="Проверяем заказ" />;
-  if (order.isError) return <ProblemAlert error={order.error} onRefresh={() => void order.refetch()} />;
+  if (order.isError) return <ProblemAlert error={order.error} onRefresh={refreshOrder} />;
   if (!editable) return <Loading label="Возвращаемся к карточке заказа" />;
 
   return (
@@ -134,7 +147,7 @@ export function CatalogPage(): ReactElement {
         {query.length === 0 ? <Empty description="Введите название — поиск начнётся через 300 мс после ввода." title="Начните поиск товара" /> : null}
         {products.isPending && query.length >= 2 ? <Loading label="Ищем товары" /> : null}
         {products.isError ? <ProblemAlert error={products.error} /> : null}
-        {addItem.isError && !isStaleQuote(addItem.error) && !isGrindUnavailable(addItem.error) ? <ProblemAlert error={addItem.error} /> : null}
+        {addItem.isError && !isStaleQuote(addItem.error) && !isGrindUnavailable(addItem.error) && !conflictError ? <ProblemAlert error={addItem.error} /> : null}
         {products.isSuccess && products.data.items.length === 0 ? <Empty description="Измените запрос или фильтр доступности." title="Товары не найдены" /> : null}
         <div className="product-grid">
           {products.data?.items.map((product) => {
@@ -156,7 +169,7 @@ export function CatalogPage(): ReactElement {
                     {grindOptions.map((option) => <option key={option.sourceGrindKeyHash} value={option.sourceGrindKeyHash}>{option.displayName}</option>)}
                   </select>
                 </label> : null}
-                <Button isDisabled={product.availability !== "Available" || !product.mappingAvailable || !quantity.trim()} isPending={addItem.isPending} onPress={() => addItem.mutate(
+                <Button isDisabled={product.availability !== "Available" || !product.mappingAvailable || !quantity.trim() || Boolean(conflictError)} isPending={addItem.isPending} onPress={() => addItem.mutate(
                   { itemRef: newUlidRef("itm"), product, quantity, ...(grindSelections[key] ? { sourceGrindKeyHash: grindSelections[key] } : {}) },
                   { onSuccess: (next) => setAdded(next.orderRef) },
                 )}>Добавить</Button>
@@ -170,6 +183,14 @@ export function CatalogPage(): ReactElement {
           setParams(next);
         }} variant="quiet">Следующая страница</Button> : null}
       </section>
+      <Dialog
+        {...(conflictError ? { description: `Correlation ID: ${conflictError.problem.correlationId}` } : {})}
+        footer={<Button isDisabled={order.isFetching} onPress={refreshOrder}>Обновить карточку</Button>}
+        isKeyboardDismissDisabled
+        isOpen={Boolean(conflictError)}
+        onOpenChange={() => undefined}
+        title="Заказ изменился на сервере"
+      ><p>Карточка заказа обновится. Проверьте состав и повторите добавление вручную.</p></Dialog>
     </>
   );
 }

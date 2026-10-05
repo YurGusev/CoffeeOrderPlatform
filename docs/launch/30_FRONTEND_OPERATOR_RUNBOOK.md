@@ -218,8 +218,8 @@ GitHub CI, review, accepted merge и deployment этой публикацией 
 из #171: optional grind options/hash/displayName, связанная пара полей и terminal
 `PRICING_GRIND_NOT_AVAILABLE`. Runtime schemas и transport types создаются штатной
 генерацией из OpenAPI. InternalApi, backend и миграции #11 остаются в #171.
-Эта интеграция не означает accepted merge #11: production consumer требует
-принятого backend producer; PR #172 остаётся Draft до принятия этого provider.
+На этапе локальной интеграции backend producer ещё не был принят, поэтому
+PR #172 оставался Draft. Состояние после принятия #171 описано в разделе 11.
 
 Отсутствие `availability` в URL означает исходный фильтр `Available`; явный
 `availability=` означает «Все» и отсутствие availability filter в API. Submit
@@ -265,3 +265,31 @@ Cached response не заменяет отказ в доступе. Времен
 gzip 139656 B ≤ 256000 B. Логи:
 `/tmp/coffee-pr172-customer-privacy-20261005/`. Это browser proof с mock API;
 browser-through-Edge и production в этой проверке не участвовали.
+
+## 11. Смена оператора и конфликт версии в Catalog — 5 октября 2026
+
+При смене actor отменяются только business queries. Выполняющийся запрос
+`browser-session` принимает новую сессию; SessionBoundary размонтирует формы
+прежнего оператора, а прежние cache и pending intents очищаются.
+
+`ORDER_VERSION_CONFLICT` в Catalog открывает диалог с correlation ID.
+Количество и выбранный помол сохраняются. Кнопка «Обновить карточку» выполняет
+`invalidateQueries` для точного Order query и читает актуальный Order. Только успешный GET
+закрывает конфликт; он не повторяет PUT. Следующее явное «Добавить» создаёт
+новый intent и использует свежую owner version.
+
+Producer #171 принят в `develop` commit
+`2191b82ea114db8f9b1c4839773ef7ca51a204b9`. Ветка #9 согласована с этой базой;
+конфликты compatibility evidence, breaking guard и указателя документации разрешены,
+runtime schemas генерируются штатно с Catalog roots для browser consumer.
+PR #172 остаётся Draft: browser-through-Edge/Compose served-surface acceptance
+и production в текущем локальном browser proof не проверены.
+
+На согласованной ветке прошли штатная генерация и generated drift check,
+contracts lint/breaking и 49/49 контрактных тестов, полный Playwright со свежей
+сборкой/typecheck, queries 15/15, idempotency 6/6 и browser group,
+foundation, architecture, lint, versions и bundle check (gzip 139763 B ≤ 256000 B).
+Регрессии проверяют периодический session poll через 31 секунду с новым actor
+и удалением приватной формы, а также Catalog `1 → 4 → 5` с сохранением помола
+и количества, без автоматического PUT и с новым ключом при явном повторе.
+Логи: `/tmp/coffee-pr172-session-conflict-20261005/`.

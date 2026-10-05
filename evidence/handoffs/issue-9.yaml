@@ -1,10 +1,10 @@
 issue: 9
-baseCommit: e278aeb10e57d37485542f8668f078456074b038
-status: draft-awaiting-provider-acceptance
+baseCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+status: draft-awaiting-served-surface-acceptance
 scope: >-
-  React operator flow #9: пять исходных замечаний review и P1 cached Customer privacy исправлены; public grind
-  output A #11 интегрирован штатно; локальные build/runtime/browser gates проходят, producer #171 ещё не
-  принят
+  React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict
+  исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
+  остаётся непроверенной
 inputs:
   - issue: 4
     acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
@@ -79,7 +79,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/api/remote.ts
-    sha256: 51939cc53c3aae9dcfc4536f1a1c0ac2145bdf49386b1fa5f806d9737727ba37
+    sha256: a0b995e89718ecc2b5424b007f7953eeed9a62233336380aea1f4320277b28b7
     consumers:
       - 12
       - 13
@@ -144,7 +144,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/CatalogPage.tsx
-    sha256: 7c40ab49820b224d89384f515cdc62838ec6c33ddb225a00cda19f9f864b9b74
+    sha256: fcc9a64fee9c8446abca4ecae13d4d90f7f4d9d87f34ca634adfda8d0102e4c0
     consumers:
       - 12
       - 13
@@ -184,7 +184,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: d4a3151a4669db0a57ad105c8117e74ecc312bcef3440fc97c2f00080ca108a1
+    sha256: f3bb9247003031d94a665e442cfbb31c17621194463e664a94e5500780b9250f
     consumers:
       - 12
       - 13
@@ -224,7 +224,7 @@ outputs:
       - 12
       - 13
   - artifact: contracts/compatibility-evidence.yaml
-    sha256: e4ad4e8213c7ca20df4ef06a49686dc26883450a1f047fe8cfaf139aa1fd9a22
+    sha256: 1d628031a4229d83262ef14ad917614d7a29280a4e4cfb404400d10bb33c95e7
     consumers:
       - 12
       - 13
@@ -239,7 +239,7 @@ outputs:
       - 12
       - 13
   - artifact: contracts/manifest.yaml
-    sha256: a0edb168ce7db130376825710e1ccf80c6e5c83d7df9ff1767bfd0009e2c1e9f
+    sha256: f87ce42f1947bdd10a8e1443e74fe2b15a99bcb4e286e977d66af8f392e54a46
     consumers:
       - 12
       - 13
@@ -259,17 +259,17 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: d77a4a932cd7802fe06055f0c664c115f20b61c752d27330acf87c54e6115f48
+    sha256: f67f2ed82581256c72baafa1cf680c472217e7b6b49f00231cbfdc968ceb2121
     consumers:
       - 12
       - 13
   - artifact: docs/launch/README.md
-    sha256: 1508bf92edb8eecc16927d87b0665a37306890f0b921107fe275b682b61e8e28
+    sha256: cefa6d33cdc7aea11aa3fb35c523dd9b0520501840cb5c69b9bf37083c69c6ff
     consumers:
       - 12
       - 13
   - artifact: package.json
-    sha256: 3551fd571353e55b2a1abcff045ffabdb84ab9dc39a38d164e7c4470c0cde252
+    sha256: f4e129866eea793e6163985660f9637ff1c3f9eac8d82857c4485ca81f2fe56d
     consumers:
       - 12
       - 13
@@ -309,7 +309,7 @@ outputs:
       - 12
       - 13
   - artifact: pnpm-lock.yaml
-    sha256: 9f7474491b22d63b2fe717cf806c225b0a369739038899d72bfc7f4537a49b8e
+    sha256: 990b22f1275b7315442592eb48f9424bcc672bce4f865c8425446d0839475e55
     consumers:
       - 12
       - 13
@@ -319,17 +319,17 @@ outputs:
       - 12
       - 13
   - artifact: scripts/contracts-breaking.mjs
-    sha256: fc1b15c3d90bdc2f64486546092277d1e16a0865aae890d200e6104062079269
+    sha256: 8c5c6566e9d4e806f614283b89e253670362901f98282863694c66b317e42483
     consumers:
       - 12
       - 13
   - artifact: scripts/contracts-generate.mjs
-    sha256: b27e2f9ec657d8c74c4aae0718b8045a13296b2ac4f47b83ec0abad4d85c52c6
+    sha256: 4338a07c08fed067be2315f6e6fba6dc34a53431996ff5b30497fba819d72265
     consumers:
       - 12
       - 13
   - artifact: tests/contracts/breaking.test.mjs
-    sha256: 81bcbd0bddcc53ef5c44a22c8c8d74fef4e8573e3881db0f030697964c53d801
+    sha256: 228b55b8598384bbc76b77470130e9062f6bcb184f3cd3e9feb14f782e4f920a
     consumers:
       - 12
       - 13
@@ -509,30 +509,125 @@ verification:
       Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
       Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
       /tmp/coffee-pr172-customer-privacy-20261005/browser-bundle.log
+  - command: pnpm contracts:generate
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-generate.log
+  - command: pnpm contracts:lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-lint.log
+  - command: pnpm contracts:check-generated
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-check-generated.log
+  - command: pnpm contracts:breaking
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-breaking.log
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-typecheck.log
+  - command: pnpm contracts:test
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-test.log
+  - command: pnpm test:playwright
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/playwright.log
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/web-queries.log
+  - command: pnpm test:web-idempotency
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/web-idempotency.log
+  - command: pnpm test:web-foundation
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/web-foundation.log
+  - command: pnpm architecture:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/architecture.log
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/lint.log
+  - command: pnpm versions:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/versions.log
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/browser-bundle.log
 limitations:
   - >-
-    PR #172 остаётся Draft до принятия producer #171 и согласования с актуальной develop. Public contract
-    output A интегрирован локально; backend #11 и InternalApi в PR #172 не перенесены. #11 пока не accepted
-    predecessor.
+    PR #172 остаётся Draft до browser-through-Edge/Compose served-surface acceptance и owner acceptance.
+    Producer #171 принят; прежняя зависимость от непринятого backend устранена.
   - >-
-    Неуспешные baseline и 4 октября typecheck/query результаты выше — история; финальные самостоятельные gates
-    5 октября прошли. Более ранние route/full browser failures при отладке тестовой синхронизации сохранены в
-    локальных receipts; окончательный full Playwright PASS.
+    Исторические baseline/typecheck/query/route failures выше относятся к прежним ревизиям; итоговые gates
+    после merge accepted develop и двух новых fixes прошли.
   - >-
-    Browser-through-Edge/Compose served-surface acceptance не повторялась. Исторический запуск #9 блокировался
-    отсутствующим external PostgreSQL endpoint; последующий Compose #11 proof не заменяет browser-through-Edge
-    acceptance.
+    Production IdP, TLS/PKI, live provider mutation, deployment и CI в этом прогоне не проверялись. Browser
+    proof использует mock API. Merge самого PR #172 и закрытие issue #9 не выполнялись.
   - >-
-    Production IdP, TLS/PKI, live provider mutation, deployment и owner acceptance frontend не проверялись.
-    GitHub CI, review и accepted merge локальными проверками не подтверждены.
-  - >-
-    Пользовательские uncommitted agent settings и local container tooling исключены из коммита #9 и сохранены
-    побайтно. README в outputs берётся из HEAD.
-pendingContractInput:
+    Пользовательские 11 dirty/untracked settings/tooling файлов в основном checkout сохранены отдельно от
+    чистой integration copy и исключены из PR.
+sourceFingerprint:
+  algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
+  sha256: e50c273417cfa6840bd76612075efb2b1a7eed737232a94e694f701eddab5146
+acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171
   headCommit: 3abdd4a7f937225af3d2e6cdcb5bd1b76744a796
-  accepted: false
+  accepted: true
   artifacts:
     - artifact: contracts/openapi/client-v1.yaml
       sha256: 69b4ae3c7522abcb3e8a0927552507219bbab2b5bfd34bc0c28538384c921974
@@ -540,8 +635,18 @@ pendingContractInput:
       sha256: 7e1aabbed1355a2e37f97fa142c24495febcbf5323a386a59d19012e9e6cb42e
   integratedLocally: true
   integratedFromCommit: 3384569711553b7d860e459d56e4c302df4c6d7f
-sourceFingerprint:
-  algorithm: >-
-    sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded; README taken from HEAD to
-    exclude unrelated user edit)
-  sha256: 2be158854f104123f0ff76635ba395805a00fc22c049862e518189ed8be7044c
+  acceptedMergeCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+  sourceHandoff:
+    artifact: evidence/handoffs/issue-11.yaml
+    sha256: 60626b2c92789a8949b362b7a29d12c43b7e2df429a5a5b96eee7ae0fb60ebef
+integration:
+  method: merge-develop
+  previousHead: 32bc8d9d1f9088e27c8f7b420563334f3908bb9f
+  acceptedDevelopCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+  resolvedConflicts:
+    - contracts/compatibility-evidence.yaml
+    - docs/launch/README.md
+    - scripts/contracts-breaking.mjs
+  detail: >-
+    Сохранены backend/internal guarantees принятого #11 и browser Catalog roots #9; native generation совпала
+    побайтно. Git diff backend/config/public OpenAPI относительно accepted develop пуст.

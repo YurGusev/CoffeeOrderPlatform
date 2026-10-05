@@ -3,6 +3,10 @@
 Статус: нормативная спецификация первого запуска. Исполнитель не выбирает
 формулу, таблицы, rounding, TTL, hash, idempotency или verify semantics заново.
 
+Для #11 сквозное сохранение и проверка выбранного помола в quote/verify
+определены [контрактом помола](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md).
+Это расширение immutable proof, не новая формула цены или внешний вызов Confirm.
+
 ## 1. Граница и зависимости
 
 `pricing-service` принадлежит bounded context `Pricing`, является единственным
