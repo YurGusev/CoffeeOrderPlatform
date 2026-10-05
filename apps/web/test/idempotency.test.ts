@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { beforeEach, test } from "vitest";
+import { beforeEach, test, vi } from "vitest";
 import type { ProblemDetails } from "@coffee-platform/generated-client-v1";
 import { isTerminalCommandProblem, isTerminalProblemForCommand } from "../src/browser/api/client.js";
 import {
@@ -73,6 +73,32 @@ test("fingerprint канонизирует порядок ключей JSON obje
   const left = await browserFingerprint({ quantity: "2", product: { b: 2, a: 1 } });
   const right = await browserFingerprint({ product: { a: 1, b: 2 }, quantity: "2" });
   assert.equal(left, right);
+});
+
+test("перекрывающиеся create-draft сохраняют один intent для одного scope", async () => {
+  let releaseDigest!: (value: ArrayBuffer) => void;
+  const digestResult = new Promise<ArrayBuffer>((resolve) => {
+    releaseDigest = resolve;
+  });
+  const digest = vi.spyOn(globalThis.crypto.subtle, "digest").mockReturnValue(digestResult);
+  const input = {
+    actorRef: "operator-1",
+    body: { customerRef: "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV" },
+    kind: "create-draft" as const,
+    method: "POST" as const,
+    path: "/api/client-v1/orders/drafts",
+  };
+
+  const first = beginIntent(input);
+  const second = beginIntent(input);
+  assert.equal(digest.mock.calls.length, 2);
+  releaseDigest(new ArrayBuffer(32));
+
+  const results = await Promise.all([first, second]);
+  digest.mockRestore();
+  assert.equal(results.filter((result) => result.created).length, 1);
+  assert.equal(results[0]?.intent.key, results[1]?.intent.key);
+  assert.equal(readPendingIntents().items.length, 1);
 });
 
 test("unresolved order command блокирует другую команду того же заказа", async () => {

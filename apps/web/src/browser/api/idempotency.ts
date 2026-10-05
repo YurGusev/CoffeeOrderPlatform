@@ -149,9 +149,9 @@ export async function beginIntent(input: Readonly<{
   if (!allowedKinds.has(input.kind) || !allowedPath.test(input.path) || !matchesCommand(input.kind, input.method, input.path)) {
     throw new Error("Команда не входит в allowlist восстановления");
   }
+  const fingerprint = await browserFingerprint(input.body);
   const snapshot = readPendingIntents();
   if (snapshot.corrupt) throw new Error("Повреждённые данные восстановления требуют новой защищённой сессии");
-  const fingerprint = await browserFingerprint(input.body);
   const existing = snapshot.items.find((item) => item.actorRef === input.actorRef
     && intentScope(item.kind, item.path) === intentScope(input.kind, input.path));
   if (existing) return { created: false, intent: existing };

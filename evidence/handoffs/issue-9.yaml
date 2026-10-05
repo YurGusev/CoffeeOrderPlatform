@@ -4,7 +4,7 @@ status: draft-awaiting-served-surface-acceptance
 scope: >-
   React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
   несохранённое количество, восстановление конфликта Order Card и повторная сверка AROMA
-  после новой owner-проекции и скрытие cached Catalog при 403
+  после новой owner-проекции, скрытие cached Catalog при 403 и гонка pending scope до fingerprint
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -66,7 +66,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/api/idempotency.ts
-    sha256: 01313c8a7ad2e4df5daf6004916e31953b01f047fdd23df7ca64722d71d7372c
+    sha256: 78a877bdae596dcbd60906e9a0a14f4129f84f340f6513c2753af15bfda437e9
     consumers:
       - 12
       - 13
@@ -181,7 +181,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/idempotency.test.ts
-    sha256: 238efc7b941a1352e3f735683a5ef0132c6146beaa6a9f340a31cd195b82661b
+    sha256: 68ae35c80492caf24b72eed8b4c093c5ed8b6d81690298add753ca0836b780a3
     consumers:
       - 12
       - 13
@@ -261,7 +261,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: 191c095d8ee02710c383b30fb7be09c69c12e1517a74529429b22c9d36a6eac1
+    sha256: 5c5628abdaf1ba0064cf947e6dad969b780119893f4e49d5711e6d9c7aa9818b
     consumers:
       - 12
       - 13
@@ -732,7 +732,48 @@ verification:
     detail: >-
       5 октября 2026, cached Catalog P2: Initial JS gzip 139946 B из лимита 256000 B.
       Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/browser-bundle.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, pending scope race: worker воспроизвёл на прежнем helper два created=true.
+      Краткая квитанция worker в /tmp/coffee-pr172-fingerprint-race-20261005/ui/idempotency-race.log;
+      raw stdout этого воспроизведения не сохранён. После переноса snapshot за fingerprint worker получил7/7.
+  - command: pnpm test:web-idempotency
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, pending scope race: 7/7 units, свежие typecheck/build и existing browser idempotency group.
+      Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/web-idempotency.log. После этого production source
+      не менялся; unit assertion упрощена до подсчёта created intent для соблюдения lint.
+  - command: pnpm lint
+    result: failed-test-lint
+    exitCode: 1
+    detail: >-
+      5 октября 2026, pending scope race: новый unit test использовал sort без comparator.
+      Заменён подсчётом created=true; runtime не менялся. Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/lint.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, pending scope race: финальная unit assertion, 7/7 PASS.
+      Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/idempotency-final.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, pending scope race: финальный diff после исправления test assertion.
+      Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/lint-final.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, pending scope race: 1 JS, initial gzip139945 B из256000 B.
+      Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/browser-bundle.log.
 limitations:
+  - >-
+    Перекрывающиеся beginIntent проверены unit test с удержанием digest; sidebar/unmount race отдельно
+    в браузере не воспроизводился. Существующая browser idempotency group прошла на свежем build.
   - >-
     Catalog cache privacy regression использует controlled SPA history transition с одним QueryClient.
     Native UI Link перезагружает документ; acceptance native Link/Back/Edge этим сценарием не подтверждена.
@@ -750,7 +791,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: 4d520ea333e375c6bf2b279f1f6ffb2ca9728f9492f292299250731b192aead0
+  sha256: ea084f3e62a3ca1ca14a25cc0480a48464abb7066b640607a939d21f8d76fd36
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171
