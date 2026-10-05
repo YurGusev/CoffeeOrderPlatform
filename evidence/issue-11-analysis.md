@@ -1202,3 +1202,52 @@ Receipts последующих проверок: `/tmp/coffee-issue11-final-che
   red/failed receipts сохранены. Fresh Compose/browser после fix не повторялись;
   old167–169 proof относится к предыдущему source. Историческая generic DB error
   не классифицируется задним числом. Unsafe/provider/production mutations отсутствуют.
+
+
+- **F60:** Review P2: общий blocker guard запрещал удаление/уменьшение по
+  прежнему physical key после исключения недоступного вклада из Desired.
+  Теперь при blockers только из `MAPPING_CHANGED|MAPPING_MISSING|MAPPING_STOPPED|
+  PRODUCT_UNAVAILABLE` planner выбирает первый lexicographic cleanup diff;
+  положительные изменения и смешанные hard blockers запрещены. Сохраняются
+  complete fresh GET, reservation barrier, fence/current Desired checks и
+  максимум одна unsafe mutation на Attempt. Catalog proof требуется только
+  для положительного изменения; cleanup не меняет frozen physical key.
+  Planner сохраняет прежний линейный проход и создаёт объект только для
+  выбранной строки. После проверки cleanup terminal остаётся `Blocked` с
+  исходными codes. Если проверка доказала применение и остался другой
+  безопасный diff, существующий durable work получает следующий wake-up;
+  positive-only/no diff не создаёт hot loop. После lost ACK RecoveredApplied
+  остаётся reconcile-only (unsafe=0); оставшийся cleanup получает wake-up для
+  отдельной Attempt с новым operationRef. Прежний operationRef не повторяется.
+  RecoveredNotApplied не включает этот дополнительный cleanup wake.
+
+- **F61:** Existing owner-role PostgreSQL/fake Gateway regression проверяет
+  Remove с прежним grind hash, decrease, mixed positive-before-cleanup,
+  positive-only запрет, Stopped cleanup, mixed hard blocker fail-closed и две
+  устаревшие строки: две `Blocked` Attempt, по одному Remove, затем idle.
+  Worker final `pnpm test:aroma-convergence`94/94 PASS (встроенный tsc),
+  local Attempt437.5ms<=500. Final `pnpm test:aroma-recovery`184/184 PASS,
+  0fail/skip/cancel; local Attempt430.197970ms/provider10.251678ms,
+  Preparation1877.101ms<=2000/same-hash707.134ms. Raw receipts
+  `/tmp/coffee-pr171-172-fixes-20261005/backend`; mutationsEnabled=false.
+  Это изолированная локальная проверка; Compose/browser-through-Edge/production
+  после нового cleanup fix ещё не повторялись.
+
+
+- **F62:** Финальный source после recovery correction: `pnpm test:aroma-convergence`
+  94/94 PASS, `pnpm test:aroma-recovery`184/184 PASS, 0fail/skip/cancel; обе
+  команды включают tsc. Local Attempt453.449603ms/provider11.464204ms в
+  convergence и431.726903ms/provider10.441706ms в recovery, threshold500ms;
+  Preparation1843.763788ms<=2000. `pnpm lint`exit0. Отдельная capacity suite
+  до последней recovery-ветки:77/77, local472.264ms/Preparation1927.484ms;
+  финальный recovery повторно проверяет обе capacity нагрузки на новом source.
+  Raw post-recovery-fix logs в `/tmp/coffee-pr171-172-fixes-20261005/backend`.
+  Lost ACK при двух obsolete keys: первая mutation UnknownOutcome, fresh
+  recovery разрешает reservation в RecoveredApplied (старый Attempt неизменен),
+  unsafe=0/selected_action=null/Blocked/dirty=true; отдельная следующая Attempt
+  выполняет оставшийся Remove новым operationRef, prior reservation больше не
+  меняется, dirty=false и idle. Независимое повторное ревью по diff3384569:
+  CLEANUP-RECOVERY-WAKE устранено, существенных новых findings нет.
+  `git diff --check` PASS; generic historical DB cause остаётся UNKNOWN.
+  Compose, browser-through-Edge, CI, accepted merge и deployment не подтверждены
+  для нового source; реальные provider mutations не выполнялись.

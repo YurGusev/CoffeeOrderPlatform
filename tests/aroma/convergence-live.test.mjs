@@ -134,9 +134,9 @@ void test("convergence owner-role PostgreSQL + controlled fake Gateway", {timeou
         } catch(error) {await db.query("ROLLBACK");throw error;}
       };
       const target = (offerRef = OFFER, quantityMilli = "1000", sourceGrindKeyHash) => ({offerRef,quantityMilli,...(sourceGrindKeyHash===undefined?{}:{sourceGrindKeyHash})});
-      const reset = async (lines = [target()]) => {
+      const reset = async (lines = [target()], codes = []) => {
         await db.query("TRUNCATE orders.cart_desired_revisions,orders.cart_observed_revisions,orders.convergence_leases,orders.convergence_work,orders.catalog_mapping_projection,orders.outbox_messages CASCADE");
-        await freshDesired(lines);
+        await freshDesired(lines,codes);
         for (const [index,offerRef] of [OFFER,OTHER].entries()) await db.query("INSERT INTO orders.catalog_mapping_projection VALUES($1,$2,$3,1,1,'Active','Available',clock_timestamp(),'fixture',$4)",[`prd_${String(index+1).padStart(26,'0')}`,`var_${String(index+1).padStart(26,'0')}`,offerRef,H]);
       };
       const facts = async () => ({attempts:(await db.query("SELECT * FROM orders.convergence_attempts ORDER BY started_at,attempt_ref")).rows,reservations:(await db.query("SELECT * FROM orders.mutation_reservations ORDER BY reserved_at,operation_ref")).rows});
@@ -267,6 +267,68 @@ void test("convergence owner-role PostgreSQL + controlled fake Gateway", {timeou
         await createAromaConvergenceStore(runtime,options).runOnce(removal.gateway,signal);
         assert.equal(removal.catalogReads,0);assert.equal(removal.calls[0].action,"Remove");
       });
+      await t.test("PRODUCT_UNAVAILABLE permits only verified cleanup and keeps the Attempt blocked",async () => {
+        await reset([], ["PRODUCT_UNAVAILABLE"]);await db.query("UPDATE orders.catalog_mapping_projection SET availability='Unavailable',mapping_revision=2,catalog_snapshot_revision=2,effective_at=clock_timestamp()");
+        const removal=fake([line(OFFER,"1",GRIND)]);
+        await createAromaConvergenceStore(runtime,options).runOnce(removal.gateway,signal);
+        let result=await facts();
+        assert.deepEqual(removal.calls.map(call=>[call.action,call.request.sourceGrindKeyHash]),[["Remove",GRIND]]);assert.equal(removal.catalogReads,0);
+        assert.equal(result.reservations[0].state,"Verified");assert.equal(result.attempts[0].state,"Blocked");
+        assert.deepEqual(result.attempts[0].blocker_codes,["PRODUCT_UNAVAILABLE"]);
+
+        await reset([target(OFFER,"1000")], ["PRODUCT_UNAVAILABLE"]);await db.query("UPDATE orders.catalog_mapping_projection SET availability='Unavailable',mapping_revision=2,catalog_snapshot_revision=2,effective_at=clock_timestamp()");
+        const decrease=fake([line(OFFER,"2")]);
+        await createAromaConvergenceStore(runtime,options).runOnce(decrease.gateway,signal);
+        result=await facts();
+        assert.deepEqual(decrease.calls.map(call=>[call.action,call.request.quantity]),[["SetQuantity","1"]]);assert.equal(decrease.catalogReads,0);
+        assert.equal(result.reservations[0].state,"Verified");assert.equal(result.attempts[0].state,"Blocked");
+        assert.deepEqual(result.attempts[0].blocker_codes,["PRODUCT_UNAVAILABLE"]);
+
+        await reset([], ["PRODUCT_UNAVAILABLE"]);
+        await db.query("UPDATE orders.catalog_mapping_projection SET availability='Unavailable',mapping_revision=2,catalog_snapshot_revision=2,effective_at=clock_timestamp()");
+        const multiple=fake([line(OFFER,"1"),line(OTHER,"1")]),store=createAromaConvergenceStore(runtime,options);
+        await store.runOnce(multiple.gateway,signal);
+        result=await facts();
+        assert.equal(multiple.calls.length,1);assert.equal(result.attempts.length,1);assert.equal(result.attempts[0].state,"Blocked");
+        assert.equal((await db.query("SELECT dirty FROM orders.convergence_work")).rows[0].dirty,true);
+        await due();await store.runOnce(multiple.gateway,signal);
+        result=await facts();
+        assert.equal(multiple.calls.length,2);assert.equal(result.attempts.length,2);assert.ok(result.attempts.every(attempt=>attempt.state==="Blocked"));
+        assert.deepEqual(multiple.calls.map(call=>call.action),["Remove","Remove"]);
+        assert.equal(await store.runOnce(multiple.gateway,signal),"idle");
+        assert.equal((await db.query("SELECT dirty FROM orders.convergence_work")).rows[0].dirty,false);
+
+        await reset([target(OFFER,"2000"),target(OFFER,"1000",GRIND)], ["PRODUCT_UNAVAILABLE"]);
+        await db.query("UPDATE orders.catalog_mapping_projection SET availability='Unavailable',mapping_revision=2,catalog_snapshot_revision=2,effective_at=clock_timestamp()");
+        const mixed=fake([line(OFFER,"1"),line(OFFER,"2",GRIND)]);
+        await createAromaConvergenceStore(runtime,options).runOnce(mixed.gateway,signal);
+        result=await facts();
+        assert.deepEqual(mixed.calls.map(call=>[call.action,call.request.sourceGrindKeyHash,call.request.quantity]),[["SetQuantity",GRIND,"1"]]);
+        assert.equal(result.attempts[0].state,"Blocked");assert.deepEqual(result.attempts[0].blocker_codes,["PRODUCT_UNAVAILABLE"]);
+
+        await reset([target(OFFER,"2000")], ["PRODUCT_UNAVAILABLE"]);
+        await db.query("UPDATE orders.catalog_mapping_projection SET availability='Unavailable',mapping_revision=2,catalog_snapshot_revision=2,effective_at=clock_timestamp()");
+        const positive=fake([line(OFFER,"1")]);
+        await createAromaConvergenceStore(runtime,options).runOnce(positive.gateway,signal);
+        result=await facts();
+        assert.equal(positive.calls.length,0);assert.equal(result.reservations.length,0);assert.equal(result.attempts[0].state,"Blocked");
+        assert.deepEqual(result.attempts[0].blocker_codes,["PRODUCT_UNAVAILABLE"]);
+
+        await reset([], ["MAPPING_STOPPED"]);
+        await db.query("UPDATE orders.catalog_mapping_projection SET mapping_state='Stopped',availability='Stopped',mapping_revision=2,effective_at=clock_timestamp()");
+        const stopped=fake([line(OFFER,"1")]);
+        await createAromaConvergenceStore(runtime,options).runOnce(stopped.gateway,signal);
+        result=await facts();
+        assert.deepEqual(stopped.calls.map(call=>call.action),["Remove"]);assert.equal(result.reservations[0].state,"Verified");
+        assert.equal(result.attempts[0].state,"Blocked");assert.deepEqual(result.attempts[0].blocker_codes,["MAPPING_STOPPED"]);
+
+        await reset([], ["PRODUCT_UNAVAILABLE","AROMA_QUANTITY_NOT_SUPPORTED"]);
+        const hardBlocker=fake([line(OFFER,"1")]);
+        await createAromaConvergenceStore(runtime,options).runOnce(hardBlocker.gateway,signal);
+        result=await facts();
+        assert.equal(hardBlocker.calls.length,0);assert.equal(result.reservations.length,0);assert.equal(result.attempts[0].state,"Blocked");
+        assert.deepEqual(result.attempts[0].blocker_codes,["AROMA_QUANTITY_NOT_SUPPORTED","PRODUCT_UNAVAILABLE"]);
+      });
       await t.test("RecoveredApplied is reconcile-only even when current Desired has another difference; old UnknownOutcome stays immutable",async () => {
         await reset();
         const cart=fake();
@@ -285,6 +347,36 @@ void test("convergence owner-role PostgreSQL + controlled fake Gateway", {timeou
         assert.equal(result.attempts[1].state,"OutOfSync");
         assert.equal(result.attempts[1].selected_action,null);
         assert.equal((await db.query("SELECT dirty FROM orders.convergence_work")).rows[0].dirty,true);
+
+        await reset([], ["PRODUCT_UNAVAILABLE"]);
+        await db.query("UPDATE orders.catalog_mapping_projection SET availability='Unavailable',mapping_revision=2,catalog_snapshot_revision=2,effective_at=clock_timestamp()");
+        const cleanupCart=fake([line(OFFER,"1"),line(OTHER,"1")]);
+        cleanupCart.beforeMutation=async ({offerRef,request})=>{
+          cleanupCart.lines=cleanupCart.lines.filter(value=>value.offerRef!==offerRef||value.sourceGrindKeyHash!==request.sourceGrindKeyHash);
+          throw new Error("controlled lost cleanup acknowledgement");
+        };
+        await createAromaConvergenceStore(runtime,short).runOnce(cleanupCart.gateway,signal);
+        let cleanupFacts=await facts();
+        assert.equal(cleanupCart.calls.length,1);assert.equal(cleanupFacts.attempts[0].state,"UnknownOutcome");
+        assert.equal(cleanupFacts.reservations[0].state,"UnknownOutcome");
+        const oldCleanupAttempt=cleanupFacts.attempts[0];
+        await waitBarrier();cleanupCart.beforeMutation=undefined;
+        const recovered= createAromaConvergenceStore(runtime,{...short,ownerInstanceId:owner2});
+        await recovered.runOnce(cleanupCart.gateway,signal);
+        cleanupFacts=await facts();
+        assert.deepEqual(cleanupFacts.attempts[0],oldCleanupAttempt);
+        assert.equal(cleanupFacts.reservations[0].state,"RecoveredApplied");
+        const recoveredReservation=cleanupFacts.reservations[0];
+        assert.equal(cleanupFacts.attempts[1].state,"Blocked");assert.equal(cleanupFacts.attempts[1].selected_action,null);
+        assert.equal((await db.query("SELECT dirty FROM orders.convergence_work")).rows[0].dirty,true);
+        await due();await createAromaConvergenceStore(runtime,{...short,ownerInstanceId:owner2}).runOnce(cleanupCart.gateway,signal);
+        cleanupFacts=await facts();
+        assert.equal(cleanupCart.calls.length,2);assert.notEqual(cleanupCart.calls[0].request.operationRef,cleanupCart.calls[1].request.operationRef);
+        assert.deepEqual(cleanupFacts.attempts[0],oldCleanupAttempt);assert.deepEqual(cleanupFacts.reservations[0],recoveredReservation);
+        assert.equal(cleanupFacts.attempts[1].state,"Blocked");assert.equal(cleanupFacts.attempts[1].selected_action,null);
+        assert.equal(cleanupFacts.attempts[2].state,"Blocked");assert.equal(cleanupFacts.attempts[2].selected_action,"Remove");
+        assert.equal((await db.query("SELECT dirty FROM orders.convergence_work")).rows[0].dirty,false);
+        assert.equal(await recovered.runOnce(cleanupCart.gateway,signal),"idle");
       });
       await t.test("Acknowledged is durable before fresh verification; successful SetQuantity touches exactly one nullable-grind key",async () => {
         await reset([target(OFFER,"1000"),target(OFFER,"2000",GRIND)]);

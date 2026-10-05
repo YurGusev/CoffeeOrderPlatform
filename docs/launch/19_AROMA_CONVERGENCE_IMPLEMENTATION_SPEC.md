@@ -244,11 +244,13 @@ timestamps в statement. Условные expiry/fence/current-Desired пров�
 1. Acquire lease/fence; создать Attempt `Started` для current Desired.
 2. Выполнить fresh safe GET через Gateway.
 3. Полный GET сохранить как Observed только при current fence; Attempt=`Observed`.
-4. Если Observed равен Desired по всем offers/quantities, сохранить
+4. Если нет blockers и Observed равен Desired по всем offers/quantities, сохранить
    `NoOpInSync`, событие `InSync`, освободить lease; mutations=0.
-5. Если есть blockers, Attempt=`Blocked`; positive mutation для blocked mapping
-   запрещена.
-6. Выбрать ровно одну разницу: offers сортируются lexicographic; первый diff.
+5. Если есть blockers, positive mutation запрещена. Когда все codes относятся к
+   `MAPPING_CHANGED|MAPPING_MISSING|MAPPING_STOPPED|PRODUCT_UNAVAILABLE`, разрешена
+   только безопасная очистка; остальные blockers запрещают любую mutation.
+6. Выбрать ровно одну допустимую разницу: offers сортируются lexicographic;
+   первый diff, при Catalog blockers — первый decrease/remove.
    Desired 0 -> `Remove`, иначе `SetQuantity(desiredMilli)`.
 7. В короткой transaction повторно проверить lease/fence/current Desired и
    создать точную reservation `Reserved` с `operationRef`; commit.
@@ -262,7 +264,10 @@ timestamps в statement. Условные expiry/fence/current-Desired пров�
     очищать.
 12. Complete verification сохраняется только при current fence. Если весь cart
     равен current Desired -> `VerifiedInSync`; иначе `OutOfSync` и новый durable
-    wake-up. В этой Attempt второй diff не исправляется.
+    wake-up. При Catalog blockers terminal остаётся `Blocked` с исходными codes;
+    после подтверждённой очистки новый durable wake-up создаётся только если
+    осталось другое безопасное decrease/remove. Positive-only diff не создаёт
+    такой wake-up. В этой Attempt второй diff не исправляется.
 13. Terminal Attempt + reservation + Observed(optional) + Outbox пишутся одной
     transaction; lease освобождается conditional UPDATE.
 
@@ -289,14 +294,17 @@ Catalog проверяет возраст активного snapshot по DB cl
 будущий timestamp, отсутствие или превышение возраста дают
 `503 CATALOG_UNAVAILABLE`. Ответ не раскрывает timestamp. Проверка включается
 для подписанного `originalCaller=aroma-convergence`; Pricing сохраняет прежнюю
-семантику. В текущем YAML порог ещё не задан и ожидает решения владельца:
-положительные mutations закрыты до настройки.
+семантику. Утверждённый предел в YAML — `7200000` мс (два часа);
+отсутствие настройки по-прежнему закрывает положительные mutations.
 
 ## 8. Recovery UnknownOutcome
 
 Новая Attempt всегда начинает с fresh GET. Для незавершённой reservation:
 
 - physical line равна `desiredMilli` -> `RecoveredApplied`, mutation=0;
+  если остаётся другой допустимый diff, новый durable wake-up продолжает
+  работу отдельной Attempt. При Catalog blockers это только cleanup, а
+  terminal recovery Attempt остаётся `Blocked` с исходными codes;
 - physical line равна `observedBeforeMilli` -> `RecoveredNotApplied`; после
   полного сравнения новая Attempt может создать новый operationRef/mutation;
 - другое значение -> сохранить новое Observed, оставить blocker

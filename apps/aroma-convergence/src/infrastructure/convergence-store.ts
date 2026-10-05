@@ -258,14 +258,15 @@ export function createAromaConvergenceStore(database: Database, options: AromaCo
     await check(tx, attempt, revision);
     return {revision, normalized};
   }
-  async function terminal(tx: Transaction, attempt: Attempt, state: Terminal, revision: string | null, codes: readonly string[], source?: KafkaEnvelope): Promise<void> {
+  async function terminal(tx: Transaction, attempt: Attempt, state: Terminal, revision: string | null, codes: readonly string[], source?: KafkaEnvelope,
+    retryCleanup = false): Promise<void> {
     await check(tx, attempt, revision);
     const time = (await clock(tx, [])).rows[0]!;
     await end(tx, [attempt.attempt_ref, state, revision, codes[0] ?? null, JSON.stringify([...new Set(codes)].sort())]);
     const fallback = revision ?? (await currentObserved(tx, [])).rows[0]?.revision ?? "0";
     await event(tx, {cartScopeRef: "aroma-primary", desiredRevision: attempt.desired_revision, observedRevision: fallback,
       attemptRef: attempt.attempt_ref, attemptState: state, changedAt: time.now, blockerCodes: [...new Set(codes)].sort()}, false, source);
-    const retry = state === "OutOfSync" || state === "UnknownOutcome" || state === "Failed";
+    const retry = retryCleanup || state === "OutOfSync" || state === "UnknownOutcome" || state === "Failed";
     telemetry?.attempt(state === "NoOpInSync" ? "no_op_in_sync" : state === "VerifiedInSync" ? "verified_in_sync" : state === "OutOfSync" ? "out_of_sync" : state === "Blocked" ? "blocked" : state === "UnknownOutcome" ? "unknown_outcome" : "failed");
     telemetry?.blocker(codes.length);
     await consume(tx, [attempt.desired_revision, attempt.wake_revision, retry, config.retryBackoffMs]);
@@ -409,14 +410,23 @@ export function createAromaConvergenceStore(database: Database, options: AromaCo
           }
         }
         const target = (await desiredLines(tx, [owned.desired_revision])).rows.map(physical);
+        const catalogBlockers = codes.length !== 0 && codes.every(code => code === "MAPPING_CHANGED" || code === "MAPPING_MISSING" ||
+          code === "MAPPING_STOPPED" || code === "PRODUCT_UNAVAILABLE");
         let diff: CartDifference | null;
-        try {diff = firstCartDifference(target, baseline.normalized.lines);}
+        try {diff = firstCartDifference(target, baseline.normalized.lines, catalogBlockers);}
         catch {await terminal(tx, owned, "Blocked", baseline.revision, ["AROMA_QUANTITY_NOT_SUPPORTED"], source); return null;}
-        if (codes.length !== 0) {await terminal(tx, owned, "Blocked", baseline.revision, codes, source); return null;}
+        const cleanup = diff !== null && (diff.action === "Remove" || BigInt(diff.quantityMilli) < BigInt(diff.observedBeforeMilli));
+        if (codes.length !== 0 && !(catalogBlockers && cleanup)) {
+          await terminal(tx, owned, "Blocked", baseline.revision, codes, source); return null;
+        }
         if (diff === null) {await terminal(tx, owned, "NoOpInSync", baseline.revision, [], source); return null;}
         // Applied recovery consumes only fresh reconciliation proof. A changed
         // Desired requires a later Attempt; never combine it with another mutation.
-        if (recoveredApplied) {await terminal(tx, owned, "OutOfSync", baseline.revision, [], source); return null;}
+        if (recoveredApplied) {
+          await terminal(tx, owned, codes.length === 0 ? "OutOfSync" : "Blocked", baseline.revision, codes, source,
+            catalogBlockers && cleanup);
+          return null;
+        }
         if (!config.mutationsEnabled) {await terminal(tx, owned, "Blocked", baseline.revision, ["AROMA_MUTATIONS_DISABLED"], source); return null;}
         const positive = diff.action === "SetQuantity" && BigInt(diff.quantityMilli) > BigInt(diff.observedBeforeMilli);
         if (positive && (await mapping(tx, [diff.offerRef])).rows[0]?.safe !== true) {
@@ -426,7 +436,7 @@ export function createAromaConvergenceStore(database: Database, options: AromaCo
         if (positive && catalog === undefined) {
           await terminal(tx, owned, "Blocked", baseline.revision, ["AROMA_MAPPING_NOT_AVAILABLE"], source); return null;
         }
-        return {diff, catalog};
+        return {diff, catalog, blockerCodes: codes, cleanupAllowed: catalogBlockers};
       });
       if (selection === null) return "attempted";
       const {diff, catalog} = selection;
@@ -548,7 +558,10 @@ export function createAromaConvergenceStore(database: Database, options: AromaCo
           await resolve(tx, [operation.operationRef, applied === "RecoveredApplied" ? "Verified" : "RecoveredNotApplied", canonicalRequestHash(ack as JsonValue)]);
           const target = (await desiredLines(tx, [owned.desired_revision])).rows.map(physical);
           const equal = firstCartDifference(target, saved.normalized.lines) === null;
-          await terminal(tx, owned, equal && applied === "RecoveredApplied" ? "VerifiedInSync" : "OutOfSync", saved.revision, [], source);
+          const retryCleanup = applied === "RecoveredApplied" && selection.cleanupAllowed &&
+            firstCartDifference(target, saved.normalized.lines, true) !== null;
+          await terminal(tx, owned, selection.blockerCodes.length !== 0 ? "Blocked" : equal && applied === "RecoveredApplied" ? "VerifiedInSync" : "OutOfSync",
+            saved.revision, selection.blockerCodes, source, retryCleanup);
         });
       } catch (error) {
         if (error instanceof OwnershipLost) throw error;

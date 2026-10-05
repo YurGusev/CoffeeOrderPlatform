@@ -43,7 +43,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/aroma-convergence/src/cart-plan.ts
-    sha256: 2e386eaf9e4f3d62f9cd2511bbc363d37b5ace2cd1987abb49eb7ec9dee20ff8
+    sha256: 4cf708375d020d1d747a533c78ad78d925f367d105dca34f3ae855514ca528a1
     consumers:
       - 12
       - 13
@@ -53,7 +53,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/aroma-convergence/src/infrastructure/convergence-store.ts
-    sha256: 58f1c180840a3f029301c5377d4c02c677300a536bc1a84771d55d4d3c56ff09
+    sha256: f17455f011674271a1e21f3f91547c643069fde65ccef43ec422046b94dff030
     consumers:
       - 12
       - 13
@@ -429,7 +429,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md
-    sha256: 8f048d0667ba33e2a6598b1856e4169c2f28e46f26b44345b3a3e76c92e3a1eb
+    sha256: 8e7c956ba4578fcac85cb27bb7c611a08ba64f9ff170820a2980b4621f3502f3
     consumers:
       - 12
       - 13
@@ -450,7 +450,7 @@ outputs:
       - 12
       - 13
   - artifact: evidence/issue-11-analysis.md
-    sha256: 4161764a6256ad668877c7e2b2c0aca24bbd7a299a6fe388b358af91c317e1f7
+    sha256: c7e61994f14d80cf406a713c3d7c807f12880c656defa4bb73da05c4c24f37e5
     consumers:
       - 12
       - 13
@@ -585,7 +585,7 @@ outputs:
       - 12
       - 13
   - artifact: tests/aroma/convergence-live.test.mjs
-    sha256: 91cae465570109e882d1f8cccb0ec2534bcad7e0532bd6ba91edc7585734d989
+    sha256: 87ec9c253a7a0fc4fcee028f4f64054390cd71f4c0678133acc232ea36942e59
     consumers:
       - 12
       - 13
@@ -735,7 +735,7 @@ outputs:
       - 12
       - 13
 verifiedSourceSubset:
-  sha256: 32b225a86bf4b06d24ac1f9257129a7b4359e459b617c4884f650d03eadf9bea
+  sha256: 260f19571f118b36cd6480a515bdb44093be6f040e1e7cdc9638d7090392402f
   files:
     - apps/aroma-convergence/src/application/messages.ts
     - apps/aroma-convergence/src/cart-plan.ts
@@ -760,7 +760,7 @@ verifiedSourceSubset:
     - packages/platform-runtime/src/index.ts
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: 0cac070e2924fb5594766bdd16859d4c23bff8921b155c94c59fcb55b4a26b24
+  sha256: 98d12039163e6ff7d26ed1204636d60cf6255a6ec27cf64cee98696d1b4e6f0b
 providerCallCounts:
   proof: Controlled fake Gateway, не real provider; assertions in receipt047
   noOp:
@@ -1201,6 +1201,20 @@ verification:
       Первый lint require-array-sort-compare FAIL сохранён. После explicit ASCII test comparator final
       lint0/selectedregression1PASS/diffcheck/nodecheck PASS. Runtime не менялся после полных67/183 suites.
       Independent read-only reviewer: no confirmed findings.
+  - command: pnpm test:aroma-convergence; pnpm test:aroma-recovery; pnpm lint
+    result: passed-after-catalog-cleanup-and-recovery-fix
+    detail: >-
+      5 октября 2026: final source94/94 convergence,184/184 recovery,0skip/cancel/fail, embedded tsc и lint
+      exit0. Local453.449603/431.726903ms<=500; Preparation1843.763788ms<=2000. Owner-role PostgreSQL/fake
+      Gateway regressions: old grind-key Remove/decrease, mixed positive/cleanup, positive-only и hard blocker
+      deny, Stopped cleanup,2 sequential Blocked Remove и lostACK→reconcile-only→separate new operationRef.
+      Independent review CLEANUP-RECOVERY-WAKE устранено, новых findings нет. Raw
+      /tmp/coffee-pr171-172-fixes-20261005/backend/*post-recovery-fix.log.
+  - command: pnpm test:aroma-capacity
+    result: passed-before-final-recovery-branch-correction
+    detail: >-
+      77/77,0skip/fail; local472.264ms<=500,Preparation1927.484ms<=2000. Этот отдельный profile предшествует
+      одной финальной recovery-ветке; новый final recovery повторно проверил обе capacity нагрузки.
 limitations:
   - >-
     Convergence final164/165/166 PASS456.387/439.868/449.080ms<=500. Historical145892.607218ms spike
@@ -1240,3 +1254,8 @@ limitations:
     После P1 timestamp/no-op decoder fix current PostgreSQL Preparation67/67 и recovery183/183 PASS;
     Compose167–169 и consumer browser proofs относятся к предыдущему source и после fix не повторялись.
     Production/runtime deployment не выполнялся; old generic DB cause остаётся UNKNOWN.
+  - >-
+    После Catalog cleanup/recovery fix финальные94/184 suites и lint PASS. Terminal остаётся Blocked с Catalog
+    codes; wake только для оставшегося safe cleanup, lostACK recovery не повторяет старую mutation. Compose и
+    browser-through-Edge на этом source не повторялись; historical receipts сохранены, production/provider
+    mutations отсутствуют. YAML maxAgeMs=7200000, mutationsEnabled=false.

@@ -39,12 +39,17 @@ function index(lines: readonly PhysicalLine[]): Map<string, PhysicalLine> {
 }
 
 /** Complete fresh Observed only; no side effects, and at most one deterministic mutation. */
-export function firstCartDifference(desired: readonly PhysicalLine[], observed: readonly PhysicalLine[]): CartDifference | null {
+export function firstCartDifference(desired: readonly PhysicalLine[], observed: readonly PhysicalLine[],
+  cleanupOnly = false): CartDifference | null {
   const target = index(desired), actual = index(observed);
   for (const line of target.values()) providerQuantity(line.quantityMilli);
   let first: string | undefined;
   for (const [identity, wanted] of target) {
-    if (wanted.quantityMilli !== actual.get(identity)?.quantityMilli && (first === undefined || identity < first)) first = identity;
+    const observedQuantity = actual.get(identity)?.quantityMilli;
+    if (wanted.quantityMilli !== observedQuantity && (!cleanupOnly || BigInt(wanted.quantityMilli) < BigInt(observedQuantity ?? "0")) &&
+        (first === undefined || identity < first)) {
+      first = identity;
+    }
   }
   for (const identity of actual.keys()) {
     if (!target.has(identity) && (first === undefined || identity < first)) first = identity;
