@@ -179,6 +179,7 @@ async function installCommonMocks(page: Page, options: {
   const quoteRequests: string[] = [];
   const putRequests: string[] = [];
   const putIntentKeys: string[] = [];
+  let quotedCanonicalQuantity = "2";
   const reconciliationExpectedVersions: string[] = [];
   const reconciliationKeys: string[] = [];
   let releaseReconciliationRefresh = (): void => undefined;
@@ -414,7 +415,12 @@ async function installCommonMocks(page: Page, options: {
         correlationId: "00000000-0000-4000-8000-000000000012",
         errors: [],
       }, 503);
-      const quoteRequest = request.postDataJSON() as { lines?: Array<{ sourceGrindKeyHash?: string }> };
+      const quoteRequest = request.postDataJSON() as { lines?: Array<{ quantity?: string; sourceGrindKeyHash?: string }> };
+      const requestedQuantity = quoteRequest.lines?.[0]?.quantity ?? "2";
+      const canonicalQuantity = requestedQuantity.includes(".")
+        ? requestedQuantity.replace(/0+$/u, "").replace(/\.$/u, "")
+        : requestedQuantity;
+      quotedCanonicalQuantity = canonicalQuantity;
       const sourceGrindKeyHash = quoteRequest.lines?.[0]?.sourceGrindKeyHash;
       return fulfillJson(route, {
       quoteRef,
@@ -424,7 +430,7 @@ async function installCommonMocks(page: Page, options: {
       createdAt: timestamp,
       expiresAt: "2030-01-01T00:10:00.000Z",
       currency: "RUB",
-      lines: [{ lineNumber: 1, productRef, variantRef, productDisplayName: "Капучино", quantity: "2", unit: "piece", unitMinor: "25000", lineTotalMinor: "50000", ...(sourceGrindKeyHash ? { sourceGrindKeyHash, grindDisplayName: "Мелкий помол" } : {}) }],
+      lines: [{ lineNumber: 1, productRef, variantRef, productDisplayName: "Капучино", quantity: canonicalQuantity, unit: "piece", unitMinor: "25000", lineTotalMinor: "50000", ...(sourceGrindKeyHash ? { sourceGrindKeyHash, grindDisplayName: "Мелкий помол" } : {}) }],
       totalMinor: "50000",
       hash,
       }, 201);
@@ -444,7 +450,17 @@ async function installCommonMocks(page: Page, options: {
           errors: [],
         }, 409);
       }
-      const putRequest = request.postDataJSON() as { expectedVersion?: string; sourceGrindKeyHash?: string };
+      const putRequest = request.postDataJSON() as { expectedVersion?: string; quantity?: string; sourceGrindKeyHash?: string };
+      if (putRequest.quantity !== quotedCanonicalQuantity) return fulfillJson(route, {
+        type: "about:blank",
+        title: "Quote scope mismatch",
+        status: 409,
+        code: "ORDER_QUOTE_SCOPE_MISMATCH",
+        detail: "PUT quantity must match the selected quote line",
+        instance: url.pathname,
+        correlationId: "00000000-0000-4000-8000-000000000016",
+        errors: [],
+      }, 409);
       if (options.conflictPut && putRequest.expectedVersion === "1") {
         if (options.orderRefetchUnavailableAfterConflict) orderRefetchFailuresRemaining = 2;
         current = orderCard("4", options.conflictRefetchConfirmed ? "Confirmed" : "Draft", true);
@@ -1287,6 +1303,41 @@ async function grindSelectionFlows(context: BrowserContext): Promise<void> {
   await quantityPage.close();
 }
 
+async function quoteUsesCanonicalQuantity(context: BrowserContext): Promise<void> {
+  for (const [requested, canonical] of [["2.0", "2"], ["2.500", "2.5"]] as const) {
+    const page = await context.newPage();
+    const telemetry = await installCommonMocks(page);
+    await page.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
+    const quantity = page.getByRole("textbox", { name: "Количество для Капучино" });
+    await quantity.fill(requested);
+    const quoteResponse = page.waitForResponse((response) => response.url().endsWith("/api/client-v1/pricing/quotes") && response.request().method() === "POST");
+    const putResponse = page.waitForResponse((response) => /\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(new URL(response.url()).pathname) && response.request().method() === "PUT");
+    await page.getByRole("button", { name: "Добавить" }).click();
+    const [, putResult] = await Promise.all([quoteResponse, putResponse]);
+    const quote = JSON.parse(telemetry.quoteRequests[0] ?? "{}") as { lines?: Array<{ quantity?: string }> };
+    const put = JSON.parse(telemetry.putRequests[0] ?? "{}") as { quantity?: string };
+    assert.equal(quote.lines?.[0]?.quantity, requested);
+    assert.equal(putResult.status(), 200, "the fixture accepts only a PUT matching the selected quote quantity");
+    assert.equal(put.quantity, canonical);
+    await page.close();
+  }
+
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { initialItem: true });
+  await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  await page.getByRole("textbox", { name: "Количество Капучино" }).fill("0.010");
+  const quoteResponse = page.waitForResponse((response) => response.url().endsWith("/api/client-v1/pricing/quotes") && response.request().method() === "POST");
+  const putResponse = page.waitForResponse((response) => /\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(new URL(response.url()).pathname) && response.request().method() === "PUT");
+  await page.getByRole("button", { name: "Обновить", exact: true }).click();
+  const [, putResult] = await Promise.all([quoteResponse, putResponse]);
+  const quote = JSON.parse(telemetry.quoteRequests[0] ?? "{}") as { lines?: Array<{ quantity?: string }> };
+  const put = JSON.parse(telemetry.putRequests[0] ?? "{}") as { quantity?: string };
+  assert.equal(quote.lines?.[0]?.quantity, "0.010");
+  assert.equal(putResult.status(), 200, "the fixture accepts only a PUT matching the selected quote quantity");
+  assert.equal(put.quantity, "0.01");
+  await page.close();
+}
+
 async function malformedResponse(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   await installCommonMocks(page, { malformedCustomers: true });
@@ -1617,6 +1668,7 @@ async function main(): Promise<void> {
       await fatalOrderRefetchHidesCachedCard(context);
       await browserBackDoesNotRepeatDraft(context);
       await staleQuoteAndConcurrentChange(context);
+      await quoteUsesCanonicalQuantity(context);
       await orderCardConfirmationRequiresSavedQuantities(context);
       await deleteItemReturnsFocusToItemsHeading(context);
       await actorChangeClearsCustomerFormAfterPeriodicSessionCheck(context);

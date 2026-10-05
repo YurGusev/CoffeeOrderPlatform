@@ -4,7 +4,8 @@ status: draft-awaiting-served-surface-acceptance
 scope: >-
   React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
   несохранённое количество, восстановление конфликта Order Card и повторная сверка AROMA
-  после новой owner-проекции, скрытие cached Catalog при 403 и гонка pending scope до fingerprint
+  после новой owner-проекции, скрытие cached Catalog при 403, гонка pending scope до fingerprint
+  и каноническое количество Quote → PUT
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -81,7 +82,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/api/remote.ts
-    sha256: a0b995e89718ecc2b5424b007f7953eeed9a62233336380aea1f4320277b28b7
+    sha256: 7c501eede85f0ed9f70592edc493309def75e4733625791ad912b3f891567b5b
     consumers:
       - 12
       - 13
@@ -186,7 +187,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: 5a329ec451e1bf842c08306881c1a96b2047fac0cb50b526d5e8b748a23c264a
+    sha256: 43b8e806833ff5fb3fc3cb25f84b3cfd1f16f11006e7cd82d098beb4cb629913
     consumers:
       - 12
       - 13
@@ -261,7 +262,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: 5c5628abdaf1ba0064cf947e6dad969b780119893f4e49d5711e6d9c7aa9818b
+    sha256: 10fb0425e6b155cdbd340cd0d464820896202e075c4d48343556408a7679d320
     consumers:
       - 12
       - 13
@@ -770,6 +771,40 @@ verification:
     detail: >-
       5 октября 2026, pending scope race: 1 JS, initial gzip139945 B из256000 B.
       Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, Quote quantity P2: свежая сборка старого remote.ts и усиленная fixture
+      получили ORDER_QUOTE_SCOPE_MISMATCH409 вместо200. Raw /tmp/coffee-pr172-quote-quantity-20261005/ui/red-routes.log;
+      build stdout в red-build.log.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Quote quantity P2: свежие typecheck/UI/browser build после quantity=line.quantity.
+      Лог /tmp/coffee-pr172-quote-quantity-20261005/ui/green-build.log; затем worker routes group PASS.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Quote quantity P2: полный existing mock browser набор на свежем dist.
+      Pricing fixture канонизирует quantity; PUT mock отвергает несовпадение с quote.
+      Catalog2.0→2/2.500→2.5 и OrderCard0.010→0.01 получили accepted200.
+      Production/test source hashes не менялись после build.
+      Логи /tmp/coffee-pr172-quote-quantity-20261005/ui/web-operator.log и status.tsv.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Quote quantity P2: итоговые remote.ts и existing browser regression.
+      Лог /tmp/coffee-pr172-quote-quantity-20261005/ui/lint.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Quote quantity P2: 1 JS, initial gzip139948 B из256000 B.
+      Лог /tmp/coffee-pr172-quote-quantity-20261005/ui/browser-bundle.log.
 limitations:
   - >-
     Перекрывающиеся beginIntent проверены unit test с удержанием digest; sidebar/unmount race отдельно
@@ -791,7 +826,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: ea084f3e62a3ca1ca14a25cc0480a48464abb7066b640607a939d21f8d76fd36
+  sha256: 343a4616468042ed910a60d4ddd6554f2fa7ce756a5192262c05385064ca1d20
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171

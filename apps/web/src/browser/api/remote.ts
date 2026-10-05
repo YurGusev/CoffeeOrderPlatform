@@ -159,7 +159,7 @@ export function useQuoteAndPutItem(actorRef: string, orderRef: string) {
       return api.putOrderItem(actorRef, current.orderRef, input.itemRef, {
         expectedVersion: current.version,
         productRef: input.product.productRef,
-        quantity: input.quantity,
+        quantity: line.quantity,
         quoteHash: quote.hash,
         quoteLineNumber: line.lineNumber,
         quoteRef: quote.quoteRef,
