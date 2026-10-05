@@ -114,6 +114,7 @@ type MockTelemetry = Readonly<{
   putRequests: string[];
   reconciliationReasons: string[];
   releaseReconciliationRefresh: () => void;
+  armCustomerFailure: () => void;
   armOrderFailure: () => void;
   setSessionAvailable: (available: boolean) => void;
   switchActor: () => void;
@@ -125,12 +126,14 @@ async function installCommonMocks(page: Page, options: {
   aromaScenario?: "Blocked" | "UnknownOutcome";
   catalogUnavailable?: boolean;
   conflictPut?: boolean;
+  customerNextCursor?: boolean;
   customersUnavailable?: boolean;
   grindSelectionRefresh?: boolean;
   customerValidationError?: boolean;
   draftStatusMismatch?: boolean;
   expiredSession?: boolean;
   forbiddenCustomers?: boolean;
+  forbiddenCustomerQueryOnRefetch?: string;
   holdReconciliationRefresh?: boolean;
   initialItem?: boolean;
   initialItemGrind?: boolean;
@@ -146,6 +149,7 @@ async function installCommonMocks(page: Page, options: {
   stalePut?: boolean;
 } = {}): Promise<MockTelemetry> {
   let draftAttempt = 0;
+  let customerFailureArmed = false;
   let orderCardReads = 0;
   let orderFailureArmed = false;
   let grindOptionSearchCount = 0;
@@ -170,6 +174,7 @@ async function installCommonMocks(page: Page, options: {
     putRequests,
     reconciliationReasons: [],
     releaseReconciliationRefresh: () => releaseReconciliationRefresh(),
+    armCustomerFailure: () => { customerFailureArmed = true; },
     armOrderFailure: () => { orderFailureArmed = true; },
     setSessionAvailable: (available) => { sessionAvailable = available; },
     switchActor: () => { activeActor = "operator-2"; },
@@ -213,6 +218,8 @@ async function installCommonMocks(page: Page, options: {
     if (!correlationPattern.test(request.headers()["x-correlation-id"] ?? "")) telemetry.correlationFailures.push(url.pathname);
     const method = request.method();
     if (url.pathname === "/api/client-v1/customers" && method === "GET") {
+      const forbiddenCustomerRefetch = customerFailureArmed
+        && options.forbiddenCustomerQueryOnRefetch === url.searchParams.get("query");
       if (options.customersUnavailable) return fulfillJson(route, {
         type: "about:blank",
         title: "Customer unavailable",
@@ -223,7 +230,7 @@ async function installCommonMocks(page: Page, options: {
         correlationId: "00000000-0000-4000-8000-000000000010",
         errors: [],
       }, 503);
-      if (options.forbiddenCustomers) return fulfillJson(route, {
+      if (options.forbiddenCustomers || forbiddenCustomerRefetch) return fulfillJson(route, {
         type: "about:blank",
         title: "Forbidden",
         status: 403,
@@ -234,7 +241,7 @@ async function installCommonMocks(page: Page, options: {
         errors: [],
       }, 403);
       if (options.malformedCustomers) return fulfillJson(route, { items: "invalid", nextCursor: null });
-      return fulfillJson(route, { items: [customerSummary()], nextCursor: null });
+      return fulfillJson(route, { items: [customerSummary()], nextCursor: options.customerNextCursor ? "customer-next-page" : null });
     }
     if (url.pathname === "/api/client-v1/customers" && method === "POST") {
       if (options.customerValidationError) {
@@ -904,19 +911,44 @@ async function forbiddenResourceKeepsSessionAndShowsRightsError(context: Browser
   assert.equal(await page.getByText("AUTHORIZATION_FORBIDDEN").count(), 0);
   assert.equal(await page.getByText(/Correlation ID/iu).count(), 0);
   assert.equal(await page.getByText("Требуется вход").count(), 0);
-  const refresh = page.getByRole("button", { name: "Обновить данные" });
+  assert.equal(await page.getByRole("button", { name: "Обновить данные" }).count(), 0);
   for (const width of [1280, 375]) {
     await page.setViewportSize({ width, height: 900 });
     const size = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
     assert.ok(size.scroll <= size.client + 1, `${width}px forbidden overflow: ${JSON.stringify(size)}`);
-    const refreshBox = await refresh.boundingBox();
-    assert.ok(refreshBox && refreshBox.height >= 44, `${width}px forbidden refresh target must be at least 44px high`);
     await capture(page, `customers-forbidden-${width}.png`);
   }
   const violations = await new AxeBuilder({ page }).analyze();
   assert.deepEqual(violations.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? "")), []);
-  await refresh.click();
+  await page.close();
+}
+
+async function cachedCustomersAreHiddenAfterForbiddenRefetch(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await page.clock.install();
+  const telemetry = await installCommonMocks(page, { customerNextCursor: true, forbiddenCustomerQueryOnRefetch: "иван" });
+  await page.goto(`${origin}/app/customers?q=иван`, { waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  await page.getByText("+799••••4567").waitFor();
+  await page.getByRole("button", { name: "Выбрать" }).waitFor();
+  await page.getByRole("button", { name: "Следующая страница" }).waitFor();
+  telemetry.armCustomerFailure();
+  await page.getByRole("button", { name: "Выбрать" }).click();
+  await page.getByRole("button", { name: "Создать черновик" }).waitFor();
+  await page.clock.fastForward(31_000);
+  const forbiddenRefetch = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/client-v1/customers" && url.searchParams.get("query") === "иван" && response.status() === 403;
+  });
+  await page.goBack({ waitUntil: "networkidle" });
+  await forbiddenRefetch;
   await page.getByText("Недостаточно прав").waitFor();
+  assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0);
+  assert.equal(await page.getByText("+799••••4567").count(), 0);
+  assert.equal(await page.getByText(customerRef).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Выбрать" }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Следующая страница" }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Обновить данные" }).count(), 0);
   await page.close();
 }
 
@@ -1283,6 +1315,7 @@ async function main(): Promise<void> {
       await deleteItemReturnsFocusToItemsHeading(context);
       await unavailableSessionHidesPrivateRoutes(context);
       await forbiddenResourceKeepsSessionAndShowsRightsError(context);
+      await cachedCustomersAreHiddenAfterForbiddenRefetch(context);
       await unavailableDependenciesPreserveOperatorContext(context);
       await grindSelectionFlows(context);
       await aromaBlockedAndUnknownOutcomeUseOwnerActions(context);

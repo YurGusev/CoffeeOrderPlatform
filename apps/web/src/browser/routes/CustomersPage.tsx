@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import { Alert, Button, Dialog, Empty, Field, Icon, Loading } from "@coffee-platform/ui";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { CustomerCreateRequest } from "@coffee-platform/generated-client-v1";
+import { ApiError } from "../api/client.js";
 import { ProblemAlert, problemFieldError } from "../api/problem.js";
 import { formatPrivatePhone } from "../api/format.js";
 import { useCreateCustomer, useCustomerSearch } from "../api/remote.js";
@@ -26,6 +27,7 @@ export function CustomersPage(): ReactElement {
   const customers = useCustomerSearch(session.actorRef, query, cursor);
   const createCustomer = useCreateCustomer(session.actorRef);
   const items = customers.data?.items ?? [];
+  const customerAccessDenied = customers.error instanceof ApiError && customers.error.problem.status === 403;
   const displayNameError = problemFieldError(createCustomer.error, "displayName")
     ?? (formError && !form.displayName.trim() ? "Укажите имя." : undefined);
   const phoneError = problemFieldError(createCustomer.error, "phone")
@@ -103,17 +105,17 @@ export function CustomersPage(): ReactElement {
         {query.length > 0 && query.length < 2 ? <Alert title="Слишком короткий запрос" tone="warning">Введите не менее двух символов.</Alert> : null}
         {query.length === 0 ? <Empty description="Введите имя, телефон или email — поиск начнётся через 300 мс после ввода." title="Начните поиск клиента" /> : null}
         {customers.isPending && query.length >= 2 ? <Loading label="Ищем клиентов" /> : null}
-        {customers.isError ? <ProblemAlert error={customers.error} onRefresh={() => void customers.refetch()} /> : null}
+        {customers.isError ? <ProblemAlert error={customers.error} {...(customerAccessDenied ? {} : { onRefresh: () => void customers.refetch() })} /> : null}
         {customers.isSuccess && items.length === 0 ? <Empty description="Измените запрос или создайте клиента." title="Клиенты не найдены" /> : null}
         <div className="result-list">
-          {items.map((customer) => (
+          {!customerAccessDenied ? items.map((customer) => (
             <article className="result-card" key={customer.customerRef}>
               <div><h2>{customer.displayName}</h2><p>{customer.phone ? formatPrivatePhone(customer.phone) : (customer.email ?? "Контакты не указаны")}</p><small>{customer.customerRef}</small></div>
               <Button onPress={() => navigate(`/app/orders/new?customerRef=${encodeURIComponent(customer.customerRef)}`)} variant="secondary">Выбрать</Button>
             </article>
-          ))}
+          )) : null}
         </div>
-        {customers.data?.nextCursor ? <Button onPress={() => setParams({ q: query, cursor: customers.data.nextCursor ?? "" })} variant="quiet">Следующая страница</Button> : null}
+        {!customerAccessDenied && customers.data?.nextCursor ? <Button onPress={() => setParams({ q: query, cursor: customers.data.nextCursor ?? "" })} variant="quiet">Следующая страница</Button> : null}
       </section>
 
       <Dialog

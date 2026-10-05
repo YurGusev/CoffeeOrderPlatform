@@ -2,8 +2,9 @@ issue: 9
 baseCommit: e278aeb10e57d37485542f8668f078456074b038
 status: draft-awaiting-provider-acceptance
 scope: >-
-  React operator flow #9: пять замечаний review исправлены, public grind contract output A #11 интегрирован и
-  сгенерирован штатно; самостоятельные build/runtime/browser gates проходят, producer #171 ещё не принят
+  React operator flow #9: пять исходных замечаний review и P1 cached Customer privacy исправлены; public grind
+  output A #11 интегрирован штатно; локальные build/runtime/browser gates проходят, producer #171 ещё не
+  принят
 inputs:
   - issue: 4
     acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
@@ -148,7 +149,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/CustomersPage.tsx
-    sha256: cc602347d5f8caaa5160f1a80cb950b0ef393ddd32e709e870ff72a0464ee015
+    sha256: acfcb5446782903c1c171cfb8199a4707d4708b65163e76e132c8db0ed6dd4e0
     consumers:
       - 12
       - 13
@@ -183,7 +184,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: ea2ddca1f2d309b7b3afd20e1e38dd2cb37c6ac8bed188e9fb6ccca781e41059
+    sha256: d4a3151a4669db0a57ad105c8117e74ecc312bcef3440fc97c2f00080ca108a1
     consumers:
       - 12
       - 13
@@ -258,7 +259,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: 3f8da75b68fbdda6ccfc61389cc161132ebd10fffe04be81e642468832a0dea5
+    sha256: d77a4a932cd7802fe06055f0c664c115f20b61c752d27330acf87c54e6115f48
     consumers:
       - 12
       - 13
@@ -476,6 +477,38 @@ verification:
     detail: >-
       5 октября 2026, worker: свежая сборка и routes group PASS; окончательный tester pnpm test:playwright
       повторно покрывает те же route regressions, cached 403/404 и transient 503.
+  - command: pnpm test:playwright
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P1 Customer privacy: initial search → Select/New Order → test clock +31s →
+      Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
+      Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
+      /tmp/coffee-pr172-customer-privacy-20261005/playwright.log
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P1 Customer privacy: initial search → Select/New Order → test clock +31s →
+      Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
+      Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
+      /tmp/coffee-pr172-customer-privacy-20261005/lint.log
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P1 Customer privacy: initial search → Select/New Order → test clock +31s →
+      Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
+      Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
+      /tmp/coffee-pr172-customer-privacy-20261005/web-queries.log
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P1 Customer privacy: initial search → Select/New Order → test clock +31s →
+      Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
+      Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
+      /tmp/coffee-pr172-customer-privacy-20261005/browser-bundle.log
 limitations:
   - >-
     PR #172 остаётся Draft до принятия producer #171 и согласования с актуальной develop. Public contract
@@ -511,4 +544,4 @@ sourceFingerprint:
   algorithm: >-
     sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded; README taken from HEAD to
     exclude unrelated user edit)
-  sha256: 1e0c3b8e8b2cd20947a93698a1720487b2639df49fe8c77212a95ac08c5e5b8c
+  sha256: 2be158854f104123f0ff76635ba395805a00fc22c049862e518189ed8be7044c

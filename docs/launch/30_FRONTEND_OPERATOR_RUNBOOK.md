@@ -248,3 +248,20 @@ Foundation fixture использует session expiry на час позже т
 неуспешные прогоны сохранены как история исправления тестовой синхронизации.
 Это локальный browser proof с mock API. Browser-through-Edge/Compose,
 production IdP/provider, deployment и accepted merge этим прогоном не проверены.
+
+## 10. Customer search после отзыва доступа — 5 октября 2026
+
+При refetch поиска Customer с ответом 403 экран показывает «Недостаточно прав»
+и скрывает сохранённые имя, контакт, customerRef, кнопки «Выбрать» и пагинацию.
+Ошибка доступа не предлагает повтор запроса.
+Cached response не заменяет отказ в доступе. Временный 503 сохраняет результаты
+и показывает Problem Details с возможностью повторной проверки.
+
+Регрессия выполняет успешный поиск с контактами и nextCursor, переход через
+«Выбрать» к созданию заказа, продвижение тестовых часов на 31 секунду и Back
+к тому же запросу. Refetch 403 скрывает все сохранённые данные и действия.
+`pnpm test:playwright` со свежей сборкой/typecheck, `pnpm lint`,
+`pnpm test:web-queries` (15/15) и `pnpm browser:bundle:check` прошли;
+gzip 139656 B ≤ 256000 B. Логи:
+`/tmp/coffee-pr172-customer-privacy-20261005/`. Это browser proof с mock API;
+browser-through-Edge и production в этой проверке не участвовали.
