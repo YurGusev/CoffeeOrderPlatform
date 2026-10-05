@@ -109,6 +109,7 @@ async function browserTelemetry(page: Page): Promise<BrowserTelemetryEvent[]> {
 type MockTelemetry = Readonly<{
   correlationFailures: string[];
   draftRequests: Array<Readonly<{ body: string | null; key: string | undefined; replayOnly: boolean }>>;
+  putReplayOnly: boolean[];
   logoutRequests: string[];
   quoteRequests: string[];
   putRequests: string[];
@@ -128,6 +129,7 @@ type MockTelemetry = Readonly<{
 
 async function installCommonMocks(page: Page, options: {
   abortFirstDraft?: boolean;
+  abortFirstPut?: boolean;
   aromaBlocker?: "MAPPING_MISSING" | "AROMA_QUANTITY_NOT_SUPPORTED";
   aromaScenario?: "Blocked" | "UnknownOutcome";
   catalogUnavailable?: boolean;
@@ -148,7 +150,7 @@ async function installCommonMocks(page: Page, options: {
   malformedCustomers?: boolean;
   orderNotFound?: boolean;
   orderUnavailable?: boolean;
-  orderFailureOnRefetch?: 403 | 404;
+  orderFailureOnRefetch?: 403 | 404 | 503;
   orderRefetchUnavailableAfterConflict?: boolean;
   conflictRefetchConfirmed?: boolean;
   allowUnknownOutcomeReconciliation?: boolean;
@@ -160,6 +162,7 @@ async function installCommonMocks(page: Page, options: {
   stalePut?: boolean;
 } = {}): Promise<MockTelemetry> {
   let draftAttempt = 0;
+  let firstPutAborted = false;
   let customerFailureArmed = false;
   let catalogFailureArmed = false;
   let releaseCatalogRefetch = (): void => undefined;
@@ -179,6 +182,7 @@ async function installCommonMocks(page: Page, options: {
   const quoteRequests: string[] = [];
   const putRequests: string[] = [];
   const putIntentKeys: string[] = [];
+  const putReplayOnly: boolean[] = [];
   let quotedCanonicalQuantity = "2";
   const reconciliationExpectedVersions: string[] = [];
   const reconciliationKeys: string[] = [];
@@ -193,6 +197,7 @@ async function installCommonMocks(page: Page, options: {
     quoteRequests,
     putRequests,
     putIntentKeys,
+    putReplayOnly,
     reconciliationReasons: [],
     reconciliationExpectedVersions,
     reconciliationKeys,
@@ -327,11 +332,11 @@ async function installCommonMocks(page: Page, options: {
       if (orderFailureArmed && orderCardReads > 1 && options.orderFailureOnRefetch) {
         const status = options.orderFailureOnRefetch;
         return fulfillJson(route, {
-          type: "about:blank",
-          title: status === 403 ? "Forbidden" : "Order not found",
+        type: "about:blank",
+          title: status === 403 ? "Forbidden" : status === 404 ? "Order not found" : "Order unavailable",
           status,
-          code: status === 403 ? "AUTHORIZATION_FORBIDDEN" : "ORDER_NOT_FOUND",
-          detail: status === 403 ? "Actor cannot read order" : "Заказ не найден",
+          code: status === 403 ? "AUTHORIZATION_FORBIDDEN" : status === 404 ? "ORDER_NOT_FOUND" : "ORDER_UNAVAILABLE",
+          detail: status === 403 ? "Actor cannot read order" : status === 404 ? "Заказ не найден" : "Текущее состояние заказа временно недоступно",
           instance: url.pathname,
           correlationId: "00000000-0000-4000-8000-000000000016",
           errors: [],
@@ -438,6 +443,14 @@ async function installCommonMocks(page: Page, options: {
     if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "PUT") {
       putRequests.push(request.postData() ?? "");
       putIntentKeys.push(request.headers()["idempotency-key"] ?? "");
+      const replayOnly = request.headers()["idempotency-replay-only"] === "true";
+      putReplayOnly.push(replayOnly);
+      if (replayOnly) return fulfillJson(route, current, 200, { "Idempotency-Replayed": "true" });
+      if (options.abortFirstPut && !firstPutAborted) {
+        firstPutAborted = true;
+        current = orderCard("3", "Draft", true);
+        return route.abort("connectionfailed");
+      }
       if (options.stalePut) {
         return fulfillJson(route, {
           type: "about:blank",
@@ -960,6 +973,58 @@ async function replayDoesNotPublishHistoricalCard(context: BrowserContext): Prom
   }
   assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0, "historical replay не должен становиться current Order Card");
   await page.close();
+}
+
+async function replayVerificationUpdatesExactOrderQuery(context: BrowserContext): Promise<void> {
+  for (const status of [403, 404, 503] as const) {
+    const page = await context.newPage();
+    const telemetry = await installCommonMocks(page, {
+      abortFirstPut: true,
+      initialItem: true,
+      orderFailureOnRefetch: status,
+    });
+    const orderCardStatuses: number[] = [];
+    page.on("response", (response) => {
+      if (new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}` && response.request().method() === "GET") {
+        orderCardStatuses.push(response.status());
+      }
+    });
+    await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+    await page.getByRole("heading", { name: "Капучино" }).waitFor();
+    const initialOrderCardReads = orderCardStatuses.length;
+    await page.getByRole("textbox", { name: "Количество Капучино" }).fill("3");
+    await page.getByRole("button", { name: "Обновить", exact: true }).click();
+    const pendingPut = async () => page.evaluate(() => Object.keys(sessionStorage)
+      .filter((key) => key.startsWith("coffee-platform:intent:v1:"))
+      .map((key) => JSON.parse(sessionStorage.getItem(key) ?? "null") as { kind?: string; state?: string })
+      .find((intent) => intent?.kind === "put-item"));
+    await expect.poll(async () => (await pendingPut())?.state).toBe("ambiguous");
+    await expect.poll(() => telemetry.putRequests.length).toBe(1);
+    assert.equal((await pendingPut())?.kind, "put-item");
+    telemetry.armOrderFailure();
+    await page.getByRole("button", { name: "Проверить результат команды" }).click();
+    await page.getByText("Результат найден, но текущая карточка недоступна").waitFor();
+    const expectedStatuses = status === 503 ? [503, 503] : [status];
+    await expect.poll(() => orderCardStatuses.slice(initialOrderCardReads)).toEqual(expectedStatuses);
+    assert.equal(new URL(page.url()).pathname, `/app/orders/${orderRef}`, "verification stays on the same Order Card route");
+    assert.deepEqual(telemetry.putReplayOnly, [false, true]);
+    assert.equal(telemetry.putRequests.length, 2, "verification must not repeat the business mutation");
+    assert.equal(telemetry.putRequests[1], "", "replay lookup must be bodyless");
+    assert.equal(telemetry.putIntentKeys[0], telemetry.putIntentKeys[1], "replay must reuse the accepted command key");
+
+    if (status === 503) {
+      await page.getByText("Не удалось проверить актуальность карточки", { exact: true }).waitFor();
+      await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+      await page.getByRole("heading", { name: "Капучино" }).waitFor();
+      assert.equal(await page.getByRole("button", { name: "Подтвердить заказ" }).count(), 1);
+    } else {
+      await expect(page.getByRole("heading", { name: "Иван Петров" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Капучино" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Подтвердить заказ" })).toHaveCount(0);
+    }
+    await page.close();
+  }
 }
 
 async function explicitLogoutClearsRecovery(context: BrowserContext): Promise<void> {
@@ -1695,6 +1760,7 @@ async function main(): Promise<void> {
       await reconciliationUnlocksAfterNewOwnerProjection(context);
       await reconciliationStaysBlockedDuringOwnerRefresh(context);
       await replayDoesNotPublishHistoricalCard(context);
+      await replayVerificationUpdatesExactOrderQuery(context);
       await explicitLogoutClearsRecovery(context);
       await expiredSessionHidesPrivateRoutes(context);
     }

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type {
   BrowserSession,
 } from "@coffee-platform/generated-edge-auth-v1";
@@ -94,19 +94,25 @@ export function useCreateDraft(actorRef: string) {
   return useMutation({ mutationFn: (customerRef: string) => api.createDraft(actorRef, customerRef) });
 }
 
-export function useOrderCard(actorRef: string, orderRef: string) {
-  const queryClient = useQueryClient();
+function orderCardQueryOptions(queryClient: QueryClient, actorRef: string, orderRef: string) {
   const orderKey = queryKeys.orderDetail(orderRef);
-  return useQuery({
-    enabled: /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(orderRef),
-    queryFn: async ({ signal }) => {
+  return {
+    queryKey: orderKey,
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const session = captureApplicationSession(actorRef);
       const next = await api.getOrderCard(orderRef, signal);
       assertApplicationSession(session);
       return acceptOrderCard(queryClient.getQueryData<OrderCardResponse>(orderKey), next);
     },
-    queryKey: orderKey,
     staleTime: 0,
+  };
+}
+
+export function useOrderCard(actorRef: string, orderRef: string) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    ...orderCardQueryOptions(queryClient, actorRef, orderRef),
+    enabled: /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(orderRef),
   });
 }
 
@@ -241,10 +247,9 @@ export function useReplayIntent(actorRef: string) {
       const result = await api.replayIntent(intent);
       if ("orderRef" in result) {
         try {
-          const session = captureApplicationSession(actorRef);
-          const latest = await api.getOrderCard(result.orderRef);
-          assertApplicationSession(session);
-          storeAcceptedOrderCard(queryClient, latest);
+          const orderKey = queryKeys.orderDetail(result.orderRef);
+          await queryClient.cancelQueries({ exact: true, queryKey: orderKey });
+          await queryClient.fetchQuery(orderCardQueryOptions(queryClient, actorRef, result.orderRef));
         } catch (verificationError) {
           return { orderRef: result.orderRef, result, verificationError };
         }

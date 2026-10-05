@@ -4,8 +4,8 @@ status: draft-awaiting-served-surface-acceptance
 scope: >-
   React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
   несохранённое количество, восстановление конфликта Order Card и повторная сверка AROMA
-  после новой owner-проекции, скрытие cached Catalog при 403, гонка pending scope до fingerprint
-  и каноническое количество Quote → PUT
+  после новой owner-проекции, скрытие cached Catalog при 403, гонка pending scope до fingerprint,
+  каноническое количество Quote → PUT и fatal recovery GET в exact Order query
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -46,6 +46,11 @@ inputs:
     artifact: evidence/handoffs/issue-162.yaml
     sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
 outputs:
+  - artifact: docs/launch/26_BROWSER_COMMAND_RECOVERY.md
+    sha256: 8a5071dc966c09a4d3be9e72f9890e432e3d957cfd8930ce76f934e78c5f6a43
+    consumers:
+      - 12
+      - 13
   - artifact: apps/web/index.html
     sha256: 7d5c3044c5ef1566be47b7ecbb1976ee0fce948ee8faee916c525645fbf6a0f7
     consumers:
@@ -82,7 +87,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/api/remote.ts
-    sha256: 7c501eede85f0ed9f70592edc493309def75e4733625791ad912b3f891567b5b
+    sha256: d44ad0993bd50cbc4a71700e2ae1b5c1a952d33080dd363e1b67ac464bdd5180
     consumers:
       - 12
       - 13
@@ -187,7 +192,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: 43b8e806833ff5fb3fc3cb25f84b3cfd1f16f11006e7cd82d098beb4cb629913
+    sha256: 1a79f8f2b6872b405efe6c69aa68c660193e1714f1f61c66de8ca4db48a75d70
     consumers:
       - 12
       - 13
@@ -262,7 +267,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: 10fb0425e6b155cdbd340cd0d464820896202e075c4d48343556408a7679d320
+    sha256: 17268fc5d4b13355fc927c1261add0c89656bc3dd8d52533d45ef3b136247832
     consumers:
       - 12
       - 13
@@ -805,6 +810,58 @@ verification:
     detail: >-
       5 октября 2026, Quote quantity P2: 1 JS, initial gzip139948 B из256000 B.
       Лог /tmp/coffee-pr172-quote-quantity-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, recovery fatal P1: initial regression проверяла PUT до его отправки,
+      увидев pending Quote. Предусловие исправлено ожиданием ambiguous put-item и actual PUT.
+      История /tmp/coffee-pr172-recovery-fatal-20261005/ui/red-idempotency.stdout.log и red-diagnostic.stdout.log.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, recovery fatal P1: старый helper после lost PUT/replay200/GET403 оставил
+      cached Customer heading видимым (1 вместо0). Raw /tmp/coffee-pr172-recovery-fatal-20261005/ui/red-repro.stdout.log;
+      exit в red-repro.exit. Это корректный RED после устранения fixture precondition.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: свежие typecheck/UI/browser build после общего exact Order query path.
+      Логи /tmp/coffee-pr172-recovery-fatal-20261005/ui/green-build.log и green-build.exit.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: worker адресная группа на свежем build; GET403/404 скрывает
+      cached Customer/items/Confirm на том же маршруте, GET503+retry503 сохраняет контекст с warning.
+      Bodyless same-key replay, ровно два PUT (normal+lookup), без третьей mutation.
+      /tmp/coffee-pr172-recovery-fatal-20261005/ui/green-idempotency.stdout.log и green-idempotency.exit.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: полный mock browser набор на том же свежем dist;
+      production/test source hashes до/после совпали. /tmp/coffee-pr172-recovery-fatal-20261005/ui/web-operator.log и status.tsv.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: 6 файлов/15 query/cache/time/format/schema/ULID tests.
+      /tmp/coffee-pr172-recovery-fatal-20261005/ui/web-queries.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: финальный source и browser regression.
+      /tmp/coffee-pr172-recovery-fatal-20261005/ui/lint.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: 1 JS, initial gzip139983 B из256000 B.
+      /tmp/coffee-pr172-recovery-fatal-20261005/ui/browser-bundle.log.
 limitations:
   - >-
     Перекрывающиеся beginIntent проверены unit test с удержанием digest; sidebar/unmount race отдельно
@@ -826,7 +883,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: 343a4616468042ed910a60d4ddd6554f2fa7ce756a5192262c05385064ca1d20
+  sha256: ff4700c80d965b78b239352d4e3fd24d0be0a013bb05eea32d1cd2b54dedd5af
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171
