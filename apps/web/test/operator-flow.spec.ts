@@ -142,6 +142,7 @@ async function installCommonMocks(page: Page, options: {
   customerValidationError?: boolean;
   draftStatusMismatch?: boolean;
   expiredSession?: boolean;
+  expiredDraftQuote?: boolean;
   forbiddenCustomers?: boolean;
   forbiddenCustomerQueryOnRefetch?: string;
   holdReconciliationRefresh?: boolean;
@@ -174,6 +175,13 @@ async function installCommonMocks(page: Page, options: {
   let current = options.aromaScenario
     ? orderCard("5", "Confirmed", true, options.aromaScenario, options.initialItemGrind ? grindHash : undefined, options.aromaBlocker)
     : options.initialItem ? orderCard(options.conflictPut ? "1" : "2", "Draft", true, "NotRequested", options.initialItemGrind ? grindHash : undefined) : orderCard();
+  if (options.expiredDraftQuote && current.pricing) {
+    current = {
+      ...current,
+      allowedActions: ["edit-items"],
+      pricing: { ...current.pricing, quoteProofs: current.pricing.quoteProofs.map((proof) => ({ ...proof, expiresAt: "2020-01-01T00:00:00.000Z" })) },
+    };
+  }
   if (options.allowUnknownOutcomeReconciliation) current = { ...current, allowedActions: ["request-aroma-reconciliation"] };
   let reconciliationAccepted = false;
   let activeActor = "operator-1";
@@ -488,7 +496,7 @@ async function installCommonMocks(page: Page, options: {
           errors: [],
         }, 409);
       }
-      current = orderCard(options.conflictPut ? "5" : "2", "Draft", true, "NotRequested", putRequest.sourceGrindKeyHash);
+      current = orderCard(options.expiredDraftQuote ? "3" : options.conflictPut ? "5" : "2", "Draft", true, "NotRequested", putRequest.sourceGrindKeyHash);
       return fulfillJson(route, current);
     }
     if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "DELETE") {
@@ -1639,6 +1647,46 @@ async function staleQuoteAndConcurrentChange(context: BrowserContext): Promise<v
   await catalogConflictPage.close();
 }
 
+async function expiredQuoteCanBeRefreshedAtSameQuantity(context: BrowserContext): Promise<void> {
+  const itemRef = "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, { expiredDraftQuote: true, initialItem: true, initialItemGrind: true });
+  await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  const confirm = page.getByRole("button", { name: "Подтвердить заказ", exact: true });
+  const update = page.getByRole("button", { name: "Обновить", exact: true });
+  const quantity = page.getByRole("textbox", { name: "Количество Капучино" });
+  await expect(quantity).toHaveValue("2");
+  assert.equal(await confirm.count(), 0, "the reopened owner Draft allows editing but does not allow Confirm");
+  assert.equal(telemetry.quoteRequests.length, 0);
+  assert.equal(telemetry.putRequests.length, 0);
+
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  await expect(quantity).toHaveValue("2");
+  assert.equal(await confirm.count(), 0);
+  assert.equal(telemetry.quoteRequests.length, 0, "mount/refetch must not silently request a new quote");
+  assert.equal(telemetry.putRequests.length, 0, "mount/refetch must not silently update the item");
+  await expect(update).toBeEnabled();
+
+  const quoteResponse = page.waitForResponse((response) => response.url().endsWith("/api/client-v1/pricing/quotes") && response.request().method() === "POST");
+  const putResponse = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}/items/${itemRef}` && response.request().method() === "PUT");
+  await update.click();
+  const [quote, put] = await Promise.all([quoteResponse, putResponse]);
+  assert.equal(quote.status(), 201);
+  assert.equal(put.status(), 200);
+  const quoteRequest = JSON.parse(telemetry.quoteRequests[0] ?? "{}") as { lines?: Array<{ quantity?: string; sourceGrindKeyHash?: string }> };
+  const putRequest = JSON.parse(telemetry.putRequests[0] ?? "{}") as { expectedVersion?: string; quantity?: string; sourceGrindKeyHash?: string };
+  assert.equal(quoteRequest.lines?.[0]?.quantity, "2");
+  assert.equal(quoteRequest.lines?.[0]?.sourceGrindKeyHash, grindHash);
+  assert.equal(putRequest.expectedVersion, "2");
+  assert.equal(putRequest.quantity, "2");
+  assert.equal(putRequest.sourceGrindKeyHash, grindHash);
+  await confirm.waitFor();
+  assert.equal(telemetry.quoteRequests.length, 1, "only the explicit Update requested a fresh quote");
+  assert.equal(telemetry.putRequests.length, 1, "only the explicit Update sent the item PUT");
+  await page.close();
+}
+
 async function orderCardConfirmationRequiresSavedQuantities(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   await installCommonMocks(page, { initialItem: true });
@@ -1733,6 +1781,7 @@ async function main(): Promise<void> {
       await fatalOrderRefetchHidesCachedCard(context);
       await browserBackDoesNotRepeatDraft(context);
       await staleQuoteAndConcurrentChange(context);
+      await expiredQuoteCanBeRefreshedAtSameQuantity(context);
       await quoteUsesCanonicalQuantity(context);
       await orderCardConfirmationRequiresSavedQuantities(context);
       await deleteItemReturnsFocusToItemsHeading(context);

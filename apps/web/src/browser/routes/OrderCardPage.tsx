@@ -168,7 +168,7 @@ export function OrderCardPage(): ReactElement {
                 <div><h3>{item.displayName}</h3><p>{formatMoney(item.lineTotalMinor, card.pricing?.currency)}</p><small>Позиция {item.linePosition}</small>{item.grindDisplayName ? <small>Помол: {item.grindDisplayName}</small> : null}</div>
                 <Field aria-label={`Количество ${item.displayName}`} isDisabled={!editable || pending} label="Количество" onChange={(value) => setQuantities((current) => ({ ...current, [item.itemRef]: value }))} value={quantity} />
                 <div className="item-actions">
-                  <Button isDisabled={!editable || pending || quantity === item.quantity} onPress={() => quoteAndPut.mutate({ itemRef: item.itemRef, product: productForItem(item), quantity, ...(item.sourceGrindKeyHash ? { sourceGrindKeyHash: item.sourceGrindKeyHash } : {}) }, {
+                  <Button isDisabled={!editable || pending} onPress={() => quoteAndPut.mutate({ itemRef: item.itemRef, product: productForItem(item), quantity, ...(item.sourceGrindKeyHash ? { sourceGrindKeyHash: item.sourceGrindKeyHash } : {}) }, {
                     onSuccess: () => setQuantities((current) => {
                       const next = { ...current };
                       delete next[item.itemRef];
