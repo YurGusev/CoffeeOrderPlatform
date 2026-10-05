@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import type { OrderCardResponse } from "@coffee-platform/generated-client-v1";
+import { ApiError } from "./client.js";
 import { compareDecimalVersion } from "./format.js";
 import { queryKeys } from "../app/query-keys.js";
 
@@ -8,6 +9,10 @@ export class OrderCardProtocolError extends Error {
     super(message);
     this.name = "OrderCardProtocolError";
   }
+}
+
+export function isFatalOrderCardReadError(error: unknown): error is ApiError {
+  return error instanceof ApiError && [403, 404].includes(error.problem.status);
 }
 
 export function acceptOrderCard(
@@ -31,9 +36,11 @@ export function acceptOrderCard(
   return next;
 }
 
-export function storeAcceptedOrderCard(queryClient: QueryClient, next: OrderCardResponse): OrderCardResponse {
+export function storeAcceptedOrderCard(queryClient: QueryClient, next: OrderCardResponse): OrderCardResponse | undefined {
   const key = queryKeys.orderDetail(next.orderRef);
-  const accepted = acceptOrderCard(queryClient.getQueryData<OrderCardResponse>(key), next);
+  const current = queryClient.getQueryData<OrderCardResponse>(key);
+  if (isFatalOrderCardReadError(queryClient.getQueryState(key)?.error)) return current;
+  const accepted = acceptOrderCard(current, next);
   if (accepted === next) queryClient.setQueryData(key, next);
   return accepted;
 }

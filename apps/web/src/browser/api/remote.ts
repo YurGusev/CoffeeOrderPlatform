@@ -18,7 +18,7 @@ import {
   readPendingIntents,
   type PendingIntent,
 } from "./idempotency.js";
-import { acceptOrderCard, storeAcceptedOrderCard } from "./order-card.js";
+import { acceptOrderCard, isFatalOrderCardReadError, storeAcceptedOrderCard } from "./order-card.js";
 import {
   assertApplicationSession,
   captureApplicationSession,
@@ -100,9 +100,15 @@ function orderCardQueryOptions(queryClient: QueryClient, actorRef: string, order
     queryKey: orderKey,
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const session = captureApplicationSession(actorRef);
-      const next = await api.getOrderCard(orderRef, signal);
-      assertApplicationSession(session);
-      return acceptOrderCard(queryClient.getQueryData<OrderCardResponse>(orderKey), next);
+      try {
+        const next = await api.getOrderCard(orderRef, signal);
+        assertApplicationSession(session);
+        return acceptOrderCard(queryClient.getQueryData<OrderCardResponse>(orderKey), next);
+      } catch (error) {
+        const previousError = queryClient.getQueryState(orderKey)?.error;
+        if (isFatalOrderCardReadError(previousError)) throw previousError;
+        throw error;
+      }
     },
     staleTime: 0,
   };

@@ -5,8 +5,9 @@ scope: >-
   React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
   несохранённое количество, восстановление конфликта Order Card и повторная сверка AROMA
   после новой owner-проекции, скрытие cached Catalog при 403, гонка pending scope до fingerprint,
-  каноническое количество Quote → PUT, fatal recovery GET в exact Order query
-  и обновление истёкшей цены без изменения количества
+  каноническое количество Quote → PUT, fatal recovery GET в exact Order query,
+  обновление истёкшей цены без изменения количества и удержание fatal отказа
+  при запоздалом ответе mutation до успешного owner GET
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -48,7 +49,7 @@ inputs:
     sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
 outputs:
   - artifact: docs/launch/26_BROWSER_COMMAND_RECOVERY.md
-    sha256: 8a5071dc966c09a4d3be9e72f9890e432e3d957cfd8930ce76f934e78c5f6a43
+    sha256: 6c4a140071cc34a0665d83cf3ba61a5968f3320815b8189583daca07fb7ec5a8
     consumers:
       - 12
       - 13
@@ -78,7 +79,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/api/order-card.ts
-    sha256: bfb68cef6930934a822981a9d6e96fd19d0334d995b33293b9cdd112b56a4b9c
+    sha256: 5167b9645b71d935358c2f94622c4084e1e0d338efbd697a14dce554c70b7eef
     consumers:
       - 12
       - 13
@@ -88,7 +89,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/api/remote.ts
-    sha256: d44ad0993bd50cbc4a71700e2ae1b5c1a952d33080dd363e1b67ac464bdd5180
+    sha256: cf3ac3740b2c0ba53d03db6e4127df26e42c1772f9ab76f551686e697e8e0aa0
     consumers:
       - 12
       - 13
@@ -193,12 +194,12 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: 83cdb66b41bc3df25a51c1d9e22317a88a46a80815d185dd01a9c1d5d0d4db91
+    sha256: 0a925e4df9adf1fecd9ce32bbcdd0cdc9c765859e0f08a58c7c914ed02fe6f78
     consumers:
       - 12
       - 13
   - artifact: apps/web/test/order-cache.test.ts
-    sha256: c95492b8ec1784a3d98ecee9118030696720ec75bc66fc7fab76e4eff4d1af00
+    sha256: 8d0f3ecc950b89aa4d0611131cecaadc65f552e5591420a71920ec3575bcc5d9
     consumers:
       - 12
       - 13
@@ -268,7 +269,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: c78ea822f0d2b678795cb64161d4ce2c0e6d38d2296640f722bd93e76dbd8ab7
+    sha256: 6590258453b00bbb2ef3e19e4d105bfc94c752239a80265175e5ff8f47293cca
     consumers:
       - 12
       - 13
@@ -902,7 +903,109 @@ verification:
     detail: >-
       5 октября 2026, expired quote P2: 1 JS, initial gzip139973 B из256000 B.
       /tmp/coffee-pr172-expired-quote-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, late mutation P1: первые прогоны исправляли baseline GET counter, strict selector
+      и assertions sequence; эти сбои не доказывают production defect. Raw fresh-idempotency.log,
+      idempotency-sequence-fixed.log, idempotency-selector-fixed.log в /tmp/coffee-pr172-late-fatal-20261005/ui/.
+      Первая old-writer попытка red-old-storage.log прошла без нужного изменения проекции; это также
+      незавершённое предусловие. Финальный fixture возвращает held PUT projection3 при cached projection2.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, late mutation P1: корректный controlled SPA fixture на old writer после GET403
+      и release PUT200 показал private Customer heading1 вместо0. Raw
+      /tmp/coffee-pr172-late-fatal-20261005/ui/red-old-storage-correct-fixture.log.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: свежие typecheck/UI/browser build финального writer/query guard.
+      /tmp/coffee-pr172-late-fatal-20261005/ui/green-final.log.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: cached projection2, held ordinary PUT projection3, Completed
+      bodyless lookup по прежнему ключу, owner GET403/404, release original PUT200 не раскрывает Card/actions.
+      Controlled SPA сохраняет QueryClient: следующий GET503 сохраняет fatal, GET200 возвращает owner Card.
+      Ровно два PUT normal+lookup, без новой business mutation. Raw green-final.log в
+      /tmp/coffee-pr172-late-fatal-20261005/ui/.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: Полный mock browser набор на свежем dist; late PUT/replay/fatal/503/200 в одном QueryClient. web-operator.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: 6 файлов, 16 тестов; web-queries.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: Итоговые runtime/test source; lint.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: 1 JS, gzip140038 B из256000 B; browser-bundle.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm web:build && WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, LATE-FATAL-INVALID-ACCEPTANCE: независимое ревью выявило, что acceptance error
+      оставался вне catch. Catch теперь охватывает полный owner read/session/monotonic acceptance.
+      Дополненная regression после403/404 и503 получает schema-valid HTTP200 projection2/Confirmed
+      при cached2/Draft: private Card/actions скрыты. Только следующий valid200 projection3/Draft
+      снимает fatal; response body поля проверены, same QueryClient и ровно2PUT normal+lookup.
+      Fresh build/group /tmp/coffee-pr172-late-fatal-20261005/ui/green-divergent-acceptance.log;
+      финальный test-only response-body assert /tmp/coffee-pr172-late-fatal-20261005/ui/green-divergent-acceptance-final.log.
+      Предыдущие final-checks относятся к первому срезу до расширения acceptance catch.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: Полный mock browser набор после full acceptance catch; обе403/404, late PUT200,503, divergent200 скрыты; valid200 возвращает Card. web-operator.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с итоговым worker.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: 6 файлов,16 тестов; web-queries.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с итоговым worker.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: Финальный source/test срез после review; lint.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с итоговым worker.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: 1 JS, gzip140036 B из256000 B; browser-bundle.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с итоговым worker.
 limitations:
+  - >-
+    Late mutation privacy regression сохраняет один QueryClient через controlled SPA history transition.
+    Native Link/Back, Edge и реальный backend для этой гонки отдельно не проверялись.
   - >-
     Перекрывающиеся beginIntent проверены unit test с удержанием digest; sidebar/unmount race отдельно
     в браузере не воспроизводился. Существующая browser idempotency group прошла на свежем build.
@@ -923,7 +1026,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: 62eb70ff46fc4a50dec30b539c092ac658d17833fc4e21967cfea14b2c109928
+  sha256: 55ad579335e9f96342ed45a8fabeddf5bb6d72de6763bef35143e9af1d16e0b3
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171

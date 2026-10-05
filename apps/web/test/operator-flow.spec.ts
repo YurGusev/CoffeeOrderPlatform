@@ -119,6 +119,7 @@ type MockTelemetry = Readonly<{
   reconciliationKeys: string[];
   advanceReconciliationProjection: () => void;
   releaseReconciliationRefresh: () => void;
+  releaseFirstPut: () => void;
   releaseCatalogRefetch: () => void;
   armCustomerFailure: () => void;
   armCatalogFailure: () => void;
@@ -130,6 +131,7 @@ type MockTelemetry = Readonly<{
 async function installCommonMocks(page: Page, options: {
   abortFirstDraft?: boolean;
   abortFirstPut?: boolean;
+  holdFirstPut?: boolean;
   aromaBlocker?: "MAPPING_MISSING" | "AROMA_QUANTITY_NOT_SUPPORTED";
   aromaScenario?: "Blocked" | "UnknownOutcome";
   catalogUnavailable?: boolean;
@@ -152,6 +154,7 @@ async function installCommonMocks(page: Page, options: {
   orderNotFound?: boolean;
   orderUnavailable?: boolean;
   orderFailureOnRefetch?: 403 | 404 | 503;
+  orderFailureSequence?: readonly (403 | 404 | 503 | "divergent-200")[];
   orderRefetchUnavailableAfterConflict?: boolean;
   conflictRefetchConfirmed?: boolean;
   allowUnknownOutcomeReconciliation?: boolean;
@@ -164,12 +167,18 @@ async function installCommonMocks(page: Page, options: {
 } = {}): Promise<MockTelemetry> {
   let draftAttempt = 0;
   let firstPutAborted = false;
+  let firstPutHeld = false;
+  let releaseFirstPut = (): void => undefined;
+  const firstPutGate = options.holdFirstPut
+    ? new Promise<void>((resolve) => { releaseFirstPut = resolve; })
+    : Promise.resolve();
   let customerFailureArmed = false;
   let catalogFailureArmed = false;
   let releaseCatalogRefetch = (): void => undefined;
   const catalogRefetchGate = new Promise<void>((resolve) => { releaseCatalogRefetch = resolve; });
   let orderCardReads = 0;
   let orderFailureArmed = false;
+  let orderFailureSequenceIndex = 0;
   let orderRefetchFailuresRemaining = 0;
   let grindOptionSearchCount = 0;
   let current = options.aromaScenario
@@ -213,6 +222,7 @@ async function installCommonMocks(page: Page, options: {
       current = { ...orderCard("5", "Confirmed", true, "OutOfSync"), projectionVersion: "6" };
     },
     releaseReconciliationRefresh: () => releaseReconciliationRefresh(),
+    releaseFirstPut: () => releaseFirstPut(),
     releaseCatalogRefetch: () => releaseCatalogRefetch(),
     armCustomerFailure: () => { customerFailureArmed = true; },
     armCatalogFailure: () => { catalogFailureArmed = true; },
@@ -337,8 +347,14 @@ async function installCommonMocks(page: Page, options: {
     }
     if (url.pathname === `/api/client-v1/orders/${orderRef}` && method === "GET") {
       orderCardReads += 1;
-      if (orderFailureArmed && orderCardReads > 1 && options.orderFailureOnRefetch) {
-        const status = options.orderFailureOnRefetch;
+      const sequencedRead = orderFailureArmed && options.orderFailureSequence
+        ? options.orderFailureSequence[orderFailureSequenceIndex++]
+        : undefined;
+      if (sequencedRead === "divergent-200") {
+        return fulfillJson(route, { ...orderCard("2", "Confirmed", true), projectionVersion: "2" });
+      }
+      const status = sequencedRead ?? options.orderFailureOnRefetch;
+      if (orderFailureArmed && orderCardReads > 1 && status) {
         return fulfillJson(route, {
         type: "about:blank",
           title: status === 403 ? "Forbidden" : status === 404 ? "Order not found" : "Order unavailable",
@@ -496,7 +512,13 @@ async function installCommonMocks(page: Page, options: {
           errors: [],
         }, 409);
       }
-      current = orderCard(options.expiredDraftQuote ? "3" : options.conflictPut ? "5" : "2", "Draft", true, "NotRequested", putRequest.sourceGrindKeyHash);
+      current = orderCard(options.holdFirstPut ? "3" : options.expiredDraftQuote ? "3" : options.conflictPut ? "5" : "2", "Draft", true, "NotRequested", putRequest.sourceGrindKeyHash);
+      if (options.holdFirstPut && !firstPutHeld) {
+        firstPutHeld = true;
+        const accepted = current;
+        await firstPutGate;
+        return fulfillJson(route, accepted);
+      }
       return fulfillJson(route, current);
     }
     if (/^\/api\/client-v1\/orders\/ord_[^/]+\/items\/itm_[^/]+$/u.test(url.pathname) && method === "DELETE") {
@@ -1031,6 +1053,108 @@ async function replayVerificationUpdatesExactOrderQuery(context: BrowserContext)
       await expect(page.getByRole("heading", { name: "Капучино" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Подтвердить заказ" })).toHaveCount(0);
     }
+    await page.close();
+  }
+}
+
+async function lateMutationCannotRestoreAfterFatalOwnerRead(context: BrowserContext): Promise<void> {
+  for (const fatalStatus of [403, 404] as const) {
+    const page = await context.newPage();
+    const telemetry = await installCommonMocks(page, {
+      holdFirstPut: true,
+      initialItem: true,
+      orderFailureSequence: [fatalStatus, 503, "divergent-200"],
+    });
+    const orderCardStatuses: number[] = [];
+    page.on("response", (response) => {
+      if (new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}` && response.request().method() === "GET") {
+        orderCardStatuses.push(response.status());
+      }
+    });
+    await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+    const quantity = page.getByRole("textbox", { name: "Количество Капучино" });
+    await quantity.fill("3");
+    await page.getByRole("button", { name: "Обновить", exact: true }).click();
+    await expect.poll(() => telemetry.putRequests.length).toBe(1);
+    telemetry.armOrderFailure();
+    await page.getByRole("button", { name: "Проверить результат команды" }).click();
+    await page.getByText("Результат команды найден, но текущее состояние заказа проверить не удалось").waitFor();
+    if (fatalStatus === 403) await page.locator("#route-content").getByText("Недостаточно прав").waitFor();
+    else await page.getByRole("heading", { name: "Заказ не найден" }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0);
+    assert.equal(await page.getByRole("heading", { name: "Капучино" }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Подтвердить заказ" }).count(), 0);
+    assert.deepEqual(telemetry.putReplayOnly, [false, true]);
+
+    const latePutResponse = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}/items/itm_01ARZ3NDEKTSV4RRFFQ69G5FAV`
+      && response.request().method() === "PUT"
+      && response.request().headers()["idempotency-replay-only"] !== "true",
+    );
+    telemetry.releaseFirstPut();
+    assert.equal((await latePutResponse).status(), 200);
+    await page.waitForTimeout(50);
+    assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0, "late successful PUT cannot clear the fatal owner-read error");
+    assert.equal(await page.getByRole("heading", { name: "Капучино" }).count(), 0);
+    assert.equal(telemetry.putRequests.length, 2, "the recovery lookup does not repeat the business mutation");
+
+    // Keep one SPA document and QueryClient across refetch failures and explicit recovery.
+    await page.evaluate((href) => {
+      window.history.pushState(window.history.state, "", href);
+      window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+    }, "/app/customers");
+    await page.getByRole("heading", { name: "Клиенты" }).waitFor();
+    const unavailableRead = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}`
+      && response.request().method() === "GET"
+      && response.status() === 503,
+    );
+    await page.goBack({ waitUntil: "networkidle" });
+    await unavailableRead;
+    if (fatalStatus === 403) await page.locator("#route-content").getByText("Недостаточно прав").waitFor();
+    else await page.getByRole("heading", { name: "Заказ не найден" }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0, "a later 503 does not release the fatal barrier");
+    assert.equal(await page.getByRole("button", { name: "Подтвердить заказ" }).count(), 0);
+
+    await page.evaluate((href) => {
+      window.history.pushState(window.history.state, "", href);
+      window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+    }, "/app/customers");
+    await page.getByRole("heading", { name: "Клиенты" }).waitFor();
+    const divergentRead = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}`
+      && response.request().method() === "GET"
+      && response.status() === 200,
+    );
+    await page.goBack({ waitUntil: "networkidle" });
+    const divergentCard = await (await divergentRead).json() as { projectionVersion: string; status: string };
+    assert.equal(divergentCard.projectionVersion, "2");
+    assert.equal(divergentCard.status, "Confirmed");
+    if (fatalStatus === 403) await page.locator("#route-content").getByText("Недостаточно прав").waitFor();
+    else await page.getByRole("heading", { name: "Заказ не найден" }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0, "a divergent equal-projection 200 does not replace the fatal read error");
+    assert.equal(await page.getByRole("heading", { name: "Капучино" }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Подтвердить заказ" }).count(), 0);
+
+    await page.evaluate((href) => {
+      window.history.pushState(window.history.state, "", href);
+      window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+    }, "/app/customers");
+    await page.getByRole("heading", { name: "Клиенты" }).waitFor();
+    const successfulRead = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}`
+      && response.request().method() === "GET"
+      && response.status() === 200,
+    );
+    await page.goBack({ waitUntil: "networkidle" });
+    const freshCard = await (await successfulRead).json() as { projectionVersion: string; status: string };
+    assert.equal(freshCard.projectionVersion, "3");
+    assert.equal(freshCard.status, "Draft");
+    await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+    await page.getByRole("heading", { name: "Капучино" }).waitFor();
+    assert.deepEqual(telemetry.putReplayOnly, [false, true]);
+    assert.deepEqual(orderCardStatuses.slice(-4), [fatalStatus, 503, 200, 200]);
     await page.close();
   }
 }
@@ -1810,6 +1934,7 @@ async function main(): Promise<void> {
       await reconciliationStaysBlockedDuringOwnerRefresh(context);
       await replayDoesNotPublishHistoricalCard(context);
       await replayVerificationUpdatesExactOrderQuery(context);
+      await lateMutationCannotRestoreAfterFatalOwnerRead(context);
       await explicitLogoutClearsRecovery(context);
       await expiredSessionHidesPrivateRoutes(context);
     }
