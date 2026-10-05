@@ -64,7 +64,7 @@ void test("signed cursor invalidates after activation and concurrent reads never
 },async t=>withCatalogPostgres(async({adminClient,port,databaseName})=>{
   await adminClient.query("CREATE ROLE coffee_catalog_activate_rw LOGIN PASSWORD 'activate-proof'");
   await adminClient.query("CREATE ROLE coffee_catalog_api_ro LOGIN PASSWORD 'api-proof'");
-  for(const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants","0008_catalog_active_read"])
+  for(const name of ["0004_catalog_active","0005_catalog_identity","0006_catalog_outbox","0007_catalog_grants","0008_catalog_active_read","0009_active_snapshot_freshness"])
     await adminClient.query(await readFile(resolve("apps/catalog-service/migrations",`${name}.sql`),"utf8"));
   const first="snp_00000000000000000000000041",second="snp_00000000000000000000000042",third="snp_00000000000000000000000043";
   await stage(adminClient,first,"Revision one coffee","111");

@@ -22,6 +22,7 @@ const MIGRATION_IDS = [
   "0006_catalog_outbox",
   "0007_catalog_grants",
   "0008_catalog_active_read",
+  "0009_active_snapshot_freshness",
 ];
 const pool = {max: 4, checkoutTimeoutMs: 1_000, lockTimeoutMs: 1_000, interactiveStatementTimeoutMs: 5_000,
   backgroundStatementTimeoutMs: 10_000, terminalTimeoutMs: 5_000, transactionTimeoutMs: 20_000,
@@ -29,7 +30,7 @@ const pool = {max: 4, checkoutTimeoutMs: 1_000, lockTimeoutMs: 1_000, interactiv
 
 async function loadMigrations() {
   const names = (await readdir(MIGRATIONS_DIR)).filter(name => name.endsWith(".sql")).sort();
-  assert.deepEqual(names, MIGRATION_IDS.map(id => `${id}.sql`), "Catalog migration sequence must be exactly 0001–0008");
+  assert.deepEqual(names, MIGRATION_IDS.map(id => `${id}.sql`), "Catalog migration sequence must match its ordered migration ledger");
   return Promise.all(MIGRATION_IDS.map(async id => {
     const sql = await readFile(join(MIGRATIONS_DIR, `${id}.sql`), "utf8");
     return {id, sql, checksum: migrationChecksum(sql)};

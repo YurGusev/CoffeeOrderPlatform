@@ -38,7 +38,17 @@ const optionalEvidence = compatibilityEvidence.optionalExpansions ?? [];
 const narrowingEvidence = compatibilityEvidence.narrowingCorrections ?? [];
 const privateVerifyReplacements = compatibilityEvidence.approvedInternalReplacements ?? [];
 const approvedResponseExpansions = compatibilityEvidence.approvedResponseExpansions ?? [];
+const approvedCommandRecoveryExpansions = compatibilityEvidence.approvedCommandRecoveryExpansions ?? [];
+const approvedInternalCallerExpansions = compatibilityEvidence.approvedInternalCallerExpansions ?? [];
 const privateVerifySchemas = new Set(['PricingQuoteVerifyLine', 'PricingQuoteVerifyRequest', 'PricingQuoteVerificationResponse']);
+const catalogPricingRoute = '/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input';
+const catalogPricingCallerExpansion = {
+  operation: {
+    before: {'x-audience': 'pricing-service', 'x-caller': 'pricing-service', 'x-callers': ['pricing-service'], 'x-auth': 'mTLS-and-signed-delegation'},
+    after: {'x-audience': ['pricing-service', 'aroma-convergence'], 'x-caller': null, 'x-callers': ['pricing-service', 'aroma-convergence'], 'x-auth': 'mTLS; signed-delegation for pricing-service; scoped-mTLS identity for aroma-convergence'},
+  },
+  manifest: {before: 'pricing-service', after: ['pricing-service', 'aroma-convergence']},
+};
 
 function fromBase(path) {
   if (baseRoot) {
@@ -92,12 +102,22 @@ function approvedPrivateVerifyReplacement(path, name, before, after) {
   if (path !== 'contracts/openapi/internal-v1.yaml' || !privateVerifySchemas.has(name)) return false;
   const evidence = privateVerifyReplacements.find((entry) => entry.schemaPath === path && entry.schema === name);
   if (evidence === undefined) return false;
+  const additive = name === 'PricingQuoteVerifyRequest' && after !== undefined && Object.hasOwn(after.properties ?? {}, 'sourceGrindKeyHash');
+  const originalAfter = additive ? structuredClone(after) : after;
+  if (additive) {
+    if (JSON.stringify(after.properties.sourceGrindKeyHash) !== JSON.stringify({$ref: '#/components/schemas/Hash'})) {
+      fail(`${path}#${name}: approved optional grind hash schema has drifted`);
+    }
+    delete originalAfter.properties.sourceGrindKeyHash;
+    requireOptionalEvidence(path, `${path}#${name}`, 'sourceGrindKeyHash');
+  }
   if (privateVerifyReplacements.length !== privateVerifySchemas.size ||
       new Set(privateVerifyReplacements.map((entry) => entry.schema)).size !== privateVerifySchemas.size ||
       evidence.issue !== 8 || evidence.migration !== 'docs/launch/16_PRICING_IMPLEMENTATION_SPEC.md' ||
       evidence.proof !== 'tests/pricing/pricing-store.test.mjs' ||
       !existsSync(resolve(root, evidence.migration)) || !existsSync(resolve(root, evidence.proof)) ||
-      evidence.beforeSha256 !== evidenceValueHash(before) || evidence.afterSha256 !== evidenceValueHash(after) ||
+      ![evidence.beforeSha256, evidence.afterSha256].includes(evidenceValueHash(before)) ||
+      evidence.afterSha256 !== evidenceValueHash(originalAfter) ||
       (name === 'PricingQuoteVerifyLine' && after !== undefined)) {
     fail(`${path}#${name}: approved private verify replacement evidence is incomplete or has drifted`);
   }
@@ -155,6 +175,15 @@ function compareSchema(before, after, at, sourcePath) {
   for (const name of Object.keys(after.properties ?? {})) {
     if (!oldProperties.has(name) && !required.has(name)) requireOptionalEvidence(sourcePath, at, name);
   }
+  if (JSON.stringify(before.dependentRequired ?? null) !== JSON.stringify(after.dependentRequired ?? null)) {
+    if (before.dependentRequired !== undefined || after.additionalProperties !== false ||
+        Object.entries(after.dependentRequired ?? {}).length === 0 ||
+        !Object.entries(after.dependentRequired ?? {}).every(([name, dependencies]) =>
+          Array.isArray(dependencies) && dependencies.length > 0 &&
+          [name, ...dependencies].every(property => !oldProperties.has(property) && !required.has(property) && Object.hasOwn(after.properties ?? {}, property)))) {
+      fail(`${at}: dependentRequired changes previously accepted objects`);
+    }
+  }
   for (const keyword of ['allOf', 'anyOf', 'oneOf', 'prefixItems']) {
     const oldItems = before[keyword] ?? [];
     const newItems = after[keyword] ?? [];
@@ -166,7 +195,7 @@ function compareSchema(before, after, at, sourcePath) {
     if (!Object.hasOwn(after.$defs ?? {}, name)) fail(`${at}: definition ${name} removed`);
     compareSchema(schema, after.$defs[name], `${at}.$defs.${name}`, sourcePath);
   }
-  const structural = new Set(['$ref', 'const', 'pattern', 'format', 'type', 'enum', 'required', 'properties', '$defs', 'items', 'allOf', 'anyOf', 'oneOf', 'prefixItems', 'additionalProperties', 'minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties', 'maximum', 'exclusiveMaximum', 'maxItems', 'maxLength', 'maxProperties', 'title', 'description', 'examples', 'example', 'default', 'deprecated', 'readOnly', 'writeOnly']);
+  const structural = new Set(['$ref', 'const', 'pattern', 'format', 'type', 'enum', 'required', 'properties', '$defs', 'items', 'allOf', 'anyOf', 'oneOf', 'prefixItems', 'dependentRequired', 'additionalProperties', 'minimum', 'exclusiveMinimum', 'minItems', 'minLength', 'minProperties', 'maximum', 'exclusiveMaximum', 'maxItems', 'maxLength', 'maxProperties', 'title', 'description', 'examples', 'example', 'default', 'deprecated', 'readOnly', 'writeOnly']);
   for (const [keyword, value] of Object.entries(before)) if (!structural.has(keyword) && JSON.stringify(value) !== JSON.stringify(after[keyword])) fail(`${at}: unsupported keyword ${keyword} changed`);
   for (const [keyword] of Object.entries(after)) if (!structural.has(keyword) && !Object.hasOwn(before, keyword)) fail(`${at}: unsupported keyword ${keyword} added`);
 }
@@ -202,6 +231,47 @@ function allowConfirmResponseExpansion(sourcePath, route, at, before, after) {
   const recoveryHeaders = currentDocument.components?.responses?.RecoveryOrderConfirmationRejected?.headers;
   const expectedContent = {'application/problem+json': {schema: {oneOf: variants.map((name) => ({$ref: `#/components/schemas/${name}`}))}}};
   if (JSON.stringify(after.content) !== JSON.stringify(expectedContent) || JSON.stringify(after.headers) !== JSON.stringify(recoveryHeaders) || after.description !== 'Confirmation is rejected, or the completed rejection is replayed.') fail(`${at}: issue-8 response expansion does not match the approved branches`);
+  return true;
+}
+
+function catalogCallerExpansionEvidence() {
+  const evidence = approvedInternalCallerExpansions[0];
+  if (approvedInternalCallerExpansions.length !== 1 || evidence?.schemaPath !== 'contracts/openapi/internal-v1.yaml' ||
+      evidence.route !== catalogPricingRoute || evidence.operationId !== 'getCatalogPricingInput' || evidence.issue !== 11 ||
+      evidence.migration !== 'docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md' ||
+      evidence.proof !== 'tests/catalog/catalog-root.test.mjs' ||
+      JSON.stringify(evidence.operationBefore) !== JSON.stringify(catalogPricingCallerExpansion.operation.before) ||
+      JSON.stringify(evidence.operationAfter) !== JSON.stringify(catalogPricingCallerExpansion.operation.after) ||
+      JSON.stringify(evidence.manifestBefore) !== JSON.stringify(catalogPricingCallerExpansion.manifest.before) ||
+      JSON.stringify(evidence.manifestAfter) !== JSON.stringify(catalogPricingCallerExpansion.manifest.after) ||
+      !existsSync(resolve(root, evidence.migration)) || !existsSync(resolve(root, evidence.proof))) {
+    fail('getCatalogPricingInput caller expansion evidence is incomplete or has drifted');
+  }
+  return evidence;
+}
+
+function trustMetadata(operation) {
+  return Object.fromEntries(['x-audience', 'x-caller', 'x-callers', 'x-auth'].map((field) => [field, operation[field] ?? null]));
+}
+
+function allowCatalogPricingInputCallerExpansion(sourcePath, route, before, after) {
+  if (sourcePath !== 'contracts/openapi/internal-v1.yaml' || route !== catalogPricingRoute ||
+      before.operationId !== 'getCatalogPricingInput' || after.operationId !== 'getCatalogPricingInput') return false;
+  catalogCallerExpansionEvidence();
+  if (JSON.stringify(trustMetadata(before)) !== JSON.stringify(catalogPricingCallerExpansion.operation.before) ||
+      JSON.stringify(trustMetadata(after)) !== JSON.stringify(catalogPricingCallerExpansion.operation.after)) {
+    fail(`${sourcePath}: getCatalogPricingInput caller/auth metadata differs from the approved expansion`);
+  }
+  return true;
+}
+
+function allowCatalogPricingInputManifestAudienceExpansion(id, before, after) {
+  if (id !== 'getCatalogPricingInput') return false;
+  catalogCallerExpansionEvidence();
+  if (JSON.stringify(before) !== JSON.stringify(catalogPricingCallerExpansion.manifest.before) ||
+      JSON.stringify(after) !== JSON.stringify(catalogPricingCallerExpansion.manifest.after)) {
+    fail(`manifest ${id} audience differs from the approved caller expansion`);
+  }
   return true;
 }
 
@@ -260,7 +330,22 @@ function compareParameters(before, after, at, sourcePath, beforeDocument, afterD
 }
 
 function compareOpenApi(before, after, path) {
-  if (JSON.stringify(before['x-command-recovery'] ?? null) !== JSON.stringify(after['x-command-recovery'] ?? null)) fail(`${path}: command recovery protocol changed`);
+  const oldRecovery = structuredClone(before['x-command-recovery'] ?? null);
+  const newRecovery = structuredClone(after['x-command-recovery'] ?? null);
+  if (oldRecovery && newRecovery) {
+    for (const evidence of approvedCommandRecoveryExpansions.filter(entry => entry.schemaPath === path)) {
+      const previous = oldRecovery.terminalSchemas?.[evidence.operationId];
+      const next = newRecovery.terminalSchemas?.[evidence.operationId];
+      const cases = JSON.parse(readFileSync(resolve(root, evidence.fixture), 'utf8'));
+      if (evidence.issue !== 11 || !Array.isArray(previous) || !Array.isArray(next) ||
+          next.length !== previous.length + 1 || next.at(-1) !== evidence.addedTerminalSchema ||
+          JSON.stringify(next.slice(0, -1)) !== JSON.stringify(previous) ||
+          !cases.some(item => item.operationId === evidence.operationId && item.schema === evidence.fixtureCase && item.status === 422))
+        fail(`${path}: command recovery expansion lacks matching evidence`);
+      newRecovery.terminalSchemas[evidence.operationId] = previous;
+    }
+  }
+  if (JSON.stringify(oldRecovery) !== JSON.stringify(newRecovery)) fail(`${path}: command recovery protocol changed`);
   for (const [route, pathItem] of Object.entries(before.paths ?? {})) {
     if (!after.paths?.[route]) fail(`${path}: route ${route} removed`);
     compareParameters(pathItem.parameters, after.paths[route].parameters, `${path}:${route}:parameters`, path, before, after);
@@ -270,8 +355,12 @@ function compareOpenApi(before, after, path) {
       if (!next) fail(`${path}: ${method.toUpperCase()} ${route} removed`);
       if (operation.operationId !== next.operationId) fail(`${path}: ${method.toUpperCase()} ${route} operationId changed`);
       if (JSON.stringify(operation.security ?? null) !== JSON.stringify(next.security ?? null)) fail(`${path}: ${operation.operationId} security changed`);
+      const trustFields = ['x-audience', 'x-caller', 'x-callers', 'x-auth'];
+      const trustChanged = trustFields.some((field) => JSON.stringify(operation[field] ?? null) !== JSON.stringify(next[field] ?? null));
+      const approvedTrustChange = trustChanged && allowCatalogPricingInputCallerExpansion(path, route, operation, next);
       for (const field of ['x-owner', 'x-audience', 'x-caller', 'x-callers', 'x-exposure', 'x-auth', 'x-idempotency']) {
-        if (JSON.stringify(operation[field]) !== JSON.stringify(next[field])) fail(`${path}: ${operation.operationId} ${field} changed`);
+        if (JSON.stringify(operation[field] ?? null) !== JSON.stringify(next[field] ?? null) &&
+            !(approvedTrustChange && trustFields.includes(field))) fail(`${path}: ${operation.operationId} ${field} changed`);
       }
       compareParameters(operation.parameters, next.parameters, `${path}:${operation.operationId}:parameters`, path, before, after);
       if (Boolean(operation.requestBody?.required) !== Boolean(next.requestBody?.required)) fail(`${path}: ${operation.operationId} request body required changed`);
@@ -321,7 +410,10 @@ for (const path of sources) {
     for (const [id, entry] of oldEntries) {
       const next = newEntries.get(id);
       if (!next) fail(`manifest entry ${id} removed`);
-      for (const field of ['kind', 'owner', 'operation', 'key', 'audience', 'producers', 'consumers', 'pii', 'secrets', 'compatibility']) if (JSON.stringify(entry[field]) !== JSON.stringify(next[field])) fail(`manifest ${id} ${field} changed`);
+      for (const field of ['kind', 'owner', 'operation', 'key', 'audience', 'producers', 'consumers', 'pii', 'secrets', 'compatibility']) {
+        if (JSON.stringify(entry[field]) !== JSON.stringify(next[field]) &&
+            !(field === 'audience' && allowCatalogPricingInputManifestAudienceExpansion(id, entry[field], next[field]))) fail(`manifest ${id} ${field} changed`);
+      }
     }
   }
   else compareSchema(before, after, path, path);

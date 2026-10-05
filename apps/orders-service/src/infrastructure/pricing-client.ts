@@ -10,6 +10,7 @@ type PricingQuoteClientRequest = Readonly<{
   productRef: string;
   variantRef: string;
   quantity: string;
+  sourceGrindKeyHash?: string;
   delegation: string;
   correlationId: string;
   traceparent?: string;
@@ -97,6 +98,7 @@ function exactScope(response: PricingQuoteVerificationResponse, request: Pricing
     response.currency === "RUB" && response.line.lineNumber === request.quoteLineNumber &&
     response.line.productRef === request.productRef && response.line.variantRef === request.variantRef &&
     response.line.quantity === request.quantity && response.line.currency === "RUB" &&
+    response.line.sourceGrindKeyHash === request.sourceGrindKeyHash &&
     fresh;
 }
 
@@ -113,6 +115,7 @@ export function createPricingQuoteClient(client: HttpClient): Readonly<{
         productRef: request.productRef,
         variantRef: request.variantRef,
         quantity: request.quantity,
+        ...(request.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash:request.sourceGrindKeyHash}),
       };
       if (!isPricingQuoteVerifyRequest(body)) throw new PricingQuoteClientError("PRICING_UNAVAILABLE");
       request.signal.throwIfAborted();

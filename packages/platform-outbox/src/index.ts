@@ -60,6 +60,8 @@ export type OutboxStore = Readonly<{
 }>;
 
 type OutboxRow = Readonly<{
+  envelope_bytes?: unknown;
+  envelope_hash?: unknown;
   message_id: unknown;
   message_type: unknown;
   topic: unknown;
@@ -85,6 +87,8 @@ type OutboxRow = Readonly<{
 }>;
 
 type ExistingMessageRow = Readonly<{
+  envelope_bytes?: unknown;
+  envelope_hash?: unknown;
   payload_hash: unknown;
   message_type: unknown;
   topic: unknown;
@@ -200,7 +204,12 @@ function validateMessage(message: OutboxMessage): string {
   }
 }
 
-function rowMessage(row: OutboxRow): OutboxClaim {
+function sameEnvelopeBytes(row: Readonly<{envelope_bytes?: unknown; envelope_hash?: unknown}>, envelope: JsonValue, hash: string): boolean {
+  return row.envelope_hash === hash && row.envelope_bytes instanceof Uint8Array
+    && Buffer.from(row.envelope_bytes).equals(Buffer.from(canonicalJson(envelope)));
+}
+
+function rowMessage(row: OutboxRow, envelopeBytes = false): OutboxClaim {
   const state = stringValue(row.state, "state");
   if (state !== "Publishing") throw new OutboxError("OUTBOX_RECORD_INVALID", "claim вернул не Publishing row");
   const payloadHash = stringValue(row.payload_hash, "payload_hash");
@@ -224,6 +233,7 @@ function rowMessage(row: OutboxRow): OutboxClaim {
   let computedHash: string;
   try { computedHash = validateMessage(message); } catch { throw new OutboxError("OUTBOX_RECORD_INVALID", "claim вернул некорректное сообщение"); }
   if (computedHash !== payloadHash) throw new OutboxError("OUTBOX_RECORD_INVALID", "claim payload_hash не совпадает с envelope");
+  if (envelopeBytes && !sameEnvelopeBytes(row, message.envelope, computedHash)) throw new OutboxError("OUTBOX_RECORD_INVALID", "claim immutable bytes/hash не совпадают с envelope");
   return {
     message,
     payloadHash,
@@ -244,9 +254,13 @@ const claimProjection = `current.message_id, current.message_type, current.topic
   (extract(epoch from current.lease_until) * 1000)::bigint AS lease_until_ms,
   current.attempt, (extract(epoch from current.next_attempt_at) * 1000)::bigint AS next_attempt_at_ms, current.last_error`;
 
-export type SqlOutboxStoreOptions = Readonly<{schema?: string; table?: string}>;
+// Opt-in для owner schemas с обязательными immutable envelope_bytes/envelope_hash.
+// Generic JSON layout остаётся совместимым с существующими callers.
+export type SqlOutboxStoreOptions = Readonly<{schema?: string; table?: string; envelopeBytes?: boolean; topics?: readonly string[]}>;
 
 export class SqlOutboxStore implements OutboxStore {
+  private readonly envelopeBytes: boolean;
+  private readonly claimTopics: string | undefined;
   private readonly insert: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<Readonly<{message_id: string}>>>;
   private readonly readById: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<ExistingMessageRow>>;
   private readonly readSequence: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<Readonly<{aggregate_sequence: unknown}>>>;
@@ -256,21 +270,30 @@ export class SqlOutboxStore implements OutboxStore {
 
   public constructor(database: Database, options: SqlOutboxStoreOptions = {}) {
     const qualified = `${quoteIdentifier(options.schema ?? "public")}.${quoteIdentifier(options.table ?? "outbox_messages")}`;
+    this.envelopeBytes = options.envelopeBytes === true;
+    if (options.topics !== undefined) {
+      if (!Array.isArray(options.topics) || options.topics.length === 0 || new Set(options.topics).size !== options.topics.length) invalid("Outbox topics некорректны");
+      for (const topic of options.topics) boundedString(topic, "topic", 255);
+    }
+    this.claimTopics = options.topics === undefined ? undefined : JSON.stringify(options.topics);
+    const byteColumns = this.envelopeBytes ? ", envelope_bytes, envelope_hash" : "";
+    const byteValues = this.envelopeBytes ? ", $16::bytea, $17::char(64)" : "";
     this.insert = defineStatement(database, `INSERT INTO ${qualified}
       (message_id, message_type, topic, aggregate_ref, aggregate_sequence, owner_version,
        partition_key, schema_version, envelope, payload, payload_hash, occurred_at,
        correlation_id, causation_id, traceparent, state, lease_owner, lease_token,
-       lease_until, attempt, next_attempt_at)
+       lease_until, attempt, next_attempt_at${byteColumns})
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12::timestamptz,
-       $13, $14, $15, 'Pending', '', 0, clock_timestamp(), 0, clock_timestamp())
+       $13, $14, $15, 'Pending', '', 0, clock_timestamp(), 0, clock_timestamp()${byteValues})
       ON CONFLICT (message_id) DO NOTHING RETURNING message_id`);
-    this.readById = defineStatement(database, `SELECT payload_hash, message_type, topic, aggregate_ref, aggregate_sequence, owner_version, partition_key, schema_version, envelope
+    this.readById = defineStatement(database, `SELECT payload_hash, message_type, topic, aggregate_ref, aggregate_sequence, owner_version, partition_key, schema_version, envelope${byteColumns}
       FROM ${qualified} WHERE message_id = $1 FOR UPDATE`);
     this.readSequence = defineStatement(database, `SELECT aggregate_sequence FROM ${qualified}
       WHERE aggregate_ref = $1 ORDER BY aggregate_sequence DESC LIMIT 1 FOR UPDATE`);
     this.claimStatement = defineStatement(database, `WITH candidates AS (
       SELECT current.message_id FROM ${qualified} AS current
       WHERE current.next_attempt_at <= to_timestamp($1 / 1000.0)
+        ${this.claimTopics === undefined ? "" : "AND current.topic IN (SELECT jsonb_array_elements_text($5::jsonb))"}
         AND (current.state = 'Pending' OR (current.state = 'Publishing' AND current.lease_until <= clock_timestamp()))
         AND NOT EXISTS (
           SELECT 1 FROM ${qualified} AS predecessor
@@ -286,7 +309,7 @@ export class SqlOutboxStore implements OutboxStore {
           lease_until = to_timestamp($2 / 1000.0), attempt = current.attempt + 1
     FROM candidates
     WHERE current.message_id = candidates.message_id
-    RETURNING ${claimProjection}`);
+    RETURNING ${claimProjection}${this.envelopeBytes ? ", current.envelope_bytes, current.envelope_hash" : ""}`);
     this.finalizeStatement = defineStatement(database, `UPDATE ${qualified}
       SET state = 'Published', lease_owner = '', lease_until = clock_timestamp(), published_at = clock_timestamp()
       WHERE message_id = $1 AND state = 'Publishing' AND lease_owner = $2
@@ -305,16 +328,17 @@ export class SqlOutboxStore implements OutboxStore {
     const sequence = sequenceValue(message.aggregateSequence);
     const existing = await this.readById(transaction, [message.messageId]);
     const existingRow = existing.rows[0];
-    if (existingRow !== undefined) return sameMessage(existingRow, message, payloadHash) ? "duplicate" : "conflict";
+    if (existingRow !== undefined) return sameMessage(existingRow, message, payloadHash) && (!this.envelopeBytes || sameEnvelopeBytes(existingRow, message.envelope, payloadHash)) ? "duplicate" : "conflict";
     const sequenceRows = await this.readSequence(transaction, [message.aggregateRef]);
     const latest = sequenceRows.rows[0];
     const expected = latest === undefined ? 1n : bigintValue(latest.aggregate_sequence, "aggregate_sequence") + 1n;
     if (sequence !== expected) throw new OutboxError("OUTBOX_SEQUENCE_INVALID", "aggregateSequence должен быть непрерывным");
-    const inserted = await this.insert(transaction, [message.messageId, message.messageType, message.topic, message.aggregateRef, sequence, message.ownerVersion, message.partitionKey, message.schemaVersion, canonicalJson(message.envelope), canonicalJson(message.payload), payloadHash, message.occurredAt, message.correlationId, message.causationId ?? null, message.traceparent ?? null]);
+    const envelope = canonicalJson(message.envelope);
+    const inserted = await this.insert(transaction, [message.messageId, message.messageType, message.topic, message.aggregateRef, sequence, message.ownerVersion, message.partitionKey, message.schemaVersion, envelope, canonicalJson(message.payload), payloadHash, message.occurredAt, message.correlationId, message.causationId ?? null, message.traceparent ?? null, ...(this.envelopeBytes ? [Buffer.from(envelope), payloadHash] : [])]);
     if (inserted.rowCount === 1) return "created";
     const raced = await this.readById(transaction, [message.messageId]);
     const racedRow = raced.rows[0];
-    return racedRow === undefined ? "conflict" : sameMessage(racedRow, message, payloadHash) ? "duplicate" : "conflict";
+    return racedRow !== undefined && sameMessage(racedRow, message, payloadHash) && (!this.envelopeBytes || sameEnvelopeBytes(racedRow, message.envelope, payloadHash)) ? "duplicate" : "conflict";
   }
 
   public async claim(transaction: Transaction, nowMs: number, leaseOwner: string, limit: number, leaseMs: number): Promise<readonly OutboxClaim[]> {
@@ -323,8 +347,8 @@ export class SqlOutboxStore implements OutboxStore {
     positiveInteger(limit, "limit");
     positiveInteger(leaseMs, "leaseMs");
     if (nowMs + leaseMs > Number.MAX_SAFE_INTEGER) invalid("Outbox lease выходит за пределы safe integer");
-    const result = await this.claimStatement(transaction, [nowMs, nowMs + leaseMs, leaseOwner, limit]);
-    return result.rows.map(rowMessage);
+    const result = await this.claimStatement(transaction, [nowMs, nowMs + leaseMs, leaseOwner, limit, ...(this.claimTopics === undefined ? [] : [this.claimTopics])]);
+    return result.rows.map(row => rowMessage(row, this.envelopeBytes));
   }
 
   public async finalize(transaction: Transaction, messageId: string, leaseOwner: string, leaseToken: bigint | number): Promise<void> {

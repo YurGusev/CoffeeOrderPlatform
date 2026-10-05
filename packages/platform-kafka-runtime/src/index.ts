@@ -23,7 +23,7 @@ import {
   canonicalRequestHash,
   type JsonValue,
 } from "@coffee-platform/idempotency";
-import { consumeOnce, type InboxStore } from "@coffee-platform/inbox";
+import { consumeOnce, InboxProcessingError, type InboxStore } from "@coffee-platform/inbox";
 import {
   parseKafkaConfig,
   validateKafkaServiceConfig,
@@ -460,21 +460,22 @@ export async function processKafkaRecord(
   const now = receivedAt.epochMilliseconds;
   if (options.binding.processing === "durable") {
     const binding = options.binding;
+    const transactionOptions = {
+      mode: "background" as const,
+      signal: options.signal,
+      ...(envelope
+        ? {
+            correlationId: envelope.correlationId,
+            ...(envelope.causationId === null
+              ? {}
+              : { causationId: envelope.causationId }),
+            traceparent: envelope.traceparent,
+          }
+        : {}),
+    };
     await withTransaction(
       binding.database,
-      {
-        mode: "background",
-        signal: options.signal,
-        ...(envelope
-          ? {
-              correlationId: envelope.correlationId,
-              ...(envelope.causationId === null
-                ? {}
-                : { causationId: envelope.causationId }),
-              traceparent: envelope.traceparent,
-            }
-          : {}),
-      },
+      transactionOptions,
       async (transaction) => {
         if (!envelope) {
           await binding.inbox.quarantineRecord(
@@ -535,7 +536,39 @@ export async function processKafkaRecord(
         }
         if (begin.kind === "duplicate") return;
       },
-    );
+    ).catch(async (error: unknown) => {
+      const rejected = envelope;
+      if (!(error instanceof InboxProcessingError) ||
+        error.failure.kind === "transient" || !rejected) throw error;
+      // withTransaction rethrows this owner error only after confirmed ROLLBACK.
+      // Never catch it inside consumeOnce: that would commit partial owner effects.
+      // Unknown COMMIT/ROLLBACK outcomes remain database errors, not quarantine.
+      const payload = JSON.parse(canonicalJson(rejected as unknown as JsonValue)) as JsonValue;
+      await withTransaction(binding.database, transactionOptions, async (transaction) => {
+        const begin = await binding.inbox.begin(transaction, {
+          messageId: rejected.messageId,
+          messageType: rejected.messageType,
+          receivedAt: receivedAt.toString(),
+          payloadHash: canonicalRequestHash(payload),
+          payload,
+        }, options.groupId, now, options.leaseMs);
+        if (begin.kind === "in_progress") throw new KafkaRuntimeError("KAFKA_HANDLER_FAILED");
+        if (begin.kind === "acquired") {
+          await binding.inbox.quarantine(transaction, rejected.messageId, options.groupId, error.failure.reason);
+        }
+        const quarantined = await binding.inbox.quarantineRecord(transaction, {
+          topic: record.topic,
+          partition: record.partition,
+          offset: record.offset,
+          messageId: rejected.messageId,
+          messageType: rejected.messageType,
+          payloadHash: canonicalRequestHash(payload),
+          envelope: payload,
+          reason: begin.kind === "conflict" ? "INBOX_HASH_CONFLICT" : error.failure.reason,
+        }, now);
+        if (quarantined === "conflict") throw new KafkaRuntimeError("KAFKA_HANDLER_FAILED");
+      });
+    });
   } else if (envelope) {
     await options.binding.enqueue(envelope, options.signal);
   } else {

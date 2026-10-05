@@ -178,9 +178,54 @@ const rowProjection = `message_id, message_type, received_at::text AS received_a
   (extract(epoch from lease_until) * 1000)::bigint AS lease_until_ms,
   attempt, processed_at::text AS processed_at, quarantine_reason`;
 
-export type SqlInboxStoreOptions = Readonly<{schema?: string; table?: string; quarantineTable?: string}>;
+// Consumer mode accepts the full envelope carried by processKafkaRecord, without
+// depending on the Kafka package (which itself imports Inbox).
+type ConsumerEnvelope = Readonly<{
+  value: JsonValue;
+  payload: JsonValue;
+  messageId: string;
+  messageType: string;
+  partitionKey: string;
+  schemaVersion: string;
+  ownerVersion: string;
+}>;
+
+function consumerEnvelope(value: JsonValue, messageId?: string, messageType?: string): ConsumerEnvelope {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) invalid("Inbox требует full envelope");
+  const envelope = value as Readonly<Record<string, JsonValue>>;
+  const keys = ["envelopeVersion", "messageId", "messageType", "occurredAt", "producer", "correlationId", "causationId", "traceparent", "aggregate", "payload"];
+  const aggregate = envelope["aggregate"];
+  if (Object.keys(envelope).length !== keys.length || keys.some(key => !Object.hasOwn(envelope, key)) ||
+      envelope["envelopeVersion"] !== "1" || aggregate === null || typeof aggregate !== "object" || Array.isArray(aggregate)) invalid("Inbox envelope некорректен");
+  const owner = aggregate as Readonly<Record<string, JsonValue>>;
+  if (Object.keys(owner).length !== 3 || ["type", "ref", "version"].some(key => !Object.hasOwn(owner, key))) invalid("Inbox aggregate некорректен");
+  const identifier = (source: Readonly<Record<string, JsonValue>>, key: string): string => {
+    const text = requiredString(source[key], key);
+    // Transport identifiers must not contain control characters.
+    // eslint-disable-next-line no-control-regex
+    if (text.length > 256 || /[\u0000-\u001f]/u.test(text)) invalid("Inbox envelope identifier некорректен");
+    return text;
+  };
+  const id = identifier(envelope, "messageId");
+  const type = identifier(envelope, "messageType");
+  if ((messageId !== undefined && id !== messageId) || (messageType !== undefined && type !== messageType)) invalid("Inbox envelope identity не совпадает");
+  identifier(envelope, "producer");
+  identifier(envelope, "correlationId");
+  if (envelope["causationId"] !== null) identifier(envelope, "causationId");
+  instantValue(envelope["occurredAt"], "occurredAt");
+  const trace = identifier(envelope, "traceparent");
+  if (!/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(trace) || trace.slice(3, 35) === "0".repeat(32) || trace.slice(36, 52) === "0".repeat(16)) invalid("Inbox traceparent некорректен");
+  identifier(owner, "type");
+  const partitionKey = identifier(owner, "ref");
+  const ownerVersion = identifier(owner, "version");
+  if (!/^[1-9][0-9]{0,18}$/u.test(ownerVersion) || BigInt(ownerVersion) > 9223372036854775807n) invalid("Inbox ownerVersion вне bigint");
+  return {value, payload: envelope["payload"] as JsonValue, messageId: id, messageType: type, partitionKey, schemaVersion: "1", ownerVersion};
+}
+
+export type SqlInboxStoreOptions = Readonly<{schema?: string; table?: string; quarantineTable?: string; consumerName?: string}>;
 
 export class SqlInboxStore implements InboxStore {
+  private readonly consumerName: string | undefined;
   private readonly permits = new WeakMap<Transaction, Set<string>>();
   private readonly insert: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<Readonly<{message_id: string}>>>;
   private readonly readForUpdate: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<InboxRow>>;
@@ -197,6 +242,46 @@ export class SqlInboxStore implements InboxStore {
     const quarantine = quoteIdentifier(options.quarantineTable ?? "inbox_quarantine");
     const qualified = `${schema}.${table}`;
     const quarantineQualified = `${schema}.${quarantine}`;
+    this.consumerName = options.consumerName;
+    if (this.consumerName !== undefined) {
+      requiredString(this.consumerName, "consumerName");
+      if (!/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u.test(this.consumerName) || this.consumerName.length > 64) invalid("Inbox consumerName некорректен");
+      // Alias the full envelope/hash into the existing InboxRecord contract.
+      const projection = rowProjection.replace("received_at, payload,", "received_at, envelope AS payload,").replace("payload_hash, state", "envelope_hash AS payload_hash, state");
+      this.insert = defineStatement(database, `INSERT INTO ${qualified}
+        (message_id, message_type, envelope, envelope_hash, lease_owner, lease_until, consumer_name,
+         payload, payload_hash, partition_key, schema_version, owner_version)
+        VALUES ($1, $2, $3::jsonb, $4, $5, clock_timestamp() + $6 * interval '1 millisecond', $7,
+          $8::jsonb, $9, $10, $11, $12::bigint)
+        ON CONFLICT (consumer_name, message_id) DO NOTHING RETURNING message_id`);
+      this.readForUpdate = defineStatement(database, `SELECT ${projection} FROM ${qualified}
+        WHERE message_id = $1 AND consumer_name = $2 FOR UPDATE`);
+      this.reclaim = defineStatement(database, `UPDATE ${qualified}
+        SET lease_owner = $2, lease_until = clock_timestamp() + $3 * interval '1 millisecond', attempt = attempt + 1
+        WHERE message_id = $1 AND consumer_name = $4 AND state = 'Processing' AND lease_until <= clock_timestamp()
+        RETURNING ${projection}`);
+      this.markProcessedStatement = defineStatement(database, `UPDATE ${qualified}
+        SET state = 'Processed', lease_owner = '', lease_until = clock_timestamp(), processed_at = clock_timestamp(),
+          outcome = 'Processed', result = '{"kind":"Processed"}'::jsonb
+        WHERE message_id = $1 AND consumer_name = $3 AND state = 'Processing' AND lease_owner = $2
+          AND lease_until > clock_timestamp() RETURNING message_id`);
+      this.quarantineStatement = defineStatement(database, `UPDATE ${qualified}
+        SET state = 'Quarantined', lease_owner = '', lease_until = clock_timestamp(),
+          quarantine_reason = $3, quarantined_at = clock_timestamp(), outcome = 'Quarantined', result = '{"kind":"Quarantined"}'::jsonb
+        WHERE message_id = $1 AND consumer_name = $4 AND state = 'Processing' AND lease_owner = $2
+          AND lease_until > clock_timestamp() RETURNING message_id`);
+      this.releaseStatement = defineStatement(database, `UPDATE ${qualified} SET lease_until = clock_timestamp()
+        WHERE message_id = $1 AND consumer_name = $3 AND state = 'Processing' AND lease_owner = $2
+          AND lease_until > clock_timestamp() RETURNING message_id`);
+      this.quarantineInsert = defineStatement(database, `INSERT INTO ${quarantineQualified}
+        (consumer_name, topic, "partition", "offset", message_id, message_type, partition_key, schema_version,
+          payload_hash, envelope_hash, envelope, reason)
+        VALUES ($1, $2, $3, $4::bigint, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)
+        ON CONFLICT (consumer_name, topic, "partition", "offset") DO NOTHING RETURNING topic`);
+      this.quarantineRead = defineStatement(database, `SELECT envelope_hash AS payload_hash FROM ${quarantineQualified}
+        WHERE topic = $1 AND "partition" = $2 AND "offset" = $3::bigint AND consumer_name = $4`);
+      return;
+    }
     this.insert = defineStatement(database, `INSERT INTO ${qualified}
       (message_id, message_type, received_at, payload, payload_hash, state, lease_owner, lease_until, attempt)
       VALUES ($1, $2, $3::timestamptz, $4::jsonb, $5, 'Processing', $6, to_timestamp($7 / 1000.0), 1)
@@ -234,8 +319,12 @@ export class SqlInboxStore implements InboxStore {
     safePositiveInteger(leaseMs, "leaseMs");
     if (nowMs + leaseMs > Number.MAX_SAFE_INTEGER) invalid("Inbox lease выходит за пределы safe integer");
     const leaseUntilMs = nowMs + leaseMs;
-    const inserted = await this.insert(transaction, [message.messageId, message.messageType, message.receivedAt, canonicalJson(message.payload), payloadHash, leaseOwner, leaseUntilMs]);
-    let result = await this.readForUpdate(transaction, [message.messageId]);
+    const envelope = this.consumerName === undefined ? undefined : consumerEnvelope(message.payload, message.messageId, message.messageType);
+    const inserted = await this.insert(transaction, envelope === undefined
+      ? [message.messageId, message.messageType, message.receivedAt, canonicalJson(message.payload), payloadHash, leaseOwner, leaseUntilMs]
+      : [message.messageId, message.messageType, canonicalJson(envelope.value), payloadHash, leaseOwner, leaseMs,
+        this.consumerName as string, canonicalJson(envelope.payload), canonicalRequestHash(envelope.payload), envelope.partitionKey, envelope.schemaVersion, envelope.ownerVersion]);
+    const result = await this.readForUpdate(transaction, this.consumerName === undefined ? [message.messageId] : [message.messageId, this.consumerName]);
     let row = result.rows[0];
     if (row === undefined) throw new InboxError("INBOX_RECORD_INVALID", "Inbox acquire не вернул запись");
     if (String(row.payload_hash) !== payloadHash) return {kind: "conflict", reason: "payload_hash_mismatch"};
@@ -243,7 +332,7 @@ export class SqlInboxStore implements InboxStore {
     if (state === "Processed" || state === "Quarantined") return {kind: "duplicate", state};
     if (state !== "Processing") throw new InboxError("INBOX_RECORD_INVALID", "неизвестное состояние Inbox");
     if (inserted.rowCount !== 1) {
-      const reclaimed = await this.reclaim(transaction, [message.messageId, leaseOwner, leaseUntilMs]);
+      const reclaimed = await this.reclaim(transaction, this.consumerName === undefined ? [message.messageId, leaseOwner, leaseUntilMs] : [message.messageId, leaseOwner, leaseMs, this.consumerName]);
       if (reclaimed.rowCount === 1) {
         row = reclaimed.rows[0];
         if (row === undefined) throw new InboxError("INBOX_RECORD_INVALID", "Inbox reclaim не вернул запись");
@@ -265,7 +354,8 @@ export class SqlInboxStore implements InboxStore {
   public async markProcessed(transaction: Transaction, messageId: string, leaseOwner: string, processedAt: string): Promise<void> {
     this.requirePermit(transaction, messageId, leaseOwner);
     requiredString(processedAt, "processedAt");
-    const result = await this.markProcessedStatement(transaction, [requiredString(messageId, "messageId"), requiredString(leaseOwner, "leaseOwner"), processedAt]);
+    if (this.consumerName !== undefined) instantValue(processedAt, "processedAt");
+    const result = await this.markProcessedStatement(transaction, [requiredString(messageId, "messageId"), requiredString(leaseOwner, "leaseOwner"), this.consumerName ?? processedAt]);
     if (result.rowCount !== 1) throw new InboxError("INBOX_LEASE_INVALID", "Inbox lease недействителен или истёк");
     this.permits.get(transaction)?.delete(`${messageId}\u0000${leaseOwner}`);
   }
@@ -273,14 +363,14 @@ export class SqlInboxStore implements InboxStore {
   public async quarantine(transaction: Transaction, messageId: string, leaseOwner: string, reason: string): Promise<void> {
     this.requirePermit(transaction, messageId, leaseOwner);
     validateReason(reason);
-    const result = await this.quarantineStatement(transaction, [requiredString(messageId, "messageId"), requiredString(leaseOwner, "leaseOwner"), reason]);
+    const result = await this.quarantineStatement(transaction, [requiredString(messageId, "messageId"), requiredString(leaseOwner, "leaseOwner"), reason, ...(this.consumerName === undefined ? [] : [this.consumerName])]);
     if (result.rowCount !== 1) throw new InboxError("INBOX_LEASE_INVALID", "Inbox lease недействителен или истёк");
     this.permits.get(transaction)?.delete(`${messageId}\u0000${leaseOwner}`);
   }
 
   public async release(transaction: Transaction, messageId: string, leaseOwner: string): Promise<void> {
     this.requirePermit(transaction, messageId, leaseOwner);
-    const result = await this.releaseStatement(transaction, [requiredString(messageId, "messageId"), requiredString(leaseOwner, "leaseOwner")]);
+    const result = await this.releaseStatement(transaction, [requiredString(messageId, "messageId"), requiredString(leaseOwner, "leaseOwner"), ...(this.consumerName === undefined ? [] : [this.consumerName])]);
     if (result.rowCount !== 1) throw new InboxError("INBOX_LEASE_INVALID", "Inbox lease недействителен или истёк");
     this.permits.get(transaction)?.delete(`${messageId}\u0000${leaseOwner}`);
   }
@@ -288,6 +378,26 @@ export class SqlInboxStore implements InboxStore {
   public async quarantineRecord(transaction: Transaction, record: InboxQuarantineRecord, nowMs: number): Promise<InboxQuarantineResult> {
     validateQuarantineRecord(record);
     safeNonNegativeInteger(nowMs, "nowMs");
+    if (this.consumerName !== undefined) {
+      if (!/^(0|[1-9][0-9]{0,18})$/u.test(record.offset) || BigInt(record.offset) > 9223372036854775807n) invalid("Inbox offset вне bigint");
+      const envelopeHash = record.envelope === undefined ? null : canonicalRequestHash(record.envelope);
+      if (record.payloadHash !== undefined && record.payloadHash !== envelopeHash) invalid("Inbox envelope hash не совпадает");
+      let parsed: ConsumerEnvelope | undefined;
+      if (record.envelope !== undefined) {
+        try { parsed = consumerEnvelope(record.envelope, record.messageId, record.messageType); }
+        catch (error) { if (!(error instanceof InboxError)) throw error; }
+      }
+      const inserted = await this.quarantineInsert(transaction, [this.consumerName, record.topic, record.partition, record.offset,
+        record.messageId ?? parsed?.messageId ?? null, record.messageType ?? parsed?.messageType ?? null,
+        parsed?.partitionKey ?? null, parsed?.schemaVersion ?? null, parsed === undefined ? null : canonicalRequestHash(parsed.payload),
+        envelopeHash, record.envelope === undefined ? null : canonicalJson(record.envelope),
+        record.reason === "INBOX_HASH_CONFLICT" ? "MESSAGE_ID_PAYLOAD_CONFLICT" : record.reason]);
+      if (inserted.rowCount === 1) return "created";
+      const existing = await this.quarantineRead(transaction, [record.topic, record.partition, record.offset, this.consumerName]);
+      const row = existing.rows[0];
+      if (row === undefined) throw new InboxError("INBOX_RECORD_INVALID", "Inbox quarantine не вернул запись");
+      return row.payload_hash === envelopeHash ? "duplicate" : "conflict";
+    }
     const payloadHash = record.payloadHash ?? (record.envelope === undefined ? null : canonicalRequestHash(record.envelope));
     const envelope = record.envelope === undefined ? null : canonicalJson(record.envelope);
     const inserted = await this.quarantineInsert(transaction, [record.topic, record.partition, record.offset, record.messageId ?? null, record.messageType ?? null, payloadHash, envelope, record.reason, nowMs]);
@@ -325,7 +435,9 @@ function validateQuarantineRecord(record: InboxQuarantineRecord): void {
 
 export type ConsumeResult = Readonly<{kind: "processed" | "duplicate" | "in_progress" | "quarantined" | "conflict"}>;
 
-/** Выполняется внутри уже открытой withTransaction; transient error должен откатить внешнюю transaction. */
+/** Выполняется внутри уже открытой withTransaction. Любая ошибка handler должна
+ * откатить внешнюю transaction; permanent disposition фиксирует coordinator
+ * отдельной transaction только после подтверждённого rollback owner effects. */
 export async function consumeOnce(
   store: InboxStore,
   transaction: Transaction,

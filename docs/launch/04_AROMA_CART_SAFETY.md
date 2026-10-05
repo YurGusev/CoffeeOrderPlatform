@@ -49,6 +49,12 @@ provider IDs, body, cookies и credentials наружу не выходят.
 Timeout after step 8 persists `UnknownOutcome`. A new attempt must reconcile
 with fresh GET and operation reservation before any further mutation.
 
+Перед положительным `SetQuantity` Orders получает read-only proof от Catalog
+owner API по latest complete active snapshot и проверяет точные offer,
+availability и revisions. Ошибка или неполный/устаревший proof закрывает путь
+без mutation. Convergence не читает чужую БД и не использует provider live lookup
+для Catalog facts.
+
 ## Правила обработки отказов
 
 - Failed/partial GET never becomes an empty cart observation.

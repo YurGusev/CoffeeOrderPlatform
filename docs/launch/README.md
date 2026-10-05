@@ -54,6 +54,7 @@
 30. [Исследованный HTTP-протокол AROMA и открытые вопросы](27_AROMA_PROVIDER_PROTOCOL.md)
 31. [Почасовой каталог AROMA, цены и недельные акции](28_AROMA_CATALOG_PRICING_POLICY.md)
 32. [Target authority nginx и application auth #159](29_NGINX_TRANSPORT_AND_AUTH.md) — после merge ADR-0031; active cutover только #162.
+33. [Контракт помола и параллельность #9/#11](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md) — утверждённый backend contract closure и физическая идентичность; не evidence реализации.
 
 Продолжение после первого запуска: [план второй волны — закупка, счета и оплата](../wave-2/README.md).
 

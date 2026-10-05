@@ -50,6 +50,18 @@ void test("public hash uses exact ordered persisted keys and UTF-8 compact JSON"
   }
 });
 
+void test("selected hash and display snapshot both commit to public and private quote proofs", () => {
+  const selected={...quote,lines:[{...quote.lines[0],sourceGrindKeyHash:"a".repeat(64),grindDisplayName:"Средний"}]};
+  const publicHash=hashPublicQuote(selected),privateHash=hashInternalQuote(selected,policy,proofLines);
+  assert.notEqual(publicHash,hashPublicQuote(quote));
+  assert.notEqual(privateHash,hashInternalQuote(quote,policy,proofLines));
+  for(const mutation of [{sourceGrindKeyHash:"b".repeat(64)},{grindDisplayName:"Крупный"}]) {
+    const changed={...selected,lines:[{...selected.lines[0],...mutation}]};
+    assert.notEqual(hashPublicQuote(changed),publicHash);
+    assert.notEqual(hashInternalQuote(changed,policy,proofLines),privateHash);
+  }
+});
+
 void test("private proof commits to each private fact and applied policy", () => {
   const original = hashInternalQuote(quote, policy, proofLines);
   assert.notEqual(original, hashPublicQuote(quote));

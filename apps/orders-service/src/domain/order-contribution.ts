@@ -18,9 +18,11 @@ export type ContributionItem = Readonly<{
   quantityMilli: string;
   quoteRef: string;
   quoteLineNumber: number;
+  sourceGrindKeyHash?: string;
 }>;
 export type ContributionLine = Readonly<{
   offerRef: string;
+  sourceGrindKeyHash?: string;
   quantityMilli: string;
   contributionHash: string;
   itemRefs: readonly string[];
@@ -43,6 +45,7 @@ function facts(item: ContributionItem): Readonly<Record<string, string | number>
     quoteLineNumber: item.quoteLineNumber,
     quoteRef: item.quoteRef,
     variantRef: item.variantRef,
+    ...(item.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash: item.sourceGrindKeyHash}),
   };
 }
 
@@ -68,15 +71,18 @@ export function computeOrderContribution(items: readonly ContributionItem[]): Or
     if (quoteLines.has(quoteLine)) throw new OrderContributionError("ORDER_STATE_INCONSISTENT");
     quoteLines.add(quoteLine);
     const quantity = BigInt(item.quantityMilli);
+    if (item.sourceGrindKeyHash !== undefined && !/^[0-9a-f]{64}$/u.test(item.sourceGrindKeyHash)) throw new OrderContributionError("ORDER_STATE_INCONSISTENT");
     if (quantity > MAX_BIGINT) throw new OrderContributionError("ORDER_DESIRED_OVERFLOW");
-    const group = groups.get(item.offerRef) ?? {quantity: 0n, items: []};
+    const key = `${item.offerRef}:${item.sourceGrindKeyHash ?? ""}`;
+    const group = groups.get(key) ?? {quantity: 0n, items: []};
     group.quantity += quantity;
     if (group.quantity > MAX_BIGINT) throw new OrderContributionError("ORDER_DESIRED_OVERFLOW");
     group.items.push(item);
-    groups.set(item.offerRef, group);
+    groups.set(key, group);
   }
-  const lines = [...groups.entries()].sort(([left], [right]) => compare(left, right)).map(([offerRef, group]): ContributionLine => ({
-    offerRef,
+  const lines = [...groups.entries()].sort(([left], [right]) => compare(left, right)).map(([key, group]): ContributionLine => ({
+    offerRef: key.slice(0, 30),
+    ...(key.length === 31 ? {} : {sourceGrindKeyHash: key.slice(31)}),
     quantityMilli: group.quantity.toString(),
     contributionHash: digest(group.items.map(facts)),
     itemRefs: group.items.map(item => item.itemRef),

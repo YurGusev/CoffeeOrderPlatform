@@ -37,15 +37,69 @@
         "catalog-activation-worker": {"$ref": "#/$defs/service"},
         "pricing-service": {"$ref": "#/$defs/service"},
         "orders-service": {"$ref": "#/$defs/service"},
-        "orders-aroma-preparation": {"$ref": "#/$defs/service"},
-        "aroma-observer": {"$ref": "#/$defs/service"},
-        "aroma-convergence": {"$ref": "#/$defs/service"},
+        "orders-aroma-preparation": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["aromaPreparation"], "properties": {"aromaPreparation": {"$ref": "#/$defs/aromaPreparation"}}}]},
+        "aroma-observer": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["aromaObservation"], "properties": {"aromaObservation": {"$ref": "#/$defs/aromaObservation"}}}]},
+        "aroma-convergence": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["mutationsEnabled", "aromaConvergence"], "properties": {"mutationsEnabled": {"type": "boolean"}, "aromaConvergence": {"$ref": "#/$defs/aromaConvergence"}}}]},
         "aroma-gateway": {"$ref": "#/$defs/service"},
         "realtime-gateway": {"$ref": "#/$defs/service"}
-      }
+      },
+      "allOf": [{"properties": {
+        "edge-gateway": {"$ref": "#/$defs/noAromaWorkflow"},
+        "api-public": {"$ref": "#/$defs/noAromaWorkflow"},
+        "api-internal": {"$ref": "#/$defs/noAromaWorkflow"},
+        "customer-service": {"$ref": "#/$defs/noAromaWorkflow"},
+        "catalog-service": {"$ref": "#/$defs/noAromaWorkflow"},
+        "catalog-supplier-sync": {"$ref": "#/$defs/noAromaWorkflow"},
+        "catalog-activation-worker": {"$ref": "#/$defs/noAromaWorkflow"},
+        "pricing-service": {"$ref": "#/$defs/noAromaWorkflow"},
+        "orders-service": {"$ref": "#/$defs/noAromaWorkflow"},
+        "orders-aroma-preparation": {"type": "object", "properties": {"mutationsEnabled": false, "aromaObservation": false, "aromaConvergence": false}},
+        "aroma-observer": {"type": "object", "properties": {"mutationsEnabled": false, "aromaPreparation": false, "aromaConvergence": false}},
+        "aroma-convergence": {"type": "object", "properties": {"aromaPreparation": false, "aromaObservation": false}},
+        "aroma-gateway": {"$ref": "#/$defs/noAromaWorkflow"},
+        "realtime-gateway": {"$ref": "#/$defs/noAromaWorkflow"}
+      }}]
     }
   },
   "$defs": {
+    "noAromaWorkflow": {"type": "object", "properties": {"mutationsEnabled": false, "aromaPreparation": false, "aromaObservation": false, "aromaConvergence": false}},
+    "aromaPreparation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pollIntervalMs", "batchSize", "maxOrders", "maxLines"],
+      "properties": {
+        "pollIntervalMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "batchSize": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "maxOrders": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "maxLines": {"type": "integer", "minimum": 1, "maximum": 10000}
+      }
+    },
+    "aromaObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pollIntervalMs", "intervalMs", "leaseMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"],
+      "properties": {
+        "pollIntervalMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "intervalMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "leaseMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "maxSnapshotAgeMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "maxLines": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "maxResponseBytes": {"type": "integer", "const": 2097152}
+      }
+    },
+    "aromaConvergence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pollIntervalMs", "leaseMs", "heartbeatIntervalMs", "providerDeadlineMs", "safetyMarginMs", "retryBackoffMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"],
+      "properties": {
+        "pollIntervalMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "leaseMs": {"type": "integer", "const": 30000},
+        "heartbeatIntervalMs": {"type": "integer", "const": 10000},
+        "providerDeadlineMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "safetyMarginMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "retryBackoffMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "maxSnapshotAgeMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "maxLines": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "maxResponseBytes": {"type": "integer", "const": 2097152}
+      }
+    },
     "pricingPolicy": {
       "type": "object", "additionalProperties": false,
       "required": ["policyVersionRef", "version", "currency", "markupBasisPoints", "minimumMarginMinor", "quoteTtlSeconds", "quantityScale", "roundingMode"],
@@ -210,7 +264,16 @@
           "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
         },
         "permissions": {"$ref": "#/$defs/permissions"},
-        "mutationCapability": {"type": "boolean"}
+        "mutationCapability": {"type": "boolean"},
+        "catalogSnapshotProof": {
+          "type": "object", "additionalProperties": false,
+          "required": ["maxAgeMs"],
+          "properties": {"maxAgeMs": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}}
+        },
+        "mutationsEnabled": {"type": "boolean"},
+        "aromaPreparation": {"$ref": "#/$defs/aromaPreparation"},
+        "aromaObservation": {"$ref": "#/$defs/aromaObservation"},
+        "aromaConvergence": {"$ref": "#/$defs/aromaConvergence"}
       }
     },
     "platform": {

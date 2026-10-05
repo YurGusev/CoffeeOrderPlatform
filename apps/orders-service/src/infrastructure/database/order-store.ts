@@ -18,10 +18,11 @@ type ItemSnapshot = Readonly<{
   productRef:string; variantRef:string; productDisplayName:string; unit:"piece"|"gram"|"kilogram"; quantityMilli:string;
   quoteRef:string; quoteLineNumber:number; quoteHash:string; internalProofHash:string; quoteExpiresAt:string;
   policyVersionRef:string; catalogSnapshotRevision:string; mappingRevision:string; offerRef:string;
+  sourceGrindKeyHash?:string; grindDisplayName?:string;
   unitMinor:string; lineTotalMinor:string; currency:"RUB";
 }>;
 type Meta = Readonly<{actorRef:string; identity:IdempotencyKey; correlationId:string; signal?:AbortSignal; traceparent?:string; cardPermissions?:readonly string[]}>;
-type ItemRequest=Readonly<{expectedVersion:string;productRef:string;variantRef:string;quantity:string;quoteRef:string;quoteLineNumber:number;quoteHash:string}>;
+type ItemRequest=Readonly<{expectedVersion:string;productRef:string;variantRef:string;quantity:string;quoteRef:string;quoteLineNumber:number;quoteHash:string;sourceGrindKeyHash?:string}>;
 export type CreateDraftCommand = Meta & Readonly<{customer:Readonly<{customerRef:string;customerVersion:string;displayName:string;state:"Active"}>}>;
 export type PutItemCommand = Meta & Readonly<{orderRef:string;itemRef:string;expectedVersion:string;request:ItemRequest;item:ItemSnapshot}>;
 export type DeleteItemCommand = Meta & Readonly<{orderRef:string;itemRef:string;expectedVersion:string}>;
@@ -29,9 +30,7 @@ export type ConfirmOrderCommand = Meta & Readonly<{orderRef:string;expectedVersi
 export type ReconciliationCommand = Meta & Readonly<{orderRef:string;expectedVersion:string;reason:string}>;
 export type OrderCommandResult = Readonly<{status:200|201;body:OrderCardResponse;replayed:boolean}>;
 export type ReconciliationCommandResult = Readonly<{status:202;body:ReconciliationAcceptedResponse;replayed:boolean}>;
-type ReconciliationState = "OutOfSync"|"Blocked"|"UnknownOutcome";
-/** Test-only, synchronous, read-only local projection. The production composition root never supplies one. */
-export type ReconciliationProjectionFixture = ReadonlyMap<string,Readonly<{orderVersion:string;state:ReconciliationState|"PendingObservation"|"Converging"|"InSync"}>>;
+
 export type OrderReplayResult =
   | Readonly<{kind:"completed";response:Readonly<{status:number;body:JsonValue;resourceRef?:string}>}>
   | Readonly<{kind:"in_progress"}> | Readonly<{kind:"not_retained"}> | Readonly<{kind:"invalid"}>;
@@ -55,7 +54,7 @@ function timestamp(value:unknown):string {try {if(typeof value!=="string")return
 function newRef(prefix:string):string {let bits=(BigInt(temporal().Now.instant().epochMilliseconds)<<80n)|BigInt(`0x${randomBytes(10).toString("hex")}`);let encoded="";for(let i=0;i<26;i++){encoded=ULID_ALPHABET[Number(bits&31n)]!+encoded;bits>>=5n;}return `${prefix}_${encoded}`;}
 function requestHash(value:JsonValue):string {return canonicalRequestHash(value);}
 export function hashOrderDraftRequest(customerRef:string):string {validRef(customerRef,"cus");return requestHash({customerRef});}
-export function hashOrderItemPutRequest(request:ItemRequest):string {canonicalPositive(request.expectedVersion);validRef(request.productRef,"prd");validRef(request.variantRef,"var");validRef(request.quoteRef,"prq");validHash(request.quoteHash);if(!Number.isInteger(request.quoteLineNumber)||request.quoteLineNumber<1||request.quoteLineNumber>100||! /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$/u.test(request.quantity))return fail("ORDER_VALIDATION_FAILED");return requestHash({expectedVersion:request.expectedVersion,productRef:request.productRef,variantRef:request.variantRef,quantity:request.quantity,quoteRef:request.quoteRef,quoteLineNumber:request.quoteLineNumber,quoteHash:request.quoteHash});}
+export function hashOrderItemPutRequest(request:ItemRequest):string {canonicalPositive(request.expectedVersion);validRef(request.productRef,"prd");validRef(request.variantRef,"var");validRef(request.quoteRef,"prq");validHash(request.quoteHash);if(request.sourceGrindKeyHash!==undefined)validHash(request.sourceGrindKeyHash);if(!Number.isInteger(request.quoteLineNumber)||request.quoteLineNumber<1||request.quoteLineNumber>100||! /^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$/u.test(request.quantity))return fail("ORDER_VALIDATION_FAILED");return requestHash({expectedVersion:request.expectedVersion,productRef:request.productRef,variantRef:request.variantRef,quantity:request.quantity,quoteRef:request.quoteRef,quoteLineNumber:request.quoteLineNumber,quoteHash:request.quoteHash,...(request.sourceGrindKeyHash===undefined?{}:{sourceGrindKeyHash:request.sourceGrindKeyHash})});}
 function quantityMilli(value:string):string {if(!/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,3})?$/u.test(value))return fail("ORDER_VALIDATION_FAILED");const [whole,fraction=""] = value.split(".");const milli=BigInt(whole!)*1000n+BigInt((fraction+"000").slice(0,3));if(milli<1n||milli>999_999_999n)return fail("ORDER_VALIDATION_FAILED");return milli.toString();}
 export function customerSnapshotProofHash(customer:Readonly<{customerRef:string;customerVersion:string;displayName:string;state:"Active"}>):string {return requestHash({customerRef:customer.customerRef,customerVersion:customer.customerVersion,displayName:customer.displayName,state:customer.state});}
 function objectJson(value:unknown):JsonValue {if(value===null||typeof value!=="object") return fail("IDEMPOTENCY_RESULT_INVALID");return value as JsonValue;}
@@ -88,6 +87,7 @@ export class OrderStore {
   private readonly selectItems;
   private readonly insertOrder;
   private readonly updateOrder;
+  private readonly advanceCardProjection;
   private readonly insertHistory;
   private readonly insertItem;
   private readonly updateItem;
@@ -96,13 +96,18 @@ export class OrderStore {
   private readonly insertDesiredLine;
   private readonly insertOutbox;
   private readonly insertReconciliationOutbox;
+  private readonly nextOutboxSequence;
   private readonly updateReconciledOrder;
   private readonly readIdempotencyTime;
   private readonly checkQuoteExpiry;
-  private readonly testOnlyReconciliationProjection:ReconciliationProjectionFixture|undefined;
-  public constructor(database:Database,options:Readonly<{testOnlyReconciliationProjection?:ReconciliationProjectionFixture}>={}) {
+  private readonly readAromaProjection;
+  private readonly maxSnapshotAgeMs:number;
+  public constructor(database:Database,options:Readonly<{maxSnapshotAgeMs?:number}>={}) {
     this.database=database;
-    this.testOnlyReconciliationProjection=options.testOnlyReconciliationProjection;
+    // Отсутствующая composition config никогда не разрешает InSync.
+    this.maxSnapshotAgeMs=options.maxSnapshotAgeMs??0;
+    if(!Number.isSafeInteger(this.maxSnapshotAgeMs)||this.maxSnapshotAgeMs<0||this.maxSnapshotAgeMs>2_147_483_647)throw new Error("ORDER_CARD_FRESHNESS_INVALID");
+    this.readAromaProjection=defineStatement<Row,[string,number]>(database,"SELECT * FROM orders.read_card_projection($1,$2)");
     this.idempotency=createSqlIdempotencyStore<IdempotencyResponse>(database,{schema:"orders",table:"idempotency_records"});
     this.readIdempotencyTime=defineStatement<Row,[]>(database,"SELECT floor(extract(epoch FROM transaction_timestamp())*1000)::bigint AS now_ms");
     this.selectOrderForShare=defineStatement<Row,[string]>(database,"SELECT * FROM orders.orders WHERE order_ref=$1 FOR SHARE");
@@ -110,18 +115,22 @@ export class OrderStore {
     this.checkQuoteExpiry=defineStatement<Row,[string]>(database,"SELECT $1::timestamptz > transaction_timestamp() AS valid");
     this.selectItems=defineStatement<Row,[string]>(database,"SELECT * FROM orders.order_items WHERE order_ref=$1 ORDER BY line_position");
     this.insertOrder=defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO orders.orders(order_ref,customer_ref,customer_version,customer_display_name,customer_state,customer_state_proof_hash,created_by_actor_ref,last_modified_by_actor_ref,status) VALUES($1,$2,$3,$4,'Active',$5,$6,$6,$7)`);
-    this.updateOrder=defineStatement<Row,readonly SqlScalar[]>(database,`UPDATE orders.orders SET version=version+1, projection_version=projection_version+1, currency=COALESCE(currency,$3), updated_at=transaction_timestamp(), last_modified_by_actor_ref=$4 WHERE order_ref=$1 AND status='Draft' AND version=$2 RETURNING version::text`);
+    this.updateOrder=defineStatement<Row,readonly SqlScalar[]>(database,`UPDATE orders.orders SET version=version+1, currency=COALESCE(currency,$3), updated_at=transaction_timestamp(), last_modified_by_actor_ref=$4 WHERE order_ref=$1 AND status='Draft' AND version=$2 RETURNING version::text`);
+    this.advanceCardProjection=defineStatement<Row,[string]>(database,"SELECT projection_version FROM orders.write_card_projection($1)");
     this.insertHistory=defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO orders.order_history(history_ref,order_ref,order_version,event_type,item_ref,actor_ref,correlation_id,facts) VALUES($1,$2,$3,$4,$5,$6,$7::uuid,$8::jsonb)`);
-    this.insertItem=defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO orders.order_items(order_ref,item_ref,line_position,product_ref,variant_ref,product_display_name,unit,quantity_milli,quote_ref,quote_line_number,quote_hash,internal_proof_hash,quote_expires_at,policy_version_ref,catalog_snapshot_revision,mapping_revision,offer_ref,unit_minor,line_total_minor,currency) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::timestamptz,$14,$15,$16,$17,$18,$19,$20)`);
-    this.updateItem=defineStatement<Row,readonly SqlScalar[]>(database,`UPDATE orders.order_items SET product_ref=$3,variant_ref=$4,product_display_name=$5,unit=$6,quantity_milli=$7,quote_ref=$8,quote_line_number=$9,quote_hash=$10,internal_proof_hash=$11,quote_expires_at=$12::timestamptz,policy_version_ref=$13,catalog_snapshot_revision=$14,mapping_revision=$15,offer_ref=$16,unit_minor=$17,line_total_minor=$18,currency=$19,updated_at=transaction_timestamp() WHERE order_ref=$1 AND item_ref=$2`);
+    this.insertItem=defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO orders.order_items(order_ref,item_ref,line_position,product_ref,variant_ref,product_display_name,unit,quantity_milli,quote_ref,quote_line_number,quote_hash,internal_proof_hash,quote_expires_at,policy_version_ref,catalog_snapshot_revision,mapping_revision,offer_ref,unit_minor,line_total_minor,currency,source_grind_key_hash,grind_display_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::timestamptz,$14,$15,$16,$17,$18,$19,$20,$21,$22)`);
+    this.updateItem=defineStatement<Row,readonly SqlScalar[]>(database,`UPDATE orders.order_items SET product_ref=$3,variant_ref=$4,product_display_name=$5,unit=$6,quantity_milli=$7,quote_ref=$8,quote_line_number=$9,quote_hash=$10,internal_proof_hash=$11,quote_expires_at=$12::timestamptz,policy_version_ref=$13,catalog_snapshot_revision=$14,mapping_revision=$15,offer_ref=$16,unit_minor=$17,line_total_minor=$18,currency=$19,source_grind_key_hash=$20,grind_display_name=$21,updated_at=transaction_timestamp() WHERE order_ref=$1 AND item_ref=$2`);
     this.deleteItemRow=defineStatement<Row,readonly SqlScalar[]>(database,"DELETE FROM orders.order_items WHERE order_ref=$1 AND item_ref=$2 RETURNING item_ref");
     this.insertDesired=defineStatement<Row,readonly SqlScalar[]>(database,"INSERT INTO orders.order_desired_contributions(order_ref,contribution_revision,order_version) VALUES($1,1,$2)");
-    this.insertDesiredLine=defineStatement<Row,readonly SqlScalar[]>(database,"INSERT INTO orders.order_desired_contribution_lines(order_ref,contribution_revision,offer_ref,quantity_milli,contribution_hash,item_refs) VALUES($1,1,$2,$3,$4,ARRAY(SELECT jsonb_array_elements_text($5::jsonb))::varchar[])");
+    this.insertDesiredLine=defineStatement<Row,readonly SqlScalar[]>(database,"INSERT INTO orders.order_desired_contribution_lines(order_ref,contribution_revision,offer_ref,quantity_milli,contribution_hash,item_refs,source_grind_key_hash) VALUES($1,1,$2,$3,$4,ARRAY(SELECT jsonb_array_elements_text($5::jsonb))::varchar[],$6)");
     this.insertOutbox=defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO orders.outbox_messages(message_id,message_type,topic,aggregate_ref,aggregate_sequence,owner_version,partition_key,schema_version,envelope_bytes,envelope_hash,envelope,payload,payload_hash,occurred_at,correlation_id,causation_id,traceparent,lease_until) VALUES($1::text,'OrderConfirmed.v1','coffee.orders.lifecycle.v1',$2::varchar(30),$3::bigint,$4::text,$2::text,'1',$5::bytea,$6::char(64),$7::jsonb,$8::jsonb,$9::char(64),$10::timestamptz,$11::text,NULL,$12::text,to_timestamp(0))`);
-    this.updateReconciledOrder=defineStatement<Row,readonly SqlScalar[]>(database,`UPDATE orders.orders SET version=version+1,projection_version=projection_version+1,updated_at=transaction_timestamp(),last_modified_by_actor_ref=$3 WHERE order_ref=$1 AND status='Confirmed' AND version=$2 RETURNING version::text AS version,to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS requested_at`);
-    this.insertReconciliationOutbox=defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO orders.outbox_messages(message_id,message_type,topic,aggregate_ref,aggregate_sequence,owner_version,partition_key,schema_version,envelope_bytes,envelope_hash,envelope,payload,payload_hash,occurred_at,correlation_id,causation_id,traceparent,lease_until) VALUES($1::text,'OrderReconciliationRequested.v1','coffee.orders.lifecycle.v1',$2::varchar(30),$3::bigint,$3::text,$2::text,'1',$4::bytea,$5::char(64),$6::jsonb,$7::jsonb,$5::char(64),$8::timestamptz,$9::text,NULL,$10::text,to_timestamp(0))`);
+    this.updateReconciledOrder=defineStatement<Row,readonly SqlScalar[]>(database,`UPDATE orders.orders SET version=version+1,updated_at=transaction_timestamp(),last_modified_by_actor_ref=$3 WHERE order_ref=$1 AND status='Confirmed' AND version=$2 RETURNING version::text AS version,to_char(updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS requested_at`);
+    this.insertReconciliationOutbox=defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO orders.outbox_messages(message_id,message_type,topic,aggregate_ref,aggregate_sequence,owner_version,partition_key,schema_version,envelope_bytes,envelope_hash,envelope,payload,payload_hash,occurred_at,correlation_id,causation_id,traceparent,lease_until) VALUES($1::text,'OrderReconciliationRequested.v1','coffee.orders.lifecycle.v1',$2::varchar(30),$3::bigint,$4::text,$2::text,'1',$5::bytea,$6::char(64),$7::jsonb,$8::jsonb,$6::char(64),$9::timestamptz,$10::text,NULL,$11::text,to_timestamp(0))`);
+    this.nextOutboxSequence=defineStatement<Row,[string]>(database,"SELECT (COALESCE(max(aggregate_sequence),0)+1)::text AS sequence FROM orders.outbox_messages WHERE aggregate_ref=$1");
   }
   private async time(tx:Transaction):Promise<number> {const row=(await this.readIdempotencyTime(tx,[])).rows[0];if(row===undefined)return fail("ORDER_DATABASE_DECODE_ERROR");return milliseconds(row["now_ms"]);}
+  /** Call while holding the parent Order FOR UPDATE lock shared by every owner Outbox producer. */
+  private async outboxSequence(tx:Transaction,orderRef:string):Promise<string> {const row=(await this.nextOutboxSequence(tx,[orderRef])).rows[0];if(row===undefined)return fail("ORDER_DATABASE_DECODE_ERROR");return canonicalPositive(string(row["sequence"]));}
   private async acquire(tx:Transaction,command:Meta,hash:string,reconciliationOrderRef?:string):Promise<"new"|OrderCommandResult|ReconciliationCommandResult> {
     checkActor(command);const leaseOwner=randomUUID();const acquired=await this.idempotency.acquire(tx,command.identity,hash,leaseOwner,await this.time(tx),LEASE_MS,RETENTION_MS);
     if(acquired.kind==="conflict") return fail("IDEMPOTENCY_CONFLICT");
@@ -136,18 +145,32 @@ export class OrderStore {
     if(permit===undefined) return fail("IDEMPOTENCY_NOT_ACQUIRED");
     await this.idempotency.complete(tx,command.identity,permit,replayResponse(result));
   }
+  private async aroma(tx:Transaction,orderRef:string):Promise<OrderCardResponse["aroma"]> {
+    const row=(await this.readAromaProjection(tx,[orderRef,this.maxSnapshotAgeMs])).rows[0];
+    if(row===undefined)return {state:"PendingObservation",desiredRevision:"0",observedRevision:"0",blockers:[]};
+    const state=string(row["state"]);
+    if(!["PendingObservation","Converging","InSync","OutOfSync","Blocked","UnknownOutcome"].includes(state))return fail("ORDER_DATABASE_DECODE_ERROR");
+    const codes=row["blocker_codes"];
+    if(!Array.isArray(codes)||codes.some((code:unknown)=>typeof code!=="string"||!/^[A-Z][A-Z0-9_]{0,127}$/u.test(code)))return fail("ORDER_DATABASE_DECODE_ERROR");
+    const last=row["last_observed_at"];
+    if(last!==null&&!(last instanceof Date))return fail("ORDER_DATABASE_DECODE_ERROR");
+    return {state:state as OrderCardResponse["aroma"]["state"],desiredRevision:string(row["desired_revision"]),observedRevision:string(row["observed_revision"]),
+      lastObservedAt:last===null?null:timestamp(last.toISOString()),
+      blockers:[...new Set(codes as string[])].sort().map(code=>({code:code as OrderCardResponse["aroma"]["blockers"][number]["code"],message:"Сходимость корзины требует проверки"}))};
+  }
   private async response(tx:Transaction,orderRef:string,permissions:readonly string[]=[]):Promise<OrderCardResponse> {
     // Item DML's owner trigger takes FOR UPDATE on the same parent; keep this lock through both reads.
     const rawOrder=(await this.selectOrderForShare(tx,[orderRef])).rows[0];if(rawOrder===undefined)return fail("ORDER_NOT_FOUND");
     const order=decodeOrderRow(rawOrder);
     const rows=(await this.selectItems(tx,[orderRef])).rows.map(decodeOrderItemRow);
     const storedOrder:StoredCardOrder={orderRef:order.order_ref,status:order.status,version:order.version,projectionVersion:order.projection_version,customerRef:order.customer_ref,customerDisplayName:order.customer_display_name,customerVersion:order.customer_version};
-    const items:StoredCardItem[]=rows.map(row=>({itemRef:row.item_ref,linePosition:row.line_position,productRef:row.product_ref,variantRef:row.variant_ref,displayName:row.product_display_name,quantity:(Number(row.quantity_milli)/1000).toString(),unit:row.unit,quoteRef:row.quote_ref,quoteLineNumber:row.quote_line_number,unitMinor:row.unit_minor,lineTotalMinor:row.line_total_minor,quoteHash:row.quote_hash,quoteExpiresAt:timestamp(row.quote_expires_at.toISOString()),quoteExpiresAtEpochMs:row.quote_expires_at.getTime()}));
-    const projected=projectOrderCard({order:storedOrder,items,nowEpochMs:await this.time(tx),permissions});
+    const items:StoredCardItem[]=rows.map(row=>({itemRef:row.item_ref,linePosition:row.line_position,productRef:row.product_ref,variantRef:row.variant_ref,displayName:row.product_display_name,quantity:(Number(row.quantity_milli)/1000).toString(),unit:row.unit,quoteRef:row.quote_ref,quoteLineNumber:row.quote_line_number,unitMinor:row.unit_minor,lineTotalMinor:row.line_total_minor,...(row.source_grind_key_hash===null?{}:{sourceGrindKeyHash:row.source_grind_key_hash,grindDisplayName:row.grind_display_name ?? ""}),quoteHash:row.quote_hash,quoteExpiresAt:timestamp(row.quote_expires_at.toISOString()),quoteExpiresAtEpochMs:row.quote_expires_at.getTime()}));
+    const projected=projectOrderCard({order:storedOrder,items,nowEpochMs:await this.time(tx),permissions,
+      ...(order.status==="Confirmed"?{aroma:await this.aroma(tx,orderRef)}:{})});
     if(!isOrderCardResponse(projected))return fail("ORDER_DATABASE_DECODE_ERROR");return projected;
   }
   private async bump(tx:Transaction,command:Meta,orderRef:string,expectedVersion:string,currency:string|null):Promise<string> {
-    const result=await this.updateOrder(tx,[orderRef,expectedVersion,currency,command.actorRef]);if(result.rowCount!==1)return fail("ORDER_VERSION_CONFLICT");return string(result.rows[0]?.["version"]);
+    const result=await this.updateOrder(tx,[orderRef,expectedVersion,currency,command.actorRef]);if(result.rowCount!==1)return fail("ORDER_VERSION_CONFLICT");await this.advanceCardProjection(tx,[orderRef]);return string(result.rows[0]?.["version"]);
   }
   private async history(tx:Transaction,command:Meta,orderRef:string,version:string,event:string,itemRef:string|null,facts:JsonValue):Promise<void> {
     await this.insertHistory(tx,[newRef("htr"),orderRef,version,event,itemRef,command.actorRef,command.correlationId,JSON.stringify(facts)]);
@@ -173,8 +196,10 @@ export class OrderStore {
   }
   public async putItem(command:PutItemCommand):Promise<OrderCommandResult> {
     const {orderRef,itemRef,expectedVersion}=command;validRef(orderRef,"ord");validRef(itemRef,"itm");canonicalPositive(expectedVersion);const item={...command.item};
-    const request=command.request;if(request.expectedVersion!==expectedVersion||request.productRef!==item.productRef||request.variantRef!==item.variantRef||request.quoteRef!==item.quoteRef||request.quoteLineNumber!==item.quoteLineNumber||request.quoteHash!==item.quoteHash||quantityMilli(request.quantity)!==item.quantityMilli)return fail("ORDER_VALIDATION_FAILED");
+    const request=command.request;if(request.expectedVersion!==expectedVersion||request.productRef!==item.productRef||request.variantRef!==item.variantRef||request.quoteRef!==item.quoteRef||request.quoteLineNumber!==item.quoteLineNumber||request.quoteHash!==item.quoteHash||request.sourceGrindKeyHash!==item.sourceGrindKeyHash||quantityMilli(request.quantity)!==item.quantityMilli)return fail("ORDER_VALIDATION_FAILED");
     validRef(item.productRef,"prd");validRef(item.variantRef,"var");validRef(item.quoteRef,"prq");validRef(item.policyVersionRef,"pvr");validRef(item.offerRef,"off");canonicalPositive(item.quantityMilli);canonicalNonnegative(item.catalogSnapshotRevision);canonicalNonnegative(item.mappingRevision);validHash(item.quoteHash);validHash(item.internalProofHash);
+    if(item.sourceGrindKeyHash!==undefined)validHash(item.sourceGrindKeyHash);
+    if((item.sourceGrindKeyHash===undefined)!==(item.grindDisplayName===undefined)||item.grindDisplayName!==undefined&&!item.grindDisplayName.trim())return fail("ORDER_VALIDATION_FAILED");
     if(!Number.isInteger(item.quoteLineNumber)||item.quoteLineNumber<1||item.quoteLineNumber>100||!item.productDisplayName||!["piece","gram","kilogram"].includes(item.unit)||item.currency!=="RUB")return fail("ORDER_VALIDATION_FAILED");
     const quoteExpiresAt=timestamp(item.quoteExpiresAt);
     const hash=hashOrderItemPutRequest(request);
@@ -187,7 +212,7 @@ export class OrderStore {
       if(existing!==undefined) position=existing.line_position;else {const count=(await defineStatement<Row,[string]>(this.database,"SELECT COALESCE(min(candidate.position),101)::int AS count FROM generate_series(1,100) AS candidate(position) WHERE NOT EXISTS (SELECT 1 FROM orders.order_items WHERE order_ref=$1 AND line_position=candidate.position)")(tx,[orderRef])).rows[0];position=Number(count?.["count"]??101);if(position>100)return fail("ORDER_ITEM_LIMIT_EXCEEDED");}
       const currency=string(parent["currency"]??"RUB");if(parent["currency"]!==null&&parent["currency"]!=="RUB")return fail("ORDER_STATE_INCONSISTENT");
       await this.bump(tx,command,orderRef,expectedVersion,currency);
-      const params=[orderRef,itemRef,position,item.productRef,item.variantRef,item.productDisplayName,item.unit,item.quantityMilli,item.quoteRef,item.quoteLineNumber,item.quoteHash,item.internalProofHash,quoteExpiresAt,item.policyVersionRef,item.catalogSnapshotRevision,item.mappingRevision,item.offerRef,item.unitMinor,item.lineTotalMinor,item.currency] as const;
+      const params=[orderRef,itemRef,position,item.productRef,item.variantRef,item.productDisplayName,item.unit,item.quantityMilli,item.quoteRef,item.quoteLineNumber,item.quoteHash,item.internalProofHash,quoteExpiresAt,item.policyVersionRef,item.catalogSnapshotRevision,item.mappingRevision,item.offerRef,item.unitMinor,item.lineTotalMinor,item.currency,item.sourceGrindKeyHash??null,item.grindDisplayName??null] as const;
       if(existing===undefined)await this.insertItem(tx,params);else await this.updateItem(tx,[orderRef,itemRef,...params.slice(3)]);
       return {orderRef,version:(BigInt(expectedVersion)+1n).toString(),event:"ItemUpserted",itemRef,facts:{itemRef,quoteRef:item.quoteRef,quoteLineNumber:item.quoteLineNumber}};
     })),command.signal);
@@ -210,13 +235,13 @@ export class OrderStore {
       const rows=(await this.selectItems(tx,[orderRef])).rows.map(decodeOrderItemRow);if(rows.length===0)return fail("ORDER_EMPTY");
       const beforeConfirm=await this.response(tx,orderRef,[]);
       if(beforeConfirm.aroma.blockers.some(blocker=>blocker.code==="ORDER_STATE_INCONSISTENT"))return fail("ORDER_STATE_INCONSISTENT");
-      const items:ContributionItem[]=rows.map(row=>({itemRef:row.item_ref,offerRef:row.offer_ref,productRef:row.product_ref,variantRef:row.variant_ref,quantityMilli:row.quantity_milli,quoteRef:row.quote_ref,quoteLineNumber:row.quote_line_number}));
+      const items:ContributionItem[]=rows.map(row=>({itemRef:row.item_ref,offerRef:row.offer_ref,productRef:row.product_ref,variantRef:row.variant_ref,quantityMilli:row.quantity_milli,quoteRef:row.quote_ref,quoteLineNumber:row.quote_line_number,...(row.source_grind_key_hash===null?{}:{sourceGrindKeyHash:row.source_grind_key_hash})}));
       const contribution=computeOrderContribution(items);const now=await this.time(tx);if(rows.some(row=>row.quote_expires_at.getTime()<=now))return fail("PRICING_QUOTE_EXPIRED");
-      const version=(BigInt(expectedVersion)+1n).toString();const updated=await defineStatement<Row,readonly SqlScalar[]>(this.database,`UPDATE orders.orders SET status=$5,version=$3,projection_version=projection_version+1,confirmed_at=transaction_timestamp(),updated_at=transaction_timestamp(),last_modified_by_actor_ref=$4,currency='RUB' WHERE order_ref=$1 AND status='Draft' AND version=$2 RETURNING to_char(confirmed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS confirmed_at`)(tx,[orderRef,expectedVersion,version,command.actorRef,nextStatus]);
-      if(updated.rowCount!==1)return fail("ORDER_VERSION_CONFLICT");const confirmedAt=timestamp(updated.rows[0]?.["confirmed_at"]);
-      await this.insertDesired(tx,[orderRef,version]);for(const line of contribution.lines)await this.insertDesiredLine(tx,[orderRef,line.offerRef,line.quantityMilli,line.contributionHash,JSON.stringify(line.itemRefs)]);
+      const version=(BigInt(expectedVersion)+1n).toString();const updated=await defineStatement<Row,readonly SqlScalar[]>(this.database,`UPDATE orders.orders SET status=$5,version=$3,confirmed_at=transaction_timestamp(),updated_at=transaction_timestamp(),last_modified_by_actor_ref=$4,currency='RUB' WHERE order_ref=$1 AND status='Draft' AND version=$2 RETURNING to_char(confirmed_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS confirmed_at`)(tx,[orderRef,expectedVersion,version,command.actorRef,nextStatus]);
+      if(updated.rowCount!==1)return fail("ORDER_VERSION_CONFLICT");await this.advanceCardProjection(tx,[orderRef]);const confirmedAt=timestamp(updated.rows[0]?.["confirmed_at"]);
+      await this.insertDesired(tx,[orderRef,version]);for(const line of contribution.lines)await this.insertDesiredLine(tx,[orderRef,line.offerRef,line.quantityMilli,line.contributionHash,JSON.stringify(line.itemRefs),line.sourceGrindKeyHash??null]);
       const payload={orderRef,orderVersion:version,customerRef:string(order["customer_ref"]),confirmedAt,contributionRevision:"1"};const envelope={envelopeVersion:"1",messageId:newRef("msg"),messageType:"OrderConfirmed.v1",occurredAt:confirmedAt,producer:"orders-service",correlationId:command.correlationId,causationId:null,traceparent,aggregate:{type:"Order",ref:orderRef,version},payload};
-      const bytes=Buffer.from(canonicalJson(envelope));const envelopeDigest=eventHash(bytes);const payloadDigest=requestHash(envelope);await observe("orders.outbox.insert",()=>this.insertOutbox(tx,[envelope.messageId,orderRef,version,version,bytes,envelopeDigest,JSON.stringify(envelope),JSON.stringify(payload),payloadDigest,confirmedAt,command.correlationId,envelope.traceparent]),command.signal);
+      const bytes=Buffer.from(canonicalJson(envelope));const envelopeDigest=eventHash(bytes);const payloadDigest=requestHash(envelope);const sequence=await this.outboxSequence(tx,orderRef);await observe("orders.outbox.insert",()=>this.insertOutbox(tx,[envelope.messageId,orderRef,sequence,version,bytes,envelopeDigest,JSON.stringify(envelope),JSON.stringify(payload),payloadDigest,confirmedAt,command.correlationId,envelope.traceparent]),command.signal);
       return {orderRef,version,event:"OrderConfirmed",facts:{contributionRevision:"1",contributionHash:contribution.hash}};
     })),command.signal);
   }
@@ -234,17 +259,19 @@ export class OrderStore {
       const order=decodeOrderRow(raw);
       if(nextOrderStatus(order.status,"RequestReconciliation")===null)return fail("AROMA_RECONCILIATION_NOT_ALLOWED");
       if(order.version!==expectedVersion)return fail("ORDER_VERSION_CONFLICT");
-      const projected=this.testOnlyReconciliationProjection?.get(orderRef);
-      if(projected?.orderVersion!==order.version||!(projected.state==="OutOfSync"||projected.state==="Blocked"||projected.state==="UnknownOutcome"))return fail("AROMA_RECONCILIATION_NOT_ALLOWED");
+      const projected=await this.aroma(tx,orderRef);
+      if(!(projected.state==="OutOfSync"||projected.state==="Blocked"||projected.state==="UnknownOutcome"))return fail("AROMA_RECONCILIATION_NOT_ALLOWED");
       const updated=await this.updateReconciledOrder(tx,[orderRef,expectedVersion,command.actorRef]);
       if(updated.rowCount!==1)return fail("ORDER_VERSION_CONFLICT");
+      await this.advanceCardProjection(tx,[orderRef]);
       const version=string(updated.rows[0]?.["version"]),requestedAt=timestamp(updated.rows[0]?.["requested_at"]);
       // The free-text operator reason participates in idempotency, but must not enter the durable audit/event payload.
       await this.history(tx,command,orderRef,version,"ReconciliationRequested",null,{requestKind:"OperatorRequested"});
       const payload={orderRef,orderVersion:version,requestedAt};
       const envelope={envelopeVersion:"1",messageId:newRef("msg"),messageType:"OrderReconciliationRequested.v1",occurredAt:requestedAt,producer:"orders-service",correlationId:command.correlationId,causationId:null,traceparent,aggregate:{type:"Order",ref:orderRef,version},payload};
       const bytes=Buffer.from(canonicalJson(envelope));const digest=eventHash(bytes);
-      await observe("orders.outbox.insert",()=>this.insertReconciliationOutbox(tx,[envelope.messageId,orderRef,version,bytes,digest,JSON.stringify(envelope),JSON.stringify(payload),requestedAt,command.correlationId,traceparent]),command.signal);
+      const sequence=await this.outboxSequence(tx,orderRef);
+      await observe("orders.outbox.insert",()=>this.insertReconciliationOutbox(tx,[envelope.messageId,orderRef,sequence,version,bytes,digest,JSON.stringify(envelope),JSON.stringify(payload),requestedAt,command.correlationId,traceparent]),command.signal);
       const result={status:202,body:{orderRef,orderVersion:version,requestedAt,aromaState:projected.state},replayed:false} as const;
       if(!isReconciliationAcceptedResponse(result.body))return fail("ORDER_DATABASE_DECODE_ERROR");
       await this.complete(tx,command,result);

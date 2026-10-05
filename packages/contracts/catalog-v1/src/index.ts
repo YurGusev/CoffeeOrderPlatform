@@ -25,6 +25,10 @@ ajv.addFormat("uri", {type: "string", validate: (value: string) => URL.canParse(
 // Catalog's runtime schema aliases are not yet emitted by the types-only generator.
 const productRefSchema = {type: "string", pattern: "^prd_[0-9A-HJKMNP-TV-Z]{26}$"} as const;
 const variantRefSchema = {type: "string", pattern: "^var_[0-9A-HJKMNP-TV-Z]{26}$"} as const;
+const grindOptionsSchema = {type: "array", maxItems: 100, items: {
+  type: "object", additionalProperties: false, required: ["sourceGrindKeyHash", "displayName"],
+  properties: {sourceGrindKeyHash: {type: "string", pattern: "^[0-9a-f]{64}$"}, displayName: {type: "string", minLength: 1, maxLength: 200}},
+}} as const;
 const catalogProductSummarySchema = {
   type: "object", additionalProperties: false,
   required: ["productRef", "variantRef", "displayName", "unit", "availability", "mappingAvailable"],
@@ -36,6 +40,7 @@ const catalogProductSummarySchema = {
     availability: {type: "string", enum: ["Available", "Unavailable", "Stopped"]},
     mappingAvailable: {type: "boolean"},
     imageUrl: {type: "string", format: "uri", maxLength: 2048},
+    grindOptions: grindOptionsSchema,
   },
 } as const;
 const searchResponseSchema = {
@@ -61,6 +66,7 @@ const pricingInputSchema = {
     availability: {type: "string", enum: ["Available", "Unavailable", "Stopped"]},
     mappingRevision: {type: "string", pattern: "^(0|[1-9][0-9]*)$"},
     displayName: {type: "string", minLength: 1, maxLength: 200},
+    grindOptions: grindOptionsSchema,
   },
 } as const;
 const querySchema = {

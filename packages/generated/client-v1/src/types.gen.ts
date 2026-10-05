@@ -91,6 +91,12 @@ export type CatalogProductSummary = {
   availability: 'Available' | 'Unavailable' | 'Stopped';
   mappingAvailable: boolean;
   imageUrl?: string;
+  grindOptions?: Array<GrindOption>;
+};
+
+export type GrindOption = {
+  sourceGrindKeyHash: HashSha256;
+  displayName: string;
 };
 
 export type CatalogSearchResponse = {
@@ -103,6 +109,7 @@ export type PricingQuoteCreateLine = {
   productRef: IdentifiersV1SchemaProductRef;
   variantRef: IdentifiersV1SchemaVariantRef;
   quantity: MoneyVersionTimeV1SchemaQuantityDecimal;
+  sourceGrindKeyHash?: HashSha256;
 };
 
 export type PricingQuoteCreateRequest = {
@@ -119,6 +126,8 @@ export type PricingQuoteLine = {
   unit: 'piece' | 'gram' | 'kilogram';
   unitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   lineTotalMinor: MoneyVersionTimeV1SchemaMoneyMinor;
+  sourceGrindKeyHash?: HashSha256;
+  grindDisplayName?: string;
 };
 
 export type PricingQuoteResponse = {
@@ -146,6 +155,7 @@ export type OrderItemPutRequest = {
   quoteRef: IdentifiersV1SchemaQuoteRef;
   quoteLineNumber: number;
   quoteHash: HashSha256;
+  sourceGrindKeyHash?: HashSha256;
 };
 
 export type OrderConfirmRequest = {
@@ -174,6 +184,8 @@ export type OrderItem = {
   quoteLineNumber: number;
   unitMinor: MoneyVersionTimeV1SchemaMoneyMinor;
   lineTotalMinor: MoneyVersionTimeV1SchemaMoneyMinor;
+  sourceGrindKeyHash?: HashSha256;
+  grindDisplayName?: string;
 };
 
 export type QuoteProof = {
@@ -189,7 +201,7 @@ export type OrderPricing = {
 };
 
 export type OrderBlocker = {
-  code: 'MAPPING_CHANGED' | 'MAPPING_MISSING' | 'MAPPING_STOPPED' | 'PRODUCT_UNAVAILABLE' | 'ORDER_STATE_INCONSISTENT';
+  code: 'MAPPING_CHANGED' | 'MAPPING_MISSING' | 'MAPPING_STOPPED' | 'PRODUCT_UNAVAILABLE' | 'ORDER_STATE_INCONSISTENT' | 'AROMA_UNKNOWN_OUTCOME' | 'AROMA_WORKER_INTERRUPTED' | 'AROMA_OBSERVATION_UNAVAILABLE' | 'AROMA_OBSERVATION_INVALID' | 'AROMA_EXTERNAL_CHANGE' | 'AROMA_QUANTITY_NOT_SUPPORTED' | 'AROMA_MUTATIONS_DISABLED' | 'AROMA_MAPPING_NOT_AVAILABLE' | 'AROMA_OPERATION_UNKNOWN_OUTCOME' | 'AROMA_VERIFICATION_UNAVAILABLE' | 'AROMA_VERIFICATION_INVALID' | 'AROMA_CART_ITEM_NOT_FOUND';
   message: string;
   productRef?: IdentifiersV1SchemaProductRef;
 };
@@ -291,6 +303,11 @@ export type ErrorCatalogProductUnavailable = ProblemDetailsV1SchemaProblemDetail
 export type ErrorCatalogRevisionChanged = ProblemDetailsV1SchemaProblemDetails & {
   status?: 409;
   code?: 'CATALOG_REVISION_CHANGED';
+};
+
+export type ErrorPricingGrindNotAvailable = ProblemDetailsV1SchemaProblemDetails & {
+  status?: 422;
+  code?: 'PRICING_GRIND_NOT_AVAILABLE';
 };
 
 export type ErrorCatalogSnapshotIncomplete = ProblemDetailsV1SchemaProblemDetails & {
@@ -684,6 +701,10 @@ export type CreatePricingQuoteErrors = {
    * The completed response is outside retention; no new command was run.
    */
   410: ErrorIdempotencyResultNotRetained;
+  /**
+   * Grind selection is not in the current Catalog snapshot.
+   */
+  422: ErrorPricingGrindNotAvailable;
   /**
    * Safe unexpected error or invalid stored terminal response.
    */

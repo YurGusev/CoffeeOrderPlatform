@@ -10,6 +10,15 @@
 согласованно обновлены и проверены в той же ветке/PR. Исходный срез анализа —
 `c88c62c91e5a6833d26c8368e3f45e78948f051c` с локальными изменениями #8.
 
+## Уточнение для реализации #11
+
+По решению от 28 сентября 2026 #11 расширяет persisted Order/quote proof и
+contribution выбранным помолом. Точная wire-форма, forward-only migration,
+сохранение старых immutable hashes и граница с #9 определены в
+[контракте помола](30_AROMA_GRIND_CONTRACT_AND_PARALLEL_DELIVERY.md).
+Ниже описание принятых миграций #8 сохраняет историческую структуру: новые
+изменения идут последующими миграциями #11, не переписыванием #8.
+
 ## 1. Граница #8 и #11
 
 Issue #8 реализует `orders-service`: Draft, позиции, локальные snapshots,
@@ -119,6 +128,12 @@ Completed хранится 24 часа; Order/history не удаляются cl
 `payload` и `payload_hash` канонического envelope для `SqlOutboxStore.claim`,
 `occurred_at`, lease/fence и publish attempts/state. Unique
 `(message_type,aggregate_ref,owner_version)`.
+
+Все producers для одного Order, включая AROMA realtime projection, выделяют
+`aggregate_sequence=max+1` под существующей блокировкой parent Order. Confirm
+и reconciliation не используют business version как transport sequence:
+между ними могли появиться realtime events. `owner_version` и `aggregate.version`
+соответствуют версии бизнес-факта либо projection, как определено событием.
 
 ## 3. Источники доверенных snapshots
 

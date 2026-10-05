@@ -393,14 +393,30 @@ SQL statement для исключения смешения ревизий при
 ### 6.2 Pricing input
 
 `GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input` доступен
-только audience `pricing-service`. Response содержит `productRef`, `variantRef`,
+audience `pricing-service` и `aroma-convergence`. Response содержит `productRef`, `variantRef`,
 `offerRef`, `snapshotRevision`, `supplierUnitMinor`, `currency`, `unit`,
 `availability`, `mappingRevision`, `displayName`. Pricing не читает Catalog DB
 напрямую; `displayName` становится частью immutable quote/order snapshot.
 
-`api-internal` проверяет signed original caller `pricing-service` и делегирует
-`getCatalogPricingInput` владельцу; browser audience и чужой caller отклоняются
+`api-internal` проверяет scoped mTLS identity: Pricing дополнительно передаёт
+signed delegation, а convergence не принимает входящую delegation. InternalApi
+подписывает downstream original caller и делегирует `getCatalogPricingInput`
+владельцу; browser audience и чужой caller отклоняются
 до доступа к owner store. Этот endpoint не имеет Kafka producer или DML-пути.
+
+Для `originalCaller=aroma-convergence` Catalog требует freshness активного
+snapshot по DB clock. Миграция `0009_active_snapshot_freshness.sql` дополняет
+owner read view временем начала импорта из `supplier_snapshots.created_at`:
+импорт создаётся до provider export, поздняя активация не омолаживает proof.
+Порог — `services.catalog-service.catalogSnapshotProof.maxAgeMs`; отсутствующий
+порог, snapshot, будущая дата или превышение возраста дают
+`503 CATALOG_UNAVAILABLE`. Timestamp не добавляется в HTTP response. Pricing
+сохраняет прежнюю семантику. Владелец утвердил 4 октября 2026 года порог
+`7 200 000 ms` (2 часа): импорт запускается ежечасно, а окно активации — до
+15 минут. Возраст считают от `supplier_snapshots.created_at`, то есть от начала
+импорта; поздняя активация не обновляет timestamp и не продлевает свежесть.
+Если порог отсутствует в platform config, Catalog сохраняет fail-closed поведение
+и возвращает convergence `503 CATALOG_UNAVAILABLE`; скрытого значения по умолчанию нет.
 
 ### 6.3. Точная active-модель
 

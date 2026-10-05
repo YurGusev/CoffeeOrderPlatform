@@ -26,6 +26,8 @@ export type StoredCardItem = Readonly<{
   displayName: string;
   quantity: string;
   unit: "piece" | "gram" | "kilogram";
+  sourceGrindKeyHash?: string;
+  grindDisplayName?: string;
   quoteRef: string;
   quoteLineNumber: number;
   unitMinor: string;
@@ -39,6 +41,7 @@ export type CardProjectionInput = Readonly<{
   items: readonly StoredCardItem[];
   nowEpochMs: number;
   permissions: readonly string[];
+  aroma?: OrderCardResponse["aroma"];
 }>;
 
 function compare(left: string, right: string): number {return left < right ? -1 : left > right ? 1 : 0;}
@@ -50,7 +53,7 @@ function money(value: string): bigint {
 }
 
 /** Project only whitelisted public fields from owner rows; never read another service. */
-export function projectOrderCard({order, items, nowEpochMs, permissions}: CardProjectionInput): OrderCardResponse {
+export function projectOrderCard({order, items, nowEpochMs, permissions, aroma: persistedAroma}: CardProjectionInput): OrderCardResponse {
   let inconsistent = !(order.status === "Draft" || order.status === "Confirmed") ||
     !POSITIVE.test(order.version) || !POSITIVE.test(order.projectionVersion) ||
     !POSITIVE.test(order.customerVersion) || !Number.isFinite(nowEpochMs) || items.length > 100;
@@ -79,6 +82,11 @@ export function projectOrderCard({order, items, nowEpochMs, permissions}: CardPr
   const aroma: OrderCardResponse["aroma"] = inconsistent ? {
     state: "Blocked", desiredRevision: "0", observedRevision: "0",
     blockers: [{code: "ORDER_STATE_INCONSISTENT", message: "Состояние заказа требует проверки"}],
+  } : status === "Confirmed" && persistedAroma !== undefined ? {
+    state:persistedAroma.state,desiredRevision:persistedAroma.desiredRevision,observedRevision:persistedAroma.observedRevision,
+    ...(persistedAroma.lastObservedAt===undefined?{}:{lastObservedAt:persistedAroma.lastObservedAt}),
+    blockers:persistedAroma.blockers.map(blocker=>({code:blocker.code,message:blocker.message,
+      ...(blocker.productRef===undefined?{}:{productRef:blocker.productRef})})),
   } : {state: status === "Draft" ? "NotRequested" : "PendingObservation", desiredRevision: "0", observedRevision: "0", blockers: []};
   const publicItems: OrderCardResponse["items"] = inconsistent ? [] : sorted.map(item => ({
     itemRef: item.itemRef,
@@ -88,6 +96,7 @@ export function projectOrderCard({order, items, nowEpochMs, permissions}: CardPr
     displayName: item.displayName,
     quantity: item.quantity,
     unit: item.unit,
+    ...(item.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash:item.sourceGrindKeyHash,grindDisplayName:item.grindDisplayName}),
     quoteRef: item.quoteRef,
     quoteLineNumber: item.quoteLineNumber,
     unitMinor: item.unitMinor,

@@ -33,7 +33,7 @@ void test("PostgreSQL PricingStore atomic create, replay, conflict and private v
   // Reuse the repository's disposable PostgreSQL lifecycle; no production database is touched.
   await withCatalogPostgres(async ({adminClient:admin,port,databaseName}) => {
     await admin.query("CREATE ROLE coffee_pricing_rw LOGIN PASSWORD 'pricing-proof'");
-    for (const migration of ["0001_create_pricing_policy_versions", "0002_create_pricing_quotes", "0003_create_pricing_idempotency", "0004_create_pricing_audit"])
+    for (const migration of ["0001_create_pricing_policy_versions", "0002_create_pricing_quotes", "0003_create_pricing_idempotency", "0004_create_pricing_audit", "0005_quote_grind_selection"])
       await admin.query(await readFile(new URL(`../../apps/pricing-service/migrations/${migration}.sql`, import.meta.url), "utf8"));
     const database = createDatabase({owner:"pricing-service",database:databaseName,allowedDatabase:databaseName,host:"127.0.0.1",port,user:"coffee_pricing_rw",password:"pricing-proof",ssl:false,pool,shutdownGraceMs:40_000});
     const store = new PricingStore(database);
@@ -155,6 +155,15 @@ void test("PostgreSQL PricingStore atomic create, replay, conflict and private v
       await admin.query("UPDATE pricing.pricing_idempotency_records SET created_at=now()-interval '3 days',lease_until=now()-interval '2 days',expires_at=now()-interval '1 day',completed_at=now()-interval '2 days' WHERE idempotency_key=$1",[id.key]);
       assert.equal((await store.precheck(id,input.requestHash)).kind,"not_retained");
       assert.equal((await admin.query("SELECT count(*)::int n FROM pricing.pricing_quotes")).rows[0].n,1);
+      const selected = {sourceGrindKeyHash:"a".repeat(64),grindDisplayName:"Средний помол"};
+      const grindLine = {...input.lines[0], ...selected};
+      const mixed = await store.create({...input,identity:identity(),requestHash:"f".repeat(64),lines:[input.lines[0],grindLine]});
+      assert.equal(mixed.body.lines.length,2,"the same product/variant with a distinct grind is a distinct quote line");
+      assert.equal(mixed.body.lines[1].grindDisplayName,selected.grindDisplayName);
+      const selectedRequest={quoteRef:mixed.body.quoteRef,hash:mixed.body.hash,customerRef:input.customerRef,quoteLineNumber:2,productRef:grindLine.productRef,variantRef:grindLine.variantRef,quantity:grindLine.quantity,sourceGrindKeyHash:selected.sourceGrindKeyHash};
+      assert.equal((await store.verify({request:selectedRequest,actorRef:"orders-service",correlationId:randomUUID()})).line.sourceGrindKeyHash,selected.sourceGrindKeyHash);
+      await assert.rejects(store.verify({request:{...selectedRequest,sourceGrindKeyHash:undefined},actorRef:"orders-service",correlationId:randomUUID()}),{code:"PRICING_QUOTE_SCOPE_MISMATCH"});
+      await assert.rejects(store.verify({request:{...selectedRequest,quoteLineNumber:1},actorRef:"orders-service",correlationId:randomUUID()}),{code:"PRICING_QUOTE_SCOPE_MISMATCH"});
     } finally {await database.resource.stop(AbortSignal.timeout(5_000));}
   });
 });

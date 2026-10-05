@@ -25,7 +25,7 @@ const hashPattern = "^[0-9a-f]{64}$";
 const policyRowSchema: AnySchema = {type:"object",additionalProperties:false,required:["policy_version_ref","version","currency","markup_basis_points","minimum_margin_minor","quote_ttl_seconds","quantity_scale","rounding_mode"],properties:{policy_version_ref:{type:"string",pattern:`^pvr_${refPattern}$`},version:{type:"string",pattern:"^[1-9][0-9]*$"},currency:{const:"RUB"},markup_basis_points:{type:"integer",minimum:0,maximum:100000},minimum_margin_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},quote_ttl_seconds:{type:"integer",minimum:60,maximum:3600},quantity_scale:{const:3},rounding_mode:{const:"CEILING"}}};
 const clockRowSchema: AnySchema = {type:"object",additionalProperties:false,required:["created_at","expires_at","now_ms"],properties:{created_at:{type:"object"},expires_at:{type:"object"},now_ms:{type:"string",pattern:"^(0|[1-9][0-9]*)$"}}};
 const quoteRowSchema: AnySchema = {type:"object",additionalProperties:false,required:["quote_ref","customer_ref","policy_version_ref","catalog_snapshot_revision","currency","total_minor","canonical_hash","internal_proof_hash","created_at","expires_at","actor_ref","correlation_id","request_hash","quote_ttl_seconds","quantity_scale","rounding_mode","unexpired"],properties:{quote_ref:{type:"string",pattern:`^prq_${refPattern}$`},customer_ref:{type:"string",pattern:`^cus_${refPattern}$`},policy_version_ref:{type:"string",pattern:`^pvr_${refPattern}$`},catalog_snapshot_revision:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},currency:{const:"RUB"},total_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},canonical_hash:{type:"string",pattern:hashPattern},internal_proof_hash:{type:"string",pattern:hashPattern},created_at:{type:"object"},expires_at:{type:"object"},actor_ref:{type:"string",minLength:1},correlation_id:{type:"string",format:"uuid"},request_hash:{type:"string",pattern:hashPattern},quote_ttl_seconds:{type:"integer",minimum:60,maximum:3600},quantity_scale:{const:3},rounding_mode:{const:"CEILING"},unexpired:{type:"boolean"}}};
-const lineRowSchema: AnySchema = {type:"object",additionalProperties:false,required:["quote_ref","line_number","product_ref","variant_ref","product_display_name","offer_ref","catalog_snapshot_revision","mapping_revision","unit","quantity_milli","supplier_unit_minor","markup_basis_points","minimum_margin_minor","unit_minor","line_total_minor","currency"],properties:{quote_ref:{type:"string",pattern:`^prq_${refPattern}$`},line_number:{type:"integer",minimum:1,maximum:100},product_ref:{type:"string",pattern:`^prd_${refPattern}`},variant_ref:{type:"string",pattern:`^var_${refPattern}`},product_display_name:{type:"string",minLength:1},offer_ref:{type:"string",pattern:`^off_${refPattern}`},catalog_snapshot_revision:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},mapping_revision:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},unit:{enum:["piece","gram","kilogram"]},quantity_milli:{type:"string",pattern:"^[1-9][0-9]*$"},supplier_unit_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},markup_basis_points:{type:"integer",minimum:0,maximum:100000},minimum_margin_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},unit_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},line_total_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},currency:{const:"RUB"}}};
+const lineRowSchema: AnySchema = {type:"object",additionalProperties:false,required:["quote_ref","line_number","product_ref","variant_ref","product_display_name","offer_ref","catalog_snapshot_revision","mapping_revision","unit","quantity_milli","supplier_unit_minor","markup_basis_points","minimum_margin_minor","unit_minor","line_total_minor","currency","source_grind_key_hash","grind_display_name"],properties:{quote_ref:{type:"string",pattern:`^prq_${refPattern}$`},line_number:{type:"integer",minimum:1,maximum:100},product_ref:{type:"string",pattern:`^prd_${refPattern}`},variant_ref:{type:"string",pattern:`^var_${refPattern}`},product_display_name:{type:"string",minLength:1},offer_ref:{type:"string",pattern:`^off_${refPattern}`},catalog_snapshot_revision:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},mapping_revision:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},unit:{enum:["piece","gram","kilogram"]},quantity_milli:{type:"string",pattern:"^[1-9][0-9]*$"},supplier_unit_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},markup_basis_points:{type:"integer",minimum:0,maximum:100000},minimum_margin_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},unit_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},line_total_minor:{type:"string",pattern:"^(0|[1-9][0-9]*)$"},currency:{const:"RUB"},source_grind_key_hash:{type:["string","null"],pattern:hashPattern},grind_display_name:{type:["string","null"],minLength:1,maxLength:200}}};
 const idempotencyRecordSchema: AnySchema = {type:"object",additionalProperties:false,required:["identity","requestHash","state","leaseOwner","leaseUntilMs","expiresAtMs"],properties:{identity:{type:"object",additionalProperties:false,required:["actorRef","scope","key"],properties:{actorRef:{type:"string",minLength:1},scope:{type:"string",pattern:hashPattern},key:{type:"string",format:"uuid"}}},requestHash:{type:"string",pattern:hashPattern},state:{enum:["Acquired","Completed"]},leaseOwner:{type:"string",format:"uuid"},leaseUntilMs:{type:"integer"},expiresAtMs:{type:"integer"},response:{type:"object",additionalProperties:false,required:["status","body"],properties:{status:{type:"integer",minimum:100,maximum:599},body:true,resourceRef:{type:"string",minLength:1}}}}};
 const idempotencyResponseSchema: AnySchema = {type:"object",additionalProperties:false,required:["status","body"],properties:{status:{type:"integer",minimum:100,maximum:599},body:true,resourceRef:{type:"string",minLength:1}}};
 const validatePolicyRow = rowValidator(policyRowSchema), validateClockRow = rowValidator(clockRowSchema), validateQuoteRow = rowValidator(quoteRowSchema), validateLineRow = rowValidator(lineRowSchema), validateIdempotencyRecord = rowValidator(idempotencyRecordSchema), validateIdempotencyResponse = rowValidator(idempotencyResponseSchema);
@@ -37,6 +37,7 @@ export type PricingStoreLine = Readonly<{
   productRef: string; variantRef: string; productDisplayName: string; quantity: string;
   unit: "piece" | "gram" | "kilogram"; offerRef: string; mappingRevision: string;
   supplierUnitMinor: string; catalogSnapshotRevision: string;
+  sourceGrindKeyHash?: string; grindDisplayName?: string;
 }>;
 export type PricingCreateInput = Readonly<{
   identity: IdempotencyKey; requestHash: string; correlationId: string; policy: PricingPolicy;
@@ -109,13 +110,14 @@ function publicResponse(value: unknown): PricingQuoteResponse {
   const pairs = new Set<string>();
   const lines = row["lines"].map((value: unknown, index: number) => {
     const line = object(value);
-    exactKeys(line,["lineNumber","productRef","variantRef","productDisplayName","quantity","unit","unitMinor","lineTotalMinor"]);
+    exactKeys(line,["lineNumber","productRef","variantRef","productDisplayName","quantity","unit","unitMinor","lineTotalMinor",...(line["sourceGrindKeyHash"] === undefined ? [] : ["sourceGrindKeyHash","grindDisplayName"])]);
     const quantity = text(line["quantity"]);
     try {if (parseQuantity(quantity).quantity !== quantity) return invalid();} catch {return invalid();}
     if (line["lineNumber"] !== index + 1 || !["piece","gram","kilogram"].includes(text(line["unit"]))) return invalid();
     const productRef = ref(line["productRef"],"prd"), variantRef = ref(line["variantRef"],"var");
-    const key = `${productRef}/${variantRef}`; if (pairs.has(key)) return invalid(); pairs.add(key);
-    return {lineNumber:index + 1,productRef,variantRef,productDisplayName:text(line["productDisplayName"]),quantity,unit:line["unit"] as PricingStoreLine["unit"],unitMinor:minor(line["unitMinor"]),lineTotalMinor:minor(line["lineTotalMinor"])};
+    const selection = line["sourceGrindKeyHash"] === undefined ? {} : {sourceGrindKeyHash:hash(line["sourceGrindKeyHash"]),grindDisplayName:text(line["grindDisplayName"])};
+    const key = `${productRef}/${variantRef}/${selection.sourceGrindKeyHash ?? ""}`; if (pairs.has(key)) return invalid(); pairs.add(key);
+    return {lineNumber:index + 1,productRef,variantRef,productDisplayName:text(line["productDisplayName"]),quantity,unit:line["unit"] as PricingStoreLine["unit"],unitMinor:minor(line["unitMinor"]),lineTotalMinor:minor(line["lineTotalMinor"]),...selection};
   });
   const response: PricingQuoteResponse = {quoteRef:ref(row["quoteRef"],"prq"),policyVersionRef:ref(row["policyVersionRef"],"pvr"),catalogSnapshotRevision:minor(row["catalogSnapshotRevision"]),customerRef:ref(row["customerRef"],"cus"),createdAt,expiresAt,currency:"RUB",lines,totalMinor:minor(row["totalMinor"]),hash:hash(row["hash"])};
   if (encodeMinor(sumLineTotals(lines.map(line => ({lineTotalMinor:BigInt(line["lineTotalMinor"])})))) !== response.totalMinor || hashPublicQuote(response) !== response.hash) return invalid();
@@ -149,7 +151,7 @@ export class PricingStore {
     this.activePolicy = defineStatement<Row,[]>(database,`SELECT ${POLICY_COLUMNS} FROM pricing.pricing_policy_versions WHERE currency='RUB' AND status='Active' AND valid_from <= transaction_timestamp() AND (valid_to IS NULL OR valid_to > transaction_timestamp())`);
     this.clock = defineStatement<Row,[number]>(database,"SELECT date_trunc('milliseconds',transaction_timestamp()) AS created_at, date_trunc('milliseconds',transaction_timestamp()) + $1 * interval '1 second' AS expires_at, floor(extract(epoch FROM transaction_timestamp()) * 1000)::text AS now_ms");
     this.insertQuote = defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO pricing.pricing_quotes (quote_ref,customer_ref,policy_version_ref,catalog_snapshot_revision,currency,total_minor,canonical_hash,internal_proof_hash,created_at,expires_at,actor_ref,correlation_id,request_hash) VALUES ($1,$2,$3,$4,'RUB',$5,$6,$7,$8::timestamptz,$9::timestamptz,$10,$11::uuid,$12)`);
-    this.insertLine = defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO pricing.pricing_quote_lines (quote_ref,line_number,product_ref,variant_ref,product_display_name,offer_ref,catalog_snapshot_revision,mapping_revision,unit,quantity_milli,supplier_unit_minor,markup_basis_points,minimum_margin_minor,unit_minor,line_total_minor,currency) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'RUB')`);
+    this.insertLine = defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO pricing.pricing_quote_lines (quote_ref,line_number,product_ref,variant_ref,product_display_name,offer_ref,catalog_snapshot_revision,mapping_revision,unit,quantity_milli,supplier_unit_minor,markup_basis_points,minimum_margin_minor,unit_minor,line_total_minor,currency,source_grind_key_hash,grind_display_name) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'RUB',$16,$17)`);
     this.insertAudit = defineStatement<Row,readonly SqlScalar[]>(database,`INSERT INTO pricing.pricing_audit_records (audit_ref,action,quote_ref,actor_ref,correlation_id,reason_code) VALUES ($1,$2,$3,$4,$5::uuid,$6)`);
     this.selectQuote = defineStatement<Row,[string]>(database,`SELECT q.*, p.quote_ttl_seconds, p.quantity_scale, p.rounding_mode, q.total_minor::text, q.catalog_snapshot_revision::text, (q.expires_at > clock_timestamp()) AS unexpired FROM pricing.pricing_quotes q JOIN pricing.pricing_policy_versions p USING (policy_version_ref) WHERE quote_ref=$1`);
     this.selectLines = defineStatement<Row,[string]>(database,`SELECT *, catalog_snapshot_revision::text, mapping_revision::text, quantity_milli::text, supplier_unit_minor::text, minimum_margin_minor::text, unit_minor::text, line_total_minor::text FROM pricing.pricing_quote_lines WHERE quote_ref=$1 ORDER BY line_number`);
@@ -201,16 +203,19 @@ export class PricingStore {
     const lines = input.lines.map((line,index) => {
       if (line.catalogSnapshotRevision !== catalogSnapshotRevision) throw new PricingStoreError("CATALOG_REVISION_CHANGED");
       const productRef = ref(line.productRef,"prd"), variantRef = ref(line.variantRef,"var");
-      const pair = `${productRef}/${variantRef}`;
+      const pair = `${productRef}/${variantRef}/${line.sourceGrindKeyHash ?? ""}`;
       if (pairs.has(pair)) return invalid();
       pairs.add(pair);
       const productDisplayName = text(line.productDisplayName);
+      const selection = line.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash:hash(line.sourceGrindKeyHash),grindDisplayName:text(line.grindDisplayName)};
+      if (selection.grindDisplayName !== undefined && Array.from(selection.grindDisplayName).length > 200) return invalid();
+      if (line.sourceGrindKeyHash === undefined && line.grindDisplayName !== undefined) return invalid();
       if (Array.from(productDisplayName).length > 200 || !["piece","gram","kilogram"].includes(line.unit)) return invalid();
       const calculate = () => calculatePricingLine({quantity:line.quantity,supplierUnitMinor:line.supplierUnitMinor,markupBasisPoints:policy.markupBasisPoints,minimumMarginMinor:BigInt(policy.minimumMarginMinor)});
       const calculated = this.telemetry ? this.telemetry.observeSync("pricing.quote.calculate",calculate) : calculate();
       quantities.push(calculated.quantityMilli);
       proofs.push({lineNumber:index + 1,offerRef:ref(line.offerRef,"off"),mappingRevision:minor(line.mappingRevision),supplierUnitMinor:minor(line.supplierUnitMinor),catalogSnapshotRevision,markupBasisPoints:String(policy.markupBasisPoints),minimumMarginMinor:policy.minimumMarginMinor});
-      return {lineNumber:index + 1,productRef,variantRef,productDisplayName,quantity:calculated.quantity,unit:line.unit,unitMinor:encodeMinor(calculated.unitMinor),lineTotalMinor:encodeMinor(calculated.lineTotalMinor)};
+      return {lineNumber:index + 1,productRef,variantRef,productDisplayName,quantity:calculated.quantity,unit:line.unit,unitMinor:encodeMinor(calculated.unitMinor),lineTotalMinor:encodeMinor(calculated.lineTotalMinor),...selection};
     });
     const totalMinor = encodeMinor(sumLineTotals(lines.map(line => ({lineTotalMinor:BigInt(line.lineTotalMinor)}))));
     const persist = () => withTransaction<PricingCreateResult>(this.database,{mode:"interactive",correlationId,...(signal === undefined ? {} : {signal})},async tx => {
@@ -237,7 +242,7 @@ export class PricingStore {
       for (const line of lines) {
         const proof = proofs[line.lineNumber - 1], quantityMilli = quantities[line.lineNumber - 1];
         if (proof === undefined || quantityMilli === undefined) return invalid();
-        await this.insertLine(tx,[quoteRef,line.lineNumber,line.productRef,line.variantRef,line.productDisplayName,proof.offerRef,proof.catalogSnapshotRevision,proof.mappingRevision,line.unit,quantityMilli,proof.supplierUnitMinor,policy.markupBasisPoints,proof.minimumMarginMinor,line.unitMinor,line.lineTotalMinor]);
+        await this.insertLine(tx,[quoteRef,line.lineNumber,line.productRef,line.variantRef,line.productDisplayName,proof.offerRef,proof.catalogSnapshotRevision,proof.mappingRevision,line.unit,quantityMilli,proof.supplierUnitMinor,policy.markupBasisPoints,proof.minimumMarginMinor,line.unitMinor,line.lineTotalMinor,line.sourceGrindKeyHash ?? null,line.grindDisplayName ?? null]);
       }
       await this.audit(tx,"QuoteCreated",quoteRef,identity.actorRef,correlationId,null);
       await this.idempotency.complete(tx,identity,leaseOwner,{status:201,body,resourceRef:quoteRef});
@@ -269,7 +274,9 @@ export class PricingStore {
           const quantity = parseQuantity(`${milli / 1000n}.${String(milli % 1000n).padStart(3,"0")}`).quantity;
           const calculated = calculatePricingLine({quantity,supplierUnitMinor:minor(line["supplier_unit_minor"]),markupBasisPoints:integer(line["markup_basis_points"],0,100_000),minimumMarginMinor:BigInt(minor(line["minimum_margin_minor"]))});
           if (encodeMinor(calculated.unitMinor) !== minor(line["unit_minor"]) || encodeMinor(calculated.lineTotalMinor) !== minor(line["line_total_minor"])) return invalid();
-          return {lineNumber:line["line_number"],productRef:line["product_ref"],variantRef:line["variant_ref"],productDisplayName:line["product_display_name"],quantity,unit:line["unit"],unitMinor:line["unit_minor"],lineTotalMinor:line["line_total_minor"]};
+          if ((line["source_grind_key_hash"] === null) !== (line["grind_display_name"] === null)) return invalid();
+          const selection = line["source_grind_key_hash"] === null ? {} : {sourceGrindKeyHash:hash(line["source_grind_key_hash"]),grindDisplayName:text(line["grind_display_name"])};
+          return {lineNumber:line["line_number"],productRef:line["product_ref"],variantRef:line["variant_ref"],productDisplayName:line["product_display_name"],quantity,unit:line["unit"],unitMinor:line["unit_minor"],lineTotalMinor:line["line_total_minor"],...selection};
         });
         body = publicResponse({quoteRef:row["quote_ref"],policyVersionRef:row["policy_version_ref"],catalogSnapshotRevision:row["catalog_snapshot_revision"],customerRef:row["customer_ref"],createdAt:timestamp(row["created_at"]),expiresAt:timestamp(row["expires_at"]),currency:row["currency"],lines,totalMinor:row["total_minor"],hash:row["canonical_hash"]});
         if (instantMs(body.expiresAt) - instantMs(body.createdAt) !== policy.quoteTtlSeconds * 1000) return invalid();
@@ -284,7 +291,7 @@ export class PricingStore {
       const selectedLine = body.lines[selectedIndex];
       if (body.customerRef !== input.request.customerRef || selectedLine === undefined ||
         selectedLine.productRef !== input.request.productRef || selectedLine.variantRef !== input.request.variantRef ||
-        selectedLine.quantity !== input.request.quantity) return reject("PRICING_QUOTE_SCOPE_MISMATCH");
+        selectedLine.quantity !== input.request.quantity || selectedLine.sourceGrindKeyHash !== input.request.sourceGrindKeyHash) return reject("PRICING_QUOTE_SCOPE_MISMATCH");
       if (!row["unexpired"]) return reject("PRICING_QUOTE_EXPIRED");
       const proof = proofs[selectedIndex]; if (proof === undefined) return reject("PRICING_QUOTE_HASH_MISMATCH");
       const verified: PricingQuoteVerificationResponse = {valid:true,quoteRef:body.quoteRef,policyVersionRef:body.policyVersionRef,catalogSnapshotRevision:body.catalogSnapshotRevision,customerRef:body.customerRef,expiresAt:body.expiresAt,currency:body.currency,line:{...selectedLine,offerRef:proof.offerRef,mappingRevision:proof.mappingRevision,supplierUnitMinor:proof.supplierUnitMinor,currency:"RUB",internalProofHash:internalHash}};

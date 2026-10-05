@@ -17,7 +17,7 @@ export type CreatePricingQuoteCommand = Readonly<{
 export type CatalogPricingClient = Readonly<{getPricingInput: (request: CatalogPricingRequest) => Promise<CatalogPricingInput>}>;
 
 export class CreatePricingQuoteError extends Error {
-  public readonly code: "VALIDATION_FAILED" | "CATALOG_REVISION_CHANGED" | "IDEMPOTENCY_CONFLICT" | "IDEMPOTENCY_REQUEST_IN_PROGRESS";
+  public readonly code: "VALIDATION_FAILED" | "CATALOG_REVISION_CHANGED" | "PRICING_GRIND_NOT_AVAILABLE" | "IDEMPOTENCY_CONFLICT" | "IDEMPOTENCY_REQUEST_IN_PROGRESS";
   public constructor(code: CreatePricingQuoteError["code"]) {
     super(code);
     this.name = "CreatePricingQuoteError";
@@ -29,10 +29,10 @@ function normalizedRequest(request: PricingQuoteCreateRequest): PricingQuoteCrea
   if (!isPricingQuoteCreateRequest(request)) throw new CreatePricingQuoteError("VALIDATION_FAILED");
   const seen = new Set<string>();
   const lines = request.lines.map(line => {
-    const pair = `${line.productRef}/${line.variantRef}`;
+    const pair = `${line.productRef}/${line.variantRef}/${line.sourceGrindKeyHash ?? ""}`;
     if (seen.has(pair)) throw new CreatePricingQuoteError("VALIDATION_FAILED");
     seen.add(pair);
-    try {return {productRef:line.productRef,variantRef:line.variantRef,quantity:parseQuantity(line.quantity).quantity};}
+    try {return {productRef:line.productRef,variantRef:line.variantRef,quantity:parseQuantity(line.quantity).quantity,...(line.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash:line.sourceGrindKeyHash})};}
     catch {throw new CreatePricingQuoteError("VALIDATION_FAILED");}
   });
   return {customerRef:request.customerRef,lines};
@@ -45,6 +45,9 @@ function checkedFact(value: CatalogPricingInput, line: PricingQuoteCreateRequest
     throw new CatalogPricingError("CATALOG_UNAVAILABLE");
   }
   try {parseCanonicalMinor(value.supplierUnitMinor);} catch {throw new CatalogPricingError("CATALOG_UNAVAILABLE");}
+  const options = value.grindOptions;
+  if (options !== undefined && (new Set(options.map(option => option.sourceGrindKeyHash)).size !== options.length)) throw new CatalogPricingError("CATALOG_UNAVAILABLE");
+  if (line.sourceGrindKeyHash !== undefined && !options?.some(option => option.sourceGrindKeyHash === line.sourceGrindKeyHash)) throw new CreatePricingQuoteError("PRICING_GRIND_NOT_AVAILABLE");
   return value;
 }
 
@@ -123,6 +126,7 @@ export async function createPricingQuote(
       return {productRef:line.productRef,variantRef:line.variantRef,quantity:line.quantity,
         productDisplayName:fact.displayName,unit:fact.unit,offerRef:fact.offerRef,
         mappingRevision:fact.mappingRevision,supplierUnitMinor:fact.supplierUnitMinor,
-        catalogSnapshotRevision:fact.snapshotRevision};
+        catalogSnapshotRevision:fact.snapshotRevision,
+        ...(line.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash:line.sourceGrindKeyHash,grindDisplayName:fact.grindOptions?.find(option => option.sourceGrindKeyHash === line.sourceGrindKeyHash)?.displayName ?? ""})};
     }),signal});
 }

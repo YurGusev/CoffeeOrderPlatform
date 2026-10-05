@@ -86,6 +86,37 @@ async function writeClientV1BrowserOperations() {
   await writeFile(target, source);
 }
 
+async function writeOrdersAromaMessageSchemas() {
+  const files = [
+    'order-confirmed.v1', 'order-reconciliation-requested.v1', 'catalog-mapping-changed.v2',
+    'aroma-convergence-requested.v1', 'aroma-observation-changed.v1', 'aroma-convergence-changed.v1',
+    'realtime-invalidated.v1',
+  ];
+  const documents = new Map();
+  async function collect(path) {
+    if (documents.has(path)) return;
+    const schema = await loadDocument(path);
+    if (typeof schema.$id !== 'string') throw new Error(`message schema lacks $id: ${path}`);
+    documents.set(path, schema);
+    async function references(value) {
+      if (!value || typeof value !== 'object') return;
+      if (typeof value.$ref === 'string') {
+        const [relativePath] = value.$ref.split('#');
+        if (relativePath) {
+          if (/^[a-z]+:/i.test(relativePath)) throw new Error(`non-local message schema reference: ${value.$ref}`);
+          await collect(resolve(dirname(path), relativePath));
+        }
+      }
+      for (const item of Object.values(value)) await references(item);
+    }
+    await references(schema);
+  }
+  for (const name of files) await collect(resolve(root, `contracts/schemas/events/${name}.schema.json`));
+  const schemas = Object.fromEntries([...documents.values()].sort((a, b) => a.$id.localeCompare(b.$id)).map(schema => [schema.$id, schema]));
+  const target = resolve(root, 'packages/generated/internal-v1/src/message-schemas.gen.ts');
+  await writeFile(target, `// This file is auto-generated from canonical contracts/schemas events and their dependencies.\n\nexport const ordersAromaMessageSchemas = ${JSON.stringify(schemas, null, 2)} as const;\n`);
+}
+
 const requestedSurface = process.argv.includes('--surface') ? process.argv[process.argv.indexOf('--surface') + 1] : undefined;
 if (requestedSurface && !['client', 'internal', 'edge-auth'].includes(requestedSurface)) throw new Error(`unsupported contract surface: ${requestedSurface}`);
 for (const surface of requestedSurface ? [requestedSurface] : ['client', 'internal', 'edge-auth']) {
@@ -100,6 +131,7 @@ for (const surface of requestedSurface ? [requestedSurface] : ['client', 'intern
     plugins: [{ name: '@hey-api/typescript', enums: false }],
   });
   await writeRuntimeSchemas(surface);
+  if (surface === 'internal') await writeOrdersAromaMessageSchemas();
 }
 
 if (!requestedSurface) await writeClientV1BrowserOperations();

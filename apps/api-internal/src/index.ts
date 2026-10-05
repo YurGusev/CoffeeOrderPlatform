@@ -278,21 +278,24 @@ export function registerInternalRoutes(app: RuntimeApp, adapters: InternalApiAda
     schema: {response: catalogResponseSchema(catalogContractSchemas.pricingInput, 200, [400, 401, 403, 404, 503])},
     handler: async (request, rawReply) => {
       const reply = rawReply as unknown as Reply;
-      if (spoofed(request) || !adapters.verifyTransport(request, "pricing-service")) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "pricing service identity is required"));
-      const token = oneHeader(header(request, "x-service-delegation"));
-      if (token === undefined) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "signed service delegation is required"));
+      const convergence = trustedCaller(request, ["aroma-convergence"]);
+      if (spoofed(request) || (convergence === undefined && !adapters.verifyTransport(request, "pricing-service"))) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "service identity is required"));
       const requestContext = context(request, 2_000);
-      let claims: InternalCallerClaims;
-      try { claims = await adapters.verifyCallerDelegation(token, request, "getCatalogPricingInput", requestContext.signal); }
-      catch { return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed")); }
-      if (claims.iss !== "pricing-service" || claims.aud !== "api-internal" || claims.originalCaller !== "pricing-service" || claims.operationId !== "getCatalogPricingInput") return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed"));
+      if (convergence === undefined) {
+        const token = oneHeader(header(request, "x-service-delegation"));
+        if (token === undefined) return sendProblem(reply, problem(request, 401, "SERVICE_AUTHENTICATION_REQUIRED", "signed service delegation is required"));
+        let claims: InternalCallerClaims;
+        try { claims = await adapters.verifyCallerDelegation(token, request, "getCatalogPricingInput", requestContext.signal); }
+        catch { return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed")); }
+        if (claims.iss !== "pricing-service" || claims.aud !== "api-internal" || claims.originalCaller !== "pricing-service" || claims.operationId !== "getCatalogPricingInput") return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "caller, audience, or operation is not allowed"));
+      } else if (header(request, "x-service-delegation") !== undefined) return sendProblem(reply, problem(request, 403, "SERVICE_DELEGATION_INVALID", "convergence uses its scoped transport identity"));
       const params = paramsRecord(request);
       const rawProductRef = params["productRef"];
       const rawVariantRef = params["variantRef"];
       if (!isCatalogProductRef(rawProductRef) || !isCatalogVariantRef(rawVariantRef)) return sendProblem(reply, problem(request, 400, "VALIDATION_FAILED", "Request validation failed"));
       const productRef = rawProductRef as string;
       const variantRef = rawVariantRef as string;
-      const delegation = adapters.signDelegation({originalCaller: "pricing-service", operationId: "getCatalogPricingInput", context: requestContext});
+      const delegation = adapters.signDelegation({originalCaller: convergence ?? "pricing-service", operationId: "getCatalogPricingInput", context: requestContext});
       try { return sendCatalogPricingForward(request, reply, await adapters.catalog.pricingInput(productRef, variantRef, requestContext, delegation)); }
       catch { return sendProblem(reply, problem(request, 503, "CATALOG_UNAVAILABLE", "catalog owner is unavailable")); }
     },

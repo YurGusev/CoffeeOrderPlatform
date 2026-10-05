@@ -47,7 +47,7 @@ const validateProblem: ValidateFunction = ajv.compile(pricingContractSchemas.pro
 export function isPricingQuoteCreateRequest(value: unknown): value is PricingQuoteCreateRequest {
   if (!validateCreateRequest(value)) return false;
   const lines = (value as PricingQuoteCreateRequest).lines;
-  return new Set(lines.map((line) => `${line.productRef}:${line.variantRef}`)).size === lines.length;
+  return new Set(lines.map((line) => `${line.productRef}:${line.variantRef}:${line.sourceGrindKeyHash ?? ""}`)).size === lines.length;
 }
 
 export function isPricingQuoteResponse(value: unknown): value is PricingQuoteResponse {
