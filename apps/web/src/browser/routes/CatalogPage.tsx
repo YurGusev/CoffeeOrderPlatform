@@ -65,6 +65,7 @@ export function CatalogPage(): ReactElement {
   const conflictError = addItem.error instanceof ApiError && addItem.error.problem.code === "ORDER_VERSION_CONFLICT"
     ? addItem.error
     : undefined;
+  const catalogAccessDenied = products.error instanceof ApiError && products.error.problem.status === 403;
 
   const refreshOrder = (): void => {
     void queryClient.invalidateQueries({ exact: true, queryKey: orderKey, refetchType: "none" }).then(() => order.refetch()).then((result) => {
@@ -150,7 +151,7 @@ export function CatalogPage(): ReactElement {
         {addItem.isError && !isStaleQuote(addItem.error) && !isGrindUnavailable(addItem.error) && !conflictError ? <ProblemAlert error={addItem.error} /> : null}
         {products.isSuccess && products.data.items.length === 0 ? <Empty description="Измените запрос или фильтр доступности." title="Товары не найдены" /> : null}
         <div className="product-grid">
-          {products.data?.items.map((product) => {
+          {!catalogAccessDenied ? products.data?.items.map((product) => {
             const key = `${product.productRef}:${product.variantRef}`;
             const quantity = quantities[key] ?? "1";
             const grindOptions = product.grindOptions ?? [];
@@ -175,9 +176,9 @@ export function CatalogPage(): ReactElement {
                 )}>Добавить</Button>
               </article>
             );
-          })}
+          }) : null}
         </div>
-        {products.data?.nextCursor ? <Button onPress={() => {
+        {!catalogAccessDenied && products.data?.nextCursor ? <Button onPress={() => {
           const next = new URLSearchParams(params);
           next.set("cursor", products.data?.nextCursor ?? "");
           setParams(next);

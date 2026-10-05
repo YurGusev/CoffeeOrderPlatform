@@ -4,7 +4,7 @@ status: draft-awaiting-served-surface-acceptance
 scope: >-
   React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
   несохранённое количество, восстановление конфликта Order Card и повторная сверка AROMA
-  после новой owner-проекции
+  после новой owner-проекции и скрытие cached Catalog при 403
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -146,7 +146,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/CatalogPage.tsx
-    sha256: fcc9a64fee9c8446abca4ecae13d4d90f7f4d9d87f34ca634adfda8d0102e4c0
+    sha256: f2a3153fda8d94ed937b86d523cdc87fce7ba55cfb964322ce4191721944093c
     consumers:
       - 12
       - 13
@@ -186,7 +186,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: df040584d4e2249da5649fd899e5fe9de418cc6653db14e1a745729c65d5c0c3
+    sha256: 5a329ec451e1bf842c08306881c1a96b2047fac0cb50b526d5e8b748a23c264a
     consumers:
       - 12
       - 13
@@ -261,7 +261,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: e791c6ae7b88a72e2ec7c8e8e0267403fab98f6d2805481506950402fcf3a1e5
+    sha256: 191c095d8ee02710c383b30fb7be09c69c12e1517a74529429b22c9d36a6eac1
     consumers:
       - 12
       - 13
@@ -690,7 +690,52 @@ verification:
     detail: >-
       5 октября 2026, P2 повторной сверки AROMA: Initial JS gzip 139926 B из лимита 256000 B.
       Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/browser-bundle.log.
+  - command: pnpm test:playwright; pnpm test:web-operator
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, Catalog P2: typecheck и свежая сборка прошли. Первый browser
+      regression не смог прочитать body начального Order GET в Chromium; лишняя
+      wire-проверка заменена existing UI proof права edit-items. Следующий прогон
+      не подтвердил cached rows при503: переход через native UI Link пересоздавал
+      документ/QueryClient. Fixture исправлена на controlled SPA history transition
+      и held refetch: cached поля проверяются до release403/503. Runtime navigation
+      не менялась. История в /tmp/coffee-pr172-catalog-privacy-20261005/ui/playwright.log
+      и full-browser-final.log.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: Полный mock-browser набор на свежем dist из первого pnpm test:playwright; production source не менялся. Controlled SPA history+Back сохраняет QueryClient; held refetch доказывает cached товары/quantity/grind/Add/pagination до release. После403 они скрыты у того же actor; после503+retry503 сохранены.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/full-browser-verified.log.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: 15/15 frontend query/cache/time/format/schema/ULID tests.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/web-queries.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: 6/6 idempotency unit tests.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/idempotency.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: Финальный Catalog guard и existing browser fixture.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/lint-verified.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: Initial JS gzip 139946 B из лимита 256000 B.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/browser-bundle.log.
 limitations:
+  - >-
+    Catalog cache privacy regression использует controlled SPA history transition с одним QueryClient.
+    Native UI Link перезагружает документ; acceptance native Link/Back/Edge этим сценарием не подтверждена.
   - >-
     PR #172 остаётся Draft до browser-through-Edge/Compose served-surface acceptance и owner acceptance.
     Producer #171 принят; прежняя зависимость от непринятого backend устранена.
@@ -705,7 +750,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: 705b0faebf563bc3c52ded64faa6451eed832fc8dc0e45a4ce703533e836d4d7
+  sha256: 4d520ea333e375c6bf2b279f1f6ffb2ca9728f9492f292299250731b192aead0
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171
