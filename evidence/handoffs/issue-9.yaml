@@ -2,7 +2,8 @@ issue: 9
 baseCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
 status: draft-awaiting-served-surface-acceptance
 scope: >-
-  React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict
+  React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
+  несохранённое количество и восстановление конфликта Order Card
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -164,7 +165,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/OrderCardPage.tsx
-    sha256: 48ee57bdd7c2d1be1f50e36e7cce98cb6970a0442879e0914b4e4e46b880d9e7
+    sha256: c85ebff3b87e87d56029eb6d163f8ae5a8cb2ceb7901bdba5e20792be562e943
     consumers:
       - 12
       - 13
@@ -184,7 +185,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: f3bb9247003031d94a665e442cfbb31c17621194463e664a94e5500780b9250f
+    sha256: 9c3c71d4fd1445d1448c44bc6767d07cfb80c207d0ea747ccc794eebcf396bac
     consumers:
       - 12
       - 13
@@ -259,7 +260,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: f67f2ed82581256c72baafa1cf680c472217e7b6b49f00231cbfdc968ceb2121
+    sha256: 680105eff05ba01aa9b697782b00ff8a87b13c90f68d16f5d56db29f18b44eb4
     consumers:
       - 12
       - 13
@@ -607,13 +608,64 @@ verification:
       5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
       units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
       /tmp/coffee-pr172-session-conflict-20261005/ui/browser-bundle.log
+  - command: pnpm test:playwright
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, Order Card P2: typecheck и свежая сборка прошли; browser regression
+      ошибочно давала один 503, затем штатный read-only retry получал 200. Диагностические
+      routes-прогоны подтвердили также ошибочную привязку отказа к initial GET counter.
+      Fixture исправлена: два 503 включаются только после 409; runtime retry не менялся.
+      Первичные логи сохранены в /tmp/coffee-pr172-order-card-20261005/ui/playwright.log,
+      playwright-retry.log и playwright-diagnostic.log.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, полный mock-browser набор на свежем dist из предыдущего
+      pnpm test:playwright; production source не менялся после build. Проверены dirty
+      quantity/Confirm, canonical quantity после PUT, owner quantity в Confirmed,
+      conflict GET 503+retry503, ручной GET200, отсутствие auto PUT и новый intent version4.
+      После этого переиспользован existing 503 payload в fixture без изменения сценария.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/full-browser-final.log.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Order Card P2: 15/15 frontend query/cache/time/format/schema/ULID tests.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/web-queries.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Order Card P2: 6/6 idempotency unit tests.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/idempotency.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Order Card P2: initial JS gzip 139888 B из лимита 256000 B.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=routes pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, финальная fixture после переиспользования existing 503 payload:
+      routes group и все новые Order Card regressions прошли на том же production dist.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/routes-final.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, финальные Order Card source и test fixture.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/lint-final.log.
 limitations:
   - >-
     PR #172 остаётся Draft до browser-through-Edge/Compose served-surface acceptance и owner acceptance.
     Producer #171 принят; прежняя зависимость от непринятого backend устранена.
   - >-
     Исторические baseline/typecheck/query/route failures выше относятся к прежним ревизиям; итоговые gates
-    после merge accepted develop и двух новых fixes прошли.
+    после merge accepted develop прошли; текущие Order Card P2 receipts приведены отдельно.
   - >-
     Production IdP, TLS/PKI, live provider mutation, deployment и CI в этом прогоне не проверялись. Browser
     proof использует mock API. Merge самого PR #172 и закрытие issue #9 не выполнялись.
@@ -622,7 +674,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: e50c273417cfa6840bd76612075efb2b1a7eed737232a94e694f701eddab5146
+  sha256: 8a2f2dea51643743d47b41df2ebb3f23fdbb4957e6e65e4a573011d5268c4942
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171

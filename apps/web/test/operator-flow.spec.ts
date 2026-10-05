@@ -142,6 +142,8 @@ async function installCommonMocks(page: Page, options: {
   orderNotFound?: boolean;
   orderUnavailable?: boolean;
   orderFailureOnRefetch?: 403 | 404;
+  orderRefetchUnavailableAfterConflict?: boolean;
+  conflictRefetchConfirmed?: boolean;
   pricingUnavailable?: boolean;
   reconciliationRefreshFails?: boolean;
   replayWrongTerminal?: boolean;
@@ -153,6 +155,7 @@ async function installCommonMocks(page: Page, options: {
   let customerFailureArmed = false;
   let orderCardReads = 0;
   let orderFailureArmed = false;
+  let orderRefetchFailuresRemaining = 0;
   let grindOptionSearchCount = 0;
   let current = options.aromaScenario
     ? orderCard("5", "Confirmed", true, options.aromaScenario, options.initialItemGrind ? grindHash : undefined, options.aromaBlocker)
@@ -323,7 +326,9 @@ async function installCommonMocks(page: Page, options: {
         correlationId: "00000000-0000-4000-8000-000000000013",
         errors: [],
       }, 404);
-      if (options.orderUnavailable || (options.reconciliationRefreshFails && reconciliationAccepted)) {
+      const failConflictRefetch = orderRefetchFailuresRemaining > 0;
+      if (failConflictRefetch) orderRefetchFailuresRemaining -= 1;
+      if (failConflictRefetch || options.orderUnavailable || (options.reconciliationRefreshFails && reconciliationAccepted)) {
         return fulfillJson(route, {
           type: "about:blank",
           title: "Order unavailable",
@@ -414,7 +419,8 @@ async function installCommonMocks(page: Page, options: {
       }
       const putRequest = request.postDataJSON() as { expectedVersion?: string; sourceGrindKeyHash?: string };
       if (options.conflictPut && putRequest.expectedVersion === "1") {
-        current = orderCard("4", "Draft", true);
+        if (options.orderRefetchUnavailableAfterConflict) orderRefetchFailuresRemaining = 2;
+        current = orderCard("4", options.conflictRefetchConfirmed ? "Confirmed" : "Draft", true);
         return fulfillJson(route, {
           type: "about:blank",
           title: "Order changed",
@@ -1279,17 +1285,40 @@ async function staleQuoteAndConcurrentChange(context: BrowserContext): Promise<v
   await stalePage.close();
 
   const conflictPage = await context.newPage();
-  await installCommonMocks(conflictPage, { conflictPut: true, initialItem: true });
+  const conflict = await installCommonMocks(conflictPage, { conflictPut: true, initialItem: true, orderRefetchUnavailableAfterConflict: true });
+  const orderCardStatuses: number[] = [];
+  conflictPage.on("response", (response) => {
+    if (new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}` && response.request().method() === "GET") orderCardStatuses.push(response.status());
+  });
   await conflictPage.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  const baselineOrderCardStatusCount = orderCardStatuses.length;
   const updateQuantity = conflictPage.getByRole("textbox", { name: "Количество Капучино" });
   await updateQuantity.fill("3");
   await conflictPage.getByRole("button", { name: "Обновить" }).click();
   const conflictDialog = conflictPage.getByRole("dialog", { name: "Заказ изменился на сервере" });
   await conflictDialog.waitFor();
   assert.equal(await updateQuantity.inputValue(), "3");
+  assert.ok(baselineOrderCardStatusCount >= 1 && orderCardStatuses.every((status) => status === 200));
+  await conflictDialog.getByRole("button", { name: "Обновить карточку" }).click();
+  await expect.poll(() => orderCardStatuses.slice(baselineOrderCardStatusCount)).toEqual([503, 503]);
+  await conflictPage.getByText("Не удалось проверить актуальность карточки", { exact: true }).waitFor();
+  await conflictDialog.waitFor();
+  assert.equal(await updateQuantity.inputValue(), "3", "failed refresh keeps the unsaved quantity and conflict choice");
+  assert.equal(conflict.putRequests.length, 1, "failed refresh must not retry the PUT");
+  assert.equal(conflict.quoteRequests.length, 1, "failed refresh must not create another quote");
   await conflictDialog.getByRole("button", { name: "Обновить карточку" }).click();
   await conflictDialog.waitFor({ state: "hidden" });
+  assert.deepEqual(orderCardStatuses.slice(baselineOrderCardStatusCount), [503, 503, 200]);
   await conflictPage.getByText("Версия заказа").locator("..").getByText("4", { exact: true }).waitFor();
+  assert.equal(await updateQuantity.inputValue(), "3");
+  assert.equal(conflict.putRequests.length, 1, "successful fresh GET must not automatically retry the PUT");
+  await conflictPage.getByRole("button", { name: "Обновить", exact: true }).click();
+  await conflictPage.getByText("Версия заказа").locator("..").getByText("5", { exact: true }).waitFor();
+  assert.equal(conflict.putRequests.length, 2, "only the explicit update after successful GET sends another PUT");
+  const recoveredPut = JSON.parse(conflict.putRequests[1] ?? "{}") as { expectedVersion?: string; quantity?: string };
+  assert.equal(recoveredPut.expectedVersion, "4");
+  assert.equal(recoveredPut.quantity, "3");
+  assert.notEqual(conflict.putIntentKeys[1], conflict.putIntentKeys[0], "explicit recovery must use a fresh idempotency key");
   await conflictPage.close();
 
   const catalogConflictPage = await context.newPage();
@@ -1323,6 +1352,55 @@ async function staleQuoteAndConcurrentChange(context: BrowserContext): Promise<v
   assert.equal(refreshedCatalogPut.sourceGrindKeyHash, grindHash);
   assert.notEqual(catalogConflict.putIntentKeys[1], catalogConflict.putIntentKeys[0], "manual retry must use a fresh idempotency key");
   await catalogConflictPage.close();
+}
+
+async function orderCardConfirmationRequiresSavedQuantities(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  await installCommonMocks(page, { initialItem: true });
+  let confirmPosts = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith(`/api/client-v1/orders/${orderRef}/commands/confirm`) && request.method() === "POST") confirmPosts += 1;
+  });
+  await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  const quantity = page.getByRole("textbox", { name: "Количество Капучино" });
+  const confirmTrigger = page.getByRole("button", { name: "Подтвердить заказ" });
+  await quantity.fill("5");
+  const unsavedWarning = page.getByText("Сначала сохраните изменения количества", { exact: true });
+  await unsavedWarning.waitFor();
+  assert.equal(await confirmTrigger.isDisabled(), true);
+  assert.equal(confirmPosts, 0, "unsaved quantity must not send a Confirm command");
+  await quantity.fill("2");
+  await unsavedWarning.waitFor({ state: "detached" });
+  assert.equal(await confirmTrigger.isDisabled(), false, "restoring the server quantity permits confirmation");
+
+  await quantity.fill("2.0");
+  await page.getByRole("button", { name: "Обновить", exact: true }).click();
+  await expect(quantity).toHaveValue("2");
+  await unsavedWarning.waitFor({ state: "detached" });
+  await confirmTrigger.click();
+  const confirmDialog = page.getByRole("dialog", { name: "Подтвердить заказ?" });
+  const confirmButton = confirmDialog.getByRole("button", { name: "Подтвердить", exact: true });
+  assert.equal(await confirmButton.isDisabled(), false);
+  await confirmButton.click();
+  await page.getByText("Подтверждён").waitFor();
+  assert.equal(confirmPosts, 1);
+  await page.close();
+
+  const confirmedPage = await context.newPage();
+  await installCommonMocks(confirmedPage, { conflictPut: true, conflictRefetchConfirmed: true, initialItem: true });
+  await confirmedPage.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  const confirmedQuantity = confirmedPage.getByRole("textbox", { name: "Количество Капучино" });
+  await confirmedQuantity.fill("5");
+  await confirmedPage.getByRole("button", { name: "Обновить", exact: true }).click();
+  const conflictDialog = confirmedPage.getByRole("dialog", { name: "Заказ изменился на сервере" });
+  await conflictDialog.waitFor();
+  await conflictDialog.getByRole("button", { name: "Обновить карточку" }).click();
+  await conflictDialog.waitFor({ state: "hidden" });
+  await confirmedPage.getByText("Подтверждён").waitFor();
+  assert.equal(await confirmedQuantity.inputValue(), "2", "a fresh non-editable card displays its server quantity");
+  assert.equal(await confirmedQuantity.isDisabled(), true);
+  assert.equal(await confirmedPage.getByText("Сначала сохраните изменения количества", { exact: true }).count(), 0);
+  await confirmedPage.close();
 }
 
 async function deleteItemReturnsFocusToItemsHeading(context: BrowserContext): Promise<void> {
@@ -1370,6 +1448,7 @@ async function main(): Promise<void> {
       await fatalOrderRefetchHidesCachedCard(context);
       await browserBackDoesNotRepeatDraft(context);
       await staleQuoteAndConcurrentChange(context);
+      await orderCardConfirmationRequiresSavedQuantities(context);
       await deleteItemReturnsFocusToItemsHeading(context);
       await actorChangeClearsCustomerFormAfterPeriodicSessionCheck(context);
       await unavailableSessionHidesPrivateRoutes(context);

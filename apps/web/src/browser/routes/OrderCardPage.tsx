@@ -101,6 +101,10 @@ export function OrderCardPage(): ReactElement {
   const card = order.data;
   const editable = card.allowedActions.includes("edit-items");
   const confirmable = card.allowedActions.includes("confirm");
+  const hasUnsavedQuantities = editable && card.items.some((item) => {
+    const quantity = quantities[item.itemRef];
+    return quantity !== undefined && quantity !== item.quantity;
+  });
   const canReconcile = card.status === "Confirmed"
     && !order.isError
     && ["OutOfSync", "Blocked", "UnknownOutcome"].includes(card.aroma.state)
@@ -115,7 +119,7 @@ export function OrderCardPage(): ReactElement {
     <section className="surface command-bar">
       <div><strong>Действия заказа</strong><p>Доступны только действия, разрешённые текущим состоянием заказа.</p></div>
       <div className="command-actions">
-        {confirmable ? <Button isDisabled={pending || card.items.length === 0} onPress={(event) => {
+        {confirmable ? <Button isDisabled={pending || hasUnsavedQuantities || card.items.length === 0} onPress={(event) => {
           dialogReturnFocusRef.current = event.target as HTMLButtonElement;
           setConfirmOpen(true);
         }}>Подтвердить заказ</Button> : null}
@@ -139,6 +143,7 @@ export function OrderCardPage(): ReactElement {
       </section>
 
       {order.isError ? <Alert title="Не удалось проверить актуальность карточки" tone="warning">Сохранённая карточка остаётся доступной. Перед следующей командой обновите данные.</Alert> : null}
+      {hasUnsavedQuantities ? <Alert title="Сначала сохраните изменения количества" tone="warning">Обновите позиции или верните сохранённые значения перед подтверждением заказа.</Alert> : null}
       {card.aroma.state === "UnknownOutcome" ? <Alert title="Исход AROMA неизвестен" tone="danger">Не отправляйте команду повторно. Обновите карточку заказа или используйте доступное действие.</Alert> : null}
       {routeParams.get("notice") === "catalog-unavailable" ? <Alert title="Каталог недоступен" tone="warning">Изменение состава этого заказа больше не разрешено сервером.</Alert> : null}
       {card.aroma.blockers.map((blocker) => <Alert key={`${blocker.code}:${blocker.productRef ?? "order"}`} title={blocker.code} tone="warning">{blocker.message}</Alert>)}
@@ -151,13 +156,19 @@ export function OrderCardPage(): ReactElement {
         {card.items.length === 0 ? <Empty description="Откройте каталог и добавьте первый товар." title="Черновик пока пуст" /> : null}
         <div className="item-list">
           {card.items.map((item) => {
-            const quantity = quantities[item.itemRef] ?? item.quantity;
+            const quantity = editable ? quantities[item.itemRef] ?? item.quantity : item.quantity;
             return (
               <article aria-label={`Позиция заказа ${item.itemRef}`} className="order-item" key={item.itemRef}>
                 <div><h3>{item.displayName}</h3><p>{formatMoney(item.lineTotalMinor, card.pricing?.currency)}</p><small>Позиция {item.linePosition}</small>{item.grindDisplayName ? <small>Помол: {item.grindDisplayName}</small> : null}</div>
                 <Field aria-label={`Количество ${item.displayName}`} isDisabled={!editable || pending} label="Количество" onChange={(value) => setQuantities((current) => ({ ...current, [item.itemRef]: value }))} value={quantity} />
                 <div className="item-actions">
-                  <Button isDisabled={!editable || pending || quantity === item.quantity} onPress={() => quoteAndPut.mutate({ itemRef: item.itemRef, product: productForItem(item), quantity, ...(item.sourceGrindKeyHash ? { sourceGrindKeyHash: item.sourceGrindKeyHash } : {}) })} size="compact" variant="secondary">Обновить</Button>
+                  <Button isDisabled={!editable || pending || quantity === item.quantity} onPress={() => quoteAndPut.mutate({ itemRef: item.itemRef, product: productForItem(item), quantity, ...(item.sourceGrindKeyHash ? { sourceGrindKeyHash: item.sourceGrindKeyHash } : {}) }, {
+                    onSuccess: () => setQuantities((current) => {
+                      const next = { ...current };
+                      delete next[item.itemRef];
+                      return next;
+                    }),
+                  })} size="compact" variant="secondary">Обновить</Button>
                   <Button isDisabled={!editable || pending} onPress={(event) => {
                     dialogReturnFocusRef.current = event.target as HTMLButtonElement;
                     setDeleteTarget(item);
@@ -175,7 +186,9 @@ export function OrderCardPage(): ReactElement {
 
       <Dialog
         description={`Будет подтверждена версия заказа ${card.version}. После подтверждения состав нельзя изменить в этом сценарии.`}
-        footer={<><Button onPress={() => setConfirmOpen(false)} ref={confirmCancelRef} variant="quiet">Отмена</Button><Button isPending={confirmOrder.isPending} onPress={() => confirmOrder.mutate()}>Подтвердить</Button></>}
+        footer={<><Button onPress={() => setConfirmOpen(false)} ref={confirmCancelRef} variant="quiet">Отмена</Button><Button isDisabled={hasUnsavedQuantities} isPending={confirmOrder.isPending} onPress={() => {
+          if (!hasUnsavedQuantities) confirmOrder.mutate();
+        }}>Подтвердить</Button></>}
         initialFocusRef={confirmCancelRef}
         isKeyboardDismissDisabled={confirmOrder.isPending}
         isOpen={confirmOpen}
@@ -217,8 +230,10 @@ export function OrderCardPage(): ReactElement {
       <Dialog
         {...(conflictError instanceof ApiError ? { description: `Correlation ID: ${conflictError.problem.correlationId}` } : {})}
         footer={<Button onPress={() => {
-          void queryClient.invalidateQueries({ exact: true, queryKey: orderKey, refetchType: "none" }).then(() => order.refetch()).finally(resetMutationErrors);
-        }}>Обновить карточку</Button>}
+          void queryClient.invalidateQueries({ exact: true, queryKey: orderKey, refetchType: "none" }).then(() => order.refetch()).then((result) => {
+            if (result.isSuccess) resetMutationErrors();
+          });
+        }} isDisabled={order.isFetching}>Обновить карточку</Button>}
         isKeyboardDismissDisabled
         isOpen={Boolean(conflictError)}
         onOpenChange={() => undefined}
