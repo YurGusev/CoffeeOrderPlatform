@@ -3,7 +3,8 @@ baseCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
 status: draft-awaiting-served-surface-acceptance
 scope: >-
   React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
-  несохранённое количество и восстановление конфликта Order Card
+  несохранённое количество, восстановление конфликта Order Card и повторная сверка AROMA
+  после новой owner-проекции
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -165,7 +166,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/OrderCardPage.tsx
-    sha256: c85ebff3b87e87d56029eb6d163f8ae5a8cb2ceb7901bdba5e20792be562e943
+    sha256: 2fcd4ae1fc9c13fdc6803200e194862862e78ea49f33c34dc4f637f5cefca8dc
     consumers:
       - 12
       - 13
@@ -185,7 +186,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: 9c3c71d4fd1445d1448c44bc6767d07cfb80c207d0ea747ccc794eebcf396bac
+    sha256: df040584d4e2249da5649fd899e5fe9de418cc6653db14e1a745729c65d5c0c3
     consumers:
       - 12
       - 13
@@ -260,7 +261,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: 680105eff05ba01aa9b697782b00ff8a87b13c90f68d16f5d56db29f18b44eb4
+    sha256: e791c6ae7b88a72e2ec7c8e8e0267403fab98f6d2805481506950402fcf3a1e5
     consumers:
       - 12
       - 13
@@ -659,6 +660,36 @@ verification:
     detail: >-
       5 октября 2026, финальные Order Card source и test fixture.
       Лог /tmp/coffee-pr172-order-card-20261005/ui/lint-final.log.
+  - command: pnpm test:playwright
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: Свежие typecheck/build и полный mock-browser набор. Проверены same projection5 после202, explicit GET projection6/OutOfSync при Order.version5, второй явный POST с новым key/expectedVersion5 и повторная блокировка после202. Existing failed/pending GET regressions сохранились.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/playwright.log.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: 15/15 frontend query/cache/time/format/schema/ULID tests.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/web-queries.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: 6/6 idempotency unit tests.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/idempotency.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: Финальные frontend source и existing browser test.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/lint.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: Initial JS gzip 139926 B из лимита 256000 B.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/browser-bundle.log.
 limitations:
   - >-
     PR #172 остаётся Draft до browser-through-Edge/Compose served-surface acceptance и owner acceptance.
@@ -674,7 +705,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: 8a2f2dea51643743d47b41df2ebb3f23fdbb4957e6e65e4a573011d5268c4942
+  sha256: 705b0faebf563bc3c52ded64faa6451eed832fc8dc0e45a4ce703533e836d4d7
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171

@@ -4,7 +4,7 @@ import { Alert, Badge, Button, Dialog, Empty, Field, Link, Loading } from "@coff
 import type { CatalogProductSummary, OrderCardResponse, OrderItem } from "@coffee-platform/generated-client-v1";
 import { useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client.js";
-import { formatMoney } from "../api/format.js";
+import { compareDecimalVersion, formatMoney } from "../api/format.js";
 import { ProblemAlert, problemFieldError } from "../api/problem.js";
 import { useConfirmOrder, useDeleteOrderItem, useOrderCard, useQuoteAndPutItem, useRequestReconciliation } from "../api/remote.js";
 import { PageHeader } from "../app/PageHeader.js";
@@ -46,6 +46,7 @@ export function OrderCardPage(): ReactElement {
   const [deleteTarget, setDeleteTarget] = useState<OrderItem>();
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [reconcileReason, setReconcileReason] = useState("");
+  const [reconciliationProjectionVersion, setReconciliationProjectionVersion] = useState<string>();
   const dialogReturnFocusRef = useRef<HTMLButtonElement>(null);
   const confirmCancelRef = useRef<HTMLButtonElement>(null);
   const deleteCancelRef = useRef<HTMLButtonElement>(null);
@@ -60,6 +61,7 @@ export function OrderCardPage(): ReactElement {
   });
   const confirmOrder = useConfirmOrder(session.actorRef, orderRef, () => setConfirmOpen(false));
   const reconcile = useRequestReconciliation(session.actorRef, orderRef, () => {
+    setReconciliationProjectionVersion(queryClient.getQueryData<OrderCardResponse>(orderKey)?.projectionVersion);
     setReconcileOpen(false);
     setReconcileReason("");
   });
@@ -105,6 +107,10 @@ export function OrderCardPage(): ReactElement {
     const quantity = quantities[item.itemRef];
     return quantity !== undefined && quantity !== item.quantity;
   });
+  const waitingForReconciliationRefresh = reconcile.isSuccess && (
+    reconciliationProjectionVersion === undefined
+    || compareDecimalVersion(card.projectionVersion, reconciliationProjectionVersion) <= 0
+  );
   const canReconcile = card.status === "Confirmed"
     && !order.isError
     && ["OutOfSync", "Blocked", "UnknownOutcome"].includes(card.aroma.state)
@@ -124,7 +130,7 @@ export function OrderCardPage(): ReactElement {
           setConfirmOpen(true);
         }}>Подтвердить заказ</Button> : null}
         {card.aroma.state === "UnknownOutcome" ? <Button isDisabled={order.isFetching} onPress={() => void order.refetch()} variant="secondary">Проверить состояние</Button> : null}
-        {canReconcile ? <Button isDisabled={pending || order.isFetching || reconcile.isSuccess} onPress={(event) => {
+        {canReconcile ? <Button isDisabled={pending || order.isFetching || waitingForReconciliationRefresh} onPress={(event) => {
           dialogReturnFocusRef.current = event.target as HTMLButtonElement;
           setReconcileOpen(true);
         }} variant="secondary">Запросить сверку AROMA</Button> : null}

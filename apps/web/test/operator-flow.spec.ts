@@ -114,6 +114,9 @@ type MockTelemetry = Readonly<{
   putRequests: string[];
   putIntentKeys: string[];
   reconciliationReasons: string[];
+  reconciliationExpectedVersions: string[];
+  reconciliationKeys: string[];
+  advanceReconciliationProjection: () => void;
   releaseReconciliationRefresh: () => void;
   armCustomerFailure: () => void;
   armOrderFailure: () => void;
@@ -144,6 +147,7 @@ async function installCommonMocks(page: Page, options: {
   orderFailureOnRefetch?: 403 | 404;
   orderRefetchUnavailableAfterConflict?: boolean;
   conflictRefetchConfirmed?: boolean;
+  allowUnknownOutcomeReconciliation?: boolean;
   pricingUnavailable?: boolean;
   reconciliationRefreshFails?: boolean;
   replayWrongTerminal?: boolean;
@@ -160,6 +164,7 @@ async function installCommonMocks(page: Page, options: {
   let current = options.aromaScenario
     ? orderCard("5", "Confirmed", true, options.aromaScenario, options.initialItemGrind ? grindHash : undefined, options.aromaBlocker)
     : options.initialItem ? orderCard(options.conflictPut ? "1" : "2", "Draft", true, "NotRequested", options.initialItemGrind ? grindHash : undefined) : orderCard();
+  if (options.allowUnknownOutcomeReconciliation) current = { ...current, allowedActions: ["request-aroma-reconciliation"] };
   let reconciliationAccepted = false;
   let activeActor = "operator-1";
   let sessionAvailable = true;
@@ -167,6 +172,8 @@ async function installCommonMocks(page: Page, options: {
   const quoteRequests: string[] = [];
   const putRequests: string[] = [];
   const putIntentKeys: string[] = [];
+  const reconciliationExpectedVersions: string[] = [];
+  const reconciliationKeys: string[] = [];
   let releaseReconciliationRefresh = (): void => undefined;
   const reconciliationRefreshGate = options.holdReconciliationRefresh
     ? new Promise<void>((resolve) => { releaseReconciliationRefresh = resolve; })
@@ -179,6 +186,11 @@ async function installCommonMocks(page: Page, options: {
     putRequests,
     putIntentKeys,
     reconciliationReasons: [],
+    reconciliationExpectedVersions,
+    reconciliationKeys,
+    advanceReconciliationProjection: () => {
+      current = { ...orderCard("5", "Confirmed", true, "OutOfSync"), projectionVersion: "6" };
+    },
     releaseReconciliationRefresh: () => releaseReconciliationRefresh(),
     armCustomerFailure: () => { customerFailureArmed = true; },
     armOrderFailure: () => { orderFailureArmed = true; },
@@ -444,8 +456,10 @@ async function installCommonMocks(page: Page, options: {
       return fulfillJson(route, current);
     }
     if (url.pathname === `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation` && method === "POST") {
-      const body = request.postDataJSON() as { reason?: string };
+      const body = request.postDataJSON() as { expectedVersion?: string; reason?: string };
       telemetry.reconciliationReasons.push(body.reason ?? "");
+      reconciliationExpectedVersions.push(body.expectedVersion ?? "");
+      reconciliationKeys.push(request.headers()["idempotency-key"] ?? "");
       reconciliationAccepted = true;
       return fulfillJson(route, { orderRef, orderVersion: current.version, requestedAt: "2026-09-28T18:00:00.000Z", aromaState: "PendingObservation" }, 202);
     }
@@ -809,6 +823,66 @@ async function reconciliationAcceptanceCannotBeResubmitted(context: BrowserConte
   assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 1, "503 refetch should keep the cached Card visible");
   assert.deepEqual(telemetry.reconciliationReasons, ["Проверка после подтверждения"]);
   assert.equal(await page.getByRole("button", { name: "Запросить сверку AROMA" }).count(), 0);
+  await page.close();
+}
+
+async function reconciliationUnlocksAfterNewOwnerProjection(context: BrowserContext): Promise<void> {
+  const page = await context.newPage();
+  const telemetry = await installCommonMocks(page, {
+    allowUnknownOutcomeReconciliation: true,
+    aromaScenario: "UnknownOutcome",
+  });
+  await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+  const trigger = page.getByRole("button", { name: "Запросить сверку AROMA" });
+  await trigger.waitFor();
+  assert.equal(await trigger.isDisabled(), false);
+
+  await trigger.click();
+  let dialog = page.getByRole("dialog", { name: "Запросить сверку AROMA?" });
+  await dialog.getByRole("textbox", { name: "Причина" }).fill("Первая явная сверка");
+  const sameSnapshotRefresh = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/client-v1/orders/${orderRef}`) && response.request().method() === "GET",
+  );
+  await dialog.getByRole("button", { name: "Отправить запрос" }).click();
+  const sameSnapshotResponse = await sameSnapshotRefresh;
+  const sameSnapshotCard = await sameSnapshotResponse.json() as { projectionVersion: string };
+  assert.equal(sameSnapshotCard.projectionVersion, "5");
+  await dialog.waitFor({ state: "hidden" });
+  await expect.poll(() => trigger.isDisabled()).toBe(true);
+  await page.getByText("Результат неизвестен", { exact: true }).waitFor();
+  assert.deepEqual(telemetry.reconciliationReasons, ["Первая явная сверка"]);
+  assert.deepEqual(telemetry.reconciliationExpectedVersions, ["5"]);
+
+  telemetry.advanceReconciliationProjection();
+  const newerSnapshot = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/client-v1/orders/${orderRef}`) && response.request().method() === "GET",
+  );
+  await page.getByRole("button", { name: "Проверить состояние" }).click();
+  const newerSnapshotResponse = await newerSnapshot;
+  const newerCard = await newerSnapshotResponse.json() as { allowedActions: string[]; aroma: { state: string }; projectionVersion: string; version: string };
+  assert.equal(newerCard.projectionVersion, "6");
+  assert.equal(newerCard.version, "5", "AROMA projection advancement must not change the Order business version");
+  assert.equal(newerCard.aroma.state, "OutOfSync");
+  assert.ok(newerCard.allowedActions.includes("request-aroma-reconciliation"));
+  await page.getByText("Есть расхождение", { exact: true }).waitFor();
+  await expect.poll(() => trigger.isDisabled()).toBe(false);
+  assert.deepEqual(telemetry.reconciliationReasons, ["Первая явная сверка"], "a fresh owner GET must not automatically submit another reconciliation");
+
+  await trigger.click();
+  dialog = page.getByRole("dialog", { name: "Запросить сверку AROMA?" });
+  await dialog.getByRole("textbox", { name: "Причина" }).fill("Вторая явная сверка");
+  const repeatedSnapshotRefresh = page.waitForResponse((response) =>
+    response.url().endsWith(`/api/client-v1/orders/${orderRef}`) && response.request().method() === "GET",
+  );
+  await dialog.getByRole("button", { name: "Отправить запрос" }).click();
+  await repeatedSnapshotRefresh;
+  await dialog.waitFor({ state: "hidden" });
+  await expect.poll(() => telemetry.reconciliationReasons.length).toBe(2);
+  await expect.poll(() => trigger.isDisabled()).toBe(true);
+  assert.deepEqual(telemetry.reconciliationReasons, ["Первая явная сверка", "Вторая явная сверка"]);
+  assert.deepEqual(telemetry.reconciliationExpectedVersions, ["5", "5"], "projection-only advancement must not change the command business version");
+  assert.ok(telemetry.reconciliationKeys[0]);
+  assert.notEqual(telemetry.reconciliationKeys[1], telemetry.reconciliationKeys[0], "a new explicit reconciliation intent must use a new idempotency key");
   await page.close();
 }
 
@@ -1470,6 +1544,7 @@ async function main(): Promise<void> {
       await logoutDuringFingerprintDoesNotCreateIntent(context);
       await mismatchedProblemStatusRetainsIntent(context);
       await reconciliationAcceptanceCannotBeResubmitted(context);
+      await reconciliationUnlocksAfterNewOwnerProjection(context);
       await reconciliationStaysBlockedDuringOwnerRefresh(context);
       await replayDoesNotPublishHistoricalCard(context);
       await explicitLogoutClearsRecovery(context);
