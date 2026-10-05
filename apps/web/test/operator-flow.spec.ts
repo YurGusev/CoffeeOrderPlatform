@@ -1446,6 +1446,7 @@ async function cachedCatalogRefetchKeepsAccessAndAvailabilitySeparate(context: B
       assert.equal(await page.getByRole("combobox", { name: "Помол для Капучино" }).count(), 0);
       assert.equal(await page.getByRole("button", { name: "Добавить" }).count(), 0);
       assert.equal(await page.getByRole("button", { name: "Следующая страница" }).count(), 0);
+      assert.equal(await page.getByRole("button", { name: "Обновить данные" }).count(), 0);
       assert.deepEqual(catalogStatuses, [403]);
 
       await page.evaluate((href) => {
@@ -1467,6 +1468,7 @@ async function cachedCatalogRefetchKeepsAccessAndAvailabilitySeparate(context: B
       assert.equal(await page.getByRole("combobox", { name: "Помол для Капучино" }).count(), 0);
       assert.equal(await page.getByRole("button", { name: "Добавить" }).count(), 0);
       assert.equal(await page.getByRole("button", { name: "Следующая страница" }).count(), 0);
+      assert.equal(await page.getByRole("button", { name: "Обновить данные" }).count(), 0);
       telemetry.clearSearchFailures();
 
       await page.evaluate((href) => {
@@ -1508,10 +1510,55 @@ async function unavailableDependenciesPreserveOperatorContext(context: BrowserCo
   await customersPage.close();
 
   const catalogPage = await context.newPage();
-  await installCommonMocks(catalogPage, { catalogUnavailable: true });
+  const catalog = await installCommonMocks(catalogPage, {
+    catalogRefetchFailure: { query: "капучино", status: 503 },
+  });
+  const catalogReads: Array<{ query: string | null; availability: string | null; status: number }> = [];
+  catalogPage.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname === "/api/client-v1/catalog/products" && response.request().method() === "GET") {
+      catalogReads.push({ query: url.searchParams.get("query"), availability: url.searchParams.get("availability"), status: response.status() });
+    }
+  });
+  catalog.armCatalogFailure();
+  catalog.releaseCatalogRefetch();
   await catalogPage.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
   await catalogPage.getByText("Сервис временно недоступен").waitFor();
   assert.equal(await catalogPage.getByRole("textbox", { name: "Название товара" }).inputValue(), "капучино");
+  assert.equal(await catalogPage.getByRole("button", { name: "Обновить данные" }).count(), 1);
+  assert.equal(await catalogPage.getByRole("heading", { name: "Капучино" }).count(), 0);
+  assert.deepEqual(catalogReads, [
+    { query: "капучино", availability: "Available", status: 503 },
+    { query: "капучино", availability: "Available", status: 503 },
+  ]);
+
+  catalog.clearSearchFailures();
+  const recoveredCatalog = catalogPage.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/client-v1/catalog/products"
+      && response.request().method() === "GET"
+      && url.searchParams.get("query") === "капучино"
+      && url.searchParams.get("availability") === "Available"
+      && response.status() === 200;
+  });
+  await catalogPage.getByRole("button", { name: "Обновить данные" }).click();
+  await recoveredCatalog;
+  await catalogPage.getByRole("heading", { name: "Капучино" }).waitFor();
+  await catalogPage.getByRole("textbox", { name: "Количество для Капучино" }).waitFor();
+  await catalogPage.getByRole("combobox", { name: "Помол для Капучино" }).waitFor();
+  await catalogPage.getByRole("button", { name: "Добавить" }).waitFor();
+  assert.deepEqual(catalogReads, [
+    { query: "капучино", availability: "Available", status: 503 },
+    { query: "капучино", availability: "Available", status: 503 },
+    { query: "капучино", availability: "Available", status: 200 },
+  ]);
+  const recoveredUrl = new URL(catalogPage.url());
+  assert.equal(recoveredUrl.pathname, "/app/catalog");
+  assert.equal(recoveredUrl.searchParams.get("orderRef"), orderRef);
+  assert.equal(recoveredUrl.searchParams.get("q"), "капучино");
+  assert.equal(recoveredUrl.searchParams.has("availability"), false);
+  assert.equal(catalog.quoteRequests.length, 0);
+  assert.equal(catalog.putRequests.length, 0);
   await catalogPage.close();
 
   const pricingPage = await context.newPage();

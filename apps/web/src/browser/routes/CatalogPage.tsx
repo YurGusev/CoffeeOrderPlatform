@@ -147,7 +147,7 @@ export function CatalogPage(): ReactElement {
         {query.length > 0 && query.length < 2 ? <Alert title="Слишком короткий запрос" tone="warning">Введите не менее двух символов.</Alert> : null}
         {query.length === 0 ? <Empty description="Введите название — поиск начнётся через 300 мс после ввода." title="Начните поиск товара" /> : null}
         {products.isPending && query.length >= 2 ? <Loading label="Ищем товары" /> : null}
-        {products.isError ? <ProblemAlert error={products.error} /> : null}
+        {products.isError ? <ProblemAlert error={products.error} {...(catalogAccessDenied ? {} : { onRefresh: () => void products.refetch() })} /> : null}
         {addItem.isError && !isStaleQuote(addItem.error) && !isGrindUnavailable(addItem.error) && !conflictError ? <ProblemAlert error={addItem.error} /> : null}
         {products.isSuccess && products.data.items.length === 0 ? <Empty description="Измените запрос или фильтр доступности." title="Товары не найдены" /> : null}
         <div className="product-grid">

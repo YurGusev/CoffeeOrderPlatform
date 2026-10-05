@@ -8,7 +8,7 @@ scope: >-
   каноническое количество Quote → PUT, fatal recovery GET в exact Order query,
   обновление истёкшей цены без изменения количества и удержание fatal отказа
   при запоздалом ответе mutation до успешного owner GET, запрет показа cached Customer/Catalog
-  search после403 до успешного чтения того же query
+  search после403 до успешного чтения того же query и явное обновление Catalog после временной ошибки
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -155,7 +155,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/CatalogPage.tsx
-    sha256: f2a3153fda8d94ed937b86d523cdc87fce7ba55cfb964322ce4191721944093c
+    sha256: a503113be27ecbb98d8c8f45eb621eec6ee25beab8b52f320e97a5465679beff
     consumers:
       - 12
       - 13
@@ -195,7 +195,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: 6a15bbdce9855404f28863a76da87884c76deb56e37772c16f84f4df270aa980
+    sha256: fc66d633928ff881fc55b887eecd2ac17d7eb389f4acbe5dc7b2093bf6f6513d
     consumers:
       - 12
       - 13
@@ -270,7 +270,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: f01fa182840d347e1ffde1fffbb396e9efa4cb0e4ea9fe4029a91557ca88cdca
+    sha256: 9361be0d7d78c89d697ef0bd9ba418f616707f0afcb4d60ad620bc2d91735cfc
     consumers:
       - 12
       - 13
@@ -1065,6 +1065,41 @@ verification:
       5 октября 2026, search fatal P1: 1 JS, gzip140069 B из256000 B; browser-bundle.log.
       /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
       Source/test SHA до и после совпали с worker.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Catalog refresh P2: свежие typecheck, UI build и Vite browser build прошли.
+      /tmp/coffee-pr172-catalog-refresh-20261005/ui/routes-build.log содержит успешную сборку;
+      последующий routes failure относится только к literal URL assertion и указан отдельно.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, Catalog refresh P2: восстановительный третий GET200 и поля уже появились,
+      но literal URL assertion сравнил raw кириллицу с percent-encoded URL браузера.
+      Исправлен test-only assertion через URL/searchParams; окончательный полный набор прошёл ниже.
+      /tmp/coffee-pr172-catalog-refresh-20261005/ui/routes-build.log.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Catalog refresh P2: полный mock-browser набор на свежей сборке и итоговом test.
+      После503/retry503 явное обновление даёт третий GET200 с прежними query/Available и URL/orderRef,
+      показывает товары/quantity/grind/Add, не создаёт quote и PUT.
+      При403 и сохранённом403 после503 кнопка обновления отсутствует.
+      /tmp/coffee-pr172-catalog-refresh-20261005/ui/operator-full.log, exit0.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Catalog refresh P2: /tmp/coffee-pr172-catalog-refresh-20261005/ui/lint.log, exit0.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Catalog refresh P2: 1 JS, gzip140090 B из256000 B.
+      /tmp/coffee-pr172-catalog-refresh-20261005/ui/bundle.log, exit0.
 limitations:
   - >-
     Late mutation privacy regression сохраняет один QueryClient через controlled SPA history transition.
@@ -1090,7 +1125,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: b9948bfecb4b94db18247c06e3cfec6f6855b6849e687ede31c13cf1560de5ef
+  sha256: c699a10c0dfa9b62d6355025aecde0fdeff5b726c4ece4477d959657eca564f8
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171
