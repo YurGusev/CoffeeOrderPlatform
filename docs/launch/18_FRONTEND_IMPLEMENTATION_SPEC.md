@@ -183,7 +183,9 @@ response. При `ORDER_VERSION_CONFLICT`:
 
 Каждый route имеет четыре взаимоисключающих render states: initial/loading,
 success (включая empty), recoverable error, route-fatal error. Старые данные не
-маскируют fatal auth/not-found.
+маскируют fatal auth/not-found. После search 403 запрет показа cached Customer и
+Catalog сохраняется до успешного чтения того же query; временная ошибка не
+подтверждает доступ.
 
 | Code/ситуация | Точный UI |
 |---|---|

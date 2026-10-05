@@ -10,7 +10,7 @@ import type {
   PricingQuoteResponse,
   ReconciliationAcceptedResponse,
 } from "@coffee-platform/generated-client-v1";
-import { api, ProtocolError, SESSION_INVALIDATED } from "./client.js";
+import { api, ApiError, ProtocolError, SESSION_INVALIDATED } from "./client.js";
 import {
   clearPendingIntents,
   dismissRecoveryDiscardedWarning,
@@ -27,6 +27,10 @@ import {
 } from "./session-identity.js";
 import { currentEpochMilliseconds, instantEpochMilliseconds } from "./time.js";
 import { queryKeys } from "../app/query-keys.js";
+
+function isForbiddenSearchError(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.problem.status === 403;
+}
 
 export function useBrowserSession() {
   const queryClient = useQueryClient();
@@ -73,15 +77,23 @@ export function useLogout() {
 }
 
 export function useCustomerSearch(actorRef: string, q: string, cursor?: string) {
+  const queryClient = useQueryClient();
+  const queryKey = queryKeys.customersSearch({ q, ...(cursor ? { cursor } : {}) });
   return useQuery({
     enabled: q.trim().length >= 2,
     queryFn: async ({ signal }) => {
       const session = captureApplicationSession(actorRef);
-      const result = await api.searchCustomers(q, cursor, signal);
-      assertApplicationSession(session);
-      return result;
+      try {
+        const result = await api.searchCustomers(q, cursor, signal);
+        assertApplicationSession(session);
+        return result;
+      } catch (error) {
+        const previousError = queryClient.getQueryState(queryKey)?.error;
+        if (isForbiddenSearchError(previousError)) throw previousError;
+        throw error;
+      }
     },
-    queryKey: queryKeys.customersSearch({ q, ...(cursor ? { cursor } : {}) }),
+    queryKey,
     staleTime: 30_000,
   });
 }
@@ -128,15 +140,23 @@ export function useCatalogSearch(actorRef: string, input: Readonly<{
   orderRef: string;
   q: string;
 }>) {
+  const queryClient = useQueryClient();
+  const queryKey = queryKeys.catalogSearch(input);
   return useQuery({
     enabled: input.q.trim().length >= 2 && /^ord_[0-9A-HJKMNP-TV-Z]{26}$/u.test(input.orderRef),
     queryFn: async ({ signal }) => {
       const session = captureApplicationSession(actorRef);
-      const result = await api.searchCatalog(input.q, input.availability, input.cursor, signal);
-      assertApplicationSession(session);
-      return result;
+      try {
+        const result = await api.searchCatalog(input.q, input.availability, input.cursor, signal);
+        assertApplicationSession(session);
+        return result;
+      } catch (error) {
+        const previousError = queryClient.getQueryState(queryKey)?.error;
+        if (isForbiddenSearchError(previousError)) throw previousError;
+        throw error;
+      }
     },
-    queryKey: queryKeys.catalogSearch(input),
+    queryKey,
     staleTime: 30_000,
   });
 }

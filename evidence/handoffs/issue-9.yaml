@@ -1,13 +1,14 @@
 issue: 9
 baseCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
-status: draft-awaiting-served-surface-acceptance
+status: awaiting-served-surface-acceptance
 scope: >-
   React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
   несохранённое количество, восстановление конфликта Order Card и повторная сверка AROMA
   после новой owner-проекции, скрытие cached Catalog при 403, гонка pending scope до fingerprint,
   каноническое количество Quote → PUT, fatal recovery GET в exact Order query,
   обновление истёкшей цены без изменения количества и удержание fatal отказа
-  при запоздалом ответе mutation до успешного owner GET
+  при запоздалом ответе mutation до успешного owner GET, запрет показа cached Customer/Catalog
+  search после403 до успешного чтения того же query
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -89,7 +90,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/api/remote.ts
-    sha256: cf3ac3740b2c0ba53d03db6e4127df26e42c1772f9ab76f551686e697e8e0aa0
+    sha256: 55105700ca7eb193c2345d48d5c6858af9446d285c0b5f56a9861177b619257c
     consumers:
       - 12
       - 13
@@ -194,7 +195,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: 0a925e4df9adf1fecd9ce32bbcdd0cdc9c765859e0f08a58c7c914ed02fe6f78
+    sha256: 6a15bbdce9855404f28863a76da87884c76deb56e37772c16f84f4df270aa980
     consumers:
       - 12
       - 13
@@ -264,12 +265,12 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
-    sha256: 9b7b38094dbbbeddf220fdfccc9bb0419c0ef9c0ad130e53465bb336b412705a
+    sha256: 9dc47b575a63a4d1fb770b3441aafdebef3eb3c4f504b56f4dc628fd190903d5
     consumers:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: 6590258453b00bbb2ef3e19e4d105bfc94c752239a80265175e5ff8f47293cca
+    sha256: f01fa182840d347e1ffde1fffbb396e9efa4cb0e4ea9fe4029a91557ca88cdca
     consumers:
       - 12
       - 13
@@ -1002,6 +1003,68 @@ verification:
       5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: 1 JS, gzip140036 B из256000 B; browser-bundle.log.
       /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
       Source/test SHA до и после совпали с итоговым worker.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, search fatal P1: первые fixture iterations исправляли refresh count дляnormal503,
+      ожидание retry при retained403, re-arm обычного503 и место clearSearchFailures вCatalog.
+      Raw green-initial.log, green-final.log, green-final-2.log, routes-final.log в
+      /tmp/coffee-pr172-search-fatal-20261005/ui/. Старый red-head-runtime.log с ранним50ms check
+      не доказывает defect: во время retry query ещё сохранял403, а следующий200 был разрешён.
+      Финальная semantic phase повторяет503 до explicit clear; прежние fixture receipts не считаются gates.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, search fatal P1: точный remote.ts из HEAD6e9e5ca3 после403/503/retry503
+      снова показывает cached Customer heading1 вместо0. Успешного200 между отказом и assertion нет.
+      /tmp/coffee-pr172-search-fatal-20261005/ui/red-semantic-old-runtime.log, exit1.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: fresh runtime typecheck/UI/browser build прошёл в green-final-2.log.
+      Последующие test-only fixture corrections использовали тот же runtime dist.
+      /tmp/coffee-pr172-search-fatal-20261005/ui/; failed routes в build log относится к fixture,
+      финальный адресный прогон зафиксирован отдельно.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: same QueryClient controlled SPA, Customer/Catalog cached rows,
+      contacts/quantity/grind/actions/pagination скрыты после403 и следующего503 до explicit clear+GET200.
+      После successful GET данные снова видны; обычный503 без prior403 сохраняет контекст и штатный retry.
+      Customer response statuses403/503/200/503/503, Catalog403/503/200 и отдельно normal503/503.
+      /tmp/coffee-pr172-search-fatal-20261005/ui/routes-final-2.log, exit0.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: Полный mock browser набор: оба search403→503 скрыты, successfulGET200 возвращает данные; normal503retry и прежние recovery tests сохранены. web-operator.log.
+      /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: 6 файлов,16 тестов; web-queries.log.
+      /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: Итоговый remote.ts и existing browser tests; lint.log.
+      /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: 1 JS, gzip140069 B из256000 B; browser-bundle.log.
+      /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
 limitations:
   - >-
     Late mutation privacy regression сохраняет один QueryClient через controlled SPA history transition.
@@ -1013,7 +1076,8 @@ limitations:
     Catalog cache privacy regression использует controlled SPA history transition с одним QueryClient.
     Native UI Link перезагружает документ; acceptance native Link/Back/Edge этим сценарием не подтверждена.
   - >-
-    PR #172 остаётся Draft до browser-through-Edge/Compose served-surface acceptance и owner acceptance.
+    PR #172 открыт без Draft; browser-through-Edge/Compose served-surface acceptance
+    и owner acceptance в этом прогоне не подтверждены.
     Producer #171 принят; прежняя зависимость от непринятого backend устранена.
   - >-
     Исторические baseline/typecheck/query/route failures выше относятся к прежним ревизиям; итоговые gates
@@ -1026,7 +1090,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: 55ad579335e9f96342ed45a8fabeddf5bb6d72de6763bef35143e9af1d16e0b3
+  sha256: b9948bfecb4b94db18247c06e3cfec6f6855b6849e687ede31c13cf1560de5ef
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171

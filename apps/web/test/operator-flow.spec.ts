@@ -123,6 +123,7 @@ type MockTelemetry = Readonly<{
   releaseCatalogRefetch: () => void;
   armCustomerFailure: () => void;
   armCatalogFailure: () => void;
+  clearSearchFailures: () => void;
   armOrderFailure: () => void;
   setSessionAvailable: (available: boolean) => void;
   switchActor: () => void;
@@ -137,11 +138,13 @@ async function installCommonMocks(page: Page, options: {
   catalogUnavailable?: boolean;
   catalogNextCursor?: boolean;
   catalogRefetchFailure?: Readonly<{ query: string; status: 403 | 503 }>;
+  catalogRefetchFailureSequence?: Readonly<{ query: string; statuses: readonly (200 | 403 | 503)[] }>;
   conflictPut?: boolean;
   customerNextCursor?: boolean;
   customersUnavailable?: boolean;
   grindSelectionRefresh?: boolean;
   customerValidationError?: boolean;
+  customerRefetchFailureSequence?: Readonly<{ query: string; statuses: readonly (200 | 403 | 503)[] }>;
   draftStatusMismatch?: boolean;
   expiredSession?: boolean;
   expiredDraftQuote?: boolean;
@@ -173,7 +176,9 @@ async function installCommonMocks(page: Page, options: {
     ? new Promise<void>((resolve) => { releaseFirstPut = resolve; })
     : Promise.resolve();
   let customerFailureArmed = false;
+  let customerFailureSequenceIndex = 0;
   let catalogFailureArmed = false;
+  let catalogFailureSequenceIndex = 0;
   let releaseCatalogRefetch = (): void => undefined;
   const catalogRefetchGate = new Promise<void>((resolve) => { releaseCatalogRefetch = resolve; });
   let orderCardReads = 0;
@@ -226,6 +231,7 @@ async function installCommonMocks(page: Page, options: {
     releaseCatalogRefetch: () => releaseCatalogRefetch(),
     armCustomerFailure: () => { customerFailureArmed = true; },
     armCatalogFailure: () => { catalogFailureArmed = true; },
+    clearSearchFailures: () => { customerFailureArmed = false; catalogFailureArmed = false; },
     armOrderFailure: () => { orderFailureArmed = true; },
     setSessionAvailable: (available) => { sessionAvailable = available; },
     switchActor: () => { activeActor = "operator-2"; },
@@ -271,6 +277,11 @@ async function installCommonMocks(page: Page, options: {
     if (url.pathname === "/api/client-v1/customers" && method === "GET") {
       const forbiddenCustomerRefetch = customerFailureArmed
         && options.forbiddenCustomerQueryOnRefetch === url.searchParams.get("query");
+      const customerSequenceMatches = customerFailureArmed
+        && options.customerRefetchFailureSequence?.query === url.searchParams.get("query");
+      const customerFailureStatus = customerSequenceMatches
+        ? options.customerRefetchFailureSequence?.statuses[Math.min(customerFailureSequenceIndex++, (options.customerRefetchFailureSequence?.statuses.length ?? 1) - 1)]
+        : forbiddenCustomerRefetch ? 403 : undefined;
       if (options.customersUnavailable) return fulfillJson(route, {
         type: "about:blank",
         title: "Customer unavailable",
@@ -281,7 +292,7 @@ async function installCommonMocks(page: Page, options: {
         correlationId: "00000000-0000-4000-8000-000000000010",
         errors: [],
       }, 503);
-      if (options.forbiddenCustomers || forbiddenCustomerRefetch) return fulfillJson(route, {
+      if (options.forbiddenCustomers || customerFailureStatus === 403) return fulfillJson(route, {
         type: "about:blank",
         title: "Forbidden",
         status: 403,
@@ -291,6 +302,16 @@ async function installCommonMocks(page: Page, options: {
         correlationId: "00000000-0000-4000-8000-000000000009",
         errors: [],
       }, 403);
+      if (customerFailureStatus === 503) return fulfillJson(route, {
+        type: "about:blank",
+        title: "Customer unavailable",
+        status: 503,
+        code: "CUSTOMER_UNAVAILABLE",
+        detail: "Поиск клиентов временно недоступен",
+        instance: url.pathname,
+        correlationId: "00000000-0000-4000-8000-000000000010",
+        errors: [],
+      }, 503);
       if (options.malformedCustomers) return fulfillJson(route, { items: "invalid", nextCursor: null });
       return fulfillJson(route, { items: [customerSummary()], nextCursor: options.customerNextCursor ? "customer-next-page" : null });
     }
@@ -394,11 +415,17 @@ async function installCommonMocks(page: Page, options: {
       return fulfillJson(route, current);
     }
     if (url.pathname === "/api/client-v1/catalog/products" && method === "GET") {
-      const catalogFailureStatus = catalogFailureArmed && options.catalogRefetchFailure?.query === url.searchParams.get("query")
-        ? options.catalogRefetchFailure.status
-        : options.catalogUnavailable ? 503 : undefined;
-      if (catalogFailureStatus) {
-        if (catalogFailureArmed && options.catalogRefetchFailure?.query === url.searchParams.get("query")) await catalogRefetchGate;
+      const catalogSequenceMatches = catalogFailureArmed
+        && options.catalogRefetchFailureSequence?.query === url.searchParams.get("query");
+      const sequencedCatalogStatus = catalogSequenceMatches
+        ? options.catalogRefetchFailureSequence?.statuses[Math.min(catalogFailureSequenceIndex++, (options.catalogRefetchFailureSequence?.statuses.length ?? 1) - 1)]
+        : undefined;
+      const catalogFailureStatus = sequencedCatalogStatus
+        ?? (catalogFailureArmed && options.catalogRefetchFailure?.query === url.searchParams.get("query")
+          ? options.catalogRefetchFailure.status
+          : options.catalogUnavailable ? 503 : undefined);
+      if (catalogFailureStatus === 403 || catalogFailureStatus === 503) {
+        if (catalogSequenceMatches || (catalogFailureArmed && options.catalogRefetchFailure?.query === url.searchParams.get("query"))) await catalogRefetchGate;
         return fulfillJson(route, {
         type: "about:blank",
         title: catalogFailureStatus === 403 ? "Forbidden" : "Catalog unavailable",
@@ -1260,29 +1287,91 @@ async function forbiddenResourceKeepsSessionAndShowsRightsError(context: Browser
 async function cachedCustomersAreHiddenAfterForbiddenRefetch(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   await page.clock.install();
-  const telemetry = await installCommonMocks(page, { customerNextCursor: true, forbiddenCustomerQueryOnRefetch: "иван" });
+  const telemetry = await installCommonMocks(page, {
+    customerNextCursor: true,
+    customerRefetchFailureSequence: { query: "иван", statuses: [403, 503] },
+  });
+  const customerStatuses: number[] = [];
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname === "/api/client-v1/customers" && url.searchParams.get("query") === "иван") customerStatuses.push(response.status());
+  });
   await page.goto(`${origin}/app/customers?q=иван`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
   await page.getByText("+799••••4567").waitFor();
   await page.getByRole("button", { name: "Выбрать" }).waitFor();
   await page.getByRole("button", { name: "Следующая страница" }).waitFor();
+  const baselineReads = customerStatuses.length;
+
+  const pushOrderRoute = async (): Promise<void> => {
+    await page.evaluate((href) => {
+      window.history.pushState(window.history.state, "", href);
+      window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+    }, `/app/orders/${orderRef}`);
+    await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  };
+  const backToCustomerWithStatus = async (status: 200 | 403 | 503): Promise<void> => {
+    const response = page.waitForResponse((candidate) => {
+      const url = new URL(candidate.url());
+      return url.pathname === "/api/client-v1/customers" && url.searchParams.get("query") === "иван" && candidate.status() === status;
+    });
+    await page.goBack({ waitUntil: "domcontentloaded" });
+    await response;
+  };
+  const assertCustomerSearchHidden = async (): Promise<void> => {
+    assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0, `cached customer remained visible; GET statuses=${JSON.stringify(customerStatuses.slice(baselineReads))}`);
+    assert.equal(await page.getByText("+799••••4567").count(), 0);
+    assert.equal(await page.getByText(customerRef).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Выбрать" }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Следующая страница" }).count(), 0);
+  };
+
   telemetry.armCustomerFailure();
-  await page.getByRole("button", { name: "Выбрать" }).click();
-  await page.getByRole("button", { name: "Создать черновик" }).waitFor();
+  await pushOrderRoute();
   await page.clock.fastForward(31_000);
-  const forbiddenRefetch = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return url.pathname === "/api/client-v1/customers" && url.searchParams.get("query") === "иван" && response.status() === 403;
-  });
-  await page.goBack({ waitUntil: "networkidle" });
-  await forbiddenRefetch;
+  await backToCustomerWithStatus(403);
   await page.getByText("Недостаточно прав").waitFor();
-  assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0);
-  assert.equal(await page.getByText("+799••••4567").count(), 0);
-  assert.equal(await page.getByText(customerRef).count(), 0);
-  assert.equal(await page.getByRole("button", { name: "Выбрать" }).count(), 0);
-  assert.equal(await page.getByRole("button", { name: "Следующая страница" }).count(), 0);
-  assert.equal(await page.getByRole("button", { name: "Обновить данные" }).count(), 0);
+  await assertCustomerSearchHidden();
+
+  await pushOrderRoute();
+  await backToCustomerWithStatus(503);
+  await page.clock.fastForward(500);
+  await page.waitForTimeout(50);
+  await assertCustomerSearchHidden();
+  telemetry.clearSearchFailures();
+
+  await pushOrderRoute();
+  await backToCustomerWithStatus(200);
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  await page.getByText("+799••••4567").waitFor();
+  await page.getByText(customerRef).waitFor();
+  await page.getByRole("button", { name: "Выбрать" }).waitFor();
+  await page.getByRole("button", { name: "Следующая страница" }).waitFor();
+
+  await page.clock.fastForward(31_000);
+  telemetry.armCustomerFailure();
+  await pushOrderRoute();
+  const firstUnavailable = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/client-v1/customers"
+    && new URL(response.url()).searchParams.get("query") === "иван"
+    && response.status() === 503,
+  );
+  await page.goBack({ waitUntil: "domcontentloaded" });
+  await firstUnavailable;
+  const retryUnavailable = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === "/api/client-v1/customers"
+    && new URL(response.url()).searchParams.get("query") === "иван"
+    && response.status() === 503,
+  );
+  await page.clock.fastForward(500);
+  await retryUnavailable;
+  await page.getByText("Сервис временно недоступен").waitFor();
+  await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+  await page.getByText("+799••••4567").waitFor();
+  await page.getByRole("button", { name: "Выбрать" }).waitFor();
+  await page.getByRole("button", { name: "Следующая страница" }).waitFor();
+  assert.deepEqual(customerStatuses.slice(baselineReads), [403, 503, 200, 503, 503]);
+  assert.equal(await page.getByRole("button", { name: "Обновить данные" }).count(), 1, "ordinary 503 retains its explicit retry");
   await page.close();
 }
 
@@ -1292,7 +1381,9 @@ async function cachedCatalogRefetchKeepsAccessAndAvailabilitySeparate(context: B
     await page.clock.install();
     const telemetry = await installCommonMocks(page, {
       catalogNextCursor: true,
-      catalogRefetchFailure: { query: "капучино", status },
+      ...(status === 403
+        ? { catalogRefetchFailureSequence: { query: "капучино", statuses: [403, 503] } }
+        : { catalogRefetchFailure: { query: "капучино", status } }),
     });
     await page.goto(`${origin}/app/catalog?orderRef=${orderRef}&q=капучино`, { waitUntil: "networkidle" });
     await page.getByRole("heading", { name: "Капучино" }).waitFor();
@@ -1355,6 +1446,47 @@ async function cachedCatalogRefetchKeepsAccessAndAvailabilitySeparate(context: B
       assert.equal(await page.getByRole("combobox", { name: "Помол для Капучино" }).count(), 0);
       assert.equal(await page.getByRole("button", { name: "Добавить" }).count(), 0);
       assert.equal(await page.getByRole("button", { name: "Следующая страница" }).count(), 0);
+      assert.deepEqual(catalogStatuses, [403]);
+
+      await page.evaluate((href) => {
+        window.history.pushState(window.history.state, "", href);
+        window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+      }, `/app/orders/${orderRef}`);
+      await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+      const unavailableAfterForbidden = page.waitForResponse((response) =>
+        new URL(response.url()).pathname === "/api/client-v1/catalog/products"
+        && new URL(response.url()).searchParams.get("query") === "капучино"
+        && response.status() === 503,
+      );
+      await page.goBack({ waitUntil: "domcontentloaded" });
+      await unavailableAfterForbidden;
+      await page.clock.fastForward(500);
+      await page.waitForTimeout(50);
+      assert.equal(await page.getByRole("heading", { name: "Капучино" }).count(), 0, `403 remains sticky after a later 503; GET statuses=${JSON.stringify(catalogStatuses)}`);
+      assert.equal(await page.getByRole("textbox", { name: "Количество для Капучино" }).count(), 0);
+      assert.equal(await page.getByRole("combobox", { name: "Помол для Капучино" }).count(), 0);
+      assert.equal(await page.getByRole("button", { name: "Добавить" }).count(), 0);
+      assert.equal(await page.getByRole("button", { name: "Следующая страница" }).count(), 0);
+      telemetry.clearSearchFailures();
+
+      await page.evaluate((href) => {
+        window.history.pushState(window.history.state, "", href);
+        window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+      }, `/app/orders/${orderRef}`);
+      await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+      const successfulCatalogRead = page.waitForResponse((response) =>
+        new URL(response.url()).pathname === "/api/client-v1/catalog/products"
+        && new URL(response.url()).searchParams.get("query") === "капучино"
+        && response.status() === 200,
+      );
+      await page.goBack({ waitUntil: "domcontentloaded" });
+      await successfulCatalogRead;
+      await page.getByRole("heading", { name: "Капучино" }).waitFor();
+      await page.getByRole("textbox", { name: "Количество для Капучино" }).waitFor();
+      await page.getByRole("combobox", { name: "Помол для Капучино" }).waitFor();
+      await page.getByRole("button", { name: "Добавить" }).waitFor();
+      await page.getByRole("button", { name: "Следующая страница" }).waitFor();
+      assert.deepEqual(catalogStatuses, [403, 503, 200]);
     } else {
       await page.getByRole("heading", { name: "Капучино" }).waitFor();
       assert.equal(await page.getByRole("textbox", { name: "Количество для Капучино" }).count(), 1);
