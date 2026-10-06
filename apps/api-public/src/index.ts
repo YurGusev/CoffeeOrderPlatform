@@ -261,7 +261,7 @@ function orderParams(request: Request): Record<string, unknown> {
 }
 
 async function forwardOrder(request: Request, reply: Reply, adapters: PublicApiAdapters, operationId: OrdersOperationId, method: "GET" | "POST" | "PUT" | "DELETE", path: string, body: unknown, extra: Readonly<{idempotencyKey?: string; ifMatchVersion?: string; replayOnly?: boolean}> = {}): Promise<Reply> {
-  if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+  if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-nginx")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
   const requestContext = context(request, operationId === "getOrderCard" ? 1_000 : undefined);
   let claims: ActorContextClaims;
   try { claims = await ordersActor(request, adapters, operationId, requestContext.signal); }
@@ -328,7 +328,7 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
     errorHandler: (error, request, reply) => frameworkError(request, reply, error),
     schema: {response: pricingResponseSchema(pricingContractSchemas.response, 201, [400, 401, 403, 404, 409, 410, 500, 503])},
     handler: async (request, reply) => {
-      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-nginx")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
       const requestContext = context(request);
       let claims: ActorContextClaims;
       try { claims = await pricingActor(request, adapters, requestContext.signal); }
@@ -356,7 +356,7 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
     errorHandler: (error, request, reply) => frameworkError(request, reply, error),
     schema: {response: customerResponseSchema(customerContractSchemas.response, 201, [400, 401, 403, 409, 410, 500, 503])},
     handler: async (request, reply) => {
-      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-nginx")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
       const requestContext = context(request);
       let claims: ActorContextClaims;
       try { claims = await actor(request, adapters, "createCustomer", requestContext.signal); }
@@ -384,7 +384,7 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
     config: {runtimeDeadlineProfile: "defaultMs"},
     schema: {response: customerResponseSchema(customerContractSchemas.searchResponse, 200, [400, 401, 403, 500, 503])},
     handler: async (request, reply) => {
-      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-nginx")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
       const requestContext = context(request, 1_000);
       let claims: ActorContextClaims;
       try { claims = await actor(request, adapters, "searchCustomers", requestContext.signal); }
@@ -412,7 +412,7 @@ export function registerPublicRoutes(app: RuntimeApp, adapters: PublicApiAdapter
     schema: {response: catalogResponseSchema(catalogContractSchemas.searchResponse, 200, [400, 401, 403, 503])},
     handler: async (request, rawReply) => {
       const reply = rawReply as unknown as Reply;
-      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-gateway")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
+      if (!adapters.verifyTransport(request, adapters.expectedIngressCaller ?? "edge-nginx")) return sendProblem(reply, problem(request, 401, "AUTHENTICATION_REQUIRED", "service identity is required"));
       const requestContext = context(request, 1_000);
       let claims: ActorContextClaims;
       try { claims = await catalogActor(request, adapters, requestContext.signal); }
@@ -705,8 +705,7 @@ export function createConfiguredPublicAdapters(context: RuntimeCompositionContex
     }, signingKey);
   };
   return {
-    // Exactly one caller is allowed at a time; #162 materializes the native runtime profile.
-    expectedIngressCaller: Object.hasOwn(context.config.services, "edge-nginx") ? "edge-nginx" : "edge-gateway",
+    expectedIngressCaller: "edge-nginx",
     verifyTransport: (request, expectedCaller) => request.runtimeContext?.transportIdentity?.runtime === expectedCaller,
     verifyActor: (token, operationId, signal, correlationId) => {
       signal.throwIfAborted();

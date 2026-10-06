@@ -30,7 +30,7 @@ async function capture(page: Page, name: string): Promise<void> {
   await page.screenshot({ fullPage: true, path: resolve(screenshotDir, name) });
 }
 
-function customerSummary() {
+export function customerSummary() {
   return { customerRef, version: "1", displayName: "Иван Петров", phone: "+79999994567" };
 }
 
@@ -38,7 +38,7 @@ function customerResponse() {
   return { ...customerSummary(), createdAt: timestamp, updatedAt: timestamp };
 }
 
-function orderCard(
+export function orderCard(
   version = "1",
   status: "Draft" | "Confirmed" = "Draft",
   withItem = false,
@@ -2240,4 +2240,275 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+type ServedControls = {
+  actor: (actorRef: string, permissions?: string[]) => void;
+  failures: (next: Record<string, number>) => void;
+  reset: () => void;
+  conflict: () => void;
+  divergentProjection: () => void;
+  olderProjection: () => void;
+  hold: () => void;
+  release: () => void;
+  records: () => Array<{ operation?: string; method?: string }>;
+  expiry: () => Promise<void>;
+  expire: () => void;
+};
+
+export async function runServedBrowser(context: BrowserContext, base: string, evidence: string, controls: ServedControls): Promise<void> {
+  const page = await context.newPage();
+  page.setDefaultTimeout(8_000);
+  const network: Array<{ method: string; path: string; status: number }> = [];
+  page.on("response", (response) => network.push({ method: response.request().method(), path: new URL(response.url()).pathname, status: response.status() }));
+  try {
+    const absent = await context.request.get(`${base}/auth/session`);
+    assert.equal(absent.status(), 401);
+    const login = await context.request.get(`${base}/auth/login?returnTo=/app/customers`, { maxRedirects: 0 });
+    assert.equal(login.status(), 303);
+    const authorization = new URL(login.headers()["location"] ?? "");
+    const state = authorization.searchParams.get("state");
+    assert.ok(state);
+    await page.goto(`${base}/auth/callback?state=${encodeURIComponent(state)}&code=${encodeURIComponent(state)}`);
+    const cookies = await context.cookies(base);
+    for (const [name, httpOnly] of [["__Host-coffee-session", true], ["__Host-coffee-csrf", false]] as const) {
+      const cookie = cookies.find((entry) => entry.name === name);
+      assert.ok(cookie);
+      assert.equal(cookie.secure, true);
+      assert.equal(cookie.httpOnly, httpOnly);
+      assert.equal(cookie.path, "/");
+      assert.equal(cookie.sameSite, "Lax");
+    }
+    const session = await context.request.get(`${base}/auth/session`);
+    network.push({ method: "GET", path: "/auth/session", status: session.status() });
+    assert.equal(session.status(), 200, "actual production session must be available after successful OIDC callback");
+    await page.getByRole("heading", { name: "Клиенты", exact: true }).waitFor();
+    for (const [route, heading] of [["/app/customers", "Клиенты"], ["/app/catalog", "Не выбран заказ"], ["/app/orders/new", "Новый заказ"], [`/app/orders/${orderRef}`, "Иван Петров"]]) {
+      assert.equal((await page.goto(`${base}${route}`))?.status(), 200);
+      await page.getByText(heading!, { exact: true }).first().waitFor();
+      assert.equal((await page.reload())?.status(), 200);
+      await page.getByText(heading!, { exact: true }).first().waitFor();
+    }
+    const assetPaths = [...new Set(network.filter(r => r.path.startsWith('/assets/') && /\.(js|css)$/u.test(r.path)).map(r => r.path))];
+    assert.ok(assetPaths.some(p => p.endsWith('.js')) && assetPaths.some(p => p.endsWith('.css')));
+    for (const assetPath of assetPaths) {
+      assert.match(assetPath, /-[A-Za-z0-9_-]{8,}\.(js|css)$/u);
+      const asset = await context.request.get(`${base}${assetPath}`);
+      assert.equal(asset.status(), 200);
+      assert.match(asset.headers()['cache-control'] ?? '', /immutable/u);
+      assert.ok((await asset.body()).length > 0);
+    }
+    for (const route of ["/assets/missing.js", "/api/client-v1/missing", "/events/missing"]) {
+      const response = await context.request.get(`${base}${route}`);
+      assert.equal(response.status(), 404);
+      assert.equal((await response.text()).includes('<div id="root">'), false);
+    }
+    await page.goto(`${base}/`);
+    await page.getByRole("heading", { name: "Клиенты", exact: true }).waitFor();
+    const tabTo = async (locator: ReturnType<Page["getByRole"]>): Promise<void> => {
+      await locator.waitFor({ state: "visible" });
+      for (let i = 0; i < 100; i += 1) {
+        if (await locator.evaluate(node => node === document.activeElement || node.contains(document.activeElement))) return;
+        await page.keyboard.press("Tab");
+      }
+      assert.fail(`Keyboard focus could not reach ${String(locator)}`);
+    };
+    const press = async (locator: ReturnType<Page["getByRole"]>): Promise<void> => { await tabTo(locator); await page.keyboard.press("Enter"); };
+    const type = async (locator: ReturnType<Page["getByRole"]>, value: string): Promise<void> => { await tabTo(locator); await page.keyboard.press("Control+A"); await page.keyboard.type(value); };
+    await press(page.getByRole("button", { name: "Новый клиент" }));
+    const dialog = page.getByRole("dialog", { name: "Новый клиент" });
+    await type(dialog.getByRole("textbox", { name: "Имя", exact: true }), "Иван Петров");
+    await type(dialog.getByRole("textbox", { name: "Телефон", exact: true }), "+79991234567");
+    await press(dialog.getByRole("button", { name: "Создать и выбрать" }));
+    await page.getByRole("heading", { name: "Новый заказ" }).waitFor();
+    await press(page.getByRole("button", { name: "Создать черновик" }));
+    await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+    await press(page.getByRole("link", { name: "Открыть каталог" }));
+    await page.getByRole("heading", { name: "Поиск товаров" }).waitFor();
+    await type(page.getByRole("textbox", { name: "Название товара" }), "капучино");
+    await press(page.getByRole("button", { name: "Найти" }));
+    await page.getByRole("heading", { name: "Капучино" }).waitFor();
+    await type(page.getByRole("textbox", { name: "Количество для Капучино" }), "2");
+    await press(page.getByRole("button", { name: "Добавить" }));
+    await page.getByText("Товар добавлен", { exact: true }).waitFor();
+    await press(page.getByRole("link", { name: "К заказу" }).first());
+    await page.getByText("500,00 ₽").first().waitFor();
+    await press(page.getByRole("button", { name: "Подтвердить заказ" }));
+    await press(page.getByRole("dialog", { name: "Подтвердить заказ?" }).getByRole("button", { name: "Подтвердить", exact: true }));
+    await page.getByText("Подтверждён").waitFor();
+    await page.screenshot({ path: resolve(evidence, "served-happy-path.png"), fullPage: true });
+    await press(page.getByRole("button", { name: "Запросить сверку AROMA" }));
+    const reconciliation = page.getByRole("dialog", { name: "Запросить сверку AROMA?" });
+    await type(reconciliation.getByRole("textbox", { name: "Причина" }), "Проверка isolated fixture");
+    await press(reconciliation.getByRole("button", { name: "Отправить запрос" }));
+    await reconciliation.waitFor({ state: "hidden" });
+    const scenarios: Array<{ name: string; status: string; boundary?: string }> = ['default-clock-crypto-login-keyboard-happy-path', 'four-deep-links-and-reload-render-ui', 'fresh-built-hashed-assets-immutable', 'missing-assets-api-events-no-spa-fallback', 'absent-session-native-401', 'root-navigation'].map(name => ({name, status:'pass'}));
+    const { writeFile } = await import("node:fs/promises");
+    const passed = async (name: string, boundary?: string): Promise<void> => {
+      scenarios.push({ name, status: "pass", ...(boundary ? { boundary } : {}) });
+      await page.screenshot({ path: resolve(evidence, `${name}.png`), fullPage: true });
+      await writeFile(resolve(evidence, "scenarios.json"), JSON.stringify(scenarios, null, 2));
+    };
+    const loginWithoutNavigation = async (): Promise<void> => {
+      const start = await context.request.get(`${base}/auth/login?returnTo=/app/customers`, { maxRedirects: 0 });
+      assert.equal(start.status(), 303);
+      const value = new URL(start.headers()["location"] ?? "").searchParams.get("state");
+      assert.ok(value);
+      const callback = await context.request.get(`${base}/auth/callback?state=${encodeURIComponent(value)}&code=${encodeURIComponent(value)}`, { maxRedirects: 0 });
+      assert.equal(callback.status(), 303);
+      assert.equal((await context.request.get(`${base}/auth/session`)).status(), 200);
+    };
+    const nav = (name: string) => page.getByRole("navigation", { name: "Основная навигация" }).getByRole("link", { name, exact: true });
+    await page.clock.install();
+    // Native UI links and browser Back, not history injection or browser interception.
+    for (const resource of ["customers", "catalog"] as const) {
+      controls.reset();
+      controls.actor("served-operator");
+      await loginWithoutNavigation();
+      const path = resource === "customers" ? "/app/customers?q=иван" : `/app/catalog?orderRef=${orderRef}&q=капучино`;
+      const heading = resource === "customers" ? "Иван Петров" : "Капучино";
+      const operation = resource === "customers" ? "searchCustomers" : "searchCatalogProducts";
+      for (const status of [403, 503] as const) {
+        controls.failures({});
+        await page.goto(`${base}${path}`, { waitUntil: "networkidle" });
+        await page.getByRole("heading", { name: heading }).waitFor();
+        await press(nav("Новый заказ"));
+        await page.getByRole("heading", { name: "Новый заказ", exact: true }).waitFor();
+        if (status === 403) { controls.actor("served-operator", []); await loginWithoutNavigation(); }
+        else controls.failures({ [operation]: 503 });
+        await page.clock.fastForward(31_000);
+        const failed = page.waitForResponse(r => new URL(r.url()).pathname === (resource === "customers" ? "/api/client-v1/customers" : "/api/client-v1/catalog/products") && r.status() === status);
+        await page.goBack(); await failed;
+        if (status === 403) {
+          await page.getByText("Недостаточно прав", { exact: true }).waitFor();
+          assert.equal(await page.getByRole("heading", { name: heading }).count(), 0);
+          if(resource==='customers') { assert.equal(await page.getByText('+799••••4567').count(),0); assert.equal(await page.getByText(customerRef,{exact:true}).count(),0); assert.equal(await page.getByRole('button',{name:'Выбрать',exact:true}).count(),0); }
+          else { assert.equal(await page.getByRole('button',{name:'Добавить',exact:true}).count(),0); assert.equal(await page.getByRole('textbox',{name:'Количество для Капучино'}).count(),0); }
+          assert.equal((await context.request.get(`${base}/auth/session`)).status(), 200);
+          await passed(`${resource}-native-back-real-permission-403`);
+          // A following 503 cannot resurrect the already denied cache.
+          controls.actor("served-operator"); await loginWithoutNavigation();
+          await page.clock.fastForward(31_000);
+          controls.failures({ [operation]: 503 });
+          await press(nav("Новый заказ"));
+          await page.getByRole("heading", { name: "Новый заказ", exact: true }).waitFor();
+          const unavailable = page.waitForResponse(r => new URL(r.url()).pathname.includes(resource === "customers" ? "/customers" : "/catalog/products") && r.status() === 503);
+          await page.goBack(); await unavailable;
+          assert.equal(await page.getByRole("heading", { name: heading }).count(), 0);
+          if(resource==='customers') { assert.equal(await page.getByText('+799••••4567').count(),0); assert.equal(await page.getByText(customerRef,{exact:true}).count(),0); assert.equal(await page.getByRole('button',{name:'Выбрать',exact:true}).count(),0); }
+          else { assert.equal(await page.getByRole('button',{name:'Добавить',exact:true}).count(),0); assert.equal(await page.getByRole('textbox',{name:'Количество для Капучино'}).count(),0); }
+          await passed(`${resource}-denial-then-503-no-resurrection`);
+        } else {
+          await page.clock.fastForward(600);
+          await page.getByText("Сервис временно недоступен", { exact: true }).waitFor();
+          await page.getByRole("heading", { name: heading }).waitFor();
+          await passed(`${resource}-native-back-temporary-503-retains-authorized-cache`);
+        }
+        controls.actor("served-operator"); controls.failures({}); await loginWithoutNavigation();
+      }
+    }
+    controls.reset();
+    await page.goto(`${base}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+    controls.conflict();
+    await page.getByRole("textbox", { name: "Количество Капучино" }).fill("3");
+    await press(page.getByRole("button", { name: "Обновить", exact: true }));
+    await page.getByRole("dialog", { name: "Заказ изменился на сервере" }).waitFor();
+    const commandsBefore = controls.records().filter(r => r.operation === "upsertOrderItem").length;
+    const readsBefore = controls.records().filter(r => r.operation === "getOrderCard").length;
+    await press(page.getByRole("button", { name: "Обновить карточку", exact: true }));
+    await page.getByRole("dialog", { name: "Заказ изменился на сервере" }).waitFor({ state: "hidden" });
+    assert.ok(controls.records().filter(r => r.operation === "getOrderCard").length > readsBefore);
+    assert.equal(controls.records().filter(r => r.operation === "upsertOrderItem").length, commandsBefore);
+    await passed("conflict-explicit-owner-get-no-resubmit");
+    for (const fatalStatus of [403, 404] as const) {
+      controls.reset();
+      await page.goto(`${base}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+      controls.hold();
+      await page.getByRole("textbox", { name: "Количество Капучино" }).fill("3");
+      const before = controls.records().filter(r => r.operation === "upsertOrderItem").length;
+      await press(page.getByRole("button", { name: "Обновить", exact: true }));
+      await expect.poll(() => controls.records().filter(r => r.operation === "upsertOrderItem").length).toBe(before + 1);
+      await press(nav("Новый заказ"));
+      await page.getByRole("heading", { name: "Новый заказ", exact: true }).waitFor();
+      await page.clock.fastForward(31_000);
+      controls.failures({ getOrderCard: fatalStatus });
+      const denied = page.waitForResponse(r => new URL(r.url()).pathname === `/api/client-v1/orders/${orderRef}` && r.status() === fatalStatus);
+      await page.goBack(); await denied;
+      await page.getByText(fatalStatus === 403 ? "Недостаточно прав" : "Заказ не найден", { exact: true }).first().waitFor();
+      const lateResponse = page.waitForResponse(r => r.request().method() === 'PUT' && r.status() === 200);
+      controls.release();
+      await lateResponse;
+      await page.clock.fastForward(500);
+      assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0);
+      assert.equal(await page.getByRole("textbox", { name: "Количество Капучино" }).count(), 0);
+      await passed(`late-mutation-fatal-owner-get-${fatalStatus}-no-resurrection`);
+      for (const laterStatus of [503, 200] as const) {
+        await press(nav("Новый заказ"));
+        await page.getByRole("heading", { name: "Новый заказ", exact: true }).waitFor();
+        if(laterStatus===503) controls.failures({getOrderCard:503}); else controls.divergentProjection();
+        await page.clock.fastForward(31_000);
+        const laterRead=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/client-v1/orders/${orderRef}`&&r.status()===laterStatus);
+        await page.goBack(); await laterRead;
+        if(laterStatus===503) await page.clock.fastForward(600);
+        assert.equal(await page.getByRole('heading',{name:'Иван Петров'}).count(),0);
+        assert.equal(await page.getByRole('textbox',{name:'Количество Капучино'}).count(),0);
+        await passed(`fatal-${fatalStatus}-then-${laterStatus===200?'equal-divergent-projection-200':'503'}-no-resurrection`);
+      }
+      await press(nav("Новый заказ"));
+      await page.getByRole("heading", { name: "Новый заказ", exact: true }).waitFor();
+      controls.olderProjection();
+      await page.clock.fastForward(31_000);
+      const olderRead = page.waitForResponse(r => new URL(r.url()).pathname === `/api/client-v1/orders/${orderRef}` && r.status() === 200);
+      await page.goBack();
+      const olderResponse = await olderRead;
+      assert.equal((await olderResponse.json()).projectionVersion, "1");
+      await page.getByText(fatalStatus === 403 ? "Недостаточно прав" : "Заказ не найден", { exact: true }).first().waitFor();
+      assert.equal(await page.getByRole("heading", { name: "Иван Петров" }).count(), 0);
+      assert.equal(await page.getByRole("textbox", { name: "Количество Капучино" }).count(), 0);
+      assert.equal(controls.records().filter(r => r.operation === "upsertOrderItem").length, before + 1);
+      await passed(`fatal-${fatalStatus}-then-older-projection-200-no-resurrection`);
+      await press(nav("Новый заказ"));
+      await page.getByRole("heading", { name: "Новый заказ", exact: true }).waitFor();
+      controls.reset();
+      await page.clock.fastForward(31_000);
+      const acceptedRead = page.waitForResponse(r => new URL(r.url()).pathname === `/api/client-v1/orders/${orderRef}` && r.status() === 200);
+      await page.goBack();
+      assert.equal((await (await acceptedRead).json()).projectionVersion, "2");
+      await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+      await page.getByRole("textbox", { name: "Количество Капучино" }).waitFor();
+      assert.equal(controls.records().filter(r => r.operation === "upsertOrderItem").length, before + 1);
+      await passed(`fatal-${fatalStatus}-then-accepted-equal-projection-200-restores-card`);
+    }
+    controls.reset();
+    await page.goto(`${base}/app/customers`, { waitUntil: "networkidle" });
+    await press(page.getByRole("button", { name: "Новый клиент" }));
+    await page.getByRole("dialog", { name: "Новый клиент" }).getByRole("textbox", { name: "Имя", exact: true }).fill("Old actor private draft");
+    const mutationsBefore = controls.records().filter(r => r.method === "POST").length;
+    controls.actor("served-operator-2"); await loginWithoutNavigation();
+    await page.clock.fastForward(31_000);
+    await page.getByText("served-operator-2", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("dialog", { name: "Новый клиент" }).count(), 0);
+    assert.equal(controls.records().filter(r => r.method === "POST").length, mutationsBefore);
+    await passed("session-switch-fences-old-form-and-commands");
+    await press(page.getByRole("button", { name: "Выйти", exact: true }));
+    await press(page.getByRole("button", { name: "Завершить сессию", exact: true }));
+    await page.getByText("Требуется вход", { exact: true }).waitFor();
+    assert.equal((await context.request.get(`${base}/auth/session`)).status(), 401);
+    await passed("real-logout-csrf-401-private-ui-hidden");
+    await controls.expiry();
+    await loginWithoutNavigation();
+    await page.goto(`${base}/app/customers`, { waitUntil: "networkidle" });
+    controls.expire();
+    assert.equal((await context.request.get(`${base}/auth/session`)).status(), 401);
+    await page.reload();
+    await page.getByText("Требуется вход", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("heading", { name: "Клиенты", exact: true }).count(), 0);
+    await passed("authority-clock-absolute-expiry-native-401", "Distinct injectable authority now fixture; not wall-clock or live IdP expiry");
+  } finally {
+    controls.release();
+    await page.screenshot({ path: resolve(evidence, "served-last-state.png"), fullPage: true });
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(resolve(evidence, "browser-network.json"), JSON.stringify(network, null, 2));
+    await page.close();
+  }
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

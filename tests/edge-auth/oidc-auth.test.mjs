@@ -149,6 +149,18 @@ void test("valid callback maps identity only through resolver and yields opaque 
   assert.equal(h.authority.session(completed.sessionId), undefined);
 });
 
+void test("fractional clock yields an integer session expiry without extending its absolute lifetime", async () => {
+  const h = harness({nowState: {value: BASE + 0.75}});
+  const completed = await loginAndComplete(h);
+  assert.equal(completed.expiresAt, BASE + 15 * 60_000);
+  assert.equal(Number.isInteger(completed.expiresAt), true);
+  assert.equal(h.authority.session(completed.sessionId).expiresAt, completed.expiresAt);
+  h.setTime(completed.expiresAt - 0.25);
+  assert.ok(h.authority.session(completed.sessionId));
+  h.setTime(completed.expiresAt);
+  assert.equal(h.authority.session(completed.sessionId), undefined);
+});
+
 void test("state is consumed before exchange and callback cannot be replayed", async () => {
   const h = harness({tokenStatus: 503});
   const login = await h.begin();

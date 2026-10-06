@@ -9,6 +9,12 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+if (process.argv.includes('--web-served-proof')) {
+  const { runServedProof } = await import('./fixtures/served-backend.mjs');
+  await runServedProof();
+  process.exit(0);
+}
+
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const suffix = `${process.pid}`;
 const nginxImage = `coffee-edge-nginx:issue162-${suffix}`;
