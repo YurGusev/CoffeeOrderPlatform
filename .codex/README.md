@@ -1,11 +1,11 @@
-# Sol и Luna для CoffeeOrderPlatform
+# Sol, Luna и Astra для CoffeeOrderPlatform
 
 Локальная адаптация [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator).
 
-| Режим | Root и reviewer | Luna | Лимит субагентов |
-|---|---|---|---|
-| Обычный | root — Sol по умолчанию; reviewer — Sol low | medium | 4 |
-| Большой | root — Sol medium; reviewer — Sol medium | high | 8 |
+| Режим | Root | Luna | Reviewer | Лимит субагентов |
+|---|---|---|---|---|
+| Обычный | GPT-6.1 Sol, reasoning из настроек пользователя | GPT-6 Luna high | GPT-6 Astra medium | 4 |
+| Большой | GPT-6.1 Sol medium | GPT-6 Luna high | GPT-6 Astra medium | 8 |
 
 Лимит исключает корневого агента; это потолок, а не обязательное число.
 Начинать с одного Luna для содержательной подзадачи; добавлять остальных только
@@ -14,34 +14,34 @@
 Из корня проекта:
 
 ```bash
-codex # Root Sol из конфигурации проекта
+codex # Root GPT-6.1 Sol из конфигурации проекта
 bash .codex/large.sh # Большой
 ```
 
 Большой запуск принимает аргументы Codex, например:
 `bash .codex/large.sh exec 'Описание задачи'`.
-Режимы проверены на Codex CLI 0.153.2. Большой запуск задаёт параметры через
-CLI overrides, включая отдельный файл reviewer. Глобальные профили для этих
+Режимы проверены на Codex CLI 0.153.2 до изменения моделей. Большой запуск задаёт
+reasoning root и лимит субагентов через CLI overrides. Глобальные профили для этих
 режимов не создаются.
 [Документация профилей](https://developers.openai.com/codex/config-advanced/#profiles).
 
-Проект задаёт Sol как модель root по умолчанию; reasoning берётся из выбора
+Проект задаёт GPT-6.1 Sol как модель root по умолчанию; reasoning берётся из выбора
 пользователя или его настроек. В Desktop и параметрами запуска модель можно
 переопределить; тогда фактическая модель root может отличаться от схемы ниже,
-а reviewer останется Sol. Для воспроизводимого большого режима использовать
+а reviewer останется GPT-6 Astra. Для воспроизводимого большого режима использовать
 команду выше в терминале. Она не переключает открытые задачи Desktop.
 
 Навык `$astra-orchestrator` находится в `.agents/skills/astra-orchestrator`;
 после изменения конфигурации агентов использовать новую сессию. Глобальные
 настройки не изменяются.
-Роли explorer, worker, tester и researcher закреплены на GPT-6 Luna, reasoning
-наследуют от agents; reviewer закреплён на GPT-6 Sol с настройкой для каждого режима.
+Роли explorer, worker, tester и researcher закреплены на GPT-6 Luna high;
+reviewer закреплён на GPT-6 Astra medium в обоих режимах.
 Глобальная luna_worker в проекте использует worker без фиксированного xhigh.
 
 ## Передача работы и возврат замечаний
 
 ```text
-                   GPT-6 Sol
+                  GPT-6.1 Sol
                root / orchestrator
                        |
        +---------------+---------------+
@@ -54,13 +54,13 @@ CLI overrides, включая отдельный файл reviewer. Глобал
                       Luna
                        |
                     reviewer
-                      Sol
+                     Astra
                        |
-                   GPT-6 Sol
+                  GPT-6.1 Sol
                integrate + verify
 ```
 
-Root — основной агент задачи; reviewer — отдельный субагент Sol.
+Root — основной агент задачи; reviewer — отдельный субагент Astra.
 Reviewer сообщает root замечания, рекомендуемую роль и критерии приёмки.
 Root организует исправления, tester проверяет их, reviewer повторяет ревью.
 Подробные правила — в [навыке оркестратора](../.agents/skills/astra-orchestrator/SKILL.md#цикл-ревью-и-исправлений).
@@ -79,4 +79,4 @@ Sol принимает архитектурные решения и резуль
 не повторяет весь поиск, тестовый прогон и ревью без новых оснований.
 Точные границы: [правила Codex](../.agents/skills/astra-orchestrator/references/codex.md#границы-и-экономия-sol).
 Настройка задаёт поведение, а не жёсткий бюджет токенов и не автоматический
-маршрутизатор. Для применения в Desktop открыть новую задачу с Sol.
+маршрутизатор. Для применения в Desktop открыть новую задачу с GPT-6.1 Sol.

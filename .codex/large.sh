@@ -4,6 +4,4 @@ set -eu
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 exec codex -C "$project_dir" \
   -c 'model_reasoning_effort="medium"' \
-  -c 'agents.default_subagent_reasoning_effort="high"' \
-  -c 'agents.max_concurrent_threads_per_session=8' \
-  -c "agents.reviewer.config_file=\"$project_dir/.codex/large-reviewer.toml\"" "$@"
+  -c 'agents.max_concurrent_threads_per_session=8' "$@"

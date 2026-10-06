@@ -1,12 +1,102 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import childProcess from "node:child_process";
 import { spawnSync } from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const COMPOSE_FILE = join(REPO_ROOT, "compose.yaml");
+
+void test("smoke removes only images built by this run and preserves keep/no-build/shared images", async (t) => {
+  const {buildRuntimeImages, removeBuiltRuntimeImages} = await import("../../tools/compose-smoke.mjs");
+  const calls = [];
+  t.mock.method(childProcess, "execFileSync", (command, args) => {
+    calls.push([command, args]);
+    if (args.includes("RUNTIME=second")) throw new Error("build interrupted");
+    return "";
+  });
+  syncBuiltinESMExports();
+  try {
+    const images = [];
+    assert.throws(() => buildRuntimeImages("coffee-cleanup-proof", ["first", "second"], images), /interrupted/);
+    assert.deepEqual(images, ["coffee-cleanup-proof-first:latest"]);
+    calls.length = 0;
+    removeBuiltRuntimeImages(images, {keep: true});
+    removeBuiltRuntimeImages(images, {noBuild: true});
+    assert.deepEqual(calls, []);
+    removeBuiltRuntimeImages(images, {});
+    assert.deepEqual(calls, [["docker", ["image", "rm", "coffee-cleanup-proof-first:latest"]]]);
+    calls.length = 0;
+    const complete = [];
+    buildRuntimeImages("coffee-cleanup-proof", ["first"], complete);
+    assert.deepEqual(complete, images, "shared nginx must not be scheduled for deletion");
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+});
+
+void test("all smoke modes isolate networks while only topology smoke adopts external PostgreSQL", async () => {
+  const {writeScopedComposeOverride} = await import("../../tools/compose-smoke.mjs");
+  for (const sharedPostgres of [true, false]) {
+    const path = await writeScopedComposeOverride("coffee-scope-proof", {sharedPostgres});
+    try {
+      const result = spawnSync("docker", ["compose", "-p", "coffee-scope-proof", "-f", COMPOSE_FILE, "-f", path, "config", "--format", "json"], {encoding: "utf8"});
+      assert.equal(result.status, 0, result.stderr);
+      const config = JSON.parse(result.stdout);
+      for (const [name, network] of Object.entries(config.networks)) {
+        assert.equal(network.name, name === "coffee_postgres_data" && sharedPostgres ? name : `coffee-scope-proof_${name}`);
+      }
+      assert.equal(config.networks.coffee_postgres_data.external, true);
+    } finally {
+      await rm(path);
+    }
+  }
+});
+
+void test("local container controls exclude shared PostgreSQL and refuse deletion of running groups", async () => {
+  const directory = await mkdtemp("/dev/shm/coffee-controls-proof-");
+  const docker = join(directory, "docker");
+  await writeFile(docker, `#!/bin/sh
+case "$1" in
+  ps)
+    case "$*" in
+      *service=api*) echo 'api-id api' ;;
+      *) printf 'db-id postgres\\napi-id api\\nui-id blazorui\\n' ;;
+    esac ;;
+  inspect)
+    case "$*" in *Running*) echo true ;; *) printf '%s\\n' "$*" ;; esac ;;
+  start|stop) printf '%s\\n' "$*" ;;
+  container) echo 'unsafe delete reached' >&2; exit 99 ;;
+  *) exit 98 ;;
+esac
+`, "utf8");
+  await chmod(docker, 0o700);
+  const run = (...args) => spawnSync("bash", [join(REPO_ROOT, "tools/coffee-containers.sh"), ...args], {encoding: "utf8", env: {...process.env, PATH: `${directory}:${process.env.PATH}`}});
+  try {
+    const status = run("legacy", "status");
+    assert.equal(status.status, 0, status.stderr);
+    assert.match(status.stdout, /api-id ui-id/);
+    assert.doesNotMatch(status.stdout, /db-id/);
+    const start = run("legacy", "start");
+    assert.equal(start.status, 0);
+    assert.equal(start.stdout.trim(), "start api-id", "disabled UI must remain stopped");
+    const stop = run("legacy", "stop");
+    assert.equal(stop.status, 0);
+    assert.equal(stop.stdout.trim(), "stop --time 30 api-id ui-id");
+    const removal = run("legacy", "remove");
+    assert.equal(removal.status, 1);
+    assert.match(removal.stderr, /Сначала/);
+    assert.doesNotMatch(removal.stderr, /unsafe delete/);
+    assert.equal(run("legacy", "remove", "--volumes").status, 2);
+    assert.equal(run("unknown", "stop").status, 2);
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+});
 
 const RUNTIMES = [
   "edge-gateway",

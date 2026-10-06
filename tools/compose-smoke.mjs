@@ -243,7 +243,7 @@ function runDockerAsync(args, options = {}) {
   });
 }
 
-function buildRuntimeImages(projectName, runtimes = RUNTIMES) {
+export function buildRuntimeImages(projectName, runtimes = RUNTIMES, builtImages = []) {
   for (const runtime of runtimes) {
     execFileSync(
       process.execPath,
@@ -260,6 +260,7 @@ function buildRuntimeImages(projectName, runtimes = RUNTIMES) {
       ],
       { cwd: ROOT, env: process.env, stdio: "inherit" },
     );
+    builtImages.push(`${projectName}-${runtime}:latest`);
   }
   execFileSync(
     process.execPath,
@@ -273,6 +274,17 @@ function buildRuntimeImages(projectName, runtimes = RUNTIMES) {
     ],
     {cwd: ROOT, env: process.env, stdio: "inherit"},
   );
+}
+
+export function removeBuiltRuntimeImages(images, options) {
+  if (options.keep || options.noBuild) return;
+  for (const image of images) {
+    try {
+      runDocker(["image", "rm", image]);
+    } catch {
+      console.warn(`compose-smoke: image cleanup failed, preserved ${image}`);
+    }
+  }
 }
 
 async function writeStubSecret(
@@ -783,7 +795,7 @@ function ensureExternalNetwork(options) {
   }
 }
 
-async function writeScopedComposeOverride(projectName, options = {}) {
+export async function writeScopedComposeOverride(projectName, options = {}) {
   const path = join(
     SECRETS_TMPFS_ROOT,
     `coffee-platform-compose-${projectName}-${randomUUID().slice(0, 8)}.yaml`,
@@ -792,7 +804,7 @@ async function writeScopedComposeOverride(projectName, options = {}) {
     "networks:",
     ...COMPOSE_NETWORKS.flatMap((network) => [
       `  ${network}:`,
-      `    name: ${projectName}_${network}`,
+      `    name: ${network === EXTERNAL_POSTGRES_NETWORK && options.sharedPostgres ? network : `${projectName}_${network}`}`,
       `    external: ${network === EXTERNAL_POSTGRES_NETWORK ? "true" : "false"}`,
       ...(network === "coffee_provider_egress" && (options.aromaCartProof || options.recoveryProof)
         ? ["    internal: true"]
@@ -3340,6 +3352,13 @@ async function main() {
   const projectName =
     options.projectName ??
     `coffee-compose-smoke-${process.pid}-${randomUUID().slice(0, 8)}`;
+  assert.notEqual(projectName, "coffee-platform", "smoke must not use the main platform project");
+  assert.notEqual(projectName, "coffeeordersystem", "smoke must not use the legacy project");
+  for (const [resource, list] of [["container", "ps"], ["volume", "volume"], ["network", "network"]]) {
+    const args = list === "ps" ? ["ps", "--all", "--quiet"] : [list, "ls", "--quiet"];
+    assert.equal(runDocker([...args, "--filter", `label=com.docker.compose.project=${projectName}`]).trim(), "",
+      `smoke project already has ${resource} resources: ${projectName}; choose a new project name`);
+  }
   const secretsDir = await mkdtemp(
     join(SECRETS_TMPFS_ROOT, "coffee-platform-secrets-"),
   );
@@ -3347,6 +3366,7 @@ async function main() {
   let databaseProofNetwork;
   let composeFile = COMPOSE_FILE;
   let composeAttempted = false;
+  const builtImages = [];
   let databaseProofContainer;
   let recoveryDatabaseProof;
   let recoveryProofCredentials;
@@ -3380,12 +3400,13 @@ async function main() {
     recoveryProofCredentials = options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
       ? await readRecoveryProofCredentials()
       : undefined;
+    composeFile = await writeScopedComposeOverride(projectName, {
+      sharedPostgres: !(options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof),
+      aromaBindingProof: options.aromaBindingProof,
+      aromaCartProof: options.aromaCartProof,
+      recoveryProof: options.recoveryProof,
+    });
     if (options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
-      composeFile = await writeScopedComposeOverride(projectName, {
-        aromaBindingProof: options.aromaBindingProof,
-        aromaCartProof: options.aromaCartProof,
-        recoveryProof: options.recoveryProof,
-      });
       const networkNames = databaseProofNetworkNames(projectName);
       for (const networkName of networkNames) {
         try {
@@ -3502,6 +3523,7 @@ async function main() {
           : options.aromaBindingProof || options.aromaCartProof
             ? ["api-internal", "aroma-gateway"]
             : RUNTIMES,
+        builtImages,
       );
     if (options.customerProof) await writeCustomerProofFixtures(secretsDir, materialized.securityMaterial, materialized.transportMaterials);
     if (options.aromaBindingProof) aromaBindingFixture = await writeAromaBindingProofFixtures(secretsDir, materialized, platformConfig.environment, aromaBindingTlsObserver);
@@ -3759,9 +3781,7 @@ async function main() {
         runCompose(
           projectName,
           secretsDir,
-          options.databaseProof
-            ? ["down", "--volumes", "--remove-orphans"]
-            : ["down", "--volumes", "--remove-orphans"],
+          ["down", "--volumes", "--remove-orphans"],
           {composeFile},
         );
       } catch {
@@ -3789,6 +3809,7 @@ async function main() {
         /* never remove a network adopted by another workload */
       }
     }
+    removeBuiltRuntimeImages(builtImages, options);
     if (composeFile !== COMPOSE_FILE && !options.keep)
       await rm(composeFile, {force: true});
     if (!options.keep) await rm(secretsDir, { recursive: true, force: true });
@@ -3799,11 +3820,13 @@ async function main() {
   }
 }
 
-try {
-  await main();
-} catch (error) {
-  console.error(
-    `compose-smoke: FAIL: ${error instanceof Error ? error.message : String(error)}`,
-  );
-  process.exitCode = 1;
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    await main();
+  } catch (error) {
+    console.error(
+      `compose-smoke: FAIL: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exitCode = 1;
+  }
 }
