@@ -359,6 +359,12 @@ cached карточку и действия. Отказ сохраняется �
 ошибка повторного чтения или проверки проекции не подтверждает доступ. Completed lookup по прежнему
 ключу доказывает результат команды, а не право показывать её приватную карточку.
 
+Успешный HTTP 200 с меньшей `projectionVersion` не снимает fatal-барьер:
+monotonic guard оставляет сохранённую карточку, а query сохраняет исходный 403/404.
+Допустимый равный owner GET снимает отказ, даже когда guard возвращает прежний
+объект; допустимая новая проекция также восстанавливает карточку. Equal-version
+divergent GET и older GET — разные обязательные регрессии, не замены друг друга.
+
 ## 19. Повторное чтение поиска после отказа доступа — 5 октября 2026
 
 После Customer или Catalog search 403 cached результаты, действия строк и
@@ -380,3 +386,28 @@ cached карточку и действия. Отказ сохраняется �
 несохранённые количества предыдущего заказа не переходят в следующий заказ.
 Для команды выбранному заказу требуется заново открыть его диалог и подтвердить
 действие. Уже отправленная команда сохраняет прежний intent и путь восстановления.
+
+## 22. Native served-surface проверка #9
+
+`pnpm test:web-served-surface` собирает pinned native nginx и настоящую SPA,
+запускает production Edge routes/configured authorizer и API-public receiver.
+Транспорт nginx → Edge/API использует настоящие mTLS/SPIFFE и signed actor
+verification. Business owners и OIDC — изолированные fixtures; в served-ветке
+нет Vite preview, browser `route.fulfill` или echo API вместо production receiver.
+
+Артефакты сохраняются по `WEB_SERVED_EVIDENCE`; каждый прогон содержит безопасные
+HTTP metadata, сценарии, PNG и cleanup receipts. Harness удаляет только свои
+контейнеры, network, image и scoped tmpfs, закрывает browser и runtime listeners.
+Transient fixture credentials не входят в экспортируемые evidence.
+
+Сценарии покрывают keyboard-only happy path, четыре deep links/reload, immutable
+assets и отсутствие SPA fallback для API/events/missing assets, permission 403,
+отличие временного 503, native Back, конфликт без command resubmit, late mutation,
+fatal 403/404 → 503/divergent/older GET, допустимое восстановление, session switch
+и logout. Default-clock login не заменяется test clock. Отдельный expiry scenario
+явно использует injectable authority clock и не доказывает wall-clock/live IdP expiry.
+
+Fixture-based PASS не заменяет приёмку владельца, production IdP/PKI/provider,
+SSE capacity, CI или принятие изменений в `develop`. Исторический handoff #9
+сохраняется без переписывания. Свежая локальная проверка и её ограничения:
+[served-surface evidence](../../evidence/issue-9-served-surface.md).

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import {generateKeyPairSync, randomUUID} from "node:crypto";
 import test from "node:test";
+import {fileURLToPath} from "node:url";
+import {load as parseYaml} from "js-yaml";
+import {loadPlatformConfig} from "../../packages/platform-config/src/index.ts";
 import {isCustomerProblem} from "../../packages/contracts/customer-v1/dist/index.js";
 import {createRuntime} from "../../packages/platform-runtime/src/index.ts";
 import {signActorContext} from "../../packages/platform-security/src/index.ts";
@@ -74,7 +77,7 @@ void test("api-public requires edge-nginx transport identity for browser ingress
   assert.equal(calls.create, 0);
 });
 
-void test("api-public retains the sole legacy ingress until nginx cutover", async (t) => {
+void test("api-public defaults to sole nginx ingress and rejects legacy transport", async (t) => {
   let expectedCaller;
   const app = await runtime(t, (value) => registerPublicRoutes(value, {
     verifyTransport: (_request, caller) => { expectedCaller = caller; return caller === "edge-gateway"; },
@@ -83,8 +86,8 @@ void test("api-public retains the sole legacy ingress until nginx cutover", asyn
     catalog: {search: async () => ({status: 200, body: {items: [], nextCursor: null}})},
   }));
   const result = await app.inject({method: "GET", url: "/api/client-v1/customers?query=test", headers: {"x-actor-context": "signed-test"}});
-  assert.equal(expectedCaller, "edge-gateway");
-  assert.equal(result.statusCode, 200);
+  assert.equal(expectedCaller, "edge-nginx");
+  assert.equal(result.statusCode, 401);
 });
 
 void test("configured api-public verifies nginx peer and Edge signature, audience, operation and correlated request", async (t) => {
@@ -93,12 +96,13 @@ void test("configured api-public verifies nginx peer and Edge signature, audienc
   const other = generateKeyPairSync("ed25519");
   const publicPem = (pair) => pair.publicKey.export({type: "spki", format: "pem"});
   const context = {
-    config: {services: {"edge-nginx": {}, "api-public": {outbound: []}}},
+    config: await loadPlatformConfig(fileURLToPath(new URL("../../config/platform.yaml", import.meta.url)), parseYaml),
     secrets: {security: {
       apiPublicDelegationSigningPrivateKey: active.privateKey.export({type: "pkcs8", format: "pem"}),
       actorContextEdgeVerificationPublicKeys: {active: publicPem(active), previous: publicPem(previous)},
     }},
   };
+  assert.equal(Object.hasOwn(context.config.services, "edge-nginx"), false);
   const adapters = createConfiguredPublicAdapters(context, {fetch: async () => { throw new Error("no owner calls expected"); }});
   assert.equal(adapters.expectedIngressCaller, "edge-nginx");
   assert.equal(adapters.verifyTransport({runtimeContext: {transportIdentity: {runtime: "edge-nginx"}}}, "edge-nginx"), true);

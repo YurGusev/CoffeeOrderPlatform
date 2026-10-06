@@ -60,6 +60,7 @@
     "nginx:check": "node tools/nginx/generate-config.mjs --config config/platform.yaml --output apps/edge-nginx/generated/nginx.conf && node tools/nginx/check-config.mjs",
     "test:nginx-image": "node tests/nginx/image.test.mjs",
     "test:nginx-cutover": "node tests/nginx/cutover.test.mjs",
+    "test:web-served-surface": "pnpm exec tsc -b apps/edge-gateway apps/api-public --pretty false && node tests/nginx/cutover.test.mjs --web-served-proof",
     "test:edge-auth": "pnpm exec tsc -b apps/edge-gateway --pretty false && node --experimental-strip-types --test tests/edge-auth/*.test.mjs packages/platform-security/test/actor-context.test.mjs",
     "ui:build": "pnpm --filter @coffee-platform/ui build",
     "web:build": "pnpm typecheck && pnpm ui:build && pnpm --filter @coffee-platform/web build:browser",

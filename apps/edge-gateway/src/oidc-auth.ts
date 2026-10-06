@@ -301,7 +301,7 @@ export function createOidcAuthority(options: OidcAuthorityOptions) {
       let sessionId: string;
       do sessionId = randomToken(); while (sessions.has(sessionId));
       const csrf = randomToken();
-      const expiresAt = now() + SESSION_TTL_MS;
+      const expiresAt = Math.floor(now() + SESSION_TTL_MS);
       const actorRef = resolved["actorRef"];
       const permissions = Object.freeze([...new Set(resolved["permissions"] as string[])]);
       sessions.set(sessionId, {actorRef, permissions, csrf, csrfDigest: createHash("sha256").update(csrf).digest(), expiresAt});

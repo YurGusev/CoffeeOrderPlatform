@@ -21,3 +21,13 @@ SDK/client запрещён; runtime response validation обязательна.
 Прочитать `docs/launch/07_FRONTEND_CONTRACT.md`. Проверять generated transport
 types drift, project-owned client boundary, types/lint/unit, mocks, Playwright,
 accessibility, CSP, deep links и SSE.
+
+Для served-surface приёмки запускать `pnpm test:web-served-surface`: mock/Vite
+Playwright не заменяет production nginx → Edge/API transport proof. Разделять
+fixture OIDC/owners, default-clock login и отдельный injectable expiry scenario.
+
+После fatal Order GET 403/404 проверять отдельно older HTTP 200 и equal-version
+divergent response: второй сценарий не покрывает первый. HTTP success без принятой
+проекции не снимает privacy barrier. Положительно проверять равный и новый owner
+GET без повторной команды; `accepted === previous` допустим для равного ответа
+и сам по себе не означает отсутствие подтверждённого owner recovery.
