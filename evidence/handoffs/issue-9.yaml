@@ -8,7 +8,8 @@ scope: >-
   каноническое количество Quote → PUT, fatal recovery GET в exact Order query,
   обновление истёкшей цены без изменения количества и удержание fatal отказа
   при запоздалом ответе mutation до успешного owner GET, запрет показа cached Customer/Catalog
-  search после403 до успешного чтения того же query и явное обновление Catalog после временной ошибки
+  search после403 до успешного чтения того же query, явное обновление Catalog после временной ошибки
+  и сброс командных диалогов при смене orderRef
   исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
   остаётся непроверенной
 inputs:
@@ -175,7 +176,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/src/browser/routes/OrderCardPage.tsx
-    sha256: eaf13920f2e8216a172429c1ca38ec511e455a5045ff9912707d7f111b1a704c
+    sha256: 1e4c93e7a4ee4a746e5b1b3e43a924d349078829fbae161c98ebcbd2675e900b
     consumers:
       - 12
       - 13
@@ -195,7 +196,7 @@ outputs:
       - 12
       - 13
   - artifact: apps/web/test/operator-flow.spec.ts
-    sha256: fc66d633928ff881fc55b887eecd2ac17d7eb389f4acbe5dc7b2093bf6f6513d
+    sha256: 700a04da0a16c953782568945b67cebe75c2509152d3efe9f0b6d54a793ceefb
     consumers:
       - 12
       - 13
@@ -270,7 +271,7 @@ outputs:
       - 12
       - 13
   - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
-    sha256: 9361be0d7d78c89d697ef0bd9ba418f616707f0afcb4d60ad620bc2d91735cfc
+    sha256: 4d9918db0a33b146b3c131b552906662384d348f4f158f78a66ce669a68d0451
     consumers:
       - 12
       - 13
@@ -1100,6 +1101,39 @@ verification:
     detail: >-
       5 октября 2026, Catalog refresh P2: 1 JS, gzip140090 B из256000 B.
       /tmp/coffee-pr172-catalog-refresh-20261005/ui/bundle.log, exit0.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-regression-red
+    exitCode: 1
+    detail: >-
+      6 октября 2026, order route P1: старый bundle538389a оставляет Confirm диалог B после
+      same-document перехода A→B и настоящего browser Back к A: count1 вместо0.
+      GET B и открытие диалога прошли до assertion; /tmp/coffee-pr172-order-route-20261006/ui/red-routes.log.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      6 октября 2026, order route P1: свежие typecheck/UI/browser build на keyed OrderCardContent.
+      /tmp/coffee-pr172-order-route-20261006/ui/build.log, exit0.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      6 октября 2026, order route P1: полный mock-browser набор на свежем bundle.
+      Confirm/Delete/Reconcile B→browser Back A закрываются, без команды при возврате;
+      новое явное открытие на A отправляет единственную команду по пути A с его expectedVersion
+      и ответом200/202; причина сверки B сброшена перед новым intent A.
+      /tmp/coffee-pr172-order-route-20261006/ui/operator-full.log, exit0.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      6 октября 2026, order route P1: /tmp/coffee-pr172-order-route-20261006/ui/lint.log, exit0.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      6 октября 2026, order route P1: 1 JS, gzip140123 B из256000 B.
+      /tmp/coffee-pr172-order-route-20261006/ui/bundle.log, exit0.
 limitations:
   - >-
     Late mutation privacy regression сохраняет один QueryClient через controlled SPA history transition.
@@ -1125,7 +1159,7 @@ limitations:
     чистой integration copy и исключены из PR.
 sourceFingerprint:
   algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
-  sha256: c699a10c0dfa9b62d6355025aecde0fdeff5b726c4ece4477d959657eca564f8
+  sha256: d47094f032955628d69e917588006813c72844acad2927965b83290bb1c49c93
 acceptedContractInput:
   issue: 11
   pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171

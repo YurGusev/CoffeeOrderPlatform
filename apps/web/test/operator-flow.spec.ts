@@ -2057,6 +2057,117 @@ async function deleteItemReturnsFocusToItemsHeading(context: BrowserContext): Pr
   await page.close();
 }
 
+async function orderRouteDialogsResetOnBrowserBack(context: BrowserContext): Promise<void> {
+  const alternateOrderRef = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW";
+  const scenarios = [
+    {
+      options: { initialItem: true },
+      alternateCard: orderCard("7", "Draft", true),
+      dialogName: "Подтвердить заказ?",
+      openDialog: (page: Page) => page.getByRole("button", { name: "Подтвердить заказ" }).click(),
+      prepareDialog: undefined,
+      submitDialog: (page: Page) => page.getByRole("dialog", { name: "Подтвердить заказ?" }).getByRole("button", { name: "Подтвердить", exact: true }).click(),
+      commandMethod: "POST",
+      commandPath: `/api/client-v1/orders/${orderRef}/commands/confirm`,
+      expectedVersion: "2",
+      responseStatus: 200,
+    },
+    {
+      options: { initialItem: true },
+      alternateCard: orderCard("7", "Draft", true),
+      dialogName: "Удалить позицию?",
+      openDialog: (page: Page) => page.getByRole("button", { name: "Удалить", exact: true }).click(),
+      prepareDialog: undefined,
+      submitDialog: (page: Page) => page.getByRole("dialog", { name: "Удалить позицию?" }).getByRole("button", { name: "Удалить", exact: true }).click(),
+      commandMethod: "DELETE",
+      commandPath: `/api/client-v1/orders/${orderRef}/items/itm_01ARZ3NDEKTSV4RRFFQ69G5FAV`,
+      expectedVersion: "2",
+      responseStatus: 200,
+    },
+    {
+      options: { aromaScenario: "UnknownOutcome" as const, allowUnknownOutcomeReconciliation: true },
+      alternateCard: { ...orderCard("7", "Confirmed", true, "UnknownOutcome"), allowedActions: ["request-aroma-reconciliation"] },
+      dialogName: "Запросить сверку AROMA?",
+      openDialog: (page: Page) => page.getByRole("button", { name: "Запросить сверку AROMA" }).click(),
+      prepareDialog: async (page: Page, routeOrder: "A" | "B") => {
+        const reason = page.getByRole("dialog", { name: "Запросить сверку AROMA?" }).getByRole("textbox", { name: "Причина" });
+        if (routeOrder === "A") assert.equal(await reason.inputValue(), "", "reconciliation reason from B must be discarded on route change");
+        await reason.fill(routeOrder === "B" ? "Причина сверки B" : "Причина сверки A");
+      },
+      submitDialog: (page: Page) => page.getByRole("dialog", { name: "Запросить сверку AROMA?" }).getByRole("button", { name: "Отправить запрос" }).click(),
+      commandMethod: "POST",
+      commandPath: `/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,
+      expectedVersion: "5",
+      responseStatus: 202,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const page = await context.newPage();
+    const telemetry = await installCommonMocks(page, scenario.options);
+    const commandRequests: Array<{ method: string; path: string }> = [];
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.includes("/commands/") || (request.method() === "DELETE" && path.includes("/items/"))) {
+        commandRequests.push({ method: request.method(), path });
+      }
+    });
+    await page.route(`**/api/client-v1/orders/${alternateOrderRef}`, async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      await fulfillJson(route, { ...scenario.alternateCard, orderRef: alternateOrderRef });
+    });
+
+    await page.goto(`${origin}/app/orders/${orderRef}`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+    const alternateCardRead = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/client-v1/orders/${alternateOrderRef}`
+      && response.request().method() === "GET",
+    );
+    await page.evaluate((href) => {
+      window.history.pushState(window.history.state, "", href);
+      window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+    }, `/app/orders/${alternateOrderRef}`);
+    await alternateCardRead;
+    await page.getByRole("heading", { name: "Иван Петров" }).waitFor();
+    await scenario.openDialog(page);
+    if (scenario.prepareDialog) await scenario.prepareDialog(page, "B");
+    const dialog = page.getByRole("dialog", { name: scenario.dialogName });
+    await dialog.waitFor();
+
+    const ownerCardRead = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/client-v1/orders/${orderRef}`
+      && response.request().method() === "GET",
+    );
+    await page.goBack({ waitUntil: "domcontentloaded" });
+    await ownerCardRead;
+    await expect(dialog).toHaveCount(0);
+    assert.equal(new URL(page.url()).pathname, `/app/orders/${orderRef}`);
+    assert.deepEqual(commandRequests, [], `${scenario.dialogName} on B must not submit a command while returning to A`);
+
+    await scenario.openDialog(page);
+    await page.getByRole("dialog", { name: scenario.dialogName }).waitFor();
+    if (scenario.prepareDialog) await scenario.prepareDialog(page, "A");
+    const expectedCommand = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === scenario.commandPath
+      && response.request().method() === scenario.commandMethod,
+    );
+    await scenario.submitDialog(page);
+    const commandResponse = await expectedCommand;
+    assert.equal(commandResponse.status(), scenario.responseStatus);
+    if (scenario.commandMethod === "DELETE") {
+      assert.equal(commandResponse.request().headers()["if-match-version"], scenario.expectedVersion);
+    } else {
+      assert.equal((commandResponse.request().postDataJSON() as { expectedVersion: string }).expectedVersion, scenario.expectedVersion);
+    }
+    assert.deepEqual(commandRequests, [{ method: scenario.commandMethod, path: scenario.commandPath }]);
+    if (scenario.dialogName === "Запросить сверку AROMA?") {
+      assert.deepEqual(telemetry.reconciliationReasons, ["Причина сверки A"]);
+      assert.deepEqual(telemetry.reconciliationExpectedVersions, ["5"]);
+    }
+    await page.close();
+  }
+}
+
 async function main(): Promise<void> {
   const server: PreviewServer = await preview({ configFile: resolve(appRoot, "vite.config.ts"), preview: { host: "127.0.0.1", port, strictPort: true }, root: appRoot });
   let browser: Browser | undefined;
@@ -2079,6 +2190,7 @@ async function main(): Promise<void> {
     const group = process.env.WEB_TEST_GROUP ?? "all";
     if (["all", "accessibility", "routes"].includes(group)) await happyPath(context);
     if (["all", "routes"].includes(group)) {
+      await orderRouteDialogsResetOnBrowserBack(context);
       await routeSemantics(context);
       await missingOrderUsesRouteRecovery(context);
       await fatalOrderRefetchHidesCachedCard(context);

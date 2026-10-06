@@ -37,9 +37,13 @@ function isStaleQuote(error: unknown): boolean {
 }
 
 export function OrderCardPage(): ReactElement {
+  const { orderRef = "" } = useParams();
+  return <OrderCardContent key={orderRef} orderRef={orderRef} />;
+}
+
+function OrderCardContent({ orderRef }: Readonly<{ orderRef: string }>): ReactElement {
   const session = useSession();
   const queryClient = useQueryClient();
-  const { orderRef = "" } = useParams();
   const [routeParams] = useSearchParams();
   const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
