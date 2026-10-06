@@ -341,6 +341,180 @@ export const clientV1Schemas = {
     "type": "string",
     "pattern": "^cus_[0-9A-HJKMNP-TV-Z]{26}$"
   },
+  "CatalogProductSummary": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "productRef",
+      "variantRef",
+      "displayName",
+      "unit",
+      "availability",
+      "mappingAvailable"
+    ],
+    "properties": {
+      "productRef": {
+        "type": "string",
+        "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "variantRef": {
+        "type": "string",
+        "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "displayName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "unit": {
+        "type": "string",
+        "enum": [
+          "piece",
+          "gram",
+          "kilogram"
+        ]
+      },
+      "availability": {
+        "type": "string",
+        "enum": [
+          "Available",
+          "Unavailable",
+          "Stopped"
+        ]
+      },
+      "mappingAvailable": {
+        "type": "boolean"
+      },
+      "imageUrl": {
+        "type": "string",
+        "format": "uri",
+        "maxLength": 2048
+      },
+      "grindOptions": {
+        "type": "array",
+        "maxItems": 100,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sourceGrindKeyHash",
+            "displayName"
+          ],
+          "properties": {
+            "sourceGrindKeyHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        }
+      }
+    }
+  },
+  "CatalogSearchResponse": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "snapshotRevision",
+      "items",
+      "nextCursor"
+    ],
+    "properties": {
+      "snapshotRevision": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]*)$"
+      },
+      "items": {
+        "type": "array",
+        "maxItems": 50,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "productRef",
+            "variantRef",
+            "displayName",
+            "unit",
+            "availability",
+            "mappingAvailable"
+          ],
+          "properties": {
+            "productRef": {
+              "type": "string",
+              "pattern": "^prd_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "variantRef": {
+              "type": "string",
+              "pattern": "^var_[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            "displayName": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "piece",
+                "gram",
+                "kilogram"
+              ]
+            },
+            "availability": {
+              "type": "string",
+              "enum": [
+                "Available",
+                "Unavailable",
+                "Stopped"
+              ]
+            },
+            "mappingAvailable": {
+              "type": "boolean"
+            },
+            "imageUrl": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            },
+            "grindOptions": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sourceGrindKeyHash",
+                  "displayName"
+                ],
+                "properties": {
+                  "sourceGrindKeyHash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "nextCursor": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "maxLength": 512
+      }
+    }
+  },
   "ProblemDetails": {
     "type": "object",
     "additionalProperties": false,

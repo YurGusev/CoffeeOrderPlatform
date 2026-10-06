@@ -100,6 +100,7 @@ function evidenceValueHash(value) {
 
 function approvedPrivateVerifyReplacement(path, name, before, after) {
   if (path !== 'contracts/openapi/internal-v1.yaml' || !privateVerifySchemas.has(name)) return false;
+  if (JSON.stringify(before) === JSON.stringify(after)) return false;
   const evidence = privateVerifyReplacements.find((entry) => entry.schemaPath === path && entry.schema === name);
   if (evidence === undefined) return false;
   const additive = name === 'PricingQuoteVerifyRequest' && after !== undefined && Object.hasOwn(after.properties ?? {}, 'sourceGrindKeyHash');
@@ -234,6 +235,30 @@ function allowConfirmResponseExpansion(sourcePath, route, at, before, after) {
   return true;
 }
 
+function allowPricingGrindRecoveryExpansion(sourcePath, before, after) {
+  const entry = approvedCommandRecoveryExpansions[0];
+  const operationId = 'createPricingQuote';
+  const schema = 'ErrorPricingGrindNotAvailable';
+  if (sourcePath !== 'contracts/openapi/client-v1.yaml' || approvedCommandRecoveryExpansions.length !== 1 ||
+      entry?.schemaPath !== sourcePath || entry.operationId !== operationId || entry.addedTerminalSchema !== schema ||
+      entry.issue !== 11 || entry.fixture !== 'contracts/fixtures/positive/http/problems.json' ||
+      entry.fixtureCase !== schema) return false;
+  const previous = before?.terminalSchemas?.[operationId];
+  const next = after?.terminalSchemas?.[operationId];
+  const fixturePath = resolve(root, entry.fixture);
+  if (!Array.isArray(previous) || !Array.isArray(next) || next.length !== previous.length + 1 || next.at(-1) !== schema ||
+      JSON.stringify(next.slice(0, -1)) !== JSON.stringify(previous) || !existsSync(fixturePath)) {
+    fail(`${sourcePath}: command recovery expansion lacks matching evidence`);
+  }
+  const fixtures = JSON.parse(readFileSync(fixturePath, 'utf8'));
+  if (!fixtures.some((fixture) => fixture.document === 'client-v1' && fixture.operationId === operationId &&
+      fixture.status === 422 && fixture.schema === entry.fixtureCase)) {
+    fail(`${sourcePath}: command recovery expansion fixture is incomplete`);
+  }
+  after.terminalSchemas[operationId] = previous;
+  return true;
+}
+
 function catalogCallerExpansionEvidence() {
   const evidence = approvedInternalCallerExpansions[0];
   if (approvedInternalCallerExpansions.length !== 1 || evidence?.schemaPath !== 'contracts/openapi/internal-v1.yaml' ||
@@ -332,18 +357,8 @@ function compareParameters(before, after, at, sourcePath, beforeDocument, afterD
 function compareOpenApi(before, after, path) {
   const oldRecovery = structuredClone(before['x-command-recovery'] ?? null);
   const newRecovery = structuredClone(after['x-command-recovery'] ?? null);
-  if (oldRecovery && newRecovery) {
-    for (const evidence of approvedCommandRecoveryExpansions.filter(entry => entry.schemaPath === path)) {
-      const previous = oldRecovery.terminalSchemas?.[evidence.operationId];
-      const next = newRecovery.terminalSchemas?.[evidence.operationId];
-      const cases = JSON.parse(readFileSync(resolve(root, evidence.fixture), 'utf8'));
-      if (evidence.issue !== 11 || !Array.isArray(previous) || !Array.isArray(next) ||
-          next.length !== previous.length + 1 || next.at(-1) !== evidence.addedTerminalSchema ||
-          JSON.stringify(next.slice(0, -1)) !== JSON.stringify(previous) ||
-          !cases.some(item => item.operationId === evidence.operationId && item.schema === evidence.fixtureCase && item.status === 422))
-        fail(`${path}: command recovery expansion lacks matching evidence`);
-      newRecovery.terminalSchemas[evidence.operationId] = previous;
-    }
+  if (JSON.stringify(oldRecovery) !== JSON.stringify(newRecovery) && !allowPricingGrindRecoveryExpansion(path, oldRecovery, newRecovery)) {
+    fail(`${path}: command recovery protocol changed`);
   }
   if (JSON.stringify(oldRecovery) !== JSON.stringify(newRecovery)) fail(`${path}: command recovery protocol changed`);
   for (const [route, pathItem] of Object.entries(before.paths ?? {})) {

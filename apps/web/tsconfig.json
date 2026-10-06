@@ -9,6 +9,10 @@
 
     "noEmit": true
   },
-  "references": [{ "path": "../../packages/platform-ui" }],
+  "references": [
+    { "path": "../../packages/platform-ui" },
+    { "path": "../../packages/generated/client-v1" },
+    { "path": "../../packages/generated/edge-auth-v1" }
+  ],
   "include": ["src/browser/**/*.ts", "src/browser/**/*.tsx", "src/vite-env.d.ts"]
 }

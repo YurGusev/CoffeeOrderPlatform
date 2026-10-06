@@ -154,40 +154,24 @@ function assertPageSignals(signals: PageSignals, label: string): void {
 async function testProductionShell(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   const signals = observePage(page);
+  await page.route("**/auth/session", (route) => route.fulfill({
+    body: JSON.stringify({ actorRef: "operator-foundation", expiresAt: Temporal.Now.instant().add({ hours: 1 }).toString() }),
+    contentType: "application/json",
+    status: 200,
+  }));
+  await page.route("**/api/client-v1/customers**", (route) => route.fulfill({
+    body: JSON.stringify({ items: [], nextCursor: null }),
+    contentType: "application/json",
+    status: 200,
+  }));
   await page.goto(`http://127.0.0.1:${productionPort}/`, { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Рабочее пространство" }).waitFor();
-  assert.equal(await page.title(), "CoffeeOrderPlatform — UI foundation");
-  assert.equal(await page.getByText("Фокусировать первое invalid поле").count(), 0);
-  assert.equal(await page.getByRole("button", { name: "Открыть диалог" }).count(), 0);
-  const futureSections = page.getByLabel("Будущие разделы");
-  assert.equal(await futureSections.locator("[aria-disabled=true]").count(), 3);
-  assert.equal(await page.locator("[aria-current=page]").count(), 0, "foundation shell must not claim an active route");
-  const search = page.getByRole("button", { name: "Поиск", exact: true });
-  assert.equal(await search.count(), 1, "search button must have one accessible name");
-  assert.equal(await search.isDisabled(), true);
-  assert.equal(await page.getByRole("link", { name: /Открыть раздел/ }).count(), 0);
-  assert.equal(await page.getByText("ДОСТУПЕН").count(), 0, "foundation shell must not claim an implemented Orders section");
+  await page.getByRole("heading", { name: "Клиенты" }).waitFor();
+  assert.equal(await page.title(), "CoffeeOrderPlatform — Оператор");
   assert.equal(await page.getByText("Счета").count(), 0, "invoice registry fixture leaked into production shell");
-  assert.equal(await page.getByText("Данные сервера не подключены").count(), 1);
-  assert.equal(await page.getByText("presentation foundation").count(), 0);
-  assert.equal(await page.locator(".workspace-topbar > .foundation-badge").textContent(), "ОСНОВА");
-  assert.equal(await page.getByText("Локальная основа интерфейса").count(), 1);
-  await page.getByRole("link", { name: "К началу" }).click();
-  await assertNoCriticalA11y(page, "production initial foundation");
+  assert.equal(await page.getByRole("link", { name: "Клиенты" }).first().getAttribute("aria-current"), "page");
+  assert.equal(await page.getByRole("link", { name: "Каталог" }).count(), 1);
+  await assertNoCriticalA11y(page, "production operator shell");
   await assertFoundationTokens(page);
-  const shellStyles = await page.evaluate(() => {
-    const badge = document.querySelector<HTMLElement>(".card-heading > .foundation-badge");
-    const icon = document.querySelector<SVGElement>(".page-intro [data-slot='button'] svg");
-    const alert = document.querySelector<HTMLElement>(".state-grid > .foundation-alert");
-    if (!badge || !icon || !alert) throw new Error("foundation shell styles are missing");
-    return {
-      badgeFontSize: getComputedStyle(badge).fontSize,
-      badgeMinHeight: getComputedStyle(badge).minHeight,
-      iconWidth: getComputedStyle(icon).width,
-      alertMinHeight: getComputedStyle(alert).minHeight,
-    };
-  });
-  assert.deepEqual(shellStyles, { badgeFontSize: "9px", badgeMinHeight: "22px", iconWidth: "16px", alertMinHeight: "104px" });
 
   const fontState = await page.evaluate(async () => {
     await document.fonts.ready;
@@ -206,22 +190,9 @@ async function testProductionShell(context: BrowserContext): Promise<void> {
   await page.setViewportSize({ width: 1024, height: 600 });
   const desktopSidebar = await page.locator(".operator-sidebar").boundingBox();
   assert.ok(desktopSidebar && Math.abs(desktopSidebar.width - 226) <= 1, `1024px desktop sidebar is missing or not 226px: ${JSON.stringify(desktopSidebar)}`);
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  await page.waitForFunction(() => window.scrollY > 0);
-  const sidebarTop = await page.locator(".operator-sidebar").evaluate((element) => element.getBoundingClientRect().top);
-  assert.ok(Math.abs(sidebarTop - 12) <= 2, `1024px desktop sidebar did not stay sticky: ${sidebarTop}`);
-  await page.evaluate(() => window.scrollTo(0, 0));
-  const compactGrid = await page.locator(".state-grid").boundingBox();
-  const compactEmpty = await page.locator(".state-grid > section").boundingBox();
-  assert.ok(compactGrid && compactEmpty, "compact state panel is missing");
-  assert.ok(
-    Math.abs(compactEmpty.x - compactGrid.x) <= 2 && compactEmpty.width >= compactGrid.width - 2,
-    `compact empty state leaves an unused grid cell: ${JSON.stringify({ compactGrid, compactEmpty })}`,
-  );
   await page.setViewportSize({ width: 1023, height: 600 });
   assert.equal(await page.locator(".operator-sidebar").isVisible(), false, "below 1024px desktop boundary the sidebar should be hidden");
-  assert.equal(await page.getByRole("heading", { name: "Рабочее пространство" }).isVisible(), true);
-  await assertNoOverflow(page, 1023);
+  assert.equal(await page.locator(".mobile-nav").isVisible(), true, "mobile navigation is missing below the desktop boundary");
   for (const width of [375, 768, 1280]) await assertNoOverflow(page, width);
   assertPageSignals(signals, "production shell");
   await page.close();

@@ -1,0 +1,1189 @@
+issue: 9
+baseCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+status: awaiting-served-surface-acceptance
+scope: >-
+  React operator flow #9: исходные замечания, cached Customer privacy, смена actor и Catalog version conflict,
+  несохранённое количество, восстановление конфликта Order Card и повторная сверка AROMA
+  после новой owner-проекции, скрытие cached Catalog при 403, гонка pending scope до fingerprint,
+  каноническое количество Quote → PUT, fatal recovery GET в exact Order query,
+  обновление истёкшей цены без изменения количества и удержание fatal отказа
+  при запоздалом ответе mutation до успешного owner GET, запрет показа cached Customer/Catalog
+  search после403 до успешного чтения того же query, явное обновление Catalog после временной ошибки
+  и сброс командных диалогов при смене orderRef
+  исправлены; ветка согласована с accepted #171 в develop; локальные gates проходят, served-surface acceptance
+  остаётся непроверенной
+inputs:
+  - issue: 4
+    acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - issue: 5
+    acceptedMergeCommit: 7db7bc97b41962c0592b82853ebd7dc9bc43c290
+    artifact: evidence/handoffs/issue-5.yaml
+    sha256: f801608e05ca43243eb9258f58ae25b31a7fcfb943ba01f2afe370810998cbdb
+  - issue: 7
+    acceptedMergeCommit: c88c62c91e5a6833d26c8368e3f45e78948f051c
+    artifact: evidence/handoffs/issue-7.yaml
+    sha256: 692e3e7a6920e2e9203b7f8582636aeb692e4a6478a5473a95b8f2fa6395fc08
+  - issue: 8
+    acceptedMergeCommit: e278aeb10e57d37485542f8668f078456074b038
+    artifact: evidence/handoffs/issue-8.yaml
+    sha256: 7d793e9ffaa5030ea941323d1fa525427c3ff2ed903108fc6b5b884802ead411
+  - issue: 17
+    acceptedMergeCommit: 972e480fff560d2a8c1aed0af7c419322fe1eba4
+    artifact: evidence/handoffs/issue-17.yaml
+    sha256: bb593fe72358c832768de1cfb75a36a48062e72866c2df0988bf268b7871ca61
+  - issue: 18
+    acceptedMergeCommit: cd8cb2d8122622fd385b25944ebe9701f90f56e2
+    artifact: evidence/handoffs/issue-18.yaml
+    sha256: e91e59128844131e7011087bbdd9be3f315d48df1a38d76837d0f1e9186b31cb
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+  - issue: 137
+    acceptedMergeCommit: 15ff4cb294b68e98cbe7f8b3212381baee7f96a4
+    artifact: evidence/handoffs/issue-137.yaml
+    sha256: 01c0c9f1ffc77a42508ea75301243ef45388e03b72ac7d8110560682f58ce95b
+  - issue: 162
+    acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+outputs:
+  - artifact: docs/launch/26_BROWSER_COMMAND_RECOVERY.md
+    sha256: 6c4a140071cc34a0665d83cf3ba61a5968f3320815b8189583daca07fb7ec5a8
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/index.html
+    sha256: 7d5c3044c5ef1566be47b7ecbb1976ee0fce948ee8faee916c525645fbf6a0f7
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/package.json
+    sha256: 34ef5fcd25c29446dbc99d83e9645bab6d1c947682e7bb057e5715aadff3a8a9
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/client.ts
+    sha256: f8e0f68fdfd7727988810dca043bc6ba55568d15d0888732af423c0b752a72fb
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/format.ts
+    sha256: 5b9c6c15c4f6820d8fd6595d30856e99c4555c878796e687db49ea65c97cd2b2
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/idempotency.ts
+    sha256: 78a877bdae596dcbd60906e9a0a14f4129f84f340f6513c2753af15bfda437e9
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/order-card.ts
+    sha256: 5167b9645b71d935358c2f94622c4084e1e0d338efbd697a14dce554c70b7eef
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/problem.tsx
+    sha256: d45589666248c96c2f0fdc188ed382dc8b463320288622a18cf224dbc567db36
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/remote.ts
+    sha256: 55105700ca7eb193c2345d48d5c6858af9446d285c0b5f56a9861177b619257c
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/schema.ts
+    sha256: 15bc7f12ee2041186d9e56df7b694c6b11fae899477b443516d3f544618bd1fb
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/session-identity.ts
+    sha256: 7ac0eca61a7d83f4c4ba9ce3a5a5b58f14423eb9d77b86645e8c89f2d6f2cd1c
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/time.ts
+    sha256: 6a9844e931c148d09fe965be06466ef508ef38c5c99eaa8fbb49b957b70ed194
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/api/ulid.ts
+    sha256: fbbc6e223d8f2079c3c36539ebaf4641ac9b57e2b179143fae7eb1579087ede8
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/App.tsx
+    sha256: 48e72f1c1383ae749b0cb08f8db539634d6bd2cf4212f771a371cf4863ca5cef
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/AppShell.tsx
+    sha256: ea494abda3f81890e0079019e8cde78225fabf638508c50dc5c2e003d4b27af2
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/PageHeader.tsx
+    sha256: 1131810c32ec1494aadc13f4f20fceb885fc624d7ca3f3f8134cf6f364404d33
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/PendingRecovery.tsx
+    sha256: 8aa583acf41a0866d9c30dfb3d0c25ef914e2d3b64f27bba5e9863ce2444a0b0
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/query-client.ts
+    sha256: 0895406448ff16935e861b717767cb9dd317f3f94b058778c7a65dfb4e68da47
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/query-keys.ts
+    sha256: 457b551b198b5fb0a0b7ac40612f874062de844ad0467cd747efcc5094465356
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/app/session.tsx
+    sha256: 6a4b148f3926c4cdb20131a5e9a4dd1894445cb0dc36e764d1c8d5b9972fb7ca
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/main.tsx
+    sha256: e0d02a38247e74460d08c41aef23382870fcd8199f895cabffa952a15e374e02
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/CatalogPage.tsx
+    sha256: a503113be27ecbb98d8c8f45eb621eec6ee25beab8b52f320e97a5465679beff
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/CustomersPage.tsx
+    sha256: acfcb5446782903c1c171cfb8199a4707d4708b65163e76e132c8db0ed6dd4e0
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/NewOrderPage.tsx
+    sha256: 7e54ca2bb9dd6e8e24186ed33f8a2bba14d341449a89446272d562b6295025ef
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/NotFoundPage.tsx
+    sha256: 7a80c2a924f2d96422ca0eb2a435d587fd7ca0e49cbe0467923bf0ed3155b834
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/routes/OrderCardPage.tsx
+    sha256: 1e4c93e7a4ee4a746e5b1b3e43a924d349078829fbae161c98ebcbd2675e900b
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/src/browser/styles.css
+    sha256: 2d09ced61b00727b918efce44649073905871aa7b0353fbc2f433dfe622102c2
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/format.test.ts
+    sha256: 09c676fa7d763f615cf924e29dd051892315251c3e28354aa915e3d3ce7cdfb0
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/idempotency.test.ts
+    sha256: 68ae35c80492caf24b72eed8b4c093c5ed8b6d81690298add753ca0836b780a3
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/operator-flow.spec.ts
+    sha256: 700a04da0a16c953782568945b67cebe75c2509152d3efe9f0b6d54a793ceefb
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/order-cache.test.ts
+    sha256: 8d0f3ecc950b89aa4d0611131cecaadc65f552e5591420a71920ec3575bcc5d9
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/query-policy.test.ts
+    sha256: a9ad3e23a4883186031943ffc3d3ce6cfde6bdbab69864ac30438b0aa27ee275
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/schema.test.ts
+    sha256: 80c8f51d97fcd47168241c16b4ce9f26a4051231c09ab4234f65ba99b3f35dd6
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/time.test.ts
+    sha256: e4ae501475d776dfcbedbcc983b76833f2dcbc2aa9a8f2a61949efba969d8906
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/ui-foundation.spec.ts
+    sha256: 32820eb53313e1bc6ae9a94c71af2ccaa2d55c0a3f7e084fb44c70a67ecfbe2c
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/test/ulid.test.ts
+    sha256: 43a8192db55a8a39790eff8695726393940bd42e83c3fd677ce98bcf79c5aca5
+    consumers:
+      - 12
+      - 13
+  - artifact: apps/web/tsconfig.json
+    sha256: b8430cadc132e8dea26917752a191bf17034e5d2a58480d2b93f88ef373c2a65
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/compatibility-evidence.yaml
+    sha256: 1d628031a4229d83262ef14ad917614d7a29280a4e4cfb404400d10bb33c95e7
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/fixtures/positive/http/problems.json
+    sha256: 3a53684664b8abc87afbb8382687ec4b28b36aaf32e91d531463f27cd9f0f387
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/fixtures/positive/http/success.json
+    sha256: dd2a5527398e64477a3c1a2907d58c2e5bb62abc332e91bb86d1e5b5809df5aa
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/manifest.yaml
+    sha256: f87ce42f1947bdd10a8e1443e74fe2b15a99bcb4e286e977d66af8f392e54a46
+    consumers:
+      - 12
+      - 13
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: 69b4ae3c7522abcb3e8a0927552507219bbab2b5bfd34bc0c28538384c921974
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/07_FRONTEND_CONTRACT.md
+    sha256: 5207c657d4c60ea9b2b9053ddeefcbd7a5f4d3d3d100557e9dcb11d88d37e820
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/18_FRONTEND_IMPLEMENTATION_SPEC.md
+    sha256: 9dc47b575a63a4d1fb770b3441aafdebef3eb3c4f504b56f4dc628fd190903d5
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
+    sha256: 4d9918db0a33b146b3c131b552906662384d348f4f158f78a66ce669a68d0451
+    consumers:
+      - 12
+      - 13
+  - artifact: docs/launch/README.md
+    sha256: cefa6d33cdc7aea11aa3fb35c523dd9b0520501840cb5c69b9bf37083c69c6ff
+    consumers:
+      - 12
+      - 13
+  - artifact: package.json
+    sha256: f4e129866eea793e6163985660f9637ff1c3f9eac8d82857c4485ca81f2fe56d
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/client-v1/src/index.ts
+    sha256: aa46f5b86f8ead20442a47ca02dcc6c5f065b398805e30b1c9b35fa20b32e41d
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
+    sha256: 369d395e54f53f63b79f935bc52e8d28ca94f3b4eca7f174a1916f1440358c26
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: 7e1aabbed1355a2e37f97fa142c24495febcbf5323a386a59d19012e9e6cb42e
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-ui/src/components/alert.tsx
+    sha256: 760d3b256a7738e3e1107f46b3652a118582e6cc8cef4bd062de4ed3c31b486a
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-ui/src/components/badge.tsx
+    sha256: 6062bed175122b7c124e60c038c189684c5c098408c6673d8d5d0c8548759d21
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-ui/src/components/button.tsx
+    sha256: 467ba4d3192d15650d9406308bb541b36b66ea3f02e2198c03b0e18bb78bb848
+    consumers:
+      - 12
+      - 13
+  - artifact: packages/platform-ui/src/styles/index.css
+    sha256: a2c50d52bf0d64a9355dac5b3d3ad53ef3295fd94b5dbd0237c967e5b372ae72
+    consumers:
+      - 12
+      - 13
+  - artifact: pnpm-lock.yaml
+    sha256: 990b22f1275b7315442592eb48f9424bcc672bce4f865c8425446d0839475e55
+    consumers:
+      - 12
+      - 13
+  - artifact: scripts/check-browser-bundle.mjs
+    sha256: 457dbfa915dfe2a5a4ace246f60d6a453fa72a458d979f3e5bac78973d97e2ef
+    consumers:
+      - 12
+      - 13
+  - artifact: scripts/contracts-breaking.mjs
+    sha256: 8c5c6566e9d4e806f614283b89e253670362901f98282863694c66b317e42483
+    consumers:
+      - 12
+      - 13
+  - artifact: scripts/contracts-generate.mjs
+    sha256: 4338a07c08fed067be2315f6e6fba6dc34a53431996ff5b30497fba819d72265
+    consumers:
+      - 12
+      - 13
+  - artifact: tests/contracts/breaking.test.mjs
+    sha256: 228b55b8598384bbc76b77470130e9062f6bcb184f3cd3e9feb14f782e4f920a
+    consumers:
+      - 12
+      - 13
+verification:
+  - command: >-
+      pnpm versions:check && pnpm contracts:check-generated && pnpm architecture:check && pnpm
+      rule-parity:check && pnpm lint && pnpm browser:bundle:check && pnpm test:ui && pnpm test:web-foundation
+      && pnpm test:web-queries && WEB_OPERATOR_PORT=4176 pnpm test:web-idempotency && WEB_OPERATOR_PORT=4176
+      pnpm test:web-accessibility && WEB_OPERATOR_PORT=4176 pnpm test:web-operator && git diff --check
+    result: passed
+    exitCode: 0
+    detail: >-
+      Историческая проверка baseline #9 до grind delta, commit adfca3f9df79a180ce84539c12c956e55c7e3b41.
+      Current-tree type/build, generated drift, architecture, lint, UI foundation, browser bundle,
+      query/cache/time/format/schema/ULID units, route, idempotency, accessibility and full operator flows
+      passed.
+  - command: WEB_SCREENSHOT_DIR=$TMPDIR/issue-9-served-surface-final15 WEB_OPERATOR_PORT=4176 pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      Историческая проверка baseline #9 до grind delta, commit adfca3f9df79a180ce84539c12c956e55c7e3b41.
+      Captured desktop/mobile happy, auth-unavailable and forbidden surfaces; Playwright proved no horizontal
+      overflow, serious/critical axe findings, or active action target below 44 px.
+  - command: node --test --test-reporter=spec tests/contracts/breaking.test.mjs
+    result: baseline-failed
+    exitCode: 1
+    detail: >-
+      The same failure is reproduced in detached origin/develop worktree; issue #9 does not change client-v1
+      OpenAPI and does not hide this pre-existing baseline defect.
+  - command: node tools/compose-smoke.mjs --stub-secrets --keep --project-name coffee-issue9-debug2
+    result: environment-blocked
+    exitCode: 1
+    detail: >-
+      Images built, but owner readiness returned 503 because external network coffee_postgres_data had no
+      coffee_postgres endpoint. The diagnostic stack and tmpfs secret directory were removed.
+  - command: pnpm exec tsc -b apps/web --pretty false
+    result: failed-missing-pending-contract
+    exitCode: 1
+    detail: >-
+      4 октября 2026, самостоятельная ветка #9: 7 diagnostics для
+      grindOptions/grindDisplayName/sourceGrindKeyHash в старых generated client-v1 types; contract outputs A
+      находятся в открытом PR #171. Лог /tmp/coffee-issue9-publish-checks/01-typecheck.log
+  - command: pnpm test:web-queries
+    result: failed-missing-pending-contract
+    exitCode: 1
+    detail: >-
+      4 октября 2026: 14/15 PASS, один schema test FAIL: старый OrderItem запрещает grind hash вместо
+      dependentRequired проверки пары. Лог /tmp/coffee-issue9-publish-checks/02-queries.log
+  - command: >-
+      pnpm test:web-queries; pnpm test:web-routes; pnpm test:web-idempotency; pnpm test:web-accessibility;
+      pnpm test:playwright; pnpm test:web-bundle; pnpm lint; pnpm contracts:check-generated
+    result: passed-local-integration-only
+    detail: >-
+      Ранее выполненные receipts 107/110/114/126/150/151/153/158/159/160 в отдельном managed #9+#11 checkout.
+      Текущий UI7 fingerprint 98bb2c30774b3e2480caebbd19c21a26996fda7a044b9cbbcc7c995e72c5e232 совпадает; 15
+      query tests, 6 idempotency units, full browser PASS, gzip139524B. Не является PASS самостоятельной ветки
+      #9.
+  - command: pnpm versions:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/versions.log
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/typecheck-final.log
+  - command: pnpm contracts:lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/contracts-lint.log
+  - command: pnpm contracts:check-generated
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/contracts-generated.log
+  - command: pnpm contracts:breaking
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/contracts-breaking.log
+  - command: pnpm contracts:test
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/contracts-test.log
+  - command: pnpm architecture:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/architecture-final.log
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/lint-final.log
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-queries.log
+  - command: pnpm test:web-idempotency
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-idempotency.log
+  - command: pnpm test:web-accessibility
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-accessibility.log
+  - command: pnpm test:web-foundation
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-foundation.log
+  - command: pnpm test:playwright
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/playwright-final.log
+  - command: pnpm test:web-bundle
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, самостоятельная ветка #9 после интеграции public contract output A и исправлений review.
+      Лог /tmp/coffee-pr171-172-fixes-20261005/ui/web-bundle-final.log
+  - command: pnpm test:web-routes
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, worker: свежая сборка и routes group PASS; окончательный tester pnpm test:playwright
+      повторно покрывает те же route regressions, cached 403/404 и transient 503.
+  - command: pnpm test:playwright
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P1 Customer privacy: initial search → Select/New Order → test clock +31s →
+      Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
+      Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
+      /tmp/coffee-pr172-customer-privacy-20261005/playwright.log
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P1 Customer privacy: initial search → Select/New Order → test clock +31s →
+      Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
+      Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
+      /tmp/coffee-pr172-customer-privacy-20261005/lint.log
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P1 Customer privacy: initial search → Select/New Order → test clock +31s →
+      Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
+      Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
+      /tmp/coffee-pr172-customer-privacy-20261005/web-queries.log
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P1 Customer privacy: initial search → Select/New Order → test clock +31s →
+      Back/same-query refetch 403; cached имя/контакт/customerRef/Select/pagination скрыты, retry отсутствует.
+      Full mocked browser со свежей сборкой/typecheck; queries 15/15; gzip139656B≤256000B. Лог
+      /tmp/coffee-pr172-customer-privacy-20261005/browser-bundle.log
+  - command: pnpm contracts:generate
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-generate.log
+  - command: pnpm contracts:lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-lint.log
+  - command: pnpm contracts:check-generated
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-check-generated.log
+  - command: pnpm contracts:breaking
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-breaking.log
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-typecheck.log
+  - command: pnpm contracts:test
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/contracts-test.log
+  - command: pnpm test:playwright
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/playwright.log
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/web-queries.log
+  - command: pnpm test:web-idempotency
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/web-idempotency.log
+  - command: pnpm test:web-foundation
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/web-foundation.log
+  - command: pnpm architecture:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/architecture.log
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/lint.log
+  - command: pnpm versions:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/versions.log
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, integration develop@2191b82 и новые session/Catalog fixes. Contracts 49/49, frontend
+      units 15+6, full mock browser со свежей сборкой/typecheck; gzip139763B≤256000B. Лог
+      /tmp/coffee-pr172-session-conflict-20261005/ui/browser-bundle.log
+  - command: pnpm test:playwright
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, Order Card P2: typecheck и свежая сборка прошли; browser regression
+      ошибочно давала один 503, затем штатный read-only retry получал 200. Диагностические
+      routes-прогоны подтвердили также ошибочную привязку отказа к initial GET counter.
+      Fixture исправлена: два 503 включаются только после 409; runtime retry не менялся.
+      Первичные логи сохранены в /tmp/coffee-pr172-order-card-20261005/ui/playwright.log,
+      playwright-retry.log и playwright-diagnostic.log.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, полный mock-browser набор на свежем dist из предыдущего
+      pnpm test:playwright; production source не менялся после build. Проверены dirty
+      quantity/Confirm, canonical quantity после PUT, owner quantity в Confirmed,
+      conflict GET 503+retry503, ручной GET200, отсутствие auto PUT и новый intent version4.
+      После этого переиспользован existing 503 payload в fixture без изменения сценария.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/full-browser-final.log.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Order Card P2: 15/15 frontend query/cache/time/format/schema/ULID tests.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/web-queries.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Order Card P2: 6/6 idempotency unit tests.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/idempotency.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Order Card P2: initial JS gzip 139888 B из лимита 256000 B.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=routes pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, финальная fixture после переиспользования existing 503 payload:
+      routes group и все новые Order Card regressions прошли на том же production dist.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/routes-final.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, финальные Order Card source и test fixture.
+      Лог /tmp/coffee-pr172-order-card-20261005/ui/lint-final.log.
+  - command: pnpm test:playwright
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: Свежие typecheck/build и полный mock-browser набор. Проверены same projection5 после202, explicit GET projection6/OutOfSync при Order.version5, второй явный POST с новым key/expectedVersion5 и повторная блокировка после202. Existing failed/pending GET regressions сохранились.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/playwright.log.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: 15/15 frontend query/cache/time/format/schema/ULID tests.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/web-queries.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: 6/6 idempotency unit tests.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/idempotency.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: Финальные frontend source и existing browser test.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/lint.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, P2 повторной сверки AROMA: Initial JS gzip 139926 B из лимита 256000 B.
+      Лог /tmp/coffee-pr172-reconcile-unlock-20261005/ui/browser-bundle.log.
+  - command: pnpm test:playwright; pnpm test:web-operator
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, Catalog P2: typecheck и свежая сборка прошли. Первый browser
+      regression не смог прочитать body начального Order GET в Chromium; лишняя
+      wire-проверка заменена existing UI proof права edit-items. Следующий прогон
+      не подтвердил cached rows при503: переход через native UI Link пересоздавал
+      документ/QueryClient. Fixture исправлена на controlled SPA history transition
+      и held refetch: cached поля проверяются до release403/503. Runtime navigation
+      не менялась. История в /tmp/coffee-pr172-catalog-privacy-20261005/ui/playwright.log
+      и full-browser-final.log.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: Полный mock-browser набор на свежем dist из первого pnpm test:playwright; production source не менялся. Controlled SPA history+Back сохраняет QueryClient; held refetch доказывает cached товары/quantity/grind/Add/pagination до release. После403 они скрыты у того же actor; после503+retry503 сохранены.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/full-browser-verified.log.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: 15/15 frontend query/cache/time/format/schema/ULID tests.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/web-queries.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: 6/6 idempotency unit tests.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/idempotency.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: Финальный Catalog guard и existing browser fixture.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/lint-verified.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, cached Catalog P2: Initial JS gzip 139946 B из лимита 256000 B.
+      Лог /tmp/coffee-pr172-catalog-privacy-20261005/ui/browser-bundle.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, pending scope race: worker воспроизвёл на прежнем helper два created=true.
+      Краткая квитанция worker в /tmp/coffee-pr172-fingerprint-race-20261005/ui/idempotency-race.log;
+      raw stdout этого воспроизведения не сохранён. После переноса snapshot за fingerprint worker получил7/7.
+  - command: pnpm test:web-idempotency
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, pending scope race: 7/7 units, свежие typecheck/build и existing browser idempotency group.
+      Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/web-idempotency.log. После этого production source
+      не менялся; unit assertion упрощена до подсчёта created intent для соблюдения lint.
+  - command: pnpm lint
+    result: failed-test-lint
+    exitCode: 1
+    detail: >-
+      5 октября 2026, pending scope race: новый unit test использовал sort без comparator.
+      Заменён подсчётом created=true; runtime не менялся. Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/lint.log.
+  - command: pnpm exec vitest run apps/web/test/idempotency.test.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, pending scope race: финальная unit assertion, 7/7 PASS.
+      Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/idempotency-final.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, pending scope race: финальный diff после исправления test assertion.
+      Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/lint-final.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, pending scope race: 1 JS, initial gzip139945 B из256000 B.
+      Лог /tmp/coffee-pr172-fingerprint-race-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, Quote quantity P2: свежая сборка старого remote.ts и усиленная fixture
+      получили ORDER_QUOTE_SCOPE_MISMATCH409 вместо200. Raw /tmp/coffee-pr172-quote-quantity-20261005/ui/red-routes.log;
+      build stdout в red-build.log.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Quote quantity P2: свежие typecheck/UI/browser build после quantity=line.quantity.
+      Лог /tmp/coffee-pr172-quote-quantity-20261005/ui/green-build.log; затем worker routes group PASS.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Quote quantity P2: полный existing mock browser набор на свежем dist.
+      Pricing fixture канонизирует quantity; PUT mock отвергает несовпадение с quote.
+      Catalog2.0→2/2.500→2.5 и OrderCard0.010→0.01 получили accepted200.
+      Production/test source hashes не менялись после build.
+      Логи /tmp/coffee-pr172-quote-quantity-20261005/ui/web-operator.log и status.tsv.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Quote quantity P2: итоговые remote.ts и existing browser regression.
+      Лог /tmp/coffee-pr172-quote-quantity-20261005/ui/lint.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Quote quantity P2: 1 JS, initial gzip139948 B из256000 B.
+      Лог /tmp/coffee-pr172-quote-quantity-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, recovery fatal P1: initial regression проверяла PUT до его отправки,
+      увидев pending Quote. Предусловие исправлено ожиданием ambiguous put-item и actual PUT.
+      История /tmp/coffee-pr172-recovery-fatal-20261005/ui/red-idempotency.stdout.log и red-diagnostic.stdout.log.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, recovery fatal P1: старый helper после lost PUT/replay200/GET403 оставил
+      cached Customer heading видимым (1 вместо0). Raw /tmp/coffee-pr172-recovery-fatal-20261005/ui/red-repro.stdout.log;
+      exit в red-repro.exit. Это корректный RED после устранения fixture precondition.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: свежие typecheck/UI/browser build после общего exact Order query path.
+      Логи /tmp/coffee-pr172-recovery-fatal-20261005/ui/green-build.log и green-build.exit.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: worker адресная группа на свежем build; GET403/404 скрывает
+      cached Customer/items/Confirm на том же маршруте, GET503+retry503 сохраняет контекст с warning.
+      Bodyless same-key replay, ровно два PUT (normal+lookup), без третьей mutation.
+      /tmp/coffee-pr172-recovery-fatal-20261005/ui/green-idempotency.stdout.log и green-idempotency.exit.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: полный mock browser набор на том же свежем dist;
+      production/test source hashes до/после совпали. /tmp/coffee-pr172-recovery-fatal-20261005/ui/web-operator.log и status.tsv.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: 6 файлов/15 query/cache/time/format/schema/ULID tests.
+      /tmp/coffee-pr172-recovery-fatal-20261005/ui/web-queries.log.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: финальный source и browser regression.
+      /tmp/coffee-pr172-recovery-fatal-20261005/ui/lint.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, recovery fatal P1: 1 JS, initial gzip139983 B из256000 B.
+      /tmp/coffee-pr172-recovery-fatal-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, expired quote P2: fresh old source оставил Update disabled при owner edit-items
+      и прежнем quantity2. Raw /tmp/coffee-pr172-expired-quote-20261005/ui/red-routes.stdout.log и red-routes.exit.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, expired quote P2: свежие typecheck/UI/browser build после снятия quantity equality guard.
+      /tmp/coffee-pr172-expired-quote-20261005/ui/green-build.log и green-build.exit.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, expired quote P2: worker regression reopened Draft owneredit/noConfirm, unchangedquantity2.
+      Mount/reload не отправляют quote/PUT; явный Update создаёт quote и PUT тому же itemRef с количеством2,
+      выбранным grindHash и expectedVersion2; ownerresponse разрешает Confirm.
+      /tmp/coffee-pr172-expired-quote-20261005/ui/green-routes.stdout.log и green-routes.exit.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, expired quote P2: полный mock browser набор на том же свежем dist, включая
+      confirm/recovery/pending и новый explicit unchanged quantity refresh. Source/test hashes до/после совпали.
+      /tmp/coffee-pr172-expired-quote-20261005/ui/web-operator.log и status.tsv.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, expired quote P2: итоговый UI source и existing browser regression.
+      /tmp/coffee-pr172-expired-quote-20261005/ui/lint.log.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, expired quote P2: 1 JS, initial gzip139973 B из256000 B.
+      /tmp/coffee-pr172-expired-quote-20261005/ui/browser-bundle.log.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, late mutation P1: первые прогоны исправляли baseline GET counter, strict selector
+      и assertions sequence; эти сбои не доказывают production defect. Raw fresh-idempotency.log,
+      idempotency-sequence-fixed.log, idempotency-selector-fixed.log в /tmp/coffee-pr172-late-fatal-20261005/ui/.
+      Первая old-writer попытка red-old-storage.log прошла без нужного изменения проекции; это также
+      незавершённое предусловие. Финальный fixture возвращает held PUT projection3 при cached projection2.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, late mutation P1: корректный controlled SPA fixture на old writer после GET403
+      и release PUT200 показал private Customer heading1 вместо0. Raw
+      /tmp/coffee-pr172-late-fatal-20261005/ui/red-old-storage-correct-fixture.log.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: свежие typecheck/UI/browser build финального writer/query guard.
+      /tmp/coffee-pr172-late-fatal-20261005/ui/green-final.log.
+  - command: WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: cached projection2, held ordinary PUT projection3, Completed
+      bodyless lookup по прежнему ключу, owner GET403/404, release original PUT200 не раскрывает Card/actions.
+      Controlled SPA сохраняет QueryClient: следующий GET503 сохраняет fatal, GET200 возвращает owner Card.
+      Ровно два PUT normal+lookup, без новой business mutation. Raw green-final.log в
+      /tmp/coffee-pr172-late-fatal-20261005/ui/.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: Полный mock browser набор на свежем dist; late PUT/replay/fatal/503/200 в одном QueryClient. web-operator.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: 6 файлов, 16 тестов; web-queries.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: Итоговые runtime/test source; lint.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, late mutation P1: 1 JS, gzip140038 B из256000 B; browser-bundle.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm web:build && WEB_TEST_GROUP=idempotency node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, LATE-FATAL-INVALID-ACCEPTANCE: независимое ревью выявило, что acceptance error
+      оставался вне catch. Catch теперь охватывает полный owner read/session/monotonic acceptance.
+      Дополненная regression после403/404 и503 получает schema-valid HTTP200 projection2/Confirmed
+      при cached2/Draft: private Card/actions скрыты. Только следующий valid200 projection3/Draft
+      снимает fatal; response body поля проверены, same QueryClient и ровно2PUT normal+lookup.
+      Fresh build/group /tmp/coffee-pr172-late-fatal-20261005/ui/green-divergent-acceptance.log;
+      финальный test-only response-body assert /tmp/coffee-pr172-late-fatal-20261005/ui/green-divergent-acceptance-final.log.
+      Предыдущие final-checks относятся к первому срезу до расширения acceptance catch.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: Полный mock browser набор после full acceptance catch; обе403/404, late PUT200,503, divergent200 скрыты; valid200 возвращает Card. web-operator.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с итоговым worker.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: 6 файлов,16 тестов; web-queries.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с итоговым worker.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: Финальный source/test срез после review; lint.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с итоговым worker.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, final late mutation P1 после LATE-FATAL-INVALID-ACCEPTANCE: 1 JS, gzip140036 B из256000 B; browser-bundle.log.
+      /tmp/coffee-pr172-late-fatal-20261005/final-checks-v2/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с итоговым worker.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, search fatal P1: первые fixture iterations исправляли refresh count дляnormal503,
+      ожидание retry при retained403, re-arm обычного503 и место clearSearchFailures вCatalog.
+      Raw green-initial.log, green-final.log, green-final-2.log, routes-final.log в
+      /tmp/coffee-pr172-search-fatal-20261005/ui/. Старый red-head-runtime.log с ранним50ms check
+      не доказывает defect: во время retry query ещё сохранял403, а следующий200 был разрешён.
+      Финальная semantic phase повторяет503 до explicit clear; прежние fixture receipts не считаются gates.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: expected-regression-failure
+    exitCode: 1
+    detail: >-
+      5 октября 2026, search fatal P1: точный remote.ts из HEAD6e9e5ca3 после403/503/retry503
+      снова показывает cached Customer heading1 вместо0. Успешного200 между отказом и assertion нет.
+      /tmp/coffee-pr172-search-fatal-20261005/ui/red-semantic-old-runtime.log, exit1.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: fresh runtime typecheck/UI/browser build прошёл в green-final-2.log.
+      Последующие test-only fixture corrections использовали тот же runtime dist.
+      /tmp/coffee-pr172-search-fatal-20261005/ui/; failed routes в build log относится к fixture,
+      финальный адресный прогон зафиксирован отдельно.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: same QueryClient controlled SPA, Customer/Catalog cached rows,
+      contacts/quantity/grind/actions/pagination скрыты после403 и следующего503 до explicit clear+GET200.
+      После successful GET данные снова видны; обычный503 без prior403 сохраняет контекст и штатный retry.
+      Customer response statuses403/503/200/503/503, Catalog403/503/200 и отдельно normal503/503.
+      /tmp/coffee-pr172-search-fatal-20261005/ui/routes-final-2.log, exit0.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: Полный mock browser набор: оба search403→503 скрыты, successfulGET200 возвращает данные; normal503retry и прежние recovery tests сохранены. web-operator.log.
+      /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm test:web-queries
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: 6 файлов,16 тестов; web-queries.log.
+      /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: Итоговый remote.ts и existing browser tests; lint.log.
+      /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, search fatal P1: 1 JS, gzip140069 B из256000 B; browser-bundle.log.
+      /tmp/coffee-pr172-search-fatal-20261005/final-checks/; status.tsv содержит exit0.
+      Source/test SHA до и после совпали с worker.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Catalog refresh P2: свежие typecheck, UI build и Vite browser build прошли.
+      /tmp/coffee-pr172-catalog-refresh-20261005/ui/routes-build.log содержит успешную сборку;
+      последующий routes failure относится только к literal URL assertion и указан отдельно.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-test-fixture
+    exitCode: 1
+    detail: >-
+      5 октября 2026, Catalog refresh P2: восстановительный третий GET200 и поля уже появились,
+      но literal URL assertion сравнил raw кириллицу с percent-encoded URL браузера.
+      Исправлен test-only assertion через URL/searchParams; окончательный полный набор прошёл ниже.
+      /tmp/coffee-pr172-catalog-refresh-20261005/ui/routes-build.log.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Catalog refresh P2: полный mock-browser набор на свежей сборке и итоговом test.
+      После503/retry503 явное обновление даёт третий GET200 с прежними query/Available и URL/orderRef,
+      показывает товары/quantity/grind/Add, не создаёт quote и PUT.
+      При403 и сохранённом403 после503 кнопка обновления отсутствует.
+      /tmp/coffee-pr172-catalog-refresh-20261005/ui/operator-full.log, exit0.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Catalog refresh P2: /tmp/coffee-pr172-catalog-refresh-20261005/ui/lint.log, exit0.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      5 октября 2026, Catalog refresh P2: 1 JS, gzip140090 B из256000 B.
+      /tmp/coffee-pr172-catalog-refresh-20261005/ui/bundle.log, exit0.
+  - command: WEB_TEST_GROUP=routes node --experimental-strip-types apps/web/test/operator-flow.spec.ts
+    result: failed-regression-red
+    exitCode: 1
+    detail: >-
+      6 октября 2026, order route P1: старый bundle538389a оставляет Confirm диалог B после
+      same-document перехода A→B и настоящего browser Back к A: count1 вместо0.
+      GET B и открытие диалога прошли до assertion; /tmp/coffee-pr172-order-route-20261006/ui/red-routes.log.
+  - command: pnpm web:build
+    result: passed
+    exitCode: 0
+    detail: >-
+      6 октября 2026, order route P1: свежие typecheck/UI/browser build на keyed OrderCardContent.
+      /tmp/coffee-pr172-order-route-20261006/ui/build.log, exit0.
+  - command: pnpm test:web-operator
+    result: passed
+    exitCode: 0
+    detail: >-
+      6 октября 2026, order route P1: полный mock-browser набор на свежем bundle.
+      Confirm/Delete/Reconcile B→browser Back A закрываются, без команды при возврате;
+      новое явное открытие на A отправляет единственную команду по пути A с его expectedVersion
+      и ответом200/202; причина сверки B сброшена перед новым intent A.
+      /tmp/coffee-pr172-order-route-20261006/ui/operator-full.log, exit0.
+  - command: pnpm lint
+    result: passed
+    exitCode: 0
+    detail: >-
+      6 октября 2026, order route P1: /tmp/coffee-pr172-order-route-20261006/ui/lint.log, exit0.
+  - command: pnpm browser:bundle:check
+    result: passed
+    exitCode: 0
+    detail: >-
+      6 октября 2026, order route P1: 1 JS, gzip140123 B из256000 B.
+      /tmp/coffee-pr172-order-route-20261006/ui/bundle.log, exit0.
+limitations:
+  - >-
+    Late mutation privacy regression сохраняет один QueryClient через controlled SPA history transition.
+    Native Link/Back, Edge и реальный backend для этой гонки отдельно не проверялись.
+  - >-
+    Перекрывающиеся beginIntent проверены unit test с удержанием digest; sidebar/unmount race отдельно
+    в браузере не воспроизводился. Существующая browser idempotency group прошла на свежем build.
+  - >-
+    Catalog cache privacy regression использует controlled SPA history transition с одним QueryClient.
+    Native UI Link перезагружает документ; acceptance native Link/Back/Edge этим сценарием не подтверждена.
+  - >-
+    PR #172 открыт без Draft; browser-through-Edge/Compose served-surface acceptance
+    и owner acceptance в этом прогоне не подтверждены.
+    Producer #171 принят; прежняя зависимость от непринятого backend устранена.
+  - >-
+    Исторические baseline/typecheck/query/route failures выше относятся к прежним ревизиям; итоговые gates
+    после merge accepted develop прошли; текущие Order Card P2 receipts приведены отдельно.
+  - >-
+    Production IdP, TLS/PKI, live provider mutation, deployment и CI в этом прогоне не проверялись. Browser
+    proof использует mock API. Merge самого PR #172 и закрытие issue #9 не выполнялись.
+  - >-
+    Пользовательские 11 dirty/untracked settings/tooling файлов в основном checkout сохранены отдельно от
+    чистой integration copy и исключены из PR.
+sourceFingerprint:
+  algorithm: sha256(sorted artifact + NUL + sha256(file), joined by LF; handoff excluded)
+  sha256: d47094f032955628d69e917588006813c72844acad2927965b83290bb1c49c93
+acceptedContractInput:
+  issue: 11
+  pullRequest: https://github.com/YurGusev/CoffeeOrderPlatform/pull/171
+  headCommit: 3abdd4a7f937225af3d2e6cdcb5bd1b76744a796
+  accepted: true
+  artifacts:
+    - artifact: contracts/openapi/client-v1.yaml
+      sha256: 69b4ae3c7522abcb3e8a0927552507219bbab2b5bfd34bc0c28538384c921974
+    - artifact: packages/generated/client-v1/src/types.gen.ts
+      sha256: 7e1aabbed1355a2e37f97fa142c24495febcbf5323a386a59d19012e9e6cb42e
+  integratedLocally: true
+  integratedFromCommit: 3384569711553b7d860e459d56e4c302df4c6d7f
+  acceptedMergeCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+  sourceHandoff:
+    artifact: evidence/handoffs/issue-11.yaml
+    sha256: 60626b2c92789a8949b362b7a29d12c43b7e2df429a5a5b96eee7ae0fb60ebef
+integration:
+  method: merge-develop
+  previousHead: 32bc8d9d1f9088e27c8f7b420563334f3908bb9f
+  acceptedDevelopCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+  resolvedConflicts:
+    - contracts/compatibility-evidence.yaml
+    - docs/launch/README.md
+    - scripts/contracts-breaking.mjs
+  detail: >-
+    Сохранены backend/internal guarantees принятого #11 и browser Catalog roots #9; native generation совпала
+    побайтно. Git diff backend/config/public OpenAPI относительно accepted develop пуст.

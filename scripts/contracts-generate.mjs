@@ -8,7 +8,7 @@ const root = resolve(import.meta.dirname, '..');
 
 const runtimeSchemaSelection = {
   client: {
-    components: ['CustomerAddress', 'CustomerCreateRequest', 'CustomerResponse', 'CustomerSummary', 'CustomerSearchResponse', 'CustomerRef', 'ProblemDetails', 'PricingQuoteCreateRequest', 'PricingQuoteResponse', 'QuoteRef', 'OrderDraftCreateRequest', 'OrderItemPutRequest', 'OrderConfirmRequest', 'ReconciliationRequest', 'OrderCardResponse', 'ReconciliationAcceptedResponse', 'OrderRef', 'ItemRef', 'ProductRef', 'VariantRef', 'ErrorOrderConfirmationRejected', 'ErrorOrderEmpty', 'ErrorOrderDesiredOverflow', 'ErrorOrderItemLimitExceeded', 'ErrorOrderQuoteScopeMismatch'],
+    components: ['CustomerAddress', 'CustomerCreateRequest', 'CustomerResponse', 'CustomerSummary', 'CustomerSearchResponse', 'CustomerRef', 'CatalogProductSummary', 'CatalogSearchResponse', 'ProblemDetails', 'PricingQuoteCreateRequest', 'PricingQuoteResponse', 'QuoteRef', 'OrderDraftCreateRequest', 'OrderItemPutRequest', 'OrderConfirmRequest', 'ReconciliationRequest', 'OrderCardResponse', 'ReconciliationAcceptedResponse', 'OrderRef', 'ItemRef', 'ProductRef', 'VariantRef', 'ErrorOrderConfirmationRejected', 'ErrorOrderEmpty', 'ErrorOrderDesiredOverflow', 'ErrorOrderItemLimitExceeded', 'ErrorOrderQuoteScopeMismatch'],
     parameters: ['CustomerQuery', 'PageLimit', 'CustomerCursor', 'Cursor', 'IdempotencyKey', 'ReplayOnly', 'IfMatchVersion'],
   },
   internal: {

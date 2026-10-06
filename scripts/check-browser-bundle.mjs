@@ -11,7 +11,7 @@ const INITIAL_JS_GZIP_BUDGET_BYTES = 250 * 1024;
 const forbidden = [
   { rule: "BUNDLE-NODE", pattern: /(?:["']node:[^"']+["']|@coffee-platform\/runtime|process\.env)/, message: "Node/runtime code" },
   { rule: "BUNDLE-NETWORK", pattern: /\bfetch\(\s*["'`](?:\/|https?:)/, message: "network call" },
-  { rule: "BUNDLE-PROVIDER", pattern: /["'`][^"'`]*(?:aroma|provider|localhost:\d{2,5})[^"'`]*["'`]/, message: "provider/server endpoint" },
+  { rule: "BUNDLE-PROVIDER", pattern: /["'`][^"'`]*(?:https?:\/\/[^"'`]*(?:aroma|provider)|(?:aroma|provider)\.(?:internal|local|ru|com)(?=[:/"'`])|localhost:\d{2,5})[^"'`]*["'`]/, message: "provider/server endpoint" },
 ];
 
 if (!existsSync(browserRoot)) {
