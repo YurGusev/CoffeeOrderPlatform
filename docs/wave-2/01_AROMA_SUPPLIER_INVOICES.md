@@ -22,6 +22,7 @@ acceptance-сценарии. Он не утверждает, что provider API
 - [ownership данных](../launch/05_DATA_OWNERSHIP.md)
 - [каталог первых контрактов](../launch/12_LAUNCH_CONTRACT_CATALOG.md)
 - [граф поставки](../launch/13_DELIVERY_DEPENDENCY_GRAPH.md)
+- [ADR-0033: header phases и revenue grants](../adr/ADR-0033-wave2-header-revenue-boundaries.md)
 
 Первый запуск заканчивается без оформления invoice поставщика, PDF
 materialization и customer payment. Эти функции являются второй волной. Наличие
@@ -85,8 +86,9 @@ Invoices — единственный владелец и writer:
 - reconciliation и invoice compensation state.
 
 Invoices принимает только self-contained durable handoff от Orders. Он не читает
-Orders DB и не обращается к AROMA. Header, его статус и их history не должны
-дублироваться изменяемыми копиями в Orders.
+Orders DB и не обращается к AROMA. Header/status/history authority не
+дублируется в Orders: разрешена только revision-guarded read projection
+invoice summary, не второй writer invoice truth.
 
 ### Payments, Pricing и UI
 
@@ -178,7 +180,26 @@ link; при guard или version failure artifact не даёт права от
 блокируют автоматический link. Candidate, появившийся во время CancelGuard,
 переходит в явный compensation/review путь, а не теряется.
 
-### 2. Self-contained manifest
+### Locked revenue handoff (#80 → #86)
+
+По ADR-0033 `orders-checkout-worker` отдельно сохраняет write-once target
+`order-revenue-proof.v1` вне DB transaction: frozen order/checkout/version,
+currency, Locked customer line/order totals, полное coverage/hash и source
+snapshot proof identity. Это не существующая schema: её публикует #76.
+Wholesale/provider payload, credentials/URL, Customer PII и текущая quote
+исключены; сумма не пересчитывается и не берётся из supplier invoice.
+Та же guarded exact-link transaction после version/fence/CancelGuard check
+сохраняет revenue refs и stages один Orders→Pricing Outbox fact вместе с
+invoice handoff. При rejected link bytes остаются orphan, не proof commit;
+retry identity/hash idempotent, иной hash/version — correction/conflict.
+Pricing `pricing-cost-worker` имеет только type-scoped ready read revenue и
+invoice-price-proof, не полный allocation manifest/PDF/source-proof; checkout
+ref/hash — correlation, не read capability. Validation вне DB locks, затем
+Inbox/proof/projection атомарны; до обоих proofs маржа pending/review, не ноль.
+Trusted generated JSON не ждёт scanner. Retention/pending intents защищают
+bytes при cleanup; W2 manifest/event limits сохраняются.
+
+### 2. Self-contained allocation manifest
 
 Orders создаёт immutable `CheckoutAllocationManifest` после exact wholesale
 match и до staging handoff. Manifest собирается из frozen source allocations и
@@ -378,6 +399,17 @@ Orders/Invoices/Payments и ручное решение, если provider не 
 primitive.
 
 ## UI projection contract
+
+Ранний Orders-owned handler #81 — только в существующей target роли
+`apps/orders-invoice-consumer/src/main.ts`, principal `coffee_orders_invoice_rw`
+(pool 4), materialized #77. Проверив identity/correlation/invoice revision,
+он атомарно пишет Orders Inbox + summary + OrderCard.projectionVersion +
+Orders Outbox invalidation. Header phase требует DB/Kafka, не PDF store/scan
+и не #82/#83/#84; не создаёт payment requirement и не меняет payable amount
+или lifecycle. #83 принимает #81 handoff и расширяет ту же роль финансовым
+InvoicePricesApplied handler/read invoice-price-proof; header handler и
+subscription/group identity не заменяются. #76 публикует один mapping;
+второй consumer в orders-service и Invoices writer в Orders DB запрещены.
 
 UI получает данные из owner-derived Invoices/Orders projection. Браузер не делает
 provider запрос и не использует номер счёта как глобальный поиск.

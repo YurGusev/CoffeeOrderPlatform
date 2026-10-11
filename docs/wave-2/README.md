@@ -40,6 +40,15 @@ GitHub и принятым handoffs, а не фиксируются этим д�
 дополнительным prerequisite #76. Topology handoff #71 раскрывается в [документе runtime topology](02_RUNTIME_TOPOLOGY.md)
 и [ADR-0030](../adr/ADR-0030-wave2-runtime-topology.md).
 
+[ADR-0033](../adr/ADR-0033-wave2-header-revenue-boundaries.md) — scoped решение
+Архитектора D1/D2 (документальная поставка ожидает merge, не runtime): #81
+реализует ранний header handler единственной `orders-invoice-consumer` роли;
+#83 принимает #81 и расширяет тот же runtime финансовым handler, без обратного
+prerequisite раннего header. #80 публикует отдельный минимальный Locked revenue
+proof для #86, не grant Pricing на полный checkout. #76 сохраняет актуальный
+launch registry с восемью сообщениями по [ADR-0032](../adr/ADR-0032-order-reconciliation-intent.md),
+не исторический exact-seven; gate #13 не снимается.
+
 Точный порядок и зависимости:
 
 1. Решения #71 (topology/DB/runtime), #72 (AROMA evidence) и #75
@@ -60,6 +69,9 @@ GitHub и принятым handoffs, а не фиксируются этим д�
    #124 подключает поздние financial sources после #76/#77/#82–#87.
    #84/#85 могут проверять contract fixtures #76 до реализации #83,
    но живой финансовый путь принимается только в #90.
+8. #83 принимает #8/#80/#81/#82/#76/#77; прямая #81→#83 — reuse header consumer,
+   не второй consumer. #86 принимает #7/#75/#76/#77/#80/#82: отдельные revenue
+   и invoice cost proofs; неизвестная выручка pending, Locked цена неизменна.
 
 Это план зависимостей из #70, а не отчёт о выполнении: ни готовность, ни
 принятие handoffs здесь не утверждаются. Каждый owner output остаётся отдельной
@@ -73,7 +85,7 @@ GitHub и принятым handoffs, а не фиксируются этим д�
 | W2-invoices / Invoices | Immutable allocation handoff и provider observations → header/links, allocations, document reconciliation, invoice/price proof | Раннее состояние счёта по владеющему документу; полный proof требует coverage/hash/quantity/amount checks. Inbox replay идемпотентен; изменения счёта версионируются, расхождения идут в review |
 | W2-payment-requirement / Orders | Verified invoice proof → server-owned requirement и AwaitingCustomerPayment | Проверены frozen version, coverage, amount/currency и correlation. Частичный/чужой proof не продвигает lifecycle; duplicate event не создаёт второе requirement |
 | W2-payments / Payments; lifecycle writer Orders | Requirement → intent, verified webhook/reconciliation, payment/refund facts | Browser redirect не proof. Unknown create/refund сверяется по stable provider identity; поздняя оплата отменённого заказа создаёт incident, а не resurrect. Cancel/refund/compensation и их recovery приняты до live gate |
-| W2-pricing / Pricing | Verified actual supplier cost и введённая фактическая доставка → воспроизводимая маржа и preview следующего коэффициента | Цена Locked Order не меняется. Активация коэффициента — явная versioned команда; неполные costs остаются pending, исправления сохраняют evidence |
+| W2-pricing / Pricing | Locked Orders revenue proof #80, verified actual supplier cost и введённая фактическая доставка → воспроизводимая маржа и preview следующего коэффициента | Только revenue/price proof grants, без checkout/PDF. Цена Locked Order не меняется; до обоих proofs маржа pending. Активация коэффициента — явная versioned команда; исправления сохраняют evidence |
 | W2-work-center / Work Center | Факты подключённых owners → очереди исключений и разрешённые owner commands | Acknowledge/snooze не меняют бизнес-истину. Resolution требует completion fact. Replay восстанавливает projection; недоступный/отстающий источник виден, пустая очередь не означает здоровье |
 | W2-acceptance / Reliability | Все принятые outputs → release evidence | Пройдены duplicate/reorder/crash/unknown, cancel races, document integrity, capacity/restore и сквозная диагностика; непроверенные live paths не объявлены PASS |
 
