@@ -157,6 +157,7 @@ INTERNAL_ALLOWLIST = (
     ("aroma-convergence", "aroma-gateway", "POST", "/api/internal-v1/aroma/cart-snapshots:read", "readAromaCartSnapshot", False),
     ("aroma-convergence", "aroma-gateway", "POST", "/api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity", "setAromaCartLineQuantity", True),
     ("aroma-convergence", "aroma-gateway", "POST", "/api/internal-v1/aroma/cart-lines/{offerRef}:remove", "removeAromaCartLine", True),
+    ("aroma-convergence", "catalog-service", "GET", "/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input", "getCatalogPricingInput", False),
 )
 
 

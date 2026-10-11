@@ -95,9 +95,22 @@ refs/hash/version, next-at/attempts/reason и lease/fence; duplicate intake не
 создаёт второй job, terminal job не исполняется снова. Fetch/size/hash/type/
 schema/Ready validation выполняются вне DB transaction. Новая короткая Orders
 transaction повторно проверяет correlation/current frozen version, coverage,
-currency/amount, cancellation и job lease/version; consumed verified proof +
-guarded lifecycle/requirement/history/projection/Outbox + terminal job outcome
-атомарны. Crash после commit до ACK/retry не повторяет requirement.
+currency/amount, cancellation и job lease/version для всего bounded набора N
+Orders из verified proof. Orders применяет набор all-or-nothing. Успешная
+transaction сохраняет consumed proof и terminal job outcome вместе со всеми N
+per-order effects: отдельный stable PaymentRequirementRef, lifecycle/history/
+projection и один принятый payment Outbox handoff каждого Order. Payable amount
+берётся из Locked customer agreement по #75/#76, не из supplier invoice total.
+
+Если хотя бы один Order cancelled/stale/conflicting или набор неполон, Orders
+не создаёт новых requirements/lifecycle/Outbox effects ни для одного элемента.
+Job сохраняет explicit review/conflict и причину. Прежние корректные
+исторические effects не откатываются. Полностью применённый тот же proof —
+no-op/reuse всего набора с прежними identities. Чужое или частично несовместимое
+прежнее requirement — conflict, не overwrite и не автозавершение остальных.
+Конфликт разрешается только существующим принятым recovery/correction путём.
+Crash после commit до ACK/retry не повторяет per-order requirements. Checkout,
+proof/envelope и transaction limits не повышаются; validation сети/bytes вне locks.
 
 Storage outage оставляет durable pending/retry по accepted budgets. Corrupt,
 wrong owner/type/hash или stale proof даёт explicit review/conflict без payment
@@ -140,9 +153,12 @@ silent truncation или повышения limits.
 transaction повторно проверяет checkout/control version, fence, CancelGuard и
 равенство множества orderRef в proof refs frozen CheckoutSnapshot: без пропусков,
 лишних Orders, duplicate refs или partial line coverage. В той же transaction
-сохраняются все refs и N Orders→Pricing revenue Outbox facts вместе с одним
-существующим invoice materialization handoff, link/exclusion/revisions — всё
-или ничего. Rollback/rejected/stale link не публикует ни одного revenue fact;
+сохраняются все N revenue proof refs и N durable publication intents в Orders
+вместе с одним существующим invoice materialization Outbox handoff и link/
+exclusion/revisions — всё или ничего. Каждый intent сохраняет immutable Locked
+customer facts/ref/hash и element identity до публикации. Durable intent — не
+опубликованный факт и не завершённая Pricing projection.
+Rollback/rejected/stale link не создаёт ни одного committed revenue intent/fact;
 orphan bytes не business proof, cleanup учитывает retention/holds/pending intents.
 
 Normal element identity в Orders — (checkoutSnapshotRef, orderRef,
@@ -152,9 +168,45 @@ immutable: тот же content возвращает сохранённый messa
 overwrite. Correction требует отдельного принятого versioned contract, не random
 identity в обход dedupe. Каждый element имеет собственный stable messageId,
 orderRef key/aggregate и owner version, общую checkout correlation и исходную
-causation. #76 материализует единственные wire type/topic/schema names. Общий
-owner Outbox #63 использует непрерывный aggregate_sequence delivery counter по
-aggregate, не индекс Order в checkout и не frozen version; второго счётчика нет.
+causation. Эти значения фиксируются в intent до публикации. #76 материализует
+единственные wire type/topic/schema names.
+
+### D2b: durable publication до установки Pricing consumer
+
+Пока #86 не принят и не установлен, revenue publication выключена. Checkout
+link, invoice materialization и ранний header продолжаются без ожидания #86/PDF.
+Pending revenue не ставится в общий Outbox и не резервирует aggregate_sequence:
+заблокированная revenue row не должна задержать последующие owner rows.
+#80 принимается на isolated accepted fixtures #76 до #86. Обратной implementation
+дуги #86→#80 нет.
+
+#76 определяет versioned activation/compatibility contract и exact identities.
+#77 материализует явную activation в config/platform.yaml/schema/runbook.
+Этот ADR не вводит config key или wire type. HTTP health consumer не разрешает
+публикацию автоматически. После явной activation bounded scheduler/startup
+sweep того же orders-checkout-worker возобновляет intents. Короткая Orders
+transaction атомарно переводит intent в staged и enqueue-ит его через существующий
+owner Outbox #63. Переход и Outbox row коммитятся вместе. Непрерывный
+aggregate_sequence назначается в существующем Outbox пути только при enqueue,
+не как индекс Order или frozen version; второго счётчика нет.
+
+Promotion переносит committed immutable historical fact. Она не выполняет
+checkout заново и не повторяет exact-link guards по изменившемуся текущему Order.
+Повреждённый сохранённый proof требует explicit review, не пересчёта по текущей
+quote. Restart/crash до и после enqueue commit не теряет intent и не создаёт
+второй normal fact; stable messageId/ref/hash/business identity сохраняются.
+Непоставленные intents и proof bytes нельзя удалять по Kafka retention, обычной
+очистке опубликованного Outbox или orphan cleanup. Bounded paging/lease/retry и
+backlog count/age/reason используют accepted #71/#77/#121 budgets. Исчерпание
+durable capacity вызывает backpressure до нового необратимого действия, не
+silent drop или повышение limits.
+
+Rollback сначала выключает promotion новых revenue intents. Совместимый consumer
+обслуживает уже staged/in-flight rows до доказанного drain/replay horizon.
+Consumer нельзя удалить, сбросить offsets/Inbox или объявить rollout завершённым
+при непроверенном остатке. Обычная длительная эксплуатационная потеря consumer
+остаётся предметом existing retention/recovery policy. #86 проверяет оба порядка
+revenue/cost и независимый per-order dedupe; #90 доказывает живой catch-up.
 
 Pricing fetch/size/hash/type/schema validation выполняется вне DB locks; затем
 Inbox + consumed proof + projection атомарны для каждого Order независимо.
@@ -206,5 +258,9 @@ runtime tests этой документационной поставки. Уто
 #76/#77/#80/#82/#83/#86/#90: accepted-not-active/installed-before-activation,
 restart/rollback/in-flight, multi-order completeness/idempotency/limits/rollback,
 financial→header в одной partition при storage outage, pending catch-up,
-corrupt proof, cancellation/version/lease race и ровно одно requirement после
-apply commit. Зелёный documentary lint не является исполнением этих tests.
+corrupt proof и bounded all-or-nothing per-order payment apply. Для двух Orders
+нужны два requirements; один invalid Order запрещает новые effects всего набора.
+[A27–A28](../wave-2/01_AROMA_SUPPLIER_INVOICES.md#acceptance-scenarios) требуют
+link без #86, задержку дольше Kafka retention/Outbox cleanup, сохранность всех N
+refs/intents, activation/catch-up, crash по обе стороны enqueue commit, rollback
+с in-flight, header progress и bounds. Зелёный documentary lint не исполняет tests.

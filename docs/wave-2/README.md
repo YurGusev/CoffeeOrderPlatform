@@ -44,9 +44,10 @@ GitHub и принятым handoffs, а не фиксируются этим д�
 Архитектора D1/D2 (документальная поставка ожидает merge, не runtime): #81
 реализует ранний header handler единственной `orders-invoice-consumer` роли;
 #83 принимает #81 и расширяет тот же runtime финансовым handler, без обратного
-prerequisite раннего header. #80 публикует минимальный Locked revenue proof и
-факт для каждого frozen Order полным атомарным набором для #86, не grant Pricing
-на полный checkout. #76 сохраняет актуальный
+prerequisite раннего header. #80 атомарно сохраняет минимальные Locked revenue
+proof refs и durable publication intents для всех frozen Orders. Публикация для
+#86 начинается только после принятого установленного consumer и явной activation,
+не блокируя checkout/header и не давая Pricing grant на полный checkout. #76 сохраняет актуальный
 launch registry с восемью сообщениями по [ADR-0032](../adr/ADR-0032-order-reconciliation-intent.md),
 не исторический exact-seven; gate #13 не снимается.
 
@@ -103,13 +104,38 @@ partition продолжается в принятом bounded profile. Это �
 с bindings/runbook #77, не готовая возможность foundation. Полная семантика и
 future cases — [invoice flow](01_AROMA_SUPPLIER_INVOICES.md#acceptance-scenarios).
 
+Revenue следует D2b ADR-0033. Exact link коммитит все N refs/intents с одним
+invoice Outbox handoff и link/exclusion/revisions. До accepted installed #86
+revenue publication выключена: нет blocked revenue Outbox rows или заранее
+зарезервированных sequence. #80 принимает accepted fixtures #76 до #86.
+Checkout/header не ждут #86/PDF; DAG не получает обратного ребра.
+После явной activation по #76/#77 bounded sweep того же Orders worker атомарно
+stages intents и enqueue-ит факты через существующий owner Outbox. Sequence
+назначается только при enqueue; immutable facts/refs/hash/identities не меняются.
+Непоставленные intents/bytes защищены от Kafka retention/Outbox/orphan cleanup.
+Backlog/lease/retry используют accepted #71/#77/#121 budgets; capacity exhaustion даёт
+backpressure до нового необратимого действия. Rollback сначала выключает promotion,
+сохраняя совместимый consumer для staged/in-flight до drain/replay horizon.
+HTTP health не разрешение, #90 отдельно доказывает живой catch-up и header progress.
+
+#83 применяет один verified bounded proof/job для точного множества N Orders
+all-or-nothing. Успех коммитит consumed proof, N отдельных stable
+PaymentRequirementRef, N per-order lifecycle/history/projection и N payment
+Outbox handoffs с terminal job. Сумма каждого requirement — Locked customer
+agreement. Один cancelled/stale/conflicting Order или неполный набор запрещает
+новые effects всего набора и сохраняет review/conflict в job. Прежние корректные
+effects не откатываются. Полный duplicate — reuse/no-op всех identities;
+частично несовместимое прежнее requirement — conflict без автозавершения остальных.
+Сеть/validation вне locks; все guards повторяются в короткой Orders transaction,
+limits не повышаются. Recovery только через существующий принятый correction путь.
+
 | Этап / владелец | Вход → выход | Критерий приёмки и восстановление |
 |---|---|---|
 | W2-contracts / Platform Architecture с владельцами контрактов | Канон и закрытые provider inputs → один набор target schemas, topics, ownership и topology bindings | Для каждой связи заданы writer, transport, key, consumer, idempotency, revision/replay policy; дублирующих путей нет. Несовместимость блокирует consumer, invalid payload уходит в quarantine |
 | W2-artifacts / Platform Operations | Принятые roles и artifact boundary → private object storage, authorized refs, quarantine/scan, retention/restore | Immutable manifest проверяется по hash/size/schema, документы проходят scan до parsing. Повтор upload/job и restart не создают иной proof; restore подтверждён чтением bytes |
 | W2-checkout / Orders; Gateway исполняет provider transport | Current InSync proof и все active строки Order → freeze, exact wholesale link, allocation manifest и ожидание реквизитов | Один Order закупается целиком. После exact link купленные contributions исключены атомарно; ambiguity/cancel race сохраняют blocker/compensation, не повторяют submit |
 | W2-invoices / Invoices | Immutable allocation handoff и provider observations → header/links, allocations, document reconciliation, invoice/price proof | Раннее состояние счёта по владеющему документу; полный proof требует coverage/hash/quantity/amount checks. Inbox replay идемпотентен; изменения счёта версионируются, расхождения идут в review |
-| W2-payment-requirement / Orders | Verified invoice proof → server-owned requirement и AwaitingCustomerPayment | Проверены frozen version, coverage, amount/currency и correlation. Частичный/чужой proof не продвигает lifecycle; duplicate event не создаёт второе requirement |
+| W2-payment-requirement / Orders | Verified invoice proof → отдельный server-owned requirement и AwaitingCustomerPayment каждого Order | Bounded all-or-nothing apply полного набора; один invalid Order запрещает новые effects всех. Полный duplicate переиспользует N identities, partial prior conflict требует review. Supplier total не payable amount |
 | W2-payments / Payments; lifecycle writer Orders | Requirement → intent, verified webhook/reconciliation, payment/refund facts | Browser redirect не proof. Unknown create/refund сверяется по stable provider identity; поздняя оплата отменённого заказа создаёт incident, а не resurrect. Cancel/refund/compensation и их recovery приняты до live gate |
 | W2-pricing / Pricing | Locked Orders revenue proof #80, verified actual supplier cost и введённая фактическая доставка → воспроизводимая маржа и preview следующего коэффициента | Только revenue/price proof grants, без checkout/PDF. Цена Locked Order не меняется; до обоих proofs маржа pending. Активация коэффициента — явная versioned команда; исправления сохраняют evidence |
 | W2-work-center / Work Center | Факты подключённых owners → очереди исключений и разрешённые owner commands | Acknowledge/snooze не меняют бизнес-истину. Resolution требует completion fact. Replay восстанавливает projection; недоступный/отстающий источник виден, пустая очередь не означает здоровье |

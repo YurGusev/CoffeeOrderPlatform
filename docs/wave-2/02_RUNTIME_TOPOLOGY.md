@@ -75,8 +75,17 @@ Inbox Processed означает durable intake, не verified proof/payment tra
 message/business identity, next-at/attempts/reason, lease/fence и version. Fetch/
 size/hash/type/schema/Ready validation вне locks; новая короткая transaction
 повторно проверяет correlation/frozen version/coverage/currency/amount/cancel и
-job lease/version, атомарно пишет verified proof, lifecycle/requirement/history/
-projection/Outbox и terminal job. Duplicate/terminal job не повторяет effect;
+job lease/version всего bounded набора N Orders. All-or-nothing apply атомарно
+пишет consumed proof, terminal job и N per-order effects: отдельный stable
+PaymentRequirementRef, lifecycle/history/projection и один payment Outbox handoff
+каждого Order. Payable amount — Locked customer agreement, не supplier total.
+Один cancelled/stale/conflicting Order или неполный набор запрещает новые
+effects всего набора; job сохраняет explicit review/conflict с причиной.
+Прежние корректные effects не откатываются. Полный duplicate переиспользует весь
+набор identities; частично несовместимое прежнее requirement — conflict, не
+overwrite или автозавершение остальных. Recovery — существующий принятый
+correction путь; checkout/proof/envelope/tx limits не повышаются.
+Duplicate/terminal job и crash после commit не повторяют per-order effects;
 corrupt/stale proof даёт review/conflict без payment. Storage retry не держит
 Kafka partition handler и не использует replay Processed Inbox для apply.
 Header после financial record в той же partition должен продолжаться в bounded
@@ -176,16 +185,37 @@ connections/permissions/health, #78 enforcement. #80 пишет write-once reven
 bytes вне DB transaction: N per-order artifacts для N frozen Orders. Guarded
 exact-link проверяет равенство proof-orderRef set frozen CheckoutSnapshot, полное
 line coverage без omitted/extra/duplicate refs и version/fence/CancelGuard;
-весь набор refs + N Orders→Pricing Outbox facts + один invoice handoff + link/
-exclusion/revisions коммитится атомарно. Rollback/rejected/stale link не публикует
-ни одного revenue fact; orphan cleanup сохраняет retention/pending intents.
+все N refs + N durable publication intents + один invoice materialization Outbox
+handoff + link/exclusion/revisions коммитятся атомарно в Orders. Intent хранит
+immutable customer facts/ref/hash, не означает публикацию или Pricing projection.
+Rollback/rejected/stale link не создаёт committed revenue intent/fact;
+orphan cleanup сохраняет retention/pending intents.
 Normal identity каждого элемента (checkoutSnapshotRef, orderRef,
 orderVersionAtCheckout) привязана к immutable source proof/hash/ArtifactRef:
 same content переиспользует messageId/ref, другой hash/frozen version даёт
 conflict/correction, не новый normal факт. Каждый element — stable messageId,
 orderRef key/aggregate, owner version, общая correlation/исходная causation;
-aggregate_sequence общего #63 Outbox — непрерывный delivery counter, не индекс
-Order/его frozen version. Wire names определяет только #76, без второго registry.
+identity/ref/hash фиксируются до публикации. До accepted installed #86 revenue
+publication выключена. Exact link/invoice/header не ждут #86/PDF; #80 принимается
+на accepted fixtures #76 без обратного implementation ребра.
+Pending intents не ставятся blocked rows в Outbox и не резервируют sequence.
+#76 задаёт versioned activation/compatibility и identities, #77 материализует явную
+activation в config/platform.yaml/schema/runbook, не автоматически по HTTP health.
+После activation bounded scheduler/startup sweep того же orders-checkout-worker
+атомарно stages intent и enqueue-ит факт в owner Outbox #63. Непрерывный delivery
+counter aggregate_sequence назначается только при enqueue, не как индекс Order/
+frozen version. Wire names определяет только #76, без второго registry/counter.
+Promotion переносит committed historical fact: не новый checkout/повтор guards
+по текущему Order. Повреждённый proof даёт review, не пересчёт quote.
+Непоставленные intents/bytes защищены от Kafka retention, обычной Outbox cleanup
+и orphan cleanup. Crash до/после enqueue commit не теряет intent/не раздваивает
+normal fact. Bounded paging/lease/retry/backlog count/age/reason используют accepted
+#71/#77/#121 budgets. Исчерпание durable capacity даёт backpressure до нового
+необратимого действия, не drop или повышение limits.
+Rollback выключает promotion первой. Совместимый consumer остаётся для staged/
+in-flight до доказанного drain/replay horizon. Удалять consumer, сбрасывать offsets/
+Inbox или завершать rollout при непроверенном остатке нельзя. Existing retention/
+recovery policy покрывает длительную потерю consumer; #90 доказывает живой catch-up.
 Pricing bounded-fetches/validates вне DB locks, затем Inbox/proof/projection
 атомарны отдельно для каждого Order. Duplicate одного не подавляет другой;
 revenue/cost в обоих порядках, до обоих proofs Order pending/review, не ноль.

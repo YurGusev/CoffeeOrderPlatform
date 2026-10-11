@@ -93,7 +93,8 @@ invoice summary, не второй writer invoice truth.
 ### Payments, Pricing и UI
 
 Invoices не инициирует payment/refund. После проверенного `InvoicePricesApplied`
-Orders формирует server-owned payment requirement, а Payments действует по своим
+Orders формирует отдельный server-owned payment requirement каждого Order через
+bounded all-or-nothing apply полного verified набора. Payments действует по своим
 контрактам. Supplier invoice total не становится payable amount каждого Order.
 
 Pricing получает owner-derived фактическую себестоимость после достаточного
@@ -192,9 +193,11 @@ Wholesale/provider payload, credentials/URL, Customer PII и текущая quot
 Та же guarded exact-link transaction после version/fence/CancelGuard check
 проверяет равенство orderRef set всех proof refs frozen CheckoutSnapshot, без
 omitted/extra/duplicate refs или partial line coverage. Весь набор revenue refs
-и N Orders→Pricing Outbox facts сохраняется атомарно с одним invoice handoff,
-link/exclusion/revisions. Rollback/rejected/stale link не публикует ни одного
-revenue fact; bytes остаются orphan, не proof commit.
+и N durable publication intents сохраняется в Orders атомарно с одним invoice
+materialization Outbox handoff и link/exclusion/revisions. Каждый intent хранит
+immutable customer facts/ref/hash. Intent не означает публикацию или Pricing
+projection. Rollback/rejected/stale link не создаёт committed revenue intents/
+facts; bytes остаются orphan, не proof commit.
 
 Normal identity элемента — (checkoutSnapshotRef, orderRef, orderVersionAtCheckout)
 в Orders, с immutable source snapshot proof identity/hash/ArtifactRef binding.
@@ -202,9 +205,32 @@ Same content повторяет сохранённый messageId/ref; иной h
 conflict/correction, не новый normal факт. Correction требует отдельного
 принятого versioned contract, не random identity. Собственный stable messageId,
 orderRef key/aggregate и owner version каждого элемента сохраняют общую checkout
-correlation/исходную causation. #76 задаёт единственные wire names; общий Outbox
-#63 aggregate_sequence — непрерывный delivery counter по aggregate, не индекс
-Order в checkout/frozen version, без второго счётчика.
+correlation/исходную causation. Identity/ref/hash фиксируются до публикации.
+#76 задаёт единственные wire names и versioned activation/compatibility contract.
+#77 материализует явную activation в config/platform.yaml/schema/runbook;
+здесь ключ или wire type не создаётся. HTTP health не разрешает публикацию.
+
+До accepted installed #86 revenue publication выключена. Exact link, invoice
+materialization и header продолжаются без ожидания #86/PDF. Pending intents не
+становятся blocked Outbox rows и не резервируют aggregate_sequence.
+#80 принимается на accepted fixtures #76 до #86; обратного DAG ребра нет.
+После явной activation bounded scheduler/startup sweep orders-checkout-worker
+атомарно переводит intent в staged и enqueue-ит факт через owner Outbox #63.
+Переход intent и Outbox row коммитятся вместе. Непрерывный delivery counter
+aggregate_sequence назначается только при enqueue, не как индекс Order/frozen
+version; второго счётчика нет. Promotion переносит committed historical fact,
+не повторяет exact-link guards по текущему Order и не выполняет checkout заново.
+Повреждённый сохранённый proof даёт review, не пересчёт по текущей quote.
+Crash до/после enqueue commit сохраняет intent и прежние identities без второго
+normal fact. Непоставленные intents/bytes защищены от Kafka retention, обычной
+очистки Outbox и orphan cleanup. Paging/lease/retry и backlog count/age/reason
+ограничены accepted #71/#77/#121 budgets. При исчерпании durable capacity —
+backpressure до нового необратимого действия, не drop или повышение limits.
+Rollback сначала выключает promotion. Совместимый consumer остаётся для
+staged/in-flight rows до доказанного drain/replay horizon. Удаление consumer,
+сброс offsets/Inbox или завершение rollout с непроверенным остатком запрещены.
+Existing retention/recovery policy покрывает длительную потерю consumer после
+activation; #90 отдельно доказывает живой catch-up.
 Pricing `pricing-cost-worker` имеет только type-scoped ready read revenue и
 invoice-price-proof, не полный allocation manifest/PDF/source-proof; checkout
 ref/hash — correlation, не read capability. Validation вне DB locks, затем
@@ -458,9 +484,19 @@ sweep восстанавливает jobs после restart/store recovery, dup
 
 Fetch/size/hash/type/schema/Ready validation вне DB locks. Новая короткая Orders
 transaction повторно проверяет correlation/current frozen version, coverage,
-amount/currency, cancellation и job lease/version; verified consumed proof +
-guarded lifecycle/requirement/history/projection/Outbox + terminal outcome
-атомарны. Crash после commit до ACK/retry не повторяет requirement. Corrupt/
+amount/currency, cancellation и job lease/version всего точного bounded набора N
+Orders. Успешный all-or-nothing apply атомарно пишет consumed proof, terminal job
+outcome и все N per-order effects: отдельный stable PaymentRequirementRef,
+lifecycle/history/projection и один payment Outbox handoff каждого Order.
+Payable amount берётся из Locked customer agreement по #75/#76, не supplier total.
+Если хотя бы один Order cancelled/stale/conflicting или набор неполон, новых
+requirements/lifecycle/Outbox effects нет для всего набора. Durable job сохраняет
+explicit review/conflict и причину; прежние корректные effects не откатываются.
+Полностью применённый тот же proof — no-op/reuse всех прежних identities.
+Чужое или частично несовместимое прежнее requirement — conflict, без overwrite
+и автозавершения остальных. Recovery требует существующего принятого correction
+пути, не random identity или generic API. Checkout/proof/envelope/tx limits не
+повышаются. Crash после commit до ACK/retry не повторяет requirements. Corrupt/
 wrong owner/type/hash/stale proof — review/conflict без payment effect; storage
 outage — durable pending/retry по accepted budgets, не retry внутри Kafka handler
 и не transport replay уже Processed Inbox для apply.
@@ -526,11 +562,13 @@ operator-visible review и сохраняет последнее accepted eviden
 | A19 | UI ищет номер, одинаковый в разных scopes | Результаты разделены account context и показывают review markers | Не смешивать supplier invoices разных scopes |
 | A20 | #81 header-only и accepted-not-active #82, затем установка #83 | #82 document intents durable, price application/financial Outbox выключены до явной activation после installed accepted #83; isolated fixtures #76 доказаны отдельно (#76/#77/#82/#83/#90) | Не quarantine/skip валидный future record, не бесконечный retry partition и не blocked financial Outbox перед header; #81/#88 не ждут #83, DAG без reverse edge |
 | A21 | Activation, restart или rollback с financial records в полёте | Те же Invoices intent identities; application/proof ref/Outbox атомарны. Rollback producer-off первым, dual consumer и pending jobs сохраняются до drain/replay horizon (#77/#82/#83/#90) | Не applied proof без handoff, не header-only downgrade до drain, не сброс offsets/Inbox |
-| A22 | Checkout с двумя и более frozen Orders; omitted/extra/duplicate ref или неполное line coverage | N per-order artifacts/facts, точное множество frozen Orders; guarded exact-link refs/N revenue rows/один invoice handoff/link/exclusion/revisions all-or-nothing (#76/#80/#90) | Ошибка coverage/version/fence/CancelGuard или transaction rollback не публикует ни одного revenue fact; orphan bytes не commit |
+| A22 | Checkout с двумя и более frozen Orders; omitted/extra/duplicate ref или неполное line coverage | N per-order artifacts и N durable publication intents; guarded exact-link refs/intents/один invoice Outbox handoff/link/exclusion/revisions all-or-nothing (#76/#80/#90) | Ошибка coverage/version/fence/CancelGuard или rollback не создаёт committed revenue intent/fact; orphan bytes не commit |
 | A23 | Wrong hash/frozen version, duplicate/crash/redelivery, oversized checkout/proof/envelope | Stable per-element identity/messageId/ref, conflict/correction при другом content; все checkout и byte/tx bounds соблюдены. Pricing duplicate Order не подавляет другой, оба порядка revenue/cost сохраняют per-order pending до обоих proofs (#76/#80/#86/#90) | Не random identity в обход dedupe, не второй sequence/registry, не splitting/truncation/повышение limits; Locked agreement неизменен |
 | A24 | Storage outage: financial record, затем header в одной Kafka partition | Inbox+immutable refs+owner pending job commit до offset; header продолжает progress, financial apply degraded, backlog reason/age видны в bounded profile (#77/#83/#90) | Не offset до job, не Processed=financial completion, не storage retry в handler; financial fetch не исчерпывает header capacity; при DB/disk saturation честный backpressure |
 | A25 | Restart pending job, восстановление store, corrupt/wrong owner/type/hash/stale proof | Bounded scheduler/startup sweep с identity/lease/fence/version; validation вне locks, corrupt proof в review/conflict без payment, catch-up по accepted #71/#77/#121 budgets (#83/#90) | Не transport replay Processed Inbox вместо job, не второй job на duplicate, не повтор terminal job и не бесконечная RAM queue |
-| A26 | Cancellation/frozen-version/job lease race; crash после apply commit до ACK/retry; поздний header | Короткая transaction повторно проверяет guards и атомарно пишет verified proof/requirement/history/projection/Outbox/terminal job; ровно одно requirement. Header guards ортогональны (#83/#90) | Cancelled/stale/conflicting proof не продвигает payment/lifecycle; поздний header не откатывает financial state |
+| A26 | Verified bounded proof двух Orders; cancellation/frozen-version/job lease race; один cancelled/stale/conflicting, неполный набор или partial prior conflict; duplicate/crash после apply commit; поздний header | Все guards повторены в короткой Orders transaction. Успех: consumed proof + два stable requirements + per-order lifecycle/history/projection + два payment Outbox handoffs + terminal job. Полный duplicate переиспользует весь набор. Один invalid элемент: ноль новых effects всего набора, durable review/conflict с причиной (#76/#83/#90) | Не одно requirement на supplier invoice, не partial success/overwrite/автозавершение остальных; прежние корректные effects не откатываются. Locked payable amount не supplier total. Поздний header не откатывает finance; limits не повышаются |
+| A27 | #80 exact link без installed accepted #86; задержка дольше Kafka retention и обычной Outbox cleanup; затем activation/catch-up | Все N proof refs/intents/bytes сохраняются durable с прежними identities. Invoice materialization/header продолжаются до #86. Явная activation запускает bounded promotion через существующий Outbox; #86 принимает оба порядка revenue/cost независимо для каждого Order (#76/#77/#80/#86/#90) | Не ранние blocked revenue Outbox rows/sequence reservation, не reverse DAG edge или ожидание #86/PDF, не удаление непоставленного proof по retention/orphan cleanup. Live catch-up доказывает #90 |
+| A28 | Duplicate/restart/crash до и после revenue enqueue commit; rollback с staged/in-flight; damaged proof и capacity exhaustion | Переход intent в staged и enqueue atomic, stable messageId/ref/hash/business identity без второго normal fact. Producer-off первым, совместимый consumer до drain/replay horizon. Bounded paging/lease/retry/backlog по #71/#77/#121; corrupt proof в review, saturation вызывает backpressure до нового irreversible effect (#77/#80/#86/#90) | Не новый checkout/повтор current Order guards/пересчёт quote, не второй counter/registry, не drop/повышение limits. Не consumer removal/offsets/Inbox reset/завершение rollout с непроверенным остатком |
 
 ## Проверки будущей реализации
 
