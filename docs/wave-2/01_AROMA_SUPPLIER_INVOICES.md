@@ -183,21 +183,40 @@ link; при guard или version failure artifact не даёт права от
 ### Locked revenue handoff (#80 → #86)
 
 По ADR-0033 `orders-checkout-worker` отдельно сохраняет write-once target
-`order-revenue-proof.v1` вне DB transaction: frozen order/checkout/version,
+`order-revenue-proof.v1` вне DB transaction для каждого из N frozen Orders:
+N artifacts, каждый содержит свой frozen order/checkout/version,
 currency, Locked customer line/order totals, полное coverage/hash и source
 snapshot proof identity. Это не существующая schema: её публикует #76.
 Wholesale/provider payload, credentials/URL, Customer PII и текущая quote
 исключены; сумма не пересчитывается и не берётся из supplier invoice.
 Та же guarded exact-link transaction после version/fence/CancelGuard check
-сохраняет revenue refs и stages один Orders→Pricing Outbox fact вместе с
-invoice handoff. При rejected link bytes остаются orphan, не proof commit;
-retry identity/hash idempotent, иной hash/version — correction/conflict.
+проверяет равенство orderRef set всех proof refs frozen CheckoutSnapshot, без
+omitted/extra/duplicate refs или partial line coverage. Весь набор revenue refs
+и N Orders→Pricing Outbox facts сохраняется атомарно с одним invoice handoff,
+link/exclusion/revisions. Rollback/rejected/stale link не публикует ни одного
+revenue fact; bytes остаются orphan, не proof commit.
+
+Normal identity элемента — (checkoutSnapshotRef, orderRef, orderVersionAtCheckout)
+в Orders, с immutable source snapshot proof identity/hash/ArtifactRef binding.
+Same content повторяет сохранённый messageId/ref; иной hash/frozen version —
+conflict/correction, не новый normal факт. Correction требует отдельного
+принятого versioned contract, не random identity. Собственный stable messageId,
+orderRef key/aggregate и owner version каждого элемента сохраняют общую checkout
+correlation/исходную causation. #76 задаёт единственные wire names; общий Outbox
+#63 aggregate_sequence — непрерывный delivery counter по aggregate, не индекс
+Order в checkout/frozen version, без второго счётчика.
 Pricing `pricing-cost-worker` имеет только type-scoped ready read revenue и
 invoice-price-proof, не полный allocation manifest/PDF/source-proof; checkout
 ref/hash — correlation, не read capability. Validation вне DB locks, затем
-Inbox/proof/projection атомарны; до обоих proofs маржа pending/review, не ноль.
+Inbox/proof/projection атомарны отдельно для каждого Order. Duplicate одного не
+подавляет другой; revenue-before-cost/cost-before-revenue поддерживаются, до обоих
+proofs соответствующего Order маржа pending/review, не ноль. Producer transaction
+гарантирует completeness без cross-owner lookup.
 Trusted generated JSON не ждёт scanner. Retention/pending intents защищают
-bytes при cleanup; W2 manifest/event limits сохраняются.
+bytes при cleanup. Maximum checkout Orders/items/allocations #76 и bounds #71/#77
+до freeze/повторно перед link, каждый proof ≤1 MiB/envelope+payload ≤64 KiB и
+owner transaction budgets сохраняются, без truncation/повышения limits или
+разбиения в обход общего checkout bound.
 
 ### 2. Self-contained allocation manifest
 
@@ -411,6 +430,53 @@ InvoicePricesApplied handler/read invoice-price-proof; header handler и
 subscription/group identity не заменяются. #76 публикует один mapping;
 второй consumer в orders-service и Invoices writer в Orders DB запрещены.
 
+### Financial activation и durable apply (#82/#83)
+
+По D1a ADR-0033 #82 fixture/merge acceptance не активирует producer в общей
+среде. До принятого установленного #83 price application/InvoicePricesApplied
+выключены: document input/intents durable в Invoices, applied proof/его Outbox
+не коммитятся. Заблокированной financial Outbox row перед header нет. Isolated
+accepted fixture receiver #76 позволяет принять #82 до #83 без обратного DAG
+ребра. Затем #83 устанавливает dual-capable intake/recovery, явная activation
+идёт по versioned contract #76 и #77 config/platform.yaml/schema/runbook с
+последующим #90 live gate, не автоматически по HTTP health.
+После activation сохранённые intents с теми же identities завершаются одной
+Invoices transaction price application/proof ref/Outbox. Restart не раздваивает
+факт. Rollback сначала останавливает producer; consumer сохраняется для
+опубликованных/in-flight records и pending jobs, header-only downgrade запрещён
+до доказанного drain/replay horizon, offsets/Inbox не сбрасываются.
+
+По D1b #83 принимает валидный financial envelope через Inbox в одной Orders
+transaction с immutable envelope/ref/hash/correlation и pending financial job;
+transport acceptance/offset только после известного commit. Inbox Processed —
+durable acceptance, не verified price proof/AwaitingCustomerPayment. Handler
+без pending row не может успешно завершиться. Owner-local job, не новая роль/
+shared queue, хранит stable message/business identity, refs/hash/version,
+next-at/attempts/reason и lease/fence. В том же процессе bounded scheduler/startup
+sweep восстанавливает jobs после restart/store recovery, duplicate intake не
+создаёт второй job, terminal job не исполняется снова.
+
+Fetch/size/hash/type/schema/Ready validation вне DB locks. Новая короткая Orders
+transaction повторно проверяет correlation/current frozen version, coverage,
+amount/currency, cancellation и job lease/version; verified consumed proof +
+guarded lifecycle/requirement/history/projection/Outbox + terminal outcome
+атомарны. Crash после commit до ACK/retry не повторяет requirement. Corrupt/
+wrong owner/type/hash/stale proof — review/conflict без payment effect; storage
+outage — durable pending/retry по accepted budgets, не retry внутри Kafka handler
+и не transport replay уже Processed Inbox для apply.
+
+После #83 общая /health/ready требует Orders DB + Kafka/Inbox + bounded capacity
+header/durable financial intake. Только artifact-ready outage делает financial
+apply readiness false/degraded с reason/backlog age, не header: financial record
+→ header в одной partition продолжает intake после сохранения job в принятом
+profile. Financial fetches не исчерпывают header capacity, нет starvation/
+неограниченной RAM queue; backlog/count/age/horizon по #71/#77/#121 наблюдаемы.
+Исчерпание безопасной durable DB/disk capacity даёт честный backpressure/not-ready
+без потери, не обещание бесконечной независимости. /health/live dependency-free;
+mandatory storage остальных ролей не отменяется. Header/financial revision guards
+ортогональны: поздний header не откатывает financial state. #81 реализует только
+ранний header, не будущие pending jobs/storage dependency #83.
+
 UI получает данные из owner-derived Invoices/Orders projection. Браузер не делает
 provider запрос и не использует номер счёта как глобальный поиск.
 
@@ -458,6 +524,13 @@ operator-visible review и сохраняет последнее accepted eviden
 | A17 | Invoices получил handoff без self-contained manifest или с неверным hash | Bounded fetch/metadata/hash/size/schema validation до DB transaction отклоняет/ставит review; cross-owner read запрещён | Не делать SQL/HTTP добор из Orders или AROMA и не записывать непроверенный artifact в DB transaction |
 | A18 | Header уже имеет price/payment evidence, затем приходит correction | Исходные allocations/proofs immutable; создаётся correction/compensation review | Не unlink/delete историю и не воскресить Cancelled Order |
 | A19 | UI ищет номер, одинаковый в разных scopes | Результаты разделены account context и показывают review markers | Не смешивать supplier invoices разных scopes |
+| A20 | #81 header-only и accepted-not-active #82, затем установка #83 | #82 document intents durable, price application/financial Outbox выключены до явной activation после installed accepted #83; isolated fixtures #76 доказаны отдельно (#76/#77/#82/#83/#90) | Не quarantine/skip валидный future record, не бесконечный retry partition и не blocked financial Outbox перед header; #81/#88 не ждут #83, DAG без reverse edge |
+| A21 | Activation, restart или rollback с financial records в полёте | Те же Invoices intent identities; application/proof ref/Outbox атомарны. Rollback producer-off первым, dual consumer и pending jobs сохраняются до drain/replay horizon (#77/#82/#83/#90) | Не applied proof без handoff, не header-only downgrade до drain, не сброс offsets/Inbox |
+| A22 | Checkout с двумя и более frozen Orders; omitted/extra/duplicate ref или неполное line coverage | N per-order artifacts/facts, точное множество frozen Orders; guarded exact-link refs/N revenue rows/один invoice handoff/link/exclusion/revisions all-or-nothing (#76/#80/#90) | Ошибка coverage/version/fence/CancelGuard или transaction rollback не публикует ни одного revenue fact; orphan bytes не commit |
+| A23 | Wrong hash/frozen version, duplicate/crash/redelivery, oversized checkout/proof/envelope | Stable per-element identity/messageId/ref, conflict/correction при другом content; все checkout и byte/tx bounds соблюдены. Pricing duplicate Order не подавляет другой, оба порядка revenue/cost сохраняют per-order pending до обоих proofs (#76/#80/#86/#90) | Не random identity в обход dedupe, не второй sequence/registry, не splitting/truncation/повышение limits; Locked agreement неизменен |
+| A24 | Storage outage: financial record, затем header в одной Kafka partition | Inbox+immutable refs+owner pending job commit до offset; header продолжает progress, financial apply degraded, backlog reason/age видны в bounded profile (#77/#83/#90) | Не offset до job, не Processed=financial completion, не storage retry в handler; financial fetch не исчерпывает header capacity; при DB/disk saturation честный backpressure |
+| A25 | Restart pending job, восстановление store, corrupt/wrong owner/type/hash/stale proof | Bounded scheduler/startup sweep с identity/lease/fence/version; validation вне locks, corrupt proof в review/conflict без payment, catch-up по accepted #71/#77/#121 budgets (#83/#90) | Не transport replay Processed Inbox вместо job, не второй job на duplicate, не повтор terminal job и не бесконечная RAM queue |
+| A26 | Cancellation/frozen-version/job lease race; crash после apply commit до ACK/retry; поздний header | Короткая transaction повторно проверяет guards и атомарно пишет verified proof/requirement/history/projection/Outbox/terminal job; ровно одно requirement. Header guards ортогональны (#83/#90) | Cancelled/stale/conflicting proof не продвигает payment/lifecycle; поздний header не откатывает financial state |
 
 ## Проверки будущей реализации
 

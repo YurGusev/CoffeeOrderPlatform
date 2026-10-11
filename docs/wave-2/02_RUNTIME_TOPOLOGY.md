@@ -50,7 +50,7 @@ handoff и число W2 ролей/DB/pools не меняются.
 
 У всех 19 process roles `executable=apps/<role>/src/main.ts`, `composeService=<role>`, `replicas=1`, `stateful=false`, runtime `Node.js 26/Fastify` (HTTP roles) либо native async worker, отдельный non-root image из единого pin registry; для роли без HTTP health из private listener, не public port. `orders-checkout-worker` принимает durable freeze/link jobs и не выполняет provider submit; `aroma-checkout-poller` и `orders-document-worker` используют только safe read через Gateway, сохраняют timer/proof в Orders; `invoice-intake` и `invoices-command-handler` принимают self-contained Orders handoff и пишут header/allocations локально; `invoice-document-worker` выполняет только scanned PDF proof; Payments webhook отдельно от PSP clients; `work-center-projection` только потребляет факты; scanner отдельно от business owner. Разделение worker/API/PSP ingress/PDF parsing исключает расширение provider secrets и blocking I/O на интерактивных routes. Каноническая `aroma-checkout-poller` роль не означает право на direct AROMA egress: ADR-0019 сохраняет Gateway-only transport.
 
-Health bindings для каждой строки таблицы (реализует #77, уточняет owner при введении роли): **HTTP** (`invoices-service`, `payments-service`, `work-center-service`, `artifact-metadata-service`) — owner DB, authorized internal API и mandatory storage только для metadata; **Kafka workers** (`orders-checkout-worker`, `orders-invoice-consumer`, `orders-payment-consumer`, `invoices-command-handler`, `invoice-intake`, `payments-order-consumer`, `payments-command-handler`, `pricing-cost-worker`, `work-center-projection`) — owner DB, Kafka group/Outbox и mandatory artifact-ready для checkout/invoice handler и pricing-cost-worker; **provider/read workers** (`aroma-checkout-poller`, `orders-document-worker`, `payments-reconciliation`) — owner DB, exact gateway/PSP endpoint health и artifact-quarantine/ready для document; **document/scanner** (`invoice-document-worker`, `artifact-scan-worker`) — owner/metadata DB и соответствующий ready/quarantine storage; **webhook** (`payments-webhook`) — owner DB, signature verification material, durable Inbox/Outbox. Provider outage делает provider-dependent readiness false и задерживает работу, но не стирает durable queue; отдельная live probe не должна изменять provider state. Межвладельческая зависимость не создаёт синхронного цикла readiness (downstream service может быть ready для своего bounded pending при недоступном source, когда его контракт это допускает).
+Health bindings для каждой строки таблицы (реализует #77, уточняет owner при введении роли): **HTTP** (`invoices-service`, `payments-service`, `work-center-service`, `artifact-metadata-service`) — owner DB, authorized internal API и mandatory storage только для metadata; **Kafka workers** (`orders-checkout-worker`, `orders-invoice-consumer`, `orders-payment-consumer`, `invoices-command-handler`, `invoice-intake`, `payments-order-consumer`, `payments-command-handler`, `pricing-cost-worker`, `work-center-projection`) — owner DB, Kafka group/Outbox и mandatory artifact-ready для orders-checkout-worker, invoices-command-handler, invoice-intake и pricing-cost-worker; orders-invoice-consumer использует исключение dual-capability readiness ниже; **provider/read workers** (`aroma-checkout-poller`, `orders-document-worker`, `payments-reconciliation`) — owner DB, exact gateway/PSP endpoint health и artifact-quarantine/ready для document; **document/scanner** (`invoice-document-worker`, `artifact-scan-worker`) — owner/metadata DB и соответствующий ready/quarantine storage; **webhook** (`payments-webhook`) — owner DB, signature verification material, durable Inbox/Outbox. Provider outage делает provider-dependent readiness false и задерживает работу, но не стирает durable queue; отдельная live probe не должна изменять provider state. Межвладельческая зависимость не создаёт синхронного цикла readiness (downstream service может быть ready для своего bounded pending при недоступном source, когда его контракт это допускает).
 
 ### DB grants и schema lifecycle
 
@@ -61,11 +61,40 @@ ready source-proof, поэтому ready storage обязателен наряд
 читает ready allocation — storage обязателен для обоих. `pricing-cost-worker`
 читает ready revenue/price proof, без checkout/PDF/source-proof. Header phase
 `orders-invoice-consumer` (#81) требует только Orders DB/Kafka, не PDF store/scan;
-mandatory ready read invoice-price-proof добавляется только в financial phase
-#83. #77 создаёт выключенные bindings, #81 реализует header, #83 принимает #81
-handoff и расширяет ту же роль/principal/subscription/group identity. #76
-задаёт единственный mapping; второй consumer/header writer запрещён. Это
-уточнение общей строки health выше, не право активировать будущие capabilities.
+ready read invoice-price-proof добавляется для financial apply #83, не становится
+общей зависимостью header intake. После #83 /health/ready требует Orders DB,
+Kafka/Inbox и bounded capacity для header/durable financial acceptance. При
+отказе только artifact-ready financial apply readiness false/degraded с reason/
+backlog age, header продолжает работу; /health/live dependency-free. Остальные
+mandatory storage bindings выше сохраняются.
+
+#83 в той же Orders Inbox transaction сохраняет immutable envelope/ref/hash/
+correlation и owner-local pending financial job до transport acceptance/offset.
+Inbox Processed означает durable intake, не verified proof/payment transition.
+В том же процессе bounded scheduler/startup sweep возобновляет jobs по stable
+message/business identity, next-at/attempts/reason, lease/fence и version. Fetch/
+size/hash/type/schema/Ready validation вне locks; новая короткая transaction
+повторно проверяет correlation/frozen version/coverage/currency/amount/cancel и
+job lease/version, атомарно пишет verified proof, lifecycle/requirement/history/
+projection/Outbox и terminal job. Duplicate/terminal job не повторяет effect;
+corrupt/stale proof даёт review/conflict без payment. Storage retry не держит
+Kafka partition handler и не использует replay Processed Inbox для apply.
+Header после financial record в той же partition должен продолжаться в bounded
+profile; financial fetch не исчерпывает header capacity. Backlog/count/age/horizon
+по #71/#77/#121 наблюдаемы; исчерпание durable DB/disk capacity честно даёт
+backpressure/not-ready без потери, не бесконечную независимость. Header/financial
+revision guards ортогональны, поздний header не откатывает financial state.
+
+#77 создаёт выключенные bindings, #81 реализует только header, #83 принимает #81
+handoff и расширяет ту же роль/principal/subscription/group identity. #76 задаёт
+единственный mapping и versioned activation contract. #82 fixture acceptance не
+включает producer в общей среде до accepted installed #83: document intents
+остаются durable без applied proof/blocked financial Outbox перед header.
+#77 материализует явную настройку только в config/platform.yaml/schema/runbook.
+Rollback сначала выключает producer, но оставляет dual consumer для in-flight/
+pending/replay horizon; header-only downgrade до drain запрещён, Inbox/offsets
+не сбрасываются. Второй consumer/header writer и новые grants/roles/pools не
+добавляются. Это уточнение health, не activation будущих capabilities scaffold.
 
 `coffee_platform_invoices`, `coffee_platform_payments`, `coffee_platform_work_center` — самостоятельные owner databases; `coffee_platform_artifacts` — инфраструктурная metadata/scan-jobs DB, без Orders/Invoices state. Их миграции выполняют по одному отдельному bootstrap migration principal на БД (Invoices/Payments/Work Center/Artifact Operations) в serial stage до включения новых ролей; приложение не получает DDL и не выполняет миграции при старте. Owner-local runtime roles получают SELECT/INSERT/UPDATE лишь на нужные projections/tables, execution только разрешённых owner functions; read-only API paths не получают worker grants, а scan-role не может продвинуть business state. `orders-*`/`pricing-*` roles ограничены соответствующими существующими owner DB и explicit table allowlists, не получают новых DB/PSP creds. В target config у всех principal отдельные SOPS refs и scoped tmpfs credential; bootstrap admin никогда не попадает в runtime. Материализация #77 сверяет SQL grants/negative tests для каждого role, cross-owner SELECT и CREATE/ALTER/DROP должны дать denial. Именно #77 создаёт новые DB и роли, не #71.
 
@@ -81,7 +110,7 @@ handoff и расширяет ту же роль/principal/subscription/group id
 
 W2 memory ceiling при всех ролях по одной replica: **16 обычных × 256 MiB + 3 byte-heavy (`orders-document-worker`, `invoice-document-worker`, `artifact-scan-worker`) × 512 MiB = 5632 MiB**; резерв дополнительной W2 workload до **8192 MiB** (без launch/DB/Kafka/Collector). CPU ceiling обычной роли 0.5 vCPU, heavy 1 vCPU: **11 vCPU** incremental worst requests/limits planning, не обещание host sufficiency. Владелец #77 проверяет реальный total launch+W2+dependencies+rollout на capacity host; #90 меряет RSS, OOM, CPU throttling, event-loop, provider rate, invoice lag и restore под load. При exceeded cap — bounded backpressure/429 или durable pending/ManualReview, не бесконечная очередь.
 
-На worker `maxInFlight=4`, bounded local queue=32, Kafka payload W2 ≤64 KiB (одновременно < launch `maxMessageBytes=1048576`); byte payload уходит в ArtifactRef. `payments-webhook`: 1 MiB ingress max, deadline 5 s на durable ACK; PSP calls: connect 2 s, total 10 s с сохранением UnknownOutcome после network ambiguity, **без blind retry**; rate/concurrency ниже provider contract при наличии, иначе live PSP disabled. `aroma-checkout-poller`: один outstanding read на provider account, верхний предел 1 request/s только если provider подтверждает quota; на один physical cart максимум один fenced mutation lane, без вторичного submit. Эти ceilings — предлагаемые лимиты #77/#90, не SLA и не доказательство capacity. Health: `/health/live` без зависимостей; `/health/ready` false при потере обязательной DB/Kafka/scan/storage/credential или невозможности accept bounded work для конкретной роли; на SIGTERM stop intake, finish bounded in-flight, flush durable state/offset after commit, close pools в пределах существующего shutdown budget 30 s. Работы > budget возвращаются в durable pending/UnknownOutcome и возобновляются после restart, не теряются.
+На worker `maxInFlight=4`, bounded local queue=32, Kafka payload W2 ≤64 KiB (одновременно < launch `maxMessageBytes=1048576`); byte payload уходит в ArtifactRef. `payments-webhook`: 1 MiB ingress max, deadline 5 s на durable ACK; PSP calls: connect 2 s, total 10 s с сохранением UnknownOutcome после network ambiguity, **без blind retry**; rate/concurrency ниже provider contract при наличии, иначе live PSP disabled. `aroma-checkout-poller`: один outstanding read на provider account, верхний предел 1 request/s только если provider подтверждает quota; на один physical cart максимум один fenced mutation lane, без вторичного submit. Эти ceilings — предлагаемые лимиты #77/#90, не SLA и не доказательство capacity. Health: `/health/live` без зависимостей; `/health/ready` false при потере обязательной DB/Kafka/scan/storage/credential или невозможности accept bounded work для конкретной роли; для dual-capable orders-invoice-consumer отказ только artifact-ready деградирует financial apply, не header/durable intake, пока Orders DB/Kafka и bounded capacity исправны (точное исключение выше); на SIGTERM stop intake, finish bounded in-flight, flush durable state/offset after commit, close pools в пределах существующего shutdown budget 30 s. Работы > budget возвращаются в durable pending/UnknownOutcome и возобновляются после restart, не теряются.
 
 ### Единая budget matrix и producer evidence
 
@@ -144,12 +173,25 @@ Revenue grant требует одновременно `ownerContext=Orders`,
 `artifactType=order-revenue-proof`, `schemaVersion=1` и exact ready namespace;
 generic prefix/list/download запрещён. #76 материализует target schema, #77
 connections/permissions/health, #78 enforcement. #80 пишет write-once revenue
-bytes вне DB transaction; только guarded exact-link commit сохраняет refs и
-stages один Orders→Pricing Outbox fact вместе с invoice handoff. Rejected link
-не публикует revenue; orphan cleanup сохраняет retention/pending intents.
-Pricing bounded-fetches/validates вне DB locks, затем атомарно принимает
-Inbox/proof/projection. Отсутствующая выручка — pending/review, не ноль;
-иной hash/version — correction/conflict, не overwrite Locked agreement.
+bytes вне DB transaction: N per-order artifacts для N frozen Orders. Guarded
+exact-link проверяет равенство proof-orderRef set frozen CheckoutSnapshot, полное
+line coverage без omitted/extra/duplicate refs и version/fence/CancelGuard;
+весь набор refs + N Orders→Pricing Outbox facts + один invoice handoff + link/
+exclusion/revisions коммитится атомарно. Rollback/rejected/stale link не публикует
+ни одного revenue fact; orphan cleanup сохраняет retention/pending intents.
+Normal identity каждого элемента (checkoutSnapshotRef, orderRef,
+orderVersionAtCheckout) привязана к immutable source proof/hash/ArtifactRef:
+same content переиспользует messageId/ref, другой hash/frozen version даёт
+conflict/correction, не новый normal факт. Каждый element — stable messageId,
+orderRef key/aggregate, owner version, общая correlation/исходная causation;
+aggregate_sequence общего #63 Outbox — непрерывный delivery counter, не индекс
+Order/его frozen version. Wire names определяет только #76, без второго registry.
+Pricing bounded-fetches/validates вне DB locks, затем Inbox/proof/projection
+атомарны отдельно для каждого Order. Duplicate одного не подавляет другой;
+revenue/cost в обоих порядках, до обоих proofs Order pending/review, не ноль.
+Checkout Orders/items/allocations limits до freeze/повторно перед link, каждый
+JSON proof ≤1 MiB/envelope+payload ≤64 KiB и owner transaction budgets сохраняются;
+нет splitting в обход bound, truncation, generic grant или overwrite Locked agreement.
 
 Production: private S3-compatible encrypted at rest storage с TLS, versioning и distinct quarantine/ready prefixes (Compose MinIO-compatible — **только dev reference**). `artifact-metadata-service` выдаёт opaque UUID/ref, owner/type/schemaVersion, `sha256` hex-64, `byteSize`, media type, createdAt, retentionClass; до Ready исходный объект доступен только uploader и scanner. Scoped short-lived signed URL ≤5 min не даёт business authorization; не использовать filename как path authority. Browser upload не получает DB/provider identity. Immutable JSON checkout/proof manifests: ≤1 MiB, hash+size+schema+owner checked before consume, versioned write-once. Provider PDF: ≤25 MiB, accepted content-type после magic-byte/PDF safe parse, проверка hash+size, malware scan и metadata verdict по hash/version до любого Orders→Invoices parsing; Reject/scan timeout = Quarantined или ManualReview, не Ready. Scanner не может менять собственноручно Orders/Invoicing proof; Ready разрешается лишь после сверки verdict/hash/metadata atomically в artifact metadata. Ни одно вложение не обрабатывается как executable и не логируется целиком.
 

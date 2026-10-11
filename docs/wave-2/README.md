@@ -44,8 +44,9 @@ GitHub и принятым handoffs, а не фиксируются этим д�
 Архитектора D1/D2 (документальная поставка ожидает merge, не runtime): #81
 реализует ранний header handler единственной `orders-invoice-consumer` роли;
 #83 принимает #81 и расширяет тот же runtime финансовым handler, без обратного
-prerequisite раннего header. #80 публикует отдельный минимальный Locked revenue
-proof для #86, не grant Pricing на полный checkout. #76 сохраняет актуальный
+prerequisite раннего header. #80 публикует минимальный Locked revenue proof и
+факт для каждого frozen Order полным атомарным набором для #86, не grant Pricing
+на полный checkout. #76 сохраняет актуальный
 launch registry с восемью сообщениями по [ADR-0032](../adr/ADR-0032-order-reconciliation-intent.md),
 не исторический exact-seven; gate #13 не снимается.
 
@@ -76,6 +77,31 @@ launch registry с восемью сообщениями по [ADR-0032](../adr/
 Это план зависимостей из #70, а не отчёт о выполнении: ни готовность, ни
 принятие handoffs здесь не утверждаются. Каждый owner output остаётся отдельной
 поставкой; общий PR на все домены не подразумевается.
+
+### Acceptance не активирует financial producer
+
+По D1a ADR-0033 #82 принимается на isolated accepted fixture receiver #76 до
+#83, оставаясь его implementation predecessor. В общей среде price application/
+InvoicePricesApplied выключены до принятого установленного #83. Invoices
+сохраняет document input/intents durable, не коммитит applied proof/financial
+Outbox и не ставит заблокированную financial row перед header. Header-only #81
+не паркует неизвестный будущий payload и #81/#88 не ждут #83.
+
+Rollout: #82 fixture acceptance → #83 installation с header+financial durable
+intake/job recovery → явная activation #82 по versioned contract #76 и #77
+config/platform.yaml/schema/runbook, с последующим live gate #90. HTTP health
+не автоматическое разрешение. При activation сохранённые intents завершаются с
+прежними identities; price application/proof ref/Outbox одной Invoices transaction.
+Restart не раздваивает факт. Rollback сначала выключает producer, сохраняет
+dual-capable consumer для опубликованных/in-flight records и pending jobs;
+header-only downgrade запрещён до доказанного drain/replay horizon, offsets/
+Inbox не сбрасываются. Это operational gate, не обратное DAG ребро #83→#82.
+
+После #83 D1b разделяет durable intake/header readiness и financial apply:
+storage outage оставляет owner-local financial jobs pending, header из той же
+partition продолжается в принятом bounded profile. Это будущая реализация #83
+с bindings/runbook #77, не готовая возможность foundation. Полная семантика и
+future cases — [invoice flow](01_AROMA_SUPPLIER_INVOICES.md#acceptance-scenarios).
 
 | Этап / владелец | Вход → выход | Критерий приёмки и восстановление |
 |---|---|---|
