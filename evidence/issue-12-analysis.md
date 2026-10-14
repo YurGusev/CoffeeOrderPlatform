@@ -5546,3 +5546,33 @@ Staged diff check охватил также новые файлы и обнар�
 или исполнимых инструкций fixture. Frozen manifest/result не переписывались;
 их source hash этого test file относится к исходному срезу до EOF cleanup.
 Output hash handoff пересчитан. Security material check перед публикацией PASS.
+
+
+## PR #176: синхронизация 400 для /events — 14 октября 2026
+
+Reviewer P2: https://github.com/YurGusev/CoffeeOrderPlatform/pull/176#discussion_r4269990744.
+Замечание подтверждено: runtime уже возвращает400VALIDATION_FAILED при query
+или объявленном body, а OpenAPI/manifest перечисляли200/401/403/503.
+Добавлен400 со ссылкой на существующий ValidationFailed в client-v1 и manifest;
+generated StreamOrderInvalidationsErrors включает400:ErrorValidationFailed.
+Описание owning spec обновлено. Runtime/дедлайны/budgets/wire поведение не менялись.
+
+Расширен существующий SSE contract regression:400 обязателен в обеих authority.
+До исправления RED1/1 (missing response), после исправления полный contracts:test
+49/49 PASS без skips. pnpm test:realtime-auth9/9 PASS подтверждает текущие query
+rejections и остальные auth paths. contracts:generate, contracts:check-generated
+(byte-identical), contracts:lint, contracts:breaking, pnpmtypecheck и целевой
+oxlint — exit0. Логи: /tmp/coffee-pr176-400-*.log.
+
+Полный check/30minsoak не повторялись: изменение описывает существующее поведение,
+не меняет runtime. Frozen manifest и исторические source hashes/receipts
+сохраняют прежний контрактный срез и не переписаны. Новые outputs и hashes
+добавлены в handoff; пользователь разрешил новый commit и push в тот жеPR.
+Merge и сообщения reviewer не выполняются этим разрешением.
+
+
+Astra: PR176-P2-400 устранено, новых существенных замечаний нет. Проверены
+OpenAPI400→ValidationFailed, manifest, минимальный generated diff (четыре
+строки), regression обеих authority и owning doc. Повторный soak не требуется:
+это описание существующего ответа без изменения runtime/wire поведения.
+Root подтвердил91outputs/7inputs hashes и ancestry; новый commit/push разрешены.

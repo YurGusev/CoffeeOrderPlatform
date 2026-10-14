@@ -266,7 +266,7 @@ outputs:
     consumers:
       - 13
   - artifact: docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md
-    sha256: 1c0e78d50aabb481a27b6c8cc8825379a354faf8f55c6d5fa9efed253caad25d
+    sha256: 6ed0d85a9051c2867add845edc91772a4b1b3b722296f50040b3f42289d98ff0
     consumers:
       - 13
       - 64
@@ -366,7 +366,7 @@ outputs:
       - 13
       - 64
   - artifact: evidence/issue-12-analysis.md
-    sha256: 71e531e84ab5243bf27e26cd5ec33581fb9af2b98c29e0374c036255c867c1a4
+    sha256: 63c3db7782a915f3f71d94b0e824d030bd09478163b226c1b0cbb800c1f900cb
     consumers:
       - 13
       - 64
@@ -400,6 +400,22 @@ outputs:
       - 13
   - artifact: tests/orders/public-api.test.mjs
     sha256: 16f0cefdf332ced377daca5501fb4e195bcc28e357f4dcb3130826db438b1af2
+    consumers:
+      - 13
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: e44e31653e56e3a4e1c39fdcf66b12fe56b61045d25b7cde62329106d3a74165
+    consumers:
+      - 13
+  - artifact: contracts/manifest.yaml
+    sha256: 1db6ca31f2c4fbe6179a52d2ff8b91cf9e26769555c714bf038e7bc2407e06ea
+    consumers:
+      - 13
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: d65107d5bc2d1aaa88caaba401e27b7cc5c7349be7846fb1aafb2ee450ca3eec
+    consumers:
+      - 13
+  - artifact: tests/contracts/openapi-fixtures.test.mjs
+    sha256: 720e8a6e42ce849f4dbee2965f5f2200a2783c5317b062286fd64ea3717daea6
     consumers:
       - 13
 verification:
@@ -524,14 +540,47 @@ verification:
       Eventp95306ms/loopp9526.755/headroommax179.341ms;technical512/513preheader503;19expectedreauth0unexpected/maxgap3038/3sessionrefresh/HUP124.706ms/shutdown343.702ms
       exit0;clientcleanup5431.295ms/coordinatorfixturecleanup3278.657ms.
       ResultSHA850456422b158b0560d15114afdfed7240003497cfeb4ed9c0fe567d8e381fe3;Astraindependentreviewaccepted;log35-operator1-prepared-soak.stdout.
+  - command: pnpm contracts:generate
+    result: passed
+    exitCode: 0
+    detail: Добавлен только generated StreamOrderInvalidationsErrors[400]:ErrorValidationFailed.
+  - command: pnpm contracts:check-generated
+    result: passed
+    exitCode: 0
+    detail: Повторная генерация byte-identical; logs /tmp/coffee-pr176-400-generated.log.
+  - command: pnpm contracts:lint
+    result: passed
+    exitCode: 0
+    detail: OpenAPI/manifest согласованы; /tmp/coffee-pr176-400-lint.log.
+  - command: pnpm contracts:breaking
+    result: passed
+    exitCode: 0
+    detail: Изменение additive, без breaking; /tmp/coffee-pr176-400-breaking.log.
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+    detail: Generated type и callers компилируются; /tmp/coffee-pr176-400-types.log.
+  - command: pnpm contracts:test
+    result: passed
+    exitCode: 0
+    detail: 49/49 PASS без skips; SSE regression сначалаRED из-за отсутствия400, затемGREEN; /tmp/coffee-pr176-400-tests.log.
+  - command: pnpm test:realtime-auth
+    result: passed
+    exitCode: 0
+    detail: 9/9 PASS без skips; существующие mTLS query negatives400VALIDATION_FAILED; /tmp/coffee-pr176-400-auth.log.
+  - command: pnpm exec oxlint --type-aware --deny-warnings tests/contracts/openapi-fixtures.test.mjs
+    result: passed
+    exitCode: 0
+    detail: Целевой lint изменённого regression PASS.
 limitations:
   - >-
     Локальная техническая приёмка завершена. Матрица61/5 фиксирует срез до публикации. Владелец явно разрешил commit/push/PR в
     develop 14 октября2026; merge/deployment/issue labels/production не разрешены. Артефакт становится accepted input только после
     принятого merge; self commit SHA не добавляется.
   - >-
-    Astra закрыл R1/R2/R3/CACHE-01/CAP-01/CAP-02/PREFLIGHT-TEST-01 и принял final soak. Root проверил 87 output hashes и семь
-    accepted inputs, включая ancestry. После изменения output hash пересчитывается.
+    Astra закрыл прежние R1/R2/R3/CACHE-01/CAP-01/CAP-02/PREFLIGHT-TEST-01 и PR176-P2-400. Reviewer подтвердил минимальный
+    additive контрактный diff без runtime/wire изменений. Root проверил91output hashes и7acceptedinputs с ancestry; после
+    изменения output hash пересчитывается.
   - >-
     VK/Agent/LLM, реальный провайдер, production и whole-fleet/public ingress capacity не проверены. Owner 100×10: одна
     операторская identity, реальные routes/application/PostgreSQL/Outbox, synthetic upstream через Fastify.inject. Волна 10.874 с,
@@ -562,3 +611,7 @@ limitations:
     После full soak выполнен только test-only EOF cleanup harness.test.mjs: удалена лишняя пустая строка, исполнимые байты без
     завершающих переводов строк совпадают. Frozen manifest сохраняет hash до форматирования; runtime и compiled файлы не менялись.
     Staged diff и security material checks выполнены перед публикацией.
+  - >-
+    PR176 reviewer P2 r4269990744 исправлен: существующий400VALIDATION_FAILED объявлен в OpenAPI/manifest/generatedtypes. Runtime,
+    wireповедение и loadbudgets не менялись; полныйsoak не повторялся. Frozenmanifest сохраняет контрактныйсрез
+    доэтогоadditiveописания400; historicalreceiptsнепереписаны.

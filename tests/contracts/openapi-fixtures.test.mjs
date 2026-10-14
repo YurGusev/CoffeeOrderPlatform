@@ -294,6 +294,10 @@ void test("positive wire fixtures survive encode/decode round-trip", async () =>
 
 void test("SSE fixtures enforce ready/reset/invalidation/heartbeat wire rules", async () => {
   const {ajv} = await loadCorpus();
+  const {operation} = findOperation("client-v1", "streamOrderInvalidations");
+  assert.equal(operation.responses["400"]?.$ref, "#/components/responses/ValidationFailed");
+  const manifest = yaml.load(await readFile(join(ROOT, "contracts/manifest.yaml"), "utf8"));
+  assert.ok(manifest.contracts.find(({id}) => id === "streamOrderInvalidations").statuses.includes(400));
   const frames = await jsonFixture(join(POSITIVE_ROOT, "sse/order-invalidations.json"));
   assert.deepEqual(frames.map((frame) => frame.event ?? "heartbeat"), ["stream-ready.v1", "resource-invalidated.v1", "stream-reset.v1", "heartbeat"]);
   for (const [index, name] of ["SseStreamReady", "SseResourceInvalidated", "SseStreamReset"].entries()) {

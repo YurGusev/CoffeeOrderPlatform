@@ -82,6 +82,10 @@ partitions единственному fixed-group consumer. Kafka metadata conne
 
 ## 3. Авторизация `GET /events`
 
+Маршрут не принимает query-строку или объявленное request body: нарушение
+возвращает `400 VALIDATION_FAILED` до SSE headers. Этот существующий ответ
+объявлен в OpenAPI `client-v1`, manifest и generated transport types.
+
 Public route существует только на edge. Edge проверяет session/JWT, удаляет
 client `X-Actor-*` headers и передаёт подписанный trusted actor context с
 `actorRef`, permissions, expiry и audience `realtime-gateway`.
