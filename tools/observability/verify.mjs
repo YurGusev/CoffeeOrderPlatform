@@ -1342,7 +1342,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '32',
       '--mount', `type=bind,source=${collectorConfigPath},target=/collector-config`,
       '--entrypoint', 'node', toolchain.nodeImage, '-e',
-      `const fs=require('node:fs');fs.chownSync('/collector-config',${uid},${gid});fs.chmodSync('/collector-config',${mode});`,
+      `const fs=require('node:fs');fs.chownSync('/collector-config',0,0);fs.chmodSync('/collector-config',${mode});fs.chownSync('/collector-config',${uid},${gid});`,
     ]);
     try {
       const {runLaunchPath} = await import('../../tests/observability/launch-path.mjs');
