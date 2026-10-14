@@ -69,6 +69,15 @@ same-origin cookie. Отсутствие CSRF блокирует команду 
 command result для Order Card только если `projectionVersion` не меньше уже показанной.
 Действия показываются и разрешаются только по `allowedActions`.
 
+После reconnect или ручного чтения AROMA state может измениться при прежней
+`projectionVersion`: владелец заново проверяет свежесть наблюдения, lease и
+неопределённый исход reservation. Поэтому «Синхронизировано» может смениться
+на «Есть расхождение» или «Синхронизация» без новой команды.
+Текущий owner GET также может показать или снять `UnknownOutcome` до обработки
+асинхронного обновления проекции. Остальные бизнес-факты и AROMA revisions
+обязаны сохраняться. Исторический command/replay response не снимает такое
+состояние; доступ и действия определяет новое разрешённое чтение владельца.
+
 ## 4. Неопределённый исход команды
 
 Перед каждой business mutation вкладка сохраняет в `sessionStorage` metadata intent:
@@ -133,6 +142,7 @@ pnpm test:ui
 pnpm test:web-foundation
 pnpm test:web-routes
 pnpm test:web-queries
+pnpm test:web-realtime
 pnpm test:web-idempotency
 pnpm test:web-accessibility
 pnpm test:playwright
@@ -145,6 +155,41 @@ fail-closed malformed response и CSRF, ambiguous command и replay-only recover
 same-actor re-auth, actor switch/logout, offline mutation policy, query sharing/retry,
 axe serious/critical, deep links и отсутствие горизонтального overflow на
 375/768/1280.
+
+### Realtime lifecycle #12
+
+После авторизации текущая application session владеет одним native `EventSource`
+на same-origin `/events`. Reconnect и `Last-Event-ID` принадлежат браузеру; отдельный
+цикл retry, auth headers, второй QueryClient или polling не используются. При
+logout, смене session и owner API `401` источник закрывается; поздний callback
+старой session не может восстановить её cache.
+
+`resource-invalidated.v1` проходит строгую generated `SseResourceInvalidated`
+schema validation и invalidates только уже существующий exact Order detail query,
+если hint новее принятой `projectionVersion`. `stream-ready.v1` и
+`stream-reset.v1` проверяются по `SseStreamReady`/`SseStreamReset` и обновляют
+уже существующие Order detail queries. Inactive query помечается stale без
+eager GET; Customer, Catalog и Pricing не перечитываются из-за этих сигналов.
+Malformed/oversize data и лишние поля игнорируются. Event payload не изменяет
+business state: его принимает только проверенный owner GET с сохранением
+monotonic projection и fatal privacy barrier.
+
+Индикатор показывает «Подключено», «Переподключение» или «Обновление состояния».
+Это состояние транспорта, не подтверждение заказа. После 30 секунд разрыва
+показывается banner с безопасным ручным перечитыванием Order details; команда
+convergence или повторная mutation автоматически не отправляется. После
+восстановления подключения banner исчезает, ready сигнал вызывает owner read.
+
+Подписанный Edge actor context имеет короткий TTL, receiver закрывает истёкший
+stream, а native reconnect получает новый context через nginx → Edge authorizer.
+Это не продление старого context и не замена проверки отзыва browser session.
+Browser group `pnpm test:web-realtime` проверяет lifecycle/invalidation на fixture
+transport. Полный native TLS/Kafka capacity proof выполняется отдельно через
+`pnpm test:realtime-soak`; короткий smoke и browser fixture PASS не подтверждают
+профиль operator-1 (одна вкладка, 100 invalidations/s, 100 subjects, 30 минут)
+или production admission. Technical admission512/513 проверяется отдельно;
+100 одновременно начинающих buyer flows по10 позиций — owner-boundary тест,
+не число SSE connections и не обещание100orders/s или VK/Agent/LLM E2E.
 
 ## 7. Rollback static assets
 
@@ -364,6 +409,9 @@ monotonic guard оставляет сохранённую карточку, а q
 Допустимый равный owner GET снимает отказ, даже когда guard возвращает прежний
 объект; допустимая новая проекция также восстанавливает карточку. Equal-version
 divergent GET и older GET — разные обязательные регрессии, не замены друг друга.
+Вычисляемые read-time изменения AROMA из раздела 3 не считаются расхождением
+бизнес-фактов. Изменение customer/items/pricing/version или AROMA revisions
+при равной projectionVersion остаётся protocol error.
 
 ## 19. Повторное чтение поиска после отказа доступа — 5 октября 2026
 

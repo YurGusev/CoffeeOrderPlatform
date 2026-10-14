@@ -7,6 +7,9 @@
     "realtime": {"host": "realtime.fixture.internal", "port": 9445, "serverName": "realtime.fixture.internal"}
   },
   "tls": {
+    "bufferBytes": 4096,
+    "sessionCacheMiB": 4,
+    "sessionTimeoutMinutes": 5,
     "publicCertificate": "/run/secrets/edge-nginx/public.crt",
     "publicPrivateKey": "/run/secrets/edge-nginx/public.key",
     "upstreamCa": "/run/secrets/edge-nginx/upstream-ca.crt",
@@ -17,11 +20,17 @@
     "bodyBytes": 1048576,
     "headerBytes": 16384,
     "targetBytes": 2048,
+    "requestPoolBytes": 2048,
     "apiConnectSeconds": 1,
     "apiReadSeconds": 6,
     "apiSendSeconds": 6,
     "authConnectSeconds": 1,
     "authReadSeconds": 1,
-    "sseReadSeconds": 45
+    "sseReadSeconds": 45,
+    "workerProcesses": 1,
+    "workerConnections": 2048,
+    "sseAdmissionConnections": 512,
+    "apiAdmissionConnections": 384,
+    "authAdmissionConnections": 320
   }
 }

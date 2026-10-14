@@ -154,6 +154,9 @@ function assertPageSignals(signals: PageSignals, label: string): void {
 async function testProductionShell(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   const signals = observePage(page);
+  // This foundation fixture does not emulate SSE. Match non-realtime operator
+  // fixtures: HTTP 204 stops native reconnect without masking failed responses.
+  await page.route("**/events", route => route.fulfill({ status: 204 }));
   await page.route("**/auth/session", (route) => route.fulfill({
     body: JSON.stringify({ actorRef: "operator-foundation", expiresAt: Temporal.Now.instant().add({ hours: 1 }).toString() }),
     contentType: "application/json",
