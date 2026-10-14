@@ -17,6 +17,7 @@ contracts/
   schemas/events/catalog-snapshot-activated.v1.schema.json
   schemas/events/catalog-mapping-changed.v2.schema.json
   schemas/events/order-confirmed.v1.schema.json
+  schemas/events/order-reconciliation-requested.v1.schema.json
   schemas/events/aroma-convergence-requested.v1.schema.json
   schemas/events/aroma-observation-changed.v1.schema.json
   schemas/events/aroma-convergence-changed.v1.schema.json
@@ -289,7 +290,7 @@ headers или raw body в schema отсутствуют.
 `code` и `status` обязаны совпадать с route mapping выше. Stack trace, SQL,
 provider response и secret data запрещены.
 
-## 6. Семь событий
+## 6. Восемь сообщений (события и команда)
 
 Общий envelope каждого JSON Schema:
 

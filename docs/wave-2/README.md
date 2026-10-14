@@ -40,6 +40,17 @@ GitHub и принятым handoffs, а не фиксируются этим д�
 дополнительным prerequisite #76. Topology handoff #71 раскрывается в [документе runtime topology](02_RUNTIME_TOPOLOGY.md)
 и [ADR-0030](../adr/ADR-0030-wave2-runtime-topology.md).
 
+[ADR-0033](../adr/ADR-0033-wave2-header-revenue-boundaries.md) — scoped решение
+Архитектора D1/D2 (документальная поставка ожидает merge, не runtime): #81
+реализует ранний header handler единственной `orders-invoice-consumer` роли;
+#83 принимает #81 и расширяет тот же runtime финансовым handler, без обратного
+prerequisite раннего header. #80 атомарно сохраняет минимальные Locked revenue
+proof refs и durable publication intents для всех frozen Orders. Публикация для
+#86 начинается только после принятого установленного consumer и явной activation,
+не блокируя checkout/header и не давая Pricing grant на полный checkout. #76 сохраняет актуальный
+launch registry с восемью сообщениями по [ADR-0032](../adr/ADR-0032-order-reconciliation-intent.md),
+не исторический exact-seven; gate #13 не снимается.
+
 Точный порядок и зависимости:
 
 1. Решения #71 (topology/DB/runtime), #72 (AROMA evidence) и #75
@@ -60,10 +71,71 @@ GitHub и принятым handoffs, а не фиксируются этим д�
    #124 подключает поздние financial sources после #76/#77/#82–#87.
    #84/#85 могут проверять contract fixtures #76 до реализации #83,
    но живой финансовый путь принимается только в #90.
+8. #83 принимает #8/#80/#81/#82/#76/#77; прямая #81→#83 — reuse header consumer,
+   не второй consumer. #86 принимает #7/#75/#76/#77/#80/#82: отдельные revenue
+   и invoice cost proofs; неизвестная выручка pending, Locked цена неизменна.
 
 Это план зависимостей из #70, а не отчёт о выполнении: ни готовность, ни
 принятие handoffs здесь не утверждаются. Каждый owner output остаётся отдельной
 поставкой; общий PR на все домены не подразумевается.
+
+### Acceptance не активирует financial producer
+
+По D1a ADR-0033 #82 принимается на isolated accepted fixture receiver #76 до
+#83, оставаясь его implementation predecessor. В общей среде price application/
+InvoicePricesApplied выключены до принятия и установки всех consumers:
+orders-invoice-consumer #83, payments-order-consumer #84 для payment handoffs
+из #83 и pricing-cost-worker #86 для invoice cost proof из #82. Invoices
+сохраняет document input/intents durable, не коммитит applied proof/financial
+Outbox и не ставит заблокированную financial row перед header. Header-only #81
+не паркует неизвестный будущий payload и #81/#88 не ждут #83.
+
+Rollout: #82 fixture acceptance → #83 installation с header+financial durable
+intake/job recovery и accepted installed #84/#86 с совместимыми contracts #76 →
+явная activation #82 по versioned contract #76 и #77
+config/platform.yaml/schema/runbook, с последующим live gate #90. HTTP health
+не автоматическое разрешение. Отсутствие любого из трёх consumers запрещает
+activation; до неё document intents сохраняются независимо от Kafka retention/
+Outbox cleanup. При activation сохранённые intents завершаются с
+прежними identities; price application/proof ref/Outbox одной Invoices transaction.
+Restart не раздваивает факт. Rollback сначала выключает producer, сохраняет
+#83/#84/#86 для опубликованных/in-flight records, pending jobs #83 и их payment
+handoffs, а также invoice cost facts. Удаление любого consumer/header-only
+downgrade запрещены до доказанного drain/replay horizon всей цепочки
+Invoices→Orders→Payments и Invoices→Pricing; offsets/Inbox не сбрасываются.
+Это operational gate, не обратные DAG рёбра #83/#84/#86→#82: implementation
+acceptance использует isolated accepted fixtures #76.
+
+После #83 D1b разделяет durable intake/header readiness и financial apply:
+storage outage оставляет owner-local financial jobs pending, header из той же
+partition продолжается в принятом bounded profile. Это будущая реализация #83
+с bindings/runbook #77, не готовая возможность foundation. Полная семантика и
+future cases — [invoice flow](01_AROMA_SUPPLIER_INVOICES.md#acceptance-scenarios).
+
+Revenue следует D2b ADR-0033. Exact link коммитит все N refs/intents с одним
+invoice Outbox handoff и link/exclusion/revisions. До accepted installed #86
+revenue publication выключена: нет blocked revenue Outbox rows или заранее
+зарезервированных sequence. #80 принимает accepted fixtures #76 до #86.
+Checkout/header не ждут #86/PDF; DAG не получает обратного ребра.
+После явной activation по #76/#77 bounded sweep того же Orders worker атомарно
+stages intents и enqueue-ит факты через существующий owner Outbox. Sequence
+назначается только при enqueue; immutable facts/refs/hash/identities не меняются.
+Непоставленные intents/bytes защищены от Kafka retention/Outbox/orphan cleanup.
+Backlog/lease/retry используют accepted #71/#77/#121 budgets; capacity exhaustion даёт
+backpressure до нового необратимого действия. Rollback сначала выключает promotion,
+сохраняя совместимый consumer для staged/in-flight до drain/replay horizon.
+HTTP health не разрешение, #90 отдельно доказывает живой catch-up и header progress.
+
+#83 применяет один verified bounded proof/job для точного множества N Orders
+all-or-nothing. Успех коммитит consumed proof, N отдельных stable
+PaymentRequirementRef, N per-order lifecycle/history/projection и N payment
+Outbox handoffs с terminal job. Сумма каждого requirement — Locked customer
+agreement. Один cancelled/stale/conflicting Order или неполный набор запрещает
+новые effects всего набора и сохраняет review/conflict в job. Прежние корректные
+effects не откатываются. Полный duplicate — reuse/no-op всех identities;
+частично несовместимое прежнее requirement — conflict без автозавершения остальных.
+Сеть/validation вне locks; все guards повторяются в короткой Orders transaction,
+limits не повышаются. Recovery только через существующий принятый correction путь.
 
 | Этап / владелец | Вход → выход | Критерий приёмки и восстановление |
 |---|---|---|
@@ -71,9 +143,9 @@ GitHub и принятым handoffs, а не фиксируются этим д�
 | W2-artifacts / Platform Operations | Принятые roles и artifact boundary → private object storage, authorized refs, quarantine/scan, retention/restore | Immutable manifest проверяется по hash/size/schema, документы проходят scan до parsing. Повтор upload/job и restart не создают иной proof; restore подтверждён чтением bytes |
 | W2-checkout / Orders; Gateway исполняет provider transport | Current InSync proof и все active строки Order → freeze, exact wholesale link, allocation manifest и ожидание реквизитов | Один Order закупается целиком. После exact link купленные contributions исключены атомарно; ambiguity/cancel race сохраняют blocker/compensation, не повторяют submit |
 | W2-invoices / Invoices | Immutable allocation handoff и provider observations → header/links, allocations, document reconciliation, invoice/price proof | Раннее состояние счёта по владеющему документу; полный proof требует coverage/hash/quantity/amount checks. Inbox replay идемпотентен; изменения счёта версионируются, расхождения идут в review |
-| W2-payment-requirement / Orders | Verified invoice proof → server-owned requirement и AwaitingCustomerPayment | Проверены frozen version, coverage, amount/currency и correlation. Частичный/чужой proof не продвигает lifecycle; duplicate event не создаёт второе requirement |
+| W2-payment-requirement / Orders | Verified invoice proof → отдельный server-owned requirement и AwaitingCustomerPayment каждого Order | Bounded all-or-nothing apply полного набора; один invalid Order запрещает новые effects всех. Полный duplicate переиспользует N identities, partial prior conflict требует review. Supplier total не payable amount |
 | W2-payments / Payments; lifecycle writer Orders | Requirement → intent, verified webhook/reconciliation, payment/refund facts | Browser redirect не proof. Unknown create/refund сверяется по stable provider identity; поздняя оплата отменённого заказа создаёт incident, а не resurrect. Cancel/refund/compensation и их recovery приняты до live gate |
-| W2-pricing / Pricing | Verified actual supplier cost и введённая фактическая доставка → воспроизводимая маржа и preview следующего коэффициента | Цена Locked Order не меняется. Активация коэффициента — явная versioned команда; неполные costs остаются pending, исправления сохраняют evidence |
+| W2-pricing / Pricing | Locked Orders revenue proof #80, verified actual supplier cost и введённая фактическая доставка → воспроизводимая маржа и preview следующего коэффициента | Только revenue/price proof grants, без checkout/PDF. Цена Locked Order не меняется; до обоих proofs маржа pending. Активация коэффициента — явная versioned команда; исправления сохраняют evidence |
 | W2-work-center / Work Center | Факты подключённых owners → очереди исключений и разрешённые owner commands | Acknowledge/snooze не меняют бизнес-истину. Resolution требует completion fact. Replay восстанавливает projection; недоступный/отстающий источник виден, пустая очередь не означает здоровье |
 | W2-acceptance / Reliability | Все принятые outputs → release evidence | Пройдены duplicate/reorder/crash/unknown, cancel races, document integrity, capacity/restore и сквозная диагностика; непроверенные live paths не объявлены PASS |
 

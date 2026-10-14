@@ -461,6 +461,14 @@
       "path": "/api/internal-v1/aroma/cart-lines/{offerRef}:remove",
       "operationId": "removeAromaCartLine",
       "mutation": true
+    },
+    {
+      "originalCaller": "aroma-convergence",
+      "target": "catalog-service",
+      "method": "GET",
+      "path": "/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input",
+      "operationId": "getCatalogPricingInput",
+      "mutation": false
     }
   ],
   "delegation": {

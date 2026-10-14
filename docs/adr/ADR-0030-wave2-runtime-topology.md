@@ -13,6 +13,13 @@ Target роли W2, их DB/owners/provider contracts и исторически�
 
 ## Контекст и момент переключения
 
+Позднее [ADR-0032](ADR-0032-order-reconciliation-intent.md) расширил launch
+registry до восьми сообщений; ниже exact-seven — исторический snapshot #71,
+не актуальный prerequisite #76. [ADR-0033](ADR-0033-wave2-header-revenue-boundaries.md)
+уточняет target header/financial phases одной orders-invoice-consumer роли и
+минимальные revenue grants, не увеличивая fleet. Исторический handoff не
+переписывается; документальная поставка ADR-0033 ожидает merge, не runtime admission.
+
 [ADR-0019](ADR-0019-greenfield-node26-and-service-topology.md), [ADR-0025](ADR-0025-fastify-launch-recovery.md) и launch-каталоги фиксируют **ровно 15 runtime / 5 owner DB** первой волны. #66 описал будущие Invoice/Payment/Checkout, но не расширил действующую конфигурацию. Даже закрытый #71 не разрешает W2 deployment. До принятого launch #13 с #64 остаются прежние topology, exact-seven message inventory #4, order-only SSE #12, роли/ACL и launch evidence. Никакой статус #13 не предполагается заранее.
 
 После принятого #13 contracts #76 расширяют **тот же** источник schemas/messages/types-only генерации, фиксируют Kafka topic/group/ACL и operation allowlist; не создают второй реестр или условный launch/W2 codegen. Core materialization #77 изменяет config/DB migrations/Compose/permissions только по принятому handoff #76, затем #120 расширяет существующий realtime transport до invoice/Work Center subjects, а #121 подключает новые roots к #64 Collector/OpenObserve и alert gates. Они не являются prerequisites #77; полное W2 admission требует #90. Исторические #4/#12/#13 handoffs не переписываются. ADR supersede-ит только запрет **будущего W2-расширения** exact-15/exact-5, exact-seven и order-only subjects после указанных gates; не отменяет их как условия launch acceptance.
