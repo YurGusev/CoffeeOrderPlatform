@@ -10,6 +10,7 @@
   },
   "packageManager": "pnpm@11.24.0",
   "scripts": {
+    "preinstall": "node scripts/check-toolchain-versions.mjs",
     "authority:check": "python3 scripts/validate-launch-authority.py && python3 -m unittest discover -s tests/authority -p 'test_*.py'",
     "architecture:check": "node scripts/check-architecture.mjs",
     "contracts:lint": "node scripts/contracts-lint.mjs",
@@ -21,6 +22,10 @@
     "config:check": "node scripts/check-platform-config.mjs",
     "rule-parity:check": "node scripts/check-rule-parity.mjs",
     "rule-parity:admit": "node scripts/check-rule-parity.mjs --admit",
+    "test:observability": "pnpm exec tsc -b --pretty false && node tools/observability/verify.mjs",
+    "observability:storage": "node tools/observability/storage.mjs",
+    "observability:generate": "node tools/observability/generate.mjs",
+    "observability:bootstrap": "node tools/observability/bootstrap.mjs",
     "test:compose-smoke": "node tools/compose-smoke.mjs",
     "test:aroma-unit": "pnpm exec tsc -b --pretty false && node --test tests/aroma/provider-decoder.test.mjs tests/aroma/provider-http.test.mjs tests/aroma/provider-session.test.mjs tests/aroma/cart-reader.test.mjs",
     "test:aroma-http": "pnpm exec tsc -b --pretty false && node --test tests/aroma/binding-http.test.mjs tests/aroma/safe-read-http.test.mjs",

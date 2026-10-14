@@ -54,5 +54,14 @@
   "nginxSourceRevision": "a16f1329e13e7273c4103f75d863ca625b75109e",
   "pgCopyStreams": "7.0.0",
   "typesPg": "8.23.1",
-  "typesPgCopyStreams": "1.2.5"
+  "typesPgCopyStreams": "1.2.5",
+  "opentelemetrySdkTraceBase": "2.12.0",
+  "opentelemetrySdkMetrics": "2.12.0",
+  "opentelemetryResources": "2.12.0",
+  "opentelemetryContextAsyncHooks": "2.12.0",
+  "opentelemetryExporterTraceOtlpHttp": "0.223.0",
+  "opentelemetryExporterMetricsOtlpHttp": "0.223.0",
+  "otelCollectorImage": "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6",
+  "openObserveImage": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+  "bootstrapProbeSha256": "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14"
 }

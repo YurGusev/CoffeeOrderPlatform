@@ -4,7 +4,7 @@ import {createPrivateKey, createPublicKey, X509Certificate} from 'node:crypto';
 import {chmod, mkdir, unlink, writeFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {checkPlatformConfig, ConfigError, loadEncryptedSecrets, loadPlatformConfig} from '../../scripts/config-lib.mjs';
+import {checkPlatformConfig, ConfigError, infrastructureSecretEntries, loadEncryptedSecrets, loadPlatformConfig} from '../../scripts/config-lib.mjs';
 import {load as parseYaml, dump as dumpYaml} from 'js-yaml';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -184,6 +184,49 @@ export async function materializeRuntimeSecrets({root = REPO_ROOT, runtime, outp
   await writeFile(destination, materialized, {encoding: 'utf8', mode: 0o400});
   await chmod(destination, 0o400);
   return {path: destination, runtime, secretRefs: [...refs]};
+}
+
+async function readTelemetrySecrets({root, env, scope}) {
+  const refs = await infrastructureSecretEntries(scope, {root});
+  assertLocatorEnv(env, true);
+  const config = await loadPlatformConfig(root, env.COFFEE_CONFIG_FILE ? resolve(env.COFFEE_CONFIG_FILE) : join(root, 'config/platform.yaml'));
+  const secretPath = join(root, 'secrets/platform.secrets.sops.yaml');
+  const encrypted = await loadEncryptedSecrets(root);
+  for (const entry of refs) {
+    const ref = entry[1];
+    if (secretValueAt(encrypted.environments[config.environment], ref) === undefined) fail('CONFIG-SECRET-REF', `config-bootstrap.${ref}: secret does not exist for ${config.environment}`);
+  }
+  const decrypted = assertPlainSecretDocument(encrypted, decryptInMemory(secretPath, env));
+  const environment = decrypted.environments[config.environment];
+  const values = {};
+  for (const [name, ref] of refs) {
+    const value = secretValueAt(environment, ref);
+    if (typeof value !== 'string' || value.length === 0) fail('CONFIG-SECRET-REF', `config-bootstrap.${ref}: secret does not exist for ${config.environment}`);
+    values[name] = value;
+  }
+  return values;
+}
+
+export async function materializeCollectorSecrets({root = REPO_ROOT, outputDir = '/dev/shm/coffee-platform-observability-secrets', env = process.env} = {}) {
+  await mkdir(outputDir, {recursive: true, mode: 0o700});
+  await chmod(outputDir, 0o700);
+  const scopedPath = join(outputDir, 'collector.json');
+  await unlink(scopedPath).catch((error) => { if (error.code !== 'ENOENT') throw error; });
+  const values = await readTelemetrySecrets({root, env, scope: 'otel-collector'});
+  await writeFile(scopedPath, JSON.stringify(values) + '\n', {encoding: 'utf8', mode: 0o400});
+  await chmod(scopedPath, 0o400);
+  return {path: scopedPath, runtime: 'otel-collector'};
+}
+
+export async function materializeOpenObserveAdminSecret({root = REPO_ROOT, outputDir = '/dev/shm/coffee-platform-openobserve-bootstrap', env = process.env} = {}) {
+  await mkdir(outputDir, {recursive: true, mode: 0o700});
+  await chmod(outputDir, 0o700);
+  const path = join(outputDir, 'admin-secret');
+  await unlink(path).catch((error) => { if (error.code !== 'ENOENT') throw error; });
+  const values = await readTelemetrySecrets({root, env, scope: 'openobserve-bootstrap'});
+  await writeFile(path, `${values['admin-secret']}\n`, {encoding: 'utf8', mode: 0o400});
+  await chmod(path, 0o400);
+  return {path, runtime: 'config-bootstrap'};
 }
 
 export async function loadRuntimeConfig({root = REPO_ROOT, runtime, env = process.env} = {}) {

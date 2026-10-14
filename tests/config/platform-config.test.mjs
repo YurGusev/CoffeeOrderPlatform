@@ -86,6 +86,56 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
   );
 });
 
+void test("telemetry config is strict, immutable, and rejects missing or inconsistent budgets", async () => {
+  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const parsed = parsePlatformConfig(document);
+  assert.equal(parsed.telemetry.namespace, "coffee-platform");
+  assert.equal(parsed.telemetry.openObserve.retentionDays, 3);
+  assert.deepEqual(
+    [parsed.telemetry.openObserve.telemetryEnabled, parsed.telemetry.openObserve.mmdbDownloadEnabled, parsed.telemetry.openObserve.modelPricingEnabled],
+    [false, false, false],
+  );
+  assert.equal(parsed.telemetry.openObserve.deleteFilesDelayMinutes, 1);
+  assert.equal(parsed.telemetry.openObserve.jobCleanupWaitSeconds, 60);
+  assert.equal(parsed.telemetry.alerts.evaluationIntervalMs, 60_000);
+  assert.equal(parsed.telemetry.alerts.sseDropRate.threshold, 0.05);
+  assert.ok(Object.isFrozen(parsed.telemetry) && Object.isFrozen(parsed.telemetry.collector));
+  for (const changed of [
+    {...document, telemetry: undefined},
+    {...document, telemetry: Object.fromEntries(Object.entries(document.telemetry).filter(([key]) => key !== "nginxStatusEndpoint"))},
+    {...document, telemetry: {...document.telemetry, producer: {...document.telemetry.producer, extra: true}}},
+    {...document, telemetry: {...document.telemetry, nginxStatusEndpoint: "http://edge-nginx:65536/nginx_status"}},
+    {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, queueCapacity: 32, batchSize: 64}}},
+    {...document, telemetry: {...document.telemetry, alerts: {...document.telemetry.alerts, unknownOutcome: {...document.telemetry.alerts.unknownOutcome, threshold: -1}}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, retentionDays: 1}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, diskWatermarkPercent: 100}}},
+    ...["logs", "traces", "metrics"].map((name) => ({...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, streams: {...document.telemetry.openObserve.streams, [name]: "Bad-Stream"}}}})),
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, bootstrapEmail: "not-an-email"}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, deleteFilesDelayMinutes: 0}}},
+    ...["telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled"].map((key) => ({...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, [key]: true}}})),
+    {...document, telemetry: {...document.telemetry, alerts: {...document.telemetry.alerts, evaluationIntervalMs: 1000}}},
+  ]) assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+  assert.throws(() => parsePlatformConfig({...document, environment: "production"}), PlatformConfigError);
+  assert.match(parsePlatformConfig({...document, environment: "production", telemetry: {...document.telemetry, releaseDigest: `sha256:${"a".repeat(64)}`}}).telemetry.releaseDigest, /^sha256:/u);
+});
+
+void test("RED: config loader rejects enabling OpenObserve external requests", async () => {
+  for (const key of ["telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled"]) {
+    const root = await configRoot();
+    try {
+      const path = join(root, "config/platform.yaml");
+      const document = parseYaml(await readFile(path, "utf8"), {json: true});
+      document.telemetry.openObserve[key] = true;
+      await writeFile(path, dumpYaml(document), "utf8");
+      const result = run(root);
+      assert.notEqual(result.status, 0, key);
+      assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-SCHEMA|CONFIG-OBSERVABILITY-EGRESS/u, key);
+    } finally {
+      await rm(root, {recursive: true, force: true});
+    }
+  }
+});
+
 void test("GREEN: Pricing bootstrap policy matches the immutable migration seed", async () => {
   const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
   const policy = parsePlatformConfig(document).pricingPolicy;
@@ -232,24 +282,29 @@ void test("NGINX reference admission retains 512 streams and a separate full pro
   const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
   const routes = readRoutes(parseYaml(await readFile(join(REPO_ROOT, "contracts/openapi/client-v1.yaml"), "utf8"), {json: true}));
   const profile = document.nginxTransport;
+  const statusEndpoint = document.telemetry.nginxStatusEndpoint;
   assert.equal(profile.limits.sseAdmissionConnections, 512);
   assert.equal(profile.limits.workerProcesses, 1);
   assert.equal(profile.limits.requestPoolBytes, 2048);
-  const reference = render(profile, routes);
+  const reference = render(profile, routes, statusEndpoint);
   const schema = JSON.parse(await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"));
   const validate = new Ajv2020({allErrors: true, strict: true}).compile(schema);
   assert.equal(validate(profile), true);
   assert.match(reference, /^worker_processes 1;$/m);
   assert.match(reference, /request_pool_size 2048;/u);
+  assert.match(reference, /listen 8081; server_name edge-nginx; location = \/nginx_status \{ stub_status; access_log off;/u);
+  assert.match(reference, /location = \/health\/ready \{ return 404; \}/u);
+  assert.match(reference, /location = \/metrics \{ return 404; \}/u);
+  assert.throws(() => render(profile, routes, "http://attacker.invalid:8081/nginx_status"), /private nginx status endpoint/u);
   for (const workerProcesses of [undefined, 0, 1.5, 3, "2; include /etc/passwd;"]) {
     const invalidProfile = structuredClone(profile);
     invalidProfile.limits.workerProcesses = workerProcesses;
-    assert.throws(() => render(invalidProfile, routes), /worker processes/u);
+    assert.throws(() => render(invalidProfile, routes, statusEndpoint), /worker processes/u);
   }
   for (const requestPoolBytes of [undefined, 0, 1024, 2048.5, 4096, "2048; include /etc/passwd;"]) {
     const invalidProfile = structuredClone(profile);
     invalidProfile.limits.requestPoolBytes = requestPoolBytes;
-    assert.throws(() => render(invalidProfile, routes), /request pool/u);
+    assert.throws(() => render(invalidProfile, routes, statusEndpoint), /request pool/u);
   }
   assert.match(reference, /worker_connections 2048;/u);
   assert.match(reference, /limit_conn edge_sse_admission 512;/u);
@@ -259,16 +314,16 @@ void test("NGINX reference admission retains 512 streams and a separate full pro
   const fullProfile = structuredClone(profile);
   fullProfile.limits.workerProcesses = 2;
   fullProfile.limits.workerConnections = 16384;
-  const full = render(fullProfile, routes);
+  const full = render(fullProfile, routes, statusEndpoint);
   assert.match(full, /^worker_processes 2;$/m);
   for (const sseAdmissionConnections of [513, 5000]) {
     const invalidProfile = structuredClone(profile);
     invalidProfile.limits.sseAdmissionConnections = sseAdmissionConnections;
     assert.equal(validate(invalidProfile), false);
-    assert.throws(() => render(invalidProfile, routes), /SSE admission/u);
+    assert.throws(() => render(invalidProfile, routes, statusEndpoint), /SSE admission/u);
   }
   fullProfile.limits.workerConnections = 1024;
-  assert.throws(() => render(fullProfile, routes), /worker.*headroom/u);
+  assert.throws(() => render(fullProfile, routes, statusEndpoint), /worker.*headroom/u);
   assert.equal(document.nginxTransport.limits.sseAdmissionConnections, 512);
 });
 

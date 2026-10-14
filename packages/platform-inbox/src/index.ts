@@ -1,7 +1,18 @@
 import {canonicalJson, canonicalRequestHash, type JsonValue} from "@coffee-platform/idempotency";
 import {quoteIdentifier, type Database, type QueryResult, type SqlScalar, type Transaction} from "@coffee-platform/database";
 import {defineStatement} from "@coffee-platform/database/owner";
+import {metrics, SpanKind, SpanStatusCode, trace, type Histogram, type MeterProvider} from "@opentelemetry/api";
 import {toInstant} from "@coffee-platform/platform-time";
+
+let inboxMetricProvider: MeterProvider | undefined;
+let inboxReceivedAge: Histogram | undefined;
+
+function initializeInboxMetrics(): void {
+  const provider = metrics.getMeterProvider();
+  if (provider === inboxMetricProvider) return;
+  inboxMetricProvider = provider;
+  inboxReceivedAge = provider.getMeter("coffee-platform.inbox").createHistogram("messaging.inbox.received.age", {unit: "ms"});
+}
 
 export type InboxMessage = Readonly<{
   messageId: string;
@@ -448,13 +459,33 @@ export async function consumeOnce(
   handler: (transaction: Transaction) => Promise<void>,
   processedAt: string,
 ): Promise<ConsumeResult> {
+  const span = trace.getTracer("coffee-platform.inbox").startSpan("Inbox.consumeOnce", {kind: SpanKind.INTERNAL});
+  try {
   const begin = await store.begin(transaction, message, leaseOwner, nowMs, leaseMs);
-  if (begin.kind === "duplicate") return {kind: begin.state === "Quarantined" ? "quarantined" : "duplicate"};
-  if (begin.kind === "conflict") return begin;
-  if (begin.kind === "in_progress") return begin;
+  initializeInboxMetrics();
+  const receivedAgeMs = nowMs - toInstant(message.receivedAt).epochMilliseconds;
+  if (Number.isSafeInteger(receivedAgeMs) && receivedAgeMs >= 0)
+    inboxReceivedAge?.record(receivedAgeMs, {"messaging.consumer.group": leaseOwner});
+  if (begin.kind === "duplicate") {
+    const result = {kind: begin.state === "Quarantined" ? "quarantined" : "duplicate"} as const;
+    span.setAttribute("messaging.inbox.result", result.kind);
+    return result;
+  }
+  if (begin.kind === "conflict" || begin.kind === "in_progress") {
+    span.setAttribute("messaging.inbox.result", begin.kind);
+    return begin;
+  }
   await handler(transaction);
   await store.markProcessed(transaction, message.messageId, leaseOwner, processedAt);
+  span.setAttribute("messaging.inbox.result", "processed");
   return {kind: "processed"};
+  } catch (error) {
+    span.setAttribute("messaging.inbox.result", "failed");
+    span.setStatus({code: SpanStatusCode.ERROR});
+    throw error;
+  } finally {
+    span.end();
+  }
 }
 
 export function createSqlInboxStore(database: Database, options: SqlInboxStoreOptions = {}): SqlInboxStore {

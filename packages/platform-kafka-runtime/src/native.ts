@@ -352,6 +352,7 @@ function consumerConfig(options: NativeConsumerOptions): NativeConfig {
     "queued.max.messages.kbytes": queueBytes(options),
     "fetch.queue.backoff.ms": consumerPollTimeout(options),
     "offset_commit_cb": true,
+    "statistics.interval.ms": options.receiveTimeoutMs,
     // An idle Fetch must not hold broker health traffic for the whole receive
     // deadline. Keep that deadline and broker-confirmed commit ACK unchanged.
     "fetch.wait.max.ms": Math.min(100, options.receiveTimeoutMs),
@@ -876,6 +877,7 @@ export async function createNativeProducer(
 export async function createNativeConsumer(
   options: NativeConsumerOptions,
   onRebalance: (event: NativeRebalanceEvent) => void,
+  onStatistics?: (event: unknown) => void,
 ): Promise<NativeConsumerPort> {
   validateConsumerOptions(options);
   const module = await loadNative();
@@ -984,6 +986,7 @@ export async function createNativeConsumer(
   client.on("disconnected", () => {
     if (state !== "closing" && state !== "closed") state = "failed";
   });
+  if (onStatistics !== undefined) client.on("event.stats", onStatistics);
   const connect = (): Promise<void> => {
     if (state === "connected") return Promise.resolve();
     if (state === "failed")

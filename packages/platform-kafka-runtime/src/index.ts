@@ -33,6 +33,53 @@ import {
   type KafkaServiceConfig,
 } from "@coffee-platform/config";
 import { isTraceparent } from "@coffee-platform/observability";
+import { context as otelContext, metrics, SpanKind, SpanStatusCode, trace, type Histogram, type MeterProvider } from "@opentelemetry/api";
+
+const kafkaLagValues = new Map<string, Readonly<{group: string; topic: string; partition: number; lag: number}>>();
+let kafkaMetricProvider: MeterProvider | undefined;
+let kafkaEventAge: Histogram | undefined;
+
+function initializeKafkaMetrics(): void {
+  const provider = metrics.getMeterProvider();
+  if (provider === kafkaMetricProvider) return;
+  kafkaMetricProvider = provider;
+  const meter = provider.getMeter("coffee-platform.kafka-runtime");
+  kafkaEventAge = meter.createHistogram("messaging.kafka.event.age", {unit: "ms"});
+  meter.createObservableGauge("messaging.kafka.consumer.lag", {unit: "messages"}).addCallback((observer) => {
+    for (const value of kafkaLagValues.values()) observer.observe(value.lag, {"messaging.consumer.group": value.group, "messaging.destination.name": value.topic, "messaging.destination.partition.id": String(value.partition)});
+  });
+}
+
+function remoteTraceContext(value: string): ReturnType<typeof otelContext.active> {
+  if (!isTraceparent(value)) return otelContext.active();
+  const [, traceId, spanId, flags] = value.split("-");
+  return trace.setSpanContext(otelContext.active(), {traceId: traceId!, spanId: spanId!, traceFlags: Number.parseInt(flags!, 16), isRemote: true});
+}
+
+function recordKafkaLag(group: string, topics: readonly string[], stats: unknown, config: KafkaConfig): void {
+  if (!object(stats) || !object(stats["topics"])) return;
+  const sourceTopics = stats["topics"];
+  for (const topic of topics) {
+    const partitionCount = Object.values(config.topics).find((candidate) => candidate.name === topic)?.partitions;
+    if (partitionCount === undefined) continue;
+    const sourceTopic = sourceTopics[topic];
+    const partitions = object(sourceTopic) && object(sourceTopic["partitions"]) ? sourceTopic["partitions"] : {};
+    for (let partition = 0; partition < partitionCount; partition++) {
+      const key = `${group}\u0000${topic}\u0000${partition}`;
+      const value = partitions[String(partition)];
+      const lag = object(value) ? value["consumer_lag"] : undefined;
+      if (typeof lag === "number" && Number.isSafeInteger(lag) && lag >= 0)
+        kafkaLagValues.set(key, {group, topic, partition, lag});
+      else kafkaLagValues.delete(key);
+    }
+  }
+}
+
+function clearKafkaLag(group: string, partitions?: readonly Pick<KafkaRecord, "topic" | "partition">[]): void {
+  for (const [key, value] of kafkaLagValues) {
+    if (value.group === group && (partitions === undefined || partitions.some((partition) => partition.topic === value.topic && partition.partition === value.partition))) kafkaLagValues.delete(key);
+  }
+}
 
 export type KafkaHeaders = Readonly<Record<string, string | null>>;
 export type KafkaEnvelope<Payload = unknown> = Readonly<{
@@ -466,6 +513,18 @@ export async function processKafkaRecord(
   }
   const receivedAt = nowInstant();
   const now = receivedAt.epochMilliseconds;
+  if (envelope !== undefined) {
+    const eventAgeMs = now - toInstant(envelope.occurredAt).epochMilliseconds;
+    if (Number.isSafeInteger(eventAgeMs) && eventAgeMs >= 0)
+      kafkaEventAge?.record(eventAgeMs, {"messaging.destination.name": record.topic, "messaging.consumer.group": options.groupId});
+  }
+  const parent = envelope === undefined ? otelContext.active() : remoteTraceContext(envelope.traceparent);
+  const span = trace.getTracer("coffee-platform.kafka-runtime").startSpan("Kafka.consume", {
+    kind: SpanKind.CONSUMER,
+    attributes: {"messaging.system": "kafka", "messaging.destination.name": record.topic, "messaging.consumer.group": options.groupId},
+  }, parent);
+  try {
+  await otelContext.with(trace.setSpan(parent, span), async () => {
   if (options.binding.processing === "durable") {
     const binding = options.binding;
     const transactionOptions = {
@@ -587,10 +646,19 @@ export async function processKafkaRecord(
   if (options.signal.aborted) throw new KafkaRuntimeError("KAFKA_REVOKED");
   try {
     await options.commit(record);
+    span.setAttribute("messaging.kafka.result", "committed");
   } catch (error) {
     if (error instanceof KafkaRuntimeError && error.code === "KAFKA_REVOKED")
       throw error;
     throw new KafkaRuntimeError("OFFSET_COMMIT_OUTCOME_UNKNOWN");
+  }
+  });
+  } catch (error) {
+    span.setAttribute("messaging.kafka.result", "failed");
+    span.setStatus({code: SpanStatusCode.ERROR});
+    throw error;
+  } finally {
+    span.end();
   }
 }
 
@@ -781,6 +849,11 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     if (!producer || stopping || shutdown.signal.aborted)
       throw new KafkaRuntimeError("KAFKA_STOPPED");
     const validated = parseEnvelope(envelope, (value) => value);
+    const span = trace.getTracer("coffee-platform.kafka-runtime").startSpan("Kafka.produce", {
+      kind: SpanKind.PRODUCER,
+      attributes: {"messaging.system": "kafka", "messaging.destination.name": topic},
+    }, remoteTraceContext(validated.traceparent));
+    try {
     let serialized: string;
     try {
       serialized = canonicalJson(validated as unknown as JsonValue);
@@ -815,6 +888,7 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
         "KAFKA_SEND_OUTCOME_UNKNOWN",
         signal,
       );
+      span.setAttribute("messaging.kafka.result", "ack");
       return { kind: "ack", ...ack };
     } catch (error) {
       if (
@@ -829,6 +903,13 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
         throw new KafkaRuntimeError("KAFKA_CONFIG_INVALID");
       lastCode = "KAFKA_SEND_OUTCOME_UNKNOWN";
       throw new KafkaRuntimeError(lastCode);
+    }
+    } catch (error) {
+      span.setAttribute("messaging.kafka.result", "failed");
+      span.setStatus({code: SpanStatusCode.ERROR});
+      throw error;
+    } finally {
+      span.end();
     }
   }
   async function realtimeQuarantine(
@@ -1051,6 +1132,7 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     const rebalance = (event: NativeRebalanceEvent): void => {
       if (stopping) return;
       if (event.type === "revoked") {
+        clearKafkaLag(group.groupId, event.partitions);
         state.current = false;
         state.restart = true;
         state.revoked = true;
@@ -1095,6 +1177,7 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
           autoOffsetReset: group.processing === "realtime" ? "latest" : "error",
         },
         rebalance,
+        (stats) => recordKafkaLag(group.groupId, group.topics, stats, options.config),
       ),
     );
     ports.add(port);
@@ -1119,6 +1202,7 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
         track(port.close()),
       ),
     );
+    for (const group of options.service.consumers) clearKafkaLag(group.groupId);
     if (results.some((result) => result.status === "rejected"))
       throw new KafkaRuntimeError("KAFKA_SHUTDOWN_TIMEOUT");
   }
@@ -1202,6 +1286,7 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     resource: {
       name: "kafka",
       start: async (signal: AbortSignal): Promise<void> => {
+        initializeKafkaMetrics();
         if (started || stopping) throw new KafkaRuntimeError("KAFKA_STOPPED");
         started = true;
         const startup = async (): Promise<void> => {

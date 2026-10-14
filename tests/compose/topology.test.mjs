@@ -9,6 +9,20 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const COMPOSE_FILE = join(REPO_ROOT, "compose.yaml");
+const OBSERVABILITY_CONFIG = {
+  platform: {health: {intervalMs: 5000, timeoutMs: 1000, startupGraceMs: 30000, failureThreshold: 3}},
+  telemetry: {
+    collector: {
+      otlpEndpoint: "http://otel-collector:4318",
+      healthEndpoint: "http://otel-collector:13133",
+      metricsEndpoint: "http://otel-collector:8888",
+      memoryLimitMiB: 128,
+      memorySpikeMiB: 32,
+    },
+    producer: {maxRecordBytes: 16384, queueCapacity: 256},
+    logging: {maxSizeMiB: 8, maxFiles: 3},
+  },
+};
 
 void test("smoke removes only images built by this run and preserves keep/no-build/shared images", async (t) => {
   const {buildRuntimeImages, removeBuiltRuntimeImages} = await import("../../tools/compose-smoke.mjs");
@@ -448,6 +462,50 @@ void test("Kafka data uses a project-scoped named volume", async () => {
   );
   const source = await readFile(COMPOSE_FILE, "utf8");
   assert.doesNotMatch(source, /(^|\n)  kafka_data:\n(?:    .*\n)*    name:/);
+});
+
+void test("observability overlay keeps OpenObserve private and bounds exact Docker log mounts", async () => {
+  const {createComposeOverride, createRuntimeLoggingOverride} = await import("../../tools/observability/generate.mjs");
+  const id = "a".repeat(64);
+  const logFiles = [{service: "edge-nginx", containerId: id, logPath: `/var/lib/docker/containers/${id}/${id}-json.log`}];
+  const overlay = createComposeOverride({
+    config: {
+      ...OBSERVABILITY_CONFIG,
+      telemetry: {...OBSERVABILITY_CONFIG.telemetry, openObserve: {endpoint: "http://openobserve:5080", bootstrapEmail: "operations@coffee-platform.internal", validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, maxDiskBytes: 1073741824, memoryLimitMiB: 512, compactionIntervalSeconds: 60, deleteFilesDelayMinutes: 1, retentionDays: 3, diskWatermarkPercent: 80, jobCleanupWaitSeconds: 60}},
+    },
+    imageRefs: {otelCollectorImage: "otel/opentelemetry-collector-contrib@sha256:collector", openObserveImage: "openobserve@sha256:openobserve", bootstrapProbeSha256: "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14"},
+    logFiles,
+    collectorConfigPath: "/dev/shm/observability/collector.yaml",
+    openObserveDataVolume: "coffee-topology-openobserve-data",
+  });
+  const collector = overlay.services["otel-collector"];
+  const openObserve = overlay.services.openobserve;
+  assert.deepEqual(openObserve.environment, {ZO_LOCAL_MODE: "true", ZO_DATA_DIR: "/data", ZO_HTTP_PORT: "5080", ZO_ROOT_USER_EMAIL: "operations@coffee-platform.internal", ZO_ROOT_USER_PASSWORD: "bootstrap-validation-placeholder", ZO_TELEMETRY: "false", ZO_MMDB_DISABLE_DOWNLOAD: "true", ZO_MODEL_PRICING_ENABLED: "false", ZO_COMPACT_INTERVAL: "60", ZO_COMPACT_DATA_RETENTION_INTERVAL: "60", ZO_COMPACT_DATA_RETENTION_DAYS: "3", ZO_COMPACT_DELETE_FILES_DELAY_MINUTES: "1", ZO_COMPACT_JOB_CLEAN_WAIT_TIME: "60", ZO_DISK_CIRCUIT_BREAKER_ENABLED: "true", ZO_DISK_CIRCUIT_BREAKER_THRESHOLD: "80"});
+  assert.deepEqual(openObserve.entrypoint, ["/busybox", "sh", "-ceu"]);
+  assert.match(openObserve.command[0], /\.coffee-initialized-v1/u);
+  assert.match(openObserve.command[0], /test ! -L/u);
+  assert.match(openObserve.command[0], /marker_email.*ZO_ROOT_USER_EMAIL/u);
+  assert.ok(openObserve.healthcheck.test.join(" ").includes("test \"$used\" -lt '80'"));
+  assert.deepEqual(openObserve.networks, ["coffee_observability"]);
+  assert.deepEqual(collector.networks, ["coffee_observability", "coffee_edge_backend", "coffee_public_api_backend", "coffee_internal_api", "coffee_kafka_event"]);
+  assert.equal(collector.ports, undefined);
+  assert.equal(openObserve.ports, undefined);
+  assert.equal(collector.healthcheck.test[1], "/busybox");
+  assert.equal(collector.healthcheck.test[7], "1");
+  assert.ok(openObserve.healthcheck.test.join(" ").includes("-T 1 "));
+  assert.ok(openObserve.healthcheck.test.join(" ").includes("http://127.0.0.1:5080/healthz"));
+  assert.ok(collector.volumes.some(({source, target, read_only}) => source === "/usr/bin/busybox" && target === "/busybox" && read_only));
+  assert.ok(openObserve.volumes.some(({source, target, read_only}) => source === "/usr/bin/busybox" && target === "/busybox" && read_only));
+  assert.ok(collector.volumes.every(({read_only}) => read_only === true));
+  assert.ok(collector.volumes.some(({source, target, read_only}) => source === `/var/lib/docker/containers/${id}` && target === `/var/lib/docker/containers/${id}` && read_only));
+  assert.equal(collector.volumes.some(({source}) => source === "/var/run/docker.sock"), false);
+  assert.equal(collector.mem_limit, "160m");
+  assert.deepEqual(overlay.volumes.openobserve_data, {external: true, name: "coffee-topology-openobserve-data"});
+  assert.deepEqual(overlay.networks.coffee_observability, {name: "coffee_observability", internal: true});
+
+  const logging = createRuntimeLoggingOverride({config: OBSERVABILITY_CONFIG});
+  assert.deepEqual(logging.services["edge-gateway"].logging.options, {"max-size": "8m", "max-file": "3", mode: "non-blocking", "max-buffer-size": "4194304"});
+  assert.deepEqual(logging.services.kafka.logging.options, {"max-size": "8m", "max-file": "3", mode: "non-blocking", "max-buffer-size": "4194304"});
 });
 
 void test("Node production image is exact, non-root, and keeps build tooling out of final stage", async () => {

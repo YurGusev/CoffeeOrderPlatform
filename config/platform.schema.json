@@ -4,7 +4,7 @@
   "title": "CoffeeOrderPlatform launch configuration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "schemaVersion", "environment", "toolchainRef", "platform", "postgres", "kafka", "aroma", "pricingPolicy", "security", "nginxTransport", "services"],
+  "required": ["$schema", "schemaVersion", "environment", "toolchainRef", "platform", "postgres", "kafka", "aroma", "pricingPolicy", "telemetry", "security", "nginxTransport", "services"],
   "properties": {
     "$schema": {"type": "string", "const": "./platform.schema.json"},
     "schemaVersion": {"type": "integer", "const": 1},
@@ -15,6 +15,7 @@
     "kafka": {"$ref": "#/$defs/kafka"},
     "aroma": {"$ref": "#/$defs/aroma"},
     "pricingPolicy": {"$ref": "#/$defs/pricingPolicy"},
+    "telemetry": {"$ref": "#/$defs/telemetry"},
     "security": {"$ref": "#/$defs/security"},
     "nginxTransport": {"$ref": "./nginx-profile.schema.json"},
     "browserOidc": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/browserOidcProfile"}]},
@@ -76,7 +77,30 @@
       }}]
     }
   },
+  "allOf": [{"if": {"properties": {"environment": {"enum": ["staging", "production"]}}, "required": ["environment"]}, "then": {"properties": {"telemetry": {"type": "object", "properties": {"releaseDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}}}}],
   "$defs": {
+    "telemetry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["namespace", "releaseDigest", "nginxStatusEndpoint", "collector", "producer", "logging", "openObserve", "alerts"],
+      "properties": {
+        "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9.-]{0,62}$"},
+        "releaseDigest": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
+        "nginxStatusEndpoint": {"type": "string", "pattern": "^http://edge-nginx:(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/nginx_status$"},
+        "collector": {
+          "type": "object", "additionalProperties": false,
+          "required": ["otlpEndpoint", "healthEndpoint", "metricsEndpoint", "memoryLimitMiB", "memorySpikeMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"],
+          "properties": {
+            "otlpEndpoint": {"type": "string", "pattern": "^http://[^\\s#]+$"}, "healthEndpoint": {"type": "string", "pattern": "^http://[^\\s#]+$"}, "metricsEndpoint": {"type": "string", "pattern": "^http://[^\\s#]+$"},
+            "memoryLimitMiB": {"type": "integer", "minimum": 1}, "memorySpikeMiB": {"type": "integer", "minimum": 1}, "memoryCheckIntervalMs": {"type": "integer", "minimum": 1}, "batchSize": {"type": "integer", "minimum": 1}, "batchTimeoutMs": {"type": "integer", "minimum": 1}, "queueCapacity": {"type": "integer", "minimum": 1}, "queueConsumers": {"type": "integer", "minimum": 1}, "exportTimeoutMs": {"type": "integer", "minimum": 1}, "retryInitialMs": {"type": "integer", "minimum": 1}, "retryMaxMs": {"type": "integer", "minimum": 1}, "retryWindowMs": {"type": "integer", "minimum": 1}, "maxLogRecordBytes": {"type": "integer", "minimum": 1}
+          }
+        },
+        "producer": {"type": "object", "additionalProperties": false, "required": ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], "properties": {"queueCapacity": {"type": "integer", "minimum": 1}, "maxRecordBytes": {"type": "integer", "minimum": 1}, "batchSize": {"type": "integer", "minimum": 1}, "batchIntervalMs": {"type": "integer", "minimum": 1}, "exportTimeoutMs": {"type": "integer", "minimum": 1}, "diagnosticIntervalMs": {"type": "integer", "minimum": 1}, "flushTimeoutMs": {"type": "integer", "minimum": 1}}},
+        "logging": {"type": "object", "additionalProperties": false, "required": ["maxSizeMiB", "maxFiles"], "properties": {"maxSizeMiB": {"type": "integer", "minimum": 1}, "maxFiles": {"type": "integer", "minimum": 1}}},
+        "openObserve": {"type": "object", "additionalProperties": false, "required": ["endpoint", "organization", "bootstrapEmail", "validationMarker", "telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled", "memoryLimitMiB", "streams", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "diskWatermarkPercent", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], "properties": {"endpoint": {"type": "string", "pattern": "^http://[^\\s#]+$"}, "organization": {"type": "string", "minLength": 1}, "bootstrapEmail": {"type": "string", "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"}, "validationMarker": {"const": "bootstrap-validation-placeholder"}, "telemetryEnabled": {"const": false}, "mmdbDownloadEnabled": {"const": false}, "modelPricingEnabled": {"const": false}, "memoryLimitMiB": {"type": "integer", "minimum": 1}, "streams": {"type": "object", "additionalProperties": false, "required": ["logs", "traces", "metrics"], "properties": {"logs": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$"}, "traces": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$"}, "metrics": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$"}}}, "retentionDays": {"type": "integer", "minimum": 3}, "deleteFilesDelayMinutes": {"type": "integer", "minimum": 1}, "maxDiskBytes": {"type": "integer", "minimum": 1}, "diskWatermarkPercent": {"type": "integer", "minimum": 1, "maximum": 99}, "compactionIntervalSeconds": {"type": "integer", "minimum": 1}, "jobCleanupWaitSeconds": {"type": "integer", "minimum": 1}}},
+        "alerts": {"type": "object", "additionalProperties": false, "required": ["version", "evaluationIntervalMs", "notReady", "consumerLag", "outboxOldestAge", "unknownOutcome", "sseDropRate"], "properties": {"version": {"type": "integer", "const": 1}, "evaluationIntervalMs": {"type": "integer", "const": 60000}, "notReady": {"$ref": "#/$defs/alertThreshold"}, "consumerLag": {"$ref": "#/$defs/alertThreshold"}, "outboxOldestAge": {"$ref": "#/$defs/alertThreshold"}, "unknownOutcome": {"$ref": "#/$defs/alertThreshold"}, "sseDropRate": {"$ref": "#/$defs/alertThreshold"}}}
+      }
+    },
+    "alertThreshold": {"type": "object", "additionalProperties": false, "required": ["forMs", "threshold"], "properties": {"forMs": {"type": "integer", "minimum": 1}, "threshold": {"type": "number", "minimum": 0}}},
     "realtime": {
       "type": "object", "additionalProperties": false,
       "required": ["shutdownGraceMs", "maxConnections", "queueMaxRecords", "queueMaxBytes", "totalQueueMaxRecords", "totalQueueMaxBytes", "ringMaxRecords", "ringMaxBytes", "ringMaxAgeMs", "coalesceMs", "writeTimeoutMs", "heartbeatMs", "authCheckMs", "maxEventDataBytes", "rssBudgetBytes", "fdBudget"],

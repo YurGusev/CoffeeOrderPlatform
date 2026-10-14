@@ -3,9 +3,11 @@ import {readFileSync} from "node:fs";
 import {load as parseYaml} from "js-yaml";
 import { generateKeyPairSync } from "node:crypto";
 import test from "node:test";
+import {createServer as createHttpServer} from "node:http";
 import {EventEmitter} from "node:events";
-import {Readable} from "node:stream";
+import {Readable, Writable} from "node:stream";
 import pg from "pg";
+import {context as otelContext, metrics, trace} from "@opentelemetry/api";
 import {createRuntime} from "../../platform-runtime/dist/index.js";
 import {
   parsePlatformConfig,
@@ -14,10 +16,12 @@ import {
 import {
   correlationHeaders,
   createCorrelationContext,
-  createLogger,
+  createPinoLogger,
+  logRecordsDropped,
   isTraceparent,
   redactLogFields,
   withCorrelationFields,
+  createTelemetryResource,
 } from "../../platform-observability/src/index.ts";
 import {
   signActorContext,
@@ -30,6 +34,7 @@ import {
   parseServiceTransportMaterial,
 } from "../../platform-security/src/index.ts";
 import {withTransaction, createDatabase, DatabaseTransactionError} from "../../platform-database/dist/index.js";
+import {createHttpClient} from "../../platform-http/dist/index.js";
 import {defineStatement, defineCopy} from "../../platform-database/dist/owner.js";
 import {createSqlIdempotencyStore, canonicalRequestHash} from "../../platform-idempotency/dist/index.js";
 import {consumeOnce, createSqlInboxStore} from "../../platform-inbox/dist/index.js";
@@ -49,17 +54,40 @@ void test("config rejects unknown keys and requires the exact runtime set", () =
   assert.throws(() => parsePlatformConfig({...parsed, unknown: true}), PlatformConfigError);
 });
 
-void test("observability redacts nested secret fields", () => {
+void test("observability uses Pino and redacts nested request/provider/PII/error canaries", async () => {
+  const canary = "must-never-escape";
   assert.deepEqual(
-    redactLogFields({ actor: { token: "secret", value: "ok" } }),
-    { actor: { token: "[REDACTED]", value: "ok" } },
+    redactLogFields({ actor: { token: canary, value: "ok" }, request: {headers: {cookie: canary}, body: {customerName: canary}}, payload: canary, query: canary, provider: {message: canary}, credentials: {username: canary, password: canary}, "x-api-key": canary, private_key: canary, passwd: canary, err: new Error(canary) }),
+    { actor: { token: "[REDACTED]", value: "ok" }, request: {headers: "[REDACTED]", body: "[REDACTED]"}, payload: "[REDACTED]", query: "[REDACTED]", provider: "[REDACTED]", credentials: "[REDACTED]", "x-api-key": "[REDACTED]", private_key: "[REDACTED]", passwd: "[REDACTED]", err: "[REDACTED]" },
   );
   const records = [];
-  createLogger((record) => records.push(record), { runtime: "test" }).info(
-    "hello",
-    { password: "never-log" },
-  );
-  assert.equal(records[0].fields.password, "[REDACTED]");
+  const destination = new Writable({write(chunk, _encoding, callback) { records.push(chunk.toString()); callback(); }});
+  const logger = createPinoLogger({ runtime: "test" }, 16_384, destination, 1, 25);
+  logger.info({password: canary, err: new Error(canary)}, "hello");
+  logger.info({safe: {token: canary, toJSON() {return {token: canary};}}}, "custom serialization");
+  logger.child({token: canary}).child({actor: {email: canary}}).info({request: {body: {customerName: canary}}}, "nested");
+  logger.flush();
+  assert.equal(JSON.stringify(records).includes(canary), false);
+  assert.equal(typeof logger.child, "function");
+  const droppedBefore = logRecordsDropped();
+  const emitWarning = process.emitWarning.bind(process);
+  const warnings = [];
+  process.emitWarning = (warning, options) => {warnings.push({warning, options}); return process;};
+  try {
+  logger.info({largeSafeField: "x".repeat(20_000)}, "oversized");
+    logger.child({largeSafeField: "x".repeat(20_000)}).info("oversized child binding");
+    createPinoLogger({runtime: "test", largeSafeField: "x".repeat(20_000)}, 16_384, destination).info("oversized base binding");
+  } finally { process.emitWarning = emitWarning; }
+  await new Promise(resolve => setTimeout(resolve, 35));
+  const emitWarningAgain = process.emitWarning.bind(process);
+  process.emitWarning = (warning, options) => {warnings.push({warning, options}); return process;};
+  try { logger.info({largeSafeField: "x".repeat(20_000)}, "oversized after configured interval"); }
+  finally { process.emitWarning = emitWarningAgain; }
+  logger.flush();
+  assert.equal(logRecordsDropped(), droppedBefore + 4);
+  assert.equal(warnings.length, 2, "dropped logs emit diagnostics at the configured interval");
+  assert.equal(warnings[0].warning, "Structured log records dropped by configured telemetry bounds");
+  assert.equal(records.some(record => record.includes("oversized")), false, "oversized arguments and bindings are dropped before Pino serialization");
 });
 
 void test("observability preserves valid correlation and W3C trace context only", () => {
@@ -85,6 +113,8 @@ void test("observability preserves valid correlation and W3C trace context only"
     causationId: "msg_1",
   });
   assert.equal(isTraceparent(traceparent), true);
+  assert.equal(isTraceparent(`01-${"a".repeat(32)}-${"b".repeat(16)}-01`), false);
+  assert.equal(isTraceparent(`00-${"A".repeat(32)}-${"b".repeat(16)}-01`), false);
   assert.equal(
     isTraceparent(`00-${"0".repeat(32)}-bbbbbbbbbbbbbbbb-01`),
     false,
@@ -213,6 +243,122 @@ function mockDatabase(t, hook = () => undefined, ssl = false, poolOverrides = {}
   t.after(() => database.resource.destroy());
   return {database, statements, releases, connection, options};
 }
+
+void test("database, HTTP and Outbox telemetry preserves owner parentage, bounded metrics and payload privacy", async t => {
+  let traces = "";
+  let exportedMetrics = "";
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {
+      const body = Buffer.concat(chunks).toString();
+      if (request.url === "/v1/traces") traces += body;
+      if (request.url === "/v1/metrics") exportedMetrics += body;
+      response.writeHead(200, {"content-type": "application/x-protobuf"});
+      response.end();
+    });
+  });
+  let outgoingTraceparent;
+  let forwardedCorrelation;
+  let forwardedCausation;
+  const service = createHttpServer((request, response) => {
+    if (request.url?.startsWith("/failed")) response.writeHead(503);
+    else {
+      outgoingTraceparent = request.headers.traceparent;
+      forwardedCorrelation = request.headers["x-correlation-id"];
+      forwardedCausation = request.headers["x-causation-id"];
+    }
+    response.end("ok");
+  });
+  await Promise.all([
+    new Promise(resolve => collector.listen(0, "127.0.0.1", resolve)),
+    new Promise(resolve => service.listen(0, "127.0.0.1", resolve)),
+  ]);
+  const collectorAddress = collector.address();
+  const serviceAddress = service.address();
+  assert.ok(collectorAddress && typeof collectorAddress === "object");
+  assert.ok(serviceAddress && typeof serviceAddress === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${collectorAddress.port}`},
+    producer: {queueCapacity: 32, maxRecordBytes: 16_384, batchSize: 16, batchIntervalMs: 60_000, exportTimeoutMs: 1_000, diagnosticIntervalMs: 60_000, flushTimeoutMs: 2_000},
+  }, "database-http-span-test", "test-token");
+  telemetry.start();
+  const {database} = mockDatabase(t);
+  await database.resource.start(new AbortController().signal);
+  const statement = defineStatement(database, "SELECT 'db-private-canary'");
+  const client = createHttpClient({origin: `http://127.0.0.1:${serviceAddress.port}`});
+  const ownerSpan = trace.getTracer("owner-test").startSpan("orders.owner.operation");
+  let transactionSpan;
+  let failedTransactionSpan;
+  let ownerSpanEnded = false;
+  const endOwnerSpan = () => {if (!ownerSpanEnded) {ownerSpanEnded = true; ownerSpan.end();}};
+  const callerTraceparent = `00-${ownerSpan.spanContext().traceId}-${ownerSpan.spanContext().spanId}-01`;
+  let telemetryStopped = false;
+  try {
+    await otelContext.with(trace.setSpan(otelContext.active(), ownerSpan), async () => {
+      await withTransaction(database, {mode: "interactive"}, async transaction => {
+        transactionSpan = trace.getSpan(otelContext.active());
+        assert.ok(transactionSpan);
+        assert.equal(transactionSpan.spanContext().traceId, ownerSpan.spanContext().traceId);
+        assert.notEqual(transactionSpan.spanContext().spanId, ownerSpan.spanContext().spanId);
+        await statement(transaction, []);
+      });
+      assert.equal(transactionSpan.isRecording(), false);
+      await assert.rejects(withTransaction(database, {mode: "background"}, async () => {
+        failedTransactionSpan = trace.getSpan(otelContext.active());
+        throw new Error("db-private-canary");
+      }), /db-private-canary/u);
+      assert.equal(failedTransactionSpan.isRecording(), false);
+      const response = await client.fetch("/private/entity-secret?token=query-secret", {headers: {
+        "x-correlation-id": "corr-safe",
+        "x-causation-id": "cause-safe",
+        traceparent: callerTraceparent,
+      }});
+      assert.equal(response.status, 200);
+      assert.equal((await client.fetch("/failed/entity-secret?token=query-secret")).status, 503);
+    });
+    const {database: deliveryDatabase} = deliverySqlDatabase(t);
+    const outbox = createSqlOutboxStore(deliveryDatabase);
+    const message = outboxFixture("trace-relay", "trace-aggregate", 1);
+    await withTransaction(deliveryDatabase, {mode: "background"}, transaction => outbox.enqueue(transaction, message));
+    let deliverySpan;
+    const delivered = await relayOutboxBatch(outbox, deliveryDatabase, async () => {
+      deliverySpan = trace.getSpan(otelContext.active());
+      assert.ok(deliverySpan);
+      assert.equal(deliverySpan.spanContext().traceId, message.traceparent.slice(3, 35));
+      assert.notEqual(deliverySpan.spanContext().spanId, message.traceparent.slice(36, 52));
+      return {kind: "ack"};
+    }, {nowMs: 100, leaseOwner: "trace-relay", policy: {leaseMs: 1000, sendTimeoutMs: 100, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}}});
+    assert.equal(delivered.published, 1);
+    assert.equal(deliverySpan.isRecording(), false);
+    endOwnerSpan();
+    await client.close();
+    await telemetry.stop(new AbortController().signal);
+    telemetryStopped = true;
+  } finally {
+    endOwnerSpan();
+    await client.close();
+    await new Promise(resolve => collector.close(resolve));
+    await new Promise(resolve => service.close(resolve));
+    if (!telemetryStopped) await telemetry.stop(new AbortController().signal);
+  }
+  assert.ok(traces.includes("db.transaction"));
+  assert.ok(traces.includes("HTTP GET"));
+  assert.ok(traces.includes("Outbox.relay"));
+  assert.ok(traces.includes("http_5xx"));
+  assert.ok(traces.includes("UNEXPECTED"));
+  assert.equal(traces.includes("db-private-canary"), false);
+  assert.equal(traces.includes("entity-secret"), false);
+  assert.equal(traces.includes("query-secret"), false);
+  assert.equal(forwardedCorrelation, "corr-safe");
+  assert.equal(forwardedCausation, "cause-safe");
+  assert.equal(outgoingTraceparent, callerTraceparent);
+  assert.ok(exportedMetrics.includes("db.client.connection.checkout_wait"));
+  assert.ok(exportedMetrics.includes("db.client.connection.waiting"));
+  assert.ok(exportedMetrics.includes("db.client.transaction.duration"));
+  assert.ok(exportedMetrics.includes("db.client.transaction.count"));
+});
 
 void test('database opaque transaction: states, budgets, owner identity and terminal use', async t => {
   const {database, statements, releases, options} = mockDatabase(t);
@@ -345,6 +491,11 @@ void test('database pool cap preserves healthy readiness and recovers admission'
 });
 
 void test('database bounded checkout queue reserves slots FIFO, keeps health, and removes canceled or expired waiters', async t => {
+  const waitingSamples = [];
+  t.mock.method(metrics, 'getMeter', () => ({
+    createGauge: name => ({record: (value, attributes) => waitingSamples.push({name, value, attributes})}),
+    createHistogram: () => ({record() {}}), createCounter: () => ({add() {}}),
+  }));
   const {database} = mockDatabase(t, () => undefined, false, {max: 1, maxWaiting: 2, checkoutTimeoutMs: 50});
   assert.equal(await database.readiness.check(new AbortController().signal), true);
   let finishFirst, finishSecond;
@@ -359,6 +510,7 @@ void test('database bounded checkout queue reserves slots FIFO, keeps health, an
   const second = withTransaction(database, {mode: 'interactive'}, async () => {entered.push('second'); secondEntered(); await secondGate;});
   const third = withTransaction(database, {mode: 'interactive'}, async () => {entered.push('third'); thirdEntered();});
   assert.equal(database.metrics().waiting, 2);
+  assert.deepEqual(waitingSamples.at(-1), {name: 'db.client.connection.waiting', value: 2, attributes: {'db.owner': 'other'}});
   await new Promise(resolve => setTimeout(resolve, 75));
   assert.equal(database.metrics().waiting, 2, 'transaction deadline bounds queue wait, not the physical connect budget');
   await assert.rejects(withTransaction(database, {mode: 'interactive'}, async () => {}), {code: 'DB_POOL_EXHAUSTED'});
@@ -369,6 +521,7 @@ void test('database bounded checkout queue reserves slots FIFO, keeps health, an
   await secondStarted;
   assert.deepEqual(entered, ['first', 'second']);
   assert.equal(database.metrics().waiting, 1);
+  assert.equal(waitingSamples.at(-1).value, 1);
   finishSecond();
   await thirdStarted;
   await Promise.all([first, second, third]);
@@ -391,6 +544,7 @@ void test('database bounded checkout queue reserves slots FIFO, keeps health, an
   assert.equal(boundedDatabase.metrics().saturationTotal, 1);
   finishBlocker();
   await blocker;
+  assert.equal(waitingSamples.at(-1).value, 0);
 });
 
 void test('database shutdown rejects queued checkouts without acquiring a connection', async t => {

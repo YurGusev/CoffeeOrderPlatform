@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {fixture,login,request,until,nativeProducer,envelopeValidator} from './transport.mjs';
 import {createDatabase} from '../../../packages/platform-database/dist/index.js';
 import {createSqlOutboxStore} from '../../../packages/platform-outbox/dist/index.js';
 import {createKafkaRuntime} from '../../../packages/platform-kafka-runtime/dist/index.js';
+import {createNativeProducer} from '../../../packages/platform-kafka-runtime/dist/native.js';
+import {canonicalJson} from '../../../packages/platform-idempotency/dist/index.js';
 
 // A pinned native sender for the real owner Outbox, not a synthetic envelope source.
 const action=process.argv[2];
@@ -20,6 +23,23 @@ if(action==='login'){
   finally{await producer.close().catch(error=>{cleanupFailure=error;});}
   if(cleanupFailure)throw cleanupFailure;
   console.log(JSON.stringify({...ack,messageId:envelope.messageId}));
+}else if(action==='publish-orders'){
+  let input='';for await(const chunk of process.stdin){input+=chunk;assert.ok(Buffer.byteLength(input)<=1_048_576,'bounded source event input');}
+  const events=JSON.parse(input);assert.ok(Array.isArray(events)&&events.length>0&&events.length<=4,'bounded synthetic Orders source events');
+  const topics={'CatalogMappingChanged.v2':fixture.config.kafka.topics.catalogMapping.name,'OrderConfirmed.v1':fixture.config.kafka.topics.ordersLifecycle.name,'AromaObservationChanged.v1':fixture.config.kafka.topics.aromaEvents.name};
+  const producer=await createNativeProducer({brokers:fixture.config.kafka.brokers,protocol:'SASL_SSL',username:fixture.credentials.orders.username,password:fixture.credentials.orders.password,sslCaPem:fixture.credentials.orders.caPem,clientId:`g14-orders-source-${process.pid}`,maxPending:16,maxMessageBytes:1048576,sendTimeoutMs:5000,receiveTimeoutMs:5000,commitTimeoutMs:5000,shutdownTimeoutMs:10000,producerRetries:3});
+  const receipts=[];let cleanupFailure;
+  try{
+    await producer.connect();
+    for(const event of events){
+      const topic=topics[event?.messageType];assert.ok(topic,'source event has a configured actual Orders consumer topic');
+      assert.equal(typeof event.messageId,'string');assert.equal(typeof event.correlationId,'string');
+      const ack=await producer.send(topic,event.aggregate.ref,canonicalJson(event),{messageId:event.messageId,messageType:event.messageType,correlationId:event.correlationId,traceparent:event.traceparent},AbortSignal.timeout(10000));
+      receipts.push({topic,partition:ack.partition,offset:ack.offset,messageIdSha256:createHash('sha256').update(event.messageId).digest('hex')});
+    }
+  }finally{await producer.close().catch(error=>{cleanupFailure=error;});}
+  if(cleanupFailure)throw cleanupFailure;
+  console.log(JSON.stringify(receipts));
 }else if(action==='relay'){
   const runtime='orders-aroma-preparation';
   const connection=JSON.parse(await readFile('/owner-publisher.json','utf8'));

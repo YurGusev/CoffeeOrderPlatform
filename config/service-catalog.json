@@ -7,6 +7,24 @@
     "contractCatalog": "docs/launch/12_LAUNCH_CONTRACT_CATALOG.md"
   },
   "exactRuntimeCount": 15,
+  "infrastructureSecretScopes": {
+    "otel-collector": [
+      {
+        "name": "exporterToken",
+        "ref": "telemetry.exporterToken"
+      },
+      {
+        "name": "openObserveIngestToken",
+        "ref": "telemetry.openObserveIngestToken"
+      }
+    ],
+    "openobserve-bootstrap": [
+      {
+        "name": "admin-secret",
+        "ref": "telemetry.openObserveAdmin"
+      }
+    ]
+  },
   "runtimes": [
     {
       "name": "edge-gateway",

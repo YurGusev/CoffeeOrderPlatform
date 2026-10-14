@@ -31,6 +31,54 @@ async function verifyBrokerFixture(broker,dir){
   const proof={status:'fixture-transport-only-not-launch-proof',launchProof:false,sent:records.length,received:received.length,protocol:'SASL_SSL',producer:'pinned Apache Kafka Java CLI, generated publisher credentials, acks=all',consumer:'pinned Apache Kafka Java CLI, generated inspector credentials, actual broker offsets',records:received};await json(join(dir,'fixture-transport.json'),proof);return proof;
 }
 
+export async function bootstrapOwnedOrdersKafka({broker,runId,config,inspectBroker,runKafka,writeReceipt,owners=['orders-service','orders-aroma-preparation']}){
+  const inspected=await inspectBroker(broker),state=Array.isArray(inspected)?inspected[0]:inspected;
+  assert.ok(state&&state.State?.Running===true,'owner Kafka bootstrap requires a running broker');
+  assert.equal(state.Config?.Labels?.[LABEL],runId,'owner Kafka bootstrap is limited to this fixture broker');
+  assert.ok(state.HostConfig?.Tmpfs?.['/var/lib/kafka/data'],'owner Kafka bootstrap requires a newly launched tmpfs broker');
+  const mountCheck=await runKafka(broker,['sh','-c',"grep -Eq '^[^ ]+ /var/lib/kafka/data tmpfs ' /proc/mounts && printf mounted"]);
+  assert.equal(mountCheck.trim(),'mounted','owner Kafka data directory is an active tmpfs mount');
+  assert.ok(Array.isArray(owners)&&owners.length>0&&owners.every(name=>['orders-service','orders-aroma-preparation','aroma-convergence'].includes(name)),'Kafka bootstrap owners are an explicit bounded fixture allowlist');
+  const groups=[];
+  for(const serviceName of owners){
+    const service=config.services[serviceName];assert.ok(service,`configured owner runtime exists: ${serviceName}`);
+    for(const consumer of service.kafka.consumers.filter(candidate=>candidate.processing==='durable')){
+      for(const topicName of consumer.topics){
+        const topic=Object.values(config.kafka.topics).find(candidate=>candidate.name===topicName);
+        assert.ok(topic,`configured durable owner topic exists: ${topicName}`);
+        if(!groups.some(item=>item.groupId===consumer.groupId&&item.topic===topic.name))groups.push({service:serviceName,groupId:consumer.groupId,topic:topic.name,partitions:topic.partitions});
+      }
+    }
+  }
+  assert.ok(groups.length>0,'actual Orders owners have durable Kafka consumers');
+  const cli=['/opt/kafka/bin/kafka-consumer-groups.sh','--bootstrap-server','kafka:9092','--command-config','/etc/kafka/secrets/client.properties'];
+  const topics=[...new Map(groups.map(item=>[item.topic,{name:item.topic,partitions:item.partitions}])).values()];
+  const emptyTopics=[];
+  for(const topic of topics){
+    const output=await runKafka(broker,['/opt/kafka/bin/kafka-get-offsets.sh','--bootstrap-server','kafka:9092','--command-config','/etc/kafka/secrets/client.properties','--topic',topic.name,'--time','-1']);
+    const offsets=output.trim().split(/\r?\n/u).filter(Boolean).map(line=>{
+      const match=/^([^:]+):(\d+):(\d+)$/u.exec(line.trim());assert.ok(match,`Kafka end-offset output is bounded for ${topic.name}`);
+      assert.equal(match[1],topic.name);return {partition:Number(match[2]),endOffset:match[3]};
+    }).sort((a,b)=>a.partition-b.partition);
+    assert.equal(offsets.length,topic.partitions,`new owner topic partition count: ${topic.name}`);
+    assert.deepEqual(offsets.map(item=>item.partition),Array.from({length:topic.partitions},(_,index)=>index));
+    assert.ok(offsets.every(item=>item.endOffset==='0'),`new owner topic has no records before producer startup: ${topic.name}`);
+    emptyTopics.push({topic:topic.name,partitions:offsets});
+  }
+  const initializedGroups=[];
+  for(const group of groups){
+    await runKafka(broker,[...cli,'--group',group.groupId,'--topic',group.topic,'--reset-offsets','--to-earliest','--execute']);
+    const output=await runKafka(broker,[...cli,'--describe','--group',group.groupId]);
+    const offsets=output.trim().split(/\r?\n/u).map(line=>line.trim().split(/\s+/u)).filter(parts=>parts[0]===group.groupId&&parts[1]===group.topic&&/^\d+$/u.test(parts[2]??'')).map(parts=>({partition:Number(parts[2]),currentOffset:/^\d+$/u.test(parts[3]??'')?parts[3]:null,endOffset:/^\d+$/u.test(parts[4]??'')?parts[4]:null,lag:/^\d+$/u.test(parts[5]??'')?parts[5]:null})).sort((a,b)=>a.partition-b.partition);
+    assert.equal(offsets.length,group.partitions,`initialized durable group partitions: ${group.groupId}`);
+    assert.deepEqual(offsets.map(item=>item.partition),Array.from({length:group.partitions},(_,index)=>index));
+    assert.ok(offsets.every(item=>item.currentOffset==='0'&&item.endOffset==='0'&&item.lag==='0'),`durable group starts at offset zero on empty topic: ${group.groupId}`);
+    initializedGroups.push({service:group.service,groupId:group.groupId,topic:group.topic,partitions:offsets});
+  }
+  const receipt={verified:true,fixtureOnly:true,broker:{containerId:state.Id,imageId:state.Image,runLabel:runId,freshTmpfsData:true,tmpfsMountVerified:true},topics:emptyTopics,groups:initializedGroups};
+  await writeReceipt(receipt);return receipt;
+}
+
 export function parse(args){
   const options={mode:'full',profile:'reference-512',prepareOnly:false,fixtureCheck:false,smoke:{clients:512,rate:100,durationMs:10000},runId:`i12-${randomUUID().replaceAll('-','').slice(0,16)}`};
   const valued=new Set(['--profile','--result-dir','--prepared','--approve-manifest','--smoke-clients','--smoke-duration-ms']);
@@ -60,11 +108,49 @@ export async function bounded(fn,{timeout=30000,interval=250,label='condition'}=
   while(performance.now()<end){try{const value=await fn();if(value)return value;}catch(e){last=e;}await new Promise(r=>setTimeout(r,Math.min(interval,Math.max(0,end-performance.now()))));}
   throw Object.assign(new Error(`${label}: ${last?.message??'timeout'}`),{code:'FIXTURE_READINESS_TIMEOUT'});
 }
+function nginxErrorCategory(value){
+  const text=String(value??'').toLowerCase();
+  if(/host not found in upstream|could not be resolved/u.test(text))return 'upstream_resolution';
+  if(/cannot load certificate|certificate.*failed/u.test(text))return 'certificate_load';
+  if(/ssl_ctx_use_privatekey|private key.*failed/u.test(text))return 'tls_key_load';
+  if(/permission denied/u.test(text))return 'permission_denied';
+  if(/no such file|bio_new_file|open\(\).*failed/u.test(text))return 'file_open';
+  if(/unknown directive|invalid number of arguments/u.test(text))return 'invalid_directive';
+  if(/bind\(\).*failed|address already in use/u.test(text))return 'bind_failed';
+  if(/resolver/u.test(text))return 'resolver_failure';
+  return text?'nginx_error':'unavailable';
+}
+async function nginxStartupDiagnostic({name,id,state,stage}){
+  const safeState={
+    Running:Boolean(state?.Running),
+    ExitCode:Number.isInteger(state?.ExitCode)?state.ExitCode:null,
+    OOMKilled:Boolean(state?.OOMKilled),
+    Error:nginxErrorCategory(state?.Error),
+    StartedAt:typeof state?.StartedAt==='string'?state.StartedAt:'',
+    FinishedAt:typeof state?.FinishedAt==='string'?state.FinishedAt:'',
+  };
+  let errorOrWarningLines='';
+  try{
+    const logs=await run('docker',['logs','--tail','20',id],{timeout:5000,outputLimit:2048,includeStderr:true});
+    assert.ok(Buffer.byteLength(logs,'utf8')<=2048,'bounded nginx startup logs');
+    const entries=logs.split('\n').map(line=>{
+      const text=line.trim();
+      const nginx=/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} \[(emerg|alert|crit|error)\] \d+#\d+:\s*(.*)$/u.exec(text);
+      if(nginx)return `[${nginx[1]}] category=${nginxErrorCategory(nginx[2])}`;
+      const missing=/(?:^|:\s*)exec:\s*([A-Za-z0-9._-]{1,40}):\s*not found$/iu.exec(text);
+      if(missing&&new Set(['nginx','-e','sh','bash']).has(missing[1]))return `[error] category=entrypoint_command_missing executable=${missing[1]}`;
+      return null;
+    }).filter(Boolean).slice(0,20);
+    errorOrWarningLines=entries.join('\n').slice(0,2048);
+  }catch{/* retain only safe inspect state if bounded log capture is unavailable */}
+  return {name,stage,state:safeState,...(errorOrWarningLines?{errorOrWarningLines}:{})};
+}
 export async function runTransportFixture(options,hooks={}){
-  if(hooks.exercise||hooks.startOwner){
+  if(hooks.exercise||hooks.startOwner||hooks.launchPath){
     assert.equal(options.mode,'smoke','owner browser proof is smoke-only, never full capacity acceptance');
     assert.equal(options.smoke.clients,1);assert.ok(!options.prepared&&!options.prepareOnly&&!options.fixtureCheck);
-    assert.equal(typeof hooks.exercise,'function');assert.equal(typeof hooks.startOwner,'function');
+    if(hooks.launchPath){assert.equal(typeof hooks.launchPath.startOwner,'function');assert.equal(typeof hooks.launchPath.exercise,'function');}
+    else{assert.equal(typeof hooks.exercise,'function');assert.equal(typeof hooks.startOwner,'function');}
   }
   const dir=options.resultDir,network=`${options.runId}-net`,owned=[],containerReceipts=[],samples=[];
   let setup,ownerResource,retainedPreparation=false,networkCreated=false,driverExit,driverRunning=false,hostFatal,controlBusy=false,monitorBusy=false,realtimeStopped=false,observersStopping=false,observerRunning=false,observerWork=Promise.resolve();
@@ -72,32 +158,37 @@ export async function runTransportFixture(options,hooks={}){
   async function launch(role,image,args,{cpus=2,memory=536870912,nofile=4096,aliases=[],fixtures=true}={}){
     const name=`${options.runId}-${role}`;
     const scopedProduct=['edge-gateway','api-public','realtime-gateway'].includes(role);
+    const scopedOwner=['api-internal','orders-service','orders-aroma-preparation'].includes(role);
     const base=['run','--detach','--name',name,'--label',`${LABEL}=${options.runId}`,'--network',network,'--init','--cpus',String(cpus),'--memory',String(memory),'--memory-swap',String(memory),'--ulimit',`nofile=${nofile}:${nofile}`,'--cap-drop','ALL','--security-opt','no-new-privileges:true'];
     for(const a of aliases)base.push('--network-alias',a);
     if(fixtures){
       base.push('--entrypoint','docker-entrypoint.sh','--user','1000:1000','--read-only','--tmpfs','/tmp:rw,nosuid,nodev,size=67108864,uid=1000,gid=1000');
-      if(scopedProduct){
+      if(scopedProduct||scopedOwner){
         base.push('--mount',`type=bind,src=${setup.snapshot},dst=/app,readonly`,'--mount',`type=bind,src=${setup.privateDir}/platform.yaml,dst=/fixture/platform.yaml,readonly`,'--mount',`type=bind,src=${setup.privateDir}/${role}.yaml,dst=/fixture/${role}.yaml,readonly`);
-        if(role==='edge-gateway')base.push('--mount',`type=bind,src=${setup.privateDir}/certs/ca.crt,dst=/fixture/certs/ca.crt,readonly`);
+        if(scopedProduct&&role==='edge-gateway')base.push('--mount',`type=bind,src=${setup.privateDir}/certs/ca.crt,dst=/fixture/certs/ca.crt,readonly`);
       }else base.push('--mount',`type=bind,src=${setup.snapshot},dst=/app,readonly`,'--mount',`type=bind,src=${setup.privateDir},dst=/fixture,readonly`,'--mount',`type=bind,src=${dir},dst=/results`);
       base.push('--workdir','/app');
     }
     const id=(await run('docker',[...base,...args.slice(0,args.indexOf('--IMAGE--')) ,image,...args.slice(args.indexOf('--IMAGE--')+1)],{timeout:30000})).trim();
     owned.push({role,name,id,cpus,memory,nofile});const inspect=JSON.parse(await docker('inspect',id))[0];
     assert.equal(inspect.Config.Labels[LABEL],options.runId);assert.equal(inspect.HostConfig.NanoCpus,cpus*1000000000);assert.equal(inspect.HostConfig.Memory,memory);assert.equal(inspect.HostConfig.Ulimits.find(l=>l.Name==='nofile').Hard,nofile);
+    if(role==='edge-nginx'&&!inspect.State.Running){
+      const diagnostic=await nginxStartupDiagnostic({name,id,state:inspect.State,stage:'product-owner-start'});
+      throw Object.assign(new Error(`${role} container exited during startup`),{containerDiagnostics:[diagnostic]});
+    }
     assert.equal(inspect.State.Running,true,`${role} container exited during startup`);
     const receipt={role,id,name,image:inspect.Image,resourceLimits:{cpus:inspect.HostConfig.NanoCpus/1000000000,memoryBytes:inspect.HostConfig.Memory,nofile:inspect.HostConfig.Ulimits},networks:inspect.NetworkSettings.Networks};
-    if(scopedProduct){
+    if(scopedProduct||scopedOwner){
       const expectedMounts=[
         {Type:'bind',Source:join(setup.snapshot),Destination:'/app',RW:false},
         {Type:'bind',Source:join(setup.privateDir,'platform.yaml'),Destination:'/fixture/platform.yaml',RW:false},
         {Type:'bind',Source:join(setup.privateDir,`${role}.yaml`),Destination:`/fixture/${role}.yaml`,RW:false},
-        ...(role==='edge-gateway'?[{Type:'bind',Source:join(setup.privateDir,'certs/ca.crt'),Destination:'/fixture/certs/ca.crt',RW:false}]:[]),
+        ...(scopedProduct&&role==='edge-gateway'?[{Type:'bind',Source:join(setup.privateDir,'certs/ca.crt'),Destination:'/fixture/certs/ca.crt',RW:false}]:[]),
       ].sort((a,b)=>a.Destination.localeCompare(b.Destination));
       const actualMounts=inspect.Mounts.map(({Type,Source,Destination,RW})=>({Type,Source,Destination,RW})).sort((a,b)=>a.Destination.localeCompare(b.Destination));
       assert.deepEqual(actualMounts,expectedMounts,`${role} fixture mount scope`);
-      const foreignRole=role==='edge-gateway'?'realtime-gateway':'edge-gateway';
-      const readablePaths=['/fixture/platform.yaml',`/fixture/${role}.yaml`,...(role==='edge-gateway'?['/fixture/certs/ca.crt']:[])];
+      const foreignRole=role==='edge-gateway'?'realtime-gateway':role==='orders-service'?'orders-aroma-preparation':role==='orders-aroma-preparation'?'orders-service':'edge-gateway';
+      const readablePaths=['/fixture/platform.yaml',`/fixture/${role}.yaml`,...(scopedProduct&&role==='edge-gateway'?['/fixture/certs/ca.crt']:[])];
       const deniedPaths=['/fixture/fixture.json',`/fixture/${foreignRole}.yaml`,'/fixture/certs/ca.key','/results/private/fixture.json'];
       const probe=`const fs=require('node:fs/promises');const readable=${JSON.stringify(readablePaths)},denied=${JSON.stringify(deniedPaths)};(async()=>{const canRead=[];for(const p of readable)try{await fs.readFile(p);canRead.push(p)}catch{}const canReadDenied=[];for(const p of denied)try{await fs.readFile(p);canReadDenied.push(p)}catch{}if(canRead.length!==readable.length||canReadDenied.length)throw new Error('scoped fixture mount access mismatch');console.log(JSON.stringify({readablePaths:canRead,deniedPaths:denied}))})().catch(e=>{console.error(e.message);process.exitCode=1});`;
       const scope=JSON.parse(await docker('exec','--user','1000:1000',id,'node','--input-type=commonjs','-e',probe));
@@ -109,6 +200,34 @@ export async function runTransportFixture(options,hooks={}){
   }
 
   async function inspectRole(role){const c=owned.find(c=>c.role===role);assert.ok(c,`owned role missing ${role}`);const s=JSON.parse(await docker('inspect',c.id))[0];assert.equal(s.Config.Labels[LABEL],options.runId);return {c,s};}
+  async function captureLaunchFailure(error){
+    if(!hooks.launchPath||!error.launchPathCommand)return undefined;
+    const containers=[];
+    for(const c of owned){
+      try{
+        const s=JSON.parse(await docker('inspect',c.id))[0];assert.equal(s.Config.Labels[LABEL],options.runId);
+        let cgroup;
+        if(Number.isSafeInteger(s.State.Pid)&&s.State.Pid>0){
+          try{
+            const sample=await readCgroupMemory(s.State.Pid);
+            cgroup={currentBytes:sample.currentBytes,maxBytes:sample.maxBytes,peakBytes:sample.peakBytes,
+              oomEvents:sample.events.oom,oomKillEvents:sample.events.oom_kill,oomGroupKillEvents:sample.events.oom_group_kill};
+          }catch(failure){cgroup={unavailableCode:failure.code??failure.name};}
+        }
+        containers.push({role:c.role,running:Boolean(s.State.Running),exitCode:Number.isInteger(s.State.ExitCode)?s.State.ExitCode:null,
+          oomKilled:Boolean(s.State.OOMKilled),...(cgroup?{cgroup}:{})});
+      }catch(failure){containers.push({role:c.role,stateUnavailableCode:failure.code??failure.name});}
+    }
+    const command=error.launchPathCommand;
+    const kernelOom=containers.some(item=>item.oomKilled||item.cgroup?.oomKillEvents>0||item.cgroup?.oomGroupKillEvents>0);
+    const outcome=kernelOom?'kernel_oom_evidence':command.signal==='SIGKILL'&&command.elapsedMs>=command.timeoutMs?'host_docker_cli_timeout_sigkill':command.signal==='SIGKILL'?'docker_cli_sigkill_before_timeout_or_external':command.exitCode===127?'container_exec_failure':command.exitCode===137?'remote_exec_exit_137_without_cgroup_oom_evidence':'command_failure';
+    return {command,outcome,containers};
+  }
+  async function roleLogFiles(roles){
+    const logFiles=[];
+    for(const role of roles){const {s}=await inspectRole(role);assert.ok(s.State.Running,`${role} remains running for telemetry proof`);assert.ok(s.LogPath,`${role} exposes a Docker log path`);logFiles.push({service:role,containerId:s.Id,logPath:s.LogPath});}
+    return logFiles;
+  }
   async function monitor(){
     if(monitorBusy||!driverRunning||observersStopping)return;monitorBusy=true;
     let observedRole,memory;
@@ -198,19 +317,34 @@ export async function runTransportFixture(options,hooks={}){
     else{
       if(!options.fixtureCheck){const main=await readFile(join(setup.snapshot,'apps/realtime-gateway/dist/main.js'),'utf8');assert.match(main,/startConfiguredRuntime\([\s\S]*realtime-gateway[\s\S]*,/u,'DEPENDENCY: actual realtime main composition not wired; refusing fake /events receiver');}
       await docker('network','create','--label',`${LABEL}=${options.runId}`,network);networkCreated=true;
+      if(hooks.launchPath?.onNetwork)await hooks.launchPath.onNetwork({networkName:network});
+      const registerOwner=resource=>{assert.equal(ownerResource,undefined);assert.equal(typeof resource.stop,'function');ownerResource=resource;};
+      if(hooks.launchPath)ownerResource=await hooks.launchPath.startOwner({setup,network,dir,registerOwner});
       if(hooks.startOwner)ownerResource=await hooks.startOwner({setup,network,dir,registerOwner:resource=>{assert.equal(ownerResource,undefined);assert.equal(typeof resource.stop,'function');ownerResource=resource;}});
       const brokerEnv=Object.entries({KAFKA_NODE_ID:'1',KAFKA_PROCESS_ROLES:'broker,controller',KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:'CONTROLLER:PLAINTEXT,SASL_SSL:SASL_SSL',KAFKA_CONTROLLER_QUORUM_VOTERS:'1@kafka:29093',KAFKA_LISTENERS:'SASL_SSL://:9092,CONTROLLER://:29093',KAFKA_ADVERTISED_LISTENERS:'SASL_SSL://kafka:9092',KAFKA_CONTROLLER_LISTENER_NAMES:'CONTROLLER',KAFKA_INTER_BROKER_LISTENER_NAME:'SASL_SSL',KAFKA_SSL_KEYSTORE_TYPE:'PKCS12',KAFKA_SSL_KEYSTORE_FILENAME:'kafka.keystore.p12',KAFKA_SSL_KEY_CREDENTIALS:'kafka.keystore.password',KAFKA_SSL_KEYSTORE_CREDENTIALS:'kafka.keystore.password',KAFKA_SSL_TRUSTSTORE_TYPE:'PKCS12',KAFKA_SSL_TRUSTSTORE_FILENAME:'kafka.truststore.p12',KAFKA_SSL_TRUSTSTORE_CREDENTIALS:'kafka.keystore.password',KAFKA_SSL_CLIENT_AUTH:'requested',KAFKA_SASL_ENABLED_MECHANISMS:'PLAIN',KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL:'PLAIN',KAFKA_OPTS:'-Djava.security.auth.login.config=/etc/kafka/secrets/kafka_jaas.conf',KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR:'1',KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR:'1',KAFKA_TRANSACTION_STATE_LOG_MIN_ISR:'1',KAFKA_AUTO_CREATE_TOPICS_ENABLE:'false',KAFKA_NUM_PARTITIONS:'3',KAFKA_LOG_DIRS:'/var/lib/kafka/data',KAFKA_HEAP_OPTS:'-Xms256m -Xmx768m'}).flatMap(([k,v])=>['--env',`${k}=${v}`]);
       const broker=await launch('kafka',setup.images.kafka,['--user','1000:1000','--mount',`type=bind,src=${setup.privateDir}/kafka,dst=/etc/kafka/secrets,readonly`,'--tmpfs','/var/lib/kafka/data:rw,uid=1000,gid=1000,mode=0700,size=1073741824',...brokerEnv,'--IMAGE--'],{cpus:2,memory:2147483648,nofile:8192,aliases:['kafka'],fixtures:false});
       await bounded(async()=>{await docker('exec',broker,'/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','kafka:9092','--command-config','/etc/kafka/secrets/client.properties','--list');return true;},{timeout:90000,interval:500,label:'real SASL_SSL Kafka broker'});
-      await docker('exec',broker,'/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','kafka:9092','--command-config','/etc/kafka/secrets/client.properties','--create','--topic','coffee.realtime.invalidate.v1','--partitions',String(setup.config.kafka.topics.realtimeInvalidate.partitions),'--replication-factor','1');
+      const realtimeTopic=setup.config.kafka.topics.realtimeInvalidate;const topics=new Map([[realtimeTopic.name,realtimeTopic.partitions]]);
+      if(ownerResource?.startServices)for(const service of ['orders-service','orders-aroma-preparation','realtime-gateway'])for(const name of [...setup.config.services[service].kafka.producers,...setup.config.services[service].kafka.consumers.flatMap(consumer=>consumer.topics)]){
+        const topic=Object.values(setup.config.kafka.topics).find(item=>item.name===name);assert.ok(topic,`configured Kafka topic is defined: ${name}`);topics.set(name,topic.partitions);
+      }
+      for(const [topic,partitions]of topics)await docker('exec',broker,'/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','kafka:9092','--command-config','/etc/kafka/secrets/client.properties','--create','--topic',topic,'--partitions',String(partitions),'--replication-factor','1');
+      if(ownerResource?.startServices){
+        await bootstrapOwnedOrdersKafka({broker,runId:options.runId,config:setup.config,
+          ...(hooks.launchPath?{owners:['orders-service','orders-aroma-preparation','aroma-convergence']}:{}),
+          inspectBroker:async name=>JSON.parse(await docker('inspect',name))[0],
+          runKafka:async(name,args)=>docker('exec',name,...args),
+          writeReceipt:receipt=>json(join(dir,'orders-kafka-offset-bootstrap.json'),receipt)});
+        await ownerResource.startServices({setup,network,dir,broker,launch});
+      }
 
       await launch('idp',setup.images.node,['--IMAGE--','node','tests/realtime/fixtures/services.mjs','idp'],{aliases:['idp.fixture.invalid']});
       if(!options.fixtureCheck){
         if(!ownerResource)await launch('orders-fixture',setup.images.node,['--IMAGE--','node','tests/realtime/fixtures/services.mjs','orders'],{aliases:['orders-service']});
         await launch('edge-gateway',setup.images.node,productArgs('edge-gateway'),{aliases:['edge-gateway']});
-        await launch('api-public',setup.images.node,[...(ownerResource?['--add-host',`orders-service:${ownerResource.host}`]:[]),...productArgs('api-public')],{aliases:['api-public']});
+        await launch('api-public',setup.images.node,[...(ownerResource?.host?['--add-host',`orders-service:${ownerResource.host}`]:[]),...productArgs('api-public')],{aliases:['api-public']});
         await launch('realtime-gateway',setup.images.node,productArgs('realtime-gateway'),{memory:setup.manifest.containerBudgets['realtime-gateway'].memory,nofile:12288,aliases:['realtime-gateway']});
-        await launch('edge-nginx',ownerResource?.nginxImage??setup.images.nginx,[...(hooks.exercise?['--publish','127.0.0.1:8443:8443']:[]),'--user','101:101','--read-only','--tmpfs','/tmp:rw,nosuid,nodev,size=67108864,uid=101,gid=101','--mount',`type=bind,src=${setup.privateDir}/nginx.conf,dst=/etc/nginx/nginx.conf,readonly`,'--mount',`type=bind,src=${setup.privateDir}/nginx-secrets,dst=/run/secrets/edge-nginx,readonly`,'--mount',`type=bind,src=${ROOT}/apps/edge-nginx/snippets,dst=/etc/nginx/snippets,readonly`,'--IMAGE--',...(ownerResource?[]:['nginx']),'-e','stderr','-g','daemon off; error_log stderr warn;'],{memory:setup.manifest.containerBudgets['edge-nginx'].memory,nofile:16384,aliases:['edge-nginx'],fixtures:false});
+        await launch('edge-nginx',ownerResource?.nginxImage??setup.images.nginx,[...(hooks.exercise||hooks.launchPath?['--publish','127.0.0.1:8443:8443']:[]),'--user','101:101','--read-only','--tmpfs','/tmp:rw,nosuid,nodev,size=67108864,uid=101,gid=101','--mount',`type=bind,src=${setup.privateDir}/nginx.conf,dst=/etc/nginx/nginx.conf,readonly`,'--mount',`type=bind,src=${setup.privateDir}/nginx-secrets,dst=/run/secrets/edge-nginx,readonly`,'--mount',`type=bind,src=${ROOT}/apps/edge-nginx/snippets,dst=/etc/nginx/snippets,readonly`,'--IMAGE--',...(ownerResource?.nginxImage?[]:['nginx']),'-e','stderr','-g','daemon off; error_log stderr warn;'],{memory:setup.manifest.containerBudgets['edge-nginx'].memory,nofile:16384,aliases:['edge-nginx'],fixtures:false});
       }
       if(!options.fixtureCheck){
         const {c}=await inspectRole('edge-nginx');
@@ -218,12 +352,15 @@ export async function runTransportFixture(options,hooks={}){
         await json(join(dir,'nginx-workers.json'),{configuredWorkers:setup.config.nginxTransport.limits.workerProcesses,workerPids,containerId:c.id,cpus:c.cpus});
       }
       if(options.fixtureCheck){const brokerProof=await verifyBrokerFixture(broker,dir);result.published=brokerProof.sent;}
-      await launch('driver',setup.images.node,[...(ownerResource?.driverArgs??[]),'--IMAGE--','node',...(hooks.exercise?['--input-type=module','-e','setInterval(()=>{},1000)']:[options.fixtureCheck?'tests/realtime/fixtures/fixture-check.mjs':'tests/realtime/fixtures/driver.mjs'])],{cpus:8,memory:2147483648,nofile:32768});driverRunning=true;
+      await launch('driver',setup.images.node,[...(ownerResource?.driverArgs??[]),'--IMAGE--','node',...(hooks.exercise||hooks.launchPath?['--input-type=module','-e','setInterval(()=>{},1000)']:[options.fixtureCheck?'tests/realtime/fixtures/fixture-check.mjs':'tests/realtime/fixtures/driver.mjs'])],{cpus:8,memory:2147483648,nofile:32768});driverRunning=true;
       timer=setInterval(()=>{void scheduleObservers();},500);timer.unref();
       const start=performance.now();
-      if(hooks.exercise){
-        result.ownerBrowser=await hooks.exercise({setup,network,dir,broker,driver:owned.find(c=>c.role==='driver').name});
-        assert.equal(result.ownerBrowser.verified,true,'actual owner/browser assertions must complete');
+      if(hooks.exercise||hooks.launchPath){
+        if(hooks.launchPath?.onRolesReady)await hooks.launchPath.onRolesReady({networkName:network,logFiles:await roleLogFiles(['orders-service','orders-aroma-preparation','api-internal','api-public','realtime-gateway','edge-gateway','edge-nginx'])});
+        const exercise=hooks.launchPath?hooks.launchPath.exercise:hooks.exercise;
+        const proof=await exercise({setup,network,dir,broker,driver:owned.find(c=>c.role==='driver').name});
+        if(hooks.launchPath){result.launchPath=proof;assert.equal(result.launchPath.verified,true,'actual launch-path assertions must complete');}
+        else{result.ownerBrowser=proof;assert.equal(result.ownerBrowser.verified,true,'actual owner/browser assertions must complete');}
         await stopObservers();
         if(hostFatal)throw hostFatal;result.totalElapsedMs=performance.now()-start;
       }else{
@@ -235,7 +372,7 @@ export async function runTransportFixture(options,hooks={}){
       if(driverExit!==0&&!result.error)throw new Error(`real driver exited ${driverExit}`);
       }
     }
-  }catch(e){result.error={code:e.code??'HARNESS_FAILED',message:redact(e.message)};result.status='FAIL';result.launchProof=false;}
+  }catch(e){result.error={code:e.code??'HARNESS_FAILED',message:redact(e.message)};if(Array.isArray(e.containerDiagnostics))result.containerDiagnostics=e.containerDiagnostics;const launchFailure=await captureLaunchFailure(e);if(launchFailure)result.launchFailure=launchFailure;result.status='FAIL';result.launchProof=false;}
   finally{
     await stopObservers();
     const cleanupStart=performance.now(),receipts=[];
@@ -263,9 +400,9 @@ export async function runTransportFixture(options,hooks={}){
       await json(join(dir,'cleanup.json'),{durationMs:performance.now()-cleanupStart,receipts,owner:ownerCleanup,network:{name:network,created:networkCreated,removed:networkRemoved},syntheticPrivateMaterialRemoved,verified:result.cleanupVerified});
       if(retainedPreparation){result.status='prepared-not-launch-proof';result.launchProof=false;}
       else if(options.fixtureCheck&&!result.error){result.status='fixture-transport-only-not-launch-proof';result.launchProof=false;}
-      else if(hooks.exercise){result.status=result.error||!result.cleanupVerified?'FAIL':'owner-browser-proof-only';result.launchProof=false;}
+      else if(hooks.exercise||hooks.launchPath){result.status=result.error||!result.cleanupVerified?'FAIL':hooks.launchPath?'owner-launch-path-proof-only':'owner-browser-proof-only';result.launchProof=false;}
       else Object.assign(result,classifyResult(result));
-      result.classification=hooks.exercise?'owner-browser-not-capacity-proof':options.mode==='smoke'?'smoke-not-launch-proof':retainedPreparation?'prepared-not-launch-proof':'full-profile';
+      result.classification=hooks.launchPath?'owner-launch-path-not-capacity-proof':hooks.exercise?'owner-browser-not-capacity-proof':options.mode==='smoke'?'smoke-not-launch-proof':retainedPreparation?'prepared-not-launch-proof':'full-profile';
       await json(join(dir,'result.json'),result);console.log(JSON.stringify({status:result.status,classification:result.classification,launchProof:result.launchProof,artifact:join(dir,'result.json'),manifest:join(dir,'profile-manifest.json'),error:result.error}));
     }catch(e){console.error(`artifact write failed: ${e.message}`);result.error??={code:'ARTIFACT_WRITE_FAILED',message:e.message};}
   }

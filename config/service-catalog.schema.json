@@ -8,6 +8,7 @@
     "schemaVersion",
     "authority",
     "exactRuntimeCount",
+    "infrastructureSecretScopes",
     "runtimes",
     "newRuntimeProcedure"
   ],
@@ -40,6 +41,24 @@
     },
     "exactRuntimeCount": {
       "const": 15
+    },
+    "infrastructureSecretScopes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["otel-collector", "openobserve-bootstrap"],
+      "properties": {
+        "otel-collector": {
+          "const": [
+            {"name": "exporterToken", "ref": "telemetry.exporterToken"},
+            {"name": "openObserveIngestToken", "ref": "telemetry.openObserveIngestToken"}
+          ]
+        },
+        "openobserve-bootstrap": {
+          "const": [
+            {"name": "admin-secret", "ref": "telemetry.openObserveAdmin"}
+          ]
+        }
+      }
     },
     "runtimes": {
       "type": "array",

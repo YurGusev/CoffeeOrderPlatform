@@ -1,5 +1,13 @@
 # Матрица конфигурации 14 Node runtime и native nginx
 
+Collector/OpenObserve #64 — Operations infrastructure вне business runtime
+catalog. `config/platform.yaml.telemetry` задаёт endpoint/stream, buffer, timeout,
+retention, watermark и alert policies; schema/parser требуют все поля.
+Backend network соединяет только Collector/OpenObserve, producer ingress —
+существующие private zones, без зависимости business readiness. Generated
+configs/provenance, scoped bootstrap и bounded storage описаны в
+[runbook](../operations/observability.md); exact versions остаются только в BOM.
+
 Reference-профиль #162 по
 [ADR-0031](../adr/ADR-0031-nginx-transport-and-application-auth.md) и
 [контракту nginx](29_NGINX_TRANSPORT_AND_AUTH.md) заменяет public Node Edge proxy

@@ -24,6 +24,7 @@ export class AromaConvergenceTelemetry {
   #leaseFailures = 0;
   #fenceFailures = 0;
   #unknown = 0;
+  #unresolvedUnknown: number | undefined;
   #blockers = 0;
   #providerFailures = 0;
   #degraded = false;
@@ -46,6 +47,9 @@ export class AromaConvergenceTelemetry {
   blocker(count: number): void {this.#blockers += count;}
   attempt(value: string): void {this.#increment(this.#attempts, ATTEMPTS, value); if (value === "unknown_outcome") this.#unknown += 1;}
   recovery(value: string): void {this.#increment(this.#recoveries, RECOVERY, value);}
+  unresolvedUnknown(value: number | undefined): void {
+    this.#unresolvedUnknown = value !== undefined && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  }
   mutation(value: string): void {this.#increment(this.#mutations, MUTATIONS, value);}
 
   render(): readonly string[] {
@@ -56,6 +60,7 @@ export class AromaConvergenceTelemetry {
       `coffee_aroma_lease_failures_total ${this.#leaseFailures}`,
       `coffee_aroma_fence_failures_total ${this.#fenceFailures}`,
       `coffee_aroma_unknown_outcomes_total ${this.#unknown}`,
+      ...(this.#unresolvedUnknown === undefined ? [] : [`coffee_aroma_unknown_outcomes_current ${this.#unresolvedUnknown}`]),
       `coffee_aroma_blockers_total ${this.#blockers}`,
       `coffee_aroma_provider_failures_total ${this.#providerFailures}`,
       `coffee_aroma_observed_age_ms ${ageMs(this.#observedCapturedAt)}`,

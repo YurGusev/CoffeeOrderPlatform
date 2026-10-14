@@ -14,6 +14,7 @@ const activeProfileConfig = resolve(root, 'apps/edge-nginx/generated/nginx.conf'
 const profileConfig = resolve(root, `apps/edge-nginx/generated/.image-fixture-${process.pid}.conf`);
 const image = 'coffee-edge-nginx:issue161-test';
 const backendImage = 'coffee-edge-fixture:issue161-test';
+const registry = JSON.parse(await readFile(join(root, 'config/toolchain-versions.json'), 'utf8'));
 const network = `edge161-${process.pid}`;
 const extraIds = [];
 const extraNetworks = [];
@@ -61,7 +62,7 @@ try {
   assert.notEqual(missingConfig.status,0,'image must fail closed without the mounted runtime secrets required by its active config');
   if(process.argv.includes('--check-only')) { console.log(`PASS image check-only: nginx -t; final image ${imageId}; no Node/compiler/package manager/private key/certificate.`); }
   else {
-  nginxId = docker('run','--detach','--read-only','--user','101:101','--network',network,'--publish',`127.0.0.1:${hostPort}:8443`,'--tmpfs','/tmp:rw,noexec,nosuid,mode=1777','--mount',`type=bind,src=${profileConfig},dst=/etc/nginx/nginx.conf,readonly`,'--mount',`type=bind,src=${certDir},dst=/run/secrets/edge-nginx,readonly`,image).trim();
+  nginxId = docker('run','--detach','--read-only','--user','101:101','--network',network,'--network-alias','edge-nginx','--publish',`127.0.0.1:${hostPort}:8443`,'--tmpfs','/tmp:rw,noexec,nosuid,mode=1777','--mount',`type=bind,src=${profileConfig},dst=/etc/nginx/nginx.conf,readonly`,'--mount',`type=bind,src=${certDir},dst=/run/secrets/edge-nginx,readonly`,image).trim();
   await delay(900);
   const request = (path, { method='GET', headers={}, body, timeout=10_000, port=hostPort } = {}) => new Promise((resolveRequest, reject) => {
     const req = https.request({ hostname:'127.0.0.1', port, path, method, headers, ca:readFileSync(join(certDir,'ca.crt')), servername:'edge-fixture.invalid', rejectUnauthorized:true, timeout }, res => {
@@ -79,6 +80,12 @@ try {
     assert.equal(problem.correlationId,response.headers['x-correlation-id']);
     assert.ok(Array.isArray(problem.errors));
   };
+  const publicStatusPaths = ['/nginx_status', '/health/ready', '/metrics'];
+  for (const path of publicStatusPaths) assert.equal((await request(path)).status,404,`${path} must remain private on public TLS`);
+  const privateStatus = docker('run','--rm','--network',network,'--entrypoint','node',registry.nodeImage,'-e',
+    'fetch("http://edge-nginx:8081/nginx_status").then(async response=>{const body=await response.text();if(response.status!==200||!/^Active connections: \\d+\\s+server accepts handled requests\\s+\\d+\\s+\\d+\\s+\\d+\\s+Reading: \\d+\\s+Writing: \\d+\\s+Waiting: \\d+\\s*$/u.test(body)){console.error(JSON.stringify({status:response.status,body}));process.exit(1)}process.stdout.write(body)}).catch(error=>{console.error(error);process.exit(2)})');
+  assert.match(privateStatus, /^Active connections: \d+/u,
+    'the private stub_status endpoint must be readable and expose only bounded native counters');
   if(process.env.NGINX_TLS_NEGATIVE==='1') {
   const variant = (port, { secrets=certDir, config, snippet, net=network } = {}) => {
     const args=['run','--detach','--read-only','--user','101:101','--network',net,'--publish',`127.0.0.1:${port}:8443`,'--tmpfs','/tmp:rw,noexec,nosuid,mode=1777','--mount',`type=bind,src=${config ?? profileConfig},dst=/etc/nginx/nginx.conf,readonly`,'--mount',`type=bind,src=${secrets},dst=/run/secrets/edge-nginx,readonly`];
@@ -175,10 +182,33 @@ try {
   const slow=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=slow','idempotency-key':'fixture-slow'}});
   assert.equal(slow.status,503,'a stalled authorizer must time out before reaching the API');
   assert.equal(JSON.parse(slow.body).code,'AUTHORIZER_UNAVAILABLE');
-  const allowed=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow; __Host-coffee-csrf=csrf-safe; tracking=raw-cookie-marker','x-actor-context':'forged-client','x-correlation-id':'00000000-0000-4000-8000-000000000000','authorization':'Bearer forged','origin':'https://evil.invalid','x-csrf-token':'browser-csrf','content-type':'application/json','idempotency-key':'fixture-1','if-match':'"7"'},body:'{"x":1}'});
+  const validTraceparent='00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
+  const authLogStart=(await readFile(requestsFile,'utf8')).trim().split('\n').filter(Boolean).length;
+  const allowed=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow; __Host-coffee-csrf=csrf-safe; tracking=raw-cookie-marker','x-actor-context':'forged-client','x-correlation-id':'00000000-0000-4000-8000-000000000000','authorization':'Bearer forged','origin':'https://evil.invalid','x-csrf-token':'browser-csrf','content-type':'application/json','idempotency-key':'fixture-1','if-match':'"7"',traceparent:validTraceparent},body:'{"x":1}'});
   assert.equal(allowed.status,200,'204 + nonempty assertion must reach API');
   const api=JSON.parse(allowed.body); assert.equal(api.role,'api'); assert.equal(api.method,'POST'); assert.equal(api.body,'{"x":1}'); assert.equal(api.headers['x-actor-context'],'fixture-actor-17'); assert.notEqual(api.headers['x-actor-context'],'forged-client'); assert.equal(api.headers.cookie,undefined); assert.equal(api.headers.authorization,undefined); assert.equal(api.headers.origin,undefined); assert.equal(api.headers['x-csrf-token'],undefined); assert.equal(api.headers['idempotency-key'],'fixture-1'); assert.equal(api.headers['if-match'],'"7"'); assert.equal(api.clientAuthorized,true);
   assert.equal(api.headers['x-correlation-id'],'123e4567-e89b-42d3-a456-426614174000','API receives only the correlation bound to Edge assertion');
+  assert.equal(api.headers.traceparent,validTraceparent,'API receives the validated W3C trace context');
+  const accessRecord=docker('logs',nginxId).split('\n').filter(line=>line.startsWith('{"method"')).map(JSON.parse)
+    .find(record=>record.correlation_id==='123e4567-e89b-42d3-a456-426614174000'&&record.traceparent===validTraceparent);
+  assert.deepEqual(Object.keys(accessRecord ?? {}).sort(),['correlation_id','duration_seconds','method','request_bytes','request_id','response_bytes','route','status','traceparent'].sort(),
+    'nginx access log contains only bounded request metadata');
+  assert.equal(accessRecord.route,'client.orders');
+  assert.equal(typeof accessRecord.duration_seconds,'number');
+  const authorized = (await readFile(requestsFile,'utf8')).trim().split('\n').filter(Boolean).slice(authLogStart).map(JSON.parse)
+    .find(event => event.role === 'edge' && event.url === '/_edge/authorize');
+  assert.equal(authorized?.headers.traceparent,validTraceparent,'Edge authorization receives the same validated W3C trace context');
+  assert.equal(authorized?.headers['x-correlation-id'],'00000000-0000-4000-8000-000000000000','Edge may bind the validated client correlation to its signed assertion');
+  const zeroTraceId='00-00000000000000000000000000000000-00f067aa0ba902b7-01';
+  const zeroTraceLogStart=(await readFile(requestsFile,'utf8')).trim().split('\n').filter(Boolean).length;
+  const zeroTrace=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow',traceparent:zeroTraceId,'x-correlation-id':'invalid-client-correlation'}});
+  assert.equal(zeroTrace.status,200);
+  assert.equal(JSON.parse(zeroTrace.body).headers.traceparent,undefined,'all-zero W3C trace IDs are stripped before the business request');
+  const zeroTraceAuth=(await readFile(requestsFile,'utf8')).trim().split('\n').filter(Boolean).slice(zeroTraceLogStart).map(JSON.parse)
+    .find(event => event.role === 'edge' && event.url === '/_edge/authorize');
+  assert.equal(zeroTraceAuth?.headers.traceparent,undefined,'all-zero W3C trace IDs are stripped before Edge authorization');
+  assert.equal(zeroTraceAuth?.headers['x-correlation-id'],undefined,'malformed client correlation is stripped before Edge authorization');
+  assert.equal(docker('logs',nginxId).includes(zeroTraceId),false,'untrusted all-zero trace context is absent from native nginx logs');
   const denied=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=forbidden'}}); assert.equal(denied.status,403); assert.equal(JSON.parse(denied.body).code,'AUTHORIZATION_FORBIDDEN');
   assertTypedProblem(denied,'AUTHORIZATION_FORBIDDEN');
   assert.equal((await request('/_edge/authorize')).status,404); assert.equal((await request('/api/agent-v1/orders')).status,404);

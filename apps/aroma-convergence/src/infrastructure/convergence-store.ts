@@ -66,6 +66,9 @@ export function createAromaConvergenceStore(database: Database, options: AromaCo
     };
   };
   const command = (sql: string) => defineStatement<never, readonly SqlScalar[]>(database, sql);
+  const unresolvedUnknown = defineStatement<Readonly<{count: string}>, readonly SqlScalar[]>(database,
+    "SELECT count(*)::text AS count FROM orders.mutation_reservations WHERE cart_scope_ref='aroma-primary' AND state='UnknownOutcome' AND resolved_at IS NULL");
+  let telemetryReading = false;
   const lock = statement("SELECT true AS locked FROM (SELECT pg_advisory_xact_lock(hashtext('orders:aroma-primary'))) AS acquired", decodeConvergenceLockRow);
   const clock = statement(`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS now,
     floor(extract(epoch FROM clock_timestamp())*1000)::bigint::text AS ms`, decodeConvergenceClockRow);
@@ -585,7 +588,18 @@ export function createAromaConvergenceStore(database: Database, options: AromaCo
     }
   }
   async function runOnce(gateway: Gateway, signal: AbortSignal): Promise<"idle" | "attempted"> {
-    return telemetry ? telemetry.observe("aroma.convergence.attempt", () => runOnceCore(gateway, signal)) : runOnceCore(gateway, signal);
+    try {
+      return await (telemetry ? telemetry.observe("aroma.convergence.attempt", () => runOnceCore(gateway, signal)) : runOnceCore(gateway, signal));
+    } finally {
+      if (telemetry && !telemetryReading && !signal.aborted) {
+        telemetryReading = true;
+        // Один diagnostic read не задерживает business loop и не ставит запросы в очередь.
+        void withTransaction(database, {mode: "background", signal}, tx => unresolvedUnknown(tx, []))
+          .then(result => telemetry.unresolvedUnknown(Number(result.rows[0]?.count)))
+          .catch(() => telemetry.unresolvedUnknown(undefined))
+          .finally(() => {telemetryReading = false;});
+      }
+    }
   }
   return {recover, handleWake, runOnce};
 }

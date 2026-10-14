@@ -44,6 +44,9 @@ inputs, а не только историческим #60;
 #4 остаётся blocked до merge/handoff #119. Остальные сохраняют свои prerequisites.
 Observability не блокирует business implementation; Operations принимает реальные
 instrumentation points после #12 и обеспечивает полный G14 до #13.
+Единственный evidence path — `pnpm test:observability` и
+`evidence/handoffs/issue-64.yaml`; наличие producer/config не заменяет PASS G14.
+[Runbook Operations](../operations/observability.md) описывает границы проверки.
 
 #136 поставляет только ADR, UX-макеты и согласованные нормативные документы.
 #137 после принятого #136 materialize-ит `packages/platform-ui` /

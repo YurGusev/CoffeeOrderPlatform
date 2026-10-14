@@ -76,6 +76,15 @@ const ROOT_DEV_DEPENDENCIES = Object.freeze({
 });
 
 const DEPENDENCY_TO_MANIFEST_KEY = Object.freeze({
+  "pino": "pino",
+  "@opentelemetry/api": "opentelemetryApi",
+  "@opentelemetry/sdk-trace-base": "opentelemetrySdkTraceBase",
+  "@opentelemetry/sdk-metrics": "opentelemetrySdkMetrics",
+  "@opentelemetry/resources": "opentelemetryResources",
+  "@opentelemetry/context-async-hooks": "opentelemetryContextAsyncHooks",
+  "@opentelemetry/exporter-trace-otlp-http": "opentelemetryExporterTraceOtlpHttp",
+  "@opentelemetry/exporter-metrics-otlp-http": "opentelemetryExporterMetricsOtlpHttp",
+
   "@confluentinc/kafka-javascript": "confluentKafkaJavaScript",
   "@fastify/swagger": "fastifySwagger",
   "@hey-api/openapi-ts": "heyApiOpenapiTs",
@@ -196,6 +205,7 @@ function allDependencies(manifest) {
 }
 
 async function checkPackageManifests(root) {
+  const bom = await readJson(join(root, "config/toolchain-versions.json"));
   const manifestPaths = [
     join(root, "package.json"),
     ...(await walk(join(root, "apps"))),
@@ -239,7 +249,7 @@ async function checkPackageManifests(root) {
       checkDependencySpec(value, `${pathLabel}:${name}`);
       const manifestKey = DEPENDENCY_TO_MANIFEST_KEY[name];
       if (manifestKey)
-        exact(value, EXPECTED[manifestKey], `${pathLabel}:${name}`);
+        exact(value, bom[manifestKey], `${pathLabel}:${name}`);
       if (name === "pg-copy-streams" && pathLabel !== "packages/platform-database/package.json")
         fail("DATABASE-COPY-SCOPE", `${pathLabel}: COPY driver belongs to platform-database`);
       if (name === "typescript") {
@@ -378,6 +388,13 @@ async function checkManifest(root) {
   if (!/^[0-9a-f]{64}$/.test(manifest.librdkafkaPatchSha256??"") ||
       createHash("sha256").update(patch).digest("hex")!==manifest.librdkafkaPatchSha256)
     fail("LIBRDKAFKA-PATCH","native source patch must match config/toolchain-versions.json.librdkafkaPatchSha256");
+  for (const key of ['opentelemetryApi', 'pino', 'opentelemetrySdkTraceBase', 'opentelemetrySdkMetrics', 'opentelemetryResources', 'opentelemetryContextAsyncHooks', 'opentelemetryExporterTraceOtlpHttp', 'opentelemetryExporterMetricsOtlpHttp']) {
+    if (!/^\d+\.\d+\.\d+$/.test(manifest[key] ?? '')) fail('TELEMETRY-BOM', `${key}: required exact BOM ref`);
+  }
+  if (!/^[0-9a-f]{64}$/.test(manifest.bootstrapProbeSha256 ?? '')) fail('TELEMETRY-BOM', 'bootstrapProbeSha256: required static probe hash');
+  for (const key of ['otelCollectorImage', 'openObserveImage']) {
+    if (!/^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$/.test(manifest[key] ?? '')) fail('TELEMETRY-BOM', `${key}: required immutable image ref`);
+  }
   const foundation = await readJson(
     join(root, "platform/runtime-foundation-decision.json"),
   );

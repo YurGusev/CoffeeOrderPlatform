@@ -2,6 +2,8 @@ import {canonicalJson, canonicalRequestHash, type JsonValue} from "@coffee-platf
 import {withTransaction, quoteIdentifier, type Database, type QueryResult, type SqlScalar, type Transaction} from "@coffee-platform/database";
 import {defineStatement} from "@coffee-platform/database/owner";
 import {toInstant} from "@coffee-platform/platform-time";
+import {context, metrics, SpanKind, SpanStatusCode, trace, type MeterProvider, type ObservableGauge} from "@opentelemetry/api";
+
 
 export type OutboxMessage = Readonly<{
   messageId: string;
@@ -57,7 +59,29 @@ export type OutboxStore = Readonly<{
   claim(transaction: Transaction, nowMs: number, leaseOwner: string, limit: number, leaseMs: number): Promise<readonly OutboxClaim[]>;
   finalize(transaction: Transaction, messageId: string, leaseOwner: string, leaseToken: bigint | number): Promise<void>;
   fail(transaction: Transaction, messageId: string, leaseOwner: string, leaseToken: bigint | number, nextAttemptAtMs: number, lastError: string, permanent: boolean): Promise<OutboxState>;
+  oldestUnpublishedAgesMs?(transaction: Transaction, nowMs: number): Promise<readonly Readonly<{topic: string; ageMs: number}>[] | null>;
 }>;
+
+const outboxAgeValues = new Map<string, Readonly<{owner: string; topic: string; ageMs: number}>>();
+const outboxAgeGenerations = new Map<string, number>();
+let outboxMetricProvider: MeterProvider | undefined;
+let outboxAgeGauge: ObservableGauge | undefined;
+
+function initializeOutboxMetrics(): void {
+  const provider = metrics.getMeterProvider();
+  if (provider === outboxMetricProvider) return;
+  outboxAgeValues.clear();
+  outboxAgeGenerations.clear();
+  outboxMetricProvider = provider;
+  outboxAgeGauge = provider.getMeter("coffee-platform.outbox").createObservableGauge("messaging.outbox.oldest_unpublished.age", {unit: "ms"});
+  outboxAgeGauge.addCallback(observer => {
+    for (const value of outboxAgeValues.values()) observer.observe(value.ageMs, {"db.owner": value.owner, "messaging.destination.name": value.topic});
+  });
+}
+
+function outboxMetricScope(owner: string, topics: readonly string[]): string {
+  return `${owner}\u0000${JSON.stringify(topics)}`;
+}
 
 type OutboxRow = Readonly<{
   envelope_bytes?: unknown;
@@ -261,21 +285,31 @@ export type SqlOutboxStoreOptions = Readonly<{schema?: string; table?: string; e
 export class SqlOutboxStore implements OutboxStore {
   private readonly envelopeBytes: boolean;
   private readonly claimTopics: string | undefined;
+  public readonly metricOwner: string;
+  public readonly metricTopics: readonly string[] | undefined;
   private readonly insert: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<Readonly<{message_id: string}>>>;
   private readonly readById: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<ExistingMessageRow>>;
   private readonly readSequence: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<Readonly<{aggregate_sequence: unknown}>>>;
   private readonly claimStatement: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<OutboxRow>>;
   private readonly finalizeStatement: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<Readonly<{message_id: string}>>>;
   private readonly failStatement: (transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<Readonly<{state: string}>>>;
+  private readonly oldestUnpublishedAgesStatement: ((transaction: Transaction, parameters: readonly SqlScalar[]) => Promise<QueryResult<Readonly<{topic: string; age_ms: unknown}>>>) | undefined;
 
   public constructor(database: Database, options: SqlOutboxStoreOptions = {}) {
     const qualified = `${quoteIdentifier(options.schema ?? "public")}.${quoteIdentifier(options.table ?? "outbox_messages")}`;
     this.envelopeBytes = options.envelopeBytes === true;
+    this.metricOwner = options.schema ?? "public";
+    this.metricTopics = options.topics === undefined ? undefined : Object.freeze([...options.topics]);
     if (options.topics !== undefined) {
       if (!Array.isArray(options.topics) || options.topics.length === 0 || new Set(options.topics).size !== options.topics.length) invalid("Outbox topics некорректны");
       for (const topic of options.topics) boundedString(topic, "topic", 255);
     }
     this.claimTopics = options.topics === undefined ? undefined : JSON.stringify(options.topics);
+    this.oldestUnpublishedAgesStatement = this.claimTopics === undefined ? undefined : defineStatement(database, `SELECT configured.topic,
+        COALESCE((extract(epoch FROM (to_timestamp($1 / 1000.0) - min(outbox.occurred_at))) * 1000)::bigint, 0) AS age_ms
+      FROM jsonb_array_elements_text($2::jsonb) AS configured(topic)
+      LEFT JOIN ${qualified} AS outbox ON outbox.topic = configured.topic AND outbox.state IN ('Pending', 'Publishing')
+      GROUP BY configured.topic`);
     const byteColumns = this.envelopeBytes ? ", envelope_bytes, envelope_hash" : "";
     const byteValues = this.envelopeBytes ? ", $16::bytea, $17::char(64)" : "";
     this.insert = defineStatement(database, `INSERT INTO ${qualified}
@@ -365,6 +399,18 @@ export class SqlOutboxStore implements OutboxStore {
     if (result.rowCount !== 1 || (state !== "Pending" && state !== "Quarantined")) throw new OutboxError("OUTBOX_LEASE_INVALID", "Outbox lease недействителен, истёк или fence token устарел");
     return state;
   }
+
+  public async oldestUnpublishedAgesMs(transaction: Transaction, nowMs: number): Promise<readonly Readonly<{topic: string; ageMs: number}>[] | null> {
+    nonNegativeInteger(nowMs, "nowMs");
+    // An unscoped store cannot prove which topic series are known and stays unknown.
+    if (this.oldestUnpublishedAgesStatement === undefined || this.claimTopics === undefined) return null;
+    const result = await this.oldestUnpublishedAgesStatement(transaction, [nowMs, this.claimTopics]);
+    return result.rows.map(row => {
+      const ageMs = Number(row.age_ms);
+      if (!Number.isSafeInteger(ageMs) || ageMs < 0) throw new OutboxError("OUTBOX_RECORD_INVALID", "некорректное поле Outbox age_ms");
+      return {topic: row.topic, ageMs};
+    });
+  }
 }
 
 function sameMessage(row: ExistingMessageRow, message: OutboxMessage, payloadHash: string): boolean {
@@ -406,9 +452,43 @@ export async function relayOutboxBatch(store: OutboxStore, database: Database, s
   positiveInteger(options.policy.retry.maxMs, "policy.retry.maxMs");
   positiveInteger(options.policy.retry.maxAttempts, "policy.retry.maxAttempts");
   if (options.policy.retry.baseMs > options.policy.retry.maxMs) invalid("policy.retry baseMs должен быть не больше maxMs");
+  const span = trace.getTracer("coffee-platform.outbox").startSpan("Outbox.poll", {kind: SpanKind.INTERNAL});
+  try {
   const txOptions = {mode: "background" as const, ...(options.signal === undefined ? {} : {signal: options.signal})};
+  initializeOutboxMetrics();
+  if (store.oldestUnpublishedAgesMs !== undefined) {
+    const owner = store instanceof SqlOutboxStore ? store.metricOwner : "unknown";
+    const topics = store instanceof SqlOutboxStore ? store.metricTopics : undefined;
+    const scope = topics === undefined ? undefined : outboxMetricScope(owner, topics);
+    const generation = scope === undefined ? undefined : (outboxAgeGenerations.get(scope) ?? 0) + 1;
+    if (scope !== undefined && generation !== undefined) {
+      outboxAgeGenerations.set(scope, generation);
+      for (const topic of topics ?? []) outboxAgeValues.delete(`${owner}\u0000${topic}`);
+    }
+    try {
+      const ages = await withTransaction(database, txOptions, transaction => store.oldestUnpublishedAgesMs!(transaction, options.nowMs));
+      if (ages !== null && scope !== undefined && generation !== undefined && outboxAgeGenerations.get(scope) === generation) {
+        for (const {topic, ageMs} of ages) outboxAgeValues.set(`${owner}\u0000${topic}`, {owner, topic, ageMs});
+        span.setAttribute("messaging.outbox.oldest_unpublished_age.result", "recorded");
+      } else span.setAttribute("messaging.outbox.oldest_unpublished_age.result", "unknown");
+    } catch {
+      // A diagnostic query must not change the relay outcome.
+      if (scope !== undefined && generation !== undefined && outboxAgeGenerations.get(scope) === generation) {
+        for (const topic of topics ?? []) outboxAgeValues.delete(`${owner}\u0000${topic}`);
+      }
+      span.setAttribute("messaging.outbox.oldest_unpublished_age.result", "unknown");
+    }
+  } else span.setAttribute("messaging.outbox.oldest_unpublished_age.result", "unknown");
   const claims = await withTransaction(database, txOptions, transaction => store.claim(transaction, options.nowMs, options.leaseOwner, options.policy.maxInFlight, options.policy.leaseMs));
   const processClaim = async (claim: OutboxClaim): Promise<OutboxRelayResult> => {
+    const carrier = claim.message.traceparent;
+    let parent = context.active();
+    if (/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(carrier) && carrier.slice(3, 35) !== "0".repeat(32) && carrier.slice(36, 52) !== "0".repeat(16)) {
+      parent = trace.setSpanContext(parent, {traceId: carrier.slice(3, 35), spanId: carrier.slice(36, 52), traceFlags: Number.parseInt(carrier.slice(53), 16), isRemote: true});
+    }
+    const delivery = trace.getTracer("coffee-platform.outbox").startSpan("Outbox.relay", {kind: SpanKind.PRODUCER, attributes: {"messaging.destination.name": claim.message.topic}}, parent);
+    try {
+      return await context.with(trace.setSpan(parent, delivery), async () => {
     if (options.signal?.aborted) return {claimed: 0, published: 0, failed: 0, unknown: 0, quarantined: 0};
     const timeout = new AbortController();
     const signal = options.signal === undefined ? timeout.signal : AbortSignal.any([options.signal, timeout.signal]);
@@ -417,6 +497,7 @@ export async function relayOutboxBatch(store: OutboxStore, database: Database, s
     const timeoutPromise = new Promise<OutboxSendResult>((resolve) => {timer = setTimeout(() => {timeout.abort(); resolve({kind: "unknown"});}, options.policy.sendTimeoutMs);});
     const outcome = await Promise.race([sendPromise, timeoutPromise]);
     if (timer !== undefined) clearTimeout(timer);
+    delivery.setAttribute("messaging.outbox.result", outcome.kind);
     if (outcome.kind === "ack") {
       await withTransaction(database, txOptions, transaction => store.finalize(transaction, claim.message.messageId, claim.leaseOwner, claim.leaseToken));
       return {claimed: 0, published: 1, failed: 0, unknown: 0, quarantined: 0};
@@ -428,9 +509,16 @@ export async function relayOutboxBatch(store: OutboxStore, database: Database, s
     const error = outcome.error === undefined ? "outbox send failed" : outcome.error.slice(0, 512);
     const state = await withTransaction(database, txOptions, transaction => store.fail(transaction, claim.message.messageId, claim.leaseOwner, claim.leaseToken, options.nowMs + delay, error, permanent));
     return {claimed: 0, published: 0, failed: 1, unknown: 0, quarantined: state === "Quarantined" ? 1 : 0};
+      });
+    } catch (error) {
+      delivery.setStatus({code: SpanStatusCode.ERROR});
+      throw error;
+    } finally {
+      delivery.end();
+    }
   };
   const settled = await Promise.allSettled(claims.map(processClaim));
-  return settled.reduce((total, result) => {
+  const result = settled.reduce((total, result) => {
     if (result.status === "fulfilled") return {
       claimed: total.claimed,
       published: total.published + result.value.published,
@@ -440,4 +528,14 @@ export async function relayOutboxBatch(store: OutboxStore, database: Database, s
     };
     return {...total, unknown: total.unknown + 1};
   }, {claimed: claims.length, published: 0, failed: 0, unknown: 0, quarantined: 0});
+  span.setAttributes({"messaging.outbox.claimed": result.claimed, "messaging.outbox.published": result.published, "messaging.outbox.failed": result.failed, "messaging.outbox.unknown": result.unknown, "messaging.outbox.quarantined": result.quarantined});
+  span.setAttribute("messaging.outbox.result", result.unknown > 0 ? "unknown" : result.failed > 0 ? "failed" : "completed");
+  return result;
+  } catch (error) {
+    span.setAttribute("messaging.outbox.result", "failed");
+    span.setStatus({code: SpanStatusCode.ERROR});
+    throw error;
+  } finally {
+    span.end();
+  }
 }

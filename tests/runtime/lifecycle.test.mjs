@@ -8,10 +8,13 @@ import {fileURLToPath} from "node:url";
 import {join} from "node:path";
 import {tmpdir} from "node:os";
 import test from "node:test";
+import {context as otelContext, metrics, trace} from "@opentelemetry/api";
+import {createServer as createHttpServer} from "node:http";
 import {load as parseYaml} from "js-yaml";
 import {RUNTIME_NAMES, loadPlatformConfig} from "../../packages/platform-config/src/index.ts";
 import {
   assertScopedSecrets,
+  completeRuntimeRequestTelemetry,
   configuredRuntimeIdentity,
   createRuntime,
   RuntimeError,
@@ -23,6 +26,7 @@ import {nowInstant} from "../../packages/platform-time/src/index.ts";
 import {readRuntimeHealthStatuses, runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
 import {parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../../packages/platform-security/src/index.ts";
 import {checkInternalApiReady} from "../../apps/orders-service/src/infrastructure/internal-api-readiness.ts";
+import {createTelemetryResource, telemetryDiagnostics} from "../../packages/platform-observability/dist/index.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const health = {
@@ -139,6 +143,266 @@ function runHealthcheckChild(environment) {
     child.once("close", (code, signal) => resolve({code, signal, output}));
   });
 }
+
+void test("runtime continues valid W3C parent and async request context into a server span", async (t) => {
+  let exportedSpans = "";
+  let exportedMetrics = Buffer.alloc(0);
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.resume();
+    request.on("end", () => {
+      const body = Buffer.concat(chunks);
+      if (request.url === "/v1/traces") exportedSpans += body.toString();
+      if (request.url === "/v1/metrics") exportedMetrics = Buffer.concat([exportedMetrics, body]);
+      response.writeHead(200, {"content-type": "application/x-protobuf"});
+      response.end();
+    });
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const collectorAddress = collector.address();
+  assert.ok(collectorAddress && typeof collectorAddress === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development",
+    namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${collectorAddress.port}`, queueCapacity: 16, batchSize: 4, batchTimeoutMs: 10, exportTimeoutMs: 100},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 4, batchIntervalMs: 60000, exportTimeoutMs: 100, diagnosticIntervalMs: 60000, flushTimeoutMs: 500},
+  }, "otel-context-test", "test-token");
+  const traceId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const parentSpanId = "bbbbbbbbbbbbbbbb";
+  let observed;
+  const app = await createRuntime(identity("otel-context-test", {
+    resources: [telemetry],
+    configure: (instance) => {
+      instance.get("/otel", async (request) => {
+        await new Promise(resolve => setTimeout(resolve, 1));
+        const active = trace.getSpan(otelContext.active())?.spanContext();
+        observed = {active, correlationId: request.correlationContext?.correlationId};
+        trace.getTracer("runtime-context-test").startActiveSpan("safe.operation", span => {
+          span.setAttribute("customer.email", "otel-private-canary");
+          span.setAttribute("db.statement", "SELECT 'otel-private-canary'");
+          span.addEvent("exception", {"exception.message": "otel-private-canary", "exception.stacktrace": "otel-private-canary"});
+          span.end();
+        });
+        return {traceId: active?.traceId};
+      });
+    },
+  }));
+  await app.runtimeController.start();
+  t.after(async () => {
+    await app.runtimeController.closeRuntime("SIGTERM");
+    await new Promise(resolve => collector.close(resolve));
+  });
+  const response = await app.inject({method: "GET", url: "/otel", headers: {
+    traceparent: `00-${traceId}-${parentSpanId}-01`,
+    "x-correlation-id": "11111111-1111-4111-8111-111111111111",
+  }});
+  assert.equal((await app.inject("/health/ready")).statusCode, 200);
+  assert.equal((await app.inject("/missing")).statusCode, 404);
+  assert.equal(response.statusCode, 200);
+  assert.equal(observed.active.traceId, traceId);
+  assert.notEqual(observed.active.spanId, parentSpanId);
+  assert.equal(observed.correlationId, "11111111-1111-4111-8111-111111111111");
+  assert.equal(response.json().traceId, traceId);
+  await app.runtimeController.closeRuntime("SIGTERM");
+  await new Promise(resolve => collector.close(resolve));
+  assert.ok(exportedSpans.length > 0, "server span and nested test span were exported");
+  assert.equal(exportedSpans.includes("otel-private-canary"), false, "span attributes and events are redacted before export");
+  for (const metric of ["runtime_http_requests_total", "runtime_http_request_duration_ms", "runtime_ready", "runtime_process_start_time_seconds", "telemetry_log_records_dropped_total", "telemetry_records_dropped_total", "telemetry_export_failures_total", "telemetry_shutdown_losses_total"])
+    assert.ok(exportedMetrics.includes(Buffer.from(metric)), `OTLP export contains ${metric}`);
+  for (const attribute of ["http.request.method", "http.route", "http.response.status_class", "/otel", "2xx", "4xx"])
+    assert.ok(exportedMetrics.includes(Buffer.from(attribute)), `request metrics include ${attribute}`);
+});
+void test("telemetry span queue drops at its configured bound and records exporter failures", async (t) => {
+  const exportRequests = [];
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {
+      exportRequests.push({path: request.url, body: Buffer.concat(chunks)});
+      setTimeout(() => {response.writeHead(503); response.end();}, 25);
+    });
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development",
+    namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 1, maxRecordBytes: 1024, batchSize: 1, batchIntervalMs: 60000, exportTimeoutMs: 100, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "otel-bounds-test", "test-token");
+  const warnings = [];
+  t.mock.method(process, "emitWarning", (...args) => {warnings.push(args);});
+  const before = telemetryDiagnostics();
+  telemetry.start();
+  const tracer = trace.getTracer("otel-bounds-test");
+  for (let index = 0; index < 3; index++) tracer.startSpan(`bounded.${index}`).end();
+  const oversized = tracer.startSpan("oversized");
+  oversized.setAttribute("token", "span-warning-private-canary");
+  oversized.setAttribute("safe_attribute", "x".repeat(2_000));
+  oversized.end();
+  await telemetry.stop(new AbortController().signal);
+  await new Promise(resolve => collector.close(resolve));
+  const after = telemetryDiagnostics();
+  assert.ok(after.dropped >= before.dropped + 2);
+  assert.ok(after.exportFailures >= before.exportFailures + 1);
+  assert.equal(after.serializationRejected, before.serializationRejected + 1);
+  assert.ok(after.queueOverflows >= before.queueOverflows + 2);
+  assert.equal(warnings.length, 1, "span drops and the exporter failure share the configured diagnostic rate limit");
+  assert.equal(warnings[0][1]?.code, "OTEL_SPAN_DROPPED");
+  assert.equal(warnings.some(args => args.map(String).join(" ").includes("span-warning-private-canary")), false,
+    "diagnostics never include dropped span attributes");
+  assert.ok(exportRequests.length > 0);
+  assert.equal(exportRequests.filter(request => request.path === "/v1/traces").length, 1,
+    "only the single in-flight span batch is sent");
+  assert.equal(exportRequests.every(request => request.path === "/v1/traces" || request.path === "/v1/metrics"), true,
+    "telemetry exports only trace batches and metrics, never diagnostics as a separate payload");
+  assert.equal(exportRequests.some(request => request.body.includes(Buffer.from("span-warning-private-canary"))), false,
+    "dropped span contents are never exported");
+  t.after(() => new Promise(resolve => collector.close(resolve)));
+});
+
+void test("telemetry preserves a final diagnostic when bounded shutdown drops an in-flight span", async () => {
+  const collector = createHttpServer((_request, response) => {
+    response.writeHead(200, {"content-type": "application/x-protobuf", connection: "close"});
+    response.end();
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 16, batchIntervalMs: 60000, exportTimeoutMs: 1000, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "otel-shutdown-loss-test", "test-token");
+  const before = telemetryDiagnostics();
+  telemetry.start();
+  trace.getTracer("otel-shutdown-loss-test").startSpan("shutdown.loss.probe").end();
+  const shutdown = new AbortController();
+  shutdown.abort(new Error("bounded shutdown probe"));
+  await telemetry.stop(shutdown.signal);
+  await new Promise(resolve => collector.close(resolve));
+  assert.equal(telemetryDiagnostics().shutdownLoss, before.shutdownLoss + 1);
+});
+
+void test("runtime owner metric bridge exports fixed gauges and counters while filtering unbounded attributes", async (t) => {
+  const payloads = [];
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {payloads.push(Buffer.concat(chunks)); response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();});
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development",
+    namespace: "coffee-platform", releaseDigest: "test", collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 4, batchIntervalMs: 60000, exportTimeoutMs: 500, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "otel-owner-metrics-test", "test-token", () => [
+    "coffee_realtime_connections 3",
+    "coffee_realtime_invalidation_dropped_total 2",
+    "coffee_realtime_connections{entity=\"ord_metric_canary\"} 90",
+    "coffee_aroma_mutation_calls_total{action=\"remove\"} 4",
+    "coffee_aroma_mutation_calls_total{action=\"order_ref_canary\"} 90",
+    "coffee_aroma_unknown_outcomes_current 2",
+  ]);
+  t.after(async () => {if (collector.listening) await new Promise(resolve => collector.close(resolve));});
+  telemetry.start();
+  metrics.getMeter("metric-attribute-view-test").createObservableGauge("metric.attribute.view.canary").addCallback(result => {
+    result.observe(1, {entity: "metric_entity_canary", "orders.result": "success"});
+  });
+  await telemetry.stop(new AbortController().signal);
+  await new Promise(resolve => collector.close(resolve));
+  const payload = Buffer.concat(payloads);
+  for (const name of ["coffee_realtime_connections", "coffee_realtime_invalidation_dropped_total", "coffee_aroma_mutation_calls_total", "coffee_aroma_unknown_outcomes_current", "metric.attribute.view.canary", "runtime_process_rss_bytes", "runtime_event_loop_delay_p95_ms", "runtime_process_start_time_seconds", "telemetry_log_records_dropped_total", "telemetry_records_dropped_total", "telemetry_export_failures_total", "telemetry_shutdown_losses_total"])
+    assert.ok(payload.includes(Buffer.from(name)), `OTLP export contains ${name}`);
+  for (const secret of ["ord_metric_canary", "order_ref_canary", "metric_entity_canary", "entity"])
+    assert.equal(payload.includes(Buffer.from(secret)), false, `${secret} is excluded from OTLP`);
+  assert.ok(payload.includes(Buffer.from("deployment.environment")) && payload.includes(Buffer.from("development")));
+  assert.ok(payload.includes(Buffer.from("remove")) && payload.includes(Buffer.from("orders.result")));
+});
+
+void test("telemetry starts before business resources and flushes their stop-time metrics and spans last", async (t) => {
+  const payloads = [];
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {payloads.push({path: request.url, body: Buffer.concat(chunks)}); response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();});
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 4, batchIntervalMs: 60000, exportTimeoutMs: 500, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "otel-resource-order-test", "test-token");
+  const owner = {
+    name: "business-start-probe",
+    start() {metrics.getMeter("business-start-probe").createCounter("business.start.counter").add(1);},
+    stop() {
+      metrics.getMeter("business-stop-probe").createCounter("business.stop.counter").add(1);
+      const span = trace.getTracer("business-stop-probe").startSpan("business.shutdown.flush.probe");
+      span.end();
+    },
+    destroy() {},
+  };
+  t.after(async () => {if (collector.listening) await new Promise(resolve => collector.close(resolve));});
+  const app = await startApp(identity("telemetry-order-test", {resources: [telemetry, owner]}));
+  await stopApp(app);
+  await new Promise(resolve => collector.close(resolve));
+  assert.ok(payloads.some(({path, body}) => path === "/v1/metrics" && body.includes(Buffer.from("business.stop.counter"))));
+  assert.ok(payloads.some(({path, body}) => path === "/v1/metrics" && body.includes(Buffer.from("business.start.counter"))));
+  assert.ok(payloads.some(({path, body}) => path === "/v1/traces" && body.includes(Buffer.from("business.shutdown.flush.probe"))));
+});
+
+void test("SSE server span is exported at handshake while its stream stays open", async (t) => {
+  let exportedSpans = Buffer.alloc(0);
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {exportedSpans = Buffer.concat([exportedSpans, Buffer.concat(chunks)]); response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();});
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const collectorAddress = collector.address();
+  assert.ok(collectorAddress && typeof collectorAddress === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${collectorAddress.port}`},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 1, batchIntervalMs: 60000, exportTimeoutMs: 500, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "sse-span-handshake-test", "test-token");
+  const app = await startApp(identity("sse-span-handshake-test", {
+    resources: [telemetry],
+    configure(instance) {
+      instance.get("/events", (request, reply) => {
+        reply.hijack();
+        reply.raw.writeHead(200, {"Content-Type": "text/event-stream; charset=utf-8"});
+        reply.raw.write("event: stream-ready.v1\n\n");
+        completeRuntimeRequestTelemetry(request, 200);
+      });
+    },
+  }));
+  const port = addressOf(app).port;
+  const response = await new Promise((resolve, reject) => {
+    const request = httpRequest({host: "127.0.0.1", port, path: "/events"}, incoming => resolve({request, incoming}));
+    request.once("error", reject);
+    request.end();
+  });
+  t.after(async () => {
+    response.request.destroy();
+    response.incoming.destroy();
+    await stopApp(app);
+    if (collector.listening) await new Promise(resolve => collector.close(resolve));
+  });
+  await waitFor(() => exportedSpans.includes(Buffer.from("HTTP GET")));
+  assert.equal(response.incoming.complete, false, "the SSE response remains open after its request span is exported");
+  response.request.destroy();
+  response.incoming.destroy();
+  await stopApp(app);
+  await new Promise(resolve => collector.close(resolve));
+});
 
 void test("public Edge TLS accepts a browser client while internal TLS rejects a client without service identity", async (t) => {
   const material = await tlsMaterial(t);
@@ -1035,6 +1299,7 @@ void test("configured realtime shutdown is bounded by 20s without changing other
   const config = await loadPlatformConfig(join(root, "config/platform.yaml"), (text) => parseYaml(text, {json: true}));
   assert.equal(configuredRuntimeIdentity(config, "realtime-gateway").shutdownGraceMs, 20000);
   assert.equal(configuredRuntimeIdentity(config, "orders-service").shutdownGraceMs, config.platform.shutdownGraceMs);
+  assert.equal(configuredRuntimeIdentity(config, "orders-service").telemetryLogDiagnosticIntervalMs, config.telemetry.producer.diagnosticIntervalMs);
 });
 
 void test("configured roots preserve null deadlines for api-internal and realtime-gateway", async () => {
@@ -1186,6 +1451,8 @@ void test("runtime metrics endpoint appends bounded composition metrics", async 
   const response = await app.inject({method: "GET", url: "/metrics"});
   assert.equal(response.statusCode, 200);
   assert.match(response.body, /runtime_admission_rejected_total 0/);
+  for (const metric of ["runtime_event_loop_utilization", "runtime_event_loop_delay_p95_ms", "runtime_process_rss_bytes", "runtime_process_heap_used_bytes", "runtime_process_external_bytes", "runtime_process_array_buffers_bytes", "runtime_gc_pause_count_total", "runtime_gc_pause_total_ms"])
+    assert.match(response.body, new RegExp(`^${metric} `, "m"));
   assert.match(response.body, /aroma_gateway_safe_read_attempts_total 1/);
 });
 

@@ -160,6 +160,14 @@ restore каждой DB <=10m и совокупно <=30m на записанн�
 Владелец реализации — #64 (Operations), обязательный accepted
 predecessor #13. Он поставляет Collector/OpenObserve, exporters, alert evaluation
 и `pnpm test:observability`; #13 проверяет этот результат, а не создаёт backend.
+Handoff — `evidence/handoffs/issue-64.yaml`. В
+`evidence/observability/<run-id>/` обязательны `alert-transitions.json`,
+`correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`,
+`retention-result.json`, `runtime-health-matrix.json` и `result.json` с source,
+config/BOM/image digests. NOT_RUN/FAIL любого обязательного сценария сохраняет
+G14 закрытым. Внешние notifications запрещены. Единственная policy authority —
+`config/platform.yaml.telemetry`; [runbook](../operations/observability.md)
+не является вторым источником значений.
 Сквозной сценарий использует ограниченные по времени spans и W3C context/links;
 `orderRef` и correlation связывают долгоживущий order с несколькими traces.
 Бесконечный span на весь lifecycle заказа не требуется.
