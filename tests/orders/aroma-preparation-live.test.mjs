@@ -140,7 +140,7 @@ const product = () => ({product: ref("prd"), variant: ref("var"), offer: ref("of
 async function fixture(run, options = {}) {
   const {createAromaPreparationStore} = await import("../../apps/orders-aroma-preparation/dist/infrastructure/preparation-store.js");
   const {decodeAromaPreparationEnvelope} = await import("../../apps/orders-aroma-preparation/dist/application/messages.js");
-  const receipt = await withCatalogPostgres(async ({adminClient, port}) => {
+  const receipt = await withCatalogPostgres(async ({adminClient, port, container}) => {
     const passwords = new Map();
     for (const role of ROLES) {
       const password = randomBytes(24).toString("hex"); passwords.set(role, password);
@@ -265,11 +265,27 @@ async function fixture(run, options = {}) {
         [event.messageId,order,seq,saved.version,bytes,createHash("sha256").update(bytes).digest("hex"),JSON.stringify(event),JSON.stringify(event.payload),canonicalRequestHash(event),at,event.correlationId,trace]);
         return event;
       };
-      return await run({get store() {return store;},port,database: () => database, core,tx,query,read,deliver,restart,seed,card,current,observe,proof,acceptIntent,commits: () => commits});
+      const publisherConnection={owner:'orders-aroma-preparation',database:DATABASE,allowedDatabase:DATABASE,host:'127.0.0.1',port,user:ROLE,password:passwords.get(ROLE),ssl:false,pool,shutdownGraceMs:40000};
+      return await run({get store() {return store;},container,publisherConnection,port,database: () => database, core,tx,query,read,deliver,restart,seed,card,current,observe,proof,acceptIntent,commits: () => commits});
     } finally {if (database) await database.resource.stop(AbortSignal.timeout(5_000)); if (core) await core.resource.stop(AbortSignal.timeout(5_000)); await migrator.end();}
   });
   assert.equal(receipt.cleanup.containerRemoved,true);
 }
+
+for(const scenario of ['positive','private-eof','reauth'])void test(`preparation owner realtime vertical through served browser ${scenario}`,{timeout:900000,skip:process.env.COFFEE_DB_LIVE_PROOF!=='1'||process.env.COFFEE_REALTIME_OWNER_LIVE_PROOF!=='1'?'disposable PostgreSQL/native Kafka/served browser required':false},async()=>{
+  const {proveOwnerBrowser}=await import('../realtime/fixtures/owner-browser.mjs');
+  await fixture(async f=>{
+    await proveOwnerBrowser(f,{
+      scenario,
+      baseline:async()=>{const p=product();await f.deliver(mapping(p));const order=await f.seed([p]);await f.deliver(order.confirmed);const observation=await f.observe();await f.deliver(observation.changed);return {orderRef:order.order,observation};},
+      // Existing f.observe()/f.proof() helpers create source-event inputs; A
+      // and B pass through the real Inbox, which alone writes their persisted
+      // RealtimeInvalidated Outbox records. No realtime envelope/row is forged.
+      change:async()=>{const observation=await f.observe();await f.deliver(observation.changed);return observation;},
+      finish:async(_state,observation)=>{const proof=await f.proof(observation);await f.deliver(proof.changed);return proof;},
+    });
+  });
+});
 
 void test("preparation Desired/mapping/Inbox semantics on real runtime role", live, async t => {
   await fixture(async f => {
@@ -512,8 +528,23 @@ void test("preparation sole Card writer uses persisted terminal proof, not Kafka
       const inbox = (await f.read("SELECT state FROM orders.inbox_messages WHERE message_id=$1",[proof.changed.messageId]))[0]; assert.equal(inbox.state,"Processed");
       const history = (await f.read("SELECT projection FROM orders.order_aroma_projection_history WHERE order_ref=$1 AND projection_version=$2",[order.order,card.card_version]))[0];
       assert.equal(String(history.projection.projection_version),card.card_version);
-      const realtime = await f.read("SELECT owner_version,payload FROM orders.outbox_messages WHERE message_type='RealtimeInvalidated.v1' AND aggregate_ref=$1 AND owner_version=$2",[order.order,card.card_version]);
+      const realtime = await f.read("SELECT owner_version,payload,envelope,topic,partition_key,message_id FROM orders.outbox_messages WHERE message_type='RealtimeInvalidated.v1' AND aggregate_ref=$1 AND owner_version=$2",[order.order,card.card_version]);
       assert.equal(realtime.length,1); assert.equal(realtime[0].payload.ownerVersion,card.card_version); assert.equal(realtime[0].payload.subjectRef,order.order);
+      // Actual persisted owner output, not a hand-authored transport fixture.
+      const {decodeRealtimeEnvelope,RealtimeHub}=await import("../../apps/realtime-gateway/dist/index.js");
+      const {config}=await import("../realtime/helpers.mjs");
+      const owner=realtime[0];assert.equal(owner.envelope.aggregate.type,"Order");
+      assert.equal(owner.envelope.aggregate.version,card.card_version);
+      assert.equal(owner.envelope.payload.ownerVersion,exposed.projectionVersion);
+      assert.notEqual(owner.envelope.payload.ownerVersion,exposed.version,"projection hint version must not become command expectedVersion");
+      const record={topic:owner.topic,key:owner.partition_key,value:JSON.stringify(owner.envelope),headers:{messageId:owner.message_id},partition:0,offset:"0"};
+      assert.deepEqual(decodeRealtimeEnvelope(owner.envelope,record,config.maxEventDataBytes),owner.envelope);
+      const hub=new RealtimeHub(config),effects=[];
+      try{
+        await processKafkaRecord(record,{runtime:"realtime-gateway",groupId:"realtime-gateway-v1",topics:[owner.topic],leaseMs:30000,maxMessageBytes:1048576,signal:new AbortController().signal,
+          binding:hub.binding,quarantine:async()=>effects.push("quarantine"),commit:async()=>effects.push("offset")});
+        assert.deepEqual(effects,["offset"]);assert.equal(hub.stats().ringRecords,1);
+      }finally{await hub.shutdown();}
     });
     await t.test("same terminal duplicate and recreated process are material no-ops", async () => {
       const before = await f.card(order.order); await f.deliver(proof.changed); await f.restart(); await f.store.recover(new AbortController().signal);
@@ -536,10 +567,26 @@ void test("preparation sole Card writer uses persisted terminal proof, not Kafka
     const second = await f.proof(newer,{epoch:"2"}); await f.deliver(second.changed);
     await t.test("lease release alone preserves fence proof; takeover without new Attempt invalidates it", async () => {
       assert.equal((await f.card(order.order)).state,"InSync"); const before = await f.card(order.order);
+      const cardAtFreshRead=await publicCard(order.order);
+      assert.equal(cardAtFreshRead.aroma.state,"InSync");assert.equal(cardAtFreshRead.projectionVersion,before.card_version);
       await f.query("UPDATE orders.convergence_leases SET expires_at=clock_timestamp()-interval '1 second',heartbeat_at=clock_timestamp() WHERE cart_scope_ref='aroma-primary'");
       await f.store.runOnce(new AbortController().signal); assert.deepEqual(await f.card(order.order),before);
-      await f.query("UPDATE orders.convergence_leases SET fence_epoch=3,owner_instance_id=$1,expires_at=clock_timestamp()-interval '1 second',heartbeat_at=clock_timestamp() WHERE cart_scope_ref='aroma-primary'",[randomUUID()]);
-      assert.equal((await f.card(order.order)).state,"InSync");assert.equal((await publicCard(order.order)).aroma.state,"OutOfSync");
+      const cardAfterRelease=await publicCard(order.order);
+      assert.equal(cardAfterRelease.aroma.state,"InSync");
+      assert.equal(cardAfterRelease.projectionVersion,cardAtFreshRead.projectionVersion,"release alone leaves the accepted fence proof current");
+
+      const takeoverOwner=randomUUID();
+      await f.query("UPDATE orders.convergence_leases SET fence_epoch=3,owner_instance_id=$1,expires_at=clock_timestamp()+interval '60 seconds',heartbeat_at=clock_timestamp() WHERE cart_scope_ref='aroma-primary'",[takeoverOwner]);
+      const cardWithNewFence=await publicCard(order.order);
+      assert.equal(cardWithNewFence.aroma.state,"Converging");
+      assert.equal(cardWithNewFence.projectionVersion,cardAtFreshRead.projectionVersion,"a new active fence is computed at read time");
+      assert.deepEqual(await f.card(order.order),before,"the lease takeover has not written the persisted Card");
+
+      await f.query("UPDATE orders.convergence_leases SET expires_at=clock_timestamp()-interval '1 second',heartbeat_at=clock_timestamp() WHERE cart_scope_ref='aroma-primary'");
+      const cardAfterExpiry=await publicCard(order.order);
+      assert.equal(cardAfterExpiry.aroma.state,"OutOfSync");
+      assert.equal(cardAfterExpiry.projectionVersion,cardAtFreshRead.projectionVersion,"expiry of the new fence is still read-time only");
+      assert.deepEqual(await f.card(order.order),before,"both read-time lease changes preserve the stored InSync projection");
       await f.store.runOnce(new AbortController().signal); assert.equal((await f.card(order.order)).state,"OutOfSync");
     });
     const stale = await f.observe({stale:true}); const staleProof = await f.proof(stale,{epoch:"4"});
@@ -604,6 +651,48 @@ void test("preparation unresolved mutation barrier and Card precedence survive r
       await f.store.runOnce(new AbortController().signal); const card = await f.card(order.order);
       assert.equal(card.state,"Blocked"); assert.ok(card.blocker_codes.includes("MAPPING_STOPPED")); assert.equal(card.observed_revision,obs.revision);
     });
+  });
+});
+
+void test("preparation owner GET overlays and clears UnknownOutcome without a projection write", live, async () => {
+  await fixture(async f => {
+    const {OrderStore}=await import("../../apps/orders-service/dist/infrastructure/database/order-store.js");
+    const api=new OrderStore(f.core,{maxSnapshotAgeMs:60_000});
+    const readOwnerCard=orderRef=>api.getCard(orderRef,{correlationId:randomUUID(),permissions:["orders:reconcile:any"]});
+    const p=product();await f.deliver(mapping(p));const order=await f.seed([p]);await f.deliver(order.confirmed);
+    const observation=await f.observe();await f.deliver(observation.changed);
+    const reserved=await f.proof(observation,{reserve:true,active:true});
+    await f.store.runOnce(new AbortController().signal);
+    const stored=await f.card(order.order);const active=await readOwnerCard(order.order);
+    assert.equal(stored.state,"Converging");assert.equal(active.aroma.state,"Converging");
+    assert.equal(active.projectionVersion,stored.card_version);
+    const outboxBefore=await f.read("SELECT message_id,message_type,owner_version,envelope_bytes,envelope_hash FROM orders.outbox_messages WHERE aggregate_ref=$1 ORDER BY message_id",[order.order]);
+
+    await f.query("UPDATE orders.mutation_reservations SET state='UnknownOutcome' WHERE operation_ref=$1",[reserved.operation]);
+    await f.query("UPDATE orders.convergence_attempts SET state='UnknownOutcome',ended_at=clock_timestamp(),failure_code='AROMA_UNKNOWN_OUTCOME' WHERE attempt_ref=$1",[reserved.attempt]);
+    const overlay=await readOwnerCard(order.order);
+    assert.equal(overlay.aroma.state,"UnknownOutcome");
+    assert.deepEqual(overlay.aroma.blockers.map(blocker=>blocker.code),["AROMA_UNKNOWN_OUTCOME"]);
+    assert.equal(overlay.projectionVersion,active.projectionVersion,"the active reservation overlay is evaluated at GET time");
+    assert.deepEqual(await f.card(order.order),stored,"the UnknownOutcome overlay does not rewrite the stored Card row");
+    assert.deepEqual(await f.read("SELECT message_id,message_type,owner_version,envelope_bytes,envelope_hash FROM orders.outbox_messages WHERE aggregate_ref=$1 ORDER BY message_id",[order.order]),outboxBefore);
+
+    await f.query("UPDATE orders.mutation_reservations SET state='RecoveredApplied',resolved_at=clock_timestamp() WHERE operation_ref=$1",[reserved.operation]);
+    await f.query("UPDATE orders.convergence_leases SET expires_at=clock_timestamp()-interval '1 second',heartbeat_at=clock_timestamp() WHERE cart_scope_ref='aroma-primary'");
+    const recovered=await readOwnerCard(order.order);
+    assert.equal(recovered.aroma.state,"OutOfSync");
+    assert.equal(recovered.projectionVersion,active.projectionVersion,"overlay recovery and lease expiry remain read-time only");
+    assert.equal(recovered.version,active.version);
+    assert.equal(recovered.aroma.desiredRevision,active.aroma.desiredRevision);
+    assert.equal(recovered.aroma.observedRevision,active.aroma.observedRevision);
+    assert.equal(recovered.aroma.lastObservedAt,active.aroma.lastObservedAt);
+    assert.deepEqual(recovered.aroma.blockers,active.aroma.blockers);
+    assert.deepEqual(recovered.items,active.items);
+    assert.deepEqual(recovered.customer,active.customer);
+    assert.deepEqual(recovered.pricing,active.pricing);
+    assert.deepEqual(recovered.allowedActions,["request-aroma-reconciliation"]);
+    assert.deepEqual(await f.card(order.order),stored,"overlay recovery leaves the stored Card row unchanged");
+    assert.deepEqual(await f.read("SELECT message_id,message_type,owner_version,envelope_bytes,envelope_hash FROM orders.outbox_messages WHERE aggregate_ref=$1 ORDER BY message_id",[order.order]),outboxBefore);
   });
 });
 
@@ -780,22 +869,22 @@ void test("preparation transaction failure leaves Inbox/projection/history/Outbo
   });
 });
 
-void test("capacity: preparation recomputes 100 contributions and 10000 cart lines within two seconds on real owner DB",{...live,timeout:240_000},async t=>{
+for(const positions of [10,100])void test(`capacity: preparation recomputes 100 contributions and ${100*positions} cart lines within two seconds on real owner DB`,{...live,timeout:240_000},async t=>{
   await fixture(async f=>{
-    const products=Array.from({length:10_000},()=>product());
+    const products=Array.from({length:100*positions},()=>product());
     await f.query(`INSERT INTO orders.catalog_mapping_projection(product_ref,variant_ref,offer_ref,mapping_revision,catalog_snapshot_revision,mapping_state,availability,effective_at,source_message_id,payload_hash)
       SELECT x.product,x.variant,x.offer,1,1,'Active','Available',clock_timestamp(),'capacity-fixture',$2
       FROM jsonb_to_recordset($1::jsonb) AS x(product text,variant text,offer text)`,[JSON.stringify(products),"a".repeat(64)]);
-    for(let order=0;order<100;order++)await f.seed(products.slice(order*100,(order+1)*100));
+    for(let order=0;order<100;order++)await f.seed(products.slice(order*positions,(order+1)*positions));
     const heapBefore=process.memoryUsage().heapUsed;const peakBefore=process.resourceUsage().maxRSS;
     const started=performance.now();assert.equal(await f.store.runOnce(new AbortController().signal),"prepared");const elapsed=performance.now()-started;
     const counts=(await f.read("SELECT (SELECT count(*) FROM orders.cart_desired_lines)::int AS lines,(SELECT count(*) FROM orders.cart_desired_order_facts)::int AS contributions,(SELECT count(*) FROM orders.order_aroma_projections)::int AS cards,(SELECT count(*) FROM orders.cart_desired_blockers)::int AS blockers"))[0];
-    assert.deepEqual(counts,{lines:10000,contributions:100,cards:100,blockers:0});
+    assert.deepEqual(counts,{lines:100*positions,contributions:100,cards:100,blockers:0});
     t.diagnostic(JSON.stringify({desiredRecomputeMs:elapsed,limitMs:2000,heapGrowthBytes:process.memoryUsage().heapUsed-heapBefore,peakRssGrowthKiB:process.resourceUsage().maxRSS-peakBefore,cardinality:counts}));
     assert.ok(elapsed<=2000,`real preparation recompute ${elapsed}ms exceeds 2000ms`);
     const current=await f.current();const next=performance.now();assert.equal(await f.store.runOnce(new AbortController().signal),"idle");
     assert.deepEqual(await f.current(),current);t.diagnostic(`same-hash recovery ms=${performance.now()-next}`);
-  },{maxOrders:100,maxLines:10_000});
+  },{maxOrders:100,maxLines:100*positions});
 });
 
 void test("preparation set-based item proofs preserve grouped NULL/selected keys, canonical hash and missing-item rejection", live, async t => {

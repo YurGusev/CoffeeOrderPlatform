@@ -1,0 +1,672 @@
+issue: 12
+baseCommit: bd78787e5ca416b77ae8cbbebcbfeea848b522d3
+inputs:
+  - issue: 8
+    acceptedMergeCommit: e278aeb10e57d37485542f8668f078456074b038
+    artifact: evidence/handoffs/issue-8.yaml
+    sha256: 7d793e9ffaa5030ea941323d1fa525427c3ff2ed903108fc6b5b884802ead411
+  - issue: 9
+    acceptedMergeCommit: d3b5a29fb0fcfff22d167e368c65566dc382af8d
+    artifact: evidence/handoffs/issue-9.yaml
+    sha256: f68636a4b7f4e1daee73f5f5334e421b44c431cfdce25d92a233b5f17b0ad96e
+  - issue: 11
+    acceptedMergeCommit: 2191b82ea114db8f9b1c4839773ef7ca51a204b9
+    artifact: evidence/handoffs/issue-11.yaml
+    sha256: 60626b2c92789a8949b362b7a29d12c43b7e2df429a5a5b96eee7ae0fb60ebef
+  - issue: 63
+    acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+    artifact: evidence/handoffs/issue-63.yaml
+    sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+  - issue: 119
+    acceptedMergeCommit: 53753257b22021023f887050669fc964a7998909
+    artifact: evidence/handoffs/issue-119.yaml
+    sha256: 43a46f611046c36d6212711511192e37d27a48d16c1130692639eaf3d815b1bc
+  - issue: 160
+    acceptedMergeCommit: deffca7b60c4588c8a3843a75c284963fb1c8324
+    artifact: evidence/handoffs/issue-160.yaml
+    sha256: 332b94d31fe6c6cab8bfce2a03e95ab8d1a1b9bf261e969812e7a4e2ae9ca061
+  - issue: 162
+    acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+outputs:
+  - artifact: docs/adr/ADR-0033-realtime-tls-process-experiment.md
+    sha256: 959fdc4d6fc3915956f04ff61278f6c0195a9c5641c092cb19aee9c6423c1457
+    consumers:
+      - 13
+  - artifact: tests/orders/owner-live.test.mjs
+    sha256: 181707e86b7d6c1276401be86a0c09ce1e2c8241f132de43580c91fa5eb389be
+    consumers:
+      - 13
+  - artifact: tests/orders/aroma-preparation-live.test.mjs
+    sha256: a97920e6b65b6f416386a4118f66c8e2a6100478eabfbec0f088c0b948920a2f
+    consumers:
+      - 13
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: e212cab48d40117c2ad25d388d5e949c6d8444caec0c816503e5ec4ad9701d3b
+    consumers:
+      - 13
+  - artifact: packages/platform-testing/test/platform-packages.test.mjs
+    sha256: 5ad03eaae01117ed5b95daa31583a875c5c80eb68ae8fb6b717695bfe304fb6d
+    consumers:
+      - 13
+  - artifact: tests/kafka/runtime.test.mjs
+    sha256: 0d132925cd90089607bd5b8b34772a0acefa7af7198ff1878158b186b2b008eb
+    consumers:
+      - 13
+  - artifact: apps/web/test/order-cache.test.ts
+    sha256: 1f4a8abc28cb941f5dff520b5933fbdf0fbc539be60414a0fa629dbfc2f2d8d4
+    consumers:
+      - 13
+  - artifact: apps/web/test/realtime.test.ts
+    sha256: 1681e486802c38422e1ec8db5596a9eebf9350b9a7478195fa4ad72aa5227229
+    consumers:
+      - 13
+  - artifact: apps/web/test/operator-flow.spec.ts
+    sha256: ecb5a66bba1b9ed0d271d5f475dd496ee6f39fe02e675d2f88493f3fadc3c00f
+    consumers:
+      - 13
+  - artifact: tests/nginx/cutover.test.mjs
+    sha256: 233c8ed3268b1a01a1b1f54c8246f069d7c26069acd242646ef8518f1928bf07
+    consumers:
+      - 13
+  - artifact: tests/realtime/auth.test.mjs
+    sha256: 79933ca2980b9af71bc246317022462fea9499f901bce6cc83526685dd242d7f
+    consumers:
+      - 13
+  - artifact: tests/realtime/backpressure.test.mjs
+    sha256: 3851bf138744c874825d2615af8cd9e488d5caab3b897b0f25d5dd152d0de63b
+    consumers:
+      - 13
+  - artifact: tests/realtime/contract.test.mjs
+    sha256: cc295e1880466802ab5aab2eeefe3e73f205a062151650f14fff733536ba4afe
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/clients.mjs
+    sha256: 50bd3593aa24aabb17f62b5c8dcf8bfeb6970d8710a02b34252f7295fadd1e0f
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/driver.mjs
+    sha256: 88d0c8dbf35da939a38d542f725eba49d27ad73ac228169a11d33f9ba09aa7f1
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/fixture-check.mjs
+    sha256: 77c64885e70193267268c3fba8c62969501668e2ecaf014d6444db848eba68f4
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/harness.test.mjs
+    sha256: e4603006468af62467bac50b587b90b6cde54a3cea7ac7f200a19456cf48490a
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/owner-browser.mjs
+    sha256: 52db164ceebb185617230dcbdd73b59f7d260fc5b86a08e3558206ceef902510
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/owner-publisher.mjs
+    sha256: cfc393cad70fa10dd96d2eca460774ff0ad369940fbbdbbbdc40c7be673a506b
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/protocol.mjs
+    sha256: a060b4c8b60f9042e129bcd1c4d752b110b6d88728c9e84e78212b0ca10c113c
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/services.mjs
+    sha256: 5df675606b329647336224bac710bf780ce599f0dae3a13e0a6f5d6ef89492f2
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/setup.mjs
+    sha256: 35177af97a5f3fe0eca028fe39cbd0e4927df059f2d302d4275342cad721a563
+    consumers:
+      - 13
+  - artifact: tests/realtime/fixtures/transport.mjs
+    sha256: c40b9a63662d345f5ac65f084ddcab96cb72c195a0268e010b07a644b65f51c6
+    consumers:
+      - 13
+  - artifact: tests/realtime/helpers.mjs
+    sha256: 09e19a69e35b271ed6a459d20f729e5ff87f5502d3c8e0e188c8d52cca43474f
+    consumers:
+      - 13
+  - artifact: tests/realtime/replay.test.mjs
+    sha256: 26c50f0a78828459bc85dde5be13ef33c403e144166198556f17266f08a5f7fb
+    consumers:
+      - 13
+  - artifact: tests/realtime/soak.test.mjs
+    sha256: e5d1a7040ba5e49165e9e9e2a0f52a33c9dd4e1984a3b0191a74c729459e5aee
+    consumers:
+      - 13
+  - artifact: Dockerfile
+    sha256: 04a03f1f36132532854ac5476b298ee73a5b64dbc347ec2bb2e1cde3035cdd2c
+    consumers:
+      - 13
+  - artifact: compose.yaml
+    sha256: 94457827eb9194db0211ce1a681e6cde40365f7bed5bbd4109f5bea1ab4d02ea
+    consumers:
+      - 13
+      - 64
+  - artifact: apps/realtime-gateway/package.json
+    sha256: 71e2437b22229299aea0d35221d6471c557d9f0545d7429f0ef31d278e61a152
+    consumers:
+      - 13
+      - 64
+  - artifact: apps/realtime-gateway/tsconfig.json
+    sha256: af8359c9bb5e14fcfd02f36f857f9e276f22eabb762464f758b48aa56dece251
+    consumers:
+      - 13
+  - artifact: apps/realtime-gateway/src/contract.ts
+    sha256: f2aecdb2d101284521c6164ef8d5362d7d9e8c4854dfa709e177140c4c197779
+    consumers:
+      - 13
+      - 64
+  - artifact: apps/realtime-gateway/src/hub.ts
+    sha256: 895119c4d72038af896aeb535accd74a5ee8d8e460edafa5cdfcacfcd9e0a7bf
+    consumers:
+      - 13
+      - 64
+  - artifact: apps/realtime-gateway/src/index.ts
+    sha256: a378b9e10a15b613b5a46f594a5f02baac082ed889316e9a59015d144284e800
+    consumers:
+      - 13
+      - 64
+  - artifact: apps/realtime-gateway/src/main.ts
+    sha256: 3da3ea58b79b6523f848f3c1918a67d364c71494e06b755d947b7ac575a06aa7
+    consumers:
+      - 13
+      - 64
+  - artifact: apps/realtime-gateway/src/runtime-composition.ts
+    sha256: d1a56ed89ee8acaa8d58a12a3158d7bdee44a111d1607832a3271c64fc025e9f
+    consumers:
+      - 13
+      - 64
+  - artifact: apps/web/src/browser/api/client.ts
+    sha256: ec39f5145d63856cbaa50264f8e391c07174c94fe47d80f74b8bb451aeb3e803
+    consumers:
+      - 13
+  - artifact: apps/web/src/browser/api/order-card.ts
+    sha256: 34682bc3e522c8ea7e47e685bcc0bf24e7d6d4f63f8c2654a54873fafa2eaf56
+    consumers:
+      - 13
+  - artifact: apps/web/src/browser/app/AppShell.tsx
+    sha256: 2e91f2e95ba8f61342ff758dfa5b64ce49edb1fe8bf7b5c1f7d9798db71d481d
+    consumers:
+      - 13
+  - artifact: apps/web/src/browser/app/OrderRealtime.tsx
+    sha256: 20f9fbfc08ce4e30e45b0e9caa13eeba70d1fab563468571a8610b205a915c24
+    consumers:
+      - 13
+  - artifact: apps/web/src/browser/app/session.tsx
+    sha256: a4be7851dc8b8639c4e2702aa8fa584638c77bb7287bdacb9cc643bf0ea15873
+    consumers:
+      - 13
+  - artifact: apps/web/src/browser/routes/OrderCardPage.tsx
+    sha256: aa90690790e002858f4d1aadfe715a3a43efb2fcf79ac3d826dd5578a754c37c
+    consumers:
+      - 13
+  - artifact: apps/web/src/realtime/order-invalidations.ts
+    sha256: 2d566616f20ffa2d9bd05aecb3ed4d265a1109375c1b375d82c1c8517a3198ed
+    consumers:
+      - 13
+  - artifact: contracts/fixtures/negative/events/realtime-invalidated-invalid-ref.v1.json
+    sha256: dee7e98413997ddf0f4e930b9d8f4b2749a40968a8167c1ce75813b01f0a3f66
+    consumers:
+      - 13
+      - 64
+  - artifact: contracts/fixtures/positive/events/realtime-invalidated.v1.json
+    sha256: e9df37902f64e5b704ac36c086e81b8ad1d93e29041de53d2f8655e37df297bc
+    consumers:
+      - 13
+      - 64
+  - artifact: config/nginx-profile.schema.json
+    sha256: 4178f7437e672cf7e83618e2594ebc1773b8cf624e65f04ed69550fb3536dcdf
+    consumers:
+      - 13
+      - 64
+  - artifact: config/platform.schema.json
+    sha256: e1604b469ec285b7d494b747fa0e9b333ede2577bfb78a9077a62204c9bffd14
+    consumers:
+      - 13
+      - 64
+  - artifact: config/platform.yaml
+    sha256: 065acfbb3ff05c43bfbe5a9c5be2619bbec3f6383486878673039c4d1c46ef98
+    consumers:
+      - 13
+      - 64
+  - artifact: config/service-catalog.json
+    sha256: f13e2f1e9ba7cd52a67fe8b3bd27952db55ca27395be58d0a4bf2c2da52b0122
+    consumers:
+      - 13
+      - 64
+  - artifact: config/toolchain-versions.json
+    sha256: 7ad6d8d2623032ca1c0ac1293dbf287568f1882faa93fe2ed7de463f15f546db
+    consumers:
+      - 13
+  - artifact: config/toolchain-versions.schema.json
+    sha256: 408569e2e2360ec46b904236c98d0da7bda98b424a8231588a7ab86053968ebf
+    consumers:
+      - 13
+  - artifact: platform/launch-v1-runtime-profile.json
+    sha256: b5ad1835a911ab24ab6790cc86987bab2e4075e30960461c8dd76699c69e9e69
+    consumers:
+      - 13
+      - 64
+  - artifact: docs/launch/05_DATA_OWNERSHIP.md
+    sha256: 81ebf4c5d8a4ae6626dd21a27c987083399fcd5dfc8eca4ae0258a25fc15c12a
+    consumers:
+      - 13
+  - artifact: docs/launch/06_EVENTS_AND_RECOVERY.md
+    sha256: be916fa2f60ab93dc1921bc044cc9086922033ace20aae4fb75acc6717614a49
+    consumers:
+      - 13
+      - 64
+  - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
+    sha256: ddc2e7d26db186b8b1efe15499892d34334157e19b3504daa5ca88d04e617380
+    consumers:
+      - 13
+  - artifact: docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md
+    sha256: f10a8f24bbee7956fce7711484d0b45255e8dbcf3ef473e048a65b11a08ac248
+    consumers:
+      - 13
+  - artifact: docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md
+    sha256: 2cfe10e429dfc7fa1524edf4b6200d5ab07ea8a7770e8326c075d71847f0225c
+    consumers:
+      - 13
+      - 64
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: 10a457d59e615bec3cd9dd993dbcc3f7a4761f34ea345d95b197163e32e2d21b
+    consumers:
+      - 13
+      - 64
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: d146b13d003681570a78356cfda2e885be0437d9f820f4a22867ef1b3caea0ac
+    consumers:
+      - 13
+  - artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md
+    sha256: 4ecca191632b371514883ff4eaf6b0d5725889be25230c495e7385587a157c67
+    consumers:
+      - 13
+      - 64
+  - artifact: docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md
+    sha256: b65dbc490f729fb93bf6524128945dca903f8c6af28e23e0f471fff19442fb7a
+    consumers:
+      - 13
+  - artifact: package.json
+    sha256: b66ba1cb7141da789db9a333db6e12a517ab300bdcc81bf6770aee8080c78827
+    consumers:
+      - 13
+  - artifact: pnpm-lock.yaml
+    sha256: 2574bc83d7c55898e345692d17e36cd56333bdc4f8b0df108bd1a4f2087d3fc2
+    consumers:
+      - 13
+  - artifact: packages/generated/client-v1/src/runtime-schemas.gen.ts
+    sha256: c6e83a38a3f41bbb6d641f08fe4809b7e51b1b6d091ca3ce8970a11ffb53d148
+    consumers:
+      - 13
+  - artifact: packages/platform-config/src/index.ts
+    sha256: 493c570c3f08aae352e068390e46a40c80f49266054ef2368447a7eb82ac33dd
+    consumers:
+      - 13
+  - artifact: packages/platform-database/src/index.ts
+    sha256: bb2fde7db58c08874fbdacb9ad980bef0117312752670e7db0a6554193f76e6b
+    consumers:
+      - 13
+  - artifact: packages/platform-database/src/internal.ts
+    sha256: 4fce0838f38663daeed6ee5d3b7543477a1e42a59a6136a06fd3079ccfd1b211
+    consumers:
+      - 13
+  - artifact: packages/platform-kafka-runtime/src/index.ts
+    sha256: 6817245f49e1d2a2a145cde944d062c53062f9965d47e3af20d7b38904eb7234
+    consumers:
+      - 13
+      - 64
+  - artifact: packages/platform-kafka-runtime/src/native.ts
+    sha256: cf003a7351b3dca7671021f8a1cfc3fc50135933c4317a8c8b42428a2d2131bc
+    consumers:
+      - 13
+      - 64
+  - artifact: packages/platform-runtime/src/index.ts
+    sha256: 3610f3e0fee00258987a396384d92295e71552f034399a468ab60a09751f34f3
+    consumers:
+      - 13
+  - artifact: packages/platform-security/src/index.ts
+    sha256: 82397ba3d2c1928b581d07e3b87116b158078ada44723552379d1f769f72b3ef
+    consumers:
+      - 13
+  - artifact: patches/librdkafka-resume-wakeup.patch
+    sha256: f183e657f9e42780ad30f2a437cdfd702018e275a8d280a2aa7ff863c5845533
+    consumers:
+      - 13
+      - 64
+  - artifact: scripts/check-architecture.mjs
+    sha256: 81dc8313716e887318bc4c9b9f0c06e708a5e687450d881373f57387d8b41ce4
+    consumers:
+      - 13
+  - artifact: scripts/check-service-catalog.mjs
+    sha256: c8be16b1814acb9c9de71105d1ccc4599798ed29b29c24dfba043036e28c7ba7
+    consumers:
+      - 13
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: 002e958945c7802ca73bfd6832adb67aa892e4c485188f491521246c006eeb2f
+    consumers:
+      - 13
+  - artifact: scripts/config-lib.mjs
+    sha256: 4c52d7cfb272cb51267cf7d43d8009bd43be410728b6bcd3c785e1ba13a7b13f
+    consumers:
+      - 13
+  - artifact: scripts/contracts-generate.mjs
+    sha256: c8266d8cd956d840296d0bf7bf70995f05e35db0b83788712de2ac848e8db7f8
+    consumers:
+      - 13
+  - artifact: tools/nginx/check-config.mjs
+    sha256: f56e768ddb9f6090102f4d9d0f430334a149bcb89c6d0e81b1a7512bea9f549f
+    consumers:
+      - 13
+      - 64
+  - artifact: tools/nginx/generate.mjs
+    sha256: 0ba04394cf2baca09d8dd4722e3d036897385b883a9ffa5c55f10739f26c0f91
+    consumers:
+      - 13
+      - 64
+  - artifact: evidence/issue-12-analysis.md
+    sha256: cf4188d327fd23f8ccd96036fff9400257f95fdff4f60312f48b429e3fd1da20
+    consumers:
+      - 13
+      - 64
+  - artifact: apps/web/src/browser/api/remote.ts
+    sha256: b0d04db20fcd7caf518889e3ddedf39b97a22469dce2bc22cafe2c75818cc3e4
+    consumers:
+      - 13
+  - artifact: apps/orders-service/src/application/upsert-item.ts
+    sha256: 0b646ea12c978cf47c60feed1c02e1500caadb5956483c165679d4a831fb7132
+    consumers:
+      - 13
+  - artifact: apps/orders-service/src/http/index.ts
+    sha256: 1b71567aafabdc776955cd00bc95718e016427072a5c7ec0c527d5859b3651c3
+    consumers:
+      - 13
+  - artifact: apps/orders-service/src/infrastructure/database/order-store.ts
+    sha256: 7f66d1b78fe4b405555be4ba36962b957833283b507aad2330283a4fbe7018d0
+    consumers:
+      - 13
+  - artifact: tests/orders/order-store.test.mjs
+    sha256: d2ee6ef6994f2675dd827f33829212fda7f53fec4bec93d14efd1459f80c72c8
+    consumers:
+      - 13
+  - artifact: tests/orders/order-store-faults.test.mjs
+    sha256: e1be9f32aa9976795c956587b8f10bc4bf8a033432c6bf6bdd0281bd4af2610b
+    consumers:
+      - 13
+  - artifact: tests/orders/owner-http.test.mjs
+    sha256: 1826e45cba60e4bad1539cb88f0289528e0b9362728ee1d2ad075f6fd41dbd40
+    consumers:
+      - 13
+  - artifact: tests/orders/public-api.test.mjs
+    sha256: 16f0cefdf332ced377daca5501fb4e195bcc28e357f4dcb3130826db438b1af2
+    consumers:
+      - 13
+  - artifact: contracts/openapi/client-v1.yaml
+    sha256: e44e31653e56e3a4e1c39fdcf66b12fe56b61045d25b7cde62329106d3a74165
+    consumers:
+      - 13
+  - artifact: contracts/manifest.yaml
+    sha256: 1db6ca31f2c4fbe6179a52d2ff8b91cf9e26769555c714bf038e7bc2407e06ea
+    consumers:
+      - 13
+  - artifact: packages/generated/client-v1/src/types.gen.ts
+    sha256: d65107d5bc2d1aaa88caaba401e27b7cc5c7349be7846fb1aafb2ee450ca3eec
+    consumers:
+      - 13
+  - artifact: tests/contracts/openapi-fixtures.test.mjs
+    sha256: 720e8a6e42ce849f4dbee2965f5f2200a2783c5317b062286fd64ea3717daea6
+    consumers:
+      - 13
+  - artifact: platform/launch-v1-runtime-profile.schema.json
+    sha256: 9433c3699c8861cbf818cc89bcbb2fc4e02d309e9e0ce7069873439559df337c
+    consumers:
+      - 13
+      - 64
+verification:
+  - command: TMPDIR=/home/yurgusev/.hermes/cache/scratch pnpm check
+    result: passed
+    exitCode: 0
+    detail: >-
+      Финальный28b:828 total/752PASS/0FAIL/76explicit-only skips; typecheck/lint/contracts/config/architecture/rule-parity/web/UI
+      и node:test прошли. Лог /tmp/coffee-issue12-fix-tests-20261014/28b-pnpm-check.stdout. 28lintFAIL сохранён в historical
+      evidence.
+  - command: pnpm exec tsc -b apps/orders-service --pretty false
+    result: passed
+    exitCode: 0
+    detail: Сборка итогового preflightPut; узкие owner-http/public-api также27/27PASS.
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1
+      tests/orders/order-store.test.mjs tests/orders/order-store-faults.test.mjs
+    result: passed
+    exitCode: 0
+    detail: >-
+      26b5/5PASS,0skip:read-only preflight, заранее aborted, versionrace/samekey, real blackhole COMMIT/noSQLretry/drainedcleanup.
+      Предшествующий26FAIL был преждевременной pending assertion; сохранён.
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1
+      tests/orders/owner-live.test.mjs
+    result: passed
+    exitCode: 0
+    detail: >-
+      27b5/5PASS,0skip.100/100×10;1400success/callerRetries0;2200correlatedleases/30200SQL/2200COMMIT;durablecounts exact/pool
+      drained.10874.132ms/maxcommand1087.114ms. Receipt issue12-owner-peak-3664947.json
+      SHA2566ee8a1cc7087193c4bf152c0ccce8d2d804f328af50d36590b200714b83dd263.27historicalfixtureFAIL сохранён.
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1
+      tests/database/pool-concurrency-live.test.mjs
+    result: passed
+    exitCode: 0
+    detail: 24:1/1PASS,0skip; default pool fail-fast, thirdcheckout rejection with no wait queue.
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1
+      --test-name-pattern='capacity: preparation recomputes 100 contributions and (1000|10000) cart lines within two seconds on
+      real owner DB' tests/orders/aroma-preparation-live.test.mjs
+    result: passed
+    exitCode: 0
+    detail: 25:2/2PASS,0skip;100×10 recompute828.107ms;100×1001940.916ms<=2000. Это cardinality/recompute, не order ingress throughput.
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1
+      --test-name-pattern='preparation sole Card writer uses persisted terminal proof, not Kafka hint|preparation owner GET
+      overlays and clears UnknownOutcome without a projection write' tests/orders/aroma-preparation-live.test.mjs
+    result: passed
+    exitCode: 0
+    detail: 19:13/13PASS без skips;lease/freshness/UnknownOutcome read-time transitions сохраняют storedCard/PV/Outbox.
+  - command: pnpm exec vitest run apps/web/test/order-cache.test.ts
+    result: passed
+    exitCode: 0
+    detail: 4/4;existingregressionRED→GREEN;owner-get vs command guards,Confirmed-only,immutablebusinessfacts/revisions.
+  - command: TMPDIR=/home/yurgusev/.hermes/cache/scratch pnpm test:web-realtime
+    result: passed
+    exitCode: 0
+    detail: 29:Vitest8/8 +Chromium10/10;buildpassed;лог /tmp/coffee-issue12-fix-tests-20261014/29-web-realtime.stdout.
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch node tests/realtime/soak.test.mjs --fixture-check --result-dir
+      /home/yurgusev/.hermes/cache/scratch/issue12-fixture-final-20261014
+    result: passed
+    exitCode: 0
+    detail: >-
+      30:fixture-transport-only-not-launch-proof;PKCE/nonce/RS256/single-use/providerTLS/budgets
+      true,errornull,cleanupVerifiedtrue.НеcapacityPASS.
+  - command: pnpm nginx:check
+    result: passed
+    exitCode: 0
+    detail: 06:nginx renderer и штатная schema/config;R2guards также в текущем pnpmcheck.
+  - command: git diff --check
+    result: passed
+    exitCode: 0
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch COFFEE_DB_LIVE_PROOF=1 COFFEE_REALTIME_OWNER_LIVE_PROOF=1 node --test
+      --test-concurrency=1 --test-name-pattern='preparation owner realtime vertical through served browser positive$'
+      tests/orders/aroma-preparation-live.test.mjs
+    result: passed
+    exitCode: 0
+    detail: >-
+      32:realownerOutbox/Kafka/SSE/GET,duplicate/stale/restart/reset;38compiled209sourceunchanged;1/1PASS0skip/cleanuptrue/errornull/noExtraMutation/launchProoffalse.
+      Proof /home/yurgusev/.hermes/cache/scratch/issue12-owner-browser-LzL85n/transport/owner-browser-proof.json
+      SHA2564fc6849222a5d32e840b8e63470cf1ada009fbc7fbc7656d27465a9ce0373ec3;Astrareviewpassed
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch COFFEE_DB_LIVE_PROOF=1 COFFEE_REALTIME_OWNER_LIVE_PROOF=1 node --test
+      --test-concurrency=1 --test-name-pattern='preparation owner realtime vertical through served browser private-eof$'
+      tests/orders/aroma-preparation-live.test.mjs
+    result: passed
+    exitCode: 0
+    detail: >-
+      33:one-byteBfault;LastEventIDA→reconnectB→ready→GET.Onlyexpectedcompiledruntime-composition
+      differs;209sourceunchanged;1/1PASS0skip/cleanuptrue/errornull/noExtraMutation/launchProoffalse. Proof
+      /home/yurgusev/.hermes/cache/scratch/issue12-owner-browser-0bpRMB/transport/owner-browser-proof.json
+      SHA2560b4465e939f2076bae76d22d704d73bf0d1d235107db882098e2c451fc2a6771;Astrareviewpassed
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch COFFEE_DB_LIVE_PROOF=1 COFFEE_REALTIME_OWNER_LIVE_PROOF=1 node --test
+      --test-concurrency=1 --test-name-pattern='preparation owner realtime vertical through served browser reauth$'
+      tests/orders/aroma-preparation-live.test.mjs
+    result: passed
+    exitCode: 0
+    detail: >-
+      34:1native/TTLauthclose1/2events200/LIDB/2ready/reads4→5/v2PV6InSync→OutOfSync/90788.671ms;38compiled209sourceunchanged;laterthird503belongsrestart;1/1PASS0skip/cleanuptrue/errornull/noExtraMutation/launchProoffalse.
+      Proof /home/yurgusev/.hermes/cache/scratch/issue12-owner-browser-xnoEv5/transport/owner-browser-proof.json
+      SHA256dda52e9f25ce01a62baea744d05aaba9886ae3c0e3db7649856890ad335d0441;Astrareviewpassed
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch pnpm test:realtime-soak --prepare --profile operator-1 --result-dir
+      /home/yurgusev/.hermes/cache/scratch/issue12-operator1-final-20261014
+    result: passed
+    exitCode: 0
+    detail: >-
+      31prepared-not-launch-proof;exactSHAeee77607ad3ec1140e71ba78ceba3f04e586b580110d1863e57c9a158299d4b2
+      rootverified/explicitlyapproved. Послеprepare выполнен полный35 ниже.
+  - command: >-
+      TMPDIR=/home/yurgusev/.hermes/cache/scratch node tests/realtime/soak.test.mjs --prepared
+      /home/yurgusev/.hermes/cache/scratch/issue12-operator1-final-20261014 --approve-manifest
+      eee77607ad3ec1140e71ba78ceba3f04e586b580110d1863e57c9a158299d4b2
+    result: passed
+    exitCode: 0
+    detail: >-
+      35fullPASS/launchProoftrue/11checks/errornull/cleanuptrue;1800010.3ms,180002scheduled=ACK/pending0/1subscriber100subjects.
+      Eventp95306ms/loopp9526.755/headroommax179.341ms;technical512/513preheader503;19expectedreauth0unexpected/maxgap3038/3sessionrefresh/HUP124.706ms/shutdown343.702ms
+      exit0;clientcleanup5431.295ms/coordinatorfixturecleanup3278.657ms.
+      ResultSHA850456422b158b0560d15114afdfed7240003497cfeb4ed9c0fe567d8e381fe3;Astraindependentreviewaccepted;log35-operator1-prepared-soak.stdout.
+  - command: pnpm contracts:generate
+    result: passed
+    exitCode: 0
+    detail: Добавлен только generated StreamOrderInvalidationsErrors[400]:ErrorValidationFailed.
+  - command: pnpm contracts:check-generated
+    result: passed
+    exitCode: 0
+    detail: Повторная генерация byte-identical; logs /tmp/coffee-pr176-400-generated.log.
+  - command: pnpm contracts:lint
+    result: passed
+    exitCode: 0
+    detail: OpenAPI/manifest согласованы; /tmp/coffee-pr176-400-lint.log.
+  - command: pnpm contracts:breaking
+    result: passed
+    exitCode: 0
+    detail: Изменение additive, без breaking; /tmp/coffee-pr176-400-breaking.log.
+  - command: pnpm typecheck
+    result: passed
+    exitCode: 0
+    detail: Generated type и callers компилируются; /tmp/coffee-pr176-400-types.log.
+  - command: pnpm contracts:test
+    result: passed
+    exitCode: 0
+    detail: 49/49 PASS без skips; SSE regression сначалаRED из-за отсутствия400, затемGREEN; /tmp/coffee-pr176-400-tests.log.
+  - command: pnpm test:realtime-auth
+    result: passed
+    exitCode: 0
+    detail: 9/9 PASS без skips; существующие mTLS query negatives400VALIDATION_FAILED; /tmp/coffee-pr176-400-auth.log.
+  - command: pnpm exec oxlint --type-aware --deny-warnings tests/contracts/openapi-fixtures.test.mjs
+    result: passed
+    exitCode: 0
+    detail: Целевой lint изменённого regression PASS.
+  - command: pnpm authority:check
+    result: passed
+    exitCode: 0
+    detail: Интеграция develop PR175; 8/8, /tmp/coffee-pr176-merge-authority.log.
+  - command: pnpm profile:check
+    result: failed
+    exitCode: 1
+    detail: Source менялся во время копирования clean profiles; artifacts mismatch. Исходный FAIL /tmp/coffee-pr176-merge-profile.log сохранён.
+  - command: pnpm profile:check
+    result: passed
+    exitCode: 0
+    detail: Повтор после фиксации source; parallel и singleThreaded byte-identical, 318 artifacts. /tmp/coffee-pr176-merge-profile-frozen.log.
+  - command: env -u TMPDIR pnpm check
+    result: failed
+    exitCode: 1
+    detail: 865 tests / 788 PASS / 1 FAIL / 76 skips. Принятый PR175 добавил десятую operation, schema maxItems оставался9. /tmp/coffee-pr176-merge-check.{command,stdout,exit}.
+  - command: node --test --test-name-pattern='JSON Schema Draft 2020-12 accepts configuration' tests/architecture/checks.test.mjs
+    result: failed
+    exitCode: 1
+    detail: Узкое воспроизведение integration regression, maxItems9 vs10. /tmp/coffee-pr176-schema-repro.log.
+  - command: node --test --test-name-pattern='JSON Schema Draft 2020-12 accepts configuration' tests/architecture/checks.test.mjs
+    result: passed
+    exitCode: 0
+    detail: 1/1 после schema maxItems10; exact semantic allowlist сохранён. /tmp/coffee-pr176-schema-fixed.log.
+  - command: pnpm security:secrets
+    result: passed
+    exitCode: 0
+    detail: Перед публикацией текущих исправлений, /tmp/coffee-pr176-merge-secrets.log.
+  - command: env -u TMPDIR pnpm check
+    result: passed
+    exitCode: 0
+    detail: 865 tests / 789 PASS / 0 FAIL / 76 explicit-only skips; contracts49/49, realtimeChromium10/10; current finish-without-close и portable nested harness включены. /tmp/coffee-pr176-merge-check-final.{command,stdout,exit}.
+  - command: git diff --cached --exit-code 040f57efe083d0ba06a5b40c32569d4937ae4d0f
+    result: passed
+    exitCode: 0
+    detail: После восстановления и до обновления двух delivery metadata файлов tree точно совпал с прежним проверенным HEAD; treeSHA5fe618306d3a8af895e25dd792d7b0e5101028b4.
+  - command: git diff --cached --check
+    result: passed
+    exitCode: 0
+    detail: Механическое восстановление issue12 после PR177, без whitespace defects.
+limitations:
+  - >-
+    Локальная техническая приёмка завершена. Матрица61/5 фиксирует срез до публикации. Владелец явно разрешил commit/push/PR в
+    develop 14 октября2026; затем явно разрешил исправить конфликт и merge PR176 в develop. Deployment/issue labels/production не разрешены. Артефакт становится accepted input только после
+    принятого merge; self commit SHA не добавляется.
+  - >-
+    Astra закрыл прежние R1/R2/R3/CACHE-01/CAP-01/CAP-02/PREFLIGHT-TEST-01 и PR176-P2-400. Reviewer подтвердил минимальный
+    additive контрактный diff без runtime/wire изменений. Root проверил91output hashes и7acceptedinputs с ancestry; после
+    изменения output hash пересчитывается.
+  - >-
+    VK/Agent/LLM, реальный провайдер, production и whole-fleet/public ingress capacity не проверены. Owner 100×10: одна
+    операторская identity, реальные routes/application/PostgreSQL/Outbox, synthetic upstream через Fastify.inject. Волна 10.874 с,
+    около 9.196 orders/s; metadata 100/s не означает 100 orders/s.
+  - >-
+    Preparation 100×100 занял 1940.916 мс при лимите 2000 мс: запас 59.084 мс. Seeded cardinality не доказывает command
+    throughput.
+  - >-
+    76 explicit-only skips в pnpm check не являются PASS. Обязательные scoped live targets прошли отдельно без skips. Production
+    observability #64 и clean accepted SHA/G00–G19 #13 остаются отдельными gates до main.
+  - >-
+    Исторические 5000/owner97/100/native-header/browser/cache/fixture/diagnostic/lint FAIL сохранены в
+    evidence/issue-12-analysis.md. Причина конкретного 97/100 неизвестна; текущая приёмка основана на bounded queue amplification
+    fix и свежих proofs. Исторические writers/hashes данных сохранены.
+  - >-
+    Final event max 3257 мс при принятом p95 306 мс. 47 ACK bins ниже100, включая неполный последний; 46 из первых1800. Total
+    ACK/schedule PASS не является every-second floor. 97 heartbeat frames не доказывают строгий max interval. Raw
+    minLive0/maxLive1 и auth gaps3038 мс сохранены.
+  - >-
+    Raw driver-result FAIL/error=null/missing=[budgets,fixture cleanup] сохранён: эти проверки принадлежат coordinator. Итоговый
+    PASS получен после 313 host samples и cleanup. Client cleanup5431.295 мс и fixture cleanup3278.657 мс <=10 с; восемь
+    containers/network/private materials удалены.
+  - >-
+    Transport headroom использует actual api-public/mTLS/delegation и typed owner404 fixture; это не Orders capacity. Native
+    browser32–34 functional/launchProof=false дополняют full operator-1. Полный аудит внутренних native librdkafka locks не
+    выполнялся.
+  - >-
+    После full soak выполнен только test-only EOF cleanup harness.test.mjs: удалена лишняя пустая строка, исполнимые байты без
+    завершающих переводов строк совпадают. Frozen manifest сохраняет hash до форматирования; runtime и compiled файлы не менялись.
+    Staged diff и security material checks выполнены перед публикацией.
+  - >-
+    PR176 reviewer P2 r4269990744 исправлен: существующий400VALIDATION_FAILED объявлен в OpenAPI/manifest/generatedtypes. Runtime,
+    wireповедение и loadbudgets не менялись; полныйsoak не повторялся. Frozenmanifest сохраняет контрактныйсрез
+    доэтогоadditiveописания400; historicalreceiptsнепереписаны.
+  - >-
+    Новые reviewer P2 r4270278510/r4270278532 исправлены: shutdown завершается на первом finish/close без listener leaks;
+    default test включает nested harness, CLI test portable без TMPDIR. Astra подтвердил минимальный diff и schema maxItems10
+    для принятой десятой read operation. Полный soak35 сохраняет прежний source snapshot: свежий exact-source loaded shutdown
+    изменённого hub не заявляется; targeted regression и полный check являются текущей проверкой.
+  - >-
+    Merge PR176 отменён через PR177, issue12 снова OPEN. Текущий baseCommit — accepted develop после отмены.
+    Владелец разрешил новый commit/push/PR и явно запретил merge. Внешнее ревью нового финального HEAD ещё не завершено;
+    локальный Astra verdict его не заменяет. Прежние receipts сохранены; product source идентичен040f57e, новые runtime/check/soak
+    прогоны не выполнялись. Только delivery metadata обновлены; handoff не accepted input до нового разрешённого merge.

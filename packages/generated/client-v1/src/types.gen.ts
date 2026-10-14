@@ -1111,6 +1111,10 @@ export type StreamOrderInvalidationsData = {
 
 export type StreamOrderInvalidationsErrors = {
   /**
+   * Request, query, or header validation failed.
+   */
+  400: ErrorValidationFailed;
+  /**
    * No valid authenticated actor context was supplied.
    */
   401: ErrorAuthenticationRequired;

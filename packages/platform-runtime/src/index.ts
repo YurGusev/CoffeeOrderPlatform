@@ -57,6 +57,8 @@ export type RuntimeComposition = Readonly<{
   resources?: readonly RuntimeResource[];
   /** Additional bounded Prometheus lines owned by the composed runtime. */
   metrics?: () => readonly string[];
+  /** Synchronous opt-in formatter for capacity rejection, never lifecycle/TLS failures. */
+  admissionResponse?: (request: FastifyRequest, reply: FastifyReply) => boolean;
   /** Configured database owners receive their one opaque Database as `database`. */
   configure?: (
     app: FastifyInstance,
@@ -626,6 +628,7 @@ export async function createRuntime(
         requests.size >= (identity.concurrency ?? Infinity))
     ) {
       admissionRejected += 1;
+      if (phase === "running" && identity.admissionResponse?.(request, reply) === true) return;
       void reply.code(503).send();
       return;
     }
@@ -847,7 +850,7 @@ export function configuredRuntimeIdentity(
   composition: RuntimeComposition = {},
 ): RuntimeIdentity {
   const runtime = config.services[name];
-  const shutdownGraceMs = config.platform["shutdownGraceMs"];
+  const shutdownGraceMs = runtime.realtime?.shutdownGraceMs ?? config.platform["shutdownGraceMs"];
   const bodyLimitBytes = config.platform["bodyLimitBytes"];
   if (typeof shutdownGraceMs !== "number" || typeof bodyLimitBytes !== "number")
     throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
@@ -907,7 +910,7 @@ export async function startConfiguredRuntime(
     config.services[name].secretRefs,
   );
   const service = config.services[name];
-  const shutdownGraceMs = config.platform["shutdownGraceMs"];
+  const shutdownGraceMs = service.realtime?.shutdownGraceMs ?? config.platform["shutdownGraceMs"];
   if (typeof shutdownGraceMs !== "number")
     throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
   let database: Database | undefined;

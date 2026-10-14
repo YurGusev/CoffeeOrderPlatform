@@ -8,6 +8,7 @@ platform:
   shutdownGraceMs: 30000
   requestDeadlineMs: 5000
   bodyLimitBytes: 1048576
+
   health:
     livePath: /health/live
     readyPath: /health/ready
@@ -178,6 +179,9 @@ nginxTransport:
     apiPublic: {host: api-public, port: 4050, serverName: api-public.development.svc.coffee-platform.internal}
     realtime: {host: realtime-gateway, port: 4401, serverName: realtime-gateway.development.svc.coffee-platform.internal}
   tls:
+    bufferBytes: 4096
+    sessionCacheMiB: 4
+    sessionTimeoutMinutes: 5
     publicCertificate: /run/secrets/edge-nginx/public.crt
     publicPrivateKey: /run/secrets/edge-nginx/public.key
     upstreamCa: /run/secrets/edge-nginx/upstream-ca.crt
@@ -187,12 +191,18 @@ nginxTransport:
     bodyBytes: 1048576
     headerBytes: 16384
     targetBytes: 2048
+    requestPoolBytes: 2048
     apiConnectSeconds: 1
     apiReadSeconds: 6
     apiSendSeconds: 6
     authConnectSeconds: 1
     authReadSeconds: 1
     sseReadSeconds: 45
+    workerProcesses: 1
+    workerConnections: 2048
+    sseAdmissionConnections: 512
+    apiAdmissionConnections: 384
+    authAdmissionConnections: 320
 
 services:
   edge-gateway:
@@ -346,7 +356,7 @@ services:
     deadlineProfiles: {defaultMs: 5000}
     concurrency: 150
     replicas: 1
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    dbPool: {max: 4, maxWaiting: 100, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
     database: coffee_platform_orders
     kafka:
       {
@@ -461,10 +471,27 @@ services:
     health: *health
     deadlineMs: null
     deadlineProfiles: {defaultMs: null}
-    concurrency: 5000
+    concurrency: 512
     replicas: 1
     dbPool: null
     database: null
+    realtime:
+      shutdownGraceMs: 20000
+      maxConnections: 512
+      queueMaxRecords: 64
+      queueMaxBytes: 262144
+      totalQueueMaxRecords: 262144
+      totalQueueMaxBytes: 67108864
+      ringMaxRecords: 10000
+      ringMaxBytes: 16777216
+      ringMaxAgeMs: 300000
+      coalesceMs: 250
+      writeTimeoutMs: 5000
+      heartbeatMs: 15000
+      authCheckMs: 30000
+      maxEventDataBytes: 2048
+      rssBudgetBytes: 536870912
+      fdBudget: 12288
     kafka:
       producers: []
       consumers:
@@ -474,6 +501,6 @@ services:
             processing: realtime,
           }
     outbound: []
-    secretRefs: [kafka.realtime, security.serviceTransportKeys.realtime-gateway, telemetry.exporterToken]
+    secretRefs: [kafka.realtime, security.actorContextEdgeVerificationPublicKeys, security.serviceTransportKeys.realtime-gateway, telemetry.exporterToken]
     permissions: {manifest: config/permissions/realtime-gateway.json, net: [kafka:9092], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
     mutationCapability: false

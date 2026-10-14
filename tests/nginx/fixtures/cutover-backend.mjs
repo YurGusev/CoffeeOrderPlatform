@@ -7,6 +7,14 @@ const [key, cert, ca] = await Promise.all(['server.key', 'server.crt', 'ca.crt']
 const [apiKey, apiCert] = await Promise.all(['api-server.key', 'api-server.crt'].map(name => readFile(`${dir}/${name}`)));
 const signer = createPrivateKey(await readFile(`${dir}/assertion-private.pem`));
 const events = process.env.REQUEST_LOG;
+const socketIds = new WeakMap();
+const instanceId = randomUUID();
+let nextSocketId = 0;
+function socketId(socket) {
+  let id = socketIds.get(socket);
+  if (!id) { id = `${instanceId}-${++nextSocketId}`; socketIds.set(socket, id); }
+  return id;
+}
 const services = [
   ['edge-gateway', 4000, 'edge'],
   ['api-public', 4050, 'api'],
@@ -16,16 +24,18 @@ for (const [host, port, role] of services) {
   https.createServer({ key: role === 'api' ? apiKey : key, cert: role === 'api' ? apiCert : cert, ca, requestCert: true, rejectUnauthorized: true }, async (req, res) => {
     let body = '';
     for await (const chunk of req) body += chunk;
-    const record = { host, role, method: req.method, url: req.url, headers: req.headers, body, authorized: req.socket.authorized, clientAltName: req.socket.getPeerCertificate().subjectaltname };
+    const record = { host, role, method: req.method, url: req.url, headers: req.headers, body, authorized: req.socket.authorized, clientAltName: req.socket.getPeerCertificate().subjectaltname, upstreamSocketId: socketId(req.socket) };
     await appendFile(events, `${JSON.stringify(record)}\n`);
     if (role === 'edge' && req.url === '/_edge/authorize') {
       const cookie = req.headers.cookie ?? '';
-      const status = cookie.includes('__Host-coffee-session=allow') ? 204 : 401;
+      const session = /(?:^|;\s*)__Host-coffee-session=([^;]+)/.exec(cookie)?.[1];
+      const status = ['allow', 'allow-next', 'allow-recovery'].includes(session) ? 204 : 401;
       if (status === 204) {
         const now = Math.floor(Date.now() / 1000);
         const correlationId = req.headers['x-request-id'];
+        const actorRef = session === 'allow-next' ? 'cutover-actor-next' : session === 'allow-recovery' ? 'cutover-actor-recovery' : 'cutover-actor';
         const header = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'issue162-fixture', typ: 'JWT' })).toString('base64url');
-        const payload = Buffer.from(JSON.stringify({ iss: 'edge-gateway', originalIssuer: 'edge-gateway', aud: req.headers['x-original-uri'] === '/events' ? 'realtime-gateway' : 'api-public', sub: 'cutover-actor', permissions: ['orders:draft:create'], operationId: 'createOrderDraft', correlationId, originalMethod: req.headers['x-original-method'], originalUri: req.headers['x-original-uri'], iat: now, exp: now + 60, jti: randomUUID() })).toString('base64url');
+        const payload = Buffer.from(JSON.stringify({ iss: 'edge-gateway', originalIssuer: 'edge-gateway', aud: req.headers['x-original-uri'] === '/events' ? 'realtime-gateway' : 'api-public', sub: actorRef, permissions: ['orders:draft:create'], operationId: 'createOrderDraft', correlationId, originalMethod: req.headers['x-original-method'], originalUri: req.headers['x-original-uri'], iat: now, exp: now + 60, jti: randomUUID() })).toString('base64url');
         const unsigned = `${header}.${payload}`;
         const assertion = `${unsigned}.${sign(null, Buffer.from(unsigned), signer).toString('base64url')}`;
         res.writeHead(status, { 'X-Actor-Context': assertion, 'X-Correlation-Id': correlationId });

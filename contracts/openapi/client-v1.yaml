@@ -786,6 +786,8 @@ paths:
                   value: "event: stream-ready.v1\ndata: {\"connectionId\":\"...\",\"connectedAt\":\"2026-09-05T12:00:00Z\"}\n\n"
                 invalidated:
                   value: "id: msg_01ARZ3NDEKTSV4RRFFQ69G5FAV\nevent: resource-invalidated.v1\nretry: 3000\ndata: {\"subjectType\":\"order\",\"subjectRef\":\"ord_01ARZ3NDEKTSV4RRFFQ69G5FAV\",\"ownerVersion\":\"7\",\"reason\":\"OrderChanged\",\"correlationId\":\"00000000-0000-4000-8000-000000000001\"}\n\n"
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
         '401':
           $ref: '#/components/responses/AuthenticationRequired'
         '403':

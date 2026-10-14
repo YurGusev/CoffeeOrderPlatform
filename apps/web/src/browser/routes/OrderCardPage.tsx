@@ -4,6 +4,7 @@ import { Alert, Badge, Button, Dialog, Empty, Field, Link, Loading } from "@coff
 import type { CatalogProductSummary, OrderCardResponse, OrderItem } from "@coffee-platform/generated-client-v1";
 import { useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client.js";
+import { isFatalOrderCardReadError } from "../api/order-card.js";
 import { compareDecimalVersion, formatMoney } from "../api/format.js";
 import { ProblemAlert, problemFieldError } from "../api/problem.js";
 import { useConfirmOrder, useDeleteOrderItem, useOrderCard, useQuoteAndPutItem, useRequestReconciliation } from "../api/remote.js";
@@ -102,7 +103,7 @@ function OrderCardContent({ orderRef }: Readonly<{ orderRef: string }>): ReactEl
     </>
   );
   if (order.isError && order.error instanceof ApiError && order.error.problem.status === 403) return <ProblemAlert error={order.error} />;
-  if (order.isError && !order.data) return <ProblemAlert error={order.error} onRefresh={() => void order.refetch()} />;
+  if (order.isError && (isFatalOrderCardReadError(order.error) || !order.data)) return <ProblemAlert error={order.error} onRefresh={() => void order.refetch()} />;
   if (!order.data) return <Loading label="Загружаем Order Card" />;
   const card = order.data;
   const editable = card.allowedActions.includes("edit-items");
