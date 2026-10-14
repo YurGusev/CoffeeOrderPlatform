@@ -57,27 +57,6 @@ provider/context проверяются тестами. Production provider, con
 exporter и Collector относятся к #64; локальные spans не подтверждают
 production export.
 
-### Приём всплеска Orders
-
-Уточнение владельца от 14 октября 2026: owner-boundary волна 100 одновременно
-начатых заказов по 10 позиций проверяется без тестовых повторов отказавших
-команд. Orders pool сохраняет четыре соединения, FIFO admission до 100
-ожидателей по [DB contract](05_DATA_OWNERSHIP.md). HTTP deadline 5000 ms
-включает ожидание; подключение после допуска ограничено checkout 250 ms. Запросы
-сверх очереди или дедлайна завершаются существующим отказом. Это ограниченное
-ожидание ресурса до транзакции, а не долговечная очередь заказов или retry SQL.
-Idempotency/Confirm/Outbox и неизвестный COMMIT сохраняют прежнюю семантику.
-Для PUT позиции `preflightPut` объединяет read-only idempotency precheck и
-существующее полное валидированное чтение Card в одной короткой транзакции.
-Replay/conflict/in-progress завершаются до чтения Card и Pricing. Pricing
-вызывается только после завершения транзакции и освобождения соединения;
-`putItem` отдельно повторно проверяет idempotency/version и атомарно пишет
-эффекты. Preflight не разрешает запись заранее и не удерживает lock во время
-сетевого вызова. Ошибки idempotency lookup и ошибки Card сохраняют прежнее
-раздельное отображение; неуспешное завершение транзакции запрещает Pricing.
-Точный peak target и ограничения synthetic Customer/Pricing/auth перечислены в
-[спецификации проверки](20_REALTIME_SSE_IMPLEMENTATION_SPEC.md#отдельная-owner-командная-волна).
-
 ## 2. Миграции #8
 
 Файлы выполняются строго по порядку:
@@ -349,22 +328,6 @@ concurrency. `projectionVersion` — отдельная монотонная в�
 или material AROMA projection change. Оба runtime вызывают один guarded SQL
 entry point; прямой UPDATE projection table запрещён grants/checker. SSE
 `ownerVersion` всегда равен `projectionVersion`.
-
-`orders.read_card_projection` дополнительно проверяет свежесть Observed, lease
-и reservation `UnknownOutcome` при каждом GET. Без записи Card/Outbox и без
-изменения projectionVersion допустимы read-time переходы `InSync→OutOfSync`,
-`InSync→Converging`, `Converging→OutOfSync`, `OutOfSync→Converging`.
-Unknown reservation перекрывает state/blockers значениями `UnknownOutcome`
-и единственным `AROMA_UNKNOWN_OUTCOME`; recovery может снять это перекрытие
-до асинхронного обновления публичной проекции. Прежние бизнес-поля Card,
-AROMA revisions и lastObservedAt при этом сохраняются.
-
-Клиент принимает эти различия только из текущего валидированного owner GET.
-Command/replay response не имеет такого права: исторический ответ не должен
-снимать UnknownOutcome. Read-time снятие перекрытия допускает
-`PendingObservation|Converging|OutOfSync|Blocked|UnknownOutcome`;
-восстановление `InSync` требует новой доказанной проекции. `allowedActions`
-по-прежнему вычисляет владелец, а клиент не выводит состояние из SSE payload.
 
 AROMA state precedence:
 

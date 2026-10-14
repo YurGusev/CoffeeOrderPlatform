@@ -13,11 +13,9 @@ export type DatabaseData = {
   healthy: boolean;
   saturated: number;
   acquiring: number;
-  waiters: Waiter[];
   ending?: Promise<void>;
 };
 export type Lease = {client: PoolClient; released: boolean; broken: boolean; pending: number; onError: () => void};
-export type Waiter = {resolve: () => void; reject: (error: Error) => void; signal?: AbortSignal; abort: () => void; shutdownAbort: () => void};
 export type TransactionData = {
   database: Database;
   lease: Lease;

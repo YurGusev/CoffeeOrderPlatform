@@ -265,9 +265,6 @@ serial rollout добавляет максимум 8, migrations/DBA reserve —
 
 Для всех DB pools: checkout/lock timeout `250ms`, interactive statement
 timeout `1500ms`, background `5000ms`, idle `30000ms`, max lifetime `1800000ms`.
-Orders задаёт `dbPool.maxWaiting=100`, остальные runtime при отсутствии поля
-используют 0. Admission ждёт под request/transaction signal до checkout;
-фазы, отмену и счётчики определяет [DB contract](05_DATA_OWNERSHIP.md).
 Health paths: `/health/live`, `/health/ready`, `/metrics`; interval `5000ms`,
 timeout `1000ms`, startup grace `30000ms`, failure threshold `3`, success `1`.
 

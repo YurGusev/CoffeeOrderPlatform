@@ -35,7 +35,6 @@ export type OrderReplayResult =
   | Readonly<{kind:"completed";response:Readonly<{status:number;body:JsonValue;resourceRef?:string}>}>
   | Readonly<{kind:"in_progress"}> | Readonly<{kind:"not_retained"}> | Readonly<{kind:"invalid"}>;
 export type OrderPrecheckResult=OrderReplayResult|Readonly<{kind:"proceed"}>|Readonly<{kind:"conflict"}>;
-export type OrderPutPreflightResult=Exclude<OrderPrecheckResult,{kind:"proceed"}>|Readonly<{kind:"proceed";customerRef:string}>|Readonly<{kind:"lookup_unavailable"}>;
 export class OrderStoreError extends Error {
   public readonly code:string;
   public constructor(code:string) {super(code);this.name="OrderStoreError";this.code=code;}
@@ -286,33 +285,13 @@ export class OrderStore {
   public async precheck(identity:IdempotencyKey,hash:string,correlationId:string,signal?:AbortSignal):Promise<OrderPrecheckResult> {
     validHash(hash);
     return observe("orders.transaction.precheck",()=>withTransaction(this.database,{mode:"interactive",correlationId,...(signal===undefined?{}:{signal})},async tx=>{
-      return this.readPrecheck(tx,identity,hash);
+      const record=await this.idempotency.get(tx,identity);if(record===undefined)return {kind:"proceed"} as const;
+      if(record.requestHash!==hash)return {kind:"conflict"} as const;
+      if(record.state==="Acquired")return {kind:"in_progress"} as const;
+      if(record.expiresAtMs<=await this.time(tx))return {kind:"not_retained"} as const;
+      if(record.response===undefined||!validReplay(identity,record.response))return {kind:"invalid"} as const;
+      return {kind:"completed",response:{status:record.response.status,body:objectJson(record.response.body),resourceRef:string(record.response.resourceRef)}} as const;
     }),signal);
-  }
-  private async readPrecheck(tx:Transaction,identity:IdempotencyKey,hash:string):Promise<OrderPrecheckResult> {
-    const record=await this.idempotency.get(tx,identity);if(record===undefined)return {kind:"proceed"};
-    if(record.requestHash!==hash)return {kind:"conflict"};
-    if(record.state==="Acquired")return {kind:"in_progress"};
-    if(record.expiresAtMs<=await this.time(tx))return {kind:"not_retained"};
-    if(record.response===undefined||!validReplay(identity,record.response))return {kind:"invalid"};
-    return {kind:"completed",response:{status:record.response.status,body:objectJson(record.response.body),resourceRef:string(record.response.resourceRef)}};
-  }
-  /** PUT preflight combines idempotency and the full validated card read before external Pricing I/O. */
-  public async preflightPut(identity:IdempotencyKey,hash:string,orderRef:string,permissions:readonly string[],correlationId:string,signal?:AbortSignal):Promise<OrderPutPreflightResult> {
-    validHash(hash);validRef(orderRef,"ord");
-    let proceeded=false;
-    try {
-      return await observe("orders.transaction.precheck",()=>withTransaction(this.database,{mode:"interactive",correlationId,...(signal===undefined?{}:{signal})},async tx=>{
-        const checked=await this.readPrecheck(tx,identity,hash);
-        if(checked.kind!=="proceed")return checked;
-        proceeded=true;
-        const card=await this.response(tx,orderRef,permissions);
-        return {kind:"proceed",customerRef:card.customer.customerRef} as const;
-      }),signal);
-    } catch(error) {
-      if(!proceeded)return {kind:"lookup_unavailable"};
-      throw error;
-    }
   }
   /** Authorization must happen before this bodyless replay lookup too. */
   public async replay(identity:IdempotencyKey,signal:AbortSignal|undefined,correlationId:string):Promise<OrderReplayResult> {

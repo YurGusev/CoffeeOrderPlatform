@@ -274,10 +274,6 @@ export type VerifyActorContextOptions = Readonly<{
   clockSkewSeconds: number;
 }>;
 
-export function isActorContextTimeValid(claims: Pick<ActorContextClaims, "iat" | "exp">, nowEpochSeconds: number, clockSkewSeconds: number): boolean {
-  return !(claims.iat > nowEpochSeconds + clockSkewSeconds || claims.exp <= nowEpochSeconds - clockSkewSeconds);
-}
-
 export function verifyActorContext(token: string, options: VerifyActorContextOptions): ActorContextClaims {
   const parts = token.split(".");
   if (parts.length !== 2 || parts.some((part) => part.length === 0)) throw new SecurityValidationError("ACTOR_CONTEXT_INVALID", "ожидался compact actor context");
@@ -293,7 +289,7 @@ export function verifyActorContext(token: string, options: VerifyActorContextOpt
   if (!verify(null, payload, publicKey, signature)) throw new SecurityValidationError("ACTOR_CONTEXT_INVALID", "подпись actor context недействительна");
   if (claims.iss !== options.issuer || claims.aud !== options.audience) throw new SecurityValidationError("SERVICE_AUDIENCE_FORBIDDEN", "issuer или audience не разрешены");
   if (!Number.isSafeInteger(options.nowEpochSeconds) || options.clockSkewSeconds < 0) throw new SecurityValidationError("ACTOR_CONTEXT_INVALID", "некорректные параметры времени");
-  if (!isActorContextTimeValid(claims, options.nowEpochSeconds, options.clockSkewSeconds)) {
+  if (claims.iat > options.nowEpochSeconds + options.clockSkewSeconds || claims.exp <= options.nowEpochSeconds - options.clockSkewSeconds) {
     throw new SecurityValidationError("ACTOR_CONTEXT_EXPIRED", "actor context истёк или ещё не действителен");
   }
   return claims;

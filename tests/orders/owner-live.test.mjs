@@ -7,11 +7,7 @@ import {dirname, join, resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 
 import {createHash, randomUUID} from "node:crypto";
-import {AsyncLocalStorage} from "node:async_hooks";
-import {monitorEventLoopDelay} from "node:perf_hooks";
 import test from "node:test";
-import {load as parseYaml} from "js-yaml";
-import pg from "pg";
 import {metrics, trace} from "@opentelemetry/api";
 import {createRuntime} from "../../packages/platform-runtime/src/index.ts";
 import {createDatabase} from "../../packages/platform-database/dist/index.js";
@@ -96,20 +92,6 @@ async function createOwnerApp(database, counters, options = {}) {
         replayLookups += 1;
         return value.apply(target, args);
       };
-      if (["precheck", "preflightPut", "putItem"].includes(property) && options.phaseMeasurement !== undefined) return (...args) => {
-        const started = performance.now();
-        const commandContext = options.phaseMeasurement.getContext(property,args);
-        const phaseContext = commandContext === undefined ? undefined : {...commandContext, phase:property, phaseStartedMs:started};
-        const record = outcome => { try { const ended=performance.now(); options.phaseMeasurement.record(property, ended-started, phaseContext, outcome, started, ended); } catch { /* diagnostics cannot alter store behavior */ } };
-        let result;
-        try { result = options.phaseMeasurement.run(phaseContext, () => value.apply(target, args)); } catch (error) { record("rejected"); throw error; }
-        if (result !== null && typeof result === "object" && typeof result.then === "function") {
-          void result.then(() => record("fulfilled"), () => record("rejected"));
-          return result;
-        }
-        record("fulfilled");
-        return result;
-      };
       return typeof value === "function" ? value.bind(target) : value;
     },
   });
@@ -118,9 +100,8 @@ async function createOwnerApp(database, counters, options = {}) {
     host: "127.0.0.1",
     port: 0,
     shutdownGraceMs: 5_000,
-    deadlineMs: options.deadlineMs ?? 10_000,
-    deadlineProfiles: {defaultMs: options.deadlineMs ?? 10_000},
-    ...(options.concurrency === undefined ? {} : {concurrency: options.concurrency}),
+    deadlineMs: 10_000,
+    deadlineProfiles: {defaultMs: 10_000},
   });
   registerOrdersRoutes(app, {
     // Synthetic trusted api-public fixture for this isolated test only; it is not an IdP.
@@ -145,7 +126,7 @@ async function createOwnerApp(database, counters, options = {}) {
     },
     owner: {
       store: countedStore,
-      customer: options.customer ?? {
+      customer: {
         async getOrderInput(request) {
           counters.customer += 1;
           assert.equal(request.customerRef, customerRef);
@@ -231,317 +212,6 @@ async function withLegacyOwners(run) {
   } finally {await rm(scratch,{recursive:true,force:true});}
 }
 
-void test("LIVE: owner peak 100 concurrent buyers with 10 positions persists one effect per command", {
-  timeout: 180_000,
-  skip: process.env.COFFEE_DB_LIVE_PROOF !== "1" ? "disposable PostgreSQL required" : false,
-}, async () => {
-  const config = parseYaml(await readFile(new URL("config/platform.yaml", root), "utf8"), {json:true});
-  const settings = config.services["orders-service"];
-  const receiptPath = join(process.env.TMPDIR ?? tmpdir(), `issue12-owner-peak-${process.pid}.json`);
-  const receipt = {scope:"Orders routes/application/OrderStore/PostgreSQL/Outbox; synthetic Customer/Pricing/public delegation, Fastify inject, not client-v1 ingress or VK/Agent/LLM E2E", requestedFlows:100, positionsPerFlow:10, started:0, completed:0, failed:0, peakConcurrentFlows:0, commands:[], flows:[], failures:[], pool:settings.dbPool, deadlineMs:settings.deadlineMs,concurrency:settings.concurrency,callerRetries:0,peakDatabaseMetrics:{active:0,waiting:0,pending:0}};
-  const phaseSamples = {precheck:[],preflightPut:[],putItem:[]};
-  const correlatedPhaseCounts = {precheck:0,preflightPut:0,putItem:0};
-  const phaseOutcomes = {fulfilled:0,rejected:0};
-  const commandContexts = new Map();
-  const slowPhaseWitnesses = [];
-  const phaseContext = new AsyncLocalStorage();
-  const databaseSamples = {phaseToClient:[],poolConnect:[],acquired:[],leaseHeld:[],queries:{}};
-  const slowDatabaseWitnesses = {waitAcquire:[],leaseHeld:[],sql:[]};
-  const boundedWitness = (list, witness) => {
-    list.push(witness);
-    list.sort((a,b)=>b.durationMs-a.durationMs);
-    if(list.length>24)list.length=24;
-  };
-  const timingWitness = (kind, startedAtMs, endedAtMs, context, detail = {}) => {
-    const list=slowDatabaseWitnesses[kind];
-    boundedWitness(list, {
-      kind,flow:context.flow,command:context.name,ordinal:context.ordinal,diagnosticId:context.diagnosticId,correlationId:context.correlationId,
-      phase:context.phase,startedAtMs,endedAtMs,durationMs:Number((endedAtMs-startedAtMs).toFixed(3)),...detail,
-    });
-  };
-  const summarize = values => {
-    const ordered=[...values].sort((a,b)=>a-b);
-    const percentile=p=>ordered.length===0?null:Number(ordered[Math.ceil(ordered.length*p)-1].toFixed(3));
-    return {count:ordered.length,p50:percentile(0.5),p95:percentile(0.95),max:ordered.length===0?null:Number(ordered.at(-1).toFixed(3))};
-  };
-  const eventLoopDelay = monitorEventLoopDelay({resolution:10});
-  const phaseMeasurement = {
-    getContext:(phase,args)=>{
-      const identityKey=phase==="putItem"?args[0]?.identity?.key:args[0]?.key;
-      const context=typeof identityKey==="string"?commandContexts.get(identityKey):undefined;
-      return context;
-    },
-    run:(context,operation)=>context===undefined?operation():phaseContext.run(context,operation),
-    record(phase,durationMs,context,outcome,startedAtMs,endedAtMs) {
-      phaseSamples[phase].push(durationMs);
-      phaseOutcomes[outcome]++;
-      if(context?.correlationId!==undefined)correlatedPhaseCounts[phase]++;
-      boundedWitness(slowPhaseWitnesses,{phase,startedAtMs,endedAtMs,durationMs:Number(durationMs.toFixed(3)),outcome,...(context===undefined?{}:{flow:context.flow,command:context.name,ordinal:context.ordinal,diagnosticId:context.diagnosticId,correlationId:context.correlationId})});
-    },
-  };
-  try {
-    await withCatalogPostgres(async ({adminClient:admin, port, databaseName}) => {
-      const password = `orders-peak-${randomUUID().replaceAll("-", "")}`;
-      await admin.query(`CREATE ROLE coffee_orders_service_rw LOGIN PASSWORD '${password}'`);
-      for (const role of ["coffee_orders_prepare_rw","coffee_orders_observer_rw","coffee_orders_convergence_rw"]) await admin.query(`CREATE ROLE ${role} NOLOGIN`);
-      for (const migration of migrations) await admin.query(await readFile(new URL(`apps/orders-service/migrations/${migration}`, root), "utf8"));
-      const database = createDatabase({owner:"orders-peak-proof", database:databaseName, allowedDatabase:databaseName, host:"127.0.0.1", port, user:"coffee_orders_service_rw", password, ssl:false, pool:settings.dbPool, shutdownGraceMs:config.platform.shutdownGraceMs});
-      await database.resource.start(AbortSignal.timeout(5_000));
-      const activeClientRestorers = new Set();
-      let originalPoolConnect, originalPoolConnectDescriptor, poolHookInstalled = false;
-      let runtime;
-      try {
-      originalPoolConnect = pg.Pool.prototype.connect;
-      originalPoolConnectDescriptor = Object.getOwnPropertyDescriptor(pg.Pool.prototype,"connect");
-      const classifyQuery = args => {
-        const sql=typeof args[0]==="string"?args[0]:args[0]!==null&&typeof args[0]==="object"?args[0].text:"";
-        const match=typeof sql==="string"?sql.trimStart().match(/^(BEGIN|COMMIT|ROLLBACK|SET|SELECT|INSERT|UPDATE|DELETE|WITH)\b/iu):null;
-        return match?.[1]?.toUpperCase()??"OTHER";
-      };
-      pg.Pool.prototype.connect = function(...args) {
-        if(this.options?.application_name!=="orders-peak-proof")return originalPoolConnect.apply(this,args);
-        const context=phaseContext.getStore();
-        const requestedAt=performance.now();
-        const result=originalPoolConnect.apply(this,args);
-        if(context===undefined||result===null||typeof result!=="object"||typeof result.then!=="function")return result;
-        const recordConnect=(outcome,client) => {
-          try {
-            const resolvedAt=performance.now();
-            const poolConnectMs=resolvedAt-requestedAt;
-            const phaseToClientMs=resolvedAt-context.phaseStartedMs;
-            databaseSamples.poolConnect.push(poolConnectMs);
-            databaseSamples.phaseToClient.push(phaseToClientMs);
-            timingWitness("waitAcquire",context.phaseStartedMs,resolvedAt,context,{outcome,poolConnectMs:Number(poolConnectMs.toFixed(3)),poolConnectStartedAtMs:requestedAt,poolConnectEndedAtMs:resolvedAt});
-            if(outcome!=="fulfilled"||client===undefined)return;
-            databaseSamples.acquired.push(phaseToClientMs);
-            const acquiredAt=resolvedAt;
-            const queryDescriptor=Object.getOwnPropertyDescriptor(client,"query");
-            const releaseDescriptor=Object.getOwnPropertyDescriptor(client,"release");
-            const originalQuery=client.query, originalRelease=client.release;
-            const restore=()=>{
-              try {if(queryDescriptor===undefined)delete client.query;else Object.defineProperty(client,"query",queryDescriptor);} catch {}
-              try {if(releaseDescriptor===undefined)delete client.release;else Object.defineProperty(client,"release",releaseDescriptor);} catch {}
-              activeClientRestorers.delete(restore);
-            };
-            activeClientRestorers.add(restore);
-            try {
-              Object.defineProperty(client,"query",{configurable:true,writable:true,value:function(...queryArgs) {
-                const queryContext=phaseContext.getStore()??context;
-                const verb=classifyQuery(queryArgs), queryStart=performance.now();
-                const queryResult=originalQuery.apply(this,queryArgs);
-                if(queryResult!==null&&typeof queryResult==="object"&&typeof queryResult.then==="function") {
-                  const recordQuery=outcome=>{try{
-                    const queryEndedAt=performance.now(), durationMs=queryEndedAt-queryStart;
-                    const key=`${queryContext.phase??"unknown"}:${verb}:${outcome}`;
-                    (databaseSamples.queries[key]??=[]).push(durationMs);
-                    timingWitness("sql",queryStart,queryEndedAt,queryContext,{verb,outcome});
-                  }catch{ /* diagnostic observers cannot alter query behavior */ }};
-                  void queryResult.then(()=>recordQuery("fulfilled"),()=>recordQuery("rejected"));
-                }
-                return queryResult;
-              }});
-              Object.defineProperty(client,"release",{configurable:true,writable:true,value:function(...releaseArgs) {
-                const releaseContext=phaseContext.getStore()??context;
-                const releasedAt=performance.now(), leaseHeldMs=releasedAt-acquiredAt;
-                try {
-                  databaseSamples.leaseHeld.push(leaseHeldMs);
-                  timingWitness("leaseHeld",acquiredAt,releasedAt,releaseContext,{outcome:releaseArgs[0]===true?"destroyed":"released"});
-                } catch { /* diagnostic recording cannot delay pool cleanup */ }
-                restore();
-                return originalRelease.apply(this,releaseArgs);
-              }});
-            } catch {
-              restore();
-            }
-          } catch { /* diagnostic observers cannot alter pool behavior */ }
-        };
-        void result.then(client=>recordConnect("fulfilled",client),()=>recordConnect("rejected"));
-        return result;
-      };
-      poolHookInstalled = true;
-      const counters = {customer:0, pricing:0};
-      const customers = new Set(Array.from({length:100}, (_,n) => `cus_${String(n+1).padStart(26,"0")}`));
-      const quoteExpiresAt = new Date(Date.now()+60*60_000).toISOString();
-      let active = 0, release;
-      const barrier = new Promise(resolveBarrier => {release = resolveBarrier;});
-      try {
-        runtime = await createOwnerApp(database, counters, {
-          phaseMeasurement,
-          deadlineMs:settings.deadlineMs,
-          concurrency:settings.concurrency,
-          customer:{async getOrderInput(request) {
-            counters.customer++; assert.ok(customers.has(request.customerRef));
-            return {customerRef:request.customerRef, customerVersion:"3", displayName:"Synthetic peak customer", state:"Active"};
-          }},
-          pricing:{async verify(request) {
-            counters.pricing++; assert.ok(customers.has(request.customerRef));
-            assert.equal(request.quoteRef,request.customerRef.replace("cus_","prq_")); assert.equal(request.hash,hash("a"));
-            assert.equal(request.quantity,selectedLine.quantity);
-            assert.ok(request.quoteLineNumber>=1 && request.quoteLineNumber<=10);
-            const suffix=String(request.quoteLineNumber).padStart(26,"0");
-            assert.equal(request.productRef,`prd_${suffix}`); assert.equal(request.variantRef,`var_${suffix}`);
-            return {valid:true, quoteRef:request.quoteRef, policyVersionRef, catalogSnapshotRevision:"11", customerRef:request.customerRef, expiresAt:quoteExpiresAt, currency:"RUB", line:{...selectedLine,lineNumber:request.quoteLineNumber,productRef:request.productRef,variantRef:request.variantRef,offerRef:`off_${suffix}`}};
-          }},
-        });
-        const actor="synthetic-api-public-actor-a";
-        const sampleDatabase=()=>{const sample=database.metrics();for(const key of ["active","waiting","pending"])receipt.peakDatabaseMetrics[key]=Math.max(receipt.peakDatabaseMetrics[key],sample[key]);};
-        const command = async (flow, name, request) => {
-          sampleDatabase();
-          const ordinal=receipt.commands.length+1, diagnosticId=randomUUID(), correlationId=request.headers["x-correlation-id"], idempotencyKey=request.headers["idempotency-key"], start=performance.now();
-          const row={flow,name,ordinal,diagnosticId,correlationId,startMs:start,outcome:"pending"};
-          const context={flow,name,ordinal,diagnosticId,correlationId,startMs:start};
-          commandContexts.set(idempotencyKey,context);
-          if(name==="PUT")row.putOrdinal=request.payload?.quoteLineNumber;
-          receipt.commands.push(row);
-          try {
-            let response;
-            try {response=await runtime.app.inject(request);}
-            catch(error) {
-              row.outcome="rejected";
-              row.rejection={name:error?.name??"Error",...(typeof error?.code==="string"&&/^[A-Z0-9_]{1,64}$/u.test(error.code)?{code:error.code}:{})};
-              throw error;
-            }
-            row.status=response.statusCode;
-            if(response.statusCode>=400) {
-              row.outcome="rejected";
-              row.code=response.json().code;
-              row.rejection={kind:"http",code:row.code};
-            } else row.outcome="completed";
-            sampleDatabase();
-            assert.equal(response.statusCode,name.startsWith("Draft")?201:200,response.body);
-            return response;
-          } finally {
-            try {sampleDatabase();} catch {}
-            row.endMs=performance.now();row.elapsedMs=row.endMs-start;
-            commandContexts.delete(idempotencyKey);
-          }
-        };
-        const flows=[...customers].map((customerRef,flow)=>(async()=>{
-          await barrier; receipt.started++; active++; receipt.peakConcurrentFlows=Math.max(receipt.peakConcurrentFlows,active);
-          const quoteRef=customerRef.replace("cus_","prq_");
-          const start=performance.now();
-          const flowRow={flow,customerRef,startMs:start}; receipt.flows.push(flowRow);
-          try {
-            const create={method:"POST",url:"/api/client-v1/orders/drafts",headers:requestHeaders(actor),payload:{customerRef}};
-            const draft=await command(flow,"Draft",create), orderRef=draft.json().orderRef;
-            const draftReplay=await command(flow,"Draft replay",{...create,headers:{...create.headers,"idempotency-replay-only":"true"},payload:undefined});
-            assert.equal(draftReplay.statusCode,201); assert.equal(draftReplay.headers["idempotency-replayed"],"true"); assert.deepEqual(draftReplay.json(),draft.json());
-            for(let line=1;line<=10;line++) {
-              const suffix=String(line).padStart(26,"0");
-              const response=await command(flow,"PUT",{method:"PUT",url:`${orderPath(orderRef)}/items/itm_${suffix}`,headers:requestHeaders(actor),payload:{expectedVersion:String(line),productRef:`prd_${suffix}`,variantRef:`var_${suffix}`,quantity:selectedLine.quantity,quoteRef,quoteLineNumber:line,quoteHash:hash("a")}});
-              assert.equal(response.json().version,String(line+1));
-            }
-            const confirm={method:"POST",url:confirmPath(orderRef),headers:requestHeaders(actor),payload:{expectedVersion:"11"}};
-            await command(flow,"Confirm",confirm); // Discard the first body: simulate a lost reply after owner commit.
-            const replay=await command(flow,"Confirm replay",{...confirm,headers:{...confirm.headers,"idempotency-replay-only":"true"},payload:undefined});
-            assert.equal(replay.headers["idempotency-replayed"],"true"); assert.equal(replay.json().version,"12"); assert.equal(replay.json().items.length,10);
-            receipt.completed++; flowRow.status="completed"; flowRow.orderRef=orderRef;
-            return {orderRef,customerRef,elapsedMs:performance.now()-start};
-          } catch(error) {receipt.failed++; flowRow.status="failed"; receipt.failures.push({flow,message:error.message}); throw error;}
-          finally {active--; flowRow.endMs=performance.now(); flowRow.elapsedMs=flowRow.endMs-start;}
-        })());
-        receipt.startedAt=new Date().toISOString(); const start=performance.now(); eventLoopDelay.enable(); release();
-        let settled;
-        try { settled=await Promise.allSettled(flows); }
-        finally { eventLoopDelay.disable(); }
-        receipt.elapsedMs=performance.now()-start; receipt.endedAt=new Date().toISOString(); receipt.databaseMetrics=database.metrics();
-        const eventLoopMs=value=>Number.isFinite(value)?Number((value/1e6).toFixed(3)):null;
-        receipt.eventLoopDelayMs={mean:eventLoopMs(eventLoopDelay.mean),p95:eventLoopMs(eventLoopDelay.percentile(95)),max:eventLoopMs(eventLoopDelay.max)};
-        const completed=settled.filter(result=>result.status==="fulfilled").map(result=>result.value), times=completed.map(result=>result.elapsedMs).sort((a,b)=>a-b);
-        receipt.throughputOrdersPerSecond=completed.length*1000/receipt.elapsedMs;
-        receipt.latencyMs=Object.fromEntries([50,95,99].map(p=>[`p${p}`,times[Math.ceil(times.length*p/100)-1]??null]));
-        receipt.poolOrLockFailures=receipt.commands.filter(row=>row.code!==undefined).map(({flow,name,status,code})=>({flow,name,status,code}));
-        const counts=rows=>({total:rows.length,successes:rows.filter(row=>Number.isInteger(row.status)&&row.status<400).length,refusals:rows.filter(row=>Number.isInteger(row.status)&&row.status>=400).length,statusCodes:rows.filter(row=>Number.isInteger(row.status)).reduce((out,row)=>{const key=`${row.status}:${row.code??"success"}`;out[key]=(out[key]??0)+1;return out;},{})});
-        receipt.commandCounts=counts(receipt.commands);
-        receipt.draftCounts=counts(receipt.commands.filter(row=>row.name==="Draft"));
-        receipt.rejectedCommandCount=receipt.commands.filter(row=>row.outcome==="rejected").length;
-        assert.equal(receipt.peakConcurrentFlows,100); assert.equal(receipt.started,100); assert.equal(receipt.failed,0,JSON.stringify(receipt.failures)); assert.equal(receipt.completed,100);
-        assert.deepEqual(receipt.commandCounts,{total:1400,successes:1400,refusals:0,statusCodes:{"201:success":200,"200:success":1200}});
-        assert.deepEqual(receipt.databaseMetrics,{active:0,idle:4,waiting:0,saturationTotal:0,pending:0});
-        assert.ok(receipt.peakDatabaseMetrics.active<=settings.dbPool.max);
-        assert.ok(receipt.peakDatabaseMetrics.waiting<=(settings.dbPool.maxWaiting??0));
-        assert.equal(new Set(completed.map(row=>row.orderRef)).size,100);
-        const durable=(await admin.query(`SELECT
-          (SELECT count(*)::int FROM orders.orders WHERE status='Confirmed' AND version=12) orders,
-          (SELECT count(DISTINCT customer_ref)::int FROM orders.orders) customers,
-          (SELECT count(*)::int FROM orders.order_items) positions,
-          (SELECT count(*)::int FROM orders.order_history) history,
-          (SELECT count(*)::int FROM orders.order_desired_contributions WHERE order_version=12 AND contribution_revision=1) contributions,
-          (SELECT count(*)::int FROM orders.order_desired_contribution_lines) contribution_lines,
-          (SELECT count(*)::int FROM orders.outbox_messages WHERE message_type='OrderConfirmed.v1' AND owner_version='12' AND state='Pending') outbox,
-          (SELECT count(*)::int FROM orders.idempotency_records WHERE state='Completed') idempotency`)).rows[0];
-        assert.deepEqual(durable,{orders:100,customers:100,positions:1000,history:1200,contributions:100,contribution_lines:1000,outbox:100,idempotency:1200});
-        assert.deepEqual(counters,{customer:100,pricing:1000},"replays and Confirm do not repeat upstream proof reads");
-        const workloadComplete=receipt.completed===100&&receipt.failed===0&&receipt.commands.length===1400&&receipt.commands.every(row=>row.outcome==="completed");
-        const expectedPhaseCalls={precheck:200,preflightPut:1000,putItem:1000};
-        const queryCount=Object.values(databaseSamples.queries).reduce((total,values)=>total+values.length,0);
-        const commitCount=Object.entries(databaseSamples.queries).filter(([key])=>key.endsWith(":COMMIT:fulfilled")).reduce((total,[,values])=>total+values.length,0);
-        receipt.workloadResult={complete:workloadComplete,completedFlows:receipt.completed,failedFlows:receipt.failed,commands:receipt.commands.length};
-        receipt.diagnosticCoverage={
-          expectedPhaseCalls,
-          observedPhaseCalls:Object.fromEntries(Object.entries(phaseSamples).map(([phase,values])=>[phase,values.length])),
-          correlatedPhaseCalls:{...correlatedPhaseCounts},phaseOutcomes:{...phaseOutcomes},
-          acquiredConnections:databaseSamples.acquired.length,heldLeases:databaseSamples.leaseHeld.length,
-          queryRecords:queryCount,commitRecords:commitCount,
-          commandContextsRemaining:commandContexts.size,
-        };
-        if(!workloadComplete)receipt.diagnosticCoverage.measurementUnavailable="full diagnostic coverage is asserted only after all 100 flows complete; workload remains failed";
-        else {
-          assert.deepEqual(receipt.diagnosticCoverage.observedPhaseCalls,expectedPhaseCalls,"all expected real Store phases were observed");
-          assert.deepEqual(receipt.diagnosticCoverage.correlatedPhaseCalls,expectedPhaseCalls,"every Store phase carries its command correlation context");
-          assert.equal(receipt.diagnosticCoverage.phaseOutcomes.fulfilled,2200);
-          assert.equal(receipt.diagnosticCoverage.phaseOutcomes.rejected,0);
-          assert.equal(receipt.diagnosticCoverage.acquiredConnections,2200,"each real Store phase acquired one database client");
-          assert.equal(receipt.diagnosticCoverage.heldLeases,2200,"each acquired database client was released");
-          assert.ok(queryCount>0,"real PostgreSQL query observations are required");
-          assert.ok(commitCount>0,"real COMMIT query observations are required");
-          assert.equal(receipt.diagnosticCoverage.commandContextsRemaining,0);
-        }
-        receipt.durable=durable; receipt.counters=counters; receipt.verified=true;
-      } finally {
-        if(runtime)await runtime.app.runtimeController.closeRuntime("SIGTERM");
-      }
-      } finally {
-        try {
-          if(poolHookInstalled) {
-            if(originalPoolConnectDescriptor===undefined)delete pg.Pool.prototype.connect;
-            else Object.defineProperty(pg.Pool.prototype,"connect",originalPoolConnectDescriptor);
-            assert.equal(pg.Pool.prototype.connect,originalPoolConnect,"Pool.connect hook restored to the inherited/original function");
-          }
-          for(const restore of activeClientRestorers)restore();
-        } finally {await database.resource.stop(AbortSignal.timeout(5_000));}
-      }
-    });
-  } finally {
-    eventLoopDelay.disable();
-    if(receipt.diagnosticCoverage===undefined) {
-      receipt.workloadResult={complete:receipt.completed===100&&receipt.failed===0,completedFlows:receipt.completed,failedFlows:receipt.failed,commands:receipt.commands.length};
-      receipt.diagnosticCoverage={
-        expectedPhaseCalls:{precheck:200,preflightPut:1000,putItem:1000},
-        observedPhaseCalls:Object.fromEntries(Object.entries(phaseSamples).map(([phase,values])=>[phase,values.length])),
-        correlatedPhaseCalls:{...correlatedPhaseCounts},phaseOutcomes:{...phaseOutcomes},
-        acquiredConnections:databaseSamples.acquired.length,heldLeases:databaseSamples.leaseHeld.length,
-        queryRecords:Object.values(databaseSamples.queries).reduce((total,values)=>total+values.length,0),
-        commitRecords:Object.entries(databaseSamples.queries).filter(([key])=>key.endsWith(":COMMIT:fulfilled")).reduce((total,[,values])=>total+values.length,0),
-        commandContextsRemaining:commandContexts.size,
-        measurementUnavailable:"workload or setup did not reach the diagnostic coverage assertion; failure is preserved",
-      };
-    }
-    const percentile=(values,p)=>values.length===0?null:Number([...values].sort((a,b)=>a-b)[Math.ceil(values.length*p)-1].toFixed(3));
-    receipt.storePhaseLatency=Object.fromEntries(Object.entries(phaseSamples).map(([phase,values])=>[phase,{count:values.length,p50:percentile(values,0.5),p95:percentile(values,0.95),max:values.length===0?null:Number(Math.max(...values).toFixed(3))}]));
-    receipt.slowPhaseWitnesses=slowPhaseWitnesses;
-    receipt.poolTimingDefinitions={
-      phaseStartToClient:"phase start through owner prelude/FIFO admission and pg pool queue/physical client acquisition until connect resolves; not pure FIFO",
-      poolConnect:"original pg.Pool.connect invocation through Promise resolution; may include pool queue and physical connection setup",
-      leaseHeld:"client connect resolution through client.release invocation",
-    };
-    receipt.poolTimingLatencyMs={phaseStartToClient:summarize(databaseSamples.phaseToClient),poolConnect:summarize(databaseSamples.poolConnect),acquired:summarize(databaseSamples.acquired),leaseHeld:summarize(databaseSamples.leaseHeld),queries:Object.fromEntries(Object.entries(databaseSamples.queries).map(([kind,values])=>[kind,summarize(values)]))};
-    receipt.slowDatabaseWitnesses=slowDatabaseWitnesses;
-    await writeFile(receiptPath,JSON.stringify(receipt,null,2)+"\n");
-    console.log(JSON.stringify({ownerPeakReceipt:receiptPath,verified:receipt.verified===true,launchProof:false}));
-  }
-});
-
 void test("LIVE: nullable upgrades preserve real legacy hashes, snapshots and exact/bodyless replay without repeating Confirm", {
   timeout:180_000,skip:process.env.COFFEE_DB_LIVE_PROOF!=="1"?"disposable PostgreSQL required":false,
 },async()=>{
@@ -565,20 +235,7 @@ void test("LIVE: nullable upgrades preserve real legacy hashes, snapshots and ex
       const command={identity,request,correlationId,signDelegation:()=>"synthetic-delegation"};
       const quote=await legacyCreatePricingQuote(oldPricing,{async getPricingInput(){return {productRef,variantRef,displayName:"Legacy coffee",unit:"kilogram",offerRef,mappingRevision:"7",supplierUnitMinor:"900",snapshotRevision:"11",currency:"RUB",availability:"Available"};}},command);
       const counters={customer:0,pricing:0};
-      const historicalStore=new LegacyOrderStore(database);
-      // The fixture pairs the historical writer with the current application. Bridge only the new PUT preflight by composing its old read operations; historical storage writes remain untouched.
-      const historicalApplicationStore=new Proxy(historicalStore,{get(target,property,receiver){
-        if(property==="preflightPut")return async(identity,hash,orderRef,permissions,requestCorrelationId,signal)=>{
-          let checked;
-          try{checked=await target.precheck(identity,hash,requestCorrelationId,signal);}catch{return {kind:"lookup_unavailable"};}
-          if(checked.kind!=="proceed")return checked;
-          const card=await target.getCard(orderRef,{permissions,correlationId:requestCorrelationId,signal});
-          return {kind:"proceed",customerRef:card.customer.customerRef};
-        };
-        const value=Reflect.get(target,property,receiver);
-        return typeof value==="function"?value.bind(target):value;
-      }});
-      runtime=await createOwnerApp(database,counters,{store:historicalApplicationStore});
+      runtime=await createOwnerApp(database,counters,{store:new LegacyOrderStore(database)});
       const actor="synthetic-api-public-actor-a";
       const draft=await runtime.app.inject({method:"POST",url:"/api/client-v1/orders/drafts",headers:requestHeaders(actor),payload:{customerRef}});
       assert.equal(draft.statusCode,201,draft.body);

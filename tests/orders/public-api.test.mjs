@@ -189,7 +189,7 @@ async function ownerErrorProxy(t, code) {
     verifyPublicDelegation: (_token, operationId, correlationId) => ({iss: "api-public", aud: "orders-service", originalIssuer: "edge-gateway", sub: "usr_test", permissions: [operationId === "confirmOrder" ? "orders:confirm:any" : "orders:edit:any"], operationId, correlationId}),
     signInternalDelegation: () => "fixture-delegation",
     owner: {
-      store: {precheck: async () => ({kind: "proceed"}), preflightPut: async () => ({kind:"proceed",customerRef}), getCard: async () => card,
+      store: {precheck: async () => ({kind: "proceed"}), getCard: async () => card,
         putItem: async () => { throw Object.assign(new Error("private owner cause"), {code}); },
         confirm: async () => { throw Object.assign(new Error("private owner cause"), {code}); }},
       pricing: {verify: async () => ({valid: true, quoteRef, policyVersionRef: "pvr_01ARZ3NDEKTSV4RRFFQ69G5FAV", catalogSnapshotRevision: "1", customerRef,

@@ -1,6 +1,6 @@
 import pg from "pg";
 import type {DatabasePoolConfig} from "@coffee-platform/config";
-import {bounded, databases, transactions, track, trackLease, type DatabaseData, type Lease, type TransactionData, type Waiter} from "./internal.js";
+import {bounded, databases, transactions, track, trackLease, type DatabaseData, type Lease, type TransactionData} from "./internal.js";
 
 export type SqlScalar = string | number | bigint | boolean | Uint8Array | null;
 export type QueryResult<Row> = Readonly<{rows: readonly Row[]; rowCount: number}>;
@@ -49,7 +49,6 @@ function release(data: DatabaseData, lease: Lease, destroy = false): void {
   lease.client.removeListener("error", lease.onError);
   lease.client.release(destroy || lease.broken || lease.pending > 0);
   data.leases.delete(lease);
-  dispatchWaiters(data);
 }
 export function databaseFailure(error: unknown, metadata: CorrelationMetadata): DatabaseTransactionError {
   if (error instanceof DatabaseTransactionError) return error;
@@ -60,42 +59,15 @@ export function databaseFailure(error: unknown, metadata: CorrelationMetadata): 
 }
 async function acquire(data: DatabaseData, metadata: CorrelationMetadata, signal?: AbortSignal): Promise<Lease> {
   if (data.shutdown.signal.aborted) throw new DatabaseTransactionError("DB_STOPPED", metadata);
-  if (signal?.aborted) throw new DatabaseTransactionError("DB_INTERRUPTED", metadata);
-  const rejectWaiter = (waiter: Waiter, error: Error): void => {
-    const index = data.waiters.indexOf(waiter);
-    if (index !== -1) data.waiters.splice(index, 1);
-    waiter.signal?.removeEventListener("abort", waiter.abort);
-    data.shutdown.signal.removeEventListener("abort", waiter.shutdownAbort);
-    waiter.reject(error);
-  };
-  if (data.leases.size + data.acquiring >= data.config.max || data.waiters.length > 0) {
-    if (!data.config.maxWaiting || data.waiters.length >= data.config.maxWaiting) {
-      data.saturated++;
-      throw new DatabaseTransactionError("DB_POOL_EXHAUSTED", metadata);
-    }
-    await new Promise<void>((resolve, reject) => {
-      const waiter: Waiter = {
-        resolve, reject, ...(signal ? {signal} : {}),
-        abort: () => {
-          if (signal?.reason instanceof Error && signal.reason.name === "TimeoutError") data.saturated++;
-          rejectWaiter(waiter, new DatabaseTransactionError("DB_INTERRUPTED", metadata));
-        },
-        shutdownAbort: () => rejectWaiter(waiter, new DatabaseTransactionError("DB_STOPPED", metadata)),
-      };
-      data.waiters.push(waiter);
-      signal?.addEventListener("abort", waiter.abort, {once: true});
-      data.shutdown.signal.addEventListener("abort", waiter.shutdownAbort, {once: true});
-      if (signal?.aborted) waiter.abort();
-      else if (data.shutdown.signal.aborted) waiter.shutdownAbort();
-    });
-  } else data.acquiring++;
-  if (data.shutdown.signal.aborted || signal?.aborted) {
-    data.acquiring--;
-    dispatchWaiters(data);
-    throw new DatabaseTransactionError(data.shutdown.signal.aborted ? "DB_STOPPED" : "DB_INTERRUPTED", metadata);
+  // Нет безграничной очереди pg: checkout и health делят один объявленный pool cap.
+  if (data.leases.size + data.acquiring >= data.config.max) {
+    data.saturated++;
+    throw new DatabaseTransactionError("DB_POOL_EXHAUSTED", metadata);
   }
+  if (signal?.aborted) throw new DatabaseTransactionError("DB_INTERRUPTED", metadata);
   let expired = false;
   let acquired: Lease | undefined;
+  data.acquiring++;
   const connection = track(data, data.pool.connect().catch((error: unknown) => {
     // Единственный fallback — отказ SSL negotiation ДО authentication/BEGIN.
     // Ошибки сертификата, запросов и неизвестного COMMIT не повторяются.
@@ -111,30 +83,14 @@ async function acquire(data: DatabaseData, metadata: CorrelationMetadata, signal
     data.leases.add(lease);
     acquired = lease;
     return lease;
-  }).finally(() => {data.acquiring--; dispatchWaiters(data);}));
+  }).finally(() => {data.acquiring--;}));
   try {
-    return await bounded(connection, data.config.checkoutTimeoutMs, () => {
-      if (data.shutdown.signal.aborted) return new DatabaseTransactionError("DB_STOPPED", metadata);
-      if (signal?.aborted) return new DatabaseTransactionError("DB_INTERRUPTED", metadata);
-      data.saturated++;
-      return new DatabaseTransactionError("DB_POOL_EXHAUSTED", metadata);
-    },
-      AbortSignal.any([data.shutdown.signal, ...(signal ? [signal] : [])]));
+    return await bounded(connection, data.config.checkoutTimeoutMs, () => new DatabaseTransactionError(signal?.aborted ? "DB_INTERRUPTED" : "DB_POOL_EXHAUSTED", metadata), signal);
   } catch (error) {
     expired = true;
     if (acquired) release(data, acquired, true);
     if (!(error instanceof DatabaseTransactionError)) data.healthy = false;
     throw databaseFailure(error, metadata);
-  }
-}
-function dispatchWaiters(data: DatabaseData): void {
-  if (data.shutdown.signal.aborted) return;
-  while (data.waiters.length > 0 && data.leases.size + data.acquiring < data.config.max) {
-    const waiter = data.waiters.shift()!;
-    waiter.signal?.removeEventListener("abort", waiter.abort);
-    data.shutdown.signal.removeEventListener("abort", waiter.shutdownAbort);
-    data.acquiring++;
-    waiter.resolve();
   }
 }
 async function command(data: DatabaseData, lease: Lease, sql: string, ms: number, metadata: CorrelationMetadata, signal?: AbortSignal): Promise<pg.QueryResult> {
@@ -152,17 +108,16 @@ export function createDatabase(options: DatabaseOptions): Database {
   const c = options.pool;
   if (!c) throw new DatabaseTransactionError("DB_INVALID_CONFIGURATION");
   if (!Number.isSafeInteger(options.port) || options.port < 1 || options.port > 65535 ||
-    (c.maxWaiting !== undefined && (!Number.isSafeInteger(c.maxWaiting) || c.maxWaiting < 0 || c.maxWaiting > 100)) ||
     [c.max, c.checkoutTimeoutMs, c.lockTimeoutMs, c.interactiveStatementTimeoutMs, c.backgroundStatementTimeoutMs, c.terminalTimeoutMs, c.transactionTimeoutMs, c.idleTimeoutMs, c.maxLifetimeMs].some(value => !Number.isSafeInteger(value) || value <= 0) ||
     c.checkoutTimeoutMs + c.transactionTimeoutMs + c.terminalTimeoutMs * 2 >= options.shutdownGraceMs) throw new DatabaseTransactionError("DB_INVALID_CONFIGURATION");
   const pool = new pg.Pool({host: options.host, port: options.port, database: options.database, user: options.user, password: options.password,
     ssl: options.ssl === "prefer" ? true : options.ssl ?? false, max: c.max, connectionTimeoutMillis: c.checkoutTimeoutMs, idleTimeoutMillis: c.idleTimeoutMs,
     maxLifetimeSeconds: c.maxLifetimeMs / 1000, application_name: options.owner});
-  const data: DatabaseData = {pool, config: c, preferSsl: options.ssl === "prefer", shutdown: new AbortController(), leases: new Set(), pending: new Set(), healthy: false, saturated: 0, acquiring: 0, waiters: []};
+  const data: DatabaseData = {pool, config: c, preferSsl: options.ssl === "prefer", shutdown: new AbortController(), leases: new Set(), pending: new Set(), healthy: false, saturated: 0, acquiring: 0};
   pool.on("error", () => {data.healthy = false;});
   const health = async (signal: AbortSignal): Promise<boolean> => {
     if (data.shutdown.signal.aborted) return false;
-    if (data.waiters.length > 0 || data.leases.size + data.acquiring >= c.max) return data.healthy;
+    if (data.leases.size + data.acquiring >= c.max) return data.healthy;
     let lease: Lease | undefined;
     try {
       lease = await acquire(data, {}, signal);
@@ -192,7 +147,7 @@ export function createDatabase(options: DatabaseOptions): Database {
         await data.ending;
       }, destroy},
     readiness: {name: "database", check: health},
-    metrics: () => ({active: data.leases.size, idle: pool.idleCount, waiting: data.waiters.length, saturationTotal: data.saturated, pending: data.pending.size}),
+    metrics: () => ({active: data.leases.size, idle: pool.idleCount, waiting: pool.waitingCount, saturationTotal: data.saturated, pending: data.pending.size}),
   }) as Database;
   databases.set(database, data);
   return database;

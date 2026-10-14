@@ -1031,12 +1031,6 @@ void test("all 14 configured Node roots use one real listen/controller lifecycle
   }
 });
 
-void test("configured realtime shutdown is bounded by 20s without changing other roots", async () => {
-  const config = await loadPlatformConfig(join(root, "config/platform.yaml"), (text) => parseYaml(text, {json: true}));
-  assert.equal(configuredRuntimeIdentity(config, "realtime-gateway").shutdownGraceMs, 20000);
-  assert.equal(configuredRuntimeIdentity(config, "orders-service").shutdownGraceMs, config.platform.shutdownGraceMs);
-});
-
 void test("configured roots preserve null deadlines for api-internal and realtime-gateway", async () => {
   const config = await loadPlatformConfig(join(root, "config/platform.yaml"), (text) => parseYaml(text, {json: true}));
   for (const name of ["api-internal", "realtime-gateway"]) {
@@ -1244,33 +1238,4 @@ void test("AROMA worker telemetry keeps span names and metric series bounded and
     assert.match(metrics, /coffee_aroma_blockers_total 2/);
     assert.match(metrics, /coffee_aroma_mutation_calls_total\{action="remove"\} 1/);
   } finally {trace.getTracer = original;}
-});
-
-void test("opt-in admission response is saturation-only and precedes handler; defaults and health stay unchanged", async (t) => {
-  let release, entered = 0, calls = 0;
-  const app = await createRuntime(identity("early-admission", {concurrency: 1,
-    admissionResponse: (request, reply) => {
-      calls++;
-      if (request.routeOptions.url !== "/events") return false;
-      reply.code(503).type("application/problem+json").header("Cache-Control", "no-store").send({code: "REALTIME_CAPACITY_EXCEEDED", correlationId: request.correlationContext.correlationId});
-      return true;
-    },
-  }));
-  app.get("/hold", async () => {entered++; await new Promise(resolve => {release = resolve;}); return "released";});
-  app.get("/events", async () => {entered++; return "must not run";});
-  await app.runtimeController.start(); t.after(() => stopApp(app));
-  const held = app.inject({url:"/hold"}); void held.then(() => {});
-  await waitFor(() => entered === 1);
-  const saturated = await app.inject({url:"/events"});
-  release(); await held;
-  assert.equal(saturated.statusCode, 503); assert.equal(saturated.json().code,"REALTIME_CAPACITY_EXCEEDED");
-  assert.equal(saturated.headers["content-type"],"application/problem+json; charset=utf-8");
-  assert.equal(saturated.headers["cache-control"],"no-store");
-  assert.equal(saturated.json().correlationId,saturated.headers["x-correlation-id"]);
-  assert.doesNotMatch(saturated.body,/stream-ready|event-stream/); assert.equal(entered,1); assert.equal(calls,1);
-  assert.equal((await app.inject({url:"/health/live"})).statusCode,200);
-  assert.equal((await app.inject({url:"/events"})).statusCode,200);assert.equal(entered,2);
-  app.runtimeController.transition("draining");
-  const before = calls; const drain = await app.inject({url:"/events"});
-  assert.equal(drain.statusCode,503);assert.equal(drain.body,"");assert.equal(calls,before);
 });

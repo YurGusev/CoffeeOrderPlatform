@@ -119,10 +119,7 @@ try {
     'edge-gateway.development.svc.coffee-platform.internal', 'api-public.development.svc.coffee-platform.internal',
     'realtime-gateway.development.svc.coffee-platform.internal', 'proxy_next_upstream off;',
   ]) assert.ok(generated.includes(expected), `active generated config is missing ${expected}`);
-  const capacityTestConfig = generated.replace('limit_conn edge_sse_admission 512;', 'limit_conn edge_sse_admission 1;');
-  assert.equal(capacityTestConfig === generated, false, 'test config lowers only SSE admission to exercise the generated capacity error path cheaply');
-  assert.equal(generated.split('limit_conn edge_sse_admission 512;').length - 1, 1, 'test-only admission override has one exact generated anchor');
-  await writeFile(activeConfig, capacityTestConfig);
+  await writeFile(activeConfig, generated);
 
   run('pnpm', ['image:build', '--target', 'edge-nginx', '--tag', nginxImage, '--load', '.']);
   docker('build', '--file', 'tests/nginx/fixtures/Dockerfile.cutover', '--tag', backendImage, 'tests/nginx/fixtures');
@@ -135,12 +132,6 @@ try {
 
   const denied = await request('/api/client-v1/orders/drafts', { method: 'POST' });
   assert.equal(denied.status, 401, 'unauthenticated mutation must not reach the API');
-  const deniedEvents = await request('/events');
-  assert.equal(deniedEvents.status, 401, 'SSE keeps the inherited authentication response');
-  assert.equal(JSON.parse(deniedEvents.body).code, 'AUTHENTICATION_REQUIRED');
-  const forbiddenEvents = await request('/events', { method: 'POST', headers: { cookie: '__Host-coffee-session=allow' } });
-  assert.equal(forbiddenEvents.status, 403, 'SSE keeps the inherited forbidden response');
-  assert.equal(JSON.parse(forbiddenEvents.body).code, 'AUTHORIZATION_FORBIDDEN');
   const accepted = await request('/api/client-v1/orders/drafts', { method: 'POST', headers: { cookie: '__Host-coffee-session=allow', 'idempotency-key': 'issue162-allowed' } });
   assert.equal(accepted.status, 200, 'signed 204 assertion must reach the synthetic API');
   const acceptedBody = JSON.parse(accepted.body);
@@ -162,77 +153,6 @@ try {
   assert.equal(acceptedBody.headers.cookie, undefined);
   assert.equal(acceptedBody.authorized, true, 'API upstream must authenticate nginx client certificate');
   assert.match(acceptedBody.clientAltName, /spiffe:\/\/coffee-platform\/development\/edge-nginx/);
-  const acceptedNext = await request('/api/client-v1/orders/drafts', { method: 'POST', headers: { cookie: '__Host-coffee-session=allow-next', 'idempotency-key': 'issue162-allowed-next' } });
-  assert.equal(acceptedNext.status, 200, 'a fresh authorization must be made for the next request on the pooled Edge connection');
-  const acceptedNextBody = JSON.parse(acceptedNext.body);
-  const nextAssertion = acceptedNextBody.headers['x-actor-context'];
-  const [nextHeader, nextPayload, nextSignature] = nextAssertion.split('.');
-  assert.ok(verifySignature(null, Buffer.from(`${nextHeader}.${nextPayload}`), fixtureSigningKeys.publicKey, Buffer.from(nextSignature, 'base64url')), 'second authorization carries a fresh signed assertion');
-  const nextClaims = JSON.parse(Buffer.from(nextPayload, 'base64url').toString('utf8'));
-  assert.equal(nextClaims.sub, 'cutover-actor-next');
-  assert.notEqual(nextClaims.sub, claims.sub, 'the second response must not reuse a cached actor assertion');
-  assert.notEqual(nextClaims.correlationId, claims.correlationId, 'the second authorization must use the new request correlation');
-  assert.equal(nextClaims.correlationId, acceptedNextBody.headers['x-correlation-id']);
-  const authRows = (await readFile(eventLog, 'utf8')).trim().split(String.fromCharCode(10)).filter(Boolean).map(line => JSON.parse(line))
-    .filter(event => event.role === 'edge' && event.url === '/_edge/authorize' && ['allow', 'allow-next'].includes(/(?:^|;\s*)__Host-coffee-session=([^;]+)/.exec(event.headers.cookie ?? '')?.[1]));
-  assert.equal(authRows.length, 2, 'each protected request reaches the authorizer');
-  assert.equal(authRows[0].headers.connection, undefined, 'the auth request does not send a Connection header');
-  assert.equal(authRows[1].headers.connection, undefined, 'the next auth request does not send a Connection header');
-  assert.equal(authRows[0].upstreamSocketId, authRows[1].upstreamSocketId, 'the same Edge TLS connection serves both independent authorization requests');
-
-  docker('stop', '--time', '2', backendId);
-  const beforeBackendFailure = (await readFile(eventLog, 'utf8')).trim().split(String.fromCharCode(10)).filter(Boolean).map(line => JSON.parse(line));
-  const backendFailure = await request('/api/client-v1/orders/drafts', { method: 'POST', headers: { cookie: '__Host-coffee-session=allow-recovery', 'idempotency-key': 'issue162-auth-backend-down' }, timeout: 5_000 });
-  assert.equal(backendFailure.status, 503, 'an unavailable auth subrequest maps to the authorizer-unavailable response');
-  assert.match(backendFailure.headers['content-type'], /^application\/problem\+json/);
-  const backendFailureProblem = JSON.parse(backendFailure.body);
-  assert.equal(backendFailureProblem.status, backendFailure.status);
-  assert.equal(backendFailureProblem.code, 'AUTHORIZER_UNAVAILABLE');
-  assert.equal(backendFailureProblem.correlationId, backendFailure.headers['x-correlation-id']);
-  const realtimeRowsBeforeAuthFailure = beforeBackendFailure.filter(event => event.role === 'realtime' && event.url === '/events' && !event.type).length;
-  const realtimeAuthFailure = await request('/events', { headers: { cookie: '__Host-coffee-session=allow' }, timeout: 5_000 });
-  assert.equal(realtimeAuthFailure.status, 503, 'an unavailable authorizer on /events keeps the typed auth failure');
-  assert.match(realtimeAuthFailure.headers['content-type'], /^application\/problem\+json/);
-  const realtimeAuthFailureProblem = JSON.parse(realtimeAuthFailure.body);
-  assert.equal(realtimeAuthFailureProblem.status, 503);
-  assert.equal(realtimeAuthFailureProblem.code, 'AUTHORIZER_UNAVAILABLE');
-  assert.equal(realtimeAuthFailureProblem.correlationId, realtimeAuthFailure.headers['x-correlation-id']);
-  assert.equal((await readFile(eventLog, 'utf8')).trim().split(String.fromCharCode(10)).filter(Boolean).map(line => JSON.parse(line)).filter(event => event.role === 'realtime' && event.url === '/events' && !event.type).length, realtimeRowsBeforeAuthFailure, 'an auth failure never reaches the realtime upstream');
-  const duringBackendFailure = (await readFile(eventLog, 'utf8')).trim().split(String.fromCharCode(10)).filter(Boolean).map(line => JSON.parse(line));
-  assert.equal(duringBackendFailure.filter(event => event.role === 'api' && event.headers['idempotency-key'] === 'issue162-auth-backend-down').length, 0, 'authorization failure never reaches the business API');
-  docker('start', backendId);
-  let recoveredAuth;
-  await waitFor(async () => {
-    const response = await request('/api/client-v1/orders/drafts', { method: 'POST', headers: { cookie: '__Host-coffee-session=allow-recovery', 'idempotency-key': 'issue162-auth-backend-recovered' }, timeout: 3_000 });
-    if(response.status===200){recoveredAuth=response;return true;}return false;
-  }, 'Edge authorizer restart recovery');
-  assert.equal(recoveredAuth.status, 200);
-  const recoveredBody = JSON.parse(recoveredAuth.body);
-  const recoveredAssertion = recoveredBody.headers['x-actor-context'];
-  const [recoveredHeader, recoveredPayload, recoveredSignature] = recoveredAssertion.split('.');
-  assert.ok(verifySignature(null, Buffer.from(`${recoveredHeader}.${recoveredPayload}`), fixtureSigningKeys.publicKey, Buffer.from(recoveredSignature, 'base64url')), 'restarted authorizer returns a new valid assertion');
-  const recoveredClaims = JSON.parse(Buffer.from(recoveredPayload, 'base64url').toString('utf8'));
-  assert.equal(recoveredClaims.sub, 'cutover-actor-recovery');
-  assert.notEqual(recoveredClaims.correlationId, claims.correlationId);
-  const afterRestartRows = (await readFile(eventLog, 'utf8')).trim().split(String.fromCharCode(10)).filter(Boolean).map(line => JSON.parse(line))
-    .filter(event => event.role === 'edge' && event.url === '/_edge/authorize' && /(?:^|;\s*)__Host-coffee-session=allow-recovery(?:;|$)/.test(event.headers.cookie ?? ''));
-  assert.ok(afterRestartRows.length >= 1);
-  assert.notEqual(afterRestartRows.at(-1).upstreamSocketId, authRows[0].upstreamSocketId, 'restarted authorizer uses a fresh Edge TLS connection');
-  assert.equal(beforeBackendFailure.filter(event => event.role === 'api' && event.headers['idempotency-key'] === 'issue162-auth-backend-down').length, 0);
-  const realtimeBeforeCapacity = (await readFile(eventLog, 'utf8')).trim().split(String.fromCharCode(10)).filter(Boolean).map(line => JSON.parse(line)).filter(event => event.role === 'realtime' && event.url === '/events' && !event.type).length;
-  const admittedCapacityStream = streamFor('/events', { cookie: '__Host-coffee-session=allow' }, 1_500);
-  await waitFor(async () => (await readFile(eventLog, 'utf8')).includes('"role":"realtime","method":"GET","url":"/events"'), 'first SSE stream consumes test admission slot');
-  const capacityRejected = await request('/events', { headers: { cookie: '__Host-coffee-session=allow' } });
-  assert.equal(capacityRejected.status, 503, 'SSE admission remains a typed 503');
-  assert.match(capacityRejected.headers['content-type'], /^application\/problem\+json/);
-  const capacityProblem = JSON.parse(capacityRejected.body);
-  assert.equal(capacityProblem.status, 503);
-  assert.equal(capacityProblem.code, 'REALTIME_CAPACITY_EXCEEDED');
-  assert.equal(capacityProblem.correlationId, capacityRejected.headers['x-correlation-id']);
-  const admittedStreamResult = await admittedCapacityStream;
-  assert.equal(admittedStreamResult.status, 200, 'the admitted stream is unaffected by the rejected request');
-  const realtimeAfterCapacity = (await readFile(eventLog, 'utf8')).trim().split(String.fromCharCode(10)).filter(Boolean).map(line => JSON.parse(line)).filter(event => event.role === 'realtime' && event.url === '/events' && !event.type).length;
-  assert.equal(realtimeAfterCapacity, realtimeBeforeCapacity + 1, 'only the admitted request reaches the realtime upstream');
   const sse = await streamFor('/events', { cookie: '__Host-coffee-session=allow', 'last-event-id': 'evt-162' });
   assert.equal(sse.status, 200);
   assert.ok(sse.elapsed > 5_000, `SSE remained open for ${sse.elapsed}ms`);
@@ -241,14 +161,11 @@ try {
   await waitFor(async () => (await readFile(eventLog, 'utf8')).includes('"type":"disconnect"'), 'SSE upstream disconnect cleanup');
   const eventsBeforeRejection = (await readFile(eventLog, 'utf8')).trim().split(String.fromCharCode(10)).filter(Boolean).map(line => JSON.parse(line));
   assert.equal(eventsBeforeRejection.filter(e => e.role === 'api' && e.headers['idempotency-key'] === 'issue162-allowed').length, 1);
-  assert.equal(eventsBeforeRejection.filter(e => e.role === 'api' && e.method === 'POST').length, 3);
-  assert.equal(eventsBeforeRejection.filter(e => e.role === 'api' && e.headers['idempotency-key'] === 'issue162-allowed-next').length, 1);
-  assert.equal(eventsBeforeRejection.filter(e => e.role === 'api' && e.headers['idempotency-key'] === 'issue162-auth-backend-down').length, 0);
-  assert.equal(eventsBeforeRejection.filter(e => e.role === 'api' && e.headers['idempotency-key'] === 'issue162-auth-backend-recovered').length, 1);
+  assert.equal(eventsBeforeRejection.filter(e => e.role === 'api' && e.method === 'POST').length, 1);
   const sseEvents = eventsBeforeRejection.filter(e => e.role === 'realtime' && e.url === '/events' && !e.type);
-  assert.equal(sseEvents.length, 2, 'each admitted SSE route reaches the realtime upstream exactly once');
-  assert.ok(sseEvents.some(event => event.headers['last-event-id'] === 'evt-162'));
-  assert.ok(sseEvents.every(event => event.authorized === true), 'realtime upstream must authenticate nginx client certificate');
+  assert.equal(sseEvents.length, 1, 'active SSE route must reach the realtime upstream exactly once');
+  assert.equal(sseEvents[0].headers['last-event-id'], 'evt-162');
+  assert.equal(sseEvents[0].authorized, true, 'realtime upstream must authenticate nginx client certificate');
   assert.ok(eventsBeforeRejection.some(e => e.role === 'realtime' && e.type === 'disconnect'), 'downstream close must release the SSE upstream');
 
   // A parallel active-config instance with withdrawn upstream trust models revoked certificate material.

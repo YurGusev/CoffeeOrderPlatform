@@ -32,7 +32,7 @@ const connection = (databaseName, port, password, user = "coffee_orders_service_
 void test("PostgreSQL Orders same-key concurrency, stale expectedVersion, transaction fault rollback, and unknown COMMIT replay", {
   timeout:180_000, skip:process.env.COFFEE_DB_LIVE_PROOF !== "1" ? "disposable PostgreSQL required" : false,
 }, async () => {
-  const {OrderStore,hashOrderItemPutRequest} = await import("../../apps/orders-service/dist/infrastructure/database/order-store.js");
+  const {OrderStore} = await import("../../apps/orders-service/dist/infrastructure/database/order-store.js");
   await withCatalogPostgres(async ({adminClient:admin, port, databaseName}) => {
     const runtimePassword = randomBytes(24).toString("hex");
     await admin.query(`CREATE ROLE coffee_orders_service_rw LOGIN PASSWORD '${runtimePassword}'`);
@@ -58,24 +58,12 @@ void test("PostgreSQL Orders same-key concurrency, stale expectedVersion, transa
       const orderRef = sameKeyResults[0].body.orderRef;
       const leftItem = proof(1), rightItem = proof(2);
       const put = (item, itemRef) => ({...meta(), orderRef, itemRef, expectedVersion:"1", request:request("1", item), item});
-      const racingCommands=[put(leftItem, ref("itm")), put(rightItem, ref("itm"))];
-      const racingPreflights=await Promise.all(racingCommands.map(command=>store.preflightPut(command.identity,hashOrderItemPutRequest(command.request),orderRef,[],command.correlationId)));
-      assert.ok(racingPreflights.every(result=>result.kind==="proceed"&&result.customerRef===customer.customerRef));
-      const competing = await Promise.allSettled(racingCommands.map(command => store.putItem(command)));
+      const competing = await Promise.allSettled([put(leftItem, ref("itm")), put(rightItem, ref("itm"))].map(command => store.putItem(command)));
       assert.equal(competing.filter(result => result.status === "fulfilled").length, 1);
       assert.equal(competing.filter(result => result.status === "rejected" && result.reason?.code === "ORDER_VERSION_CONFLICT").length, 1);
       const afterRace = await store.getCard(orderRef, {permissions:[], correlationId:randomUUID()});
       assert.equal(afterRace.version, "2");
       assert.equal(afterRace.items.length, 1);
-      // Two identical read-only preflights may both proceed; the unchanged write transaction still deduplicates the effect.
-      const duplicateDraft=await store.createDraft({...meta(),customer});
-      const duplicateItem=proof(6),duplicatePut={...meta(),orderRef:duplicateDraft.body.orderRef,itemRef:ref("itm"),expectedVersion:"1",request:request("1",duplicateItem),item:duplicateItem};
-      const duplicatePreflights=await Promise.all([1,2].map(()=>store.preflightPut(duplicatePut.identity,hashOrderItemPutRequest(duplicatePut.request),duplicatePut.orderRef,[],duplicatePut.correlationId)));
-      assert.ok(duplicatePreflights.every(result=>result.kind==="proceed"&&result.customerRef===customer.customerRef));
-      const duplicateWrites=await Promise.all([store.putItem(duplicatePut),store.putItem(duplicatePut)]);
-      assert.equal(duplicateWrites.filter(result=>!result.replayed).length,1);
-      assert.equal(duplicateWrites.filter(result=>result.replayed).length,1);
-      assert.equal((await store.getCard(duplicatePut.orderRef,{permissions:[],correlationId:randomUUID()})).items.length,1);
       // Three distinct commands compete for the same version; only the winner may leave effects.
       const replacement = proof(3);
       const mixedCommands = [
@@ -154,28 +142,6 @@ void test("PostgreSQL Orders same-key concurrency, stale expectedVersion, transa
       } finally {
         await admin.query("DROP FUNCTION orders.fail_live_confirm_stage()");
       }
-
-      // A lost COMMIT reply after preflight must be surfaced without retrying the read transaction.
-      const unknownPreflightDraft=await store.createDraft({...meta(),customer});
-      const unknownPreflightIdentity=identity();
-      await closeDatabase(database);database=undefined;store=undefined;
-      proxy=await openBlackholeProxy(port,"COMMIT");
-      database=connection(databaseName,proxy.port,runtimePassword);store=new OrderStore(database);
-      await database.resource.start(AbortSignal.timeout(5_000));
-      let unknownPreflightCode;
-      try {await store.preflightPut(unknownPreflightIdentity,hash("f"),unknownPreflightDraft.body.orderRef,[],randomUUID());}
-      catch(error) {unknownPreflightCode=error?.code;}
-      assert.equal(unknownPreflightCode,"TRANSACTION_OUTCOME_UNKNOWN");
-      assert.equal((await proxy.waitForReplyDropped()).command,"COMMIT");
-      assert.equal(proxy.observed.filter(command=>command==="COMMIT").length,1,"preflight does not retry an unknown COMMIT");
-      assert.equal(database.metrics().active,0,"unknown terminal transaction releases its lease");
-      assert.equal(database.metrics().waiting,0);
-      assert.equal((await admin.query("SELECT count(*)::int AS count FROM orders.idempotency_records WHERE actor_ref=$1 AND scope=$2 AND idempotency_key=$3",[unknownPreflightIdentity.actorRef,unknownPreflightIdentity.scope,unknownPreflightIdentity.key])).rows[0].count,0,"read-only preflight leaves no idempotency write");
-      await closeDatabase(database);
-      assert.equal(database.metrics().pending,0,"terminal client cleanup drains pending database work");
-      database=undefined;store=undefined;await proxy.close();proxy=undefined;
-      database=connection(databaseName,port,runtimePassword);store=new OrderStore(database);
-      await database.resource.start(AbortSignal.timeout(5_000));
 
       // A real TCP proxy drops PostgreSQL's COMMIT response only; reconnect and exact precheck resolve the outcome.
       const unknownDraft = await store.createDraft({...meta(), customer});

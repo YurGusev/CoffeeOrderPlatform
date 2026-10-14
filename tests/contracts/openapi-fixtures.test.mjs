@@ -7,7 +7,6 @@ import test from "node:test";
 import yaml from "js-yaml";
 import { contractAjv } from "../../scripts/contracts-ajv.mjs";
 import { createRuntime } from "../../packages/platform-runtime/src/index.ts";
-import { clientV1Schemas } from "../../packages/generated/client-v1/src/runtime-schemas.gen.ts";
 import {pricingContractSchemas, isPricingQuoteCreateRequest, isPricingQuoteResponse, isPricingQuoteVerifyRequest, isPricingQuoteVerificationResponse, isPricingProblem, pricingResponseSchema} from "../../packages/contracts/pricing-v1/dist/index.js";
 
 const ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -294,20 +293,8 @@ void test("positive wire fixtures survive encode/decode round-trip", async () =>
 
 void test("SSE fixtures enforce ready/reset/invalidation/heartbeat wire rules", async () => {
   const {ajv} = await loadCorpus();
-  const {operation} = findOperation("client-v1", "streamOrderInvalidations");
-  assert.equal(operation.responses["400"]?.$ref, "#/components/responses/ValidationFailed");
-  const manifest = yaml.load(await readFile(join(ROOT, "contracts/manifest.yaml"), "utf8"));
-  assert.ok(manifest.contracts.find(({id}) => id === "streamOrderInvalidations").statuses.includes(400));
   const frames = await jsonFixture(join(POSITIVE_ROOT, "sse/order-invalidations.json"));
   assert.deepEqual(frames.map((frame) => frame.event ?? "heartbeat"), ["stream-ready.v1", "resource-invalidated.v1", "stream-reset.v1", "heartbeat"]);
-  for (const [index, name] of ["SseStreamReady", "SseResourceInvalidated", "SseStreamReset"].entries()) {
-    const generated = clientV1Schemas[name];
-    assert.ok(generated, `missing generated SSE runtime schema: ${name}`);
-    assert.deepEqual(generated, componentSchema("client-v1", name), `${name} differs from canonical OpenAPI`);
-    const validate = ajv.compile(generated);
-    assert.equal(validate(frames[index].data), true, JSON.stringify(validate.errors));
-    assert.equal(validate({...frames[index].data, businessState: "forbidden"}), false);
-  }
   const ready = loadValidator(ajv, "client-v1", "SseStreamReady");
   const invalidated = loadValidator(ajv, "client-v1", "SseResourceInvalidated");
   const reset = loadValidator(ajv, "client-v1", "SseStreamReset");

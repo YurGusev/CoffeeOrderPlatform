@@ -17,7 +17,6 @@
     "confluentKafkaJavaScript",
     "librdkafka",
     "librdkafkaSourceSha256",
-    "librdkafkaPatchSha256",
     "openapi",
     "docker",
     "compose",
@@ -53,7 +52,6 @@
     "librdkafkaSourceSha256": {
       "const": "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc"
     },
-    "librdkafkaPatchSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "react": { "const": "19.2.8" },
     "reactDom": { "const": "19.2.8" },
     "reactRouterDom": { "type": "string" },

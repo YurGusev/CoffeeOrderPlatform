@@ -9,7 +9,6 @@ import {
 import { ProblemAlert } from "../api/problem.js";
 import { useLogout } from "../api/remote.js";
 import { PendingRecovery } from "./PendingRecovery.js";
-import { RealtimeFallback, RealtimeIndicator } from "./OrderRealtime.js";
 import { useSession } from "./session.js";
 
 const links = [
@@ -43,7 +42,6 @@ export function AppShell(): ReactElement {
           <div className="breadcrumb"><span>Операторская платформа</span><span aria-hidden="true">/</span><strong>Рабочая среда</strong></div>
           <nav aria-label="Мобильная навигация" className="mobile-nav">{links.map((link) => <NavLink key={link.to} to={link.to}>{link.label}</NavLink>)}</nav>
           <div className="session-actions">
-            <RealtimeIndicator />
             <Badge tone="success">СЕССИЯ АКТИВНА</Badge>
             <Button onPress={() => setLogoutOpen(true)} size="compact" variant="quiet">Выйти</Button>
           </div>
@@ -55,7 +53,6 @@ export function AppShell(): ReactElement {
             setRecoveryDiscarded(false);
           }} size="compact" variant="quiet">Понятно</Button>
         </Alert> : null}
-        <RealtimeFallback />
         <PendingRecovery />
         {logout.isError ? <ProblemAlert error={logout.error} /> : null}
         <div className="route-content" id="route-content" tabIndex={-1}><Outlet /></div>
