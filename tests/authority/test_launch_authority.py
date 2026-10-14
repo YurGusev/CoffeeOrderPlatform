@@ -75,8 +75,66 @@ def candidate_root(manifest: str, candidate: dict) -> Path:
 
 
 class LaunchAuthorityTests(unittest.TestCase):
+    def test_catalog_convergence_exact_tuple_is_accepted(self) -> None:
+        allowlist = fixture_doc("launch-v1-runtime-profile.json")["internalOperationAllowlist"]
+        convergence = {
+            "originalCaller": "aroma-convergence",
+            "target": "catalog-service",
+            "method": "GET",
+            "path": "/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input",
+            "operationId": "getCatalogPricingInput",
+            "mutation": False,
+        }
+        # Проверяем желаемую authority независимо от неполного исходного profile.
+        allowlist = [row for row in allowlist if not (row["originalCaller"] == "aroma-convergence" and row["target"] == "catalog-service")]
+        allowlist.append(convergence)
+        VALIDATOR.validate_allowlist(allowlist)
+
     def test_positive_fixture_is_accepted(self) -> None:
         VALIDATOR.validate_root(FIXTURE_ROOT)
+
+    def test_catalog_profile_contains_both_exact_callers(self) -> None:
+        rows = fixture_doc("launch-v1-runtime-profile.json")["internalOperationAllowlist"]
+        self.assertEqual(
+            [row for row in rows if row["target"] == "catalog-service"],
+            [{
+                "originalCaller": caller,
+                "target": "catalog-service",
+                "method": "GET",
+                "path": "/api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input",
+                "operationId": "getCatalogPricingInput",
+                "mutation": False,
+            } for caller in ("pricing-service", "aroma-convergence")],
+        )
+
+    def test_catalog_convergence_allowlist_rejects_drift(self) -> None:
+        profile = fixture_doc("launch-v1-runtime-profile.json")
+        VALIDATOR.validate_runtime_profile(profile)
+        rows = profile["internalOperationAllowlist"]
+        index = next(i for i, row in enumerate(rows) if row["originalCaller"] == "aroma-convergence" and row["target"] == "catalog-service")
+        changes = (
+            ("missing", None, None),
+            ("duplicate", None, None),
+            ("unauthorized-caller", "originalCaller", "aroma-observer"),
+            ("wrong-operation", "operationId", "readAromaCartSnapshot"),
+            ("mutation", "mutation", True),
+            ("wrong-target", "target", "aroma-gateway"),
+            ("wrong-method", "method", "POST"),
+            ("wrong-path", "path", "/api/internal-v1/catalog/products"),
+        )
+        for case, field, value in changes:
+            with self.subTest(case=case):
+                candidate = deepcopy(profile)
+                candidate_rows = candidate["internalOperationAllowlist"]
+                if case == "missing":
+                    del candidate_rows[index]
+                elif case == "duplicate":
+                    candidate_rows.append(deepcopy(candidate_rows[index]))
+                else:
+                    candidate_rows[index][field] = value
+                with self.assertRaisesRegex(VALIDATOR.AuthorityError, "exact caller/target/operation allowlist changed"):
+                    VALIDATOR.validate_runtime_profile(candidate)
+        self.assertEqual(profile, fixture_doc("launch-v1-runtime-profile.json"))
 
     def test_catalog_identity_and_catalog_staging_authority_are_synchronized(self) -> None:
         profile = fixture_doc("launch-v1-runtime-profile.json")

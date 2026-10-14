@@ -256,11 +256,12 @@ SAN binding из service identity contract и текущий environment. Runtim
 `api-internal 4051/0`, `edge-nginx 8443/native`,
 `customer-service 4101/8`, `catalog-service 4102/8`,
 `catalog-supplier-sync 4201/4`, `catalog-activation-worker 4202/4`,
-`pricing-service 4103/8`, `orders-service 4104/12`,
+`pricing-service 4103/8`, `orders-service 4104/4`,
 `orders-aroma-preparation 4203/4`, `aroma-observer 4204/4`,
 `aroma-convergence 4205/4`, `aroma-gateway 4301/8`,
-`realtime-gateway 4401/0`. Общий application pool budget — 64; PostgreSQL
-`max_connections>=96`, 32 соединения резервируются для migrations/DBA.
+`realtime-gateway 4401/0`. Steady application pool budget — 56;
+serial rollout добавляет максимум 8, migrations/DBA reserve — 32;
+итого 56 + 8 + 32 = 96 при `max_connections>=96`.
 
 Для всех DB pools: checkout/lock timeout `250ms`, interactive statement
 timeout `1500ms`, background `5000ms`, idle `30000ms`, max lifetime `1800000ms`.
