@@ -278,7 +278,9 @@ export class RealtimeHub {
     if(this.shutdownWork!==undefined)return this.shutdownWork;
     if(this.stopped)return Promise.resolve();this.stopped=true;this.clearEncodedBatch();clearTimeout(this.coalesceTimer);this.coalesceTimer=undefined;this.pending.clear();
     const closed=[...this.connections].map(connection=>new Promise<void>(resolve=>{
-      connection.sink.once("close",resolve);
+      const sink=connection.sink;
+      const finished=()=>{sink.removeListener("close",finished);sink.removeListener("finish",finished);resolve();};
+      sink.once("close",finished);sink.once("finish",finished);
       connection.drain();
     }));
     this.ring.length=0;this.ringBytes=0;this.ids.clear();this.latest.clear();

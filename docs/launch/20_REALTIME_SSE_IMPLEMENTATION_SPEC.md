@@ -538,10 +538,15 @@ driver сверяет client population и gateway metric перед SIGTERM. К
 После `finish` SSE response gateway завершает его mTLS socket через `end()`:
 доставленный reset не должен оставлять idle keep-alive transport и удерживать
 `server.close()` до shutdown deadline.
+Hub завершает ожидание drain на первом `finish` или `close` response и удаляет
+оба completion listener: успешно завершённый terminal write не должен ждать
+закрытия write side peer. Stalled write по-прежнему ограничен write timeout.
 
 `tests/realtime/soak.test.mjs` — explicit-only transport CLI, не автоматический
 `node:test` suite; обычный `pnpm test` исключает этот файл и **не** доказывает
-capacity. CLI требует сначала создать operator-1 профиль через
+capacity. Nested `fixtures/harness.test.mjs` включён в обычный test target;
+его CLI/config/manifest/cleanup regressions не запускают full soak.
+CLI требует сначала создать operator-1 профиль через
 `--prepare --profile operator-1 --result-dir <scratch>`, проверить
 `profile-manifest.json`, затем явно передать `--prepared <scratch>` и его
 `--approve-manifest <sha256>`. Короткие `--smoke` и `--fixture-check` дают только

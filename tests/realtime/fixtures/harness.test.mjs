@@ -20,7 +20,10 @@ void test('operator-1 CLI help describes the approved profile without obsolete f
 
 void test('operator-1 CLI requires a frozen manifest and never admits old full5000',async()=>{
   const {parse}=await import('../soak.test.mjs');
-  const dir=join(process.env.TMPDIR??tmpdir(),'operator-1-cli-proof');
+  const previousTmpdir=process.env.TMPDIR,portableTmpdir=await mkdtemp(join(tmpdir(),'issue12-operator-cli-'));
+  process.env.TMPDIR=portableTmpdir;
+  try {
+  const dir=join(portableTmpdir,'operator-1-cli-proof');
   const prepared=parse(['--prepare','--profile','operator-1','--result-dir',dir]);
   assert.equal(prepared.profile,'operator-1');assert.equal(prepared.mode,'full');assert.equal(prepared.prepareOnly,true);
   assert.throws(()=>parse(['--profile','operator-1','--result-dir',dir]),/first --prepare/u);
@@ -30,6 +33,10 @@ void test('operator-1 CLI requires a frozen manifest and never admits old full50
   assert.equal(approved.profile,'operator-1');
   assert.throws(()=>parse(['--prepared',dir,'--approve-manifest','a'.repeat(64),'--smoke']),/assert/u);
   assert.throws(()=>parse(['--prepare','--profile','operator-1','--smoke-duration-ms','1000','--result-dir',dir]),/never shorten/u);
+  } finally {
+    if(previousTmpdir===undefined)delete process.env.TMPDIR;else process.env.TMPDIR=previousTmpdir;
+    await rm(portableTmpdir,{recursive:true,force:true});
+  }
 });
 
 void test('prepared operator-1 keeps ordinary budgets, 100 subjects, one shard and rejects input drift',async()=>{

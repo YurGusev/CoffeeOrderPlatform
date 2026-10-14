@@ -126,6 +126,18 @@ void test("shutdown emits canonical reset and closes before completion; stopped 
  assert.equal(unrelatedTimerFired,false,"pending reset work must progress without waiting for an unrelated referenced timer");
  assert.equal(sink.destroyed,true);assert.match(sink.frames.at(-1),/^event: stream-reset.v1/);assert.equal(hub.stats().queuedBytes,0);assert.equal(hub.stats().ringRecords,0);assert.throws(()=>hub.open(new Sink(),options()),RealtimeCapacityError);
 });
+void test("shutdown completes on successful terminal write finish even when the sink stays open",async t=>{
+ const hub=new RealtimeHub(config);t.after(()=>hub.destroy());const sink=new Sink();
+ sink.end=function(){this.writableFinished=true;this.emit("finish");};
+ hub.open(sink,options());await turn();
+ let settled=false;const shutdown=hub.shutdown().then(()=>{settled=true;});
+ await until(()=>sink.writableFinished);await turn();
+ assert.equal(settled,true,"a successfully finished reset must release shutdown without waiting for close");
+ await shutdown;
+ assert.match(sink.frames.at(-1),/^event: stream-reset.v1/);
+ assert.equal(hub.stats().connections,0);assert.equal(hub.stats().queuedRecords,0);assert.equal(hub.stats().queuedBytes,0);
+ for(const event of ["close","finish","error","drain"])assert.equal(sink.listenerCount(event),0);
+});
 void test("exact 64 records retain ownership until the 65th selected hint closes and cleans the stalled stream",async t=>{
  const hub=new RealtimeHub(config);t.after(()=>hub.destroy());const sink=new Sink();sink.callbackBlocked=true;
  hub.open(sink,options());await turn();

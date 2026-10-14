@@ -75,7 +75,7 @@ outputs:
     consumers:
       - 13
   - artifact: tests/realtime/backpressure.test.mjs
-    sha256: 9f2ce83392622a21e1145dee32a8bbf51489f42b6c74c730da5dd3bbf19e8484
+    sha256: 3851bf138744c874825d2615af8cd9e488d5caab3b897b0f25d5dd152d0de63b
     consumers:
       - 13
   - artifact: tests/realtime/contract.test.mjs
@@ -95,7 +95,7 @@ outputs:
     consumers:
       - 13
   - artifact: tests/realtime/fixtures/harness.test.mjs
-    sha256: bac5d17889d4b33dd4aa6e9655c75613b7239776163395be57686fc0a826ca83
+    sha256: e4603006468af62467bac50b587b90b6cde54a3cea7ac7f200a19456cf48490a
     consumers:
       - 13
   - artifact: tests/realtime/fixtures/owner-browser.mjs
@@ -158,7 +158,7 @@ outputs:
       - 13
       - 64
   - artifact: apps/realtime-gateway/src/hub.ts
-    sha256: ad3d17fbd82a97d5e9bc3d612657f0ec23dd0492e0501c22b2fd9cf02e4b6858
+    sha256: 895119c4d72038af896aeb535accd74a5ee8d8e460edafa5cdfcacfcd9e0a7bf
     consumers:
       - 13
       - 64
@@ -244,7 +244,7 @@ outputs:
     consumers:
       - 13
   - artifact: platform/launch-v1-runtime-profile.json
-    sha256: 15fca22fb2bd2ba4c5d3acd336a55aacc700eb218bcc0e71e58714f582a18dd2
+    sha256: b5ad1835a911ab24ab6790cc86987bab2e4075e30960461c8dd76699c69e9e69
     consumers:
       - 13
       - 64
@@ -258,7 +258,7 @@ outputs:
       - 13
       - 64
   - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
-    sha256: cd81cba6c45ea6d647ba820889113d479edefb021237a899929f1b5e3c51a423
+    sha256: ddc2e7d26db186b8b1efe15499892d34334157e19b3504daa5ca88d04e617380
     consumers:
       - 13
   - artifact: docs/launch/17_ORDERS_IMPLEMENTATION_SPEC.md
@@ -266,7 +266,7 @@ outputs:
     consumers:
       - 13
   - artifact: docs/launch/20_REALTIME_SSE_IMPLEMENTATION_SPEC.md
-    sha256: 6ed0d85a9051c2867add845edc91772a4b1b3b722296f50040b3f42289d98ff0
+    sha256: 2cfe10e429dfc7fa1524edf4b6200d5ab07ea8a7770e8326c075d71847f0225c
     consumers:
       - 13
       - 64
@@ -276,7 +276,7 @@ outputs:
       - 13
       - 64
   - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
-    sha256: a642475f5f4d845502cad80bdf81f6e1eb2ff09efa1b3fff58c4dcaa857dd303
+    sha256: d146b13d003681570a78356cfda2e885be0437d9f820f4a22867ef1b3caea0ac
     consumers:
       - 13
   - artifact: docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md
@@ -289,7 +289,7 @@ outputs:
     consumers:
       - 13
   - artifact: package.json
-    sha256: 209ae0840daacc04e37a5f7bd77231baf3ba88d9470674877b4f3ee63dd2355b
+    sha256: b66ba1cb7141da789db9a333db6e12a517ab300bdcc81bf6770aee8080c78827
     consumers:
       - 13
   - artifact: pnpm-lock.yaml
@@ -366,7 +366,7 @@ outputs:
       - 13
       - 64
   - artifact: evidence/issue-12-analysis.md
-    sha256: 63c3db7782a915f3f71d94b0e824d030bd09478163b226c1b0cbb800c1f900cb
+    sha256: 67554bab9e8f07c75b0281863d7bebac4e63fd7855b0598f4cb2cd44a18d80bc
     consumers:
       - 13
       - 64
@@ -418,6 +418,11 @@ outputs:
     sha256: 720e8a6e42ce849f4dbee2965f5f2200a2783c5317b062286fd64ea3717daea6
     consumers:
       - 13
+  - artifact: platform/launch-v1-runtime-profile.schema.json
+    sha256: 9433c3699c8861cbf818cc89bcbb2fc4e02d309e9e0ce7069873439559df337c
+    consumers:
+      - 13
+      - 64
 verification:
   - command: TMPDIR=/home/yurgusev/.hermes/cache/scratch pnpm check
     result: passed
@@ -572,10 +577,42 @@ verification:
     result: passed
     exitCode: 0
     detail: Целевой lint изменённого regression PASS.
+  - command: pnpm authority:check
+    result: passed
+    exitCode: 0
+    detail: Интеграция develop PR175; 8/8, /tmp/coffee-pr176-merge-authority.log.
+  - command: pnpm profile:check
+    result: failed
+    exitCode: 1
+    detail: Source менялся во время копирования clean profiles; artifacts mismatch. Исходный FAIL /tmp/coffee-pr176-merge-profile.log сохранён.
+  - command: pnpm profile:check
+    result: passed
+    exitCode: 0
+    detail: Повтор после фиксации source; parallel и singleThreaded byte-identical, 318 artifacts. /tmp/coffee-pr176-merge-profile-frozen.log.
+  - command: env -u TMPDIR pnpm check
+    result: failed
+    exitCode: 1
+    detail: 865 tests / 788 PASS / 1 FAIL / 76 skips. Принятый PR175 добавил десятую operation, schema maxItems оставался9. /tmp/coffee-pr176-merge-check.{command,stdout,exit}.
+  - command: node --test --test-name-pattern='JSON Schema Draft 2020-12 accepts configuration' tests/architecture/checks.test.mjs
+    result: failed
+    exitCode: 1
+    detail: Узкое воспроизведение integration regression, maxItems9 vs10. /tmp/coffee-pr176-schema-repro.log.
+  - command: node --test --test-name-pattern='JSON Schema Draft 2020-12 accepts configuration' tests/architecture/checks.test.mjs
+    result: passed
+    exitCode: 0
+    detail: 1/1 после schema maxItems10; exact semantic allowlist сохранён. /tmp/coffee-pr176-schema-fixed.log.
+  - command: pnpm security:secrets
+    result: passed
+    exitCode: 0
+    detail: Перед публикацией текущих исправлений, /tmp/coffee-pr176-merge-secrets.log.
+  - command: env -u TMPDIR pnpm check
+    result: passed
+    exitCode: 0
+    detail: 865 tests / 789 PASS / 0 FAIL / 76 explicit-only skips; contracts49/49, realtimeChromium10/10; current finish-without-close и portable nested harness включены. /tmp/coffee-pr176-merge-check-final.{command,stdout,exit}.
 limitations:
   - >-
     Локальная техническая приёмка завершена. Матрица61/5 фиксирует срез до публикации. Владелец явно разрешил commit/push/PR в
-    develop 14 октября2026; merge/deployment/issue labels/production не разрешены. Артефакт становится accepted input только после
+    develop 14 октября2026; затем явно разрешил исправить конфликт и merge PR176 в develop. Deployment/issue labels/production не разрешены. Артефакт становится accepted input только после
     принятого merge; self commit SHA не добавляется.
   - >-
     Astra закрыл прежние R1/R2/R3/CACHE-01/CAP-01/CAP-02/PREFLIGHT-TEST-01 и PR176-P2-400. Reviewer подтвердил минимальный
@@ -615,3 +652,8 @@ limitations:
     PR176 reviewer P2 r4269990744 исправлен: существующий400VALIDATION_FAILED объявлен в OpenAPI/manifest/generatedtypes. Runtime,
     wireповедение и loadbudgets не менялись; полныйsoak не повторялся. Frozenmanifest сохраняет контрактныйсрез
     доэтогоadditiveописания400; historicalreceiptsнепереписаны.
+  - >-
+    Новые reviewer P2 r4270278510/r4270278532 исправлены: shutdown завершается на первом finish/close без listener leaks;
+    default test включает nested harness, CLI test portable без TMPDIR. Astra подтвердил минимальный diff и schema maxItems10
+    для принятой десятой read operation. Полный soak35 сохраняет прежний source snapshot: свежий exact-source loaded shutdown
+    изменённого hub не заявляется; targeted regression и полный check являются текущей проверкой.

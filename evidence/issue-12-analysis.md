@@ -5576,3 +5576,64 @@ OpenAPI400→ValidationFailed, manifest, минимальный generated diff (
 строки), regression обеих authority и owning doc. Повторный soak не требуется:
 это описание существующего ответа без изменения runtime/wire поведения.
 Root подтвердил91outputs/7inputs hashes и ancestry; новый commit/push разрешены.
+
+
+## PR #176: новые P2 и интеграция develop — 14 октября 2026
+
+Владелец разрешил исправить конфликт и выполнить merge PR #176 в develop после
+устранения замечаний. Проверены три review comments: прежний r4269990744 уже
+исправлен контрактным commit; новые r4270278510 и r4270278532 подтверждены и
+исправлены текущим diff. Сообщения reviewer и изменения issue labels не выполнялись.
+
+- r4270278510: RealtimeHub.shutdown завершает ожидание на первом finish или close
+  response и удаляет оба completion listener. Успешный terminal reset больше не
+  ждёт TCP write side peer. Прежний write timeout и socket.end в runtime сохранены.
+  Расширен существующий backpressure suite: finish без close, завершение shutdown,
+  нулевые connections/queues и отсутствие listener leaks. Core сообщил RED до fix
+  и GREEN 15/15 после него; отдельные raw логи этого узкого запуска не сохранены.
+- r4270278532: nested fixtures/harness.test.mjs явно включён в обычный pnpm test.
+  CLI/config/manifest/cleanup regressions выполняются без запуска full soak.
+  Существующий CLI test создаёт собственный временный TMPDIR, восстанавливает env
+  и удаляет каталог в finally. Core сообщил 36/36 без TMPDIR; raw узкого запуска
+  не сохранён, включение в default target подтверждено полным check ниже.
+
+Актуальный develop 387fdaf интегрирован обычным merge. Единственный текстовый
+конфликт docs/launch/11_CONFIGURATION_AND_SECRETS.md разрешён с сохранением
+уточнения develop: steady pool 56 + serial rollout 8 + migrations/DBA reserve 32
+= 96; Orders maxWaiting=100 и настройки realtime сохранены. pnpm authority:check
+прошёл 8/8 (/tmp/coffee-pr176-merge-authority.log). Первый pnpm profile:check
+получил artifacts mismatch при изменении source во время копирования clean
+profiles (log birth 11:45:47Z, hub mtime 11:46:03Z, package mtime 11:46:16Z).
+Исходный FAIL сохранён в /tmp/coffee-pr176-merge-profile.log. После фиксации
+исходников оба режима дали одинаковые 318 артефактов, exit 0
+(/tmp/coffee-pr176-merge-profile-frozen.log).
+
+Первый env -u TMPDIR pnpm check: exit 1, 865 tests / 788 PASS / 1 FAIL / 76 skips.
+Обнаружена несогласованность принятого PR #175: internalOperationAllowlist уже
+содержит десятую операцию aroma-convergence → Catalog getCatalogPricingInput,
+но JSON Schema сохранила maxItems=9. Предел согласован до 10; exact caller/target/
+operation validator не менялся, новой runtime операции это исправление не добавляет.
+Существующий JSON Schema regression воспроизвёл FAIL и затем прошёл 1/1.
+Receipts: /tmp/coffee-pr176-merge-check.{command,stdout,exit},
+/tmp/coffee-pr176-schema-repro.log, /tmp/coffee-pr176-schema-fixed.log.
+
+Astra независимо подтвердил устранение обоих P2, минимальность schema fix и
+правильность разрешения конфликта. Capacity, queue limits, wire format и бизнес-
+эффекты не менялись. Новый 30-minute soak для этих правок не требуется; принятие
+текущего diff требует успешного полного check. Исторический full operator-1
+сохраняет прежний frozen manifest и source snapshot. Свежий exact-source loaded
+shutdown изменённого hub этим evidence не заявляется.
+
+Повтор env -u TMPDIR pnpm check после schema fix: exit 0, 865 tests / 789 PASS /
+0 FAIL / 76 explicit-only skips; contracts 49/49, Chromium realtime 10/10.
+Новая finish-without-close regression и portable nested CLI harness включены в
+стандартный target и прошли. Receipts: /tmp/coffee-pr176-merge-check-final.
+{command,stdout,exit}; security:secrets PASS (/tmp/coffee-pr176-merge-secrets.log).
+
+Все семь accepted inputs подтверждены по hash на accepted merge commit и ancestry
+baseCommit. Проверены inputs successor #64: #4/#61/#62/#63/#162 уже merged, handoffs
+есть в develop; последним недостающим input перед этим merge является #12.
+Для #13 проверены все predecessors из графа и его body: остальные accepted merges
+и handoffs присутствуют, #64 остаётся OPEN без handoff. Labels не изменяются;
+#64 и G00–G19 #13 остаются отдельными gates до main. Текущий handoff становится
+accepted input только после фактического merge PR176.
