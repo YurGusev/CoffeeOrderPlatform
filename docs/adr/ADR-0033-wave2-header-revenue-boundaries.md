@@ -52,15 +52,21 @@ scope и monotonic guards. Этот ADR не придумывает wire/topic/g
 ### D1a: implementation acceptance отдельно от producer activation
 
 #82 остаётся implementation predecessor #83. Его merge/fixture acceptance не
-включает price application/InvoicePricesApplied в общей среде: до принятого и
-установленного #83 dual-capable consumer financial producer выключен. Invoices
+включает price application/InvoicePricesApplied в общей среде: financial producer
+выключен до принятия и установки всех downstream consumers — dual-capable
+orders-invoice-consumer #83, payments-order-consumer #84 для payment handoffs
+из #83 и pricing-cost-worker #86 для invoice cost proof из #82. Invoices
 сохраняет document input/intents durable, но не коммитит завершение price
 application и его Outbox до activation. Заблокированная financial Outbox row
 перед header недопустима: она перенесла бы head-of-line blocking в relay.
 
 Порядок rollout: принять #82 на isolated accepted fixture receiver по #76 →
-принять/установить #83 с header+financial intake/recovery → явно включить #82
-producer по #77 runbook и последующему #90 live gate. HTTP health consumer не
+принять/установить #83 с header+financial intake/recovery, #84 и #86 с совместимыми
+contracts #76 → явно включить #82 producer по #77 runbook и последующему #90
+live gate. Отсутствие любого из трёх consumers запрещает activation; до неё
+document intents сохраняются независимо от Kafka retention/Outbox cleanup.
+Это operational gate, не обратные implementation зависимости #83/#84/#86→#82:
+их acceptance использует isolated accepted fixtures #76. HTTP health consumer не
 является автоматическим межсервисным разрешением. #76 фиксирует versioned
 activation/compatibility contract; #77 материализует его единственную явную
 настройку в config/platform.yaml/schema и runbook. Здесь ключ не создаётся.
@@ -69,9 +75,11 @@ activation/compatibility contract; #77 материализует его еди�
 price application + immutable proof reference + Outbox — одна Invoices
 transaction. Restart/retry не раздваивает факт; proof не объявляется applied
 без durable handoff. Rollback сначала останавливает financial producer, но
-сохраняет dual-capable consumer для опубликованных/in-flight records и pending
-jobs. Header-only downgrade запрещён до доказанного drain/replay horizon;
-offsets/Inbox не сбрасываются. #81/#88 остаются независимыми от #83.
+сохраняет #83/#84/#86 для опубликованных/in-flight records, pending jobs #83
+и порождённых ими payment handoffs, а также invoice cost facts. Drain/replay
+horizon доказывается для всей цепочки Invoices→Orders→Payments и Invoices→Pricing.
+До этого удаление любого consumer/header-only downgrade запрещены;
+offsets/Inbox не сбрасываются. #81/#88 остаются независимыми от financial activation.
 
 ### D1b: durable financial pending и degraded readiness
 
@@ -255,7 +263,7 @@ no revenue до exact-link commit, оба порядка revenue/cost и immutab
 price. Это требования #76/#77/#78/#80/#81/#83/#86 и итогового #90, не выполненные
 runtime tests этой документационной поставки. Уточняющие cases
 [A20–A26](../wave-2/01_AROMA_SUPPLIER_INVOICES.md#acceptance-scenarios) закрепляют
-#76/#77/#80/#82/#83/#86/#90: accepted-not-active/installed-before-activation,
+#76/#77/#80/#82/#83/#84/#86/#90: accepted-not-active/все consumers до activation,
 restart/rollback/in-flight, multi-order completeness/idempotency/limits/rollback,
 financial→header в одной partition при storage outage, pending catch-up,
 corrupt proof и bounded all-or-nothing per-order payment apply. Для двух Orders

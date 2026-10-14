@@ -83,20 +83,28 @@ launch registry с восемью сообщениями по [ADR-0032](../adr/
 
 По D1a ADR-0033 #82 принимается на isolated accepted fixture receiver #76 до
 #83, оставаясь его implementation predecessor. В общей среде price application/
-InvoicePricesApplied выключены до принятого установленного #83. Invoices
+InvoicePricesApplied выключены до принятия и установки всех consumers:
+orders-invoice-consumer #83, payments-order-consumer #84 для payment handoffs
+из #83 и pricing-cost-worker #86 для invoice cost proof из #82. Invoices
 сохраняет document input/intents durable, не коммитит applied proof/financial
 Outbox и не ставит заблокированную financial row перед header. Header-only #81
 не паркует неизвестный будущий payload и #81/#88 не ждут #83.
 
 Rollout: #82 fixture acceptance → #83 installation с header+financial durable
-intake/job recovery → явная activation #82 по versioned contract #76 и #77
+intake/job recovery и accepted installed #84/#86 с совместимыми contracts #76 →
+явная activation #82 по versioned contract #76 и #77
 config/platform.yaml/schema/runbook, с последующим live gate #90. HTTP health
-не автоматическое разрешение. При activation сохранённые intents завершаются с
+не автоматическое разрешение. Отсутствие любого из трёх consumers запрещает
+activation; до неё document intents сохраняются независимо от Kafka retention/
+Outbox cleanup. При activation сохранённые intents завершаются с
 прежними identities; price application/proof ref/Outbox одной Invoices transaction.
 Restart не раздваивает факт. Rollback сначала выключает producer, сохраняет
-dual-capable consumer для опубликованных/in-flight records и pending jobs;
-header-only downgrade запрещён до доказанного drain/replay horizon, offsets/
-Inbox не сбрасываются. Это operational gate, не обратное DAG ребро #83→#82.
+#83/#84/#86 для опубликованных/in-flight records, pending jobs #83 и их payment
+handoffs, а также invoice cost facts. Удаление любого consumer/header-only
+downgrade запрещены до доказанного drain/replay horizon всей цепочки
+Invoices→Orders→Payments и Invoices→Pricing; offsets/Inbox не сбрасываются.
+Это operational gate, не обратные DAG рёбра #83/#84/#86→#82: implementation
+acceptance использует isolated accepted fixtures #76.
 
 После #83 D1b разделяет durable intake/header readiness и financial apply:
 storage outage оставляет owner-local financial jobs pending, header из той же

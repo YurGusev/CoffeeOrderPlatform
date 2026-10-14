@@ -97,11 +97,18 @@ revision guards ортогональны, поздний header не откат�
 #77 создаёт выключенные bindings, #81 реализует только header, #83 принимает #81
 handoff и расширяет ту же роль/principal/subscription/group identity. #76 задаёт
 единственный mapping и versioned activation contract. #82 fixture acceptance не
-включает producer в общей среде до accepted installed #83: document intents
+включает producer в общей среде до accepted installed всех downstream consumers:
+orders-invoice-consumer #83, payments-order-consumer #84 для payment handoffs
+из #83 и pricing-cost-worker #86 для invoice cost proof из #82. Document intents
 остаются durable без applied proof/blocked financial Outbox перед header.
+Отсутствие любого consumer запрещает activation; до неё intents сохраняются
+независимо от Kafka retention/Outbox cleanup. Implementation acceptance #82/
+#83/#84/#86 использует isolated accepted fixtures #76, без обратных DAG рёбер.
 #77 материализует явную настройку только в config/platform.yaml/schema/runbook.
-Rollback сначала выключает producer, но оставляет dual consumer для in-flight/
-pending/replay horizon; header-only downgrade до drain запрещён, Inbox/offsets
+Rollback сначала выключает producer, но оставляет #83/#84/#86 для in-flight
+records, pending jobs #83 и их payment handoffs, а также invoice cost facts.
+До доказанного drain/replay horizon всей цепочки Invoices→Orders→Payments и
+Invoices→Pricing удаление любого consumer/header-only downgrade запрещены; Inbox/offsets
 не сбрасываются. Второй consumer/header writer и новые grants/roles/pools не
 добавляются. Это уточнение health, не activation будущих capabilities scaffold.
 

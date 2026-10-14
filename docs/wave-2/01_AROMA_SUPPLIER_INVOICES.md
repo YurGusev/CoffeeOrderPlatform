@@ -459,18 +459,24 @@ subscription/group identity не заменяются. #76 публикует о
 ### Financial activation и durable apply (#82/#83)
 
 По D1a ADR-0033 #82 fixture/merge acceptance не активирует producer в общей
-среде. До принятого установленного #83 price application/InvoicePricesApplied
+среде. До принятия и установки всех downstream consumers — orders-invoice-consumer
+#83, payments-order-consumer #84 для payment handoffs из #83 и pricing-cost-worker
+#86 для invoice cost proof из #82 — price application/InvoicePricesApplied
 выключены: document input/intents durable в Invoices, applied proof/его Outbox
 не коммитятся. Заблокированной financial Outbox row перед header нет. Isolated
-accepted fixture receiver #76 позволяет принять #82 до #83 без обратного DAG
-ребра. Затем #83 устанавливает dual-capable intake/recovery, явная activation
-идёт по versioned contract #76 и #77 config/platform.yaml/schema/runbook с
+accepted fixtures #76 позволяют принять реализации #82/#83/#84/#86 без обратных
+DAG рёбер. Затем устанавливаются dual-capable intake/recovery #83 и совместимые
+consumers #84/#86. Отсутствие любого из трёх consumers запрещает activation;
+до неё document intents сохраняются независимо от Kafka retention/Outbox cleanup.
+Явная activation идёт по versioned contract #76 и #77 config/platform.yaml/schema/runbook с
 последующим #90 live gate, не автоматически по HTTP health.
 После activation сохранённые intents с теми же identities завершаются одной
 Invoices transaction price application/proof ref/Outbox. Restart не раздваивает
-факт. Rollback сначала останавливает producer; consumer сохраняется для
-опубликованных/in-flight records и pending jobs, header-only downgrade запрещён
-до доказанного drain/replay horizon, offsets/Inbox не сбрасываются.
+факт. Rollback сначала останавливает producer; #83/#84/#86 сохраняются для
+опубликованных/in-flight records, pending jobs #83 и их payment handoffs, а также
+invoice cost facts. До доказанного drain/replay horizon всей цепочки
+Invoices→Orders→Payments и Invoices→Pricing удаление любого consumer/header-only
+downgrade запрещены; offsets/Inbox не сбрасываются.
 
 По D1b #83 принимает валидный financial envelope через Inbox в одной Orders
 transaction с immutable envelope/ref/hash/correlation и pending financial job;
@@ -560,8 +566,8 @@ operator-visible review и сохраняет последнее accepted eviden
 | A17 | Invoices получил handoff без self-contained manifest или с неверным hash | Bounded fetch/metadata/hash/size/schema validation до DB transaction отклоняет/ставит review; cross-owner read запрещён | Не делать SQL/HTTP добор из Orders или AROMA и не записывать непроверенный artifact в DB transaction |
 | A18 | Header уже имеет price/payment evidence, затем приходит correction | Исходные allocations/proofs immutable; создаётся correction/compensation review | Не unlink/delete историю и не воскресить Cancelled Order |
 | A19 | UI ищет номер, одинаковый в разных scopes | Результаты разделены account context и показывают review markers | Не смешивать supplier invoices разных scopes |
-| A20 | #81 header-only и accepted-not-active #82, затем установка #83 | #82 document intents durable, price application/financial Outbox выключены до явной activation после installed accepted #83; isolated fixtures #76 доказаны отдельно (#76/#77/#82/#83/#90) | Не quarantine/skip валидный future record, не бесконечный retry partition и не blocked financial Outbox перед header; #81/#88 не ждут #83, DAG без reverse edge |
-| A21 | Activation, restart или rollback с financial records в полёте | Те же Invoices intent identities; application/proof ref/Outbox атомарны. Rollback producer-off первым, dual consumer и pending jobs сохраняются до drain/replay horizon (#77/#82/#83/#90) | Не applied proof без handoff, не header-only downgrade до drain, не сброс offsets/Inbox |
+| A20 | #81 header-only и accepted-not-active #82; #83 установлен, отдельно отсутствует #84 или #86 дольше Kafka retention/Outbox cleanup; затем установлены все consumers | #82 document intents durable с прежними identities, price application/financial Outbox выключены при отсутствии любого из #83/#84/#86. Явная activation только после accepted installed всех трёх с совместимыми contracts #76; isolated fixtures доказаны отдельно. Сохранённые intents дают payment handoffs #83→#84 и cost facts #82→#86 без потери (#76/#77/#82/#83/#84/#86/#90) | Не activation только по #83/HTTP health, не cleanup непоставленных intents, не quarantine/skip, бесконечный retry partition или blocked financial Outbox перед header; #81/#88 не ждут financial activation, DAG без reverse edges |
+| A21 | Activation, restart или rollback с financial records в полёте, pending jobs #83 и последующими payment handoffs/cost facts | Те же Invoices intent identities; application/proof ref/Outbox атомарны. Rollback producer-off первым; #83/#84/#86 сохраняются до доказанного drain/replay horizon всей цепочки Invoices→Orders→Payments и Invoices→Pricing, включая pending jobs и их handoffs (#77/#82/#83/#84/#86/#90) | Не applied proof без handoff, не удаление любого consumer/header-only downgrade до полного drain, не сброс offsets/Inbox |
 | A22 | Checkout с двумя и более frozen Orders; omitted/extra/duplicate ref или неполное line coverage | N per-order artifacts и N durable publication intents; guarded exact-link refs/intents/один invoice Outbox handoff/link/exclusion/revisions all-or-nothing (#76/#80/#90) | Ошибка coverage/version/fence/CancelGuard или rollback не создаёт committed revenue intent/fact; orphan bytes не commit |
 | A23 | Wrong hash/frozen version, duplicate/crash/redelivery, oversized checkout/proof/envelope | Stable per-element identity/messageId/ref, conflict/correction при другом content; все checkout и byte/tx bounds соблюдены. Pricing duplicate Order не подавляет другой, оба порядка revenue/cost сохраняют per-order pending до обоих proofs (#76/#80/#86/#90) | Не random identity в обход dedupe, не второй sequence/registry, не splitting/truncation/повышение limits; Locked agreement неизменен |
 | A24 | Storage outage: financial record, затем header в одной Kafka partition | Inbox+immutable refs+owner pending job commit до offset; header продолжает progress, financial apply degraded, backlog reason/age видны в bounded profile (#77/#83/#90) | Не offset до job, не Processed=financial completion, не storage retry в handler; financial fetch не исчерпывает header capacity; при DB/disk saturation честный backpressure |
