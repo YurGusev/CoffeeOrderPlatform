@@ -501,6 +501,7 @@
       "database": null,
       "secretRefs": [
         "kafka.realtime",
+        "security.actorContextEdgeVerificationPublicKeys",
         "security.serviceTransportKeys.realtime-gateway",
         "telemetry.exporterToken"
       ],

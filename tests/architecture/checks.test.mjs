@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import {checkStaticSource} from "../../scripts/check-architecture.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const FIXTURES = join(REPO_ROOT, "tests/architecture/fixtures");
@@ -83,6 +84,8 @@ async function toolchainRoot() {
   await cp(join(REPO_ROOT, "platform"), join(root, "platform"), {
     recursive: true,
   });
+  await mkdir(join(root,"patches"));
+  await cp(join(REPO_ROOT,"patches/librdkafka-resume-wakeup.patch"),join(root,"patches/librdkafka-resume-wakeup.patch"));
   return root;
 }
 
@@ -106,6 +109,16 @@ void test("GREEN: accepted manifests pass all direct checkers deterministically"
       [second.status, second.stdout, second.stderr],
     );
   }
+});
+
+void test("RED BOUND-DB-CLIENT: realtime infrastructure cannot import owner database capabilities",()=>{
+  assert.throws(()=>checkStaticSource("apps/realtime-gateway/src/infrastructure/database.ts",
+    'import * as owner from "@coffee-platform/database/owner"; export const forbidden=owner;'),/BOUND-DB-CLIENT/);
+});
+
+void test("RED BOUND-REALTIME-SQL: realtime infrastructure cannot contain SQL",()=>{
+  assert.throws(()=>checkStaticSource("apps/realtime-gateway/src/infrastructure/query.ts",
+    'export const forbidden="SELECT 1";'),/BOUND-REALTIME-SQL/);
 });
 
 void test("RED BOUND-IMPORT: Orders cannot import Catalog internal repository", () => {
@@ -494,9 +507,27 @@ void test("GREEN ARCH-PERMISSION: native nginx image needs no Node permission ma
   }
 });
 
-void test("GREEN: exact TS7 toolchain manifest, lockfile and config baseline passes", () => {
+void test("RED: native librdkafka source patch cannot drift from its pinned checksum",async()=>{
+  const root=await toolchainRoot();
+  try{
+    const path=join(root,"patches/librdkafka-resume-wakeup.patch");await writeFile(path,(await readFile(path,"utf8"))+"\n");
+    const result=run("check-toolchain-versions.mjs",root);assert.notEqual(result.status,0,output(result));assert.match(output(result),/LIBRDKAFKA-PATCH/);
+  }finally{await rm(root,{recursive:true,force:true});}
+});
+
+void test("GREEN: exact TS7 toolchain manifest, lockfile and config baseline passes", async () => {
   const result = run("check-toolchain-versions.mjs");
   assert.equal(result.status, 0, output(result));
+  const root = await toolchainRoot();
+  try {
+    const cache = join(root, "apps/web/node_modules/.vite/deps");
+    await mkdir(cache, {recursive: true});
+    await writeFile(join(cache, "package.json"), "not a source manifest", "utf8");
+    const cached = run("check-toolchain-versions.mjs", root);
+    assert.equal(cached.status, 0, output(cached));
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
 });
 
 void test("GREEN: canonical and single-threaded Oxlint profiles have identical diagnostics and exit code", () => {

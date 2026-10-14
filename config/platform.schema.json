@@ -41,7 +41,7 @@
         "aroma-observer": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["aromaObservation"], "properties": {"aromaObservation": {"$ref": "#/$defs/aromaObservation"}}}]},
         "aroma-convergence": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["mutationsEnabled", "aromaConvergence"], "properties": {"mutationsEnabled": {"type": "boolean"}, "aromaConvergence": {"$ref": "#/$defs/aromaConvergence"}}}]},
         "aroma-gateway": {"$ref": "#/$defs/service"},
-        "realtime-gateway": {"$ref": "#/$defs/service"}
+        "realtime-gateway": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["realtime"], "properties": {"realtime": {"$ref": "#/$defs/realtime"}}}]}
       },
       "allOf": [{"properties": {
         "edge-gateway": {"$ref": "#/$defs/noAromaWorkflow"},
@@ -58,10 +58,47 @@
         "aroma-convergence": {"type": "object", "properties": {"aromaPreparation": false, "aromaObservation": false}},
         "aroma-gateway": {"$ref": "#/$defs/noAromaWorkflow"},
         "realtime-gateway": {"$ref": "#/$defs/noAromaWorkflow"}
+      }}, {"properties": {
+        "edge-gateway": {"type": "object", "properties": {"realtime": false}},
+        "api-public": {"type": "object", "properties": {"realtime": false}},
+        "api-internal": {"type": "object", "properties": {"realtime": false}},
+        "web": {"type": "object", "properties": {"realtime": false}},
+        "customer-service": {"type": "object", "properties": {"realtime": false}},
+        "catalog-service": {"type": "object", "properties": {"realtime": false}},
+        "catalog-supplier-sync": {"type": "object", "properties": {"realtime": false}},
+        "catalog-activation-worker": {"type": "object", "properties": {"realtime": false}},
+        "pricing-service": {"type": "object", "properties": {"realtime": false}},
+        "orders-service": {"type": "object", "properties": {"realtime": false}},
+        "orders-aroma-preparation": {"type": "object", "properties": {"realtime": false}},
+        "aroma-observer": {"type": "object", "properties": {"realtime": false}},
+        "aroma-convergence": {"type": "object", "properties": {"realtime": false}},
+        "aroma-gateway": {"type": "object", "properties": {"realtime": false}}
       }}]
     }
   },
   "$defs": {
+    "realtime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["shutdownGraceMs", "maxConnections", "queueMaxRecords", "queueMaxBytes", "totalQueueMaxRecords", "totalQueueMaxBytes", "ringMaxRecords", "ringMaxBytes", "ringMaxAgeMs", "coalesceMs", "writeTimeoutMs", "heartbeatMs", "authCheckMs", "maxEventDataBytes", "rssBudgetBytes", "fdBudget"],
+      "properties": {
+        "shutdownGraceMs": {"type": "integer", "minimum": 1, "maximum": 20000},
+        "maxConnections": {"type": "integer", "minimum": 1, "maximum": 512},
+        "queueMaxRecords": {"type": "integer", "minimum": 1, "maximum": 64},
+        "queueMaxBytes": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "totalQueueMaxRecords": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "totalQueueMaxBytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "ringMaxRecords": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "ringMaxBytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "ringMaxAgeMs": {"type": "integer", "minimum": 1, "maximum": 300000},
+        "coalesceMs": {"type": "integer", "minimum": 1, "maximum": 250},
+        "writeTimeoutMs": {"type": "integer", "minimum": 1, "maximum": 5000},
+        "heartbeatMs": {"type": "integer", "minimum": 1, "maximum": 15000},
+        "authCheckMs": {"type": "integer", "minimum": 1, "maximum": 30000},
+        "maxEventDataBytes": {"type": "integer", "minimum": 1, "maximum": 2048},
+        "rssBudgetBytes": {"type": "integer", "minimum": 1, "maximum": 536870912},
+        "fdBudget": {"type": "integer", "minimum": 1, "maximum": 12288}
+      }
+    },
     "noAromaWorkflow": {"type": "object", "properties": {"mutationsEnabled": false, "aromaPreparation": false, "aromaObservation": false, "aromaConvergence": false}},
     "aromaPreparation": {
       "type": "object", "additionalProperties": false,
@@ -158,6 +195,7 @@
       "required": ["max", "checkoutTimeoutMs", "lockTimeoutMs", "interactiveStatementTimeoutMs", "backgroundStatementTimeoutMs", "terminalTimeoutMs", "transactionTimeoutMs", "idleTimeoutMs", "maxLifetimeMs"],
       "properties": {
         "max": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "maxWaiting": { "type": "integer", "minimum": 0, "maximum": 100 },
         "checkoutTimeoutMs": { "type": "integer", "const": 250 },
         "lockTimeoutMs": { "type": "integer", "const": 250 },
         "interactiveStatementTimeoutMs": { "type": "integer", "const": 1500 },
@@ -273,7 +311,8 @@
         "mutationsEnabled": {"type": "boolean"},
         "aromaPreparation": {"$ref": "#/$defs/aromaPreparation"},
         "aromaObservation": {"$ref": "#/$defs/aromaObservation"},
-        "aromaConvergence": {"$ref": "#/$defs/aromaConvergence"}
+        "aromaConvergence": {"$ref": "#/$defs/aromaConvergence"},
+        "realtime": {"$ref": "#/$defs/realtime"}
       }
     },
     "platform": {
@@ -284,6 +323,7 @@
         "shutdownGraceMs": {"type": "integer", "const": 30000},
         "requestDeadlineMs": {"type": "integer", "const": 5000},
         "bodyLimitBytes": {"type": "integer", "const": 1048576},
+
         "health": {"$ref": "#/$defs/health"},
         "outbox": {
           "type": "object", "additionalProperties": false,

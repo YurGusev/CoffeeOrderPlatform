@@ -24,7 +24,7 @@ function setup(t, permission="orders:create", overrides={}) {
       verifyPublicDelegation:(_token,operation)=>({iss:"api-public",aud:"orders-service",originalIssuer:"edge-gateway",sub:"actor-a",permissions:Array.isArray(permission)?permission:[permission],operationId:operation,correlationId:cid}),
       signInternalDelegation:()=>"fixture-delegation",
       owner:{
-        store:{async precheck(...args){calls.push(["precheck",...args]);return overrides.precheckResult??{kind:"proceed"};},async replay(...args){calls.push(["replay",...args]);return overrides.replayResult??{kind:"not_retained"};},async getCard(...args){calls.push(["getCard",...args]);if(overrides.getCardError)throw overrides.getCardError;return card;},async createDraft(...args){calls.push(["createDraft",...args]);return {status:201,body:card,replayed:false};},async putItem(...args){calls.push(["putItem",...args]);return {status:200,body:card,replayed:false};},async deleteItem(...args){calls.push(["deleteItem",...args]);return {status:200,body:card,replayed:false};},async confirm(...args){calls.push(["confirm",...args]);if(overrides.confirmError)throw overrides.confirmError;return {status:200,body:card,replayed:false};},async requestReconciliation(...args){calls.push(["requestReconciliation",...args]);throw Object.assign(new Error("no owner-local projection"),{code:"AROMA_RECONCILIATION_NOT_ALLOWED"});}},
+        store:{async precheck(...args){calls.push(["precheck",...args]);return overrides.precheckResult??{kind:"proceed"};},async preflightPut(...args){calls.push(["preflightPut",...args]);if(overrides.preflightPutError)throw overrides.preflightPutError;return overrides.preflightResult??{kind:"proceed",customerRef:card.customer.customerRef};},async replay(...args){calls.push(["replay",...args]);return overrides.replayResult??{kind:"not_retained"};},async getCard(...args){calls.push(["getCard",...args]);if(overrides.getCardError)throw overrides.getCardError;return card;},async createDraft(...args){calls.push(["createDraft",...args]);return {status:201,body:card,replayed:false};},async putItem(...args){calls.push(["putItem",...args]);return {status:200,body:card,replayed:false};},async deleteItem(...args){calls.push(["deleteItem",...args]);return {status:200,body:card,replayed:false};},async confirm(...args){calls.push(["confirm",...args]);if(overrides.confirmError)throw overrides.confirmError;return {status:200,body:card,replayed:false};},async requestReconciliation(...args){calls.push(["requestReconciliation",...args]);throw Object.assign(new Error("no owner-local projection"),{code:"AROMA_RECONCILIATION_NOT_ALLOWED"});}},
         customer:{async getOrderInput(...args){calls.push(["customer",...args]);return {customerRef:card.customer.customerRef,customerVersion:"1",displayName:"Ada",state:"Active"};}},
         pricing:{async verify(...args){calls.push(["pricing",...args]);if(overrides.pricingResult)return overrides.pricingResult;throw new Error("unexpected");}},
       },
@@ -63,6 +63,7 @@ void test("six application workflows run without Fastify and preserve the owner 
   const context={actorRef:"actor-a",permissions:["orders:create","orders:edit:any","orders:confirm:any"],identity:{actorRef:"actor-a",scope:"a".repeat(64),key:randomUUID()},correlationId:cid,signal:new AbortController().signal,deadlineUtc:null,replayOnly:false};
   const store={
     async precheck(){calls.push("precheck");return {kind:"proceed"};},
+    async preflightPut(){calls.push("preflightPut");return {kind:"proceed",customerRef:card.customer.customerRef};},
     async replay(){calls.push("replay");return {kind:"not_retained"};},
     async getCard(){calls.push("getCard");return card;},
     async createDraft(){calls.push("createDraft");return {status:201,body:card,replayed:false};},
@@ -81,7 +82,7 @@ void test("six application workflows run without Fastify and preserve the owner 
   calls.length=0;
   const request={expectedVersion:"1",productRef:line.productRef,variantRef:line.variantRef,quantity:line.quantity,quoteRef,quoteLineNumber:1,quoteHash:"a".repeat(64)};
   assert.equal((await upsertItem({store,pricing,signInternalDelegation},{...context,orderRef,itemRef,request})).status,200);
-  assert.deepEqual(calls,["precheck","getCard","pricing","putItem"]);
+  assert.deepEqual(calls,["preflightPut","pricing","putItem"]);
   calls.length=0;
   assert.equal((await deleteItem(store,{...context,orderRef,itemRef,expectedVersion:"1"})).status,200);
   assert.deepEqual(calls,["precheck","deleteItem"]);
@@ -175,11 +176,24 @@ void test("draft hash precheck conflict stops before Customer network read",asyn
   assert.deepEqual(calls.map(x=>x[0]),["precheck"]);
 });
 
-void test("item hash precheck conflict stops before Order lookup and Pricing network read",async t=>{
-  const {app,calls}=await setup(t,"orders:edit:any",{precheckResult:{kind:"conflict"}});
+void test("item hash precheck conflict stops before full card read and Pricing network read",async t=>{
+  const {app,calls}=await setup(t,"orders:edit:any",{preflightResult:{kind:"conflict"}});
   const response=await app.inject({method:"PUT",url:`/api/client-v1/orders/${orderRef}/items/${itemRef}`,headers:headers(),payload:{expectedVersion:"1",productRef:"prd_01ARZ3NDEKTSV4RRFFQ69G5FAV",variantRef:"var_01ARZ3NDEKTSV4RRFFQ69G5FAV",quantity:"2",quoteRef:"prq_01ARZ3NDEKTSV4RRFFQ69G5FAV",quoteLineNumber:1,quoteHash:"a".repeat(64)}});
   assert.equal(response.statusCode,409);
-  assert.deepEqual(calls.map(x=>x[0]),["precheck"]);
+  assert.deepEqual(calls.map(x=>x[0]),["preflightPut"]);
+});
+void test("completed and in-progress PUT preflight stop before Pricing",async t=>{
+  const request={expectedVersion:"1",productRef:"prd_01ARZ3NDEKTSV4RRFFQ69G5FAV",variantRef:"var_01ARZ3NDEKTSV4RRFFQ69G5FAV",quantity:"2",quoteRef:"prq_01ARZ3NDEKTSV4RRFFQ69G5FAV",quoteLineNumber:1,quoteHash:"a".repeat(64)};
+  const completed=await setup(t,"orders:edit:any",{preflightResult:{kind:"completed",response:{status:200,body:card,resourceRef:orderRef}}});
+  const completedResponse=await completed.app.inject({method:"PUT",url:`/api/client-v1/orders/${orderRef}/items/${itemRef}`,headers:headers(),payload:request});
+  assert.equal(completedResponse.statusCode,200);
+  assert.equal(completedResponse.headers["idempotency-replayed"],"true");
+  assert.deepEqual(completed.calls.map(x=>x[0]),["preflightPut"]);
+  const inProgress=await setup(t,"orders:edit:any",{preflightResult:{kind:"in_progress"}});
+  const inProgressResponse=await inProgress.app.inject({method:"PUT",url:`/api/client-v1/orders/${orderRef}/items/${itemRef}`,headers:headers(),payload:request});
+  assert.equal(inProgressResponse.statusCode,409);
+  assert.equal(inProgressResponse.json().code,"IDEMPOTENCY_REQUEST_IN_PROGRESS");
+  assert.deepEqual(inProgress.calls.map(x=>x[0]),["preflightPut"]);
 });
 
 void test("GET independently requires read permission and performs only the owner read",async t=>{
@@ -246,5 +260,29 @@ void test("selected Pricing line scope mismatch returns the exact code before it
   const response=await app.inject({method:"PUT",url:`/api/client-v1/orders/${orderRef}/items/${itemRef}`,headers:headers(),payload:body});
   assert.equal(response.statusCode,409);
   assert.equal(response.json().code,"ORDER_QUOTE_SCOPE_MISMATCH");
-  assert.deepEqual(calls.map(x=>x[0]),["precheck","getCard","pricing"]);
+  assert.deepEqual(calls.map(x=>x[0]),["preflightPut","pricing"]);
+});
+
+void test("aborted PUT preflight maps lookup failure without Pricing or write, while full-card not-found remains 404",async t=>{
+  const request={expectedVersion:"1",productRef:"prd_01ARZ3NDEKTSV4RRFFQ69G5FAV",variantRef:"var_01ARZ3NDEKTSV4RRFFQ69G5FAV",quantity:"2",quoteRef:"prq_01ARZ3NDEKTSV4RRFFQ69G5FAV",quoteLineNumber:1,quoteHash:"a".repeat(64)};
+  const lookup=await setup(t,"orders:edit:any",{preflightResult:{kind:"lookup_unavailable"}});
+  const lookupResponse=await lookup.app.inject({method:"PUT",url:`/api/client-v1/orders/${orderRef}/items/${itemRef}`,headers:headers(),payload:request});
+  assert.equal(lookupResponse.statusCode,503);
+  assert.equal(lookupResponse.json().code,"IDEMPOTENCY_LOOKUP_UNAVAILABLE");
+  assert.deepEqual(lookup.calls.map(x=>x[0]),["preflightPut"]);
+  const missing=await setup(t,"orders:edit:any",{preflightPutError:Object.assign(new Error("missing"),{code:"ORDER_NOT_FOUND"})});
+  const missingResponse=await missing.app.inject({method:"PUT",url:`/api/client-v1/orders/${orderRef}/items/${itemRef}`,headers:headers(),payload:request});
+  assert.equal(missingResponse.statusCode,404);
+  assert.equal(missingResponse.json().code,"ORDER_NOT_FOUND");
+  assert.deepEqual(missing.calls.map(x=>x[0]),["preflightPut"]);
+});
+void test("PUT full-card decode and database failures keep post-proceed mapping",async t=>{
+  const request={expectedVersion:"1",productRef:"prd_01ARZ3NDEKTSV4RRFFQ69G5FAV",variantRef:"var_01ARZ3NDEKTSV4RRFFQ69G5FAV",quantity:"2",quoteRef:"prq_01ARZ3NDEKTSV4RRFFQ69G5FAV",quoteLineNumber:1,quoteHash:"a".repeat(64)};
+  for(const code of ["ORDER_DATABASE_DECODE_ERROR","DB_QUERY_FAILED","TRANSACTION_OUTCOME_UNKNOWN"]) {
+    const failed=await setup(t,"orders:edit:any",{preflightPutError:Object.assign(new Error(code),{code})});
+    const response=await failed.app.inject({method:"PUT",url:`/api/client-v1/orders/${orderRef}/items/${itemRef}`,headers:headers(),payload:request});
+    assert.equal(response.statusCode,500,code);
+    assert.equal(response.json().code,"INTERNAL_ERROR",code);
+    assert.deepEqual(failed.calls.map(x=>x[0]),["preflightPut"],code);
+  }
 });

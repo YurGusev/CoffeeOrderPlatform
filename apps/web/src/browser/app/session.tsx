@@ -1,4 +1,4 @@
-import { createContext, Fragment, useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import type { BrowserSession } from "@coffee-platform/generated-edge-auth-v1";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Link, Loading } from "@coffee-platform/ui";
@@ -8,6 +8,7 @@ import { useBrowserSession } from "../api/remote.js";
 import { setApplicationSession } from "../api/session-identity.js";
 import { currentEpochMilliseconds, instantEpochMilliseconds } from "../api/time.js";
 
+import { OrderRealtime } from "./OrderRealtime.js";
 const SessionContext = createContext<BrowserSession | undefined>(undefined);
 
 export function useSession(): BrowserSession {
@@ -49,8 +50,15 @@ export function SessionBoundary({ children }: Readonly<{ children: ReactNode }>)
 
   useEffect(() => {
     if (!session.data) return;
-    const delay = Math.max(0, instantEpochMilliseconds(session.data.expiresAt) - currentEpochMilliseconds());
-    const timer = window.setTimeout(() => window.dispatchEvent(new Event(SESSION_INVALIDATED)), delay);
+    // Browser timeout is signed 32-bit; a long-lived session must not overflow
+    // into an immediate invalidation and destroy/recreate the native stream.
+    let timer: number | undefined;
+    const checkExpiry = (): void => {
+      const remaining = instantEpochMilliseconds(session.data.expiresAt) - currentEpochMilliseconds();
+      if (remaining <= 0) { window.dispatchEvent(new Event(SESSION_INVALIDATED)); return; }
+      timer = window.setTimeout(checkExpiry, Math.min(remaining, 2_147_483_647));
+    };
+    checkExpiry();
     return () => window.clearTimeout(timer);
   }, [session.data]);
 
@@ -81,5 +89,5 @@ export function SessionBoundary({ children }: Readonly<{ children: ReactNode }>)
     );
   }
 
-  return <SessionContext value={session.data}><Fragment key={session.data.actorRef}>{children}</Fragment></SessionContext>;
+  return <SessionContext value={session.data}><OrderRealtime actorRef={session.data.actorRef} key={session.data.actorRef}>{children}</OrderRealtime></SessionContext>;
 }

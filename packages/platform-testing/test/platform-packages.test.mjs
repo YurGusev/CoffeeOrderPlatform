@@ -195,7 +195,7 @@ const poolConfig = {
   interactiveStatementTimeoutMs: 100, backgroundStatementTimeoutMs: 200,
   terminalTimeoutMs: 40, transactionTimeoutMs: 300, idleTimeoutMs: 1000, maxLifetimeMs: 1000,
 };
-function mockDatabase(t, hook = () => undefined, ssl = false) {
+function mockDatabase(t, hook = () => undefined, ssl = false, poolOverrides = {}) {
   const statements = [], releases = [];
   const connection = new EventEmitter();
   connection.query = async (query) => {
@@ -208,7 +208,7 @@ function mockDatabase(t, hook = () => undefined, ssl = false) {
   t.mock.method(pg.Pool.prototype, 'connect', async () => connection);
   t.mock.method(pg.Pool.prototype, 'end', async () => {});
   const options = {owner: 'test', database: 'owner', allowedDatabase: 'owner',
-    host: 'localhost', port: 5432, user: 'owner', password: 'test-only', ssl, pool: poolConfig, shutdownGraceMs: 1000};
+    host: 'localhost', port: 5432, user: 'owner', password: 'test-only', ssl, pool: {...poolConfig, ...poolOverrides}, shutdownGraceMs: 1000};
   const database = createDatabase(options);
   t.after(() => database.resource.destroy());
   return {database, statements, releases, connection, options};
@@ -233,7 +233,10 @@ void test('database opaque transaction: states, budgets, owner identity and term
   await assert.rejects(query({}, [2]), {code: 'DB_INVALID_TRANSITION'});
   assert.throws(() => defineStatement(database, 'COMMIT'), {code: 'DB_INVALID_CONFIGURATION'});
   assert.throws(() => createDatabase({owner: 'test', database: 'other', allowedDatabase: 'owner'}), {code: 'DB_INVALID_CONFIGURATION'});
-  for (const invalid of [{...options, shutdownGraceMs: 0}, {...options, ssl: 'invalid'}, {...options, host: {}}, {...options, pool: {...poolConfig, terminalTimeoutMs: 0}}]) assert.throws(() => createDatabase(invalid), {code: 'DB_INVALID_CONFIGURATION'});
+  for (const invalid of [{...options, shutdownGraceMs: 0}, {...options, ssl: 'invalid'}, {...options, host: {}},
+    {...options, pool: {...poolConfig, terminalTimeoutMs: 0}}, {...options, pool: {...poolConfig, maxWaiting: -1}},
+    {...options, pool: {...poolConfig, maxWaiting: 1.5}}, {...options, pool: {...poolConfig, maxWaiting: 101}}])
+    assert.throws(() => createDatabase(invalid), {code: 'DB_INVALID_CONFIGURATION'});
   const failure = new DatabaseTransactionError('DB_QUERY_FAILED', {correlationId: 'safe'});
   await assert.rejects(withTransaction(database, {mode: 'background'}, async tx => {
     saved = tx;
@@ -339,6 +342,71 @@ void test('database pool cap preserves healthy readiness and recovers admission'
   await Promise.all([first, second]);
   await withTransaction(database, {mode: 'interactive'}, async () => {});
   assert.equal(database.metrics().active, 0);
+});
+
+void test('database bounded checkout queue reserves slots FIFO, keeps health, and removes canceled or expired waiters', async t => {
+  const {database} = mockDatabase(t, () => undefined, false, {max: 1, maxWaiting: 2, checkoutTimeoutMs: 50});
+  assert.equal(await database.readiness.check(new AbortController().signal), true);
+  let finishFirst, finishSecond;
+  const firstGate = new Promise(resolve => {finishFirst = resolve;});
+  const secondGate = new Promise(resolve => {finishSecond = resolve;});
+  let secondEntered, thirdEntered;
+  const secondStarted = new Promise(resolve => {secondEntered = resolve;});
+  const thirdStarted = new Promise(resolve => {thirdEntered = resolve;});
+  const entered = [];
+  const first = withTransaction(database, {mode: 'interactive'}, async () => {entered.push('first'); await firstGate;});
+  await new Promise(resolve => setImmediate(resolve));
+  const second = withTransaction(database, {mode: 'interactive'}, async () => {entered.push('second'); secondEntered(); await secondGate;});
+  const third = withTransaction(database, {mode: 'interactive'}, async () => {entered.push('third'); thirdEntered();});
+  assert.equal(database.metrics().waiting, 2);
+  await new Promise(resolve => setTimeout(resolve, 75));
+  assert.equal(database.metrics().waiting, 2, 'transaction deadline bounds queue wait, not the physical connect budget');
+  await assert.rejects(withTransaction(database, {mode: 'interactive'}, async () => {}), {code: 'DB_POOL_EXHAUSTED'});
+  assert.equal(database.metrics().saturationTotal, 1);
+  assert.equal(await database.readiness.check(new AbortController().signal), true);
+  assert.equal(database.metrics().waiting, 2);
+  finishFirst();
+  await secondStarted;
+  assert.deepEqual(entered, ['first', 'second']);
+  assert.equal(database.metrics().waiting, 1);
+  finishSecond();
+  await thirdStarted;
+  await Promise.all([first, second, third]);
+  assert.deepEqual(entered, ['first', 'second', 'third']);
+
+  const {database: boundedDatabase} = mockDatabase(t, () => undefined, false, {max: 1, maxWaiting: 2, checkoutTimeoutMs: 50});
+  let finishBlocker;
+  const blockerGate = new Promise(resolve => {finishBlocker = resolve;});
+  const blocker = withTransaction(boundedDatabase, {mode: 'interactive'}, async () => blockerGate);
+  await new Promise(resolve => setImmediate(resolve));
+  const abort = new AbortController();
+  const canceled = withTransaction(boundedDatabase, {mode: 'interactive', signal: abort.signal}, async () => {});
+  abort.abort();
+  await assert.rejects(canceled, {code: 'DB_INTERRUPTED'});
+  assert.equal(boundedDatabase.metrics().waiting, 0);
+  assert.equal(boundedDatabase.metrics().saturationTotal, 0);
+  const timed = withTransaction(boundedDatabase, {mode: 'interactive', signal: AbortSignal.timeout(75)}, async () => {});
+  await assert.rejects(timed, {code: 'DB_INTERRUPTED'});
+  assert.equal(boundedDatabase.metrics().waiting, 0);
+  assert.equal(boundedDatabase.metrics().saturationTotal, 1);
+  finishBlocker();
+  await blocker;
+});
+
+void test('database shutdown rejects queued checkouts without acquiring a connection', async t => {
+  const {database} = mockDatabase(t, () => undefined, false, {max: 1, maxWaiting: 1, checkoutTimeoutMs: 100});
+  let finishBlocker;
+  const blockerGate = new Promise(resolve => {finishBlocker = resolve;});
+  const blocker = withTransaction(database, {mode: 'interactive'}, async () => blockerGate);
+  await new Promise(resolve => setImmediate(resolve));
+  const waiting = withTransaction(database, {mode: 'interactive'}, async () => {});
+  assert.equal(database.metrics().waiting, 1);
+  const stopping = database.resource.stop(AbortSignal.timeout(500));
+  await assert.rejects(waiting, {code: 'DB_STOPPED'});
+  assert.equal(database.metrics().waiting, 0);
+  finishBlocker();
+  await Promise.allSettled([blocker]);
+  await stopping;
 });
 
 void test('database non-cooperative callback remains owned for runtime fail-stop', async t => {
