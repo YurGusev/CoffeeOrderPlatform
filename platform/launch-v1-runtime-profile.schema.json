@@ -172,7 +172,7 @@
     "internalOperationAllowlist": {
       "type": "array",
       "minItems": 8,
-      "maxItems": 10,
+      "maxItems": 9,
       "items": {
         "$ref": "#/$defs/internalOperation"
       }

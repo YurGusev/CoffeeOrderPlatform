@@ -44,7 +44,7 @@ function validateProfile(profile, schema) {
   }
 }
 
-export function readRoutes(spec) {
+function readRoutes(spec) {
   const result = [];
   for (const [path, operations] of Object.entries(spec.paths)) {
     for (const [method, operation] of Object.entries(operations)) {
@@ -81,8 +81,7 @@ function routeBlock(route, profile) {
   return `location ${location} {
       limit_except ${methods} { deny all; }
       ${rejectImplicitHead}
-      limit_conn ${event ? `edge_sse_admission ${l.sseAdmissionConnections}` : `edge_api_admission ${l.apiAdmissionConnections}`};
-      ${event ? 'limit_conn_status 429;' : ''}
+      limit_conn ${event ? 'edge_sse_admission 512' : 'edge_api_admission 256'};
       if ($bad_idempotency_key) { return 400; }
       auth_request /_edge/authorize;
       auth_request_set $edge_auth_status $upstream_status;
@@ -93,7 +92,7 @@ function routeBlock(route, profile) {
       proxy_request_buffering off;
       proxy_buffering off;
       proxy_cache off;
-      ${event ? `gzip off;\n      proxy_pass_header X-Accel-Buffering;` : ''}
+      ${event ? 'gzip off;' : ''}
       proxy_next_upstream off;
       proxy_connect_timeout ${l.apiConnectSeconds}s;
       proxy_read_timeout ${event ? l.sseReadSeconds : l.apiReadSeconds}s;
@@ -107,13 +106,8 @@ function routeBlock(route, profile) {
     }`;
 }
 
-export function render(profile, routes) {
+function render(profile, routes) {
   const { tls, upstreams: u, limits: l } = profile;
-  must(l.sseAdmissionConnections <= 512, 'SSE admission must not exceed 512');
-  must(l.workerProcesses === 1 || l.workerProcesses === 2, 'worker processes must be 1 or 2');
-  must(l.requestPoolBytes === 2048, 'request pool allocation granularity must match the checked profile');
-  must(l.workerConnections >= 2 * l.sseAdmissionConnections + l.apiAdmissionConnections + l.authAdmissionConnections + 64,
-    'worker slot budget must preserve SSE upstream/downstream and API/auth/health headroom');
   const grouped = new Map();
   for (const route of routes) {
     const group = grouped.get(route.path) ?? { path: route.path, methods: [] };
@@ -122,10 +116,10 @@ export function render(profile, routes) {
   }
   const blocks = [...grouped.values()].map(route => routeBlock(route, profile)).join('\n');
   const authTimeouts = `proxy_connect_timeout ${l.authConnectSeconds}s; proxy_read_timeout ${l.authReadSeconds}s;`;
-  return `worker_processes ${l.workerProcesses};
+  return `worker_processes 1;
 error_log /dev/null;
 pid /tmp/nginx.pid;
-events { worker_connections ${l.workerConnections}; }
+events { worker_connections 1024; }
 http {
   include /etc/nginx/mime.types;
   default_type application/octet-stream;
@@ -155,20 +149,16 @@ http {
   server_tokens off;
   upstream edge_gateway { server ${u.edge.host}:${u.edge.port}; keepalive 8; }
   upstream api_public { server ${u.apiPublic.host}:${u.apiPublic.port}; keepalive 16; }
-  upstream realtime_gateway { zone realtime_tls_state 64k; server ${u.realtime.host}:${u.realtime.port}; }
+  upstream realtime_gateway { server ${u.realtime.host}:${u.realtime.port}; }
   server { listen 127.0.0.1:18080; location / { ${problem(503, 'AUTHORIZER_UNAVAILABLE', 'Authorization unavailable')} } }
   server {
     listen ${profile.listen} ssl;
-    request_pool_size ${l.requestPoolBytes};
     server_name ${profile.publicHost};
     proxy_next_upstream off;
     proxy_cache off;
     ssl_certificate ${tls.publicCertificate};
     ssl_certificate_key ${tls.publicPrivateKey};
     ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_buffer_size ${tls.bufferBytes};
-    ssl_session_cache shared:coffee_public_tls:${tls.sessionCacheMiB}m;
-    ssl_session_timeout ${tls.sessionTimeoutMinutes}m;
     root /usr/share/nginx/html;
     location = /health/live { if ($request_method != GET) { return 405; } access_log off; default_type text/plain; return 200 'ok'; }
     location = / { if ($request_method != GET) { return 405; } return 303 /app/customers; }
@@ -180,7 +170,7 @@ http {
     location = /auth/callback { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/callback; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_login_cookie; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
     location = /auth/logout { limit_except POST { deny all; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/logout; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
     if ($edge_oversized_raw_target) { return 414; }
-    location = /_edge/authorize { internal; limit_conn edge_auth_admission ${l.authAdmissionConnections}; proxy_pass https://edge_gateway/_edge/authorize; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_pass_request_body off; proxy_set_header Content-Length ''; proxy_set_header X-Original-Method $request_method; proxy_set_header X-Original-URI $request_uri; proxy_set_header X-Request-Id $request_id; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header Authorization ''; proxy_set_header X-Actor-Context ''; include /etc/nginx/snippets/upstream-tls.conf; }
+    location = /_edge/authorize { internal; limit_conn edge_auth_admission 320; proxy_pass https://edge_gateway/_edge/authorize; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_pass_request_body off; proxy_set_header Content-Length ''; proxy_set_header X-Original-Method $request_method; proxy_set_header X-Original-URI $request_uri; proxy_set_header X-Request-Id $request_id; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header Authorization ''; proxy_set_header X-Actor-Context ''; include /etc/nginx/snippets/upstream-tls.conf; }
     location = /health/ready { return 404; }
     location = /metrics { return 404; }
     location ^~ /api/internal-v1/ { ${problem(404, 'ROUTE_NOT_FOUND', 'Not found')} }
@@ -189,7 +179,6 @@ http {
     location ~ ^/auth/ { return 404; }
     ${blocks}
     location / { return 404; }
-    error_page 429 = @realtime_capacity;
     error_page 401 = @auth_401;
     error_page 403 = @auth_403;
     error_page 500 = @auth_503;
@@ -201,7 +190,6 @@ http {
     location @auth_503 { ${problem(503, 'AUTHORIZER_UNAVAILABLE', 'Authorization unavailable')} }
     location @upstream_502 { ${problem(502, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
     location @upstream_503 { ${problem(503, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
-    location @realtime_capacity { ${problem(503, 'REALTIME_CAPACITY_EXCEEDED', 'Realtime capacity exceeded')} }
     location @upstream_504 { ${problem(504, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
   }
 }

@@ -46,9 +46,9 @@ for (const path of ["common/identifiers.v1.schema.json", "common/money-version-t
 const orderConfirmedSchema = ajv.getSchema("https://coffeeorderplatform.local/contracts/schemas/events/order-confirmed.v1.schema.json");
 assert.ok(orderConfirmedSchema);
 
-void test("OrderStore exposes command, exact precheck, PUT preflight, replay, history, Desired, and Outbox operations", async () => {
+void test("OrderStore exposes command, exact precheck, replay, history, Desired, and Outbox operations", async () => {
   const {OrderStore} = await import("../../apps/orders-service/dist/infrastructure/database/order-store.js");
-  for (const method of ["createDraft", "putItem", "deleteItem", "confirm", "getCard", "replay", "precheck", "preflightPut"]) {
+  for (const method of ["createDraft", "putItem", "deleteItem", "confirm", "getCard", "replay", "precheck"]) {
     assert.equal(typeof OrderStore.prototype[method], "function", `${method} must be implemented`);
   }
 });
@@ -139,13 +139,6 @@ void test("PostgreSQL OrderStore atomically persists commands, prechecks before 
       const firstPut = {...commandMeta(), orderRef:draft.body.orderRef, itemRef:firstRef, expectedVersion:"1", request:firstRequest, item:firstProof};
       await assert.rejects(store.putItem({...firstPut, request:{...firstRequest, quantity:"3.5"}}), {code:"ORDER_VALIDATION_FAILED"}, "verified pricing snapshot must match the original browser request");
       assert.deepEqual(await store.precheck(firstPut.identity, hashOrderItemPutRequest(firstRequest), randomUUID()), {kind:"proceed"});
-      const beforeAbortedPreflight=(await admin.query("SELECT count(*)::int AS count FROM orders.idempotency_records")).rows[0].count;
-      const abortedPreflight=new AbortController();abortedPreflight.abort();
-      assert.deepEqual(await store.preflightPut(firstPut.identity,hashOrderItemPutRequest(firstRequest),firstPut.orderRef,[],randomUUID(),abortedPreflight.signal),{kind:"lookup_unavailable"});
-      assert.equal(database.metrics().active,0,"an aborted preflight leaves no leased connection");
-      assert.equal((await admin.query("SELECT count(*)::int AS count FROM orders.idempotency_records")).rows[0].count,beforeAbortedPreflight,"an aborted preflight cannot claim a write or idempotency record");
-      assert.deepEqual(await store.preflightPut(firstPut.identity,hashOrderItemPutRequest(firstRequest),firstPut.orderRef,[],randomUUID()),{kind:"proceed",customerRef:customer.customerRef});
-      await assert.rejects(store.preflightPut(commandMeta().identity,hashOrderItemPutRequest(firstRequest),ref("ord",99),[],randomUUID()),{code:"ORDER_NOT_FOUND"});
       const edited = await store.putItem(firstPut);
       assert.equal(edited.body.version, "2");
       assert.equal(edited.body.items.length, 1);
@@ -153,9 +146,6 @@ void test("PostgreSQL OrderStore atomically persists commands, prechecks before 
       const putPrecheck = await store.precheck(firstPut.identity, hashOrderItemPutRequest(firstRequest), randomUUID());
       assert.equal(putPrecheck.kind, "completed");
       assert.deepEqual(putPrecheck.response.body, edited.body);
-      const completedPreflight=await store.preflightPut(firstPut.identity,hashOrderItemPutRequest(firstRequest),firstPut.orderRef,[],randomUUID());
-      assert.equal(completedPreflight.kind,"completed");
-      if(completedPreflight.kind==="completed")assert.deepEqual(completedPreflight.response.body,edited.body);
       assert.equal((await admin.query("SELECT count(*)::int AS count FROM orders.idempotency_records")).rows[0].count, beforePrecheck, "precheck must be read-only before Customer/Pricing calls");
       assert.deepEqual(await store.putItem(firstPut), {...edited, replayed:true});
 

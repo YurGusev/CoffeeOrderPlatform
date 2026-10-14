@@ -320,10 +320,6 @@ function checkStaticSource(path, source) {
   const label = path.replaceAll('\\', '/');
   const isUiPackage = label.includes('/packages/platform-ui/');
   const isBrowserSource = label.includes('/apps/web/src/browser/');
-  const isRealtimeSource = /(?:^|\/)apps\/realtime-gateway\//.test(label);
-  if (isRealtimeSource && /\b(?:select\s+|insert\s+into\s+|update\s+[\w."\s]+\s+set\s+|delete\s+from\s+|(?:create|alter|drop|truncate)\s+table\s+)/i.test(source)) {
-    fail('BOUND-REALTIME-SQL', `${label}: realtime gateway must not contain SQL`);
-  }
   if (label.endsWith('/apps/orders-service/src/application/confirm-order.ts')) {
     const parameters = /\bfunction\s+confirmOrder\s*\(([^)]*)\)/u.exec(source)?.[1] ?? '';
     if (!/^\s*store\s*:\s*Pick<\s*OrderStore\s*,\s*["']replay["']\s*\|\s*["']precheck["']\s*\|\s*["']confirm["']\s*>\s*,\s*input\s*:\s*CommandContext\s*&\s*Readonly<\s*\{[^}]*\}\s*>\s*$/u.test(parameters) ||
@@ -361,9 +357,6 @@ function checkStaticSource(path, source) {
     fail('ARCH-TEMPORAL', `${label}: mutable Date API is forbidden; use Temporal`);
   }
   for (const moduleName of moduleSpecifiers(source)) {
-    if (isRealtimeSource && /^@coffee-platform\/database(?:\/|$)/.test(moduleName)) {
-      fail('BOUND-DB-CLIENT', `${label}: realtime gateway cannot import database capabilities`);
-    }
     if (AROMA_GATEWAY_SOURCE_RE.test(label) && ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(moduleName)) {
       fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: alternate provider HTTP client ${moduleName} is forbidden; use native fetch/Undici`);
     }

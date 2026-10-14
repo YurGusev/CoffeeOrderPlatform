@@ -26,15 +26,6 @@ RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true upda
   && test -f /usr/local/lib/librdkafka.so \
   && test -f /usr/local/lib/librdkafka++.so
 
-COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
-RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update \
-  && apt-get install --yes --no-install-recommends patch \
-  && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')" \
-  && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch \
-  && make -j4 \
-  && make install \
-  && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "${LIBRDKAFKA_VERSION}"
-
 # Сохраняем пути workspace manifests без списка всех сервисов в Dockerfile.
 # Изменение исходников повторяет только этот дешёвый шаг; его выход неизменен.
 FROM ${NODE_IMAGE} AS workspace-manifests
@@ -82,10 +73,9 @@ COPY --from=workspace-manifests /manifests/ ./
 # disabled and perform the native build as an explicit supply-chain step. The
 # upstream documented flags link only the addon against the separately pinned
 # librdkafka stage, avoiding the bundled static archive and pnpm scoped path.
-# Заголовки того же закреплённого Node-образа исключают повторную загрузку из сети.
 RUN --network=host pnpm install --frozen-lockfile --ignore-scripts \
   && cd node_modules/@confluentinc/kafka-javascript \
-  && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local \
+  && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild \
   && cd /workspace \
   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
 

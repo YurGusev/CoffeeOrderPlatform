@@ -121,20 +121,7 @@ opaque transaction/idempotency boundary; Kafka delivery остаётся в #63.
 
 Fleet admission: `56 steady + 8 one-at-a-time rollout + 32 reserve = 96`.
 Это явное уменьшение Orders pool `12 → 4`, не автоматическое увеличение сервера.
-По уточнению владельца от 14 октября 2026 `orders-service` сохраняет четыре
-соединения и получает `dbPool.maxWaiting=100`: конечную FIFO-очередь перед
-получением соединения. Admission ожидает под общим сигналом запроса и
-транзакции: request deadline 5000 ms и transaction timeout 10000 ms включают
-очередь. После выдачи слота подключение ограничено прежними 250 ms checkout;
-ожидание не открывает соединение и не запускает SQL. Отмена, timeout и
-shutdown удаляют ожидателя; overflow и исчерпание checkout budget дают
-`DB_POOL_EXHAUSTED`. Очередь не хранит durable intent и не повторяет команды:
-принятый эффект по-прежнему определяется owner COMMIT/idempotency/Outbox.
-Остальные DB runtime используют `maxWaiting=0` при отсутствии поля и сохраняют
-немедленный отказ при насыщении. Очередь не увеличивает fleet connection budget.
-`database.metrics().waiting` учитывает очередь foundation; внутреннюю
-неограниченную очередь `pg` не используют. Health не занимает слот поверх cap
-и не обходит ожидающие checkout. Saturation считает
+Ожидающие checkout ограничены pool cap и конечным budget. Saturation считает
 `database.metrics().saturationTotal`; краткая занятость всех соединений не
 обнуляет последнее подтверждённое health. Настоящий bounded health failure
 делает owner dependency failed; успешный SELECT восстанавливает её без restart.

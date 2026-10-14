@@ -115,7 +115,7 @@ function orderCardQueryOptions(queryClient: QueryClient, actorRef: string, order
       try {
         const next = await api.getOrderCard(orderRef, signal);
         assertApplicationSession(session);
-        const accepted = acceptOrderCard(queryClient.getQueryData<OrderCardResponse>(orderKey), next, "owner-get");
+        const accepted = acceptOrderCard(queryClient.getQueryData<OrderCardResponse>(orderKey), next);
         const previousError = queryClient.getQueryState(orderKey)?.error;
         if (isFatalOrderCardReadError(previousError) && accepted.projectionVersion !== next.projectionVersion) {
           throw previousError;

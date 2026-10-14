@@ -425,30 +425,9 @@ importers:
 
   apps/realtime-gateway:
     dependencies:
-      '@coffee-platform/config':
-        specifier: workspace:*
-        version: link:../../packages/platform-config
-      '@coffee-platform/generated-client-v1':
-        specifier: workspace:*
-        version: link:../../packages/generated/client-v1
-      '@coffee-platform/generated-internal-v1':
-        specifier: workspace:*
-        version: link:../../packages/generated/internal-v1
-      '@coffee-platform/kafka-runtime':
-        specifier: workspace:*
-        version: link:../../packages/platform-kafka-runtime
       '@coffee-platform/runtime':
         specifier: workspace:*
         version: link:../../packages/platform-runtime
-      '@coffee-platform/security':
-        specifier: workspace:*
-        version: link:../../packages/platform-security
-      '@js-temporal/polyfill':
-        specifier: 0.5.1
-        version: 0.5.1
-      ajv:
-        specifier: 8.20.0
-        version: 8.20.0
 
   apps/web:
     dependencies:

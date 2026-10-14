@@ -14,10 +14,8 @@ import { tmpdir } from "node:os";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
-import Ajv2020 from "ajv/dist/2020.js";
 
 import { parsePlatformConfig, PlatformConfigError, RUNTIME_NAMES } from "../../packages/platform-config/src/index.ts";
-import {readRoutes, render} from "../../tools/nginx/generate.mjs";
 import { validateAllPermissionManifests } from "../../scripts/permission-audit.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -180,98 +178,6 @@ void test("AROMA workflow: durable schedule limits are explicit, bounded and rol
   assert.throws(() => parsePlatformConfig(wrongRole), PlatformConfigError);
 });
 
-void test("Realtime budgets and scoped actor verification are explicit, bounded and role-specific", async () => {
-  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
-  const runtime = document.services["realtime-gateway"];
-  assert.ok(runtime.realtime);
-  assert.deepEqual(parsePlatformConfig(document).services["realtime-gateway"].realtime, runtime.realtime);
-  assert.equal(runtime.realtime.maxConnections, 512);
-  assert.equal(runtime.realtime.rssBudgetBytes, 536870912);
-  const ordinary=structuredClone(document);
-  delete ordinary.platform.realtimeFullProfileMemoryBytes;
-  assert.equal("realtimeFullProfileMemoryBytes" in parsePlatformConfig(ordinary).platform,false);
-  assert.equal("realtimeFullProfileMemoryBytes" in document.platform,false);
-  for (const invalid of [undefined, null, 0, 536870912, 1073741824, 1073741825, "1073741824"]) {
-    const changed = structuredClone(document);
-    changed.platform.realtimeFullProfileMemoryBytes = invalid;
-    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
-  }
-  assert.equal(runtime.concurrency, runtime.realtime.maxConnections);
-  const overCapacity = structuredClone(document);
-  overCapacity.services["realtime-gateway"].concurrency = 513;
-  overCapacity.services["realtime-gateway"].realtime.maxConnections = 513;
-  assert.throws(() => parsePlatformConfig(overCapacity), PlatformConfigError);
-  assert.ok(runtime.secretRefs.includes("security.actorContextEdgeVerificationPublicKeys"));
-  assert.equal(runtime.secretRefs.some(ref => /SigningPrivateKey|postgres\./u.test(ref)), false);
-  assert.equal(runtime.database, null);
-  assert.equal(runtime.replicas, 1);
-  for (const invalid of [undefined, {...runtime.realtime, unknown: 1}, {...runtime.realtime, maxConnections: 5001},
-    {...runtime.realtime, shutdownGraceMs: 20001}, {...runtime.realtime, shutdownGraceMs: 0},
-    {...runtime.realtime, queueMaxBytes: 0}, {...runtime.realtime, ringMaxRecords: 10001},
-    {...runtime.realtime, rssBudgetBytes: 536870913}, {...runtime.realtime, fdBudget: 12289},
-    {...runtime.realtime, totalQueueMaxBytes: runtime.realtime.queueMaxBytes - 1},
-    {...runtime.realtime, totalQueueMaxBytes: runtime.realtime.rssBudgetBytes}]) {
-    const changed = structuredClone(document);
-    changed.services["realtime-gateway"].realtime = invalid;
-    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
-  }
-  for (const change of [
-    value => {value.services["orders-service"].realtime = runtime.realtime;},
-    value => {value.services["realtime-gateway"].replicas = 2;},
-    value => {value.services["realtime-gateway"].concurrency = 5001;},
-    value => {value.services["realtime-gateway"].secretRefs = runtime.secretRefs.filter(ref => ref !== "security.actorContextEdgeVerificationPublicKeys");},
-    value => {value.services["realtime-gateway"].secretRefs.push("security.actorContextEdgeSigningPrivateKey");},
-  ]) {
-    const changed = structuredClone(document);
-    change(changed);
-    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
-  }
-});
-
-void test("NGINX reference admission retains 512 streams and a separate full profile requires worker-slot headroom", async () => {
-  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
-  const routes = readRoutes(parseYaml(await readFile(join(REPO_ROOT, "contracts/openapi/client-v1.yaml"), "utf8"), {json: true}));
-  const profile = document.nginxTransport;
-  assert.equal(profile.limits.sseAdmissionConnections, 512);
-  assert.equal(profile.limits.workerProcesses, 1);
-  assert.equal(profile.limits.requestPoolBytes, 2048);
-  const reference = render(profile, routes);
-  const schema = JSON.parse(await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"));
-  const validate = new Ajv2020({allErrors: true, strict: true}).compile(schema);
-  assert.equal(validate(profile), true);
-  assert.match(reference, /^worker_processes 1;$/m);
-  assert.match(reference, /request_pool_size 2048;/u);
-  for (const workerProcesses of [undefined, 0, 1.5, 3, "2; include /etc/passwd;"]) {
-    const invalidProfile = structuredClone(profile);
-    invalidProfile.limits.workerProcesses = workerProcesses;
-    assert.throws(() => render(invalidProfile, routes), /worker processes/u);
-  }
-  for (const requestPoolBytes of [undefined, 0, 1024, 2048.5, 4096, "2048; include /etc/passwd;"]) {
-    const invalidProfile = structuredClone(profile);
-    invalidProfile.limits.requestPoolBytes = requestPoolBytes;
-    assert.throws(() => render(invalidProfile, routes), /request pool/u);
-  }
-  assert.match(reference, /worker_connections 2048;/u);
-  assert.match(reference, /limit_conn edge_sse_admission 512;/u);
-  assert.match(reference, /limit_conn edge_api_admission 384;/u);
-  assert.match(reference, /limit_conn edge_auth_admission 320;/u);
-  assert.match(reference, /location @realtime_capacity.*REALTIME_CAPACITY_EXCEEDED/u);
-  const fullProfile = structuredClone(profile);
-  fullProfile.limits.workerProcesses = 2;
-  fullProfile.limits.workerConnections = 16384;
-  const full = render(fullProfile, routes);
-  assert.match(full, /^worker_processes 2;$/m);
-  for (const sseAdmissionConnections of [513, 5000]) {
-    const invalidProfile = structuredClone(profile);
-    invalidProfile.limits.sseAdmissionConnections = sseAdmissionConnections;
-    assert.equal(validate(invalidProfile), false);
-    assert.throws(() => render(invalidProfile, routes), /SSE admission/u);
-  }
-  fullProfile.limits.workerConnections = 1024;
-  assert.throws(() => render(fullProfile, routes), /worker.*headroom/u);
-  assert.equal(document.nginxTransport.limits.sseAdmissionConnections, 512);
-});
-
 void test("RED: config:check rejects mismatched Pricing policy and immutable seed", async () => {
   const root = await configRoot();
   try {
@@ -282,32 +188,6 @@ void test("RED: config:check rejects mismatched Pricing policy and immutable see
     const result = run(root);
     assert.notEqual(result.status, 0);
     assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-PRICING-POLICY/u);
-  } finally { await rm(root, {recursive: true, force: true}); }
-});
-
-void test("DB checkout waiting is bounded and reserved for the orders runtime", async () => {
-  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
-  const parsed = parsePlatformConfig(document);
-  assert.equal(parsed.services["orders-service"].dbPool.maxWaiting, 100);
-  assert.equal(parsed.services["customer-service"].dbPool.maxWaiting, 0);
-  for (const invalid of [-1, 1.5, 101, Number.MAX_SAFE_INTEGER + 1]) {
-    const changed = structuredClone(document);
-    changed.services["orders-service"].dbPool.maxWaiting = invalid;
-    assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
-  }
-  const otherService = structuredClone(document);
-  otherService.services["customer-service"].dbPool.maxWaiting = 1;
-  assert.throws(() => parsePlatformConfig(otherService), PlatformConfigError);
-
-  const root = await configRoot();
-  try {
-    const path = join(root, "config/platform.yaml");
-    const wrongOrdersLimit = structuredClone(document);
-    wrongOrdersLimit.services["orders-service"].dbPool.maxWaiting = 99;
-    await writeFile(path, dumpYaml(wrongOrdersLimit), "utf8");
-    const ordersResult = run(root);
-    assert.notEqual(ordersResult.status, 0);
-    assert.match(`${ordersResult.stdout}\n${ordersResult.stderr}`, /CONFIG-RUNTIME-POLICY/u);
   } finally { await rm(root, {recursive: true, force: true}); }
 });
 

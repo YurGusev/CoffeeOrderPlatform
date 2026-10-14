@@ -7,7 +7,6 @@
  * в clean clone и в CI до materialization runtime images.
  */
 import { readFile, readdir } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -142,7 +141,6 @@ async function walk(root) {
   if (!existsSync(root)) return [];
   const result = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
-    if (entry.name === "node_modules") continue;
     const path = join(root, entry.name);
     if (entry.isDirectory()) result.push(...(await walk(path)));
     else result.push(path);
@@ -374,10 +372,6 @@ async function checkLockfile(root, manifest) {
 
 async function checkManifest(root) {
   const manifest = await readJson(join(root, "config/toolchain-versions.json"));
-  const patch = await readFile(join(root,"patches/librdkafka-resume-wakeup.patch"));
-  if (!/^[0-9a-f]{64}$/.test(manifest.librdkafkaPatchSha256??"") ||
-      createHash("sha256").update(patch).digest("hex")!==manifest.librdkafkaPatchSha256)
-    fail("LIBRDKAFKA-PATCH","native source patch must match config/toolchain-versions.json.librdkafkaPatchSha256");
   const foundation = await readJson(
     join(root, "platform/runtime-foundation-decision.json"),
   );

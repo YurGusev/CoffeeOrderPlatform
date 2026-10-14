@@ -55,7 +55,6 @@ export type HealthConfig = Readonly<{
 }>;
 export type DatabasePoolConfig = Readonly<{
   max: number;
-  maxWaiting?: number;
   checkoutTimeoutMs: number;
   lockTimeoutMs: number;
   interactiveStatementTimeoutMs: number;
@@ -169,24 +168,6 @@ export type CatalogSnapshotProofConfig = Readonly<{maxAgeMs: number}>;
 export type AromaPreparationConfig = Readonly<{pollIntervalMs: number; batchSize: number; maxOrders: number; maxLines: number}>;
 export type AromaObservationConfig = Readonly<{pollIntervalMs: number; intervalMs: number; leaseMs: number; maxSnapshotAgeMs: number; maxLines: number; maxResponseBytes: number}>;
 export type AromaConvergenceConfig = Readonly<{pollIntervalMs: number; leaseMs: number; heartbeatIntervalMs: number; providerDeadlineMs: number; safetyMarginMs: number; retryBackoffMs: number; maxSnapshotAgeMs: number; maxLines: number; maxResponseBytes: number}>;
-export type RealtimeConfig = Readonly<{
-  shutdownGraceMs: number;
-  maxConnections: number;
-  queueMaxRecords: number;
-  queueMaxBytes: number;
-  totalQueueMaxRecords: number;
-  totalQueueMaxBytes: number;
-  ringMaxRecords: number;
-  ringMaxBytes: number;
-  ringMaxAgeMs: number;
-  coalesceMs: number;
-  writeTimeoutMs: number;
-  heartbeatMs: number;
-  authCheckMs: number;
-  maxEventDataBytes: number;
-  rssBudgetBytes: number;
-  fdBudget: number;
-}>;
 export type RuntimeConfig = Readonly<{
   transportMode: TransportMode;
   listen: ListenConfig;
@@ -209,7 +190,6 @@ export type RuntimeConfig = Readonly<{
   aromaPreparation?: AromaPreparationConfig;
   aromaObservation?: AromaObservationConfig;
   aromaConvergence?: AromaConvergenceConfig;
-  realtime?: RealtimeConfig;
 }>;
 export type AromaConfig = Readonly<{
   supplierRef: typeof AROMA_SUPPLIER_REF;
@@ -776,7 +756,6 @@ function databasePoolConfig(
       "maxLifetimeMs",
     ],
     path,
-    ["maxWaiting"],
   );
   const terminalTimeoutMs = positiveIntegerValue(
     pool["terminalTimeoutMs"],
@@ -797,7 +776,6 @@ function databasePoolConfig(
   }
   return Object.freeze({
     max: integerValue(pool["max"], `${path}.max`),
-    maxWaiting: Object.hasOwn(pool, "maxWaiting") ? integerValue(pool["maxWaiting"], `${path}.maxWaiting`) : 0,
     checkoutTimeoutMs: integerValue(
       pool["checkoutTimeoutMs"],
       `${path}.checkoutTimeoutMs`,
@@ -855,30 +833,6 @@ function aromaSettings<T extends string>(value: unknown, path: string, names: re
   return Object.freeze(result);
 }
 
-function realtimeSettings(value: unknown, path: string): RealtimeConfig {
-  const source = record(value, path);
-  const maxima: RealtimeConfig = {
-    shutdownGraceMs: 20000,
-    maxConnections: 512, queueMaxRecords: 64, queueMaxBytes: 262144,
-    totalQueueMaxRecords: 262144, totalQueueMaxBytes: 67108864,
-    ringMaxRecords: 10000, ringMaxBytes: 16777216, ringMaxAgeMs: 300000,
-    coalesceMs: 250, writeTimeoutMs: 5000, heartbeatMs: 15000,
-    authCheckMs: 30000, maxEventDataBytes: 2048, rssBudgetBytes: 536870912, fdBudget: 12288,
-  };
-  exactKeys(source, Object.keys(maxima), path);
-  const result = {} as Record<keyof RealtimeConfig, number>;
-  for (const name of Object.keys(maxima) as (keyof RealtimeConfig)[]) {
-    const setting = positiveIntegerValue(source[name], `${path}.${name}`);
-    if (setting > maxima[name]) throw new PlatformConfigError(`${path}.${name}`, "значение превышает предел первого запуска");
-    result[name] = setting;
-  }
-  if (result.totalQueueMaxRecords < result.queueMaxRecords || result.totalQueueMaxBytes < result.queueMaxBytes ||
-    result.totalQueueMaxBytes + result.ringMaxBytes > result.rssBudgetBytes / 4 ||
-    result.fdBudget < result.maxConnections + 64)
-    throw new PlatformConfigError(path, "совокупные queue/ring/RSS/FD бюджеты не оставляют ресурсный запас");
-  return Object.freeze(result);
-}
-
 function runtimeConfig(
   value: unknown,
   path: string,
@@ -905,7 +859,7 @@ function runtimeConfig(
       "mutationCapability",
     ],
     path,
-    ["optionalSecretRefs", "scheduler", "catalogSnapshotProof", "mutationsEnabled", "aromaPreparation", "aromaObservation", "aromaConvergence", "realtime"],
+    ["optionalSecretRefs", "scheduler", "catalogSnapshotProof", "mutationsEnabled", "aromaPreparation", "aromaObservation", "aromaConvergence"],
   );
   if (runtime !== "catalog-service" && Object.hasOwn(source, "catalogSnapshotProof"))
     throw new PlatformConfigError(`${path}.catalogSnapshotProof`, "настройка разрешена только для catalog-service");
@@ -916,7 +870,7 @@ function runtimeConfig(
     catalogSnapshotProof = Object.freeze({maxAgeMs: positiveIntegerValue(configured["maxAgeMs"], `${path}.catalogSnapshotProof.maxAgeMs`)});
   }
   const owners = {mutationsEnabled: "aroma-convergence", aromaPreparation: "orders-aroma-preparation",
-    aromaObservation: "aroma-observer", aromaConvergence: "aroma-convergence", realtime: "realtime-gateway"} as const;
+    aromaObservation: "aroma-observer", aromaConvergence: "aroma-convergence"} as const;
   for (const [property, owner] of Object.entries(owners)) {
     if (runtime === owner && source[property] === undefined)
       throw new PlatformConfigError(`${path}.${property}`, "обязательное значение отсутствует");
@@ -931,15 +885,6 @@ function runtimeConfig(
     ["pollIntervalMs", "intervalMs", "leaseMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"]) : undefined;
   const aromaConvergence = runtime === "aroma-convergence" ? aromaSettings(source["aromaConvergence"], `${path}.aromaConvergence`,
     ["pollIntervalMs", "leaseMs", "heartbeatIntervalMs", "providerDeadlineMs", "safetyMarginMs", "retryBackoffMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"]) : undefined;
-  const realtime = runtime === "realtime-gateway" ? realtimeSettings(source["realtime"], `${path}.realtime`) : undefined;
-  if (realtime !== undefined && (source["replicas"] !== 1 || source["database"] !== null || source["dbPool"] !== null ||
-    source["concurrency"] !== realtime.maxConnections || source["mutationCapability"] !== false))
-    throw new PlatformConfigError(path, "realtime требует одну stateless replica и согласованный admission budget");
-  if (realtime !== undefined) {
-    const refs = stringArray(source["secretRefs"], `${path}.secretRefs`);
-    if (!refs.includes("security.actorContextEdgeVerificationPublicKeys") || refs.some(ref => /SigningPrivateKey|^postgres\./u.test(ref)))
-      throw new PlatformConfigError(`${path}.secretRefs`, "realtime получает только scoped public actor verifier, не signing/DB material");
-  }
   if (aromaObservation !== undefined && aromaObservation.leaseMs <= Number(source["deadlineMs"]))
     throw new PlatformConfigError(`${path}.aromaObservation.leaseMs`, "lease должен покрывать deadline чтения");
   if (aromaConvergence !== undefined && (aromaConvergence.leaseMs !== 30_000 || aromaConvergence.heartbeatIntervalMs !== 10_000 ||
@@ -993,9 +938,6 @@ function runtimeConfig(
       `${path}.mutationCapability`,
       "ожидался boolean",
     );
-  const dbPool = databasePoolConfig(source["dbPool"], `${path}.dbPool`, shutdownGraceMs);
-  if (dbPool !== null && ((dbPool.maxWaiting ?? 0) > 100 || (runtime !== "orders-service" && (dbPool.maxWaiting ?? 0) > 0)))
-    throw new PlatformConfigError(`${path}.dbPool.maxWaiting`, "очередь до 100 разрешена только для orders-service");
   return Object.freeze({
     transportMode,
     listen: Object.freeze({
@@ -1013,7 +955,11 @@ function runtimeConfig(
     ),
     concurrency: integerValue(source["concurrency"], `${path}.concurrency`),
     replicas: positiveIntegerValue(source["replicas"], `${path}.replicas`),
-    dbPool,
+    dbPool: databasePoolConfig(
+      source["dbPool"],
+      `${path}.dbPool`,
+      shutdownGraceMs,
+    ),
     database,
     secretRefs: stringArray(source["secretRefs"], `${path}.secretRefs`),
     optionalSecretRefs: stringArray(source["optionalSecretRefs"] ?? [], `${path}.optionalSecretRefs`),
@@ -1040,7 +986,6 @@ function runtimeConfig(
     ...(aromaPreparation === undefined ? {} : {aromaPreparation}),
     ...(aromaObservation === undefined ? {} : {aromaObservation}),
     ...(aromaConvergence === undefined ? {} : {aromaConvergence}),
-    ...(realtime === undefined ? {} : {realtime}),
   });
 }
 
@@ -1296,9 +1241,6 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     );
   }
   const platform = record(source["platform"], "config.platform");
-  if (Object.hasOwn(platform, "realtimeFullProfileMemoryBytes")) {
-    throw new PlatformConfigError("config.platform.realtimeFullProfileMemoryBytes", "устаревший memory override запрещён; используется штатный бюджет realtime");
-  }
   const pricingSource = record(source["pricingPolicy"], "config.pricingPolicy");
   exactKeys(pricingSource, ["policyVersionRef", "version", "currency", "markupBasisPoints", "minimumMarginMinor", "quoteTtlSeconds", "quantityScale", "roundingMode"], "config.pricingPolicy");
   const pricingRef = stringValue(pricingSource["policyVersionRef"], "config.pricingPolicy.policyVersionRef");

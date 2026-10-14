@@ -10,9 +10,7 @@ Reference-профиль #162 по
 
 Статус: нормативный input #19/#2/#3. Пустое значение записывается как `null` или
 `[]`; скрытые defaults запрещены. Общие health paths: `/health/live`,
-`/health/ready`, `/metrics`; общий shutdown grace `30000ms`, для realtime
-`services.realtime-gateway.realtime.shutdownGraceMs=20000ms` (schema ≤20000ms).
-Для каждой строки
+`/health/ready`, `/metrics`; shutdown grace `30000ms`. Для каждой строки
 `listen.host=0.0.0.0` внутри container; host publish только у nginx, на
 `127.0.0.1:8443`. Node Permission manifest —
 `config/permissions/<runtime>.json` только для Node ролей. У native nginx
@@ -48,7 +46,7 @@ Transport mode задан явно: только `edge-nginx` используе
 | aroma-observer            | 4204 | 15s / 4                            |       4 | P: aroma events | postgres.aromaObserver, kafka.orders, service identity, telemetry                              | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
 | aroma-convergence         | 4205 | 30s / 4                            |       4 | P: aroma events, realtime; C: commands | postgres.aromaConvergence, kafka.orders, service identity, telemetry                           | coffee_postgres:5432, api-internal:4051, kafka:9092                                                               |
 | aroma-gateway             | 4301 | read 15m/cart 10s/mutation 10s / 8 |       8 | none                  | postgres.aromaGateway, AROMA credentials/session/catalog identity, service identity, telemetry | coffee_postgres:5432, exact `aroma.origin.host:443`                                                               |
-| realtime-gateway          | 4401 | stream / technical cap 512         |       0 | C: realtime invalidation (realtime) | kafka.realtime, actor verify, service identity, telemetry                                      | kafka:9092; SSE является inbound stream                                                                           |
+| realtime-gateway          | 4401 | stream / 5000 connections          |       0 | C: realtime invalidation (realtime) | kafka.realtime, actor verify, service identity, telemetry                                      | kafka:9092; SSE является inbound stream                                                                           |
 
 Для Orders принятое 27 сентября 2026 уточнение #8 добавляет в целевой scope
 `security.ordersServiceDelegationSigningPrivateKey` и
@@ -58,49 +56,7 @@ Transport mode задан явно: только `edge-nginx` используе
 Строка матрицы задаёт требование реализации, а не наличие material в runtime;
 изменения secretRefs/schema/bootstrap проверяются в #8 без расширения egress.
 
-`services.orders-service.dbPool.maxWaiting=100` задаёт конечную FIFO-очередь
-checkout; у остальных DB runtime отсутствие поля означает 0 (fail-fast).
-Пул Orders остаётся max4; HTTP deadline5000ms включает admission, checkout250ms
-ограничивает последующее подключение, fleet budget не увеличивается.
-Отмена/timeout/shutdown очищают ожидателей; правила
-admission и метрик определяет [DB contract](05_DATA_OWNERSHIP.md).
-
 ### Kafka directional mapping
-
-Для realtime точный public verifier ref —
-`security.actorContextEdgeVerificationPublicKeys`; он материализуется через
-trusted bootstrap вместе с собственным transport и Kafka identity. Actor signing
-private key, PostgreSQL credential и чужой owner client этой роли запрещены.
-`services.realtime-gateway.realtime` задаёт bounded queue/ring/RSS/FD limits;
-значения и distinction между technical admission 512/513 и нагрузкой одной
-вкладки описаны в [спецификации #12](20_REALTIME_SSE_IMPLEMENTATION_SPEC.md#6-fanout-и-backpressure).
-Native worker budget учитывает оба socket slots каждого SSE и API/auth/health
-reserve; boundary ceiling не является production admission.
-
-Профиль `operator-1` #12 сохраняет reference budgets: по 2 CPU/512 MiB для
-nginx/realtime, один nginx worker и один gateway. Основная когорта — один
-subscriber, 100 ACKed invalidations/s для 100 subjects в течение 30min; отдельная
-512/513 prephase не заменяет soak. Full-memory override и executable5000 удалены;
-исторические receipts не переписываются. Frozen manifest закрепляет hashes
-profile и synthetic fixture input без раскрытия секретов.
-Начальная worker population и полная новая generation после HUP проверяются
-фактически; RSS учитывает все worker processes.
-
-`nginxTransport.limits.requestPoolBytes=2048` материализуется как
-`request_pool_size 2048` публичного native server. Это гранулярность существующего
-request allocator, не новый предел body/header, число соединений или RSS budget:
-пул штатно расширяется по необходимости. Renderer и профильная schema отклоняют
-отсутствующее, нецелое, непроверенное или внедряющее директиву значение. Actor/session
-TTL, TLS groups/ciphers и container limits этим параметром не меняются.
-Меньший observed requested набор одного SSE не заменяет полный capacity/recovery
-proof и не является production admission.
-
-Для `/events` сохраняется `proxy_buffering off`, но отдельного
-`proxy_buffer_size` override нет: Nginx использует обычный page-sized upstream
-response buffer (4 KiB в этом профиле) и для чтения тела ответа. Отключение
-proxy buffering не делает этот буфер header-only. TLS transport использует
-штатный Nginx из закреплённого официального образа; достаточность бюджета
-подтверждается полным transport soak.
 
 `P` — producer topics, `C` — consumer subscriptions. Consumer `groupId` и
 `processing` фиксированы и не выводятся из `mode`:

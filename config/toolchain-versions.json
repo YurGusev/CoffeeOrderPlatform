@@ -14,7 +14,6 @@
   "confluentKafkaJavaScript": "1.10.0",
   "librdkafka": "2.15.0",
   "librdkafkaSourceSha256": "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc",
-  "librdkafkaPatchSha256": "f183e657f9e42780ad30f2a437cdfd702018e275a8d280a2aa7ff863c5845533",
   "react": "19.2.8",
   "reactDom": "19.2.8",
   "reactRouterDom": "7.18.3",

@@ -20,7 +20,6 @@ try {
   assert.equal(regen.status, 0, regen.stderr);
   const [generated, repeated] = await Promise.all([readFile(configPath, 'utf8'), readFile(tempConfig, 'utf8')]);
   assert.equal(repeated, generated, 'generator output must be byte-identical');
-  assert.match(generated, /^worker_processes 1;$/m, 'reference nginx worker count must come from the platform profile');
   assert.match(generated, /^error_log \/dev\/null;$/m, 'raw request-bearing error logs must not reach Collector');
   assert.ok(generated.includes('map "$edge_auth_status:$edge_actor_context:$edge_auth_correlation" $api_auth_target { default http://127.0.0.1:18080; ~^204:[^:]+:[^:]+$ https://api_public; }'));
   assert.match(generated, /auth_request_set \$edge_auth_correlation \$upstream_http_x_correlation_id;/);
@@ -30,13 +29,6 @@ try {
   assert.match(generated, /proxy_request_buffering off;/);
   assert.match(generated, /proxy_next_upstream off;/);
   assert.match(generated, /proxy_cache off;/);
-  assert.match(generated, /request_pool_size 2048;/u,
-    'request allocation granularity must come from the checked platform profile');
-  const eventsLocation = generated.match(/location = \/events \{[\s\S]*?\n    \}/u)?.[0] ?? '';
-  assert.match(eventsLocation, /proxy_pass_header X-Accel-Buffering;/u,
-    'the served SSE surface must retain the receiver no-buffering header');
-  assert.equal((generated.match(/proxy_pass_header X-Accel-Buffering;/gu) ?? []).length, 1,
-    'the SSE-only response header policy must not change other routes');
   assert.match(generated, /proxy_pass_request_headers off;/);
   assert.match(generated, /map \$http_cookie \$edge_login_cookie \{[^\n]*__Host-coffee-login=/);
   assert.match(generated, /location = \/auth\/callback \{[^\n]*proxy_set_header Cookie \$edge_login_cookie;/);
@@ -50,24 +42,6 @@ try {
   assert.doesNotMatch(generated, /location \^~ \/api\/ \{[^}]*proxy_pass/s);
 
   const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
-  for (const value of [undefined, 0, 1.5, 3, '2; include /etc/passwd;']) {
-    await writeFile(tempFixture, JSON.stringify({...fixture, limits: {...fixture.limits, workerProcesses: value}}));
-    const rejected = run(['tools/nginx/generate-config.mjs', '--fixture', invalidFixture, '--output', invalidOutput]);
-    assert.notEqual(rejected.status, 0, 'missing, unsupported or injected worker process count must be rejected');
-    assert.match(rejected.stderr, /invalid nginxTransport/);
-  }
-  for (const value of [undefined, 0, 1024, 2048.5, 4096, '2048; include /etc/passwd;']) {
-    await writeFile(tempFixture, JSON.stringify({...fixture, limits: {...fixture.limits, requestPoolBytes: value}}));
-    const rejected = run(['tools/nginx/generate-config.mjs', '--fixture', invalidFixture, '--output', invalidOutput]);
-    assert.notEqual(rejected.status, 0, 'missing, unchecked or injected request pool size must be rejected');
-    assert.match(rejected.stderr, /invalid nginxTransport/);
-  }
-  for (const [field, values] of [['sessionCacheMiB', [0, 5, 1.5, '4; include /etc/passwd;']], ['bufferBytes', [0, 4095, 16384, 4096.5, '4096; include /etc/passwd;']]]) for (const value of values) {
-    await writeFile(tempFixture, JSON.stringify({...fixture, tls: {...fixture.tls, [field]: value}}));
-    const rejected = run(['tools/nginx/generate-config.mjs', '--fixture', invalidFixture, '--output', invalidOutput]);
-    assert.notEqual(rejected.status, 0, `unbounded or injected TLS ${field} must be rejected`);
-    assert.match(rejected.stderr, /invalid nginxTransport/);
-  }
   fixture.upstreams.edge.host = 'edge.fixture.invalid; include /etc/passwd;';
   await writeFile(tempFixture, JSON.stringify(fixture));
   const injection = run(['tools/nginx/generate-config.mjs', '--fixture', invalidFixture, '--output', invalidOutput]);

@@ -61,12 +61,6 @@
     "test:nginx-image": "node tests/nginx/image.test.mjs",
     "test:nginx-cutover": "node tests/nginx/cutover.test.mjs",
     "test:web-served-surface": "pnpm exec tsc -b apps/edge-gateway apps/api-public --pretty false && node tests/nginx/cutover.test.mjs --web-served-proof",
-    "test:realtime-contract": "pnpm exec tsc -b apps/realtime-gateway --pretty false && node --test tests/realtime/contract.test.mjs",
-    "test:realtime-auth": "pnpm exec tsc -b apps/realtime-gateway --pretty false && node --test tests/realtime/auth.test.mjs",
-    "test:realtime-replay": "pnpm exec tsc -b apps/realtime-gateway --pretty false && node --test tests/realtime/replay.test.mjs",
-    "test:realtime-backpressure": "pnpm exec tsc -b apps/realtime-gateway --pretty false && node --test tests/realtime/backpressure.test.mjs",
-    "test:realtime-soak": "pnpm exec tsc -b apps/realtime-gateway apps/edge-gateway apps/api-public --pretty false && node tests/realtime/soak.test.mjs",
-    "test:web-realtime": "pnpm exec vitest run apps/web/test/realtime.test.ts && pnpm web:build && WEB_TEST_GROUP=realtime node --experimental-strip-types apps/web/test/operator-flow.spec.ts",
     "test:edge-auth": "pnpm exec tsc -b apps/edge-gateway --pretty false && node --experimental-strip-types --test tests/edge-auth/*.test.mjs packages/platform-security/test/actor-context.test.mjs",
     "ui:build": "pnpm --filter @coffee-platform/ui build",
     "web:build": "pnpm typecheck && pnpm ui:build && pnpm --filter @coffee-platform/web build:browser",
@@ -85,7 +79,7 @@
     "clean-clone:check": "node scripts/verify-clean-clone.mjs",
     "lint": "oxlint --type-aware --deny-warnings --ignore-pattern 'tests/architecture/fixtures/**' --ignore-pattern 'packages/generated/**' --ignore-pattern 'packages/platform-ui/provenance/**' apps packages scripts tests",
     "typecheck": "tsc -b --pretty false",
-    "test": "node --test 'tests/*/!(soak).test.mjs' tests/realtime/fixtures/harness.test.mjs packages/*/test/**/*.test.mjs",
+    "test": "node --test tests/**/*.test.mjs packages/*/test/**/*.test.mjs",
     "check": "pnpm authority:check && pnpm versions:check && pnpm compatibility:check && pnpm config:check && pnpm contracts:lint && pnpm contracts:check-generated && pnpm contracts:breaking && pnpm typecheck && pnpm contracts:test && pnpm architecture:check && pnpm rule-parity:check && pnpm lint && pnpm web:build && pnpm browser:bundle:check && pnpm test:ui && pnpm test:web-foundation && pnpm test:web-operator && pnpm test"
   },
   "devDependencies": {

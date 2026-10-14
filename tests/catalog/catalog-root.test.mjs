@@ -21,7 +21,7 @@ async function runtime(t, register, transportCaller) {
 
 function publicAdapters(state) {
   return {
-    verifyTransport: (request, caller) => caller === "edge-nginx" && request.runtimeContext?.transportIdentity?.runtime === caller,
+    verifyTransport: (_request, caller) => caller === "edge-gateway",
     verifyActor: (_token, operationId) => state.actor ?? {iss: "edge-gateway", aud: "api-public", originalIssuer: "edge-gateway", sub: "usr_test", permissions: ["catalog:read"], operationId},
     customer: {create: async () => { throw new Error("unexpected customer work"); }, search: async () => { throw new Error("unexpected customer work"); }},
     catalog: {search: async (query, input) => { state.search = {query, claims: input.actor}; return state.result ?? {status: 200, body: searchResponse}; }},
@@ -49,7 +49,7 @@ function internalAdapters(state) {
 
 void test("public Catalog route validates actor/query, forwards to owner, and returns only typed response", async (t) => {
   const state = {};
-  const app = await runtime(t, (value) => registerPublicRoutes(value, publicAdapters(state)), "edge-nginx");
+  const app = await runtime(t, (value) => registerPublicRoutes(value, publicAdapters(state)), "edge-gateway");
   const response = await app.inject({method: "GET", url: "/api/client-v1/catalog/products?query=coffee&availability=Available&limit=5", headers: {"x-actor-context": "signed-edge-context"}});
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), searchResponse);

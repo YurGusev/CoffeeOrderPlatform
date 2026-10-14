@@ -18,7 +18,7 @@ type Operation="createOrderDraft"|"getOrderCard"|"upsertOrderItem"|"removeOrderI
 type Claims=Readonly<{iss:string;aud:string;originalIssuer:string;sub:string;permissions:readonly string[];operationId:string;correlationId:string;traceparent?:string}>;
 type Context=Readonly<{correlationId:string;traceparent?:string;signal:AbortSignal;deadlineUtc:string|null}>;
 type Security=Readonly<{verifyTransport:(request:Request,caller:"api-public")=>boolean;verifyPublicDelegation:(token:string,operation:Operation,correlationId:string,signal:AbortSignal)=>Claims|Promise<Claims>;signInternalDelegation:(request:Readonly<{operationId:"getCustomerOrderInput"|"verifyPricingQuote";correlationId:string;traceparent?:string;deadlineUtc:string|null}>)=>string}>;
-type Store=Pick<OrderStore,"createDraft"|"putItem"|"deleteItem"|"confirm"|"requestReconciliation"|"getCard"|"precheck"|"preflightPut"|"replay">;
+type Store=Pick<OrderStore,"createDraft"|"putItem"|"deleteItem"|"confirm"|"requestReconciliation"|"getCard"|"precheck"|"replay">;
 type Customer=Readonly<{getOrderInput:(request:Readonly<{customerRef:string;delegation:string;correlationId:string;traceparent?:string;signal:AbortSignal}>)=>Promise<import("@coffee-platform/contracts-customer-v1").CustomerOrderInput>}>;
 type Pricing=Readonly<{verify:(request:Readonly<{quoteRef:string;hash:string;customerRef:string;quoteLineNumber:number;productRef:string;variantRef:string;quantity:string;delegation:string;correlationId:string;traceparent?:string;signal:AbortSignal}>)=>Promise<import("@coffee-platform/contracts-pricing-v1").PricingQuoteVerificationResponse>}>;
 export type OrdersHttpAdapters=Security&Readonly<{owner:Readonly<{store:Store;customer:Customer;pricing:Pricing}>}>;
