@@ -178,4 +178,3 @@ export async function fixture(run, options = {}) {
   assert.equal(receipt.cleanup.containerRemoved,true);
   return receipt;
 }
-
