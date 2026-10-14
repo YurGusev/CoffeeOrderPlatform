@@ -172,6 +172,7 @@ const SERVICE_BASELINE = {
     concurrency: 150,
     database: "coffee_platform_orders",
     pool: 4,
+    maxWaiting: 100,
     terminalTimeoutMs: 2000,
     transactionTimeoutMs: 10000,
   },
@@ -219,7 +220,7 @@ const SERVICE_BASELINE = {
     port: 4401,
     replicas: 1,
     deadlineMs: null,
-    concurrency: 5000,
+    concurrency: 512,
     database: null,
     pool: null,
     terminalTimeoutMs: null,
@@ -622,6 +623,7 @@ export async function loadPlatformConfig(
       configured.replicas !== baseline.replicas ||
       configured.database !== baseline.database ||
       (configured.dbPool?.max ?? null) !== baseline.pool ||
+      (configured.dbPool?.maxWaiting ?? 0) !== (baseline.maxWaiting ?? 0) ||
       (configured.dbPool?.terminalTimeoutMs ?? null) !== baseline.terminalTimeoutMs ||
       (configured.dbPool?.transactionTimeoutMs ?? null) !== baseline.transactionTimeoutMs
     ) {

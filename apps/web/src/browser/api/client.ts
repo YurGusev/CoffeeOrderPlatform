@@ -262,7 +262,7 @@ async function request<T>(input: Readonly<{
     return result;
   } catch (error) {
     emitTelemetry(input, "protocol-error", startedAt, correlationId);
-    throw error;
+    throw error instanceof ProtocolError ? error : new ProtocolError(error instanceof Error ? error.message : "Ответ owner не прошёл runtime validation");
   }
 }
 

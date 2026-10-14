@@ -374,6 +374,26 @@ foundation. `#4` получает отдельный contract handoff и не с
 
 ## 16. Frontend recovery admission #119
 
+Для #12 G10/G15 принимают раздельные proofs: material owner→persisted Outbox→
+native Kafka→nginx→served SPA→owner GET без transform compiled transport и
+explicit-only private EOF negative/recovery; ни один не заменяет полный
+`operator-1` (1 SSE subscriber, 100 ACKed invalidations/s, 100 subjects, 30min).
+В существующей owner/browser вертикали отдельный `reauth` proof подтверждает
+native EventSource через nginx/Edge при естественном actor expiry60s/check30s:
+server auth-close, новый авторизованный stream, ready и owner GET без ручного
+reconnect/session refresh или изменения TTL. Transport-only re-auth и Vite401
+не заменяют этот совместный proof; frozen compiled transport остаётся неизменным.
+При expiry Observed повторный owner GET возвращает `OutOfSync` с прежней
+projectionVersion: браузер обязан принять read-time freshness transition,
+показать расхождение без fatal protocol alert и сохранить business version.
+Отдельная prephase доказывает512/513 до SSE headers и cleanup до main cohort.
+nginx/realtime сохраняют по2CPU/512MiB; authTTL≤60s/check30s/retry3000,
+session renewal, HUP900s, loaded shutdown≤20s/cleanup≤10s и прежние latency/
+event-loop/headroom thresholds обязательны. Исторический5000FAIL не становится PASS.
+Owner-пик100 одновременно начатых потоков заказов×10 позиций проверяется отдельно
+на реальных Orders routes/PostgreSQL/Outbox при текущих deadlines/pool; synthetic
+Customer/Pricing/auth seams не доказывают production ingress/VK/Agent/LLM capacity.
+
 G05/G10/G15 принимают outputs #4/#5/#7/#8/#9 по
 [протоколу browser recovery](26_BROWSER_COMMAND_RECOVERY.md): потерянный ответ
 Customer/Draft/Quote, reload до resourceRef, Completed read-only replay без

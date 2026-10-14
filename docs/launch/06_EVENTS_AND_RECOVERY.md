@@ -122,7 +122,9 @@ Inbox/Outbox writes в тот же context.
 
 Production budgets: checkout `250ms`, transaction `10000ms`, каждый terminal
 operation `2000ms`; interactive/background statement timeout `1500/5000ms`,
-lock timeout `250ms`. Их сумма с двумя terminal operations меньше shutdown
+lock timeout `250ms`. Ограниченная очередь Orders admission действует до
+checkout под общим request/transaction signal по [DB contract](05_DATA_OWNERSHIP.md);
+она не выполняет SQL и не повторяет owner effect. Сумма budgets с двумя terminal operations меньше shutdown
 `30000ms`. Request/shutdown signal действует до начала COMMIT; после начала
 COMMIT ожидается только его собственный конечный budget. Broken/ambiguous
 соединение никогда не возвращается пригодным в pool.

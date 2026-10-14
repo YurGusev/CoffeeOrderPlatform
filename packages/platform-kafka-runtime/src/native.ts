@@ -190,6 +190,7 @@ type ConsumerClient = Readonly<{
   assign(partitions: readonly NativePartition[]): unknown;
   unassign(): unknown;
   assignments(): readonly NativePartition[];
+  getWatermarkOffsets(topic: string, partition: number): unknown;
 }>;
 
 type ConsumerWithCommitCallback = ConsumerClient &
@@ -337,6 +338,10 @@ function producerConfig(options: NativeProducerOptions): NativeConfig {
   };
 }
 
+function consumerPollTimeout(options: NativeConsumerOptions): number {
+  return Math.max(1, Math.min(10, Math.floor(options.receiveTimeoutMs / 2)));
+}
+
 function consumerConfig(options: NativeConsumerOptions): NativeConfig {
   return {
     ...baseConfig(options),
@@ -345,8 +350,11 @@ function consumerConfig(options: NativeConsumerOptions): NativeConfig {
     "enable.auto.offset.store": false,
     "queued.min.messages": 1,
     "queued.max.messages.kbytes": queueBytes(options),
+    "fetch.queue.backoff.ms": consumerPollTimeout(options),
     "offset_commit_cb": true,
-    "fetch.wait.max.ms": options.receiveTimeoutMs,
+    // An idle Fetch must not hold broker health traffic for the whole receive
+    // deadline. Keep that deadline and broker-confirmed commit ACK unchanged.
+    "fetch.wait.max.ms": Math.min(100, options.receiveTimeoutMs),
     "request.timeout.ms": options.receiveTimeoutMs,
   };
 }
@@ -928,12 +936,10 @@ export async function createNativeConsumer(
       { ...consumerConfig(options), rebalance_cb: nativeRebalance },
       { "auto.offset.reset": options.autoOffsetReset },
     ) as ConsumerClient;
-    // Keep the native idle callback ahead of the outer deadline. Otherwise a
-    // normal empty poll can lose the race and leave pollInFlight occupied
-    // until the broker eventually invokes its callback.
-    client.setDefaultConsumeTimeout(
-      Math.max(1, Math.floor(options.receiveTimeoutMs / 2)),
-    );
+    // Polls also dispatch commit/rebalance callbacks while intake is paused.
+    // A receive-budget-sized empty poll would hold the available worker slots
+    // behind those callbacks. Keep it short, still below the outer deadline.
+    client.setDefaultConsumeTimeout(consumerPollTimeout(options));
     // One batch has one receive budget, not one timeout per requested record.
     client.setDefaultIsTimeoutOnlyForFirstMessage(true);
   } catch {
@@ -1230,6 +1236,17 @@ export async function createNativeConsumer(
       "NATIVE_OPERATION_FAILED",
     )
       .then(() => {
+        if (options.autoOffsetReset === "latest") {
+          // Assignment precedes asynchronous latest-offset resolution. A
+          // cached high watermark follows a real Fetch response: readiness
+          // before this boundary could silently skip the first live hint.
+          return assigned.length > 0 && assigned.every((target) => {
+            const offsets = client.getWatermarkOffsets(target.topic, target.partition);
+            if (offsets === null || typeof offsets !== "object") return false;
+            const high = (offsets as Record<string, unknown>)["highOffset"];
+            return typeof high === "number" && Number.isSafeInteger(high) && high >= 0;
+          });
+        }
         return true;
       })
       .catch(() => false);

@@ -375,7 +375,7 @@ export type DurableBinding = Readonly<{
 }>;
 export type RealtimeBinding = Readonly<{
   processing: "realtime";
-  decode: (value: unknown) => KafkaEnvelope;
+  decode: (value: unknown, record: KafkaRecord) => KafkaEnvelope;
   enqueue: (envelope: KafkaEnvelope, signal: AbortSignal) => Promise<void>;
 }>;
 export type KafkaBinding = DurableBinding | RealtimeBinding;
@@ -398,10 +398,12 @@ function recordValue(
   record: KafkaRecord,
   maxBytes: number,
 ): Readonly<{ wire: JsonValue; decoded: unknown }> {
-  const value: unknown =
-    record.value instanceof Uint8Array
-      ? new TextDecoder("utf-8", { fatal: true }).decode(record.value)
-      : record.value;
+  let value: unknown = record.value;
+  if (record.value instanceof Uint8Array) {
+    if (record.value.byteLength > maxBytes) throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
+    try { value = new TextDecoder("utf-8", { fatal: true }).decode(record.value); }
+    catch { throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID"); }
+  }
   if (typeof value === "string") {
     if (Buffer.byteLength(value) > maxBytes)
       throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
@@ -437,11 +439,17 @@ export async function processKafkaRecord(
     const value = recordValue(record, options.maxMessageBytes);
     wire = value.wire;
     envelope = parseEnvelope(
-      options.binding.decode(value.decoded),
+      options.binding.processing === "realtime"
+        ? options.binding.decode(value.decoded, record)
+        : options.binding.decode(value.decoded),
       (payload) => payload,
     );
     validateTransport(record, envelope);
-  } catch {
+  } catch (error) {
+    // Durable decoder semantics stay unchanged. Only an explicit permanent
+    // realtime rejection may advance through quarantine; bugs must fail-stop.
+    if (options.binding.processing === "realtime" &&
+      !(error instanceof KafkaRuntimeError && error.code === "KAFKA_ENVELOPE_INVALID")) throw error;
     envelope = undefined;
     // Oversized/non-JSON inputs keep only a digest in quarantine; raw data is never an error label.
     wire ??= {
@@ -835,31 +843,48 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     const id = createHash("sha256")
       .update(`${record.topic}:${record.partition}:${record.offset}`)
       .digest("hex");
+    const rawData = typeof record.value === "string"
+      ? record.value
+      : record.value instanceof Uint8Array
+        ? record.value
+        : canonicalJson(record.value as JsonValue);
+    const key = record.key && record.key.length <= 256 ? record.key : id;
+    const envelope = (quarantinedWire: JsonValue): KafkaEnvelope => ({
+      messageId: id,
+      messageType: "QuarantinedTransportRecord",
+      envelopeVersion: "1",
+      producer: options.runtime,
+      causationId: null,
+      aggregate: {
+        type: "QuarantinedTransportRecord",
+        ref: id,
+        version: "1",
+      },
+      occurredAt: nowInstant().toString(),
+      correlationId: id,
+      traceparent: `00-${id.slice(0, 32)}-${id.slice(32, 48)}-01`,
+      payload: {
+        topic: record.topic,
+        partition: record.partition,
+        offset: record.offset,
+        reason,
+        wire: quarantinedWire,
+      },
+    });
+    const boundedWire: JsonValue = {
+      digest: createHash("sha256").update(rawData).digest("hex"),
+      byteLength: typeof rawData === "string" ? Buffer.byteLength(rawData) : rawData.byteLength,
+    };
+    const wireIsSummary = object(wire) &&
+      Object.keys(wire).length === 1 && wire["digest"] === boundedWire["digest"];
+    const rawEnvelope = envelope(wireIsSummary ? boundedWire : wire);
+    const serialized = canonicalJson(rawEnvelope as unknown as JsonValue);
     await send(
       topic.dlq,
-      record.key || id,
-      {
-        messageId: id,
-        messageType: "QuarantinedTransportRecord",
-        envelopeVersion: "1",
-        producer: options.runtime,
-        causationId: null,
-        aggregate: {
-          type: "QuarantinedTransportRecord",
-          ref: id,
-          version: "1",
-        },
-        occurredAt: nowInstant().toString(),
-        correlationId: id,
-        traceparent: `00-${id.slice(0, 32)}-${id.slice(32, 48)}-01`,
-        payload: {
-          topic: record.topic,
-          partition: record.partition,
-          offset: record.offset,
-          reason,
-          wire,
-        },
-      },
+      key,
+      Buffer.byteLength(serialized) <= policy.maxMessageBytes
+        ? rawEnvelope
+        : envelope(boundedWire),
       shutdown.signal,
       true,
     );
