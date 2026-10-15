@@ -469,7 +469,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
     if (generation.state.Running !== true || generation.state.OOMKilled === true) throw new Error('Collector memory proof startup reached an unhealthy state');
     try {
       telemetry = await collectorMemorySelfTelemetry({collectorIp, config, run, name: collectorName, generation});
-      sampler.latestSample();
+      await sampler.waitForFreshSample(1000);
       break;
     } catch (error) {
       if (!['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH'].includes(error.cause?.code)) throw error;
@@ -483,7 +483,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
       telemetry = await collectorMemorySelfTelemetry({collectorIp, config, run, name: collectorName, generation});
       lastTelemetryAt = Date.now();
     }
-    sampler.latestSample();
+    await sampler.waitForFreshSample(1000);
     return telemetry;
   };
   const baseline = telemetry;
@@ -494,13 +494,13 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
   let wireBytes = 0;
   let refusal;
   while (Date.now() < deadlineAt && wireBytes + 512 * 1024 <= totalWireCap) {
-    sampler.latestSample();
+    await sampler.waitForFreshSample(1000);
     await refreshTelemetry(false);
     const response = await sendCollectorMemorySpan({collectorIp, config, token, runId,
       name: 'g14.collector.memory.pressure', paddingBytes: 200 * 1024});
     packetCount += 1;
     wireBytes += response.wireBytes;
-    sampler.latestSample();
+    await sampler.waitForFreshSample(1000);
     if (response.httpStatus === 503) {
       const afterRefusal = await refreshTelemetry(true);
       const refusedSpansDelta = afterRefusal.counters.refused - baseline.counters.refused;
@@ -521,7 +521,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
   for (const offsetMs of [1000, 6000, 21000]) {
     const target = refusalAt + offsetMs;
     while (Date.now() < target) {
-      sampler.latestSample();
+      await sampler.waitForFreshSample(1000);
       await refreshTelemetry(false);
       await sleep(Math.min(100, target - Date.now()));
     }
@@ -530,17 +530,17 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
 
   let recovery;
   while (!recovery && Date.now() < recoveryDeadline) {
-    sampler.latestSample();
+    await sampler.waitForFreshSample(1000);
     const beforeRecovery = await refreshTelemetry(true);
     const response = await sendCollectorMemorySpan({collectorIp, config, token, runId,
       name: 'g14.collector.memory.recovery-probe'});
-    sampler.latestSample();
+    await sampler.waitForFreshSample(1000);
     if (response.httpStatus === 200) {
       let afterRecovery = await refreshTelemetry(true);
       let acceptedSpansDelta = afterRecovery.counters.accepted - beforeRecovery.counters.accepted;
       const confirmationDeadline = Math.min(recoveryDeadline, Date.now() + 5000);
       while (acceptedSpansDelta <= 0 && Date.now() < confirmationDeadline) {
-        sampler.latestSample();
+        await sampler.waitForFreshSample(1000);
         await sleep(1000);
         afterRecovery = await refreshTelemetry(true);
         acceptedSpansDelta = afterRecovery.counters.accepted - beforeRecovery.counters.accepted;
@@ -554,6 +554,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
     }
   }
   if (!recovery) throw new Error('Collector did not accept a recovery span within the bounded retry window');
+  const finalMemory = await sampler.waitForFreshSample(1000);
   return {
     status: 'NOT_RUN',
     containerGeneration: {id: generation.id, startedAt: generation.state.StartedAt},
@@ -565,7 +566,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
       maxPacketBytes: 512 * 1024, maxWireBytes: totalWireCap,
       maxWireBytesPerSecond: 32 * 1024 * 1024, deadlineMs: 60000},
     cgroup: {baselineBytes: baselineMemory.currentBytes, peakBytes: sampler.peakBytes,
-      maxBytes: baselineMemory.maxBytes, oom: sampler.latestSample().oom, oomKill: sampler.latestSample().oomKill},
+      maxBytes: baselineMemory.maxBytes, oom: finalMemory.oom, oomKill: finalMemory.oomKill},
     metrics: {processor: 'memory_limiter', refused: MEMORY_LIMITER_METRICS.refused,
       accepted: MEMORY_LIMITER_METRICS.accepted, baseline, afterRecovery: telemetry},
     pressure: {packetCount, wireBytes, elapsedMs: Date.now() - startedAt}, refusal, recovery,
