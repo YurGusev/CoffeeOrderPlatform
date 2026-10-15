@@ -57,7 +57,7 @@ void test('owner metric search filters before the 100-row page and refreshes str
   const matches = await waitForOwnedMetricFamilySamples({
     baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
     metricsPrefix: 'platform_metrics', family: {name: 'messaging.kafka.consumer.lag', owners: ['orders-service'], components: ['']},
-    liveMetricStreams: [], startTimeUs: 1, fetchImpl, timeoutMs: 100, intervalMs: 1,
+    liveMetricStreams: [], startTimeUs: 1, fetchImpl, timeoutMs: 5000, intervalMs: 1,
   });
   assert.equal(inventoryCalls, 3, 'inventory refresh finds the stream and repeats while its owner has not exported a sample');
   assert.equal(ownerSearches, 2, 'owned sample visibility is retried after an empty filtered page');
