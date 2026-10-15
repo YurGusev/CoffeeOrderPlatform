@@ -56,9 +56,15 @@ void test("runtime bounds realtime DLQ wire and falls back from invalid transpor
  try{
   runtime.bind("realtime-gateway-v1",{processing:"realtime",decode:()=>{throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");},enqueue:async()=>assert.fail("enqueue")});
   await runtime.resource.start(AbortSignal.timeout(5000));
-  latestConsumer.emit("event.stats",{topics:{[topic]:{partitions:{"0":{consumer_lag:7},"24":{consumer_lag:999}}},"canary.topic":{partitions:{"0":{consumer_lag:999}}}}});
+  latestConsumer.emit("event.stats",{message:JSON.stringify({topics:{[topic]:{partitions:{"0":{consumer_lag:7},"1":{consumer_lag:0},"24":{consumer_lag:999}}},"canary.topic":{partitions:{"0":{consumer_lag:999}}}}})});
   observeLag({observe(metricValue,attributes){observed.push({value:metricValue,attributes});}});
-  assert.deepEqual(observed,[{value:7,attributes:{"messaging.consumer.group":"realtime-gateway-v1","messaging.destination.name":topic,"messaging.destination.partition.id":"0"}}]);
+  assert.deepEqual(observed,[
+   {value:7,attributes:{"messaging.consumer.group":"realtime-gateway-v1","messaging.destination.name":topic,"messaging.destination.partition.id":"0"}},
+   {value:0,attributes:{"messaging.consumer.group":"realtime-gateway-v1","messaging.destination.name":topic,"messaging.destination.partition.id":"1"}},
+  ]);
+  latestConsumer.emit("event.stats",{message:JSON.stringify({topics:{[topic]:{partitions:{"0":{consumer_lag:-1},"1":{consumer_lag:0}}}}})});
+  observed.length=0;observeLag({observe(metricValue,attributes){observed.push({value:metricValue,attributes});}});
+  assert.deepEqual(observed,[{value:0,attributes:{"messaging.consumer.group":"realtime-gateway-v1","messaging.destination.name":topic,"messaging.destination.partition.id":"1"}}]);
   const deadline=Date.now()+3000;
   while(events.filter((event)=>event.kind==="offset").length<inputs.length&&Date.now()<deadline)await new Promise((resolve)=>setTimeout(resolve,1));
   assert.deepEqual(events.filter((event)=>event.kind==="dlq"||event.kind==="offset").map((event)=>event.kind),inputs.flatMap(()=>["dlq","offset"]));
@@ -105,7 +111,11 @@ void test("native consumer bounds idle Fetch wait without changing receive/commi
    const stats=[];await createNativeConsumer(options,()=>{},value=>stats.push(value));
    const {config:captured,consumeTimeout}=capture;
    assert.equal(captured["fetch.wait.max.ms"],Math.min(100,receiveTimeoutMs));assert.equal(captured["request.timeout.ms"],receiveTimeoutMs);assert.equal(captured["enable.auto.commit"],false);assert.equal(captured["enable.auto.offset.store"],false);assert.equal(captured["allow.auto.create.topics"],false);assert.equal(captured["offset_commit_cb"],true);assert.equal(captured["statistics.interval.ms"],receiveTimeoutMs);assert.ok(consumeTimeout>=1&&consumeTimeout<=10);
-   const snapshot={topics:{[record.topic]:{partitions:{"0":{consumer_lag:12}}}}};capture.instance.emit("event.stats",snapshot);assert.deepEqual(stats,[snapshot]);
+   const snapshot={topics:{[record.topic]:{partitions:{"0":{consumer_lag:12}}}}};
+   capture.instance.emit("event.stats",{message:JSON.stringify(snapshot)});assert.deepEqual(stats,[snapshot]);
+   for(const malformed of [snapshot,{message:"{"},{message:JSON.stringify([])},{message:JSON.stringify(null)}])
+    assert.doesNotThrow(()=>capture.instance.emit("event.stats",malformed));
+   assert.deepEqual(stats,[snapshot]);
   }
  }finally{hook.deregister();delete globalThis[key];delete globalThis[Symbol.for("coffee.native-config-capture")];}
 });

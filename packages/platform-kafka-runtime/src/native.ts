@@ -986,7 +986,19 @@ export async function createNativeConsumer(
   client.on("disconnected", () => {
     if (state !== "closing" && state !== "closed") state = "failed";
   });
-  if (onStatistics !== undefined) client.on("event.stats", onStatistics);
+  if (onStatistics !== undefined) client.on("event.stats", (event: unknown) => {
+    if (event === null || typeof event !== "object" || Array.isArray(event)) return;
+    const message = (event as Record<string, unknown>)["message"];
+    if (typeof message !== "string") return;
+    let snapshot: unknown;
+    try {
+      snapshot = JSON.parse(message) as unknown;
+    } catch {
+      return;
+    }
+    if (snapshot === null || typeof snapshot !== "object" || Array.isArray(snapshot)) return;
+    onStatistics(snapshot);
+  });
   const connect = (): Promise<void> => {
     if (state === "connected") return Promise.resolve();
     if (state === "failed")
