@@ -380,13 +380,12 @@ async function waitForHealthyHttpCheckMetrics({baseUrl, authorization, organizat
   }
 }
 
-function traceSpanInventory(records) {
+export function traceSpanInventory(records) {
   const inventory = {};
   for (const record of records) {
-    const entries = Object.entries(record ?? {});
-    const service = entries.find(([key, value]) => /service_name/iu.test(key) && typeof value === 'string')?.[1];
-    const spanName = entries.find(([key, value]) => /^(?:name|span_name)$/iu.test(key) && typeof value === 'string')?.[1];
-    if (!service || !spanName) continue;
+    const service = record?.service_name;
+    const spanName = record?.operation_name;
+    if (typeof service !== 'string' || service.length === 0 || typeof spanName !== 'string' || spanName.length === 0) continue;
     inventory[service] ??= new Set();
     inventory[service].add(spanName);
   }
@@ -1550,7 +1549,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               separateRealtimeSpans = await waitFor(async () => {
                 const found = rows(await streamSearch({
                   baseUrl, authorization, organization, stream: config.telemetry.openObserve.streams.traces, streamType: 'traces',
-                  filterSql: `"service_name" = 'realtime-gateway' AND "span_name" IN (${separateSpanNames.map(name => `'${name}'`).join(', ')})`,
+                  filterSql: `"service_name" = 'realtime-gateway' AND "operation_name" IN (${separateSpanNames.map(name => `'${name}'`).join(', ')})`,
                   startTimeUs: launchStartedAtUs,
                 }));
                 const inventory = traceSpanInventory(found);
@@ -1904,9 +1903,8 @@ keep=1`;
         streamType: 'traces', filterSql: `"service_name" = 'g14-synthetic'`, startTimeUs: shutdownStartedAtUs,
       }));
       const matching = found.filter(record => {
-        const entries = Object.entries(record ?? []);
-        const service = entries.find(([key, value]) => /service_name/iu.test(key) && typeof value === 'string')?.[1];
-        const spanName = entries.find(([key, value]) => /^(?:name|span_name)$/iu.test(key) && typeof value === 'string')?.[1];
+        const service = record?.service_name;
+        const spanName = record?.operation_name;
         return service === 'g14-synthetic' && spanName === 'g14.synthetic.shutdown' &&
           hasExactValue(record, runId);
       });

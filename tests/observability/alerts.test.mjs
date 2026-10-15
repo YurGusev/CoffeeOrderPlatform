@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {missingCpuFeatures, observabilityVerificationCoverage, sourceIdentity} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory} from '../../tools/observability/verify.mjs';
 
 const config = {telemetry: {
   openObserve: {organization: 'coffee', streams: {metrics: 'platform_metrics'}},
@@ -18,6 +18,22 @@ const config = {telemetry: {
 void test('OpenObserve runner gates native execution on required CPU features', () => {
   assert.deepEqual(missingCpuFeatures('processor: 0\nflags: sse4_2 aes avx2 avx\n'), []);
   assert.deepEqual(missingCpuFeatures('processor: 0\nflags: sse4_2\n'), ['avx', 'aes']);
+});
+
+void test('OpenObserve trace inventory reads canonical operation_name and deduplicates per owner', () => {
+  const traceId = 'a'.repeat(32);
+  assert.deepEqual(traceSpanInventory([
+    {service_name: 'orders-service', operation_name: 'HTTP POST', trace_id: traceId},
+    {service_name: 'orders-service', operation_name: 'HTTP POST', trace_id: traceId},
+    {service_name: 'realtime-gateway', operation_name: 'HTTP POST', trace_id: traceId},
+    {service_name: 'orders-service', name: 'ignored name', trace_id: traceId},
+    {service_name: 'orders-service', span_name: 'ignored span_name', trace_id: traceId},
+    {service_name: '', operation_name: 'empty owner', trace_id: traceId},
+    {service_name: 'orders-service', operation_name: '', trace_id: traceId},
+  ]), {
+    'orders-service': ['HTTP POST'],
+    'realtime-gateway': ['HTTP POST'],
+  });
 });
 
 void test('verification provenance hashes the non-ignored source tree and compiled runtime packages', async () => {
