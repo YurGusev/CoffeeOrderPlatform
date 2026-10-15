@@ -118,7 +118,7 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, diskWatermarkPercent: 100}}},
     {...document, telemetry: {...document.telemetry, openObserve: Object.fromEntries(Object.entries(document.telemetry.openObserve).filter(([key]) => key !== "memPersistIntervalSeconds"))}},
     {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, maxFileSizeInMemoryMiB: 128}}},
-    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, memTableMaxSizeMiB: 512}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, memTableMaxSizeMiB: document.telemetry.openObserve.memoryLimitMiB}}},
     {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, maxFileSizeOnDiskMiB: 1025}}},
     {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, memPersistIntervalSeconds: 31}}},
     ...["logs", "traces", "metrics"].map((name) => ({...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, streams: {...document.telemetry.openObserve.streams, [name]: "Bad-Stream"}}}})),
