@@ -514,7 +514,7 @@ void test("observability overlay keeps OpenObserve private and bounds exact Dock
   const overlay = createComposeOverride({
     config: {
       ...OBSERVABILITY_CONFIG,
-      telemetry: {...OBSERVABILITY_CONFIG.telemetry, openObserve: {endpoint: "http://openobserve:5080", bootstrapEmail: "operations@coffee-platform.internal", validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, maxDiskBytes: 1073741824, memoryLimitMiB: 512, compactionIntervalSeconds: 60, deleteFilesDelayMinutes: 1, retentionDays: 3, diskWatermarkPercent: 80, jobCleanupWaitSeconds: 60}},
+      telemetry: {...OBSERVABILITY_CONFIG.telemetry, openObserve: {endpoint: "http://openobserve:5080", bootstrapEmail: "operations@coffee-platform.internal", validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, maxDiskBytes: 1073741824, memoryLimitMiB: 512, memTableMaxSizeMiB: 128, maxFileSizeInMemoryMiB: 8, maxFileSizeOnDiskMiB: 8, maxFileRetentionSeconds: 30, memPersistIntervalSeconds: 2, compactionIntervalSeconds: 60, deleteFilesDelayMinutes: 1, retentionDays: 3, diskWatermarkPercent: 80, jobCleanupWaitSeconds: 60}},
     },
     imageRefs: {otelCollectorImage: "otel/opentelemetry-collector-contrib@sha256:collector", openObserveImage: "openobserve@sha256:openobserve", bootstrapProbeSha256: "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14"},
     logFiles,
@@ -523,7 +523,7 @@ void test("observability overlay keeps OpenObserve private and bounds exact Dock
   });
   const collector = overlay.services["otel-collector"];
   const openObserve = overlay.services.openobserve;
-  assert.deepEqual(openObserve.environment, {ZO_LOCAL_MODE: "true", ZO_DATA_DIR: "/data", ZO_HTTP_PORT: "5080", ZO_ROOT_USER_EMAIL: "operations@coffee-platform.internal", ZO_ROOT_USER_PASSWORD: "bootstrap-validation-placeholder", ZO_TELEMETRY: "false", ZO_MMDB_DISABLE_DOWNLOAD: "true", ZO_MODEL_PRICING_ENABLED: "false", ZO_COMPACT_INTERVAL: "60", ZO_COMPACT_DATA_RETENTION_INTERVAL: "60", ZO_COMPACT_DATA_RETENTION_DAYS: "3", ZO_COMPACT_DELETE_FILES_DELAY_MINUTES: "1", ZO_COMPACT_JOB_CLEAN_WAIT_TIME: "60", ZO_DISK_CIRCUIT_BREAKER_ENABLED: "true", ZO_DISK_CIRCUIT_BREAKER_THRESHOLD: "80"});
+  assert.deepEqual(openObserve.environment, {ZO_LOCAL_MODE: "true", ZO_DATA_DIR: "/data", ZO_HTTP_PORT: "5080", ZO_ROOT_USER_EMAIL: "operations@coffee-platform.internal", ZO_ROOT_USER_PASSWORD: "bootstrap-validation-placeholder", ZO_TELEMETRY: "false", ZO_MMDB_DISABLE_DOWNLOAD: "true", ZO_MODEL_PRICING_ENABLED: "false", ZO_MEM_TABLE_MAX_SIZE: "128", ZO_MAX_FILE_SIZE_IN_MEMORY: "8", ZO_MAX_FILE_SIZE_ON_DISK: "8", ZO_MAX_FILE_RETENTION_TIME: "30", ZO_MEM_PERSIST_INTERVAL: "2", ZO_COMPACT_INTERVAL: "60", ZO_COMPACT_DATA_RETENTION_INTERVAL: "60", ZO_COMPACT_DATA_RETENTION_DAYS: "3", ZO_COMPACT_DELETE_FILES_DELAY_MINUTES: "1", ZO_COMPACT_JOB_CLEAN_WAIT_TIME: "60", ZO_DISK_CIRCUIT_BREAKER_ENABLED: "true", ZO_DISK_CIRCUIT_BREAKER_THRESHOLD: "80"});
   assert.deepEqual(openObserve.entrypoint, ["/busybox", "sh", "-ceu"]);
   assert.match(openObserve.command[0], /\.coffee-initialized-v1/u);
   assert.match(openObserve.command[0], /test ! -L/u);
