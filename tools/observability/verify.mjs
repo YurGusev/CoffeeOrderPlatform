@@ -1412,6 +1412,11 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     process.env.TMPDIR = workDir;
     let launchNetwork;
     let collectorAttachedToLaunchNetwork = false;
+    const detachLaunchCollector = () => {
+      if (!collectorAttachedToLaunchNetwork) return;
+      run(['network', 'disconnect', '--force', launchNetwork, collectorName]);
+      collectorAttachedToLaunchNetwork = false;
+    };
     let launchCollectorOutageStartedAt;
     let launchNginxContainer;
     const launchStartedAtUs = Date.now() * 1000;
@@ -1448,6 +1453,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const launchResult = await runLaunchPath({
         telemetry: {config: config.telemetry, endpoint: 'http://otel-collector:4318', exporterToken: producerToken},
         resultDir: join(workDir, 'launch-path'),
+        onNetworkCleanup: detachLaunchCollector,
         onNetwork: async ({networkName}) => {
           launchNetwork = networkName;
           const launchNetworkProbe = JSON.parse(run(['run', '--rm', '--network', networkName, '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m',
@@ -1714,20 +1720,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               fixtureCapacityClaim: false,
             };
           } finally {
-            if (collectorAttachedToLaunchNetwork) {
-              run(['network', 'disconnect', '--force', launchNetwork, collectorName]);
-              collectorAttachedToLaunchNetwork = false;
-            }
+            detachLaunchCollector();
           }
         },
       });
       evidence.launchPathFixture = {status: launchResult.error === null ? 'PASS' : 'FAIL', cleanupVerified: launchResult.cleanupVerified === true, smokeOnly: true};
       if (evidence.launchPathCorrelation !== 'PASS') throw new Error('launch-path fixture returned without observing native telemetry proof');
       evidence.signals.push('real Kafka → Orders owners → SSE/browser refetch records and W3C trace observed in OpenObserve');
-      if (collectorAttachedToLaunchNetwork) {
-        run(['network', 'disconnect', '--force', launchNetwork, collectorName]);
-        collectorAttachedToLaunchNetwork = false;
-      }
+      detachLaunchCollector();
       run(['rm', '-f', collectorName]);
       await startCollector(logFiles, 'post-launch-initial-logs', collectorConfig);
       await waitFor(async () => {
@@ -1738,9 +1738,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       evidence.containerDiagnostics.push(captureContainerDiagnostics({name: collectorName, stage: 'post-launch-initial-logs', secrets: sensitiveValues}));
       evidence.telemetryHealth.launchPathCollectorConfig = 'PASS';
     } finally {
-      if (collectorAttachedToLaunchNetwork) {
-        try { run(['network', 'disconnect', '--force', launchNetwork, collectorName]); } catch {}
-      }
+      try { detachLaunchCollector(); } catch {}
       if (previousTmpDir === undefined) delete process.env.TMPDIR;
       else process.env.TMPDIR = previousTmpDir;
     }

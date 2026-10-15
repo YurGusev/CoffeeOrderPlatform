@@ -164,13 +164,18 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
   const includeNginxMetrics = logFiles.some(({service}) => service === 'edge-nginx');
   const collectorHealthEndpoint = new URL('/', requireValue(collector.healthEndpoint, 'telemetry.collector.healthEndpoint')).toString();
   const openObserveHealthEndpoint = new URL('/healthz', requireValue(openObserve.endpoint, 'telemetry.openObserve.endpoint')).toString();
+  const sourceOwnerOperators = logFiles.map(({service, containerId}) => ({
+    type: 'add',
+    id: `owner-${service}`,
+    field: 'resource["service.name"]',
+    value: service,
+    if: `attributes["log.file.path"] == "/var/lib/docker/containers/${containerId}/${containerId}-json.log"`,
+    on_error: 'drop_quiet',
+  }));
   const healthCheck = (endpoint) => ({
     collection_interval: `${config.platform.health.intervalMs}ms`,
     targets: [{endpoint, method: 'GET', timeout: `${config.platform.health.timeoutMs}ms`}],
   });
-  const serviceStatements = logFiles.map(({containerId, service}) =>
-    `set(resource.attributes["service.name"], "${service}") where attributes["log.file.path"] == "/var/lib/docker/containers/${containerId}/${containerId}-json.log"`,
-  );
   const sensitiveKeys = '(?i).*(password|passwd|credential|api.?key|token|secret|authorization|cookie|session|private.?key|email|phone|actor|address|(?:client|remote|source|forwarded).?ip|(?:request|callback|target).?(uri|url)|payload|request.?body).*';
   const resourceStatements = (serviceName) => [
     `set(resource.attributes["service.name"], ${JSON.stringify(serviceName)})`,
@@ -231,6 +236,7 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
         start_at: 'beginning',
         max_log_size: collector.maxLogRecordBytes,
         operators: [
+          ...sourceOwnerOperators,
           {
             type: 'json_parser',
             id: 'docker_json',
@@ -294,7 +300,6 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
           `set(resource.attributes["service.namespace"], ${JSON.stringify(config.telemetry.namespace)})`,
           `set(resource.attributes["service.version"], ${JSON.stringify(config.telemetry.releaseDigest)})`,
           `set(resource.attributes["deployment.environment"], ${JSON.stringify(config.environment)})`,
-          ...serviceStatements,
         ]}],
       },
       'transform/metric_names': {

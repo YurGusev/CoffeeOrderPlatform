@@ -69,12 +69,12 @@ const docker=(...args)=>captureCommandFailure(()=>fixtureDocker(...args),args);
 const run=(command,args,options)=>captureCommandFailure(()=>fixtureRun(command,args,options),command==='docker'?args:[command,...args],options);
 
 /** Run the real Orders owners inside the served transport fixture and prove a synthetic W3C request context. */
-export async function runLaunchPath({telemetry,onNetwork,onRolesReady,observeBaseline,observeProof,resultDir}){
+export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRolesReady,observeBaseline,observeProof,resultDir}){
   assert.ok(telemetry&&typeof telemetry==='object');
   assert.ok(telemetry.config&&typeof telemetry.config==='object');
   assert.match(telemetry.endpoint,/^https?:\/\//u);
   assert.equal(typeof telemetry.exporterToken,'string');assert.ok(telemetry.exporterToken.length>0);
-  assert.equal(typeof onNetwork,'function');assert.equal(typeof onRolesReady,'function');assert.equal(typeof observeBaseline,'function');assert.equal(typeof observeProof,'function');
+  assert.equal(typeof onNetwork,'function');assert.equal(typeof onNetworkCleanup,'function');assert.equal(typeof onRolesReady,'function');assert.equal(typeof observeBaseline,'function');assert.equal(typeof observeProof,'function');
   let phase='fixture-preparation';
   const options=parse(['--smoke','--profile','reference-512','--smoke-clients','1','--smoke-duration-ms','45000','--result-dir',resultDir??`${process.env.TMPDIR??'/tmp'}/coffee-g14-launch-${randomUUID()}`]);
   options.launchPath={telemetryConfig:telemetry.config,telemetryEndpoint:telemetry.endpoint,exporterToken:telemetry.exporterToken};
@@ -95,6 +95,7 @@ export async function runLaunchPath({telemetry,onNetwork,onRolesReady,observeBas
         const failures=[];
         for(const cleanup of [
           async()=>{if(databaseAttached){await docker('network','disconnect',network,f.container);databaseAttached=false;}},
+          async()=>onNetworkCleanup(),
           async()=>{if(imageBuildAttempted){const present=(await docker('image','ls','--filter',`reference=${nginxImage}`,'--format','{{.ID}}')).trim();if(present){await docker('image','rm',nginxImage);assert.equal((await docker('image','ls','--filter',`reference=${nginxImage}`,'--format','{{.ID}}')).trim(),'');}}},
         ]){try{await cleanup();}catch(error){failures.push(error);}}
         if(failures.length)throw new AggregateError(failures,'launch-path owner fixture cleanup failed');

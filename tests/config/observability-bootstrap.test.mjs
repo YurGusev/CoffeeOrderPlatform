@@ -49,6 +49,7 @@ const sample = {
 };
 const logs = [
   {service: 'edge-nginx', containerId: 'a'.repeat(64), logPath: `/var/lib/docker/containers/${'a'.repeat(64)}/${'a'.repeat(64)}-json.log`},
+  {service: 'orders-service', containerId: 'b'.repeat(64), logPath: `/srv/coffee/docker-data/containers/${'b'.repeat(64)}/${'b'.repeat(64)}-json.log`},
 ];
 
 void test('infrastructure secret scopes come from the validated catalog and separate Collector/admin credentials', async () => {
@@ -361,10 +362,15 @@ void test('OpenObserve seed refuses the public runtime validation marker as the 
 
 void test('Collector config accepts only exact selected log files and bounds export', () => {
   const config = createCollectorConfig({config: sample, logFiles: logs, exporterToken: 'producer-token', openObserveIngestToken: 'o2oi-token'});
-  assert.deepEqual(config.receivers.filelog.include, [`/var/lib/docker/containers/${'a'.repeat(64)}/${'a'.repeat(64)}-json.log`]);
+  assert.deepEqual(config.receivers.filelog.include, [
+    `/var/lib/docker/containers/${'a'.repeat(64)}/${'a'.repeat(64)}-json.log`,
+    `/var/lib/docker/containers/${'b'.repeat(64)}/${'b'.repeat(64)}-json.log`,
+  ]);
   assert.equal(config.receivers.filelog.include_file_path, true);
   assert.equal(config.receivers.filelog.max_log_size, 65536);
   assert.deepEqual(config.receivers.filelog.operators, [
+    {type: 'add', id: 'owner-edge-nginx', field: 'resource["service.name"]', value: 'edge-nginx', if: `attributes["log.file.path"] == ${JSON.stringify(logs[0].logPath)}`, on_error: 'drop_quiet'},
+    {type: 'add', id: 'owner-orders-service', field: 'resource["service.name"]', value: 'orders-service', if: `attributes["log.file.path"] == "/var/lib/docker/containers/${'b'.repeat(64)}/${'b'.repeat(64)}-json.log"`, on_error: 'drop_quiet'},
     {
       type: 'json_parser', id: 'docker_json', parse_from: 'body', parse_to: 'attributes', on_error: 'drop_quiet',
       timestamp: {parse_from: 'attributes.time', layout_type: 'gotime', layout: '2006-01-02T15:04:05.999999999Z07:00'},
@@ -380,6 +386,7 @@ void test('Collector config accepts only exact selected log files and bounds exp
   assert.equal(config.processors['transform/records'].log_statements[0].statements[0], 'flatten(log.body, resolveConflicts=true) where IsMap(log.body)');
   assert.match(config.processors['transform/records'].log_statements[0].statements[1], /^delete_matching_keys\(log\.body, .+\) where IsMap\(log\.body\)$/u);
   assert.match(config.processors['transform/records'].log_statements[0].statements[2], /^delete_matching_keys\(log\.attributes, .+\)$/u);
+  assert.equal(config.processors['transform/records'].log_statements[0].statements.some(statement => statement.includes('resource.attributes["service.name"]')), false);
   assert.deepEqual(config.service.pipelines.metrics.processors, ['memory_limiter', 'transform/metric_names', 'batch']);
   assert.deepEqual(config.receivers.nginx, {endpoint: sample.telemetry.nginxStatusEndpoint, collection_interval: '5000ms'});
   assert.deepEqual(config.receivers['prometheus/collector'].config.scrape_configs, [{
