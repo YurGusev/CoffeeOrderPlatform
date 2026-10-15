@@ -272,6 +272,10 @@ export async function runLaunchPath({telemetry,onNetwork,onRolesReady,observeBas
             return {correlationId,status:response.status,correlationMatched:response.correlationMatched};
           },
         });
+        // The original handshake happened during the Collector outage; reload the real SPA to open a fresh SSE connection after recovery.
+        await page.reload({waitUntil:'domcontentloaded'});
+        try{await page.waitForFunction(()=>window.__g14Frames.some(frame=>frame.event==='stream-ready.v1'),null,{timeout:20000});await saveStreamStartup('post-outage-ready');}
+        catch(error){await saveStreamStartup('post-outage-not-ready');throw error;}
         const command=await page.evaluate(async({orderRef,expectedVersion,correlationId,parent})=>{
           const csrf=document.cookie.split('; ').map(v=>v.trim()).find(v=>v.startsWith('__Host-coffee-csrf='))?.slice('__Host-coffee-csrf='.length);
           const response=await fetch(`/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,{method:'POST',headers:{'content-type':'application/json','idempotency-key':crypto.randomUUID(),'x-correlation-id':correlationId,traceparent:parent,...(csrf?{'x-csrf-token':csrf}:{})},body:JSON.stringify({expectedVersion,reason:'G14 synthetic correlation proof'})});
