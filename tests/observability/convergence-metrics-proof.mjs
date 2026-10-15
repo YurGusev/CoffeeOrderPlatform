@@ -3,6 +3,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {load as yaml} from 'js-yaml';
+import {metrics} from '@opentelemetry/api';
 import {createDatabase,withTransaction} from '../../packages/platform-database/dist/index.js';
 import {defineStatement} from '../../packages/platform-database/dist/owner.js';
 import {createTelemetryResource} from '../../packages/platform-observability/dist/index.js';
@@ -192,6 +193,7 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
     // Allow the existing PeriodicExportingMetricReader to export the real unresolved gauge before recovery.
     await delay(telemetryConfig.producer.batchIntervalMs+100);
     assert.equal(metricValue(telemetry.render(),'coffee_aroma_unknown_outcomes_current',undefined),1);
+    await metrics.getMeterProvider().forceFlush({timeoutMillis:telemetryConfig.producer.flushTimeoutMs});
     const reservationWindow=defineStatement(database,"SELECT bool_and(reserved_until<=clock_timestamp()) AS ended FROM orders.mutation_reservations WHERE state='UnknownOutcome'");
     const deadline=Date.now()+5000;
     while(Date.now()<deadline){
@@ -217,6 +219,7 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
     assert.deepEqual(finalFacts.map(row=>row.attempt_state),['UnknownOutcome','NoOpInSync']);
     assert.deepEqual(finalFacts.map(row=>row.reservation_state),['RecoveredApplied',null]);
     await delay(telemetryConfig.producer.batchIntervalMs+100);
+    await metrics.getMeterProvider().forceFlush({timeoutMillis:telemetryConfig.producer.flushTimeoutMs});
     assert.equal(metricValue(telemetry.render(),'coffee_aroma_unknown_outcomes_current',undefined),0);
     assert.equal(metricValue(telemetry.render(),'coffee_aroma_recovery_results_total','recovered_applied'),1);
 
