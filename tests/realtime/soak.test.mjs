@@ -14,7 +14,7 @@ import {readFile,writeFile,mkdir,stat,readdir} from 'node:fs/promises';
 import {resolve,join,relative} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
-import {prepare,verifyPrepared,erasePrivate,run,docker,json,hash,LABEL,ROOT,redact,productArgs,readCgroupMemory} from './fixtures/setup.mjs';
+import {prepare,verifyPrepared,erasePrivate,run,docker,json,hash,LABEL,ROOT,redact,productArgs,readCgroupMemory,safeProductStartupFailure} from './fixtures/setup.mjs';
 import {nowMs,isoNow,parseTime,classifyResult,FULL,THRESHOLDS,ulid} from './fixtures/protocol.mjs';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -201,8 +201,9 @@ export async function runTransportFixture(options,hooks={}){
 
   async function inspectRole(role){const c=owned.find(c=>c.role===role);assert.ok(c,`owned role missing ${role}`);const s=JSON.parse(await docker('inspect',c.id))[0];assert.equal(s.Config.Labels[LABEL],options.runId);return {c,s};}
   async function captureLaunchFailure(error){
-    if(!hooks.launchPath||!error.launchPathCommand)return undefined;
+    if(!hooks.launchPath)return undefined;
     const containers=[];
+    const diagnostics=Array.isArray(error.containerDiagnostics)?[...error.containerDiagnostics]:[];
     for(const c of owned){
       try{
         const s=JSON.parse(await docker('inspect',c.id))[0];assert.equal(s.Config.Labels[LABEL],options.runId);
@@ -216,9 +217,19 @@ export async function runTransportFixture(options,hooks={}){
         }
         containers.push({role:c.role,running:Boolean(s.State.Running),exitCode:Number.isInteger(s.State.ExitCode)?s.State.ExitCode:null,
           oomKilled:Boolean(s.State.OOMKilled),...(cgroup?{cgroup}:{})});
+        if(!s.State.Running&&Number.isInteger(s.State.ExitCode)&&s.State.ExitCode!==0&&!diagnostics.some(item=>item.name===c.name)){
+          let startupFailure={logCapture:'unavailable',errorNames:[],errorCodes:[],sqlStates:[],sourceFrames:[]};
+          try{
+            const logs=await run('docker',['logs','--tail','50',c.id],{includeStderr:true,outputLimit:65536,timeout:5000});
+            startupFailure={logCapture:'captured',...safeProductStartupFailure(logs,[...Object.keys(setup.manifest.sources??{}),...Object.keys(setup.manifest.compiled??{})])};
+          }catch{/* retain only the safe inspect state when bounded log capture fails */}
+          diagnostics.push({name:c.name,stage:'product-owner-start',state:{Running:false,ExitCode:s.State.ExitCode,OOMKilled:Boolean(s.State.OOMKilled)},startupFailure});
+        }
       }catch(failure){containers.push({role:c.role,stateUnavailableCode:failure.code??failure.name});}
     }
+    if(diagnostics.length)error.containerDiagnostics=diagnostics;
     const command=error.launchPathCommand;
+    if(!command)return undefined;
     const kernelOom=containers.some(item=>item.oomKilled||item.cgroup?.oomKillEvents>0||item.cgroup?.oomGroupKillEvents>0);
     const outcome=kernelOom?'kernel_oom_evidence':command.signal==='SIGKILL'&&command.elapsedMs>=command.timeoutMs?'host_docker_cli_timeout_sigkill':command.signal==='SIGKILL'?'docker_cli_sigkill_before_timeout_or_external':command.exitCode===127?'container_exec_failure':command.exitCode===137?'remote_exec_exit_137_without_cgroup_oom_evidence':'command_failure';
     return {command,outcome,containers};
@@ -372,7 +383,7 @@ export async function runTransportFixture(options,hooks={}){
       if(driverExit!==0&&!result.error)throw new Error(`real driver exited ${driverExit}`);
       }
     }
-  }catch(e){result.error={code:e.code??'HARNESS_FAILED',message:redact(e.message)};if(Array.isArray(e.containerDiagnostics))result.containerDiagnostics=e.containerDiagnostics;const launchFailure=await captureLaunchFailure(e);if(e.launchFailure)result.launchFailure=e.launchFailure;else if(launchFailure)result.launchFailure=launchFailure;result.status='FAIL';result.launchProof=false;}
+  }catch(e){const launchFailure=await captureLaunchFailure(e);result.error={code:e.code??'HARNESS_FAILED',message:redact(e.message)};if(Array.isArray(e.containerDiagnostics))result.containerDiagnostics=e.containerDiagnostics;if(e.launchFailure)result.launchFailure=e.launchFailure;else if(launchFailure)result.launchFailure=launchFailure;result.status='FAIL';result.launchProof=false;}
   finally{
     await stopObservers();
     const cleanupStart=performance.now(),receipts=[];

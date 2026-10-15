@@ -12,7 +12,49 @@ import {isoNow,FULL,THRESHOLDS} from './protocol.mjs';
 export const ROOT=resolve(import.meta.dirname,'../../..');
 export const LABEL='coffee.issue12.realtime-soak';
 export const PRODUCT_BUILD_TARGETS=Object.freeze(['packages/contracts/pricing-v1','packages/contracts/orders-v1','apps/realtime-gateway','apps/edge-gateway','apps/api-public']);
+const STARTUP_ERROR_NAMES=new Set(['Error','TypeError','RangeError','SyntaxError','ReferenceError','URIError','EvalError','AggregateError','AssertionError']);
+const STARTUP_ERROR_CODES=new Set([
+  'AROMA_PREPARATION_CONFIG_MISSING','AROMA_PREPARATION_CONSUMER_INVALID','AROMA_PREPARATION_DEPENDENCIES_MISSING','AROMA_PREPARATION_NOT_CONFIGURED','AROMA_VERIFICATION_CONFIG_MISSING',
+  'KAFKA_CONFIG_INVALID','KAFKA_CONNECTION_FAILED','KAFKA_ENVELOPE_INVALID','KAFKA_HANDLER_FAILED','KAFKA_QUEUE_FULL','KAFKA_REVOKED','KAFKA_SHUTDOWN_TIMEOUT','KAFKA_STOPPED','OFFSET_COMMIT_OUTCOME_UNKNOWN',
+  'RUNTIME_DATABASE_CONFIG_MISMATCH','RUNTIME_DATABASE_SECRET_INVALID','RUNTIME_DATABASE_SECRET_SCOPE','RUNTIME_DUPLICATE_COMPOSITION','RUNTIME_INVALID_PLATFORM_CONFIG','RUNTIME_INVALID_RESOURCE_NAMES','RUNTIME_INVALID_TRANSITION','RUNTIME_KAFKA_SECRET_INVALID','RUNTIME_KAFKA_SECRET_SCOPE','RUNTIME_PUBLIC_BASE_URL_INVALID','RUNTIME_RESOURCE_STOP_FAILED','RUNTIME_STARTUP_DEADLINE','RUNTIME_TELEMETRY_SECRET_SCOPE','RUNTIME_TRANSPORT_NOT_CONFIGURED','RUNTIME_UNKNOWN_DEADLINE_PROFILE',
+  'ECONNREFUSED','ECONNRESET','EPIPE','ETIMEDOUT','ENOTFOUND','EAI_AGAIN','ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','ERR_INVALID_ARG_TYPE','ERR_REQUIRE_ESM','ERR_PACKAGE_PATH_NOT_EXPORTED','ERR_INVALID_URL','ERR_TLS_CERT_ALTNAME_INVALID','ERR_STREAM_PREMATURE_CLOSE','ERR_SOCKET_CLOSED','ERR_OUT_OF_RANGE',
+]);
+const STARTUP_SQL_STATES=new Set(['08000','08001','08003','08004','08006','08007','08P01','23502','23503','23505','23514','28P01','3D000','40001','40P01','53300','57P01','57P03']);
 export function productArgs(role){return ['--env','COFFEE_CONFIG_FILE=/fixture/platform.yaml','--env',`COFFEE_RUNTIME_SECRETS_FILE=/fixture/${role}.yaml`,...(role==='edge-gateway'?['--env','NODE_EXTRA_CA_CERTS=/fixture/certs/ca.crt']:[]),'--IMAGE--','node','--enable-source-maps',`apps/${role}/dist/main.js`];}
+
+export function safeProductStartupFailure(logs,allowedPaths){
+  const allowed=new Set(allowedPaths.filter(path=>/^(?:apps|packages)\/[A-Za-z0-9._/-]+\.(?:mjs|js|ts)$/u.test(path)&&!path.split('/').includes('..')));
+  const errorNames=new Set(),errorCodes=new Set(),sqlStates=new Set(),sourceFrames=new Map();
+  const addName=value=>{if(typeof value==='string'&&STARTUP_ERROR_NAMES.has(value))errorNames.add(value);};
+  const inspectFields=value=>{
+    if(!value||typeof value!=='object'||Array.isArray(value))return;
+    const err=value.err&&typeof value.err==='object'?value.err:value;
+    addName(err.type);addName(err.name);
+    if(typeof err.code==='string'&&STARTUP_SQL_STATES.has(err.code))sqlStates.add(err.code);
+    for(const key of ['code','message'])if(typeof err[key]==='string')for(const match of err[key].matchAll(/\b[A-Z][A-Z0-9_]{2,79}\b/gu))if(STARTUP_ERROR_CODES.has(match[0]))errorCodes.add(match[0]);
+    for(const key of ['sqlState','sqlstate'])if(typeof err[key]==='string'&&STARTUP_SQL_STATES.has(err[key]))sqlStates.add(err[key]);
+    if(typeof err.message==='string')for(const match of err.message.matchAll(/\bSQLSTATE\s*[:=]?\s*([0-9A-Z]{5})\b/giu))if(STARTUP_SQL_STATES.has(match[1]))sqlStates.add(match[1]);
+    if(typeof err.stack==='string')addFrames(err.stack);
+  };
+  const addFrames=text=>{
+    const pattern=/(?:file:\/\/)?(\/app\/(?:apps|packages)\/[A-Za-z0-9._/-]+\.(?:mjs|js|ts)):(\d+):(\d+)/gu;
+    for(const match of text.matchAll(pattern)){
+      const path=match[1].slice('/app/'.length),line=Number(match[2]),column=Number(match[3]);
+      if(!allowed.has(path)||path.split('/').includes('..')||!Number.isSafeInteger(line)||line<1||!Number.isSafeInteger(column)||column<1)continue;
+      const key=`${path}:${line}:${column}`;if(!sourceFrames.has(key)&&sourceFrames.size<8)sourceFrames.set(key,{path,line,column});
+    }
+  };
+  for(const line of String(logs).split(/\r?\n/u).slice(-50)){
+    const text=line.slice(0,65536);
+    try{inspectFields(JSON.parse(text));}catch{}
+    const headline=/\b(Error|TypeError|RangeError|SyntaxError|ReferenceError|URIError|EvalError|AggregateError|AssertionError):/u.exec(text);
+    if(headline)addName(headline[1]);
+    for(const match of text.matchAll(/\b[A-Z][A-Z0-9_]{2,79}\b/gu))if(STARTUP_ERROR_CODES.has(match[0]))errorCodes.add(match[0]);
+    for(const match of text.matchAll(/\bSQLSTATE\s*[:=]?\s*([0-9A-Z]{5})\b/giu))if(STARTUP_SQL_STATES.has(match[1]))sqlStates.add(match[1]);
+    addFrames(text);
+  }
+  return {errorNames:[...errorNames].slice(0,4),errorCodes:[...errorCodes].slice(0,8),sqlStates:[...sqlStates].slice(0,4),sourceFrames:[...sourceFrames.values()]};
+}
 
 export const hash=text=>createHash('sha256').update(text).digest('hex');
 export async function readCgroupMemory(pid,reader=readFile){

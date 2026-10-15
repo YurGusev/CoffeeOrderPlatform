@@ -6,7 +6,7 @@ import {load as yaml} from 'js-yaml';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {runInNewContext} from 'node:vm';
-import {ROOT,sourceSnapshot,run,json,redact,PRODUCT_BUILD_TARGETS,productArgs,LABEL} from './setup.mjs';
+import {ROOT,sourceSnapshot,run,json,redact,PRODUCT_BUILD_TARGETS,productArgs,LABEL,safeProductStartupFailure} from './setup.mjs';
 import {nowMs,SseDecoder, classifyResult, ulid, ulidTime, Histogram, assertCoverage, THRESHOLDS,FULL} from './protocol.mjs';
 import {render} from '../../../tools/nginx/generate.mjs';
 import {bootstrapOwnedOrdersKafka} from '../soak.test.mjs';
@@ -21,6 +21,18 @@ void test('operator-1 CLI help describes the approved profile without obsolete f
   assert.match(help,/1 subscriber.*100.*1800000ms/u);
   assert.doesNotMatch(help,/5000|isolated-5000/u);
   assert.match(help,/512\/513/u);
+});
+
+void test('product startup diagnostics keep only allowlisted error codes and real source frames',()=>{
+  const source='apps/orders-aroma-preparation/src/runtime-composition.ts';
+  const logs=[
+    JSON.stringify({level:50,err:{type:'TypeError',code:'23505',sqlState:'08006',message:'startup-canary-secret ERR_CANARY_TOKEN',stack:`TypeError: startup-canary-secret\n    at configure (/app/${source}:21:13)\n    at leaked (/app/apps/orders-aroma-preparation/src/private-canary-token.ts:4:9)`}}),
+    `Error: AROMA_PREPARATION_CONFIG_MISSING startup-canary-secret SQLSTATE: 08006\n    at start (/app/${source}:56:17)`,
+  ].join('\n');
+  const result=safeProductStartupFailure(logs,[source]);
+  assert.deepEqual(result,{errorNames:['TypeError','Error'],errorCodes:['AROMA_PREPARATION_CONFIG_MISSING'],sqlStates:['23505','08006'],sourceFrames:[{path:source,line:21,column:13},{path:source,line:56,column:17}]});
+  assert.ok(result.errorNames.length<=4&&result.errorCodes.length<=8&&result.sqlStates.length<=4&&result.sourceFrames.length<=8,'startup error projection is bounded');
+  assert.doesNotMatch(JSON.stringify(result),/startup-canary-secret|private-canary-token|ERR_CANARY_TOKEN|\/app\//u);
 });
 
 void test('launch-path initializes offsets only for durable Orders owners on an owned empty tmpfs broker',async()=>{
