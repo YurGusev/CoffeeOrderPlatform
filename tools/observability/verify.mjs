@@ -481,7 +481,7 @@ async function collectorTraceCounters({baseUrl, authorization, organization, met
   return counters;
 }
 
-async function verifyCollectorQueueMetrics({baseUrl, authorization, organization, metricsPrefix, startTimeUs, lossStartTimeUs = startTimeUs, lossEndTimeUs, queueCapacity}) {
+export async function verifyCollectorQueueMetrics({baseUrl, authorization, organization, metricsPrefix, startTimeUs, lossStartTimeUs = startTimeUs, lossEndTimeUs, queueCapacity, fetchImpl = fetch, timeoutMs = 60000, intervalMs = 2000}) {
   const metricNames = [
     'otelcol_exporter_queue_size', 'otelcol_exporter_queue_capacity',
     'otelcol_exporter_enqueue_failed_log_records', 'otelcol_exporter_enqueue_failed_metric_points', 'otelcol_exporter_enqueue_failed_spans',
@@ -489,18 +489,18 @@ async function verifyCollectorQueueMetrics({baseUrl, authorization, organization
     'otelcol_exporter_sent_log_records', 'otelcol_exporter_sent_metric_points', 'otelcol_exporter_sent_spans',
   ];
   return waitFor(async () => {
-    const inventory = streamEntries(await api({baseUrl, authorization, organization, path: `/api/${encodeURIComponent(organization)}/streams`}));
+    const inventory = streamEntries(await api({fetchImpl, baseUrl, authorization, organization, path: `/api/${encodeURIComponent(organization)}/streams`}));
     const availableStreams = new Set(inventory.filter(stream => stream?.stream_type === 'metrics').map(stream => stream.name));
     const samplesByMetric = {};
     for (const metricName of metricNames) {
       const stream = `${metricsPrefix}_${metricName}`;
       if (!availableStreams.has(stream)) {
-        samplesByMetric[metricName] = {stream, available: false, sampleCount: 0, values: []};
+        samplesByMetric[metricName] = {stream, available: false, sampleCount: 0, values: [], timestampsUs: []};
         continue;
       }
       const processScopedLossMetric = metricName.includes('_send_failed_') || metricName.includes('_enqueue_failed_');
       const samples = rows(await streamSearch({
-        baseUrl, authorization, organization, stream, streamType: 'metrics',
+        fetchImpl, baseUrl, authorization, organization, stream, streamType: 'metrics',
         startTimeUs: processScopedLossMetric ? lossStartTimeUs : startTimeUs,
         ...(processScopedLossMetric && lossEndTimeUs !== undefined ? {endTimeUs: lossEndTimeUs} : {}),
         filterSql: '"service_name" = \'otel-collector\'',
@@ -538,7 +538,7 @@ async function verifyCollectorQueueMetrics({baseUrl, authorization, organization
         .flatMap(signal => [`otelcol_exporter_enqueue_failed_${signal}`, `otelcol_exporter_send_failed_${signal}`, `otelcol_exporter_sent_${signal}`])
         .filter(metricName => !samplesByMetric[metricName].available),
     };
-  }, {timeoutMs: 60000, intervalMs: 2000, description: 'Collector self-scrape queue, send-failure, and recovery counters'});
+  }, {timeoutMs, intervalMs, description: 'Collector self-scrape queue, send-failure, and recovery counters'});
 }
 
 function collectorExpiredRetryDropEvidence({name, startTimeUs}) {

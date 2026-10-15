@@ -17,6 +17,7 @@ import {
 import {materializeCollectorSecrets, materializeOpenObserveAdminSecret} from '../../tools/config-bootstrap/index.mjs';
 import {initializeOpenObserve} from '../../tools/observability/bootstrap.mjs';
 import {checkObservabilityHealth} from '../../tools/observability/health.mjs';
+import {verifyCollectorQueueMetrics} from '../../tools/observability/verify.mjs';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
@@ -446,6 +447,62 @@ void test('Collector config accepts only exact selected log files and bounds exp
   assert.equal(redactionKey.test('description'), false);
   assert.equal(redactionKey.test('security'), false);
   assert.throws(() => createCollectorConfig({config: sample, logFiles: [{...logs[0], logPath: '/tmp/all-containers/*.log'}], exporterToken: 'x', openObserveIngestToken: 'y'}), /exact Docker json-file paths/u);
+});
+
+void test('Collector queue verification handles sparse streams without accepting missing required counters', async () => {
+  const names = [
+    'otelcol_exporter_queue_size', 'otelcol_exporter_queue_capacity',
+    'otelcol_exporter_enqueue_failed_log_records', 'otelcol_exporter_enqueue_failed_metric_points', 'otelcol_exporter_enqueue_failed_spans',
+    'otelcol_exporter_send_failed_log_records', 'otelcol_exporter_send_failed_metric_points', 'otelcol_exporter_send_failed_spans',
+    'otelcol_exporter_sent_log_records', 'otelcol_exporter_sent_metric_points', 'otelcol_exporter_sent_spans',
+  ];
+  const availableStreams = names.filter(name => name !== 'otelcol_exporter_sent_spans').map(name => `platform_metrics_${name}`);
+  let searchCount = 0;
+  const fetchImpl = async url => {
+    if (url.pathname === '/api/coffee/streams')
+      return new Response(JSON.stringify({data: availableStreams.map(name => ({stream_type: 'metrics', name}))}), {status: 200});
+    searchCount += 1;
+    return new Response(JSON.stringify({hits: {hits: []}}), {status: 200});
+  };
+  await assert.rejects(verifyCollectorQueueMetrics({
+    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+    metricsPrefix: 'platform_metrics', startTimeUs: 1000, lossStartTimeUs: 500, lossEndTimeUs: 1000,
+    queueCapacity: 512, fetchImpl, timeoutMs: 1000, intervalMs: 20,
+  }), /Collector self-scrape queue, send-failure, and recovery counters did not complete$/u);
+  assert.ok(searchCount > 0, 'available streams were queried while the absent required counter remained pending');
+
+  const recoveryStartUs = 1_000_000_000_000_000;
+  const failureTimestampUs = 700_000_000_000_000;
+  const optionalFailureStreams = [
+    'otelcol_exporter_enqueue_failed_log_records', 'otelcol_exporter_enqueue_failed_metric_points', 'otelcol_exporter_enqueue_failed_spans',
+    'otelcol_exporter_send_failed_log_records', 'otelcol_exporter_send_failed_spans',
+  ];
+  const recoveryMetrics = new Map([
+    ['otelcol_exporter_queue_size', [{_timestamp: recoveryStartUs + 1, value: 0, service_name: 'otel-collector'}]],
+    ['otelcol_exporter_queue_capacity', [{_timestamp: recoveryStartUs + 1, value: 512, service_name: 'otel-collector'}]],
+    ['otelcol_exporter_send_failed_metric_points', [{_timestamp: failureTimestampUs, value: 3, service_name: 'otel-collector'}]],
+    ...['log_records', 'metric_points', 'spans'].map(signal => [
+      `otelcol_exporter_sent_${signal}`,
+      [{_timestamp: recoveryStartUs + 1, value: 1, service_name: 'otel-collector'}],
+    ]),
+  ]);
+  const recoveryStreams = [...recoveryMetrics.keys()].map(name => `platform_metrics_${name}`);
+  const recoveryFetch = async (url, init) => {
+    if (url.pathname === '/api/coffee/streams')
+      return new Response(JSON.stringify({data: recoveryStreams.map(name => ({stream_type: 'metrics', name}))}), {status: 200});
+    const stream = url.searchParams.get('type') === 'metrics' &&
+      JSON.parse(init.body).query.sql.match(/FROM "([^"]+)"/u)?.[1];
+    const records = recoveryMetrics.get(stream?.replace('platform_metrics_', '')) ?? [];
+    return new Response(JSON.stringify({hits: {hits: records}}), {status: 200});
+  };
+  const recovered = await verifyCollectorQueueMetrics({
+    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+    metricsPrefix: 'platform_metrics', startTimeUs: recoveryStartUs, lossStartTimeUs: failureTimestampUs - 1,
+    lossEndTimeUs: recoveryStartUs, queueCapacity: 512, fetchImpl: recoveryFetch, timeoutMs: 5000, intervalMs: 1,
+  });
+  assert.equal(recovered.status, 'PASS');
+  assert.equal(recovered.sendFailureSamples.metric_points.values[0], 3);
+  assert.deepEqual(recovered.optionalMetricStreamsAbsent.sort(), optionalFailureStreams.sort());
 });
 
 void test('log discovery selects exactly one running container by project and runtime labels', async () => {
