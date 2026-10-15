@@ -255,9 +255,8 @@ function scanNginxImage(runDocker, image, version, projectSuffix) {
     status: passed ? 'PASS' : 'FAIL'};
 }
 
-async function sourceEvidence() {
+async function sourceEvidence(sourceIdentity) {
   try {
-    const {sourceIdentity} = await import('../../tools/observability/verify.mjs');
     const identity = await sourceIdentity(ROOT);
     if (identity.sourceFiles.status !== 'PASS' || identity.runtimeArtifacts === null || identity.identityHash === null) {
       fail('runtime matrix source identity incomplete');
@@ -308,13 +307,14 @@ function assertProjectCleanup(runDocker, projectName) {
 
 export async function verifyRuntimeMetricMatrix({
   config, exporterToken, projectName, runDocker = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120_000}),
-  onRolesReady, onCleanup, verifyMetricFamily, nodeVersion, nginxVersion,
+  onRolesReady, onCleanup, verifyMetricFamily, sourceIdentity, nodeVersion, nginxVersion,
 } = {}) {
   if (!RUN_PROJECT.test(projectName ?? '') || typeof exporterToken !== 'string' || exporterToken.length === 0 ||
       typeof onRolesReady !== 'function' || typeof onCleanup !== 'function' || typeof verifyMetricFamily !== 'function' ||
+      typeof sourceIdentity !== 'function' ||
       !/^\d+\.\d+\.\d+$/u.test(nodeVersion ?? '') || !/^\d+\.\d+\.\d+$/u.test(nginxVersion ?? '')) fail('runtime matrix inputs invalid');
   const projectSuffix = projectName.slice(-8);
-  const [source, forbiddenPackages] = await Promise.all([sourceEvidence(), forbiddenRuntimePackages()]);
+  const [source, forbiddenPackages] = await Promise.all([sourceEvidence(sourceIdentity), forbiddenRuntimePackages()]);
   const toolchain = parseJson(await readFile(resolve(ROOT, 'config/toolchain-versions.json'), 'utf8'), 'runtime matrix BOM invalid');
   if (toolchain.node !== nodeVersion || toolchain.nginxVersion !== nginxVersion) fail('runtime matrix BOM version mismatch');
   const expected = runtimeMetricFamilies(config);

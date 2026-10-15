@@ -1898,6 +1898,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const {verifyRuntimeMetricMatrix} = await import('../../tests/observability/runtime-matrix.mjs');
       evidence.runtimeMetricMatrix = await verifyRuntimeMetricMatrix({
         config, exporterToken: producerToken, projectName: matrixProject, runDocker: run,
+        sourceIdentity,
         nodeVersion: toolchain.node, nginxVersion: toolchain.nginxVersion,
         onRolesReady: async ({logFiles: matrixLogs, networks}) => {
           matrixNetworks = [...new Set(Object.values(networks))];

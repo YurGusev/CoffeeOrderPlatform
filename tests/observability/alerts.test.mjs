@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
 import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
-import {runtimeMetricFamilies, sanitizeRuntimeMetricMatches} from './runtime-matrix.mjs';
+import {runtimeMetricFamilies, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
 const config = {telemetry: {
@@ -130,6 +130,28 @@ void test('issue 64 metric matrix derives all runtime owners and sanitizes probe
   assert.throws(() => summarizeRuntimeProbeOutput(JSON.stringify({secret: 'must never pass through'}), {
     role: 'orders-service', nodeVersion: '26.8.1',
   }), /runtime metrics probe assertion failed/u);
+});
+
+void test('issue 64 metric matrix requires a source identity callback before any Docker work', async () => {
+  const args = {
+    projectName: 'coffee-issue64-final-aaaaaaaa', exporterToken: 'fixture-token',
+    onRolesReady: async () => {}, onCleanup: async () => {}, verifyMetricFamily: async () => {},
+    nodeVersion: '1.2.3', nginxVersion: '1.2.3',
+  };
+  let dockerCalls = 0;
+  for (const sourceIdentity of [undefined, {}]) {
+    await assert.rejects(verifyRuntimeMetricMatrix({
+      ...args, sourceIdentity, runDocker: () => { dockerCalls += 1; throw new Error('unexpected Docker call'); },
+    }), /runtime matrix inputs invalid/u);
+  }
+  let identityCalls = 0;
+  await assert.rejects(verifyRuntimeMetricMatrix({
+    ...args,
+    sourceIdentity: async () => { identityCalls += 1; throw new Error('source callback failure'); },
+    runDocker: () => { dockerCalls += 1; throw new Error('unexpected Docker call'); },
+  }), /runtime matrix source identity unavailable/u);
+  assert.equal(identityCalls, 1);
+  assert.equal(dockerCalls, 0);
 });
 
 void test('verification provenance hashes the non-ignored source tree and compiled runtime packages', async () => {
