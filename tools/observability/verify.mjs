@@ -286,7 +286,7 @@ printf '{"kind":"started","pid":%s}\\n' "$pid"
 reader=$!
 exec 3<&-
 sequence=0
-while [ ! -e "$stop_path" ] && [ "$sequence" -lt 2800 ]; do
+while [ ! -e "$stop_path" ] && [ "$sequence" -lt 3400 ]; do
   current=$(/busybox cat /sys/fs/cgroup/memory.current) || exit 1
   maximum=$(/busybox cat /sys/fs/cgroup/memory.max) || exit 1
   oom=$(/busybox awk '$1=="oom"{print $2}' /sys/fs/cgroup/memory.events) || exit 1
@@ -323,7 +323,7 @@ function startCollectorMemorySampler({name, token}) {
       const line = buffer.slice(0, newline);
       buffer = buffer.slice(newline + 1);
       if (!line) continue;
-      if (++lineCount > 3000 || Buffer.byteLength(line) > 1024) { failure = new Error('collector memory sampler output exceeded its bound'); return; }
+      if (++lineCount > 3500 || Buffer.byteLength(line) > 1024) { failure = new Error('collector memory sampler output exceeded its bound'); return; }
       let record;
       try { record = JSON.parse(line); } catch { failure = new Error('collector memory sampler output was invalid'); return; }
       if (record.kind === 'started' && Number.isSafeInteger(record.pid) && record.pid > 1 && samplerPid === undefined) {
