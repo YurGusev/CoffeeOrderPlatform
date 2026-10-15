@@ -30,6 +30,7 @@ const ACTIVITY_DEPENDENT_METRICS = Object.freeze([
   {name: 'db.client.transaction.duration', reason: 'sample is produced by a database transaction'},
   {name: 'db.client.transaction.count', reason: 'sample is produced by a database transaction'},
   {name: 'messaging.kafka.event.age', reason: 'sample is produced by a consumed Kafka record'},
+  {name: 'messaging.kafka.consumer.lag', owners: ['realtime-gateway'], reason: 'a fresh realtime consumer group reports lag only after real consumption and commit; the mandatory launch proof checks it after activity'},
   {name: 'messaging.inbox.received.age', reason: 'sample is produced by an Inbox delivery'},
 ]);
 
@@ -67,7 +68,10 @@ export function runtimeMetricFamilies(config) {
   if (services === null || typeof services !== 'object') fail('runtime matrix platform config invalid');
   const databaseOwners = NODE_RUNTIME_ROLES.filter(role => typeof services[role]?.database === 'string');
   const kafkaOwners = NODE_RUNTIME_ROLES.filter(role => Array.isArray(services[role]?.kafka?.consumers) && services[role].kafka.consumers.length > 0);
-  if (databaseOwners.length !== 10 || kafkaOwners.length !== 3 || REQUIRED_OUTBOX_OWNERS.some(role => !databaseOwners.includes(role))) {
+  const durableKafkaOwners = NODE_RUNTIME_ROLES.filter(role =>
+    Array.isArray(services[role]?.kafka?.consumers) && services[role].kafka.consumers.some(consumer => consumer?.processing === 'durable'));
+  if (databaseOwners.length !== 10 || kafkaOwners.length !== 3 || durableKafkaOwners.length !== 2 ||
+      REQUIRED_OUTBOX_OWNERS.some(role => !databaseOwners.includes(role))) {
     fail('runtime matrix owner inventory invalid');
   }
   const allRuntimes = [...NODE_RUNTIME_ROLES];
@@ -80,7 +84,7 @@ export function runtimeMetricFamilies(config) {
       'runtime_process_start_time_seconds',
     ].map(name => ({name, owners: allRuntimes, components: ['']})),
     {name: 'db.client.connection.waiting', owners: databaseOwners, components: ['']},
-    {name: 'messaging.kafka.consumer.lag', owners: kafkaOwners, components: ['']},
+    {name: 'messaging.kafka.consumer.lag', owners: durableKafkaOwners, components: ['']},
     {name: 'messaging.outbox.oldest_unpublished.age', owners: REQUIRED_OUTBOX_OWNERS, components: ['']},
     {name: 'nginx_connections_current', owners: ['edge-nginx'], components: ['']},
   ];

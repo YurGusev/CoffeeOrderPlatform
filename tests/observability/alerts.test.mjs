@@ -88,7 +88,7 @@ void test('issue 64 metric matrix derives all runtime owners and sanitizes probe
   const consumerOwners = new Set(['orders-aroma-preparation', 'aroma-convergence', 'realtime-gateway']);
   const config = {services: Object.fromEntries(NODE_RUNTIME_ROLES.map(role => [role, {
     database: databaseOwners.has(role) ? `coffee_platform_${role}` : null,
-    kafka: {consumers: consumerOwners.has(role) ? [{groupId: `${role}-consumer`}] : []},
+    kafka: {consumers: consumerOwners.has(role) ? [{groupId: `${role}-consumer`, processing: role === 'realtime-gateway' ? 'realtime' : 'durable'}] : []},
   }]))};
   const families = runtimeMetricFamilies(config);
   assert.deepEqual(families.find(({name}) => name === 'runtime_http_requests_total'), {
@@ -96,7 +96,7 @@ void test('issue 64 metric matrix derives all runtime owners and sanitizes probe
     attributes: {http_response_status_class: '4xx'},
   });
   assert.deepEqual(families.find(({name}) => name === 'db.client.connection.waiting').owners, [...databaseOwners]);
-  assert.deepEqual(families.find(({name}) => name === 'messaging.kafka.consumer.lag').owners, [...consumerOwners]);
+  assert.deepEqual(families.find(({name}) => name === 'messaging.kafka.consumer.lag').owners, ['orders-aroma-preparation', 'aroma-convergence']);
   assert.deepEqual(families.find(({name}) => name === 'messaging.outbox.oldest_unpublished.age').owners, [
     'catalog-activation-worker', 'orders-service', 'orders-aroma-preparation', 'aroma-observer', 'aroma-convergence',
   ]);

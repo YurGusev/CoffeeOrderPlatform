@@ -10,8 +10,14 @@ evidence path — `pnpm test:observability` и `evidence/handoffs/issue-64.yaml`
 cleanup; она не использует `--keep`, pinning ресурсов или отдельную параллельную
 pipeline. Вызовы идут по фактическому self-mTLS пути для live/ready/text metrics
 и ожидаемых 4xx. Для каждого Node runtime проверяются OTLP HTTP/error и producer
-metrics. Матрица требует 10 DB-waiting, 3 consumer-lag и 5 scoped Outbox-age
-series. Событийные и транзакционные samples принимаются только после реальной
+metrics. Матрица требует 10 DB-waiting, lag для двух durable Kafka consumers с
+подготовленными committed offsets и 5 scoped Outbox-age series. Свежая группа
+`realtime-gateway` до реального consume/commit сообщает неизвестный lag (`-1`),
+поэтому cold recovery matrix отмечает её как
+`ACTIVITY_DEPENDENT / NOT_ASSERTED_WITHOUT_ACTIVITY`. Обязательная G14 launch
+фаза отдельно проверяет lag realtime consumer после реального consume/commit;
+вместе две проверки покрывают все три configured Kafka consumer owners.
+Событийные и транзакционные samples принимаются только после реальной
 активности существующего owner launch: шесть ролей и SQL-backed convergence
 helper; helper не заменяет постоянно работающий runtime. До default cleanup
 сканируются все 15 final images по фактическим image IDs.
