@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {missingCpuFeatures, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
 
 const config = {telemetry: {
   openObserve: {organization: 'coffee', streams: {metrics: 'platform_metrics'}},
@@ -34,6 +34,36 @@ void test('OpenObserve trace inventory reads canonical operation_name and dedupl
     'orders-service': ['HTTP POST'],
     'realtime-gateway': ['HTTP POST'],
   });
+});
+
+void test('owner metric search filters before the 100-row page and refreshes stream inventory', async () => {
+  const stream = 'platform_metrics_messaging_kafka_consumer_lag';
+  let inventoryCalls = 0;
+  let ownerSearches = 0;
+  let query;
+  const unrelated = Array.from({length: 101}, (_, index) => ({service_name: `other-${index}`, value: index}));
+  const fetchImpl = async (url, init) => {
+    if (url.pathname === '/api/coffee/streams') {
+      inventoryCalls += 1;
+      return new Response(JSON.stringify(inventoryCalls === 1 ? [] : [{stream_type: 'metrics', name: stream}]), {status: 200});
+    }
+    query = JSON.parse(init.body).query;
+    const ownerFilter = query.sql.match(/WHERE "service_name" = '((?:[^']|'')*)'/u)?.[1]?.replaceAll("''", "'");
+    const hits = ownerFilter === 'orders-service'
+      ? ++ownerSearches === 1 ? [] : [{service_name: 'orders-service', value: 7}]
+      : unrelated.slice(0, query.size);
+    return new Response(JSON.stringify({hits: {hits}}), {status: 200});
+  };
+  const matches = await waitForOwnedMetricFamilySamples({
+    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+    metricsPrefix: 'platform_metrics', family: {name: 'messaging.kafka.consumer.lag', owners: ['orders-service'], components: ['']},
+    liveMetricStreams: [], startTimeUs: 1, fetchImpl, timeoutMs: 100, intervalMs: 1,
+  });
+  assert.equal(inventoryCalls, 3, 'inventory refresh finds the stream and repeats while its owner has not exported a sample');
+  assert.equal(ownerSearches, 2, 'owned sample visibility is retried after an empty filtered page');
+  assert.deepEqual(matches, [{stream, sampleCount: 1, services: ['orders-service']}]);
+  assert.equal(query.sql, `SELECT * FROM "${stream}" WHERE "service_name" = 'orders-service'`);
+  assert.equal(query.size, 100);
 });
 
 void test('verification provenance hashes the non-ignored source tree and compiled runtime packages', async () => {

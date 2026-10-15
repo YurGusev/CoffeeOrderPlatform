@@ -398,6 +398,38 @@ function metricRecordServices(records) {
     .map(([, value]) => value)))].sort();
 }
 
+export async function waitForOwnedMetricFamilySamples({baseUrl, authorization, organization, metricsPrefix, family, liveMetricStreams, startTimeUs, fetchImpl = fetch, timeoutMs = 60000, intervalMs = 2000}) {
+  let availableStreams = new Set(liveMetricStreams);
+  return waitFor(async () => {
+    const base = `${metricsPrefix}_${family.name.replace(/[^a-zA-Z0-9_]/gu, '_')}`;
+    const candidateStreams = family.components.map(component => `${base}${component}`).filter(stream => availableStreams.has(stream));
+    const matches = [];
+    for (const stream of candidateStreams) {
+      const services = new Set();
+      let sampleCount = 0;
+      for (const owner of family.owners) {
+        const escapedOwner = owner.replaceAll("'", "''");
+        const samples = rows(await streamSearch({
+          baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs, fetchImpl,
+          filterSql: `"service_name" = '${escapedOwner}'`,
+        }));
+        const ownedSamples = samples.filter(sample => metricRecordServices([sample]).includes(owner));
+        if (ownedSamples.length > 0) {
+          services.add(owner);
+          sampleCount += ownedSamples.length;
+        }
+      }
+      if (services.size > 0) matches.push({stream, sampleCount, services: [...services]});
+    }
+    if (matches.length > 0) return matches;
+    const inventory = streamEntries(await api({
+      fetchImpl, baseUrl, authorization, path: `/api/${encodeURIComponent(organization)}/streams`,
+    }));
+    availableStreams = new Set(inventory.filter(stream => stream?.stream_type === 'metrics' && typeof stream?.name === 'string').map(stream => stream.name));
+    return false;
+  }, {timeoutMs, intervalMs, description: `OpenObserve metric family ${family.name} from an owning runtime`});
+}
+
 function metricRecordAttribute(record, name) {
   const direct = record?.[name] ?? record?.[`attributes_${name}`] ?? record?.[`attributes.${name}`] ?? record?.attributes?.[name];
   return typeof direct === 'string' || typeof direct === 'number' ? direct : undefined;
@@ -1583,17 +1615,12 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               .filter(stream => stream?.stream_type === 'metrics' && typeof stream?.name === 'string')
               .map(stream => stream.name);
             const metricApplicability = {};
+            evidence.metricApplicability = metricApplicability;
             for (const family of metricFamilies) {
-              const base = `${config.telemetry.openObserve.streams.metrics}_${family.name.replace(/[^a-zA-Z0-9_]/gu, '_')}`;
-              const candidateStreams = family.components.map(component => `${base}${component}`).filter(stream => liveMetricStreams.includes(stream));
-              if (candidateStreams.length === 0) throw new Error(`live launch-path metric family ${base} is absent from OpenObserve metrics stream inventory`);
-              const matches = [];
-              for (const stream of candidateStreams) {
-                const samples = rows(await streamSearch({baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs: launchStartedAtUs}));
-                const services = metricRecordServices(samples).filter(service => family.owners.includes(service));
-                if (services.length > 0) matches.push({stream, sampleCount: samples.length, services});
-              }
-              if (matches.length === 0) throw new Error(`live launch-path metric family ${base} has no samples from its owning runtime`);
+              const matches = await waitForOwnedMetricFamilySamples({
+                baseUrl, authorization, organization, metricsPrefix: config.telemetry.openObserve.streams.metrics,
+                family, liveMetricStreams, startTimeUs: launchStartedAtUs,
+              });
               metricApplicability[family.name] = matches;
             }
             const ownerMetricObservations = await waitFor(async () => {
