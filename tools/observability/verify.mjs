@@ -1004,37 +1004,68 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     if (!fixtureTimeParser) throw new Error('Collector config lacks the conditional producer timestamp parser');
     fixtureTimeParser.if = 'body.g14_fixture == true && body.time != nil';
     const collectorConfigPath = join(workDir, 'collector.yaml');
-    await writeFile(collectorConfigPath, dumpYaml(collectorConfig, {noRefs: true, lineWidth: 120}), {mode: 0o400});
-    // Docker's json-file logs are root-readable, so the Collector needs UID 0.
-    // Keep its capability set empty and make its mounted config root-owned and
-    // read-only; only this exact temporary file is changed by the scoped helper.
-    run(['run', '--rm', '--network', 'none', '--read-only', '--user', '0:0',
-      '--cap-drop', 'ALL', '--cap-add', 'CHOWN', '--security-opt', 'no-new-privileges:true',
-      '--memory', '64m', '--pids-limit', '32',
+    const collectorName = `${project}-collector`;
+    const collectorPhases = [];
+    let collectorIp;
+    let collectorHealthEndpoint;
+    const restoreCollectorConfigOwnership = (uid, gid, mode) => run([
+      'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0', '--cap-drop', 'ALL', '--cap-add', 'CHOWN',
+      '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '32',
       '--mount', `type=bind,source=${collectorConfigPath},target=/collector-config`,
       '--entrypoint', 'node', toolchain.nodeImage, '-e',
-      'require("node:fs").chownSync("/collector-config", 0, 0)']);
-    const collectorName = `${project}-collector`;
-    const logMounts = [];
-    for (const log of logFiles) {
-      const target = `/var/lib/docker/containers/${log.containerId}`;
-      logMounts.push('--mount', `type=bind,source=${dirname(log.logPath)},target=${target},readonly`);
-    }
+      `const fs=require('node:fs');fs.chownSync('/collector-config',0,0);fs.chmodSync('/collector-config',${mode});fs.chownSync('/collector-config',${uid},${gid});`,
+    ]);
+    const startCollector = async (selectedLogs, stage, selectedConfig, extraNetworks = []) => {
+      restoreCollectorConfigOwnership(1000, 1000, 0o600);
+      await writeFile(collectorConfigPath, dumpYaml(selectedConfig, {noRefs: true, lineWidth: 120}), {mode: 0o600});
+      restoreCollectorConfigOwnership(0, 0, 0o400);
+      const logMounts = selectedLogs.map(log => ({
+        source: dirname(log.logPath), destination: `/var/lib/docker/containers/${log.containerId}`, containerId: log.containerId,
+      }));
+      const mountArgs = logMounts.flatMap(({source, destination}) => ['--mount', `type=bind,source=${source},target=${destination},readonly`]);
+      run(['run', '-d', '--name', collectorName, '--network', backendNetwork,
+        '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '1', '--memory', `${config.telemetry.collector.memoryLimitMiB + config.telemetry.collector.memorySpikeMiB}m`, '--pids-limit', '128',
+        '--log-driver', 'json-file', '--log-opt', `max-size=${config.telemetry.logging.maxSizeMiB}m`, '--log-opt', `max-file=${config.telemetry.logging.maxFiles}`,
+        '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', '0:0', '--network-alias', 'otel-collector',
+        '--mount', `type=bind,source=${collectorConfigPath},target=/etc/otelcol-contrib/config.yaml,readonly`, ...mountArgs,
+        toolchain.otelCollectorImage, '--config=/etc/otelcol-contrib/config.yaml']);
+      run(['network', 'connect', '--alias', 'otel-collector', producerNetwork, collectorName]);
+      const networks = [backendNetwork, producerNetwork, ...extraNetworks].sort();
+      for (const network of extraNetworks) run(['network', 'connect', '--alias', 'otel-collector', network, collectorName]);
+      const actualNetworks = Object.keys(JSON.parse(run(['inspect', '--format', '{{json .NetworkSettings.Networks}}', collectorName]))).sort();
+      const bindings = JSON.parse(run(['inspect', '--format', '{{json .HostConfig.PortBindings}}', collectorName]));
+      const mounts = JSON.parse(run(['inspect', '--format', '{{json .Mounts}}', collectorName]));
+      const bindMounts = mounts.filter(mount => mount.Type === 'bind').map(({Source, Destination, RW}) => ({source: resolve(Source), destination: Destination, readOnly: RW === false}));
+      const expectedBindMounts = [
+        {source: resolve(collectorConfigPath), destination: '/etc/otelcol-contrib/config.yaml', readOnly: true},
+        ...logMounts.map(({source, destination}) => ({source: resolve(source), destination, readOnly: true})),
+      ].sort((a, b) => a.destination.localeCompare(b.destination));
+      bindMounts.sort((a, b) => a.destination.localeCompare(b.destination));
+      const hostConfig = JSON.parse(run(['inspect', '--format', '{{json .HostConfig}}', collectorName]));
+      const containerConfig = JSON.parse(run(['inspect', '--format', '{{json .Config}}', collectorName]));
+      const configStat = await lstat(collectorConfigPath);
+      const configRootReadonly = configStat.uid === 0 && configStat.gid === 0 && (configStat.mode & 0o777) === 0o400;
+      const safeRuntime = hostConfig.ReadonlyRootfs === true && hostConfig.Privileged !== true &&
+        containerConfig.User === '0:0' && hostConfig.CapDrop?.includes('ALL') === true &&
+        (hostConfig.CapAdd ?? []).length === 0 && hostConfig.PidMode !== 'host' && hostConfig.NetworkMode !== 'host' &&
+        hostConfig.SecurityOpt?.includes('no-new-privileges:true') === true && configRootReadonly;
+      if (JSON.stringify(actualNetworks) !== JSON.stringify(networks) || Object.values(bindings ?? {}).flat().length !== 0 ||
+          JSON.stringify(bindMounts) !== JSON.stringify(expectedBindMounts) || !safeRuntime)
+        throw new Error(`Collector ${stage} mounts, networks, or privilege restrictions did not match the selected exact logs`);
+      collectorIp = run(['inspect', '--format', `{{(index .NetworkSettings.Networks "${backendNetwork}").IPAddress}}`, collectorName]);
+      if (!/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(collectorIp)) throw new Error(`could not resolve Collector health address during ${stage}`);
+      collectorHealthEndpoint = `http://${collectorIp}:13133`;
+      collectorPhases.push({stage, selectedServices: selectedLogs.map(({service}) => service).sort(),
+        mountedContainerIds: logMounts.map(({containerId}) => containerId).sort(), bindMountsReadOnly: true,
+        healthAddress: `${collectorIp}:13133`, networks: actualNetworks, hostBindingsAbsent: true, rootUser: true, readOnlyRoot: true,
+        configRootOwnedMode0400: true, capabilitiesDropped: true, noNewPrivileges: true});
+    };
+    await writeFile(collectorConfigPath, dumpYaml(collectorConfig, {noRefs: true, lineWidth: 120}), {mode: 0o600});
+    // Docker's json-file logs are root-readable, so the Collector needs UID 0.
+    // Keep its capability set empty and its mounted config and logs read-only.
     add(collectorName);
-    run(['run', '-d', '--name', collectorName, '--network', backendNetwork,
-      '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '1', '--memory', `${config.telemetry.collector.memoryLimitMiB + config.telemetry.collector.memorySpikeMiB}m`, '--pids-limit', '128',
-      '--log-driver', 'json-file', '--log-opt', `max-size=${config.telemetry.logging.maxSizeMiB}m`, '--log-opt', `max-file=${config.telemetry.logging.maxFiles}`,
-      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', '0:0', '--network-alias', 'otel-collector',
-      '--mount', `type=bind,source=${collectorConfigPath},target=/etc/otelcol-contrib/config.yaml,readonly`, ...logMounts,
-      toolchain.otelCollectorImage, '--config=/etc/otelcol-contrib/config.yaml']);
-    run(['network', 'connect', '--alias', 'otel-collector', producerNetwork, collectorName]);
-    const collectorIp = run(['inspect', '--format', `{{(index .NetworkSettings.Networks "${backendNetwork}").IPAddress}}`, collectorName]);
-    if (!/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(collectorIp)) throw new Error('could not resolve Collector health address on isolated backend network');
-    const collectorNetworks = Object.keys(JSON.parse(run(['inspect', '--format', '{{json .NetworkSettings.Networks}}', collectorName]))).sort();
-    const collectorBindings = JSON.parse(run(['inspect', '--format', '{{json .HostConfig.PortBindings}}', collectorName]));
-    if (collectorNetworks.join(',') !== [backendNetwork, producerNetwork].sort().join(',') || Object.values(collectorBindings ?? {}).flat().length !== 0)
-      throw new Error('Collector fixture must have no host bindings and attach only to the backend and producer networks');
-    const collectorHealthEndpoint = `http://${collectorIp}:13133`;
+    await startCollector(logFiles, 'initial-startup', collectorConfig);
+    evidence.collectorPhases = collectorPhases;
 
     const networkProbe = JSON.parse(run(['exec', producerName, 'node', '-e',
       'const urls=process.argv.slice(1);Promise.all(urls.map(async url=>{try{const response=await fetch(url,{signal:AbortSignal.timeout(1500)});return {blocked:false,status:response.status};}catch{return {blocked:true};}})).then(results=>process.stdout.write(JSON.stringify(results)));',
@@ -1337,13 +1368,6 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     let collectorAttachedToLaunchNetwork = false;
     let launchCollectorOutageStartedAt;
     const launchStartedAtUs = Date.now() * 1000;
-    const restoreCollectorConfigOwnership = (uid, gid, mode) => run([
-      'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0', '--cap-drop', 'ALL', '--cap-add', 'CHOWN',
-      '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '32',
-      '--mount', `type=bind,source=${collectorConfigPath},target=/collector-config`,
-      '--entrypoint', 'node', toolchain.nodeImage, '-e',
-      `const fs=require('node:fs');fs.chownSync('/collector-config',0,0);fs.chmodSync('/collector-config',${mode});fs.chownSync('/collector-config',${uid},${gid});`,
-    ]);
     try {
       const {runLaunchPath} = await import('../../tests/observability/launch-path.mjs');
       const launchResult = await runLaunchPath({
@@ -1368,15 +1392,16 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           if (!Array.isArray(roleLogFiles) || roleLogFiles.length === 0) throw new Error('launch-path fixture supplied no exact runtime log files');
           if (!roleLogFiles.some(({service}) => service === 'edge-nginx')) throw new Error('launch-path fixture did not expose the real edge-nginx log source');
           const roleCollectorConfig = createCollectorConfig({config, logFiles: roleLogFiles, exporterToken: producerToken, openObserveIngestToken: openObserveToken});
-          restoreCollectorConfigOwnership(1000, 1000, 0o600);
-          await writeFile(collectorConfigPath, dumpYaml(roleCollectorConfig, {noRefs: true, lineWidth: 120}), {mode: 0o600});
-          restoreCollectorConfigOwnership(0, 0, 0o400);
-          run(['restart', collectorName]);
+          run(['rm', '-f', collectorName]);
+          collectorAttachedToLaunchNetwork = false;
+          await startCollector(roleLogFiles, 'launch-path-role-logs', roleCollectorConfig, [launchNetwork]);
+          collectorAttachedToLaunchNetwork = true;
           await waitFor(async () => {
             requireRunning({run, name: collectorName, secrets: sensitiveValues});
             const response = await fetch(collectorHealthEndpoint, {signal: AbortSignal.timeout(1000)}).catch(() => undefined);
             return response?.ok;
           }, {timeoutMs: 30000, intervalMs: 500, description: 'Collector restart with exact launch-path runtime logs'});
+          evidence.containerDiagnostics.push(captureContainerDiagnostics({name: collectorName, stage: 'launch-path-role-logs', secrets: sensitiveValues}));
           await verifyMetricSignal({baseUrl, authorization, organization, stream: `${config.telemetry.openObserve.streams.metrics}_nginx_connections_current`});
           const {summary: roleHealthSummary} = await waitForHealthyHttpCheckMetrics({
             baseUrl, authorization, organization, stream: `${config.telemetry.openObserve.streams.metrics}_httpcheck_status`,
@@ -1632,6 +1657,19 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       evidence.launchPathFixture = {status: launchResult.error === null ? 'PASS' : 'FAIL', cleanupVerified: launchResult.cleanupVerified === true, smokeOnly: true};
       if (evidence.launchPathCorrelation !== 'PASS') throw new Error('launch-path fixture returned without observing native telemetry proof');
       evidence.signals.push('real Kafka → Orders owners → SSE/browser refetch records and W3C trace observed in OpenObserve');
+      if (collectorAttachedToLaunchNetwork) {
+        run(['network', 'disconnect', '--force', launchNetwork, collectorName]);
+        collectorAttachedToLaunchNetwork = false;
+      }
+      run(['rm', '-f', collectorName]);
+      await startCollector(logFiles, 'post-launch-initial-logs', collectorConfig);
+      await waitFor(async () => {
+        requireRunning({run, name: collectorName, secrets: sensitiveValues});
+        const response = await fetch(collectorHealthEndpoint, {signal: AbortSignal.timeout(1000)}).catch(() => undefined);
+        return response?.ok;
+      }, {timeoutMs: 30000, intervalMs: 500, description: 'Collector restored with fixture-only producer timestamp parser'});
+      evidence.containerDiagnostics.push(captureContainerDiagnostics({name: collectorName, stage: 'post-launch-initial-logs', secrets: sensitiveValues}));
+      evidence.telemetryHealth.launchPathCollectorConfig = 'PASS';
     } finally {
       if (collectorAttachedToLaunchNetwork) {
         try { run(['network', 'disconnect', '--force', launchNetwork, collectorName]); } catch {}
