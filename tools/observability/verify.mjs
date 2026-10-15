@@ -1642,7 +1642,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               });
             }
             const metricFamilies = [
-              {name: 'db.client.connection.checkout_wait', owners: ['orders-service'], components: ['_count', '_sum', '_bucket']},
+              {name: 'db.client.connection.checkout_wait', owners: ['orders-service', 'orders-aroma-preparation', 'aroma-convergence'], components: ['_count', '_sum', '_bucket']},
               {name: 'db.client.connection.waiting', owners: ['orders-service'], components: ['']},
               {name: 'messaging.kafka.consumer.lag', owners: ['orders-aroma-preparation', 'realtime-gateway'], components: ['']},
               {name: 'messaging.kafka.event.age', owners: ['orders-aroma-preparation', 'realtime-gateway', 'aroma-convergence'], components: ['_count', '_sum', '_bucket']},
