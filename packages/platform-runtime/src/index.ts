@@ -470,6 +470,13 @@ export async function createRuntime(
       ? {}
       : {https: httpsOptions}),
     loggerInstance: loggerInstance as unknown as FastifyBaseLogger,
+    childLoggerFactory: (logger, bindings, options, request) => logger.child({
+      ...bindings,
+      ...withCorrelationFields(createCorrelationContext(
+        request.headers,
+        typeof bindings["reqId"] === "string" ? bindings["reqId"] : undefined,
+      )),
+    }, options),
     genReqId: (request) =>
       createCorrelationContext(request.headers).correlationId,
   });
@@ -656,7 +663,6 @@ export async function createRuntime(
     const correlation = createCorrelationContext(request.headers, request.id);
     request.correlationContext = correlation;
     setCorrelationResponseHeaders(reply, correlation);
-    request.log = request.log.child(withCorrelationFields(correlation));
     let parent = otelContext.active();
     if (correlation.traceparent !== undefined) {
       const [version, traceId, spanId, flags] = correlation.traceparent.split("-");

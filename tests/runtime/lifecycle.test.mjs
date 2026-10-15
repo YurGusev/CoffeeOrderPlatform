@@ -683,6 +683,56 @@ void test("readiness checks fail closed, recover, and expose correlation context
   await stopApp(app);
 });
 
+void test("automatic request logs carry validated correlation fields", async () => {
+  const runtimePath = new URL("../../packages/platform-runtime/src/index.ts", import.meta.url).href;
+  const script = `
+    import {createRuntime} from ${JSON.stringify(runtimePath)};
+    const app = await createRuntime({name: "request-log-correlation-test", host: "127.0.0.1", port: 0, shutdownGraceMs: 100});
+    app.get("/log-context", async (request) => {
+      request.log.info("handler correlation probe");
+      return {ok: true};
+    });
+    await app.runtimeController.start();
+    await app.inject({method: "GET", url: "/log-context", headers: {
+      "x-correlation-id": "11111111-1111-4111-8111-111111111111",
+      traceparent: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+    }});
+    const invalid = await app.inject({method: "GET", url: "/log-context", headers: {
+      "x-correlation-id": "invalid",
+      traceparent: "invalid",
+    }});
+    process.stderr.write(JSON.stringify({fallbackCorrelationId: invalid.headers["x-correlation-id"]}) + "\\n");
+    await app.runtimeController.closeRuntime("SIGTERM");
+    await new Promise((resolve) => app.log.flush(resolve));
+  `;
+  const child = spawn(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  const exit = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({code, signal}));
+  });
+  assert.equal(exit.code, 0, stderr);
+  const fallbackCorrelationId = JSON.parse(stderr.trim()).fallbackCorrelationId;
+  const records = stdout.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  for (const message of ["incoming request", "request completed", "handler correlation probe"]) {
+    const eventRecords = records.filter((record) => record.runtime === "request-log-correlation-test" && record.msg === message);
+    const valid = eventRecords.find((record) => record.correlationId === "11111111-1111-4111-8111-111111111111");
+    assert.ok(valid, `${message} includes valid correlation ID`);
+    assert.equal(valid.traceparent, "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01");
+    const invalid = eventRecords.find((record) => record.correlationId === fallbackCorrelationId);
+    assert.ok(invalid, `${message} includes generated fallback correlation ID`);
+    assert.equal(Object.hasOwn(invalid, "traceparent"), false, `${message} omits invalid traceparent`);
+  }
+});
+
 void test("shutdown resources stop once in reverse order and repeated close is idempotent", async () => {
   const calls = [];
   const resource = (name) => ({
