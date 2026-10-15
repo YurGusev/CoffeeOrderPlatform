@@ -151,13 +151,20 @@ function inspectImage(runDocker, role, imageId) {
   return {role, imageId, repoDigests};
 }
 
-function nodeImageProbe(role, nodeVersion, forbiddenNames) {
+export function nodeImageProbe(role, nodeVersion, forbiddenNames) {
   const constants = JSON.stringify({role, nodeVersion, forbidden: forbiddenNames, prefixes: TOOLING_PREFIXES});
   return `const fs=require('node:fs'),path=require('node:path'),c=${constants};
 const forbidden=new Set(c.forbidden),isForbidden=n=>forbidden.has(n)||c.prefixes.some(prefix=>n.startsWith(prefix));
 let complete=true;const found=new Set(),visited=new Set();
-function manifest(file){try{const p=JSON.parse(fs.readFileSync(file,'utf8'));if(typeof p.name!=='string')complete=false;else if(isForbidden(p.name))found.add(p.name);}catch{complete=false;}}
-function walk(dir){let real;try{real=fs.realpathSync(dir);}catch{complete=false;return;}if(!real.startsWith('/app/')||visited.has(real))return;visited.add(real);let entries;try{entries=fs.readdirSync(dir,{withFileTypes:true});}catch{complete=false;return;}for(const entry of entries){const file=path.join(dir,entry.name);if(entry.name==='package.json'&&(entry.isFile()||entry.isSymbolicLink()))manifest(file);if(entry.isDirectory())walk(file);else if(entry.isSymbolicLink()){try{if(fs.statSync(file).isDirectory())walk(file);}catch{complete=false;}}}}
+function manifest(file){try{
+  const p=JSON.parse(fs.readFileSync(file,'utf8'));
+  if(p===null||typeof p!=='object'||Array.isArray(p)){complete=false;return;}
+  const parts=file.split('/'),nodeModules=parts.lastIndexOf('node_modules'),packageParts=parts.slice(nodeModules+1,-1);
+  const packageRoot=(packageParts.length===1&&!packageParts[0].startsWith('@'))||(packageParts.length===2&&packageParts[0].startsWith('@'));
+  if((Object.hasOwn(p,'name')&&typeof p.name!=='string')||(packageRoot&&typeof p.name!=='string'))complete=false;
+  else if(typeof p.name==='string'&&isForbidden(p.name))found.add(p.name);
+}catch{complete=false;}}
+function walk(dir){let real;try{real=fs.realpathSync(dir);}catch{complete=false;return;}if(!real.startsWith('/app/')||visited.has(real))return;visited.add(real);let entries;try{entries=fs.readdirSync(dir,{withFileTypes:true});}catch{complete=false;return;}for(const entry of entries){const file=path.join(dir,entry.name);if(entry.name==='package.json'&&(entry.isFile()||entry.isSymbolicLink()))manifest(file);if(entry.isDirectory())walk(file);else if(entry.isSymbolicLink()){try{if(fs.statSync(file).isDirectory())walk(file);}catch(error){if(error.code!=='ENOENT')complete=false;}}}}
 let packageName=null,rootForbidden=[];try{const root=JSON.parse(fs.readFileSync('/app/package.json','utf8'));packageName=root.name;if(typeof packageName!=='string')complete=false;for(const section of ['dependencies','devDependencies','optionalDependencies','peerDependencies'])for(const n of Object.keys(root[section]||{}))if(isForbidden(n))rootForbidden.push(n);}catch{complete=false;}
 let distMainPresent=false;try{distMainPresent=fs.statSync('/app/dist/main.js').isFile();}catch{}try{walk('/app/node_modules');}catch{complete=false;}for(const n of rootForbidden)found.add(n);
 const result={node:process.version,uid:process.getuid?.()??null,packageName,distMainPresent,packageScanComplete:complete,forbiddenPackages:[...found].sort()};

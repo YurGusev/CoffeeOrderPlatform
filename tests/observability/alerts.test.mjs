@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {runInNewContext} from 'node:vm';
+import path from 'node:path';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
 import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
-import {runtimeMetricFamilies, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
+import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
 const config = {telemetry: {
@@ -130,6 +132,71 @@ void test('issue 64 metric matrix derives all runtime owners and sanitizes probe
   assert.throws(() => summarizeRuntimeProbeOutput(JSON.stringify({secret: 'must never pass through'}), {
     role: 'orders-service', nodeVersion: '26.8.1',
   }), /runtime metrics probe assertion failed/u);
+});
+
+void test('generated Node image probe accepts nameless nested package metadata but keeps package roots strict', () => {
+  const runProbe = (files,links={}) => {
+    const directories = new Set(['/app']);
+    for (const file of Object.keys(files)) {
+      let parent = path.dirname(file);
+      while (parent.startsWith('/app/')) { directories.add(parent); parent = path.dirname(parent); }
+    }
+    for(const link of Object.keys(links)){let parent=path.dirname(link);while(parent.startsWith('/app/')){directories.add(parent);parent=path.dirname(parent);}}
+    const linkedPath=value=>{
+      for(const [link,target]of Object.entries(links))if(value===link||value.startsWith(`${link}/`))return target.error?value:`${target.path}${value.slice(link.length)}`;
+      return value;
+    };
+    const fs = {
+      realpathSync(value) { const linked=linkedPath(value);if (!directories.has(linked)) throw new Error('missing fixture directory'); return linked; },
+      readFileSync(value) { const linked=linkedPath(value);if (!Object.hasOwn(files, linked)) throw new Error('missing fixture file'); return files[linked]; },
+      statSync(value) {
+        if(links[value]?.error){const error=new Error('fixture stat failed');error.code=links[value].error;throw error;}
+        const linked=linkedPath(value);
+        return {isFile: () => Object.hasOwn(files, linked),isDirectory:()=>directories.has(linked)};
+      },
+      readdirSync(value) {
+        value=linkedPath(value);
+        if (!directories.has(value)) throw new Error('missing fixture directory');
+        const children = new Map();
+        for (const entry of [...directories, ...Object.keys(files),...Object.keys(links)]) {
+          if (!entry.startsWith(`${value}/`)) continue;
+          const rest = entry.slice(value.length + 1);
+          if (!rest.includes('/')) children.set(rest, Object.hasOwn(links,entry)?'symlink':Object.hasOwn(files, entry) ? 'file' : 'directory');
+          else {const child=path.join(value,rest.split('/')[0]);children.set(rest.split('/')[0],Object.hasOwn(links,child)?'symlink':'directory');}
+        }
+        return [...children].map(([name, kind]) => ({name,isFile:()=>kind==='file',isDirectory:()=>kind==='directory',isSymbolicLink:()=>kind==='symlink'}));
+      },
+    };
+    let output = '';
+    const runtimeProcess = {version:process.version,getuid:()=>1000,stdout:{write:value=>{output+=value;}},exitCode:0};
+    runInNewContext(nodeImageProbe('orders-service',process.versions.node,['typescript']),{process:runtimeProcess,require:name=>name==='node:fs'?fs:name==='node:path'?path:(()=>{throw new Error('unexpected module');})()});
+    return JSON.parse(output);
+  };
+  const base = {
+    '/app/package.json': JSON.stringify({name:'@coffee-platform/orders-service',dependencies:{}}),
+    '/app/dist/main.js': '',
+    '/app/node_modules/fastify/package.json': JSON.stringify({name:'fastify'}),
+    '/app/node_modules/.pnpm/@scope+lib@1/node_modules/@scope/lib/package.json': JSON.stringify({name:'@scope/lib'}),
+  };
+  const valid = runProbe({...base,'/app/node_modules/fastify/test/fixtures/package.json':JSON.stringify({type:'module'})});
+  assert.equal(valid.packageScanComplete,true);assert.deepEqual(valid.forbiddenPackages,[]);assert.equal(valid.pass,true);
+  for(const packageRoot of ['/app/node_modules/fastify/package.json','/app/node_modules/.pnpm/@scope+lib@1/node_modules/@scope/lib/package.json']){
+    const missingInstalledName = runProbe({...base,[packageRoot]:'{}'});
+    assert.equal(missingInstalledName.packageScanComplete,false);assert.equal(missingInstalledName.pass,false);
+  }
+  for(const invalidManifest of ['{invalid','[]','null','42','{"name":7}']){
+    const malformedNested = runProbe({...base,'/app/node_modules/fastify/test/fixtures/package.json':invalidManifest});
+    assert.equal(malformedNested.packageScanComplete,false);assert.equal(malformedNested.pass,false);
+  }
+  const forbiddenNested = runProbe({...base,'/app/node_modules/fastify/test/fixtures/package.json':JSON.stringify({name:'typescript'})});
+  assert.equal(forbiddenNested.packageScanComplete,true);assert.deepEqual(forbiddenNested.forbiddenPackages,['typescript']);assert.equal(forbiddenNested.pass,false);
+  const danglingWorkspaceAlias='/app/node_modules/.pnpm/node_modules/@coffee-platform/orders-service';
+  const missingTarget = runProbe(base,{[danglingWorkspaceAlias]:{error:'ENOENT'}});
+  assert.equal(missingTarget.packageScanComplete,true);assert.equal(missingTarget.pass,true);
+  const inaccessibleTarget = runProbe(base,{[danglingWorkspaceAlias]:{error:'EACCES'}});
+  assert.equal(inaccessibleTarget.packageScanComplete,false);assert.equal(inaccessibleTarget.pass,false);
+  const linkedForbidden = runProbe({...base,'/app/vendor/compiler/package.json':JSON.stringify({name:'typescript'})},{[danglingWorkspaceAlias]:{path:'/app/vendor/compiler'}});
+  assert.equal(linkedForbidden.packageScanComplete,true);assert.deepEqual(linkedForbidden.forbiddenPackages,['typescript']);assert.equal(linkedForbidden.pass,false);
 });
 
 void test('issue 64 metric matrix requires a source identity callback before any Docker work', async () => {
