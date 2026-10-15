@@ -129,6 +129,53 @@ function captureContainerDiagnostics({name, stage = 'observed', secrets = []}) {
   return {name, stage, state, ...(logs ? {errorOrWarningLines: logs} : {})};
 }
 
+function openObserveCgroupDiagnostics(name) {
+  const fields = {
+    cpuMax: 'NOT_CAPTURED',
+    cpuStat: {nr_periods: 'NOT_CAPTURED', nr_throttled: 'NOT_CAPTURED', throttled_usec: 'NOT_CAPTURED'},
+    memoryCurrent: 'NOT_CAPTURED',
+    memoryPeak: 'NOT_CAPTURED',
+    memoryMax: 'NOT_CAPTURED',
+  };
+  const script = [
+    'set -eu',
+    'read_value() { key="$1"; file="/sys/fs/cgroup/$2"; if [ -r "$file" ]; then IFS= read -r value < "$file" || value=; if [ -n "$value" ]; then printf "%s=%s\\n" "$key" "$value"; else printf "%s=NOT_CAPTURED\\n" "$key"; fi; else printf "%s=NOT_CAPTURED\\n" "$key"; fi; }',
+    'read_value cpuMax cpu.max',
+    'if [ -r /sys/fs/cgroup/cpu.stat ]; then /busybox awk \'$1 == "nr_periods" || $1 == "nr_throttled" || $1 == "throttled_usec" { print "cpuStat." $1 "=" $2 }\' /sys/fs/cgroup/cpu.stat; else printf "cpuStat.nr_periods=NOT_CAPTURED\\ncpuStat.nr_throttled=NOT_CAPTURED\\ncpuStat.throttled_usec=NOT_CAPTURED\\n"; fi',
+    'read_value memoryCurrent memory.current',
+    'read_value memoryPeak memory.peak',
+    'read_value memoryMax memory.max',
+  ].join('\n');
+  const result = spawnSync('docker', ['exec', name, '/busybox', 'sh', '-c', script], {
+    encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (result.error || result.status !== 0) return {status: 'NOT_CAPTURED', ...fields};
+  for (const line of (result.stdout ?? '').split(/\r?\n/u)) {
+    const separator = line.indexOf('=');
+    if (separator < 0) continue;
+    const key = line.slice(0, separator);
+    const value = line.slice(separator + 1);
+    if (value === 'NOT_CAPTURED') continue;
+    if (key === 'cpuMax') {
+      const match = /^(max|\d+)\s+(\d+)$/u.exec(value);
+      const quotaMicros = match?.[1] === 'max' ? null : Number(match?.[1]);
+      const periodMicros = Number(match?.[2]);
+      if (match && (quotaMicros === null || Number.isSafeInteger(quotaMicros)) && Number.isSafeInteger(periodMicros))
+        fields.cpuMax = {quotaMicros, periodMicros};
+    } else if (key.startsWith('cpuStat.')) {
+      const stat = key.slice('cpuStat.'.length);
+      const numericValue = Number(value);
+      if (Object.hasOwn(fields.cpuStat, stat) && /^\d+$/u.test(value) && Number.isSafeInteger(numericValue)) fields.cpuStat[stat] = numericValue;
+    } else if (['memoryCurrent', 'memoryPeak', 'memoryMax'].includes(key) && /^\d+$/u.test(value) && Number.isSafeInteger(Number(value))) {
+      fields[key] = Number(value);
+    } else if (key === 'memoryMax' && value === 'max') {
+      fields.memoryMax = 'max';
+    }
+  }
+  const values = [fields.cpuMax, ...Object.values(fields.cpuStat), fields.memoryCurrent, fields.memoryPeak, fields.memoryMax];
+  return {status: values.every(value => value !== 'NOT_CAPTURED') ? 'CAPTURED' : 'NOT_CAPTURED', ...fields};
+}
+
 function containerGeneration({run, name}) {
   return {
     id: run(['inspect', '--format', '{{.Id}}', name]),
@@ -853,6 +900,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
   const provenanceStart = await sourceIdentity(root);
   const absentFeatures = missingCpuFeatures(await readFile('/proc/cpuinfo', 'utf8'));
   const emulator = emulatorPath === undefined ? undefined : await inspectEmulator(emulatorPath);
+  const openObserveFixtureCpuLimit = emulator === undefined ? 2 : 4;
   if (!isAbsolute(probePath)) throw new Error('--probe path must be absolute');
   const probeSha256 = createHash('sha256').update(await readFile(probePath)).digest('hex');
   const hostTransport = hostTransportPath === undefined ? undefined : await inspectHostTransport(hostTransportPath, {root, run, emulator, probeSha256});
@@ -881,6 +929,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
   const sensitiveValues = [];
   const evidence = {runId, startedAt: new Date().toISOString(), provenanceStart, alerts: [], signals: [], retention: 'NOT_RUN', limitations: [], containerDiagnostics: []};
   evidence.executionMode = emulator === undefined ? 'native' : 'qemu-user-emulation';
+  evidence.openObserveResourceLimits = {expectedCpuLimitCores: openObserveFixtureCpuLimit, expectedMemoryLimitMiB: null, status: 'NOT_RUN'};
   if (emulator !== undefined) evidence.emulator = {path: emulator.path, version: emulator.version, sha256: emulator.sha256, startupVerified: false, capacityEvidence: 'NOT_CLAIMED', hostCpuFeaturesMissing: absentFeatures};
   evidence.bootstrapProbe = {path: probePath, sha256: 'unverified'};
   if (hostTransport !== undefined) evidence.hostTransport = hostTransport;
@@ -937,13 +986,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     if (typeof runtimeCredentialPlaceholder !== 'string' || runtimeCredentialPlaceholder.length === 0)
       throw new Error('telemetry.openObserve.validationMarker must be configured for isolated runtime validation');
     const openObserve = config.telemetry.openObserve;
+    evidence.openObserveResourceLimits.expectedMemoryLimitMiB = openObserve.memoryLimitMiB;
     if (openObserve.telemetryEnabled !== false || openObserve.mmdbDownloadEnabled !== false || openObserve.modelPricingEnabled !== false)
       throw new Error('isolated OpenObserve must disable telemetry and optional external GeoIP/model-pricing downloads');
     const fixtureIngestWindowHours = config.telemetry.openObserve.retentionDays * 24 + 48;
     add(openObserveName);
     const emulatorMount = emulator === undefined ? [] : ['--mount', `type=bind,source=${emulator.path},target=/run/tools/qemu-x86_64,readonly`];
     run(['run', '-d', '--name', openObserveName, '--network', backendNetwork, '--network-alias', 'openobserve',
-      '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '2', '--memory', `${openObserve.memoryLimitMiB}m`, '--pids-limit', '128',
+      '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', String(openObserveFixtureCpuLimit), '--memory', `${openObserve.memoryLimitMiB}m`, '--pids-limit', '128',
       '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
       '--mount', `type=volume,source=${storage.volumeName},target=/data`,
       '--mount', `type=bind,source=${probePath},target=/busybox,readonly`,
@@ -1000,8 +1050,22 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       error.message += `; container loopback health=${evidence.normalStartupDiagnosis.containerLoopbackHealth}; published ports=${evidence.normalStartupDiagnosis.publishedPortCount}; backend address present=${evidence.normalStartupDiagnosis.backendAddressPresent}`;
       throw error;
     }
-    evidence.containerDiagnostics.push(captureContainerDiagnostics({name: openObserveName, stage: 'normal-startup', secrets: sensitiveValues}));
+    evidence.containerDiagnostics.push({
+      ...captureContainerDiagnostics({name: openObserveName, stage: 'normal-startup', secrets: sensitiveValues}),
+      cgroup: openObserveCgroupDiagnostics(openObserveName),
+    });
     if (emulator !== undefined) evidence.emulator.startupVerified = true;
+    const openObserveHostLimits = run(['inspect', '--format', '{{.HostConfig.NanoCpus}}|{{.HostConfig.Memory}}', openObserveName]).split('|').map(Number);
+    const expectedNanoCpus = openObserveFixtureCpuLimit * 1_000_000_000;
+    const expectedMemoryBytes = openObserve.memoryLimitMiB * 1024 * 1024;
+    evidence.openObserveResourceLimits = {
+      expectedCpuLimitCores: openObserveFixtureCpuLimit,
+      actualNanoCpus: openObserveHostLimits[0],
+      expectedMemoryLimitMiB: openObserve.memoryLimitMiB,
+      actualMemoryBytes: openObserveHostLimits[1],
+      status: openObserveHostLimits[0] === expectedNanoCpus && openObserveHostLimits[1] === expectedMemoryBytes ? 'PASS' : 'FAIL',
+    };
+    if (evidence.openObserveResourceLimits.status !== 'PASS') throw new Error('OpenObserve fixture resource limits do not match the expected CPU quota and configured memory limit');
     const normalEnvironment = JSON.parse(run(['inspect', '--format', '{{json .Config.Env}}', openObserveName]));
     const normalMounts = JSON.parse(run(['inspect', '--format', '{{json .Mounts}}', openObserveName]));
     const openObserveBindings = JSON.parse(run(['inspect', '--format', '{{json .HostConfig.PortBindings}}', openObserveName]));
@@ -2150,14 +2214,17 @@ keep=1`;
     for (const name of containers) {
       if (capturedNames.has(name)) continue;
       const diagnostic = captureContainerDiagnostics({name, stage: 'failure-before-cleanup', secrets: sensitiveValues});
-      if (!diagnostic.state.unavailable || diagnostic.errorOrWarningLines) evidence.containerDiagnostics.push(diagnostic);
+      if (name.endsWith('-openobserve')) diagnostic.cgroup = openObserveCgroupDiagnostics(name);
+      if (!diagnostic.state.unavailable || diagnostic.errorOrWarningLines || name.endsWith('-openobserve')) evidence.containerDiagnostics.push(diagnostic);
     }
     if (Array.isArray(error.containerDiagnostics)) {
       for (const diagnostic of error.containerDiagnostics) evidence.containerDiagnostics.push(diagnostic);
     }
   } finally {
     for (const name of containers.filter(value => value.endsWith('-openobserve') || value.endsWith('-collector'))) {
-      evidence.containerDiagnostics.push(captureContainerDiagnostics({name, stage: 'pre-cleanup', secrets: sensitiveValues}));
+      const diagnostic = captureContainerDiagnostics({name, stage: 'pre-cleanup', secrets: sensitiveValues});
+      if (name.endsWith('-openobserve')) diagnostic.cgroup = openObserveCgroupDiagnostics(name);
+      evidence.containerDiagnostics.push(diagnostic);
     }
     for (const name of containers.reverse()) stop(name);
     for (const network of createdNetworks.reverse()) {

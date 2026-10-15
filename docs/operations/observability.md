@@ -106,6 +106,9 @@ OpenObserve требует AVX/AES. Published image не содержит shell/
 static BusyBox проверяется по BOM hash. G14 допускает явный временный QEMU test
 fixture с записанными version/hash; эмуляция не доказывает capacity или production
 admission и удаляется после проверки.
+В функциональном QEMU-прогоне лимит CPU только OpenObserve fixture равен 4 вместо
+2 в нативном прогоне; configured memory limit остаётся 512 MiB. Это изменение
+условий теста не является оценкой production capacity или производительности.
 
 Storage provisioner создаёт отдельный bounded ext4 volume на loop-backed файле.
 Привилегии получает только этот init helper. Чужие volumes не переиспользуются;
