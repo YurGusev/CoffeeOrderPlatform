@@ -1230,7 +1230,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     add(sinkName);
     run(['run', '-d', '--name', sinkName, `--network=container:${openObserveName}`,
       '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '0.25', '--memory', '64m', '--pids-limit', '16',
-      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
+      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', `${process.getuid()}:${process.getgid()}`,
       '--mount', `type=bind,source=${resolve(dirname(fileURLToPath(import.meta.url)), 'alert-sink.mjs')},target=/alert-sink.mjs,readonly`,
       '--mount', `type=bind,source=${sinkPath},target=/evidence/alert-events.jsonl`,
       toolchain.nodeImage, 'node', '/alert-sink.mjs', '/evidence/alert-events.jsonl']);
