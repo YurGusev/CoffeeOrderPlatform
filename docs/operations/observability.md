@@ -4,12 +4,24 @@ Operations владеет #64 и обязательным predecessor G14 в #13
 evidence path — `pnpm test:observability` и `evidence/handoffs/issue-64.yaml`.
 Наличие producer или конфигурации не означает PASS.
 
-PASS этой команды подтверждает Operations-predecessor #64: backend, именованные
-owner instrumentation points и synthetic launch path. Evidence перечисляет
-фактически проверенные роли; SQL-backed convergence helper не заменяет постоянно
-работающий runtime. Полная проверка health/readiness и применимых signals всех
-14 Node runtime остаётся обязательной для #13 по launch specification; её статус
-не выводится из успешной сборки образов или частичного launch path.
+`pnpm test:observability` включает canonical runtime metric matrix #64 в уже
+существующий Compose recovery-proof запуск через trusted programmatic hooks.
+Матрица проверяет все 14 Node runtime и native nginx до стандартного Compose
+cleanup; она не использует `--keep`, pinning ресурсов или отдельную параллельную
+pipeline. Вызовы идут по фактическому self-mTLS пути для live/ready/text metrics
+и ожидаемых 4xx. Для каждого Node runtime проверяются OTLP HTTP/error и producer
+metrics. Матрица требует 10 DB-waiting, 3 consumer-lag и 5 scoped Outbox-age
+series. Событийные и транзакционные samples принимаются только после реальной
+активности существующего owner launch: шесть ролей и SQL-backed convergence
+helper; helper не заменяет постоянно работающий runtime. До default cleanup
+сканируются все 15 final images по фактическим image IDs.
+
+Проверка фиксируется полем `runtimeMetricMatrix` в результате команды. Это
+functional evidence #64; оно само по себе не означает PASS полного G14 и не
+доказывает capacity. #13 по-прежнему владеет launch-level full-system G14:
+SLO, chaos/failure admission, capacity и сквозные browser/business/DB/Kafka/SSE
+критерии. Успешная сборка образов или частичный launch path не заменяют эти
+проверки.
 
 ## Authority и поток
 
@@ -153,4 +165,6 @@ Disk pressure заполняет только собственный fixture tel
 `retention-result.json`, `runtime-health-matrix.json` и `result.json`.
 Любой обязательный NOT_RUN/FAIL сохраняет G14 закрытым. Handoff перечисляет
 executed commands, digests и границы доказательства; synthetic fixture не
-подменяет сквозной business/DB/Kafka/SSE launch trace.
+подменяет сквозной business/DB/Kafka/SSE launch trace. Runtime matrix является
+functional #64 evidence; QEMU fixture может подтвердить только функциональный
+путь и не является capacity или production-admission доказательством.

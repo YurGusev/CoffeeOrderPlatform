@@ -253,7 +253,25 @@ export async function runLaunchPath({telemetry,onNetwork,onRolesReady,observeBas
         for(const role of roleNames){const name=`${options.runId}-${role}`;const s=JSON.parse(await docker('inspect',name))[0];assert.equal(s.State.Running,true,`${role} runtime remains alive at baseline checkpoint`);assert.equal(s.Config.Labels['coffee.issue12.realtime-soak'],options.runId);roles.push({role,containerId:s.Id,imageId:s.Image,logPath:s.LogPath});}
         const baselineReceipt={verified:true,correlationId:commandCorrelation,traceId:traceIdValue,sourceEvents:sent.length,sourceBrokerAckCount:sent.length,sourceInboxCommitted:sent.every(receipt=>receipt.state==='Processed'),sourceMessageSha256:sent.map(receipt=>receipt.messageIdSha256),projectionPresent:true,realtimeOutboxPersisted:true,sseReady:true,nodeReadiness,ownerRefetch:{status:baselineOwner.status,requestAndResponseCorrelationMatched:true,requestAndResponseTraceparentMatched:true,traceparentSha256:shortHash(traceparent)},durationsMs:{sourceKafkaAndInbox:sourceDurationMs,ownerProjectionRead:projectionDurationMs,browserSseAndOwnerRefetch:Math.round(performance.now()-browserStartedAt)},roles:roles.map(({role,containerId,imageId})=>({role,containerId,imageId,running:true}))};
         phase='baseline-observed-during-collector-outage';
-        await observeBaseline(baselineReceipt);
+        await observeBaseline(baselineReceipt,{
+          probeNativeAccess:async()=>{
+            const correlationId=randomUUID();
+            const response=await page.evaluate(({orderRef,correlationId,parent})=>new Promise(resolve=>{
+              const request=new XMLHttpRequest();
+              request.open('GET',`/api/client-v1/orders/${orderRef}`);
+              request.responseType='arraybuffer';
+              request.timeout=5000;
+              request.setRequestHeader('x-correlation-id',correlationId);
+              request.setRequestHeader('traceparent',parent);
+              const finish=()=>resolve({status:request.status,correlationMatched:request.getResponseHeader('x-correlation-id')===correlationId});
+              request.onload=finish;request.onerror=finish;request.ontimeout=finish;request.onabort=finish;
+              request.send();
+            }),{orderRef:state.orderRef,correlationId,parent:traceparent});
+            assert.equal(response.status,200,'post-outage native-access probe uses a successful read-only owner GET');
+            assert.equal(response.correlationMatched,true,'owner GET preserves the probe correlation ID');
+            return {correlationId,status:response.status,correlationMatched:response.correlationMatched};
+          },
+        });
         const command=await page.evaluate(async({orderRef,expectedVersion,correlationId,parent})=>{
           const csrf=document.cookie.split('; ').map(v=>v.trim()).find(v=>v.startsWith('__Host-coffee-csrf='))?.slice('__Host-coffee-csrf='.length);
           const response=await fetch(`/api/client-v1/orders/${orderRef}/commands/request-aroma-reconciliation`,{method:'POST',headers:{'content-type':'application/json','idempotency-key':crypto.randomUUID(),'x-correlation-id':correlationId,traceparent:parent,...(csrf?{'x-csrf-token':csrf}:{})},body:JSON.stringify({expectedVersion,reason:'G14 synthetic correlation proof'})});

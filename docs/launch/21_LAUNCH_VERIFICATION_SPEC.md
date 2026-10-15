@@ -160,6 +160,10 @@ restore каждой DB <=10m и совокупно <=30m на записанн�
 Владелец реализации — #64 (Operations), обязательный accepted
 predecessor #13. Он поставляет Collector/OpenObserve, exporters, alert evaluation
 и `pnpm test:observability`; #13 проверяет этот результат, а не создаёт backend.
+Внутри этой команды canonical `runtimeMetricMatrix` проверяет functional
+наблюдаемость всех 14 Node runtime в recovery-proof Compose запуске и native nginx.
+Это evidence не закрывает launch-level full-system G14: #13 отдельно принимает
+SLO, chaos/failure, capacity и полный browser/business/DB/Kafka/SSE путь.
 Handoff — `evidence/handoffs/issue-64.yaml`. В
 `evidence/observability/<run-id>/` обязательны `alert-transitions.json`,
 `correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`,
@@ -172,7 +176,18 @@ G14 закрытым. Внешние notifications запрещены. Един�
 `orderRef` и correlation связывают долгоживущий order с несколькими traces.
 Бесконечный span на весь lifecycle заказа не требуется.
 
-Для каждого из 14 Node runtime проверить:
+Canonical runtime matrix #64 проверяет для каждого из 14 Node runtime реальные
+self-mTLS запросы к `/health/live`, `/health/ready`, text OpenMetrics и ожидаемые
+4xx, а также доступность OTLP HTTP/error и producer metrics. Матрица проверяет
+наличие 10 DB-waiting, 3 consumer-lag и 5 scoped Outbox-age series. Событийные и
+транзакционные samples допускаются только после реальной активности существующего
+owner launch (шесть ролей и SQL-backed convergence helper). Перед стандартным
+Compose cleanup все 15 final images сканируются по фактическим image IDs; запуск
+не использует `--keep`, закрепление контейнеров или отдельную parallel pipeline.
+Результат матрицы фиксируется ровно в поле `runtimeMetricMatrix`.
+
+Матрица #64 не доказывает full-system launch acceptance и не измеряет capacity.
+Для #13 остаются обязательными:
 
 - `/health/live` 200 при живом process;
 - `/health/ready` 200 только при готовых обязательных зависимостях и 503 при их

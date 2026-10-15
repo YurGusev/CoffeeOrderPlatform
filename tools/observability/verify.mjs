@@ -392,6 +392,11 @@ export function traceSpanInventory(records) {
   return Object.fromEntries(Object.entries(inventory).map(([service, names]) => [service, [...names].sort()]));
 }
 
+export function nativeAccessLogFilter(correlationId) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(correlationId)) throw new TypeError('native access probe requires a UUID');
+  return `"service_name" = 'edge-nginx' AND "body_correlation_id" = '${correlationId}'`;
+}
+
 function metricRecordServices(records) {
   return [...new Set(records.flatMap(record => Object.entries(record ?? [])
     .filter(([key, value]) => /service_name/iu.test(key) && typeof value === 'string')
@@ -400,6 +405,10 @@ function metricRecordServices(records) {
 
 export async function waitForOwnedMetricFamilySamples({baseUrl, authorization, organization, metricsPrefix, family, liveMetricStreams, startTimeUs, fetchImpl = fetch, timeoutMs = 60000, intervalMs = 2000}) {
   let availableStreams = new Set(liveMetricStreams);
+  const attributeFilters = Object.entries(family.attributes ?? {}).map(([key, value]) => {
+    if (!/^[a-z][a-z0-9_]*$/u.test(key) || typeof value !== 'string') throw new TypeError('metric filter must use normalized attribute names and string values');
+    return `"${key}" = '${value.replaceAll("'", "''")}'`;
+  });
   return waitFor(async () => {
     const base = `${metricsPrefix}_${family.name.replace(/[^a-zA-Z0-9_]/gu, '_')}`;
     const candidateStreams = family.components.map(component => `${base}${component}`).filter(stream => availableStreams.has(stream));
@@ -411,7 +420,7 @@ export async function waitForOwnedMetricFamilySamples({baseUrl, authorization, o
         const escapedOwner = owner.replaceAll("'", "''");
         const samples = rows(await streamSearch({
           baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs, fetchImpl,
-          filterSql: `"service_name" = '${escapedOwner}'`,
+          filterSql: [`"service_name" = '${escapedOwner}'`, ...attributeFilters].join(' AND '),
         }));
         const ownedSamples = samples.filter(sample => metricRecordServices([sample]).includes(owner));
         if (ownedSamples.length > 0) {
@@ -421,13 +430,13 @@ export async function waitForOwnedMetricFamilySamples({baseUrl, authorization, o
       }
       if (services.size > 0) matches.push({stream, sampleCount, services: [...services]});
     }
-    if (matches.length > 0) return matches;
+    if (matches.length === family.components.length && matches.every(match => family.owners.every(owner => match.services.includes(owner)))) return matches;
     const inventory = streamEntries(await api({
       fetchImpl, baseUrl, authorization, path: `/api/${encodeURIComponent(organization)}/streams`,
     }));
     availableStreams = new Set(inventory.filter(stream => stream?.stream_type === 'metrics' && typeof stream?.name === 'string').map(stream => stream.name));
     return false;
-  }, {timeoutMs, intervalMs, description: `OpenObserve metric family ${family.name} from an owning runtime`});
+  }, {timeoutMs, intervalMs, description: `OpenObserve metric family ${family.name} from every owning runtime (${family.owners.join(', ')})`});
 }
 
 function metricRecordAttribute(record, name) {
@@ -648,15 +657,19 @@ export function observabilityVerificationCoverage(evidence) {
   const launchNodeRuntimes = launchRoles.filter(role => NODE_RUNTIME_TARGETS.includes(role));
   const metricApplicability = evidence.metricApplicability ?? {};
   const convergenceProof = metricApplicability.aromaConvergenceProof;
+  const matrixNodeRuntimes = evidence.runtimeMetricMatrix?.status === 'PASS'
+    ? (evidence.runtimeMetricMatrix.runtimeMetrics?.roles ?? []).map(({role}) => role).filter(role => NODE_RUNTIME_TARGETS.includes(role))
+    : [];
   return {
     verificationScope: 'issue-64-operations-predecessor',
     statusAppliesTo: 'issue-64 mandatory Operations backend and instrumentation gates',
     fullSystemG14: {
       status: 'NOT_RUN',
       owner: '#13',
-      reason: 'This verification does not exercise live health, readiness, and OpenMetrics for every Node runtime required by launch specification §8.',
+      reason: 'Issue #64 verifies functional telemetry; full-system SLO, chaos, capacity and business launch acceptance remain owned by #13.',
       requiredNodeRuntimeCount: NODE_RUNTIME_TARGETS.length,
       launchPathNodeRuntimes: launchNodeRuntimes,
+      metricMatrixNodeRuntimes: matrixNodeRuntimes,
       launchPathNativeNginx: launchRoles.includes('edge-nginx'),
       launchPathKafkaRole: launchRoles.includes('kafka'),
       convergenceMetricProof: {
@@ -665,7 +678,7 @@ export function observabilityVerificationCoverage(evidence) {
         status: convergenceProof === undefined ? 'NOT_RUN' : 'PASS',
       },
       observedOwnerMetricFamilies: Object.keys(metricApplicability).filter(name => name !== 'aromaConvergenceProof').sort(),
-      nodeRuntimesNotClaimedAsLive: NODE_RUNTIME_TARGETS.filter(role => !launchNodeRuntimes.includes(role)),
+      nodeRuntimesNotClaimedAsLive: NODE_RUNTIME_TARGETS.filter(role => !launchNodeRuntimes.includes(role) && !matrixNodeRuntimes.includes(role)),
     },
   };
 }
@@ -687,6 +700,7 @@ async function persistEvidence({root, evidence, secrets = []}) {
   const outage = evidence.outageRestart;
   const verificationCoverage = observabilityVerificationCoverage(evidence);
   const runtimeHealthGates = [
+    evidence.runtimeMetricMatrix?.status,
     evidence.runtimeShutdownStatus,
     evidence.networkIsolation?.status,
     evidence.networkIsolation?.launchPathNetworkStatus,
@@ -720,6 +734,7 @@ async function persistEvidence({root, evidence, secrets = []}) {
       gracefulShutdown: evidence.runtimeShutdown ?? 'NOT_RUN',
       telemetryHealth: evidence.telemetryHealth ?? {},
       metricApplicability: evidence.metricApplicability ?? {},
+      runtimeMetricMatrix: evidence.runtimeMetricMatrix ?? {status: 'NOT_RUN'},
       processCounterRestart: evidence.processCounterRestart ?? {},
       diskPressure: evidence.diskPressure ?? {},
       networkIsolation: evidence.networkIsolation ?? 'NOT_RUN',
@@ -1398,7 +1413,36 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     let launchNetwork;
     let collectorAttachedToLaunchNetwork = false;
     let launchCollectorOutageStartedAt;
+    let launchNginxContainer;
     const launchStartedAtUs = Date.now() * 1000;
+    const waitForNativeAccess = async correlationId => {
+      try {
+        return await waitFor(async () => {
+          const found = rows(await streamSearch({baseUrl, authorization, organization,
+            stream: config.telemetry.openObserve.streams.logs, filterSql: nativeAccessLogFilter(correlationId), startTimeUs: launchStartedAtUs}));
+          return found.some(record => record.service_name === 'edge-nginx' && hasExactValue(record, correlationId)) ? found : false;
+        }, {timeoutMs: 60000, intervalMs: 2000, description: 'real edge-nginx access log correlated in OpenObserve'});
+      } catch (error) {
+        const diagnostic = {producer: {available: false}, backend: {available: false}};
+        try {
+          const records = run(['logs', '--tail', '1000', launchNginxContainer]).split('\n').flatMap(line => {
+            try { return [JSON.parse(line)]; } catch { return []; }
+          });
+          diagnostic.producer = {available: true, recordCount: records.length,
+            matchingCorrelationRecords: records.filter(record => record.correlation_id === correlationId).length,
+            recordKeys: [...new Set(records.flatMap(record => Object.keys(record)))].slice(0, 40)};
+        } catch {}
+        try {
+          const records = rows(await streamSearch({baseUrl, authorization, organization,
+            stream: config.telemetry.openObserve.streams.logs, filterSql: '"service_name" = \'edge-nginx\'', startTimeUs: launchStartedAtUs}));
+          diagnostic.backend = {available: true, recordCount: records.length,
+            matchingCorrelationRecords: records.filter(record => hasExactValue(record, correlationId)).length,
+            recordKeys: [...new Set(records.flatMap(record => Object.keys(record)))].slice(0, 40)};
+        } catch {}
+        evidence.nativeAccessLogDiagnostics = diagnostic;
+        throw error;
+      }
+    };
     try {
       const {runLaunchPath} = await import('../../tests/observability/launch-path.mjs');
       const launchResult = await runLaunchPath({
@@ -1422,6 +1466,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         onRolesReady: async ({logFiles: roleLogFiles}) => {
           if (!Array.isArray(roleLogFiles) || roleLogFiles.length === 0) throw new Error('launch-path fixture supplied no exact runtime log files');
           if (!roleLogFiles.some(({service}) => service === 'edge-nginx')) throw new Error('launch-path fixture did not expose the real edge-nginx log source');
+          launchNginxContainer = roleLogFiles.find(({service}) => service === 'edge-nginx').containerId;
           const roleCollectorConfig = createCollectorConfig({config, logFiles: roleLogFiles, exporterToken: producerToken, openObserveIngestToken: openObserveToken});
           run(['rm', '-f', collectorName]);
           collectorAttachedToLaunchNetwork = false;
@@ -1445,7 +1490,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           launchCollectorOutageStartedAt = performance.now();
           run(['stop', collectorName]);
         },
-        observeBaseline: async baseline => {
+        observeBaseline: async (baseline, {probeNativeAccess}) => {
           const expectedRoles = ['kafka', 'orders-service', 'orders-aroma-preparation', 'api-internal', 'api-public', 'realtime-gateway', 'edge-gateway', 'edge-nginx'];
           const expectedNodeRoles = ['edge-gateway', 'api-public', 'api-internal', 'orders-service', 'orders-aroma-preparation', 'realtime-gateway'];
           const observedRoles = new Set((baseline?.roles ?? []).filter(role => role.running === true).map(role => role.role));
@@ -1477,6 +1522,10 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             baseUrl, authorization, organization, stream: `${config.telemetry.openObserve.streams.metrics}_httpcheck_status`,
             startTimeUs: collectorRestartedAtUs, description: 'healthy native status samples after launch-path Collector outage',
           });
+          const nativeProbe = await probeNativeAccess();
+          const nativeProbeRows = await waitForNativeAccess(nativeProbe.correlationId);
+          evidence.telemetryHealth.nativeAccessAfterRestart = {status: 'PASS', ownerGetStatus: nativeProbe.status,
+            correlationMatched: nativeProbe.correlationMatched, accessLogRows: nativeProbeRows.length};
           evidence.telemetryHealth.launchPathOutage = {
             collectorStopped: true,
             collectorRestarted: true,
@@ -1565,15 +1614,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               error.message += `; missing same-trace spans=${JSON.stringify(missingSpans)}`;
               throw error;
             });
-            const edgeLogRows = await waitFor(async () => {
-              const found = rows(await streamSearch({
-                baseUrl, authorization, organization, stream: config.telemetry.openObserve.streams.logs,
-                filterSql: `"body_correlation_id" = '${proof.correlationId}'`, startTimeUs: launchStartedAtUs,
-              }));
-              return found.some(record => /service_name/iu.test(Object.keys(record ?? {}).join(' ')) &&
-                Object.entries(record ?? {}).some(([key, value]) => /service_name/iu.test(key) && value === 'edge-nginx') &&
-                hasExactValue(record, proof.correlationId)) ? found : false;
-            }, {timeoutMs: 60000, intervalMs: 2000, description: 'real edge-nginx access log correlated in OpenObserve'});
+            const edgeLogRows = await waitForNativeAccess(proof.correlationId);
             const separateSpanNames = expectedTelemetry.separateRealtimeSpanNames ?? [];
             let separateRealtimeSpans = [];
             if (separateSpanNames.length) {
@@ -1596,9 +1637,9 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               {name: 'db.client.connection.checkout_wait', owners: ['orders-service'], components: ['_count', '_sum', '_bucket']},
               {name: 'db.client.connection.waiting', owners: ['orders-service'], components: ['']},
               {name: 'messaging.kafka.consumer.lag', owners: ['orders-aroma-preparation', 'realtime-gateway'], components: ['']},
-              {name: 'messaging.kafka.event.age', owners: ['orders-service'], components: ['_count', '_sum', '_bucket']},
+              {name: 'messaging.kafka.event.age', owners: ['orders-aroma-preparation', 'realtime-gateway', 'aroma-convergence'], components: ['_count', '_sum', '_bucket']},
               {name: 'messaging.outbox.oldest_unpublished.age', owners: ['orders-service', 'orders-aroma-preparation'], components: ['']},
-              {name: 'messaging.inbox.received.age', owners: ['orders-aroma-preparation'], components: ['_count', '_sum', '_bucket']},
+              {name: 'messaging.inbox.received.age', owners: ['orders-aroma-preparation', 'aroma-convergence'], components: ['_count', '_sum', '_bucket']},
               {name: 'coffee_realtime_invalidation_attempts_total', owners: ['realtime-gateway'], components: ['']},
               {name: 'coffee_realtime_invalidation_dropped_total', owners: ['realtime-gateway'], components: ['']},
               {name: 'coffee_realtime_connections', owners: ['realtime-gateway'], components: ['']},
@@ -1702,6 +1743,64 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       }
       if (previousTmpDir === undefined) delete process.env.TMPDIR;
       else process.env.TMPDIR = previousTmpDir;
+    }
+
+    const matrixProject = `coffee-issue64-final-${runId.slice(0, 8)}`;
+    let matrixNetworks = [];
+    const detachMatrixNetworks = () => {
+      if (matrixNetworks.length === 0) return;
+      if (!run(['ps', '--all', '--quiet', '--filter', `name=^/${collectorName}$`])) { matrixNetworks = []; return; }
+      const attached = JSON.parse(run(['inspect', '--format', '{{json .NetworkSettings.Networks}}', collectorName]));
+      for (const network of matrixNetworks) {
+        if (Object.hasOwn(attached, network)) run(['network', 'disconnect', '--force', network, collectorName]);
+      }
+      matrixNetworks = [];
+    };
+    evidence.runtimeMetricMatrix = {status: 'RUNNING', project: matrixProject};
+    try {
+      const {verifyRuntimeMetricMatrix} = await import('../../tests/observability/runtime-matrix.mjs');
+      evidence.runtimeMetricMatrix = await verifyRuntimeMetricMatrix({
+        config, exporterToken: producerToken, projectName: matrixProject, runDocker: run,
+        nodeVersion: toolchain.node, nginxVersion: toolchain.nginxVersion,
+        onRolesReady: async ({logFiles: matrixLogs, networks}) => {
+          matrixNetworks = [...new Set(Object.values(networks))];
+          if (matrixNetworks.length !== 4) throw new Error('runtime matrix requires four distinct application trust zones');
+          const matrixCollectorConfig = createCollectorConfig({config, logFiles: matrixLogs, exporterToken: producerToken, openObserveIngestToken: openObserveToken});
+          run(['rm', '-f', collectorName]);
+          await startCollector(matrixLogs, 'all-runtime-metric-matrix', matrixCollectorConfig, matrixNetworks);
+          await waitFor(async () => {
+            requireRunning({run, name: collectorName, secrets: sensitiveValues});
+            return (await fetch(collectorHealthEndpoint, {signal: AbortSignal.timeout(1000)}).catch(() => undefined))?.ok;
+          }, {timeoutMs: 30000, intervalMs: 500, description: 'Collector with all fourteen runtime log sources'});
+          const zones = [];
+          for (const network of matrixNetworks) {
+            const probes = JSON.parse(run(['run', '--rm', '--network', network, '--read-only', '--cap-drop', 'ALL',
+              '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16', '--entrypoint', 'node', toolchain.nodeImage, '-e',
+              'Promise.all(process.argv.slice(1).map(async url=>{try{await fetch(url,{signal:AbortSignal.timeout(1500)});return false;}catch{return true;}})).then(result=>process.stdout.write(JSON.stringify(result)))',
+              'http://openobserve:5080/healthz', `http://${openObserveIp}:5080/healthz`]));
+            if (!Array.isArray(probes) || probes.length !== 2 || probes.some(blocked => blocked !== true))
+              throw new Error('runtime matrix application network can reach OpenObserve');
+            zones.push({network, dnsBlocked: true, ipBlocked: true});
+          }
+          evidence.networkIsolation.runtimeMetricMatrix = {status: 'PASS', zones};
+        },
+        onCleanup: async () => { detachMatrixNetworks(); },
+        verifyMetricFamily: async ({startTimeUs, ...family}) => {
+          const inventory = streamEntries(await api({baseUrl, authorization, path: `/api/${encodeURIComponent(organization)}/streams`, sensitiveValues}));
+          return waitForOwnedMetricFamilySamples({baseUrl, authorization, organization,
+            metricsPrefix: config.telemetry.openObserve.streams.metrics, family, startTimeUs,
+            liveMetricStreams: inventory.filter(stream => stream?.stream_type === 'metrics').map(stream => stream.name)});
+        },
+      });
+    } catch (error) {
+      evidence.runtimeMetricMatrix = error.runtimeMetricMatrix ?? {status: 'FAIL', project: matrixProject};
+      throw error;
+    } finally {
+      detachMatrixNetworks();
+      run(['rm', '-f', collectorName]);
+      await startCollector(logFiles, 'post-matrix-initial-logs', collectorConfig);
+      await waitFor(async () => (await fetch(collectorHealthEndpoint, {signal: AbortSignal.timeout(1000)}).catch(() => undefined))?.ok,
+        {timeoutMs: 30000, intervalMs: 500, description: 'Collector restored after all-runtime metric matrix'});
     }
 
     await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: true});
@@ -1954,6 +2053,7 @@ keep=1`;
     evidence.collectorOutageRestart = 'PASS';
     evidence.runtimeShutdownStatus = 'PASS';
     const requiredGates = [
+      evidence.runtimeMetricMatrix?.status, evidence.networkIsolation?.runtimeMetricMatrix?.status,
       evidence.launchPathCorrelation, evidence.nginxMetrics, evidence.alertTransitions, evidence.nativeAlerts,
       evidence.streamDelivery, evidence.ingestionScope, evidence.retentionExpiry, evidence.collectorOutageRestart,
       evidence.runtimeShutdownStatus, evidence.networkIsolation?.status, evidence.networkIsolation?.launchPathNetworkStatus,

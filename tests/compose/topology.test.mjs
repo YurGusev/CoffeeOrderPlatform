@@ -24,6 +24,49 @@ const OBSERVABILITY_CONFIG = {
   },
 };
 
+void test("programmatic observability hooks require a bounded recovery-proof run", async () => {
+  const {runComposeSmoke} = await import("../../tools/compose-smoke.mjs");
+  const hooks = {
+    exporterToken: "fixture-exporter-token",
+    onReady: async () => {},
+    onCleanup: async () => {},
+  };
+  await assert.rejects(
+    runComposeSmoke({args: ["--stub-secrets"], observability: hooks}),
+    /require --recovery-proof/,
+  );
+  await assert.rejects(
+    runComposeSmoke({args: ["--recovery-proof", "--no-build"], observability: hooks}),
+    /require --recovery-proof/,
+  );
+  await assert.rejects(
+    runComposeSmoke({args: ["--recovery-proof", "--keep"], observability: hooks}),
+    /require --recovery-proof/,
+  );
+  await assert.rejects(
+    runComposeSmoke({args: ["--recovery-proof"], observability: {...hooks, exporterToken: ""}}),
+    /exporterToken must not be empty/,
+  );
+  await assert.rejects(
+    runComposeSmoke({args: ["--recovery-proof"], observability: {...hooks, onReady: undefined}}),
+    /onReady must be a function/,
+  );
+  let cleanupCalls = 0;
+  let cleanupContext = "not-invoked";
+  await assert.rejects(
+    runComposeSmoke({
+      args: ["--recovery-proof", "--project-name", "coffee-platform"],
+      observability: {...hooks, onCleanup: async (context) => {
+        cleanupCalls += 1;
+        cleanupContext = context;
+      }},
+    }),
+    /main platform project/,
+  );
+  assert.equal(cleanupCalls, 1);
+  assert.equal(cleanupContext, undefined);
+});
+
 void test("smoke removes only images built by this run and preserves keep/no-build/shared images", async (t) => {
   const {buildRuntimeImages, removeBuiltRuntimeImages} = await import("../../tools/compose-smoke.mjs");
   const calls = [];

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {missingCpuFeatures, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
+import {runtimeMetricFamilies, sanitizeRuntimeMetricMatches} from './runtime-matrix.mjs';
+import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
 const config = {telemetry: {
   openObserve: {organization: 'coffee', streams: {metrics: 'platform_metrics'}},
@@ -36,34 +38,98 @@ void test('OpenObserve trace inventory reads canonical operation_name and dedupl
   });
 });
 
-void test('owner metric search filters before the 100-row page and refreshes stream inventory', async () => {
-  const stream = 'platform_metrics_messaging_kafka_consumer_lag';
+void test('native access lookup selects its owner before the response page limit', () => {
+  const correlationId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+  assert.equal(nativeAccessLogFilter(correlationId), `"service_name" = 'edge-nginx' AND "body_correlation_id" = '${correlationId}'`);
+  assert.throws(() => nativeAccessLogFilter("' OR 1=1"), /requires a UUID/u);
+});
+
+void test('owner metric search waits for every owner and histogram component after the 100-row page filter', async () => {
+  const base = 'platform_metrics_runtime_http_request_duration_ms';
+  const components = ['_count', '_sum', '_bucket'];
   let inventoryCalls = 0;
-  let ownerSearches = 0;
+  const ownerSearches = new Map();
   let query;
   const unrelated = Array.from({length: 101}, (_, index) => ({service_name: `other-${index}`, value: index}));
   const fetchImpl = async (url, init) => {
     if (url.pathname === '/api/coffee/streams') {
       inventoryCalls += 1;
-      return new Response(JSON.stringify(inventoryCalls === 1 ? [] : [{stream_type: 'metrics', name: stream}]), {status: 200});
+      return new Response(JSON.stringify(inventoryCalls === 1 ? [] : components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))), {status: 200});
     }
     query = JSON.parse(init.body).query;
+    const stream = query.sql.match(/FROM "([^"]+)"/u)?.[1];
     const ownerFilter = query.sql.match(/WHERE "service_name" = '((?:[^']|'')*)'/u)?.[1]?.replaceAll("''", "'");
-    const hits = ownerFilter === 'orders-service'
-      ? ++ownerSearches === 1 ? [] : [{service_name: 'orders-service', value: 7}]
+    const key = `${stream}:${ownerFilter}`;
+    const searches = (ownerSearches.get(key) ?? 0) + 1;
+    ownerSearches.set(key, searches);
+    assert.ok(query.sql.includes('AND "http_response_status_class" = \'4xx\''));
+    const hits = ['orders-service', 'api-public'].includes(ownerFilter)
+      ? stream === `${base}_bucket` && ownerFilter === 'api-public' && searches < 3 ? [] : [{service_name: ownerFilter, value: 7}]
       : unrelated.slice(0, query.size);
     return new Response(JSON.stringify({hits: {hits}}), {status: 200});
   };
   const matches = await waitForOwnedMetricFamilySamples({
     baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
-    metricsPrefix: 'platform_metrics', family: {name: 'messaging.kafka.consumer.lag', owners: ['orders-service'], components: ['']},
+    metricsPrefix: 'platform_metrics', family: {name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components, attributes: {http_response_status_class: '4xx'}},
     liveMetricStreams: [], startTimeUs: 1, fetchImpl, timeoutMs: 5000, intervalMs: 1,
   });
-  assert.equal(inventoryCalls, 3, 'inventory refresh finds the stream and repeats while its owner has not exported a sample');
-  assert.equal(ownerSearches, 2, 'owned sample visibility is retried after an empty filtered page');
-  assert.deepEqual(matches, [{stream, sampleCount: 1, services: ['orders-service']}]);
-  assert.equal(query.sql, `SELECT * FROM "${stream}" WHERE "service_name" = 'orders-service'`);
+  assert.equal(inventoryCalls, 4, 'inventory refresh repeats until the final owner component becomes visible');
+  assert.equal(ownerSearches.get(`${base}_bucket:api-public`), 3, 'one missing component must keep the whole family pending');
+  assert.deepEqual(matches, components.map(component => ({stream: `${base}${component}`, sampleCount: 2, services: ['orders-service', 'api-public']})));
+  assert.equal(query.sql, `SELECT * FROM "${base}_bucket" WHERE "service_name" = 'api-public' AND "http_response_status_class" = '4xx'`);
   assert.equal(query.size, 100);
+});
+
+void test('issue 64 metric matrix derives all runtime owners and sanitizes probe receipts', () => {
+  const databaseOwners = new Set([
+    'customer-service', 'catalog-service', 'catalog-supplier-sync', 'catalog-activation-worker', 'pricing-service',
+    'orders-service', 'orders-aroma-preparation', 'aroma-observer', 'aroma-convergence', 'aroma-gateway',
+  ]);
+  const consumerOwners = new Set(['orders-aroma-preparation', 'aroma-convergence', 'realtime-gateway']);
+  const config = {services: Object.fromEntries(NODE_RUNTIME_ROLES.map(role => [role, {
+    database: databaseOwners.has(role) ? `coffee_platform_${role}` : null,
+    kafka: {consumers: consumerOwners.has(role) ? [{groupId: `${role}-consumer`}] : []},
+  }]))};
+  const families = runtimeMetricFamilies(config);
+  assert.deepEqual(families.find(({name}) => name === 'runtime_http_requests_total'), {
+    name: 'runtime_http_requests_total', owners: [...NODE_RUNTIME_ROLES], components: [''],
+    attributes: {http_response_status_class: '4xx'},
+  });
+  assert.deepEqual(families.find(({name}) => name === 'db.client.connection.waiting').owners, [...databaseOwners]);
+  assert.deepEqual(families.find(({name}) => name === 'messaging.kafka.consumer.lag').owners, [...consumerOwners]);
+  assert.deepEqual(families.find(({name}) => name === 'messaging.outbox.oldest_unpublished.age').owners, [
+    'catalog-activation-worker', 'orders-service', 'orders-aroma-preparation', 'aroma-observer', 'aroma-convergence',
+  ]);
+  assert.deepEqual(families.find(({name}) => name === 'runtime_http_request_duration_ms').components, ['_count', '_sum', '_bucket']);
+  const httpDuration = families.find(({name}) => name === 'runtime_http_request_duration_ms');
+  assert.deepEqual(sanitizeRuntimeMetricMatches(httpDuration, [
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_count', sampleCount: 14, services: [...NODE_RUNTIME_ROLES]},
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_sum', sampleCount: 14, services: [...NODE_RUNTIME_ROLES]},
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_bucket', sampleCount: 42, services: [...NODE_RUNTIME_ROLES], labels: {secret: 'discard'}},
+  ], 'platform_metrics'), [
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_bucket', sampleCount: 42, services: [...NODE_RUNTIME_ROLES].sort()},
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_count', sampleCount: 14, services: [...NODE_RUNTIME_ROLES].sort()},
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_sum', sampleCount: 14, services: [...NODE_RUNTIME_ROLES].sort()},
+  ]);
+  assert.throws(() => sanitizeRuntimeMetricMatches(httpDuration, [], 'platform_metrics'), /components incomplete/u);
+  assert.throws(() => sanitizeRuntimeMetricMatches(httpDuration, [
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_count', sampleCount: 1, services: ['other-runtime']},
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_sum', sampleCount: 1, services: [...NODE_RUNTIME_ROLES]},
+    {stream: 'platform_metrics_runtime_http_request_duration_ms_bucket', sampleCount: 1, services: [...NODE_RUNTIME_ROLES]},
+  ], 'platform_metrics'), /owner evidence invalid/u);
+
+  const summary = summarizeRuntimeProbeOutput(JSON.stringify({
+    node: 'v26.8.1', uid: 1000, runtime: 'orders-service', liveStatus: 200, readyStatus: 200, metricsStatus: 200,
+    unknownStatus: 404, familyCount: 1, families: {runtime_admission_rejected_total: {count: 1, min: 0, max: 0}}, pass: true,
+  }), {role: 'orders-service', nodeVersion: '26.8.1'});
+  assert.deepEqual(summary, {
+    role: 'orders-service', status: 'PASS', nodeVersion: 'v26.8.1', uid: 1000,
+    http: {live: 200, ready: 200, metrics: 200, unknown: 404},
+    familyCount: 1, families: {runtime_admission_rejected_total: {count: 1, min: 0, max: 0}},
+  });
+  assert.throws(() => summarizeRuntimeProbeOutput(JSON.stringify({secret: 'must never pass through'}), {
+    role: 'orders-service', nodeVersion: '26.8.1',
+  }), /runtime metrics probe assertion failed/u);
 });
 
 void test('verification provenance hashes the non-ignored source tree and compiled runtime packages', async () => {
@@ -103,6 +169,10 @@ void test('issue 64 evidence distinguishes selected live roles from full 14-runt
     'customer-service', 'catalog-service', 'catalog-supplier-sync', 'catalog-activation-worker',
     'pricing-service', 'aroma-observer', 'aroma-convergence', 'aroma-gateway',
   ]);
+  const withMatrix = observabilityVerificationCoverage({runtimeMetricMatrix: {status: 'PASS', runtimeMetrics: {roles: NODE_RUNTIME_ROLES.map(role => ({role}))}}});
+  assert.deepEqual(withMatrix.fullSystemG14.metricMatrixNodeRuntimes, [...NODE_RUNTIME_ROLES]);
+  assert.deepEqual(withMatrix.fullSystemG14.nodeRuntimesNotClaimedAsLive, []);
+  assert.equal(withMatrix.fullSystemG14.status, 'NOT_RUN', 'functional telemetry coverage does not grant full-system launch acceptance');
 });
 
 void test('native alert definitions use versioned OpenObserve metrics and configured windows', () => {

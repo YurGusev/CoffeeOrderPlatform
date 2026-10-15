@@ -387,7 +387,7 @@ export async function runTransportFixture(options,hooks={}){
         }catch(e){
           const error=redact(e.message);await json(join(dir,`${c.role}.log-failure.json`),{code:'FIXTURE_LOG_CAPTURE_FAILED',error});result.error??={code:'FIXTURE_LOG_CAPTURE_FAILED',message:error};
         }
-        await run('docker',['rm','--force',c.id],{timeout:15000});
+        await run('docker',['rm','--force','--volumes',c.id],{timeout:15000});
         const surviving=await docker('ps','--all','--filter',`id=${c.id}`,'--format','{{.ID}}');assert.equal(surviving.trim(),'');receipts.push({role:c.role,id:c.id,removed:true,logsCaptured});
       }catch(e){receipts.push({role:c.role,id:c.id,removed:false,error:redact(e.message)});result.error??={code:'FIXTURE_CLEANUP_FAILED',message:e.message};}
     }

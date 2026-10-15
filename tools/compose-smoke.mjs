@@ -564,7 +564,12 @@ async function materializeSecrets(secretsDir, options) {
   const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
     ? await createStubTransportMaterials(secretsDir, platformConfig.environment, publicHostname)
     : undefined;
-  const stubSecurityMaterial = stubTransportMaterials === undefined ? undefined : createStubSecurityMaterial();
+  const stubSecurityMaterial = stubTransportMaterials === undefined ? undefined : {
+    ...createStubSecurityMaterial(),
+    ...(options.observabilityExporterToken === undefined
+      ? {}
+      : {"telemetry.exporterToken": options.observabilityExporterToken}),
+  };
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
     if (options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
@@ -3346,22 +3351,24 @@ function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   return rows;
 }
 
-async function main() {
-  const options = parseArguments(process.argv.slice(2));
+export async function runComposeSmoke({args = process.argv.slice(2), observability} = {}) {
+  const options = parseArguments(args);
+  if (observability !== undefined) {
+    assert.ok(observability && typeof observability === "object", "observability hooks must be an object");
+    assert.ok(
+      options.recoveryProof && !options.stubSecrets && !options.noBuild && !options.keep,
+      "observability hooks require --recovery-proof without --stub-secrets, --no-build or --keep",
+    );
+    assert.equal(typeof observability.exporterToken, "string", "observability exporterToken must be a string");
+    assert.ok(observability.exporterToken.length > 0, "observability exporterToken must not be empty");
+    assert.equal(typeof observability.onReady, "function", "observability onReady must be a function");
+    assert.equal(typeof observability.onCleanup, "function", "observability onCleanup must be a function");
+  }
   if (options.aromaBindingProof) assertAromaGatewaySocketAssociationRegression();
   const projectName =
     options.projectName ??
     `coffee-compose-smoke-${process.pid}-${randomUUID().slice(0, 8)}`;
-  assert.notEqual(projectName, "coffee-platform", "smoke must not use the main platform project");
-  assert.notEqual(projectName, "coffeeordersystem", "smoke must not use the legacy project");
-  for (const [resource, list] of [["container", "ps"], ["volume", "volume"], ["network", "network"]]) {
-    const args = list === "ps" ? ["ps", "--all", "--quiet"] : [list, "ls", "--quiet"];
-    assert.equal(runDocker([...args, "--filter", `label=com.docker.compose.project=${projectName}`]).trim(), "",
-      `smoke project already has ${resource} resources: ${projectName}; choose a new project name`);
-  }
-  const secretsDir = await mkdtemp(
-    join(SECRETS_TMPFS_ROOT, "coffee-platform-secrets-"),
-  );
+  let secretsDir;
   let provisionedNetwork = false;
   let databaseProofNetwork;
   let composeFile = COMPOSE_FILE;
@@ -3387,8 +3394,23 @@ async function main() {
   let aromaCartEvidence;
   let aromaCartRestartEvidence;
   let aromaCartCleanupReceipt;
-  const platformConfig = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  let observabilityContext;
+  let receipt;
+  let primaryError;
+  let cleanupHookError;
+  let standardCleanupError;
   try {
+    assert.notEqual(projectName, "coffee-platform", "smoke must not use the main platform project");
+    assert.notEqual(projectName, "coffeeordersystem", "smoke must not use the legacy project");
+    for (const [resource, list] of [["container", "ps"], ["volume", "volume"], ["network", "network"]]) {
+      const dockerArgs = list === "ps" ? ["ps", "--all", "--quiet"] : [list, "ls", "--quiet"];
+      assert.equal(runDocker([...dockerArgs, "--filter", `label=com.docker.compose.project=${projectName}`]).trim(), "",
+        `smoke project already has ${resource} resources: ${projectName}; choose a new project name`);
+    }
+    secretsDir = await mkdtemp(
+      join(SECRETS_TMPFS_ROOT, "coffee-platform-secrets-"),
+    );
+    const platformConfig = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
     if (options.recoveryProof) {
       const kafkaVolume = `${projectName}_kafka_data`;
       const existingVolumes = runDocker(["volume", "ls", "--format", "{{.Name}}", "--filter", `name=${kafkaVolume}`]).trim().split("\n");
@@ -3421,6 +3443,7 @@ async function main() {
     }
     const materialized = await materializeSecrets(secretsDir, {
       ...options,
+      observabilityExporterToken: observability?.exporterToken,
       databaseProofCredentials: databaseProofCredentials === undefined
         ? undefined
         : {[DATABASE_PROOF_RUNTIME]: databaseProofCredentials.owner},
@@ -3630,6 +3653,24 @@ async function main() {
       assertTelemetryEnvironment(rows);
       assertSecretMounts(projectName, secretsDir, rows, composeFile);
       await assertReadiness(projectName, secretsDir, composeFile);
+      if (observability) {
+        const resolvedCompose = JSON.parse(runCompose(
+          projectName,
+          secretsDir,
+          ["config", "--format", "json"],
+          {composeFile},
+        ));
+        const networks = Object.fromEntries(Object.entries(resolvedCompose.networks ?? {}).map(([logicalName, network]) => {
+          assert.equal(typeof network.name, "string", `Compose network ${logicalName} has no resolved name`);
+          return [logicalName, network.name];
+        }));
+        observabilityContext = {
+          projectName,
+          runtimes: [...RUNTIMES],
+          networks,
+        };
+        await observability.onReady(observabilityContext);
+      }
       assertHostExposure(projectName, secretsDir, rows, composeFile);
       await assertNginxIngress(platformConfig.nginxTransport.publicHost,
         options.stubSecrets || options.recoveryProof ? materialized.transportMaterials.publicTls.caPem : undefined);
@@ -3719,8 +3760,7 @@ async function main() {
       );
       assertStopped(projectName, secretsDir, composeFile);
     }
-    console.log(
-      JSON.stringify({
+    receipt = {
         project: projectName,
         runtimes: options.aromaBindingProof || options.aromaCartProof ? ["api-internal", "aroma-gateway"] : options.databaseProof || options.customerProof ? 1 : RUNTIMES.length,
         nativeIngress: options.databaseProof || options.customerProof ? undefined : "edge-nginx",
@@ -3747,82 +3787,104 @@ async function main() {
         customerIntegrationProof: options.customerProof,
         hostPublish: options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof ? [] : ["127.0.0.1:8443:8443"],
         gracefulShutdown: true,
-      }),
-    );
+      };
+  } catch (error) {
+    primaryError = error;
   } finally {
-    if (
-      recoveryDeliveryTables &&
-      !options.keep &&
-      recoveryAdminUrl &&
-      recoveryDeliveryDatabase &&
-      recoveryProofCredentials
-    ) {
+    if (observability) {
       try {
-        await dropDeliveryTables(
-          recoveryAdminUrl,
-          recoveryDeliveryDatabase,
-          recoveryProofCredentials.rolePasswords,
-        );
-      } catch {
-        /* preserve the original recovery proof result */
+        await observability.onCleanup(observabilityContext);
+      } catch (error) {
+        cleanupHookError = error;
       }
     }
-    for (const snapshot of [aromaBindingSnapshot, aromaCartSnapshot]) {
-      if (snapshot?.database && !options.keep) {
+    try {
+      if (
+        recoveryDeliveryTables &&
+        !options.keep &&
+        recoveryAdminUrl &&
+        recoveryDeliveryDatabase &&
+        recoveryProofCredentials
+      ) {
         try {
-          await snapshot.database.resource.stop(AbortSignal.timeout(10_000));
+          await dropDeliveryTables(
+            recoveryAdminUrl,
+            recoveryDeliveryDatabase,
+            recoveryProofCredentials.rolePasswords,
+          );
         } catch {
-          /* preserve the original smoke failure */
+          /* preserve the original recovery proof result */
         }
       }
-    }
-    if (composeAttempted && !options.keep) {
-      try {
-        runCompose(
-          projectName,
-          secretsDir,
-          ["down", "--volumes", "--remove-orphans"],
-          {composeFile},
+      for (const snapshot of [aromaBindingSnapshot, aromaCartSnapshot]) {
+        if (snapshot?.database && !options.keep) {
+          try {
+            await snapshot.database.resource.stop(AbortSignal.timeout(10_000));
+          } catch {
+            /* preserve the original smoke failure */
+          }
+        }
+      }
+      if (composeAttempted && !options.keep) {
+        try {
+          runCompose(
+            projectName,
+            secretsDir,
+            ["down", "--volumes", "--remove-orphans"],
+            {composeFile},
+          );
+        } catch {
+          /* preserve original smoke failure */
+        }
+      }
+      if (databaseProofContainer && !options.keep) {
+        try {
+          runDocker(["rm", "--force", "--volumes", databaseProofContainer]);
+        } catch {
+          /* preserve original smoke failure */
+        }
+      }
+      if (databaseProofNetwork && !options.keep) {
+        try {
+          runDocker(["network", "rm", databaseProofNetwork]);
+        } catch {
+          /* preserve original smoke failure */
+        }
+      }
+      if (provisionedNetwork && !options.keep) {
+        try {
+          runDocker(["network", "rm", EXTERNAL_POSTGRES_NETWORK]);
+        } catch {
+          /* never remove a network adopted by another workload */
+        }
+      }
+      removeBuiltRuntimeImages(builtImages, options);
+      if (composeFile !== COMPOSE_FILE && !options.keep)
+        await rm(composeFile, {force: true});
+      if (!options.keep && secretsDir) await rm(secretsDir, { recursive: true, force: true });
+      else if (options.keep && secretsDir)
+        console.log(
+          `compose-smoke: kept project=${projectName} secretsDir=${secretsDir}`,
         );
-      } catch {
-        /* preserve original smoke failure */
-      }
+    } catch (error) {
+      standardCleanupError = error;
     }
-    if (databaseProofContainer && !options.keep) {
-      try {
-        runDocker(["rm", "--force", "--volumes", databaseProofContainer]);
-      } catch {
-        /* preserve original smoke failure */
-      }
-    }
-    if (databaseProofNetwork && !options.keep) {
-      try {
-        runDocker(["network", "rm", databaseProofNetwork]);
-      } catch {
-        /* preserve original smoke failure */
-      }
-    }
-    if (provisionedNetwork && !options.keep) {
-      try {
-        runDocker(["network", "rm", EXTERNAL_POSTGRES_NETWORK]);
-      } catch {
-        /* never remove a network adopted by another workload */
-      }
-    }
-    removeBuiltRuntimeImages(builtImages, options);
-    if (composeFile !== COMPOSE_FILE && !options.keep)
-      await rm(composeFile, {force: true});
-    if (!options.keep) await rm(secretsDir, { recursive: true, force: true });
-    else
-      console.log(
-        `compose-smoke: kept project=${projectName} secretsDir=${secretsDir}`,
-      );
   }
+  const errors = [primaryError, standardCleanupError, cleanupHookError].filter(Boolean);
+  if (errors.length > 1) {
+    const messages = errors.map((error) => error instanceof Error ? error.message : String(error));
+    throw new AggregateError(errors, `compose-smoke failed: ${messages.join("; cleanup also failed: ")}`, {
+      cause: primaryError ?? standardCleanupError,
+    });
+  }
+  if (errors.length === 1) throw errors[0];
+  console.log(JSON.stringify(receipt));
+  return receipt;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    await main();
+    await runComposeSmoke();
   } catch (error) {
     console.error(
       `compose-smoke: FAIL: ${error instanceof Error ? error.message : String(error)}`,
