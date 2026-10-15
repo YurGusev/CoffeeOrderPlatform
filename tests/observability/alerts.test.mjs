@@ -4,7 +4,7 @@ import {runInNewContext} from 'node:vm';
 import path from 'node:path';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
 import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
-import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
+import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
 const config = {telemetry: {
@@ -132,6 +132,30 @@ void test('issue 64 metric matrix derives all runtime owners and sanitizes probe
   assert.throws(() => summarizeRuntimeProbeOutput(JSON.stringify({secret: 'must never pass through'}), {
     role: 'orders-service', nodeVersion: '26.8.1',
   }), /runtime metrics probe assertion failed/u);
+});
+
+void test('issue 64 failure diagnostics retain only allowlisted error codes and local frame coordinates', () => {
+  const secret = 'canary-secret-must-not-escape';
+  const cause = new Error(`${secret} in message`);
+  cause.name = 'AssertionError';
+  cause.code = 'ERR_ASSERTION';
+  cause.actual = secret;
+  cause.expected = secret;
+  cause.stack = `${secret}\n    at fail (file://${path.resolve('tools/compose-smoke.mjs')}:123:45)\n    at test (file://${path.resolve('tests/observability/runtime-matrix.mjs')}:234:56)\n    at other (file:///tmp/${secret}.mjs:1:2)`;
+  const diagnostics = sanitizeRuntimeMatrixFailure(cause);
+  assert.deepEqual(diagnostics, {
+    errorKind: 'AssertionError', code: 'ERR_ASSERTION', frames: [
+      {source: 'tools/compose-smoke.mjs', line: 123, column: 45},
+      {source: 'tests/observability/runtime-matrix.mjs', line: 234, column: 56},
+    ],
+  });
+  assert.equal(JSON.stringify(diagnostics).includes(secret), false);
+  const aggregate = new AggregateError([cause], `${secret} aggregate message`, {cause});
+  assert.deepEqual(sanitizeRuntimeMatrixFailure(aggregate), diagnostics);
+  assert.equal(JSON.stringify(sanitizeRuntimeMatrixFailure(aggregate)).includes(secret), false);
+  const unknown = sanitizeRuntimeMatrixFailure({name: secret, code: secret, stack: `Error: ${secret}\n    at leak (/tmp/${secret}.mjs:9:8)`});
+  assert.deepEqual(unknown, {errorKind: 'unknown', frames: []});
+  assert.deepEqual(sanitizeRuntimeMatrixFailure(secret), {errorKind: 'unknown', frames: []});
 });
 
 void test('generated Node image probe accepts nameless nested package metadata but keeps package roots strict', () => {

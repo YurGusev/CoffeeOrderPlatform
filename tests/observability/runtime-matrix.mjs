@@ -33,6 +33,12 @@ const ACTIVITY_DEPENDENT_METRICS = Object.freeze([
   {name: 'messaging.kafka.consumer.lag', owners: ['realtime-gateway'], reason: 'a fresh realtime consumer group reports lag only after real consumption and commit; the mandatory launch proof checks it after activity'},
   {name: 'messaging.inbox.received.age', reason: 'sample is produced by an Inbox delivery'},
 ]);
+const FAILURE_ERROR_KINDS = new Set(['Error', 'AssertionError', 'AggregateError']);
+const FAILURE_ERROR_CODES = new Set(['ERR_ASSERTION', 'ABORT_ERR', 'ETIMEDOUT']);
+const FAILURE_FRAME_FILES = new Map([
+  [resolve(ROOT, 'tools/compose-smoke.mjs'), 'tools/compose-smoke.mjs'],
+  [resolve(ROOT, 'tests/observability/runtime-matrix.mjs'), 'tests/observability/runtime-matrix.mjs'],
+]);
 
 function fail(code) {
   throw new Error(code);
@@ -118,6 +124,32 @@ export function sanitizeRuntimeMetricMatches(family, matches, metricsPrefix) {
   }
   if (expectedStreams.some(stream => !seen.has(stream))) fail('runtime matrix OTLP family components incomplete');
   return sanitized.sort((left, right) => left.stream.localeCompare(right.stream));
+}
+
+export function sanitizeRuntimeMatrixFailure(error) {
+  const primaryError = error instanceof AggregateError && error.cause instanceof Error ? error.cause : error;
+  const name = primaryError !== null && typeof primaryError === 'object' ? primaryError.name : undefined;
+  const code = primaryError !== null && typeof primaryError === 'object' ? primaryError.code : undefined;
+  const stack = primaryError !== null && typeof primaryError === 'object' && typeof primaryError.stack === 'string' ? primaryError.stack : '';
+  const frames = [];
+  for (const line of stack.slice(0, 20_000).split('\n')) {
+    const match = line.match(/(?:\(|at )((?:file:\/\/\/)?[^()\s]+):(\d+):(\d+)\)?$/u);
+    if (!match) continue;
+    let file;
+    try { file = match[1].startsWith('file://') ? fileURLToPath(match[1]) : match[1]; }
+    catch { continue; }
+    const source = FAILURE_FRAME_FILES.get(resolve(file));
+    const lineNumber = Number(match[2]);
+    const columnNumber = Number(match[3]);
+    if (!source || !Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(columnNumber) || columnNumber < 1) continue;
+    frames.push({source, line: lineNumber, column: columnNumber});
+    if (frames.length === 5) break;
+  }
+  return {
+    errorKind: FAILURE_ERROR_KINDS.has(name) ? name : 'unknown',
+    ...(FAILURE_ERROR_CODES.has(code) ? {code} : {}),
+    frames,
+  };
 }
 
 function validateProbeContext(context, projectName) {
@@ -404,11 +436,12 @@ export async function verifyRuntimeMetricMatrix({
       args: ['--recovery-proof', '--project-name', projectName],
       observability: {exporterToken, onReady, onCleanup: cleanup},
     });
-  } catch {
+  } catch (cause) {
     const error = new Error(`runtime matrix failed during ${phase}`);
     error.runtimeMetricMatrix = {
       status: 'FAIL', project: projectName, source, images: imageEvidence,
       runtimeMetrics: {roles: probes, otlpFamilies: verifiedMetrics}, phase, cleanupCalled,
+      failureDiagnostics: sanitizeRuntimeMatrixFailure(cause),
     };
     throw error;
   }
