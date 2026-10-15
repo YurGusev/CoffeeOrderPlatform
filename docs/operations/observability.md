@@ -107,8 +107,9 @@ static BusyBox проверяется по BOM hash. G14 допускает яв
 fixture с записанными version/hash; эмуляция не доказывает capacity или production
 admission и удаляется после проверки.
 В функциональном QEMU-прогоне лимит CPU только OpenObserve fixture равен 4 вместо
-2 в нативном прогоне; configured memory limit остаётся 512 MiB. Это изменение
-условий теста не является оценкой production capacity или производительности.
+2 в нативном прогоне; configured memory limit равен 2048 MiB в обоих режимах.
+Предыдущий QEMU-прогон с 512 MiB завершился OOM. Функциональный прогон проверяет
+новый общий лимит; capacity и производительность на native CPU принимает #13.
 
 Storage provisioner создаёт отдельный bounded ext4 volume на loop-backed файле.
 Привилегии получает только этот init helper. Чужие volumes не переиспользуются;
@@ -118,7 +119,7 @@ cadence, retention, finished-job wait и file deletion delay заданы в con
 Settings или ручной delete не доказывают expiry после TTL.
 
 Buffer policy OpenObserve задана явно в `telemetry.openObserve`: общий Arrow
-memtable ограничен 128 MiB при container limit 512 MiB, один файл ограничен
+memtable ограничен 128 MiB при container limit 2048 MiB, один файл ограничен
 8 MiB отдельно в памяти и на диске. Интервал 2 s сохраняет только уже
 immutable memtables; активный файл проверяется на ротацию по возрасту каждые
 30 s и при лимите 30 s может ротироваться почти через 60 s. Trusted generator

@@ -145,7 +145,7 @@ telemetry:
     telemetryEnabled: false
     mmdbDownloadEnabled: false
     modelPricingEnabled: false
-    memoryLimitMiB: 512
+    memoryLimitMiB: 2048
     memTableMaxSizeMiB: 128
     maxFileSizeInMemoryMiB: 8
     maxFileSizeOnDiskMiB: 8

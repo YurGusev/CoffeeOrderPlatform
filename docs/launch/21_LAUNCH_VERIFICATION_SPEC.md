@@ -179,7 +179,9 @@ G14 закрытым. Внешние notifications запрещены. Един�
 Canonical runtime matrix #64 проверяет для каждого из 14 Node runtime реальные
 self-mTLS запросы к `/health/live`, `/health/ready`, text OpenMetrics и ожидаемые
 4xx, а также доступность OTLP HTTP/error и producer metrics. Матрица проверяет
-наличие 10 DB-waiting, 3 consumer-lag и 5 scoped Outbox-age series. Событийные и
+наличие 10 DB-waiting, 2 durable consumer-lag и 5 scoped Outbox-age series.
+Предшествующий launch проверяет lag preparation и realtime после реальной
+активности; вместе эти проверки охватывают все 3 consumer owners. Событийные и
 транзакционные samples допускаются только после реальной активности существующего
 owner launch (шесть ролей и SQL-backed convergence helper). Перед стандартным
 Compose cleanup все 15 final images сканируются по фактическим image IDs; запуск
