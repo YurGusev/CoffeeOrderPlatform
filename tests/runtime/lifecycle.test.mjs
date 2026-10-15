@@ -263,6 +263,37 @@ void test("telemetry span queue drops at its configured bound and records export
   t.after(() => new Promise(resolve => collector.close(resolve)));
 });
 
+void test("bounded Pino stdout queue reports drops without logging dropped content", async () => {
+  const moduleUrl = new URL("../../packages/platform-observability/dist/index.js", import.meta.url).href;
+  const script = `import {createPinoLogger,logRecordsDropped,telemetryDiagnostics} from ${JSON.stringify(moduleUrl)};
+const warnings=[];process.on('warning',warning=>warnings.push({code:warning.code,message:warning.message}));
+const logger=createPinoLogger({service:'pino-queue-proof'},16384,undefined,1,60000);
+for(let index=0;index<512;index++)logger.info({sample:'pino-queue-private-canary'+'x'.repeat(14000)},'bounded Pino stdout queue proof');
+setImmediate(()=>logger.flush(error=>{if(error){process.stderr.write('flush failed\\n');process.exitCode=1;return;}setImmediate(()=>process.stderr.write(JSON.stringify({dropped:logRecordsDropped(),queueOverflows:telemetryDiagnostics().queueOverflows,warnings})+'\\n'));}));`;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
+    cwd: root, stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout.pause();
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", chunk => {stdout += chunk;});
+  child.stderr.on("data", chunk => {stderr += chunk; if (stderr.includes("\n")) child.stdout.resume();});
+  const timeout = setTimeout(() => child.stdout.resume(), 5000);
+  const result = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({code, signal}));
+  });
+  clearTimeout(timeout);
+  assert.equal(result.code, 0, stderr);
+  const summary = JSON.parse(stderr.trim().split("\n").at(-1));
+  assert.ok(summary.dropped > 0, "the bounded async stdout queue drops records under pipe backpressure");
+  assert.equal(summary.queueOverflows, summary.dropped, "every Pino queue drop increments the runtime overflow counter");
+  assert.equal(summary.warnings.length, 1, "queue overflow emits one rate-limited warning");
+  assert.equal(summary.warnings[0].code, "LOG_RECORD_DROPPED");
+  assert.doesNotMatch(JSON.stringify(summary.warnings), /pino-queue-private-canary/u, "warning diagnostics exclude dropped log content");
+  assert.ok(stdout.length < 512 * 16384, "the child stdout pipe was bounded while records were dropped");
+});
+
 void test("telemetry preserves a final diagnostic when bounded shutdown drops an in-flight span", async () => {
   const collector = createHttpServer((_request, response) => {
     response.writeHead(200, {"content-type": "application/x-protobuf", connection: "close"});

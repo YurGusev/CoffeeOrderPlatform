@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {metrics, trace} from '/repo/packages/platform-observability/node_modules/@opentelemetry/api/build/src/index.js';
-import {createPinoLogger, createTelemetryResource, setRuntimeReadiness, telemetryDiagnostics} from '/repo/packages/platform-observability/dist/index.js';
+import {createPinoLogger, createTelemetryResource, logRecordsDropped, setRuntimeReadiness, telemetryDiagnostics} from '/repo/packages/platform-observability/dist/index.js';
 import {createRuntime} from '/repo/packages/platform-runtime/dist/index.js';
 
 const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
@@ -17,7 +17,7 @@ const shutdownProbe = {
   },
   destroy() {},
 };
-const logger = createPinoLogger({service: 'g14-synthetic'}, config.telemetry.producer.maxRecordBytes);
+const logger = createPinoLogger({service: 'g14-synthetic'}, config.telemetry.producer.maxRecordBytes, undefined, config.telemetry.producer.queueCapacity);
 let active = true;
 let oldTimestamp = false;
 let consumerLag = 0;
@@ -90,6 +90,18 @@ const app = await createRuntime({
         span.end();
       }
       return {accepted: count};
+    });
+    server.post('/test/log-burst', async (request, reply) => {
+      const count = request.body?.count;
+      if (!Number.isSafeInteger(count) || count < 1 || count > 8192) return reply.code(400).send({error: 'invalid test count'});
+      const beforeDropped = logRecordsDropped();
+      const fields = {g14_run_id: runId, g14_fixture: true, sample: 'x'.repeat(12_000)};
+      for (let index = 0; index < count; index += 1) {
+        logger.info({...fields, rotation_probe: index}, 'bounded Docker rotation probe');
+        if (index % 32 === 31) await new Promise(resolve => setImmediate(resolve));
+      }
+      await new Promise((resolve, reject) => logger.flush(error => error ? reject(error) : resolve()));
+      return {accepted: count, producerDropped: logRecordsDropped() - beforeDropped};
     });
     server.get('/test/diagnostics', async () => ({
       ...telemetryDiagnostics(),

@@ -39,6 +39,7 @@ import {
   createDeliveryTables,
   dropDeliveryTables,
 } from "../scripts/db-live-proof.mjs";
+import {createRuntimeLoggingOverride} from "./observability/generate.mjs";
 
 const { Client } = pg;
 
@@ -801,6 +802,7 @@ function ensureExternalNetwork(options) {
 }
 
 export async function writeScopedComposeOverride(projectName, options = {}) {
+  const loggingOverride = options.runtimeLogging ? createRuntimeLoggingOverride({config: options.runtimeLogging}).services : undefined;
   const path = join(
     SECRETS_TMPFS_ROOT,
     `coffee-platform-compose-${projectName}-${randomUUID().slice(0, 8)}.yaml`,
@@ -839,6 +841,7 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       "      NODE_EXTRA_CA_CERTS: /run/aroma-proof/provider-ca.crt",
       "    volumes:",
       `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-cart-proof:/run/aroma-proof:ro`,
+      ...(loggingOverride ? dumpYaml({logging: loggingOverride["aroma-gateway"].logging}, {noRefs: true}).trimEnd().split("\n").map((line) => `    ${line}`) : []),
       "  aroma-provider-fixture:",
       `    image: ${CUSTOMER_TEST_IMAGE}`,
       "    command: [node, /run/aroma-proof/provider-server.mjs]",
@@ -857,6 +860,9 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       "      interval: 1s",
       "      timeout: 1s",
       "      retries: 30",
+      ...(loggingOverride ? Object.entries(loggingOverride)
+        .filter(([service]) => service !== "aroma-gateway")
+        .flatMap(([service, definition]) => [`  ${service}:`, ...dumpYaml(definition, {noRefs: true}).trimEnd().split("\n").map((line) => `    ${line}`)]) : []),
     ] : []),
     "",
   ].join("\n");
@@ -3427,6 +3433,7 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
       aromaBindingProof: options.aromaBindingProof,
       aromaCartProof: options.aromaCartProof,
       recoveryProof: options.recoveryProof,
+      runtimeLogging: observability ? platformConfig : undefined,
     });
     if (options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
       const networkNames = databaseProofNetworkNames(projectName);

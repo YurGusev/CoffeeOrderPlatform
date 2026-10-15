@@ -1,14 +1,14 @@
-import {execFileSync, spawnSync} from 'node:child_process';
+import {execFileSync, spawn, spawnSync} from 'node:child_process';
 import {createHash, randomBytes} from 'node:crypto';
 import {accessSync, constants as fsConstants, existsSync} from 'node:fs';
 import {lstat, mkdir, mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises';
-import {delimiter, dirname, isAbsolute, join, resolve} from 'node:path';
+import {basename, delimiter, dirname, isAbsolute, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {dump as dumpYaml} from 'js-yaml';
 import {loadPlatformConfig} from '../../scripts/config-lib.mjs';
 import {installNativeAlerts, newRunId} from './alerts.mjs';
 import {initializeOpenObserve} from './bootstrap.mjs';
-import {discoverContainerLogs, createCollectorConfig, createComposeOverride, openObserveBufferEnvironment, OBSERVABILITY_TARGETS} from './generate.mjs';
+import {discoverContainerLogs, createCollectorConfig, createComposeOverride, createRuntimeLoggingOverride, openObserveBufferEnvironment, OBSERVABILITY_TARGETS} from './generate.mjs';
 import {provisionStorage, removeStorage} from './storage.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -61,6 +61,33 @@ export function missingCpuFeatures(cpuInfo) {
 
 function basicAuthorization(email, password) {
   return `Basic ${Buffer.from(`${email}:${password}`).toString('base64')}`;
+}
+
+function verifyDockerLogRotation({run, nodeImage, logFile, maxFiles, maxSizeMiB, maxRecordBytes}) {
+  const baseName = basename(logFile.logPath);
+  const suffixes = Array.from({length: maxFiles + 1}, (_, suffix) => suffix);
+  const probe = `const fs=require('node:fs'),base=${JSON.stringify(baseName)},suffixes=${JSON.stringify(suffixes)};const files=suffixes.map(suffix=>{const name=suffix===0?base:base+'.'+suffix;try{const stat=fs.statSync('/selected/'+name);if(!stat.isFile())throw Error('selected Docker log is not a regular file');return {suffix,bytes:stat.size};}catch(error){if(error.code==='ENOENT')return {suffix,bytes:0};throw error;}});process.stdout.write(JSON.stringify(files));`;
+  const files = JSON.parse(run(['run', '--rm', '--network', 'none', '--read-only', '--user', '0:0', '--cap-drop', 'ALL',
+    '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16',
+    '--mount', `type=bind,source=${dirname(logFile.logPath)},target=/selected,readonly`,
+    '--entrypoint', 'node', nodeImage, '-e', probe]));
+  const present = files.filter(file => file.bytes > 0).map(file => file.suffix);
+  const totalBytes = files.reduce((total, file) => total + file.bytes, 0);
+  if (!present.includes(0) || !present.some(suffix => suffix > 0) || present.length > maxFiles || present.includes(maxFiles) ||
+      totalBytes > maxSizeMiB * maxFiles * 1024 * 1024 + maxRecordBytes * maxFiles)
+    throw new Error('synthetic producer Docker json-file rotation exceeded its configured retention bound');
+  return {status: 'PASS', service: logFile.service, containerId: logFile.containerId, driver: 'json-file',
+    configuredPinoMaxRecordBytes: maxRecordBytes,
+    presentSuffixes: present, retainedFiles: present.length, totalBytes};
+}
+
+function assertDockerLoggingPolicy(actual, expected) {
+  const options = actual?.Config ?? {};
+  const expectedOptions = Object.fromEntries(Object.entries(expected.options).map(([name, value]) => [name, String(value)]));
+  if (actual?.Type !== expected.driver || Object.keys(options).length !== Object.keys(expectedOptions).length ||
+      Object.entries(expectedOptions).some(([name, value]) => options[name] !== value))
+    throw new Error('synthetic container Docker logging policy mismatch');
+  return {status: 'PASS', driver: actual.Type, options};
 }
 
 async function api({fetchImpl = fetch, baseUrl, path, authorization, method = 'GET', body, expected = [200], sensitiveValues = []}) {
@@ -187,6 +214,363 @@ function startedAtUs(state) {
   const startedAtMs = Date.parse(state?.StartedAt ?? '');
   if (!Number.isFinite(startedAtMs)) throw new Error('container process start time is unavailable');
   return startedAtMs * 1000;
+}
+
+const MEMORY_LIMITER_METRICS = {
+  refused: 'otelcol_processor_memory_limiter_refused_spans',
+  accepted: 'otelcol_processor_memory_limiter_accepted_spans',
+};
+const MEMORY_CGROUP_GUARD_BYTES = 280 * 1024 * 1024;
+const MEMORY_SAMPLER_STALE_MS = 100;
+
+export function parseCollectorMemoryLimiterMetrics(text) {
+  if (typeof text !== 'string' || Buffer.byteLength(text) > 2 * 1024 * 1024)
+    throw new Error('collector memory-limiter metrics response exceeded its bound');
+  const totals = {refused: 0, accepted: 0};
+  const preferred = new Set();
+  for (const line of text.split(/\r?\n/u)) {
+    if (!line || line.startsWith('#')) continue;
+    const match = /^(otelcol_processor_memory_limiter_(?:refused|accepted)_spans(?:_total)?)(?:\{([^}]*)\})?\s+([^\s]+)(?:\s|$)/u.exec(line);
+    if (!match) continue;
+    const key = match[1].includes('_refused_') ? 'refused' : 'accepted';
+    const labels = Object.fromEntries((match[2] ?? '').split(',').filter(Boolean).map(part => {
+      const label = /^(processor|otel_scope_name)="([^"\\]*(?:\\.[^"\\]*)*)"$/u.exec(part.trim());
+      return label ? [label[1], label[2]] : ['', ''];
+    }).filter(([name]) => name));
+    if (labels.processor !== 'memory_limiter') continue;
+    const amount = Number(match[3]);
+    if (!Number.isFinite(amount) || amount < 0) throw new Error('collector memory-limiter counter was invalid');
+    const normalizedName = match[1].replace(/_total$/u, '');
+    const baseName = MEMORY_LIMITER_METRICS[key];
+    if (normalizedName !== baseName) continue;
+    const isTotal = match[1].endsWith('_total');
+    if (isTotal) {
+      totals[key] = amount;
+      preferred.add(key);
+    } else if (!preferred.has(key)) {
+      totals[key] = amount;
+    }
+  }
+  return totals;
+}
+
+export function validateCollectorMemorySample(sample, {nowMs, receivedAtMs, previousSequence, guardBytes = MEMORY_CGROUP_GUARD_BYTES, staleMs = MEMORY_SAMPLER_STALE_MS}) {
+  if (!sample || !Number.isSafeInteger(sample.sequence) || sample.sequence < 1 ||
+      !Number.isSafeInteger(sample.currentBytes) || sample.currentBytes < 0 ||
+      !Number.isSafeInteger(sample.maxBytes) || sample.maxBytes !== 320 * 1024 * 1024 || sample.currentBytes > sample.maxBytes ||
+      !Number.isSafeInteger(sample.oom) || sample.oom < 0 ||
+      !Number.isSafeInteger(sample.oomKill) || sample.oomKill < 0 ||
+      !Number.isSafeInteger(sample.sampledAtMs) || sample.sampledAtMs < 1 ||
+      !Number.isFinite(nowMs) || !Number.isFinite(receivedAtMs) || receivedAtMs > nowMs || nowMs - receivedAtMs > staleMs ||
+      (previousSequence !== undefined && sample.sequence !== previousSequence + 1))
+    throw new Error('collector memory sampler sample was invalid or stale');
+  if (sample.currentBytes >= guardBytes || sample.oom > 0 || sample.oomKill > 0)
+    throw new Error('collector memory safety guard was reached');
+  return sample;
+}
+
+const collectorMemorySamplerScript = `
+set -eu
+token="$1"
+case "$token" in *[!a-f0-9]*|'') exit 2 ;; esac
+umask 077
+stop_path="/tmp/issue64-memory-stop-$token"
+pid=$$
+exec 3<&0
+printf '{"kind":"started","pid":%s}\\n' "$pid"
+(
+  while IFS= read -r command; do
+    if [ "$command" = "$token" ]; then : > "$stop_path"; break; fi
+  done
+) <&3 &
+reader=$!
+exec 3<&-
+sequence=0
+while [ ! -e "$stop_path" ] && [ "$sequence" -lt 2800 ]; do
+  current=$(/busybox cat /sys/fs/cgroup/memory.current) || exit 1
+  maximum=$(/busybox cat /sys/fs/cgroup/memory.max) || exit 1
+  oom=$(/busybox awk '$1=="oom"{print $2}' /sys/fs/cgroup/memory.events) || exit 1
+  oom_kill=$(/busybox awk '$1=="oom_kill"{print $2}' /sys/fs/cgroup/memory.events) || exit 1
+  sampled_at=$(( $(/busybox date +%s) * 1000 ))
+  sequence=$((sequence + 1))
+  printf '{"kind":"sample","sequence":%s,"currentBytes":%s,"maxBytes":%s,"oom":%s,"oomKill":%s,"sampledAtMs":%s}\\n' "$sequence" "$current" "$maximum" "\${oom:-0}" "\${oom_kill:-0}" "$sampled_at"
+  /busybox sleep 0.05
+done
+kill "$reader" 2>/dev/null || true
+/busybox rm -f "$stop_path"
+printf '{"kind":"stopped","sequence":%s}\\n' "$sequence"
+`;
+
+function startCollectorMemorySampler({name, token}) {
+  const child = spawn('docker', ['exec', '-i', name, '/busybox', 'sh', '-c', collectorMemorySamplerScript, 'issue64-memory-sampler', token], {
+    stdio: ['pipe', 'pipe', 'ignore'],
+  });
+  let buffer = '';
+  let previousSequence;
+  let samplerPid;
+  let latest;
+  let peakBytes = 0;
+  let stopped = false;
+  let failure;
+  let lineCount = 0;
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', chunk => {
+    if (failure) return;
+    buffer += chunk;
+    if (Buffer.byteLength(buffer) > 4096) { failure = new Error('collector memory sampler output exceeded its bound'); return; }
+    let newline;
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+      if (++lineCount > 3000 || Buffer.byteLength(line) > 1024) { failure = new Error('collector memory sampler output exceeded its bound'); return; }
+      let record;
+      try { record = JSON.parse(line); } catch { failure = new Error('collector memory sampler output was invalid'); return; }
+      if (record.kind === 'started' && Number.isSafeInteger(record.pid) && record.pid > 1 && samplerPid === undefined) {
+        samplerPid = record.pid;
+      } else if (record.kind === 'sample') {
+        try {
+          const receivedAtMs = performance.now();
+          const sample = validateCollectorMemorySample(record, {nowMs: receivedAtMs, receivedAtMs, previousSequence});
+          previousSequence = sample.sequence;
+          latest = {...sample, receivedAtMs};
+          peakBytes = Math.max(peakBytes, sample.currentBytes);
+        } catch (error) { failure = error; return; }
+      } else if (record.kind === 'stopped' && record.sequence === previousSequence) {
+        stopped = true;
+      } else {
+        failure = new Error('collector memory sampler record was invalid');
+        return;
+      }
+    }
+  });
+  child.on('error', () => { failure ??= new Error('collector memory sampler process failed'); });
+  child.on('close', code => {
+    if (code !== 0 || !stopped) failure ??= new Error('collector memory sampler did not stop cleanly');
+  });
+  const latestSample = () => {
+    if (failure) throw failure;
+    if (!latest) throw new Error('collector memory sampler is not ready');
+    const nowMs = performance.now();
+    validateCollectorMemorySample(latest, {nowMs, receivedAtMs: latest.receivedAtMs});
+    return latest;
+  };
+  const waitForFreshSample = async (timeoutMs = 30000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (failure) throw failure;
+      if (latest && performance.now() - latest.receivedAtMs <= MEMORY_SAMPLER_STALE_MS) return latestSample();
+      await sleep(25);
+    }
+    throw new Error('collector memory sampler did not become ready');
+  };
+  const stopSampler = async ({run}) => {
+    if (child.exitCode !== null) return !failure && stopped;
+    child.stdin.write(`${token}\n`);
+    child.stdin.end();
+    const deadline = Date.now() + 3000;
+    while (child.exitCode === null && Date.now() < deadline) await sleep(25);
+    if (child.exitCode === null && Number.isSafeInteger(samplerPid)) {
+      const killScript = 'p="$1"; t="$2"; case "$p" in *[!0-9]*|"") exit 2 ;; esac; [ "$p" -gt 1 ] || exit 2; c=$(/busybox tr "\\000" " " < "/proc/$p/cmdline") || exit 3; case "$c" in *"$t"*) /busybox kill -TERM "$p" ;; *) exit 4 ;; esac';
+      try { run(['exec', name, '/busybox', 'sh', '-c', killScript, 'issue64-memory-kill', String(samplerPid), token]); } catch { failure ??= new Error('collector memory sampler cleanup failed'); }
+      const killDeadline = Date.now() + 3000;
+      while (child.exitCode === null && Date.now() < killDeadline) await sleep(25);
+    }
+    return child.exitCode === 0 && stopped && !failure;
+  };
+  return {latestSample, waitForFreshSample, stopSampler, get peakBytes() { return peakBytes; }, get failure() { return failure; }};
+}
+
+async function boundedResponseText(response, maxBytes) {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (total <= maxBytes) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      const remaining = maxBytes + 1 - total;
+      const part = value.subarray(0, remaining);
+      chunks.push(Buffer.from(part));
+      total += part.byteLength;
+      if (total > maxBytes || part.byteLength < value.byteLength) break;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  if (total > maxBytes) throw new Error('collector response exceeded its evidence bound');
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function collectorMemorySelfTelemetry({collectorIp, config, run, name, generation}) {
+  const metricsPort = new URL(config.telemetry.collector.metricsEndpoint).port;
+  const healthPort = new URL(config.telemetry.collector.healthEndpoint).port;
+  const [metricsResponse, healthResponse] = await Promise.all([
+    fetch(`http://${collectorIp}:${metricsPort}/metrics`, {signal: AbortSignal.timeout(1000)}),
+    fetch(`http://${collectorIp}:${healthPort}/`, {signal: AbortSignal.timeout(1000)}),
+  ]);
+  if (!metricsResponse.ok || healthResponse.status !== 200) throw new Error('collector memory proof self-telemetry was unhealthy');
+  const counters = parseCollectorMemoryLimiterMetrics(await boundedResponseText(metricsResponse, 2 * 1024 * 1024));
+  const current = containerGeneration({run, name});
+  if (current.id !== generation.id || current.state.StartedAt !== generation.state.StartedAt ||
+      current.state.Running !== true || current.state.OOMKilled === true)
+    throw new Error('collector memory proof crossed a process generation or unhealthy state');
+  return {counters, sampledAt: new Date().toISOString(), containerId: current.id, startedAt: current.state.StartedAt};
+}
+
+function collectorMemorySpan({traceId, spanId, runId, name, paddingBytes = 512}) {
+  return {
+    resourceSpans: [{
+      resource: {attributes: [{key: 'service.name', value: {stringValue: 'g14-memory-proof'}}, {key: 'g14_run_id', value: {stringValue: runId}}]},
+      scopeSpans: [{scope: {name: 'g14-memory-proof'}, spans: [{
+        traceId, spanId, name, kind: 1, startTimeUnixNano: String(Date.now() * 1e6), endTimeUnixNano: String(Date.now() * 1e6 + 1),
+        attributes: [{key: 'g14_run_id', value: {stringValue: runId}}, {key: 'g14_memory_marker', value: {stringValue: name}},
+          ...(paddingBytes > 512 ? [{key: 'g14_memory_padding', value: {stringValue: 'x'.repeat(paddingBytes)}}] : [])],
+      }]}],
+    }],
+  };
+}
+
+async function sendCollectorMemorySpan({collectorIp, config, token, runId, name, paddingBytes = 512}) {
+  const endpoint = `http://${collectorIp}:${new URL(config.telemetry.collector.otlpEndpoint).port}/v1/traces`;
+  const traceId = randomBytes(16).toString('hex');
+  const spanId = randomBytes(8).toString('hex');
+  const body = JSON.stringify(collectorMemorySpan({traceId, spanId, runId, name, paddingBytes}));
+  const wireBytes = Buffer.byteLength(body) + 1024;
+  if (wireBytes > 512 * 1024) throw new Error('collector memory proof packet exceeded its bound');
+  const response = await fetch(endpoint, {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+    body, signal: AbortSignal.timeout(1000)});
+  const responseText = await boundedResponseText(response, 4096);
+  let otlpCode;
+  let refusal = false;
+  try {
+    const payload = JSON.parse(responseText);
+    otlpCode = Number.isSafeInteger(payload?.code) ? payload.code : undefined;
+    refusal = /refused due to high memory usage/iu.test(String(payload?.message ?? ''));
+  } catch { /* Неструктурированный ответ сохраняется только как HTTP-статус. */ }
+  return {httpStatus: response.status, ...(otlpCode === undefined ? {} : {otlpCode}), refusal,
+    wireBytes, ...(name === 'g14.collector.memory.recovered' ? {traceId} : {})};
+}
+
+async function runCollectorMemoryProof({run, collectorName, collectorIp, config, collectorConfig, token, runId, sampler}) {
+  const limiter = collectorConfig?.processors?.memory_limiter;
+  if (config.telemetry.collector.memoryLimitMiB !== 256 || config.telemetry.collector.memorySpikeMiB !== 64 ||
+      config.telemetry.collector.memoryCheckIntervalMs !== 1000 || config.telemetry.collector.retryWindowMs !== 15000 ||
+      limiter?.limit_mib !== 256 || limiter?.spike_limit_mib !== 64 || limiter?.check_interval !== '1000ms')
+    throw new Error('generated Collector memory-limiter policy did not match the calibrated configured limits');
+  const generation = containerGeneration({run, name: collectorName});
+  if (generation.state.Running !== true || generation.state.OOMKilled === true)
+    throw new Error('collector memory proof requires a healthy running Collector');
+  const startupDeadline = Date.now() + 30000;
+  const baselineMemory = await sampler.waitForFreshSample(startupDeadline - Date.now());
+  let telemetry;
+  while (Date.now() < startupDeadline) {
+    if (generation.state.Running !== true || generation.state.OOMKilled === true) throw new Error('Collector memory proof startup reached an unhealthy state');
+    try {
+      telemetry = await collectorMemorySelfTelemetry({collectorIp, config, run, name: collectorName, generation});
+      sampler.latestSample();
+      break;
+    } catch (error) {
+      if (!['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EHOSTUNREACH'].includes(error.cause?.code)) throw error;
+      await sleep(250);
+    }
+  }
+  if (!telemetry) throw new Error('Collector memory proof startup readiness timed out');
+  let lastTelemetryAt = Date.now();
+  const refreshTelemetry = async force => {
+    if (force || Date.now() - lastTelemetryAt >= 1000) {
+      telemetry = await collectorMemorySelfTelemetry({collectorIp, config, run, name: collectorName, generation});
+      lastTelemetryAt = Date.now();
+    }
+    sampler.latestSample();
+    return telemetry;
+  };
+  const baseline = telemetry;
+  const startedAt = Date.now();
+  const totalWireCap = 256 * 1024 * 1024;
+  const deadlineAt = startedAt + 60000;
+  let packetCount = 0;
+  let wireBytes = 0;
+  let refusal;
+  while (Date.now() < deadlineAt && wireBytes + 512 * 1024 <= totalWireCap) {
+    sampler.latestSample();
+    await refreshTelemetry(false);
+    const response = await sendCollectorMemorySpan({collectorIp, config, token, runId,
+      name: 'g14.collector.memory.pressure', paddingBytes: 200 * 1024});
+    packetCount += 1;
+    wireBytes += response.wireBytes;
+    sampler.latestSample();
+    if (response.httpStatus === 503) {
+      const afterRefusal = await refreshTelemetry(true);
+      const refusedSpansDelta = afterRefusal.counters.refused - baseline.counters.refused;
+      if (response.otlpCode !== 14 || response.refusal !== true || refusedSpansDelta <= 0)
+        throw new Error('Collector returned an unproven memory-refusal response');
+      refusal = {httpStatus: 503, otlpCode: 14, refusedSpansDelta, packetCount, wireBytes,
+        observedAt: new Date().toISOString()};
+      break;
+    }
+    if (response.httpStatus !== 200) throw new Error('Collector pressure request returned an unexpected status');
+    if (wireBytes > totalWireCap) throw new Error('Collector pressure request exceeded its wire budget');
+    await sleep(25);
+  }
+  if (!refusal) throw new Error('Collector memory refusal was not reached within the bounded pressure window');
+
+  const refusalAt = Date.now();
+  const recoveryDeadline = refusalAt + 60000;
+  for (const offsetMs of [1000, 6000, 21000]) {
+    const target = refusalAt + offsetMs;
+    while (Date.now() < target) {
+      sampler.latestSample();
+      await refreshTelemetry(false);
+      await sleep(Math.min(100, target - Date.now()));
+    }
+    await refreshTelemetry(true);
+  }
+
+  let recovery;
+  while (!recovery && Date.now() < recoveryDeadline) {
+    sampler.latestSample();
+    const beforeRecovery = await refreshTelemetry(true);
+    const response = await sendCollectorMemorySpan({collectorIp, config, token, runId,
+      name: 'g14.collector.memory.recovery-probe'});
+    sampler.latestSample();
+    if (response.httpStatus === 200) {
+      let afterRecovery = await refreshTelemetry(true);
+      let acceptedSpansDelta = afterRecovery.counters.accepted - beforeRecovery.counters.accepted;
+      const confirmationDeadline = Math.min(recoveryDeadline, Date.now() + 5000);
+      while (acceptedSpansDelta <= 0 && Date.now() < confirmationDeadline) {
+        sampler.latestSample();
+        await sleep(1000);
+        afterRecovery = await refreshTelemetry(true);
+        acceptedSpansDelta = afterRecovery.counters.accepted - beforeRecovery.counters.accepted;
+      }
+      if (acceptedSpansDelta > 0) recovery = {httpStatus: 200, acceptedSpansDelta, observedAt: new Date().toISOString()};
+      else throw new Error('Collector recovery acceptance counter did not increase');
+    } else if (response.httpStatus !== 503) {
+      throw new Error('Collector recovery request returned an unexpected status');
+    } else {
+      await sleep(1000);
+    }
+  }
+  if (!recovery) throw new Error('Collector did not accept a recovery span within the bounded retry window');
+  return {
+    status: 'NOT_RUN',
+    containerGeneration: {id: generation.id, startedAt: generation.state.StartedAt},
+    limits: {hardLimitMiB: config.telemetry.collector.memoryLimitMiB,
+      spikeLimitMiB: config.telemetry.collector.memorySpikeMiB,
+      softLimitMiB: config.telemetry.collector.memoryLimitMiB - config.telemetry.collector.memorySpikeMiB,
+      containerLimitMiB: config.telemetry.collector.memoryLimitMiB + config.telemetry.collector.memorySpikeMiB,
+      cgroupGuardBytes: MEMORY_CGROUP_GUARD_BYTES, samplerIntervalMs: 50, samplerFreshnessMs: MEMORY_SAMPLER_STALE_MS,
+      maxPacketBytes: 512 * 1024, maxWireBytes: totalWireCap,
+      maxWireBytesPerSecond: 32 * 1024 * 1024, deadlineMs: 60000},
+    cgroup: {baselineBytes: baselineMemory.currentBytes, peakBytes: sampler.peakBytes,
+      maxBytes: baselineMemory.maxBytes, oom: sampler.latestSample().oom, oomKill: sampler.latestSample().oomKill},
+    metrics: {processor: 'memory_limiter', refused: MEMORY_LIMITER_METRICS.refused,
+      accepted: MEMORY_LIMITER_METRICS.accepted, baseline, afterRecovery: telemetry},
+    pressure: {packetCount, wireBytes, elapsedMs: Date.now() - startedAt}, refusal, recovery,
+    durableExportProven: false,
+  };
 }
 
 function metricTimestampUs(record) {
@@ -339,8 +723,11 @@ function summarizeLogRows(records, {runId, redactionCanary}) {
   return {recordCount: records.length, recordKeys: [...new Set(records.flatMap(record => Object.keys(record ?? {})))].slice(0, 80), redactedPaths: [...paths].slice(0, 30), runIdObserved, canaryLeaked};
 }
 
-function inspectProducerRedaction({name, runId, redactionCanary}) {
-  const result = spawnSync('docker', ['logs', name], {encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe']});
+function inspectProducerRedaction({name, runId, redactionCanary, maxRecordBytes}) {
+  const tailRecords = Math.max(1, Math.floor(512 * 1024 / maxRecordBytes));
+  const result = spawnSync('docker', ['logs', '--tail', String(tailRecords), name], {
+    encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+  });
   if (result.error || result.status !== 0) throw new Error('could not inspect the synthetic producer Docker log for redaction evidence');
   const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
   const records = output.split('\n').flatMap(line => {
@@ -777,13 +1164,18 @@ async function persistEvidence({root, evidence, secrets = []}) {
   const verificationCoverage = observabilityVerificationCoverage(evidence);
   const runtimeHealthGates = [
     evidence.runtimeMetricMatrix?.status,
+    evidence.runtimeMetricMatrix?.loggingPolicy?.status,
     evidence.runtimeShutdownStatus,
     evidence.networkIsolation?.status,
     evidence.networkIsolation?.launchPathNetworkStatus,
     evidence.telemetryHealth?.openObserveOutage,
     evidence.telemetryHealth?.recoveryStatus,
+    evidence.telemetryHealth?.dockerLogRotation?.status,
+    evidence.telemetryHealth?.producerLoggingPolicy?.status,
+    evidence.telemetryHealth?.collectorLoggingPolicy?.status,
     evidence.telemetryHealth?.launchPathCollectorConfig,
     evidence.telemetryHealth?.launchPathOutageStatus,
+    evidence.telemetryHealth?.collectorMemoryProof?.status,
     evidence.collectorQueueMetrics?.status,
     evidence.processCounterRestart?.status,
     evidence.diskPressureStatus,
@@ -795,10 +1187,11 @@ async function persistEvidence({root, evidence, secrets = []}) {
     'redaction-scan.json': statusArtifact(redaction?.status ?? 'NOT_RUN', redaction ?? {}),
     'queue-loss-counters.json': statusArtifact(outage?.queueDrops > 0 && outage.producerExportFailureObserved === true &&
       outage.collectorExpiredRetryDrop?.status === 'PASS' && evidence.collectorQueueMetrics?.status === 'PASS' &&
-      evidence.processCounterRestart?.status === 'PASS' ? 'PASS' : 'NOT_RUN', {
+      evidence.processCounterRestart?.status === 'PASS' && evidence.telemetryHealth?.collectorMemoryProof?.status === 'PASS' ? 'PASS' : 'NOT_RUN', {
       ...(outage?.queueDrops === undefined ? {} : {droppedRecords: outage.queueDrops, producerExportFailureObserved: outage.producerExportFailureObserved}),
       collectorExpiredRetryDrop: outage?.collectorExpiredRetryDrop ?? {},
       collector: evidence.collectorQueueMetrics ?? {},
+      collectorMemoryProof: evidence.telemetryHealth?.collectorMemoryProof ?? {},
       processCounterRestart: evidence.processCounterRestart ?? {},
     }),
     'retention-result.json': statusArtifact(typeof evidence.retention === 'object' && evidence.retention.ttlRemovedRecord && evidence.diskPressureStatus === 'PASS' ? 'PASS' : 'NOT_RUN', {
@@ -812,6 +1205,7 @@ async function persistEvidence({root, evidence, secrets = []}) {
       metricApplicability: evidence.metricApplicability ?? {},
       runtimeMetricMatrix: evidence.runtimeMetricMatrix ?? {status: 'NOT_RUN'},
       processCounterRestart: evidence.processCounterRestart ?? {},
+      collectorMemoryProof: evidence.telemetryHealth?.collectorMemoryProof ?? {},
       diskPressure: evidence.diskPressure ?? {},
       networkIsolation: evidence.networkIsolation ?? 'NOT_RUN',
       openObserveDisk: evidence.openObserveDisk ?? {},
@@ -1115,16 +1509,21 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     fixtureConfig.telemetry.environment = fixtureConfig.environment;
     fixtureConfig.telemetry.collector.otlpEndpoint = 'http://otel-collector:4318';
     await writeFile(fixtureConfigPath, JSON.stringify({config: fixtureConfig, runId, exporterToken: producerToken, redactionCanary}) + '\n', {mode: 0o400});
+    const dockerLogging = createRuntimeLoggingOverride({config}).services['edge-gateway'].logging;
+    const dockerLoggingArgs = ['--log-driver', dockerLogging.driver,
+      ...Object.entries(dockerLogging.options).flatMap(([name, value]) => ['--log-opt', `${name}=${value}`])];
     run(['run', '-d', '--name', producerName, '--network', producerNetwork,
       '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '0.5', '--memory', '256m', '--pids-limit', '32',
       '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', `${process.getuid()}:${process.getgid()}`,
-      '--log-driver', 'json-file', '--log-opt', `max-size=${config.telemetry.logging.maxSizeMiB}m`, '--log-opt', `max-file=${config.telemetry.logging.maxFiles}`,
+      ...dockerLoggingArgs,
       '--label', `com.docker.compose.project=${project}`, '--label', 'com.docker.compose.service=edge-gateway',
       '--mount', `type=bind,source=${join(root, 'node_modules')},target=/repo/node_modules,readonly`,
       '--mount', `type=bind,source=${join(root, 'packages')},target=/repo/packages,readonly`,
       '--mount', `type=bind,source=${join(root, 'tests/observability/fixture.mjs')},target=/fixture.mjs,readonly`,
       '--mount', `type=bind,source=${fixtureConfigPath},target=/fixture-config.json,readonly`,
       '--entrypoint', 'node', toolchain.nodeImage, '/fixture.mjs', '/fixture-config.json']);
+    const producerLoggingPolicy = assertDockerLoggingPolicy(
+      JSON.parse(run(['inspect', '--format', '{{json .HostConfig.LogConfig}}', producerName])), dockerLogging);
     const producerIp = run(['inspect', '--format', `{{(index .NetworkSettings.Networks "${producerNetwork}").IPAddress}}`, producerName]);
     if (!/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(producerIp)) throw new Error('could not resolve synthetic producer on its isolated network');
     const producerNetworks = Object.keys(JSON.parse(run(['inspect', '--format', '{{json .NetworkSettings.Networks}}', producerName])));
@@ -1138,6 +1537,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       return response?.ok;
     }, {timeoutMs: 30000, intervalMs: 500, description: 'canonical Fastify synthetic runtime readiness'});
     const logFiles = await discoverContainerLogs({projectName: project, runtimes: ['edge-gateway'], runDocker: run});
+    const rotationRecords = Math.ceil((config.telemetry.logging.maxSizeMiB * config.telemetry.logging.maxFiles + config.telemetry.logging.maxSizeMiB / 2) * 1024 * 1024 / 12_000);
+    const rotationBurst = await fixtureRequest({baseUrl: fixtureBaseUrl, path: '/test/log-burst', body: {count: rotationRecords}, runId});
+    if (rotationBurst.accepted !== rotationRecords || rotationBurst.producerDropped !== 0)
+      throw new Error('synthetic Docker rotation burst was incomplete or exceeded Pino logging bounds');
+    const dockerLogRotation = verifyDockerLogRotation({run, nodeImage: toolchain.nodeImage,
+      logFile: logFiles[0], maxFiles: config.telemetry.logging.maxFiles, maxSizeMiB: config.telemetry.logging.maxSizeMiB,
+      maxRecordBytes: config.telemetry.producer.maxRecordBytes});
+    evidence.telemetryHealth = {dockerLogRotation, producerLoggingPolicy};
     evidence.nginxMetrics = logFiles.some(({service}) => service === 'edge-nginx') ? 'PASS' : 'NOT_RUN';
     const collectorConfig = createCollectorConfig({config, logFiles, exporterToken: producerToken, openObserveIngestToken: openObserveToken});
     // Fixture-only timestamp mapping makes a synthetic Pino `time` field exercise backend TTL.
@@ -1166,9 +1573,10 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const mountArgs = logMounts.flatMap(({source, destination}) => ['--mount', `type=bind,source=${source},target=${destination},readonly`]);
       run(['run', '-d', '--name', collectorName, '--network', backendNetwork,
         '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '1', '--memory', `${config.telemetry.collector.memoryLimitMiB + config.telemetry.collector.memorySpikeMiB}m`, '--pids-limit', '128',
-        '--log-driver', 'json-file', '--log-opt', `max-size=${config.telemetry.logging.maxSizeMiB}m`, '--log-opt', `max-file=${config.telemetry.logging.maxFiles}`,
+        ...dockerLoggingArgs,
         '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', '0:0', '--network-alias', 'otel-collector',
-        '--mount', `type=bind,source=${collectorConfigPath},target=/etc/otelcol-contrib/config.yaml,readonly`, ...mountArgs,
+        '--mount', `type=bind,source=${collectorConfigPath},target=/etc/otelcol-contrib/config.yaml,readonly`,
+        '--mount', `type=bind,source=${probePath},target=/busybox,readonly`, ...mountArgs,
         toolchain.otelCollectorImage, '--config=/etc/otelcol-contrib/config.yaml']);
       run(['network', 'connect', '--alias', 'otel-collector', producerNetwork, collectorName]);
       const networks = [backendNetwork, producerNetwork, ...extraNetworks].sort();
@@ -1179,10 +1587,12 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const bindMounts = mounts.filter(mount => mount.Type === 'bind').map(({Source, Destination, RW}) => ({source: resolve(Source), destination: Destination, readOnly: RW === false}));
       const expectedBindMounts = [
         {source: resolve(collectorConfigPath), destination: '/etc/otelcol-contrib/config.yaml', readOnly: true},
+        {source: resolve(probePath), destination: '/busybox', readOnly: true},
         ...logMounts.map(({source, destination}) => ({source: resolve(source), destination, readOnly: true})),
       ].sort((a, b) => a.destination.localeCompare(b.destination));
       bindMounts.sort((a, b) => a.destination.localeCompare(b.destination));
       const hostConfig = JSON.parse(run(['inspect', '--format', '{{json .HostConfig}}', collectorName]));
+      const collectorLoggingPolicy = assertDockerLoggingPolicy(hostConfig.LogConfig, dockerLogging);
       const containerConfig = JSON.parse(run(['inspect', '--format', '{{json .Config}}', collectorName]));
       const configStat = await lstat(collectorConfigPath);
       const configRootReadonly = configStat.uid === 0 && configStat.gid === 0 && (configStat.mode & 0o777) === 0o400;
@@ -1198,6 +1608,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       collectorHealthEndpoint = `http://${collectorIp}:13133`;
       collectorPhases.push({stage, selectedServices: selectedLogs.map(({service}) => service).sort(),
         mountedContainerIds: logMounts.map(({containerId}) => containerId).sort(), bindMountsReadOnly: true,
+        loggingPolicy: collectorLoggingPolicy,
         healthAddress: `${collectorIp}:13133`, networks: actualNetworks, hostBindingsAbsent: true, rootUser: true, readOnlyRoot: true,
         configRootOwnedMode0400: true, capabilitiesDropped: true, noNewPrivileges: true});
     };
@@ -1226,14 +1637,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       producerHostBindingsAbsent: true, producerAttachedOnlyToProducerNetwork: true,
     };
 
-    const sinkName = `${project}-alert-sink`;
-    add(sinkName);
-    run(['run', '-d', '--name', sinkName, `--network=container:${openObserveName}`,
-      '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '0.25', '--memory', '64m', '--pids-limit', '16',
-      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', `${process.getuid()}:${process.getgid()}`,
-      '--mount', `type=bind,source=${resolve(dirname(fileURLToPath(import.meta.url)), 'alert-sink.mjs')},target=/alert-sink.mjs,readonly`,
-      '--mount', `type=bind,source=${sinkPath},target=/evidence/alert-events.jsonl`,
-      toolchain.nodeImage, 'node', '/alert-sink.mjs', '/evidence/alert-events.jsonl']);
+
 
     await waitFor(async () => {
       requireRunning({run, name: collectorName, secrets: sensitiveValues});
@@ -1253,7 +1657,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         description: 'initial native readiness metrics for OpenObserve and Collector',
       });
       if (!healthSummary.healthyOpenObserve || !healthSummary.healthyCollector) throw new Error(`initial native readiness samples were not healthy: ${JSON.stringify(healthSummary)}`);
-      evidence.telemetryHealth = {initial: healthSummary, openObserveOutage: 'NOT_RUN', recovered: 'NOT_RUN'};
+      evidence.telemetryHealth = {...evidence.telemetryHealth, initial: healthSummary, openObserveOutage: 'NOT_RUN', recovered: 'NOT_RUN'};
     } catch (error) {
       let collectorLogs = '';
       let streamNames = [];
@@ -1278,7 +1682,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       error.message += `; diagnostic streams=${JSON.stringify(streamNames)}; producerTelemetry=${JSON.stringify(producerTelemetry)}; collectorSpanCounters=${JSON.stringify(collectorSpans)}${collectorLogs ? `; sanitized collector logs: ${collectorLogs}` : ''}`;
       throw error;
     }
-    const producerRedaction = inspectProducerRedaction({name: producerName, runId, redactionCanary});
+    await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
+    const producerRedaction = inspectProducerRedaction({name: producerName, runId, redactionCanary, maxRecordBytes: config.telemetry.producer.maxRecordBytes});
     if (!producerRedaction.matchingRunId || !producerRedaction.redactedToken || producerRedaction.canaryLeaked)
       throw new Error(`synthetic Pino pre-export redaction failed: ${JSON.stringify(producerRedaction)}`);
     const redactedLogs = await verifySignal({baseUrl, authorization, organization, stream: config.telemetry.openObserve.streams.logs, runId, field: 'body_g14_run_id'});
@@ -1312,6 +1717,24 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       config.telemetry.collector.batchTimeoutMs + config.telemetry.collector.retryMaxMs + config.platform.health.intervalMs;
     await sleep(Math.max(config.platform.health.intervalMs + config.platform.health.timeoutMs, collectorRetryExpiryWaitMs));
     const collectorExpiredRetryDrop = collectorExpiredRetryDropEvidence({name: collectorName, startTimeUs: openObserveStoppedAtUs});
+    const memoryProofGeneration = containerGeneration({run, name: collectorName});
+    const memorySampler = startCollectorMemorySampler({name: collectorName, token: randomBytes(16).toString('hex')});
+    let collectorMemoryProof;
+    try {
+      collectorMemoryProof = await runCollectorMemoryProof({run, collectorName, collectorIp, config, collectorConfig,
+        token: producerToken, runId, sampler: memorySampler});
+    } finally {
+      const stopped = await memorySampler.stopSampler({run});
+      if (!stopped) throw new Error('Collector memory sampler cleanup could not be verified');
+    }
+    const memoryProofGenerationAfter = containerGeneration({run, name: collectorName});
+    if (memoryProofGeneration.id !== memoryProofGenerationAfter.id ||
+        memoryProofGeneration.state.StartedAt !== memoryProofGenerationAfter.state.StartedAt ||
+        memoryProofGenerationAfter.state.Running !== true || memoryProofGenerationAfter.state.OOMKilled === true)
+      throw new Error('Collector memory proof did not retain the same healthy process generation');
+    collectorMemoryProof.containerGeneration = {id: memoryProofGenerationAfter.id,
+      startedAt: memoryProofGenerationAfter.state.StartedAt, sameGenerationAfterProbe: true};
+    evidence.telemetryHealth.collectorMemoryProof = collectorMemoryProof;
     const openObserveRestartedAtUs = Date.now() * 1000;
     run(['start', openObserveName]);
     await waitFor(async () => {
@@ -1338,6 +1761,26 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     });
     evidence.telemetryHealth.recovered = recoveredHealthSummary;
     evidence.telemetryHealth.recoveryStatus = 'PASS';
+    const memoryMarker = await sendCollectorMemorySpan({collectorIp, config, token: producerToken, runId,
+      name: 'g14.collector.memory.recovered'});
+    if (memoryMarker.httpStatus !== 200 || !/^[a-f0-9]{32}$/u.test(memoryMarker.traceId ?? ''))
+      throw new Error('Collector recovery marker was not accepted');
+    collectorMemoryProof.marker = {traceId: memoryMarker.traceId, spanName: 'g14.collector.memory.recovered', runId,
+      acceptedAt: new Date().toISOString()};
+    const memoryMarkerRows = await waitFor(async () => {
+      const found = rows(await streamSearch({baseUrl, authorization, organization,
+        stream: config.telemetry.openObserve.streams.traces, streamType: 'traces',
+        filterSql: `"trace_id" = '${collectorMemoryProof.marker.traceId}'`,
+        startTimeUs: Date.parse(collectorMemoryProof.marker.acceptedAt) * 1000 - 5_000_000}));
+      return found.some(record => hasExactValue(record, collectorMemoryProof.marker.traceId) &&
+        hasExactValue(record, collectorMemoryProof.marker.spanName) && hasExactValue(record, runId)) ? found : false;
+    }, {timeoutMs: 60000, intervalMs: 1000, description: 'Collector memory recovery marker in configured traces stream'});
+    collectorMemoryProof = {...collectorMemoryProof, status: 'PASS', durableExportProven: true,
+      marker: {...collectorMemoryProof.marker,
+        backendConfirmation: {stream: config.telemetry.openObserve.streams.traces, exactTraceId: true,
+          matchingRecords: memoryMarkerRows.filter(record => hasExactValue(record, collectorMemoryProof.marker.traceId) &&
+            hasExactValue(record, collectorMemoryProof.marker.spanName) && hasExactValue(record, runId)).length}}};
+    evidence.telemetryHealth.collectorMemoryProof = collectorMemoryProof;
     const baselineDiagnostics = await fixtureDiagnostics(fixtureBaseUrl);
     const collectorBeforeRestart = containerGeneration({run, name: collectorName});
     if (!collectorBeforeRestart.state.Running) throw new Error('Collector process was not running before its restart');
@@ -1960,6 +2403,16 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       metricAlertInputs[suffix] = {stream, sampleCount: metric.samples.length, positiveValues: metric.values.filter(value => value > 0).length};
     }
     evidence.alertInputs = metricAlertInputs;
+    // The backend restart replaces its loopback namespace; join only after recovery.
+    const sinkName = `${project}-alert-sink`;
+    add(sinkName);
+    run(['run', '-d', '--name', sinkName, `--network=container:${openObserveName}`,
+      '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '0.25', '--memory', '64m', '--pids-limit', '16',
+      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', `${process.getuid()}:${process.getgid()}`,
+      '--mount', `type=bind,source=${resolve(dirname(fileURLToPath(import.meta.url)), 'alert-sink.mjs')},target=/alert-sink.mjs,readonly`,
+      '--mount', `type=bind,source=${sinkPath},target=/evidence/alert-events.jsonl`,
+      toolchain.nodeImage, 'node', '/alert-sink.mjs', '/evidence/alert-events.jsonl']);
+
     const definitions = await installNativeAlerts({config, baseUrl, organization, authorization});
     const observed = new Map();
     const maxForMs = Math.max(...definitions.map(({pendingPeriodSec}) => pendingPeriodSec)) * 1000;
@@ -2182,6 +2635,11 @@ keep=1`;
       stopTimeSpanExported: true,
       stopTimeSpanSampleCount: stopTimeSpanRows.length,
     };
+    const collectorLoggingPolicy = {
+      status: collectorPhases.length > 0 && collectorPhases.every(({loggingPolicy}) => loggingPolicy?.status === 'PASS') ? 'PASS' : 'NOT_RUN',
+      phases: collectorPhases.map(({stage, loggingPolicy}) => ({stage, ...loggingPolicy})),
+    };
+    evidence.telemetryHealth.collectorLoggingPolicy = collectorLoggingPolicy;
     evidence.completedAt = new Date().toISOString();
     evidence.alertTransitions = 'PASS';
     evidence.nativeAlerts = 'PASS';
@@ -2191,12 +2649,16 @@ keep=1`;
     evidence.collectorOutageRestart = 'PASS';
     evidence.runtimeShutdownStatus = 'PASS';
     const requiredGates = [
-      evidence.runtimeMetricMatrix?.status, evidence.networkIsolation?.runtimeMetricMatrix?.status,
+      evidence.runtimeMetricMatrix?.status, evidence.runtimeMetricMatrix?.loggingPolicy?.status,
+      evidence.networkIsolation?.runtimeMetricMatrix?.status,
       evidence.launchPathCorrelation, evidence.nginxMetrics, evidence.alertTransitions, evidence.nativeAlerts,
       evidence.streamDelivery, evidence.ingestionScope, evidence.retentionExpiry, evidence.collectorOutageRestart,
       evidence.runtimeShutdownStatus, evidence.networkIsolation?.status, evidence.networkIsolation?.launchPathNetworkStatus,
       evidence.telemetryHealth?.openObserveOutage, evidence.telemetryHealth?.recoveryStatus,
+      evidence.telemetryHealth?.dockerLogRotation?.status, evidence.telemetryHealth?.producerLoggingPolicy?.status,
+      evidence.telemetryHealth?.collectorLoggingPolicy?.status,
       evidence.telemetryHealth?.launchPathCollectorConfig, evidence.telemetryHealth?.launchPathOutageStatus,
+      evidence.telemetryHealth?.collectorMemoryProof?.status,
       evidence.collectorQueueMetrics?.status,
       evidence.diskPressureStatus,
     ];

@@ -3,7 +3,7 @@ import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, sourceIdentity, traceSpanInventory, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, sourceIdentity, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -156,6 +156,27 @@ void test('issue 64 failure diagnostics retain only allowlisted error codes and 
   const unknown = sanitizeRuntimeMatrixFailure({name: secret, code: secret, stack: `Error: ${secret}\n    at leak (/tmp/${secret}.mjs:9:8)`});
   assert.deepEqual(unknown, {errorKind: 'unknown', frames: []});
   assert.deepEqual(sanitizeRuntimeMatrixFailure(secret), {errorKind: 'unknown', frames: []});
+});
+
+void test('Collector memory proof accepts only native limiter counters and bounded fresh cgroup samples', () => {
+  assert.deepEqual(parseCollectorMemoryLimiterMetrics([
+    '# HELP otelcol_processor_memory_limiter_refused_spans Refused spans.',
+    'otelcol_processor_memory_limiter_refused_spans{processor="memory_limiter"} 2',
+    'otelcol_processor_memory_limiter_refused_spans_total{processor="memory_limiter"} 3',
+    'otelcol_processor_memory_limiter_accepted_spans{processor="memory_limiter",otel_scope_name="otelcol"} 17',
+    'otelcol_processor_memory_limiter_refused_spans{processor="other"} 99',
+    'otelcol_processor_memory_limiter_refused_spans_extra{processor="memory_limiter"} 99',
+  ].join('\n')), {refused: 3, accepted: 17});
+  assert.throws(() => parseCollectorMemoryLimiterMetrics('otelcol_processor_memory_limiter_refused_spans{processor="memory_limiter"} NaN'), /counter was invalid/u);
+  const fresh = {sequence: 2, currentBytes: 128 * 1024 * 1024, maxBytes: 320 * 1024 * 1024,
+    oom: 0, oomKill: 0, sampledAtMs: 1700000000000};
+  assert.equal(validateCollectorMemorySample(fresh, {nowMs: 1000, receivedAtMs: 900, previousSequence: 1}), fresh);
+  for (const options of [
+    {nowMs: 1001, receivedAtMs: 900, previousSequence: 1},
+    {nowMs: 1000, receivedAtMs: 900, previousSequence: 0},
+  ]) assert.throws(() => validateCollectorMemorySample(fresh, options), /invalid or stale/u);
+  assert.throws(() => validateCollectorMemorySample({...fresh, currentBytes: 280 * 1024 * 1024}, {nowMs: 1000, receivedAtMs: 900}), /safety guard/u);
+  assert.throws(() => validateCollectorMemorySample({...fresh, oomKill: 1}, {nowMs: 1000, receivedAtMs: 900}), /safety guard/u);
 });
 
 void test('generated Node image probe accepts nameless nested package metadata but keeps package roots strict', () => {

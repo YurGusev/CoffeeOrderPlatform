@@ -2,7 +2,7 @@ import {execFileSync} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {discoverContainerLogs, OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
+import {createRuntimeLoggingOverride, discoverContainerLogs, OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
 import {
   buildRuntimeMatrixProbe, COMMON_TEXT_FAMILIES, NODE_RUNTIME_ROLES, OWNER_TEXT_FAMILIES,
   OPTIONAL_OWNER_TEXT_FAMILIES, summarizeRuntimeProbeOutput,
@@ -165,15 +165,23 @@ function validateProbeContext(context, projectName) {
   return networks;
 }
 
-function inspectContainer(runDocker, row, projectName) {
+function inspectContainer(runDocker, row, projectName, expectedLogging) {
   const inspected = parseJson(safeDocker(runDocker, ['inspect', row.containerId]), 'runtime matrix container inspect invalid');
   if (!Array.isArray(inspected) || inspected.length !== 1) fail('runtime matrix container inspect invalid');
   const item = inspected[0];
+  const actualLogConfig = item.HostConfig?.LogConfig;
+  const expectedOptions = Object.fromEntries(Object.entries(expectedLogging.options).map(([name, value]) => [name, String(value)]));
+  const actualOptions = actualLogConfig?.Config ?? {};
   if (item.Id !== row.containerId || item.State?.Running !== true ||
       item.Config?.Labels?.['com.docker.compose.project'] !== projectName ||
       item.Config?.Labels?.['com.docker.compose.service'] !== row.service ||
       !IMAGE_ID.test(item.Image ?? '')) fail('runtime matrix container identity mismatch');
-  return {role: row.service, containerId: item.Id, imageId: item.Image};
+  if (actualLogConfig?.Type !== expectedLogging.driver ||
+      Object.keys(actualOptions).length !== Object.keys(expectedOptions).length ||
+      Object.entries(expectedOptions).some(([name, value]) => actualOptions[name] !== value)) fail('runtime matrix Docker logging policy mismatch');
+  if (item.LogPath !== row.logPath) fail('runtime matrix Docker log path mismatch');
+  return {role: row.service, containerId: item.Id, imageId: item.Image, logPath: item.LogPath,
+    logging: {driver: actualLogConfig.Type, options: actualOptions}};
 }
 
 function inspectImage(runDocker, role, imageId) {
@@ -373,6 +381,7 @@ export async function verifyRuntimeMetricMatrix({
   let verifiedMetrics = [];
   let imageEvidence = [];
   let capturedNetworks = {};
+  let loggingPolicyEvidence = {status: 'NOT_RUN'};
   let phaseStartUs;
   const onReady = async context => {
     if (readyCalled) fail('runtime matrix Compose ready hook repeated');
@@ -388,7 +397,14 @@ export async function verifyRuntimeMetricMatrix({
     }
     assertNameList(logFiles.map(item => item.service), OBSERVABILITY_TARGETS, 'runtime matrix Compose service inventory mismatch');
     setPhase('container-image-identities');
-    const containers = logFiles.map(row => inspectContainer(runDocker, row, projectName));
+    const loggingPolicy = createRuntimeLoggingOverride({config}).services;
+    const containers = logFiles.map(row => inspectContainer(runDocker, row, projectName, loggingPolicy[row.service].logging));
+    loggingPolicyEvidence = {
+      status: 'PASS',
+      pinoDropCounter: 'telemetry_log_records_dropped_total',
+      dockerNonblockingBufferDropAccounting: 'NOT_PROVEN',
+      roles: containers.map(({role, logging}) => ({role, ...logging})),
+    };
     runtimeImages = containers;
     const imageRecords = containers.map(image => inspectImage(runDocker, image.role, image.imageId));
     setPhase('collector-ready');
@@ -440,7 +456,7 @@ export async function verifyRuntimeMetricMatrix({
     const error = new Error(`runtime matrix failed during ${phase}`);
     error.runtimeMetricMatrix = {
       status: 'FAIL', project: projectName, source, images: imageEvidence,
-      runtimeMetrics: {roles: probes, otlpFamilies: verifiedMetrics}, phase, cleanupCalled,
+      runtimeMetrics: {roles: probes, otlpFamilies: verifiedMetrics}, loggingPolicy: loggingPolicyEvidence, phase, cleanupCalled,
       failureDiagnostics: sanitizeRuntimeMatrixFailure(cause),
     };
     throw error;
@@ -455,6 +471,7 @@ export async function verifyRuntimeMetricMatrix({
   return {
     status: 'PASS', project: projectName, source,
     composeReceipt, cleanupVerified: true,
+    loggingPolicy: loggingPolicyEvidence,
     runtimeMetrics: {
       status: 'PASS', roles: probes, otlpFamilies: verifiedMetrics,
       legacyTextScope: 'Only /metrics text callbacks and runtime foundation counters; OTLP-only process, database and Kafka instruments are verified through their OpenObserve streams.',

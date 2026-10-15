@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import {createRuntimeLoggingOverride} from "../../tools/observability/generate.mjs";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -98,16 +99,28 @@ void test("smoke removes only images built by this run and preserves keep/no-bui
 
 void test("all smoke modes isolate networks while only topology smoke adopts external PostgreSQL", async () => {
   const {writeScopedComposeOverride} = await import("../../tools/compose-smoke.mjs");
-  for (const sharedPostgres of [true, false]) {
-    const path = await writeScopedComposeOverride("coffee-scope-proof", {sharedPostgres});
+  for (const [sharedPostgres, recoveryLogging] of [[true, false], [false, false], [false, true]]) {
+    const path = await writeScopedComposeOverride("coffee-scope-proof", {
+      sharedPostgres,
+      ...(recoveryLogging ? {recoveryProof: true, runtimeLogging: OBSERVABILITY_CONFIG} : {}),
+    });
     try {
-      const result = spawnSync("docker", ["compose", "-p", "coffee-scope-proof", "-f", COMPOSE_FILE, "-f", path, "config", "--format", "json"], {encoding: "utf8"});
+      const result = spawnSync("docker", ["compose", "-p", "coffee-scope-proof", "-f", COMPOSE_FILE, "-f", path, "config", "--format", "json"], {
+        encoding: "utf8", env: {...process.env, COFFEE_COMPOSE_SECRETS_DIR: "/dev/shm"},
+      });
       assert.equal(result.status, 0, result.stderr);
       const config = JSON.parse(result.stdout);
       for (const [name, network] of Object.entries(config.networks)) {
         assert.equal(network.name, name === "coffee_postgres_data" && sharedPostgres ? name : `coffee-scope-proof_${name}`);
       }
       assert.equal(config.networks.coffee_postgres_data.external, true);
+      if (recoveryLogging) {
+        const expectedLogging = createRuntimeLoggingOverride({config: OBSERVABILITY_CONFIG}).services;
+        for (const [service, expected] of Object.entries(expectedLogging)) {
+          assert.deepEqual(config.services[service].logging, expected.logging, `${service} Docker logging policy`);
+        }
+        assert.equal(config.services["aroma-provider-fixture"].logging, undefined);
+      } else assert.equal(config.services["edge-gateway"].logging, undefined);
     } finally {
       await rm(path);
     }

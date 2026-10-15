@@ -81,6 +81,9 @@ Collector экспортирует собственные queue/loss counters; n
 только при наличии его настоящего ID в выбранном inventory. Producer разделяет
 export failure, queue overflow, serialization rejection и shutdown loss; все
 счётчики process-scoped и связаны с process start time.
+Pino drop counter фиксирует oversized records и переполнение его stdout queue;
+потери внутри Docker non-blocking buffer этим счётчиком не учитываются, поэтому
+точный driver-side loss count здесь не доказан, а logs остаются best-effort.
 Native `http_check` отдельно измеряет health endpoints Collector/OpenObserve;
 его status/error metrics проходят тот же configured prefix и resource mapping.
 Интервал и timeout берутся из `platform.health`, business readiness их не использует.
