@@ -523,6 +523,7 @@ export async function verifyCollectorQueueMetrics({baseUrl, authorization, organ
       .filter(metric => samplesByMetric[metric].timestampsUs.some(timestamp => timestamp >= lossStartTimeUs &&
         (lossEndTimeUs === undefined || timestamp < lossEndTimeUs)) && samplesByMetric[metric].values.some(value => value > 0));
     const outageLossSamples = positiveOutageLossMetrics.length > 0;
+    const lossWindowEndedAtRestart = lossEndTimeUs !== undefined && lossEndTimeUs === startTimeUs;
     lastObservation = {
       metrics: Object.fromEntries(metricNames.map(metricName => {
         const sample = samplesByMetric[metricName];
@@ -552,8 +553,8 @@ export async function verifyCollectorQueueMetrics({baseUrl, authorization, organ
       queueSampleCount: queue.length,
       queueMaximum: Math.max(...queue),
       capacitySampleCount: capacity.length,
-      postRestartMetricTimestampsStrictlyAfterStartedAt: true,
-      historicalLossMetricWindowEndedAtRestart: true,
+      postRestartMetricTimestampsStrictlyAfterStartedAt: lossWindowEndedAtRestart,
+      historicalLossMetricWindowEndedAtRestart: lossWindowEndedAtRestart,
       sendFailureSamples: Object.fromEntries(['log_records', 'metric_points', 'spans'].map(signal => [signal, samplesByMetric[`otelcol_exporter_send_failed_${signal}`]])),
       sentSamples: Object.fromEntries(['log_records', 'metric_points', 'spans'].map(signal => [signal, samplesByMetric[`otelcol_exporter_sent_${signal}`]])),
       enqueueFailureSamples: Object.fromEntries(['log_records', 'metric_points', 'spans'].map(signal => [signal, samplesByMetric[`otelcol_exporter_enqueue_failed_${signal}`]])),
@@ -1283,6 +1284,20 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       service: 'otel-collector', afterUs: collectorBeforeRestartAtUs,
       description: 'native Collector process uptime before restart',
     });
+    const collectorOutageLossBeforeRestart = await verifyCollectorQueueMetrics({
+      baseUrl, authorization, organization,
+      metricsPrefix: config.telemetry.openObserve.streams.metrics,
+      startTimeUs: openObserveRestartedAtUs,
+      lossStartTimeUs: openObserveStoppedAtUs,
+      queueCapacity: config.telemetry.collector.queueCapacity,
+    });
+    evidence.collectorOutageLossBeforeRestart = {
+      status: collectorOutageLossBeforeRestart.status,
+      collectorProcessStartedAt: collectorBeforeRestart.state.StartedAt,
+      queryStartedAtUs: openObserveRestartedAtUs,
+      lossWindowStartedAtUs: openObserveStoppedAtUs,
+      sendFailureSamples: collectorOutageLossBeforeRestart.sendFailureSamples,
+    };
     run(['stop', collectorName]);
     await fixtureRequest({baseUrl: fixtureBaseUrl, path: '/test/burst', body: {count: config.telemetry.producer.queueCapacity * 4}, runId});
     for (let index = 0; index < 4; index += 1) {

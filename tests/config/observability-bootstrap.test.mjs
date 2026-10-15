@@ -520,21 +520,49 @@ void test('Collector queue verification handles sparse streams without accepting
       [{_timestamp: recoveryStartUs + 1, value: 1, service_name: 'otel-collector'}],
     ]),
   ]);
-  const recoveryStreams = [...recoveryMetrics.keys()].map(name => `platform_metrics_${name}`);
-  const recoveryFetch = async (url, init) => {
+  const fetchRecoveryMetrics = metrics => async (url, init) => {
     if (url.pathname === '/api/coffee/streams')
-      return new Response(JSON.stringify({data: recoveryStreams.map(name => ({stream_type: 'metrics', name}))}), {status: 200});
+      return new Response(JSON.stringify({data: [...metrics.keys()].map(name => ({stream_type: 'metrics', name: `platform_metrics_${name}`}))}), {status: 200});
     const stream = url.searchParams.get('type') === 'metrics' &&
       JSON.parse(init.body).query.sql.match(/FROM "([^"]+)"/u)?.[1];
-    const records = recoveryMetrics.get(stream?.replace('platform_metrics_', '')) ?? [];
+    const records = metrics.get(stream?.replace('platform_metrics_', '')) ?? [];
     return new Response(JSON.stringify({hits: {hits: records}}), {status: 200});
   };
+  const recoveryFetch = fetchRecoveryMetrics(recoveryMetrics);
+  const recoveredBeforeCollectorRestart = await verifyCollectorQueueMetrics({
+    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+    metricsPrefix: 'platform_metrics', startTimeUs: recoveryStartUs, lossStartTimeUs: failureTimestampUs - 1,
+    queueCapacity: 512, fetchImpl: recoveryFetch, timeoutMs: 5000, intervalMs: 1,
+  });
+  assert.equal(recoveredBeforeCollectorRestart.status, 'PASS');
+  assert.deepEqual(recoveredBeforeCollectorRestart.sendFailureSamples.metric_points.timestampsUs, [failureTimestampUs]);
+  assert.equal(recoveredBeforeCollectorRestart.postRestartMetricTimestampsStrictlyAfterStartedAt, false);
+  assert.equal(recoveredBeforeCollectorRestart.historicalLossMetricWindowEndedAtRestart, false);
+
+  const noFailureMetrics = new Map(recoveryMetrics);
+  noFailureMetrics.delete('otelcol_exporter_send_failed_metric_points');
+  let missingLossError;
+  await assert.rejects(verifyCollectorQueueMetrics({
+    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+    metricsPrefix: 'platform_metrics', startTimeUs: recoveryStartUs, lossStartTimeUs: failureTimestampUs - 1,
+    queueCapacity: 512, fetchImpl: fetchRecoveryMetrics(noFailureMetrics), timeoutMs: 50, intervalMs: 1,
+  }), error => {
+    missingLossError = error;
+    return /Collector self-scrape queue, send-failure, and recovery counters did not complete/u.test(error.message);
+  });
+  const missingLossDiagnostic = JSON.parse(missingLossError.message.match(/; last bounded observation=(\{.*\})$/u)?.[1]);
+  assert.equal(missingLossDiagnostic.outageLossObserved, false,
+    'fresh queue and sent metrics do not pass without a positive outage loss sample');
+  assert.deepEqual(missingLossDiagnostic.positiveOutageLossMetrics, []);
+
   const recovered = await verifyCollectorQueueMetrics({
     baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
     metricsPrefix: 'platform_metrics', startTimeUs: recoveryStartUs, lossStartTimeUs: failureTimestampUs - 1,
     lossEndTimeUs: recoveryStartUs, queueCapacity: 512, fetchImpl: recoveryFetch, timeoutMs: 5000, intervalMs: 1,
   });
   assert.equal(recovered.status, 'PASS');
+  assert.equal(recovered.postRestartMetricTimestampsStrictlyAfterStartedAt, true);
+  assert.equal(recovered.historicalLossMetricWindowEndedAtRestart, true);
   assert.equal(recovered.sendFailureSamples.metric_points.values[0], 3);
   assert.deepEqual(recovered.optionalMetricStreamsAbsent.sort(), optionalFailureStreams.sort());
 });
