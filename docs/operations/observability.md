@@ -108,6 +108,23 @@ Native disk breaker отклоняет ingestion выше configured watermark. 
 cadence, retention, finished-job wait и file deletion delay заданы в config.
 Settings или ручной delete не доказывают expiry после TTL.
 
+Buffer policy OpenObserve задана явно в `telemetry.openObserve`: общий Arrow
+memtable ограничен 128 MiB при container limit 512 MiB, один файл ограничен
+8 MiB отдельно в памяти и на диске. Интервал 2 s сохраняет только уже
+immutable memtables; активный файл проверяется на ротацию по возрасту каждые
+30 s и при лимите 30 s может ротироваться почти через 60 s. Trusted generator
+передаёт эти значения как
+`ZO_MEM_TABLE_MAX_SIZE`, `ZO_MAX_FILE_SIZE_IN_MEMORY`,
+`ZO_MAX_FILE_SIZE_ON_DISK`, `ZO_MEM_PERSIST_INTERVAL` и
+`ZO_MAX_FILE_RETENTION_TIME` в Compose и canonical fixture из одного mapping.
+Параметры закреплены в upstream
+[`v1.1.0 config.rs`](https://github.com/openobserve/openobserve/blob/v1.1.0/src/config/src/config.rs#L2496-L2543),
+перевод MB в байты — в
+[`v1.1.0 config.rs`](https://github.com/openobserve/openobserve/blob/v1.1.0/src/config/src/config.rs#L4390-L4405),
+а ротация по возрасту — в
+[`v1.1.0 writer.rs`](https://github.com/openobserve/openobserve/blob/v1.1.0/src/ingester/src/writer.rs#L647-L684).
+Это конечные writer limits, не capacity/SLO guarantee.
+
 OpenObserve из принятого BOM суммирует диски всех mount points, являющихся
 префиксами data directory, включая `/`. Поэтому свободное место корневого диска
 также влияет на native breaker. Health probe отдельно проверяет заполнение `/data`;

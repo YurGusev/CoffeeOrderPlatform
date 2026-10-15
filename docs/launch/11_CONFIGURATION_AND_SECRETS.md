@@ -7,6 +7,10 @@ trusted bootstrap — `telemetry.openObserveAdmin`; Node сохраняет prod
 token. Generated config и secrets находятся в tmpfs. Normal OpenObserve runtime
 использует seeded persistent volume без admin secret. Новые encrypted leaves
 остаются fail-closed до provisioning; второй secrets/config source запрещён.
+OpenObserve writer limits (`memTableMaxSizeMiB`, два `maxFileSize*MiB`,
+`maxFileRetentionSeconds`, `memPersistIntervalSeconds`) обязательны и проходят
+schema/parser budget validation; точная политика и материализация описаны в
+[runbook](../operations/observability.md#bootstrap-и-storage).
 [Конкретный поток и runbook](../operations/observability.md).
 
 Reference-профиль #162 содержит 14 Node runtime и один native nginx по

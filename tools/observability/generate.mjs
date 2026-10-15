@@ -24,6 +24,16 @@ function requireValue(value, name) {
   return value;
 }
 
+export function openObserveBufferEnvironment(openObserve) {
+  return {
+    ZO_MEM_TABLE_MAX_SIZE: String(requireValue(openObserve?.memTableMaxSizeMiB, 'telemetry.openObserve.memTableMaxSizeMiB')),
+    ZO_MAX_FILE_SIZE_IN_MEMORY: String(requireValue(openObserve?.maxFileSizeInMemoryMiB, 'telemetry.openObserve.maxFileSizeInMemoryMiB')),
+    ZO_MAX_FILE_SIZE_ON_DISK: String(requireValue(openObserve?.maxFileSizeOnDiskMiB, 'telemetry.openObserve.maxFileSizeOnDiskMiB')),
+    ZO_MAX_FILE_RETENTION_TIME: String(requireValue(openObserve?.maxFileRetentionSeconds, 'telemetry.openObserve.maxFileRetentionSeconds')),
+    ZO_MEM_PERSIST_INTERVAL: String(requireValue(openObserve?.memPersistIntervalSeconds, 'telemetry.openObserve.memPersistIntervalSeconds')),
+  };
+}
+
 export async function verifyBootstrapProbe({probePath = '/usr/bin/busybox', expectedSha256} = {}) {
   if (!/^[a-f0-9]{64}$/u.test(expectedSha256 ?? '')) throw new Error('bootstrapProbeSha256 BOM ref is required');
   const info = await lstat(probePath);
@@ -109,6 +119,11 @@ export async function createObservabilityProvenance({root = REPO_ROOT, config, i
       logging: {maxSizeMiB: config.telemetry.logging.maxSizeMiB, maxFiles: config.telemetry.logging.maxFiles},
       openObserve: {
         memoryLimitMiB: config.telemetry.openObserve.memoryLimitMiB,
+        memTableMaxSizeMiB: config.telemetry.openObserve.memTableMaxSizeMiB,
+        maxFileSizeInMemoryMiB: config.telemetry.openObserve.maxFileSizeInMemoryMiB,
+        maxFileSizeOnDiskMiB: config.telemetry.openObserve.maxFileSizeOnDiskMiB,
+        maxFileRetentionSeconds: config.telemetry.openObserve.maxFileRetentionSeconds,
+        memPersistIntervalSeconds: config.telemetry.openObserve.memPersistIntervalSeconds,
         telemetryEnabled: config.telemetry.openObserve.telemetryEnabled,
         mmdbDownloadEnabled: config.telemetry.openObserve.mmdbDownloadEnabled,
         modelPricingEnabled: config.telemetry.openObserve.modelPricingEnabled,
@@ -442,6 +457,7 @@ export function createComposeOverride({config, imageRefs, logFiles, collectorCon
           ZO_HTTP_PORT: String(openObservePort),
           ZO_ROOT_USER_EMAIL: String(config.telemetry.openObserve.bootstrapEmail),
           ZO_ROOT_USER_PASSWORD: String(requireValue(config.telemetry.openObserve.validationMarker, 'telemetry.openObserve.validationMarker')),
+          ...openObserveBufferEnvironment(config.telemetry.openObserve),
           ZO_TELEMETRY: String(config.telemetry.openObserve.telemetryEnabled),
           ZO_MMDB_DISABLE_DOWNLOAD: String(!config.telemetry.openObserve.mmdbDownloadEnabled),
           ZO_MODEL_PRICING_ENABLED: String(config.telemetry.openObserve.modelPricingEnabled),

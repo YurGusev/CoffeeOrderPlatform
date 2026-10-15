@@ -8,7 +8,7 @@ import {dump as dumpYaml} from 'js-yaml';
 import {loadPlatformConfig} from '../../scripts/config-lib.mjs';
 import {installNativeAlerts, newRunId} from './alerts.mjs';
 import {initializeOpenObserve} from './bootstrap.mjs';
-import {discoverContainerLogs, createCollectorConfig, createComposeOverride, OBSERVABILITY_TARGETS} from './generate.mjs';
+import {discoverContainerLogs, createCollectorConfig, createComposeOverride, openObserveBufferEnvironment, OBSERVABILITY_TARGETS} from './generate.mjs';
 import {provisionStorage, removeStorage} from './storage.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -914,13 +914,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     add(openObserveName);
     const emulatorMount = emulator === undefined ? [] : ['--mount', `type=bind,source=${emulator.path},target=/run/tools/qemu-x86_64,readonly`];
     run(['run', '-d', '--name', openObserveName, '--network', backendNetwork, '--network-alias', 'openobserve',
-      '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '2', '--memory', '512m', '--pids-limit', '128',
+      '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '2', '--memory', `${openObserve.memoryLimitMiB}m`, '--pids-limit', '128',
       '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL',
       '--mount', `type=volume,source=${storage.volumeName},target=/data`,
       '--mount', `type=bind,source=${probePath},target=/busybox,readonly`,
       '--user', '10001:10001', '--env', 'ZO_LOCAL_MODE=true', '--env', 'ZO_DATA_DIR=/data', '--env', 'ZO_HTTP_PORT=5080',
       '--env', `ZO_ROOT_USER_EMAIL=${config.telemetry.openObserve.bootstrapEmail}`,
       '--env', `ZO_ROOT_USER_PASSWORD=${runtimeCredentialPlaceholder}`,
+      ...Object.entries(openObserveBufferEnvironment(openObserve)).flatMap(([name, value]) => ['--env', `${name}=${value}`]),
       '--env', `ZO_TELEMETRY=${openObserve.telemetryEnabled}`,
       '--env', `ZO_MMDB_DISABLE_DOWNLOAD=${!openObserve.mmdbDownloadEnabled}`,
       '--env', `ZO_MODEL_PRICING_ENABLED=${openObserve.modelPricingEnabled}`,
@@ -980,6 +981,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     if (!backendPrivateOnly) throw new Error('OpenObserve fixture must have no host bindings and attach only to its isolated backend network');
     evidence.openObserveDisk = openObserveDiskDiagnostics({run, name: openObserveName});
     if (!normalEnvironment.includes(`ZO_ROOT_USER_PASSWORD=${runtimeCredentialPlaceholder}`) || normalEnvironment.some(value => value.includes(adminPassword)) ||
+        Object.entries(openObserveBufferEnvironment(openObserve)).some(([name, value]) => !normalEnvironment.includes(`${name}=${value}`)) ||
         !normalEnvironment.includes('ZO_TELEMETRY=false') || !normalEnvironment.includes('ZO_MMDB_DISABLE_DOWNLOAD=true') ||
         !normalEnvironment.includes('ZO_MODEL_PRICING_ENABLED=false'))
       throw new Error('normal OpenObserve runtime received unexpected bootstrap credentials or optional network features are enabled');

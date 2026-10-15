@@ -259,6 +259,8 @@ export type TelemetryConfig = Readonly<{
   logging: Readonly<{maxSizeMiB: number; maxFiles: number}>;
   openObserve: Readonly<{
     endpoint: string; organization: string; bootstrapEmail: string; validationMarker: "bootstrap-validation-placeholder"; memoryLimitMiB: number;
+    memTableMaxSizeMiB: number; maxFileSizeInMemoryMiB: number; maxFileSizeOnDiskMiB: number;
+    maxFileRetentionSeconds: number; memPersistIntervalSeconds: number;
     telemetryEnabled: false; mmdbDownloadEnabled: false; modelPricingEnabled: false;
     streams: Readonly<{logs: string; traces: string; metrics: string}>;
     retentionDays: number; deleteFilesDelayMinutes: number; maxDiskBytes: number; diskWatermarkPercent: number;
@@ -1300,7 +1302,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   const logging = record(source["logging"], `${path}.logging`);
   exactKeys(logging, ["maxSizeMiB", "maxFiles"], `${path}.logging`);
   const openObserve = record(source["openObserve"], `${path}.openObserve`);
-  exactKeys(openObserve, ["endpoint", "organization", "bootstrapEmail", "validationMarker", "telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled", "memoryLimitMiB", "streams", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "diskWatermarkPercent", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
+  exactKeys(openObserve, ["endpoint", "organization", "bootstrapEmail", "validationMarker", "telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled", "memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "streams", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "diskWatermarkPercent", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
   const streams = record(openObserve["streams"], `${path}.openObserve.streams`);
   exactKeys(streams, ["logs", "traces", "metrics"], `${path}.openObserve.streams`);
   for (const key of ["logs", "traces", "metrics"]) {
@@ -1339,8 +1341,13 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   const collectorValues = positive(collector, ["memoryLimitMiB", "memorySpikeMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
   const producerValues = positive(producer, ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], `${path}.producer`);
   const loggingValues = positive(logging, ["maxSizeMiB", "maxFiles"], `${path}.logging`);
-  const storageValues = positive(openObserve, ["memoryLimitMiB", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
+  const storageValues = positive(openObserve, ["memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
   const diskWatermarkPercent = integerValue(openObserve["diskWatermarkPercent"], `${path}.openObserve.diskWatermarkPercent`);
+  const openObserveBufferBudgetInvalid =
+    storageValues["maxFileSizeInMemoryMiB"]! >= storageValues["memTableMaxSizeMiB"]! ||
+    storageValues["memTableMaxSizeMiB"]! >= storageValues["memoryLimitMiB"]! ||
+    storageValues["maxFileSizeOnDiskMiB"]! * 1024 * 1024 > storageValues["maxDiskBytes"]! ||
+    storageValues["memPersistIntervalSeconds"]! > storageValues["maxFileRetentionSeconds"]!;
   if (openObserve["validationMarker"] !== "bootstrap-validation-placeholder")
     throw new PlatformConfigError(`${path}.openObserve.validationMarker`, "ожидался несекретный startup marker");
   if (openObserve["telemetryEnabled"] !== false || openObserve["mmdbDownloadEnabled"] !== false || openObserve["modelPricingEnabled"] !== false)
@@ -1348,7 +1355,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   const bootstrapEmail = stringValue(openObserve["bootstrapEmail"], `${path}.openObserve.bootstrapEmail`);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(bootstrapEmail))
     throw new PlatformConfigError(`${path}.openObserve.bootstrapEmail`, "ожидался email оператора bootstrap");
-  if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]!)
+  if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]! || openObserveBufferBudgetInvalid)
     throw new PlatformConfigError(path, "telemetry budgets are inconsistent");
   if (alerts["version"] !== 1) throw new PlatformConfigError(`${path}.alerts.version`, "поддерживается только версия 1");
   return Object.freeze({

@@ -12,6 +12,7 @@ import {
   discoverContainerLogs,
   ensureCollectorConfigOwnership,
   generateRuntimeLoggingOverride,
+  openObserveBufferEnvironment,
   verifyBootstrapProbe,
 } from '../../tools/observability/generate.mjs';
 import {materializeCollectorSecrets, materializeOpenObserveAdminSecret} from '../../tools/config-bootstrap/index.mjs';
@@ -42,6 +43,8 @@ const sample = {
       endpoint: 'http://openobserve:5080', organization: 'coffee',
       bootstrapEmail: 'operations@coffee-platform.internal', validationMarker: 'bootstrap-validation-placeholder',
       telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, memoryLimitMiB: 512,
+      memTableMaxSizeMiB: 128, maxFileSizeInMemoryMiB: 8, maxFileSizeOnDiskMiB: 8,
+      maxFileRetentionSeconds: 30, memPersistIntervalSeconds: 2,
       streams: {logs: 'platform_logs', traces: 'platform_traces', metrics: 'platform_metrics'},
       retentionDays: 3, maxDiskBytes: 1073741824, diskWatermarkPercent: 80,
       compactionIntervalSeconds: 60, deleteFilesDelayMinutes: 1, jobCleanupWaitSeconds: 60,
@@ -145,6 +148,16 @@ void test('generated provenance records pinned sources and limits without secret
   assert.equal(provenance.sourceSha256.lockfile.length, 64);
   assert.equal(provenance.limits.collector.queueCapacity, 512);
   assert.equal(provenance.limits.openObserve.retentionDays, 3);
+  assert.deepEqual({
+    memTableMaxSizeMiB: provenance.limits.openObserve.memTableMaxSizeMiB,
+    maxFileSizeInMemoryMiB: provenance.limits.openObserve.maxFileSizeInMemoryMiB,
+    maxFileSizeOnDiskMiB: provenance.limits.openObserve.maxFileSizeOnDiskMiB,
+    maxFileRetentionSeconds: provenance.limits.openObserve.maxFileRetentionSeconds,
+    memPersistIntervalSeconds: provenance.limits.openObserve.memPersistIntervalSeconds,
+  }, {
+    memTableMaxSizeMiB: 128, maxFileSizeInMemoryMiB: 8, maxFileSizeOnDiskMiB: 8,
+    maxFileRetentionSeconds: 30, memPersistIntervalSeconds: 2,
+  });
   assert.deepEqual(
     [provenance.limits.openObserve.telemetryEnabled, provenance.limits.openObserve.mmdbDownloadEnabled, provenance.limits.openObserve.modelPricingEnabled],
     [false, false, false],
@@ -440,6 +453,12 @@ void test('Collector config accepts only exact selected log files and bounds exp
   });
   assert.ok(compose.services['otel-collector'].networks.includes('coffee_edge_backend'),
     'Collector stays in the existing edge trust zone used by edge-nginx');
+  const bufferEnvironment = {
+    ZO_MEM_TABLE_MAX_SIZE: '128', ZO_MAX_FILE_SIZE_IN_MEMORY: '8', ZO_MAX_FILE_SIZE_ON_DISK: '8',
+    ZO_MAX_FILE_RETENTION_TIME: '30', ZO_MEM_PERSIST_INTERVAL: '2',
+  };
+  assert.deepEqual(openObserveBufferEnvironment(sample.telemetry.openObserve), bufferEnvironment);
+  assert.deepEqual(Object.fromEntries(Object.keys(bufferEnvironment).map(name => [name, compose.services.openobserve.environment[name]])), bufferEnvironment);
   const redaction = config.processors['transform/records'].log_statements[0].statements[1].match(/delete_matching_keys\(log\.body, "(.*)"\)/u)?.[1];
   const redactionKey = new RegExp(redaction.slice(4), 'iu');
   assert.equal(redactionKey.test('password'), true);

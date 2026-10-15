@@ -146,6 +146,11 @@ telemetry:
     mmdbDownloadEnabled: false
     modelPricingEnabled: false
     memoryLimitMiB: 512
+    memTableMaxSizeMiB: 128
+    maxFileSizeInMemoryMiB: 8
+    maxFileSizeOnDiskMiB: 8
+    maxFileRetentionSeconds: 30
+    memPersistIntervalSeconds: 2
     streams:
       logs: platform_logs
       traces: platform_traces
