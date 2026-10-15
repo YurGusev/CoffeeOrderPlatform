@@ -372,7 +372,7 @@ export async function runTransportFixture(options,hooks={}){
       if(driverExit!==0&&!result.error)throw new Error(`real driver exited ${driverExit}`);
       }
     }
-  }catch(e){result.error={code:e.code??'HARNESS_FAILED',message:redact(e.message)};if(Array.isArray(e.containerDiagnostics))result.containerDiagnostics=e.containerDiagnostics;const launchFailure=await captureLaunchFailure(e);if(launchFailure)result.launchFailure=launchFailure;result.status='FAIL';result.launchProof=false;}
+  }catch(e){result.error={code:e.code??'HARNESS_FAILED',message:redact(e.message)};if(Array.isArray(e.containerDiagnostics))result.containerDiagnostics=e.containerDiagnostics;const launchFailure=await captureLaunchFailure(e);if(e.launchFailure)result.launchFailure=e.launchFailure;else if(launchFailure)result.launchFailure=launchFailure;result.status='FAIL';result.launchProof=false;}
   finally{
     await stopObservers();
     const cleanupStart=performance.now(),receipts=[];

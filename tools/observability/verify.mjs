@@ -2210,6 +2210,7 @@ keep=1`;
   } catch (error) {
     evidence.status = 'FAIL';
     evidence.failure = error.message;
+    if (error.launchFailure?.stage === 'orders-outbox-relay') evidence.launchFailure = error.launchFailure;
     evidence.completedAt = new Date().toISOString();
     const capturedNames = new Set(evidence.containerDiagnostics.map(item => item.name));
     for (const name of containers) {

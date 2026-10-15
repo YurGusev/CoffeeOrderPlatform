@@ -291,7 +291,43 @@ export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRole
         assert.equal(command.status,202,`real api-public -> Orders command failed: ${command.status}`);assert.equal(command.correlationId,commandCorrelation);
         const ownerRow=await bounded(async()=>{const rows=await f.read("SELECT message_id,message_type,topic,state,correlation_id,causation_id,traceparent FROM orders.outbox_messages WHERE message_type='OrderReconciliationRequested.v1' AND aggregate_ref=$1 AND correlation_id=$2",[state.orderRef,commandCorrelation]);return rows.length===1?rows[0]:false;},{timeout:15000,interval:100,label:'real Orders HTTP command persisted Outbox'});
         assert.equal(ownerRow.traceparent,traceparent);assert.equal(ownerRow.causation_id,null,'accepted public command is the root event in this synthetic causal chain');
-        await bounded(async()=>{const rows=await f.read('SELECT state FROM orders.outbox_messages WHERE message_id=$1',[ownerRow.message_id]);return rows[0]?.state==='Published';},{timeout:20000,interval:100,label:'Orders Outbox relayed through real Kafka'});
+        phase='orders-outbox-relay';
+        let lastObservation=null;
+        try{
+          await bounded(async()=>{
+            const rows=await f.read(`SELECT CASE message.state WHEN 'Pending' THEN 'Pending' WHEN 'Publishing' THEN 'Publishing' WHEN 'Published' THEN 'Published' WHEN 'Quarantined' THEN 'Quarantined' ELSE 'OTHER' END AS state,
+              message.attempt,(message.state='Publishing' AND message.lease_until>clock_timestamp()) AS lease_active,(message.next_attempt_at<=clock_timestamp()) AS retry_due,
+              CASE WHEN message.last_error IS NULL THEN NULL WHEN message.last_error LIKE 'KAFKA_CONFIG_INVALID%' THEN 'KAFKA_CONFIG_INVALID'
+                WHEN message.last_error LIKE 'KAFKA_ENVELOPE_INVALID%' THEN 'KAFKA_ENVELOPE_INVALID' WHEN message.last_error LIKE 'KAFKA_QUEUE_FULL%' THEN 'KAFKA_QUEUE_FULL' ELSE 'OTHER' END AS last_error_class,
+              (SELECT count(*)::integer FROM orders.outbox_messages predecessor WHERE predecessor.aggregate_ref=message.aggregate_ref AND predecessor.aggregate_sequence<message.aggregate_sequence AND predecessor.state='Pending') AS predecessor_pending,
+              (SELECT count(*)::integer FROM orders.outbox_messages predecessor WHERE predecessor.aggregate_ref=message.aggregate_ref AND predecessor.aggregate_sequence<message.aggregate_sequence AND predecessor.state='Publishing') AS predecessor_publishing,
+              (SELECT count(*)::integer FROM orders.outbox_messages predecessor WHERE predecessor.aggregate_ref=message.aggregate_ref AND predecessor.aggregate_sequence<message.aggregate_sequence AND predecessor.state='Published') AS predecessor_published,
+              (SELECT count(*)::integer FROM orders.outbox_messages predecessor WHERE predecessor.aggregate_ref=message.aggregate_ref AND predecessor.aggregate_sequence<message.aggregate_sequence AND predecessor.state='Quarantined') AS predecessor_quarantined
+              FROM orders.outbox_messages message WHERE message.message_id=$1`,[ownerRow.message_id]);
+            const row=rows[0];
+            if(row){
+              const safeCount=value=>Number.isSafeInteger(value)&&value>=0?value:null;
+              const allowedErrorClasses=['KAFKA_CONFIG_INVALID','KAFKA_ENVELOPE_INVALID','KAFKA_QUEUE_FULL','OTHER'];
+              lastObservation={
+                state:['Pending','Publishing','Published','Quarantined','OTHER'].includes(row.state)?row.state:'OTHER',
+                attempt:safeCount(row.attempt),lease_active:row.lease_active,retry_due:row.retry_due,last_error_class:row.last_error_class,
+                predecessors:{Pending:safeCount(row.predecessor_pending),Publishing:safeCount(row.predecessor_publishing),Published:safeCount(row.predecessor_published),Quarantined:safeCount(row.predecessor_quarantined)},
+              };
+              assert.deepEqual(Object.keys(lastObservation).sort(),['attempt','last_error_class','lease_active','predecessors','retry_due','state']);
+              assert.ok(['Pending','Publishing','Published','Quarantined','OTHER'].includes(lastObservation.state));
+              assert.deepEqual(Object.keys(lastObservation.predecessors).sort(),['Pending','Published','Publishing','Quarantined']);
+              assert.ok(Number.isSafeInteger(lastObservation.attempt)&&lastObservation.attempt>=0&&
+                Object.values(lastObservation.predecessors).every(value=>Number.isSafeInteger(value)&&value>=0),
+              'Orders Outbox diagnostic counters are safe non-negative integers');
+              assert.ok(typeof lastObservation.lease_active==='boolean'&&typeof lastObservation.retry_due==='boolean');
+              assert.ok(lastObservation.last_error_class===null||allowedErrorClasses.includes(lastObservation.last_error_class));
+            }
+            return lastObservation?.state==='Published';
+          },{timeout:20000,interval:100,label:'Orders Outbox relayed through real Kafka'});
+        }catch(error){
+          error.launchFailure={stage:'orders-outbox-relay',messageIdSha256:shortHash(ownerRow.message_id),lastObservation};
+          throw error;
+        }
         const prepInbox=await bounded(async()=>{const rows=await f.read("SELECT state FROM orders.inbox_messages WHERE consumer_name='orders-aroma-preparation-v1' AND message_id=$1",[ownerRow.message_id]);return rows[0]?.state==='Processed'?rows[0]:false;},{timeout:30000,interval:100,label:'real prep consumer commits command through Inbox'});
         const wakeRow=await bounded(async()=>{const rows=await f.read("SELECT message_id,message_type,topic,state,correlation_id,causation_id,traceparent FROM orders.outbox_messages WHERE message_type='AromaConvergenceRequested.v1' AND causation_id=$1 AND correlation_id=$2",[ownerRow.message_id,commandCorrelation]);return rows.length===1&&rows[0].state==='Published'?rows[0]:false;},{timeout:30000,interval:100,label:'preparation owner emits a published convergence wake caused by the accepted command'});
         assert.equal(wakeRow.state,'Published');assert.equal(wakeRow.topic,setup.config.kafka.topics.aromaCommands.name);
