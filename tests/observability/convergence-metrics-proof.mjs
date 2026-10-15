@@ -216,6 +216,9 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
     const finalFacts=await readSnapshot(database,facts);
     assert.deepEqual(finalFacts.map(row=>row.attempt_state),['UnknownOutcome','NoOpInSync']);
     assert.deepEqual(finalFacts.map(row=>row.reservation_state),['RecoveredApplied',null]);
+    await delay(telemetryConfig.producer.batchIntervalMs+100);
+    assert.equal(metricValue(telemetry.render(),'coffee_aroma_unknown_outcomes_current',undefined),0);
+    assert.equal(metricValue(telemetry.render(),'coffee_aroma_recovery_results_total','recovered_applied'),1);
 
     proofResult={verified:true,owner:'aroma-convergence',attemptStates:finalFacts.map(row=>row.attempt_state),
       reservationRecovery:'RecoveredApplied',unknownOutcomeTerminalCount:1,unknownOutcomeCounter:1,
