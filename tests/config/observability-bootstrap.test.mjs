@@ -483,11 +483,26 @@ void test('Collector queue verification handles sparse streams without accepting
     searchCount += 1;
     return new Response(JSON.stringify({hits: {hits: []}}), {status: 200});
   };
+  let timeoutError;
   await assert.rejects(verifyCollectorQueueMetrics({
     baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
     metricsPrefix: 'platform_metrics', startTimeUs: 1000, lossStartTimeUs: 500, lossEndTimeUs: 1000,
     queueCapacity: 512, fetchImpl, timeoutMs: 1000, intervalMs: 20,
-  }), /Collector self-scrape queue, send-failure, and recovery counters did not complete$/u);
+  }), error => {
+    timeoutError = error;
+    return /Collector self-scrape queue, send-failure, and recovery counters did not complete/u.test(error.message);
+  });
+  const diagnosticJson = timeoutError.message.match(/; last bounded observation=(\{.*\})$/u)?.[1];
+  assert.ok(diagnosticJson, 'timeout reports a bounded last observation instead of hiding the missing metric');
+  const diagnostics = JSON.parse(diagnosticJson);
+  assert.deepEqual(diagnostics.missingFreshRequiredMetrics, [
+    'otelcol_exporter_queue_size', 'otelcol_exporter_queue_capacity', 'otelcol_exporter_sent_log_records',
+    'otelcol_exporter_sent_metric_points', 'otelcol_exporter_sent_spans',
+  ]);
+  assert.equal(diagnostics.metrics.otelcol_exporter_sent_spans.available, false);
+  assert.equal(diagnostics.metrics.otelcol_exporter_send_failed_log_records.sampleCount, 0,
+    'sparse optional failure streams remain valid empty observations');
+  assert.deepEqual(diagnostics.positiveOutageLossMetrics, []);
   assert.ok(searchCount > 0, 'available streams were queried while the absent required counter remained pending');
 
   const recoveryStartUs = 1_000_000_000_000_000;

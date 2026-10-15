@@ -488,7 +488,8 @@ export async function verifyCollectorQueueMetrics({baseUrl, authorization, organ
     'otelcol_exporter_send_failed_log_records', 'otelcol_exporter_send_failed_metric_points', 'otelcol_exporter_send_failed_spans',
     'otelcol_exporter_sent_log_records', 'otelcol_exporter_sent_metric_points', 'otelcol_exporter_sent_spans',
   ];
-  return waitFor(async () => {
+  let lastObservation = null;
+  try { return await waitFor(async () => {
     const inventory = streamEntries(await api({fetchImpl, baseUrl, authorization, organization, path: `/api/${encodeURIComponent(organization)}/streams`}));
     const availableStreams = new Set(inventory.filter(stream => stream?.stream_type === 'metrics').map(stream => stream.name));
     const samplesByMetric = {};
@@ -513,12 +514,34 @@ export async function verifyCollectorQueueMetrics({baseUrl, authorization, organ
     const capacity = samplesByMetric.otelcol_exporter_queue_capacity.values;
     const sent = ['log_records', 'metric_points', 'spans'].flatMap(signal =>
       samplesByMetric[`otelcol_exporter_sent_${signal}`].values);
-    const freshQueueSamples = ['otelcol_exporter_queue_size', 'otelcol_exporter_queue_capacity',
-      'otelcol_exporter_sent_log_records', 'otelcol_exporter_sent_metric_points', 'otelcol_exporter_sent_spans']
-      .every(metric => samplesByMetric[metric].timestampsUs.some(timestamp => timestamp > startTimeUs));
-    const outageLossSamples = ['otelcol_exporter_send_failed_log_records', 'otelcol_exporter_send_failed_metric_points', 'otelcol_exporter_send_failed_spans']
-      .some(metric => samplesByMetric[metric].timestampsUs.some(timestamp => timestamp >= lossStartTimeUs &&
+    const requiredFreshMetrics = ['otelcol_exporter_queue_size', 'otelcol_exporter_queue_capacity',
+      'otelcol_exporter_sent_log_records', 'otelcol_exporter_sent_metric_points', 'otelcol_exporter_sent_spans'];
+    const missingFreshRequiredMetrics = requiredFreshMetrics.filter(metric =>
+      !samplesByMetric[metric].timestampsUs.some(timestamp => timestamp > startTimeUs));
+    const freshQueueSamples = missingFreshRequiredMetrics.length === 0;
+    const positiveOutageLossMetrics = ['otelcol_exporter_send_failed_log_records', 'otelcol_exporter_send_failed_metric_points', 'otelcol_exporter_send_failed_spans']
+      .filter(metric => samplesByMetric[metric].timestampsUs.some(timestamp => timestamp >= lossStartTimeUs &&
         (lossEndTimeUs === undefined || timestamp < lossEndTimeUs)) && samplesByMetric[metric].values.some(value => value > 0));
+    const outageLossSamples = positiveOutageLossMetrics.length > 0;
+    lastObservation = {
+      metrics: Object.fromEntries(metricNames.map(metricName => {
+        const sample = samplesByMetric[metricName];
+        return [metricName, {
+          available: sample.available,
+          sampleCount: sample.sampleCount,
+          latestTimestampUs: sample.timestampsUs.length ? Math.max(...sample.timestampsUs) : null,
+          ...(sample.values.length ? {minimum: Math.min(...sample.values), maximum: Math.max(...sample.values)} : {}),
+        }];
+      })),
+      missingFreshRequiredMetrics,
+      positiveOutageLossMetrics,
+      outageLossObserved: outageLossSamples,
+      queueWithinBounds: queue.length > 0 && queue.every(value => value >= 0 && value <= queueCapacity),
+      configuredCapacityObserved: capacity.some(value => value === queueCapacity),
+      positiveSentMetrics: ['otelcol_exporter_sent_log_records', 'otelcol_exporter_sent_metric_points', 'otelcol_exporter_sent_spans']
+        .filter(metric => samplesByMetric[metric].values.some(value => value > 0)),
+      freshRequiredMetricsObserved: freshQueueSamples,
+    };
     if (queue.length === 0 || capacity.length === 0 || !capacity.some(value => value === queueCapacity) ||
         queue.some(value => value < 0 || value > queueCapacity) || !outageLossSamples || !sent.some(value => value > 0) || !freshQueueSamples)
       return false;
@@ -538,7 +561,12 @@ export async function verifyCollectorQueueMetrics({baseUrl, authorization, organ
         .flatMap(signal => [`otelcol_exporter_enqueue_failed_${signal}`, `otelcol_exporter_send_failed_${signal}`, `otelcol_exporter_sent_${signal}`])
         .filter(metricName => !samplesByMetric[metricName].available),
     };
-  }, {timeoutMs, intervalMs, description: 'Collector self-scrape queue, send-failure, and recovery counters'});
+  }, {timeoutMs, intervalMs, description: 'Collector self-scrape queue, send-failure, and recovery counters'}); }
+  catch (error) {
+    if (error instanceof Error && lastObservation !== null)
+      error.message += `; last bounded observation=${JSON.stringify(lastObservation)}`;
+    throw error;
+  }
 }
 
 function collectorExpiredRetryDropEvidence({name, startTimeUs}) {
