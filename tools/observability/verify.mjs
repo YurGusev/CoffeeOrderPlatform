@@ -1967,6 +1967,63 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       collector: evidence.outageRestart.collectorProcessGeneration,
     };
 
+    // Штатные короткие Outbox samples живых owners мешают synthetic recovery.
+    await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: true});
+    await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
+    const metricAlertInputs = {};
+    for (const [key, suffix, predicate] of [
+      ['notReady', 'runtime_ready', value => value <= 0],
+      ['consumerLag', 'messaging_kafka_consumer_lag', value => value > config.telemetry.alerts.consumerLag.threshold],
+      ['outboxOldestAge', 'messaging_outbox_oldest_unpublished_age', value => value > config.telemetry.alerts.outboxOldestAge.threshold],
+      ['unknownOutcome', 'coffee_aroma_unknown_outcomes_current', value => value > config.telemetry.alerts.unknownOutcome.threshold],
+    ]) {
+      const stream = `${config.telemetry.openObserve.streams.metrics}_${suffix}`;
+      const metric = await verifyMetricThreshold({baseUrl, authorization, organization, stream, predicate, description: `synthetic alert input metric ${key} exceeds its production gate`});
+      metricAlertInputs[key] = {stream, sampleCount: metric.samples.length, matchingValues: metric.values.filter(predicate).length};
+    }
+    for (const suffix of ['coffee_realtime_invalidation_attempts_total', 'coffee_realtime_invalidation_dropped_total']) {
+      const stream = `${config.telemetry.openObserve.streams.metrics}_${suffix}`;
+      const metric = await verifyMetricThreshold({baseUrl, authorization, organization, stream, predicate: value => value > 0, timeoutMs: 130000, description: `synthetic alert input counter ${suffix} is exported`});
+      metricAlertInputs[suffix] = {stream, sampleCount: metric.samples.length, positiveValues: metric.values.filter(value => value > 0).length};
+    }
+    evidence.alertInputs = metricAlertInputs;
+    // The backend restart replaces its loopback namespace; join only after recovery.
+    const sinkName = `${project}-alert-sink`;
+    add(sinkName);
+    run(['run', '-d', '--name', sinkName, `--network=container:${openObserveName}`,
+      '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '0.25', '--memory', '64m', '--pids-limit', '16',
+      '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', `${process.getuid()}:${process.getgid()}`,
+      '--mount', `type=bind,source=${resolve(dirname(fileURLToPath(import.meta.url)), 'alert-sink.mjs')},target=/alert-sink.mjs,readonly`,
+      '--mount', `type=bind,source=${sinkPath},target=/evidence/alert-events.jsonl`,
+      toolchain.nodeImage, 'node', '/alert-sink.mjs', '/evidence/alert-events.jsonl']);
+
+    const definitions = await installNativeAlerts({config, baseUrl, organization, authorization});
+    const observed = new Map();
+    const notReadyRule = definitions.find(rule => rule.key === 'notReady');
+    if (!notReadyRule) throw new Error('native alert definitions lack the existing notReady rule');
+    const maxForMs = Math.max(...definitions.map(({pendingPeriodSec}) => pendingPeriodSec)) * 1000;
+    const fireDeadline = maxForMs + 4 * config.telemetry.alerts.evaluationIntervalMs;
+    const resolveDeadline = maxForMs + 4 * config.telemetry.alerts.evaluationIntervalMs;
+    await waitFor(async () => {
+      const events = await readSinkEvents(sinkPath);
+      for (const definition of definitions) {
+        const firing = events.find(event => event.name === definition.name && event.status === 'firing');
+        if (firing) observed.set(definition.name, firing.episodeId);
+      }
+      return observed.size === definitions.length;
+    }, {timeoutMs: fireDeadline, intervalMs: 5000, description: 'native OpenObserve alert firing transitions'});
+    await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: false});
+    await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
+    await waitFor(async () => {
+      const events = await readSinkEvents(sinkPath);
+      return definitions.every(definition => events.some(event => event.name === definition.name && event.status === 'resolved' && event.episodeId === observed.get(definition.name)));
+    }, {timeoutMs: resolveDeadline, intervalMs: 5000, description: 'native OpenObserve alert recovery transitions'});
+    evidence.alerts = definitions.map(({key, pendingPeriodSec, threshold, name, streamName, queryCondition}) => ({
+      key, name, streamName, queryType: queryCondition.type, query: queryCondition.promql,
+      comparator: queryCondition.promql_condition.operator, threshold, pendingPeriodSec,
+      episodeId: observed.get(name), firing: true, resolved: true,
+    }));
+
     const previousTmpDir = process.env.TMPDIR;
     process.env.TMPDIR = workDir;
     let launchNetwork;
@@ -2372,61 +2429,6 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           }
           evidence.networkIsolation.runtimeMetricMatrix = {status: 'PASS', zones};
 
-          await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: true});
-          await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
-          const metricAlertInputs = {};
-          for (const [key, suffix, predicate] of [
-            ['notReady', 'runtime_ready', value => value <= 0],
-            ['consumerLag', 'messaging_kafka_consumer_lag', value => value > config.telemetry.alerts.consumerLag.threshold],
-            ['outboxOldestAge', 'messaging_outbox_oldest_unpublished_age', value => value > config.telemetry.alerts.outboxOldestAge.threshold],
-            ['unknownOutcome', 'coffee_aroma_unknown_outcomes_current', value => value > config.telemetry.alerts.unknownOutcome.threshold],
-          ]) {
-            const stream = `${config.telemetry.openObserve.streams.metrics}_${suffix}`;
-            const metric = await verifyMetricThreshold({baseUrl, authorization, organization, stream, predicate, description: `synthetic alert input metric ${key} exceeds its production gate`});
-            metricAlertInputs[key] = {stream, sampleCount: metric.samples.length, matchingValues: metric.values.filter(predicate).length};
-          }
-          for (const suffix of ['coffee_realtime_invalidation_attempts_total', 'coffee_realtime_invalidation_dropped_total']) {
-            const stream = `${config.telemetry.openObserve.streams.metrics}_${suffix}`;
-            const metric = await verifyMetricThreshold({baseUrl, authorization, organization, stream, predicate: value => value > 0, timeoutMs: 130000, description: `synthetic alert input counter ${suffix} is exported`});
-            metricAlertInputs[suffix] = {stream, sampleCount: metric.samples.length, positiveValues: metric.values.filter(value => value > 0).length};
-          }
-          evidence.alertInputs = metricAlertInputs;
-          // The backend restart replaces its loopback namespace; join only after recovery.
-          const sinkName = `${project}-alert-sink`;
-          add(sinkName);
-          run(['run', '-d', '--name', sinkName, `--network=container:${openObserveName}`,
-            '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '0.25', '--memory', '64m', '--pids-limit', '16',
-            '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', `${process.getuid()}:${process.getgid()}`,
-            '--mount', `type=bind,source=${resolve(dirname(fileURLToPath(import.meta.url)), 'alert-sink.mjs')},target=/alert-sink.mjs,readonly`,
-            '--mount', `type=bind,source=${sinkPath},target=/evidence/alert-events.jsonl`,
-            toolchain.nodeImage, 'node', '/alert-sink.mjs', '/evidence/alert-events.jsonl']);
-
-          const definitions = await installNativeAlerts({config, baseUrl, organization, authorization});
-          const observed = new Map();
-          const maxForMs = Math.max(...definitions.map(({pendingPeriodSec}) => pendingPeriodSec)) * 1000;
-          const fireDeadline = maxForMs + 4 * config.telemetry.alerts.evaluationIntervalMs;
-          await waitFor(async () => {
-            const events = await readSinkEvents(sinkPath);
-            for (const definition of definitions) {
-              const firing = events.find(event => event.name === definition.name && event.status === 'firing');
-              if (firing) observed.set(definition.name, firing.episodeId);
-            }
-            return observed.size === definitions.length;
-          }, {timeoutMs: fireDeadline, intervalMs: 5000, description: 'native OpenObserve alert firing transitions'});
-          await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: false});
-          await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
-          const resolveDeadline = maxForMs + 4 * config.telemetry.alerts.evaluationIntervalMs;
-          await waitFor(async () => {
-            const events = await readSinkEvents(sinkPath);
-            return definitions.every(definition => events.some(event => event.name === definition.name && event.status === 'resolved' && event.episodeId === observed.get(definition.name)));
-          }, {timeoutMs: resolveDeadline, intervalMs: 5000, description: 'native OpenObserve alert recovery transitions'});
-          evidence.alerts = definitions.map(({key, pendingPeriodSec, threshold, name, streamName, queryCondition}) => ({
-            key, name, streamName, queryType: queryCondition.type, query: queryCondition.promql,
-            comparator: queryCondition.promql_condition.operator, threshold, pendingPeriodSec,
-            episodeId: observed.get(name), firing: true, resolved: true,
-          }));
-
-
           evidence.nativeNginxAlert = {status: 'NOT_RUN', stage: 'healthy-baseline'};
           const nginxContainer = matrixLogs.find(row => row.service === 'edge-nginx');
           const nodeContainers = matrixLogs.filter(row => NODE_RUNTIME_TARGETS.includes(row.service));
@@ -2467,8 +2469,54 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           }, {timeoutMs: 60000, intervalMs: 2000, description: `fresh native nginx HTTP availability value ${value}`});
           await readyMetrics();
           const healthyNative = await nginxAvailability(1, Date.now() * 1000);
-          const notReadyRule = definitions.find(rule => rule.key === 'notReady');
-          const previousNodeEpisode = observed.get(notReadyRule.name);
+          evidence.nativeNginxAlert.stage = 'quiet-baseline';
+          await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: false});
+          await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
+          const quietBaselineMs = config.telemetry.alerts.evaluationIntervalMs + config.platform.health.intervalMs;
+          let quietSince;
+          const quietBaseline = await waitFor(async () => {
+            assertNodeHealth();
+            try {
+              const result = await api({baseUrl, authorization,
+                path: `/api/${encodeURIComponent(organization)}/prometheus/api/v1/query?query=${encodeURIComponent(notReadyRule.queryCondition.promql)}`,
+                sensitiveValues});
+              if (result?.status !== 'success' || result?.data?.resultType !== 'vector' || !Array.isArray(result.data.result))
+                throw new Error('notReady instant query did not return a successful vector');
+              const values = result.data.result;
+              const value = values[0]?.value?.[1];
+              if (values.length !== 1 || !Array.isArray(values[0]?.value) || values[0].value.length !== 2 ||
+                  !['number', 'string'].includes(typeof value) || value === '' ||
+                  !Number.isFinite(Number(value)) || Number(value) !== 1) {
+                quietSince = undefined;
+                return false;
+              }
+              const events = await readSinkEvents(sinkPath);
+              const latestEpisodes = new Map();
+              for (const [index, event] of events.entries()) {
+                if (event.name !== notReadyRule.name || typeof event.episodeId !== 'string' || !event.episodeId) continue;
+                const receivedAt = Date.parse(event.receivedAt);
+                if (!Number.isFinite(receivedAt) || !['firing', 'resolved'].includes(event.status))
+                  throw new Error('notReady sink event was malformed during the quiet baseline');
+                const key = `${event.name}\0${event.episodeId}`;
+                const previous = latestEpisodes.get(key);
+                if (!previous || receivedAt > previous.receivedAt || (receivedAt === previous.receivedAt && index > previous.index))
+                  latestEpisodes.set(key, {event, receivedAt, index});
+              }
+              if ([...latestEpisodes.values()].some(({event}) => event.status !== 'resolved')) {
+                quietSince = undefined;
+                return false;
+              }
+              quietSince ??= Date.now();
+              const stableMs = Date.now() - quietSince;
+              return stableMs >= quietBaselineMs ? {stableMs, events} : false;
+            } catch (error) {
+              quietSince = undefined;
+              throw error;
+            }
+          }, {timeoutMs: resolveDeadline, intervalMs: 5000, description: 'notReady alert remains healthy and all earlier episodes resolved before native nginx stop'});
+          const previousNotReadyEpisodes = new Set(quietBaseline.events
+            .filter(event => event.name === notReadyRule.name && typeof event.episodeId === 'string')
+            .map(event => event.episodeId));
           const beforeNative = containerGeneration({run, name: nginxContainer.containerId});
           let nativeRestarted = false;
           try {
@@ -2483,7 +2531,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               assertNodeHealth();
               const records = rows(await streamSearch({baseUrl, authorization, organization,
                 stream: `${config.telemetry.openObserve.streams.metrics}_httpcheck_error`, streamType: 'metrics', startTimeUs: stoppedAtUs,
-                filterSql: '\"service_name\" = \'edge-nginx\''}));
+                filterSql: '"service_name" = \'edge-nginx\''}));
               if (records.some(record => Object.entries(record).some(([key, value]) => /error_message$/iu.test(key) && value !== undefined && value !== null)))
                 throw Object.assign(new Error('native probe exported arbitrary error-message metric labels'), {fatal: true});
               if (records.some(record => Object.entries(record).some(([key, value]) => /^(?:http_url|http\.url)$/iu.test(key) && value !== undefined && value !== null)))
@@ -2494,7 +2542,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             const nativeFiring = await waitFor(async () => {
               assertNodeHealth();
               return (await readSinkEvents(sinkPath)).find(event => event.name === notReadyRule.name && event.status === 'firing' &&
-                event.episodeId !== previousNodeEpisode && Date.parse(event.receivedAt) * 1000 > stoppedAtUs) ?? false;
+                !previousNotReadyEpisodes.has(event.episodeId) && Date.parse(event.receivedAt) * 1000 > stoppedAtUs) ?? false;
             }, {timeoutMs: fireDeadline, intervalMs: 5000, description: 'native nginx availability fires existing not-ready rule while Node stays healthy'});
             if (Date.parse(nativeFiring.receivedAt) * 1000 - stoppedAtUs < config.telemetry.alerts.notReady.forMs * 1000)
               throw new Error('native nginx availability alert did not preserve its configured pending window');
@@ -2516,6 +2564,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             evidence.nativeNginxAlert = {status: 'PASS', runId, ruleName: notReadyRule.name, signal: 'native HTTP availability; full-system readiness not claimed',
               containerId: beforeNative.id, pendingPeriodSec: notReadyRule.pendingPeriodSec, episodeId: nativeFiring.episodeId,
               healthyValue: healthyNative.value, failedValue: failedNative.value, recoveredValue: recoveredNative.value,
+              baselineStableMs: quietBaseline.stableMs,
               errorMetricSamples: errorMetrics, rawErrorMessageMetricLabelAbsent: true, rawUrlMetricLabelAbsent: true,
               failedAtUs: stoppedAtUs, firingReceivedAt: nativeFiring.receivedAt, resolvedReceivedAt: nativeResolved.receivedAt,
               nodeOwners: [...NODE_RUNTIME_TARGETS], nodeHealthObservations, allNodeHealthObservationsPassed: true,

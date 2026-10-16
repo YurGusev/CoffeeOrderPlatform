@@ -202,6 +202,9 @@ sink. Native scheduled alerts сохраняют окна 5m для not-ready/la
 alert срабатывает по настроенному окну 5m и разрешается в том же episode после
 восстановления nginx. Этот сценарий доказывает availability alert transition,
 но не полную system readiness или capacity.
+Синтетические alert-переходы завершаются до business-owner launch path; перед
+остановкой nginx verifier проверяет здоровый `notReady` query и непрерывно
+разрешённые прежние episodes в течение evaluation interval плюс health interval.
 Operations runner проверяет сервисы по их фактическим IP внутри изолированного
 Docker-хоста; OpenObserve, Collector и synthetic producer не публикуют host ports.
 Disk pressure заполняет только собственный fixture telemetry volume с резервом,

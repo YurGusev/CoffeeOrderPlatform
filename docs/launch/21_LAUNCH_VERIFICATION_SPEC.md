@@ -202,7 +202,10 @@ Compose cleanup все 15 final images сканируются по фактич�
   nginx `httpcheck.status` класса `2xx`. При здоровых 14 Node остановить native
   nginx, проверить переход probe `1→0`, firing после настроенного окна и resolved
   того же episode после restart и перехода `0→1`. Сохранить Node not-ready
-  injection; остальные сценарии — consumer lag 5m, Outbox oldest 5m,
+  injection; сначала завершить synthetic alert transitions до business-owner
+  launch path, затем выдержать здоровый notReady baseline и resolved старые
+  episodes в течение evaluation interval плюс health interval; остальные
+  сценарии — consumer lag 5m, Outbox oldest 5m,
   UnknownOutcome >0 2m, SSE drop rate >5% 5m;
 - canary secret/PII отсутствует в logs, traces, metrics labels, alerts, artifacts
   и browser bundle.
