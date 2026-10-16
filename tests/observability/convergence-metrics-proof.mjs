@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash,randomUUID} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
+import {readFile,rename,rm,writeFile} from 'node:fs/promises';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {load as yaml} from 'js-yaml';
 import {metrics} from '@opentelemetry/api';
@@ -16,6 +16,7 @@ import {createAromaConvergenceStore} from '../../apps/aroma-convergence/dist/inf
 
 const PROOF_FILE='/fixture/aroma-convergence-proof.yaml';
 const CONFIG_FILE='/fixture/platform.yaml';
+const METRIC_BARRIER_TIMEOUT_MS=95000;
 const sha256=value=>createHash('sha256').update(value).digest('hex');
 const delay=ms=>sleep(ms);
 
@@ -23,7 +24,54 @@ async function readSelector(stream){
   let input='';for await(const chunk of stream){input+=chunk;assert.ok(Buffer.byteLength(input)<=4096,'bounded convergence proof selector');}
   const value=JSON.parse(input);assert.equal(value.schemaVersion,1);assert.match(value.wakeMessageId,/^[A-Za-z0-9_-]{1,128}$/u);
   assert.match(value.rootMessageId,/^[A-Za-z0-9_-]{1,128}$/u);assert.match(value.correlationId,/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
-  assert.match(value.traceparent,/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/iu);return value;
+  assert.match(value.traceparent,/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/iu);
+  assert.match(value.metricBarrierId,/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);return value;
+}
+
+function expectedMetricsForBarrier(phase){
+  const common=[
+    {name:'coffee_aroma_attempt_results_total',attributes:{result:'unknown_outcome'},value:1},
+    {name:'coffee_aroma_unknown_outcomes_total',attributes:{},value:1},
+  ];
+  if(phase==='unknown-current')return [...common,{name:'coffee_aroma_unknown_outcomes_current',attributes:{},value:1}];
+  assert.equal(phase,'recovered-terminal');
+  return [...common,{name:'coffee_aroma_unknown_outcomes_current',attributes:{},values:[1,0]},
+    {name:'coffee_aroma_recovery_results_total',attributes:{result:'recovered_applied'},value:1}];
+}
+
+function metricBarrierPath(barrierId,phase,suffix){
+  assert.match(barrierId,/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
+  assert.ok(['unknown-current','recovered-terminal'].includes(phase));
+  assert.ok(['checkpoint','ack'].includes(suffix));
+  return `/results/convergence-metric-${barrierId}-${phase}.${suffix}.json`;
+}
+
+async function writeAtomicJson(path,value){
+  const pending=`${path}.${randomUUID()}.tmp`;
+  try{await writeFile(pending,JSON.stringify(value)+'\n',{flag:'wx',mode:0o600});await rename(pending,path);}
+  finally{await rm(pending,{force:true});}
+}
+
+async function waitForMetricBarrier(selector,phase){
+  const barrierId=selector.metricBarrierId,checkpointPath=metricBarrierPath(barrierId,phase,'checkpoint');
+  const ackPath=metricBarrierPath(barrierId,phase,'ack');
+  const expectedMetrics=expectedMetricsForBarrier(phase);
+  await writeAtomicJson(checkpointPath,{schemaVersion:1,barrierId,phase,expectedMetrics});
+  const deadline=Date.now()+METRIC_BARRIER_TIMEOUT_MS;
+  while(Date.now()<deadline){
+    let acknowledgement;
+    try{acknowledgement=JSON.parse(await readFile(ackPath,'utf8'));}
+    catch(error){if(error?.code!=='ENOENT')throw new Error('CONVERGENCE_METRIC_BARRIER_ACK_INVALID');}
+    if(acknowledgement!==undefined){
+      assert.deepEqual(Object.keys(acknowledgement).sort(),['barrierId','phase','schemaVersion','status']);
+      assert.equal(acknowledgement.schemaVersion,1);assert.equal(acknowledgement.barrierId,barrierId);assert.equal(acknowledgement.phase,phase);
+      assert.ok(['PASS','FAIL'].includes(acknowledgement.status));
+      assert.equal(acknowledgement.status,'PASS','parent did not confirm exported owner metric samples');
+      return;
+    }
+    await delay(100);
+  }
+  throw new Error('CONVERGENCE_METRIC_BARRIER_TIMEOUT');
 }
 
 function metricValue(lines,name,label){
@@ -69,6 +117,7 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
   assert.ok(selector&&typeof selector==='object','actual Kafka wake selector is required');
   assert.equal(selector.schemaVersion,1);assert.match(selector.wakeMessageId,/^[A-Za-z0-9_-]{1,128}$/u);assert.match(selector.rootMessageId,/^[A-Za-z0-9_-]{1,128}$/u);
   assert.match(selector.correlationId,/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);assert.match(selector.traceparent,/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/iu);
+  assert.match(selector.metricBarrierId,/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
   assert.ok(service?.aromaConvergence&&service?.dbPool,'fixture convergence runtime settings present');
   assert.ok(credential&&typeof credential.username==='string'&&typeof credential.password==='string','scoped fixture DB credential present');
   assert.ok(kafkaCredential&&typeof kafkaCredential.username==='string'&&typeof kafkaCredential.password==='string'&&typeof kafkaCredential.caPem==='string','scoped fixture Kafka credential present');
@@ -152,17 +201,17 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
     assert.equal(wakeRow.inbox_envelope.correlationId,selector.correlationId);assert.equal(wakeRow.inbox_envelope.traceparent,selector.traceparent);
     const wakeReceipt={messageType:wakeRow.message_type,topic:wakeRow.topic,outboxState:wakeRow.state,inboxState:wakeRow.inbox_state,
       messageIdSha256:sha256(wakeRow.message_id),rootCausationSha256:sha256(wakeRow.causation_id),correlationMatched:true,traceparentMatched:true};
-    const signalForStore=AbortSignal.timeout(15000);
+    const firstOwnerPhaseSignal=AbortSignal.timeout(15000);
     const resultTopic=config.kafka.topics.aromaEvents.name;
     const resultEventsStatement=defineStatement(database,`SELECT message_id,message_type,topic,state,correlation_id,causation_id,traceparent,published_at
       FROM orders.outbox_messages WHERE causation_id=$1 AND correlation_id=$2
         AND message_type IN ('AromaConvergenceChanged.v1','AromaObservationChanged.v1')
       ORDER BY occurred_at,message_id`);
     const resultOutbox=createSqlOutboxStore(database,{schema:'orders',envelopeBytes:true,topics:[resultTopic]});
-    const relayWakeEvents=async()=>{
+    const relayWakeEvents=async(phaseSignal)=>{
       const totals={claimed:0,published:0,failed:0,unknown:0,quarantined:0};let rows=[];
       for(let cycle=0;cycle<100;cycle++){
-        const batch=await kafka.relay(resultOutbox,database,signalForStore);
+        const batch=await kafka.relay(resultOutbox,database,phaseSignal);
         for(const key of Object.keys(totals))totals[key]+=batch[key];
         assert.equal(batch.failed,0,'actual convergence Outbox relay has no failed records');
         assert.equal(batch.unknown,0,'actual convergence Outbox relay has no unknown acknowledgements');
@@ -174,10 +223,10 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
       assert.fail('actual convergence result Outbox was not acknowledged by Kafka');
     };
     phase='unknown-outcome-attempt';
-    assert.equal(await firstStore.runOnce(gateway,signalForStore),'attempted');
+    assert.equal(await firstStore.runOnce(gateway,firstOwnerPhaseSignal),'attempted');
     assert.equal(mutationCalls,1,'controlled Gateway loses exactly one response after applying the synthetic cart change');
     phase='unknown-outcome-kafka-relay';
-    const firstRelay=await relayWakeEvents();
+    const firstRelay=await relayWakeEvents(firstOwnerPhaseSignal);
     assert.ok(firstRelay.rows.some(row=>row.message_type==='AromaConvergenceChanged.v1'),'unknown-outcome result is published through actual Kafka');
 
     const facts=defineStatement(database,`SELECT a.state AS attempt_state,r.state AS reservation_state
@@ -194,6 +243,8 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
     await delay(telemetryConfig.producer.batchIntervalMs+100);
     assert.equal(metricValue(telemetry.render(),'coffee_aroma_unknown_outcomes_current',undefined),1);
     await metrics.getMeterProvider().forceFlush({timeoutMillis:telemetryConfig.producer.flushTimeoutMs});
+    phase='unknown-outcome-metric-export-barrier';
+    await waitForMetricBarrier(selector,'unknown-current');
     const reservationWindow=defineStatement(database,"SELECT bool_and(reserved_until<=clock_timestamp()) AS ended FROM orders.mutation_reservations WHERE state='UnknownOutcome'");
     const deadline=Date.now()+5000;
     while(Date.now()<deadline){
@@ -203,14 +254,15 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
     assert.equal((await readSnapshot(database,reservationWindow))[0]?.ended,true,'actual reservation safety window elapsed before reconciliation');
 
     phase='owner-recovery';
+    const recoveryPhaseSignal=AbortSignal.timeout(15000);
     const recoveryStore=createAromaConvergenceStore(database,{...serviceOptions,ownerInstanceId:randomUUID()},telemetry);
-    assert.equal(await recoveryStore.runOnce(gateway,signalForStore),'attempted');
+    assert.equal(await recoveryStore.runOnce(gateway,recoveryPhaseSignal),'attempted');
     assert.equal(mutationCalls,1,'recovery observes the applied synthetic mutation without repeating it');
     await waitForMetric(telemetry,'coffee_aroma_unknown_outcomes_current',undefined,0);
     assert.equal(metricValue(telemetry.render(),'coffee_aroma_unknown_outcomes_total',undefined),1);
     assert.equal(metricValue(telemetry.render(),'coffee_aroma_recovery_results_total','recovered_applied'),1);
     phase='recovered-result-kafka-relay';
-    const finalRelay=await relayWakeEvents();
+    const finalRelay=await relayWakeEvents(recoveryPhaseSignal);
     const resultRows=finalRelay.rows.filter(row=>row.message_type==='AromaConvergenceChanged.v1');
     assert.ok(resultRows.length>=2,'unknown-outcome and recovered terminal results are committed to the real owner Outbox');
     assert.ok(resultRows.some(row=>row.causation_id===wakeRow.message_id&&row.correlation_id===selector.correlationId&&row.traceparent===selector.traceparent));
@@ -222,6 +274,8 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
     await metrics.getMeterProvider().forceFlush({timeoutMillis:telemetryConfig.producer.flushTimeoutMs});
     assert.equal(metricValue(telemetry.render(),'coffee_aroma_unknown_outcomes_current',undefined),0);
     assert.equal(metricValue(telemetry.render(),'coffee_aroma_recovery_results_total','recovered_applied'),1);
+    phase='recovered-metric-export-barrier';
+    await waitForMetricBarrier(selector,'recovered-terminal');
 
     proofResult={verified:true,owner:'aroma-convergence',attemptStates:finalFacts.map(row=>row.attempt_state),
       reservationRecovery:'RecoveredApplied',unknownOutcomeTerminalCount:1,unknownOutcomeCounter:1,
@@ -231,12 +285,7 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
         resultMessages:finalRelay.rows.map(row=>({messageType:row.message_type,state:row.state,messageIdSha256:sha256(row.message_id),
           causationIdSha256:sha256(row.causation_id),correlationMatched:row.correlation_id===selector.correlationId,traceparentMatched:row.traceparent===selector.traceparent})),
         kafkaRelayPublishedCount:firstRelay.totals.published+finalRelay.totals.published,selectedOutboxPublishedCount:finalRelay.rows.length,allSelectedMessagesPublished:true},
-      expectedTelemetry:{ownerMetrics:[
-        {name:'coffee_aroma_attempt_results_total',attributes:{result:'unknown_outcome'},value:1},
-        {name:'coffee_aroma_unknown_outcomes_total',attributes:{},value:1},
-        {name:'coffee_aroma_unknown_outcomes_current',attributes:{},values:[1,0]},
-        {name:'coffee_aroma_recovery_results_total',attributes:{result:'recovered_applied'},value:1},
-      ]}};
+      expectedTelemetry:{ownerMetrics:expectedMetricsForBarrier('recovered-terminal')}};
   }catch{
     proofFailure=Object.assign(new Error('CONVERGENCE_METRICS_PROOF_FAILED'),{proofPhase:phase});
   }finally{
@@ -252,5 +301,5 @@ export async function runConvergenceMetricsProof({proofFile=PROOF_FILE,configFil
 
 if(import.meta.main){
   try{console.log(JSON.stringify(await runConvergenceMetricsProof({selector:await readSelector(process.stdin)})));}
-  catch(error){const stages=['scoped-input','telemetry-start','database-start','prepared-desired-read','kafka-start','actual-wake-inbox','unknown-outcome-attempt','unknown-outcome-kafka-relay','unknown-outcome-metric-window','owner-recovery','recovered-result-kafka-relay','resource-stop'];const stage=error!==null&&typeof error==='object'&&'proofPhase' in error&&stages.includes(error.proofPhase)?error.proofPhase:'unknown';const cleanupFailed=error!==null&&typeof error==='object'&&error.cleanupFailed===true;console.error(JSON.stringify({verified:false,code:'CONVERGENCE_METRICS_PROOF_FAILED',stage,...(cleanupFailed?{cleanupCode:'RESOURCE_STOP_FAILED'}:{})}));process.exitCode=1;}
+  catch(error){const stages=['scoped-input','telemetry-start','database-start','prepared-desired-read','kafka-start','actual-wake-inbox','unknown-outcome-attempt','unknown-outcome-kafka-relay','unknown-outcome-metric-window','unknown-outcome-metric-export-barrier','owner-recovery','recovered-result-kafka-relay','recovered-metric-export-barrier','resource-stop'];const stage=error!==null&&typeof error==='object'&&'proofPhase' in error&&stages.includes(error.proofPhase)?error.proofPhase:'unknown';const cleanupFailed=error!==null&&typeof error==='object'&&error.cleanupFailed===true;console.error(JSON.stringify({verified:false,code:'CONVERGENCE_METRICS_PROOF_FAILED',stage,...(cleanupFailed?{cleanupCode:'RESOURCE_STOP_FAILED'}:{})}));process.exitCode=1;}
 }

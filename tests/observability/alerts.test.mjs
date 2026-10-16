@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {awaitConvergenceMetricBarrier} from './launch-path.mjs';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -80,6 +83,70 @@ void test('owner metric search waits for every owner and histogram component aft
   assert.deepEqual(matches, components.map(component => ({stream: `${base}${component}`, sampleCount: 2, services: ['orders-service', 'api-public']})));
   assert.equal(query.sql, `SELECT * FROM "${base}_bucket" WHERE "service_name" = 'api-public' AND "http_response_status_class" = '4xx'`);
   assert.equal(query.size, 100);
+});
+
+void test('convergence backend acknowledgement waits for both gauge phases and recovered owner result', async () => {
+  const expectedMetrics = [
+    {name: 'coffee_aroma_unknown_outcomes_current', attributes: {}, values: [1, 0]},
+    {name: 'coffee_aroma_recovery_results_total', attributes: {result: 'recovered_applied'}, value: 1},
+  ];
+  let polls = 0;
+  const observations = [];
+  const fetchImpl = async (url, init) => {
+    if (url.pathname.endsWith('/streams')) {
+      polls += 1;
+      return new Response(JSON.stringify(expectedMetrics.map(metric => ({stream_type: 'metrics', name: `platform_metrics_${metric.name}`}))));
+    }
+    const query = JSON.parse(init.body).query;
+    assert.ok(query.sql.includes('"service_name" = \'aroma-convergence\''));
+    const current = query.sql.includes('unknown_outcomes_current');
+    const samples = current
+      ? [{value: 1}, ...(polls >= 2 ? [{value: 0}] : [])]
+      : [{value: polls >= 3 ? 1 : 0, attributes_result: 'recovered_applied'}, {value: 1, attributes_result: 'other'}];
+    return new Response(JSON.stringify({hits: {hits: samples.map(sample => ({service_name: 'aroma-convergence', _timestamp: 1700000000000000, ...sample}))}}));
+  };
+  const result = await waitForConvergenceMetricSamples({
+    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee', metricsPrefix: 'platform_metrics',
+    expectedMetrics, startTimeUs: 1, fetchImpl, timeoutMs: 1000, intervalMs: 1,
+    onObservation: value => observations.push(value),
+  });
+  assert.equal(polls, 3);
+  assert.deepEqual(observations[0].coffee_aroma_unknown_outcomes_current.missingValues, [0]);
+  assert.deepEqual(observations[1].coffee_aroma_recovery_results_total.missingValues, [1]);
+  assert.deepEqual(result.coffee_aroma_unknown_outcomes_current.observedValues, [1, 0]);
+  assert.deepEqual(result.coffee_aroma_recovery_results_total.observedValues, [1]);
+});
+
+void test('convergence phase acknowledgement follows backend PASS and rejects failed or stale phases', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'coffee-metric-barrier-'));
+  const barrierId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const phase = 'unknown-current';
+  const prefix = path.join(dir, `convergence-metric-${barrierId}-${phase}`);
+  const checkpoint = {schemaVersion: 1, barrierId, phase, expectedMetrics: []};
+  const pendingHelper = new Promise(() => {});
+  try {
+    await writeFile(`${prefix}.checkpoint.json`, JSON.stringify(checkpoint));
+    const entered = Promise.withResolvers(), backend = Promise.withResolvers();
+    const waiting = awaitConvergenceMetricBarrier({dir, barrierId, phase, helperCompletion: pendingHelper,
+      onConvergenceMetrics: async value => {assert.deepEqual(value, {barrierId, phase, expectedMetrics: []}); entered.resolve(); return backend.promise;}});
+    await entered.promise;
+    await assert.rejects(readFile(`${prefix}.ack.json`), {code: 'ENOENT'});
+    backend.resolve({status: 'PASS'});
+    await waiting;
+    assert.deepEqual(JSON.parse(await readFile(`${prefix}.ack.json`, 'utf8')), {schemaVersion: 1, barrierId, phase, status: 'PASS'});
+    await rm(`${prefix}.ack.json`);
+    const failure = new Error('backend unavailable');
+    await assert.rejects(awaitConvergenceMetricBarrier({dir, barrierId, phase, helperCompletion: pendingHelper,
+      onConvergenceMetrics: async () => {throw failure;}}), error => error === failure);
+    assert.equal(JSON.parse(await readFile(`${prefix}.ack.json`, 'utf8')).status, 'FAIL');
+    await writeFile(`${prefix}.checkpoint.json`, JSON.stringify({...checkpoint, phase: 'recovered-terminal'}));
+    await assert.rejects(awaitConvergenceMetricBarrier({dir, barrierId, phase, helperCompletion: pendingHelper,
+      onConvergenceMetrics: async () => assert.fail('stale phase cannot reach backend callback')}));
+    assert.equal(JSON.parse(await readFile(`${prefix}.ack.json`, 'utf8')).status, 'FAIL');
+    const helperFailure = new Error('helper stopped');
+    await assert.rejects(awaitConvergenceMetricBarrier({dir, barrierId, phase,
+      helperCompletion: Promise.resolve({ok: false, error: helperFailure}), onConvergenceMetrics: async () => assert.fail('helper already stopped')}), error => error === helperFailure);
+  } finally {await rm(dir, {recursive: true, force: true});}
 });
 
 void test('issue 64 metric matrix derives all runtime owners and sanitizes probe receipts', () => {

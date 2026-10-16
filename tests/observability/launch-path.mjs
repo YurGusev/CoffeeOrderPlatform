@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {cp,mkdir,readFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {setTimeout as delay} from 'node:timers/promises';
 import {parse,runTransportFixture,bounded} from '../realtime/soak.test.mjs';
 import {canonicalJson} from '../../packages/platform-idempotency/dist/index.js';
 import {docker as fixtureDocker,json,hash,productArgs,redact,run as fixtureRun,ROOT} from '../realtime/fixtures/setup.mjs';
@@ -44,6 +45,46 @@ const parseConsumerGroupSnapshot=(describeText,stateText,membersText,group)=>{
   };
 };
 const launchRoles=['driver','edge-nginx','realtime-gateway','api-public','api-internal','edge-gateway','orders-service','orders-aroma-preparation','kafka'];
+const convergenceMetricBarrierPhases=['unknown-current','recovered-terminal'];
+const convergenceMetricCheckpointWaitMs=60000;
+function convergenceMetricBarrierFile(dir,barrierId,phase,suffix){
+  assert.match(barrierId,/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu);
+  assert.ok(convergenceMetricBarrierPhases.includes(phase));assert.ok(['checkpoint','ack'].includes(suffix));
+  return join(dir,`convergence-metric-${barrierId}-${phase}.${suffix}.json`);
+}
+export async function awaitConvergenceMetricBarrier({dir,barrierId,phase,helperCompletion,onConvergenceMetrics}){
+  const checkpointPath=convergenceMetricBarrierFile(dir,barrierId,phase,'checkpoint');
+  const ackPath=convergenceMetricBarrierFile(dir,barrierId,phase,'ack');
+  const deadline=Date.now()+convergenceMetricCheckpointWaitMs;
+  let checkpoint,checkpointReadFailed=false;
+  while(Date.now()<deadline){
+    const completed=await Promise.race([helperCompletion,delay(100).then(()=>null)]);
+    if(completed){if(!completed.ok)throw completed.error;throw new Error('CONVERGENCE_METRIC_BARRIER_MISSING');}
+    try{checkpoint=JSON.parse(await readFile(checkpointPath,'utf8'));break;}
+    catch(error){if(error?.code!=='ENOENT'){checkpointReadFailed=true;break;}}
+  }
+  let callbackError;
+  try{
+    assert.equal(checkpointReadFailed,false,'convergence metric checkpoint is readable JSON');
+    assert.ok(checkpoint,'convergence metric checkpoint timed out');
+    assert.deepEqual(Object.keys(checkpoint).sort(),['barrierId','expectedMetrics','phase','schemaVersion']);
+    assert.equal(checkpoint.schemaVersion,1);assert.equal(checkpoint.barrierId,barrierId);assert.equal(checkpoint.phase,phase);
+    const callbackResult=await Promise.race([
+      Promise.resolve().then(()=>onConvergenceMetrics({barrierId,phase,expectedMetrics:checkpoint.expectedMetrics}))
+        .then(result=>({kind:'callback',result}),error=>({kind:'callback-error',error})),
+      helperCompletion.then(completion=>({kind:'helper',completion})),
+    ]);
+    if(callbackResult.kind==='helper'){
+      if(!callbackResult.completion.ok)throw callbackResult.completion.error;
+      throw new Error('CONVERGENCE_METRIC_HELPER_FINISHED_BEFORE_ACK');
+    }
+    if(callbackResult.kind==='callback-error')throw callbackResult.error;
+    const result=callbackResult.result;
+    assert.equal(result?.status,'PASS','parent did not confirm exported owner metric samples');
+  }catch(error){callbackError=error;}
+  await json(ackPath,{schemaVersion:1,barrierId,phase,status:callbackError?'FAIL':'PASS'},0o600);
+  if(callbackError)throw callbackError;
+}
 function commandContext(args,options,error){
   const operation=String(args[0]??'unknown');
   const candidates=operation==='exec'?args.slice(1):args.slice(1,2);
@@ -69,12 +110,12 @@ const docker=(...args)=>captureCommandFailure(()=>fixtureDocker(...args),args);
 const run=(command,args,options)=>captureCommandFailure(()=>fixtureRun(command,args,options),command==='docker'?args:[command,...args],options);
 
 /** Run the real Orders owners inside the served transport fixture and prove a synthetic W3C request context. */
-export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRolesReady,observeBaseline,observeProof,resultDir}){
+export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRolesReady,onConvergenceMetrics,observeBaseline,observeProof,resultDir}){
   assert.ok(telemetry&&typeof telemetry==='object');
   assert.ok(telemetry.config&&typeof telemetry.config==='object');
   assert.match(telemetry.endpoint,/^https?:\/\//u);
   assert.equal(typeof telemetry.exporterToken,'string');assert.ok(telemetry.exporterToken.length>0);
-  assert.equal(typeof onNetwork,'function');assert.equal(typeof onNetworkCleanup,'function');assert.equal(typeof onRolesReady,'function');assert.equal(typeof observeBaseline,'function');assert.equal(typeof observeProof,'function');
+  assert.equal(typeof onNetwork,'function');assert.equal(typeof onNetworkCleanup,'function');assert.equal(typeof onRolesReady,'function');assert.equal(typeof onConvergenceMetrics,'function');assert.equal(typeof observeBaseline,'function');assert.equal(typeof observeProof,'function');
   let phase='fixture-preparation';
   const options=parse(['--smoke','--profile','reference-512','--smoke-clients','1','--smoke-duration-ms','45000','--result-dir',resultDir??`${process.env.TMPDIR??'/tmp'}/coffee-g14-launch-${randomUUID()}`]);
   options.launchPath={telemetryConfig:telemetry.config,telemetryEndpoint:telemetry.endpoint,exporterToken:telemetry.exporterToken};
@@ -334,8 +375,23 @@ export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRole
         assert.equal(wakeRow.state,'Published');assert.equal(wakeRow.topic,setup.config.kafka.topics.aromaCommands.name);
         assert.equal(wakeRow.correlation_id,commandCorrelation);assert.equal(wakeRow.traceparent,traceparent);
         phase='actual-convergence-kafka-inbox-and-metrics';
-        const convergenceSelector={schemaVersion:1,wakeMessageId:wakeRow.message_id,rootMessageId:ownerRow.message_id,correlationId:commandCorrelation,traceparent};
-        const convergenceOutput=await run('docker',['exec','-i',driver,'node','tests/observability/convergence-metrics-proof.mjs'],{input:canonicalJson(convergenceSelector),timeout:60000,outputLimit:65536});
+        const metricBarrierId=randomUUID();
+        const convergenceSelector={schemaVersion:1,wakeMessageId:wakeRow.message_id,rootMessageId:ownerRow.message_id,correlationId:commandCorrelation,traceparent,metricBarrierId};
+        // Extend the old 60s command budget by two bounded 95s metric-confirmation windows.
+        const helperCompletion=run('docker',['exec','-i',driver,'node','tests/observability/convergence-metrics-proof.mjs'],{input:canonicalJson(convergenceSelector),timeout:250000,outputLimit:65536})
+          .then(output=>({ok:true,output}),error=>({ok:false,error}));
+        let convergenceOutput;
+        try{
+          for(const barrierPhase of convergenceMetricBarrierPhases){
+            await awaitConvergenceMetricBarrier({dir,barrierId:metricBarrierId,phase:barrierPhase,helperCompletion,onConvergenceMetrics});
+          }
+          const completion=await helperCompletion;
+          if(!completion.ok)throw completion.error;
+          convergenceOutput=completion.output;
+        }catch(error){
+          await helperCompletion;
+          throw error;
+        }
         const convergenceReceipt=JSON.parse(convergenceOutput);assert.equal(convergenceReceipt.verified,true,'real convergence consumer, SQL store, controlled Gateway and metrics proof');
         assert.equal(convergenceReceipt.wakeReceipt.messageIdSha256,hash(wakeRow.message_id));
         assert.equal(convergenceReceipt.wakeReceipt.rootCausationSha256,hash(ownerRow.message_id));

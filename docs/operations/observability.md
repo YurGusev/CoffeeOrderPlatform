@@ -22,6 +22,13 @@ metrics. Матрица требует 10 DB-waiting, lag для двух durabl
 helper; helper не заменяет постоянно работающий runtime. До default cleanup
 сканируются все 15 final images по фактическим image IDs.
 
+Convergence helper удерживает обычный periodic exporter до подтверждения samples
+в OpenObserve: сначала `unknown_outcomes_current=1` перед recovery, затем
+`unknown_outcomes_current=0` и `recovered_applied=1` перед остановкой. Operations
+подтверждает каждую фазу через run-scoped checkpoint в существующем `/results`;
+локальные значения и `forceFlush` сами по себе не доказывают доставку в backend.
+Ошибка или истечение bounded ожидания завершает proof с FAIL и cleanup ресурсов.
+
 Проверка фиксируется полем `runtimeMetricMatrix` в результате команды. Это
 functional evidence #64; оно само по себе не означает PASS полного G14 и не
 доказывает capacity. #13 по-прежнему владеет launch-level full-system G14:

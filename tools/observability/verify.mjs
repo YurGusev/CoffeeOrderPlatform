@@ -1000,13 +1000,55 @@ function metricRecordAttribute(record, name) {
   return typeof direct === 'string' || typeof direct === 'number' ? direct : undefined;
 }
 
-function validConvergenceMetricContract(metrics) {
-  const expected = [
-    {name: 'coffee_aroma_attempt_results_total', attributes: {result: 'unknown_outcome'}, value: 1},
-    {name: 'coffee_aroma_unknown_outcomes_total', attributes: {}, value: 1},
-    {name: 'coffee_aroma_unknown_outcomes_current', attributes: {}, values: [1, 0]},
-    {name: 'coffee_aroma_recovery_results_total', attributes: {result: 'recovered_applied'}, value: 1},
-  ];
+const CONVERGENCE_METRIC_CONTRACT = [
+  {name: 'coffee_aroma_attempt_results_total', attributes: {result: 'unknown_outcome'}, value: 1},
+  {name: 'coffee_aroma_unknown_outcomes_total', attributes: {}, value: 1},
+  {name: 'coffee_aroma_unknown_outcomes_current', attributes: {}, values: [1, 0]},
+  {name: 'coffee_aroma_recovery_results_total', attributes: {result: 'recovered_applied'}, value: 1},
+];
+
+export async function waitForConvergenceMetricSamples({baseUrl, authorization, organization, metricsPrefix, expectedMetrics, startTimeUs, onObservation, sensitiveValues = [], fetchImpl = fetch, timeoutMs = 60000, intervalMs = 2000}) {
+  return waitFor(async () => {
+    const inventory = streamEntries(await api({baseUrl, authorization, path: `/api/${encodeURIComponent(organization)}/streams`, sensitiveValues, fetchImpl}));
+    const availableStreams = new Set(inventory.filter(stream => stream?.stream_type === 'metrics').map(stream => stream.name));
+    const observed = {};
+    const diagnostics = {};
+    let complete = true;
+    for (const expected of expectedMetrics) {
+      const stream = `${metricsPrefix}_${expected.name.replace(/[^a-zA-Z0-9_]/gu, '_')}`;
+      const streamPresent = availableStreams.has(stream);
+      const wanted = expected.values ?? [expected.value];
+      if (!streamPresent) {
+        diagnostics[expected.name] = {streamPresent, queryRows: 0, ownerRows: 0, attrMatchedRows: 0,
+          observedValues: [], expectedValues: wanted, missingValues: wanted, latestTimestampUs: null};
+        complete = false;
+        continue;
+      }
+      const samples = rows(await streamSearch({
+        baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs, fetchImpl,
+        filterSql: '"service_name" = \'aroma-convergence\'',
+      }));
+      const owned = samples.filter(sample => metricRecordServices([sample]).includes('aroma-convergence'));
+      const matching = owned.filter(sample => Object.entries(expected.attributes ?? {}).every(([name, value]) => metricRecordAttribute(sample, name) === value));
+      const values = metricValues(matching);
+      const missingValues = wanted.filter(value => !values.includes(value));
+      const uniqueValues = [...new Set(values.filter(Number.isFinite))].sort((left, right) => left - right).slice(0, 16);
+      const timestamps = matching.map(metricTimestampUs).filter(Number.isFinite);
+      diagnostics[expected.name] = {streamPresent, queryRows: samples.length, ownerRows: owned.length,
+        attrMatchedRows: matching.length, observedValues: uniqueValues, expectedValues: wanted, missingValues,
+        latestTimestampUs: timestamps.length ? Math.max(...timestamps) : null};
+      if (missingValues.length > 0) complete = false;
+      observed[expected.name] = {stream, owner: 'aroma-convergence', sampleCount: matching.length, observedValues: values, expectedValues: wanted};
+    }
+    onObservation(diagnostics);
+    return complete ? observed : false;
+  }, {timeoutMs, intervalMs, description: 'real aroma-convergence owner metrics from the SQL-backed recovery proof'});
+}
+
+function validConvergenceMetricContract(metrics, phase) {
+  const expected = phase === 'unknown-current'
+    ? CONVERGENCE_METRIC_CONTRACT.slice(0, 3).map(metric => metric.values ? {name: metric.name, attributes: metric.attributes, value: 1} : metric)
+    : CONVERGENCE_METRIC_CONTRACT;
   if (!Array.isArray(metrics) || metrics.length !== expected.length) return false;
   return expected.every(expectedMetric => {
     const actual = metrics.find(metric => metric?.name === expectedMetric.name);
@@ -2260,6 +2302,23 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     let launchCollectorOutageStartedAt;
     let launchNginxContainer;
     const launchStartedAtUs = Date.now() * 1000;
+    const observeConvergenceMetrics = async expectedMetrics => {
+      evidence.metricApplicability ??= {};
+      const diagnostics = evidence.metricApplicability;
+      diagnostics.aromaConvergenceLastObservation = {status: 'PENDING', metrics: {}};
+      try {
+        const observations = await waitForConvergenceMetricSamples({
+          baseUrl, authorization, organization, metricsPrefix: config.telemetry.openObserve.streams.metrics,
+          expectedMetrics, startTimeUs: launchStartedAtUs, sensitiveValues,
+          onObservation: metrics => {diagnostics.aromaConvergenceLastObservation = {status: 'PENDING', metrics};},
+        });
+        diagnostics.aromaConvergenceLastObservation.status = 'PASS';
+        return observations;
+      } catch (error) {
+        diagnostics.aromaConvergenceLastObservation.status = 'FAIL';
+        throw error;
+      }
+    };
     const waitForNativeAccess = async correlationId => {
       try {
         return await waitFor(async () => {
@@ -2392,6 +2451,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           };
           evidence.telemetryHealth.launchPathOutageStatus = 'PASS';
         },
+        onConvergenceMetrics: async ({barrierId, phase, expectedMetrics}) => {
+          if (!['unknown-current', 'recovered-terminal'].includes(phase) || !validConvergenceMetricContract(expectedMetrics, phase))
+            throw new Error('convergence metric barrier does not match the required owner contract');
+          const observations = await observeConvergenceMetrics(expectedMetrics);
+          evidence.telemetryHealth.convergenceMetricBarriers ??= {};
+          evidence.telemetryHealth.convergenceMetricBarriers[phase] = {barrierId, status: 'PASS', observations};
+          return {status: 'PASS', observations};
+        },
         observeProof: async proof => {
           try {
             if (proof?.verified !== true || !/^[0-9a-f-]{36}$/iu.test(proof.correlationId ?? '') || !/^[0-9a-f]{32}$/iu.test(proof.traceId ?? ''))
@@ -2510,56 +2577,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               });
               metricApplicability[family.name] = matches;
             }
-            evidence.metricApplicability.aromaConvergenceLastObservation = {
-              status: 'PENDING',
-              metrics: Object.fromEntries(expectedTelemetry.ownerMetrics.map(expected => {
-                const expectedValues = expected.values ?? [expected.value];
-                return [expected.name, {streamPresent: false, queryRows: 0, ownerRows: 0, attrMatchedRows: 0,
-                  observedValues: [], expectedValues, missingValues: expectedValues, latestTimestampUs: null}];
-              })),
-            };
-            let ownerMetricObservations;
-            try {
-              ownerMetricObservations = await waitFor(async () => {
-                const inventory = streamEntries(await api({baseUrl, authorization, path: `/api/${encodeURIComponent(organization)}/streams`, sensitiveValues}));
-                const availableStreams = new Set(inventory.filter(stream => stream?.stream_type === 'metrics').map(stream => stream.name));
-                const observed = {};
-                const diagnostics = {};
-                let complete = true;
-                for (const expected of expectedTelemetry.ownerMetrics) {
-                  const stream = `${config.telemetry.openObserve.streams.metrics}_${expected.name.replace(/[^a-zA-Z0-9_]/gu, '_')}`;
-                  const streamPresent = availableStreams.has(stream);
-                  const wanted = expected.values ?? [expected.value];
-                  if (!streamPresent) {
-                    diagnostics[expected.name] = {streamPresent, queryRows: 0, ownerRows: 0, attrMatchedRows: 0,
-                      observedValues: [], expectedValues: wanted, missingValues: wanted, latestTimestampUs: null};
-                    complete = false;
-                    continue;
-                  }
-                  const samples = rows(await streamSearch({
-                    baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs: launchStartedAtUs,
-                    filterSql: '"service_name" = \'aroma-convergence\'',
-                  }));
-                  const owned = samples.filter(sample => metricRecordServices([sample]).includes('aroma-convergence'));
-                  const matching = owned.filter(sample => Object.entries(expected.attributes ?? {}).every(([name, value]) => metricRecordAttribute(sample, name) === value));
-                  const values = metricValues(matching);
-                  const missingValues = wanted.filter(value => !values.includes(value));
-                  const uniqueValues = [...new Set(values.filter(Number.isFinite))].sort((left, right) => left - right).slice(0, 16);
-                  const timestamps = matching.map(metricTimestampUs).filter(Number.isFinite);
-                  diagnostics[expected.name] = {streamPresent, queryRows: samples.length, ownerRows: owned.length,
-                    attrMatchedRows: matching.length, observedValues: uniqueValues, expectedValues: wanted, missingValues,
-                    latestTimestampUs: timestamps.length ? Math.max(...timestamps) : null};
-                  if (missingValues.length > 0) complete = false;
-                  observed[expected.name] = {stream, owner: 'aroma-convergence', sampleCount: matching.length, observedValues: values, expectedValues: wanted};
-                }
-                evidence.metricApplicability.aromaConvergenceLastObservation = {status: 'PENDING', metrics: diagnostics};
-                return complete ? observed : false;
-              }, {timeoutMs: 60000, intervalMs: 2000, description: 'real aroma-convergence owner metrics from the SQL-backed recovery proof'});
-            } catch (error) {
-              evidence.metricApplicability.aromaConvergenceLastObservation.status = 'FAIL';
-              throw error;
-            }
-            evidence.metricApplicability.aromaConvergenceLastObservation.status = 'PASS';
+            const ownerMetricObservations = await observeConvergenceMetrics(expectedTelemetry.ownerMetrics);
             const proofData = JSON.stringify({logRows, traceRows, edgeLogRows, separateRealtimeSpans});
             if (sensitiveValues.some(secret => secret && proofData.includes(secret))) throw new Error('launch-path telemetry exposed a fixture secret');
             if (/"(?:payload|request_body)"\s*:/iu.test(proofData)) throw new Error('launch-path telemetry exposed a raw payload field');
