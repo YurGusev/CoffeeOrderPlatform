@@ -676,6 +676,7 @@ void test("health endpoints expose live and ready states", async () => {
 
 void test("readiness checks fail closed, recover, and expose correlation context", async () => {
   let dependencyReady = false;
+  const logs = [];
   const correlationId = "11111111-1111-4111-8111-111111111111";
   const traceparent = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01";
   const app = await createRuntime(identity("readiness-test", {
@@ -683,6 +684,7 @@ void test("readiness checks fail closed, recover, and expose correlation context
     requiredDependencies: ["database"],
     readinessChecks: [{name: "database", check: async () => dependencyReady}],
   }));
+  app.log.warn = (fields, message) => logs.push({fields, message});
   app.get("/context", async (request) => ({
     requestCorrelationId: request.correlationContext?.correlationId,
     deadlineUtc: request.runtimeContext?.deadlineUtc,
@@ -695,6 +697,7 @@ void test("readiness checks fail closed, recover, and expose correlation context
   });
   assert.equal(notReady.statusCode, 503);
   assert.deepEqual(notReady.json(), {status: "not-ready", runtime: "readiness-test"});
+  assert.deepEqual(logs, [{fields: {event: "runtime.readiness.failed", dependency: "database", reason: "NotReady"}, message: "runtime readiness failed"}]);
   dependencyReady = true;
   const ready = await app.inject({
     method: "GET",
@@ -702,6 +705,7 @@ void test("readiness checks fail closed, recover, and expose correlation context
     headers: {"x-correlation-id": correlationId, traceparent},
   });
   assert.equal(ready.statusCode, 200);
+  assert.equal(logs.length, 1);
   assert.equal(ready.headers["x-correlation-id"], correlationId);
   assert.equal(ready.headers.traceparent, traceparent);
   const context = await app.inject({

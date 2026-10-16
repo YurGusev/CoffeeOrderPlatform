@@ -790,7 +790,18 @@ export async function createRuntime(
     );
     const result = observeUntil(work, signal)
       .then(
-        (value) => value !== false,
+        (value) => {
+          if (value === false)
+            app.log.warn(
+              {
+                event: "runtime.readiness.failed",
+                dependency: dependency.name,
+                reason: "NotReady",
+              },
+              "runtime readiness failed",
+            );
+          return value !== false;
+        },
         (error: unknown) => {
           app.log.warn(
             {
