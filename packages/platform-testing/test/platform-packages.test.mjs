@@ -82,7 +82,37 @@ void test("observability uses Pino and redacts nested request/provider/PII/error
   assert.equal(redactionRecord.marker, safeMarker, "safe marker remains in the same serialized record");
   const serializedRedactionRecord = JSON.stringify(redactionRecord);
   for (const value of pinoCanaries) assert.equal(serializedRedactionRecord.includes(value), false, "sensitive canary is absent from the retained record");
+  let responseRawReads = 0;
+  let responseHeadersReads = 0;
+  const completionMarker = "fastify-completion-record-retained";
+  logger.info({marker: completionMarker, res: {
+    statusCode: 303,
+    get raw() { responseRawReads += 1; return {headers: {cookie: "response-raw-cookie-canary"}}; },
+    get headers() { responseHeadersReads += 1; return {authorization: "response-header-canary"}; },
+  }}, "request completed");
+  const invalidStatusCanary = "invalid-response-status-canary";
+  logger.info({marker: completionMarker, res: {
+    statusCode: invalidStatusCanary,
+    get raw() { responseRawReads += 1; return invalidStatusCanary; },
+    get headers() { responseHeadersReads += 1; return invalidStatusCanary; },
+  }}, "invalid response status");
   assert.equal(typeof logger.child, "function");
+  logger.flush();
+  const serializedCompletionRecords = records.map(record => JSON.parse(record));
+  const completionRecord = serializedCompletionRecords.find(record => record.msg === "request completed");
+  const invalidCompletionRecord = serializedCompletionRecords.find(record => record.msg === "invalid response status");
+  assert.ok(completionRecord, "the same Fastify completion record is retained");
+  assert.equal(completionRecord.marker, completionMarker);
+  assert.deepEqual(completionRecord.res, {statusCode: 303});
+  assert.ok(invalidCompletionRecord, "an invalid status does not drop the completion record");
+  assert.equal(invalidCompletionRecord.marker, completionMarker);
+  assert.deepEqual(invalidCompletionRecord.res, {});
+  assert.equal(responseRawReads, 0, "the response raw graph is never read");
+  assert.equal(responseHeadersReads, 0, "response headers are never read");
+  const serializedCompletionData = JSON.stringify([completionRecord, invalidCompletionRecord]);
+  assert.equal(serializedCompletionData.includes("response-raw-cookie-canary"), false);
+  assert.equal(serializedCompletionData.includes("response-header-canary"), false);
+  assert.equal(serializedCompletionData.includes(invalidStatusCanary), false);
   const droppedBefore = logRecordsDropped();
   const emitWarning = process.emitWarning.bind(process);
   const warnings = [];

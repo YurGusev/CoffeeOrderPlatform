@@ -109,7 +109,13 @@ export function redactLogValue(
       if (Array.isArray(current)) return current.slice(0, 100).map(entry => visit(entry, depth + 1));
       const result: Record<string, unknown> = {};
       for (const [key, entry] of Object.entries(current)) {
-        if (key === "req" && entry !== null && typeof entry === "object") {
+        if (key === "res" && entry !== null && typeof entry === "object") {
+          // Fastify replies contain a large raw/socket graph; keep only the response status.
+          const statusCode = (entry as {statusCode?: unknown}).statusCode;
+          result[key] = typeof statusCode === "number" && Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599
+            ? {statusCode}
+            : {};
+        } else if (key === "req" && entry !== null && typeof entry === "object") {
           const request = entry as {method?: string; routeOptions?: {url?: string}; correlationContext?: {correlationId?: string}; id?: string};
           result[key] = {
             ...(request.method === undefined ? {} : {method: request.method}),
