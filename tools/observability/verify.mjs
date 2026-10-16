@@ -311,6 +311,7 @@ function startCollectorMemorySampler({name, token}) {
   let latest;
   let peakBytes = 0;
   let stopped = false;
+  let closed = false;
   let failure;
   let lineCount = 0;
   child.stdout.setEncoding('utf8');
@@ -346,6 +347,7 @@ function startCollectorMemorySampler({name, token}) {
   });
   child.on('error', () => { failure ??= new Error('collector memory sampler process failed'); });
   child.on('close', code => {
+    closed = true;
     if (code !== 0 || !stopped) failure ??= new Error('collector memory sampler did not stop cleanly');
   });
   const latestSample = () => {
@@ -365,18 +367,18 @@ function startCollectorMemorySampler({name, token}) {
     throw new Error('collector memory sampler did not become ready');
   };
   const stopSampler = async ({run}) => {
-    if (child.exitCode !== null) return child.exitCode === 0;
+    if (closed) return child.exitCode === 0;
     child.stdin.write(`${token}\n`);
     child.stdin.end();
     const deadline = Date.now() + 3000;
-    while (child.exitCode === null && Date.now() < deadline) await sleep(25);
+    while (!closed && Date.now() < deadline) await sleep(25);
     if (child.exitCode === null && Number.isSafeInteger(samplerPid)) {
       const killScript = 'p="$1"; t="$2"; case "$p" in *[!0-9]*|"") exit 2 ;; esac; [ "$p" -gt 1 ] || exit 2; c=$(/busybox tr "\\000" " " < "/proc/$p/cmdline") || exit 3; case "$c" in *"$t"*) /busybox kill -TERM "$p" ;; *) exit 4 ;; esac';
       try { run(['exec', name, '/busybox', 'sh', '-c', killScript, 'issue64-memory-kill', String(samplerPid), token]); } catch { failure ??= new Error('collector memory sampler cleanup failed'); }
       const killDeadline = Date.now() + 3000;
-      while (child.exitCode === null && Date.now() < killDeadline) await sleep(25);
+      while (!closed && Date.now() < killDeadline) await sleep(25);
     }
-    return child.exitCode === 0;
+    return closed && child.exitCode === 0;
   };
   return {latestSample, waitForFreshSample, stopSampler, get peakBytes() { return peakBytes; }, get failure() { return failure; }};
 }
