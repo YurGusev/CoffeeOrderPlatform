@@ -368,8 +368,10 @@ function startCollectorMemorySampler({name, token}) {
   };
   const stopSampler = async ({run}) => {
     if (closed) return child.exitCode === 0;
-    child.stdin.write(`${token}\n`);
-    child.stdin.end();
+    if (child.exitCode === null) {
+      child.stdin.write(`${token}\n`);
+      child.stdin.end();
+    }
     const deadline = Date.now() + 3000;
     while (!closed && Date.now() < deadline) await sleep(25);
     if (child.exitCode === null && Number.isSafeInteger(samplerPid)) {
