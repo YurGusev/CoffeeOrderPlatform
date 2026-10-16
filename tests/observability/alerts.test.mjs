@@ -3,7 +3,7 @@ import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, sourceIdentity, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -180,6 +180,34 @@ void test('issue 64 failure diagnostics retain only allowlisted error codes and 
   const unknown = sanitizeRuntimeMatrixFailure({name: secret, code: secret, stack: `Error: ${secret}\n    at leak (/tmp/${secret}.mjs:9:8)`});
   assert.deepEqual(unknown, {errorKind: 'unknown', frames: []});
   assert.deepEqual(sanitizeRuntimeMatrixFailure(secret), {errorKind: 'unknown', frames: []});
+});
+
+void test('infrastructure stop gate rejects a Docker stop that needed SIGKILL', () => {
+  const stopStates = [
+    {Running: false, ExitCode: 0, OOMKilled: false},
+    {Running: false, ExitCode: 137, OOMKilled: false},
+  ];
+  const commands = [];
+  const run = (args) => {
+    commands.push(args);
+    if (args[0] === 'inspect' && args[2] === '{{.Id}}') return 'a'.repeat(64);
+    if (args[0] === 'inspect' && args[2] === '{{json .State}}') return JSON.stringify(stopStates.shift());
+    return 'container';
+  };
+  const clean = stopContainerGracefully({run, name: 'collector-fixture', graceMs: 30000});
+  const forced = stopContainerGracefully({run, name: 'openobserve-fixture', graceMs: 30000});
+  assert.equal(clean.status, 'PASS');
+  assert.equal(clean.exitCode, 0);
+  assert.equal(clean.oomKilled, false);
+  assert.equal(clean.forcedKill, false);
+  assert.equal(forced.status, 'FAIL');
+  assert.equal(forced.exitCode, 137);
+  assert.equal(forced.forcedKill, true);
+  assert.ok(forced.elapsedMs <= forced.graceBudgetMs);
+  assert.deepEqual(commands.filter(args => args[0] === 'stop'), [
+    ['stop', '--time', '30', 'collector-fixture'],
+    ['stop', '--time', '30', 'openobserve-fixture'],
+  ]);
 });
 
 void test('Collector memory proof accepts only native limiter counters and bounded fresh cgroup samples', () => {

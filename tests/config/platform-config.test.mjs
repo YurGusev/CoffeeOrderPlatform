@@ -94,7 +94,7 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     parsed.telemetry.collector.memoryLimitMiB,
     parsed.telemetry.collector.memorySpikeMiB,
     parsed.telemetry.collector.containerMemoryMiB,
-  ], [256, 64, 512]);
+  ], [256, 64, 1024]);
   assert.equal(parsed.telemetry.openObserve.retentionDays, 3);
   assert.deepEqual([
     parsed.telemetry.openObserve.memTableMaxSizeMiB,

@@ -210,6 +210,24 @@ function containerGeneration({run, name}) {
   };
 }
 
+export function stopContainerGracefully({run, name, graceMs}) {
+  if (typeof run !== 'function' || typeof name !== 'string' || !name || !Number.isSafeInteger(graceMs) || graceMs < 1000)
+    throw new Error('infrastructure stop inputs invalid');
+  const stopSeconds = Math.floor(graceMs / 1000);
+  const startedAt = performance.now();
+  run(['stop', '--time', String(stopSeconds), name]);
+  const elapsedMs = Math.ceil(performance.now() - startedAt);
+  const {state} = containerGeneration({run, name});
+  const exitCode = Number.isSafeInteger(state.ExitCode) ? state.ExitCode : null;
+  const oomKilled = typeof state.OOMKilled === 'boolean' ? state.OOMKilled : null;
+  const stopped = state.Running === false;
+  return {
+    status: stopped && exitCode === 0 && oomKilled === false && elapsedMs <= graceMs ? 'PASS' : 'FAIL',
+    graceBudgetMs: graceMs, dockerStopSeconds: stopSeconds, elapsedMs, stopped, exitCode, oomKilled,
+    forcedKill: exitCode === 137,
+  };
+}
+
 function startedAtUs(state) {
   const startedAtMs = Date.parse(state?.StartedAt ?? '');
   if (!Number.isFinite(startedAtMs)) throw new Error('container process start time is unavailable');
@@ -1818,7 +1836,10 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     const latencyBudgetMs = config.platform.requestDeadlineMs;
     const healthLatencies = [];
     const openObserveStoppedAtUs = Date.now() * 1000;
-    run(['stop', openObserveName]);
+    evidence.telemetryHealth.infrastructureGracefulStops = {};
+    evidence.telemetryHealth.infrastructureGracefulStops.openObserve = stopContainerGracefully({run, name: openObserveName, graceMs: config.platform.shutdownGraceMs});
+    if (evidence.telemetryHealth.infrastructureGracefulStops.openObserve.status !== 'PASS')
+      throw new Error('OpenObserve did not exit cleanly within the configured graceful-stop budget');
     healthLatencies.push(await fixtureHealth({baseUrl: fixtureBaseUrl, path: config.platform.health.livePath, budgetMs: latencyBudgetMs}));
     await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
     const collectorRetryExpiryWaitMs = config.telemetry.collector.retryWindowMs + config.telemetry.collector.exportTimeoutMs +
@@ -1950,7 +1971,9 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       lossWindowStartedAtUs: openObserveStoppedAtUs,
       sendFailureSamples: collectorOutageLossBeforeRestart.sendFailureSamples,
     };
-    run(['stop', collectorName]);
+    evidence.telemetryHealth.infrastructureGracefulStops.collector = stopContainerGracefully({run, name: collectorName, graceMs: config.platform.shutdownGraceMs});
+    if (evidence.telemetryHealth.infrastructureGracefulStops.collector.status !== 'PASS')
+      throw new Error('Collector did not exit cleanly within the configured graceful-stop budget');
     await fixtureRequest({baseUrl: fixtureBaseUrl, path: '/test/burst', body: {count: config.telemetry.producer.queueCapacity * 4}, runId});
     for (let index = 0; index < 4; index += 1) {
       healthLatencies.push(await fixtureHealth({baseUrl: fixtureBaseUrl, path: config.platform.health.readyPath, budgetMs: latencyBudgetMs}));
@@ -2990,6 +3013,8 @@ keep=1`;
       evidence.telemetryHealth?.collectorMemoryProof?.status,
       evidence.collectorQueueMetrics?.status,
       evidence.diskPressureStatus, evidence.nativeNginxAlert?.status,
+      evidence.telemetryHealth?.infrastructureGracefulStops?.openObserve?.status,
+      evidence.telemetryHealth?.infrastructureGracefulStops?.collector?.status,
     ];
     if (requiredGates.every(status => status === 'PASS')) {
       evidence.status = 'PASS';

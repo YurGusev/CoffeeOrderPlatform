@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const COMPOSE_FILE = join(REPO_ROOT, "compose.yaml");
 const OBSERVABILITY_CONFIG = {
-  platform: {health: {intervalMs: 5000, timeoutMs: 1000, startupGraceMs: 30000, failureThreshold: 3}},
+  platform: {shutdownGraceMs: 30000, health: {intervalMs: 5000, timeoutMs: 1000, startupGraceMs: 30000, failureThreshold: 3}},
   telemetry: {
     collector: {
       otlpEndpoint: "http://otel-collector:4318",
@@ -557,6 +557,8 @@ void test("observability overlay keeps OpenObserve private and bounds exact Dock
   assert.ok(collector.volumes.some(({source, target, read_only}) => source === `/var/lib/docker/containers/${id}` && target === `/var/lib/docker/containers/${id}` && read_only));
   assert.equal(collector.volumes.some(({source}) => source === "/var/run/docker.sock"), false);
   assert.equal(collector.mem_limit, "512m");
+  for (const role of ["otel-collector", "openobserve"])
+    assert.equal(overlay.services[role].stop_grace_period, "30000ms");
   assert.deepEqual(overlay.volumes.openobserve_data, {external: true, name: "coffee-topology-openobserve-data"});
   assert.deepEqual(overlay.networks.coffee_observability, {name: "coffee_observability", internal: true});
 

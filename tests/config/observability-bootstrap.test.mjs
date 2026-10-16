@@ -24,7 +24,7 @@ const REPO_ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
 const sample = {
   environment: 'development',
-  platform: {health: {intervalMs: 5000, timeoutMs: 1000, startupGraceMs: 30000, failureThreshold: 3}},
+  platform: {shutdownGraceMs: 30000, health: {intervalMs: 5000, timeoutMs: 1000, startupGraceMs: 30000, failureThreshold: 3}},
   telemetry: {
     namespace: 'coffee-platform', releaseDigest: 'development', nginxStatusEndpoint: 'http://edge-nginx:8081/nginx_status',
     collector: {
@@ -479,6 +479,8 @@ void test('Collector config accepts only exact selected log files and bounds exp
   assert.ok(compose.services['otel-collector'].networks.includes('coffee_edge_backend'),
     'Collector stays in the existing edge trust zone used by edge-nginx');
   assert.equal(compose.services['otel-collector'].mem_limit, '512m');
+  for (const role of ['otel-collector', 'openobserve'])
+    assert.equal(compose.services[role].stop_grace_period, '30000ms');
   const bufferEnvironment = {
     ZO_MEM_TABLE_MAX_SIZE: '128', ZO_MAX_FILE_SIZE_IN_MEMORY: '8', ZO_MAX_FILE_SIZE_ON_DISK: '8',
     ZO_MAX_FILE_RETENTION_TIME: '30', ZO_MEM_PERSIST_INTERVAL: '2',
