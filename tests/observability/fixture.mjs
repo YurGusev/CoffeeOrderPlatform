@@ -98,7 +98,7 @@ const app = await createRuntime({
       const fields = {g14_run_id: runId, g14_fixture: true, sample: 'x'.repeat(12_000)};
       for (let index = 0; index < count; index += 1) {
         logger.info({...fields, rotation_probe: index}, 'bounded Docker rotation probe');
-        if (index % 32 === 31) await new Promise((resolve, reject) => logger.flush(error => error ? reject(error) : resolve()));
+        if (index % 32 === 31) await new Promise(resolve => setTimeout(resolve, 10));
       }
       await new Promise((resolve, reject) => logger.flush(error => error ? reject(error) : resolve()));
       return {accepted: count, producerDropped: logRecordsDropped() - beforeDropped};
