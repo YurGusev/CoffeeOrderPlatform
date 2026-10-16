@@ -34,7 +34,8 @@ const ACTIVITY_DEPENDENT_METRICS = Object.freeze([
   {name: 'messaging.inbox.received.age', reason: 'sample is produced by an Inbox delivery'},
 ]);
 const FAILURE_ERROR_KINDS = new Set(['Error', 'AssertionError', 'AggregateError']);
-const FAILURE_ERROR_CODES = new Set(['ERR_ASSERTION', 'ABORT_ERR', 'ETIMEDOUT']);
+const FAILURE_ERROR_CODES = new Set(['ERR_ASSERTION', 'ABORT_ERR', 'ETIMEDOUT', 'ENOBUFS']);
+const FAILURE_CHILD_SIGNALS = new Set(['SIGTERM', 'SIGKILL', 'SIGABRT', 'SIGSEGV']);
 const FAILURE_FRAME_FILES = new Map([
   [resolve(ROOT, 'tools/compose-smoke.mjs'), 'tools/compose-smoke.mjs'],
   [resolve(ROOT, 'tools/observability/verify.mjs'), 'tools/observability/verify.mjs'],
@@ -133,6 +134,9 @@ export function sanitizeRuntimeMatrixFailure(error) {
   const name = primaryError !== null && typeof primaryError === 'object' ? primaryError.name : undefined;
   const code = primaryError !== null && typeof primaryError === 'object' ? primaryError.code : undefined;
   const stack = primaryError !== null && typeof primaryError === 'object' && typeof primaryError.stack === 'string' ? primaryError.stack : '';
+  const status = primaryError !== null && typeof primaryError === 'object' ? primaryError.status : undefined;
+  const signal = primaryError !== null && typeof primaryError === 'object' ? primaryError.signal : undefined;
+  const stderr = primaryError !== null && typeof primaryError === 'object' ? primaryError.stderr : undefined;
   const frames = [];
   for (const line of stack.slice(0, 20_000).split('\n')) {
     const match = line.match(/(?:\(|at )((?:file:\/\/\/)?[^()\s]+):(\d+):(\d+)\)?$/u);
@@ -147,10 +151,25 @@ export function sanitizeRuntimeMatrixFailure(error) {
     frames.push({source, line: lineNumber, column: columnNumber});
     if (frames.length === 5) break;
   }
+  const childEvalFrames = [];
+  const stderrTail = typeof stderr === 'string' ? stderr.slice(-20_000) :
+    Buffer.isBuffer(stderr) ? stderr.subarray(-20_000).toString('utf8') : '';
+  for (const line of stderrTail.split('\n')) {
+    const match = line.match(/^\s*at\s+(?:.*\()?file:\/\/\/app\/\[eval1\]:(\d+):(\d+)\)?\s*$/u);
+    if (!match) continue;
+    const lineNumber = Number(match[1]);
+    const columnNumber = Number(match[2]);
+    if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(columnNumber) || columnNumber < 1) continue;
+    childEvalFrames.push({line: lineNumber, column: columnNumber});
+    if (childEvalFrames.length === 5) break;
+  }
   return {
     errorKind: FAILURE_ERROR_KINDS.has(name) ? name : 'unknown',
     ...(FAILURE_ERROR_CODES.has(code) ? {code} : {}),
+    ...(Number.isSafeInteger(status) && status >= 0 && status <= 255 ? {childExitCode: status} : {}),
+    ...(FAILURE_CHILD_SIGNALS.has(signal) ? {childSignal: signal} : {}),
     frames,
+    ...(childEvalFrames.length > 0 ? {childEvalFrames} : {}),
   };
 }
 

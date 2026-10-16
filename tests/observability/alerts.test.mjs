@@ -153,6 +153,29 @@ void test('issue 64 failure diagnostics retain only allowlisted error codes and 
   assert.equal(JSON.stringify(diagnostics).includes(secret), false);
   const aggregate = new AggregateError([cause], `${secret} aggregate message`, {cause});
   assert.deepEqual(sanitizeRuntimeMatrixFailure(aggregate), diagnostics);
+  const childFailure = new Error(`${secret} child failure`);
+  childFailure.code = 'ENOBUFS';
+  childFailure.status = 137;
+  childFailure.stderr = Buffer.from([
+    secret,
+    ...Array.from({length: 6}, (_, index) => `    at file:///app/[eval1]:${index + 10}:${index + 20}`),
+    `    at leak (file:///tmp/${secret}.mjs:9:8)`,
+  ].join('\n'));
+  childFailure.stack = `${secret}\n    at run (file://${path.resolve('tools/observability/verify.mjs')}:456:78)`;
+  const childDiagnostics = sanitizeRuntimeMatrixFailure(childFailure);
+  assert.deepEqual(childDiagnostics, {
+    errorKind: 'Error', code: 'ENOBUFS', childExitCode: 137,
+    frames: [{source: 'tools/observability/verify.mjs', line: 456, column: 78}],
+    childEvalFrames: [10, 11, 12, 13, 14].map((line, index) => ({line, column: index + 20})),
+  });
+  assert.equal(JSON.stringify(childDiagnostics).includes(secret), false);
+  const signalFailure = new Error(secret);
+  signalFailure.signal = 'SIGTERM';
+  signalFailure.stack = childFailure.stack;
+  const signalDiagnostics = sanitizeRuntimeMatrixFailure(signalFailure);
+  assert.equal(signalDiagnostics.childSignal, 'SIGTERM');
+  assert.equal('childExitCode' in signalDiagnostics, false);
+  assert.equal(JSON.stringify(signalDiagnostics).includes(secret), false);
   assert.equal(JSON.stringify(sanitizeRuntimeMatrixFailure(aggregate)).includes(secret), false);
   const unknown = sanitizeRuntimeMatrixFailure({name: secret, code: secret, stack: `Error: ${secret}\n    at leak (/tmp/${secret}.mjs:9:8)`});
   assert.deepEqual(unknown, {errorKind: 'unknown', frames: []});
