@@ -1729,12 +1729,17 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     const logFiles = await discoverContainerLogs({projectName: project, runtimes: ['edge-gateway'], runDocker: run});
     const rotationRecords = Math.ceil((config.telemetry.logging.maxSizeMiB * config.telemetry.logging.maxFiles + config.telemetry.logging.maxSizeMiB / 2) * 1024 * 1024 / 12_000);
     const rotationBurst = await fixtureRequest({baseUrl: fixtureBaseUrl, path: '/test/log-burst', body: {count: rotationRecords}, runId});
+    evidence.telemetryHealth = {...evidence.telemetryHealth, dockerLogRotationBurst: {
+      expectedRecords: Number.isSafeInteger(rotationRecords) && rotationRecords >= 0 ? rotationRecords : null,
+      accepted: Number.isSafeInteger(rotationBurst.accepted) && rotationBurst.accepted >= 0 ? rotationBurst.accepted : null,
+      producerDropped: Number.isSafeInteger(rotationBurst.producerDropped) && rotationBurst.producerDropped >= 0 ? rotationBurst.producerDropped : null,
+    }};
     if (rotationBurst.accepted !== rotationRecords || rotationBurst.producerDropped !== 0)
       throw new Error('synthetic Docker rotation burst was incomplete or exceeded Pino logging bounds');
     const dockerLogRotation = verifyDockerLogRotation({run, nodeImage: toolchain.nodeImage,
       logFile: logFiles[0], maxFiles: config.telemetry.logging.maxFiles, maxSizeMiB: config.telemetry.logging.maxSizeMiB,
       maxRecordBytes: config.telemetry.producer.maxRecordBytes});
-    evidence.telemetryHealth = {dockerLogRotation, producerLoggingPolicy};
+    evidence.telemetryHealth = {...evidence.telemetryHealth, dockerLogRotation, producerLoggingPolicy};
     evidence.nginxMetrics = logFiles.some(({service}) => service === 'edge-nginx') ? 'PASS' : 'NOT_RUN';
     const collectorConfig = createCollectorConfig({config, logFiles, exporterToken: producerToken, openObserveIngestToken: openObserveToken});
     // Fixture-only timestamp mapping makes a synthetic Pino `time` field exercise backend TTL.
