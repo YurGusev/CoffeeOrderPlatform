@@ -100,7 +100,7 @@ async function api({fetchImpl = fetch, baseUrl, path, authorization, method = 'G
   const text = await response.text();
   if (!expected.includes(response.status)) {
     const safeText = sensitiveValues.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, text);
-    throw new Error(`OpenObserve ${method} ${path} returned HTTP ${response.status}${safeText ? `: ${safeText.slice(0, 300)}` : ''}`);
+    throw Object.assign(new Error(`OpenObserve ${method} ${path} returned HTTP ${response.status}${safeText ? `: ${safeText.slice(0, 300)}` : ''}`), {httpStatus: response.status});
   }
   if (!text) return undefined;
   try { return JSON.parse(text); } catch { return text; }
@@ -120,6 +120,22 @@ async function waitFor(predicate, {timeoutMs, intervalMs = 2000, description}) {
     await sleep(intervalMs);
   }
   throw new Error(`${description} did not complete${lastError ? `: ${lastError.message}` : ''}`);
+}
+
+export async function waitForStreamRetentionSettings({baseUrl, authorization, organization, stream, streamType, retentionDays, fetchImpl = fetch, sensitiveValues = [], timeoutMs = 60000, intervalMs = 2000}) {
+  const query = new URLSearchParams({type: streamType});
+  const path = `/api/${encodeURIComponent(organization)}/streams/${encodeURIComponent(stream)}/settings?${query}`;
+  return waitFor(async () => {
+    try {
+      await api({fetchImpl, baseUrl, authorization, path, method: 'PUT', body: {data_retention: retentionDays}, sensitiveValues});
+      return true;
+    } catch (error) {
+      if (error?.httpStatus === 404) return false;
+      const failure = error instanceof Error ? error : new Error('OpenObserve retention settings request failed', {cause: error});
+      failure.fatal = true;
+      throw failure;
+    }
+  }, {timeoutMs, intervalMs, description: `OpenObserve retention settings for ${stream}`});
 }
 
 function requireRunning({run, name, secrets = []}) {
@@ -1913,8 +1929,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         .map(stream => [stream.name, 'metrics']),
     ]);
     for (const [stream, streamType] of retentionStreams) {
-      const query = new URLSearchParams({type: streamType});
-      await api({baseUrl, authorization, path: `/api/${encodeURIComponent(organization)}/streams/${encodeURIComponent(stream)}/settings?${query}`, method: 'PUT', body: {data_retention: config.telemetry.openObserve.retentionDays}});
+      await waitForStreamRetentionSettings({baseUrl, authorization, organization, stream, streamType,
+        retentionDays: config.telemetry.openObserve.retentionDays, sensitiveValues});
     }
     const latencyBudgetMs = config.platform.requestDeadlineMs;
     const healthLatencies = [];

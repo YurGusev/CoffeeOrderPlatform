@@ -6,7 +6,7 @@ import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {awaitConvergenceMetricBarrier} from './launch-path.mjs';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples, waitForStreamRetentionSettings} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -47,6 +47,63 @@ void test('native access lookup selects its owner before the response page limit
   const correlationId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   assert.equal(nativeAccessLogFilter(correlationId), `"service_name" = 'edge-nginx' AND "body_correlation_id" = '${correlationId}'`);
   assert.throws(() => nativeAccessLogFilter("' OR 1=1"), /requires a UUID/u);
+});
+
+void test('OpenObserve retention settings wait only for stream-settings 404 readiness', async () => {
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push({url, init});
+    return new Response(requests.length === 1 ? 'temporary canary response' : '', {status: requests.length === 1 ? 404 : 200});
+  };
+  await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
+    organization: 'coffee', stream: 'platform_metrics_runtime_http_requests_total', streamType: 'metrics',
+    retentionDays: 7, fetchImpl, sensitiveValues: ['temporary canary response'], timeoutMs: 100, intervalMs: 1});
+  assert.equal(requests.length, 2, 'a stream-settings 404 is retried until the settings endpoint is ready');
+  for (const {url, init} of requests) {
+    assert.equal(url.pathname, '/api/coffee/streams/platform_metrics_runtime_http_requests_total/settings');
+    assert.equal(url.searchParams.get('type'), 'metrics');
+    assert.equal(init.method, 'PUT');
+    assert.equal(init.headers.Authorization, 'Basic fixture');
+    assert.deepEqual(JSON.parse(init.body), {data_retention: 7});
+  }
+
+  let permanent404Calls = 0;
+  let timeoutFailure;
+  try {
+    await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
+      organization: 'coffee', stream: 'platform_metrics_missing', streamType: 'metrics', retentionDays: 7,
+      fetchImpl: async () => {permanent404Calls += 1; return new Response('permanent canary', {status: 404});},
+      sensitiveValues: ['permanent canary'], timeoutMs: 5, intervalMs: 1});
+  } catch (error) { timeoutFailure = error; }
+  assert.ok(timeoutFailure, 'a permanent 404 must fail after the bounded readiness deadline');
+  assert.ok(permanent404Calls > 1);
+  assert.equal(timeoutFailure.message.includes('permanent canary'), false);
+
+  for (const status of [401, 500]) {
+    let calls = 0;
+    let failure;
+    try {
+      await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
+        organization: 'coffee', stream: 'platform_metrics_denied', streamType: 'metrics', retentionDays: 7,
+        fetchImpl: async () => {calls += 1; return new Response('auth canary', {status});},
+        sensitiveValues: ['auth canary'], timeoutMs: 100, intervalMs: 1});
+    } catch (error) { failure = error; }
+    assert.equal(calls, 1, `HTTP ${status} fails immediately`);
+    assert.equal(failure?.httpStatus, status);
+    assert.equal(failure?.fatal, true);
+    assert.equal(failure?.message.includes('auth canary'), false);
+  }
+
+  let networkCalls = 0;
+  let networkFailure;
+  try {
+    await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
+      organization: 'coffee', stream: 'platform_metrics_offline', streamType: 'metrics', retentionDays: 7,
+      fetchImpl: async () => {networkCalls += 1; throw new Error('network unavailable');}, timeoutMs: 100, intervalMs: 1});
+  } catch (error) { networkFailure = error; }
+  assert.equal(networkCalls, 1, 'network failures are fatal rather than retried');
+  assert.equal(networkFailure?.fatal, true);
+  assert.match(networkFailure?.message ?? '', /network unavailable/u);
 });
 
 void test('owner metric search groups all expected owners before the 100-row page limit and waits for every histogram component', async () => {
