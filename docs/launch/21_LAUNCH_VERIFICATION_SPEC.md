@@ -220,6 +220,7 @@ Availability alert использует только private endpoint из
 по себе не доказывает полную system readiness или capacity. Collector удаляет
 `http.status_code` из nginx probe datapoints для стабильной availability series
 и `error.message` из всех metric datapoints для защиты от утечки текста ошибок.
+Общий metric transform также удаляет `http.url`, чтобы probe endpoint не становился label.
 
 Topology gate отдельно доказывает: `api-public` монтирует только `client-v1`,
 `api-internal` — только `internal-v1`; Edge→owner и Browser→owner запрещены;

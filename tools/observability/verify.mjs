@@ -265,7 +265,7 @@ export function validateCollectorMemorySample(sample, {nowMs, receivedAtMs, prev
       (previousSequence !== undefined && sample.sequence !== previousSequence + 1))
     throw new Error('collector memory sampler sample was invalid or stale');
   if (sample.currentBytes >= guardBytes || sample.oom > 0 || sample.oomKill > 0)
-    throw new Error('collector memory safety guard was reached');
+    throw new Error(`collector memory safety guard was reached: currentBytes=${sample.currentBytes}, guardBytes=${guardBytes}, oom=${sample.oom}, oomKill=${sample.oomKill}`);
   return sample;
 }
 
@@ -2458,6 +2458,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             const records = rows(await streamSearch({baseUrl, authorization, organization,
               stream: `${config.telemetry.openObserve.streams.metrics}_httpcheck_status`, streamType: 'metrics', startTimeUs: afterUs,
               filterSql: '"service_name" = \'edge-nginx\' AND "http_status_class" = \'2xx\''}));
+            if (records.some(record => Object.entries(record).some(([key, candidate]) => /^(?:http_url|http\.url)$/iu.test(key) && candidate !== undefined && candidate !== null)))
+              throw Object.assign(new Error('native availability exported an HTTP URL metric label'), {fatal: true});
             if (records.some(record => Object.entries(record).some(([key, candidate]) => /status_code/iu.test(key) && candidate !== undefined && candidate !== null)))
               throw Object.assign(new Error('native availability series retained changing HTTP status-code identity'), {fatal: true});
             const sample = latestMetricSample(records, {service: 'edge-nginx', afterUs});
@@ -2484,8 +2486,10 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
                 filterSql: '\"service_name\" = \'edge-nginx\''}));
               if (records.some(record => Object.entries(record).some(([key, value]) => /error_message$/iu.test(key) && value !== undefined && value !== null)))
                 throw Object.assign(new Error('native probe exported arbitrary error-message metric labels'), {fatal: true});
+              if (records.some(record => Object.entries(record).some(([key, value]) => /^(?:http_url|http\.url)$/iu.test(key) && value !== undefined && value !== null)))
+                throw Object.assign(new Error('native probe error metric exported an HTTP URL label'), {fatal: true});
               return metricValues(records).some(value => value > 0) ? records.length : false;
-            }, {timeoutMs: 60000, intervalMs: 2000, description: 'native probe error counter without raw error-message metric labels'});
+            }, {timeoutMs: 60000, intervalMs: 2000, description: 'native probe error counter without raw error or URL metric labels'});
             evidence.nativeNginxAlert.stage = 'pending-firing';
             const nativeFiring = await waitFor(async () => {
               assertNodeHealth();
@@ -2512,7 +2516,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             evidence.nativeNginxAlert = {status: 'PASS', runId, ruleName: notReadyRule.name, signal: 'native HTTP availability; full-system readiness not claimed',
               containerId: beforeNative.id, pendingPeriodSec: notReadyRule.pendingPeriodSec, episodeId: nativeFiring.episodeId,
               healthyValue: healthyNative.value, failedValue: failedNative.value, recoveredValue: recoveredNative.value,
-              errorMetricSamples: errorMetrics, rawErrorMessageMetricLabelAbsent: true,
+              errorMetricSamples: errorMetrics, rawErrorMessageMetricLabelAbsent: true, rawUrlMetricLabelAbsent: true,
               failedAtUs: stoppedAtUs, firingReceivedAt: nativeFiring.receivedAt, resolvedReceivedAt: nativeResolved.receivedAt,
               nodeOwners: [...NODE_RUNTIME_TARGETS], nodeHealthObservations, allNodeHealthObservationsPassed: true,
               freshNodeReadyMetricsBeforeFailureAtFiringAfterRecovery: true, exactContainerRecoveredWithoutOOM: true};

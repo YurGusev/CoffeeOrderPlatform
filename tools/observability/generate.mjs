@@ -324,7 +324,10 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
           {context: 'metric', statements: [
             `set(metric.name, Concat([${JSON.stringify(openObserve.streams.metrics)}, metric.name], "_"))`,
           ]},
-          {context: 'datapoint', statements: ['delete_key(datapoint.attributes, "error.message")']},
+          {context: 'datapoint', statements: [
+            'delete_key(datapoint.attributes, "error.message")',
+            'delete_key(datapoint.attributes, "http.url")',
+          ]},
         ],
       },
       ...(includeNginxMetrics ? {

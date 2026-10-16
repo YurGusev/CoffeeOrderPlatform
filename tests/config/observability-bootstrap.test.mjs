@@ -452,7 +452,10 @@ void test('Collector config accepts only exact selected log files and bounds exp
   assert.deepEqual(config.processors['transform/metric_names'].metric_statements[0].statements,
     ['set(metric.name, Concat(["platform_metrics", metric.name], "_"))']);
   assert.deepEqual(config.processors['transform/metric_names'].metric_statements[1], {
-    context: 'datapoint', statements: ['delete_key(datapoint.attributes, "error.message")'],
+    context: 'datapoint', statements: [
+      'delete_key(datapoint.attributes, "error.message")',
+      'delete_key(datapoint.attributes, "http.url")',
+    ],
   });
   assert.equal(config.service.pipelines.traces.receivers[0], 'otlp');
   assert.equal(config.processors.memory_limiter.limit_mib, 128);

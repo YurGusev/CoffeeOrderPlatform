@@ -97,7 +97,8 @@ probe серия `2xx` становится 0. Resource owner — `edge-nginx`. 
 участвуют в business readiness. `http.status_code` удаляется из nginx probe
 datapoints, чтобы смена ответа не создавала отдельную availability series;
 `error.message` удаляется из datapoints всех metric families, поскольку текст
-ошибки не должен становиться metric attribute.
+ошибки не должен становиться metric attribute; общий transform также удаляет
+`http.url`, чтобы адрес probe не попадал в metric labels.
 `telemetry.openObserve.telemetryEnabled`, `mmdbDownloadEnabled` и
 `modelPricingEnabled` обязательно равны `false`: backend не отправляет внешнюю
 телеметрию и не загружает GeoIP или model pricing. Эти значения применяются
