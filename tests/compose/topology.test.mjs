@@ -3,6 +3,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import childProcess from "node:child_process";
 import { spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
+import { runInNewContext } from "node:vm";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import {createRuntimeLoggingOverride} from "../../tools/observability/generate.mjs";
@@ -595,4 +596,117 @@ void test("Confluent Node 26 addon links dynamically to separately pinned librdk
   assert.match(dockerfile, /CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0/);
   assert.match(dockerfile, /ldd .*confluent-kafka-javascript\.node/);
   assert.doesNotMatch(dockerfile, /\/ckjs|librdkafka-static\.a/);
+});
+
+void test("recovery proof preserves the body error when orders-aroma-preparation restore also fails", async () => {
+  const source = await readFile(new URL("../../tools/compose-smoke.mjs", import.meta.url), "utf8");
+  const start = source.indexOf(`        runCompose(
+          projectName,
+          secretsDir,
+          ["stop", "orders-aroma-preparation"],`);
+  const end = source.indexOf("\n      }\n    }\n    if (!options.keep)", start);
+  assert.ok(start >= 0 && end > start);
+  const recoveryBlock = source.slice(start, end);
+  const bodyError = new Error("BODY_SECRET_CANARY");
+  const restoreError = new Error("RESTORE_SECRET_CANARY");
+  const readinessError = new Error("READINESS_SECRET_CANARY");
+  const run = ({bodyFails = false, restoreFails = false, readinessFails = false} = {}) => {
+    const calls = [];
+    const promise = runInNewContext(`(async()=>{${recoveryBlock};return nativeFoundation;})()`, {
+      AggregateError, assert, bodyError, restoreError, readinessError,
+      projectName: "synthetic-project", secretsDir: "synthetic-secrets", composeFile: "synthetic-compose",
+      recoveryDatabaseProof: {port: 5432}, recoveryProofCredentials: {}, platformConfig: {}, nativeFoundation: undefined,
+      prepareKafkaNativeFixture: async () => {if (bodyFails) throw bodyError;return {mappingTopic: "synthetic-topic"};},
+      nativeFoundationSource: () => "synthetic-source",
+      runCompose: (_project, _secrets, args) => {
+        calls.push(args[0] === "up" ? "restore-up" : args[0]);
+        if (args[0] === "up" && restoreFails) throw restoreError;
+        if (args[0] === "exec") return JSON.stringify({sigterm: {received: true, gateEntered: true, activeAtSignal: {total: 1}, ownerCount: 1, closedMetrics: {consumer: {assigned: 0, active: 0, pending: 0}}}});
+        return "";
+      },
+      assertOrdersOutboxBrokerRecovery: async () => ({recovered: true}),
+      runKafkaBlackholeProof: async () => ({recovered: true}),
+      waitForRuntimeReadiness: async () => {calls.push("readiness");if (readinessFails) throw readinessError;},
+    });
+    return {calls, promise};
+  };
+
+  const bodyOnly = run({bodyFails: true});
+  await assert.rejects(bodyOnly.promise, (error) => error === bodyError);
+  assert.deepEqual(bodyOnly.calls, ["stop", "restore-up", "readiness"]);
+  await assert.rejects(run({restoreFails: true}).promise, (error) => error === restoreError);
+  await assert.rejects(run({readinessFails: true}).promise, (error) => error === readinessError);
+  await assert.rejects(run({bodyFails: true, restoreFails: true}).promise, (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual([...error.errors], [bodyError, restoreError]);
+    assert.equal(error.cause, bodyError);
+    assert.equal(error.message, "Recovery proof and orders-aroma-preparation restoration both failed");
+    assert.doesNotMatch(error.message, /BODY_SECRET_CANARY|RESTORE_SECRET_CANARY/u);
+    return true;
+  });
+  const success = run();
+  await success.promise;
+  assert.deepEqual(success.calls, ["stop", "exec", "restore-up", "readiness"]);
+});
+
+void test("Orders recovery reads a complete bounded snapshot from every configured Kafka partition", () => {
+  const source = readFile(new URL("../../tools/compose-smoke.mjs", import.meta.url), "utf8");
+  return source.then((text) => {
+    const start = text.indexOf("function readOrdersBrokerMessages(");
+    const end = text.indexOf("\nasync function assertOrdersOutboxBrokerRecovery", start);
+    assert.ok(start >= 0 && end > start);
+    const readerSource = text.slice(start, end);
+    const topic = {name: "coffee.orders.lifecycle.v1", partitions: 2};
+    const commandError = new Error("synthetic Kafka command failure");
+    const makeReader = ({offsets, records = {}, failCommand = false}) => {
+      const commands = [];
+      const reader = runInNewContext(`(${readerSource})`, {
+        assert,
+        runCompose: (_project, _secrets, args) => {
+          const script = args.at(-1);
+          commands.push(script);
+          if (script.includes("kafka-get-offsets.sh")) return offsets;
+          if (failCommand) throw commandError;
+          const partition = Number(script.match(/--partition (\d+)/u)?.[1]);
+          return records[partition] ?? "";
+        },
+      });
+      return {commands, reader: () => reader("synthetic-project", "synthetic-secrets", "synthetic-compose", topic)};
+    };
+
+    const complete = makeReader({
+      offsets: `${topic.name}:0:0\n${topic.name}:1:2\n`,
+      records: {1: '{"messageId":"one"}\n{"messageId":"two"}\n'},
+    });
+    assert.deepEqual(JSON.parse(JSON.stringify(complete.reader())), [{messageId: "one"}, {messageId: "two"}]);
+    assert.equal(complete.commands.length, 2, "empty partitions need no consumer process");
+    assert.match(complete.commands[1], /--partition 1 --offset 0 --max-messages 2 --timeout-ms 5000/u);
+    assert.doesNotMatch(complete.commands.join(" "), /--group|2>\/dev\/null|\|\| true/u);
+
+    const empty = makeReader({offsets: `${topic.name}:0:0\n${topic.name}:1:0\n`});
+    assert.deepEqual(JSON.parse(JSON.stringify(empty.reader())), []);
+    assert.equal(empty.commands.length, 1);
+
+    for (const offsets of [
+      `${topic.name}:0:1\n`,
+      `${topic.name}:0:1\n${topic.name}:0:1\n${topic.name}:1:0\n`,
+      `${topic.name}:0:-1\n${topic.name}:1:0\n`,
+      `${topic.name}:0:\n${topic.name}:1:0\n`,
+      `${topic.name}:0:0x1\n${topic.name}:1:0\n`,
+      `${topic.name}:0:101\n${topic.name}:1:0\n`,
+    ]) {
+      const invalid = makeReader({offsets});
+      assert.throws(invalid.reader, /offset snapshot/u);
+      assert.equal(invalid.commands.length, 1, "invalid snapshots must fail before reading records");
+    }
+
+    const incomplete = makeReader({
+      offsets: `${topic.name}:0:0\n${topic.name}:1:2\n`,
+      records: {1: '{"messageId":"one"}\n'},
+    });
+    assert.throws(incomplete.reader, /expected 2 records in partition 1, received 1/u);
+
+    const failed = makeReader({offsets: `${topic.name}:0:0\n${topic.name}:1:1\n`, failCommand: true});
+    assert.throws(failed.reader, (error) => error === commandError);
+  });
 });

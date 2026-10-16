@@ -1373,16 +1373,58 @@ async function applyOrdersMigrations(port, credentials, platformConfig) {
   }
 }
 
-function readOrdersBrokerMessages(projectName, secretsDir, composeFile) {
-  const group = `orders-proof-${randomUUID().replaceAll("-", "")}`;
-  const script = [
-    "/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic coffee.orders.lifecycle.v1",
-    `  --group ${group} --from-beginning --max-messages 100 --timeout-ms 5000 2>/dev/null || true`,
-  ].join(" ");
-  const output = runCompose(projectName, secretsDir, ["exec", "-T", "kafka", "sh", "-ec", script], {composeFile});
-  return output.split("\n").flatMap((line) => {
-    try { return [JSON.parse(line)]; } catch { return []; }
-  });
+function readOrdersBrokerMessages(projectName, secretsDir, composeFile, topic) {
+  assert.match(topic?.name ?? "", /^[A-Za-z0-9._-]+$/u, "Orders recovery proof topic name is invalid");
+  assert.ok(Number.isSafeInteger(topic.partitions) && topic.partitions > 0, "Orders recovery proof partition count is invalid");
+  const offsetsOutput = runCompose(projectName, secretsDir, [
+    "exec", "-T", "kafka", "sh", "-ec",
+    `/opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic ${topic.name} --time -1`,
+  ], {composeFile});
+  const endOffsets = new Map();
+  for (const line of offsetsOutput.split(/\r?\n/u).filter(Boolean)) {
+    const [name, partitionText, offsetText, extra] = line.split(":");
+    if (!/^\d+$/u.test(partitionText ?? "") || !/^\d+$/u.test(offsetText ?? "")) {
+      throw new Error("Orders recovery proof Kafka offset snapshot is invalid");
+    }
+    const partition = Number(partitionText);
+    const offset = Number(offsetText);
+    if (extra !== undefined || name !== topic.name || !Number.isSafeInteger(partition) || partition < 0 ||
+        !Number.isSafeInteger(offset) || offset < 0 || endOffsets.has(partition)) {
+      throw new Error("Orders recovery proof Kafka offset snapshot is invalid");
+    }
+    endOffsets.set(partition, offset);
+  }
+  if (endOffsets.size !== topic.partitions || Array.from({length: topic.partitions}, (_, partition) => endOffsets.has(partition)).some((present) => !present)) {
+    throw new Error("Orders recovery proof Kafka offset snapshot is incomplete");
+  }
+  const snapshotCount = [...endOffsets.values()].reduce((total, offset) => total + offset, 0);
+  if (!Number.isSafeInteger(snapshotCount) || snapshotCount > 100) {
+    throw new Error("Orders recovery proof Kafka offset snapshot exceeds the 100-record bound");
+  }
+  const messages = [];
+  // This proof creates a fresh per-run, un-compacted topic; offset zero is its complete record range.
+  for (let partition = 0; partition < topic.partitions; partition += 1) {
+    const expectedCount = endOffsets.get(partition);
+    if (expectedCount === 0) continue;
+    const output = runCompose(projectName, secretsDir, [
+      "exec", "-T", "kafka", "sh", "-ec",
+      `/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic ${topic.name} --partition ${partition} --offset 0 --max-messages ${expectedCount} --timeout-ms 5000`,
+    ], {composeFile});
+    const lines = output.split(/\r?\n/u);
+    if (lines.at(-1) === "") lines.pop();
+    if (lines.length !== expectedCount) {
+      throw new Error(`Orders recovery proof Kafka snapshot expected ${expectedCount} records in partition ${partition}, received ${lines.length}`);
+    }
+    for (const line of lines) {
+      let message;
+      try { message = JSON.parse(line); } catch { throw new Error("Orders recovery proof Kafka snapshot contains invalid JSON"); }
+      if (message === null || typeof message !== "object" || Array.isArray(message)) {
+        throw new Error("Orders recovery proof Kafka snapshot contains an invalid record");
+      }
+      messages.push(message);
+    }
+  }
+  return messages;
 }
 
 async function assertOrdersOutboxBrokerRecovery(projectName, secretsDir, composeFile, port, credentials, platformConfig) {
@@ -1417,12 +1459,12 @@ async function assertOrdersOutboxBrokerRecovery(projectName, secretsDir, compose
     const pending = await read();
     assert.equal(pending?.state, "Pending", "OrderConfirmed must be pending while Orders runtime is stopped");
     const messageId = pending.message_id;
-    assert.equal(readOrdersBrokerMessages(projectName, secretsDir, composeFile).filter((event) => event.messageId === messageId).length,
+    assert.equal(readOrdersBrokerMessages(projectName, secretsDir, composeFile, platformConfig.kafka.topics.ordersLifecycle).filter((event) => event.messageId === messageId).length,
       0, "OrderConfirmed was published before the Orders relay restarted");
     runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile});
     stopped = false;
     assert.equal((await read())?.state, "Published", "Orders relay did not finalize the broker-acknowledged event");
-    const matched = () => readOrdersBrokerMessages(projectName, secretsDir, composeFile).filter((event) =>
+    const matched = () => readOrdersBrokerMessages(projectName, secretsDir, composeFile, platformConfig.kafka.topics.ordersLifecycle).filter((event) =>
       event.messageId === messageId && event.messageType === "OrderConfirmed.v1" && event.payload?.orderRef === orderRef);
     assert.equal(matched().length, 1, "Kafka did not retain exactly one published OrderConfirmed event");
     runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "orders-service"], {composeFile});
@@ -1430,7 +1472,8 @@ async function assertOrdersOutboxBrokerRecovery(projectName, secretsDir, compose
     runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile});
     stopped = false;
     assert.equal((await read())?.state, "Published", "Orders restart changed terminal Outbox state");
-    assert.equal(matched().length, 1, "Orders restart published a duplicate of a finalized Outbox event");
+    const matchedAfterRestart = matched().length;
+    assert.equal(matchedAfterRestart, 1, `Orders restart found ${matchedAfterRestart} matching finalized Outbox event(s); expected 1`);
     return {pendingBeforeRestart:true, brokerAcknowledged:true, publishedAfterRestart:true, duplicateAfterFinalize:false};
   } finally {
     if (stopped) {
@@ -3692,6 +3735,8 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
           ["stop", "orders-aroma-preparation"],
           {composeFile},
         );
+        let recoveryBodyFailed = false;
+        let recoveryBodyError;
         try {
           const fixture = await prepareKafkaNativeFixture(
             projectName,
@@ -3740,7 +3785,11 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
               composeFile,
             ),
           };
-        } finally {
+        } catch (error) {
+          recoveryBodyFailed = true;
+          recoveryBodyError = error;
+        }
+        try {
           runCompose(
             projectName,
             secretsDir,
@@ -3755,7 +3804,17 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
             30_000,
             composeFile,
           );
+        } catch (restoreError) {
+          if (recoveryBodyFailed) {
+            throw new AggregateError(
+              [recoveryBodyError, restoreError],
+              "Recovery proof and orders-aroma-preparation restoration both failed",
+              {cause: recoveryBodyError},
+            );
+          }
+          throw restoreError;
         }
+        if (recoveryBodyFailed) throw recoveryBodyError;
       }
     }
     if (!options.keep) {
