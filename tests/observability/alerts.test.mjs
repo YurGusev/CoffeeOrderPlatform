@@ -3,7 +3,7 @@ import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
 import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -211,6 +211,15 @@ void test('infrastructure stop gate rejects a Docker stop that needed SIGKILL', 
 });
 
 void test('Collector memory proof accepts only native limiter counters and bounded fresh cgroup samples', () => {
+  assert.equal(isCollectorMemoryRefusal({httpStatus: 503, otlpCode: 14, refusal: true}), true);
+  for (const response of [
+    {httpStatus: 503, otlpCode: 14, refusal: false},
+    {httpStatus: 503, otlpCode: 13, refusal: true},
+    {httpStatus: 500, otlpCode: 14, refusal: true},
+    {httpStatus: 200, otlpCode: 14, refusal: true},
+    {httpStatus: 503, otlpCode: '14', refusal: true},
+    undefined,
+  ]) assert.equal(isCollectorMemoryRefusal(response), false);
   assert.deepEqual(parseCollectorMemoryLimiterMetrics([
     '# HELP otelcol_processor_memory_limiter_refused_spans Refused spans.',
     'otelcol_processor_memory_limiter_refused_spans{processor="memory_limiter"} 2',

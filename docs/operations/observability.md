@@ -83,7 +83,11 @@ producer ingress использует существующие private zones. О
 в cgroup учитывается файловый кэш бинарника и читаемых логов. Проверка держит
 запас 64 MiB и останавливает proof при текущем или накопленном cgroup usage
 от 960 MiB.
-Это локальная safety policy, не гарантия Collector или capacity proof. Снимки
+Это локальная safety policy, не гарантия Collector или capacity proof. После
+подтверждённого memory refusal verifier повторяет recovery-маркер с интервалом
+1 секунду в пределах окна 60 секунд только при HTTP 503, OTLP code 14 и признаке
+отказа; остальные ответы и ошибки завершают proof. PASS требует точного trace в
+настроенном traces stream и того же здорового Collector generation. Снимки
 до outage и во время memory probe относятся к одному container generation и
 содержат только ограниченные числовые cgroup counters. Cold-cache поведение не
 проверялось.

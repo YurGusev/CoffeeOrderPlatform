@@ -520,6 +520,10 @@ async function captureCollectorMemoryStartupBaseline({run, name, config}) {
   };
 }
 
+export function isCollectorMemoryRefusal(response) {
+  return response?.httpStatus === 503 && response.otlpCode === 14 && response.refusal === true;
+}
+
 function collectorMemorySpan({traceId, spanId, runId, name, paddingBytes = 512}) {
   return {
     resourceSpans: [{
@@ -612,7 +616,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
     if (response.httpStatus === 503) {
       const afterRefusal = await refreshTelemetry(true);
       const refusedSpansDelta = afterRefusal.counters.refused - baseline.counters.refused;
-      if (response.otlpCode !== 14 || response.refusal !== true || refusedSpansDelta <= 0)
+      if (!isCollectorMemoryRefusal(response) || refusedSpansDelta <= 0)
         throw new Error('Collector returned an unproven memory-refusal response');
       refusal = {httpStatus: 503, otlpCode: 14, refusedSpansDelta, packetCount, wireBytes,
         observedAt: new Date().toISOString()};
@@ -662,8 +666,8 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
         progress.stage = 'recovery-accepted';
       }
       else throw new Error('Collector recovery acceptance counter did not increase');
-    } else if (response.httpStatus !== 503) {
-      throw new Error('Collector recovery request returned an unexpected status');
+    } else if (!isCollectorMemoryRefusal(response)) {
+      throw new Error('Collector recovery request returned an unproven memory-refusal response');
     } else {
       await sleep(1000);
     }
@@ -1927,10 +1931,60 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     });
     evidence.telemetryHealth.recovered = recoveredHealthSummary;
     evidence.telemetryHealth.recoveryStatus = 'PASS';
-    const memoryMarker = await sendCollectorMemorySpan({collectorIp, config, token: producerToken, runId,
-      name: 'g14.collector.memory.recovered'});
-    if (memoryMarker.httpStatus !== 200 || !/^[a-f0-9]{32}$/u.test(memoryMarker.traceId ?? ''))
-      throw new Error('Collector recovery marker was not accepted');
+    const markerAdmission = {status: 'PENDING', attempts: 0, refusedAttempts: 0,
+      lastHttpStatus: null, lastOtlpCode: null, lastRefusal: false};
+    collectorMemoryProof.markerAdmission = markerAdmission;
+    const markerGenerationBefore = containerGeneration({run, name: collectorName});
+    if (markerGenerationBefore.id !== collectorMemoryProof.containerGeneration.id ||
+        markerGenerationBefore.state.StartedAt !== collectorMemoryProof.containerGeneration.startedAt ||
+        markerGenerationBefore.state.Running !== true || markerGenerationBefore.state.OOMKilled === true) {
+      markerAdmission.status = 'FAIL';
+      markerAdmission.failureKind = 'COLLECTOR_GENERATION_CHANGED';
+      throw new Error('Collector recovery marker requires the same healthy process generation');
+    }
+    const markerStartedAt = Date.now();
+    let memoryMarker;
+    try {
+      memoryMarker = await waitFor(async () => {
+        markerAdmission.attempts += 1;
+        let response;
+        try {
+          response = await sendCollectorMemorySpan({collectorIp, config, token: producerToken, runId,
+            name: 'g14.collector.memory.recovered'});
+        } catch {
+          markerAdmission.status = 'FAIL';
+          markerAdmission.failureKind = 'REQUEST_ERROR';
+          throw Object.assign(new Error('Collector recovery marker request failed'), {fatal: true});
+        }
+        markerAdmission.lastHttpStatus = Number.isSafeInteger(response.httpStatus) ? response.httpStatus : null;
+        markerAdmission.lastOtlpCode = Number.isSafeInteger(response.otlpCode) ? response.otlpCode : null;
+        markerAdmission.lastRefusal = response.refusal === true;
+        if (!/^[a-f0-9]{32}$/u.test(response.traceId ?? '')) {
+          markerAdmission.status = 'FAIL';
+          markerAdmission.failureKind = 'INVALID_TRACE_ID';
+          throw Object.assign(new Error('Collector recovery marker returned an invalid trace identifier'), {fatal: true});
+        }
+        if (isCollectorMemoryRefusal(response)) {
+          markerAdmission.refusedAttempts += 1;
+          return false;
+        }
+        if (response.httpStatus !== 200) {
+          markerAdmission.status = 'FAIL';
+          markerAdmission.failureKind = response.httpStatus === 503 ? 'UNPROVEN_REFUSAL' : 'UNEXPECTED_RESPONSE';
+          throw Object.assign(new Error('Collector recovery marker request was not accepted'), {fatal: true});
+        }
+        return response;
+      }, {timeoutMs: 60000, intervalMs: 1000, description: 'Collector recovery marker admission after memory refusal'});
+    } catch (error) {
+      if (markerAdmission.status === 'PENDING') {
+        markerAdmission.status = 'FAIL';
+        markerAdmission.failureKind = 'REFUSAL_WINDOW_EXPIRED';
+      }
+      markerAdmission.elapsedMs = Date.now() - markerStartedAt;
+      throw error;
+    }
+    markerAdmission.status = 'ACCEPTED';
+    markerAdmission.elapsedMs = Date.now() - markerStartedAt;
     collectorMemoryProof.marker = {traceId: memoryMarker.traceId, spanName: 'g14.collector.memory.recovered', runId,
       acceptedAt: new Date().toISOString()};
     const memoryMarkerRows = await waitFor(async () => {
@@ -1941,6 +1995,15 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       return found.some(record => hasExactValue(record, collectorMemoryProof.marker.traceId) &&
         hasExactValue(record, collectorMemoryProof.marker.spanName) && hasExactValue(record, runId)) ? found : false;
     }, {timeoutMs: 60000, intervalMs: 1000, description: 'Collector memory recovery marker in configured traces stream'});
+    const markerGenerationAfter = containerGeneration({run, name: collectorName});
+    if (markerGenerationAfter.id !== collectorMemoryProof.containerGeneration.id ||
+        markerGenerationAfter.state.StartedAt !== collectorMemoryProof.containerGeneration.startedAt ||
+        markerGenerationAfter.state.Running !== true || markerGenerationAfter.state.OOMKilled === true) {
+      markerAdmission.status = 'FAIL';
+      markerAdmission.failureKind = 'COLLECTOR_GENERATION_CHANGED';
+      throw new Error('Collector recovery marker export did not retain the same healthy process generation');
+    }
+    markerAdmission.status = 'PASS';
     collectorMemoryProof = {...collectorMemoryProof, status: 'PASS', durableExportProven: true,
       marker: {...collectorMemoryProof.marker,
         backendConfirmation: {stream: config.telemetry.openObserve.streams.traces, exactTraceId: true,
