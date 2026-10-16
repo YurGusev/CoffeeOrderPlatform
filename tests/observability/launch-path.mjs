@@ -178,7 +178,8 @@ export async function runLaunchPath({telemetry,onNetwork,onNetworkCleanup,onRole
         const projectionStartedAt=performance.now();
         const card=await bounded(async()=>{const value=await f.card(state.orderRef);return value?.card_version?value:false;},{timeout:30000,interval:100,label:'actual Orders projection exists before browser command'});
         const invalidation=await bounded(async()=>{const rows=await f.read("SELECT state FROM orders.outbox_messages WHERE message_type='RealtimeInvalidated.v1' AND aggregate_ref=$1 AND owner_version=$2",[state.orderRef,card.card_version]);return rows.length===1?rows[0]:false;},{timeout:30000,interval:100,label:'real projection invalidation persisted in owner Outbox'});
-        assert.ok(['Pending','Published'].includes(invalidation.state));
+        // Relay может забрать durable строку между commit и этой проверкой.
+        assert.ok(['Pending','Publishing','Published'].includes(invalidation.state), `unexpected projection invalidation state: ${invalidation.state}`);
         projectionDurationMs=Math.round(performance.now()-projectionStartedAt);
         const observation=await f.observe({lines:[]});
         const observationStartedAt=performance.now();
