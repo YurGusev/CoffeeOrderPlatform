@@ -316,7 +316,8 @@ void test('native alert definitions use versioned OpenObserve metrics and config
   ]);
   assert.ok(definitions.every(rule => rule.name.startsWith('g14-v1-') && rule.queryCondition.type === 'promql'));
   assert.equal(definitions.find(rule => rule.key === 'notReady').streamName, 'platform_metrics_runtime_ready');
-  assert.equal(definitions.find(rule => rule.key === 'notReady').queryCondition.promql, 'min(platform_metrics_runtime_ready)');
+  assert.equal(definitions.find(rule => rule.key === 'notReady').queryCondition.promql,
+    'min(platform_metrics_runtime_ready or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"})');
   assert.deepEqual(definitions.find(rule => rule.key === 'notReady').queryCondition.promql_condition, {column: 'value', operator: '<=', value: 0});
   assert.equal(definitions.find(rule => rule.key === 'consumerLag').streamName, 'platform_metrics_messaging_kafka_consumer_lag');
   assert.equal(definitions.find(rule => rule.key === 'outboxOldestAge').streamName, 'platform_metrics_messaging_outbox_oldest_unpublished_age');

@@ -20,12 +20,15 @@ function metricStream(prefix, name) {
 }
 
 function promqlFor(rule, streams, windowSeconds) {
+  if (rule.key === 'notReady') {
+    return `min(${streams.runtime_ready} or ${streams.httpcheck_status}{service_name="edge-nginx",http_status_class="2xx"})`;
+  }
   if (rule.key === 'sseDropRate') {
     const dropped = streams.coffee_realtime_invalidation_dropped_total;
     const attempts = streams.coffee_realtime_invalidation_attempts_total;
     return `sum(rate(${dropped}[${windowSeconds}s])) / clamp_min(sum(rate(${attempts}[${windowSeconds}s])), 1e-12)`;
   }
-  return `${rule.key === 'notReady' ? 'min' : 'max'}(${streams[rule.metric]})`;
+  return `max(${streams[rule.metric]})`;
 }
 
 export function createAlertDefinitions({config} = {}) {
@@ -40,6 +43,7 @@ export function createAlertDefinitions({config} = {}) {
   const prefix = required(telemetry.openObserve?.streams?.metrics, 'telemetry.openObserve.streams.metrics');
   const streamNames = Object.fromEntries(ALERT_METRICS.map(({metric}) => [metric, metricStream(prefix, metric)]));
   streamNames.coffee_realtime_invalidation_attempts_total = metricStream(prefix, 'coffee_realtime_invalidation_attempts_total');
+  streamNames.httpcheck_status = metricStream(prefix, 'httpcheck_status');
 
   return ALERT_METRICS.map(rule => {
     const threshold = required(alerts[rule.key]?.threshold, `telemetry.alerts.${rule.key}.threshold`);

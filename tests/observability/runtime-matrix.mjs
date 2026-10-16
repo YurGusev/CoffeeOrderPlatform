@@ -93,6 +93,7 @@ export function runtimeMetricFamilies(config) {
     {name: 'messaging.kafka.consumer.lag', owners: durableKafkaOwners, components: ['']},
     {name: 'messaging.outbox.oldest_unpublished.age', owners: REQUIRED_OUTBOX_OWNERS, components: ['']},
     {name: 'nginx_connections_current', owners: ['edge-nginx'], components: ['']},
+    {name: 'httpcheck.status', owners: ['edge-nginx'], components: [''], attributes: {http_status_class: '2xx'}},
   ];
 }
 

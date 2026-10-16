@@ -198,8 +198,12 @@ Compose cleanup все 15 final images сканируются по фактич�
   Outbox/Inbox backlog, Attempt/UnknownOutcome, SSE connections/drops;
 - один browser correlation id проходит edge→api-public→owner→DB log→Outbox→Kafka→projection worker→Realtime→edge→browser→owner refetch;
 - W3C traceparent сохраняется; network/DB spans не содержат body/secrets/PII;
-- alerts с test injection: service not ready 5m, consumer lag 5m,
-  Outbox oldest 5m, UnknownOutcome >0 2m, SSE drop rate >5% 5m;
+- alerts: существующий `notReady` 5m охватывает Node `runtime_ready` и native
+  nginx `httpcheck.status` класса `2xx`. При здоровых 14 Node остановить native
+  nginx, проверить переход probe `1→0`, firing после настроенного окна и resolved
+  того же episode после restart и перехода `0→1`. Сохранить Node not-ready
+  injection; остальные сценарии — consumer lag 5m, Outbox oldest 5m,
+  UnknownOutcome >0 2m, SSE drop rate >5% 5m;
 - canary secret/PII отсутствует в logs, traces, metrics labels, alerts, artifacts
   и browser bundle.
 
@@ -207,6 +211,15 @@ Compose cleanup все 15 final images сканируются по фактич�
 реальный private auth/API/SSE dependency path; static 200 или `nginx -t` не
 заменяет full-system readiness. Native access allowlist и collector/alerts
 принимает #64, transport-inclusive capacity и reconnect — #12/#13.
+Availability alert использует только private endpoint из
+`telemetry.nginxStatusEndpoint`: `http_check` публикует native `2xx` status как
+1 при доступности и 0 при probe failure, а существующий `notReady` применяет
+`min(runtime_ready or native_nginx_2xx) <= 0` с прежним окном 5m. Проверка
+останавливает nginx при здоровых 14 Node и подтверждает firing и resolved того
+же episode после восстановления. Этот сигнал не подменяет Node readiness и сам
+по себе не доказывает полную system readiness или capacity. Collector удаляет
+`http.status_code` из nginx probe datapoints для стабильной availability series
+и `error.message` из всех metric datapoints для защиты от утечки текста ошибок.
 
 Topology gate отдельно доказывает: `api-public` монтирует только `client-v1`,
 `api-internal` — только `internal-v1`; Edge→owner и Browser→owner запрещены;

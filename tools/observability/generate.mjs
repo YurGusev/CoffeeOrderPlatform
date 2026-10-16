@@ -213,7 +213,7 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
       exporters: ['otlp_http/metrics'],
     };
   }
-  for (const service of ['collector', 'openobserve']) {
+  for (const service of [...(includeNginxMetrics ? ['nginx'] : []), 'collector', 'openobserve']) {
     pipelines[`metrics/health_${service}`] = {
       receivers: [`http_check/${service}`],
       processors: ['memory_limiter', `transform/health_${service}_resource`, 'transform/metric_names', 'batch'],
@@ -243,6 +243,7 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
           }],
         },
       },
+      ...(includeNginxMetrics ? {'http_check/nginx': healthCheck(nginxStatusEndpoint)} : {}),
       'http_check/collector': healthCheck(collectorHealthEndpoint),
       'http_check/openobserve': healthCheck(openObserveHealthEndpoint),
       filelog: {
@@ -319,9 +320,12 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
       },
       'transform/metric_names': {
         error_mode: 'propagate',
-        metric_statements: [{context: 'metric', statements: [
-          `set(metric.name, Concat([${JSON.stringify(openObserve.streams.metrics)}, metric.name], "_"))`,
-        ]}],
+        metric_statements: [
+          {context: 'metric', statements: [
+            `set(metric.name, Concat([${JSON.stringify(openObserve.streams.metrics)}, metric.name], "_"))`,
+          ]},
+          {context: 'datapoint', statements: ['delete_key(datapoint.attributes, "error.message")']},
+        ],
       },
       ...(includeNginxMetrics ? {
         'transform/nginx_resource': {
@@ -337,6 +341,15 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
         error_mode: 'propagate',
         metric_statements: [{context: 'metric', statements: resourceStatements('otel-collector')}],
       },
+      ...(includeNginxMetrics ? {
+        'transform/health_nginx_resource': {
+          error_mode: 'propagate',
+          metric_statements: [
+            {context: 'metric', statements: resourceStatements('edge-nginx')},
+            {context: 'datapoint', statements: ['delete_key(datapoint.attributes, "http.status_code")']},
+          ],
+        },
+      } : {}),
       'transform/health_openobserve_resource': {
         error_mode: 'propagate',
         metric_statements: [{context: 'metric', statements: resourceStatements('openobserve')}],

@@ -418,11 +418,21 @@ void test('Collector config accepts only exact selected log files and bounds exp
   assert.deepEqual(config.receivers['http_check/openobserve'], {
     collection_interval: '5000ms', targets: [{endpoint: 'http://openobserve:5080/healthz', method: 'GET', timeout: '1000ms'}],
   });
+  assert.deepEqual(config.receivers['http_check/nginx'], {
+    collection_interval: '5000ms', targets: [{endpoint: sample.telemetry.nginxStatusEndpoint, method: 'GET', timeout: '1000ms'}],
+  });
   for (const service of ['collector', 'openobserve']) {
     assert.deepEqual(config.service.pipelines[`metrics/health_${service}`].receivers, [`http_check/${service}`]);
     assert.deepEqual(config.service.pipelines[`metrics/health_${service}`].processors,
       ['memory_limiter', `transform/health_${service}_resource`, 'transform/metric_names', 'batch']);
   }
+  assert.deepEqual(config.service.pipelines['metrics/health_nginx'].receivers, ['http_check/nginx']);
+  assert.deepEqual(config.service.pipelines['metrics/health_nginx'].processors,
+    ['memory_limiter', 'transform/health_nginx_resource', 'transform/metric_names', 'batch']);
+  assert.deepEqual(config.processors['transform/health_nginx_resource'].metric_statements, [
+    {context: 'metric', statements: ['set(resource.attributes["service.name"], "edge-nginx")', 'set(resource.attributes["service.namespace"], "coffee-platform")', 'set(resource.attributes["service.version"], "development")', 'set(resource.attributes["deployment.environment"], "development")']},
+    {context: 'datapoint', statements: ['delete_key(datapoint.attributes, "http.status_code")']},
+  ]);
   assert.deepEqual(config.processors['transform/health_openobserve_resource'].metric_statements[0].statements,
     ['set(resource.attributes["service.name"], "openobserve")', 'set(resource.attributes["service.namespace"], "coffee-platform")', 'set(resource.attributes["service.version"], "development")', 'set(resource.attributes["deployment.environment"], "development")']);
   const minimalConfig = createCollectorConfig({
@@ -434,10 +444,16 @@ void test('Collector config accepts only exact selected log files and bounds exp
   assert.equal(minimalConfig.receivers.nginx, undefined);
   assert.equal(minimalConfig.processors['transform/nginx_resource'], undefined);
   assert.equal(minimalConfig.service.pipelines['metrics/nginx'], undefined);
+  assert.equal(minimalConfig.receivers['http_check/nginx'], undefined);
+  assert.equal(minimalConfig.service.pipelines['metrics/health_nginx'], undefined);
+  assert.equal(minimalConfig.processors['transform/health_nginx_resource'], undefined);
   assert.deepEqual(minimalConfig.service.pipelines['metrics/collector'].receivers, ['prometheus/collector']);
   assert.equal(config.exporters['otlp_http/metrics'].headers['stream-name'], undefined);
   assert.deepEqual(config.processors['transform/metric_names'].metric_statements[0].statements,
     ['set(metric.name, Concat(["platform_metrics", metric.name], "_"))']);
+  assert.deepEqual(config.processors['transform/metric_names'].metric_statements[1], {
+    context: 'datapoint', statements: ['delete_key(datapoint.attributes, "error.message")'],
+  });
   assert.equal(config.service.pipelines.traces.receivers[0], 'otlp');
   assert.equal(config.processors.memory_limiter.limit_mib, 128);
   assert.deepEqual(config.service.telemetry.metrics.readers[0].pull.exporter.prometheus, {host: '0.0.0.0', port: 8888});

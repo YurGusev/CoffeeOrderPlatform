@@ -63,6 +63,7 @@ names. Native metric alerts обращаются к реальным семей�
 | `coffee_aroma_attempt_*`, `coffee_aroma_unknown_outcomes_current` | `aroma-convergence`; current — нерешённые outcomes, не исторический counter |
 | `coffee_realtime_*` | `realtime-gateway` |
 | `nginx_*` | Native `edge-nginx` через `stub_status` |
+| `httpcheck.status` | Native `http_check`; nginx availability принадлежит `edge-nginx` |
 
 Histogram в OpenObserve материализуется семействами `_count`, `_sum`, `_bucket`.
 
@@ -84,9 +85,19 @@ export failure, queue overflow, serialization rejection и shutdown loss; все
 Pino drop counter фиксирует oversized records и переполнение его stdout queue;
 потери внутри Docker non-blocking buffer этим счётчиком не учитываются, поэтому
 точный driver-side loss count здесь не доказан, а logs остаются best-effort.
-Native `http_check` отдельно измеряет health endpoints Collector/OpenObserve;
-его status/error metrics проходят тот же configured prefix и resource mapping.
-Интервал и timeout берутся из `platform.health`, business readiness их не использует.
+Native `http_check` измеряет health endpoints Collector/OpenObserve и, когда
+настоящий nginx ID входит в выбранный inventory, private
+`telemetry.nginxStatusEndpoint`. Для nginx status `2xx` равен 1; при ошибке
+probe серия `2xx` становится 0. Resource owner — `edge-nginx`. Существующий
+`notReady` alert объединяет Node `runtime_ready` и nginx `httpcheck.status` до
+агрегации: `min(runtime_ready or native_nginx_2xx) <= 0`; его порог и окно 5m
+по-прежнему задаются только `config/platform.yaml.telemetry.alerts`. Это
+покрывает доступность nginx в alert, но не объявляет полную готовность системы.
+Интервал и timeout всех probes берутся из `platform.health`; их сигналы не
+участвуют в business readiness. `http.status_code` удаляется из nginx probe
+datapoints, чтобы смена ответа не создавала отдельную availability series;
+`error.message` удаляется из datapoints всех metric families, поскольку текст
+ошибки не должен становиться metric attribute.
 `telemetry.openObserve.telemetryEnabled`, `mmdbDownloadEnabled` и
 `modelPricingEnabled` обязательно равны `false`: backend не отправляет внешнюю
 телеметрию и не загружает GeoIP или model pricing. Эти значения применяются
@@ -184,6 +195,12 @@ G14 создаёт disposable run-id stack и credentials, использует 
 sink. Native scheduled alerts сохраняют окна 5m для not-ready/lag/Outbox/SSE
 и 2m для UnknownOutcome, с минутной quantization и scheduler lag. Firing/resolved
 связываются episode/run-id; API/query error не означает resolved.
+Для `notReady` проверяются обе стороны существующего правила: Node `runtime_ready`
+и реальная native nginx `httpcheck.status` серия класса `2xx`. При здоровых
+14 Node native nginx останавливается и запускается: probe проходит `1→0→1`,
+alert срабатывает по настроенному окну 5m и разрешается в том же episode после
+восстановления nginx. Этот сценарий доказывает availability alert transition,
+но не полную system readiness или capacity.
 Operations runner проверяет сервисы по их фактическим IP внутри изолированного
 Docker-хоста; OpenObserve, Collector и synthetic producer не публикуют host ports.
 Disk pressure заполняет только собственный fixture telemetry volume с резервом,
