@@ -365,7 +365,7 @@ function startCollectorMemorySampler({name, token}) {
     throw new Error('collector memory sampler did not become ready');
   };
   const stopSampler = async ({run}) => {
-    if (child.exitCode !== null) return !failure && stopped;
+    if (child.exitCode !== null) return child.exitCode === 0;
     child.stdin.write(`${token}\n`);
     child.stdin.end();
     const deadline = Date.now() + 3000;
@@ -376,7 +376,7 @@ function startCollectorMemorySampler({name, token}) {
       const killDeadline = Date.now() + 3000;
       while (child.exitCode === null && Date.now() < killDeadline) await sleep(25);
     }
-    return child.exitCode === 0 && stopped && !failure;
+    return child.exitCode === 0;
   };
   return {latestSample, waitForFreshSample, stopSampler, get peakBytes() { return peakBytes; }, get failure() { return failure; }};
 }
@@ -1727,6 +1727,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     } finally {
       const stopped = await memorySampler.stopSampler({run});
       if (!stopped) throw new Error('Collector memory sampler cleanup could not be verified');
+      if (memorySampler.failure) throw memorySampler.failure;
     }
     const memoryProofGenerationAfter = containerGeneration({run, name: collectorName});
     if (memoryProofGeneration.id !== memoryProofGenerationAfter.id ||
