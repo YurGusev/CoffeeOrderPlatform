@@ -2525,7 +2525,7 @@ while :; do
     keep=1
     exit 0
   fi
-  /busybox dd if=/dev/zero of="$file" bs=1K count="$chunk" oflag=append,direct conv=notrunc 2>/dev/null
+  /busybox dd if=/dev/zero bs=1K count="$chunk" 2>/dev/null >> "$file"
   written=$((written+chunk))
 done
 /busybox sync
@@ -2550,7 +2550,7 @@ keep=1`;
       add(pressureWriterName);
       // Отдельный cgroup writer не учитывает page cache как память OpenObserve.
       const output = run(['run', '--rm', '--name', pressureWriterName, '--network', 'none', '--read-only', '--user', '10001:10001',
-        '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16', '--cpus', '1',
+        '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '256m', '--pids-limit', '16', '--cpus', '1',
         '--mount', `type=bind,source=${probePath},target=/busybox,readonly`,
         '--mount', `type=volume,source=${storage.volumeName},target=/data`,
         '--entrypoint', '/busybox', toolchain.nodeImage, 'sh', '-ceu', pressureScript, 'g14-pressure', pressurePath,
