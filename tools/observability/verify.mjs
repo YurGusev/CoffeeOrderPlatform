@@ -2546,7 +2546,14 @@ keep=1`;
     let pressureIdentity;
     let pressureAfterRows;
     try {
-      const output = run(['exec', openObserveName, '/busybox', 'sh', '-ceu', pressureScript, 'g14-pressure', pressurePath,
+      const pressureWriterName = `${project}-disk-pressure-writer`;
+      add(pressureWriterName);
+      // Отдельный cgroup writer не учитывает page cache как память OpenObserve.
+      const output = run(['run', '--rm', '--name', pressureWriterName, '--network', 'none', '--read-only', '--user', '10001:10001',
+        '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16', '--cpus', '1',
+        '--mount', `type=bind,source=${probePath},target=/busybox,readonly`,
+        '--mount', `type=volume,source=${storage.volumeName},target=/data`,
+        '--entrypoint', '/busybox', toolchain.nodeImage, 'sh', '-ceu', pressureScript, 'g14-pressure', pressurePath,
         String(dataTargetKiB), String(maxWriteKiB), String(rootCeilingKiB)]);
       pressureIdentity = JSON.parse(output);
       if (!Number.isSafeInteger(pressureIdentity.dev) || !Number.isSafeInteger(pressureIdentity.ino) || pressureIdentity.size > maxWriteBytes ||
