@@ -980,30 +980,39 @@ export async function waitForOwnedMetricFamilySamples({baseUrl, authorization, o
         const stream = candidateStreams[index];
         const state = componentStates[index];
         if (!state.streamPresent) continue;
-        const services = new Set();
-        let sampleCount = 0;
-        for (const owner of family.owners) {
-          const escapedOwner = owner.replaceAll("'", "''");
-          let samples;
-          try {
-            samples = rows(await streamSearch({
-              baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs, fetchImpl,
-              filterSql: [`"service_name" = '${escapedOwner}'`, ...attributeFilters].join(' AND '),
-            }));
-          } catch (error) {
-            state.queryFailure = {owner, outcome: 'QUERY_FAILED'};
-            throw error;
+        try {
+          const endTimeUs = Date.now() * 1000;
+          const ownerFilter = family.owners.map(owner => `'${owner.replaceAll("'", "''")}'`).join(', ');
+          const filter = [`"service_name" IN (${ownerFilter})`, ...attributeFilters].join(' AND ');
+          const sql = `SELECT "service_name", COUNT(*) AS sample_count FROM "${stream.replaceAll('"', '""')}" WHERE ${filter} GROUP BY "service_name"`;
+          const result = await api({baseUrl, authorization, organization, fetchImpl, method: 'POST',
+            path: `/api/${encodeURIComponent(organization)}/_search?type=metrics`, body: {
+              query: {sql, start_time: startTimeUs ?? endTimeUs - 10 * 60 * 1000 * 1000, end_time: endTimeUs, from: 0, size: 100},
+              search_type: 'ui', timeout: 5,
+            }});
+          const groups = rows(result);
+          if (!Array.isArray(groups)) throw new Error('OpenObserve metric family groups invalid');
+          const counts = new Map();
+          for (const group of groups) {
+            const owner = group?.service_name;
+            const count = group?.sample_count;
+            if (!family.owners.includes(owner) || counts.has(owner) || !Number.isSafeInteger(count) || count < 1)
+              throw new Error('OpenObserve metric family group invalid');
+            counts.set(owner, count);
           }
-          const ownedSamples = samples.filter(sample => metricRecordServices([sample]).includes(owner));
-          if (ownedSamples.length > 0) {
-            services.add(owner);
-            state.presentOwners.push(owner);
-            state.missingOwners = state.missingOwners.filter(candidate => candidate !== owner);
-            sampleCount += ownedSamples.length;
-            state.sampleCount = sampleCount;
-          }
+          const sampleCount = [...counts.values()].reduce((sum, count) => {
+            const total = sum + count;
+            if (!Number.isSafeInteger(total)) throw new Error('OpenObserve metric family count invalid');
+            return total;
+          }, 0);
+          state.presentOwners = family.owners.filter(owner => counts.has(owner));
+          state.missingOwners = family.owners.filter(owner => !counts.has(owner));
+          state.sampleCount = sampleCount;
+        } catch (error) {
+          state.queryFailure = {outcome: 'QUERY_FAILED'};
+          throw error;
         }
-        if (services.size > 0) matches.push({stream, sampleCount, services: [...services]});
+        if (state.presentOwners.length > 0) matches.push({stream, sampleCount: state.sampleCount, services: state.presentOwners});
       }
       if (matches.length === family.components.length && matches.every(match => family.owners.every(owner => match.services.includes(owner)))) return matches;
       const inventory = streamEntries(await api({

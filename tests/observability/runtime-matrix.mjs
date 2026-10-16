@@ -161,14 +161,14 @@ function sanitizeMetricFamilyObservation(value) {
         new Set(component.missingOwners).size !== component.missingOwners.length ||
         component.presentOwners.length + component.missingOwners.length !== value.owners.length ||
         value.owners.some(owner => component.presentOwners.includes(owner) === component.missingOwners.includes(owner)) ||
-        (!component.streamPresent && (component.sampleCount !== 0 || component.presentOwners.length > 0)) ||
-        (component.queryFailure !== undefined && (!hasOnlyKeys(component.queryFailure, ['owner', 'outcome']) ||
-          !component.missingOwners.includes(component.queryFailure.owner) || !value.owners.includes(component.queryFailure.owner) ||
-          component.queryFailure.outcome !== 'QUERY_FAILED'))) return undefined;
+        (component.presentOwners.length === 0) !== (component.sampleCount === 0) ||
+        (!component.streamPresent && (component.sampleCount !== 0 || component.presentOwners.length > 0 || component.queryFailure !== undefined)) ||
+        (component.queryFailure !== undefined && (!hasOnlyKeys(component.queryFailure, ['outcome']) ||
+          component.queryFailure.outcome !== 'QUERY_FAILED' || component.presentOwners.length > 0 || component.sampleCount !== 0))) return undefined;
     components.push({
       component: component.component, streamPresent: component.streamPresent,
       presentOwners: [...component.presentOwners], missingOwners: [...component.missingOwners], sampleCount: component.sampleCount,
-      ...(component.queryFailure === undefined ? {} : {queryFailure: {owner: component.queryFailure.owner, outcome: 'QUERY_FAILED'}}),
+      ...(component.queryFailure === undefined ? {} : {queryFailure: {outcome: 'QUERY_FAILED'}}),
     });
   }
   if (expectedComponents.some(component => !components.some(candidate => candidate.component === component))) return undefined;

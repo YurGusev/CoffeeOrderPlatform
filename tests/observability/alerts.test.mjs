@@ -49,11 +49,11 @@ void test('native access lookup selects its owner before the response page limit
   assert.throws(() => nativeAccessLogFilter("' OR 1=1"), /requires a UUID/u);
 });
 
-void test('owner metric search waits for every owner and histogram component after the 100-row page filter', async () => {
+void test('owner metric search groups all expected owners before the 100-row page limit and waits for every histogram component', async () => {
   const base = 'platform_metrics_runtime_http_request_duration_ms';
   const components = ['_count', '_sum', '_bucket'];
   let inventoryCalls = 0;
-  const ownerSearches = new Map();
+  const componentSearches = new Map();
   let query;
   const unrelated = Array.from({length: 101}, (_, index) => ({service_name: `other-${index}`, value: index}));
   const fetchImpl = async (url, init) => {
@@ -63,14 +63,20 @@ void test('owner metric search waits for every owner and histogram component aft
     }
     query = JSON.parse(init.body).query;
     const stream = query.sql.match(/FROM "([^"]+)"/u)?.[1];
-    const ownerFilter = query.sql.match(/WHERE "service_name" = '((?:[^']|'')*)'/u)?.[1]?.replaceAll("''", "'");
-    const key = `${stream}:${ownerFilter}`;
-    const searches = (ownerSearches.get(key) ?? 0) + 1;
-    ownerSearches.set(key, searches);
+    const searches = (componentSearches.get(stream) ?? 0) + 1;
+    componentSearches.set(stream, searches);
+    assert.match(query.sql, /WHERE "service_name" IN \('orders-service', 'api-public'\) AND "http_response_status_class" = '4xx' GROUP BY "service_name"$/u);
+    assert.equal(query.size, 100, 'grouped owner evidence uses the existing 100-row search bound');
+    assert.equal(query.start_time, 1);
+    assert.ok(Number.isSafeInteger(query.end_time));
+    assert.equal(query.from, 0);
     assert.ok(query.sql.includes('AND "http_response_status_class" = \'4xx\''));
-    const hits = ['orders-service', 'api-public'].includes(ownerFilter)
-      ? stream === `${base}_bucket` && ownerFilter === 'api-public' && searches < 3 ? [] : [{service_name: ownerFilter, value: 7}]
-      : unrelated.slice(0, query.size);
+    const allowed = new Set(['orders-service', 'api-public']);
+    const records = [...unrelated, ...[...allowed].map(service_name => ({service_name, http_response_status_class: '4xx'}))];
+    const filtered = records.filter(record => allowed.has(record.service_name) && record.http_response_status_class === '4xx');
+    const hits = [...new Set(filtered.map(record => record.service_name))]
+      .filter(owner => !(stream === `${base}_bucket` && owner === 'api-public' && searches < 3))
+      .map(service_name => ({service_name, sample_count: filtered.filter(record => record.service_name === service_name).length}));
     return new Response(JSON.stringify({hits: {hits}}), {status: 200});
   };
   const matches = await waitForOwnedMetricFamilySamples({
@@ -79,9 +85,9 @@ void test('owner metric search waits for every owner and histogram component aft
     liveMetricStreams: [], startTimeUs: 1, fetchImpl, timeoutMs: 5000, intervalMs: 1,
   });
   assert.equal(inventoryCalls, 4, 'inventory refresh repeats until the final owner component becomes visible');
-  assert.equal(ownerSearches.get(`${base}_bucket:api-public`), 3, 'one missing component must keep the whole family pending');
+  assert.equal(componentSearches.get(`${base}_bucket`), 3, 'one missing owner group must keep the whole family pending');
   assert.deepEqual(matches, components.map(component => ({stream: `${base}${component}`, sampleCount: 2, services: ['orders-service', 'api-public']})));
-  assert.equal(query.sql, `SELECT * FROM "${base}_bucket" WHERE "service_name" = 'api-public' AND "http_response_status_class" = '4xx'`);
+  assert.equal(query.sql, `SELECT "service_name", COUNT(*) AS sample_count FROM "${base}_bucket" WHERE "service_name" IN ('orders-service', 'api-public') AND "http_response_status_class" = '4xx' GROUP BY "service_name"`);
   assert.equal(query.size, 100);
 
   const secret = 'query-secret-must-not-escape';
@@ -89,9 +95,8 @@ void test('owner metric search waits for every owner and histogram component aft
     if (url.pathname === '/api/coffee/streams') return new Response(JSON.stringify(components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))));
     const failingQuery = JSON.parse(init.body).query;
     const stream = failingQuery.sql.match(/FROM "([^"]+)"/u)?.[1];
-    const owner = failingQuery.sql.match(/WHERE "service_name" = '((?:[^']|'')*)'/u)?.[1]?.replaceAll("''", "'");
-    if (stream === `${base}_bucket` && owner === 'api-public') return new Response(secret, {status: 503});
-    return new Response(JSON.stringify({hits: {hits: [{service_name: owner, value: 1}]}}));
+    if (stream === `${base}_bucket`) return new Response(secret, {status: 503});
+    return new Response(JSON.stringify({hits: {hits: ['orders-service', 'api-public'].map(service_name => ({service_name, sample_count: 1}))}}));
   };
   let failure;
   try {
@@ -105,11 +110,40 @@ void test('owner metric search waits for every owner and histogram component aft
   assert.ok(failure, 'the incomplete owner bucket must remain pending until timeout');
   const diagnostics = sanitizeRuntimeMatrixFailure(failure).metricFamilyObservation;
   assert.deepEqual(diagnostics.components.find(component => component.component === '_bucket'), {
-    component: '_bucket', streamPresent: true, presentOwners: ['orders-service'], missingOwners: ['api-public'],
-    sampleCount: 1, queryFailure: {owner: 'api-public', outcome: 'QUERY_FAILED'},
+    component: '_bucket', streamPresent: true, presentOwners: [], missingOwners: ['orders-service', 'api-public'],
+    sampleCount: 0, queryFailure: {outcome: 'QUERY_FAILED'},
   });
   assert.equal(JSON.stringify(diagnostics).includes(secret), false);
   assert.equal(JSON.stringify(sanitizeRuntimeMatrixFailure(failure)).includes(secret), false);
+
+  const invalidGroups = [
+    [{service_name: 'unexpected-owner', sample_count: 1}],
+    [{service_name: 'orders-service', sample_count: 1}, {service_name: 'orders-service', sample_count: 1}],
+    [{service_name: 'orders-service', sample_count: 0}],
+    ['orders-service', 'api-public'].map(service_name => ({service_name, sample_count: Number.MAX_SAFE_INTEGER})),
+  ];
+  for (const groups of invalidGroups) {
+    const invalidFetch = async (url, init) => {
+      if (url.pathname === '/api/coffee/streams') return new Response(JSON.stringify(components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))));
+      const stream = JSON.parse(init.body).query.sql.match(/FROM "([^"]+)"/u)?.[1];
+      return new Response(JSON.stringify({hits: {hits: stream === `${base}_count` ? groups : []}}));
+    };
+    let invalidFailure;
+    try {
+      await waitForOwnedMetricFamilySamples({
+        baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+        metricsPrefix: 'platform_metrics', family: {name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components},
+        liveMetricStreams: components.map(component => `${base}${component}`), startTimeUs: 1,
+        fetchImpl: invalidFetch, timeoutMs: 1, intervalMs: 1,
+      });
+    } catch (error) { invalidFailure = error; }
+    assert.ok(invalidFailure, 'invalid grouped owner evidence must not satisfy the family gate');
+    const invalidDiagnostics = sanitizeRuntimeMatrixFailure(invalidFailure).metricFamilyObservation;
+    assert.deepEqual(invalidDiagnostics.components[0], {
+      component: '_count', streamPresent: true, presentOwners: [], missingOwners: ['orders-service', 'api-public'],
+      sampleCount: 0, queryFailure: {outcome: 'QUERY_FAILED'},
+    });
+  }
 });
 
 void test('convergence backend acknowledgement waits for both gauge phases and recovered owner result', async () => {
@@ -278,8 +312,8 @@ void test('issue 64 failure diagnostics retain only allowlisted error codes and 
     name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components: [
       {component: '_count', streamPresent: true, presentOwners: ['orders-service', 'api-public'], missingOwners: [], sampleCount: 2},
       {component: '_sum', streamPresent: true, presentOwners: ['orders-service', 'api-public'], missingOwners: [], sampleCount: 2},
-      {component: '_bucket', streamPresent: true, presentOwners: ['orders-service'], missingOwners: ['api-public'], sampleCount: 1,
-        queryFailure: {owner: 'api-public', outcome: 'QUERY_FAILED'}},
+      {component: '_bucket', streamPresent: true, presentOwners: [], missingOwners: ['orders-service', 'api-public'], sampleCount: 0,
+        queryFailure: {outcome: 'QUERY_FAILED'}},
     ],
   };
   assert.deepEqual(sanitizeRuntimeMatrixFailure(Object.assign(new Error(secret), {metricFamilyObservation: safeObservation})).metricFamilyObservation, safeObservation);
