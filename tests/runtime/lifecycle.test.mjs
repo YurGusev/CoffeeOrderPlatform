@@ -178,10 +178,15 @@ void test("runtime continues valid W3C parent and async request context into a s
         await new Promise(resolve => setTimeout(resolve, 1));
         const active = trace.getSpan(otelContext.active())?.spanContext();
         observed = {active, correlationId: request.correlationContext?.correlationId};
-        trace.getTracer("runtime-context-test").startActiveSpan("safe.operation", span => {
-          span.setAttribute("customer.email", "otel-private-canary");
-          span.setAttribute("db.statement", "SELECT 'otel-private-canary'");
-          span.addEvent("exception", {"exception.message": "otel-private-canary", "exception.stacktrace": "otel-private-canary"});
+        trace.getTracer("runtime-context-test").startActiveSpan("redaction-safe-marker-span", span => {
+          span.setAttribute("safe.redaction.marker", "otel-redaction-record-retained");
+          span.setAttribute("nested.credentials.secret", "otel-secret-canary");
+          span.setAttribute("nested.customer.email", "otel-pii-canary");
+          span.setAttribute("request.body", "otel-body-canary");
+          span.setAttribute("http.request.header.authorization", "otel-header-canary");
+          span.setAttribute("db.statement", "SELECT 'otel-sql-canary'");
+          span.setAttribute("provider.response", "otel-provider-canary");
+          span.addEvent("exception", {"exception.message": "otel-exception-canary", "exception.stacktrace": "otel-stack-canary"});
           span.end();
         });
         return {traceId: active?.traceId};
@@ -206,8 +211,10 @@ void test("runtime continues valid W3C parent and async request context into a s
   assert.equal(response.json().traceId, traceId);
   await app.runtimeController.closeRuntime("SIGTERM");
   await new Promise(resolve => collector.close(resolve));
-  assert.ok(exportedSpans.length > 0, "server span and nested test span were exported");
-  assert.equal(exportedSpans.includes("otel-private-canary"), false, "span attributes and events are redacted before export");
+  assert.ok(exportedSpans.includes("redaction-safe-marker-span"), "the span carrying redaction canaries was exported");
+  assert.ok(exportedSpans.includes("otel-redaction-record-retained"), "the safe marker from that span was exported");
+  for (const canary of ["otel-secret-canary", "otel-pii-canary", "otel-body-canary", "otel-header-canary", "otel-sql-canary", "otel-provider-canary", "otel-exception-canary", "otel-stack-canary"])
+    assert.equal(exportedSpans.includes(canary), false, `OTLP export excludes ${canary}`);
   for (const metric of ["runtime_http_requests_total", "runtime_http_request_duration_ms", "runtime_ready", "runtime_process_start_time_seconds", "telemetry_log_records_dropped_total", "telemetry_records_dropped_total", "telemetry_export_failures_total", "telemetry_shutdown_losses_total"])
     assert.ok(exportedMetrics.includes(Buffer.from(metric)), `OTLP export contains ${metric}`);
   for (const attribute of ["http.request.method", "http.route", "http.response.status_class", "/otel", "2xx", "4xx"])

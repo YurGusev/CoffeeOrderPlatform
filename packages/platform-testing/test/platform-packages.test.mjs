@@ -66,8 +66,22 @@ void test("observability uses Pino and redacts nested request/provider/PII/error
   logger.info({password: canary, err: new Error(canary)}, "hello");
   logger.info({safe: {token: canary, toJSON() {return {token: canary};}}}, "custom serialization");
   logger.child({token: canary}).child({actor: {email: canary}}).info({request: {body: {customerName: canary}}}, "nested");
+  const safeMarker = "pino-redaction-record-retained";
+  const pinoCanaries = ["pino-secret-canary", "pino-pii-canary", "pino-body-canary", "pino-header-canary", "pino-sql-canary", "pino-provider-canary"];
+  logger.info({
+    marker: safeMarker,
+    nested: {credentials: {secret: pinoCanaries[0]}, customer: {email: pinoCanaries[1]}},
+    request: {body: {value: pinoCanaries[2]}, headers: {authorization: pinoCanaries[3]}},
+    "db.statement": pinoCanaries[4],
+    provider: {response: pinoCanaries[5]},
+  }, "redaction canary record");
   logger.flush();
   assert.equal(JSON.stringify(records).includes(canary), false);
+  const redactionRecord = records.map(record => JSON.parse(record)).find(record => record.msg === "redaction canary record");
+  assert.ok(redactionRecord, "the redaction test record was serialized");
+  assert.equal(redactionRecord.marker, safeMarker, "safe marker remains in the same serialized record");
+  const serializedRedactionRecord = JSON.stringify(redactionRecord);
+  for (const value of pinoCanaries) assert.equal(serializedRedactionRecord.includes(value), false, "sensitive canary is absent from the retained record");
   assert.equal(typeof logger.child, "function");
   const droppedBefore = logRecordsDropped();
   const emitWarning = process.emitWarning.bind(process);
