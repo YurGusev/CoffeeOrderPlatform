@@ -41,6 +41,17 @@ const FAILURE_FRAME_FILES = new Map([
   [resolve(ROOT, 'tools/observability/verify.mjs'), 'tools/observability/verify.mjs'],
   [resolve(ROOT, 'tests/observability/runtime-matrix.mjs'), 'tests/observability/runtime-matrix.mjs'],
 ]);
+const FAILURE_METRIC_COMPONENTS = new Map([
+  ['runtime_http_requests_total', ['']],
+  ['runtime_http_request_duration_ms', ['_count', '_sum', '_bucket']],
+  ...[
+    'telemetry_log_records_dropped_total', 'telemetry_records_dropped_total', 'telemetry_export_failures_total',
+    'telemetry_serialization_rejections_total', 'telemetry_queue_overflows_total', 'telemetry_shutdown_losses_total',
+    'runtime_process_start_time_seconds', 'db.client.connection.waiting', 'messaging.kafka.consumer.lag',
+    'messaging.outbox.oldest_unpublished.age', 'nginx_connections_current', 'httpcheck.status',
+  ].map(name => [name, ['']]),
+]);
+const FAILURE_METRIC_OWNERS = new Set([...NODE_RUNTIME_ROLES, 'edge-nginx']);
 
 function fail(code) {
   throw new Error(code);
@@ -129,6 +140,41 @@ export function sanitizeRuntimeMetricMatches(family, matches, metricsPrefix) {
   return sanitized.sort((left, right) => left.stream.localeCompare(right.stream));
 }
 
+function sanitizeMetricFamilyObservation(value) {
+  const hasOnlyKeys = (object, keys) => object !== null && typeof object === 'object' && !Array.isArray(object) &&
+    Object.keys(object).every(key => keys.includes(key)) && keys.every(key => Object.hasOwn(object, key));
+  if (!hasOnlyKeys(value, ['name', 'owners', 'components']) || !FAILURE_METRIC_COMPONENTS.has(value.name) ||
+      !Array.isArray(value.owners) || value.owners.length === 0 || new Set(value.owners).size !== value.owners.length ||
+      value.owners.some(owner => !FAILURE_METRIC_OWNERS.has(owner)) ||
+      !Array.isArray(value.components) || value.components.length !== FAILURE_METRIC_COMPONENTS.get(value.name).length) return undefined;
+  const expectedComponents = FAILURE_METRIC_COMPONENTS.get(value.name);
+  const components = [];
+  for (const component of value.components) {
+    if (!hasOnlyKeys(component, ['component', 'streamPresent', 'presentOwners', 'missingOwners', 'sampleCount']) &&
+        !hasOnlyKeys(component, ['component', 'streamPresent', 'presentOwners', 'missingOwners', 'sampleCount', 'queryFailure'])) return undefined;
+    if (typeof component.component !== 'string' || !expectedComponents.includes(component.component) ||
+        components.some(candidate => candidate.component === component.component) || typeof component.streamPresent !== 'boolean' ||
+        !Array.isArray(component.presentOwners) || !Array.isArray(component.missingOwners) ||
+        !Number.isSafeInteger(component.sampleCount) || component.sampleCount < 0 ||
+        [...component.presentOwners, ...component.missingOwners].some(owner => !value.owners.includes(owner)) ||
+        new Set(component.presentOwners).size !== component.presentOwners.length ||
+        new Set(component.missingOwners).size !== component.missingOwners.length ||
+        component.presentOwners.length + component.missingOwners.length !== value.owners.length ||
+        value.owners.some(owner => component.presentOwners.includes(owner) === component.missingOwners.includes(owner)) ||
+        (!component.streamPresent && (component.sampleCount !== 0 || component.presentOwners.length > 0)) ||
+        (component.queryFailure !== undefined && (!hasOnlyKeys(component.queryFailure, ['owner', 'outcome']) ||
+          !component.missingOwners.includes(component.queryFailure.owner) || !value.owners.includes(component.queryFailure.owner) ||
+          component.queryFailure.outcome !== 'QUERY_FAILED'))) return undefined;
+    components.push({
+      component: component.component, streamPresent: component.streamPresent,
+      presentOwners: [...component.presentOwners], missingOwners: [...component.missingOwners], sampleCount: component.sampleCount,
+      ...(component.queryFailure === undefined ? {} : {queryFailure: {owner: component.queryFailure.owner, outcome: 'QUERY_FAILED'}}),
+    });
+  }
+  if (expectedComponents.some(component => !components.some(candidate => candidate.component === component))) return undefined;
+  return {name: value.name, owners: [...value.owners], components};
+}
+
 export function sanitizeRuntimeMatrixFailure(error) {
   const primaryError = error instanceof AggregateError && error.cause instanceof Error ? error.cause : error;
   const name = primaryError !== null && typeof primaryError === 'object' ? primaryError.name : undefined;
@@ -137,6 +183,8 @@ export function sanitizeRuntimeMatrixFailure(error) {
   const status = primaryError !== null && typeof primaryError === 'object' ? primaryError.status : undefined;
   const signal = primaryError !== null && typeof primaryError === 'object' ? primaryError.signal : undefined;
   const stderr = primaryError !== null && typeof primaryError === 'object' ? primaryError.stderr : undefined;
+  const metricFamilyObservation = primaryError !== null && typeof primaryError === 'object'
+    ? sanitizeMetricFamilyObservation(primaryError.metricFamilyObservation) : undefined;
   const frames = [];
   for (const line of stack.slice(0, 20_000).split('\n')) {
     const match = line.match(/(?:\(|at )((?:file:\/\/\/)?[^()\s]+):(\d+):(\d+)\)?$/u);
@@ -170,6 +218,7 @@ export function sanitizeRuntimeMatrixFailure(error) {
     ...(FAILURE_CHILD_SIGNALS.has(signal) ? {childSignal: signal} : {}),
     frames,
     ...(childEvalFrames.length > 0 ? {childEvalFrames} : {}),
+    ...(metricFamilyObservation === undefined ? {} : {metricFamilyObservation}),
   };
 }
 

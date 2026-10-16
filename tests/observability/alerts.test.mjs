@@ -83,6 +83,33 @@ void test('owner metric search waits for every owner and histogram component aft
   assert.deepEqual(matches, components.map(component => ({stream: `${base}${component}`, sampleCount: 2, services: ['orders-service', 'api-public']})));
   assert.equal(query.sql, `SELECT * FROM "${base}_bucket" WHERE "service_name" = 'api-public' AND "http_response_status_class" = '4xx'`);
   assert.equal(query.size, 100);
+
+  const secret = 'query-secret-must-not-escape';
+  const failureFetch = async (url, init) => {
+    if (url.pathname === '/api/coffee/streams') return new Response(JSON.stringify(components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))));
+    const failingQuery = JSON.parse(init.body).query;
+    const stream = failingQuery.sql.match(/FROM "([^"]+)"/u)?.[1];
+    const owner = failingQuery.sql.match(/WHERE "service_name" = '((?:[^']|'')*)'/u)?.[1]?.replaceAll("''", "'");
+    if (stream === `${base}_bucket` && owner === 'api-public') return new Response(secret, {status: 503});
+    return new Response(JSON.stringify({hits: {hits: [{service_name: owner, value: 1}]}}));
+  };
+  let failure;
+  try {
+    await waitForOwnedMetricFamilySamples({
+      baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+      metricsPrefix: 'platform_metrics', family: {name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components},
+      liveMetricStreams: components.map(component => `${base}${component}`), startTimeUs: 1,
+      fetchImpl: failureFetch, timeoutMs: 20, intervalMs: 1,
+    });
+  } catch (error) { failure = error; }
+  assert.ok(failure, 'the incomplete owner bucket must remain pending until timeout');
+  const diagnostics = sanitizeRuntimeMatrixFailure(failure).metricFamilyObservation;
+  assert.deepEqual(diagnostics.components.find(component => component.component === '_bucket'), {
+    component: '_bucket', streamPresent: true, presentOwners: ['orders-service'], missingOwners: ['api-public'],
+    sampleCount: 1, queryFailure: {owner: 'api-public', outcome: 'QUERY_FAILED'},
+  });
+  assert.equal(JSON.stringify(diagnostics).includes(secret), false);
+  assert.equal(JSON.stringify(sanitizeRuntimeMatrixFailure(failure)).includes(secret), false);
 });
 
 void test('convergence backend acknowledgement waits for both gauge phases and recovered owner result', async () => {
@@ -247,6 +274,31 @@ void test('issue 64 failure diagnostics retain only allowlisted error codes and 
   const unknown = sanitizeRuntimeMatrixFailure({name: secret, code: secret, stack: `Error: ${secret}\n    at leak (/tmp/${secret}.mjs:9:8)`});
   assert.deepEqual(unknown, {errorKind: 'unknown', frames: []});
   assert.deepEqual(sanitizeRuntimeMatrixFailure(secret), {errorKind: 'unknown', frames: []});
+  const safeObservation = {
+    name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components: [
+      {component: '_count', streamPresent: true, presentOwners: ['orders-service', 'api-public'], missingOwners: [], sampleCount: 2},
+      {component: '_sum', streamPresent: true, presentOwners: ['orders-service', 'api-public'], missingOwners: [], sampleCount: 2},
+      {component: '_bucket', streamPresent: true, presentOwners: ['orders-service'], missingOwners: ['api-public'], sampleCount: 1,
+        queryFailure: {owner: 'api-public', outcome: 'QUERY_FAILED'}},
+    ],
+  };
+  assert.deepEqual(sanitizeRuntimeMatrixFailure(Object.assign(new Error(secret), {metricFamilyObservation: safeObservation})).metricFamilyObservation, safeObservation);
+  const invalidObservations = [
+    observation => { observation.name = secret; },
+    observation => { observation.owners[1] = secret; },
+    observation => { observation.components[0].component = secret; },
+    observation => { observation.components[2].queryFailure.outcome = secret; },
+    observation => { observation.components[2].queryFailure.extra = secret; },
+    observation => { observation.components[0].sampleCount = 1.5; },
+  ];
+  for (const mutate of invalidObservations) {
+    const invalidFailure = new Error(secret);
+    invalidFailure.metricFamilyObservation = structuredClone(safeObservation);
+    mutate(invalidFailure.metricFamilyObservation);
+    const serialized = JSON.stringify(sanitizeRuntimeMatrixFailure(invalidFailure));
+    assert.equal(serialized.includes('metricFamilyObservation'), false);
+    assert.equal(serialized.includes(secret), false);
+  }
 });
 
 void test('infrastructure stop gate rejects a Docker stop that needed SIGKILL', () => {

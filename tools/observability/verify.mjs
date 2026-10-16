@@ -961,38 +961,61 @@ function metricRecordServices(records) {
 
 export async function waitForOwnedMetricFamilySamples({baseUrl, authorization, organization, metricsPrefix, family, liveMetricStreams, startTimeUs, fetchImpl = fetch, timeoutMs = 60000, intervalMs = 2000}) {
   let availableStreams = new Set(liveMetricStreams);
+  let latestObservation;
   const attributeFilters = Object.entries(family.attributes ?? {}).map(([key, value]) => {
     if (!/^[a-z][a-z0-9_]*$/u.test(key) || typeof value !== 'string') throw new TypeError('metric filter must use normalized attribute names and string values');
     return `"${key}" = '${value.replaceAll("'", "''")}'`;
   });
-  return waitFor(async () => {
-    const base = `${metricsPrefix}_${family.name.replace(/[^a-zA-Z0-9_]/gu, '_')}`;
-    const candidateStreams = family.components.map(component => `${base}${component}`).filter(stream => availableStreams.has(stream));
-    const matches = [];
-    for (const stream of candidateStreams) {
-      const services = new Set();
-      let sampleCount = 0;
-      for (const owner of family.owners) {
-        const escapedOwner = owner.replaceAll("'", "''");
-        const samples = rows(await streamSearch({
-          baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs, fetchImpl,
-          filterSql: [`"service_name" = '${escapedOwner}'`, ...attributeFilters].join(' AND '),
-        }));
-        const ownedSamples = samples.filter(sample => metricRecordServices([sample]).includes(owner));
-        if (ownedSamples.length > 0) {
-          services.add(owner);
-          sampleCount += ownedSamples.length;
+  try {
+    return await waitFor(async () => {
+      const base = `${metricsPrefix}_${family.name.replace(/[^a-zA-Z0-9_]/gu, '_')}`;
+      const candidateStreams = family.components.map(component => `${base}${component}`);
+      const componentStates = candidateStreams.map((stream, index) => ({
+        component: family.components[index], streamPresent: availableStreams.has(stream),
+        presentOwners: [], missingOwners: [...family.owners], sampleCount: 0,
+      }));
+      latestObservation = {name: family.name, owners: [...family.owners], components: componentStates};
+      const matches = [];
+      for (let index = 0; index < candidateStreams.length; index += 1) {
+        const stream = candidateStreams[index];
+        const state = componentStates[index];
+        if (!state.streamPresent) continue;
+        const services = new Set();
+        let sampleCount = 0;
+        for (const owner of family.owners) {
+          const escapedOwner = owner.replaceAll("'", "''");
+          let samples;
+          try {
+            samples = rows(await streamSearch({
+              baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs, fetchImpl,
+              filterSql: [`"service_name" = '${escapedOwner}'`, ...attributeFilters].join(' AND '),
+            }));
+          } catch (error) {
+            state.queryFailure = {owner, outcome: 'QUERY_FAILED'};
+            throw error;
+          }
+          const ownedSamples = samples.filter(sample => metricRecordServices([sample]).includes(owner));
+          if (ownedSamples.length > 0) {
+            services.add(owner);
+            state.presentOwners.push(owner);
+            state.missingOwners = state.missingOwners.filter(candidate => candidate !== owner);
+            sampleCount += ownedSamples.length;
+            state.sampleCount = sampleCount;
+          }
         }
+        if (services.size > 0) matches.push({stream, sampleCount, services: [...services]});
       }
-      if (services.size > 0) matches.push({stream, sampleCount, services: [...services]});
-    }
-    if (matches.length === family.components.length && matches.every(match => family.owners.every(owner => match.services.includes(owner)))) return matches;
-    const inventory = streamEntries(await api({
-      fetchImpl, baseUrl, authorization, path: `/api/${encodeURIComponent(organization)}/streams`,
-    }));
-    availableStreams = new Set(inventory.filter(stream => stream?.stream_type === 'metrics' && typeof stream?.name === 'string').map(stream => stream.name));
-    return false;
-  }, {timeoutMs, intervalMs, description: `OpenObserve metric family ${family.name} from every owning runtime (${family.owners.join(', ')})`});
+      if (matches.length === family.components.length && matches.every(match => family.owners.every(owner => match.services.includes(owner)))) return matches;
+      const inventory = streamEntries(await api({
+        fetchImpl, baseUrl, authorization, path: `/api/${encodeURIComponent(organization)}/streams`,
+      }));
+      availableStreams = new Set(inventory.filter(stream => stream?.stream_type === 'metrics' && typeof stream?.name === 'string').map(stream => stream.name));
+      return false;
+    }, {timeoutMs, intervalMs, description: `OpenObserve metric family ${family.name} from every owning runtime (${family.owners.join(', ')})`});
+  } catch (error) {
+    if (error !== null && typeof error === 'object' && latestObservation) error.metricFamilyObservation = latestObservation;
+    throw error;
+  }
 }
 
 function metricRecordAttribute(record, name) {
