@@ -2435,9 +2435,24 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           if (!nginxContainer || nodeContainers.length !== NODE_RUNTIME_TARGETS.length)
             throw new Error('native availability proof requires actual nginx and all fourteen Node containers');
           let nodeHealthObservations = 0;
+          let latestReadinessSamples = [];
           const assertNodeHealth = () => {
             const states = run(['inspect', '--format', '{{.State.Running}}|{{.State.OOMKilled}}|{{.State.Health.Status}}',
               ...nodeContainers.map(row => row.containerId)]).split('\n').filter(Boolean);
+            const knownHealthStates = new Set(['healthy', 'unhealthy', 'starting', 'none']);
+            const healthByRole = nodeContainers.map((row, index) => {
+              if (!NODE_RUNTIME_TARGETS.includes(row.service)) return undefined;
+              const [running, oomKilled, health] = states.length === nodeContainers.length ? states[index].split('|') : [];
+              return {
+                role: row.service,
+                ...(typeof row.containerId === 'string' && /^[a-f0-9]{64}$/u.test(row.containerId) ? {containerId: row.containerId} : {}),
+                running: running === 'true' ? true : running === 'false' ? false : null,
+                oomKilled: oomKilled === 'true' ? true : oomKilled === 'false' ? false : null,
+                health: knownHealthStates.has(health) ? health : 'unknown',
+              };
+            }).filter(Boolean).slice(0, NODE_RUNTIME_TARGETS.length);
+            evidence.nativeNginxAlert.lastNodeHealth = healthByRole;
+            evidence.nativeNginxAlert.nodeHealthObservedAt = Date.now();
             if (states.length !== NODE_RUNTIME_TARGETS.length || states.some(state => state !== 'true|false|healthy'))
               throw Object.assign(new Error('Node runtime became unhealthy during native nginx availability proof'), {fatal: true});
             nodeHealthObservations++;
@@ -2450,9 +2465,17 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
                 const records = rows(await streamSearch({baseUrl, authorization, organization,
                   stream: `${config.telemetry.openObserve.streams.metrics}_runtime_ready`, streamType: 'metrics', startTimeUs: afterUs,
                   filterSql: `"service_name" = '${service}'`}));
-                return latestMetricSample(records, {service, afterUs});
+                return {service, sample: latestMetricSample(records, {service, afterUs})};
               }));
-              return samples.every(sample => sample?.value === 1);
+              latestReadinessSamples = samples.map(({service, sample}) => ({
+                role: service,
+                status: sample?.value === 1 ? 'ready' : sample === undefined ? 'missing' : 'not-ready',
+                value: Number.isFinite(sample?.value) ? sample.value : null,
+                timestampUs: Number.isFinite(sample?.timestampUs) ? sample.timestampUs : null,
+              }));
+              evidence.nativeNginxAlert.lastReadinessSamples = latestReadinessSamples;
+              evidence.nativeNginxAlert.readinessObservedAt = Date.now();
+              return samples.every(({sample}) => sample?.value === 1);
             }, {timeoutMs: 60000, intervalMs: 2000, description: 'fresh healthy Node readiness metrics during native availability proof'});
           };
           const nginxAvailability = async (value, afterUs) => waitFor(async () => {
@@ -2544,6 +2567,13 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               return (await readSinkEvents(sinkPath)).find(event => event.name === notReadyRule.name && event.status === 'firing' &&
                 !previousNotReadyEpisodes.has(event.episodeId) && Date.parse(event.receivedAt) * 1000 > stoppedAtUs) ?? false;
             }, {timeoutMs: fireDeadline, intervalMs: 5000, description: 'native nginx availability fires existing not-ready rule while Node stays healthy'});
+            evidence.nativeNginxAlert.stage = 'post-firing-readiness';
+            const firingReceivedAtMs = Date.parse(nativeFiring.receivedAt);
+            evidence.nativeNginxAlert.firing = {
+              ...(typeof nativeFiring.episodeId === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(nativeFiring.episodeId) ? {episodeId: nativeFiring.episodeId} : {}),
+              receivedAtMs: Number.isFinite(firingReceivedAtMs) ? firingReceivedAtMs : null,
+              pendingElapsedMs: Number.isFinite(firingReceivedAtMs) ? firingReceivedAtMs - stoppedAtUs / 1000 : null,
+            };
             if (Date.parse(nativeFiring.receivedAt) * 1000 - stoppedAtUs < config.telemetry.alerts.notReady.forMs * 1000)
               throw new Error('native nginx availability alert did not preserve its configured pending window');
             await readyMetrics();

@@ -141,11 +141,12 @@ void test('issue 64 failure diagnostics retain only allowlisted error codes and 
   cause.code = 'ERR_ASSERTION';
   cause.actual = secret;
   cause.expected = secret;
-  cause.stack = `${secret}\n    at fail (file://${path.resolve('tools/compose-smoke.mjs')}:123:45)\n    at test (file://${path.resolve('tests/observability/runtime-matrix.mjs')}:234:56)\n    at other (file:///tmp/${secret}.mjs:1:2)`;
+  cause.stack = `${secret}\n    at fail (file://${path.resolve('tools/compose-smoke.mjs')}:123:45)\n    at verify (file://${path.resolve('tools/observability/verify.mjs')}:345:67)\n    at test (file://${path.resolve('tests/observability/runtime-matrix.mjs')}:234:56)\n    at other (file:///tmp/${secret}.mjs:1:2)`;
   const diagnostics = sanitizeRuntimeMatrixFailure(cause);
   assert.deepEqual(diagnostics, {
     errorKind: 'AssertionError', code: 'ERR_ASSERTION', frames: [
       {source: 'tools/compose-smoke.mjs', line: 123, column: 45},
+      {source: 'tools/observability/verify.mjs', line: 345, column: 67},
       {source: 'tests/observability/runtime-matrix.mjs', line: 234, column: 56},
     ],
   });

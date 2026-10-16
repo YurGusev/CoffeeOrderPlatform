@@ -37,6 +37,7 @@ const FAILURE_ERROR_KINDS = new Set(['Error', 'AssertionError', 'AggregateError'
 const FAILURE_ERROR_CODES = new Set(['ERR_ASSERTION', 'ABORT_ERR', 'ETIMEDOUT']);
 const FAILURE_FRAME_FILES = new Map([
   [resolve(ROOT, 'tools/compose-smoke.mjs'), 'tools/compose-smoke.mjs'],
+  [resolve(ROOT, 'tools/observability/verify.mjs'), 'tools/observability/verify.mjs'],
   [resolve(ROOT, 'tests/observability/runtime-matrix.mjs'), 'tests/observability/runtime-matrix.mjs'],
 ]);
 
