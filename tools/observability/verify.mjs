@@ -2525,7 +2525,7 @@ while :; do
     keep=1
     exit 0
   fi
-  /busybox dd if=/dev/zero bs=1K count="$chunk" 2>/dev/null >> "$file"
+  /busybox dd if=/dev/zero of="$file" bs=1K count="$chunk" oflag=append,direct conv=notrunc 2>/dev/null
   written=$((written+chunk))
 done
 /busybox sync
