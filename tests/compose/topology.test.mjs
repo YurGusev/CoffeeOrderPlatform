@@ -19,6 +19,7 @@ const OBSERVABILITY_CONFIG = {
       metricsEndpoint: "http://otel-collector:8888",
       memoryLimitMiB: 128,
       memorySpikeMiB: 32,
+      containerMemoryMiB: 512,
     },
     producer: {maxRecordBytes: 16384, queueCapacity: 256},
     logging: {maxSizeMiB: 8, maxFiles: 3},
@@ -555,7 +556,7 @@ void test("observability overlay keeps OpenObserve private and bounds exact Dock
   assert.ok(collector.volumes.every(({read_only}) => read_only === true));
   assert.ok(collector.volumes.some(({source, target, read_only}) => source === `/var/lib/docker/containers/${id}` && target === `/var/lib/docker/containers/${id}` && read_only));
   assert.equal(collector.volumes.some(({source}) => source === "/var/run/docker.sock"), false);
-  assert.equal(collector.mem_limit, "160m");
+  assert.equal(collector.mem_limit, "512m");
   assert.deepEqual(overlay.volumes.openobserve_data, {external: true, name: "coffee-topology-openobserve-data"});
   assert.deepEqual(overlay.networks.coffee_observability, {name: "coffee_observability", internal: true});
 

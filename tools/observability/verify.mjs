@@ -220,8 +220,25 @@ const MEMORY_LIMITER_METRICS = {
   refused: 'otelcol_processor_memory_limiter_refused_spans',
   accepted: 'otelcol_processor_memory_limiter_accepted_spans',
 };
-const MEMORY_CGROUP_GUARD_BYTES = 280 * 1024 * 1024;
+const MEMORY_MIB_BYTES = 1024 * 1024;
 const MEMORY_SAMPLER_STALE_MS = 100;
+const MEMORY_SAMPLE_FIELDS = ['sequence', 'currentBytes', 'maxBytes', 'kernelPeakBytes', 'anonBytes', 'fileBytes', 'kernelBytes', 'oom', 'oomKill', 'sampledAtMs'];
+
+function safeCollectorMemorySample(sample) {
+  if (!sample || typeof sample !== 'object') return undefined;
+  const safe = {};
+  for (const key of MEMORY_SAMPLE_FIELDS) {
+    if (Number.isSafeInteger(sample[key]) && sample[key] >= 0) safe[key] = sample[key];
+  }
+  return Object.keys(safe).length ? safe : undefined;
+}
+
+function collectorMemorySampleFailure(code, message, sample) {
+  const error = new Error(message);
+  error.diagnosticCode = code;
+  error.failureSample = safeCollectorMemorySample(sample);
+  return error;
+}
 
 export function parseCollectorMemoryLimiterMetrics(text) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 2 * 1024 * 1024)
@@ -254,18 +271,26 @@ export function parseCollectorMemoryLimiterMetrics(text) {
   return totals;
 }
 
-export function validateCollectorMemorySample(sample, {nowMs, receivedAtMs, previousSequence, guardBytes = MEMORY_CGROUP_GUARD_BYTES, staleMs = MEMORY_SAMPLER_STALE_MS}) {
-  if (!sample || !Number.isSafeInteger(sample.sequence) || sample.sequence < 1 ||
+export function validateCollectorMemorySample(sample, {nowMs, receivedAtMs, previousSequence, containerMemoryMiB, guardBytes, staleMs = MEMORY_SAMPLER_STALE_MS}) {
+  const expectedMaxBytes = Number.isSafeInteger(containerMemoryMiB) && containerMemoryMiB > 0 ? containerMemoryMiB * MEMORY_MIB_BYTES : undefined;
+  if (!sample || typeof sample !== 'object' || Object.keys(sample).some(key => !MEMORY_SAMPLE_FIELDS.includes(key) && key !== 'receivedAtMs') ||
+      !Number.isSafeInteger(sample.sequence) || sample.sequence < 1 ||
       !Number.isSafeInteger(sample.currentBytes) || sample.currentBytes < 0 ||
-      !Number.isSafeInteger(sample.maxBytes) || sample.maxBytes !== 320 * 1024 * 1024 || sample.currentBytes > sample.maxBytes ||
+      !Number.isSafeInteger(expectedMaxBytes) || !Number.isSafeInteger(sample.maxBytes) || sample.maxBytes !== expectedMaxBytes || sample.currentBytes > sample.maxBytes ||
+      !Number.isSafeInteger(sample.kernelPeakBytes) || sample.kernelPeakBytes < 0 ||
+      !Number.isSafeInteger(sample.anonBytes) || sample.anonBytes < 0 ||
+      !Number.isSafeInteger(sample.fileBytes) || sample.fileBytes < 0 ||
+      !Number.isSafeInteger(sample.kernelBytes) || sample.kernelBytes < 0 ||
       !Number.isSafeInteger(sample.oom) || sample.oom < 0 ||
       !Number.isSafeInteger(sample.oomKill) || sample.oomKill < 0 ||
       !Number.isSafeInteger(sample.sampledAtMs) || sample.sampledAtMs < 1 ||
       !Number.isFinite(nowMs) || !Number.isFinite(receivedAtMs) || receivedAtMs > nowMs || nowMs - receivedAtMs > staleMs ||
       (previousSequence !== undefined && sample.sequence !== previousSequence + 1))
-    throw new Error('collector memory sampler sample was invalid or stale');
-  if (sample.currentBytes >= guardBytes || sample.oom > 0 || sample.oomKill > 0)
-    throw new Error(`collector memory safety guard was reached: currentBytes=${sample.currentBytes}, guardBytes=${guardBytes}, oom=${sample.oom}, oomKill=${sample.oomKill}`);
+    throw collectorMemorySampleFailure('COLLECTOR_MEMORY_SAMPLE_INVALID', 'collector memory sampler sample was invalid or stale', sample);
+  if (!Number.isSafeInteger(guardBytes) || guardBytes <= 0)
+    throw collectorMemorySampleFailure('COLLECTOR_MEMORY_POLICY_INVALID', 'collector memory guard policy was invalid', sample);
+  if (Math.max(sample.currentBytes, sample.kernelPeakBytes) >= guardBytes || sample.oom > 0 || sample.oomKill > 0)
+    throw collectorMemorySampleFailure('COLLECTOR_MEMORY_SAFETY_GUARD', `collector memory safety guard was reached: currentBytes=${sample.currentBytes}, kernelPeakBytes=${sample.kernelPeakBytes}, guardBytes=${guardBytes}, oom=${sample.oom}, oomKill=${sample.oomKill}`, sample);
   return sample;
 }
 
@@ -289,11 +314,17 @@ sequence=0
 while [ ! -e "$stop_path" ] && [ "$sequence" -lt 3400 ]; do
   current=$(/busybox cat /sys/fs/cgroup/memory.current) || exit 1
   maximum=$(/busybox cat /sys/fs/cgroup/memory.max) || exit 1
+  kernel_peak=$(/busybox cat /sys/fs/cgroup/memory.peak) || exit 1
+  stats=$(/busybox awk '$1=="anon"{a=$2}$1=="file"{f=$2}$1=="kernel"{k=$2}END{if(a==""||f==""||k=="")exit 1;printf "%s %s %s",a,f,k}' /sys/fs/cgroup/memory.stat) || exit 1
+  set -- $stats
+  anon=$1
+  file=$2
+  kernel=$3
   oom=$(/busybox awk '$1=="oom"{print $2}' /sys/fs/cgroup/memory.events) || exit 1
   oom_kill=$(/busybox awk '$1=="oom_kill"{print $2}' /sys/fs/cgroup/memory.events) || exit 1
   sampled_at=$(( $(/busybox date +%s) * 1000 ))
   sequence=$((sequence + 1))
-  printf '{"kind":"sample","sequence":%s,"currentBytes":%s,"maxBytes":%s,"oom":%s,"oomKill":%s,"sampledAtMs":%s}\\n' "$sequence" "$current" "$maximum" "\${oom:-0}" "\${oom_kill:-0}" "$sampled_at"
+  printf '{"kind":"sample","sequence":%s,"currentBytes":%s,"maxBytes":%s,"kernelPeakBytes":%s,"anonBytes":%s,"fileBytes":%s,"kernelBytes":%s,"oom":%s,"oomKill":%s,"sampledAtMs":%s}\\n' "$sequence" "$current" "$maximum" "$kernel_peak" "$anon" "$file" "$kernel" "\${oom:-0}" "\${oom_kill:-0}" "$sampled_at"
   /busybox sleep 0.05
 done
 kill "$reader" 2>/dev/null || true
@@ -301,7 +332,10 @@ kill "$reader" 2>/dev/null || true
 printf '{"kind":"stopped","sequence":%s}\\n' "$sequence"
 `;
 
-function startCollectorMemorySampler({name, token}) {
+function startCollectorMemorySampler({name, token, config}) {
+  const collector = config.telemetry.collector;
+  const containerMemoryMiB = collector.containerMemoryMiB;
+  const guardBytes = (containerMemoryMiB - collector.memorySpikeMiB) * MEMORY_MIB_BYTES;
   const child = spawn('docker', ['exec', '-i', name, '/busybox', 'sh', '-c', collectorMemorySamplerScript, 'issue64-memory-sampler', token], {
     stdio: ['pipe', 'pipe', 'ignore'],
   });
@@ -331,11 +365,15 @@ function startCollectorMemorySampler({name, token}) {
         samplerPid = record.pid;
       } else if (record.kind === 'sample') {
         try {
+          if (Object.keys(record).some(key => !['kind', ...MEMORY_SAMPLE_FIELDS].includes(key)))
+            throw collectorMemorySampleFailure('COLLECTOR_MEMORY_SAMPLE_INVALID', 'collector memory sampler sample was invalid or stale', record);
+          const sample = Object.fromEntries(MEMORY_SAMPLE_FIELDS.map(key => [key, record[key]]));
           const receivedAtMs = performance.now();
-          const sample = validateCollectorMemorySample(record, {nowMs: receivedAtMs, receivedAtMs, previousSequence});
+          peakBytes = Math.max(peakBytes, Number.isSafeInteger(sample.currentBytes) ? sample.currentBytes : 0,
+            Number.isSafeInteger(sample.kernelPeakBytes) ? sample.kernelPeakBytes : 0);
+          validateCollectorMemorySample(sample, {nowMs: receivedAtMs, receivedAtMs, previousSequence, containerMemoryMiB, guardBytes});
           previousSequence = sample.sequence;
           latest = {...sample, receivedAtMs};
-          peakBytes = Math.max(peakBytes, sample.currentBytes);
         } catch (error) { failure = error; return; }
       } else if (record.kind === 'stopped' && record.sequence === previousSequence) {
         stopped = true;
@@ -354,7 +392,7 @@ function startCollectorMemorySampler({name, token}) {
     if (failure) throw failure;
     if (!latest) throw new Error('collector memory sampler is not ready');
     const nowMs = performance.now();
-    validateCollectorMemorySample(latest, {nowMs, receivedAtMs: latest.receivedAtMs});
+    validateCollectorMemorySample(latest, {nowMs, receivedAtMs: latest.receivedAtMs, containerMemoryMiB, guardBytes});
     return latest;
   };
   const waitForFreshSample = async (timeoutMs = 30000) => {
@@ -382,7 +420,15 @@ function startCollectorMemorySampler({name, token}) {
     }
     return closed && child.exitCode === 0;
   };
-  return {latestSample, waitForFreshSample, stopSampler, get peakBytes() { return peakBytes; }, get failure() { return failure; }};
+  return {latestSample, waitForFreshSample, stopSampler, get peakBytes() { return peakBytes; }, get failure() { return failure; },
+    diagnostics() {
+      const latestSafe = safeCollectorMemorySample(latest);
+      const failureSample = safeCollectorMemorySample(failure?.failureSample);
+      return {containerLimitMiB: containerMemoryMiB, maxBytes: containerMemoryMiB * MEMORY_MIB_BYTES, guardBytes,
+        guardReserveMiB: collector.memorySpikeMiB, peakBytes, ...(latestSafe ? {latestSample: latestSafe} : {}),
+        ...(failure ? {failureCode: ['COLLECTOR_MEMORY_SAMPLE_INVALID', 'COLLECTOR_MEMORY_POLICY_INVALID', 'COLLECTOR_MEMORY_SAFETY_GUARD'].includes(failure.diagnosticCode) ? failure.diagnosticCode : 'COLLECTOR_MEMORY_SAMPLER_FAILED'} : {}),
+        ...(failureSample ? {failureSample} : {})};
+    }};
 }
 
 async function boundedResponseText(response, maxBytes) {
@@ -423,6 +469,39 @@ async function collectorMemorySelfTelemetry({collectorIp, config, run, name, gen
   return {counters, sampledAt: new Date().toISOString(), containerId: current.id, startedAt: current.state.StartedAt};
 }
 
+async function captureCollectorMemoryStartupBaseline({run, name, config}) {
+  const generation = containerGeneration({run, name});
+  const sampler = startCollectorMemorySampler({name, token: randomBytes(16).toString('hex'), config});
+  let sample;
+  let failureCode;
+  try {
+    if (generation.state.Running !== true || generation.state.OOMKilled === true)
+      failureCode = 'COLLECTOR_GENERATION_UNHEALTHY';
+    else sample = await sampler.waitForFreshSample(30000);
+  } catch (error) {
+    failureCode = ['COLLECTOR_MEMORY_SAMPLE_INVALID', 'COLLECTOR_MEMORY_POLICY_INVALID', 'COLLECTOR_MEMORY_SAFETY_GUARD'].includes(error.diagnosticCode)
+      ? error.diagnosticCode : 'COLLECTOR_MEMORY_SAMPLER_FAILED';
+  }
+  let stopped = false;
+  try { stopped = await sampler.stopSampler({run}); }
+  catch { failureCode ??= 'COLLECTOR_MEMORY_SAMPLER_CLEANUP_FAILED'; }
+  const after = containerGeneration({run, name});
+  const diagnostics = sampler.diagnostics();
+  const sameGeneration = generation.id === after.id && generation.state.StartedAt === after.state.StartedAt &&
+    after.state.Running === true && after.state.OOMKilled !== true;
+  const status = sample && stopped && !sampler.failure && sameGeneration ? 'PASS' : 'FAIL';
+  return {
+    status, stage: 'initial-healthy-baseline',
+    containerGeneration: {id: generation.id, startedAt: generation.state.StartedAt, sameGenerationAfterCapture: sameGeneration},
+    limits: {containerLimitMiB: config.telemetry.collector.containerMemoryMiB,
+      cgroupGuardBytes: (config.telemetry.collector.containerMemoryMiB - config.telemetry.collector.memorySpikeMiB) * MEMORY_MIB_BYTES},
+    ...(sample ? {sample: safeCollectorMemorySample(sample)} : {}),
+    sampler: diagnostics,
+    ...(failureCode ? {failureCode} : !stopped ? {failureCode: 'COLLECTOR_MEMORY_SAMPLER_CLEANUP_FAILED'} : {}),
+    samplerStopped: stopped,
+  };
+}
+
 function collectorMemorySpan({traceId, spanId, runId, name, paddingBytes = 512}) {
   return {
     resourceSpans: [{
@@ -457,7 +536,8 @@ async function sendCollectorMemorySpan({collectorIp, config, token, runId, name,
     wireBytes, ...(name === 'g14.collector.memory.recovered' ? {traceId} : {})};
 }
 
-async function runCollectorMemoryProof({run, collectorName, collectorIp, config, collectorConfig, token, runId, sampler}) {
+async function runCollectorMemoryProof({run, collectorName, collectorIp, config, collectorConfig, token, runId, sampler, progress}) {
+  progress.stage = 'startup';
   const limiter = collectorConfig?.processors?.memory_limiter;
   if (config.telemetry.collector.memoryLimitMiB !== 256 || config.telemetry.collector.memorySpikeMiB !== 64 ||
       config.telemetry.collector.memoryCheckIntervalMs !== 1000 || config.telemetry.collector.retryWindowMs !== 15000 ||
@@ -468,6 +548,8 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
     throw new Error('collector memory proof requires a healthy running Collector');
   const startupDeadline = Date.now() + 30000;
   const baselineMemory = await sampler.waitForFreshSample(startupDeadline - Date.now());
+  progress.baselineSample = safeCollectorMemorySample(baselineMemory);
+  progress.stage = 'self-telemetry-baseline';
   let telemetry;
   while (Date.now() < startupDeadline) {
     if (generation.state.Running !== true || generation.state.OOMKilled === true) throw new Error('Collector memory proof startup reached an unhealthy state');
@@ -481,6 +563,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
     }
   }
   if (!telemetry) throw new Error('Collector memory proof startup readiness timed out');
+  progress.baselineCounters = {refused: telemetry.counters.refused, accepted: telemetry.counters.accepted};
   let lastTelemetryAt = Date.now();
   const refreshTelemetry = async force => {
     if (force || Date.now() - lastTelemetryAt >= 1000) {
@@ -497,6 +580,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
   let packetCount = 0;
   let wireBytes = 0;
   let refusal;
+  progress.stage = 'pressure';
   while (Date.now() < deadlineAt && wireBytes + 512 * 1024 <= totalWireCap) {
     await sampler.waitForFreshSample(1000);
     await refreshTelemetry(false);
@@ -504,6 +588,8 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
       name: 'g14.collector.memory.pressure', paddingBytes: 200 * 1024});
     packetCount += 1;
     wireBytes += response.wireBytes;
+    progress.packetCount = packetCount;
+    progress.wireBytes = wireBytes;
     await sampler.waitForFreshSample(1000);
     if (response.httpStatus === 503) {
       const afterRefusal = await refreshTelemetry(true);
@@ -512,6 +598,8 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
         throw new Error('Collector returned an unproven memory-refusal response');
       refusal = {httpStatus: 503, otlpCode: 14, refusedSpansDelta, packetCount, wireBytes,
         observedAt: new Date().toISOString()};
+      progress.refusal = {httpStatus: 503, otlpCode: 14, refusedSpansDelta, packetCount, wireBytes};
+      progress.stage = 'refusal-confirmed';
       break;
     }
     if (response.httpStatus !== 200) throw new Error('Collector pressure request returned an unexpected status');
@@ -521,6 +609,7 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
   if (!refusal) throw new Error('Collector memory refusal was not reached within the bounded pressure window');
 
   const refusalAt = Date.now();
+  progress.stage = 'retry-expiry-and-recovery';
   const recoveryDeadline = refusalAt + 60000;
   for (const offsetMs of [1000, 6000, 21000]) {
     const target = refusalAt + offsetMs;
@@ -549,7 +638,11 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
         afterRecovery = await refreshTelemetry(true);
         acceptedSpansDelta = afterRecovery.counters.accepted - beforeRecovery.counters.accepted;
       }
-      if (acceptedSpansDelta > 0) recovery = {httpStatus: 200, acceptedSpansDelta, observedAt: new Date().toISOString()};
+      if (acceptedSpansDelta > 0) {
+        recovery = {httpStatus: 200, acceptedSpansDelta, observedAt: new Date().toISOString()};
+        progress.recovery = {httpStatus: 200, acceptedSpansDelta};
+        progress.stage = 'recovery-accepted';
+      }
       else throw new Error('Collector recovery acceptance counter did not increase');
     } else if (response.httpStatus !== 503) {
       throw new Error('Collector recovery request returned an unexpected status');
@@ -565,12 +658,14 @@ async function runCollectorMemoryProof({run, collectorName, collectorIp, config,
     limits: {hardLimitMiB: config.telemetry.collector.memoryLimitMiB,
       spikeLimitMiB: config.telemetry.collector.memorySpikeMiB,
       softLimitMiB: config.telemetry.collector.memoryLimitMiB - config.telemetry.collector.memorySpikeMiB,
-      containerLimitMiB: config.telemetry.collector.memoryLimitMiB + config.telemetry.collector.memorySpikeMiB,
-      cgroupGuardBytes: MEMORY_CGROUP_GUARD_BYTES, samplerIntervalMs: 50, samplerFreshnessMs: MEMORY_SAMPLER_STALE_MS,
+      containerLimitMiB: config.telemetry.collector.containerMemoryMiB,
+      cgroupGuardBytes: (config.telemetry.collector.containerMemoryMiB - config.telemetry.collector.memorySpikeMiB) * MEMORY_MIB_BYTES,
+      guardReserveMiB: config.telemetry.collector.memorySpikeMiB,
+      samplerIntervalMs: 50, samplerFreshnessMs: MEMORY_SAMPLER_STALE_MS,
       maxPacketBytes: 512 * 1024, maxWireBytes: totalWireCap,
       maxWireBytesPerSecond: 32 * 1024 * 1024, deadlineMs: 60000},
-    cgroup: {baselineBytes: baselineMemory.currentBytes, peakBytes: sampler.peakBytes,
-      maxBytes: baselineMemory.maxBytes, oom: finalMemory.oom, oomKill: finalMemory.oomKill},
+    cgroup: {baseline: safeCollectorMemorySample(baselineMemory), baselineBytes: baselineMemory.currentBytes, peakBytes: sampler.peakBytes,
+      maxBytes: baselineMemory.maxBytes, final: safeCollectorMemorySample(finalMemory), oom: finalMemory.oom, oomKill: finalMemory.oomKill},
     metrics: {processor: 'memory_limiter', refused: MEMORY_LIMITER_METRICS.refused,
       accepted: MEMORY_LIMITER_METRICS.accepted, baseline, afterRecovery: telemetry},
     pressure: {packetCount, wireBytes, elapsedMs: Date.now() - startedAt}, refusal, recovery,
@@ -1197,6 +1292,7 @@ async function persistEvidence({root, evidence, secrets = []}) {
       collectorExpiredRetryDrop: outage?.collectorExpiredRetryDrop ?? {},
       collector: evidence.collectorQueueMetrics ?? {},
       collectorMemoryProof: evidence.telemetryHealth?.collectorMemoryProof ?? {},
+      collectorMemoryDiagnostics: evidence.telemetryHealth?.collectorMemoryDiagnostics ?? {},
       processCounterRestart: evidence.processCounterRestart ?? {},
     }),
     'retention-result.json': statusArtifact(typeof evidence.retention === 'object' && evidence.retention.ttlRemovedRecord && evidence.diskPressureStatus === 'PASS' ? 'PASS' : 'NOT_RUN', {
@@ -1211,6 +1307,7 @@ async function persistEvidence({root, evidence, secrets = []}) {
       runtimeMetricMatrix: evidence.runtimeMetricMatrix ?? {status: 'NOT_RUN'},
       processCounterRestart: evidence.processCounterRestart ?? {},
       collectorMemoryProof: evidence.telemetryHealth?.collectorMemoryProof ?? {},
+      collectorMemoryDiagnostics: evidence.telemetryHealth?.collectorMemoryDiagnostics ?? {},
       diskPressure: evidence.diskPressure ?? {},
       nativeNginxAvailability: evidence.nativeNginxAlert ?? {status: 'NOT_RUN'},
       networkIsolation: evidence.networkIsolation ?? 'NOT_RUN',
@@ -1578,7 +1675,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       }));
       const mountArgs = logMounts.flatMap(({source, destination}) => ['--mount', `type=bind,source=${source},target=${destination},readonly`]);
       run(['run', '-d', '--name', collectorName, '--network', backendNetwork,
-        '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '1', '--memory', `${config.telemetry.collector.memoryLimitMiB + config.telemetry.collector.memorySpikeMiB}m`, '--pids-limit', '128',
+        '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,nodev,size=8m', '--cpus', '1', '--memory', `${config.telemetry.collector.containerMemoryMiB}m`, '--pids-limit', '128',
         ...dockerLoggingArgs,
         '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', '0:0', '--network-alias', 'otel-collector',
         '--mount', `type=bind,source=${collectorConfigPath},target=/etc/otelcol-contrib/config.yaml,readonly`,
@@ -1602,7 +1699,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const containerConfig = JSON.parse(run(['inspect', '--format', '{{json .Config}}', collectorName]));
       const configStat = await lstat(collectorConfigPath);
       const configRootReadonly = configStat.uid === 0 && configStat.gid === 0 && (configStat.mode & 0o777) === 0o400;
-      const safeRuntime = hostConfig.ReadonlyRootfs === true && hostConfig.Privileged !== true &&
+      const safeRuntime = hostConfig.Memory === config.telemetry.collector.containerMemoryMiB * MEMORY_MIB_BYTES &&
+        hostConfig.ReadonlyRootfs === true && hostConfig.Privileged !== true &&
         containerConfig.User === '0:0' && hostConfig.CapDrop?.includes('ALL') === true &&
         (hostConfig.CapAdd ?? []).length === 0 && hostConfig.PidMode !== 'host' && hostConfig.NetworkMode !== 'host' &&
         hostConfig.SecurityOpt?.includes('no-new-privileges:true') === true && configRootReadonly;
@@ -1614,6 +1712,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       collectorHealthEndpoint = `http://${collectorIp}:13133`;
       collectorPhases.push({stage, selectedServices: selectedLogs.map(({service}) => service).sort(),
         mountedContainerIds: logMounts.map(({containerId}) => containerId).sort(), bindMountsReadOnly: true,
+        containerMemoryMiB: config.telemetry.collector.containerMemoryMiB, containerMemoryBytes: hostConfig.Memory,
         loggingPolicy: collectorLoggingPolicy,
         healthAddress: `${collectorIp}:13133`, networks: actualNetworks, hostBindingsAbsent: true, rootUser: true, readOnlyRoot: true,
         configRootOwnedMode0400: true, capabilitiesDropped: true, noNewPrivileges: true});
@@ -1664,6 +1763,9 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       });
       if (!healthSummary.healthyOpenObserve || !healthSummary.healthyCollector) throw new Error(`initial native readiness samples were not healthy: ${JSON.stringify(healthSummary)}`);
       evidence.telemetryHealth = {...evidence.telemetryHealth, initial: healthSummary, openObserveOutage: 'NOT_RUN', recovered: 'NOT_RUN'};
+      evidence.telemetryHealth.collectorMemoryStartupBaseline = await captureCollectorMemoryStartupBaseline({run, name: collectorName, config});
+      if (evidence.telemetryHealth.collectorMemoryStartupBaseline.status !== 'PASS')
+        throw new Error('Collector startup memory baseline could not be verified');
     } catch (error) {
       let collectorLogs = '';
       let streamNames = [];
@@ -1724,24 +1826,60 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     await sleep(Math.max(config.platform.health.intervalMs + config.platform.health.timeoutMs, collectorRetryExpiryWaitMs));
     const collectorExpiredRetryDrop = collectorExpiredRetryDropEvidence({name: collectorName, startTimeUs: openObserveStoppedAtUs});
     const memoryProofGeneration = containerGeneration({run, name: collectorName});
-    const memorySampler = startCollectorMemorySampler({name: collectorName, token: randomBytes(16).toString('hex')});
+    const startupMemoryGeneration = evidence.telemetryHealth.collectorMemoryStartupBaseline?.containerGeneration;
+    if (!startupMemoryGeneration || memoryProofGeneration.id !== startupMemoryGeneration.id ||
+        memoryProofGeneration.state.StartedAt !== startupMemoryGeneration.startedAt || memoryProofGeneration.state.Running !== true ||
+        memoryProofGeneration.state.OOMKilled === true)
+      throw new Error('Collector memory proof did not retain the startup process generation');
+    const memorySampler = startCollectorMemorySampler({name: collectorName, token: randomBytes(16).toString('hex'), config});
     let collectorMemoryProof;
+    let memoryProofFailure;
+    const memoryProofProgress = {stage: 'not-started', packetCount: 0, wireBytes: 0};
     try {
       collectorMemoryProof = await runCollectorMemoryProof({run, collectorName, collectorIp, config, collectorConfig,
-        token: producerToken, runId, sampler: memorySampler});
-    } finally {
-      const stopped = await memorySampler.stopSampler({run});
-      if (!stopped) throw new Error('Collector memory sampler cleanup could not be verified');
-      if (memorySampler.failure) throw memorySampler.failure;
+        token: producerToken, runId, sampler: memorySampler, progress: memoryProofProgress});
+    } catch (error) {
+      memoryProofFailure = error;
     }
+    let memorySamplerStopped = false;
+    try { memorySamplerStopped = await memorySampler.stopSampler({run}); }
+    catch { memoryProofFailure ??= Object.assign(new Error('Collector memory sampler cleanup failed'), {diagnosticCode: 'COLLECTOR_MEMORY_SAMPLER_CLEANUP_FAILED'}); }
     const memoryProofGenerationAfter = containerGeneration({run, name: collectorName});
-    if (memoryProofGeneration.id !== memoryProofGenerationAfter.id ||
-        memoryProofGeneration.state.StartedAt !== memoryProofGenerationAfter.state.StartedAt ||
-        memoryProofGenerationAfter.state.Running !== true || memoryProofGenerationAfter.state.OOMKilled === true)
+    const sameCollectorGeneration = memoryProofGeneration.id === memoryProofGenerationAfter.id &&
+      memoryProofGeneration.state.StartedAt === memoryProofGenerationAfter.state.StartedAt &&
+      memoryProofGenerationAfter.state.Running === true && memoryProofGenerationAfter.state.OOMKilled !== true;
+    if (memorySampler.failure && !memoryProofFailure) memoryProofFailure = memorySampler.failure;
+    const samplerDiagnostics = memorySampler.diagnostics();
+    const memoryDiagnosticCode = ['COLLECTOR_MEMORY_SAMPLE_INVALID', 'COLLECTOR_MEMORY_POLICY_INVALID', 'COLLECTOR_MEMORY_SAFETY_GUARD', 'COLLECTOR_MEMORY_SAMPLER_CLEANUP_FAILED'].includes(memoryProofFailure?.diagnosticCode)
+      ? memoryProofFailure.diagnosticCode : memoryProofFailure ? 'COLLECTOR_MEMORY_PROOF_FAILED' : undefined;
+    evidence.telemetryHealth.collectorMemoryDiagnostics = {
+      status: memoryProofFailure || !memorySamplerStopped || !sameCollectorGeneration ? 'FAIL' : 'CAPTURED',
+      stage: memoryProofProgress.stage,
+      containerGeneration: {id: memoryProofGeneration.id, startedAt: memoryProofGeneration.state.StartedAt,
+        sameGenerationAsStartupBaseline: true, sameGenerationAfterProbe: sameCollectorGeneration},
+      startupBaseline: evidence.telemetryHealth.collectorMemoryStartupBaseline,
+      limits: {hardLimitMiB: config.telemetry.collector.memoryLimitMiB, spikeLimitMiB: config.telemetry.collector.memorySpikeMiB,
+        softLimitMiB: config.telemetry.collector.memoryLimitMiB - config.telemetry.collector.memorySpikeMiB,
+        containerLimitMiB: config.telemetry.collector.containerMemoryMiB,
+        cgroupGuardBytes: samplerDiagnostics.guardBytes, guardReserveMiB: samplerDiagnostics.guardReserveMiB},
+      cgroup: {baseline: safeCollectorMemorySample(memoryProofProgress.baselineSample), ...samplerDiagnostics,
+        oom: samplerDiagnostics.failureSample?.oom ?? samplerDiagnostics.latestSample?.oom,
+        oomKill: samplerDiagnostics.failureSample?.oomKill ?? samplerDiagnostics.latestSample?.oomKill},
+      ...(memoryProofProgress.baselineCounters ? {baselineCounters: memoryProofProgress.baselineCounters} : {}),
+      pressure: {packetCount: memoryProofProgress.packetCount, wireBytes: memoryProofProgress.wireBytes},
+      ...(memoryProofProgress.refusal ? {refusal: memoryProofProgress.refusal} : {}),
+      ...(memoryProofProgress.recovery ? {recovery: memoryProofProgress.recovery} : {}),
+      samplerStopped: memorySamplerStopped, ...(memoryDiagnosticCode ? {failureCode: memoryDiagnosticCode} : {}),
+    };
+    if (!memorySamplerStopped) throw new Error('Collector memory sampler cleanup could not be verified');
+    if (memoryProofFailure) throw memoryProofFailure;
+    if (!sameCollectorGeneration)
       throw new Error('Collector memory proof did not retain the same healthy process generation');
     collectorMemoryProof.containerGeneration = {id: memoryProofGenerationAfter.id,
-      startedAt: memoryProofGenerationAfter.state.StartedAt, sameGenerationAfterProbe: true};
+      startedAt: memoryProofGenerationAfter.state.StartedAt, sameGenerationAsStartupBaseline: true, sameGenerationAfterProbe: true};
+    collectorMemoryProof.startupBaseline = evidence.telemetryHealth.collectorMemoryStartupBaseline;
     evidence.telemetryHealth.collectorMemoryProof = collectorMemoryProof;
+    evidence.telemetryHealth.collectorMemoryDiagnostics.status = 'PASS';
     const openObserveRestartedAtUs = Date.now() * 1000;
     run(['start', openObserveName]);
     await waitFor(async () => {

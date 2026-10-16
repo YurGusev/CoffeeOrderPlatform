@@ -192,15 +192,38 @@ void test('Collector memory proof accepts only native limiter counters and bound
     'otelcol_processor_memory_limiter_refused_spans_extra{processor="memory_limiter"} 99',
   ].join('\n')), {refused: 3, accepted: 17});
   assert.throws(() => parseCollectorMemoryLimiterMetrics('otelcol_processor_memory_limiter_refused_spans{processor="memory_limiter"} NaN'), /counter was invalid/u);
-  const fresh = {sequence: 2, currentBytes: 128 * 1024 * 1024, maxBytes: 320 * 1024 * 1024,
-    oom: 0, oomKill: 0, sampledAtMs: 1700000000000};
-  assert.equal(validateCollectorMemorySample(fresh, {nowMs: 1000, receivedAtMs: 900, previousSequence: 1}), fresh);
+  const memoryOptions = {nowMs: 1000, receivedAtMs: 900, previousSequence: 1,
+    containerMemoryMiB: 512, guardBytes: 448 * 1024 * 1024};
+  const fresh = {sequence: 2, currentBytes: 128 * 1024 * 1024, maxBytes: 512 * 1024 * 1024,
+    kernelPeakBytes: 192 * 1024 * 1024, anonBytes: 96 * 1024 * 1024, fileBytes: 24 * 1024 * 1024,
+    kernelBytes: 8 * 1024 * 1024, oom: 0, oomKill: 0, sampledAtMs: 1700000000000};
+  assert.equal(validateCollectorMemorySample(fresh, memoryOptions), fresh);
   for (const options of [
-    {nowMs: 1001, receivedAtMs: 900, previousSequence: 1},
-    {nowMs: 1000, receivedAtMs: 900, previousSequence: 0},
+    {...memoryOptions, nowMs: 1001},
+    {...memoryOptions, previousSequence: 0},
   ]) assert.throws(() => validateCollectorMemorySample(fresh, options), /invalid or stale/u);
-  assert.throws(() => validateCollectorMemorySample({...fresh, currentBytes: 280 * 1024 * 1024}, {nowMs: 1000, receivedAtMs: 900}), /safety guard/u);
-  assert.throws(() => validateCollectorMemorySample({...fresh, oomKill: 1}, {nowMs: 1000, receivedAtMs: 900}), /safety guard/u);
+  assert.throws(() => validateCollectorMemorySample({...fresh, maxBytes: 320 * 1024 * 1024}, memoryOptions), /invalid or stale/u);
+  assert.throws(() => validateCollectorMemorySample(fresh, {...memoryOptions, containerMemoryMiB: 320}), /invalid or stale/u);
+  assert.throws(() => validateCollectorMemorySample({...fresh, fileBytes: -1}, memoryOptions), /invalid or stale/u);
+  for (const failing of [
+    {...fresh, kernelPeakBytes: 448 * 1024 * 1024},
+    {...fresh, oomKill: 1},
+  ]) {
+    assert.throws(() => validateCollectorMemorySample(failing, memoryOptions), error => {
+      assert.match(error.message, /safety guard/u);
+      assert.equal(error.diagnosticCode, 'COLLECTOR_MEMORY_SAFETY_GUARD');
+      assert.deepEqual(Object.keys(error.failureSample).sort(), ['anonBytes', 'currentBytes', 'fileBytes', 'kernelBytes', 'kernelPeakBytes', 'maxBytes', 'oom', 'oomKill', 'sampledAtMs', 'sequence']);
+      assert.equal(error.failureSample.kernelPeakBytes, failing.kernelPeakBytes);
+      return true;
+    });
+  }
+  assert.throws(() => validateCollectorMemorySample({...fresh, privateCanary: 'sensitive-memory-record'}, memoryOptions), error => {
+    assert.match(error.message, /invalid or stale/u);
+    assert.deepEqual(error.failureSample, fresh);
+    assert.equal(JSON.stringify(error.failureSample).includes('sensitive-memory-record'), false);
+    return true;
+  });
+  assert.throws(() => validateCollectorMemorySample({...fresh, currentBytes: 448 * 1024 * 1024}, memoryOptions), /safety guard/u);
 });
 
 void test('generated Node image probe accepts nameless nested package metadata but keeps package roots strict', () => {

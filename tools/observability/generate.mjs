@@ -100,6 +100,7 @@ export async function createObservabilityProvenance({root = REPO_ROOT, config, i
       collector: {
         memoryLimitMiB: config.telemetry.collector.memoryLimitMiB,
         memorySpikeMiB: config.telemetry.collector.memorySpikeMiB,
+        containerMemoryMiB: config.telemetry.collector.containerMemoryMiB,
         maxLogRecordBytes: config.telemetry.collector.maxLogRecordBytes,
         batchSize: config.telemetry.collector.batchSize,
         queueCapacity: config.telemetry.collector.queueCapacity,
@@ -431,7 +432,7 @@ export function createComposeOverride({config, imageRefs, logFiles, collectorCon
         security_opt: ['no-new-privileges:true'],
         cap_drop: ['ALL'],
         cpus: 1,
-        mem_limit: `${config.telemetry.collector.memoryLimitMiB + config.telemetry.collector.memorySpikeMiB}m`,
+        mem_limit: `${config.telemetry.collector.containerMemoryMiB}m`,
         pids_limit: 128,
         tmpfs: ['/tmp:rw,noexec,nosuid,nodev,size=8m'],
         volumes: [

@@ -246,7 +246,7 @@ export type TelemetryConfig = Readonly<{
   nginxStatusEndpoint: string;
   collector: Readonly<{
     otlpEndpoint: string; healthEndpoint: string; metricsEndpoint: string;
-    memoryLimitMiB: number; memorySpikeMiB: number; memoryCheckIntervalMs: number;
+    memoryLimitMiB: number; memorySpikeMiB: number; containerMemoryMiB: number; memoryCheckIntervalMs: number;
     batchSize: number; batchTimeoutMs: number; queueCapacity: number; queueConsumers: number;
     exportTimeoutMs: number; retryInitialMs: number; retryMaxMs: number; retryWindowMs: number;
     maxLogRecordBytes: number;
@@ -1296,7 +1296,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   const source = record(value, path);
   exactKeys(source, ["namespace", "releaseDigest", "nginxStatusEndpoint", "collector", "producer", "logging", "openObserve", "alerts"], path);
   const collector = record(source["collector"], `${path}.collector`);
-  exactKeys(collector, ["otlpEndpoint", "healthEndpoint", "metricsEndpoint", "memoryLimitMiB", "memorySpikeMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
+  exactKeys(collector, ["otlpEndpoint", "healthEndpoint", "metricsEndpoint", "memoryLimitMiB", "memorySpikeMiB", "containerMemoryMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
   const producer = record(source["producer"], `${path}.producer`);
   exactKeys(producer, ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], `${path}.producer`);
   const logging = record(source["logging"], `${path}.logging`);
@@ -1338,7 +1338,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
     throw new PlatformConfigError(path, "некорректные namespace или releaseDigest");
   const positive = (obj: UnknownRecord, keys: readonly string[], prefix: string): Record<string, number> =>
     Object.fromEntries(keys.map(key => [key, positiveIntegerValue(obj[key], `${prefix}.${key}`)]));
-  const collectorValues = positive(collector, ["memoryLimitMiB", "memorySpikeMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
+  const collectorValues = positive(collector, ["memoryLimitMiB", "memorySpikeMiB", "containerMemoryMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
   const producerValues = positive(producer, ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], `${path}.producer`);
   const loggingValues = positive(logging, ["maxSizeMiB", "maxFiles"], `${path}.logging`);
   const storageValues = positive(openObserve, ["memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
@@ -1355,7 +1355,9 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   const bootstrapEmail = stringValue(openObserve["bootstrapEmail"], `${path}.openObserve.bootstrapEmail`);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(bootstrapEmail))
     throw new PlatformConfigError(`${path}.openObserve.bootstrapEmail`, "ожидался email оператора bootstrap");
-  if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]! || openObserveBufferBudgetInvalid)
+  const collectorGuardMiB = collectorValues["containerMemoryMiB"]! - collectorValues["memorySpikeMiB"]!;
+  const collectorContainerBytes = collectorValues["containerMemoryMiB"]! * 1024 * 1024;
+  if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorGuardMiB <= collectorValues["memoryLimitMiB"]! || !Number.isSafeInteger(collectorContainerBytes) || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]! || openObserveBufferBudgetInvalid)
     throw new PlatformConfigError(path, "telemetry budgets are inconsistent");
   if (alerts["version"] !== 1) throw new PlatformConfigError(`${path}.alerts.version`, "поддерживается только версия 1");
   return Object.freeze({

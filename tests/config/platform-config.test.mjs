@@ -90,6 +90,11 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
   const parsed = parsePlatformConfig(document);
   assert.equal(parsed.telemetry.namespace, "coffee-platform");
+  assert.deepEqual([
+    parsed.telemetry.collector.memoryLimitMiB,
+    parsed.telemetry.collector.memorySpikeMiB,
+    parsed.telemetry.collector.containerMemoryMiB,
+  ], [256, 64, 512]);
   assert.equal(parsed.telemetry.openObserve.retentionDays, 3);
   assert.deepEqual([
     parsed.telemetry.openObserve.memTableMaxSizeMiB,
@@ -113,6 +118,8 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     {...document, telemetry: {...document.telemetry, producer: {...document.telemetry.producer, extra: true}}},
     {...document, telemetry: {...document.telemetry, nginxStatusEndpoint: "http://edge-nginx:65536/nginx_status"}},
     {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, queueCapacity: 32, batchSize: 64}}},
+    {...document, telemetry: {...document.telemetry, collector: Object.fromEntries(Object.entries(document.telemetry.collector).filter(([key]) => key !== "containerMemoryMiB"))}},
+    ...[0, 512.5, 320, Number.MAX_SAFE_INTEGER].map((containerMemoryMiB) => ({...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, containerMemoryMiB}}})),
     {...document, telemetry: {...document.telemetry, alerts: {...document.telemetry.alerts, unknownOutcome: {...document.telemetry.alerts.unknownOutcome, threshold: -1}}}},
     {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, retentionDays: 1}}},
     {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, diskWatermarkPercent: 100}}},

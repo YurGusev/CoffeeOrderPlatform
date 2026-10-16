@@ -116,6 +116,7 @@ telemetry:
     metricsEndpoint: http://otel-collector:8888
     memoryLimitMiB: 256
     memorySpikeMiB: 64
+    containerMemoryMiB: 512
     memoryCheckIntervalMs: 1000
     batchSize: 128
     batchTimeoutMs: 1000

@@ -78,6 +78,13 @@ Collector применяет memory limiter, batch, конечные sending que
 и retry window. Backend network соединяет только Collector/OpenObserve;
 producer ingress использует существующие private zones. Отказ telemetry
 не участвует в business readiness и не разрешает business replay.
+`memoryLimitMiB=256` и `memorySpikeMiB=64` задают Go memory limiter Collector;
+`containerMemoryMiB=512` независимо задаёт cgroup limit. Проверка держит запас
+64 MiB и останавливает proof при текущем или накопленном cgroup usage от 448 MiB.
+Это локальная safety policy, не гарантия Collector или capacity proof. Снимки
+до outage и во время memory probe относятся к одному container generation и
+содержат только ограниченные числовые cgroup counters. Cold-cache поведение не
+проверялось.
 Collector экспортирует собственные queue/loss counters; nginx scrape включается
 только при наличии его настоящего ID в выбранном inventory. Producer разделяет
 export failure, queue overflow, serialization rejection и shutdown loss; все

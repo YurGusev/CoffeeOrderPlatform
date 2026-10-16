@@ -5,6 +5,10 @@ catalog. `config/platform.yaml.telemetry` задаёт endpoint/stream, buffer, 
 retention, watermark и alert policies; schema/parser требуют все поля.
 Writer memory/file bounds OpenObserve задаются обязательными лимитами из этой
 конфигурации и не заменяются defaults закреплённого образа.
+У Collector `memoryLimitMiB`/`memorySpikeMiB` задают Go heap limiter, а отдельный
+`containerMemoryMiB` — cgroup ceiling; verifier guard равен
+`containerMemoryMiB − memorySpikeMiB` и задаёт локальную safety policy, не
+гарантию Collector или capacity.
 Backend network соединяет только Collector/OpenObserve, producer ingress —
 существующие private zones, без зависимости business readiness. Generated
 configs/provenance, scoped bootstrap и bounded storage описаны в

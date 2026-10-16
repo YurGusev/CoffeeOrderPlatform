@@ -29,7 +29,7 @@ const sample = {
     namespace: 'coffee-platform', releaseDigest: 'development', nginxStatusEndpoint: 'http://edge-nginx:8081/nginx_status',
     collector: {
       otlpEndpoint: 'http://otel-collector:4318', healthEndpoint: 'http://otel-collector:13133',
-      metricsEndpoint: 'http://otel-collector:8888', memoryLimitMiB: 128, memorySpikeMiB: 32,
+      metricsEndpoint: 'http://otel-collector:8888', memoryLimitMiB: 128, memorySpikeMiB: 32, containerMemoryMiB: 512,
       memoryCheckIntervalMs: 1000, batchSize: 128, batchTimeoutMs: 1000, queueCapacity: 512,
       queueConsumers: 2, exportTimeoutMs: 2000, retryInitialMs: 1000, retryMaxMs: 5000,
       retryWindowMs: 15000, maxLogRecordBytes: 65536,
@@ -147,6 +147,11 @@ void test('generated provenance records pinned sources and limits without secret
   assert.equal(provenance.sourceSha256.imageBom.length, 64);
   assert.equal(provenance.sourceSha256.lockfile.length, 64);
   assert.equal(provenance.limits.collector.queueCapacity, 512);
+  assert.deepEqual({
+    memoryLimitMiB: provenance.limits.collector.memoryLimitMiB,
+    memorySpikeMiB: provenance.limits.collector.memorySpikeMiB,
+    containerMemoryMiB: provenance.limits.collector.containerMemoryMiB,
+  }, {memoryLimitMiB: 128, memorySpikeMiB: 32, containerMemoryMiB: 512});
   assert.equal(provenance.limits.openObserve.retentionDays, 3);
   assert.deepEqual({
     memTableMaxSizeMiB: provenance.limits.openObserve.memTableMaxSizeMiB,
@@ -459,6 +464,7 @@ void test('Collector config accepts only exact selected log files and bounds exp
   });
   assert.equal(config.service.pipelines.traces.receivers[0], 'otlp');
   assert.equal(config.processors.memory_limiter.limit_mib, 128);
+  assert.equal(config.processors.memory_limiter.spike_limit_mib, 32);
   assert.deepEqual(config.service.telemetry.metrics.readers[0].pull.exporter.prometheus, {host: '0.0.0.0', port: 8888});
   assert.equal(config.exporters['otlp_http/logs'].sending_queue.queue_size, 512);
   assert.equal(config.exporters['otlp_http/logs'].retry_on_failure.max_elapsed_time, '15000ms');
@@ -472,6 +478,7 @@ void test('Collector config accepts only exact selected log files and bounds exp
   });
   assert.ok(compose.services['otel-collector'].networks.includes('coffee_edge_backend'),
     'Collector stays in the existing edge trust zone used by edge-nginx');
+  assert.equal(compose.services['otel-collector'].mem_limit, '512m');
   const bufferEnvironment = {
     ZO_MEM_TABLE_MAX_SIZE: '128', ZO_MAX_FILE_SIZE_IN_MEMORY: '8', ZO_MAX_FILE_SIZE_ON_DISK: '8',
     ZO_MAX_FILE_RETENTION_TIME: '30', ZO_MEM_PERSIST_INTERVAL: '2',
