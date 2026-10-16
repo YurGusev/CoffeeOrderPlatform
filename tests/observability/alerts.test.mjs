@@ -49,9 +49,11 @@ void test('native access lookup selects its owner before the response page limit
   assert.throws(() => nativeAccessLogFilter("' OR 1=1"), /requires a UUID/u);
 });
 
-void test('OpenObserve retention settings wait only for stream-settings 404 readiness', async () => {
+void test('OpenObserve retention settings wait only for stream-settings 404 readiness', {timeout: 10000}, async t => {
+  t.mock.timers.enable({apis: ['Date'], now: 0});
   const requests = [];
   const fetchImpl = async (url, init) => {
+    t.mock.timers.tick(1);
     requests.push({url, init});
     return new Response(requests.length === 1 ? 'temporary canary response' : '', {status: requests.length === 1 ? 404 : 200});
   };
@@ -72,11 +74,12 @@ void test('OpenObserve retention settings wait only for stream-settings 404 read
   try {
     await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
       organization: 'coffee', stream: 'platform_metrics_missing', streamType: 'metrics', retentionDays: 7,
-      fetchImpl: async () => {permanent404Calls += 1; return new Response('permanent canary', {status: 404});},
+      fetchImpl: async () => {permanent404Calls += 1; t.mock.timers.tick(10); return new Response('permanent canary', {status: 404});},
       sensitiveValues: ['permanent canary'], timeoutMs: 5, intervalMs: 1});
   } catch (error) { timeoutFailure = error; }
   assert.ok(timeoutFailure, 'a permanent 404 must fail after the bounded readiness deadline');
-  assert.ok(permanent404Calls > 0);
+  assert.equal(permanent404Calls, 1);
+  assert.match(timeoutFailure.message, /did not complete/u);
   assert.equal(timeoutFailure.message.includes('permanent canary'), false);
 
   for (const status of [401, 500]) {
@@ -85,7 +88,7 @@ void test('OpenObserve retention settings wait only for stream-settings 404 read
     try {
       await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
         organization: 'coffee', stream: 'platform_metrics_denied', streamType: 'metrics', retentionDays: 7,
-        fetchImpl: async () => {calls += 1; return new Response('auth canary', {status});},
+        fetchImpl: async () => {calls += 1; t.mock.timers.tick(1); return new Response('auth canary', {status});},
         sensitiveValues: ['auth canary'], timeoutMs: 100, intervalMs: 1});
     } catch (error) { failure = error; }
     assert.equal(calls, 1, `HTTP ${status} fails immediately`);
@@ -99,7 +102,7 @@ void test('OpenObserve retention settings wait only for stream-settings 404 read
   try {
     await waitForStreamRetentionSettings({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
       organization: 'coffee', stream: 'platform_metrics_offline', streamType: 'metrics', retentionDays: 7,
-      fetchImpl: async () => {networkCalls += 1; throw new Error('network unavailable');}, timeoutMs: 100, intervalMs: 1});
+      fetchImpl: async () => {networkCalls += 1; t.mock.timers.tick(1); throw new Error('network unavailable');}, timeoutMs: 100, intervalMs: 1});
   } catch (error) { networkFailure = error; }
   assert.equal(networkCalls, 1, 'network failures are fatal rather than retried');
   assert.equal(networkFailure?.fatal, true);
