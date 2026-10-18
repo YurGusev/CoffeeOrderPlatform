@@ -89,6 +89,9 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
 void test("telemetry config is strict, immutable, and rejects missing or inconsistent budgets", async () => {
   const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
   const parsed = parsePlatformConfig(document);
+  const alternateCollectorPort = structuredClone(document);
+  alternateCollectorPort.telemetry.collector.otlpEndpoint = "http://otel-collector:4319";
+  assert.equal(parsePlatformConfig(alternateCollectorPort).telemetry.collector.otlpEndpoint, "http://otel-collector:4319");
   const minimumTelemetryDiskBytes = 256 * 1024 * 1024;
   const minimumDiskConfig = structuredClone(document);
   minimumDiskConfig.telemetry.openObserve.maxDiskBytes = minimumTelemetryDiskBytes;
@@ -98,6 +101,14 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   assert.throws(() => parsePlatformConfig(undersizedDiskConfig), PlatformConfigError);
   const platformSchema = JSON.parse(await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"));
   assert.equal(platformSchema.$defs.telemetry.properties.openObserve.properties.maxDiskBytes.minimum, minimumTelemetryDiskBytes);
+  const collectorEndpointPattern = new RegExp(platformSchema.$defs.telemetry.properties.collector.properties.otlpEndpoint.pattern, "u");
+  assert.equal(collectorEndpointPattern.test("http://otel-collector:4319"), true);
+  assert.equal(collectorEndpointPattern.test("http://otel-collector:65535"), true);
+  for (const endpoint of ["http://other-host:4318", "http://OTEL-COLLECTOR:4318", "http://otel-collector", "http://otel-collector:0", "http://otel-collector:80", "http://otel-collector:65536", "http://otel-collector:4318?target=elsewhere", "http://otel-collector:4318?", "http://otel-collector:4318#"])
+    assert.equal(collectorEndpointPattern.test(endpoint), false, endpoint);
+  const genericOpenObserve = structuredClone(document);
+  genericOpenObserve.telemetry.openObserve.endpoint = "http://openobserve.internal:5080";
+  assert.equal(parsePlatformConfig(genericOpenObserve).telemetry.openObserve.endpoint, "http://openobserve.internal:5080");
   assert.equal(parsed.telemetry.namespace, "coffee-platform");
   assert.deepEqual([
     parsed.telemetry.collector.memoryLimitMiB,
@@ -126,6 +137,16 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
     {...document, telemetry: Object.fromEntries(Object.entries(document.telemetry).filter(([key]) => key !== "nginxStatusEndpoint"))},
     {...document, telemetry: {...document.telemetry, producer: {...document.telemetry.producer, extra: true}}},
     {...document, telemetry: {...document.telemetry, nginxStatusEndpoint: "http://edge-nginx:65536/nginx_status"}},
+    ...["otlpEndpoint", "healthEndpoint", "metricsEndpoint"].flatMap((name) => [
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://other-host:4318"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://OTEL-COLLECTOR:4318"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:0"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:65536"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318?target=elsewhere"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318?"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318#"}}},
+    ]),
     {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, queueCapacity: 32, batchSize: 64}}},
     {...document, telemetry: {...document.telemetry, collector: Object.fromEntries(Object.entries(document.telemetry.collector).filter(([key]) => key !== "containerMemoryMiB"))}},
     ...[0, 512.5, 320, Number.MAX_SAFE_INTEGER].map((containerMemoryMiB) => ({...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, containerMemoryMiB}}})),

@@ -225,7 +225,7 @@ function consumerEnvelope(value: JsonValue, messageId?: string, messageType?: st
   if (envelope["causationId"] !== null) identifier(envelope, "causationId");
   instantValue(envelope["occurredAt"], "occurredAt");
   const trace = identifier(envelope, "traceparent");
-  if (!/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(trace) || trace.slice(3, 35) === "0".repeat(32) || trace.slice(36, 52) === "0".repeat(16)) invalid("Inbox traceparent некорректен");
+  if (!/^(?!ff)[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(trace) || trace.slice(3, 35) === "0".repeat(32) || trace.slice(36, 52) === "0".repeat(16)) invalid("Inbox traceparent некорректен");
   identifier(owner, "type");
   const partitionKey = identifier(owner, "ref");
   const ownerVersion = identifier(owner, "version");
@@ -463,7 +463,7 @@ export async function consumeOnce(
   try {
   const begin = await store.begin(transaction, message, leaseOwner, nowMs, leaseMs);
   initializeInboxMetrics();
-  const receivedAgeMs = nowMs - toInstant(message.receivedAt).epochMilliseconds;
+  const receivedAgeMs = toInstant(processedAt).epochMilliseconds - toInstant(message.receivedAt).epochMilliseconds;
   if (Number.isSafeInteger(receivedAgeMs) && receivedAgeMs >= 0)
     inboxReceivedAge?.record(receivedAgeMs, {"messaging.consumer.group": leaseOwner});
   if (begin.kind === "duplicate") {

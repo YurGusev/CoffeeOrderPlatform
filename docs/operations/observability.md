@@ -49,6 +49,10 @@ Node пишет Pino JSON в stdout и экспортирует OTel traces/metr
 headers/body/query/SQL/provider payload редактируются до serialization.
 HTTP client span заканчивается после получения response headers; stream body
 остаётся у caller, поэтому его чтение, отмена и ошибки происходят после span.
+`messaging.inbox.received.age` измеряет путь от получения Kafka record до входа
+в Inbox после checkout owner DB transaction; время handler в эту метрику не
+входит. `messaging.kafka.event.age` отдельно измеряет возраст события от
+`occurredAt`.
 Correlation/entity refs относятся к logs/traces, не metric labels. Native nginx
 сохраняет собственный transport logger и не импортирует Node SDK. Он передаёт
 валидные W3C context и client correlation UUID авторизатору; собственный

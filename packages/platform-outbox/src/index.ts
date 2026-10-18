@@ -483,7 +483,7 @@ export async function relayOutboxBatch(store: OutboxStore, database: Database, s
   const processClaim = async (claim: OutboxClaim): Promise<OutboxRelayResult> => {
     const carrier = claim.message.traceparent;
     let parent = context.active();
-    if (/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(carrier) && carrier.slice(3, 35) !== "0".repeat(32) && carrier.slice(36, 52) !== "0".repeat(16)) {
+    if (/^(?!ff)[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/u.test(carrier) && carrier.slice(3, 35) !== "0".repeat(32) && carrier.slice(36, 52) !== "0".repeat(16)) {
       parent = trace.setSpanContext(parent, {traceId: carrier.slice(3, 35), spanId: carrier.slice(36, 52), traceFlags: Number.parseInt(carrier.slice(53), 16), isRemote: true});
     }
     const delivery = trace.getTracer("coffee-platform.outbox").startSpan("Outbox.relay", {kind: SpanKind.PRODUCER, attributes: {"messaging.destination.name": claim.message.topic}}, parent);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {randomBytes} from "node:crypto";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
-import {Client} from "pg";
+import pg, {Client} from "pg";
 import {withCatalogPostgres} from "../../scripts/catalog-live-harness.mjs";
 import {createDatabase, withTransaction} from "../../packages/platform-database/dist/index.js";
 import {defineStatement} from "../../packages/platform-database/dist/owner.js";
@@ -84,7 +84,7 @@ async function fixture(run) {
 
 void test("Orders consumer Inbox persists full envelope and commits offset only after owner transaction",live,async()=>fixture(async({preparation,read,options})=>{
   metricMeasurements.length=0;
-  const e=envelope();const opts=options(preparation);let commits=0;
+  const e={...envelope(),traceparent:"01-11111111111111111111111111111111-2222222222222222-01"};const opts=options(preparation);let commits=0;
   opts.commit=async()=>{
     commits++;
     const row=(await read("SELECT * FROM orders.inbox_messages")).rows[0];
@@ -97,9 +97,36 @@ void test("Orders consumer Inbox persists full envelope and commits offset only 
     assert.ok(row.processed_at);assert.equal(row.quarantined_at,null);
     assert.equal((await read("SELECT * FROM orders.inbox_proof_effects")).rowCount,1);
   };
-  await processKafkaRecord(record(e),opts);
+  const connectDescriptor=Object.getOwnPropertyDescriptor(pg.Pool.prototype,"connect");
+  const originalConnect=pg.Pool.prototype.connect;
+  let signalCheckoutStarted;
+  let releaseCheckout;
+  const checkoutStarted=new Promise(resolve=>{signalCheckoutStarted=resolve;});
+  const checkoutGate=new Promise(resolve=>{releaseCheckout=resolve;});
+  let checkoutDelayed=false;
+  try {
+    pg.Pool.prototype.connect=async function(...args) {
+      if(!checkoutDelayed&&this.options.database==="coffee_platform_orders"&&this.options.user==="coffee_orders_prepare_rw") {
+        checkoutDelayed=true;
+        signalCheckoutStarted();
+        await checkoutGate;
+      }
+      return originalConnect.apply(this,args);
+    };
+    const processing=processKafkaRecord(record(e),opts);
+    await checkoutStarted;
+    await new Promise(resolve=>setTimeout(resolve,50));
+    releaseCheckout();
+    await processing;
+  } finally {
+    releaseCheckout();
+    if(connectDescriptor)Object.defineProperty(pg.Pool.prototype,"connect",connectDescriptor);
+    else delete pg.Pool.prototype.connect;
+  }
   assert.equal(commits,1);
-  assert.deepEqual(metricMeasurements.filter(sample=>sample.name==="messaging.inbox.received.age"),[{name:"messaging.inbox.received.age",value:0,attributes:{"messaging.consumer.group":group}}]);
+  const receivedAge=metricMeasurements.filter(sample=>sample.name==="messaging.inbox.received.age");
+  assert.equal(receivedAge.length,1);
+  assert.ok(receivedAge[0].value>=25,"Inbox age must include the controlled wait for owner DB checkout");
 }));
 
 void test("Outbox oldest age is current, scoped by configured topics and ignores terminal states",live,async()=>fixture(async({migrator,create})=>{
@@ -314,6 +341,11 @@ void test("consumerName and envelope identity/hash are strict and sanitized befo
   const e=envelope("identity");
   for(const bad of [{...message(e),messageId:"different"},{...message(e),messageType:"Other.v1"},{...message(e),payloadHash:"0".repeat(64)}]) {
     await assert.rejects(tx(preparation,transaction=>inbox.begin(transaction,bad,"lease",0,30000)),{code:"INBOX_INVALID"});
+  }
+  for(const traceparent of [`ff-${"a".repeat(32)}-${"b".repeat(16)}-01`,`00-${"0".repeat(32)}-${"b".repeat(16)}-01`,`00-${"a".repeat(32)}-${"0".repeat(16)}-01`]) {
+    const invalidEnvelope={...e,messageId:`invalid-trace-${traceparent.slice(0,2)}-${traceparent.slice(3,5)}`,traceparent};
+    const invalidMessage={...message(invalidEnvelope),payloadHash:canonicalRequestHash(invalidEnvelope)};
+    await assert.rejects(tx(preparation,transaction=>inbox.begin(transaction,invalidMessage,"lease",0,30000)),{code:"INBOX_INVALID"});
   }
   await assert.rejects(tx(preparation,transaction=>inbox.quarantineRecord(transaction,{topic:"coffee.orders.lifecycle.v1",partition:0,offset:"01",envelope:e,reason:"INVALID"},0)),{code:"INBOX_INVALID"});
   await assert.rejects(tx(preparation,transaction=>inbox.quarantineRecord(transaction,{topic:"coffee.orders.lifecycle.v1",partition:0,offset:"9223372036854775808",envelope:e,reason:"INVALID"},0)),{code:"INBOX_INVALID"});

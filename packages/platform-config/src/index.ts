@@ -1329,6 +1329,13 @@ function telemetryConfig(value: unknown): TelemetryConfig {
     }
     return result;
   };
+  const collectorEndpoint = (input: unknown, field: string): string => {
+    const result = endpoint(input, field);
+    const parsed = new URL(result);
+    if (!result.startsWith("http://otel-collector:") || parsed.hostname !== "otel-collector" || !parsed.port || Number(parsed.port) < 1 || parsed.search || result.includes("?") || result.includes("#"))
+      throw new PlatformConfigError(field, "ожидался endpoint Collector с явным портом 1..65535 без query");
+    return result;
+  };
   const namespace = stringValue(source["namespace"], `${path}.namespace`);
   const nginxStatusEndpoint = endpoint(source["nginxStatusEndpoint"], `${path}.nginxStatusEndpoint`);
   if (!/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(nginxStatusEndpoint) || Number(new URL(nginxStatusEndpoint).port) > 65535)
@@ -1363,7 +1370,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   if (alerts["version"] !== 1) throw new PlatformConfigError(`${path}.alerts.version`, "поддерживается только версия 1");
   return Object.freeze({
     namespace, releaseDigest, nginxStatusEndpoint,
-    collector: Object.freeze({otlpEndpoint: endpoint(collector["otlpEndpoint"], `${path}.collector.otlpEndpoint`), healthEndpoint: endpoint(collector["healthEndpoint"], `${path}.collector.healthEndpoint`), metricsEndpoint: endpoint(collector["metricsEndpoint"], `${path}.collector.metricsEndpoint`), ...collectorValues} as TelemetryConfig["collector"]),
+    collector: Object.freeze({otlpEndpoint: collectorEndpoint(collector["otlpEndpoint"], `${path}.collector.otlpEndpoint`), healthEndpoint: collectorEndpoint(collector["healthEndpoint"], `${path}.collector.healthEndpoint`), metricsEndpoint: collectorEndpoint(collector["metricsEndpoint"], `${path}.collector.metricsEndpoint`), ...collectorValues} as TelemetryConfig["collector"]),
     producer: Object.freeze(producerValues as TelemetryConfig["producer"]),
     logging: Object.freeze(loggingValues as TelemetryConfig["logging"]),
     openObserve: Object.freeze({endpoint: endpoint(openObserve["endpoint"], `${path}.openObserve.endpoint`), organization: stringValue(openObserve["organization"], `${path}.openObserve.organization`), bootstrapEmail, validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, streams: Object.freeze({logs: stringValue(streams["logs"], `${path}.openObserve.streams.logs`), traces: stringValue(streams["traces"], `${path}.openObserve.streams.traces`), metrics: stringValue(streams["metrics"], `${path}.openObserve.streams.metrics`)}), ...storageValues, diskWatermarkPercent} as TelemetryConfig["openObserve"]),

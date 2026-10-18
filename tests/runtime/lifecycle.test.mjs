@@ -8,7 +8,7 @@ import {fileURLToPath} from "node:url";
 import {join} from "node:path";
 import {tmpdir} from "node:os";
 import test from "node:test";
-import {context as otelContext, metrics, trace} from "@opentelemetry/api";
+import {context as otelContext, metrics, SpanStatusCode, trace} from "@opentelemetry/api";
 import {createServer as createHttpServer} from "node:http";
 import {load as parseYaml} from "js-yaml";
 import {RUNTIME_NAMES, loadPlatformConfig} from "../../packages/platform-config/src/index.ts";
@@ -81,7 +81,7 @@ function captureRuntimeSpans(t) {
         ends: 0,
         spanContext: () => ({traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", spanId: "bbbbbbbbbbbbbbbb", traceFlags: 1}),
         setAttribute(key, value) { this.attributes[key] = value; },
-        setStatus() {},
+        setStatus(status) { this.status = status; },
         end() { this.ends += 1; },
       };
       spans.push(span);
@@ -705,7 +705,8 @@ void test("health endpoints expose live and ready states", async () => {
   assert.deepEqual(await stopApp(app), {status: "stopped", pending: []});
 });
 
-void test("readiness checks fail closed, recover, and expose correlation context", async () => {
+void test("readiness checks fail closed, recover, and expose correlation context", async (t) => {
+  const spans = captureRuntimeSpans(t);
   let dependencyReady = false;
   const logs = [];
   const correlationId = "11111111-1111-4111-8111-111111111111";
@@ -720,6 +721,7 @@ void test("readiness checks fail closed, recover, and expose correlation context
     requestCorrelationId: request.correlationContext?.correlationId,
     deadlineUtc: request.runtimeContext?.deadlineUtc,
   }));
+  app.get("/client-error", async (_request, reply) => reply.code(404).send());
   await app.runtimeController.start();
   const notReady = await app.inject({
     method: "GET",
@@ -727,6 +729,7 @@ void test("readiness checks fail closed, recover, and expose correlation context
     headers: {"x-correlation-id": correlationId},
   });
   assert.equal(notReady.statusCode, 503);
+  assert.deepEqual(spans[0].status, {code: SpanStatusCode.ERROR});
   assert.deepEqual(notReady.json(), {status: "not-ready", runtime: "readiness-test"});
   assert.deepEqual(logs, [{fields: {event: "runtime.readiness.failed", dependency: "database", reason: "NotReady"}, message: "runtime readiness failed"}]);
   dependencyReady = true;
@@ -736,6 +739,7 @@ void test("readiness checks fail closed, recover, and expose correlation context
     headers: {"x-correlation-id": correlationId, traceparent},
   });
   assert.equal(ready.statusCode, 200);
+  assert.equal(spans[1].status, undefined);
   assert.equal(logs.length, 1);
   assert.equal(ready.headers["x-correlation-id"], correlationId);
   assert.equal(ready.headers.traceparent, traceparent);
@@ -744,6 +748,9 @@ void test("readiness checks fail closed, recover, and expose correlation context
     url: "/context",
     headers: {"x-correlation-id": correlationId, traceparent},
   });
+  const clientError = await app.inject("/client-error");
+  assert.equal(clientError.statusCode, 404);
+  assert.equal(spans.at(-1).status, undefined);
   assert.equal(context.json().requestCorrelationId, correlationId);
   assert.match(context.json().deadlineUtc, /^\d{4}-\d{2}-\d{2}T/);
   const invalid = await app.inject({

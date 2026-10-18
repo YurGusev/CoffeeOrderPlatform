@@ -199,6 +199,15 @@ try {
     .find(event => event.role === 'edge' && event.url === '/_edge/authorize');
   assert.equal(authorized?.headers.traceparent,validTraceparent,'Edge authorization receives the same validated W3C trace context');
   assert.equal(authorized?.headers['x-correlation-id'],'00000000-0000-4000-8000-000000000000','Edge may bind the validated client correlation to its signed assertion');
+  const futureTraceparent='01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
+  const futureTrace=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow; __Host-coffee-csrf=csrf-safe','x-csrf-token':'browser-csrf','content-type':'application/json','idempotency-key':'fixture-future-trace','if-match':'"7"',traceparent:futureTraceparent},body:'{"x":1}'});
+  assert.equal(futureTrace.status,200);
+  assert.equal(JSON.parse(futureTrace.body).headers.traceparent,futureTraceparent,'future W3C traceparent versions are forwarded unchanged');
+  const invalidTraceparent='ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
+  const invalidTrace=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow; __Host-coffee-csrf=csrf-safe','x-csrf-token':'browser-csrf','content-type':'application/json','idempotency-key':'fixture-invalid-trace','if-match':'"7"',traceparent:invalidTraceparent},body:'{"x":1}'});
+  assert.equal(invalidTrace.status,200);
+  assert.equal(JSON.parse(invalidTrace.body).headers.traceparent,undefined,'reserved traceparent version ff is stripped');
+  assert.equal(docker('logs',nginxId).includes(invalidTraceparent),false,'invalid trace context is absent from native nginx logs');
   const zeroTraceId='00-00000000000000000000000000000000-00f067aa0ba902b7-01';
   const zeroTraceLogStart=(await readFile(requestsFile,'utf8')).trim().split('\n').filter(Boolean).length;
   const zeroTrace=await request('/api/client-v1/orders/drafts',{method:'POST',headers:{cookie:'__Host-coffee-session=allow',traceparent:zeroTraceId,'x-correlation-id':'invalid-client-correlation'}});

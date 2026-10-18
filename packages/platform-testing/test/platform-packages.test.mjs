@@ -379,18 +379,22 @@ void test("database, HTTP and Outbox telemetry preserves owner parentage, bounde
     });
     const {database: deliveryDatabase} = deliverySqlDatabase(t);
     const outbox = createSqlOutboxStore(deliveryDatabase);
-    const message = outboxFixture("trace-relay", "trace-aggregate", 1);
-    await withTransaction(deliveryDatabase, {mode: "background"}, transaction => outbox.enqueue(transaction, message));
-    let deliverySpan;
-    const delivered = await relayOutboxBatch(outbox, deliveryDatabase, async () => {
-      deliverySpan = trace.getSpan(otelContext.active());
-      assert.ok(deliverySpan);
-      assert.equal(deliverySpan.spanContext().traceId, message.traceparent.slice(3, 35));
-      assert.notEqual(deliverySpan.spanContext().spanId, message.traceparent.slice(36, 52));
-      return {kind: "ack"};
-    }, {nowMs: 100, leaseOwner: "trace-relay", policy: {leaseMs: 1000, sendTimeoutMs: 100, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}}});
-    assert.equal(delivered.published, 1);
-    assert.equal(deliverySpan.isRecording(), false);
+    const messages = [outboxFixture("trace-relay-00", "trace-aggregate-00", 1), outboxFixture("trace-relay-01", "trace-aggregate-01", 1)];
+    messages[1].traceparent = `01-${"c".repeat(32)}-${"d".repeat(16)}-01`;
+    messages[1].envelope.traceparent = messages[1].traceparent;
+    for (const message of messages) {
+      await withTransaction(deliveryDatabase, {mode: "background"}, transaction => outbox.enqueue(transaction, message));
+      let deliverySpan;
+      const delivered = await relayOutboxBatch(outbox, deliveryDatabase, async () => {
+        deliverySpan = trace.getSpan(otelContext.active());
+        assert.ok(deliverySpan);
+        assert.equal(deliverySpan.spanContext().traceId, message.traceparent.slice(3, 35));
+        assert.notEqual(deliverySpan.spanContext().spanId, message.traceparent.slice(36, 52));
+        return {kind: "ack"};
+      }, {nowMs: 100, leaseOwner: message.messageId, policy: {leaseMs: 1000, sendTimeoutMs: 100, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}}});
+      assert.equal(delivered.published, 1);
+      assert.equal(deliverySpan.isRecording(), false);
+    }
     endOwnerSpan();
     await client.close();
     await telemetry.stop(new AbortController().signal);

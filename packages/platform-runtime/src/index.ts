@@ -122,6 +122,7 @@ export function completeRuntimeRequestTelemetry(
   const span = request.runtimeSpan;
   if (span === null) return;
   if (statusCode !== undefined) span.setAttribute("http.response.status_code", statusCode);
+  if (statusCode !== undefined && statusCode >= 500) span.setStatus({code: SpanStatusCode.ERROR});
   span.setAttribute("outcome", outcome);
   const startedAt = runtimeRequestStarts.get(span);
   runtimeRequestStarts.delete(span);
