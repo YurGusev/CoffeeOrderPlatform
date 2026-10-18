@@ -47,6 +47,8 @@ digest. Exact npm/image/probe refs берутся только из BOM. Install
 Node пишет Pino JSON в stdout и экспортирует OTel traces/metrics. Fastify
 связывает route template, request и проверенный W3C context. Секреты, PII,
 headers/body/query/SQL/provider payload редактируются до serialization.
+HTTP client span заканчивается после получения response headers; stream body
+остаётся у caller, поэтому его чтение, отмена и ошибки происходят после span.
 Correlation/entity refs относятся к logs/traces, не metric labels. Native nginx
 сохраняет собственный transport logger и не импортирует Node SDK. Он передаёт
 валидные W3C context и client correlation UUID авторизатору; собственный

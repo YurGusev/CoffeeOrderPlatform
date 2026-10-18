@@ -195,8 +195,13 @@ void test("runtime continues valid W3C parent and async request context into a s
   const parentSpanId = "bbbbbbbbbbbbbbbb";
   let observed;
   const app = await createRuntime(identity("otel-context-test", {
+    deadlineMs: 50,
     resources: [telemetry],
     configure: (instance) => {
+      instance.get("/telemetry-deadline", async (request) => {
+        await new Promise(resolve => request.runtimeContext.signal.addEventListener("abort", resolve, {once: true}));
+        return {status: "aborted"};
+      });
       instance.get("/otel", async (request) => {
         await new Promise(resolve => setTimeout(resolve, 1));
         const active = trace.getSpan(otelContext.active())?.spanContext();
@@ -222,7 +227,7 @@ void test("runtime continues valid W3C parent and async request context into a s
     await new Promise(resolve => collector.close(resolve));
   });
   const response = await app.inject({method: "GET", url: "/otel", headers: {
-    traceparent: `00-${traceId}-${parentSpanId}-01`,
+    traceparent: `01-${traceId}-${parentSpanId}-01`,
     "x-correlation-id": "11111111-1111-4111-8111-111111111111",
   }});
   assert.equal((await app.inject("/health/ready")).statusCode, 200);
@@ -232,6 +237,7 @@ void test("runtime continues valid W3C parent and async request context into a s
   assert.notEqual(observed.active.spanId, parentSpanId);
   assert.equal(observed.correlationId, "11111111-1111-4111-8111-111111111111");
   assert.equal(response.json().traceId, traceId);
+  await assert.rejects(fetch(`http://127.0.0.1:${addressOf(app).port}/telemetry-deadline`));
   await app.runtimeController.closeRuntime("SIGTERM");
   await new Promise(resolve => collector.close(resolve));
   assert.ok(exportedSpans.includes("redaction-safe-marker-span"), "the span carrying redaction canaries was exported");
@@ -242,6 +248,8 @@ void test("runtime continues valid W3C parent and async request context into a s
     assert.ok(exportedMetrics.includes(Buffer.from(metric)), `OTLP export contains ${metric}`);
   for (const attribute of ["http.request.method", "http.route", "http.response.status_class", "/otel", "2xx", "4xx"])
     assert.ok(exportedMetrics.includes(Buffer.from(attribute)), `request metrics include ${attribute}`);
+  for (const attribute of ["outcome", "deadline_exceeded", "other"])
+    assert.ok(exportedMetrics.includes(Buffer.from(attribute)), `aborted request metrics include ${attribute}`);
 });
 void test("telemetry span queue drops at its configured bound and records exporter failures", async (t) => {
   const exportRequests = [];
@@ -905,6 +913,8 @@ void test("non-cooperative handler stays tracked after disconnect and forces fai
   assert.equal(signal.reason.code, "RUNTIME_CLIENT_DISCONNECTED");
   await waitFor(() => spans[0]?.ends === 1);
   assert.equal(spans[0].ends, 1);
+  assert.equal(spans[0].attributes.outcome, "client_aborted");
+  assert.equal(spans[0].attributes["http.response.status_code"], undefined);
   const result = await stopApp(app);
   assert.equal(result.status, "fail-stop");
   assert.deepEqual(result.pending, ["handlers"]);
@@ -926,6 +936,8 @@ void test("request deadline finishes telemetry for a non-cooperative handler", a
   await waitFor(() => signal?.aborted && spans[0]?.ends === 1);
   assert.equal(signal.reason.code, "RUNTIME_REQUEST_DEADLINE");
   assert.equal(spans[0].ends, 1);
+  assert.equal(spans[0].attributes.outcome, "deadline_exceeded");
+  assert.equal(spans[0].attributes["http.response.status_code"], undefined);
   assert.equal((await stopApp(app)).status, "fail-stop");
 });
 

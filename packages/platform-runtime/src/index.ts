@@ -114,17 +114,23 @@ export type RuntimeIdentity = RuntimeComposition &
 const runtimeRequestStarts = new WeakMap<Span, number>();
 const RUNTIME_HTTP_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
 
-export function completeRuntimeRequestTelemetry(request: Pick<FastifyRequest, "runtimeSpan" | "method" | "routeOptions">, statusCode: number): void {
+export function completeRuntimeRequestTelemetry(
+  request: Pick<FastifyRequest, "runtimeSpan" | "method" | "routeOptions">,
+  statusCode: number | undefined,
+  outcome: "completed" | "deadline_exceeded" | "client_aborted" = "completed",
+): void {
   const span = request.runtimeSpan;
   if (span === null) return;
-  span.setAttribute("http.response.status_code", statusCode);
+  if (statusCode !== undefined) span.setAttribute("http.response.status_code", statusCode);
+  span.setAttribute("outcome", outcome);
   const startedAt = runtimeRequestStarts.get(span);
   runtimeRequestStarts.delete(span);
   if (startedAt !== undefined) {
     const attributes = {
       "http.request.method": RUNTIME_HTTP_METHODS.has(request.method) ? request.method : "_OTHER",
       "http.route": request.routeOptions.url ?? "unknown",
-      "http.response.status_class": Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599 ? `${Math.floor(statusCode / 100)}xx` : "other",
+      "http.response.status_class": statusCode !== undefined && Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599 ? `${Math.floor(statusCode / 100)}xx` : "other",
+      outcome,
     };
     recordRuntimeHttpRequest(nodePerformance.now() - startedAt, attributes);
   }
@@ -409,7 +415,7 @@ export async function createRuntime(
   const sockets = new Set<Socket>();
   const requests = new Set<AbortController>();
   const handlers = new Set<Promise<unknown>>();
-  const requestCleanup = new WeakMap<FastifyRequest, () => void>();
+  const requestCleanup = new WeakMap<FastifyRequest, (outcome?: "completed" | "deadline_exceeded" | "client_aborted") => void>();
   const pending = new Set<string>();
   const eventLoopDelay = monitorEventLoopDelay({resolution: 20});
   eventLoopDelay.enable();
@@ -655,7 +661,7 @@ export async function createRuntime(
       handlers.add(work);
       return work.finally(() => {
         handlers.delete(work);
-        if (reply.raw.destroyed) requestCleanup.get(request)?.();
+        if (reply.raw.destroyed) requestCleanup.get(request)?.("client_aborted");
       });
     };
   });
@@ -665,8 +671,8 @@ export async function createRuntime(
     setCorrelationResponseHeaders(reply, correlation);
     let parent = otelContext.active();
     if (correlation.traceparent !== undefined) {
-      const [version, traceId, spanId, flags] = correlation.traceparent.split("-");
-      if (version === "00" && traceId !== undefined && spanId !== undefined && flags !== undefined)
+      const [, traceId, spanId, flags] = correlation.traceparent.split("-");
+      if (traceId !== undefined && spanId !== undefined && flags !== undefined)
         parent = trace.setSpanContext(parent, {traceId, spanId, traceFlags: Number.parseInt(flags, 16), isRemote: true});
     }
     const method = RUNTIME_HTTP_METHODS.has(request.method) ? request.method : "_OTHER";
@@ -712,8 +718,8 @@ export async function createRuntime(
         ? deadlineMs
         : (identity.deadlineProfiles?.[profile] ?? null);
     let accepted = false;
-    const cleanup = (): void => {
-      if (!reply.raw.writableFinished) completeRuntimeRequestTelemetry(request, reply.statusCode);
+    const cleanup = (outcome: "completed" | "deadline_exceeded" | "client_aborted" = "completed"): void => {
+      if (!reply.raw.writableFinished) completeRuntimeRequestTelemetry(request, reply.raw.headersSent ? reply.statusCode : undefined, outcome);
       clearTimeout(timer);
       requests.delete(abort);
       requestCleanup.delete(request);
@@ -725,14 +731,14 @@ export async function createRuntime(
     const inputClosed = (): void => {
       if (!request.raw.complete && !accepted) {
         abort.abort(new RuntimeError("RUNTIME_CLIENT_DISCONNECTED"));
-        cleanup();
+        cleanup("client_aborted");
       }
     };
     const responseClosed = (): void => {
       if (reply.raw.writableFinished) cleanup();
       else if (!accepted) {
         abort.abort(new RuntimeError("RUNTIME_CLIENT_DISCONNECTED"));
-        cleanup();
+        cleanup("client_aborted");
       }
     };
     const timer =
@@ -740,8 +746,8 @@ export async function createRuntime(
         ? undefined
         : setTimeout(() => {
             abort.abort(new RuntimeError("RUNTIME_REQUEST_DEADLINE"));
+            cleanup("deadline_exceeded");
             reply.raw.destroy();
-            cleanup();
           }, budget);
     timer?.unref();
     request.runtimeContext = {
@@ -773,7 +779,7 @@ export async function createRuntime(
     done();
   });
   app.addHook("onSend", async (request, reply, payload) => {
-    if (reply.raw.destroyed) requestCleanup.get(request)?.();
+    if (reply.raw.destroyed) requestCleanup.get(request)?.("client_aborted");
     return payload;
   });
   const checkDependency = (

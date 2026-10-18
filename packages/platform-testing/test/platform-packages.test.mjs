@@ -157,7 +157,10 @@ void test("observability preserves valid correlation and W3C trace context only"
     causationId: "msg_1",
   });
   assert.equal(isTraceparent(traceparent), true);
-  assert.equal(isTraceparent(`01-${"a".repeat(32)}-${"b".repeat(16)}-01`), false);
+  const futureVersionTraceparent = `01-${"a".repeat(32)}-${"b".repeat(16)}-01`;
+  assert.equal(isTraceparent(futureVersionTraceparent), true);
+  assert.equal(createCorrelationContext({traceparent: futureVersionTraceparent}).traceparent, futureVersionTraceparent);
+  assert.equal(isTraceparent(`ff-${"a".repeat(32)}-${"b".repeat(16)}-01`), false);
   assert.equal(isTraceparent(`00-${"A".repeat(32)}-${"b".repeat(16)}-01`), false);
   assert.equal(
     isTraceparent(`00-${"0".repeat(32)}-bbbbbbbbbbbbbbbb-01`),
@@ -729,11 +732,16 @@ void test("Kafka decode precedes Inbox; only known DB commit permits offset, dup
   const order=[]; let decision="acquired", tag="COMMIT", commits=0;
   const {database}=mockDatabase(t,sql=>{if(sql==="COMMIT"){order.push("db-commit");return{rows:[],rowCount:0,command:tag};}});
   const binding={processing:"durable",database,inbox:{
-    begin:async(_tx, message)=>{const envelope=kafkaEnvelope();assert.deepEqual(message.payload,envelope);assert.equal(message.payloadHash,canonicalRequestHash(envelope));assert.notEqual(message.payloadHash,canonicalRequestHash(envelope.payload));order.push("inbox");return{kind:decision};},
+    begin:async(_tx, message)=>{const envelope={...kafkaEnvelope(),traceparent:message.payload.traceparent};assert.deepEqual(message.payload,envelope);assert.equal(message.payloadHash,canonicalRequestHash(envelope));assert.notEqual(message.payloadHash,canonicalRequestHash(envelope.payload));order.push("inbox");return{kind:decision};},
     markProcessed:async()=>{order.push("processed");},
     quarantineRecord:async()=>{order.push("quarantine");return "created";},
   },decode:value=>{order.push("decode");return parseEnvelope(value,p=>p);},handle:async tx=>{assert.equal(tx.state(),"Active");order.push("owner+outbox");}};
   const options={runtime:"orders-aroma-preparation",groupId:"orders-aroma-preparation-v1",topics:[kafkaRecord().topic],binding,leaseMs:30000,maxMessageBytes:1048576,signal:new AbortController().signal,commit:async()=>{commits++;order.push("offset");}};
+  const futureVersionEnvelope={...kafkaEnvelope(),traceparent:`01-${"a".repeat(32)}-${"b".repeat(16)}-01`};
+  await processKafkaRecord({...kafkaRecord(),value:futureVersionEnvelope},options);
+  assert.deepEqual(order,["decode","inbox","owner+outbox","processed","db-commit","offset"]);
+  assert.equal(order.includes("quarantine"),false);
+  order.length=0;
   await processKafkaRecord(kafkaRecord(),options);
   assert.deepEqual(order,["decode","inbox","owner+outbox","processed","db-commit","offset"]);
   for(const kind of ["duplicate","conflict"]){decision=kind;order.length=0;await processKafkaRecord(kafkaRecord(),options);assert.ok(!order.includes("owner+outbox"));assert.equal(order.includes("quarantine"),kind==="conflict");}

@@ -35,11 +35,32 @@ void test("native fetch enforces the fixed origin and returns responses", async 
 void test("active telemetry preserves caller traceparent and does not add one when absent", async () => {
   const receivedTraceparents = new Map();
   let exportedTraceRequests = 0;
+  let exportedSpans = Buffer.alloc(0);
+  let delayedBodyEnded = false;
+  let finishDelayedBody;
   const server = createServer((request, response) => {
     if (request.url === "/v1/traces" || request.url === "/v1/metrics") {
       if (request.url === "/v1/traces") exportedTraceRequests += 1;
-      request.on("end", () => {response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();});
+      const chunks = [];
+      request.on("data", chunk => chunks.push(chunk));
+      request.on("end", () => {
+        if (request.url === "/v1/traces") exportedSpans = Buffer.concat([exportedSpans, Buffer.concat(chunks)]);
+        response.writeHead(200, {"content-type": "application/x-protobuf"});
+        response.end();
+      });
       request.resume();
+      return;
+    }
+    if (request.url === "/delayed-body") {
+      response.writeHead(200);
+      response.write("first");
+      finishDelayedBody = () => {delayedBodyEnded = true; response.end("last");};
+      return;
+    }
+    if (request.url === "/body-error") {
+      response.writeHead(200);
+      response.write("partial");
+      setTimeout(() => response.destroy(), 50);
       return;
     }
     receivedTraceparents.set(request.url, request.headers.traceparent);
@@ -64,7 +85,23 @@ void test("active telemetry preserves caller traceparent and does not add one wh
     assert.equal(receivedTraceparents.get("/signed"), signedTraceparent);
     assert.equal(receivedTraceparents.has("/absent"), true);
     assert.equal(receivedTraceparents.get("/absent"), undefined);
+    const exportsBeforeDelayedBody = exportedTraceRequests;
+    const delayed = await client.fetch("/delayed-body", {method: "POST"});
+    assert.equal(delayed.status, 200);
+    assert.equal(delayed.bodyUsed, false);
+    assert.equal(delayedBodyEnded, false, "the server body remains open after fetch resolves");
+    await telemetry.stop(AbortSignal.timeout(2000));
+    assert.ok(exportedTraceRequests > exportsBeforeDelayedBody, "the client span exports after response headers while the body is open");
+    assert.ok(exportedSpans.includes(Buffer.from("HTTP POST")), "the ended client span was exported before the body was read");
+    assert.equal(delayed.bodyUsed, false, "fetch leaves the response body caller-owned");
+    assert.equal(delayedBodyEnded, false, "flushing telemetry does not consume the response body");
+    finishDelayedBody();
+    assert.equal(await delayed.text(), "firstlast");
+    const bodyError = await client.fetch("/body-error");
+    assert.equal(bodyError.status, 200);
+    await assert.rejects(bodyError.text());
   } finally {
+    if (!delayedBodyEnded) finishDelayedBody?.();
     await client.close();
     await telemetry.stop(AbortSignal.timeout(2000));
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

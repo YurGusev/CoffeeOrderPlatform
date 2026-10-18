@@ -592,7 +592,7 @@ export function isTraceparent(value: string): boolean {
   if (!TRACEPARENT_PATTERN.test(value)) return false;
   const [version, traceId, parentId] = value.split("-");
   return (
-    version === "00" &&
+    version !== "ff" &&
     traceId !== "0".repeat(32) &&
     parentId !== "0".repeat(16)
   );

@@ -153,8 +153,13 @@ function localizeReadPath(path, root) {
 }
 
 export function telemetryHostPort(config) {
-  const endpoint = new URL(config.telemetry.collector.otlpEndpoint);
-  if (endpoint.protocol !== 'http:' || endpoint.hostname !== 'otel-collector' || endpoint.port !== '4318' || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) fail('invalid telemetry ingest endpoint');
+  let endpoint;
+  try {
+    endpoint = new URL(config.telemetry.collector.otlpEndpoint);
+  } catch {
+    fail('invalid telemetry ingest endpoint');
+  }
+  if (endpoint.protocol !== 'http:' || endpoint.hostname !== 'otel-collector' || !endpoint.port || Number(endpoint.port) < 1 || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) fail('invalid telemetry ingest endpoint');
   return endpoint.host;
 }
 
