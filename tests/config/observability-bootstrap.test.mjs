@@ -480,6 +480,14 @@ void test('Collector config accepts only exact selected log files and bounds exp
     collectorConfigPath: '/dev/shm/collector.yaml',
     openObserveDataVolume: 'coffee-test-openobserve-data',
   });
+  const alternateOpenObservePort = createComposeOverride({
+    config: {...sample, telemetry: {...sample.telemetry, openObserve: {...sample.telemetry.openObserve, endpoint: 'http://openobserve:5081'}}},
+    imageRefs: {otelCollectorImage: 'otel-collector@sha256:' + 'a'.repeat(64), openObserveImage: 'openobserve@sha256:' + 'b'.repeat(64), bootstrapProbeSha256: 'c'.repeat(64)},
+    logFiles: logs,
+    collectorConfigPath: '/dev/shm/collector.yaml',
+    openObserveDataVolume: 'coffee-test-openobserve-data',
+  });
+  assert.equal(alternateOpenObservePort.services.openobserve.environment.ZO_HTTP_PORT, '5081');
   assert.ok(compose.services['otel-collector'].networks.includes('coffee_edge_backend'),
     'Collector stays in the existing edge trust zone used by edge-nginx');
   assert.equal(compose.services['otel-collector'].mem_limit, '512m');

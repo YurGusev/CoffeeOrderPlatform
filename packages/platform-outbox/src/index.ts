@@ -498,6 +498,7 @@ export async function relayOutboxBatch(store: OutboxStore, database: Database, s
     const outcome = await Promise.race([sendPromise, timeoutPromise]);
     if (timer !== undefined) clearTimeout(timer);
     delivery.setAttribute("messaging.outbox.result", outcome.kind);
+    if (outcome.kind !== "ack") delivery.setStatus({code: SpanStatusCode.ERROR});
     if (outcome.kind === "ack") {
       await withTransaction(database, txOptions, transaction => store.finalize(transaction, claim.message.messageId, claim.leaseOwner, claim.leaseToken));
       return {claimed: 0, published: 1, failed: 0, unknown: 0, quarantined: 0};
@@ -530,6 +531,7 @@ export async function relayOutboxBatch(store: OutboxStore, database: Database, s
   }, {claimed: claims.length, published: 0, failed: 0, unknown: 0, quarantined: 0});
   span.setAttributes({"messaging.outbox.claimed": result.claimed, "messaging.outbox.published": result.published, "messaging.outbox.failed": result.failed, "messaging.outbox.unknown": result.unknown, "messaging.outbox.quarantined": result.quarantined});
   span.setAttribute("messaging.outbox.result", result.unknown > 0 ? "unknown" : result.failed > 0 ? "failed" : "completed");
+  if (result.unknown > 0 || result.failed > 0) span.setStatus({code: SpanStatusCode.ERROR});
   return result;
   } catch (error) {
     span.setAttribute("messaging.outbox.result", "failed");

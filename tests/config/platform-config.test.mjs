@@ -17,6 +17,7 @@ import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
 
 import { parsePlatformConfig, PlatformConfigError, RUNTIME_NAMES } from "../../packages/platform-config/src/index.ts";
+import {loadPlatformConfig} from "../../scripts/config-lib.mjs";
 import {readRoutes, render} from "../../tools/nginx/generate.mjs";
 import { validateAllPermissionManifests } from "../../scripts/permission-audit.mjs";
 
@@ -92,6 +93,14 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   const alternateCollectorPort = structuredClone(document);
   alternateCollectorPort.telemetry.collector.otlpEndpoint = "http://otel-collector:4319";
   assert.equal(parsePlatformConfig(alternateCollectorPort).telemetry.collector.otlpEndpoint, "http://otel-collector:4319");
+  const collectorRootPath = structuredClone(document);
+  collectorRootPath.telemetry.collector.otlpEndpoint += "/";
+  assert.equal(parsePlatformConfig(collectorRootPath).telemetry.collector.otlpEndpoint, "http://otel-collector:4318/");
+  for (const [first, second] of [["otlpEndpoint", "healthEndpoint"], ["otlpEndpoint", "metricsEndpoint"], ["healthEndpoint", "metricsEndpoint"]]) {
+    const collidingCollectorPorts = structuredClone(document);
+    collidingCollectorPorts.telemetry.collector[first] = collidingCollectorPorts.telemetry.collector[second];
+    assert.throws(() => parsePlatformConfig(collidingCollectorPorts), PlatformConfigError, `${first}/${second}`);
+  }
   const minimumTelemetryDiskBytes = 256 * 1024 * 1024;
   const minimumDiskConfig = structuredClone(document);
   minimumDiskConfig.telemetry.openObserve.maxDiskBytes = minimumTelemetryDiskBytes;
@@ -104,11 +113,35 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
   const collectorEndpointPattern = new RegExp(platformSchema.$defs.telemetry.properties.collector.properties.otlpEndpoint.pattern, "u");
   assert.equal(collectorEndpointPattern.test("http://otel-collector:4319"), true);
   assert.equal(collectorEndpointPattern.test("http://otel-collector:65535"), true);
-  for (const endpoint of ["http://other-host:4318", "http://OTEL-COLLECTOR:4318", "http://otel-collector", "http://otel-collector:0", "http://otel-collector:80", "http://otel-collector:65536", "http://otel-collector:4318?target=elsewhere", "http://otel-collector:4318?", "http://otel-collector:4318#"])
+  assert.equal(collectorEndpointPattern.test("http://otel-collector:4318/"), true);
+  for (const endpoint of ["http://other-host:4318", "http://OTEL-COLLECTOR:4318", "http://otel-collector", "http://otel-collector:0", "http://otel-collector:80", "http://otel-collector:65536", "http://otel-collector:4318/v1/traces", "http://otel-collector:4318//", "http://otel-collector:4318?target=elsewhere", "http://otel-collector:4318?", "http://otel-collector:4318#"])
     assert.equal(collectorEndpointPattern.test(endpoint), false, endpoint);
   const genericOpenObserve = structuredClone(document);
-  genericOpenObserve.telemetry.openObserve.endpoint = "http://openobserve.internal:5080";
-  assert.equal(parsePlatformConfig(genericOpenObserve).telemetry.openObserve.endpoint, "http://openobserve.internal:5080");
+  genericOpenObserve.telemetry.openObserve.endpoint = "http://openobserve:5081";
+  assert.equal(parsePlatformConfig(genericOpenObserve).telemetry.openObserve.endpoint, "http://openobserve:5081");
+  const openObserveEndpointPattern = new RegExp(platformSchema.$defs.telemetry.properties.openObserve.properties.endpoint.pattern, "u");
+  assert.equal(openObserveEndpointPattern.test("http://openobserve:5080"), true);
+  assert.equal(openObserveEndpointPattern.test("http://openobserve:5081"), true);
+  for (const endpoint of ["http://openobserve.internal:5080", "http://openobserve", "http://openobserve:0", "http://openobserve:80", "http://openobserve:65536", "http://openobserve:5080/", "http://openobserve:5080/api", "http://openobserve:5080?", "http://openobserve:5080?next=x", "http://openobserve:5080#", "http://openobserve:5080#fragment", "http://user@openobserve:5080", "http://openobserve:5080@other.internal"])
+    assert.equal(openObserveEndpointPattern.test(endpoint), false, endpoint);
+  for (const endpoint of ["http://openobserve.internal:5080", "http://openobserve", "http://openobserve:0", "http://openobserve:80", "http://openobserve:65536", "http://openobserve:5080/", "http://openobserve:5080/api", "http://openobserve:5080?", "http://openobserve:5080?next=x", "http://openobserve:5080#", "http://openobserve:5080#fragment", "http://user@openobserve:5080", "http://openobserve:5080@other.internal"]) {
+    const invalidOpenObserveEndpoint = structuredClone(document);
+    invalidOpenObserveEndpoint.telemetry.openObserve.endpoint = endpoint;
+    assert.throws(() => parsePlatformConfig(invalidOpenObserveEndpoint), PlatformConfigError, endpoint);
+  }
+  const organizationPattern = new RegExp(platformSchema.$defs.telemetry.properties.openObserve.properties.organization.pattern, "u");
+  for (const organization of ["default", "_meta", "acme-corp", "team_1", "Org2"]) {
+    const validOrganization = structuredClone(document);
+    validOrganization.telemetry.openObserve.organization = organization;
+    assert.equal(organizationPattern.test(organization), true, organization);
+    assert.equal(parsePlatformConfig(validOrganization).telemetry.openObserve.organization, organization);
+  }
+  for (const organization of ["", "coffee/test", "team.one", "team one", "кофе", "~", "%", "?", "#", `team${String.fromCharCode(1)}1`]) {
+    const invalidOrganization = structuredClone(document);
+    invalidOrganization.telemetry.openObserve.organization = organization;
+    assert.equal(organizationPattern.test(organization), false, organization);
+    assert.throws(() => parsePlatformConfig(invalidOrganization), PlatformConfigError, organization);
+  }
   assert.equal(parsed.telemetry.namespace, "coffee-platform");
   assert.deepEqual([
     parsed.telemetry.collector.memoryLimitMiB,
@@ -143,6 +176,9 @@ void test("telemetry config is strict, immutable, and rejects missing or inconsi
       {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector"}}},
       {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:0"}}},
       {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:65536"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:80"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318/v1/traces"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318//"}}},
       {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318?target=elsewhere"}}},
       {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318?"}}},
       {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318#"}}},
@@ -182,6 +218,39 @@ void test("RED: config loader rejects enabling OpenObserve external requests", a
     } finally {
       await rm(root, {recursive: true, force: true});
     }
+  }
+});
+
+void test("RED: config loader rejects colliding Collector listener ports", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), {json: true});
+    document.telemetry.collector.metricsEndpoint = document.telemetry.collector.otlpEndpoint;
+    await writeFile(path, dumpYaml(document), "utf8");
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-PLATFORM-CONFIG/u);
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-PLATFORM-CONFIG/u);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+void test("RED: config loader and parser reject OpenObserve hosts outside its private service alias", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), {json: true});
+    document.telemetry.openObserve.endpoint = "http://openobserve.internal:5080";
+    await writeFile(path, dumpYaml(document), "utf8");
+    assert.throws(() => parsePlatformConfig(document), PlatformConfigError);
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-SCHEMA/u);
+  } finally {
+    await rm(root, {recursive: true, force: true});
   }
 });
 

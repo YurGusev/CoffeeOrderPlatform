@@ -44,6 +44,12 @@ Required `config/platform.yaml.telemetry` задаёт endpoints, streams, оч�
 digest. Exact npm/image/probe refs берутся только из BOM. Install, image build
 и profile checker проверяют BOM до materialization.
 
+Collector endpoints используют `http://otel-collector:<port>` с пустым или
+корневым путём; явные порты OTLP, health и metrics должны различаться.
+OpenObserve endpoint — `http://openobserve:<port>` с явным non-default портом, без завершающего
+`/`, пути, query или fragment. `organization` содержит только ASCII-буквы,
+цифры, `-` и `_`, как требует закреплённый OpenObserve.
+
 Node пишет Pino JSON в stdout и экспортирует OTel traces/metrics. Fastify
 связывает route template, request и проверенный W3C context. Секреты, PII,
 headers/body/query/SQL/provider payload редактируются до serialization.
@@ -53,6 +59,8 @@ HTTP client span заканчивается после получения respon
 в Inbox после checkout owner DB transaction; время handler в эту метрику не
 входит. `messaging.kafka.event.age` отдельно измеряет возраст события от
 `occurredAt`.
+Возвращённые исходы Outbox `unknown` и `failed` помечают spans доставки и poll
+как ошибки; исход `ack` оставляет статус span unset.
 Correlation/entity refs относятся к logs/traces, не metric labels. Native nginx
 сохраняет собственный transport logger и не импортирует Node SDK. Он передаёт
 валидные W3C context и client correlation UUID авторизатору; собственный

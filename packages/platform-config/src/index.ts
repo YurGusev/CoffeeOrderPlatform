@@ -1332,8 +1332,15 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   const collectorEndpoint = (input: unknown, field: string): string => {
     const result = endpoint(input, field);
     const parsed = new URL(result);
-    if (!result.startsWith("http://otel-collector:") || parsed.hostname !== "otel-collector" || !parsed.port || Number(parsed.port) < 1 || parsed.search || result.includes("?") || result.includes("#"))
-      throw new PlatformConfigError(field, "ожидался endpoint Collector с явным портом 1..65535 без query");
+    if (!result.startsWith("http://otel-collector:") || parsed.hostname !== "otel-collector" || !parsed.port || Number(parsed.port) < 1 || parsed.pathname !== "/" || parsed.search || result.includes("?") || result.includes("#"))
+      throw new PlatformConfigError(field, "ожидался HTTP origin Collector с явным портом 1..65535 и только корневым путём");
+    return result;
+  };
+  const openObserveEndpoint = (input: unknown, field: string): string => {
+    const result = endpoint(input, field);
+    const parsed = new URL(result);
+    if (parsed.hostname !== "openobserve" || !parsed.port || Number(parsed.port) < 1 || parsed.pathname !== "/" || result.endsWith("/") || parsed.search || result.includes("?") || parsed.hash || result.includes("#") || result.includes("@"))
+      throw new PlatformConfigError(field, "ожидался HTTP origin OpenObserve по приватному alias openobserve с явным non-default портом");
     return result;
   };
   const namespace = stringValue(source["namespace"], `${path}.namespace`);
@@ -1363,8 +1370,18 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   const bootstrapEmail = stringValue(openObserve["bootstrapEmail"], `${path}.openObserve.bootstrapEmail`);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(bootstrapEmail))
     throw new PlatformConfigError(`${path}.openObserve.bootstrapEmail`, "ожидался email оператора bootstrap");
+  const organization = stringValue(openObserve["organization"], `${path}.openObserve.organization`);
+  if (!/^[A-Za-z0-9_-]+$/u.test(organization))
+    throw new PlatformConfigError(`${path}.openObserve.organization`, "ожидался идентификатор организации OpenObserve из букв, цифр, дефиса или подчёркивания");
   const collectorGuardMiB = collectorValues["containerMemoryMiB"]! - collectorValues["memorySpikeMiB"]!;
   const collectorContainerBytes = collectorValues["containerMemoryMiB"]! * 1024 * 1024;
+  const collectorPorts = [
+    Number(new URL(collectorEndpoint(collector["otlpEndpoint"], `${path}.collector.otlpEndpoint`)).port),
+    Number(new URL(collectorEndpoint(collector["healthEndpoint"], `${path}.collector.healthEndpoint`)).port),
+    Number(new URL(collectorEndpoint(collector["metricsEndpoint"], `${path}.collector.metricsEndpoint`)).port),
+  ];
+  if (new Set(collectorPorts).size !== collectorPorts.length)
+    throw new PlatformConfigError(`${path}.collector`, "порты OTLP, health и metrics Collector должны различаться");
   if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorGuardMiB <= collectorValues["memoryLimitMiB"]! || !Number.isSafeInteger(collectorContainerBytes) || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]! || openObserveBufferBudgetInvalid)
     throw new PlatformConfigError(path, "telemetry budgets are inconsistent");
   if (alerts["version"] !== 1) throw new PlatformConfigError(`${path}.alerts.version`, "поддерживается только версия 1");
@@ -1373,7 +1390,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
     collector: Object.freeze({otlpEndpoint: collectorEndpoint(collector["otlpEndpoint"], `${path}.collector.otlpEndpoint`), healthEndpoint: collectorEndpoint(collector["healthEndpoint"], `${path}.collector.healthEndpoint`), metricsEndpoint: collectorEndpoint(collector["metricsEndpoint"], `${path}.collector.metricsEndpoint`), ...collectorValues} as TelemetryConfig["collector"]),
     producer: Object.freeze(producerValues as TelemetryConfig["producer"]),
     logging: Object.freeze(loggingValues as TelemetryConfig["logging"]),
-    openObserve: Object.freeze({endpoint: endpoint(openObserve["endpoint"], `${path}.openObserve.endpoint`), organization: stringValue(openObserve["organization"], `${path}.openObserve.organization`), bootstrapEmail, validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, streams: Object.freeze({logs: stringValue(streams["logs"], `${path}.openObserve.streams.logs`), traces: stringValue(streams["traces"], `${path}.openObserve.streams.traces`), metrics: stringValue(streams["metrics"], `${path}.openObserve.streams.metrics`)}), ...storageValues, diskWatermarkPercent} as TelemetryConfig["openObserve"]),
+    openObserve: Object.freeze({endpoint: openObserveEndpoint(openObserve["endpoint"], `${path}.openObserve.endpoint`), organization, bootstrapEmail, validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, streams: Object.freeze({logs: stringValue(streams["logs"], `${path}.openObserve.streams.logs`), traces: stringValue(streams["traces"], `${path}.openObserve.streams.traces`), metrics: stringValue(streams["metrics"], `${path}.openObserve.streams.metrics`)}), ...storageValues, diskWatermarkPercent} as TelemetryConfig["openObserve"]),
     alerts: Object.freeze({version: 1, evaluationIntervalMs: 60_000, notReady: alert("notReady"), consumerLag: alert("consumerLag"), outboxOldestAge: alert("outboxOldestAge"), unknownOutcome: alert("unknownOutcome"), sseDropRate: alert("sseDropRate")} as TelemetryConfig["alerts"]),
   });
 }

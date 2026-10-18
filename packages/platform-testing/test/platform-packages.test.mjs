@@ -7,7 +7,7 @@ import {createServer as createHttpServer} from "node:http";
 import {EventEmitter} from "node:events";
 import {Readable, Writable} from "node:stream";
 import pg from "pg";
-import {context as otelContext, metrics, trace} from "@opentelemetry/api";
+import {context as otelContext, metrics, SpanStatusCode, trace} from "@opentelemetry/api";
 import {createRuntime} from "../../platform-runtime/dist/index.js";
 import {
   parsePlatformConfig,
@@ -1006,6 +1006,23 @@ void test("SQL Outbox preserves stable messageId, recovers expired lease and fen
 
   const relayMessage = outboxFixture("relay-stable-id", "aggregate-relay", 1);
   await withTransaction(database, {mode: "background"}, transaction => store.enqueue(transaction, relayMessage));
+  const outboxSpans = [];
+  const originalGetTracer = Reflect.get(trace, "getTracer");
+  trace.getTracer = function(name, ...args) {
+    const tracer = originalGetTracer.call(this, name, ...args);
+    if (name !== "coffee-platform.outbox") return tracer;
+    return {...tracer, startSpan(spanName, ...spanArgs) {
+      const span = tracer.startSpan(spanName, ...spanArgs);
+      const captured = {name: spanName, statuses: [], ends: 0};
+      const setStatus = span.setStatus.bind(span);
+      const end = span.end.bind(span);
+      span.setStatus = status => {captured.statuses.push(status); return setStatus(status);};
+      span.end = (...endArgs) => {captured.ends++; return end(...endArgs);};
+      outboxSpans.push(captured);
+      return span;
+    }};
+  };
+  t.after(() => {trace.getTracer = originalGetTracer;});
   const sent = [];
   const relayResult = await relayOutboxBatch(store, database, async (claim, signal) => {
     assert.equal(signal.aborted, false);
@@ -1015,6 +1032,11 @@ void test("SQL Outbox preserves stable messageId, recovers expired lease and fen
   assert.deepEqual(sent, [{messageId: relayMessage.messageId, envelopeMessageId: relayMessage.messageId, occurredAt: relayMessage.occurredAt, causationId: null}]);
   assert.deepEqual(relayResult, {claimed: 1, published: 1, failed: 0, unknown: 0, quarantined: 0});
   assert.equal(snapshot().outbox.get(relayMessage.messageId).state, "Published");
+  assert.deepEqual(outboxSpans.map(({name, statuses, ends}) => ({name, statuses, ends})), [
+    {name: "Outbox.poll", statuses: [], ends: 1},
+    {name: "Outbox.relay", statuses: [], ends: 1},
+  ]);
+  outboxSpans.length = 0;
 
   // A batch cannot start more native sends than maxInFlight, even with more ready rows.
   for (const id of ["bounded-a", "bounded-b", "bounded-c"]) {
@@ -1037,6 +1059,38 @@ void test("SQL Outbox preserves stable messageId, recovers expired lease and fen
   }
   assert.deepEqual(await boundedBatch, {claimed: 2, published: 0, failed: 0, unknown: 2, quarantined: 0});
   assert.equal(activeSends, 0);
+  assert.equal(outboxSpans.filter(span => span.name === "Outbox.poll").length, 1);
+  assert.equal(outboxSpans.filter(span => span.name === "Outbox.relay").length, 2);
+  assert.ok(outboxSpans.every(span => span.statuses.length === 1 && span.statuses[0].code === SpanStatusCode.ERROR && span.ends === 1));
+
+  outboxSpans.length = 0;
+  const drainedResult = await relayOutboxBatch(store, database, async () => ({kind: "ack"}), {
+    nowMs: 301, leaseOwner: "publisher-drain", policy: {leaseMs: 100, sendTimeoutMs: 50, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}},
+  });
+  assert.equal(drainedResult.published, 1);
+  assert.ok(outboxSpans.every(span => span.statuses.length === 0 && span.ends === 1));
+
+  outboxSpans.length = 0;
+  const failedMessage = outboxFixture("relay-failed", "aggregate-relay-failed", 1);
+  await withTransaction(database, {mode: "background"}, transaction => store.enqueue(transaction, failedMessage));
+  const failedResult = await relayOutboxBatch(store, database, async () => ({kind: "failed", error: "send rejected"}), {
+    nowMs: 302, leaseOwner: "publisher-failed", policy: {leaseMs: 100, sendTimeoutMs: 50, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}},
+  });
+  assert.deepEqual(failedResult, {claimed: 1, published: 0, failed: 1, unknown: 0, quarantined: 0});
+  assert.equal(outboxSpans.length, 2);
+  assert.ok(outboxSpans.every(span => span.statuses.length === 1 && span.statuses[0].code === SpanStatusCode.ERROR && span.ends === 1));
+
+  outboxSpans.length = 0;
+  const thrownMessage = outboxFixture("relay-thrown-finalize", "aggregate-relay-thrown-finalize", 1);
+  await withTransaction(database, {mode: "background"}, transaction => store.enqueue(transaction, thrownMessage));
+  const failingFinalizeStore = Object.create(store);
+  failingFinalizeStore.finalize = async () => {throw new Error("finalize failed");};
+  const thrownResult = await relayOutboxBatch(failingFinalizeStore, database, async () => ({kind: "ack"}), {
+    nowMs: 302, leaseOwner: "publisher-thrown", policy: {leaseMs: 100, sendTimeoutMs: 50, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}},
+  });
+  assert.deepEqual(thrownResult, {claimed: 1, published: 0, failed: 0, unknown: 1, quarantined: 0});
+  assert.equal(outboxSpans.length, 2);
+  assert.ok(outboxSpans.every(span => span.statuses.length === 1 && span.statuses[0].code === SpanStatusCode.ERROR && span.ends === 1));
 });
 
 void test("Inbox consumeOnce rollback leaves no partial Inbox/Outbox mark and permits retry", async t => {

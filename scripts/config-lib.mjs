@@ -6,6 +6,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { load as parseYaml } from "js-yaml";
 import {
   assertDatabaseAdmissionBudget,
+  parsePlatformConfig,
   PlatformConfigError,
 } from "../packages/platform-config/src/index.ts";
 
@@ -656,6 +657,12 @@ export async function loadPlatformConfig(
       if (!/^[a-z][a-zA-Z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(ref))
         fail("CONFIG-SECRET-REF", `${runtime}.${ref}: invalid secretRef`);
     }
+  }
+  try {
+    parsePlatformConfig(config);
+  } catch (error) {
+    if (error instanceof PlatformConfigError) fail("CONFIG-PLATFORM-CONFIG", error.message);
+    throw error;
   }
   return config;
 }
