@@ -171,10 +171,30 @@ void test('owner metric search groups all expected owners before the 100-row pag
   const diagnostics = sanitizeRuntimeMatrixFailure(failure).metricFamilyObservation;
   assert.deepEqual(diagnostics.components.find(component => component.component === '_bucket'), {
     component: '_bucket', streamPresent: true, presentOwners: [], missingOwners: ['orders-service', 'api-public'],
-    sampleCount: 0, queryFailure: {outcome: 'QUERY_FAILED'},
+    sampleCount: 0, queryFailure: {outcome: 'QUERY_FAILED', httpStatus: 503, errorClass: 'Error'},
   });
   assert.equal(JSON.stringify(diagnostics).includes(secret), false);
   assert.equal(JSON.stringify(sanitizeRuntimeMatrixFailure(failure)).includes(secret), false);
+
+  const timeoutFetch = async (url, init) => {
+    if (url.pathname === '/api/coffee/streams') return new Response(JSON.stringify(components.map(component => ({stream_type: 'metrics', name: `${base}${component}`}))));
+    const stream = JSON.parse(init.body).query.sql.match(/FROM "([^"]+)"/u)?.[1];
+    if (stream === `${base}_bucket`) throw new DOMException(secret, 'TimeoutError');
+    return new Response(JSON.stringify({hits: {hits: ['orders-service', 'api-public'].map(service_name => ({service_name, sample_count: 1}))}}));
+  };
+  let timeoutFailure;
+  try {
+    await waitForOwnedMetricFamilySamples({
+      baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+      metricsPrefix: 'platform_metrics', family: {name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components},
+      liveMetricStreams: components.map(component => `${base}${component}`), startTimeUs: 1,
+      fetchImpl: timeoutFetch, timeoutMs: 20, intervalMs: 1,
+    });
+  } catch (error) { timeoutFailure = error; }
+  assert.ok(timeoutFailure, 'query timeout must remain a failed observation');
+  assert.deepEqual(sanitizeRuntimeMatrixFailure(timeoutFailure).metricFamilyObservation.components[2].queryFailure,
+    {outcome: 'QUERY_FAILED', errorClass: 'TimeoutError'});
+  assert.equal(JSON.stringify(sanitizeRuntimeMatrixFailure(timeoutFailure)).includes(secret), false);
 
   const invalidGroups = [
     [{service_name: 'unexpected-owner', sample_count: 1}],
@@ -201,7 +221,7 @@ void test('owner metric search groups all expected owners before the 100-row pag
     const invalidDiagnostics = sanitizeRuntimeMatrixFailure(invalidFailure).metricFamilyObservation;
     assert.deepEqual(invalidDiagnostics.components[0], {
       component: '_count', streamPresent: true, presentOwners: [], missingOwners: ['orders-service', 'api-public'],
-      sampleCount: 0, queryFailure: {outcome: 'QUERY_FAILED'},
+      sampleCount: 0, queryFailure: {outcome: 'QUERY_FAILED', errorClass: 'Error'},
     });
   }
 });
@@ -377,6 +397,23 @@ void test('issue 64 failure diagnostics retain only allowlisted error codes and 
     ],
   };
   assert.deepEqual(sanitizeRuntimeMatrixFailure(Object.assign(new Error(secret), {metricFamilyObservation: safeObservation})).metricFamilyObservation, safeObservation);
+  const malformedMetadata = structuredClone(safeObservation);
+  malformedMetadata.components[2].queryFailure.httpStatus = '503';
+  malformedMetadata.components[2].queryFailure.errorClass = secret;
+  const safeMalformedMetadata = sanitizeRuntimeMatrixFailure(Object.assign(new Error(secret), {metricFamilyObservation: malformedMetadata}));
+  assert.deepEqual(safeMalformedMetadata.metricFamilyObservation.components[2].queryFailure, {outcome: 'QUERY_FAILED'});
+  assert.equal(JSON.stringify(safeMalformedMetadata).includes(secret), false);
+  for (const httpStatus of [99, 600, 503.5, '503']) {
+    const invalidStatus = structuredClone(safeObservation);
+    invalidStatus.components[2].queryFailure.httpStatus = httpStatus;
+    const sanitized = sanitizeRuntimeMatrixFailure(Object.assign(new Error(secret), {metricFamilyObservation: invalidStatus}));
+    assert.deepEqual(sanitized.metricFamilyObservation.components[2].queryFailure, {outcome: 'QUERY_FAILED'});
+  }
+  const validMetadata = structuredClone(safeObservation);
+  validMetadata.components[2].queryFailure.httpStatus = 503;
+  validMetadata.components[2].queryFailure.errorClass = 'AbortError';
+  assert.deepEqual(sanitizeRuntimeMatrixFailure(Object.assign(new Error(secret), {metricFamilyObservation: validMetadata}))
+    .metricFamilyObservation.components[2].queryFailure, {outcome: 'QUERY_FAILED', httpStatus: 503, errorClass: 'AbortError'});
   const invalidObservations = [
     observation => { observation.name = secret; },
     observation => { observation.owners[1] = secret; },

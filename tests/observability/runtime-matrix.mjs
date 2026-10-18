@@ -163,12 +163,19 @@ function sanitizeMetricFamilyObservation(value) {
         value.owners.some(owner => component.presentOwners.includes(owner) === component.missingOwners.includes(owner)) ||
         (component.presentOwners.length === 0) !== (component.sampleCount === 0) ||
         (!component.streamPresent && (component.sampleCount !== 0 || component.presentOwners.length > 0 || component.queryFailure !== undefined)) ||
-        (component.queryFailure !== undefined && (!hasOnlyKeys(component.queryFailure, ['outcome']) ||
+        (component.queryFailure !== undefined && (component.queryFailure === null || typeof component.queryFailure !== 'object' || Array.isArray(component.queryFailure) ||
+          Object.keys(component.queryFailure).some(key => !['outcome', 'httpStatus', 'errorClass'].includes(key)) ||
           component.queryFailure.outcome !== 'QUERY_FAILED' || component.presentOwners.length > 0 || component.sampleCount !== 0))) return undefined;
+    const queryFailure = component.queryFailure === undefined ? undefined : {outcome: 'QUERY_FAILED'};
+    if (queryFailure !== undefined && Number.isInteger(component.queryFailure.httpStatus) &&
+        component.queryFailure.httpStatus >= 100 && component.queryFailure.httpStatus <= 599)
+      queryFailure.httpStatus = component.queryFailure.httpStatus;
+    if (queryFailure !== undefined && ['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(component.queryFailure.errorClass))
+      queryFailure.errorClass = component.queryFailure.errorClass;
     components.push({
       component: component.component, streamPresent: component.streamPresent,
       presentOwners: [...component.presentOwners], missingOwners: [...component.missingOwners], sampleCount: component.sampleCount,
-      ...(component.queryFailure === undefined ? {} : {queryFailure: {outcome: 'QUERY_FAILED'}}),
+      ...(queryFailure === undefined ? {} : {queryFailure}),
     });
   }
   if (expectedComponents.some(component => !components.some(candidate => candidate.component === component))) return undefined;

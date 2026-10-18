@@ -1025,7 +1025,12 @@ export async function waitForOwnedMetricFamilySamples({baseUrl, authorization, o
           state.missingOwners = family.owners.filter(owner => !counts.has(owner));
           state.sampleCount = sampleCount;
         } catch (error) {
-          state.queryFailure = {outcome: 'QUERY_FAILED'};
+          const queryFailure = {outcome: 'QUERY_FAILED'};
+          const httpStatus = error !== null && typeof error === 'object' ? error.httpStatus : undefined;
+          const errorClass = error !== null && typeof error === 'object' ? error.name : undefined;
+          if (Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599) queryFailure.httpStatus = httpStatus;
+          if (['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(errorClass)) queryFailure.errorClass = errorClass;
+          state.queryFailure = queryFailure;
           throw error;
         }
         if (state.presentOwners.length > 0) matches.push({stream, sampleCount: state.sampleCount, services: state.presentOwners});
