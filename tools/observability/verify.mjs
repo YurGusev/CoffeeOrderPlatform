@@ -2855,7 +2855,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             return ['number', 'string'].includes(typeof value) && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
           };
           const missingOwnerCases = await waitFor(async () => {
-            const values = await Promise.all(readinessQueries.map(({rule}) => queryReadinessValue(rule)));
+            const values = [];
+            for (const {rule} of readinessQueries) values.push(await queryReadinessValue(rule));
             if (readinessQueries.some(({expectedValue}, index) => values[index] !== expectedValue)) return false;
             return readinessQueries.map(({scenario, readinessServices, rule, expectedValue}, index) => ({
               scenario, readinessServices, query: rule.queryCondition.promql, expectedValue, observedValue: values[index],
