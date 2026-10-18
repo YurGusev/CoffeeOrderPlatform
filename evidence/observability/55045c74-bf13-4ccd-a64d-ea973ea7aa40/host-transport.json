@@ -1,0 +1,54 @@
+{
+  "path": "/host-tools/host-transport.json",
+  "sha256": "61ae8d9ca3ae839bb5ead776ee9b403820b28e047416ef07e031c482252df320",
+  "schemaVersion": 1,
+  "bomSha256": "dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab",
+  "images": [
+    {
+      "bomKey": "nodeImage",
+      "bomRef": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+      "imageId": "sha256:cf29686709c0bbe09620640e5275825c6f435f69f7665ef8e8f6603d11feae51",
+      "sourceVerified": true
+    },
+    {
+      "bomKey": "otelCollectorImage",
+      "bomRef": "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6",
+      "imageId": "sha256:b90b3ed4cab89c4e196d0c58234b71a862165e77631871fc9b5b1b6f2aad3163",
+      "sourceVerified": true
+    },
+    {
+      "bomKey": "openObserveImage",
+      "bomRef": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+      "imageId": "sha256:5244f7147815773af96c317067fa4ced817b92e2889312be42de7bfb28095054",
+      "sourceVerified": true
+    }
+  ],
+  "supplementalImages": [
+    {
+      "bomKey": "nginxImage",
+      "bomRef": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
+      "imageId": "sha256:e9567a94eddcc1f293d083044d4c988b853fe17c2a462f343704bcb1ea01c9a6",
+      "sourceVerified": true
+    },
+    {
+      "bomKey": "kafkaImage",
+      "bomRef": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+      "imageId": "sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11",
+      "sourceVerified": true
+    }
+  ],
+  "toolchainCache": [
+    {
+      "name": "buildkit",
+      "imageRef": "moby/buildkit:buildx-stable-1@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8",
+      "imageId": "sha256:260cc297a47c57183fe53fb963885068c30e976060fabc90e32af04919dbd0bf",
+      "sourceVerified": true
+    }
+  ],
+  "shimSha256": "41c53759b0c48b688fc8dcf2ca7383969ed43e94f85f77dd7780afa443226701",
+  "dockerVersion": "29.7.2",
+  "storageDriver": "overlay2",
+  "dataRootBacking": "loop-ext4",
+  "qemuSha256": "90181b5552cd1a0b60d8edcc9f1cf8e38647579ef697d3155e2b6150e8fbcee0",
+  "probeSha256": "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14"
+}

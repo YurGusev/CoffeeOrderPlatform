@@ -1,0 +1,5101 @@
+{
+  "runId": "55045c74-bf13-4ccd-a64d-ea973ea7aa40",
+  "status": "PASS",
+  "verificationScope": "issue-64-operations-predecessor",
+  "statusAppliesTo": "issue-64 mandatory Operations backend and instrumentation gates",
+  "fullSystemG14": {
+    "status": "NOT_RUN",
+    "owner": "#13",
+    "reason": "Issue #64 verifies functional telemetry; full-system SLO, chaos, capacity and business launch acceptance remain owned by #13.",
+    "requiredNodeRuntimeCount": 14,
+    "launchPathNodeRuntimes": [
+      "api-internal",
+      "api-public",
+      "edge-gateway",
+      "orders-aroma-preparation",
+      "orders-service",
+      "realtime-gateway"
+    ],
+    "metricMatrixNodeRuntimes": [
+      "edge-gateway",
+      "api-public",
+      "api-internal",
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+      "realtime-gateway"
+    ],
+    "launchPathNativeNginx": true,
+    "launchPathKafkaRole": true,
+    "convergenceMetricProof": {
+      "ownerRuntime": "aroma-convergence",
+      "processKind": "driver-container SQL-backed proof helper",
+      "status": "PASS"
+    },
+    "observedOwnerMetricFamilies": [
+      "aromaConvergenceLastObservation",
+      "coffee_aroma_attempt_results_total",
+      "coffee_aroma_recovery_results_total",
+      "coffee_aroma_unknown_outcomes_current",
+      "coffee_aroma_unknown_outcomes_total",
+      "coffee_realtime_connections",
+      "coffee_realtime_invalidation_attempts_total",
+      "coffee_realtime_invalidation_dropped_total",
+      "coffee_realtime_queue_bytes",
+      "coffee_realtime_queue_records",
+      "db.client.connection.checkout_wait",
+      "db.client.connection.waiting",
+      "messaging.inbox.received.age",
+      "messaging.kafka.consumer.lag",
+      "messaging.kafka.event.age",
+      "messaging.outbox.oldest_unpublished.age",
+      "runtime_http_request_duration_ms",
+      "runtime_http_requests_total"
+    ],
+    "nodeRuntimesNotClaimedAsLive": []
+  },
+  "openObserve": "restarted",
+  "collector": "restarted",
+  "producerExportFailureObserved": true,
+  "queueDrops": 769,
+  "collectorExpiredRetryDrop": {
+    "status": "PASS",
+    "expiredRetryDropEvents": 8,
+    "droppedItems": 93
+  },
+  "healthLatencyMs": [
+    7,
+    3,
+    77,
+    2,
+    1,
+    2
+  ],
+  "budgetMs": 5000,
+  "collectorQueueMetrics": {
+    "status": "PASS",
+    "service": "otel-collector",
+    "queueCapacity": 512,
+    "queueSampleCount": 3,
+    "queueMaximum": 0,
+    "capacitySampleCount": 3,
+    "postRestartMetricTimestampsStrictlyAfterStartedAt": true,
+    "historicalLossMetricWindowEndedAtRestart": true,
+    "sendFailureSamples": {
+      "log_records": {
+        "stream": "platform_metrics_otelcol_exporter_send_failed_log_records",
+        "available": true,
+        "sampleCount": 2,
+        "values": [
+          26,
+          26
+        ],
+        "timestampsUs": [
+          1792316879794000,
+          1792316869794000
+        ]
+      },
+      "metric_points": {
+        "stream": "platform_metrics_otelcol_exporter_send_failed_metric_points",
+        "available": true,
+        "sampleCount": 2,
+        "values": [
+          323,
+          323
+        ],
+        "timestampsUs": [
+          1792316879794000,
+          1792316869794000
+        ]
+      },
+      "spans": {
+        "stream": "platform_metrics_otelcol_exporter_send_failed_spans",
+        "available": true,
+        "sampleCount": 2,
+        "values": [
+          237,
+          237
+        ],
+        "timestampsUs": [
+          1792316879794000,
+          1792316869794000
+        ]
+      }
+    },
+    "sentSamples": {
+      "log_records": {
+        "stream": "platform_metrics_otelcol_exporter_sent_log_records",
+        "available": true,
+        "sampleCount": 1,
+        "values": [
+          581
+        ],
+        "timestampsUs": [
+          1792316889791000
+        ]
+      },
+      "metric_points": {
+        "stream": "platform_metrics_otelcol_exporter_sent_metric_points",
+        "available": true,
+        "sampleCount": 1,
+        "values": [
+          271
+        ],
+        "timestampsUs": [
+          1792316889791000
+        ]
+      },
+      "spans": {
+        "stream": "platform_metrics_otelcol_exporter_sent_spans",
+        "available": true,
+        "sampleCount": 1,
+        "values": [
+          135
+        ],
+        "timestampsUs": [
+          1792316889791000
+        ]
+      }
+    },
+    "enqueueFailureSamples": {
+      "log_records": {
+        "stream": "platform_metrics_otelcol_exporter_enqueue_failed_log_records",
+        "available": false,
+        "sampleCount": 0,
+        "values": [],
+        "timestampsUs": []
+      },
+      "metric_points": {
+        "stream": "platform_metrics_otelcol_exporter_enqueue_failed_metric_points",
+        "available": true,
+        "sampleCount": 2,
+        "values": [
+          2974,
+          2974
+        ],
+        "timestampsUs": [
+          1792316879794000,
+          1792316869794000
+        ]
+      },
+      "spans": {
+        "stream": "platform_metrics_otelcol_exporter_enqueue_failed_spans",
+        "available": false,
+        "sampleCount": 0,
+        "values": [],
+        "timestampsUs": []
+      }
+    },
+    "optionalMetricStreamsAbsent": [
+      "otelcol_exporter_enqueue_failed_log_records",
+      "otelcol_exporter_enqueue_failed_spans"
+    ]
+  },
+  "collectorProcessGeneration": {
+    "sameContainer": true,
+    "startedAtChanged": true,
+    "beforeStartedAt": "2026-10-18T09:46:18.406080905Z",
+    "afterStartedAt": "2026-10-18T09:48:02.340699666Z",
+    "processUptime": {
+      "metric": "otelcol_process_uptime",
+      "before": {
+        "valueSeconds": 88.626712357,
+        "timestampUs": 1792316869794000
+      },
+      "after": {
+        "valueSeconds": 6.904045764,
+        "timestampUs": 1792316889791000
+      },
+      "instanceIdentityChanged": true
+    },
+    "postRestartQueueAndSentMetricsOnly": true,
+    "lossCounterWindowEndsAtRestart": true,
+    "abruptCrashLossMayBeIncomplete": true
+  },
+  "gracefulShutdown": {
+    "exitCode": 0,
+    "oomKilled": false,
+    "elapsedMs": 310,
+    "gracePeriodMs": 30000,
+    "stopTimeSpanExported": true,
+    "stopTimeSpanSampleCount": 1
+  },
+  "telemetryHealth": {
+    "dockerLogRotationBurst": {
+      "expectedRecords": 2447,
+      "accepted": 2447,
+      "producerDropped": 0
+    },
+    "dockerLogRotation": {
+      "status": "PASS",
+      "service": "edge-gateway",
+      "containerId": "676db1a99af8ec9c842b7c1f8f1c82e9c8302e1ed9c5ac88758beac0eba61130",
+      "driver": "json-file",
+      "configuredPinoMaxRecordBytes": 16384,
+      "presentSuffixes": [
+        0,
+        1,
+        2
+      ],
+      "retainedFiles": 3,
+      "totalBytes": 22280639
+    },
+    "producerLoggingPolicy": {
+      "status": "PASS",
+      "driver": "json-file",
+      "options": {
+        "max-buffer-size": "4194304",
+        "max-file": "3",
+        "max-size": "8m",
+        "mode": "non-blocking"
+      }
+    },
+    "initial": {
+      "sampleCount": 10,
+      "healthyOpenObserve": true,
+      "healthyCollector": true,
+      "samples": [
+        {
+          "service": "otel-collector",
+          "statusClass": "2xx",
+          "value": 1,
+          "timestamp": 1792316782219071
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "5xx",
+          "value": 0,
+          "timestamp": 1792316782219071
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "3xx",
+          "value": 0,
+          "timestamp": 1792316782219071
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "4xx",
+          "value": 0,
+          "timestamp": 1792316782219071
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "1xx",
+          "value": 0,
+          "timestamp": 1792316782219071
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "4xx",
+          "value": 0,
+          "timestamp": 1792316782219068
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "5xx",
+          "value": 0,
+          "timestamp": 1792316782219068
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "2xx",
+          "value": 1,
+          "timestamp": 1792316782219068
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "3xx",
+          "value": 0,
+          "timestamp": 1792316782219068
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "1xx",
+          "value": 0,
+          "timestamp": 1792316782219068
+        }
+      ]
+    },
+    "openObserveOutage": "PASS",
+    "recovered": {
+      "sampleCount": 15,
+      "healthyOpenObserve": true,
+      "healthyCollector": true,
+      "samples": [
+        {
+          "service": "openobserve",
+          "statusClass": "3xx",
+          "value": 0,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "1xx",
+          "value": 0,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "4xx",
+          "value": 0,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "5xx",
+          "value": 0,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "1xx",
+          "value": 0,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "2xx",
+          "value": 1,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "3xx",
+          "value": 0,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "4xx",
+          "value": 0,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "5xx",
+          "value": 0,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "openobserve",
+          "statusClass": "2xx",
+          "value": 1,
+          "timestamp": 1792316872215967
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "4xx",
+          "value": 0,
+          "timestamp": 1792316857215789
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "5xx",
+          "value": 0,
+          "timestamp": 1792316857215789
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "2xx",
+          "value": 1,
+          "timestamp": 1792316857215789
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "3xx",
+          "value": 0,
+          "timestamp": 1792316857215789
+        },
+        {
+          "service": "otel-collector",
+          "statusClass": "1xx",
+          "value": 0,
+          "timestamp": 1792316857215789
+        }
+      ]
+    },
+    "collectorMemoryStartupBaseline": {
+      "status": "PASS",
+      "stage": "initial-healthy-baseline",
+      "containerGeneration": {
+        "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+        "startedAt": "2026-10-18T09:46:18.406080905Z",
+        "sameGenerationAfterCapture": true
+      },
+      "limits": {
+        "containerLimitMiB": 1024,
+        "cgroupGuardBytes": 1006632960
+      },
+      "sample": {
+        "sequence": 1,
+        "currentBytes": 554057728,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 558661632,
+        "anonBytes": 68636672,
+        "fileBytes": 482373632,
+        "kernelBytes": 2912256,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792316785000
+      },
+      "sampler": {
+        "containerLimitMiB": 1024,
+        "maxBytes": 1073741824,
+        "guardBytes": 1006632960,
+        "guardReserveMiB": 64,
+        "peakBytes": 558661632,
+        "latestSample": {
+          "sequence": 1,
+          "currentBytes": 554057728,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 558661632,
+          "anonBytes": 68636672,
+          "fileBytes": 482373632,
+          "kernelBytes": 2912256,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316785000
+        }
+      },
+      "samplerStopped": true
+    },
+    "infrastructureGracefulStops": {
+      "openObserve": {
+        "status": "PASS",
+        "graceBudgetMs": 30000,
+        "dockerStopSeconds": 30,
+        "elapsedMs": 447,
+        "stopped": true,
+        "exitCode": 0,
+        "oomKilled": false,
+        "forcedKill": false
+      },
+      "collector": {
+        "status": "PASS",
+        "graceBudgetMs": 30000,
+        "dockerStopSeconds": 30,
+        "elapsedMs": 282,
+        "stopped": true,
+        "exitCode": 0,
+        "oomKilled": false,
+        "forcedKill": false
+      }
+    },
+    "collectorMemoryDiagnostics": {
+      "status": "PASS",
+      "stage": "recovery-accepted",
+      "containerGeneration": {
+        "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+        "startedAt": "2026-10-18T09:46:18.406080905Z",
+        "sameGenerationAsStartupBaseline": true,
+        "sameGenerationAfterProbe": true
+      },
+      "startupBaseline": {
+        "status": "PASS",
+        "stage": "initial-healthy-baseline",
+        "containerGeneration": {
+          "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+          "startedAt": "2026-10-18T09:46:18.406080905Z",
+          "sameGenerationAfterCapture": true
+        },
+        "limits": {
+          "containerLimitMiB": 1024,
+          "cgroupGuardBytes": 1006632960
+        },
+        "sample": {
+          "sequence": 1,
+          "currentBytes": 554057728,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 558661632,
+          "anonBytes": 68636672,
+          "fileBytes": 482373632,
+          "kernelBytes": 2912256,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316785000
+        },
+        "sampler": {
+          "containerLimitMiB": 1024,
+          "maxBytes": 1073741824,
+          "guardBytes": 1006632960,
+          "guardReserveMiB": 64,
+          "peakBytes": 558661632,
+          "latestSample": {
+            "sequence": 1,
+            "currentBytes": 554057728,
+            "maxBytes": 1073741824,
+            "kernelPeakBytes": 558661632,
+            "anonBytes": 68636672,
+            "fileBytes": 482373632,
+            "kernelBytes": 2912256,
+            "oom": 0,
+            "oomKill": 0,
+            "sampledAtMs": 1792316785000
+          }
+        },
+        "samplerStopped": true
+      },
+      "limits": {
+        "hardLimitMiB": 256,
+        "spikeLimitMiB": 64,
+        "softLimitMiB": 192,
+        "containerLimitMiB": 1024,
+        "cgroupGuardBytes": 1006632960,
+        "guardReserveMiB": 64
+      },
+      "cgroup": {
+        "baseline": {
+          "sequence": 2,
+          "currentBytes": 559132672,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 563437568,
+          "anonBytes": 71634944,
+          "fileBytes": 484319232,
+          "kernelBytes": 2867200,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316816000
+        },
+        "containerLimitMiB": 1024,
+        "maxBytes": 1073741824,
+        "guardBytes": 1006632960,
+        "guardReserveMiB": 64,
+        "peakBytes": 765841408,
+        "latestSample": {
+          "sequence": 724,
+          "currentBytes": 696184832,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 765841408,
+          "anonBytes": 207863808,
+          "fileBytes": 484814848,
+          "kernelBytes": 3293184,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316856000
+        },
+        "oom": 0,
+        "oomKill": 0
+      },
+      "baselineCounters": {
+        "refused": 0,
+        "accepted": 13
+      },
+      "pressure": {
+        "packetCount": 546,
+        "wireBytes": 112765380
+      },
+      "refusal": {
+        "httpStatus": 503,
+        "otlpCode": 14,
+        "refusedSpansDelta": 1,
+        "packetCount": 546,
+        "wireBytes": 112765380
+      },
+      "recovery": {
+        "httpStatus": 200,
+        "acceptedSpansDelta": 1
+      },
+      "samplerStopped": true
+    },
+    "collectorMemoryProof": {
+      "status": "PASS",
+      "containerGeneration": {
+        "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+        "startedAt": "2026-10-18T09:46:18.406080905Z",
+        "sameGenerationAsStartupBaseline": true,
+        "sameGenerationAfterProbe": true
+      },
+      "limits": {
+        "hardLimitMiB": 256,
+        "spikeLimitMiB": 64,
+        "softLimitMiB": 192,
+        "containerLimitMiB": 1024,
+        "cgroupGuardBytes": 1006632960,
+        "guardReserveMiB": 64,
+        "samplerIntervalMs": 50,
+        "samplerFreshnessMs": 100,
+        "maxPacketBytes": 524288,
+        "maxWireBytes": 268435456,
+        "maxWireBytesPerSecond": 33554432,
+        "deadlineMs": 60000
+      },
+      "cgroup": {
+        "baseline": {
+          "sequence": 2,
+          "currentBytes": 559132672,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 563437568,
+          "anonBytes": 71634944,
+          "fileBytes": 484319232,
+          "kernelBytes": 2867200,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316816000
+        },
+        "baselineBytes": 559132672,
+        "peakBytes": 765841408,
+        "maxBytes": 1073741824,
+        "final": {
+          "sequence": 724,
+          "currentBytes": 696184832,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 765841408,
+          "anonBytes": 207863808,
+          "fileBytes": 484814848,
+          "kernelBytes": 3293184,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316856000
+        },
+        "oom": 0,
+        "oomKill": 0
+      },
+      "metrics": {
+        "processor": "memory_limiter",
+        "refused": "otelcol_processor_memory_limiter_refused_spans",
+        "accepted": "otelcol_processor_memory_limiter_accepted_spans",
+        "baseline": {
+          "counters": {
+            "refused": 0,
+            "accepted": 13
+          },
+          "sampledAt": "2026-10-18T09:46:56.484Z",
+          "containerId": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+          "startedAt": "2026-10-18T09:46:18.406080905Z"
+        },
+        "afterRecovery": {
+          "counters": {
+            "refused": 5,
+            "accepted": 567
+          },
+          "sampledAt": "2026-10-18T09:47:36.825Z",
+          "containerId": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+          "startedAt": "2026-10-18T09:46:18.406080905Z"
+        }
+      },
+      "pressure": {
+        "packetCount": 546,
+        "wireBytes": 112765380,
+        "elapsedMs": 40341
+      },
+      "refusal": {
+        "httpStatus": 503,
+        "otlpCode": 14,
+        "refusedSpansDelta": 1,
+        "packetCount": 546,
+        "wireBytes": 112765380,
+        "observedAt": "2026-10-18T09:47:15.330Z"
+      },
+      "recovery": {
+        "httpStatus": 200,
+        "acceptedSpansDelta": 1,
+        "observedAt": "2026-10-18T09:47:36.851Z"
+      },
+      "durableExportProven": true,
+      "startupBaseline": {
+        "status": "PASS",
+        "stage": "initial-healthy-baseline",
+        "containerGeneration": {
+          "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+          "startedAt": "2026-10-18T09:46:18.406080905Z",
+          "sameGenerationAfterCapture": true
+        },
+        "limits": {
+          "containerLimitMiB": 1024,
+          "cgroupGuardBytes": 1006632960
+        },
+        "sample": {
+          "sequence": 1,
+          "currentBytes": 554057728,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 558661632,
+          "anonBytes": 68636672,
+          "fileBytes": 482373632,
+          "kernelBytes": 2912256,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316785000
+        },
+        "sampler": {
+          "containerLimitMiB": 1024,
+          "maxBytes": 1073741824,
+          "guardBytes": 1006632960,
+          "guardReserveMiB": 64,
+          "peakBytes": 558661632,
+          "latestSample": {
+            "sequence": 1,
+            "currentBytes": 554057728,
+            "maxBytes": 1073741824,
+            "kernelPeakBytes": 558661632,
+            "anonBytes": 68636672,
+            "fileBytes": 482373632,
+            "kernelBytes": 2912256,
+            "oom": 0,
+            "oomKill": 0,
+            "sampledAtMs": 1792316785000
+          }
+        },
+        "samplerStopped": true
+      },
+      "markerAdmission": {
+        "status": "PASS",
+        "attempts": 2,
+        "refusedAttempts": 1,
+        "lastHttpStatus": 200,
+        "lastOtlpCode": null,
+        "lastRefusal": false,
+        "elapsedMs": 1009
+      },
+      "marker": {
+        "traceId": "1d7767c9569f6a230a8b656dbbcaf5c3",
+        "spanName": "g14.collector.memory.recovered",
+        "runId": "55045c74-bf13-4ccd-a64d-ea973ea7aa40",
+        "acceptedAt": "2026-10-18T09:47:55.910Z",
+        "backendConfirmation": {
+          "stream": "platform_traces",
+          "exactTraceId": true,
+          "matchingRecords": 1
+        }
+      }
+    },
+    "openObserveOutageWaitMs": 28000,
+    "outageMetricSamples": 8,
+    "recoveryStatus": "PASS",
+    "launchPathCollectorConfig": "PASS",
+    "nativeAccessAfterRestart": {
+      "status": "PASS",
+      "ownerGetStatus": 200,
+      "correlationMatched": true,
+      "accessLogRows": 1
+    },
+    "launchPathOutage": {
+      "collectorStopped": true,
+      "collectorRestarted": true,
+      "outageElapsedMs": 7138,
+      "sourceEvents": 3,
+      "sourceBrokerAckCount": 3,
+      "sourceInboxCommitted": true,
+      "projectionPresent": true,
+      "realtimeOutboxPersisted": true,
+      "sseReady": true,
+      "ownerRefetchStatus": 200,
+      "ownerCorrelationMatched": true,
+      "ownerTraceparentMatched": true,
+      "allRuntimeRolesRunning": true,
+      "nodeReadiness": {
+        "edge-gateway": 200,
+        "api-public": 200,
+        "api-internal": 200,
+        "orders-service": 200,
+        "orders-aroma-preparation": 200,
+        "realtime-gateway": 200
+      },
+      "allActualNodeRolesReady": true,
+      "healthyEndpointChecksAfterRestart": {
+        "sampleCount": 15,
+        "healthyOpenObserve": true,
+        "healthyCollector": true,
+        "samples": [
+          {
+            "service": "otel-collector",
+            "statusClass": "1xx",
+            "value": 0,
+            "timestamp": 1792317527933805
+          },
+          {
+            "service": "otel-collector",
+            "statusClass": "5xx",
+            "value": 0,
+            "timestamp": 1792317527933805
+          },
+          {
+            "service": "otel-collector",
+            "statusClass": "4xx",
+            "value": 0,
+            "timestamp": 1792317527933805
+          },
+          {
+            "service": "otel-collector",
+            "statusClass": "3xx",
+            "value": 0,
+            "timestamp": 1792317527933805
+          },
+          {
+            "service": "otel-collector",
+            "statusClass": "2xx",
+            "value": 1,
+            "timestamp": 1792317527933805
+          },
+          {
+            "service": "openobserve",
+            "statusClass": "1xx",
+            "value": 0,
+            "timestamp": 1792317527933305
+          },
+          {
+            "service": "openobserve",
+            "statusClass": "4xx",
+            "value": 0,
+            "timestamp": 1792317527933305
+          },
+          {
+            "service": "openobserve",
+            "statusClass": "2xx",
+            "value": 1,
+            "timestamp": 1792317527933305
+          },
+          {
+            "service": "openobserve",
+            "statusClass": "5xx",
+            "value": 0,
+            "timestamp": 1792317527933305
+          },
+          {
+            "service": "openobserve",
+            "statusClass": "3xx",
+            "value": 0,
+            "timestamp": 1792317527933305
+          },
+          {
+            "service": "edge-nginx",
+            "statusClass": "2xx",
+            "value": 1,
+            "timestamp": 1792317527931606
+          },
+          {
+            "service": "edge-nginx",
+            "statusClass": "3xx",
+            "value": 0,
+            "timestamp": 1792317527931606
+          },
+          {
+            "service": "edge-nginx",
+            "statusClass": "1xx",
+            "value": 0,
+            "timestamp": 1792317527931606
+          },
+          {
+            "service": "edge-nginx",
+            "statusClass": "5xx",
+            "value": 0,
+            "timestamp": 1792317527931606
+          },
+          {
+            "service": "edge-nginx",
+            "statusClass": "4xx",
+            "value": 0,
+            "timestamp": 1792317527931606
+          }
+        ]
+      }
+    },
+    "launchPathOutageStatus": "PASS",
+    "convergenceMetricBarriers": {
+      "unknown-current": {
+        "barrierId": "63b5d45f-ca4e-4485-9bdf-f1113f6a03d8",
+        "status": "PASS",
+        "observations": {
+          "coffee_aroma_attempt_results_total": {
+            "stream": "platform_metrics_coffee_aroma_attempt_results_total",
+            "owner": "aroma-convergence",
+            "sampleCount": 5,
+            "observedValues": [
+              1,
+              1,
+              1,
+              0,
+              0
+            ],
+            "expectedValues": [
+              1
+            ]
+          },
+          "coffee_aroma_unknown_outcomes_total": {
+            "stream": "platform_metrics_coffee_aroma_unknown_outcomes_total",
+            "owner": "aroma-convergence",
+            "sampleCount": 5,
+            "observedValues": [
+              1,
+              1,
+              1,
+              0,
+              0
+            ],
+            "expectedValues": [
+              1
+            ]
+          },
+          "coffee_aroma_unknown_outcomes_current": {
+            "stream": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+            "owner": "aroma-convergence",
+            "sampleCount": 3,
+            "observedValues": [
+              1,
+              1,
+              1
+            ],
+            "expectedValues": [
+              1
+            ]
+          }
+        }
+      },
+      "recovered-terminal": {
+        "barrierId": "63b5d45f-ca4e-4485-9bdf-f1113f6a03d8",
+        "status": "PASS",
+        "observations": {
+          "coffee_aroma_attempt_results_total": {
+            "stream": "platform_metrics_coffee_aroma_attempt_results_total",
+            "owner": "aroma-convergence",
+            "sampleCount": 7,
+            "observedValues": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0
+            ],
+            "expectedValues": [
+              1
+            ]
+          },
+          "coffee_aroma_unknown_outcomes_total": {
+            "stream": "platform_metrics_coffee_aroma_unknown_outcomes_total",
+            "owner": "aroma-convergence",
+            "sampleCount": 9,
+            "observedValues": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1,
+              0,
+              0
+            ],
+            "expectedValues": [
+              1
+            ]
+          },
+          "coffee_aroma_unknown_outcomes_current": {
+            "stream": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+            "owner": "aroma-convergence",
+            "sampleCount": 7,
+            "observedValues": [
+              0,
+              0,
+              0,
+              1,
+              1,
+              1,
+              1
+            ],
+            "expectedValues": [
+              1,
+              0
+            ]
+          },
+          "coffee_aroma_recovery_results_total": {
+            "stream": "platform_metrics_coffee_aroma_recovery_results_total",
+            "owner": "aroma-convergence",
+            "sampleCount": 9,
+            "observedValues": [
+              1,
+              1,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "expectedValues": [
+              1
+            ]
+          }
+        }
+      }
+    },
+    "collectorLoggingPolicy": {
+      "status": "PASS",
+      "phases": [
+        {
+          "stage": "initial-startup",
+          "status": "PASS",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "stage": "launch-path-role-logs",
+          "status": "PASS",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "stage": "post-launch-initial-logs",
+          "status": "PASS",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "stage": "all-runtime-metric-matrix",
+          "status": "PASS",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "stage": "post-matrix-initial-logs",
+          "status": "PASS",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        }
+      ]
+    }
+  },
+  "metricApplicability": {
+    "db.client.connection.checkout_wait": [
+      {
+        "stream": "platform_metrics_db_client_connection_checkout_wait_count",
+        "sampleCount": 106,
+        "services": [
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-convergence"
+        ]
+      },
+      {
+        "stream": "platform_metrics_db_client_connection_checkout_wait_sum",
+        "sampleCount": 106,
+        "services": [
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-convergence"
+        ]
+      },
+      {
+        "stream": "platform_metrics_db_client_connection_checkout_wait_bucket",
+        "sampleCount": 1696,
+        "services": [
+          "orders-service",
+          "orders-aroma-preparation",
+          "aroma-convergence"
+        ]
+      }
+    ],
+    "db.client.connection.waiting": [
+      {
+        "stream": "platform_metrics_db_client_connection_waiting",
+        "sampleCount": 36,
+        "services": [
+          "orders-service"
+        ]
+      }
+    ],
+    "messaging.kafka.consumer.lag": [
+      {
+        "stream": "platform_metrics_messaging_kafka_consumer_lag",
+        "sampleCount": 1324,
+        "services": [
+          "orders-aroma-preparation",
+          "realtime-gateway"
+        ]
+      }
+    ],
+    "messaging.kafka.event.age": [
+      {
+        "stream": "platform_metrics_messaging_kafka_event_age_count",
+        "sampleCount": 113,
+        "services": [
+          "orders-aroma-preparation",
+          "realtime-gateway",
+          "aroma-convergence"
+        ]
+      },
+      {
+        "stream": "platform_metrics_messaging_kafka_event_age_sum",
+        "sampleCount": 113,
+        "services": [
+          "orders-aroma-preparation",
+          "realtime-gateway",
+          "aroma-convergence"
+        ]
+      },
+      {
+        "stream": "platform_metrics_messaging_kafka_event_age_bucket",
+        "sampleCount": 1824,
+        "services": [
+          "orders-aroma-preparation",
+          "realtime-gateway",
+          "aroma-convergence"
+        ]
+      }
+    ],
+    "messaging.outbox.oldest_unpublished.age": [
+      {
+        "stream": "platform_metrics_messaging_outbox_oldest_unpublished_age",
+        "sampleCount": 153,
+        "services": [
+          "orders-service",
+          "orders-aroma-preparation"
+        ]
+      }
+    ],
+    "messaging.inbox.received.age": [
+      {
+        "stream": "platform_metrics_messaging_inbox_received_age_count",
+        "sampleCount": 86,
+        "services": [
+          "orders-aroma-preparation",
+          "aroma-convergence"
+        ]
+      },
+      {
+        "stream": "platform_metrics_messaging_inbox_received_age_sum",
+        "sampleCount": 86,
+        "services": [
+          "orders-aroma-preparation",
+          "aroma-convergence"
+        ]
+      },
+      {
+        "stream": "platform_metrics_messaging_inbox_received_age_bucket",
+        "sampleCount": 1376,
+        "services": [
+          "orders-aroma-preparation",
+          "aroma-convergence"
+        ]
+      }
+    ],
+    "coffee_realtime_invalidation_attempts_total": [
+      {
+        "stream": "platform_metrics_coffee_realtime_invalidation_attempts_total",
+        "sampleCount": 37,
+        "services": [
+          "realtime-gateway"
+        ]
+      }
+    ],
+    "coffee_realtime_invalidation_dropped_total": [
+      {
+        "stream": "platform_metrics_coffee_realtime_invalidation_dropped_total",
+        "sampleCount": 37,
+        "services": [
+          "realtime-gateway"
+        ]
+      }
+    ],
+    "coffee_realtime_connections": [
+      {
+        "stream": "platform_metrics_coffee_realtime_connections",
+        "sampleCount": 38,
+        "services": [
+          "realtime-gateway"
+        ]
+      }
+    ],
+    "coffee_realtime_queue_records": [
+      {
+        "stream": "platform_metrics_coffee_realtime_queue_records",
+        "sampleCount": 38,
+        "services": [
+          "realtime-gateway"
+        ]
+      }
+    ],
+    "coffee_realtime_queue_bytes": [
+      {
+        "stream": "platform_metrics_coffee_realtime_queue_bytes",
+        "sampleCount": 38,
+        "services": [
+          "realtime-gateway"
+        ]
+      }
+    ],
+    "runtime_http_requests_total": [
+      {
+        "stream": "platform_metrics_runtime_http_requests_total",
+        "sampleCount": 185,
+        "services": [
+          "api-public",
+          "orders-service"
+        ]
+      }
+    ],
+    "runtime_http_request_duration_ms": [
+      {
+        "stream": "platform_metrics_runtime_http_request_duration_ms_count",
+        "sampleCount": 185,
+        "services": [
+          "api-public",
+          "orders-service"
+        ]
+      },
+      {
+        "stream": "platform_metrics_runtime_http_request_duration_ms_sum",
+        "sampleCount": 185,
+        "services": [
+          "api-public",
+          "orders-service"
+        ]
+      },
+      {
+        "stream": "platform_metrics_runtime_http_request_duration_ms_bucket",
+        "sampleCount": 3008,
+        "services": [
+          "api-public",
+          "orders-service"
+        ]
+      }
+    ],
+    "coffee_aroma_attempt_results_total": [
+      {
+        "stream": "platform_metrics_coffee_aroma_attempt_results_total",
+        "sampleCount": 60,
+        "services": [
+          "aroma-convergence"
+        ]
+      }
+    ],
+    "coffee_aroma_unknown_outcomes_total": [
+      {
+        "stream": "platform_metrics_coffee_aroma_unknown_outcomes_total",
+        "sampleCount": 10,
+        "services": [
+          "aroma-convergence"
+        ]
+      }
+    ],
+    "coffee_aroma_unknown_outcomes_current": [
+      {
+        "stream": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+        "sampleCount": 8,
+        "services": [
+          "aroma-convergence"
+        ]
+      }
+    ],
+    "coffee_aroma_recovery_results_total": [
+      {
+        "stream": "platform_metrics_coffee_aroma_recovery_results_total",
+        "sampleCount": 60,
+        "services": [
+          "aroma-convergence"
+        ]
+      }
+    ],
+    "aromaConvergenceLastObservation": {
+      "status": "PASS",
+      "metrics": {
+        "coffee_aroma_attempt_results_total": {
+          "streamPresent": true,
+          "queryRows": 60,
+          "ownerRows": 60,
+          "attrMatchedRows": 10,
+          "observedValues": [
+            0,
+            1
+          ],
+          "expectedValues": [
+            1
+          ],
+          "missingValues": [],
+          "latestTimestampUs": 1792317550811000
+        },
+        "coffee_aroma_unknown_outcomes_total": {
+          "streamPresent": true,
+          "queryRows": 10,
+          "ownerRows": 10,
+          "attrMatchedRows": 10,
+          "observedValues": [
+            0,
+            1
+          ],
+          "expectedValues": [
+            1
+          ],
+          "missingValues": [],
+          "latestTimestampUs": 1792317550811000
+        },
+        "coffee_aroma_unknown_outcomes_current": {
+          "streamPresent": true,
+          "queryRows": 8,
+          "ownerRows": 8,
+          "attrMatchedRows": 8,
+          "observedValues": [
+            0,
+            1
+          ],
+          "expectedValues": [
+            1,
+            0
+          ],
+          "missingValues": [],
+          "latestTimestampUs": 1792317550811000
+        },
+        "coffee_aroma_recovery_results_total": {
+          "streamPresent": true,
+          "queryRows": 60,
+          "ownerRows": 60,
+          "attrMatchedRows": 10,
+          "observedValues": [
+            0,
+            1
+          ],
+          "expectedValues": [
+            1
+          ],
+          "missingValues": [],
+          "latestTimestampUs": 1792317550811000
+        }
+      }
+    },
+    "aromaConvergenceProof": {
+      "coffee_aroma_attempt_results_total": {
+        "stream": "platform_metrics_coffee_aroma_attempt_results_total",
+        "owner": "aroma-convergence",
+        "sampleCount": 10,
+        "observedValues": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          0
+        ],
+        "expectedValues": [
+          1
+        ]
+      },
+      "coffee_aroma_unknown_outcomes_total": {
+        "stream": "platform_metrics_coffee_aroma_unknown_outcomes_total",
+        "owner": "aroma-convergence",
+        "sampleCount": 10,
+        "observedValues": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0,
+          0
+        ],
+        "expectedValues": [
+          1
+        ]
+      },
+      "coffee_aroma_unknown_outcomes_current": {
+        "stream": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+        "owner": "aroma-convergence",
+        "sampleCount": 8,
+        "observedValues": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        "expectedValues": [
+          1,
+          0
+        ]
+      },
+      "coffee_aroma_recovery_results_total": {
+        "stream": "platform_metrics_coffee_aroma_recovery_results_total",
+        "owner": "aroma-convergence",
+        "sampleCount": 10,
+        "observedValues": [
+          1,
+          1,
+          1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "expectedValues": [
+          1
+        ]
+      }
+    }
+  },
+  "runtimeMetricMatrix": {
+    "status": "PASS",
+    "project": "coffee-issue64-final-55045c74",
+    "source": {
+      "baseSha": "8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e",
+      "configSha256": "0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9",
+      "bomSha256": "dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab",
+      "imageRefs": {
+        "otelCollectorImage": "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6",
+        "openObserveImage": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+        "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+        "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+        "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+      },
+      "sourceFiles": {
+        "status": "PASS",
+        "fileCount": 1469,
+        "missingFileCount": 0,
+        "sha256": "8a69e8db97e3e13d41cc00fba45c93e2148cd678588b7a7288a985a242b382fc"
+      },
+      "runtimeArtifacts": {
+        "packages/platform-runtime/dist": {
+          "status": "PASS",
+          "fileCount": 4,
+          "sha256": "fa5173d6de021b0e9d148a6536653cb4405d6af2a240634fe0e5fb9586be8812"
+        },
+        "packages/platform-observability/dist": {
+          "status": "PASS",
+          "fileCount": 2,
+          "sha256": "1c120dd7bf1597d7343794a8ef6829826c5e9b4e8ef14ceb623d1d7ee7a783ec"
+        }
+      },
+      "identityHash": "caf4e44491b41ffeef62343a671d04abf2ca57dbfdda2ff3829ea977508bf72e"
+    },
+    "composeReceipt": {
+      "project": "coffee-issue64-final-55045c74",
+      "runtimes": 14,
+      "nativeIngress": "edge-nginx",
+      "kafka": true,
+      "ephemeralKafkaBroker": true,
+      "credentialSource": "local-fixture",
+      "telemetry": true,
+      "dbIntegrationProof": true,
+      "gracefulShutdown": true,
+      "healthEndpoints": [
+        "/health/live",
+        "/health/ready",
+        "/metrics"
+      ],
+      "recoveryProofPresent": true
+    },
+    "cleanupVerified": true,
+    "loggingPolicy": {
+      "status": "PASS",
+      "pinoDropCounter": "telemetry_log_records_dropped_total",
+      "dockerNonblockingBufferDropAccounting": "NOT_PROVEN",
+      "roles": [
+        {
+          "role": "edge-nginx",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "edge-gateway",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "api-public",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "api-internal",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "customer-service",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "catalog-service",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "catalog-supplier-sync",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "catalog-activation-worker",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "pricing-service",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "orders-service",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "orders-aroma-preparation",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "aroma-observer",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "aroma-convergence",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "aroma-gateway",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        },
+        {
+          "role": "realtime-gateway",
+          "driver": "json-file",
+          "options": {
+            "max-buffer-size": "4194304",
+            "max-file": "3",
+            "max-size": "8m",
+            "mode": "non-blocking"
+          }
+        }
+      ]
+    },
+    "runtimeMetrics": {
+      "status": "PASS",
+      "roles": [
+        {
+          "role": "edge-gateway",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 19,
+          "families": {
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.152,
+              "max": 21.152
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 22.921,
+              "max": 22.921
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38141,
+              "max": 38141
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.00703,
+              "max": 0.00703
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 419,
+              "max": 419
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 498.529,
+              "max": 498.529
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 2258559,
+              "max": 2258559
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 6481109,
+              "max": 6481109
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 33701888,
+              "max": 33701888
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 30955136,
+              "max": 30955136
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 115290112,
+              "max": 115290112
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 110,
+              "max": 110
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "api-public",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 19,
+          "families": {
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.103,
+              "max": 21.103
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 22.921,
+              "max": 22.921
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38132,
+              "max": 38132
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.006536,
+              "max": 0.006536
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 408,
+              "max": 408
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 508.249,
+              "max": 508.249
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 1826520,
+              "max": 1826520
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 6068295,
+              "max": 6068295
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 40173568,
+              "max": 40173568
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 36131696,
+              "max": 36131696
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 124141568,
+              "max": 124141568
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 96,
+              "max": 96
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "api-internal",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 19,
+          "families": {
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.201,
+              "max": 21.201
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 22.938,
+              "max": 22.938
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38090,
+              "max": 38090
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.010319,
+              "max": 0.010319
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 544,
+              "max": 544
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 624.139,
+              "max": 624.139
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 921845,
+              "max": 921845
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 5174187,
+              "max": 5174187
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 43581440,
+              "max": 43581440
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 42456920,
+              "max": 42456920
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 129196032,
+              "max": 129196032
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 137,
+              "max": 137
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "customer-service",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 19,
+          "families": {
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.168,
+              "max": 21.168
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 23.069,
+              "max": 23.069
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38067,
+              "max": 38067
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.007563,
+              "max": 0.007563
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 414,
+              "max": 414
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 511.737,
+              "max": 511.737
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 2442434,
+              "max": 2442434
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 6699976,
+              "max": 6699976
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 38420480,
+              "max": 38420480
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 35729928,
+              "max": 35729928
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 123170816,
+              "max": 123170816
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 108,
+              "max": 108
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "catalog-service",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 19,
+          "families": {
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.152,
+              "max": 21.152
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 22.987,
+              "max": 22.987
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38064,
+              "max": 38064
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.00718,
+              "max": 0.00718
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 427,
+              "max": 427
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 501.312,
+              "max": 501.312
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 2095144,
+              "max": 2095144
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 6352677,
+              "max": 6352677
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 36323328,
+              "max": 36323328
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 32737680,
+              "max": 32737680
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 119607296,
+              "max": 119607296
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 109,
+              "max": 109
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "catalog-supplier-sync",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 33,
+          "families": {
+            "coffee_catalog_import_age_seconds": {
+              "count": 1,
+              "min": 836.915746208,
+              "max": 836.915746208
+            },
+            "coffee_catalog_import_backpressure_seconds_count": {
+              "count": 2,
+              "min": 0,
+              "max": 2
+            },
+            "coffee_catalog_import_backpressure_seconds_sum": {
+              "count": 2,
+              "min": 0,
+              "max": 0.020882600000000136
+            },
+            "coffee_catalog_import_batch_bytes_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_catalog_import_batch_duration_seconds_count": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_catalog_import_batch_duration_seconds_sum": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_catalog_import_batches_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_catalog_import_duration_seconds_count": {
+              "count": 1,
+              "min": 1,
+              "max": 1
+            },
+            "coffee_catalog_import_duration_seconds_sum": {
+              "count": 1,
+              "min": 0.1463834350000002,
+              "max": 0.1463834350000002
+            },
+            "coffee_catalog_import_has_success": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_catalog_import_results_total": {
+              "count": 4,
+              "min": 0,
+              "max": 1
+            },
+            "coffee_catalog_import_scheduler_failure": {
+              "count": 1,
+              "min": 1,
+              "max": 1
+            },
+            "coffee_catalog_import_scheduler_running": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_catalog_import_scheduler_skipped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.152,
+              "max": 21.152
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 22.921,
+              "max": 22.921
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38058,
+              "max": 38058
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.00792,
+              "max": 0.00792
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 525,
+              "max": 525
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 568.312,
+              "max": 568.312
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 4556955,
+              "max": 4556955
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 8833788,
+              "max": 8833788
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 39124992,
+              "max": 39124992
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 37810688,
+              "max": 37810688
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 126738432,
+              "max": 126738432
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 100,
+              "max": 100
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "catalog-activation-worker",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 21,
+          "families": {
+            "coffee_catalog_activation_cycle_failed": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_catalog_activation_supervisor_up": {
+              "count": 1,
+              "min": 1,
+              "max": 1
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.234,
+              "max": 21.234
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 23.036,
+              "max": 23.036
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38026,
+              "max": 38026
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.020059,
+              "max": 0.020059
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 750,
+              "max": 750
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 1115.136,
+              "max": 1115.136
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 946117,
+              "max": 946117
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 5216195,
+              "max": 5216195
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 43425792,
+              "max": 43425792
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 37008024,
+              "max": 37008024
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 138440704,
+              "max": 138440704
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 172,
+              "max": 172
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "pricing-service",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 27,
+          "families": {
+            "coffee_pricing_catalog_read_results_total": {
+              "count": 2,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_pricing_catalog_retry_results_total": {
+              "count": 3,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_pricing_database_results_total": {
+              "count": 6,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_pricing_operation_duration_ms_count": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_pricing_operation_duration_ms_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_pricing_quote_create_results_total": {
+              "count": 5,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_pricing_quote_line_count_total": {
+              "count": 3,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_pricing_quote_verify_results_total": {
+              "count": 6,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.119,
+              "max": 21.119
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 22.938,
+              "max": 22.938
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38040,
+              "max": 38040
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.00809,
+              "max": 0.00809
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 489,
+              "max": 489
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 577.443,
+              "max": 577.443
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 683246,
+              "max": 683246
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 4957536,
+              "max": 4957536
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 40435712,
+              "max": 40435712
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 32493056,
+              "max": 32493056
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 124112896,
+              "max": 124112896
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 106,
+              "max": 106
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "orders-service",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 20,
+          "families": {
+            "coffee_orders_outbox_relay_ready": {
+              "count": 1,
+              "min": 1,
+              "max": 1
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.185,
+              "max": 21.185
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 23.118,
+              "max": 23.118
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 38005,
+              "max": 38005
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.017948,
+              "max": 0.017948
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 798,
+              "max": 798
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 1129.585,
+              "max": 1129.585
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 1018427,
+              "max": 1018427
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 5288397,
+              "max": 5288397
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 45260800,
+              "max": 45260800
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 37664072,
+              "max": 37664072
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 140705792,
+              "max": 140705792
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 173,
+              "max": 173
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "orders-aroma-preparation",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 26,
+          "families": {
+            "coffee_aroma_preparation_desired_age_ms": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_preparation_desired_revision": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_preparation_inbox_results_total": {
+              "count": 5,
+              "min": 0,
+              "max": 155
+            },
+            "coffee_aroma_preparation_projection_results_total": {
+              "count": 3,
+              "min": 0,
+              "max": 931
+            },
+            "coffee_aroma_preparation_ready": {
+              "count": 1,
+              "min": 1,
+              "max": 1
+            },
+            "coffee_aroma_preparation_recompute_results_total": {
+              "count": 3,
+              "min": 0,
+              "max": 932
+            },
+            "coffee_aroma_preparation_recovery_results_total": {
+              "count": 3,
+              "min": 0,
+              "max": 776
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.152,
+              "max": 20.152
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.496,
+              "max": 21.496
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 23.888,
+              "max": 23.888
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 37900,
+              "max": 37900
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.10237,
+              "max": 0.10237
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 190,
+              "max": 190
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 1604.843,
+              "max": 1604.843
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 529388,
+              "max": 529388
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 4782689,
+              "max": 4782689
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 96460800,
+              "max": 96460800
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 36394872,
+              "max": 36394872
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 194830336,
+              "max": 194830336
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 85,
+              "max": 85
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "aroma-observer",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 24,
+          "families": {
+            "coffee_aroma_observation_fence_failures_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_observation_ready": {
+              "count": 1,
+              "min": 1,
+              "max": 1
+            },
+            "coffee_aroma_observation_recovery_results_total": {
+              "count": 2,
+              "min": 0,
+              "max": 1
+            },
+            "coffee_aroma_observation_results_total": {
+              "count": 3,
+              "min": 0,
+              "max": 639
+            },
+            "coffee_aroma_observed_age_ms": {
+              "count": 1,
+              "min": 1603,
+              "max": 1603
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.185,
+              "max": 21.185
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 22.987,
+              "max": 22.987
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 37966,
+              "max": 37966
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.022663,
+              "max": 0.022663
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 238,
+              "max": 238
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 736.693,
+              "max": 736.693
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 937539,
+              "max": 937539
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 5224282,
+              "max": 5224282
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 99262464,
+              "max": 99262464
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 47023312,
+              "max": 47023312
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 195977216,
+              "max": 195977216
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 169,
+              "max": 169
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "aroma-convergence",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 30,
+          "families": {
+            "coffee_aroma_attempt_results_total": {
+              "count": 6,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_blockers_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_convergence_ready": {
+              "count": 1,
+              "min": 1,
+              "max": 1
+            },
+            "coffee_aroma_fence_failures_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_lease_failures_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_mutation_calls_total": {
+              "count": 2,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_observed_age_ms": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_provider_failures_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_recovery_results_total": {
+              "count": 6,
+              "min": 0,
+              "max": 1
+            },
+            "coffee_aroma_unknown_outcomes_current": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_aroma_unknown_outcomes_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.07,
+              "max": 20.07
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.234,
+              "max": 21.234
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 23.151,
+              "max": 23.151
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 37935,
+              "max": 37935
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.057911,
+              "max": 0.057911
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 123,
+              "max": 123
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 464.96,
+              "max": 464.96
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 983809,
+              "max": 983809
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 5254861,
+              "max": 5254861
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 68591616,
+              "max": 68591616
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 40759736,
+              "max": 40759736
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 167596032,
+              "max": 167596032
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 218,
+              "max": 218
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "aroma-gateway",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 42,
+          "families": {
+            "aroma_gateway_catalog_batch_bytes_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_catalog_batches_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_catalog_failures_total": {
+              "count": 1,
+              "min": 1,
+              "max": 1
+            },
+            "aroma_gateway_catalog_results_total": {
+              "count": 2,
+              "min": 0,
+              "max": 1
+            },
+            "aroma_gateway_journal_acquire_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_journal_dispatch_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_journal_states_total": {
+              "count": 5,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_journal_terminal_persistence_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_mutation_acknowledged_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_mutation_outcomes_total": {
+              "count": 3,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_mutation_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_mutation_unknown_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_provider_latency_ms_total": {
+              "count": 1,
+              "min": 2485,
+              "max": 2485
+            },
+            "aroma_gateway_safe_read_attempts_total": {
+              "count": 1,
+              "min": 162,
+              "max": 162
+            },
+            "aroma_gateway_safe_read_bytes_total": {
+              "count": 1,
+              "min": 18429,
+              "max": 18429
+            },
+            "aroma_gateway_safe_read_failures_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_safe_read_reauthenticated_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_safe_read_results_total": {
+              "count": 3,
+              "min": 0,
+              "max": 162
+            },
+            "aroma_gateway_session_attempts_total": {
+              "count": 1,
+              "min": 162,
+              "max": 162
+            },
+            "aroma_gateway_session_cache_hits_total": {
+              "count": 1,
+              "min": 159,
+              "max": 159
+            },
+            "aroma_gateway_session_failures_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "aroma_gateway_session_logins_total": {
+              "count": 1,
+              "min": 3,
+              "max": 3
+            },
+            "aroma_gateway_session_results_total": {
+              "count": 3,
+              "min": 0,
+              "max": 159
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.087,
+              "max": 20.087
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.185,
+              "max": 21.185
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 23.183,
+              "max": 23.183
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 37876,
+              "max": 37876
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.010622,
+              "max": 0.010622
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 546,
+              "max": 546
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 748.858,
+              "max": 748.858
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 683418,
+              "max": 683418
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 4955152,
+              "max": 4955152
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 44892160,
+              "max": 44892160
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 38863064,
+              "max": 38863064
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 131846144,
+              "max": 131846144
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 128,
+              "max": 128
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        },
+        {
+          "role": "realtime-gateway",
+          "status": "PASS",
+          "nodeVersion": "v26.8.1",
+          "uid": 1000,
+          "http": {
+            "live": 200,
+            "ready": 200,
+            "metrics": 200,
+            "unknown": 404
+          },
+          "familyCount": 34,
+          "families": {
+            "coffee_realtime_auth_close_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_connections": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.118975,
+              "max": 21.118975
+            },
+            "coffee_realtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 40781,
+              "max": 40781
+            },
+            "coffee_realtime_invalidation_attempts_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_invalidation_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_queue_bytes": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_queue_records": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_ring_bytes": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_ring_evictions_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_ring_records": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_scheduled_connections": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_slow_close_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_writing_connections": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "coffee_realtime_writing_records": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_admission_rejected_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "runtime_event_loop_delay_p50_ms": {
+              "count": 1,
+              "min": 20.07,
+              "max": 20.07
+            },
+            "runtime_event_loop_delay_p95_ms": {
+              "count": 1,
+              "min": 21.201,
+              "max": 21.201
+            },
+            "runtime_event_loop_delay_p99_ms": {
+              "count": 1,
+              "min": 23.085,
+              "max": 23.085
+            },
+            "runtime_event_loop_delay_samples": {
+              "count": 1,
+              "min": 37884,
+              "max": 37884
+            },
+            "runtime_event_loop_utilization": {
+              "count": 1,
+              "min": 0.045696,
+              "max": 0.045696
+            },
+            "runtime_gc_pause_count_total": {
+              "count": 1,
+              "min": 818,
+              "max": 818
+            },
+            "runtime_gc_pause_total_ms": {
+              "count": 1,
+              "min": 1026.917,
+              "max": 1026.917
+            },
+            "runtime_process_array_buffers_bytes": {
+              "count": 1,
+              "min": 838602,
+              "max": 838602
+            },
+            "runtime_process_external_bytes": {
+              "count": 1,
+              "min": 5053101,
+              "max": 5053101
+            },
+            "runtime_process_heap_total_bytes": {
+              "count": 1,
+              "min": 38789120,
+              "max": 38789120
+            },
+            "runtime_process_heap_used_bytes": {
+              "count": 1,
+              "min": 29973040,
+              "max": 29973040
+            },
+            "runtime_process_rss_bytes": {
+              "count": 1,
+              "min": 133648384,
+              "max": 133648384
+            },
+            "telemetry_export_failures_total": {
+              "count": 1,
+              "min": 103,
+              "max": 103
+            },
+            "telemetry_log_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_queue_overflows_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_records_dropped_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_serialization_rejections_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            },
+            "telemetry_shutdown_losses_total": {
+              "count": 1,
+              "min": 0,
+              "max": 0
+            }
+          }
+        }
+      ],
+      "otlpFamilies": [
+        {
+          "name": "runtime_http_requests_total",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "attributes": {
+            "http_response_status_class": "4xx"
+          },
+          "matches": [
+            {
+              "stream": "platform_metrics_runtime_http_requests_total",
+              "sampleCount": 44,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "runtime_http_request_duration_ms",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            "_count",
+            "_sum",
+            "_bucket"
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_runtime_http_request_duration_ms_bucket",
+              "sampleCount": 240832,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            },
+            {
+              "stream": "platform_metrics_runtime_http_request_duration_ms_count",
+              "sampleCount": 15011,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            },
+            {
+              "stream": "platform_metrics_runtime_http_request_duration_ms_sum",
+              "sampleCount": 15023,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "telemetry_log_records_dropped_total",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_telemetry_log_records_dropped_total",
+              "sampleCount": 4533,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "telemetry_records_dropped_total",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_telemetry_records_dropped_total",
+              "sampleCount": 4547,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "telemetry_export_failures_total",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_telemetry_export_failures_total",
+              "sampleCount": 4525,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "telemetry_serialization_rejections_total",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_telemetry_serialization_rejections_total",
+              "sampleCount": 4533,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "telemetry_queue_overflows_total",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_telemetry_queue_overflows_total",
+              "sampleCount": 4541,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "telemetry_shutdown_losses_total",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_telemetry_shutdown_losses_total",
+              "sampleCount": 4532,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "runtime_process_start_time_seconds",
+          "owners": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_runtime_process_start_time_seconds",
+              "sampleCount": 4524,
+              "services": [
+                "api-internal",
+                "api-public",
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "edge-gateway",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service",
+                "realtime-gateway"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "db.client.connection.waiting",
+          "owners": [
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_db_client_connection_waiting",
+              "sampleCount": 3387,
+              "services": [
+                "aroma-convergence",
+                "aroma-gateway",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "customer-service",
+                "orders-aroma-preparation",
+                "orders-service",
+                "pricing-service"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "messaging.kafka.consumer.lag",
+          "owners": [
+            "orders-aroma-preparation",
+            "aroma-convergence"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_messaging_kafka_consumer_lag",
+              "sampleCount": 20000,
+              "services": [
+                "aroma-convergence",
+                "orders-aroma-preparation"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "messaging.outbox.oldest_unpublished.age",
+          "owners": [
+            "catalog-activation-worker",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_messaging_outbox_oldest_unpublished_age",
+              "sampleCount": 3364,
+              "services": [
+                "aroma-convergence",
+                "aroma-observer",
+                "catalog-activation-worker",
+                "orders-aroma-preparation",
+                "orders-service"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "nginx_connections_current",
+          "owners": [
+            "edge-nginx"
+          ],
+          "components": [
+            ""
+          ],
+          "matches": [
+            {
+              "stream": "platform_metrics_nginx_connections_current",
+              "sampleCount": 140,
+              "services": [
+                "edge-nginx"
+              ]
+            }
+          ],
+          "status": "PASS"
+        },
+        {
+          "name": "httpcheck.status",
+          "owners": [
+            "edge-nginx"
+          ],
+          "components": [
+            ""
+          ],
+          "attributes": {
+            "http_status_class": "2xx"
+          },
+          "matches": [
+            {
+              "stream": "platform_metrics_httpcheck_status",
+              "sampleCount": 82,
+              "services": [
+                "edge-nginx"
+              ]
+            }
+          ],
+          "status": "PASS"
+        }
+      ],
+      "legacyTextScope": "Only /metrics text callbacks and runtime foundation counters; OTLP-only process, database and Kafka instruments are verified through their OpenObserve streams.",
+      "legacyTextFamilies": {
+        "common": [
+          "runtime_admission_rejected_total",
+          "telemetry_log_records_dropped_total",
+          "telemetry_records_dropped_total",
+          "telemetry_export_failures_total",
+          "telemetry_serialization_rejections_total",
+          "telemetry_queue_overflows_total",
+          "telemetry_shutdown_losses_total"
+        ],
+        "ownerSpecific": {
+          "edge-gateway": [],
+          "api-public": [],
+          "api-internal": [],
+          "customer-service": [],
+          "catalog-service": [],
+          "catalog-supplier-sync": [
+            "coffee_catalog_import_batches_total",
+            "coffee_catalog_import_batch_bytes_total",
+            "coffee_catalog_import_batch_duration_seconds_sum",
+            "coffee_catalog_import_batch_duration_seconds_count",
+            "coffee_catalog_import_backpressure_seconds_sum",
+            "coffee_catalog_import_backpressure_seconds_count",
+            "coffee_catalog_import_duration_seconds_sum",
+            "coffee_catalog_import_duration_seconds_count",
+            "coffee_catalog_import_age_seconds",
+            "coffee_catalog_import_has_success",
+            "coffee_catalog_import_results_total",
+            "coffee_catalog_import_scheduler_running",
+            "coffee_catalog_import_scheduler_skipped_total",
+            "coffee_catalog_import_scheduler_failure"
+          ],
+          "catalog-activation-worker": [
+            "coffee_catalog_activation_supervisor_up",
+            "coffee_catalog_activation_cycle_failed"
+          ],
+          "pricing-service": [
+            "coffee_pricing_quote_create_results_total",
+            "coffee_pricing_catalog_read_results_total",
+            "coffee_pricing_quote_verify_results_total",
+            "coffee_pricing_catalog_retry_results_total",
+            "coffee_pricing_database_results_total",
+            "coffee_pricing_operation_duration_ms_total",
+            "coffee_pricing_operation_duration_ms_count",
+            "coffee_pricing_quote_line_count_total"
+          ],
+          "orders-service": [
+            "coffee_orders_outbox_relay_ready"
+          ],
+          "orders-aroma-preparation": [
+            "coffee_aroma_preparation_inbox_results_total",
+            "coffee_aroma_preparation_recompute_results_total",
+            "coffee_aroma_preparation_projection_results_total",
+            "coffee_aroma_preparation_recovery_results_total",
+            "coffee_aroma_preparation_desired_revision",
+            "coffee_aroma_preparation_desired_age_ms",
+            "coffee_aroma_preparation_ready"
+          ],
+          "aroma-observer": [
+            "coffee_aroma_observation_results_total",
+            "coffee_aroma_observation_recovery_results_total",
+            "coffee_aroma_observation_fence_failures_total",
+            "coffee_aroma_observed_age_ms",
+            "coffee_aroma_observation_ready"
+          ],
+          "aroma-convergence": [
+            "coffee_aroma_attempt_results_total",
+            "coffee_aroma_recovery_results_total",
+            "coffee_aroma_mutation_calls_total",
+            "coffee_aroma_lease_failures_total",
+            "coffee_aroma_fence_failures_total",
+            "coffee_aroma_unknown_outcomes_total",
+            "coffee_aroma_blockers_total",
+            "coffee_aroma_provider_failures_total",
+            "coffee_aroma_observed_age_ms",
+            "coffee_aroma_convergence_ready"
+          ],
+          "aroma-gateway": [
+            "aroma_gateway_session_attempts_total",
+            "aroma_gateway_session_cache_hits_total",
+            "aroma_gateway_session_logins_total",
+            "aroma_gateway_session_failures_total",
+            "aroma_gateway_safe_read_attempts_total",
+            "aroma_gateway_safe_read_reauthenticated_total",
+            "aroma_gateway_safe_read_failures_total",
+            "aroma_gateway_safe_read_bytes_total",
+            "aroma_gateway_catalog_batches_total",
+            "aroma_gateway_catalog_batch_bytes_total",
+            "aroma_gateway_catalog_failures_total",
+            "aroma_gateway_journal_acquire_total",
+            "aroma_gateway_journal_dispatch_total",
+            "aroma_gateway_journal_terminal_persistence_total",
+            "aroma_gateway_mutation_acknowledged_total",
+            "aroma_gateway_mutation_rejected_total",
+            "aroma_gateway_mutation_unknown_total",
+            "aroma_gateway_provider_latency_ms_total",
+            "aroma_gateway_session_results_total",
+            "aroma_gateway_safe_read_results_total",
+            "aroma_gateway_catalog_results_total",
+            "aroma_gateway_journal_states_total",
+            "aroma_gateway_mutation_outcomes_total"
+          ],
+          "realtime-gateway": [
+            "coffee_realtime_connections",
+            "coffee_realtime_scheduled_connections",
+            "coffee_realtime_writing_connections",
+            "coffee_realtime_writing_records",
+            "coffee_realtime_queue_records",
+            "coffee_realtime_queue_bytes",
+            "coffee_realtime_ring_records",
+            "coffee_realtime_ring_bytes",
+            "coffee_realtime_slow_close_total",
+            "coffee_realtime_ring_evictions_total",
+            "coffee_realtime_auth_close_total",
+            "coffee_realtime_invalidation_attempts_total",
+            "coffee_realtime_invalidation_dropped_total",
+            "coffee_realtime_event_loop_delay_p95_ms",
+            "coffee_realtime_event_loop_delay_samples"
+          ]
+        }
+      }
+    },
+    "metricApplicability": {
+      "activityDependent": [
+        {
+          "name": "db.client.connection.checkout_wait",
+          "reason": "sample is produced by a database checkout operation",
+          "status": "NOT_ASSERTED_WITHOUT_ACTIVITY"
+        },
+        {
+          "name": "db.client.transaction.duration",
+          "reason": "sample is produced by a database transaction",
+          "status": "NOT_ASSERTED_WITHOUT_ACTIVITY"
+        },
+        {
+          "name": "db.client.transaction.count",
+          "reason": "sample is produced by a database transaction",
+          "status": "NOT_ASSERTED_WITHOUT_ACTIVITY"
+        },
+        {
+          "name": "messaging.kafka.event.age",
+          "reason": "sample is produced by a consumed Kafka record",
+          "status": "NOT_ASSERTED_WITHOUT_ACTIVITY"
+        },
+        {
+          "name": "messaging.kafka.consumer.lag",
+          "owners": [
+            "realtime-gateway"
+          ],
+          "reason": "a fresh realtime consumer group reports lag only after real consumption and commit; the mandatory launch proof checks it after activity",
+          "status": "NOT_ASSERTED_WITHOUT_ACTIVITY"
+        },
+        {
+          "name": "messaging.inbox.received.age",
+          "reason": "sample is produced by an Inbox delivery",
+          "status": "NOT_ASSERTED_WITHOUT_ACTIVITY"
+        }
+      ],
+      "optionalLegacyFamilies": {
+        "aroma-convergence": [
+          "coffee_aroma_unknown_outcomes_current"
+        ]
+      },
+      "outboxOwners": [
+        "catalog-activation-worker",
+        "orders-service",
+        "orders-aroma-preparation",
+        "aroma-observer",
+        "aroma-convergence"
+      ]
+    },
+    "images": [
+      {
+        "role": "edge-nginx",
+        "imageId": "sha256:a81108912e464b04c0a9dfb78c84e06088591bf11caf64af73866f8eb92a95bd",
+        "repoDigests": [],
+        "nginxVersion": "nginx/1.31.6",
+        "uid": 101,
+        "versionMatches": true,
+        "forbiddenTools": [],
+        "privateMaterialAbsent": true,
+        "status": "PASS"
+      },
+      {
+        "role": "edge-gateway",
+        "imageId": "sha256:c6c7fa7a0ee7134a21fb4cde2d2332a45bfdb6658e16ced1ce6dfed274ffdad1",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/edge-gateway",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "api-public",
+        "imageId": "sha256:9296fca0acb2d2f517e7d0e58902cb8bb28c6ae5549cf2ac9755c4dd415dc480",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/api-public",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "api-internal",
+        "imageId": "sha256:da2459281e7fa0e8f1641ef43d88d6c9b526d540cbb8fdcc45a8e692218dc64e",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/api-internal",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "customer-service",
+        "imageId": "sha256:93d9c1c806cd1029430023e4c338d1185f831ff05195a4f21fa22a7efb3e8a0b",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/customer-service",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-service",
+        "imageId": "sha256:f3abf54fe67296a92bda717479d5858c16eefef89bbed24a138cb17f1699a3c8",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/catalog-service",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-supplier-sync",
+        "imageId": "sha256:d281d1f4f6f0ac7b89ee71887f1a1011796866c25d6dfbf72e86df507b0d1ac5",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/catalog-supplier-sync",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "catalog-activation-worker",
+        "imageId": "sha256:e227524ac0fde52ddcf5e0fccf93b7c9629109f289bc53c4e52314b331878d95",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/catalog-activation-worker",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "pricing-service",
+        "imageId": "sha256:67cd250120d7da958de63370cf5efb67e2e5f8d4d439b3c36ba660a5633b9d2d",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/pricing-service",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "orders-service",
+        "imageId": "sha256:171c304f0fe04f90be52f5b5d1b7b87b8ab4ad9bb02d8db28facf56ecc17725d",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/orders-service",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "orders-aroma-preparation",
+        "imageId": "sha256:6ac21c49313d6d1dba78bf70d60e700e40cdba4f23c2d7420c39932a7b5d5d01",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/orders-aroma-preparation",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-observer",
+        "imageId": "sha256:a59418c589e1ae18b8dfaa58fa543130b7ae092871089377a6ffddbb501fa353",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/aroma-observer",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-convergence",
+        "imageId": "sha256:3111f7397580a78d47c913ff119590e3009376f41c8d154c96ff84465cddcb86",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/aroma-convergence",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "aroma-gateway",
+        "imageId": "sha256:f697fffe83277bea2ee288c8cef32ae7356912a0e1d425abe205cefe98225958",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/aroma-gateway",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      },
+      {
+        "role": "realtime-gateway",
+        "imageId": "sha256:be16494c6665960f3badbd7ed9f3f56f7372c0a0f2a1f0c5726e7ca65fd04e8b",
+        "repoDigests": [],
+        "nodeVersion": "v26.8.1",
+        "uid": 1000,
+        "packageName": "@coffee-platform/realtime-gateway",
+        "distMainPresent": true,
+        "packageScanComplete": true,
+        "forbiddenPackages": [],
+        "status": "PASS"
+      }
+    ],
+    "configuration": {
+      "nodeVersion": "26.8.1",
+      "nginxVersion": "1.31.6",
+      "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+      "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
+      "bomSha256": "dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab",
+      "platformConfigSha256": "0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9",
+      "rootToolingPackages": [
+        "@hey-api/openapi-ts",
+        "dependency-cruiser",
+        "oxlint",
+        "oxlint-tsgolint",
+        "playwright",
+        "prettier",
+        "typescript",
+        "vitest"
+      ]
+    }
+  },
+  "processCounterRestart": {
+    "status": "PASS",
+    "producer": {
+      "sameContainer": true,
+      "startedAtChanged": true,
+      "beforeStartedAt": "2026-10-18T09:46:13.837661946Z",
+      "afterStartedAt": "2026-10-18T09:48:12.419922486Z",
+      "beforeProcessId": 1,
+      "afterProcessId": 1,
+      "processStartTimeMetric": {
+        "before": {
+          "valueSeconds": 1792316773.9757729,
+          "timestampUs": 1792316890239000
+        },
+        "after": {
+          "valueSeconds": 1792316892.55476,
+          "timestampUs": 1792316894653000
+        },
+        "matchesRuntimeDiagnostics": true
+      },
+      "postRestartSdkMetrics": {
+        "runtimeReady": {
+          "value": 1,
+          "timestampUs": 1792316894653000
+        },
+        "httpRequests": {
+          "value": 1,
+          "timestampUs": 1792316894653000
+        }
+      },
+      "lossCounters": {
+        "before": {
+          "dropped": 769,
+          "exportFailures": 18,
+          "shutdownLoss": 0,
+          "serializationRejected": 0,
+          "queueOverflows": 769
+        },
+        "after": {
+          "dropped": 0,
+          "exportFailures": 0,
+          "shutdownLoss": 0,
+          "serializationRejected": 0,
+          "queueOverflows": 0
+        },
+        "storedBeforeRestart": {
+          "dropped": 769,
+          "exportFailures": 18
+        },
+        "reset": true
+      },
+      "abruptCrashLossMayBeIncomplete": true
+    },
+    "collector": {
+      "sameContainer": true,
+      "startedAtChanged": true,
+      "beforeStartedAt": "2026-10-18T09:46:18.406080905Z",
+      "afterStartedAt": "2026-10-18T09:48:02.340699666Z",
+      "processUptime": {
+        "metric": "otelcol_process_uptime",
+        "before": {
+          "valueSeconds": 88.626712357,
+          "timestampUs": 1792316869794000
+        },
+        "after": {
+          "valueSeconds": 6.904045764,
+          "timestampUs": 1792316889791000
+        },
+        "instanceIdentityChanged": true
+      },
+      "postRestartQueueAndSentMetricsOnly": true,
+      "lossCounterWindowEndsAtRestart": true,
+      "abruptCrashLossMayBeIncomplete": true
+    }
+  },
+  "collectorMemoryProof": {
+    "status": "PASS",
+    "containerGeneration": {
+      "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+      "startedAt": "2026-10-18T09:46:18.406080905Z",
+      "sameGenerationAsStartupBaseline": true,
+      "sameGenerationAfterProbe": true
+    },
+    "limits": {
+      "hardLimitMiB": 256,
+      "spikeLimitMiB": 64,
+      "softLimitMiB": 192,
+      "containerLimitMiB": 1024,
+      "cgroupGuardBytes": 1006632960,
+      "guardReserveMiB": 64,
+      "samplerIntervalMs": 50,
+      "samplerFreshnessMs": 100,
+      "maxPacketBytes": 524288,
+      "maxWireBytes": 268435456,
+      "maxWireBytesPerSecond": 33554432,
+      "deadlineMs": 60000
+    },
+    "cgroup": {
+      "baseline": {
+        "sequence": 2,
+        "currentBytes": 559132672,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 563437568,
+        "anonBytes": 71634944,
+        "fileBytes": 484319232,
+        "kernelBytes": 2867200,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792316816000
+      },
+      "baselineBytes": 559132672,
+      "peakBytes": 765841408,
+      "maxBytes": 1073741824,
+      "final": {
+        "sequence": 724,
+        "currentBytes": 696184832,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 765841408,
+        "anonBytes": 207863808,
+        "fileBytes": 484814848,
+        "kernelBytes": 3293184,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792316856000
+      },
+      "oom": 0,
+      "oomKill": 0
+    },
+    "metrics": {
+      "processor": "memory_limiter",
+      "refused": "otelcol_processor_memory_limiter_refused_spans",
+      "accepted": "otelcol_processor_memory_limiter_accepted_spans",
+      "baseline": {
+        "counters": {
+          "refused": 0,
+          "accepted": 13
+        },
+        "sampledAt": "2026-10-18T09:46:56.484Z",
+        "containerId": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+        "startedAt": "2026-10-18T09:46:18.406080905Z"
+      },
+      "afterRecovery": {
+        "counters": {
+          "refused": 5,
+          "accepted": 567
+        },
+        "sampledAt": "2026-10-18T09:47:36.825Z",
+        "containerId": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+        "startedAt": "2026-10-18T09:46:18.406080905Z"
+      }
+    },
+    "pressure": {
+      "packetCount": 546,
+      "wireBytes": 112765380,
+      "elapsedMs": 40341
+    },
+    "refusal": {
+      "httpStatus": 503,
+      "otlpCode": 14,
+      "refusedSpansDelta": 1,
+      "packetCount": 546,
+      "wireBytes": 112765380,
+      "observedAt": "2026-10-18T09:47:15.330Z"
+    },
+    "recovery": {
+      "httpStatus": 200,
+      "acceptedSpansDelta": 1,
+      "observedAt": "2026-10-18T09:47:36.851Z"
+    },
+    "durableExportProven": true,
+    "startupBaseline": {
+      "status": "PASS",
+      "stage": "initial-healthy-baseline",
+      "containerGeneration": {
+        "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+        "startedAt": "2026-10-18T09:46:18.406080905Z",
+        "sameGenerationAfterCapture": true
+      },
+      "limits": {
+        "containerLimitMiB": 1024,
+        "cgroupGuardBytes": 1006632960
+      },
+      "sample": {
+        "sequence": 1,
+        "currentBytes": 554057728,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 558661632,
+        "anonBytes": 68636672,
+        "fileBytes": 482373632,
+        "kernelBytes": 2912256,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792316785000
+      },
+      "sampler": {
+        "containerLimitMiB": 1024,
+        "maxBytes": 1073741824,
+        "guardBytes": 1006632960,
+        "guardReserveMiB": 64,
+        "peakBytes": 558661632,
+        "latestSample": {
+          "sequence": 1,
+          "currentBytes": 554057728,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 558661632,
+          "anonBytes": 68636672,
+          "fileBytes": 482373632,
+          "kernelBytes": 2912256,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316785000
+        }
+      },
+      "samplerStopped": true
+    },
+    "markerAdmission": {
+      "status": "PASS",
+      "attempts": 2,
+      "refusedAttempts": 1,
+      "lastHttpStatus": 200,
+      "lastOtlpCode": null,
+      "lastRefusal": false,
+      "elapsedMs": 1009
+    },
+    "marker": {
+      "traceId": "1d7767c9569f6a230a8b656dbbcaf5c3",
+      "spanName": "g14.collector.memory.recovered",
+      "runId": "55045c74-bf13-4ccd-a64d-ea973ea7aa40",
+      "acceptedAt": "2026-10-18T09:47:55.910Z",
+      "backendConfirmation": {
+        "stream": "platform_traces",
+        "exactTraceId": true,
+        "matchingRecords": 1
+      }
+    }
+  },
+  "collectorMemoryDiagnostics": {
+    "status": "PASS",
+    "stage": "recovery-accepted",
+    "containerGeneration": {
+      "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+      "startedAt": "2026-10-18T09:46:18.406080905Z",
+      "sameGenerationAsStartupBaseline": true,
+      "sameGenerationAfterProbe": true
+    },
+    "startupBaseline": {
+      "status": "PASS",
+      "stage": "initial-healthy-baseline",
+      "containerGeneration": {
+        "id": "8b692417f8025e64865a3172715275036438f2acf41097bfaeceb88593d5b7c7",
+        "startedAt": "2026-10-18T09:46:18.406080905Z",
+        "sameGenerationAfterCapture": true
+      },
+      "limits": {
+        "containerLimitMiB": 1024,
+        "cgroupGuardBytes": 1006632960
+      },
+      "sample": {
+        "sequence": 1,
+        "currentBytes": 554057728,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 558661632,
+        "anonBytes": 68636672,
+        "fileBytes": 482373632,
+        "kernelBytes": 2912256,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792316785000
+      },
+      "sampler": {
+        "containerLimitMiB": 1024,
+        "maxBytes": 1073741824,
+        "guardBytes": 1006632960,
+        "guardReserveMiB": 64,
+        "peakBytes": 558661632,
+        "latestSample": {
+          "sequence": 1,
+          "currentBytes": 554057728,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 558661632,
+          "anonBytes": 68636672,
+          "fileBytes": 482373632,
+          "kernelBytes": 2912256,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792316785000
+        }
+      },
+      "samplerStopped": true
+    },
+    "limits": {
+      "hardLimitMiB": 256,
+      "spikeLimitMiB": 64,
+      "softLimitMiB": 192,
+      "containerLimitMiB": 1024,
+      "cgroupGuardBytes": 1006632960,
+      "guardReserveMiB": 64
+    },
+    "cgroup": {
+      "baseline": {
+        "sequence": 2,
+        "currentBytes": 559132672,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 563437568,
+        "anonBytes": 71634944,
+        "fileBytes": 484319232,
+        "kernelBytes": 2867200,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792316816000
+      },
+      "containerLimitMiB": 1024,
+      "maxBytes": 1073741824,
+      "guardBytes": 1006632960,
+      "guardReserveMiB": 64,
+      "peakBytes": 765841408,
+      "latestSample": {
+        "sequence": 724,
+        "currentBytes": 696184832,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 765841408,
+        "anonBytes": 207863808,
+        "fileBytes": 484814848,
+        "kernelBytes": 3293184,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792316856000
+      },
+      "oom": 0,
+      "oomKill": 0
+    },
+    "baselineCounters": {
+      "refused": 0,
+      "accepted": 13
+    },
+    "pressure": {
+      "packetCount": 546,
+      "wireBytes": 112765380
+    },
+    "refusal": {
+      "httpStatus": 503,
+      "otlpCode": 14,
+      "refusedSpansDelta": 1,
+      "packetCount": 546,
+      "wireBytes": 112765380
+    },
+    "recovery": {
+      "httpStatus": 200,
+      "acceptedSpansDelta": 1
+    },
+    "samplerStopped": true
+  },
+  "diskPressure": {
+    "status": "PASS",
+    "maximumWriteBytes": 912680550,
+    "writtenBytes": 751754240,
+    "fileDev": 1811,
+    "fileInode": 9450,
+    "dataUsedPercent": 82.96,
+    "dataDfReportedPercent": 84,
+    "rootUsedPercent": 83.23,
+    "rootDfReportedPercent": 83,
+    "aggregateUsedPercent": 83.21,
+    "watermarkPercent": 80,
+    "rootReservedHeadroomBytes": 269283328,
+    "generatedDataGuardRejected": true,
+    "nativeScopedIngestStatus": 503,
+    "cleanupVerified": true,
+    "recoveredIngestStatus": 200
+  },
+  "nativeNginxAvailability": {
+    "status": "PASS",
+    "runId": "55045c74-bf13-4ccd-a64d-ea973ea7aa40",
+    "ruleName": "g14-v1-service-not-ready",
+    "signal": "native HTTP availability; full-system readiness not claimed",
+    "containerId": "a9112a94e10a273234761b1a272aa65696f50a8589a0c056699f89465f13a77e",
+    "pendingPeriodSec": 300,
+    "episodeId": "3Krb5cYuLqVBAvjsERwDV3bK6CU",
+    "healthyValue": 1,
+    "failedValue": 0,
+    "recoveredValue": 1,
+    "baselineStableMs": 66746,
+    "errorMetricSamples": 1,
+    "rawErrorMessageMetricLabelAbsent": true,
+    "rawUrlMetricLabelAbsent": true,
+    "failedAtUs": 1792318039131000,
+    "firingReceivedAt": "2026-10-18T10:14:12.172Z",
+    "resolvedReceivedAt": "2026-10-18T10:16:12.689Z",
+    "nodeOwners": [
+      "edge-gateway",
+      "api-public",
+      "api-internal",
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+      "realtime-gateway"
+    ],
+    "nodeHealthObservations": 142,
+    "allNodeHealthObservationsPassed": true,
+    "freshNodeReadyMetricsBeforeFailureAtFiringAfterRecovery": true,
+    "exactContainerRecoveredWithoutOOM": true
+  },
+  "networkIsolation": {
+    "status": "PASS",
+    "producerOpenObserveDnsBlocked": true,
+    "producerOpenObserveIpBlocked": true,
+    "managementEndpointScope": "isolated-runner-to-private-backend-ip",
+    "managementEndpoints": [
+      {
+        "service": "openobserve",
+        "address": "172.20.0.2:5080",
+        "network": "coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-backend",
+        "hostBindingsAbsent": true
+      },
+      {
+        "service": "otel-collector",
+        "address": "172.20.0.3:13133",
+        "network": "coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-backend",
+        "hostBindingsAbsent": true
+      },
+      {
+        "service": "synthetic-runtime",
+        "address": "172.21.0.2:4310",
+        "network": "coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-producer",
+        "hostBindingsAbsent": true
+      }
+    ],
+    "openObserveHostBindingsAbsent": true,
+    "openObserveAttachedOnlyToBackend": true,
+    "collectorHostBindingsAbsent": true,
+    "collectorAttachedOnlyToFixtureNetworks": true,
+    "producerHostBindingsAbsent": true,
+    "producerAttachedOnlyToProducerNetwork": true,
+    "launchPathOpenObserveDnsBlocked": true,
+    "launchPathOpenObserveIpBlocked": true,
+    "launchPathNetworkStatus": "PASS",
+    "runtimeMetricMatrix": {
+      "status": "PASS",
+      "zones": [
+        {
+          "network": "coffee-issue64-final-55045c74_coffee_edge_backend",
+          "dnsBlocked": true,
+          "ipBlocked": true
+        },
+        {
+          "network": "coffee-issue64-final-55045c74_coffee_public_api_backend",
+          "dnsBlocked": true,
+          "ipBlocked": true
+        },
+        {
+          "network": "coffee-issue64-final-55045c74_coffee_internal_api",
+          "dnsBlocked": true,
+          "ipBlocked": true
+        },
+        {
+          "network": "coffee-issue64-final-55045c74_coffee_kafka_event",
+          "dnsBlocked": true,
+          "ipBlocked": true
+        }
+      ]
+    }
+  },
+  "openObserveDisk": {
+    "mounts": [
+      {
+        "mountPoint": "/",
+        "filesystem": "overlay"
+      },
+      {
+        "mountPoint": "/data",
+        "filesystem": "ext4"
+      }
+    ],
+    "filesystemUsage": [
+      {
+        "mountPoint": "/",
+        "totalBytes": 15215902720,
+        "usedBytes": 11721515008,
+        "usedPercent": 77
+      },
+      {
+        "mountPoint": "/data",
+        "totalBytes": 1020702720,
+        "usedBytes": 6098944,
+        "usedPercent": 1
+      }
+    ],
+    "nodeDiskMetrics": []
+  },
+  "executionMode": "qemu-user-emulation"
+}

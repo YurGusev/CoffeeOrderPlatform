@@ -1,0 +1,28 @@
+{
+  "runId": "55045c74-bf13-4ccd-a64d-ea973ea7aa40",
+  "status": "PASS",
+  "configuredDays": 3,
+  "fixtureOnlyIngestWindowHours": 120,
+  "backdatedRecordVisible": true,
+  "ttlRemovedRecord": true,
+  "usedPercent": 9.67,
+  "watermarkPercent": 80,
+  "diskPressure": {
+    "status": "PASS",
+    "maximumWriteBytes": 912680550,
+    "writtenBytes": 751754240,
+    "fileDev": 1811,
+    "fileInode": 9450,
+    "dataUsedPercent": 82.96,
+    "dataDfReportedPercent": 84,
+    "rootUsedPercent": 83.23,
+    "rootDfReportedPercent": 83,
+    "aggregateUsedPercent": 83.21,
+    "watermarkPercent": 80,
+    "rootReservedHeadroomBytes": 269283328,
+    "generatedDataGuardRejected": true,
+    "nativeScopedIngestStatus": 503,
+    "cleanupVerified": true,
+    "recoveredIngestStatus": 200
+  }
+}

@@ -1,0 +1,722 @@
+issue: 64
+baseCommit: d6d860af092e3874f58d31506d473fe75dfc3d2f
+status: verified
+inputs:
+- acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+  artifact: evidence/handoffs/issue-60.yaml
+  issue: 60
+  sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+- acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+  artifact: evidence/handoffs/issue-4.yaml
+  issue: 4
+  sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+- acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+  artifact: evidence/handoffs/issue-61.yaml
+  issue: 61
+  sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+- acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+  artifact: evidence/handoffs/issue-62.yaml
+  issue: 62
+  sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+- acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+  artifact: evidence/handoffs/issue-63.yaml
+  issue: 63
+  sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+- acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+  artifact: evidence/handoffs/issue-162.yaml
+  issue: 162
+  sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+- acceptedMergeCommit: d6d860af092e3874f58d31506d473fe75dfc3d2f
+  artifact: evidence/handoffs/issue-12.yaml
+  issue: 12
+  sha256: 447a52e667d23502d0c29a25311dd9e96a8e08f6030e666f797eb2aa2c8caa8f
+- acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+  artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+  issue: 60
+  sha256: 108de7042b7546cae60e4fe807fe1bb8640d464e37caed1bb5a147f0c1abc141
+outputs:
+- artifact: .gitignore
+  sha256: ac492347816b8ed42554da151b866c5581e9c7a85f340301fb1500e190c779ad
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: apps/aroma-convergence/src/infrastructure/convergence-store.ts
+  sha256: 85e98ab99b270b254fa514b82b4ccbb9ee8b6e7e0ef86a56152988dc697a1b21
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: apps/aroma-convergence/src/observability.ts
+  sha256: db716467dfd9eb97e94bd355ef9edf1f1675cd1020427b3440ce9f6d6d04f338
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: apps/catalog-activation-worker/src/main.ts
+  sha256: 5286d5eb426a5f796099dea7bfbb9dcc898af79ccf336076980bc1095b76ed91
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: apps/edge-nginx/Dockerfile
+  sha256: c91f9c0cc21a9849c9060c0da3cdeb34d2593519be0bcd4e9d71bcb50110d899
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: apps/edge-nginx/snippets/business-headers.conf
+  sha256: bd6388e010f61a55aad9eefcd47c519bbdfaeb77856b314da89dc8b666391d19
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: apps/realtime-gateway/package.json
+  sha256: 78bcadcdda641d8e2538194a88389c39f5b50f00be1dcc922ddf5cdc85192720
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: apps/realtime-gateway/src/hub.ts
+  sha256: ede37d2e7c01e38f1cac81e170ab8a8f769f5c5514bb5cccb54663d4f25c31fa
+  consumers:
+  - 30
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: apps/realtime-gateway/src/runtime-composition.ts
+  sha256: 40ba47ba1d9c2b94f9dd4d827bbb4ec24decd5e1d3e22c0cab4c8bec92e4f32d
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: config/platform.schema.json
+  sha256: cae8258f4e43d39a6b53398161f04788c18880f2afecfb9120163f491d202199
+  consumers:
+  - 23
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: config/platform.yaml
+  sha256: 0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9
+  consumers:
+  - 4
+  - 16
+  - 22
+  - 36
+  - 37
+  - 40
+  - 65
+  - 87
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: config/service-catalog.json
+  sha256: c98ac6c44f0ef107d6b7f93cdad2766b2c9c3d033986b88de845b3c88c90cbd1
+  consumers:
+  - 14
+  - 24
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: config/service-catalog.schema.json
+  sha256: 42f3c4b3be2e059438dd206f8542f2916c3aed674789a0113b8a8b3de89921b6
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: config/toolchain-versions.json
+  sha256: dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab
+  consumers:
+  - 17
+  - 19
+  - 84
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: config/toolchain-versions.schema.json
+  sha256: e5e1f1807eba8aeeef36f06cb4c2466a15ce302355ca8789631c064f57dc296d
+  consumers:
+  - 18
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
+  sha256: 93fd94b5074005aa478d60fd633c23ddf1fa26848f68468a0b34bfa2c11ef989
+  consumers:
+  - 2
+  - 77
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+  sha256: b56a03e6cc32aaffc2e7e8d39737fb80669f83488f9d29aaf74e335fe5c766d3
+  consumers:
+  - 1
+  - 76
+  - 94
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+  sha256: a77dd1450e84e4466831b50afeff21189dcd63e0c4b34c3d3047bbad8b2ba92c
+  consumers:
+  - 2
+  - 7
+  - 31
+  - 45
+  - 52
+  - 76
+  - 79
+  - 80
+  - 96
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+  sha256: 3d8869c554481dfa87b9fde66a9e377c9b60ce4140e8cfd41ea25042bf98730d
+  consumers:
+  - 77
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: docs/launch/README.md
+  sha256: 0f538189afb3c0eda523bdfbe16ce5280841fce0c6546d9df11a11576d219d28
+  consumers:
+  - 76
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: docs/operations/observability.md
+  sha256: 2dae1776f84f6b55564b89b74fd4168299be9a56786b3033e7f7ffc0999628e9
+  consumers:
+  - 6
+  - 31
+  - 43
+  - 45
+  - 78
+  - 95
+  - 96
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: package.json
+  sha256: 71b837d8ee12ed7a1d95f8798845af1d33dda198664be1786f048b94750cc590
+  consumers:
+  - 19
+  - 44
+  - 67
+  - 68
+  - 69
+  - 70
+  - 71
+  - 72
+  - 73
+  - 74
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-config/src/index.ts
+  sha256: 437e0dad348a0108ac067bbef67407702c71a83360dd5139ef295de279b5497c
+  consumers:
+  - 36
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-database/package.json
+  sha256: decab3078a55e47022ba8ef82770a484219514c4970b5d3664230a8d72e10f59
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-database/src/index.ts
+  sha256: 2c05a4006477fa42389837cfd8a82fc002e92bc4059ab6aea56a3c72a86000cb
+  consumers:
+  - 15
+  - 30
+  - 81
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-database/src/internal.ts
+  sha256: d1571a3d5fdfcb74cfb732b729421f65a5d967cd34dd40e07f5affa252567d71
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-http/package.json
+  sha256: bffec0b53dfa8a093b0e1c486c3ca20ad9501e02149c93d16ab2a1b0c801365d
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-http/src/index.ts
+  sha256: 228444cbc84ba1c9710b285ba3085ac7fa28358cf3bda8699e9beecdeb805f9a
+  consumers:
+  - 30
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-inbox/package.json
+  sha256: 26b3e4705f47e44e789750513dc27d92268465e52c3f04849466557d6fce9f96
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-inbox/src/index.ts
+  sha256: ff711efaf6c0cbfed21aff58d508140f786ce9e9f1f4fd1c1f2c26d05292feef
+  consumers:
+  - 30
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-kafka-runtime/package.json
+  sha256: 20d1a7891277c3ec4741cf9640f83a22dcf9c35d78d8f90df7387a3b267d9f04
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-kafka-runtime/src/index.ts
+  sha256: ca5c1537071bb461d079b5b59a0645ae0b212585f97bfa8e7e536e7668c0df92
+  consumers:
+  - 3
+  - 30
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-kafka-runtime/src/native.ts
+  sha256: 195bc07fbd4693f54953774aa6871c69d69bf204c51439248b8ec9cf926b5f7f
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-observability/package.json
+  sha256: 92ecd452f9daf6fcc46ebe20beb0fea28e6243a615a1e932373d03ef7b69b9d9
+  consumers:
+  - 20
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-observability/src/index.ts
+  sha256: 561afbac3b584aae770f87e84f581534821ca1e32e58c6d49c048bfa648ba7af
+  consumers:
+  - 3
+  - 5
+  - 10
+  - 11
+  - 12
+  - 13
+  - 28
+  - 31
+  - 32
+  - 34
+  - 35
+  - 38
+  - 55
+  - 88
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-outbox/package.json
+  sha256: 9aa9f7d6983d49d8cb937fd9249d01fc444a8ebe8008b536ce35847c10330db4
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-outbox/src/index.ts
+  sha256: 84e7d10b51262abe65ad3e620e26c32ee4938f5dae010f372f29b11ba305eab7
+  consumers:
+  - 30
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-runtime/package.json
+  sha256: 79ce8e0082cb72cf0c6ebdbbffc769827b297b566ccc44778a91f63cd29e4114
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-runtime/src/index.ts
+  sha256: e2b6d087661161806e78cc8bfd9f9804830feac3833d9fdce56cebc11858858e
+  consumers:
+  - 3
+  - 29
+  - 30
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: packages/platform-testing/test/platform-packages.test.mjs
+  sha256: 49cf0fd0a4db6dde9bfabbef6907607615a4736c7ac28ae83af5dddbb1af0644
+  consumers:
+  - 53
+  - 56
+  - 57
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: pnpm-lock.yaml
+  sha256: 62d117c22e5efdcf716a345a3ffce15d16b8ff63d5e6a8b7a47669dd75696c22
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: scripts/check-service-catalog.mjs
+  sha256: de90bc487c00dad108b338ed55f05a6943cab9ab60f48774a153455988d1010d
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: scripts/check-toolchain-profiles.mjs
+  sha256: efc3b9d82b8496e132ef58f47e8bf32d7fb0ef670fe0ef772addb0b27c8c0d15
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: scripts/check-toolchain-versions.mjs
+  sha256: 0afce952ae9847faf2b997d669adb74eb6572e283e87c039a534a35f850826db
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: scripts/config-lib.mjs
+  sha256: 664d159cb8eaf85d9dc6f8a8c1f6defb744cd299aca24c5ee16699696f201512
+  consumers:
+  - 24
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: scripts/permission-audit.mjs
+  sha256: 34f17e4effc4bb93ba890418ea85cf1c498808080b56696707485ff15ad2d561
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: secrets/platform-secrets.schema.json
+  sha256: af0879a48cb4477e1cc3c6174e9662446f7cbe2b51358eb0fe22137a396ae7fd
+  consumers:
+  - 24
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/aroma/convergence-live.test.mjs
+  sha256: 2b333faf39f88b5389ffe2ff9823881b788ab8fa0662f7885a15821c403ed12d
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/compose/topology.test.mjs
+  sha256: b31eeb0ea747baf284f129075d6f806c4eda9dd96b1a7c737826b2c06aad1910
+  consumers:
+  - 26
+  - 65
+  - 72
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/config/observability-bootstrap.test.mjs
+  sha256: 51193854256b0c886326ddb84d3836110878ac02f3d8e2adb088cc9aa9b47d66
+  consumers:
+  - 16
+  - 31
+  - 37
+  - 38
+  - 39
+  - 45
+  - 66
+  - 95
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/config/platform-config.test.mjs
+  sha256: 4fed82449d1013bbb23e4eefd9d398a5263a968e109a5da720d1b2eb1b5facce
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/kafka/orders-inbox-live.test.mjs
+  sha256: 883368858f432dae55d97dd73988e59365b122fb98c9be8bd42175c9135768cf
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/kafka/runtime.test.mjs
+  sha256: 48102657e1920986ab42689ade6e37cdabae44b823c98289cb4d46b999488c7c
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/nginx/image.test.mjs
+  sha256: 61b0b04481c162a475ecec184ecc9a20f5c13f2ce61e4d3c66ec812de5480626
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/observability/alerts.test.mjs
+  sha256: 52de1a6ed823817327b36366396718cca9f3a450a75afe892c55d5646a815065
+  consumers:
+  - 45
+  - 48
+  - 96
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/observability/convergence-metrics-proof.mjs
+  sha256: c17c9241dab4e07a096b7d86cd04c8bddf901328abfc09355d89042b1ac964c0
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/observability/fixture.mjs
+  sha256: c42fcff19ed574e9c4c95d408ccd595c2b924e583c577e88dd0073fc54d7b06a
+  consumers:
+  - 33
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/observability/launch-path.mjs
+  sha256: 5152ef00e3e27532e04e08068235fdee597bff6a6c124f96d66d1210135aa033
+  consumers:
+  - 49
+  - 54
+  - 63
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/observability/orders-fixture.mjs
+  sha256: a49313caf55b3455997e3396466694bf6854f56d0520537509aa680842fe357f
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/observability/runtime-matrix-probe.mjs
+  sha256: c8a5d09f46ee4609f14dbc2bbf5c8564c237846d46a9389c4f5a4ca4aba29a56
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/observability/runtime-matrix.mjs
+  sha256: 06890ec202b1e3b518ff72e2c7dd6be25294c73dba767591b5087808fb551cb6
+  consumers:
+  - 48
+  - 65
+  - 74
+  - 96
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/observability/storage.test.mjs
+  sha256: 76320e434946ff802226f8bd96e79efac985e15d71310e1f2d78b209ce87f6f0
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/orders/aroma-preparation-live.test.mjs
+  sha256: 0f1521fb1685ea7c1780724a43b5873540c1c30d044243df527bcbf80aa746e5
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/orders/observability.test.mjs
+  sha256: cbe5f6467da945e18c7bc975f07f68fe55063dce8f3538bf6b060725a1c110c5
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/realtime/backpressure.test.mjs
+  sha256: 94649a8f70c12cb50ecc9edbef62102cd6a5756ad031dd40d09c87d50485276a
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/realtime/fixtures/harness.test.mjs
+  sha256: 87393021e2e23f7666e7b3c80071591f39a282e1221fc908fb9fca5b90d0a80b
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/realtime/fixtures/owner-browser.mjs
+  sha256: 0e4138bdd21e5199b8283465934310ba2e543c58b21055740f2af22a9f92e9af
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/realtime/fixtures/owner-publisher.mjs
+  sha256: 8c301699eee8dff63e85a1a0b97038552a0abf9b42aacb7f626fda1031e58fe8
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/realtime/fixtures/services.mjs
+  sha256: 9fc4f0f663671bb5686204685633d05d2b8bd34c294ac782990b568d4f17aae6
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/realtime/fixtures/setup.mjs
+  sha256: 82bd0af8e1a9c8118721f535567d9dde1e5f154b77dc719bfe0040618a80e7c6
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/realtime/soak.test.mjs
+  sha256: 8f4ebe759fba1d31b0371a6be12c8c6c09fd972925757e778a2cc23b51c30073
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/runtime/lifecycle.test.mjs
+  sha256: fa6494253d729f67c782e8a08259f3fc012905fee5103a6398b1728818ea409e
+  consumers:
+  - 33
+  - 53
+  - 56
+  - 58
+  - 66
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/runtime/permissions.test.mjs
+  sha256: 6fab7e0d3489879a93eddb34216087f966afe189bba54929da8c4e127313ff80
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tests/runtime/platform-http.test.mjs
+  sha256: 5fa11863e28327ad897fbe5cb45df2d24d2192a68a8cd6de04e70c43eeba389f
+  consumers:
+  - 3
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/compose-smoke.mjs
+  sha256: 3216b888af90b275b74f140080ddb4a2f492f2f4c6437f61122e7cae1c6d2a77
+  consumers:
+  - 72
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/config-bootstrap/index.mjs
+  sha256: a74e4ecb70fe9f28f337b0f410b7fa9c29ed554d184865484ee7d276fa7f71e5
+  consumers:
+  - 24
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/docker-build.mjs
+  sha256: 88b2325206cbd80ecb892b8b7133c95d8c6803ed08338917b1d17f68bdcfb48b
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/nginx/check-config.mjs
+  sha256: 7f1d3eb718d4e5756193c5f91f2a2137672300a58c67d306afc1c086d85aa9a3
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/nginx/generate.mjs
+  sha256: 4212d662f6b34b1d6480003e5e6810ec41fb186598a4354934874ae81dd226bb
+  consumers:
+  - 95
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/observability/alert-sink.mjs
+  sha256: a70c3f521f5133cb6e896ffa5359e68f203fe3cd5da602e145f6557718020d7f
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/observability/alerts.mjs
+  sha256: 76859d5c0aab4d9a84b714afacc7d895984cfafa54995d249af0fa23e60c0ab8
+  consumers:
+  - 45
+  - 47
+  - 89
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/observability/bootstrap.mjs
+  sha256: 1795cb5ac316476959179fdec51977ab1f053948af953509bee077ddea57c35f
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/observability/generate.mjs
+  sha256: 6b38e0d9154e0ede5447e6ed6f61634d0a7e42c70c3c954712f70e43936361f5
+  consumers:
+  - 8
+  - 9
+  - 16
+  - 21
+  - 25
+  - 26
+  - 27
+  - 31
+  - 33
+  - 36
+  - 39
+  - 40
+  - 41
+  - 42
+  - 45
+  - 65
+  - 85
+  - 86
+  - 95
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/observability/health.mjs
+  sha256: aa35be55023cd8857f1f78eac7c48a1940ac9e8867416caba3fd483e68462665
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/observability/storage.mjs
+  sha256: e527724cb5602c21d787edf7f6603a1c967d518a2f8d611b2c750a1b8a653c0c
+  consumers: []
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: tools/observability/verify.mjs
+  sha256: b4453b325003fb3aae4cc75f48b6adbacf971490d1a8c465aa1aa94d464c41cc
+  consumers:
+  - 31
+  - 33
+  - 38
+  - 45
+  - 46
+  - 47
+  - 48
+  - 50
+  - 51
+  - 54
+  - 59
+  - 60
+  - 61
+  - 62
+  - 63
+  - 64
+  - 65
+  - 73
+  - 82
+  - 83
+  - 95
+  - 96
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+- artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/result.json
+  sha256: 80b371ddc38a7c2d9a6548c5371b5b87e48f79bfe291178a9205d57c6c741f9a
+  consumers:
+  - 13
+- artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/alert-transitions.json
+  sha256: 727fefaf15a5615e2c16c019a6dda94f2c5850de8ca937b7729304e945fb4b18
+  consumers:
+  - 13
+- artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/correlation-proof.json
+  sha256: c977861746aa695b4e81250625e08c7ec48829799ef409bcf0b038231739e5ee
+  consumers:
+  - 13
+- artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/host-transport.json
+  sha256: bcdda5c0f55f9a9ba1d62999f5ee5c4232c0ed7c6eb5d647245c149484d951b6
+  consumers:
+  - 13
+- artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/queue-loss-counters.json
+  sha256: 1a6a223ecc9e48a9898c7860ca50780ccc9ccdd2f3ada10558dd2cc4e470987d
+  consumers:
+  - 13
+- artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/redaction-scan.json
+  sha256: 6e07bab3af49af44779dea2e1885f60f77305df09f6a92f79b567eb7afb94290
+  consumers:
+  - 13
+- artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/retention-result.json
+  sha256: fdb8e66954ae1dcb0e7794ecd05b077cc908361a50096d033e1f659730dcf4f5
+  consumers:
+  - 13
+- artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/runtime-health-matrix.json
+  sha256: 513a45251404bec176ecb7b4941a7752459c37ff880de81b36a731f4f826efde
+  consumers:
+  - 13
+- artifact: evidence/issue-64-local-checks.json
+  sha256: f82eaefa1a1c90ff47813d4526ca7cd88ca4fc7b23fab548249081c51c8c6118
+  consumers:
+  - 13
+- artifact: evidence/issue-64-checkbox-audit.json
+  sha256: b975a0b4bbe05b1745b6d672fde1d42d1330228c87abe8447b370fb9506e73bf
+  consumers:
+  - 13
+- artifact: evidence/issue-64-host-cleanup.json
+  sha256: e69f432e5e9e2dd420eb08861584d0bbebc8a8de3355a25dee87beede55da5c0
+  consumers:
+  - 13
+verification:
+  sourceRoot: SOURCE_ROOT_VERIFIED_RUNTIME_AND_CHECKS_PENDING
+  full8: PASS_ROOT_VERIFIED_CURRENT_HEAD_FULL8_AFTER_EXACT137
+  canonicalG14: PASS_ROOT_VERIFIED_CURRENT_CANONICAL
+  literalCompose: PASS_ROOT_VERIFIED_LITERAL_COMPOSE_CURRENT_HEAD
+  imageBuild: PASS_ROOT_VERIFIED_ALL_15_CURRENT_IMAGES_LOADED
+  hostCleanup: PASS
+  fullSystemG14: NOT_RUN_ISSUE13
+limitations:
+- 'Полная системная проверка G14 для issue #13 и official consumer verification не запускались.'
+- В полном наборе тестов пропущено 77 проверок; пропуски не считаются PASS.
+- OpenObserve под QEMU подтверждает функциональную интеграцию; native capacity, SLO и контролируемый холодный cache не проверены.
+- Точный объём потерь Docker logging driver и abrupt-crash loss не доказан; process-scoped producer counters не являются durable
+  crash-loss accounting.
+- Причины исторических QUERY_FAILED, Query read timeout, unhealthy aroma-observer, restore-up/HTTP 504 и кратких readiness-сбоев
+  текущего прогона не установлены; успешный повтор не доказывает их причинное исправление.
+- Callback producer path отдельно не проверен; current full8, literal Compose и canonical receipts подтверждают только выполненные
+  сценарии.
+- Production SOPS leaves не provisioned; production/provider/GitHub/deployment mutations не выполнялись.
+consumerContract:
+  issue: 13
+  status: pending
+  owner: Operations
+  requiredCommand: pnpm test:observability
+  sourceIdentity:
+    baseSha: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+    configSha256: 0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9
+    bomSha256: dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab
+    imageRefs:
+      otelCollectorImage: otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6
+      openObserveImage: public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7
+      nodeImage: node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+      kafkaImage: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+      nginxImage: nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+    sourceFiles:
+      status: PASS
+      fileCount: 1469
+      missingFileCount: 0
+      sha256: 8a69e8db97e3e13d41cc00fba45c93e2148cd678588b7a7288a985a242b382fc
+    runtimeArtifacts:
+      packages/platform-runtime/dist:
+        status: PASS
+        fileCount: 4
+        sha256: fa5173d6de021b0e9d148a6536653cb4405d6af2a240634fe0e5fb9586be8812
+      packages/platform-observability/dist:
+        status: PASS
+        fileCount: 2
+        sha256: 1c120dd7bf1597d7343794a8ef6829826c5e9b4e8ef14ceb623d1d7ee7a783ec
+    identityHash: caf4e44491b41ffeef62343a671d04abf2ca57dbfdda2ff3829ea977508bf72e
+  isolatedResources: 'Canonical run 55045c74-bf13-4ccd-a64d-ea973ea7aa40: Compose project coffee-issue64-final-55045c74; Collector
+    coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-collector и OpenObserve coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-openobserve;
+    backend network coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-backend; producer network coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-producer;
+    runtime-matrix networks coffee-issue64-final-55045c74_coffee_edge_backend, coffee-issue64-final-55045c74_coffee_public_api_backend,
+    coffee-issue64-final-55045c74_coffee_internal_api, coffee-issue64-final-55045c74_coffee_kafka_event; private bounded OpenObserve
+    /data ext4 fixture и runner tmpfs (/dev/shm, command workdir /dev/shm/obs-source-snapshot-64). Canonical runtime fixture
+    cleanupVerified=true. Host-level cleanup выполнена; evidence/issue-64-host-cleanup.json и независимая root-проверка подтверждают
+    удаление 5 контейнеров, 2 volumes, 1 custom runner image, loop18/backing file и 6 SHM directories; 25 foreign containers
+    и foreign Snap17 сохранены.'
+  expectedResult: 'PASS для predecessor #64: фактический pnpm test:observability завершается с exit 0, 8/8 canonical producer
+    artifacts приняты, все 27 обязательных canonical gates PASS, source/config/BOM и runtime inventory совпадают с receipt,
+    cleanupVerified=true. Любой ненулевой exit, отсутствующий artifact/gate, FAIL/NOT_RUN или drift означает FAIL/NOT_RUN
+    и оставляет acceptance #13/G14 закрытым. Это не принимает full-system G14: его статус остаётся NOT_RUN и требуется отдельная
+    проверка владельца #13.'
+  limitations: 'Этот handoff подтверждает только функциональный predecessor #64. Он не заявляет launch-level SLO, chaos/failure,
+    native capacity или cold-cache acceptance; полный G14 issue #13 остаётся NOT_RUN до отдельной приёмки.'
+  verifiedCommand:
+  - pnpm
+  - test:observability
+  - --
+  - --emulator
+  - /dev/shm/coffee-issue64-emulator/qemu-x86_64
+  - --probe
+  - /host-tools/busybox
+  - --host-transport
+  - /host-tools/host-transport.json
+  verifiedCommandContext: Фактический argv принятого canonical receipt после имени runner; QEMU emulator, probe и host-transport
+    являются параметрами этого fixture и не подтверждают native capacity.
+  canonicalRunId: 55045c74-bf13-4ccd-a64d-ea973ea7aa40
+  configAuthority: config/platform.yaml
+  bomAuthority: config/toolchain-versions.json
+  externalNotifications: 'Запрещены: canonical evidence использует только изолированный run-local OpenObserve; внешние alert
+    destinations и отправка уведомлений не настраиваются и не вызываются.'
+createdAtUtc: '2026-10-16T09:49:20.637565+00:00'
+sourceIdentity:
+  baseSha: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  configSha256: 0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9
+  bomSha256: dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab
+  imageRefs:
+    otelCollectorImage: otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6
+    openObserveImage: public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7
+    nodeImage: node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+    kafkaImage: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+    nginxImage: nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+  sourceFiles:
+    status: PASS
+    fileCount: 1469
+    missingFileCount: 0
+    sha256: 8a69e8db97e3e13d41cc00fba45c93e2148cd678588b7a7288a985a242b382fc
+  runtimeArtifacts:
+    packages/platform-runtime/dist:
+      status: PASS
+      fileCount: 4
+      sha256: fa5173d6de021b0e9d148a6536653cb4405d6af2a240634fe0e5fb9586be8812
+    packages/platform-observability/dist:
+      status: PASS
+      fileCount: 2
+      sha256: 1c120dd7bf1597d7343794a8ef6829826c5e9b4e8ef14ceb623d1d7ee7a783ec
+  identityHash: caf4e44491b41ffeef62343a671d04abf2ca57dbfdda2ff3829ea977508bf72e
+currentG14:
+  status: PASS_ROOT_VERIFIED_CURRENT_CANONICAL
+  appliesToCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  runId: 55045c74-bf13-4ccd-a64d-ea973ea7aa40
+  receiptDirectory: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40
+  resultSha256: 80b371ddc38a7c2d9a6548c5371b5b87e48f79bfe291178a9205d57c6c741f9a
+  postCaptureSha256: 9f186c1c058b586a6249a5513d5fd1aac352b87bea3f775c6da44e404d50f065
+outputsRehashedAgainst:
+  receipt: source-output-hashes.json
+  head: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  tree: 061aae25f8352d180362af916957f4e2636bcd3a
+  changedPathCount: 86
+cleanup:
+  status: PASS
+  receipt: evidence/issue-64-host-cleanup.json
+  handoffSelfSha256: OMIT_BY_PROTOCOL
+testedCodeCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+testedCodeTree: 061aae25f8352d180362af916957f4e2636bcd3a
+sourceIdentityHash: caf4e44491b41ffeef62343a671d04abf2ca57dbfdda2ff3829ea977508bf72e
+sourceFilesReviewedAtHead: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+currentLiteralComposeComponent:
+  status: PASS_ROOT_VERIFIED_LITERAL_COMPOSE_CURRENT_HEAD
+  appliesToCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  receiptDirectory: literal-compose-8191b5f-r2-20261018
+  exitCode: 0
+evidence:
+  localChecks: evidence/issue-64-local-checks.json
+  localChecksSha256: f82eaefa1a1c90ff47813d4526ca7cd88ca4fc7b23fab548249081c51c8c6118
+  checkboxAudit: evidence/issue-64-checkbox-audit.json
+  checkboxAuditSha256: b975a0b4bbe05b1745b6d672fde1d42d1330228c87abe8447b370fb9506e73bf
+  canonicalRunId: 55045c74-bf13-4ccd-a64d-ea973ea7aa40
+  hostCleanupReceipt: evidence/issue-64-host-cleanup.json
+  hostCleanupSha256: e69f432e5e9e2dd420eb08861584d0bbebc8a8de3355a25dee87beede55da5c0

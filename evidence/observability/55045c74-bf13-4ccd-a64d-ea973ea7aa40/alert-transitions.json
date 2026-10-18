@@ -1,0 +1,142 @@
+{
+  "runId": "55045c74-bf13-4ccd-a64d-ea973ea7aa40",
+  "status": "PASS",
+  "alerts": [
+    {
+      "key": "notReady",
+      "name": "g14-v1-service-not-ready",
+      "streamName": "platform_metrics_runtime_ready",
+      "queryType": "promql",
+      "query": "min(platform_metrics_runtime_ready or platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\"})",
+      "comparator": "<=",
+      "threshold": 0,
+      "pendingPeriodSec": 300,
+      "episodeId": "3KrYeJ458vgpNLxvtrcotsHxLrI",
+      "firing": true,
+      "resolved": true
+    },
+    {
+      "key": "consumerLag",
+      "name": "g14-v1-consumer-lag",
+      "streamName": "platform_metrics_messaging_kafka_consumer_lag",
+      "queryType": "promql",
+      "query": "max(platform_metrics_messaging_kafka_consumer_lag)",
+      "comparator": ">",
+      "threshold": 0,
+      "pendingPeriodSec": 300,
+      "episodeId": "3KrYeAHv4s6VW6bLro7c6RNMV3u",
+      "firing": true,
+      "resolved": true
+    },
+    {
+      "key": "outboxOldestAge",
+      "name": "g14-v1-outbox-oldest-age",
+      "streamName": "platform_metrics_messaging_outbox_oldest_unpublished_age",
+      "queryType": "promql",
+      "query": "max(platform_metrics_messaging_outbox_oldest_unpublished_age)",
+      "comparator": ">",
+      "threshold": 0,
+      "pendingPeriodSec": 300,
+      "episodeId": "3KrYe9cEYnUBhQexidkGfUnjQ3L",
+      "firing": true,
+      "resolved": true
+    },
+    {
+      "key": "unknownOutcome",
+      "name": "g14-v1-unknown-outcome",
+      "streamName": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+      "queryType": "promql",
+      "query": "max(platform_metrics_coffee_aroma_unknown_outcomes_current)",
+      "comparator": ">",
+      "threshold": 0,
+      "pendingPeriodSec": 120,
+      "episodeId": "3KrYHXqXhj78uoVgEQL6lGaYf0t",
+      "firing": true,
+      "resolved": true
+    },
+    {
+      "key": "sseDropRate",
+      "name": "g14-v1-sse-drop-rate",
+      "streamName": "platform_metrics_coffee_realtime_invalidation_dropped_total",
+      "queryType": "promql",
+      "query": "sum(rate(platform_metrics_coffee_realtime_invalidation_dropped_total[300s])) / clamp_min(sum(rate(platform_metrics_coffee_realtime_invalidation_attempts_total[300s])), 1e-12)",
+      "comparator": ">",
+      "threshold": 0.05,
+      "pendingPeriodSec": 300,
+      "episodeId": "3KrYeGs23s9uTSeNkxWJzc696hm",
+      "firing": true,
+      "resolved": true
+    }
+  ],
+  "inputMetrics": {
+    "notReady": {
+      "stream": "platform_metrics_runtime_ready",
+      "sampleCount": 42,
+      "matchingValues": 2
+    },
+    "consumerLag": {
+      "stream": "platform_metrics_messaging_kafka_consumer_lag",
+      "sampleCount": 42,
+      "matchingValues": 41
+    },
+    "outboxOldestAge": {
+      "stream": "platform_metrics_messaging_outbox_oldest_unpublished_age",
+      "sampleCount": 43,
+      "matchingValues": 42
+    },
+    "unknownOutcome": {
+      "stream": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+      "sampleCount": 43,
+      "matchingValues": 42
+    },
+    "coffee_realtime_invalidation_attempts_total": {
+      "stream": "platform_metrics_coffee_realtime_invalidation_attempts_total",
+      "sampleCount": 43,
+      "positiveValues": 19
+    },
+    "coffee_realtime_invalidation_dropped_total": {
+      "stream": "platform_metrics_coffee_realtime_invalidation_dropped_total",
+      "sampleCount": 43,
+      "positiveValues": 19
+    }
+  },
+  "nativeNginxAvailability": {
+    "status": "PASS",
+    "runId": "55045c74-bf13-4ccd-a64d-ea973ea7aa40",
+    "ruleName": "g14-v1-service-not-ready",
+    "signal": "native HTTP availability; full-system readiness not claimed",
+    "containerId": "a9112a94e10a273234761b1a272aa65696f50a8589a0c056699f89465f13a77e",
+    "pendingPeriodSec": 300,
+    "episodeId": "3Krb5cYuLqVBAvjsERwDV3bK6CU",
+    "healthyValue": 1,
+    "failedValue": 0,
+    "recoveredValue": 1,
+    "baselineStableMs": 66746,
+    "errorMetricSamples": 1,
+    "rawErrorMessageMetricLabelAbsent": true,
+    "rawUrlMetricLabelAbsent": true,
+    "failedAtUs": 1792318039131000,
+    "firingReceivedAt": "2026-10-18T10:14:12.172Z",
+    "resolvedReceivedAt": "2026-10-18T10:16:12.689Z",
+    "nodeOwners": [
+      "edge-gateway",
+      "api-public",
+      "api-internal",
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+      "realtime-gateway"
+    ],
+    "nodeHealthObservations": 142,
+    "allNodeHealthObservationsPassed": true,
+    "freshNodeReadyMetricsBeforeFailureAtFiringAfterRecovery": true,
+    "exactContainerRecoveredWithoutOOM": true
+  }
+}
