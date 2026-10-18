@@ -5,7 +5,8 @@ import path from 'node:path';
 import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {awaitConvergenceMetricBarrier} from './launch-path.mjs';
-import {createAlertDefinitions, installNativeAlerts} from '../../tools/observability/alerts.mjs';
+import {createAlertDefinitions, installNativeAlert, installNativeAlerts} from '../../tools/observability/alerts.mjs';
+import {OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
 import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples, waitForStreamRetentionSettings} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
@@ -650,8 +651,13 @@ void test('native alert definitions use versioned OpenObserve metrics and config
   ]);
   assert.ok(definitions.every(rule => rule.name.startsWith('g14-v1-') && rule.queryCondition.type === 'promql'));
   assert.equal(definitions.find(rule => rule.key === 'notReady').streamName, 'platform_metrics_runtime_ready');
+  const readinessServices = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
+  const readinessOwnerFilter = `^(${readinessServices.join('|')})$`;
   assert.equal(definitions.find(rule => rule.key === 'notReady').queryCondition.promql,
-    'min(platform_metrics_runtime_ready or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"})');
+    `(min(platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}"} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}"}))) == bool ${readinessServices.length})) or vector(0)`);
+  assert.equal(readinessServices.length, 14);
+  assert.match(definitions.find(rule => rule.key === 'notReady').queryCondition.promql, /count by \(service_name\)/u,
+    'the readiness gate counts distinct expected runtime owners');
   assert.deepEqual(definitions.find(rule => rule.key === 'notReady').queryCondition.promql_condition, {column: 'value', operator: '<=', value: 0});
   assert.equal(definitions.find(rule => rule.key === 'consumerLag').streamName, 'platform_metrics_messaging_kafka_consumer_lag');
   assert.equal(definitions.find(rule => rule.key === 'outboxOldestAge').streamName, 'platform_metrics_messaging_outbox_oldest_unpublished_age');
@@ -665,6 +671,17 @@ void test('native alert definitions use versioned OpenObserve metrics and config
   assert.equal((1 / 100) / (2 / 100), 0.5);
   assert.equal((1 / 100) / Math.max(2 / 100, 1), 0.01, 'a whole-unit denominator floor would hide the 50% low-rate drop ratio');
   assert.ok(definitions.every(rule => !JSON.stringify(rule).includes('g14_run_id') && !JSON.stringify(rule).includes('platform_logs')));
+});
+
+void test('synthetic readiness scope is isolated and rejects invalid owner filters', () => {
+  const synthetic = createAlertDefinitions({config, readinessServices: ['g14-synthetic']});
+  assert.equal(synthetic[0].name, 'g14-v1-service-not-ready-synthetic');
+  assert.match(synthetic[0].queryCondition.promql,
+    /runtime_ready\{service_name=~"\^\(g14-synthetic\)\$"\}.*== bool 1\)\) or vector\(0\)/u);
+  assert.deepEqual(synthetic.slice(1).map(({name}) => name),
+    createAlertDefinitions({config}).slice(1).map(({name}) => name));
+  for (const readinessServices of [[], ['g14-synthetic', 'g14-synthetic'], ['bad|owner']])
+    assert.throws(() => createAlertDefinitions({config, readinessServices}), /readinessServices/u);
 });
 
 void test('native alert installation configures only local webhook delivery and recovery', async () => {
@@ -692,4 +709,34 @@ void test('native alert installation configures only local webhook delivery and 
   assert.equal(requests.at(-1).body.pending_period_sec, 300);
   assert.equal(requests.at(-1).body.trigger_condition.threshold, 1);
   assert.deepEqual(requests.at(-1).body.query_condition.promql_condition, {column: 'value', operator: '>', value: 0.05});
+  assert.match(requests[2].body.query_condition.promql, /== bool 14\)\) or vector\(0\)/u,
+    'the production POST keeps the complete default owner gate');
+});
+
+void test('synthetic readiness scope reaches only its separately named readiness rule payload', async () => {
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push({url: new URL(url).pathname, body: init.body ? JSON.parse(init.body) : undefined});
+    return new Response('', {status: 200});
+  };
+  const rules = await installNativeAlerts({config, baseUrl: 'http://127.0.0.1:5080', organization: 'coffee', authorization: 'Basic fixture', readinessServices: ['g14-synthetic'], fetchImpl});
+  assert.equal(rules[0].name, 'g14-v1-service-not-ready-synthetic');
+  assert.equal(requests[2].body.name, 'g14-v1-service-not-ready-synthetic');
+  assert.equal(requests[2].body.query_condition.promql.includes('service_name=~"^(g14-synthetic)$"'), true);
+  assert.deepEqual(requests.slice(3).map(({body}) => body.name), rules.slice(1).map(({name}) => name));
+});
+
+void test('a late native alert install posts one selected readiness rule only', async () => {
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push({url: new URL(url).pathname, method: init.method, body: JSON.parse(init.body)});
+    return new Response('', {status: 200});
+  };
+  const definition = createAlertDefinitions({config}).find(rule => rule.key === 'notReady');
+  await installNativeAlert({baseUrl: 'http://127.0.0.1:5080', organization: 'coffee', authorization: 'Basic fixture', definition, fetchImpl});
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, '/api/v2/coffee/alerts');
+  assert.equal(requests[0].method, 'POST');
+  assert.equal(requests[0].body.name, 'g14-v1-service-not-ready');
+  assert.equal(requests[0].body.query_condition.promql, definition.queryCondition.promql);
 });

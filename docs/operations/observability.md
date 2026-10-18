@@ -152,9 +152,30 @@ admission и удаляется после проверки.
 Storage provisioner создаёт отдельный bounded ext4 volume на loop-backed файле.
 Привилегии получает только этот init helper. Чужие volumes не переиспользуются;
 fixture cleanup проверяет owner/lifecycle и не удаляет persistent storage.
+После reboot перед повторным provisioning остановить и удалить только контейнеры,
+ссылающиеся на telemetry volume: `docker compose stop openobserve` и
+`docker compose rm -f openobserve` с теми же project и override. Volumes не удалять.
+Provisioner проверяет сохранённый backing file и при смене loop device пересоздаёт
+только привязку собственного volume; файл с данными сохраняется. Активные или
+оставшиеся ссылки контейнеров приводят к отказу.
 Native disk breaker отклоняет ingestion выше configured watermark. Compaction
 cadence, retention, finished-job wait и file deletion delay заданы в config.
 Settings или ручной delete не доказывают expiry после TTL.
+
+Filelog сохраняет offsets через `file_storage` в отдельный Compose-managed
+`collector_checkpoints` volume, смонтированный только в Collector по пути
+`/var/lib/otelcol/file_storage`. `fsync` включён, чтобы записи checkpoint
+переживали перезапуск процесса; постоянный volume сохраняет их при обычном
+пересоздании контейнера. На штатном restart запускайте только сервис Collector,
+не удаляя его volume (`docker compose restart otel-collector`). При возврате к
+уже известным файлам чтение продолжается с checkpoint, а `start_at: beginning`
+применяется к ещё неизвестным файлам. Это предотвращает полный replay при
+обычном рестарте, но не гарантирует exactly-once доставку: downstream-сбой,
+ротация или удаление Docker log-файла всё ещё могут дать пропуск либо дубликат.
+Offset checkpoint не является бизнес-журналом и не заменяет восстановление
+OpenObserve data volume. Подробнее: upstream
+[File Storage Extension v0.162.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.162.0/extension/storage/filestorage/README.md)
+и [File Log Receiver v0.162.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.162.0/receiver/filelogreceiver/README.md).
 
 Buffer policy OpenObserve задана явно в `telemetry.openObserve`: общий Arrow
 memtable ограничен 128 MiB при container limit 2048 MiB, один файл ограничен
@@ -203,8 +224,10 @@ generator. Scoped helper передаёт единственный Collector con
   business requests продолжаются, business effects не replay.
 - Queue saturation: сопоставить configured capacity и process counters;
   diagnostics ограничены частотой и не используют падающий exporter.
-- Restart: повторить discovery/generation. Counter reset связывается с process
-  start; abrupt crash может оставить gap без точного durable loss count.
+- Restart: обычный restart Collector сохраняет filelog offsets в
+  `collector_checkpoints`; не удалять этот volume. При смене контейнеров повторить
+  discovery/generation для новых Docker log IDs. Counter reset связывается с
+  process start; downstream loss и abrupt crash не дают exactly-once гарантии.
 - Disk pressure: проверить только telemetry volume, breaker и retention jobs.
   PostgreSQL/Kafka volumes не очищаются, breaker не выключается.
 - Restore: остановить telemetry, сохранить backing file отдельно, восстановить

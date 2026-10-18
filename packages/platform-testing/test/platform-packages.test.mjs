@@ -335,6 +335,7 @@ void test("database, HTTP and Outbox telemetry preserves owner parentage, bounde
   const ownerSpan = trace.getTracer("owner-test").startSpan("orders.owner.operation");
   let transactionSpan;
   let failedTransactionSpan;
+  let unknownTransactionSpan;
   let ownerSpanEnded = false;
   const endOwnerSpan = () => {if (!ownerSpanEnded) {ownerSpanEnded = true; ownerSpan.end();}};
   const callerTraceparent = `00-${ownerSpan.spanContext().traceId}-${ownerSpan.spanContext().spanId}-01`;
@@ -354,6 +355,17 @@ void test("database, HTTP and Outbox telemetry preserves owner parentage, bounde
         throw new Error("db-private-canary");
       }), /db-private-canary/u);
       assert.equal(failedTransactionSpan.isRecording(), false);
+      let rejectRollback;
+      const {database: rollbackDatabase, connection: rollbackConnection, statements: rollbackStatements, releases: rollbackReleases} = mockDatabase(t, sql => sql === "ROLLBACK" ? new Promise((_, reject) => {rejectRollback = reject;}) : undefined);
+      rollbackConnection.release = destroy => {rollbackReleases.push(destroy); assert.equal(destroy, true); rejectRollback?.(new Error("socket closed"));};
+      await assert.rejects(otelContext.with(trace.setSpan(otelContext.active(), ownerSpan), () => withTransaction(rollbackDatabase, {mode: "background"}, async () => {
+        unknownTransactionSpan = trace.getSpan(otelContext.active());
+        throw new Error("rollback failed");
+      })), error => error.code === "DB_ROLLBACK_FAILED" && error.message === "DB_ROLLBACK_FAILED" && error.previousCode === "DB_QUERY_FAILED");
+      assert.equal(unknownTransactionSpan.isRecording(), false);
+      assert.equal(rollbackStatements.at(-1), "ROLLBACK");
+      assert.equal(rollbackStatements.includes("COMMIT"), false);
+      assert.deepEqual(rollbackReleases, [true]);
       const response = await client.fetch("/private/entity-secret?token=query-secret", {headers: {
         "x-correlation-id": "corr-safe",
         "x-causation-id": "cause-safe",
@@ -390,6 +402,8 @@ void test("database, HTTP and Outbox telemetry preserves owner parentage, bounde
   assert.ok(traces.includes("db.transaction"));
   assert.ok(traces.includes("HTTP GET"));
   assert.ok(traces.includes("Outbox.relay"));
+  assert.ok(traces.includes("transaction.outcome"));
+  assert.ok(traces.includes("unknown"));
   assert.ok(traces.includes("http_5xx"));
   assert.ok(traces.includes("UNEXPECTED"));
   assert.equal(traces.includes("db-private-canary"), false);
@@ -402,6 +416,8 @@ void test("database, HTTP and Outbox telemetry preserves owner parentage, bounde
   assert.ok(exportedMetrics.includes("db.client.connection.waiting"));
   assert.ok(exportedMetrics.includes("db.client.transaction.duration"));
   assert.ok(exportedMetrics.includes("db.client.transaction.count"));
+  assert.ok(exportedMetrics.includes("transaction.outcome"));
+  assert.ok(exportedMetrics.includes("unknown"));
 });
 
 void test('database opaque transaction: states, budgets, owner identity and terminal use', async t => {

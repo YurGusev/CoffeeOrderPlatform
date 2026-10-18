@@ -15,28 +15,55 @@ export function provisionStorage({name, maxDiskBytes, nodeImage, run = args => e
     if (info?.Labels?.['coffee.owner'] !== 'operations' || info.Labels['coffee.lifecycle'] !== lifecycle) throw new Error('Refusing to reuse unrelated telemetry volume');
     return info;
   };
-  owned(backingVolume);
+  const backing = owned(backingVolume);
+  if (backing && (backing.Driver !== 'local' || (backing.Options && Object.keys(backing.Options).length > 0))) throw new Error('Existing telemetry backing volume has different storage options');
+  const previous = owned(name);
+  if (previous && !backing) throw new Error('Existing telemetry volume is missing its backing volume');
+  if (previous) {
+    const options = previous.Options ?? {};
+    if (previous.Driver !== 'local' || options.type !== 'ext4' || options.o !== 'nodev,nosuid,noexec' || !/^\/dev\/loop[0-9]+$/u.test(options.device ?? '') || Object.keys(options).length !== 3)
+      throw new Error('Existing telemetry volume has different storage backing');
+    if (run(['ps', '--all', '--filter', `volume=${name}`, '--format', '{{.ID}}']).trim()) throw new Error('Cannot rebind an active telemetry volume');
+  }
   run(['volume', 'create', '--label', 'coffee.owner=operations', '--label', `coffee.lifecycle=${lifecycle}`, backingVolume]);
-  const device = run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, nodeImage, 'sh', '-ceu', `
+  const attachment = JSON.parse(run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, nodeImage, 'sh', '-ceu', `
+    if [ -L /storage/telemetry.ext4 ]; then exit 1; fi
     if [ -e /storage/telemetry.ext4 ]; then
+      test -f /storage/telemetry.ext4
       test "$(stat -c %s /storage/telemetry.ext4)" = "$1"
+      test "$(blkid -p -s TYPE -o value /storage/telemetry.ext4)" = ext4
     else
+      test "$2" = false
       truncate -s "$1" /storage/telemetry.ext4
       mkfs.ext4 -q -m 0 /storage/telemetry.ext4
     fi
     existing=$(losetup -j /storage/telemetry.ext4 | cut -d : -f 1)
-    if [ -n "$existing" ]; then printf '%s' "$existing"; else
+    if [ -n "$existing" ]; then printf '{"device":"%s","attached":false}' "$existing"; else
       device=$(losetup --find)
       test -b "$device" || mknod "$device" b 7 "\${device##*loop}"
       losetup "$device" /storage/telemetry.ext4
-      printf '%s' "$device"
+      printf '{"device":"%s","attached":true}' "$device"
     fi
-  `, 'storage', String(maxDiskBytes)]).trim();
-  if (!/^\/dev\/loop[0-9]+$/u.test(device)) throw new Error('Cannot provision bounded telemetry loop device');
-  const previous = owned(name);
-  if (previous && (previous.Options?.device !== device || previous.Options?.type !== 'ext4')) throw new Error('Existing telemetry volume has different storage backing');
-  run(['volume', 'create', '--driver', 'local', '--opt', 'type=ext4', '--opt', `device=${device}`, '--opt', 'o=nodev,nosuid,noexec', '--label', 'coffee.owner=operations', '--label', `coffee.lifecycle=${lifecycle}`, name]);
-  return {volumeName: name, backingVolume, device, maxDiskBytes};
+  `, 'storage', String(maxDiskBytes), String(Boolean(previous))]));
+  const {device, attached} = attachment;
+  const validDevice = typeof device === 'string' && /^\/dev\/loop[0-9]+$/u.test(device);
+  try {
+    if (!validDevice) throw new Error('Cannot provision bounded telemetry loop device');
+    if (typeof attached !== 'boolean') throw new Error('Cannot verify telemetry loop attachment');
+    if (previous && previous.Options.device !== device) run(['volume', 'rm', name]);
+    const volumeLabels = previous?.Labels ?? {'coffee.owner': 'operations', 'coffee.lifecycle': lifecycle};
+    run(['volume', 'create', '--driver', 'local', '--opt', 'type=ext4', '--opt', `device=${device}`, '--opt', 'o=nodev,nosuid,noexec', ...Object.entries(volumeLabels).flatMap(([key, value]) => ['--label', `${key}=${value}`]), name]);
+    return {volumeName: name, backingVolume, device, maxDiskBytes};
+  } catch (error) {
+    if (attached === true && validDevice) {
+      try {
+        run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, nodeImage, 'sh', '-ceu', 'losetup -j /storage/telemetry.ext4 | cut -d : -f 1 | grep -Fx "$1"; losetup -d "$1"', 'storage', device]);
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'Telemetry storage provisioning and loop cleanup failed');
+      }
+    }
+    throw error;
+  }
 }
 
 export function removeStorage({storage, nodeImage, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']})}) {

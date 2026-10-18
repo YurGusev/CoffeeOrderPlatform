@@ -89,6 +89,15 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
 void test("telemetry config is strict, immutable, and rejects missing or inconsistent budgets", async () => {
   const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
   const parsed = parsePlatformConfig(document);
+  const minimumTelemetryDiskBytes = 256 * 1024 * 1024;
+  const minimumDiskConfig = structuredClone(document);
+  minimumDiskConfig.telemetry.openObserve.maxDiskBytes = minimumTelemetryDiskBytes;
+  assert.equal(parsePlatformConfig(minimumDiskConfig).telemetry.openObserve.maxDiskBytes, minimumTelemetryDiskBytes);
+  const undersizedDiskConfig = structuredClone(document);
+  undersizedDiskConfig.telemetry.openObserve.maxDiskBytes = minimumTelemetryDiskBytes - 1;
+  assert.throws(() => parsePlatformConfig(undersizedDiskConfig), PlatformConfigError);
+  const platformSchema = JSON.parse(await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"));
+  assert.equal(platformSchema.$defs.telemetry.properties.openObserve.properties.maxDiskBytes.minimum, minimumTelemetryDiskBytes);
   assert.equal(parsed.telemetry.namespace, "coffee-platform");
   assert.deepEqual([
     parsed.telemetry.collector.memoryLimitMiB,

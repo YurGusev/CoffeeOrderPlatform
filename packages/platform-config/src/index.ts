@@ -1344,6 +1344,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   const storageValues = positive(openObserve, ["memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
   const diskWatermarkPercent = integerValue(openObserve["diskWatermarkPercent"], `${path}.openObserve.diskWatermarkPercent`);
   const openObserveBufferBudgetInvalid =
+    storageValues["maxDiskBytes"]! < 268435456 ||
     storageValues["maxFileSizeInMemoryMiB"]! >= storageValues["memTableMaxSizeMiB"]! ||
     storageValues["memTableMaxSizeMiB"]! >= storageValues["memoryLimitMiB"]! ||
     storageValues["maxFileSizeOnDiskMiB"]! * 1024 * 1024 > storageValues["maxDiskBytes"]! ||

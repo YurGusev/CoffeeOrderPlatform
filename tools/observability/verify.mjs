@@ -6,7 +6,7 @@ import {basename, delimiter, dirname, isAbsolute, join, resolve} from 'node:path
 import {fileURLToPath} from 'node:url';
 import {dump as dumpYaml} from 'js-yaml';
 import {loadPlatformConfig} from '../../scripts/config-lib.mjs';
-import {installNativeAlerts, newRunId} from './alerts.mjs';
+import {createAlertDefinitions, installNativeAlert, installNativeAlerts, newRunId} from './alerts.mjs';
 import {initializeOpenObserve} from './bootstrap.mjs';
 import {discoverContainerLogs, createCollectorConfig, createComposeOverride, createRuntimeLoggingOverride, openObserveBufferEnvironment, OBSERVABILITY_TARGETS} from './generate.mjs';
 import {provisionStorage, removeStorage} from './storage.mjs';
@@ -1536,11 +1536,14 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
   }
   const project = safeName(`coffee-g14-${runId}`);
   const workDir = await mkdtemp(`/dev/shm/${project}-`);
+  const collectorName = `${project}-collector`;
+  const collectorCheckpointVolume = `${project}_collector_checkpoints`;
   const createdNetworks = [];
   let storage;
   const containers = [];
   const cleanupErrors = [];
   const sensitiveValues = [];
+  let collectorCheckpointVolumeCreated = false;
   const evidence = {runId, startedAt: new Date().toISOString(), provenanceStart, alerts: [], signals: [], retention: 'NOT_RUN', limitations: [], containerDiagnostics: []};
   evidence.executionMode = emulator === undefined ? 'native' : 'qemu-user-emulation';
   evidence.openObserveResourceLimits = {expectedCpuLimitCores: openObserveFixtureCpuLimit, expectedMemoryLimitMiB: null, status: 'NOT_RUN'};
@@ -1777,7 +1780,6 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     if (!fixtureTimeParser) throw new Error('Collector config lacks the conditional producer timestamp parser');
     fixtureTimeParser.if = 'body.g14_fixture == true && body.time != nil';
     const collectorConfigPath = join(workDir, 'collector.yaml');
-    const collectorName = `${project}-collector`;
     const collectorPhases = [];
     let collectorIp;
     let collectorHealthEndpoint;
@@ -1801,7 +1803,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         ...dockerLoggingArgs,
         '--security-opt', 'no-new-privileges:true', '--cap-drop', 'ALL', '--user', '0:0', '--network-alias', 'otel-collector',
         '--mount', `type=bind,source=${collectorConfigPath},target=/etc/otelcol-contrib/config.yaml,readonly`,
-        '--mount', `type=bind,source=${probePath},target=/busybox,readonly`, ...mountArgs,
+        '--mount', `type=bind,source=${probePath},target=/busybox,readonly`,
+        '--mount', `type=volume,source=${collectorCheckpointVolume},target=/var/lib/otelcol/file_storage`, ...mountArgs,
         toolchain.otelCollectorImage, '--config=/etc/otelcol-contrib/config.yaml']);
       run(['network', 'connect', '--alias', 'otel-collector', producerNetwork, collectorName]);
       const networks = [backendNetwork, producerNetwork, ...extraNetworks].sort();
@@ -1810,6 +1813,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       const bindings = JSON.parse(run(['inspect', '--format', '{{json .HostConfig.PortBindings}}', collectorName]));
       const mounts = JSON.parse(run(['inspect', '--format', '{{json .Mounts}}', collectorName]));
       const bindMounts = mounts.filter(mount => mount.Type === 'bind').map(({Source, Destination, RW}) => ({source: resolve(Source), destination: Destination, readOnly: RW === false}));
+      const checkpointMounts = mounts.filter(mount => mount.Type === 'volume').map(({Name, Destination, RW}) => ({name: Name, destination: Destination, readWrite: RW === true}));
+      const expectedCheckpointMounts = [{name: collectorCheckpointVolume, destination: '/var/lib/otelcol/file_storage', readWrite: true}];
       const expectedBindMounts = [
         {source: resolve(collectorConfigPath), destination: '/etc/otelcol-contrib/config.yaml', readOnly: true},
         {source: resolve(probePath), destination: '/busybox', readOnly: true},
@@ -1827,13 +1832,15 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         (hostConfig.CapAdd ?? []).length === 0 && hostConfig.PidMode !== 'host' && hostConfig.NetworkMode !== 'host' &&
         hostConfig.SecurityOpt?.includes('no-new-privileges:true') === true && configRootReadonly;
       if (JSON.stringify(actualNetworks) !== JSON.stringify(networks) || Object.values(bindings ?? {}).flat().length !== 0 ||
-          JSON.stringify(bindMounts) !== JSON.stringify(expectedBindMounts) || !safeRuntime)
+          JSON.stringify(bindMounts) !== JSON.stringify(expectedBindMounts) ||
+          JSON.stringify(checkpointMounts) !== JSON.stringify(expectedCheckpointMounts) || !safeRuntime)
         throw new Error(`Collector ${stage} mounts, networks, or privilege restrictions did not match the selected exact logs`);
       collectorIp = run(['inspect', '--format', `{{(index .NetworkSettings.Networks "${backendNetwork}").IPAddress}}`, collectorName]);
       if (!/^(?:\d{1,3}\.){3}\d{1,3}$/u.test(collectorIp)) throw new Error(`could not resolve Collector health address during ${stage}`);
       collectorHealthEndpoint = `http://${collectorIp}:13133`;
       collectorPhases.push({stage, selectedServices: selectedLogs.map(({service}) => service).sort(),
         mountedContainerIds: logMounts.map(({containerId}) => containerId).sort(), bindMountsReadOnly: true,
+        checkpointVolume: collectorCheckpointVolume, checkpointMountReadWrite: true,
         containerMemoryMiB: config.telemetry.collector.containerMemoryMiB, containerMemoryBytes: hostConfig.Memory,
         loggingPolicy: collectorLoggingPolicy,
         healthAddress: `${collectorIp}:13133`, networks: actualNetworks, hostBindingsAbsent: true, rootUser: true, readOnlyRoot: true,
@@ -1842,6 +1849,15 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     await writeFile(collectorConfigPath, dumpYaml(collectorConfig, {noRefs: true, lineWidth: 120}), {mode: 0o600});
     // Docker's json-file logs are root-readable, so the Collector needs UID 0.
     // Keep its capability set empty and its mounted config and logs read-only.
+    if (run(['volume', 'ls', '--quiet', '--filter', `name=^${collectorCheckpointVolume}$`]))
+      throw new Error('run-owned Collector checkpoint volume already exists');
+    if (run(['volume', 'create', '--label', 'coffee.owner=operations', '--label', `coffee.g14.run-id=${runId}`, collectorCheckpointVolume]) !== collectorCheckpointVolume)
+      throw new Error('Docker created an unexpected Collector checkpoint volume');
+    collectorCheckpointVolumeCreated = true;
+    const checkpointVolume = JSON.parse(run(['volume', 'inspect', collectorCheckpointVolume]))[0];
+    if (checkpointVolume?.Name !== collectorCheckpointVolume || checkpointVolume.Driver !== 'local' ||
+        checkpointVolume.Labels?.['coffee.owner'] !== 'operations' || checkpointVolume.Labels?.['coffee.g14.run-id'] !== runId)
+      throw new Error('Collector checkpoint volume is not owned by this verification run');
     add(collectorName);
     await startCollector(logFiles, 'initial-startup', collectorConfig);
     evidence.collectorPhases = collectorPhases;
@@ -2110,6 +2126,18 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           matchingRecords: memoryMarkerRows.filter(record => hasExactValue(record, collectorMemoryProof.marker.traceId) &&
             hasExactValue(record, collectorMemoryProof.marker.spanName) && hasExactValue(record, runId)).length}}};
     evidence.telemetryHealth.collectorMemoryProof = collectorMemoryProof;
+    const fixtureLogRows = (correlationId, startTimeUs) => streamSearch({baseUrl, authorization, organization,
+      stream: config.telemetry.openObserve.streams.logs, runId: correlationId, field: 'body_correlationid', startTimeUs})
+      .then(result => rows(result).filter(record => hasExactValue(record, 'synthetic observability sample')));
+    const waitForFixtureLog = (correlationId, startTimeUs, description) => waitFor(async () => {
+      const found = await fixtureLogRows(correlationId, startTimeUs);
+      if (found.length > 1) throw Object.assign(new Error('Collector replayed the unique fixture log marker'), {fatal: true});
+      return found.length === 1 && hasExactValue(found[0], correlationId) ? found : false;
+    }, {timeoutMs: 60000, intervalMs: 1000, description});
+    const checkpointMarkerId = newRunId();
+    const checkpointMarkerAtUs = Date.now() * 1000;
+    await fixtureRequest({baseUrl: fixtureBaseUrl, runId: checkpointMarkerId});
+    const checkpointMarkerRows = await waitForFixtureLog(checkpointMarkerId, checkpointMarkerAtUs, 'unique fixture request log delivered before Collector restart');
     const baselineDiagnostics = await fixtureDiagnostics(fixtureBaseUrl);
     const collectorBeforeRestart = containerGeneration({run, name: collectorName});
     if (!collectorBeforeRestart.state.Running) throw new Error('Collector process was not running before its restart');
@@ -2167,6 +2195,19 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       throw new Error('Collector native process uptime or instance identity did not reset after restart');
     const afterOutage = await fetch(new URL('/synthetic', fixtureBaseUrl), {method: 'POST', headers: correlationHeaders, signal: AbortSignal.timeout(5000)});
     if (!afterOutage.ok) throw new Error(`synthetic request after Collector recovery returned HTTP ${afterOutage.status}`);
+    const postRestartMarkerId = newRunId();
+    const postRestartMarkerAtUs = Date.now() * 1000;
+    await fixtureRequest({baseUrl: fixtureBaseUrl, runId: postRestartMarkerId});
+    const postRestartMarkerRows = await waitForFixtureLog(postRestartMarkerId, postRestartMarkerAtUs, 'fresh fixture request log delivered after Collector restart');
+    const checkpointMarkerRowsAfterRestart = await fixtureLogRows(checkpointMarkerId, checkpointMarkerAtUs);
+    if (checkpointMarkerRowsAfterRestart.length !== checkpointMarkerRows.length)
+      throw new Error('Collector graceful restart replayed an already-exported fixture log record');
+    evidence.telemetryHealth.collectorFilelogCheckpoint = {
+      status: 'PASS', restart: 'graceful-same-container', markerCorrelationId: checkpointMarkerId,
+      markerRecordsBeforeRestart: checkpointMarkerRows.length, markerRecordsAfterRestart: checkpointMarkerRowsAfterRestart.length,
+      postRestartCorrelationId: postRestartMarkerId, postRestartRecords: postRestartMarkerRows.length,
+      postRestartRecordDelivered: true,
+    };
     evidence.outageRestart = {openObserve: 'restarted', collector: 'restarted', producerExportFailureObserved: true,
       queueDrops: failedQueueDiagnostics.dropped - baselineDiagnostics.dropped, collectorExpiredRetryDrop,
       healthLatencyMs: healthLatencies, budgetMs: latencyBudgetMs};
@@ -2321,10 +2362,10 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       '--mount', `type=bind,source=${sinkPath},target=/evidence/alert-events.jsonl`,
       toolchain.nodeImage, 'node', '/alert-sink.mjs', '/evidence/alert-events.jsonl']);
 
-    const definitions = await installNativeAlerts({config, baseUrl, organization, authorization});
+    const definitions = await installNativeAlerts({config, baseUrl, organization, authorization, readinessServices: ['g14-synthetic']});
     const observed = new Map();
-    const notReadyRule = definitions.find(rule => rule.key === 'notReady');
-    if (!notReadyRule) throw new Error('native alert definitions lack the existing notReady rule');
+    const syntheticNotReadyRule = definitions.find(rule => rule.key === 'notReady');
+    if (!syntheticNotReadyRule) throw new Error('native alert definitions lack the synthetic notReady rule');
     const maxForMs = Math.max(...definitions.map(({pendingPeriodSec}) => pendingPeriodSec)) * 1000;
     const fireDeadline = maxForMs + 4 * config.telemetry.alerts.evaluationIntervalMs;
     const resolveDeadline = maxForMs + 4 * config.telemetry.alerts.evaluationIntervalMs;
@@ -2792,6 +2833,40 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           }, {timeoutMs: 60000, intervalMs: 2000, description: `fresh native nginx HTTP availability value ${value}`});
           await readyMetrics();
           const healthyNative = await nginxAvailability(1, Date.now() * 1000);
+          const notReadyRule = createAlertDefinitions({config}).find(rule => rule.key === 'notReady');
+          if (!notReadyRule) throw new Error('native alert definitions lack the production notReady rule');
+          const missingOneOwners = [...NODE_RUNTIME_TARGETS.slice(0, -1), 'g14-missing-owner'];
+          const readinessQueries = [
+            {scenario: 'all-production-owners-ready', readinessServices: [...NODE_RUNTIME_TARGETS], rule: notReadyRule, expectedValue: 1},
+            {scenario: 'one-production-owner-missing', readinessServices: missingOneOwners,
+              rule: createAlertDefinitions({config, readinessServices: missingOneOwners}).find(rule => rule.key === 'notReady'), expectedValue: 0},
+            {scenario: 'all-production-owners-missing', readinessServices: ['g14-missing-owner'],
+              rule: createAlertDefinitions({config, readinessServices: ['g14-missing-owner']}).find(rule => rule.key === 'notReady'), expectedValue: 0},
+          ];
+          const queryReadinessValue = async rule => {
+            const result = await api({baseUrl, authorization,
+              path: `/api/${encodeURIComponent(organization)}/prometheus/api/v1/query?query=${encodeURIComponent(rule.queryCondition.promql)}`,
+              sensitiveValues});
+            if (result?.status !== 'success' || result?.data?.resultType !== 'vector' || !Array.isArray(result.data.result))
+              throw new Error('notReady instant query did not return a successful vector');
+            const values = result.data.result;
+            if (values.length !== 1 || !Array.isArray(values[0]?.value) || values[0].value.length !== 2) return null;
+            const value = values[0].value[1];
+            return ['number', 'string'].includes(typeof value) && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+          };
+          const missingOwnerCases = await waitFor(async () => {
+            const values = await Promise.all(readinessQueries.map(({rule}) => queryReadinessValue(rule)));
+            if (readinessQueries.some(({expectedValue}, index) => values[index] !== expectedValue)) return false;
+            return readinessQueries.map(({scenario, readinessServices, rule, expectedValue}, index) => ({
+              scenario, readinessServices, query: rule.queryCondition.promql, expectedValue, observedValue: values[index],
+            }));
+          }, {timeoutMs: 60000, intervalMs: 2000, description: 'OpenObserve readiness query fails closed for absent expected owners'});
+          const missingOwnerQueryProof = {
+            status: 'PASS', observedAt: Date.now(), expectedProductionOwners: [...NODE_RUNTIME_TARGETS], cases: missingOwnerCases,
+          };
+          evidence.nativeNginxAlert.missingOwnerQueryProof = missingOwnerQueryProof;
+          await installNativeAlert({baseUrl, organization, authorization, definition: notReadyRule});
+          evidence.nativeNginxAlert.productionReadinessOwners = [...NODE_RUNTIME_TARGETS];
           evidence.nativeNginxAlert.stage = 'quiet-baseline';
           await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: false});
           await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
@@ -2800,16 +2875,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           const quietBaseline = await waitFor(async () => {
             assertNodeHealth();
             try {
-              const result = await api({baseUrl, authorization,
-                path: `/api/${encodeURIComponent(organization)}/prometheus/api/v1/query?query=${encodeURIComponent(notReadyRule.queryCondition.promql)}`,
-                sensitiveValues});
-              if (result?.status !== 'success' || result?.data?.resultType !== 'vector' || !Array.isArray(result.data.result))
-                throw new Error('notReady instant query did not return a successful vector');
-              const values = result.data.result;
-              const value = values[0]?.value?.[1];
-              if (values.length !== 1 || !Array.isArray(values[0]?.value) || values[0].value.length !== 2 ||
-                  !['number', 'string'].includes(typeof value) || value === '' ||
-                  !Number.isFinite(Number(value)) || Number(value) !== 1) {
+              if (await queryReadinessValue(notReadyRule) !== 1) {
                 quietSince = undefined;
                 return false;
               }
@@ -2893,6 +2959,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               throw new Error('native nginx availability recovery did not restart its exact non-OOM container');
             evidence.nativeNginxAlert = {status: 'PASS', runId, ruleName: notReadyRule.name, signal: 'native HTTP availability; full-system readiness not claimed',
               containerId: beforeNative.id, pendingPeriodSec: notReadyRule.pendingPeriodSec, episodeId: nativeFiring.episodeId,
+              productionReadinessOwners: [...NODE_RUNTIME_TARGETS], missingOwnerQueryProof,
               healthyValue: healthyNative.value, failedValue: failedNative.value, recoveredValue: recoveredNative.value,
               baselineStableMs: quietBaseline.stableMs,
               errorMetricSamples: errorMetrics, rawErrorMessageMetricLabelAbsent: true, rawUrlMetricLabelAbsent: true,
@@ -3184,6 +3251,21 @@ keep=1`;
       evidence.containerDiagnostics.push(diagnostic);
     }
     for (const name of containers.reverse()) stop(name);
+    if (collectorCheckpointVolumeCreated) {
+      try {
+        if (run(['ps', '-aq', '--filter', `name=^${collectorName}$`])) {
+          cleanupErrors.push('cannot remove fixture Collector checkpoint volume before Collector removal');
+        } else {
+          const checkpointVolume = JSON.parse(run(['volume', 'inspect', collectorCheckpointVolume]))[0];
+          if (checkpointVolume?.Name !== collectorCheckpointVolume || checkpointVolume.Driver !== 'local' ||
+              checkpointVolume.Labels?.['coffee.owner'] !== 'operations' || checkpointVolume.Labels?.['coffee.g14.run-id'] !== runId) {
+            cleanupErrors.push('refusing to remove a Collector checkpoint volume not owned by this verification run');
+          } else {
+            run(['volume', 'rm', collectorCheckpointVolume]);
+          }
+        }
+      } catch (error) { cleanupErrors.push(`cannot remove fixture Collector checkpoint volume: ${error.message}`); }
+    }
     for (const network of createdNetworks.reverse()) {
       try { run(['network', 'rm', network]); }
       catch (error) { cleanupErrors.push(`cannot remove fixture network: ${network}: ${error.message}`); }

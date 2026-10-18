@@ -223,6 +223,7 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
   }
   return {
     extensions: {
+      file_storage: {directory: '/var/lib/otelcol/file_storage', fsync: true},
       health_check: {endpoint: `0.0.0.0:${endpointPort(collector.healthEndpoint, 'telemetry.collector.healthEndpoint')}`},
       'bearertokenauth/server': {scheme: 'Bearer', token: exporterToken},
     },
@@ -251,6 +252,7 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
         include,
         include_file_path: true,
         start_at: 'beginning',
+        storage: 'file_storage',
         max_log_size: collector.maxLogRecordBytes,
         operators: [
           ...sourceOwnerOperators,
@@ -385,7 +387,7 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
       },
     ])),
     service: {
-      extensions: ['health_check', 'bearertokenauth/server'],
+      extensions: ['file_storage', 'health_check', 'bearertokenauth/server'],
       telemetry: {
         metrics: {readers: [{pull: {exporter: {prometheus: {
           host: '0.0.0.0',
@@ -439,6 +441,7 @@ export function createComposeOverride({config, imageRefs, logFiles, collectorCon
         volumes: [
           {type: 'bind', source: collectorConfigPath, target: '/etc/otelcol-contrib/config.yaml', read_only: true},
           probeMount,
+          {type: 'volume', source: 'collector_checkpoints', target: '/var/lib/otelcol/file_storage'},
           ...logVolumes,
         ],
         expose: [
@@ -497,7 +500,7 @@ export function createComposeOverride({config, imageRefs, logFiles, collectorCon
       },
     },
     networks: {coffee_observability: {name: 'coffee_observability', internal: true}},
-    volumes: {openobserve_data: {external: true, name: openObserveDataVolume}},
+    volumes: {collector_checkpoints: {}, openobserve_data: {external: true, name: openObserveDataVolume}},
   };
 }
 

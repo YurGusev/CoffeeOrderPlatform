@@ -290,6 +290,7 @@ export async function withTransaction<Result>(database: Database, options: Trans
         } catch {
           state.state = "Unknown";
           destroy = true;
+          outcome = "unknown";
           throw new DatabaseTransactionError("DB_ROLLBACK_FAILED", metadata, undefined, error instanceof DatabaseTransactionError ? error.code : "DB_QUERY_FAILED");
         }
       }

@@ -68,6 +68,29 @@ async function waitFor(predicate, timeoutMs = 1_000) {
   }
 }
 
+function captureRuntimeSpans(t) {
+  const getTracer = trace.getTracer.bind(trace);
+  const spans = [];
+  t.mock.method(trace, "getTracer", function (name, ...args) {
+    const tracer = getTracer(name, ...args);
+    if (name !== "coffee-platform.runtime") return tracer;
+    return {...tracer, startSpan(spanName, options) {
+      const span = {
+        name: spanName,
+        attributes: {...options?.attributes},
+        ends: 0,
+        spanContext: () => ({traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", spanId: "bbbbbbbbbbbbbbbb", traceFlags: 1}),
+        setAttribute(key, value) { this.attributes[key] = value; },
+        setStatus() {},
+        end() { this.ends += 1; },
+      };
+      spans.push(span);
+      return span;
+    }};
+  });
+  return spans;
+}
+
 function addressOf(app) {
   const address = app.server.address();
   assert.ok(address && typeof address === "object");
@@ -862,7 +885,8 @@ void test("premature GET response disconnect aborts the request signal", async (
   await stopApp(app);
 });
 
-void test("non-cooperative handler stays tracked after disconnect and forces fail-stop", async () => {
+void test("non-cooperative handler stays tracked after disconnect and forces fail-stop", async (t) => {
+  const spans = captureRuntimeSpans(t);
   let entered = false;
   let signal;
   const app = await createRuntime(identity("non-cooperative-test", {deadlineMs: 2_000, shutdownGraceMs: 40}));
@@ -879,11 +903,44 @@ void test("non-cooperative handler stays tracked after disconnect and forces fai
   await closeClientRequest(request);
   await waitFor(() => signal.aborted);
   assert.equal(signal.reason.code, "RUNTIME_CLIENT_DISCONNECTED");
+  await waitFor(() => spans[0]?.ends === 1);
+  assert.equal(spans[0].ends, 1);
   const result = await stopApp(app);
   assert.equal(result.status, "fail-stop");
   assert.deepEqual(result.pending, ["handlers"]);
   assert.equal(app.runtimeController.phase(), "stopped");
   assert.equal(app.server.listening, false);
+});
+
+void test("request deadline finishes telemetry for a non-cooperative handler", async (t) => {
+  const spans = captureRuntimeSpans(t);
+  let signal;
+  const app = await createRuntime(identity("deadline-blackhole-test", {deadlineMs: 30, shutdownGraceMs: 40}));
+  app.get("/blackhole", async (request) => {
+    signal = request.runtimeContext.signal;
+    await new Promise(() => {});
+  });
+  await app.runtimeController.start();
+  const {port} = addressOf(app);
+  await assert.rejects(fetch(`http://127.0.0.1:${port}/blackhole`));
+  await waitFor(() => signal?.aborted && spans[0]?.ends === 1);
+  assert.equal(signal.reason.code, "RUNTIME_REQUEST_DEADLINE");
+  assert.equal(spans[0].ends, 1);
+  assert.equal((await stopApp(app)).status, "fail-stop");
+});
+
+void test("runtime server spans bound unrecognized HTTP methods", async (t) => {
+  const spans = captureRuntimeSpans(t);
+  const app = await createRuntime(identity("unrecognized-method-test"));
+  t.after(() => stopApp(app));
+  app.route({method: "TRACE", url: "/trace", handler: async () => ({status: "ok"})});
+  await app.runtimeController.start();
+  const {port} = addressOf(app);
+  const {response} = await requestJson(port, "/trace", {method: "TRACE"});
+  assert.equal(response.statusCode, 200);
+  assert.equal(spans[0].name, "HTTP _OTHER");
+  assert.equal(spans[0].attributes["http.request.method"], "_OTHER");
+  assert.equal(spans[0].ends, 1);
 });
 
 void test("partial POST input disconnects before the request is complete", async () => {

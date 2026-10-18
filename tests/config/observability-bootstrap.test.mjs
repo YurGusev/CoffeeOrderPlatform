@@ -385,6 +385,9 @@ void test('Collector config accepts only exact selected log files and bounds exp
     `/var/lib/docker/containers/${'a'.repeat(64)}/${'a'.repeat(64)}-json.log`,
     `/var/lib/docker/containers/${'b'.repeat(64)}/${'b'.repeat(64)}-json.log`,
   ]);
+  assert.equal(config.receivers.filelog.storage, 'file_storage');
+  assert.deepEqual(config.extensions.file_storage, {directory: '/var/lib/otelcol/file_storage', fsync: true});
+  assert.ok(config.service.extensions.includes('file_storage'));
   assert.equal(config.receivers.filelog.include_file_path, true);
   assert.equal(config.receivers.filelog.max_log_size, 65536);
   assert.deepEqual(config.receivers.filelog.operators, [
@@ -479,6 +482,10 @@ void test('Collector config accepts only exact selected log files and bounds exp
   assert.ok(compose.services['otel-collector'].networks.includes('coffee_edge_backend'),
     'Collector stays in the existing edge trust zone used by edge-nginx');
   assert.equal(compose.services['otel-collector'].mem_limit, '512m');
+  assert.ok(compose.services['otel-collector'].volumes.some(({type, source, target, read_only}) =>
+    type === 'volume' && source === 'collector_checkpoints' && target === '/var/lib/otelcol/file_storage' && read_only === undefined));
+  assert.deepEqual(compose.volumes.collector_checkpoints, {});
+  assert.deepEqual(compose.volumes.openobserve_data, {external: true, name: 'coffee-test-openobserve-data'});
   for (const role of ['otel-collector', 'openobserve'])
     assert.equal(compose.services[role].stop_grace_period, '30000ms');
   const bufferEnvironment = {

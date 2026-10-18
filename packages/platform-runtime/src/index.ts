@@ -669,9 +669,10 @@ export async function createRuntime(
       if (version === "00" && traceId !== undefined && spanId !== undefined && flags !== undefined)
         parent = trace.setSpanContext(parent, {traceId, spanId, traceFlags: Number.parseInt(flags, 16), isRemote: true});
     }
-    const span = trace.getTracer("coffee-platform.runtime").startSpan(`HTTP ${request.method}`, {
+    const method = RUNTIME_HTTP_METHODS.has(request.method) ? request.method : "_OTHER";
+    const span = trace.getTracer("coffee-platform.runtime").startSpan(`HTTP ${method}`, {
       kind: SpanKind.SERVER,
-      attributes: {"http.request.method": request.method, "http.route": request.routeOptions.url ?? "unknown"},
+      attributes: {"http.request.method": method, "http.route": request.routeOptions.url ?? "unknown"},
     }, parent);
     request.runtimeSpan = span;
     runtimeRequestStarts.set(span, nodePerformance.now());
@@ -712,6 +713,7 @@ export async function createRuntime(
         : (identity.deadlineProfiles?.[profile] ?? null);
     let accepted = false;
     const cleanup = (): void => {
+      if (!reply.raw.writableFinished) completeRuntimeRequestTelemetry(request, reply.statusCode);
       clearTimeout(timer);
       requests.delete(abort);
       requestCleanup.delete(request);

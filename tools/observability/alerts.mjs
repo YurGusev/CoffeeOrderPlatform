@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {OBSERVABILITY_TARGETS} from './generate.mjs';
 
 const ALERT_API = '/api/v2';
 const MANAGEMENT_API = '/api';
@@ -9,6 +10,7 @@ const ALERT_METRICS = [
   {key: 'unknownOutcome', slug: 'unknown-outcome', metric: 'coffee_aroma_unknown_outcomes_current', operator: '>'},
   {key: 'sseDropRate', slug: 'sse-drop-rate', metric: 'coffee_realtime_invalidation_dropped_total', operator: '>'},
 ];
+const READINESS_SERVICES = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
 
 function required(value, name) {
   if (value === undefined || value === null || value === '') throw new Error(`${name} is required`);
@@ -19,9 +21,11 @@ function metricStream(prefix, name) {
   return `${prefix}_${name}`.replace(/[^a-zA-Z0-9_]/gu, '_');
 }
 
-function promqlFor(rule, streams, windowSeconds) {
+function promqlFor(rule, streams, windowSeconds, readinessServices) {
   if (rule.key === 'notReady') {
-    return `min(${streams.runtime_ready} or ${streams.httpcheck_status}{service_name="edge-nginx",http_status_class="2xx"})`;
+    const owners = `^(${readinessServices.join('|')})$`;
+    const runtimeReady = `${streams.runtime_ready}{service_name=~"${owners}"}`;
+    return `(min(${runtimeReady} or ${streams.httpcheck_status}{service_name="edge-nginx",http_status_class="2xx"}) * (scalar(count(count by (service_name) (${runtimeReady}))) == bool ${readinessServices.length})) or vector(0)`;
   }
   if (rule.key === 'sseDropRate') {
     const dropped = streams.coffee_realtime_invalidation_dropped_total;
@@ -31,7 +35,7 @@ function promqlFor(rule, streams, windowSeconds) {
   return `max(${streams[rule.metric]})`;
 }
 
-export function createAlertDefinitions({config} = {}) {
+export function createAlertDefinitions({config, readinessServices} = {}) {
   const telemetry = required(config?.telemetry, 'telemetry');
   const alerts = required(telemetry.alerts, 'telemetry.alerts');
   const version = alerts.version;
@@ -41,6 +45,11 @@ export function createAlertDefinitions({config} = {}) {
     throw new Error('telemetry.alerts.evaluationIntervalMs must be a positive whole number of minutes');
   const evaluationIntervalMinutes = evaluationIntervalMs / 60000;
   const prefix = required(telemetry.openObserve?.streams?.metrics, 'telemetry.openObserve.streams.metrics');
+  const expectedReadinessServices = readinessServices ?? READINESS_SERVICES;
+  if (!Array.isArray(expectedReadinessServices) || expectedReadinessServices.length === 0 ||
+    expectedReadinessServices.some(service => typeof service !== 'string' || !/^[a-z0-9][a-z0-9-]*$/u.test(service)) ||
+    new Set(expectedReadinessServices).size !== expectedReadinessServices.length)
+    throw new Error('readinessServices must contain unique service names');
   const streamNames = Object.fromEntries(ALERT_METRICS.map(({metric}) => [metric, metricStream(prefix, metric)]));
   streamNames.coffee_realtime_invalidation_attempts_total = metricStream(prefix, 'coffee_realtime_invalidation_attempts_total');
   streamNames.httpcheck_status = metricStream(prefix, 'httpcheck_status');
@@ -52,7 +61,8 @@ export function createAlertDefinitions({config} = {}) {
       throw new Error(`invalid alert config: ${rule.key}`);
     return {
       key: rule.key,
-      name: `g14-v${version}-${rule.slug}`,
+      name: `g14-v${version}-${rule.slug}${rule.key === 'notReady' && readinessServices !== undefined &&
+        (expectedReadinessServices.length !== READINESS_SERVICES.length || expectedReadinessServices.some((service, index) => service !== READINESS_SERVICES[index])) ? '-synthetic' : ''}`,
       streamName: streamNames[rule.metric],
       metricName: rule.metric,
       threshold,
@@ -61,7 +71,7 @@ export function createAlertDefinitions({config} = {}) {
       pendingPeriodSec: forMs / 1000,
       queryCondition: {
         type: 'promql',
-        promql: promqlFor(rule, streamNames, forMs / 1000),
+        promql: promqlFor(rule, streamNames, forMs / 1000, expectedReadinessServices),
         promql_condition: {column: 'value', operator: rule.operator, value: threshold},
       },
     };
@@ -80,11 +90,33 @@ async function request({fetchImpl, baseUrl, path, authorization, method = 'POST'
   return text.length === 0 ? undefined : JSON.parse(text);
 }
 
-export async function installNativeAlerts({config, baseUrl, organization, authorization, fetchImpl = fetch} = {}) {
+export async function installNativeAlert({baseUrl, organization, authorization, definition, fetchImpl = fetch} = {}) {
   required(baseUrl, 'baseUrl');
   required(organization, 'organization');
   required(authorization, 'authorization');
-  const definitions = createAlertDefinitions({config});
+  required(definition, 'definition');
+  await request({fetchImpl, baseUrl, path: `${ALERT_API}/${organization}/alerts`, authorization, body: {
+    name: definition.name,
+    stream_type: 'metrics',
+    stream_name: definition.streamName,
+    is_real_time: false,
+    query_condition: definition.queryCondition,
+    trigger_condition: {period: definition.evaluationIntervalMinutes, operator: '>=', threshold: 1, frequency: definition.evaluationIntervalMinutes, frequency_type: 'minutes', silence: 0},
+    destinations: ['g14-local'],
+    enabled: true,
+    pending_period_sec: definition.pendingPeriodSec,
+    notify_on_recovery: true,
+    recovery_destinations: ['g14-local'],
+    keep_firing_for: 0,
+  }});
+  return definition;
+}
+
+export async function installNativeAlerts({config, baseUrl, organization, authorization, readinessServices, fetchImpl = fetch} = {}) {
+  required(baseUrl, 'baseUrl');
+  required(organization, 'organization');
+  required(authorization, 'authorization');
+  const definitions = createAlertDefinitions({config, readinessServices});
   const api = (path, args = {}) => request({fetchImpl, baseUrl, path, authorization, ...args});
 
   await api(`${MANAGEMENT_API}/${organization}/alerts/templates`, {body: {
@@ -98,20 +130,7 @@ export async function installNativeAlerts({config, baseUrl, organization, author
   }});
 
   for (const definition of definitions) {
-    await api(`${ALERT_API}/${organization}/alerts`, {body: {
-      name: definition.name,
-      stream_type: 'metrics',
-      stream_name: definition.streamName,
-      is_real_time: false,
-      query_condition: definition.queryCondition,
-      trigger_condition: {period: definition.evaluationIntervalMinutes, operator: '>=', threshold: 1, frequency: definition.evaluationIntervalMinutes, frequency_type: 'minutes', silence: 0},
-      destinations: ['g14-local'],
-      enabled: true,
-      pending_period_sec: definition.pendingPeriodSec,
-      notify_on_recovery: true,
-      recovery_destinations: ['g14-local'],
-      keep_firing_for: 0,
-    }});
+    await installNativeAlert({baseUrl, organization, authorization, definition, fetchImpl});
   }
   return definitions;
 }

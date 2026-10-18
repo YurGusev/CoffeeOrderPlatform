@@ -554,7 +554,9 @@ void test("observability overlay keeps OpenObserve private and bounds exact Dock
   assert.ok(openObserve.healthcheck.test.join(" ").includes("http://127.0.0.1:5080/healthz"));
   assert.ok(collector.volumes.some(({source, target, read_only}) => source === "/usr/bin/busybox" && target === "/busybox" && read_only));
   assert.ok(openObserve.volumes.some(({source, target, read_only}) => source === "/usr/bin/busybox" && target === "/busybox" && read_only));
-  assert.ok(collector.volumes.every(({read_only}) => read_only === true));
+  assert.deepEqual(collector.volumes.filter(({read_only}) => read_only !== true), [
+    {type: "volume", source: "collector_checkpoints", target: "/var/lib/otelcol/file_storage"},
+  ]);
   assert.ok(collector.volumes.some(({source, target, read_only}) => source === `/var/lib/docker/containers/${id}` && target === `/var/lib/docker/containers/${id}` && read_only));
   assert.equal(collector.volumes.some(({source}) => source === "/var/run/docker.sock"), false);
   assert.equal(collector.mem_limit, "512m");
