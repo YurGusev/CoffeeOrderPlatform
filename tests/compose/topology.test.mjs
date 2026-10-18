@@ -543,7 +543,7 @@ void test("observability overlay keeps OpenObserve private and bounds exact Dock
   assert.match(openObserve.command[0], /\.coffee-initialized-v1/u);
   assert.match(openObserve.command[0], /test ! -L/u);
   assert.match(openObserve.command[0], /marker_email.*ZO_ROOT_USER_EMAIL/u);
-  assert.ok(openObserve.healthcheck.test.join(" ").includes("test \"$used\" -lt '80'"));
+  assert.ok(openObserve.healthcheck.test.join(" ").includes("/busybox df -P / /data"));
   assert.deepEqual(openObserve.networks, ["coffee_observability"]);
   assert.deepEqual(collector.networks, ["coffee_observability", "coffee_edge_backend", "coffee_public_api_backend", "coffee_internal_api", "coffee_kafka_event"]);
   assert.equal(collector.ports, undefined);

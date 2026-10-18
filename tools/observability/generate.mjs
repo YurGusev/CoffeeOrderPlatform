@@ -415,7 +415,7 @@ export function createComposeOverride({config, imageRefs, logFiles, collectorCon
   const healthcheck = (url, {diskWatermarkPercent} = {}) => ({
     test: diskWatermarkPercent === undefined
       ? ['CMD', '/busybox', 'wget', '-q', '-O', '/dev/null', '-T', String(probeTimeoutSeconds), url]
-      : ['CMD', '/busybox', 'sh', '-ceu', `/busybox wget -q -O /dev/null -T ${probeTimeoutSeconds} '${url}'; used="$(/busybox df -P /data | /busybox tail -n 1 | /busybox awk '{gsub(/%/, "", $5); print $5}')"; test "$used" -lt '${diskWatermarkPercent}'`],
+      : ['CMD', '/busybox', 'sh', '-ceu', `/busybox wget -q -O /dev/null -T ${probeTimeoutSeconds} '${url}'; /busybox df -P / /data | /busybox awk 'NR > 1 {gsub(/%/, "", $5); count++; if ($5 >= ${diskWatermarkPercent}) exit 1} END {if (count != 2) exit 1}'`],
     interval: `${config.platform.health.intervalMs}ms`,
     timeout: `${config.platform.health.timeoutMs}ms`,
     start_period: `${config.platform.health.startupGraceMs}ms`,

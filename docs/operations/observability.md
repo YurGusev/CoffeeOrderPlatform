@@ -196,7 +196,7 @@ immutable memtables; активный файл проверяется на ро�
 
 OpenObserve из принятого BOM суммирует диски всех mount points, являющихся
 префиксами data directory, включая `/`. Поэтому свободное место корневого диска
-также влияет на native breaker. Health probe отдельно проверяет заполнение `/data`;
+также влияет на native breaker. Health probe проверяет порог заполнения `/` и `/data`;
 bounded filesystem ограничивает telemetry независимо от свободного места хоста.
 При admission проверяются оба диска; увеличение порога не заменяет очистку.
 

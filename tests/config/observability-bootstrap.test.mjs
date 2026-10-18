@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile} from 'node:fs/promises';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {resolve} from 'node:path';
+import {join, resolve} from 'node:path';
 import test from 'node:test';
 import {infrastructureSecretEntries, loadServiceCatalog} from '../../scripts/config-lib.mjs';
 import {
@@ -501,6 +502,44 @@ void test('Collector config accepts only exact selected log files and bounds exp
   assert.equal(redactionKey.test('description'), false);
   assert.equal(redactionKey.test('security'), false);
   assert.throws(() => createCollectorConfig({config: sample, logFiles: [{...logs[0], logPath: '/tmp/all-containers/*.log'}], exporterToken: 'x', openObserveIngestToken: 'y'}), /exact Docker json-file paths/u);
+});
+
+void test('OpenObserve healthcheck requires root and data filesystems below the disk watermark', async () => {
+  const directory = await mkdtemp('/dev/shm/coffee-openobserve-healthcheck-');
+  const busybox = join(directory, 'busybox');
+  await writeFile(busybox, `#!/bin/sh
+case "$1" in
+  wget) exit 0 ;;
+  df)
+    printf 'Filesystem 1024-blocks Used Available Use%% Mounted on\\n'
+    printf '/dev/root 100 81 19 %s%% /\\n' "$ROOT_USED"
+    printf '/dev/data 100 1 99 %s%% /data\\n' "$DATA_USED"
+    ;;
+  awk) shift; exec /usr/bin/awk "$@" ;;
+  *) exit 127 ;;
+esac
+`, {mode: 0o700});
+  try {
+    const compose = createComposeOverride({
+      config: sample,
+      imageRefs: {otelCollectorImage: 'otel-collector@sha256:' + 'a'.repeat(64), openObserveImage: 'openobserve@sha256:' + 'b'.repeat(64), bootstrapProbeSha256: 'c'.repeat(64)},
+      logFiles: logs,
+      collectorConfigPath: '/dev/shm/collector.yaml',
+      openObserveDataVolume: 'coffee-test-openobserve-data',
+    });
+    const [commandType, executable, shell, flag, script] = compose.services.openobserve.healthcheck.test;
+    assert.deepEqual([commandType, executable, shell, flag], ['CMD', '/busybox', 'sh', '-ceu']);
+    const healthcheck = script.replaceAll('/busybox', busybox);
+    const run = (rootUsed, dataUsed) => execFileSync('/bin/sh', ['-ceu', healthcheck], {
+      env: {...process.env, ROOT_USED: String(rootUsed), DATA_USED: String(dataUsed)},
+      stdio: 'ignore',
+    });
+    run(77, 1);
+    assert.throws(() => run(81, 1), error => error.status === 1);
+    assert.throws(() => run(1, 81), error => error.status === 1);
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
 });
 
 void test('Collector queue verification handles sparse streams without accepting missing required counters', async () => {
