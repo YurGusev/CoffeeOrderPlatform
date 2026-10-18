@@ -122,7 +122,8 @@ export function completeRuntimeRequestTelemetry(
   const span = request.runtimeSpan;
   if (span === null) return;
   if (statusCode !== undefined) span.setAttribute("http.response.status_code", statusCode);
-  if (statusCode !== undefined && statusCode >= 500) span.setStatus({code: SpanStatusCode.ERROR});
+  if (outcome !== "completed" || (statusCode !== undefined && Number.isInteger(statusCode) && statusCode >= 500 && statusCode <= 599))
+    span.setStatus({code: SpanStatusCode.ERROR});
   span.setAttribute("outcome", outcome);
   const startedAt = runtimeRequestStarts.get(span);
   runtimeRequestStarts.delete(span);
@@ -772,7 +773,6 @@ export async function createRuntime(
   });
   app.addHook("onError", (request, _reply, error, done) => {
     request.runtimeSpan?.setAttribute("error.type", errorName(error));
-    request.runtimeSpan?.setStatus({code: SpanStatusCode.ERROR});
     done();
   });
   app.addHook("onResponse", (request, reply, done) => {

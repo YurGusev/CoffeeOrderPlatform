@@ -722,6 +722,8 @@ void test("readiness checks fail closed, recover, and expose correlation context
     deadlineUtc: request.runtimeContext?.deadlineUtc,
   }));
   app.get("/client-error", async (_request, reply) => reply.code(404).send());
+  app.post("/malformed-json", async () => ({status: "handler must not run"}));
+  app.get("/server-error", async () => { throw new Error("synthetic server failure"); });
   await app.runtimeController.start();
   const notReady = await app.inject({
     method: "GET",
@@ -751,6 +753,12 @@ void test("readiness checks fail closed, recover, and expose correlation context
   const clientError = await app.inject("/client-error");
   assert.equal(clientError.statusCode, 404);
   assert.equal(spans.at(-1).status, undefined);
+  const malformedJson = await app.inject({method: "POST", url: "/malformed-json", headers: {"content-type": "application/json"}, payload: "{"});
+  assert.equal(malformedJson.statusCode, 400);
+  assert.equal(spans.at(-1).status, undefined);
+  const serverError = await app.inject("/server-error");
+  assert.equal(serverError.statusCode, 500);
+  assert.deepEqual(spans.at(-1).status, {code: SpanStatusCode.ERROR});
   assert.equal(context.json().requestCorrelationId, correlationId);
   assert.match(context.json().deadlineUtc, /^\d{4}-\d{2}-\d{2}T/);
   const invalid = await app.inject({
@@ -922,6 +930,7 @@ void test("non-cooperative handler stays tracked after disconnect and forces fai
   assert.equal(spans[0].ends, 1);
   assert.equal(spans[0].attributes.outcome, "client_aborted");
   assert.equal(spans[0].attributes["http.response.status_code"], undefined);
+  assert.deepEqual(spans[0].status, {code: SpanStatusCode.ERROR});
   const result = await stopApp(app);
   assert.equal(result.status, "fail-stop");
   assert.deepEqual(result.pending, ["handlers"]);
@@ -945,6 +954,7 @@ void test("request deadline finishes telemetry for a non-cooperative handler", a
   assert.equal(spans[0].ends, 1);
   assert.equal(spans[0].attributes.outcome, "deadline_exceeded");
   assert.equal(spans[0].attributes["http.response.status_code"], undefined);
+  assert.deepEqual(spans[0].status, {code: SpanStatusCode.ERROR});
   assert.equal((await stopApp(app)).status, "fail-stop");
 });
 
