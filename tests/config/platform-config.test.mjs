@@ -254,6 +254,20 @@ void test("RED: config loader and parser reject OpenObserve hosts outside its pr
   }
 });
 
+void test("RED: config loader and parser reject the normalized default nginx status port", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), {json: true});
+    document.telemetry.nginxStatusEndpoint = "http://edge-nginx:80/nginx_status";
+    await writeFile(path, dumpYaml(document), "utf8");
+    assert.throws(() => parsePlatformConfig(document), PlatformConfigError);
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
 void test("GREEN: Pricing bootstrap policy matches the immutable migration seed", async () => {
   const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
   const policy = parsePlatformConfig(document).pricingPolicy;

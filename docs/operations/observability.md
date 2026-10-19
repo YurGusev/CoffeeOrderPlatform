@@ -149,6 +149,10 @@ Collector получает `telemetry.exporterToken` и отдельный
 Два infrastructure scope заданы в `config/service-catalog.json` и закреплены
 его схемой; Collector scope не допускает admin reference.
 Единый SOPS source в этой задаче не изменялся; provisioning требуется отдельно.
+Материализация требует приватного каталога текущего UID в tmpfs, отклоняет
+символические ссылки и атомарно заменяет scoped файлы с mode `0400`.
+Стандартный путь находится непосредственно в `/dev/shm`; для явного
+`--output-dir` все родительские каталоги должны быть доверенными.
 Admin secret читается из tmpfs только seed-процессом. После успешного admin probe
 bootstrap записывает маркер инициализации в volume. Обычный OpenObserve process
 проверяет маркер и email, получает публичный validation marker вместо credential

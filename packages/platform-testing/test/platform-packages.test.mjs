@@ -1093,6 +1093,54 @@ void test("SQL Outbox preserves stable messageId, recovers expired lease and fen
   assert.ok(outboxSpans.every(span => span.statuses.length === 1 && span.statuses[0].code === SpanStatusCode.ERROR && span.ends === 1));
 });
 
+void test("Outbox age diagnostics run single-flight without gating delivery and drain before database shutdown", async t => {
+  const {database} = mockDatabase(t);
+  const message = outboxFixture("age-diagnostic-does-not-gate", "aggregate-age-diagnostic", 1);
+  const started = [Promise.withResolvers(), Promise.withResolvers()];
+  const gates = [Promise.withResolvers(), Promise.withResolvers()];
+  let diagnosticCalls = 0;
+  let claimAvailable = true;
+  const store = {
+    enqueue: async () => "created",
+    claim: async () => {
+      if (!claimAvailable) return [];
+      claimAvailable = false;
+      return [{message, payloadHash: canonicalRequestHash(message.envelope), state: "Publishing", attempt: 1, leaseOwner: "age-diagnostic-relay", leaseToken: 1n, leaseUntilMs: 500, nextAttemptAtMs: 400}];
+    },
+    finalize: async () => {},
+    fail: async () => "Pending",
+    oldestUnpublishedAgesMs: async () => {
+      const call = diagnosticCalls++;
+      started[call].resolve();
+      await gates[call].promise;
+      if (call === 0) throw new Error("diagnostic query failed");
+      return null;
+    },
+  };
+  const options = {nowMs: 400, leaseOwner: "age-diagnostic-relay", policy: {leaseMs: 100, sendTimeoutMs: 50, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}}};
+
+  const delivered = await relayOutboxBatch(store, database, async () => ({kind: "ack"}), options);
+  assert.equal(delivered.published, 1, "a delayed diagnostic must not delay claim or delivery");
+  await started[0].promise;
+  const overlapping = await relayOutboxBatch(store, database, async () => ({kind: "ack"}), options);
+  assert.equal(overlapping.claimed, 0);
+  assert.equal(diagnosticCalls, 1, "the same store must not start overlapping age queries");
+
+  gates[0].resolve();
+  while (database.metrics().pending > 0) await new Promise(resolve => setImmediate(resolve));
+  const retried = await relayOutboxBatch(store, database, async () => ({kind: "ack"}), options);
+  assert.equal(retried.claimed, 0);
+  await started[1].promise;
+  assert.equal(diagnosticCalls, 2, "a failed diagnostic releases the single-flight guard");
+  let stopped = false;
+  const shutdown = database.resource.stop(AbortSignal.timeout(1_000)).then(() => {stopped = true;});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(stopped, false, "database shutdown waits for the already-tracked diagnostic transaction");
+  gates[1].resolve();
+  await shutdown;
+  assert.equal(stopped, true);
+});
+
 void test("Inbox consumeOnce rollback leaves no partial Inbox/Outbox mark and permits retry", async t => {
   const {database, snapshot} = deliverySqlDatabase(t);
   const inbox = createSqlInboxStore(database);

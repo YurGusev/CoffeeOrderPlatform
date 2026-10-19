@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile} from 'node:fs/promises';
+import {chmod, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile} from 'node:fs/promises';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {join, resolve} from 'node:path';
@@ -701,6 +701,120 @@ void test('unprovisioned collector and admin credentials fail closed without wri
     await rm(adminDir, {recursive: true, force: true});
   }
 });
+
+void test('collector/admin materializers reject untrusted output directories and symlink targets', async () => {
+  const root = await mkdtemp('/dev/shm/coffee-observability-output-');
+  const fixture = await createSecretMaterializationFixture();
+  const targetDir = join(root, 'target');
+  const collectorLink = join(root, 'collector-link');
+  const adminLink = join(root, 'admin-link');
+  await mkdir(targetDir);
+  await symlink(targetDir, collectorLink, 'dir');
+  await symlink(targetDir, adminLink, 'dir');
+  try {
+    await assert.rejects(materializeCollectorSecrets({outputDir: collectorLink, env: {}}), /real directory owned by config-bootstrap/u);
+    await assert.rejects(materializeOpenObserveAdminSecret({outputDir: adminLink, env: {}}), /real directory owned by config-bootstrap/u);
+
+    const collectorDir = join(root, 'collector');
+    const adminDir = join(root, 'admin');
+    const collectorTarget = join(root, 'collector-victim');
+    const adminTarget = join(root, 'admin-victim');
+    await mkdir(collectorDir);
+    await mkdir(adminDir);
+    await writeFile(collectorTarget, 'collector victim');
+    await writeFile(adminTarget, 'admin victim');
+    await symlink(collectorTarget, join(collectorDir, 'collector.json'));
+    await symlink(adminTarget, join(adminDir, 'admin-secret'));
+    await assert.rejects(materializeCollectorSecrets({root: fixture.root, outputDir: collectorDir, env: fixture.env}), /existing secret output must be a regular file/u);
+    await assert.rejects(materializeOpenObserveAdminSecret({root: fixture.root, outputDir: adminDir, env: fixture.env}), /existing secret output must be a regular file/u);
+    assert.equal(await readFile(collectorTarget, 'utf8'), 'collector victim');
+    assert.equal(await readFile(adminTarget, 'utf8'), 'admin victim');
+  } finally {
+    await rm(root, {recursive: true, force: true});
+    await rm(fixture.root, {recursive: true, force: true});
+    await rm(fixture.bin, {recursive: true, force: true});
+  }
+});
+
+void test('collector/admin materializers atomically replace owned files with mode 0400 secrets', async () => {
+  const fixture = await createSecretMaterializationFixture();
+  const collectorDir = await mkdtemp('/dev/shm/coffee-observability-atomic-collector-');
+  const adminDir = await mkdtemp('/dev/shm/coffee-observability-atomic-admin-');
+  try {
+    const collectorPath = join(collectorDir, 'collector.json');
+    const adminPath = join(adminDir, 'admin-secret');
+    await writeFile(collectorPath, 'stale collector secret', {mode: 0o400});
+    await writeFile(adminPath, 'stale admin secret', {mode: 0o400});
+    const oldCollector = await stat(collectorPath);
+    const oldAdmin = await stat(adminPath);
+
+    await materializeCollectorSecrets({root: fixture.root, outputDir: collectorDir, env: fixture.env});
+    await materializeOpenObserveAdminSecret({root: fixture.root, outputDir: adminDir, env: fixture.env});
+
+    const collector = JSON.parse(await readFile(collectorPath, 'utf8'));
+    assert.equal(collector.exporterToken, 'fixture-secret-value');
+    assert.equal(collector.openObserveIngestToken, 'fixture-secret-value');
+    assert.equal(await readFile(adminPath, 'utf8'), 'fixture-secret-value\n');
+    for (const [path, oldMetadata] of [[collectorPath, oldCollector], [adminPath, oldAdmin]]) {
+      const metadata = await stat(path);
+      assert.equal(metadata.mode & 0o777, 0o400);
+      assert.equal(metadata.uid, process.getuid());
+      assert.notEqual(metadata.ino, oldMetadata.ino);
+    }
+    assert.deepEqual((await readdir(collectorDir)).sort(), ['collector.json']);
+    assert.deepEqual((await readdir(adminDir)).sort(), ['admin-secret']);
+  } finally {
+    await rm(fixture.root, {recursive: true, force: true});
+    await rm(fixture.bin, {recursive: true, force: true});
+    await rm(collectorDir, {recursive: true, force: true});
+    await rm(adminDir, {recursive: true, force: true});
+  }
+});
+
+void test('collector/admin materializers reject directories owned by another user', async () => {
+  if (process.getuid() === 0) return;
+  const before = await stat('/tmp');
+  assert.notEqual(before.uid, process.getuid());
+  for (const materialize of [materializeCollectorSecrets, materializeOpenObserveAdminSecret]) {
+    await assert.rejects(materialize({outputDir: '/tmp', env: {}}), /real directory owned by config-bootstrap/u);
+  }
+  const after = await stat('/tmp');
+  assert.equal(after.mode, before.mode);
+  assert.equal(after.uid, before.uid);
+});
+
+async function createSecretMaterializationFixture() {
+  const root = await mkdtemp('/dev/shm/coffee-observability-secret-fixture-');
+  const bin = await mkdtemp('/dev/shm/coffee-observability-sops-bin-');
+  const plainPath = join(root, 'decrypted.json');
+  try {
+    for (const path of ['config', 'platform']) await cp(`${REPO_ROOT}/${path}`, `${root}/${path}`, {recursive: true});
+    await mkdir(`${root}/secrets`, {recursive: true});
+    await cp(`${REPO_ROOT}/secrets/platform-secrets.schema.json`, `${root}/secrets/platform-secrets.schema.json`);
+    await cp(`${REPO_ROOT}/.sops.yaml`, `${root}/.sops.yaml`);
+    const encrypted = syntheticEncryptedSecrets();
+    for (const environment of Object.values(encrypted.environments)) {
+      environment.telemetry.openObserveIngestToken = 'ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]';
+      environment.telemetry.openObserveAdmin = 'ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]';
+    }
+    await writeFile(`${root}/secrets/platform.secrets.sops.yaml`, JSON.stringify(encrypted), 'utf8');
+    const decrypted = structuredClone(encrypted);
+    delete decrypted.sops;
+    const replaceEncrypted = (value) => {
+      if (Array.isArray(value)) return value.map(replaceEncrypted);
+      if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, replaceEncrypted(child)]));
+      return typeof value === 'string' && value.startsWith('ENC[') ? 'fixture-secret-value' : value;
+    };
+    await writeFile(plainPath, JSON.stringify(replaceEncrypted(decrypted)), 'utf8');
+    await writeFile(join(bin, 'sops'), `#!/bin/sh\ncat '${plainPath}'\n`, {mode: 0o700});
+    await chmod(join(bin, 'sops'), 0o700);
+    return {root, bin, env: {PATH: `${bin}:${process.env.PATH ?? ''}`}};
+  } catch (error) {
+    await rm(root, {recursive: true, force: true});
+    await rm(bin, {recursive: true, force: true});
+    throw error;
+  }
+}
 
 function syntheticEncryptedSecrets() {
   const encrypted = 'ENC[AES256_GCM,data:x,iv:x,tag:x,type:str]';

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {randomBytes} from "node:crypto";
 import {readFile} from "node:fs/promises";
+import {setTimeout as sleep} from "node:timers/promises";
 import test from "node:test";
 import pg, {Client} from "pg";
 import {withCatalogPostgres} from "../../scripts/catalog-live-harness.mjs";
@@ -160,8 +161,16 @@ void test("Outbox oldest age is current, scoped by configured topics and ignores
 
   const firstRelay=await relayOutboxBatch(store,service,async()=>({kind:"ack"}),{nowMs:Date.now(),leaseOwner:"age-proof-relay",policy:{leaseMs:60_000,sendTimeoutMs:5_000,maxInFlight:1,retry:{baseMs:1,maxMs:10,maxAttempts:3}}});
   assert.equal(firstRelay.published,1);
-  const gaugeSamples=observeGauge("messaging.outbox.oldest_unpublished.age");
-  assert.deepEqual(gaugeSamples.map(sample=>sample.attributes["messaging.destination.name"]).toSorted((left,right)=>left.localeCompare(right)),[emptyTopic,otherTopic,topic].toSorted((left,right)=>left.localeCompare(right)));
+  const expectedTopics=[emptyTopic,otherTopic,topic].toSorted();
+  const gaugeDeadline=performance.now()+pool.transactionTimeoutMs;
+  let gaugeSamples=[];
+  while(performance.now()<gaugeDeadline) {
+    gaugeSamples=observeGauge("messaging.outbox.oldest_unpublished.age");
+    const actualTopics=gaugeSamples.map(sample=>sample.attributes["messaging.destination.name"]).toSorted();
+    if(JSON.stringify(actualTopics)===JSON.stringify(expectedTopics))break;
+    await sleep(Math.min(10,gaugeDeadline-performance.now()));
+  }
+  assert.deepEqual(gaugeSamples.map(sample=>sample.attributes["messaging.destination.name"]).toSorted(),expectedTopics,"background refresh records every configured topic before the database transaction deadline");
   assert.equal(gaugeSamples.find(sample=>sample.attributes["messaging.destination.name"]===emptyTopic)?.value,0);
 
   const failingAgeStore=new Proxy(store,{get(target,key){if(key==="oldestUnpublishedAgesMs")return async()=>{throw new Error("diagnostic query failed")};const value=Reflect.get(target,key,target);return typeof value==="function"?value.bind(target):value;}});

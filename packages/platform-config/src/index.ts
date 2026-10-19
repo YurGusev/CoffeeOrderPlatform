@@ -1345,7 +1345,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   };
   const namespace = stringValue(source["namespace"], `${path}.namespace`);
   const nginxStatusEndpoint = endpoint(source["nginxStatusEndpoint"], `${path}.nginxStatusEndpoint`);
-  if (!/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(nginxStatusEndpoint) || Number(new URL(nginxStatusEndpoint).port) > 65535)
+  if (!/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(nginxStatusEndpoint) || !new URL(nginxStatusEndpoint).port || Number(new URL(nginxStatusEndpoint).port) > 65535)
     throw new PlatformConfigError(`${path}.nginxStatusEndpoint`, "ожидался приватный native nginx status endpoint");
   const releaseDigest = stringValue(source["releaseDigest"], `${path}.releaseDigest`);
   if (!/^[a-z][a-z0-9.-]{0,62}$/u.test(namespace) || !/^[a-zA-Z0-9._:-]{1,128}$/u.test(releaseDigest))
