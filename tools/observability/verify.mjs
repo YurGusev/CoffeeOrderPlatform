@@ -737,6 +737,13 @@ function latestMetricSample(records, {service, afterUs, beforeUs}) {
     .sort((left, right) => right.timestampUs - left.timestampUs)[0];
 }
 
+export async function readinessMetricSamples({baseUrl, authorization, organization, stream, services, afterUs, fetchImpl = fetch}) {
+  const owners = services.map(service => `'${service.replaceAll("'", "''")}'`).join(', ');
+  const records = rows(await streamSearch({baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs: afterUs,
+    filterSql: `"service_name" IN (${owners})`, size: 1000, orderByTimestampDesc: true, fetchImpl}));
+  return services.map(service => ({service, sample: latestMetricSample(records, {service, afterUs})}));
+}
+
 async function waitForProcessMetric({baseUrl, authorization, organization, stream, service, afterUs, beforeUs, description}) {
   return waitFor(async () => {
     const samples = rows(await streamSearch({baseUrl, authorization, organization, stream, streamType: 'metrics', startTimeUs: afterUs, endTimeUs: beforeUs ?? Date.now() * 1000}));
@@ -833,11 +840,11 @@ async function fixtureRequest({baseUrl, path = '/synthetic', method = 'POST', bo
   return response.status === 204 ? undefined : response.json();
 }
 
-async function streamSearch({baseUrl, authorization, organization, stream, runId, field, filterSql, streamType = 'logs', windowMs = 10 * 60 * 1000, startTimeUs, endTimeUs = Date.now() * 1000, fetchImpl = fetch}) {
+async function streamSearch({baseUrl, authorization, organization, stream, runId, field, filterSql, streamType = 'logs', windowMs = 10 * 60 * 1000, startTimeUs, endTimeUs = Date.now() * 1000, size = 100, orderByTimestampDesc = false, fetchImpl = fetch}) {
   const escapedStream = stream.replaceAll('"', '""');
   const filter = filterSql ?? (runId === undefined || field === undefined ? '' : `"${field}" = '${runId}'`);
   return api({fetchImpl, baseUrl, path: `/api/${encodeURIComponent(organization)}/_search?type=${encodeURIComponent(streamType)}`, authorization, method: 'POST', expected: [200], body: {
-    query: {sql: `SELECT * FROM "${escapedStream}"${filter ? ` WHERE ${filter}` : ''}`, start_time: startTimeUs ?? endTimeUs - windowMs * 1000, end_time: endTimeUs, from: 0, size: 100},
+    query: {sql: `SELECT * FROM "${escapedStream}"${filter ? ` WHERE ${filter}` : ''}${orderByTimestampDesc ? ' ORDER BY "_timestamp" DESC' : ''}`, start_time: startTimeUs ?? endTimeUs - windowMs * 1000, end_time: endTimeUs, from: 0, size},
     search_type: 'ui', timeout: 5,
   }});
 }
@@ -2802,12 +2809,8 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
             const afterUs = Date.now() * 1000;
             await waitFor(async () => {
               assertNodeHealth();
-              const samples = await Promise.all(NODE_RUNTIME_TARGETS.map(async service => {
-                const records = rows(await streamSearch({baseUrl, authorization, organization,
-                  stream: `${config.telemetry.openObserve.streams.metrics}_runtime_ready`, streamType: 'metrics', startTimeUs: afterUs,
-                  filterSql: `"service_name" = '${service}'`}));
-                return {service, sample: latestMetricSample(records, {service, afterUs})};
-              }));
+              const samples = await readinessMetricSamples({baseUrl, authorization, organization,
+                stream: `${config.telemetry.openObserve.streams.metrics}_runtime_ready`, services: NODE_RUNTIME_TARGETS, afterUs});
               latestReadinessSamples = samples.map(({service, sample}) => ({
                 role: service,
                 status: sample?.value === 1 ? 'ready' : sample === undefined ? 'missing' : 'not-ready',

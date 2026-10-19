@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {awaitConvergenceMetricBarrier} from './launch-path.mjs';
 import {createAlertDefinitions, installNativeAlert, installNativeAlerts} from '../../tools/observability/alerts.mjs';
 import {OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
-import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples, waitForStreamRetentionSettings} from '../../tools/observability/verify.mjs';
+import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, readinessMetricSamples, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples, waitForStreamRetentionSettings} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -48,6 +48,55 @@ void test('native access lookup selects its owner before the response page limit
   const correlationId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   assert.equal(nativeAccessLogFilter(correlationId), `"service_name" = 'edge-nginx' AND "body_correlation_id" = '${correlationId}'`);
   assert.throws(() => nativeAccessLogFilter("' OR 1=1"), /requires a UUID/u);
+});
+
+void test('native readiness reads every fresh owner in one bounded, newest-first search', async () => {
+  const services = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
+  const afterUs = 1_700_000_000_000_000;
+  const samplesPerOwner = 60;
+  const records = services.flatMap(service => Array.from({length: samplesPerOwner}, (_, index) => ({
+    service_name: service, value: index === 0 ? 0 : 1, _timestamp: afterUs + index + 1,
+  }))).sort((left, right) => right._timestamp - left._timestamp);
+  assert.equal(services.length, 14);
+  assert.equal(records.length, services.length * samplesPerOwner);
+  assert.ok(records.every((record, index) => index === 0 || records[index - 1]._timestamp >= record._timestamp),
+    'the 840 in-window fixture samples are ordered newest first');
+  const observe = async returnedRecords => {
+    let calls = 0;
+    let query;
+    const samples = await readinessMetricSamples({
+      baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+      stream: 'platform_metrics_runtime_ready', services, afterUs,
+      fetchImpl: async (url, init) => {
+        calls += 1;
+        query = JSON.parse(init.body).query;
+        return new Response(JSON.stringify({hits: {hits: returnedRecords}}), {status: 200});
+      },
+    });
+    assert.equal(calls, 1, 'one poll sends one search for the whole owner set');
+    assert.equal(query.sql, `SELECT * FROM "platform_metrics_runtime_ready" WHERE "service_name" IN (${services.map(service => `'${service}'`).join(', ')}) ORDER BY "_timestamp" DESC`);
+    assert.equal(query.size, 1000);
+    assert.equal(query.start_time, afterUs);
+    assert.equal(query.from, 0);
+    return samples;
+  };
+
+  const ready = await observe(records);
+  assert.equal(ready.length, services.length);
+  assert.ok(ready.every(({sample}) => sample?.value === 1 && sample.timestampUs === afterUs + samplesPerOwner),
+    'each owner resolves to its newest value=1 sample after the oldest value=0 sample');
+
+  const missing = services.at(-1);
+  for (const invalidRecords of [
+    records.filter(record => record.service_name !== missing),
+    records.map(record => record.service_name === missing ? {...record, _timestamp: afterUs} : record),
+    records.map(record => record.service_name === missing ? {...record, service_name: 'unexpected-owner'} : record),
+  ]) {
+    const samples = await observe(invalidRecords);
+    assert.equal(samples.length, services.length);
+    assert.equal(samples.every(({sample}) => sample?.value === 1), false,
+      'missing, stale, or unexpected-owner evidence must not satisfy readiness');
+  }
 });
 
 void test('OpenObserve retention settings wait only for stream-settings 404 readiness', {timeout: 10000}, async t => {
