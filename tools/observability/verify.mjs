@@ -968,7 +968,7 @@ export function traceSpanInventory(records) {
     inventory[service] ??= new Set();
     inventory[service].add(spanName);
   }
-  return Object.fromEntries(Object.entries(inventory).map(([service, names]) => [service, [...names].sort()]));
+  return Object.fromEntries(Object.entries(inventory).map(([service, names]) => [service, [...names].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)]));
 }
 
 export function nativeAccessLogFilter(correlationId) {
@@ -979,7 +979,7 @@ export function nativeAccessLogFilter(correlationId) {
 function metricRecordServices(records) {
   return [...new Set(records.flatMap(record => Object.entries(record ?? [])
     .filter(([key, value]) => /service_name/iu.test(key) && typeof value === 'string')
-    .map(([, value]) => value)))].sort();
+    .map(([, value]) => value)))].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
 }
 
 export async function waitForOwnedMetricFamilySamples({baseUrl, authorization, organization, metricsPrefix, family, liveMetricStreams, startTimeUs, fetchImpl = fetch, timeoutMs = 60000, intervalMs = 2000}) {
@@ -1340,7 +1340,7 @@ export async function sourceIdentity(root = REPO_ROOT) {
 }
 
 export function observabilityVerificationCoverage(evidence) {
-  const launchRoles = [...new Set((evidence.launchPathProof?.roles ?? []).map(({role}) => role).filter(role => typeof role === 'string'))].sort();
+  const launchRoles = [...new Set((evidence.launchPathProof?.roles ?? []).map(({role}) => role).filter(role => typeof role === 'string'))].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
   const launchNodeRuntimes = launchRoles.filter(role => NODE_RUNTIME_TARGETS.includes(role));
   const metricApplicability = evidence.metricApplicability ?? {};
   const convergenceProof = metricApplicability.aromaConvergenceProof;
@@ -1814,7 +1814,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
         '--mount', `type=volume,source=${collectorCheckpointVolume},target=/var/lib/otelcol/file_storage`, ...mountArgs,
         toolchain.otelCollectorImage, '--config=/etc/otelcol-contrib/config.yaml']);
       run(['network', 'connect', '--alias', 'otel-collector', producerNetwork, collectorName]);
-      const networks = [backendNetwork, producerNetwork, ...extraNetworks].sort();
+      const networks = [backendNetwork, producerNetwork, ...extraNetworks].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
       for (const network of extraNetworks) run(['network', 'connect', '--alias', 'otel-collector', network, collectorName]);
       const actualNetworks = Object.keys(JSON.parse(run(['inspect', '--format', '{{json .NetworkSettings.Networks}}', collectorName]))).sort();
       const bindings = JSON.parse(run(['inspect', '--format', '{{json .HostConfig.PortBindings}}', collectorName]));
@@ -2343,11 +2343,11 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: true});
     await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
     const metricAlertInputs = {};
-    for (const [key, suffix, predicate] of [
-      ['notReady', 'runtime_ready', value => value <= 0],
-      ['consumerLag', 'messaging_kafka_consumer_lag', value => value > config.telemetry.alerts.consumerLag.threshold],
-      ['outboxOldestAge', 'messaging_outbox_oldest_unpublished_age', value => value > config.telemetry.alerts.outboxOldestAge.threshold],
-      ['unknownOutcome', 'coffee_aroma_unknown_outcomes_current', value => value > config.telemetry.alerts.unknownOutcome.threshold],
+    for (const {key, suffix, predicate} of [
+      {key: 'notReady', suffix: 'runtime_ready', predicate: value => value <= 0},
+      {key: 'consumerLag', suffix: 'messaging_kafka_consumer_lag', predicate: value => value > config.telemetry.alerts.consumerLag.threshold},
+      {key: 'outboxOldestAge', suffix: 'messaging_outbox_oldest_unpublished_age', predicate: value => value > config.telemetry.alerts.outboxOldestAge.threshold},
+      {key: 'unknownOutcome', suffix: 'coffee_aroma_unknown_outcomes_current', predicate: value => value > config.telemetry.alerts.unknownOutcome.threshold},
     ]) {
       const stream = `${config.telemetry.openObserve.streams.metrics}_${suffix}`;
       const metric = await verifyMetricThreshold({baseUrl, authorization, organization, stream, predicate, description: `synthetic alert input metric ${key} exceeds its production gate`});
@@ -2838,9 +2838,12 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           const healthyNative = await nginxAvailability(1, Date.now() * 1000);
           const notReadyRule = createAlertDefinitions({config}).find(rule => rule.key === 'notReady');
           if (!notReadyRule) throw new Error('native alert definitions lack the production notReady rule');
+          const missingNativeRule = {...notReadyRule, queryCondition: {...notReadyRule.queryCondition,
+            promql: notReadyRule.queryCondition.promql.replaceAll('service_name="edge-nginx"', 'service_name="g14-missing-nginx"')}};
           const missingOneOwners = [...NODE_RUNTIME_TARGETS.slice(0, -1), 'g14-missing-owner'];
           const readinessQueries = [
             {scenario: 'all-production-owners-ready', readinessServices: [...NODE_RUNTIME_TARGETS], rule: notReadyRule, expectedValue: 1},
+            {scenario: 'native-nginx-series-missing', readinessServices: [...NODE_RUNTIME_TARGETS], rule: missingNativeRule, expectedValue: 0},
             {scenario: 'one-production-owner-missing', readinessServices: missingOneOwners,
               rule: createAlertDefinitions({config, readinessServices: missingOneOwners}).find(rule => rule.key === 'notReady'), expectedValue: 0},
             {scenario: 'all-production-owners-missing', readinessServices: ['g14-missing-owner'],
@@ -3228,7 +3231,7 @@ keep=1`;
     ];
     if (requiredGates.every(status => status === 'PASS')) {
       evidence.status = 'PASS';
-      evidence.limitations.push('QEMU-эмуляция подтверждает функциональную интеграцию, но не производительность или capacity OpenObserve на нативном AVX/AES CPU.');
+      if (emulator !== undefined) evidence.limitations.push('QEMU-эмуляция подтверждает функциональную интеграцию, но не производительность или capacity OpenObserve на нативном AVX/AES CPU.');
     } else {
       evidence.status = 'NOT_RUN';
       evidence.failure = 'G14 содержит обязательные критерии со статусом NOT_RUN; общий PASS не выставлен.';

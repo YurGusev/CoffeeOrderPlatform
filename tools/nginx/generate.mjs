@@ -118,6 +118,7 @@ function routeBlock(route, profile) {
 export function render(profile, routes, statusEndpoint) {
   const { tls, upstreams: u, limits: l } = profile;
   const statusPort = nginxStatusPort(statusEndpoint);
+  must(statusPort !== profile.listen, 'nginx status listener must not share the public TLS port');
   must(l.sseAdmissionConnections <= 512, 'SSE admission must not exceed 512');
   must(l.workerProcesses === 1 || l.workerProcesses === 2, 'worker processes must be 1 or 2');
   must(l.requestPoolBytes === 2048, 'request pool allocation granularity must match the checked profile');

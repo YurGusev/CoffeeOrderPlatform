@@ -90,6 +90,13 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
 void test("telemetry config is strict, immutable, and rejects missing or inconsistent budgets", async () => {
   const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
   const parsed = parsePlatformConfig(document);
+  const equalProducerExportBudget = structuredClone(document);
+  equalProducerExportBudget.telemetry.producer.exportTimeoutMs = 2_000;
+  equalProducerExportBudget.telemetry.producer.batchIntervalMs = 2_000;
+  assert.equal(parsePlatformConfig(equalProducerExportBudget).telemetry.producer.exportTimeoutMs, 2_000);
+  const producerExportExceedsInterval = structuredClone(document);
+  producerExportExceedsInterval.telemetry.producer.exportTimeoutMs = 2_000;
+  assert.throws(() => parsePlatformConfig(producerExportExceedsInterval), PlatformConfigError);
   const alternateCollectorPort = structuredClone(document);
   alternateCollectorPort.telemetry.collector.otlpEndpoint = "http://otel-collector:4319";
   assert.equal(parsePlatformConfig(alternateCollectorPort).telemetry.collector.otlpEndpoint, "http://otel-collector:4319");
@@ -254,15 +261,17 @@ void test("RED: config loader and parser reject OpenObserve hosts outside its pr
   }
 });
 
-void test("RED: config loader and parser reject the normalized default nginx status port", async () => {
+void test("RED: config loader and parser reject default and public TLS nginx status ports", async () => {
   const root = await configRoot();
   try {
     const path = join(root, "config/platform.yaml");
-    const document = parseYaml(await readFile(path, "utf8"), {json: true});
-    document.telemetry.nginxStatusEndpoint = "http://edge-nginx:80/nginx_status";
-    await writeFile(path, dumpYaml(document), "utf8");
-    assert.throws(() => parsePlatformConfig(document), PlatformConfigError);
-    await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+    for (const port of [80, 8443]) {
+      const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+      document.telemetry.nginxStatusEndpoint = `http://edge-nginx:${port}/nginx_status`;
+      await writeFile(path, dumpYaml(document), "utf8");
+      assert.throws(() => parsePlatformConfig(document), PlatformConfigError);
+      await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+    }
   } finally {
     await rm(root, {recursive: true, force: true});
   }
@@ -428,6 +437,7 @@ void test("NGINX reference admission retains 512 streams and a separate full pro
   assert.match(reference, /location = \/health\/ready \{ return 404; \}/u);
   assert.match(reference, /location = \/metrics \{ return 404; \}/u);
   assert.throws(() => render(profile, routes, "http://attacker.invalid:8081/nginx_status"), /private nginx status endpoint/u);
+  assert.throws(() => render(profile, routes, "http://edge-nginx:8443/nginx_status"), /must not share the public TLS port/u);
   for (const workerProcesses of [undefined, 0, 1.5, 3, "2; include /etc/passwd;"]) {
     const invalidProfile = structuredClone(profile);
     invalidProfile.limits.workerProcesses = workerProcesses;

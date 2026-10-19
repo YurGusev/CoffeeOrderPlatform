@@ -1,10 +1,11 @@
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
-import {chmod, lstat, mkdir, readFile, unlink, writeFile} from 'node:fs/promises';
+import {lstat, readFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {dump as dumpYaml} from 'js-yaml';
 import {loadPlatformConfig} from '../../scripts/config-lib.mjs';
+import {ensurePrivateSecretDirectory, writePrivateSecret} from '../config-bootstrap/index.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const OBSERVABILITY_TARGETS = [
@@ -524,12 +525,9 @@ function createDockerLogging(config) {
 export async function generateRuntimeLoggingOverride({root = REPO_ROOT, outputDir = '/dev/shm/coffee-platform-observability', config} = {}) {
   const platformConfig = config ?? await loadPlatformConfig(root);
   const path = join(outputDir, 'runtime-logging.override.yaml');
-  await mkdir(outputDir, {recursive: true, mode: 0o700});
-  await chmod(outputDir, 0o700);
+  await ensurePrivateSecretDirectory(outputDir);
   const content = dumpYaml(createRuntimeLoggingOverride({config: platformConfig}), {noRefs: true, lineWidth: 120});
-  await unlink(path).catch((error) => { if (error.code !== 'ENOENT') throw error; });
-  await writeFile(path, content, {encoding: 'utf8', mode: 0o400});
-  await chmod(path, 0o400);
+  await writePrivateSecret(path, content);
   return {path};
 }
 
@@ -548,17 +546,12 @@ export async function generate({root = REPO_ROOT, projectName, outputDir = '/dev
   const collectorConfigPath = join(outputDir, 'collector.yaml');
   const composeOverridePath = join(outputDir, 'compose.override.yaml');
   const provenancePath = join(outputDir, 'provenance.json');
-  await mkdir(outputDir, {recursive: true, mode: 0o700});
-  await chmod(outputDir, 0o700);
-  await unlink(collectorConfigPath).catch((error) => { if (error.code !== 'ENOENT') throw error; });
-  await writeFile(collectorConfigPath, collectorYaml, {encoding: 'utf8', mode: 0o400});
-  await chmod(collectorConfigPath, 0o400);
+  await ensurePrivateSecretDirectory(outputDir);
+  await writePrivateSecret(collectorConfigPath, collectorYaml);
   const composeYaml = dumpYaml(createComposeOverride({config, imageRefs, logFiles, collectorConfigPath, probePath, openObserveDataVolume}), {noRefs: true, lineWidth: 120});
-  await writeFile(composeOverridePath, composeYaml, {encoding: 'utf8', mode: 0o400});
-  await chmod(composeOverridePath, 0o400);
+  await writePrivateSecret(composeOverridePath, composeYaml);
   const provenance = await createObservabilityProvenance({root, config, imageRefs, logFiles, openObserveDataVolume, collectorConfigSha256: createHash('sha256').update(collectorYaml).digest('hex')});
-  await writeFile(provenancePath, `${JSON.stringify(provenance, null, 2)}\n`, {encoding: 'utf8', mode: 0o400});
-  await chmod(provenancePath, 0o400);
+  await writePrivateSecret(provenancePath, `${JSON.stringify(provenance, null, 2)}\n`);
   const collectorConfigOwnership = ensureCollectorConfigOwnership({collectorConfigPath, nodeImage: imageRefs.nodeImage, runDocker});
   return {collectorConfigPath, composeOverridePath, provenancePath, logFiles, collectorConfigOwnership};
 }

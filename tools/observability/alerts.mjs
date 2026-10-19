@@ -25,7 +25,13 @@ function promqlFor(rule, streams, windowSeconds, readinessServices) {
   if (rule.key === 'notReady') {
     const owners = `^(${readinessServices.join('|')})$`;
     const runtimeReady = `${streams.runtime_ready}{service_name=~"${owners}"}`;
-    return `(min(${runtimeReady} or ${streams.httpcheck_status}{service_name="edge-nginx",http_status_class="2xx"}) * (scalar(count(count by (service_name) (${runtimeReady}))) == bool ${readinessServices.length})) or vector(0)`;
+    const nginxHttpCheck = `${streams.httpcheck_status}{service_name="edge-nginx",http_status_class="2xx"}`;
+    const readiness = `min(${runtimeReady} or ${nginxHttpCheck}) * (scalar(count(count by (service_name) (${runtimeReady}))) == bool ${readinessServices.length})`;
+    const requiresNginx = readinessServices.length === READINESS_SERVICES.length &&
+      readinessServices.every((service, index) => service === READINESS_SERVICES[index]);
+    return requiresNginx
+      ? `((${readiness}) and on() (count(${nginxHttpCheck}) > 0)) or vector(0)`
+      : `(${readiness}) or vector(0)`;
   }
   if (rule.key === 'sseDropRate') {
     const dropped = streams.coffee_realtime_invalidation_dropped_total;

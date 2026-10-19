@@ -342,14 +342,14 @@ export function createTelemetryResource(
         if (result.code !== 0) recordFailure();
         exportInProgress = false;
         inFlightSpanCount = 0;
-        if (spans.length >= config.producer.batchSize) drain();
+        if (spans.length >= config.producer.batchSize || resolveDrain !== undefined) drain();
         else { scheduleDrain(); settleDrain(); }
       });
     } catch {
       recordFailure();
       exportInProgress = false;
       inFlightSpanCount = 0;
-      if (spans.length >= config.producer.batchSize) drain();
+      if (spans.length >= config.producer.batchSize || resolveDrain !== undefined) drain();
       else { scheduleDrain(); settleDrain(); }
     }
   };

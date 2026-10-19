@@ -224,7 +224,7 @@ export async function materializeOpenObserveAdminSecret({root = REPO_ROOT, outpu
   return {path, runtime: 'config-bootstrap'};
 }
 
-async function ensurePrivateSecretDirectory(directory) {
+export async function ensurePrivateSecretDirectory(directory) {
   await mkdir(directory, {recursive: true, mode: 0o700});
   const metadata = await lstat(directory);
   if (!metadata.isDirectory() || metadata.uid !== process.getuid() || await realpath(directory) !== resolve(directory)) {
@@ -233,7 +233,7 @@ async function ensurePrivateSecretDirectory(directory) {
   await chmod(directory, 0o700);
 }
 
-async function writePrivateSecret(path, contents) {
+export async function writePrivateSecret(path, contents) {
   const temporary = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
   let handle;
   try {

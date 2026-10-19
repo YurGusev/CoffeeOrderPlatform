@@ -1,7 +1,7 @@
 import {canonicalJson, canonicalRequestHash, type JsonValue} from "@coffee-platform/idempotency";
 import {quoteIdentifier, type Database, type QueryResult, type SqlScalar, type Transaction} from "@coffee-platform/database";
 import {defineStatement} from "@coffee-platform/database/owner";
-import {metrics, SpanKind, SpanStatusCode, trace, type Histogram, type MeterProvider} from "@opentelemetry/api";
+import {context, metrics, SpanKind, SpanStatusCode, trace, type Histogram, type MeterProvider} from "@opentelemetry/api";
 import {toInstant} from "@coffee-platform/platform-time";
 
 let inboxMetricProvider: MeterProvider | undefined;
@@ -475,7 +475,7 @@ export async function consumeOnce(
     span.setAttribute("messaging.inbox.result", begin.kind);
     return begin;
   }
-  await handler(transaction);
+  await context.with(trace.setSpan(context.active(), span), () => handler(transaction));
   await store.markProcessed(transaction, message.messageId, leaseOwner, processedAt);
   span.setAttribute("messaging.inbox.result", "processed");
   return {kind: "processed"};

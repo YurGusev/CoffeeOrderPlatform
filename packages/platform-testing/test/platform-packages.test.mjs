@@ -369,6 +369,29 @@ void test("database, HTTP and Outbox telemetry preserves owner parentage, bounde
       assert.equal(rollbackStatements.at(-1), "ROLLBACK");
       assert.equal(rollbackStatements.includes("COMMIT"), false);
       assert.deepEqual(rollbackReleases, [true]);
+      const inboxProbe = {begin: async () => ({kind: "acquired", record: {}}), markProcessed: async () => {}};
+      const inboxMessage = {messageId: "trace-inbox", messageType: "TraceProbe", receivedAt: "2026-01-01T00:00:00Z", payloadHash: "a".repeat(64), payload: {}};
+      let inboxSpan;
+      let handlerChildSpan;
+      const inboxResult = await consumeOnce(inboxProbe, {}, inboxMessage, "trace-consumer", 1_000, 10_000, async () => {
+        inboxSpan = trace.getSpan(otelContext.active());
+        handlerChildSpan = trace.getTracer("inbox-child-probe").startSpan("Inbox.handler.child");
+        handlerChildSpan.end();
+      }, "2026-01-01T00:00:00Z");
+      assert.equal(inboxResult.kind, "processed");
+      assert.equal(inboxSpan.name, "Inbox.consumeOnce");
+      assert.equal(handlerChildSpan.parentSpanContext.spanId, inboxSpan.spanContext().spanId);
+      assert.equal(handlerChildSpan.spanContext().traceId, inboxSpan.spanContext().traceId);
+      assert.equal(trace.getSpan(otelContext.active()), ownerSpan);
+      let failedInboxSpan;
+      await assert.rejects(consumeOnce(inboxProbe, {}, inboxMessage, "trace-consumer", 1_000, 10_000, async () => {
+        failedInboxSpan = trace.getSpan(otelContext.active());
+        throw new Error("inbox handler failed");
+      }, "2026-01-01T00:00:00Z"), /inbox handler failed/u);
+      assert.equal(failedInboxSpan.name, "Inbox.consumeOnce");
+      assert.equal(failedInboxSpan.parentSpanContext.spanId, ownerSpan.spanContext().spanId);
+      assert.equal(failedInboxSpan.isRecording(), false);
+      assert.equal(trace.getSpan(otelContext.active()), ownerSpan);
       const response = await client.fetch("/private/entity-secret?token=query-secret", {headers: {
         "x-correlation-id": "corr-safe",
         "x-causation-id": "cause-safe",

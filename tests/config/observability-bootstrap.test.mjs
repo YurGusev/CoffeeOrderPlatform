@@ -208,6 +208,20 @@ void test('runtime logging override is bounded and can be emitted before contain
   }
 });
 
+void test('observability generator rejects a symlink output directory without changing its target', async () => {
+  const root = await mkdtemp('/dev/shm/coffee-runtime-logging-link-');
+  const targetDir = join(root, 'target');
+  const outputLink = join(root, 'output');
+  await mkdir(targetDir);
+  await symlink(targetDir, outputLink, 'dir');
+  try {
+    await assert.rejects(generateRuntimeLoggingOverride({root: REPO_ROOT, outputDir: outputLink, config: sample}), /real directory owned by config-bootstrap/u);
+    assert.deepEqual(await readdir(targetDir), []);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
 void test('OpenObserve seed keeps admin secret file-scoped, networkless, health-bounded, and removes the seed container', async () => {
   const directory = await mkdtemp('/dev/shm/coffee-openobserve-seed-');
   const secretPath = `${directory}/admin-secret`;

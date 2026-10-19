@@ -27,6 +27,7 @@ import {readRuntimeHealthStatuses, runRuntimeHealthcheck} from "../../packages/p
 import {parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../../packages/platform-security/src/index.ts";
 import {checkInternalApiReady} from "../../apps/orders-service/src/infrastructure/internal-api-readiness.ts";
 import {createTelemetryResource, telemetryDiagnostics} from "../../packages/platform-observability/dist/index.js";
+import {createTelemetryResource as createSourceTelemetryResource} from "../../packages/platform-observability/src/index.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const health = {
@@ -299,6 +300,48 @@ void test("telemetry span queue drops at its configured bound and records export
   assert.equal(exportRequests.some(request => request.body.includes(Buffer.from("span-warning-private-canary"))), false,
     "dropped span contents are never exported");
   t.after(() => new Promise(resolve => collector.close(resolve)));
+});
+
+void test("telemetry forceFlush immediately drains the final partial span batch", async (t) => {
+  const traceBatches = [];
+  let firstTraceRequestStarted;
+  const firstTraceStarted = new Promise(resolve => {firstTraceRequestStarted = resolve;});
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.url === "/v1/traces") {
+        traceBatches.push(Buffer.concat(chunks));
+        if (traceBatches.length === 1) {
+          firstTraceRequestStarted();
+          setTimeout(() => {response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();}, 50);
+          return;
+        }
+      }
+      response.writeHead(200, {"content-type": "application/x-protobuf"});
+      response.end();
+    });
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createSourceTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 8, maxRecordBytes: 16384, batchSize: 2, batchIntervalMs: 60_000, exportTimeoutMs: 1_000, diagnosticIntervalMs: 60_000, flushTimeoutMs: 300},
+  }, "otel-flush-tail-test", "test-token");
+  t.after(async () => {if (collector.listening) await new Promise(resolve => collector.close(resolve));});
+  telemetry.start();
+  const tracer = trace.getTracer("otel-flush-tail-test");
+  for (let index = 0; index < 2; index++) tracer.startSpan(`flush.batch.${index}`).end();
+  await firstTraceStarted;
+  for (let index = 2; index < 5; index++) tracer.startSpan(`flush.batch.${index}`).end();
+  await telemetry.stop(new AbortController().signal);
+  await new Promise(resolve => collector.close(resolve));
+  const exported = Buffer.concat(traceBatches);
+  assert.equal(traceBatches.length, 3, "the multi-batch flush exports its partial tail immediately");
+  for (let index = 0; index < 5; index++)
+    assert.ok(exported.includes(Buffer.from(`flush.batch.${index}`)), `span ${index} was exported`);
 });
 
 void test("bounded Pino stdout queue reports drops without logging dropped content", async () => {

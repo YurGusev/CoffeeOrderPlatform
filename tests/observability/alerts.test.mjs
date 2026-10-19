@@ -703,10 +703,13 @@ void test('native alert definitions use versioned OpenObserve metrics and config
   const readinessServices = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
   const readinessOwnerFilter = `^(${readinessServices.join('|')})$`;
   assert.equal(definitions.find(rule => rule.key === 'notReady').queryCondition.promql,
-    `(min(platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}"} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}"}))) == bool ${readinessServices.length})) or vector(0)`);
+    `((min(platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}"} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}"}))) == bool ${readinessServices.length})) and on() (count(platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"}) > 0)) or vector(0)`);
   assert.equal(readinessServices.length, 14);
   assert.match(definitions.find(rule => rule.key === 'notReady').queryCondition.promql, /count by \(service_name\)/u,
     'the readiness gate counts distinct expected runtime owners');
+  assert.match(definitions.find(rule => rule.key === 'notReady').queryCondition.promql,
+    /and on\(\) \(count\(platform_metrics_httpcheck_status\{service_name="edge-nginx",http_status_class="2xx"\}\) > 0\)/u,
+    'production readiness also requires an existing native NGINX 2xx series');
   assert.deepEqual(definitions.find(rule => rule.key === 'notReady').queryCondition.promql_condition, {column: 'value', operator: '<=', value: 0});
   assert.equal(definitions.find(rule => rule.key === 'consumerLag').streamName, 'platform_metrics_messaging_kafka_consumer_lag');
   assert.equal(definitions.find(rule => rule.key === 'outboxOldestAge').streamName, 'platform_metrics_messaging_outbox_oldest_unpublished_age');
@@ -725,6 +728,8 @@ void test('native alert definitions use versioned OpenObserve metrics and config
 void test('synthetic readiness scope is isolated and rejects invalid owner filters', () => {
   const synthetic = createAlertDefinitions({config, readinessServices: ['g14-synthetic']});
   assert.equal(synthetic[0].name, 'g14-v1-service-not-ready-synthetic');
+  assert.equal(synthetic[0].queryCondition.promql,
+    `(min(platform_metrics_runtime_ready{service_name=~"^(g14-synthetic)$"} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"^(g14-synthetic)$"}))) == bool 1)) or vector(0)`);
   assert.match(synthetic[0].queryCondition.promql,
     /runtime_ready\{service_name=~"\^\(g14-synthetic\)\$"\}.*== bool 1\)\) or vector\(0\)/u);
   assert.deepEqual(synthetic.slice(1).map(({name}) => name),
@@ -758,8 +763,8 @@ void test('native alert installation configures only local webhook delivery and 
   assert.equal(requests.at(-1).body.pending_period_sec, 300);
   assert.equal(requests.at(-1).body.trigger_condition.threshold, 1);
   assert.deepEqual(requests.at(-1).body.query_condition.promql_condition, {column: 'value', operator: '>', value: 0.05});
-  assert.match(requests[2].body.query_condition.promql, /== bool 14\)\) or vector\(0\)/u,
-    'the production POST keeps the complete default owner gate');
+  assert.match(requests[2].body.query_condition.promql, /== bool 14\)\) and on\(\) \(count\(platform_metrics_httpcheck_status/u,
+    'the production POST keeps the complete Node owner gate and native NGINX presence guard');
 });
 
 void test('synthetic readiness scope reaches only its separately named readiness rule payload', async () => {

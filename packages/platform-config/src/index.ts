@@ -1345,7 +1345,8 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   };
   const namespace = stringValue(source["namespace"], `${path}.namespace`);
   const nginxStatusEndpoint = endpoint(source["nginxStatusEndpoint"], `${path}.nginxStatusEndpoint`);
-  if (!/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(nginxStatusEndpoint) || !new URL(nginxStatusEndpoint).port || Number(new URL(nginxStatusEndpoint).port) > 65535)
+  const nginxStatusPort = Number(new URL(nginxStatusEndpoint).port);
+  if (!/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(nginxStatusEndpoint) || !nginxStatusPort || nginxStatusPort > 65535 || nginxStatusPort === 8443)
     throw new PlatformConfigError(`${path}.nginxStatusEndpoint`, "ожидался приватный native nginx status endpoint");
   const releaseDigest = stringValue(source["releaseDigest"], `${path}.releaseDigest`);
   if (!/^[a-z][a-z0-9.-]{0,62}$/u.test(namespace) || !/^[a-zA-Z0-9._:-]{1,128}$/u.test(releaseDigest))
@@ -1382,7 +1383,7 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   ];
   if (new Set(collectorPorts).size !== collectorPorts.length)
     throw new PlatformConfigError(`${path}.collector`, "порты OTLP, health и metrics Collector должны различаться");
-  if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorGuardMiB <= collectorValues["memoryLimitMiB"]! || !Number.isSafeInteger(collectorContainerBytes) || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]! || openObserveBufferBudgetInvalid)
+  if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorGuardMiB <= collectorValues["memoryLimitMiB"]! || !Number.isSafeInteger(collectorContainerBytes) || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]! || producerValues["exportTimeoutMs"]! > producerValues["batchIntervalMs"]! || openObserveBufferBudgetInvalid)
     throw new PlatformConfigError(path, "telemetry budgets are inconsistent");
   if (alerts["version"] !== 1) throw new PlatformConfigError(`${path}.alerts.version`, "поддерживается только версия 1");
   return Object.freeze({
