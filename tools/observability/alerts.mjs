@@ -21,11 +21,18 @@ function metricStream(prefix, name) {
   return `${prefix}_${name}`.replace(/[^a-zA-Z0-9_]/gu, '_');
 }
 
-function promqlFor(rule, streams, windowSeconds, readinessServices) {
+function quotedLabelValue(value, name) {
+  const identity = required(value, name);
+  if (typeof identity !== 'string') throw new Error(`${name} must be a nonempty string`);
+  return JSON.stringify(identity);
+}
+
+function promqlFor(rule, streams, windowSeconds, readinessServices, identityMatchers) {
+  const select = metric => `${metric}{${identityMatchers}}`;
   if (rule.key === 'notReady') {
     const owners = `^(${readinessServices.join('|')})$`;
-    const runtimeReady = `${streams.runtime_ready}{service_name=~"${owners}"}`;
-    const nginxHttpCheck = `${streams.httpcheck_status}{service_name="edge-nginx",http_status_class="2xx"}`;
+    const runtimeReady = `${streams.runtime_ready}{service_name=~"${owners}",${identityMatchers}}`;
+    const nginxHttpCheck = `${streams.httpcheck_status}{service_name="edge-nginx",http_status_class="2xx",${identityMatchers}}`;
     const readiness = `min(${runtimeReady} or ${nginxHttpCheck}) * (scalar(count(count by (service_name) (${runtimeReady}))) == bool ${readinessServices.length})`;
     const requiresNginx = readinessServices.length === READINESS_SERVICES.length &&
       readinessServices.every((service, index) => service === READINESS_SERVICES[index]);
@@ -34,11 +41,11 @@ function promqlFor(rule, streams, windowSeconds, readinessServices) {
       : `(${readiness}) or vector(0)`;
   }
   if (rule.key === 'sseDropRate') {
-    const dropped = streams.coffee_realtime_invalidation_dropped_total;
-    const attempts = streams.coffee_realtime_invalidation_attempts_total;
+    const dropped = select(streams.coffee_realtime_invalidation_dropped_total);
+    const attempts = select(streams.coffee_realtime_invalidation_attempts_total);
     return `sum(rate(${dropped}[${windowSeconds}s])) / clamp_min(sum(rate(${attempts}[${windowSeconds}s])), 1e-12)`;
   }
-  return `max(${streams[rule.metric]})`;
+  return `max(${select(streams[rule.metric])})`;
 }
 
 export function createAlertDefinitions({config, readinessServices} = {}) {
@@ -51,6 +58,11 @@ export function createAlertDefinitions({config, readinessServices} = {}) {
     throw new Error('telemetry.alerts.evaluationIntervalMs must be a positive whole number of minutes');
   const evaluationIntervalMinutes = evaluationIntervalMs / 60000;
   const prefix = required(telemetry.openObserve?.streams?.metrics, 'telemetry.openObserve.streams.metrics');
+  const identityMatchers = [
+    `deployment_environment=${quotedLabelValue(config.environment, 'environment')}`,
+    `service_namespace=${quotedLabelValue(telemetry.namespace, 'telemetry.namespace')}`,
+    `service_version=${quotedLabelValue(telemetry.releaseDigest, 'telemetry.releaseDigest')}`,
+  ].join(',');
   const expectedReadinessServices = readinessServices ?? READINESS_SERVICES;
   if (!Array.isArray(expectedReadinessServices) || expectedReadinessServices.length === 0 ||
     expectedReadinessServices.some(service => typeof service !== 'string' || !/^[a-z0-9][a-z0-9-]*$/u.test(service)) ||
@@ -77,7 +89,7 @@ export function createAlertDefinitions({config, readinessServices} = {}) {
       pendingPeriodSec: forMs / 1000,
       queryCondition: {
         type: 'promql',
-        promql: promqlFor(rule, streamNames, forMs / 1000, expectedReadinessServices),
+        promql: promqlFor(rule, streamNames, forMs / 1000, expectedReadinessServices, identityMatchers),
         promql_condition: {column: 'value', operator: rule.operator, value: threshold},
       },
     };

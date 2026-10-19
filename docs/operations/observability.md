@@ -72,6 +72,8 @@ OpenObserve хранит OTLP metrics отдельным stream на каждо�
 `streams.metrics` задаёт префикс, который Collector добавляет к имени instrument;
 точка в имени нормализуется в `_`. Logs/traces используют свои configured stream
 names. Native metric alerts обращаются к реальным семействам с этим префиксом.
+Все пять native alerts ограничены deployment identity: `deployment_environment`,
+`service_namespace` и `service_version`; значения берутся из текущего полного config.
 
 Метрики публикуются только при наличии соответствующего owner resource:
 

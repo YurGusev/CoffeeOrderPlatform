@@ -2840,6 +2840,19 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           if (!notReadyRule) throw new Error('native alert definitions lack the production notReady rule');
           const missingNativeRule = {...notReadyRule, queryCondition: {...notReadyRule.queryCondition,
             promql: notReadyRule.queryCondition.promql.replaceAll('service_name="edge-nginx"', 'service_name="g14-missing-nginx"')}};
+          const missingRelease = config.telemetry.releaseDigest === `sha256:${'0'.repeat(64)}`
+            ? `sha256:${'1'.repeat(64)}` : `sha256:${'0'.repeat(64)}`;
+          const deploymentMismatchQueries = [
+            {scenario: 'deployment-environment-mismatch', label: 'deployment_environment', value: config.environment,
+              otherValue: config.environment === 'production' ? 'staging' : 'production'},
+            {scenario: 'deployment-namespace-mismatch', label: 'service_namespace', value: config.telemetry.namespace,
+              otherValue: config.telemetry.namespace === 'g14-missing-namespace' ? 'g14-other-namespace' : 'g14-missing-namespace'},
+            {scenario: 'deployment-release-mismatch', label: 'service_version', value: config.telemetry.releaseDigest, otherValue: missingRelease},
+          ].map(({scenario, label, value, otherValue}) => ({
+            scenario, readinessServices: [...NODE_RUNTIME_TARGETS], expectedValue: 0,
+            rule: {...notReadyRule, queryCondition: {...notReadyRule.queryCondition,
+              promql: notReadyRule.queryCondition.promql.replaceAll(`${label}=${JSON.stringify(value)}`, `${label}=${JSON.stringify(otherValue)}`)}},
+          }));
           const missingOneOwners = [...NODE_RUNTIME_TARGETS.slice(0, -1), 'g14-missing-owner'];
           const readinessQueries = [
             {scenario: 'all-production-owners-ready', readinessServices: [...NODE_RUNTIME_TARGETS], rule: notReadyRule, expectedValue: 1},
@@ -2848,6 +2861,7 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               rule: createAlertDefinitions({config, readinessServices: missingOneOwners}).find(rule => rule.key === 'notReady'), expectedValue: 0},
             {scenario: 'all-production-owners-missing', readinessServices: ['g14-missing-owner'],
               rule: createAlertDefinitions({config, readinessServices: ['g14-missing-owner']}).find(rule => rule.key === 'notReady'), expectedValue: 0},
+            ...deploymentMismatchQueries,
           ];
           const queryReadinessValue = async rule => {
             const result = await api({baseUrl, authorization,

@@ -11,7 +11,8 @@ import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCove
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
-const config = {telemetry: {
+const config = {environment: 'development', telemetry: {
+  namespace: 'coffee-platform', releaseDigest: 'test-release',
   openObserve: {organization: 'coffee', streams: {metrics: 'platform_metrics'}},
   alerts: {
     version: 1, evaluationIntervalMs: 60000,
@@ -700,38 +701,64 @@ void test('native alert definitions use versioned OpenObserve metrics and config
   ]);
   assert.ok(definitions.every(rule => rule.name.startsWith('g14-v1-') && rule.queryCondition.type === 'promql'));
   assert.equal(definitions.find(rule => rule.key === 'notReady').streamName, 'platform_metrics_runtime_ready');
+  const identityMatchers = 'deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"';
   const readinessServices = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
   const readinessOwnerFilter = `^(${readinessServices.join('|')})$`;
   assert.equal(definitions.find(rule => rule.key === 'notReady').queryCondition.promql,
-    `((min(platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}"} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}"}))) == bool ${readinessServices.length})) and on() (count(platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"}) > 0)) or vector(0)`);
+    `((min(platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}",${identityMatchers}} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx",${identityMatchers}}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"${readinessOwnerFilter}",${identityMatchers}}))) == bool ${readinessServices.length})) and on() (count(platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx",${identityMatchers}}) > 0)) or vector(0)`);
   assert.equal(readinessServices.length, 14);
   assert.match(definitions.find(rule => rule.key === 'notReady').queryCondition.promql, /count by \(service_name\)/u,
     'the readiness gate counts distinct expected runtime owners');
-  assert.match(definitions.find(rule => rule.key === 'notReady').queryCondition.promql,
-    /and on\(\) \(count\(platform_metrics_httpcheck_status\{service_name="edge-nginx",http_status_class="2xx"\}\) > 0\)/u,
-    'production readiness also requires an existing native NGINX 2xx series');
   assert.deepEqual(definitions.find(rule => rule.key === 'notReady').queryCondition.promql_condition, {column: 'value', operator: '<=', value: 0});
   assert.equal(definitions.find(rule => rule.key === 'consumerLag').streamName, 'platform_metrics_messaging_kafka_consumer_lag');
+  assert.equal(definitions.find(rule => rule.key === 'consumerLag').queryCondition.promql,
+    `max(platform_metrics_messaging_kafka_consumer_lag{${identityMatchers}})`);
   assert.equal(definitions.find(rule => rule.key === 'outboxOldestAge').streamName, 'platform_metrics_messaging_outbox_oldest_unpublished_age');
+  assert.equal(definitions.find(rule => rule.key === 'outboxOldestAge').queryCondition.promql,
+    `max(platform_metrics_messaging_outbox_oldest_unpublished_age{${identityMatchers}})`);
   assert.equal(definitions.find(rule => rule.key === 'unknownOutcome').streamName, 'platform_metrics_coffee_aroma_unknown_outcomes_current');
+  assert.equal(definitions.find(rule => rule.key === 'unknownOutcome').queryCondition.promql,
+    `max(platform_metrics_coffee_aroma_unknown_outcomes_current{${identityMatchers}})`);
   assert.equal(definitions.find(rule => rule.key === 'sseDropRate').streamName, 'platform_metrics_coffee_realtime_invalidation_dropped_total');
   assert.equal(new Set(definitions.map(rule => rule.streamName)).size, definitions.length);
   const ssePromql = definitions.find(rule => rule.key === 'sseDropRate').queryCondition.promql;
-  assert.match(ssePromql, /rate\(platform_metrics_coffee_realtime_invalidation_dropped_total\[300s\]\).*rate\(platform_metrics_coffee_realtime_invalidation_attempts_total\[300s\]\)/u);
-  assert.match(ssePromql, /clamp_min\(sum\(rate\(platform_metrics_coffee_realtime_invalidation_attempts_total\[300s\]\)\), 1e-12\)/u);
+  assert.equal(ssePromql,
+    `sum(rate(platform_metrics_coffee_realtime_invalidation_dropped_total{${identityMatchers}}[300s])) / clamp_min(sum(rate(platform_metrics_coffee_realtime_invalidation_attempts_total{${identityMatchers}}[300s])), 1e-12)`);
   assert.doesNotMatch(ssePromql, /,\s*1\)/u);
   assert.equal((1 / 100) / (2 / 100), 0.5);
   assert.equal((1 / 100) / Math.max(2 / 100, 1), 0.01, 'a whole-unit denominator floor would hide the 50% low-rate drop ratio');
   assert.ok(definitions.every(rule => !JSON.stringify(rule).includes('g14_run_id') && !JSON.stringify(rule).includes('platform_logs')));
 });
 
+void test('native alert selectors require and isolate the complete deployment identity', () => {
+  const definitions = createAlertDefinitions({config});
+  const otherConfig = {
+    ...config,
+    environment: 'staging',
+    telemetry: {...config.telemetry, namespace: 'coffee-platform-staging', releaseDigest: 'sha256:' + 'a'.repeat(64)},
+  };
+  const otherDefinitions = createAlertDefinitions({config: otherConfig});
+  const identityMatchers = 'deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"';
+  const otherIdentityMatchers = `deployment_environment="staging",service_namespace="coffee-platform-staging",service_version=${JSON.stringify(otherConfig.telemetry.releaseDigest)}`;
+  assert.deepEqual(definitions.map(({key}) => key), otherDefinitions.map(({key}) => key));
+  for (let index = 0; index < definitions.length; index++) {
+    assert.notEqual(definitions[index].queryCondition.promql, otherDefinitions[index].queryCondition.promql);
+    assert.ok(definitions[index].queryCondition.promql.includes(identityMatchers), `${definitions[index].key} uses its deployment identity`);
+    assert.ok(otherDefinitions[index].queryCondition.promql.includes(otherIdentityMatchers), `${otherDefinitions[index].key} uses the other deployment identity`);
+  }
+  for (const invalidConfig of [
+    {...config, environment: undefined},
+    {...config, telemetry: {...config.telemetry, namespace: ''}},
+    {...config, telemetry: {...config.telemetry, releaseDigest: null}},
+  ]) assert.throws(() => createAlertDefinitions({config: invalidConfig}), /is required/u);
+});
+
 void test('synthetic readiness scope is isolated and rejects invalid owner filters', () => {
   const synthetic = createAlertDefinitions({config, readinessServices: ['g14-synthetic']});
   assert.equal(synthetic[0].name, 'g14-v1-service-not-ready-synthetic');
+  const identityMatchers = 'deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"';
   assert.equal(synthetic[0].queryCondition.promql,
-    `(min(platform_metrics_runtime_ready{service_name=~"^(g14-synthetic)$"} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"^(g14-synthetic)$"}))) == bool 1)) or vector(0)`);
-  assert.match(synthetic[0].queryCondition.promql,
-    /runtime_ready\{service_name=~"\^\(g14-synthetic\)\$"\}.*== bool 1\)\) or vector\(0\)/u);
+    `(min(platform_metrics_runtime_ready{service_name=~"^(g14-synthetic)$",${identityMatchers}} or platform_metrics_httpcheck_status{service_name="edge-nginx",http_status_class="2xx",${identityMatchers}}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~"^(g14-synthetic)$",${identityMatchers}}))) == bool 1)) or vector(0)`);
   assert.deepEqual(synthetic.slice(1).map(({name}) => name),
     createAlertDefinitions({config}).slice(1).map(({name}) => name));
   for (const readinessServices of [[], ['g14-synthetic', 'g14-synthetic'], ['bad|owner']])
@@ -747,6 +774,7 @@ void test('native alert installation configures only local webhook delivery and 
   const rules = await installNativeAlerts({config, baseUrl: 'http://127.0.0.1:5080', organization: 'coffee', authorization: 'Basic fixture', fetchImpl});
   assert.equal(rules.length, 5);
   assert.equal(requests.length, 7);
+  assert.deepEqual(requests.slice(2).map(({body}) => body.query_condition.promql), rules.map(({queryCondition}) => queryCondition.promql));
   assert.equal(requests[1].body.url, 'http://127.0.0.1:9091/alerts');
   for (const request of requests.slice(2)) {
     assert.equal(request.url, '/api/v2/coffee/alerts');
@@ -777,6 +805,8 @@ void test('synthetic readiness scope reaches only its separately named readiness
   assert.equal(rules[0].name, 'g14-v1-service-not-ready-synthetic');
   assert.equal(requests[2].body.name, 'g14-v1-service-not-ready-synthetic');
   assert.equal(requests[2].body.query_condition.promql.includes('service_name=~"^(g14-synthetic)$"'), true);
+  assert.ok(requests[2].body.query_condition.promql.includes('deployment_environment="development",service_namespace="coffee-platform",service_version="test-release"'));
+  assert.equal(requests[2].body.query_condition.promql.includes('and on()'), false, 'synthetic readiness stays independent of native NGINX');
   assert.deepEqual(requests.slice(3).map(({body}) => body.name), rules.slice(1).map(({name}) => name));
 });
 
