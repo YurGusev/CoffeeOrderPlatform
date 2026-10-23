@@ -485,7 +485,11 @@ void test('database opaque transaction: states, budgets, owner identity and term
 
 void test('database COMMIT blackhole: finite unknown, destroy, no rollback, native promise settled on close', async t => {
   let rejectCommit;
-  const {database, statements, releases, connection} = mockDatabase(t, sql => sql === 'COMMIT' ? new Promise((_, reject) => {rejectCommit = reject;}) : undefined);
+  let commitError;
+  const canary = 'db-commit-private-canary';
+  const {database, statements, releases, connection} = mockDatabase(t, sql => sql === 'COMMIT'
+    ? commitError === undefined ? new Promise((_, reject) => {rejectCommit = reject;}) : Promise.reject(commitError)
+    : undefined);
   connection.release = destroy => {releases.push(destroy); rejectCommit?.(new Error('socket closed'));};
   let saved;
   const started = performance.now();
@@ -493,12 +497,30 @@ void test('database COMMIT blackhole: finite unknown, destroy, no rollback, nati
     assert.equal(error.code, 'TRANSACTION_OUTCOME_UNKNOWN');
     assert.deepEqual(error.metadata, {correlationId: 'corr'});
     assert.equal(error.message, 'TRANSACTION_OUTCOME_UNKNOWN');
+    assert.equal(error.previousCode, 'DB_QUERY_TIMEOUT');
+    assert.equal(error.sqlState, undefined);
+    assert.equal(error.cause, undefined);
+    assert.equal(JSON.stringify({name: error.name, message: error.message, code: error.code, previousCode: error.previousCode, sqlState: error.sqlState}).includes(canary), false);
     return true;
   });
   assert.ok(performance.now() - started < 500);
   assert.equal(saved.state(), 'Unknown');
   assert.equal(statements.includes('ROLLBACK'), false);
   assert.deepEqual(releases, [true]);
+
+  commitError = Object.assign(new Error(canary), {code: '23514'});
+  await assert.rejects(withTransaction(database, {mode: 'interactive'}, async () => {}), error => {
+    assert.equal(error.code, 'TRANSACTION_OUTCOME_UNKNOWN');
+    assert.equal(error.previousCode, 'DB_QUERY_FAILED');
+    assert.equal(error.sqlState, '23514');
+    assert.equal(error.message, 'TRANSACTION_OUTCOME_UNKNOWN');
+    assert.equal(error.cause, undefined);
+    assert.equal(JSON.stringify({name: error.name, message: error.message, code: error.code, previousCode: error.previousCode, sqlState: error.sqlState}).includes(canary), false);
+    return true;
+  });
+  assert.equal(statements.filter(statement => statement === 'COMMIT').length, 2);
+  assert.equal(statements.includes('ROLLBACK'), false);
+  assert.deepEqual(releases, [true, true]);
   await database.resource.stop(new AbortController().signal);
   assert.equal(database.metrics().active, 0);
   assert.equal(database.metrics().pending, 0);

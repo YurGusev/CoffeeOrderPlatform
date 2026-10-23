@@ -1,0 +1,561 @@
+{
+  "runId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+  "status": "PASS",
+  "droppedRecords": 769,
+  "producerExportFailureObserved": true,
+  "collectorExpiredRetryDrop": {
+    "status": "PASS",
+    "expiredRetryDropEvents": 9,
+    "droppedItems": 190
+  },
+  "collector": {
+    "status": "PASS",
+    "service": "otel-collector",
+    "queueCapacity": 512,
+    "queueSampleCount": 3,
+    "queueMaximum": 0,
+    "capacitySampleCount": 3,
+    "postRestartMetricTimestampsStrictlyAfterStartedAt": true,
+    "historicalLossMetricWindowEndedAtRestart": true,
+    "sendFailureSamples": {
+      "log_records": {
+        "stream": "platform_metrics_otelcol_exporter_send_failed_log_records",
+        "available": true,
+        "sampleCount": 9,
+        "values": [
+          30,
+          30,
+          30,
+          30,
+          30,
+          30,
+          30,
+          30,
+          10
+        ],
+        "timestampsUs": [
+          1792735486838000,
+          1792735481838000,
+          1792735476838000,
+          1792735471838000,
+          1792735451838000,
+          1792735446838000,
+          1792735441838000,
+          1792735436838000,
+          1792735376838000
+        ]
+      },
+      "metric_points": {
+        "stream": "platform_metrics_otelcol_exporter_send_failed_metric_points",
+        "available": true,
+        "sampleCount": 10,
+        "values": [
+          487,
+          487,
+          487,
+          487,
+          421,
+          421,
+          421,
+          421,
+          421,
+          138
+        ],
+        "timestampsUs": [
+          1792735486838000,
+          1792735481838000,
+          1792735476838000,
+          1792735471838000,
+          1792735451838000,
+          1792735446838000,
+          1792735446838000,
+          1792735441838000,
+          1792735436838000,
+          1792735376838000
+        ]
+      },
+      "spans": {
+        "stream": "platform_metrics_otelcol_exporter_send_failed_spans",
+        "available": true,
+        "sampleCount": 10,
+        "values": [
+          399,
+          399,
+          368,
+          335,
+          270,
+          203,
+          203,
+          203,
+          175,
+          5
+        ],
+        "timestampsUs": [
+          1792735486838000,
+          1792735481838000,
+          1792735476838000,
+          1792735471838000,
+          1792735451838000,
+          1792735446838000,
+          1792735446838000,
+          1792735441838000,
+          1792735436838000,
+          1792735376838000
+        ]
+      }
+    },
+    "sentSamples": {
+      "log_records": {
+        "stream": "platform_metrics_otelcol_exporter_sent_log_records",
+        "available": true,
+        "sampleCount": 1,
+        "values": [
+          16
+        ],
+        "timestampsUs": [
+          1792735496834000
+        ]
+      },
+      "metric_points": {
+        "stream": "platform_metrics_otelcol_exporter_sent_metric_points",
+        "available": true,
+        "sampleCount": 1,
+        "values": [
+          320
+        ],
+        "timestampsUs": [
+          1792735496834000
+        ]
+      },
+      "spans": {
+        "stream": "platform_metrics_otelcol_exporter_sent_spans",
+        "available": true,
+        "sampleCount": 1,
+        "values": [
+          7
+        ],
+        "timestampsUs": [
+          1792735496834000
+        ]
+      }
+    },
+    "enqueueFailureSamples": {
+      "log_records": {
+        "stream": "platform_metrics_otelcol_exporter_enqueue_failed_log_records",
+        "available": false,
+        "sampleCount": 0,
+        "values": [],
+        "timestampsUs": []
+      },
+      "metric_points": {
+        "stream": "platform_metrics_otelcol_exporter_enqueue_failed_metric_points",
+        "available": true,
+        "sampleCount": 10,
+        "values": [
+          2956,
+          2956,
+          2956,
+          2956,
+          2281,
+          2281,
+          2281,
+          2281,
+          2281,
+          499
+        ],
+        "timestampsUs": [
+          1792735486838000,
+          1792735481838000,
+          1792735476838000,
+          1792735471838000,
+          1792735451838000,
+          1792735446838000,
+          1792735446838000,
+          1792735441838000,
+          1792735436838000,
+          1792735376838000
+        ]
+      },
+      "spans": {
+        "stream": "platform_metrics_otelcol_exporter_enqueue_failed_spans",
+        "available": true,
+        "sampleCount": 8,
+        "values": [
+          65,
+          65,
+          65,
+          65,
+          65,
+          65,
+          65,
+          65
+        ],
+        "timestampsUs": [
+          1792735486838000,
+          1792735481838000,
+          1792735476838000,
+          1792735471838000,
+          1792735451838000,
+          1792735446838000,
+          1792735441838000,
+          1792735436838000
+        ]
+      }
+    },
+    "optionalMetricStreamsAbsent": [
+      "otelcol_exporter_enqueue_failed_log_records"
+    ]
+  },
+  "collectorMemoryProof": {
+    "status": "PASS",
+    "containerGeneration": {
+      "id": "7bf5d0656d955dd5a927d8990af397624dbb6469cc8d83c355db0ce6cdebfeab",
+      "startedAt": "2026-10-23T06:02:23.619485897Z",
+      "sameGenerationAsStartupBaseline": true,
+      "sameGenerationAfterProbe": true
+    },
+    "limits": {
+      "hardLimitMiB": 256,
+      "spikeLimitMiB": 64,
+      "softLimitMiB": 192,
+      "containerLimitMiB": 1024,
+      "cgroupGuardBytes": 1006632960,
+      "guardReserveMiB": 64,
+      "samplerIntervalMs": 50,
+      "samplerFreshnessMs": 100,
+      "maxPacketBytes": 524288,
+      "maxWireBytes": 268435456,
+      "maxWireBytesPerSecond": 33554432,
+      "deadlineMs": 60000
+    },
+    "cgroup": {
+      "baseline": {
+        "sequence": 1,
+        "currentBytes": 535220224,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 539246592,
+        "anonBytes": 71000064,
+        "fileBytes": 460787712,
+        "kernelBytes": 2531328,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792735383000
+      },
+      "baselineBytes": 535220224,
+      "peakBytes": 738795520,
+      "maxBytes": 1073741824,
+      "final": {
+        "sequence": 701,
+        "currentBytes": 721211392,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 738795520,
+        "anonBytes": 256909312,
+        "fileBytes": 461189120,
+        "kernelBytes": 2859008,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792735422000
+      },
+      "oom": 0,
+      "oomKill": 0
+    },
+    "metrics": {
+      "processor": "memory_limiter",
+      "refused": "otelcol_processor_memory_limiter_refused_spans",
+      "accepted": "otelcol_processor_memory_limiter_accepted_spans",
+      "baseline": {
+        "counters": {
+          "refused": 0,
+          "accepted": 15
+        },
+        "sampledAt": "2026-10-23T06:03:03.213Z",
+        "containerId": "7bf5d0656d955dd5a927d8990af397624dbb6469cc8d83c355db0ce6cdebfeab",
+        "startedAt": "2026-10-23T06:02:23.619485897Z"
+      },
+      "afterRecovery": {
+        "counters": {
+          "refused": 3,
+          "accepted": 604
+        },
+        "sampledAt": "2026-10-23T06:03:42.601Z",
+        "containerId": "7bf5d0656d955dd5a927d8990af397624dbb6469cc8d83c355db0ce6cdebfeab",
+        "startedAt": "2026-10-23T06:02:23.619485897Z"
+      }
+    },
+    "pressure": {
+      "packetCount": 583,
+      "wireBytes": 120406990,
+      "elapsedMs": 39388
+    },
+    "refusal": {
+      "httpStatus": 503,
+      "otlpCode": 14,
+      "refusedSpansDelta": 1,
+      "packetCount": 583,
+      "wireBytes": 120406990,
+      "observedAt": "2026-10-23T06:03:21.441Z"
+    },
+    "recovery": {
+      "httpStatus": 200,
+      "acceptedSpansDelta": 1,
+      "observedAt": "2026-10-23T06:03:42.601Z"
+    },
+    "durableExportProven": true,
+    "startupBaseline": {
+      "status": "PASS",
+      "stage": "initial-healthy-baseline",
+      "containerGeneration": {
+        "id": "7bf5d0656d955dd5a927d8990af397624dbb6469cc8d83c355db0ce6cdebfeab",
+        "startedAt": "2026-10-23T06:02:23.619485897Z",
+        "sameGenerationAfterCapture": true
+      },
+      "limits": {
+        "containerLimitMiB": 1024,
+        "cgroupGuardBytes": 1006632960
+      },
+      "sample": {
+        "sequence": 1,
+        "currentBytes": 531161088,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 534618112,
+        "anonBytes": 68251648,
+        "fileBytes": 459554816,
+        "kernelBytes": 2531328,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792735352000
+      },
+      "sampler": {
+        "containerLimitMiB": 1024,
+        "maxBytes": 1073741824,
+        "guardBytes": 1006632960,
+        "guardReserveMiB": 64,
+        "peakBytes": 534618112,
+        "latestSample": {
+          "sequence": 1,
+          "currentBytes": 531161088,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 534618112,
+          "anonBytes": 68251648,
+          "fileBytes": 459554816,
+          "kernelBytes": 2531328,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792735352000
+        }
+      },
+      "samplerStopped": true
+    },
+    "markerAdmission": {
+      "status": "PASS",
+      "attempts": 1,
+      "refusedAttempts": 0,
+      "lastHttpStatus": 200,
+      "lastOtlpCode": null,
+      "lastRefusal": false,
+      "elapsedMs": 10
+    },
+    "marker": {
+      "traceId": "75b3e63e2baee4ebacb2f64384b4c327",
+      "spanName": "g14.collector.memory.recovered",
+      "runId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+      "acceptedAt": "2026-10-23T06:04:13.334Z",
+      "backendConfirmation": {
+        "stream": "platform_traces",
+        "exactTraceId": true,
+        "matchingRecords": 1
+      }
+    }
+  },
+  "collectorMemoryDiagnostics": {
+    "status": "PASS",
+    "stage": "recovery-accepted",
+    "containerGeneration": {
+      "id": "7bf5d0656d955dd5a927d8990af397624dbb6469cc8d83c355db0ce6cdebfeab",
+      "startedAt": "2026-10-23T06:02:23.619485897Z",
+      "sameGenerationAsStartupBaseline": true,
+      "sameGenerationAfterProbe": true
+    },
+    "startupBaseline": {
+      "status": "PASS",
+      "stage": "initial-healthy-baseline",
+      "containerGeneration": {
+        "id": "7bf5d0656d955dd5a927d8990af397624dbb6469cc8d83c355db0ce6cdebfeab",
+        "startedAt": "2026-10-23T06:02:23.619485897Z",
+        "sameGenerationAfterCapture": true
+      },
+      "limits": {
+        "containerLimitMiB": 1024,
+        "cgroupGuardBytes": 1006632960
+      },
+      "sample": {
+        "sequence": 1,
+        "currentBytes": 531161088,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 534618112,
+        "anonBytes": 68251648,
+        "fileBytes": 459554816,
+        "kernelBytes": 2531328,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792735352000
+      },
+      "sampler": {
+        "containerLimitMiB": 1024,
+        "maxBytes": 1073741824,
+        "guardBytes": 1006632960,
+        "guardReserveMiB": 64,
+        "peakBytes": 534618112,
+        "latestSample": {
+          "sequence": 1,
+          "currentBytes": 531161088,
+          "maxBytes": 1073741824,
+          "kernelPeakBytes": 534618112,
+          "anonBytes": 68251648,
+          "fileBytes": 459554816,
+          "kernelBytes": 2531328,
+          "oom": 0,
+          "oomKill": 0,
+          "sampledAtMs": 1792735352000
+        }
+      },
+      "samplerStopped": true
+    },
+    "limits": {
+      "hardLimitMiB": 256,
+      "spikeLimitMiB": 64,
+      "softLimitMiB": 192,
+      "containerLimitMiB": 1024,
+      "cgroupGuardBytes": 1006632960,
+      "guardReserveMiB": 64
+    },
+    "cgroup": {
+      "baseline": {
+        "sequence": 1,
+        "currentBytes": 535220224,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 539246592,
+        "anonBytes": 71000064,
+        "fileBytes": 460787712,
+        "kernelBytes": 2531328,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792735383000
+      },
+      "containerLimitMiB": 1024,
+      "maxBytes": 1073741824,
+      "guardBytes": 1006632960,
+      "guardReserveMiB": 64,
+      "peakBytes": 738795520,
+      "latestSample": {
+        "sequence": 702,
+        "currentBytes": 721371136,
+        "maxBytes": 1073741824,
+        "kernelPeakBytes": 738795520,
+        "anonBytes": 256913408,
+        "fileBytes": 461189120,
+        "kernelBytes": 2850816,
+        "oom": 0,
+        "oomKill": 0,
+        "sampledAtMs": 1792735422000
+      },
+      "oom": 0,
+      "oomKill": 0
+    },
+    "baselineCounters": {
+      "refused": 0,
+      "accepted": 15
+    },
+    "pressure": {
+      "packetCount": 583,
+      "wireBytes": 120406990
+    },
+    "refusal": {
+      "httpStatus": 503,
+      "otlpCode": 14,
+      "refusedSpansDelta": 1,
+      "packetCount": 583,
+      "wireBytes": 120406990
+    },
+    "recovery": {
+      "httpStatus": 200,
+      "acceptedSpansDelta": 1
+    },
+    "samplerStopped": true
+  },
+  "processCounterRestart": {
+    "status": "PASS",
+    "producer": {
+      "sameContainer": true,
+      "startedAtChanged": true,
+      "beforeStartedAt": "2026-10-23T06:02:19.148528846Z",
+      "afterStartedAt": "2026-10-23T06:05:02.173409976Z",
+      "beforeProcessId": 1,
+      "afterProcessId": 1,
+      "processStartTimeMetric": {
+        "before": {
+          "valueSeconds": 1792735339.303398,
+          "timestampUs": 1792735500418000
+        },
+        "after": {
+          "valueSeconds": 1792735502.349938,
+          "timestampUs": 1792735505429000
+        },
+        "matchesRuntimeDiagnostics": true
+      },
+      "postRestartSdkMetrics": {
+        "runtimeReady": {
+          "value": 1,
+          "timestampUs": 1792735505429000
+        },
+        "httpRequests": {
+          "value": 1,
+          "timestampUs": 1792735505429000
+        }
+      },
+      "lossCounters": {
+        "before": {
+          "dropped": 769,
+          "exportFailures": 31,
+          "shutdownLoss": 0,
+          "serializationRejected": 0,
+          "queueOverflows": 769
+        },
+        "after": {
+          "dropped": 0,
+          "exportFailures": 0,
+          "shutdownLoss": 0,
+          "serializationRejected": 0,
+          "queueOverflows": 0
+        },
+        "storedBeforeRestart": {
+          "dropped": 769,
+          "exportFailures": 31
+        },
+        "reset": true
+      },
+      "abruptCrashLossMayBeIncomplete": true
+    },
+    "collector": {
+      "sameContainer": true,
+      "startedAtChanged": true,
+      "beforeStartedAt": "2026-10-23T06:02:23.619485897Z",
+      "afterStartedAt": "2026-10-23T06:04:47.959916252Z",
+      "processUptime": {
+        "metric": "otelcol_process_uptime",
+        "before": {
+          "valueSeconds": 135.4353071,
+          "timestampUs": 1792735481838000
+        },
+        "after": {
+          "valueSeconds": 8.401817374,
+          "timestampUs": 1792735496834000
+        },
+        "instanceIdentityChanged": true
+      },
+      "postRestartQueueAndSentMetricsOnly": true,
+      "lossCounterWindowEndsAtRestart": true,
+      "abruptCrashLossMayBeIncomplete": true
+    }
+  }
+}

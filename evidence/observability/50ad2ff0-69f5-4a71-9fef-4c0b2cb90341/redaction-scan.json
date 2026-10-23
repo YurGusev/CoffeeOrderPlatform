@@ -1,0 +1,9 @@
+{
+  "runId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+  "status": "PASS",
+  "producerRedaction": "PASS",
+  "producerCanaryLeaked": false,
+  "backendCanaryLeaked": false,
+  "backendSensitiveFieldPresent": false,
+  "matchingProducerRecords": 32
+}

@@ -1,0 +1,483 @@
+{
+  "runId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+  "status": "PASS",
+  "syntheticTraceCorrelation": "PASS",
+  "syntheticSignals": [
+    "canonical Pino filelog JSON → configured logs stream",
+    "Fastify request spans via OTLP → configured traces stream",
+    "OpenTelemetry SDK metrics via OTLP → platform_metrics_* metric streams",
+    "real Kafka → Orders owners → SSE/browser refetch records and W3C trace observed in OpenObserve"
+  ],
+  "launchPath": {
+    "verified": true,
+    "correlationId": "731741b7-f9ac-4841-a9d8-ae6df5c5c2f0",
+    "traceId": "9b856ada3b87fcd99ab27bc2bedd73f9",
+    "traceparentSha256": "3b6ed86564f86b111fff917fbe544a123b7e33826ef7dd4ab6c47716facbf1d6",
+    "browserRefetchMatched": true,
+    "sseFrameMatched": true,
+    "rootCommandCausation": true,
+    "projectionCausationMatched": true,
+    "causationMessageSha256": "fd97e60632f6ea62dd49f62c2c67c6a73f3de3119e224da465116df819a4100a",
+    "sourceEvents": 3,
+    "ownerLogRecords": 14,
+    "roles": [
+      {
+        "role": "kafka",
+        "containerId": "9b9e187629ba8c751cc918ea21b378dc0a000644e9fda9897b15bbcba80f09c6",
+        "imageId": "sha256:47dccc76b32761bc57462b8753144cdbb73a16b123b1d13d3eedb92bb7952b11"
+      },
+      {
+        "role": "orders-service",
+        "containerId": "d7aa032547b40b05fa91fd74f62f6a4fbe9fbe87e47ea12fc4b553983d9525cd",
+        "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+      },
+      {
+        "role": "orders-aroma-preparation",
+        "containerId": "3918abc58702bd998a4da1bbfe7c3769f6de377518ae7c75d59a14c7d08292e4",
+        "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+      },
+      {
+        "role": "api-internal",
+        "containerId": "5128476ea248833b624f711faa99bbf1eec6bc1dd9975695769b9d7ee7c19b93",
+        "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+      },
+      {
+        "role": "api-public",
+        "containerId": "8833d39fd506c7e4d5c8b86a36f1b1aec1725df989b9c8cd14ad00d9b0eb1355",
+        "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+      },
+      {
+        "role": "realtime-gateway",
+        "containerId": "14cba6da9f3fe2040cef260ef9e4df50ec6f8d0fa2dfd39f79fd219d7f2ba494",
+        "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+      },
+      {
+        "role": "edge-gateway",
+        "containerId": "06935596268ad359e6c934ac5615153a39282e5e60a4f1dc4ff608d400028955",
+        "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+      },
+      {
+        "role": "edge-nginx",
+        "containerId": "65053cf3223a404d448dad1adc4f9f762109836ef6ab595edfb2c584456a5e6a",
+        "imageId": "sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3"
+      }
+    ],
+    "edgeNginxLogRows": 7,
+    "traceSpanCount": 32,
+    "traceServices": [
+      "api-public",
+      "aroma-convergence",
+      "edge-gateway",
+      "orders-aroma-preparation",
+      "orders-service",
+      "realtime-gateway"
+    ],
+    "separateRealtimeSpanCount": 3,
+    "metricApplicability": {
+      "db.client.connection.checkout_wait": [
+        {
+          "stream": "platform_metrics_db_client_connection_checkout_wait_count",
+          "sampleCount": 140,
+          "services": [
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-convergence"
+          ]
+        },
+        {
+          "stream": "platform_metrics_db_client_connection_checkout_wait_sum",
+          "sampleCount": 141,
+          "services": [
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-convergence"
+          ]
+        },
+        {
+          "stream": "platform_metrics_db_client_connection_checkout_wait_bucket",
+          "sampleCount": 2256,
+          "services": [
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-convergence"
+          ]
+        }
+      ],
+      "db.client.connection.waiting": [
+        {
+          "stream": "platform_metrics_db_client_connection_waiting",
+          "sampleCount": 50,
+          "services": [
+            "orders-service"
+          ]
+        }
+      ],
+      "messaging.kafka.consumer.lag": [
+        {
+          "stream": "platform_metrics_messaging_kafka_consumer_lag",
+          "sampleCount": 2215,
+          "services": [
+            "orders-aroma-preparation",
+            "realtime-gateway"
+          ]
+        }
+      ],
+      "messaging.kafka.event.age": [
+        {
+          "stream": "platform_metrics_messaging_kafka_event_age_count",
+          "sampleCount": 128,
+          "services": [
+            "orders-aroma-preparation",
+            "realtime-gateway",
+            "aroma-convergence"
+          ]
+        },
+        {
+          "stream": "platform_metrics_messaging_kafka_event_age_sum",
+          "sampleCount": 128,
+          "services": [
+            "orders-aroma-preparation",
+            "realtime-gateway",
+            "aroma-convergence"
+          ]
+        },
+        {
+          "stream": "platform_metrics_messaging_kafka_event_age_bucket",
+          "sampleCount": 2064,
+          "services": [
+            "orders-aroma-preparation",
+            "realtime-gateway",
+            "aroma-convergence"
+          ]
+        }
+      ],
+      "messaging.outbox.oldest_unpublished.age": [
+        {
+          "stream": "platform_metrics_messaging_outbox_oldest_unpublished_age",
+          "sampleCount": 253,
+          "services": [
+            "orders-service",
+            "orders-aroma-preparation"
+          ]
+        }
+      ],
+      "messaging.inbox.received.age": [
+        {
+          "stream": "platform_metrics_messaging_inbox_received_age_count",
+          "sampleCount": 95,
+          "services": [
+            "orders-aroma-preparation",
+            "aroma-convergence"
+          ]
+        },
+        {
+          "stream": "platform_metrics_messaging_inbox_received_age_sum",
+          "sampleCount": 95,
+          "services": [
+            "orders-aroma-preparation",
+            "aroma-convergence"
+          ]
+        },
+        {
+          "stream": "platform_metrics_messaging_inbox_received_age_bucket",
+          "sampleCount": 1568,
+          "services": [
+            "orders-aroma-preparation",
+            "aroma-convergence"
+          ]
+        }
+      ],
+      "coffee_realtime_invalidation_attempts_total": [
+        {
+          "stream": "platform_metrics_coffee_realtime_invalidation_attempts_total",
+          "sampleCount": 41,
+          "services": [
+            "realtime-gateway"
+          ]
+        }
+      ],
+      "coffee_realtime_invalidation_dropped_total": [
+        {
+          "stream": "platform_metrics_coffee_realtime_invalidation_dropped_total",
+          "sampleCount": 41,
+          "services": [
+            "realtime-gateway"
+          ]
+        }
+      ],
+      "coffee_realtime_connections": [
+        {
+          "stream": "platform_metrics_coffee_realtime_connections",
+          "sampleCount": 42,
+          "services": [
+            "realtime-gateway"
+          ]
+        }
+      ],
+      "coffee_realtime_queue_records": [
+        {
+          "stream": "platform_metrics_coffee_realtime_queue_records",
+          "sampleCount": 41,
+          "services": [
+            "realtime-gateway"
+          ]
+        }
+      ],
+      "coffee_realtime_queue_bytes": [
+        {
+          "stream": "platform_metrics_coffee_realtime_queue_bytes",
+          "sampleCount": 42,
+          "services": [
+            "realtime-gateway"
+          ]
+        }
+      ],
+      "runtime_http_requests_total": [
+        {
+          "stream": "platform_metrics_runtime_http_requests_total",
+          "sampleCount": 190,
+          "services": [
+            "api-public",
+            "orders-service"
+          ]
+        }
+      ],
+      "runtime_http_request_duration_ms": [
+        {
+          "stream": "platform_metrics_runtime_http_request_duration_ms_count",
+          "sampleCount": 193,
+          "services": [
+            "api-public",
+            "orders-service"
+          ]
+        },
+        {
+          "stream": "platform_metrics_runtime_http_request_duration_ms_sum",
+          "sampleCount": 193,
+          "services": [
+            "api-public",
+            "orders-service"
+          ]
+        },
+        {
+          "stream": "platform_metrics_runtime_http_request_duration_ms_bucket",
+          "sampleCount": 3136,
+          "services": [
+            "api-public",
+            "orders-service"
+          ]
+        }
+      ],
+      "coffee_aroma_attempt_results_total": [
+        {
+          "stream": "platform_metrics_coffee_aroma_attempt_results_total",
+          "sampleCount": 96,
+          "services": [
+            "aroma-convergence"
+          ]
+        }
+      ],
+      "coffee_aroma_unknown_outcomes_total": [
+        {
+          "stream": "platform_metrics_coffee_aroma_unknown_outcomes_total",
+          "sampleCount": 16,
+          "services": [
+            "aroma-convergence"
+          ]
+        }
+      ],
+      "coffee_aroma_unknown_outcomes_current": [
+        {
+          "stream": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+          "sampleCount": 13,
+          "services": [
+            "aroma-convergence"
+          ]
+        }
+      ],
+      "coffee_aroma_recovery_results_total": [
+        {
+          "stream": "platform_metrics_coffee_aroma_recovery_results_total",
+          "sampleCount": 96,
+          "services": [
+            "aroma-convergence"
+          ]
+        }
+      ],
+      "aromaConvergenceLastObservation": {
+        "status": "PASS",
+        "metrics": {
+          "coffee_aroma_attempt_results_total": {
+            "streamPresent": true,
+            "queryRows": 96,
+            "ownerRows": 96,
+            "attrMatchedRows": 16,
+            "observedValues": [
+              0,
+              1
+            ],
+            "expectedValues": [
+              1
+            ],
+            "missingValues": [],
+            "latestTimestampUs": 1792736233659000
+          },
+          "coffee_aroma_unknown_outcomes_total": {
+            "streamPresent": true,
+            "queryRows": 16,
+            "ownerRows": 16,
+            "attrMatchedRows": 16,
+            "observedValues": [
+              0,
+              1
+            ],
+            "expectedValues": [
+              1
+            ],
+            "missingValues": [],
+            "latestTimestampUs": 1792736233659000
+          },
+          "coffee_aroma_unknown_outcomes_current": {
+            "streamPresent": true,
+            "queryRows": 13,
+            "ownerRows": 13,
+            "attrMatchedRows": 13,
+            "observedValues": [
+              0,
+              1
+            ],
+            "expectedValues": [
+              1,
+              0
+            ],
+            "missingValues": [],
+            "latestTimestampUs": 1792736233659000
+          },
+          "coffee_aroma_recovery_results_total": {
+            "streamPresent": true,
+            "queryRows": 96,
+            "ownerRows": 96,
+            "attrMatchedRows": 16,
+            "observedValues": [
+              0,
+              1
+            ],
+            "expectedValues": [
+              1
+            ],
+            "missingValues": [],
+            "latestTimestampUs": 1792736233659000
+          }
+        }
+      },
+      "aromaConvergenceProof": {
+        "coffee_aroma_attempt_results_total": {
+          "stream": "platform_metrics_coffee_aroma_attempt_results_total",
+          "owner": "aroma-convergence",
+          "sampleCount": 16,
+          "observedValues": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "expectedValues": [
+            1
+          ]
+        },
+        "coffee_aroma_unknown_outcomes_total": {
+          "stream": "platform_metrics_coffee_aroma_unknown_outcomes_total",
+          "owner": "aroma-convergence",
+          "sampleCount": 16,
+          "observedValues": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0
+          ],
+          "expectedValues": [
+            1
+          ]
+        },
+        "coffee_aroma_unknown_outcomes_current": {
+          "stream": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+          "owner": "aroma-convergence",
+          "sampleCount": 13,
+          "observedValues": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1
+          ],
+          "expectedValues": [
+            1,
+            0
+          ]
+        },
+        "coffee_aroma_recovery_results_total": {
+          "stream": "platform_metrics_coffee_aroma_recovery_results_total",
+          "owner": "aroma-convergence",
+          "sampleCount": 16,
+          "observedValues": [
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "expectedValues": [
+            1
+          ]
+        }
+      }
+    },
+    "logStreamMatched": true,
+    "traceStreamMatched": true,
+    "rawPayloadObserved": false,
+    "fixtureCapacityClaim": false
+  }
+}

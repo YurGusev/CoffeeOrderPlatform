@@ -1,0 +1,79 @@
+{
+  "buildx.build.provenance": {
+    "builder": {
+      "id": ""
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
+      {
+        "uri": "pkg:docker/docker/dockerfile@1.9",
+        "digest": {
+          "sha256": "fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28"
+        }
+      },
+      {
+        "uri": "pkg:docker/node@26.8.1-bookworm-slim?digest=sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae\u0026platform=linux%2Famd64",
+        "digest": {
+          "sha256": "27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
+        }
+      }
+    ],
+    "invocation": {
+      "configSource": {
+        "entryPoint": "Dockerfile"
+      },
+      "parameters": {
+        "frontend": "gateway.v0",
+        "args": {
+          "build-arg:RUNTIME": "aroma-observer",
+          "cmdline": "docker/dockerfile:1.9",
+          "source": "docker/dockerfile:1.9",
+          "target": "runtime"
+        },
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
+          }
+        ],
+        "root": {
+          "configSource": {
+            "path": "Dockerfile"
+          },
+          "request": {
+            "args": {
+              "build-arg:RUNTIME": "aroma-observer",
+              "target": "runtime",
+              "vcs:localdir:context": ".",
+              "vcs:localdir:dockerfile": ".",
+              "vcs:revision": "cddbc5145f895ae9fa909d32c15427174fca599f",
+              "vcs:source": "https://github.com/YurGusev/CoffeeOrderPlatform.git"
+            }
+          }
+        },
+        "compatibilityVersion": 30
+      },
+      "environment": {
+        "platform": "linux/amd64"
+      }
+    }
+  },
+  "buildx.build.ref": "coffee-platform-mtu/coffee-platform-mtu0/z7fs6ju6uez6ex3h6e8jh8s1z",
+  "containerimage.config.digest": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84",
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:814a24403a38a5ed2761e8f7c3e1f47408215e0ad168d8e3dea5c54c256101a0",
+    "size": 2576,
+    "annotations": {
+      "org.opencontainers.image.created": "2026-10-23T07:23:28Z"
+    },
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  },
+  "containerimage.digest": "sha256:814a24403a38a5ed2761e8f7c3e1f47408215e0ad168d8e3dea5c54c256101a0",
+  "image.name": "docker.io/library/coffee-pr179-wip15-image-f2ffecc03d3d:latest"
+}

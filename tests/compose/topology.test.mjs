@@ -70,6 +70,48 @@ void test("programmatic observability hooks require a bounded recovery-proof run
   assert.equal(cleanupContext, undefined);
 });
 
+void test("G14 PostgreSQL proof storage is verified tmpfs while other proof storage stays unchanged", async () => {
+  const calls = [];
+  let inspected = {"/var/lib/postgresql/data": "rw,noexec,nosuid,size=536870912"};
+  let stat = "tmpfs|4096|131072";
+  const source = await readFile(new URL("../../tools/compose-smoke.mjs", import.meta.url), "utf8");
+  const start = source.indexOf("function startDatabaseProofContainer(");
+  const inspect = source.indexOf("function assertEphemeralDatabaseProofStorage(", start);
+  const end = source.indexOf("\nfunction bootstrapDatabaseProofRole(", inspect);
+  assert.ok(start >= 0 && inspect > start && end > inspect);
+  const helpers = runInNewContext(`(()=>{${source.slice(start, source.indexOf("\nfunction assertEphemeralDatabaseProofStorage(", start))}
+${source.slice(inspect, end)}
+return {startDatabaseProofContainer, assertEphemeralDatabaseProofStorage};})()`, {
+    assert, DATABASE_PROOF_IMAGE: "fixture-postgres-image",
+    runDocker(args) {
+      calls.push(args);
+      if (args[0] === "inspect") return JSON.stringify(inspected);
+      if (args[0] === "exec") return stat;
+      return "";
+    },
+  });
+  assert.equal(helpers.startDatabaseProofContainer("g14-proof", "g14-network", {username: "admin", password: "fixture"}, {ephemeralPgData: true}), "g14-proof-postgres-proof");
+  assert.ok(calls[0].includes("--tmpfs"));
+  const storage = helpers.assertEphemeralDatabaseProofStorage("g14-proof-postgres-proof");
+  assert.equal(storage.type, "tmpfs");
+  assert.equal(storage.destination, "/var/lib/postgresql/data");
+  assert.equal(storage.sizeMiB, 512);
+  assert.equal(storage.durability, "ephemeral");
+  assert.deepEqual([...calls[1]], ["inspect", "--format", "{{json .HostConfig.Tmpfs}}", "g14-proof-postgres-proof"]);
+  assert.deepEqual([...calls[2]], ["exec", "g14-proof-postgres-proof", "stat", "-f", "-c", "%T|%S|%b", "/var/lib/postgresql/data"]);
+
+  calls.length = 0;
+  assert.equal(helpers.startDatabaseProofContainer("other-proof", "other-network", {username: "admin", password: "fixture"}), "other-proof-postgres-proof");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].includes("--tmpfs"), false);
+  assert.equal(calls.some(args => args[0] === "inspect" || args[0] === "exec"), false);
+
+  for (const output of ["ext4|4096|131072", "tmpfs|4096|131071", "tmpfs|4096", "tmpfs|x|131072"]) {
+    stat = output;
+    assert.throws(() => helpers.assertEphemeralDatabaseProofStorage("bad-proof-postgres-proof"));
+  }
+});
+
 void test("smoke removes only images built by this run and preserves keep/no-build/shared images", async (t) => {
   const {buildRuntimeImages, removeBuiltRuntimeImages} = await import("../../tools/compose-smoke.mjs");
   const calls = [];

@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
-import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {chmod, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {awaitConvergenceMetricBarrier} from './launch-path.mjs';
 import {createAlertDefinitions, installNativeAlert, installNativeAlerts} from '../../tools/observability/alerts.mjs';
-import {OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
-import {missingCpuFeatures, nativeAccessLogFilter, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, readinessMetricSamples, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples, waitForStreamRetentionSettings} from '../../tools/observability/verify.mjs';
+import {createCollectorConfig, OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
+import {missingCpuFeatures, nativeAccessLogFilter, nativeFiringProofSatisfied, nativeNormalEvaluationAdvanced, nativePendingWindowSatisfied, observabilityVerificationCoverage, parseCollectorMemoryLimiterMetrics, isCollectorMemoryRefusal, parseNativeAlertState, queryReadinessValue, readinessMetricSamples, sourceIdentity, stopContainerGracefully, traceSpanInventory, validateCollectorMemorySample, waitForDiskGuardBaseline, waitForOwnedMetricFamilySamples, waitForConvergenceMetricSamples, waitForSameTraceSpans, waitForStreamRetentionSettings} from '../../tools/observability/verify.mjs';
 import {nodeImageProbe, runtimeMetricFamilies, sanitizeRuntimeMatrixFailure, sanitizeRuntimeMetricMatches, verifyRuntimeMetricMatrix} from './runtime-matrix.mjs';
 import {NODE_RUNTIME_ROLES, summarizeRuntimeProbeOutput} from './runtime-matrix-probe.mjs';
 
@@ -29,6 +30,128 @@ void test('OpenObserve runner gates native execution on required CPU features', 
   assert.deepEqual(missingCpuFeatures('processor: 0\nflags: sse4_2\n'), ['avx', 'aes']);
 });
 
+void test('Collector filelog retries transient high-memory refusals within the configured retry window', () => {
+  const retry = {initialMs: 1000, maxMs: 5000, windowMs: 15000};
+  const config = createCollectorConfig({
+    config: {
+      environment: 'test', platform: {health: {intervalMs: 5000, timeoutMs: 1000}},
+      telemetry: {
+        namespace: 'coffee-platform', releaseDigest: 'test-release', nginxStatusEndpoint: 'http://edge-nginx:8081/nginx_status',
+        collector: {
+          otlpEndpoint: 'http://otel-collector:4318', healthEndpoint: 'http://otel-collector:13133', metricsEndpoint: 'http://otel-collector:8888',
+          memoryLimitMiB: 128, memorySpikeMiB: 32, memoryCheckIntervalMs: 1000, batchSize: 128, batchTimeoutMs: 1000,
+          queueCapacity: 512, queueConsumers: 2, exportTimeoutMs: 2000,
+          retryInitialMs: retry.initialMs, retryMaxMs: retry.maxMs, retryWindowMs: retry.windowMs, maxLogRecordBytes: 65536,
+        },
+        openObserve: {endpoint: 'http://openobserve:5080', organization: 'coffee',
+          streams: {logs: 'platform_logs', traces: 'platform_traces', metrics: 'platform_metrics'}},
+      },
+    },
+    logFiles: [{service: 'api-public', containerId: 'a'.repeat(64),
+      logPath: `/var/lib/docker/containers/${'a'.repeat(64)}/${'a'.repeat(64)}-json.log`}],
+    exporterToken: 'producer-token', openObserveIngestToken: 'ingest-token',
+  });
+
+  assert.deepEqual(config.receivers.filelog.retry_on_failure, {
+    enabled: true, initial_interval: '1000ms', max_interval: '5000ms', max_elapsed_time: '15000ms',
+  });
+});
+
+void test('disk pressure baseline waits for a clear native guard and retains its last diagnostics on failure', async () => {
+  const rows = [
+    {mountPoint: '/', totalBytes: 1024000, usedBytes: 409600, usedPercent: 40},
+    {mountPoint: '/data', totalBytes: 2048000, usedBytes: 512000, usedPercent: 25},
+  ];
+
+  let guardCalls = 0;
+  const baseline = await waitForDiskGuardBaseline({readDiskRows: () => rows,
+    readGuardStatus: () => ++guardCalls === 1 ? 1 : 0, timeoutMs: 50, intervalMs: 1});
+  assert.equal(baseline.status, 'PASS');
+  assert.equal(baseline.guardExit, 0);
+  assert.equal(baseline.attempts, 2, 'a transient native guard exit 1 is retried until exact exit 0');
+  assert.deepEqual(baseline.rows, rows);
+
+  let timeoutFailure;
+  try {
+    await waitForDiskGuardBaseline({readDiskRows: () => rows, readGuardStatus: () => 1, timeoutMs: 10, intervalMs: 1});
+  } catch (error) { timeoutFailure = error; }
+  assert.ok(timeoutFailure, 'a persistent native guard exit 1 must remain fatal within the bounded wait');
+  assert.match(timeoutFailure.message, /disk watermark guard preflight did not complete/u);
+  assert.deepEqual(timeoutFailure.diskPressurePreflight, {
+    status: 'FAIL', rows, guardExit: 1, attempts: timeoutFailure.diskPressurePreflight.attempts, failurePhase: 'disk-guard',
+  });
+  assert.ok(timeoutFailure.diskPressurePreflight.attempts >= 1 && timeoutFailure.diskPressurePreflight.attempts < 100);
+
+  let guardCallsForMalformed = 0;
+  let malformedFailure;
+  try {
+    await waitForDiskGuardBaseline({readDiskRows: () => [{...rows[0], totalBytes: Infinity}, rows[1]],
+      readGuardStatus: () => { guardCallsForMalformed += 1; return 0; }, timeoutMs: 50, intervalMs: 1});
+  } catch (error) { malformedFailure = error; }
+  assert.equal(guardCallsForMalformed, 0, 'malformed mount statistics fail before the guard result can be accepted');
+  assert.deepEqual(malformedFailure?.diskPressurePreflight,
+    {status: 'FAIL', rows: null, guardExit: null, attempts: 1, failurePhase: 'mount-statistics'});
+
+  let guardCallsForNaN = 0;
+  let nanFailure;
+  try {
+    await waitForDiskGuardBaseline({readDiskRows: () => [{...rows[0], usedPercent: Number.NaN}, rows[1]],
+      readGuardStatus: () => { guardCallsForNaN += 1; return 0; }, timeoutMs: 50, intervalMs: 1});
+  } catch (error) { nanFailure = error; }
+  assert.equal(guardCallsForNaN, 0, 'NaN statistics cannot satisfy a clean guard result');
+  assert.equal(nanFailure?.diskPressurePreflight?.status, 'FAIL');
+  assert.equal(nanFailure?.diskPressurePreflight?.failurePhase, 'mount-statistics');
+
+  let invalidExit;
+  try {
+    await waitForDiskGuardBaseline({readDiskRows: () => rows,
+      readGuardStatus: () => { throw Object.assign(new Error('private docker failure'), {status: 2}); }, timeoutMs: 50, intervalMs: 1});
+  } catch (error) { invalidExit = error; }
+  assert.deepEqual(invalidExit?.diskPressurePreflight,
+    {status: 'FAIL', rows, guardExit: 2, attempts: 1, failurePhase: 'disk-guard'});
+  assert.equal(invalidExit?.message.includes('private docker failure'), false);
+});
+
+void test('disk pressure cleanup syncs the owned volume before its single trim and stops on sync failure', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'coffee-disk-trim-'));
+  try {
+    const busyboxPath = path.join(directory, 'busybox');
+    const callLog = path.join(directory, 'calls.log');
+    await writeFile(busyboxPath, '#!/bin/sh\ncase "$1" in\n  sync) printf "sync\\n" >> "$CALL_LOG"; [ "${SYNC_FAIL:-0}" = 0 ] ;;\n  fstrim) printf "fstrim\\n" >> "$CALL_LOG"; printf "/data: 42 bytes trimmed\\n" ;;\n  *) exit 97 ;;\nesac\n');
+    await chmod(busyboxPath, 0o700);
+
+    const source = await readFile(new URL('../../tools/observability/verify.mjs', import.meta.url), 'utf8');
+    const start = source.indexOf('const trimPressureVolume = () => run(');
+    const end = source.indexOf('    const dataTargetKiB', start);
+    assert.ok(start >= 0 && end > start, 'the production trim helper is available for focused execution');
+    const helper = source.slice(start, end);
+    const args = runInNewContext(`${helper}\ntrimPressureVolume();`, {
+      run: value => value,
+      probePath: '/fixture/busybox',
+      storage: {volumeName: 'fixture-volume', maxDiskBytes: 4096},
+      toolchain: {nodeImage: 'node:fixture'},
+    });
+    const shellIndex = args.indexOf('-ceu');
+    assert.ok(shellIndex >= 0);
+    const shellScript = args[shellIndex + 1].replaceAll('/busybox', busyboxPath);
+    const shellArgs = ['-ceu', shellScript, 'g14-pressure-cleanup', '4096'];
+    const environment = {...process.env, CALL_LOG: callLog, SYNC_FAIL: '0'};
+
+    const output = execFileSync('/bin/sh', shellArgs, {encoding: 'utf8', env: environment});
+    assert.match(output, /G14_SYNCFS_COMPLETE/u);
+    assert.match(output, /42 bytes trimmed/u);
+    assert.equal(await readFile(callLog, 'utf8'), 'sync\nfstrim\n');
+
+    await writeFile(callLog, '');
+    assert.throws(() => execFileSync('/bin/sh', shellArgs, {
+      encoding: 'utf8', env: {...environment, SYNC_FAIL: '1'},
+    }));
+    assert.equal(await readFile(callLog, 'utf8'), 'sync\n', 'fstrim must not run when syncfs fails');
+  } finally {
+    await rm(directory, {recursive: true, force: true});
+  }
+});
+
 void test('OpenObserve trace inventory reads canonical operation_name and deduplicates per owner', () => {
   const traceId = 'a'.repeat(32);
   assert.deepEqual(traceSpanInventory([
@@ -43,6 +166,66 @@ void test('OpenObserve trace inventory reads canonical operation_name and dedupl
     'orders-service': ['HTTP POST'],
     'realtime-gateway': ['HTTP POST'],
   });
+});
+
+void test('same-trace search preserves its bounded query and replaces safe diagnostics per attempt', async () => {
+  const traceId = 'a'.repeat(32);
+  const expectedSpanNames = Object.fromEntries(Array.from({length: 5}, (_, serviceIndex) => [
+    `service-${serviceIndex}`, Array.from({length: 5}, (_, spanIndex) => `span-${serviceIndex}-${spanIndex}`),
+  ]));
+  const expectedRecords = Object.entries(expectedSpanNames).flatMap(([service_name, names]) => names.map(operation_name => ({service_name, operation_name})));
+  const canary = 'diagnostic-secret-canary';
+  const requests = [];
+  const observations = [];
+  let queryIndex = 0;
+  const fetchImpl = async (url, init) => {
+    requests.push({url: new URL(url), method: init.method, body: JSON.parse(init.body)});
+    queryIndex += 1;
+    if (queryIndex === 1) return new Response(JSON.stringify({hits: {hits: [{service_name: 'service-0', operation_name: 'span-0-0', secret: canary}]}, total: 31, is_partial: true}));
+    if (queryIndex === 2) return new Response(canary, {status: 503});
+    if (queryIndex === 3) return new Response(JSON.stringify({hits: {hits: expectedRecords.slice(1)}, total: 24, is_partial: false}));
+    return new Response(JSON.stringify({hits: {hits: expectedRecords}, total: 25, is_partial: false}));
+  };
+
+  const result = await waitForSameTraceSpans({
+    baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee',
+    stream: 'platform_traces', traceId, expectedSpanNames, fetchImpl, timeoutMs: 1000, intervalMs: 0,
+    onObservation: observation => observations.push(structuredClone(observation)),
+  });
+
+  assert.equal(requests.length, 4);
+  for (const {url, method, body} of requests) {
+    assert.equal(url.pathname, '/api/coffee/_search');
+    assert.equal(url.searchParams.get('type'), 'traces');
+    assert.equal(method, 'POST');
+    assert.deepEqual(body, {
+      query: {
+        sql: `SELECT * FROM "platform_traces" WHERE "trace_id" = '${traceId}'`,
+        start_time: body.query.end_time - 600_000_000, end_time: body.query.end_time, from: 0, size: 100,
+      },
+      search_type: 'ui', timeout: 5,
+    });
+    assert.equal(body.query.sql.includes('ORDER BY'), false);
+  }
+  assert.equal(observations[0].lastAttempt.outcome, 'MISSING_SPANS');
+  assert.equal(observations[0].lastAttempt.rowCount, 1);
+  assert.equal(observations[0].lastAttempt.total, 31);
+  assert.equal(observations[0].lastAttempt.isPartial, true);
+  assert.equal(observations[0].lastAttempt.matchedExpectedSpanCount, 1);
+  assert.equal(observations[0].lastAttempt.missingExpectedSpanNames.length, 24);
+  assert.deepEqual(observations[1].lastAttempt, {
+    outcome: 'QUERY_ERROR', rowCount: null, total: null, isPartial: null,
+    matchedExpectedSpanCount: null, missingExpectedSpanNames: null, errorClass: 'Error', httpStatus: 503,
+  });
+  assert.equal(observations[1].lastSuccessful.total, 31, 'the last successful bounded summary remains available after a later API error');
+  assert.equal(observations[2].lastAttempt.outcome, 'MISSING_SPANS', 'a later query does not inherit spans from an earlier attempt');
+  assert.deepEqual(observations[2].lastAttempt.missingExpectedSpanNames, ['service-0:span-0-0']);
+  assert.equal(observations[3].lastAttempt.outcome, 'COMPLETE');
+  assert.equal(observations[3].lastAttempt.rowCount, 25);
+  assert.deepEqual(observations[3].lastAttempt.missingExpectedSpanNames, []);
+  assert.equal(result.traceRows.length, 25);
+  assert.equal(JSON.stringify(observations).includes(canary), false);
+  assert.equal(JSON.stringify(observations).includes(traceId), false);
 });
 
 void test('native access lookup selects its owner before the response page limit', () => {
@@ -98,6 +281,65 @@ void test('native readiness reads every fresh owner in one bounded, newest-first
     assert.equal(samples.every(({sample}) => sample?.value === 1), false,
       'missing, stale, or unexpected-owner evidence must not satisfy readiness');
   }
+});
+
+void test('readiness PromQL uses a 30s server deadline and a forwarded 35s transport signal', async t => {
+  const nativeTimeout = AbortSignal.timeout.bind(AbortSignal);
+  const timeoutBudgets = [];
+  t.mock.method(AbortSignal, 'timeout', durationMs => {
+    timeoutBudgets.push(durationMs);
+    return nativeTimeout(5000);
+  });
+  const rule = {queryCondition: {promql: 'sum(up{service_name="api-public"})'}};
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push({url, init});
+    return new Response(JSON.stringify({status: 'success', data: {resultType: 'vector', result: [{value: [123, '1']}]}}));
+  };
+  assert.equal(await queryReadinessValue({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
+    organization: 'coffee team', rule, fetchImpl}), 1);
+  const [{url, init}] = requests;
+  assert.equal(url.searchParams.get('query'), rule.queryCondition.promql);
+  assert.equal(url.searchParams.get('timeout'), '30s');
+  const serverDeadlineMs = Number(url.searchParams.get('timeout').replace(/s$/u, '')) * 1000;
+  assert.ok(serverDeadlineMs > 0);
+  assert.ok(serverDeadlineMs < timeoutBudgets[0]);
+  assert.ok(timeoutBudgets[0] > 30000);
+  assert.equal(timeoutBudgets[0], 35000);
+  assert.equal(init.signal instanceof AbortSignal, true, 'the HTTP request receives the transport signal');
+
+  let httpFailure;
+  try {
+    await queryReadinessValue({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee', rule,
+      fetchImpl: async () => new Response('private error body', {status: 503}), sensitiveValues: ['private error body']});
+  } catch (error) { httpFailure = error; }
+  assert.equal(httpFailure?.httpStatus, 503);
+  assert.equal(httpFailure?.message.includes('private error body'), false);
+
+  await assert.rejects(queryReadinessValue({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture', organization: 'coffee', rule,
+    fetchImpl: async () => new Response(JSON.stringify({status: 'error', data: {resultType: 'matrix', result: []}}))}),
+  /notReady instant query did not return a successful vector/u);
+});
+
+void test('readiness PromQL aborts through its transport signal', async t => {
+  const nativeTimeout = AbortSignal.timeout.bind(AbortSignal);
+  const timeoutBudgets = [];
+  t.mock.method(AbortSignal, 'timeout', durationMs => {
+    timeoutBudgets.push(durationMs);
+    return nativeTimeout(5);
+  });
+  let receivedSignal;
+  await assert.rejects(queryReadinessValue({baseUrl: 'http://openobserve.test', authorization: 'Basic fixture',
+    organization: 'coffee', rule: {queryCondition: {promql: 'up'}}, fetchImpl: (_url, {signal}) => {
+      receivedSignal = signal;
+      return new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), {once: true});
+        if (signal.aborted) reject(signal.reason);
+      });
+    }}), error => error?.name === 'TimeoutError');
+  assert.deepEqual(timeoutBudgets, [35000]);
+  assert.equal(receivedSignal?.aborted, true);
+  assert.equal(receivedSignal?.reason?.name, 'TimeoutError');
 });
 
 void test('OpenObserve retention settings wait only for stream-settings 404 readiness', {timeout: 10000}, async t => {
@@ -439,6 +681,114 @@ void test('issue 64 failure diagnostics retain only allowlisted error codes and 
   const unknown = sanitizeRuntimeMatrixFailure({name: secret, code: secret, stack: `Error: ${secret}\n    at leak (/tmp/${secret}.mjs:9:8)`});
   assert.deepEqual(unknown, {errorKind: 'unknown', frames: []});
   assert.deepEqual(sanitizeRuntimeMatrixFailure(secret), {errorKind: 'unknown', frames: []});
+  const quietBaselineCases = [
+    {queryValue: 0, phase: 'readiness', predicate: 'readiness-not-one'},
+    {queryValue: 1, phase: 'native-state', predicate: 'native-state-not-normal', nativeAlertId: '0'.repeat(27),
+      nativeOutcome: 'pending', nativeOutcomeAtUs: 1234567, nativeOutcomeSinceUs: 1234000, nativeOutcomeAnchorAtUs: 1230000,
+      lastReset: {reason: 'native-state-not-normal', observedAt: 1234, nativeOutcome: 'pending'}},
+    {queryValue: 1, phase: 'native-state', predicate: 'awaiting-fresh-native-normal',
+      lastReset: {reason: 'native-normal-not-fresh', observedAt: 1234, nativeOutcome: 'normal'}},
+    {queryValue: 1, phase: 'episodes', predicate: 'unresolved-episodes', eventCount: 2, episodeCount: 1, unresolvedEpisodeCount: 1},
+    {queryValue: null, phase: 'request-error', predicate: 'readiness-query-failed', requestError: {source: 'query', httpStatus: 503, errorClass: 'Error'}},
+    {queryValue: 1, phase: 'request-error', predicate: 'sink-query-failed', requestError: {source: 'sink', errorClass: 'AbortError'}},
+    {queryValue: 1, phase: 'stability', predicate: 'continuous-stability', stableMs: 1500},
+  ];
+  for (const sample of quietBaselineCases) {
+    const quietBaseline = {
+      queryValue: null, observedAt: 1234, requiredStableMs: 60000, stableMs: 0,
+      eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0,
+      phase: 'readiness', predicate: 'readiness-not-one', ...sample,
+      arbitraryBody: secret,
+      ...(sample.requestError === undefined ? {} : {requestError: {...sample.requestError, message: secret, headers: {authorization: secret}}}),
+    };
+    const cause = new Error(secret);
+    const wrappedFailure = Object.assign(new Error(secret), {cause, nativeNginxAlert: quietBaseline});
+    const sanitized = sanitizeRuntimeMatrixFailure(wrappedFailure);
+    const expected = {
+      queryValue: sample.queryValue, observedAt: 1234, requiredStableMs: 60000,
+      stableMs: sample.stableMs ?? 0, eventCount: sample.eventCount ?? 0,
+      episodeCount: sample.episodeCount ?? 0, unresolvedEpisodeCount: sample.unresolvedEpisodeCount ?? 0,
+      phase: sample.phase, predicate: sample.predicate,
+      ...(sample.requestError === undefined ? {} : {requestError: sample.requestError}),
+      ...(sample.nativeAlertId === undefined ? {} : {nativeAlertId: sample.nativeAlertId, nativeOutcome: sample.nativeOutcome,
+        nativeOutcomeAtUs: sample.nativeOutcomeAtUs, nativeOutcomeSinceUs: sample.nativeOutcomeSinceUs,
+        nativeOutcomeAnchorAtUs: sample.nativeOutcomeAnchorAtUs,
+        lastReset: sample.lastReset}),
+      ...(sample.lastReset?.reason === 'native-normal-not-fresh' ? {lastReset: sample.lastReset} : {}),
+    };
+    assert.deepEqual(sanitized.nativeNginxAlert, expected);
+    assert.equal(JSON.stringify(sanitized).includes(secret), false);
+  }
+  const retriedSnapshot = {
+    queryValue: 1, observedAt: 2345, requiredStableMs: 60000, stableMs: 1500,
+    eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0,
+    phase: 'stability', predicate: 'continuous-stability', queryDurationMs: 37,
+    lastReset: {reason: 'request-error', observedAt: 1234, phase: 'readiness', queryDurationMs: 5000,
+      requestError: {source: 'query', httpStatus: 503, errorClass: 'TimeoutError', message: secret}},
+  };
+  const retriedFailure = Object.assign(new Error(secret), {nativeNginxAlert: retriedSnapshot});
+  const retriedDiagnostics = sanitizeRuntimeMatrixFailure(retriedFailure);
+  assert.deepEqual(retriedDiagnostics.nativeNginxAlert, {
+    queryValue: 1, observedAt: 2345, requiredStableMs: 60000, stableMs: 1500,
+    eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0,
+    phase: 'stability', predicate: 'continuous-stability', queryDurationMs: 37,
+    lastReset: {reason: 'request-error', observedAt: 1234, phase: 'readiness', queryDurationMs: 5000,
+      requestError: {source: 'query', httpStatus: 503, errorClass: 'TimeoutError'}},
+  });
+  assert.equal(JSON.stringify(retriedDiagnostics).includes(secret), false);
+  const recoveryObservation = {
+    stage: 'recovery', outcome: 'VALUE_MISMATCH', requiredAfterUs: 1_800_000_500_000_000,
+    observedAtUs: 1_800_000_560_000_000, rowCount: 3, matchingRowCount: 2, expectedValue: 1,
+    totalRowCount: 8, isPartial: false,
+    latestTargetSample: {service: 'edge-nginx', statusClass: '2xx', timestampUs: 1_800_000_550_000_000, value: 0},
+    arbitraryBody: secret,
+  };
+  const recoveryFailure = Object.assign(new Error(secret), {
+    nativeNginxAlert: {queryValue: 1, observedAt: 2345, requiredStableMs: 60000, stableMs: 0,
+      eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0, phase: 'readiness', predicate: 'readiness-not-one'},
+    nativeNginxRecovery: recoveryObservation,
+  });
+  const recoveryDiagnostics = sanitizeRuntimeMatrixFailure(recoveryFailure);
+  assert.deepEqual(recoveryDiagnostics.nativeNginxRecovery, {
+    stage: 'recovery', outcome: 'VALUE_MISMATCH', requiredAfterUs: recoveryObservation.requiredAfterUs,
+    observedAtUs: recoveryObservation.observedAtUs, rowCount: 3, matchingRowCount: 2, expectedValue: 1,
+    totalRowCount: 8, isPartial: false,
+    latestTargetSample: recoveryObservation.latestTargetSample,
+  });
+  assert.equal(recoveryDiagnostics.nativeNginxAlert.predicate, 'readiness-not-one', 'recovery diagnostics do not replace the native baseline evidence');
+  assert.equal(JSON.stringify(recoveryDiagnostics).includes(secret), false);
+  const invalidRecoveryFailure = Object.assign(new Error(secret), {
+    nativeNginxRecovery: {...recoveryObservation, latestTargetSample: {...recoveryObservation.latestTargetSample, value: Number.NaN}},
+  });
+  assert.equal('nativeNginxRecovery' in sanitizeRuntimeMatrixFailure(invalidRecoveryFailure), false,
+    'non-finite target values are omitted instead of serialized');
+  const pendingFailure = Object.assign(new Error(secret), {nativeNginxAlert: {
+    queryValue: 1, observedAt: 2345, requiredStableMs: 65000, stableMs: 0,
+    eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0,
+    phase: 'pending-firing', predicate: 'pending-window-not-proven', nativeAlertId: '0'.repeat(27), nativeOutcome: 'firing',
+    nativeOutcomeAtUs: 1_800_000_400_000_000, nativeOutcomeSinceUs: 1_800_000_350_000_000,
+    pendingSinceUs: 1_800_000_001_000_000, firingSinceUs: 1_800_000_350_000_000, pendingElapsedUs: 349_000_000,
+    stopCallStartedAtUs: 1_800_000_000_000_000, stopCallEndedAtUs: 1_800_000_100_000_000,
+    firstFailedProbeAtUs: 1_800_000_110_000_000, firingOutcomeAtUs: secret, baselineNormalSinceUs: Number.NaN, arbitraryBody: secret,
+  }});
+  const pendingDiagnostics = sanitizeRuntimeMatrixFailure(pendingFailure);
+  assert.deepEqual(pendingDiagnostics.nativeNginxAlert, {
+    queryValue: 1, observedAt: 2345, requiredStableMs: 65000, stableMs: 0,
+    eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0,
+    phase: 'pending-firing', predicate: 'pending-window-not-proven', nativeAlertId: '0'.repeat(27), nativeOutcome: 'firing',
+    nativeOutcomeAtUs: 1_800_000_400_000_000, nativeOutcomeSinceUs: 1_800_000_350_000_000,
+    pendingSinceUs: 1_800_000_001_000_000, firingSinceUs: 1_800_000_350_000_000, pendingElapsedUs: 349_000_000,
+    stopCallStartedAtUs: 1_800_000_000_000_000, stopCallEndedAtUs: 1_800_000_100_000_000,
+    firstFailedProbeAtUs: 1_800_000_110_000_000,
+  });
+  assert.equal(JSON.stringify(pendingDiagnostics).includes(secret), false);
+  const invalidDuration = structuredClone(retriedSnapshot);
+  invalidDuration.queryDurationMs = '37';
+  invalidDuration.lastReset.queryDurationMs = Number.NaN;
+  const invalidDurationDiagnostics = sanitizeRuntimeMatrixFailure(Object.assign(new Error(secret), {nativeNginxAlert: invalidDuration}));
+  assert.equal('queryDurationMs' in invalidDurationDiagnostics.nativeNginxAlert, false);
+  assert.equal('lastReset' in invalidDurationDiagnostics.nativeNginxAlert, false);
+  assert.equal(JSON.stringify(invalidDurationDiagnostics).includes(secret), false);
   const safeObservation = {
     name: 'runtime_http_request_duration_ms', owners: ['orders-service', 'api-public'], components: [
       {component: '_count', streamPresent: true, presentOwners: ['orders-service', 'api-public'], missingOwners: [], sampleCount: 2},
@@ -793,6 +1143,44 @@ void test('native alert installation configures only local webhook delivery and 
   assert.deepEqual(requests.at(-1).body.query_condition.promql_condition, {column: 'value', operator: '>', value: 0.05});
   assert.match(requests[2].body.query_condition.promql, /== bool 14\)\) and on\(\) \(count\(platform_metrics_httpcheck_status/u,
     'the production POST keeps the complete Node owner gate and native NGINX presence guard');
+});
+
+void test('native notReady evaluation state is exact, fail-closed, and proves its configured pending interval', () => {
+  const rule = createAlertDefinitions({config}).find(candidate => candidate.key === 'notReady');
+  const alertId = '0'.repeat(27);
+  const trigger = {period: rule.evaluationIntervalMinutes, frequency: rule.evaluationIntervalMinutes, frequency_type: 'minutes'};
+  const condition = {promql: rule.queryCondition.promql, promql_condition: rule.queryCondition.promql_condition};
+  const detail = {id: alertId, name: rule.name, enabled: true, is_real_time: false, stream_type: 'metrics',
+    stream_name: rule.streamName, query_condition: condition, trigger_condition: trigger, pending_period_sec: rule.pendingPeriodSec};
+  const row = (state, sinceUs) => ({alert_id: alertId, name: rule.name, alert_type: 'scheduled', enabled: true,
+    is_real_time: false, stream_type: 'metrics', stream_name: rule.streamName, condition, trigger_condition: trigger,
+    last_outcome: state, last_outcome_at: sinceUs + 1, last_outcome_since: sinceUs});
+  const normal = parseNativeAlertState({listResponse: {list: [row('normal', 1_800_000_000_000_000)]}, detailResponse: detail, rule});
+  assert.deepEqual(normal, {state: 'normal', alertId, outcomeAtUs: 1_800_000_000_000_001, sinceUs: 1_800_000_000_000_000});
+  const pending = parseNativeAlertState({listResponse: {list: [row('pending', 1_800_000_001_000_000)]}, detailResponse: detail, rule, expectedAlertId: alertId});
+  assert.deepEqual(pending, {state: 'pending', alertId, outcomeAtUs: 1_800_000_001_000_001, sinceUs: 1_800_000_001_000_000});
+  assert.equal(parseNativeAlertState({listResponse: {list: [row('pending', 1)]}, detailResponse: detail, rule}).state, 'pending');
+  assert.equal(parseNativeAlertState({listResponse: {list: [{...row('normal', 1), last_outcome_at: 'not-numeric'}]}, detailResponse: detail, rule}).state, 'unknown');
+  for (const state of ['normal', 'pending', 'firing']) {
+    assert.equal(parseNativeAlertState({listResponse: {list: [{...row(state, 100), last_outcome_at: 99}]}, detailResponse: detail, rule}).state, 'unknown');
+    assert.equal(parseNativeAlertState({listResponse: {list: [{...row(state, 100), last_outcome_at: 100}]}, detailResponse: detail, rule}).state, state,
+      'equal since and outcome timestamps are valid for every native state');
+  }
+  assert.equal(parseNativeAlertState({listResponse: {list: []}, detailResponse: detail, rule}).state, 'unknown');
+  assert.throws(() => parseNativeAlertState({listResponse: {list: [row('normal', 1), row('normal', 2)]}, detailResponse: detail, rule}), {fatal: true});
+  assert.throws(() => parseNativeAlertState({listResponse: {list: [row('normal', 1)]}, detailResponse: {...detail, pending_period_sec: 1}, rule}), {fatal: true});
+  assert.equal(nativePendingWindowSatisfied(1_800_000_001_000_000, 1_800_000_300_999_999, 300), false);
+  assert.equal(nativePendingWindowSatisfied(1_800_000_001_000_000, 1_800_000_301_000_000, 300), true);
+  assert.equal(nativePendingWindowSatisfied(1_800_000_001_000_000, Number.NaN, 300), false);
+  assert.equal(nativeFiringProofSatisfied({pendingSinceUs: 1_800_000_001_000_000, firingSinceUs: 1_800_000_301_000_000,
+    pendingPeriodSec: 300, sinkReceivedAtUs: 1_800_000_200_000_000, stoppedAtUs: 1_800_000_250_000_000}), false,
+  'an unseen sink firing received before stop cannot complete the native proof');
+  assert.equal(nativeFiringProofSatisfied({pendingSinceUs: 1_800_000_001_000_000, firingSinceUs: 1_800_000_301_000_000,
+    pendingPeriodSec: 300, sinkReceivedAtUs: 1_800_000_350_000_000, stoppedAtUs: 1_800_000_250_000_000}), true,
+  'a fresh sink receipt is accepted only alongside the full native pending window');
+  assert.equal(nativeNormalEvaluationAdvanced(1_800_000_000_000_001, 1_800_000_060_000_001), true);
+  assert.equal(nativeNormalEvaluationAdvanced(1_800_000_000_000_001, 1_800_000_000_000_001), false);
+  assert.equal(nativeNormalEvaluationAdvanced(1_800_000_000_000_001, Number.NaN), false);
 });
 
 void test('synthetic readiness scope reaches only its separately named readiness rule payload', async () => {

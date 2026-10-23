@@ -1,0 +1,57 @@
+{
+  "runId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+  "status": "PASS",
+  "configuredDays": 3,
+  "fixtureOnlyIngestWindowHours": 120,
+  "backdatedRecordVisible": true,
+  "ttlRemovedRecord": true,
+  "usedPercent": 11.5,
+  "watermarkPercent": 80,
+  "diskPressure": {
+    "status": "PASS",
+    "maximumWriteBytes": 912680550,
+    "writtenBytes": 733711360,
+    "fileDev": 1811,
+    "fileInode": 11433,
+    "dataUsedPercent": 82.88,
+    "dataDfReportedPercent": 84,
+    "rootUsedPercent": 81,
+    "rootDfReportedPercent": 81,
+    "aggregateUsedPercent": 81.06,
+    "watermarkPercent": 80,
+    "rootReservedHeadroomBytes": 1177374720,
+    "generatedDataGuardRejected": true,
+    "nativeScopedIngestStatus": 503,
+    "cleanupTrim": {
+      "status": "PASS",
+      "offsetBytes": 0,
+      "lengthBytes": 1073741824,
+      "syncBeforeTrim": true,
+      "reportedBytes": 865325056,
+      "startedAt": "2026-10-23T06:40:53.478Z",
+      "completedAt": "2026-10-23T06:40:53.919Z",
+      "stdout": "/data: 865325056 bytes trimmed"
+    },
+    "cleanupMounts": {
+      "rows": [
+        {
+          "mountPoint": "/",
+          "totalBytes": 29412638720,
+          "usedBytes": 23070654464,
+          "usedPercent": 78
+        },
+        {
+          "mountPoint": "/data",
+          "totalBytes": 1020702720,
+          "usedBytes": 113942528,
+          "usedPercent": 11
+        }
+      ],
+      "observedAt": "2026-10-23T06:40:53.920Z",
+      "aggregateUsedPercent": 76.18,
+      "guardExit": 0
+    },
+    "cleanupVerified": true,
+    "recoveredIngestStatus": 200
+  }
+}

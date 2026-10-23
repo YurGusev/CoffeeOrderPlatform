@@ -90,12 +90,12 @@ function assertDockerLoggingPolicy(actual, expected) {
   return {status: 'PASS', driver: actual.Type, options};
 }
 
-async function api({fetchImpl = fetch, baseUrl, path, authorization, method = 'GET', body, expected = [200], sensitiveValues = []}) {
+async function api({fetchImpl = fetch, baseUrl, path, authorization, method = 'GET', body, expected = [200], sensitiveValues = [], signal = AbortSignal.timeout(5000)}) {
   const response = await fetchImpl(new URL(path, baseUrl), {
     method,
     headers: {Authorization: authorization, ...(body === undefined ? {} : {'Content-Type': 'application/json'})},
     ...(body === undefined ? {} : {body: JSON.stringify(body)}),
-    signal: AbortSignal.timeout(5000),
+    signal,
   });
   const text = await response.text();
   if (!expected.includes(response.status)) {
@@ -104,6 +104,68 @@ async function api({fetchImpl = fetch, baseUrl, path, authorization, method = 'G
   }
   if (!text) return undefined;
   try { return JSON.parse(text); } catch { return text; }
+}
+
+export async function queryReadinessValue({baseUrl, authorization, organization, rule, fetchImpl = fetch, sensitiveValues = []}) {
+  const result = await api({fetchImpl, baseUrl, authorization, sensitiveValues, signal: AbortSignal.timeout(35000),
+    path: `/api/${encodeURIComponent(organization)}/prometheus/api/v1/query?query=${encodeURIComponent(rule.queryCondition.promql)}&timeout=30s`});
+  if (result?.status !== 'success' || result?.data?.resultType !== 'vector' || !Array.isArray(result.data.result))
+    throw new Error('notReady instant query did not return a successful vector');
+  const values = result.data.result;
+  if (values.length !== 1 || !Array.isArray(values[0]?.value) || values[0].value.length !== 2) return null;
+  const value = values[0].value[1];
+  return ['number', 'string'].includes(typeof value) && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
+export function parseNativeAlertState({listResponse, detailResponse, rule, expectedAlertId} = {}) {
+  if (!Array.isArray(listResponse?.list)) return {state: 'unknown'};
+  const matching = listResponse.list.filter(alert => alert?.name === rule?.name);
+  if (matching.length === 0) return {state: 'unknown'};
+  if (matching.length !== 1) throw Object.assign(new Error('native notReady alert identity is ambiguous'), {fatal: true});
+  const alert = matching[0];
+  const alertId = alert.alert_id;
+  if (typeof alertId !== 'string' || !/^[A-Za-z0-9]{27}$/u.test(alertId) ||
+      (expectedAlertId !== undefined && alertId !== expectedAlertId))
+    throw Object.assign(new Error('native notReady alert identity changed'), {fatal: true});
+  const conditionMatches = condition => condition?.promql === rule.queryCondition.promql &&
+    condition?.promql_condition?.column === 'value' &&
+    condition.promql_condition.operator === rule.queryCondition.promql_condition.operator &&
+    condition.promql_condition.value === rule.queryCondition.promql_condition.value;
+  const triggerMatches = trigger => trigger?.period === rule.evaluationIntervalMinutes &&
+    trigger?.frequency === rule.evaluationIntervalMinutes && trigger?.frequency_type === 'minutes';
+  if (alert.alert_type !== 'scheduled' || alert.enabled !== true || alert.is_real_time !== false ||
+      alert.stream_type !== 'metrics' || alert.stream_name !== rule.streamName ||
+      !conditionMatches(alert.condition) || !triggerMatches(alert.trigger_condition))
+    throw Object.assign(new Error('native notReady alert list configuration mismatch'), {fatal: true});
+  if (detailResponse === undefined) return {state: 'unverified', alertId, needsDetail: true};
+  if (detailResponse?.id !== alertId || detailResponse?.name !== rule.name || detailResponse?.enabled !== true ||
+      detailResponse?.is_real_time !== false || detailResponse?.stream_type !== 'metrics' ||
+      detailResponse?.stream_name !== rule.streamName || detailResponse?.pending_period_sec !== rule.pendingPeriodSec ||
+      !conditionMatches(detailResponse.query_condition) || !triggerMatches(detailResponse.trigger_condition))
+    throw Object.assign(new Error('native notReady alert detail configuration mismatch'), {fatal: true});
+
+  const outcome = alert.last_outcome;
+  const outcomeAtUs = alert.last_outcome_at;
+  const sinceUs = alert.last_outcome_since;
+  if (!['normal', 'pending', 'firing'].includes(outcome) || !Number.isSafeInteger(outcomeAtUs) || outcomeAtUs <= 0 ||
+      !Number.isSafeInteger(sinceUs) || sinceUs <= 0 || sinceUs > outcomeAtUs) return {state: 'unknown', alertId};
+  return {state: outcome, alertId, outcomeAtUs, sinceUs};
+}
+
+export function nativePendingWindowSatisfied(pendingSinceUs, firingSinceUs, pendingPeriodSec) {
+  return Number.isSafeInteger(pendingSinceUs) && pendingSinceUs > 0 && Number.isSafeInteger(firingSinceUs) &&
+    firingSinceUs >= pendingSinceUs && Number.isSafeInteger(pendingPeriodSec) && pendingPeriodSec > 0 &&
+    firingSinceUs - pendingSinceUs >= pendingPeriodSec * 1_000_000;
+}
+
+export function nativeFiringProofSatisfied({pendingSinceUs, firingSinceUs, pendingPeriodSec, sinkReceivedAtUs, stoppedAtUs} = {}) {
+  return nativePendingWindowSatisfied(pendingSinceUs, firingSinceUs, pendingPeriodSec) &&
+    Number.isSafeInteger(sinkReceivedAtUs) && Number.isSafeInteger(stoppedAtUs) && sinkReceivedAtUs > stoppedAtUs;
+}
+
+export function nativeNormalEvaluationAdvanced(previousOutcomeAtUs, currentOutcomeAtUs) {
+  return Number.isSafeInteger(previousOutcomeAtUs) && previousOutcomeAtUs > 0 &&
+    Number.isSafeInteger(currentOutcomeAtUs) && currentOutcomeAtUs > previousOutcomeAtUs;
 }
 
 async function waitFor(predicate, {timeoutMs, intervalMs = 2000, description}) {
@@ -120,6 +182,45 @@ async function waitFor(predicate, {timeoutMs, intervalMs = 2000, description}) {
     await sleep(intervalMs);
   }
   throw new Error(`${description} did not complete${lastError ? `: ${lastError.message}` : ''}`);
+}
+
+export async function waitForDiskGuardBaseline({readDiskRows, readGuardStatus, timeoutMs = 30000, intervalMs = 1000}) {
+  let latestRows = null;
+  let guardExit = null;
+  let attempts = 0;
+  let failurePhase = null;
+  try {
+    return await waitFor(() => {
+      attempts += 1;
+      failurePhase = 'mount-statistics';
+      let rows;
+      try { rows = readDiskRows(); }
+      catch { throw Object.assign(new Error('OpenObserve bounded mount statistics are unavailable'), {fatal: true}); }
+      const validRows = Array.isArray(rows) && rows.length === 2 && new Set(rows.map(row => row?.mountPoint)).size === 2 &&
+        ['/', '/data'].every(mountPoint => rows.some(row => row?.mountPoint === mountPoint)) && rows.every(row =>
+          row !== null && typeof row === 'object' && Number.isSafeInteger(row.totalBytes) && row.totalBytes > 0 && Number.isSafeInteger(row.usedBytes) &&
+          row.usedBytes >= 0 && row.usedBytes <= row.totalBytes && Number.isFinite(row.usedPercent) &&
+          row.usedPercent >= 0 && row.usedPercent <= 100);
+      if (!validRows) throw Object.assign(new Error('OpenObserve bounded mount statistics are unavailable'), {fatal: true});
+      latestRows = rows.map(({mountPoint, totalBytes, usedBytes, usedPercent}) => ({mountPoint, totalBytes, usedBytes, usedPercent}));
+      failurePhase = 'disk-guard';
+      try { guardExit = readGuardStatus(); }
+      catch (error) {
+        if (Number.isInteger(error?.status)) guardExit = error.status;
+        throw Object.assign(new Error('OpenObserve native disk watermark guard probe failed'), {fatal: true});
+      }
+      if (guardExit !== 0 && guardExit !== 1)
+        throw Object.assign(new Error('OpenObserve native disk watermark guard returned an unexpected exit code'), {fatal: true});
+      if (guardExit === 0) {
+        failurePhase = null;
+        return {status: 'PASS', rows: latestRows, guardExit, attempts};
+      }
+      return false;
+    }, {timeoutMs, intervalMs, description: 'OpenObserve native disk watermark guard preflight'});
+  } catch (error) {
+    error.diskPressurePreflight = {status: 'FAIL', rows: latestRows, guardExit, attempts, failurePhase};
+    throw error;
+  }
 }
 
 export async function waitForStreamRetentionSettings({baseUrl, authorization, organization, stream, streamType, retentionDays, fetchImpl = fetch, sensitiveValues = [], timeoutMs = 60000, intervalMs = 2000}) {
@@ -969,6 +1070,42 @@ export function traceSpanInventory(records) {
     inventory[service].add(spanName);
   }
   return Object.fromEntries(Object.entries(inventory).map(([service, names]) => [service, [...names].sort((left, right) => left < right ? -1 : left > right ? 1 : 0)]));
+}
+
+export async function waitForSameTraceSpans({baseUrl, authorization, organization, stream, traceId, expectedSpanNames,
+  fetchImpl = fetch, timeoutMs = 60000, intervalMs = 2000, onObservation}) {
+  let lastSuccessful = null;
+  return waitFor(async () => {
+    let result;
+    try {
+      result = await streamSearch({baseUrl, authorization, organization, stream, runId: traceId, field: 'trace_id', streamType: 'traces', fetchImpl});
+    } catch (error) {
+      const errorClass = ['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(error?.name) ? error.name : null;
+      const httpStatus = Number.isInteger(error?.httpStatus) && error.httpStatus >= 100 && error.httpStatus <= 599 ? error.httpStatus : null;
+      onObservation?.({lastAttempt: {
+        outcome: 'QUERY_ERROR', rowCount: null, total: null, isPartial: null,
+        matchedExpectedSpanCount: null, missingExpectedSpanNames: null, errorClass, httpStatus,
+      }, lastSuccessful});
+      throw error;
+    }
+
+    const found = rows(result);
+    const inventory = traceSpanInventory(found);
+    const missingExpectedSpanNames = Object.entries(expectedSpanNames).flatMap(([service, names]) =>
+      names.filter(name => !inventory[service]?.includes(name)).map(name => `${service}:${name}`));
+    const total = Number.isSafeInteger(result?.total) && result.total >= 0 ? result.total : null;
+    const isPartial = typeof result?.is_partial === 'boolean' ? result.is_partial : null;
+    const observation = {
+      outcome: missingExpectedSpanNames.length === 0 ? 'COMPLETE' : 'MISSING_SPANS',
+      rowCount: found.length, total, isPartial,
+      matchedExpectedSpanCount: Object.values(expectedSpanNames).reduce((count, names) => count + names.length, 0) - missingExpectedSpanNames.length,
+      missingExpectedSpanNames,
+      errorClass: null, httpStatus: null,
+    };
+    lastSuccessful = observation;
+    onObservation?.({lastAttempt: observation, lastSuccessful});
+    return missingExpectedSpanNames.length === 0 ? {traceRows: found, spanInventory: inventory} : false;
+  }, {timeoutMs, intervalMs, description: 'all expected same-trace runtime spans in OpenObserve'});
 }
 
 export function nativeAccessLogFilter(correlationId) {
@@ -2623,13 +2760,20 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               return found.length > 0 ? found : false;
             }, {timeoutMs: 60000, intervalMs: 2000, description: 'launch-path correlation record in OpenObserve logs'});
             let missingSpans = [];
-            const {traceRows, spanInventory} = await waitFor(async () => {
-              const found = rows(await streamSearch({baseUrl, authorization, organization, stream: config.telemetry.openObserve.streams.traces, runId: proof.traceId, field: 'trace_id', streamType: 'traces'}));
-              const inventory = traceSpanInventory(found);
-              missingSpans = Object.entries(expectedTelemetry.traceSpanNames).flatMap(([service, names]) =>
-                names.filter(name => !inventory[service]?.includes(name)).map(name => `${service}:${name}`));
-              return missingSpans.length === 0 ? {traceRows: found, spanInventory: inventory} : false;
-            }, {timeoutMs: 60000, intervalMs: 2000, description: 'all expected same-trace runtime spans in OpenObserve'}).catch(error => {
+            evidence.telemetryHealth ??= {};
+            evidence.telemetryHealth.launchPathTraceQuery = {
+              lastAttempt: {outcome: 'QUERY_NOT_RUN', rowCount: null, total: null, isPartial: null,
+                matchedExpectedSpanCount: null, missingExpectedSpanNames: null, errorClass: null, httpStatus: null},
+              lastSuccessful: null,
+            };
+            const {traceRows, spanInventory} = await waitForSameTraceSpans({
+              baseUrl, authorization, organization, stream: config.telemetry.openObserve.streams.traces,
+              traceId: proof.traceId, expectedSpanNames: expectedTelemetry.traceSpanNames,
+              onObservation: observation => {
+                evidence.telemetryHealth.launchPathTraceQuery = observation;
+                if (observation.lastSuccessful) missingSpans = observation.lastSuccessful.missingExpectedSpanNames;
+              },
+            }).catch(error => {
               error.message += `; missing same-trace spans=${JSON.stringify(missingSpans)}`;
               throw error;
             });
@@ -2822,18 +2966,63 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               return samples.every(({sample}) => sample?.value === 1);
             }, {timeoutMs: 60000, intervalMs: 2000, description: 'fresh healthy Node readiness metrics during native availability proof'});
           };
-          const nginxAvailability = async (value, afterUs) => waitFor(async () => {
-            assertNodeHealth();
-            const records = rows(await streamSearch({baseUrl, authorization, organization,
-              stream: `${config.telemetry.openObserve.streams.metrics}_httpcheck_status`, streamType: 'metrics', startTimeUs: afterUs,
-              filterSql: '"service_name" = \'edge-nginx\' AND "http_status_class" = \'2xx\''}));
-            if (records.some(record => Object.entries(record).some(([key, candidate]) => /^(?:http_url|http\.url)$/iu.test(key) && candidate !== undefined && candidate !== null)))
-              throw Object.assign(new Error('native availability exported an HTTP URL metric label'), {fatal: true});
-            if (records.some(record => Object.entries(record).some(([key, candidate]) => /status_code/iu.test(key) && candidate !== undefined && candidate !== null)))
-              throw Object.assign(new Error('native availability series retained changing HTTP status-code identity'), {fatal: true});
-            const sample = latestMetricSample(records, {service: 'edge-nginx', afterUs});
-            return sample?.value === value ? sample : false;
-          }, {timeoutMs: 60000, intervalMs: 2000, description: `fresh native nginx HTTP availability value ${value}`});
+          const nginxAvailability = async (value, afterUs) => {
+            const captureRecovery = evidence.nativeNginxAlert.stage === 'recovery';
+            let lastRecoveryObservation;
+            const recordRecoveryObservation = fields => {
+              if (!captureRecovery) return;
+              lastRecoveryObservation = {stage: 'recovery', outcome: 'QUERY_NOT_RUN', requiredAfterUs: afterUs,
+                observedAtUs: Date.now() * 1000, rowCount: 0, matchingRowCount: 0, expectedValue: value, ...fields};
+              evidence.nativeNginxAlert.recoveryObservation = lastRecoveryObservation;
+            };
+            recordRecoveryObservation({outcome: 'QUERY_NOT_RUN'});
+            try {
+              return await waitFor(async () => {
+                assertNodeHealth();
+                let result;
+                let records;
+                try {
+                  result = await streamSearch({baseUrl, authorization, organization,
+                    stream: `${config.telemetry.openObserve.streams.metrics}_httpcheck_status`, streamType: 'metrics', startTimeUs: afterUs,
+                    filterSql: '"service_name" = \'edge-nginx\' AND "http_status_class" = \'2xx\''});
+                  records = rows(result);
+                } catch (error) {
+                  const errorClass = error !== null && typeof error === 'object' ? error.name : undefined;
+                  const httpStatus = error !== null && typeof error === 'object' ? error.httpStatus : undefined;
+                  recordRecoveryObservation({outcome: 'QUERY_ERROR',
+                    ...(['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(errorClass) ? {errorClass} : {}),
+                    ...(Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 ? {httpStatus} : {})});
+                  throw error;
+                }
+                const targetRecords = records.filter(record => metricRecordAttribute(record, 'service_name') === 'edge-nginx' &&
+                  metricRecordAttribute(record, 'http_status_class') === '2xx');
+                const latestTargetSample = latestMetricSample(targetRecords, {service: 'edge-nginx'});
+                const diagnosticFields = {rowCount: records.length,
+                  ...(Number.isSafeInteger(result?.total) && result.total >= 0 ? {totalRowCount: result.total} : {}),
+                  ...(typeof result?.is_partial === 'boolean' ? {isPartial: result.is_partial} : {}),
+                  matchingRowCount: targetRecords.length,
+                  ...(latestTargetSample !== undefined && Number.isSafeInteger(latestTargetSample.timestampUs) && Number.isFinite(latestTargetSample.value)
+                    ? {latestTargetSample: {service: 'edge-nginx', statusClass: '2xx', timestampUs: latestTargetSample.timestampUs, value: latestTargetSample.value}} : {})};
+                recordRecoveryObservation({outcome: 'QUERY_SUCCEEDED', ...diagnosticFields});
+                if (records.some(record => Object.entries(record).some(([key, candidate]) => /^(?:http_url|http\.url)$/iu.test(key) && candidate !== undefined && candidate !== null)))
+                  throw Object.assign(new Error('native availability exported an HTTP URL metric label'), {fatal: true});
+                if (records.some(record => Object.entries(record).some(([key, candidate]) => /status_code/iu.test(key) && candidate !== undefined && candidate !== null)))
+                  throw Object.assign(new Error('native availability series retained changing HTTP status-code identity'), {fatal: true});
+                const sample = latestMetricSample(records, {service: 'edge-nginx', afterUs});
+                const outcome = targetRecords.length === 0 ? 'NO_TARGET_ROWS' : sample === undefined
+                  ? latestTargetSample === undefined ? 'NO_NUMERIC_TARGET_SAMPLE' : 'NO_FRESH_TARGET_SAMPLE'
+                  : sample.value === value ? 'MATCHED' : 'VALUE_MISMATCH';
+                recordRecoveryObservation({...diagnosticFields, outcome});
+                return sample?.value === value ? sample : false;
+              }, {timeoutMs: 60000, intervalMs: 2000, description: `fresh native nginx HTTP availability value ${value}`});
+            } catch (error) {
+              if (captureRecovery && lastRecoveryObservation !== undefined) {
+                lastRecoveryObservation.failureCode = error?.fatal === true ? 'FATAL_GUARD' : 'WAIT_TIMEOUT';
+                if (error !== null && typeof error === 'object') error.nativeNginxRecovery = lastRecoveryObservation;
+              }
+              throw error;
+            }
+          };
           await readyMetrics();
           const healthyNative = await nginxAvailability(1, Date.now() * 1000);
           const notReadyRule = createAlertDefinitions({config}).find(rule => rule.key === 'notReady');
@@ -2863,20 +3052,10 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               rule: createAlertDefinitions({config, readinessServices: ['g14-missing-owner']}).find(rule => rule.key === 'notReady'), expectedValue: 0},
             ...deploymentMismatchQueries,
           ];
-          const queryReadinessValue = async rule => {
-            const result = await api({baseUrl, authorization,
-              path: `/api/${encodeURIComponent(organization)}/prometheus/api/v1/query?query=${encodeURIComponent(rule.queryCondition.promql)}`,
-              sensitiveValues});
-            if (result?.status !== 'success' || result?.data?.resultType !== 'vector' || !Array.isArray(result.data.result))
-              throw new Error('notReady instant query did not return a successful vector');
-            const values = result.data.result;
-            if (values.length !== 1 || !Array.isArray(values[0]?.value) || values[0].value.length !== 2) return null;
-            const value = values[0].value[1];
-            return ['number', 'string'].includes(typeof value) && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
-          };
           const missingOwnerCases = await waitFor(async () => {
             const values = [];
-            for (const {rule} of readinessQueries) values.push(await queryReadinessValue(rule));
+            for (const {rule} of readinessQueries)
+              values.push(await queryReadinessValue({baseUrl, authorization, organization, rule, sensitiveValues}));
             if (readinessQueries.some(({expectedValue}, index) => values[index] !== expectedValue)) return false;
             return readinessQueries.map(({scenario, readinessServices, rule, expectedValue}, index) => ({
               scenario, readinessServices, query: rule.queryCondition.promql, expectedValue, observedValue: values[index],
@@ -2887,56 +3066,194 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
           };
           evidence.nativeNginxAlert.missingOwnerQueryProof = missingOwnerQueryProof;
           await installNativeAlert({baseUrl, organization, authorization, definition: notReadyRule});
+          let nativeAlertId;
+          let nativeAlertDetail;
+          const readNativeAlertState = async () => {
+            const alertPath = `/api/v2/${encodeURIComponent(organization)}/alerts`;
+            const listResponse = await api({baseUrl, authorization,
+              path: `${alertPath}?alert_type=scheduled&alert_name_substring=${encodeURIComponent(notReadyRule.name)}&page_size=1000&page_idx=0`,
+              sensitiveValues});
+            let state = parseNativeAlertState({listResponse, detailResponse: nativeAlertDetail, rule: notReadyRule, expectedAlertId: nativeAlertId});
+            if (state.needsDetail) {
+              nativeAlertDetail = await api({baseUrl, authorization,
+                path: `${alertPath}/${encodeURIComponent(state.alertId)}`, sensitiveValues});
+              nativeAlertId = state.alertId;
+              state = parseNativeAlertState({listResponse, detailResponse: nativeAlertDetail, rule: notReadyRule, expectedAlertId: nativeAlertId});
+            }
+            return state;
+          };
           evidence.nativeNginxAlert.productionReadinessOwners = [...NODE_RUNTIME_TARGETS];
           evidence.nativeNginxAlert.stage = 'quiet-baseline';
           await setFixtureState({baseUrl: fixtureBaseUrl, runId, active: false});
           await fixtureRequest({baseUrl: fixtureBaseUrl, runId});
           const quietBaselineMs = config.telemetry.alerts.evaluationIntervalMs + config.platform.health.intervalMs;
           let quietSince;
-          const quietBaseline = await waitFor(async () => {
-            assertNodeHealth();
-            try {
-              if (await queryReadinessValue(notReadyRule) !== 1) {
+          let nativeOutcomeAnchorAtUs;
+          let nativeBaselineNormalOutcomeAtUs;
+          const quietBaselineEvidence = {queryValue: null, observedAt: Date.now(), requiredStableMs: quietBaselineMs,
+            stableMs: 0, eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0,
+            phase: 'readiness', predicate: 'readiness-not-one', nativeOutcome: 'unknown'};
+          evidence.nativeNginxAlert.quietBaseline = quietBaselineEvidence;
+          let quietBaseline;
+          try {
+            quietBaseline = await waitFor(async () => {
+              assertNodeHealth();
+              let phase = 'readiness';
+              let queryStartedAt = Date.now();
+              let queryDurationMs = 0;
+              try {
+                delete quietBaselineEvidence.requestError;
+                Object.assign(quietBaselineEvidence, {queryValue: null, observedAt: Date.now(), stableMs: 0,
+                  eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0, phase, predicate: 'readiness-not-one'});
+                queryStartedAt = Date.now();
+                const queryValue = await queryReadinessValue({baseUrl, authorization, organization, rule: notReadyRule, sensitiveValues});
+                queryDurationMs = Math.min(Math.max(Date.now() - queryStartedAt, 0), 600000);
+                Object.assign(quietBaselineEvidence, {queryValue, queryDurationMs, observedAt: Date.now(), stableMs: 0,
+                  eventCount: 0, episodeCount: 0, unresolvedEpisodeCount: 0, phase, predicate: 'readiness-not-one'});
+                phase = 'native-state';
+                const nativeState = await readNativeAlertState();
+                Object.assign(quietBaselineEvidence, {
+                  nativeAlertId: nativeState.alertId,
+                  nativeOutcome: nativeState.state,
+                  nativeOutcomeAtUs: nativeState.outcomeAtUs ?? null,
+                  nativeOutcomeSinceUs: nativeState.sinceUs ?? null,
+                  observedAt: Date.now(),
+                });
+                if (nativeOutcomeAnchorAtUs === undefined && Number.isSafeInteger(nativeState.outcomeAtUs) && nativeState.outcomeAtUs > 0)
+                  nativeOutcomeAnchorAtUs = nativeState.outcomeAtUs;
+                quietBaselineEvidence.nativeOutcomeAnchorAtUs = nativeOutcomeAnchorAtUs ?? null;
+                if (queryValue !== 1) {
+                  quietSince = undefined;
+                  nativeBaselineNormalOutcomeAtUs = undefined;
+                  quietBaselineEvidence.lastReset = {reason: 'readiness-not-one', observedAt: Date.now()};
+                  return false;
+                }
+                if (nativeState.state !== 'normal') {
+                  quietSince = undefined;
+                  nativeBaselineNormalOutcomeAtUs = undefined;
+                  quietBaselineEvidence.stableMs = 0;
+                  quietBaselineEvidence.phase = 'native-state';
+                  quietBaselineEvidence.predicate = 'native-state-not-normal';
+                  quietBaselineEvidence.lastReset = {reason: 'native-state-not-normal', observedAt: quietBaselineEvidence.observedAt,
+                    nativeOutcome: nativeState.state};
+                  return false;
+                }
+                if (!nativeNormalEvaluationAdvanced(nativeOutcomeAnchorAtUs, nativeState.outcomeAtUs)) {
+                  if (Number.isSafeInteger(nativeState.outcomeAtUs) && nativeState.outcomeAtUs > 0 &&
+                      (nativeOutcomeAnchorAtUs === undefined || nativeState.outcomeAtUs < nativeOutcomeAnchorAtUs))
+                    nativeOutcomeAnchorAtUs = nativeState.outcomeAtUs;
+                  quietSince = undefined;
+                  nativeBaselineNormalOutcomeAtUs = undefined;
+                  quietBaselineEvidence.stableMs = 0;
+                  quietBaselineEvidence.phase = 'native-state';
+                  quietBaselineEvidence.predicate = 'awaiting-fresh-native-normal';
+                  quietBaselineEvidence.lastReset = {reason: 'native-normal-not-fresh', observedAt: Date.now(), nativeOutcome: 'normal'};
+                  return false;
+                }
+                nativeBaselineNormalOutcomeAtUs = nativeState.outcomeAtUs;
+                Object.assign(quietBaselineEvidence, {baselineNormalAlertId: nativeState.alertId,
+                  baselineNormalOutcomeAtUs: nativeState.outcomeAtUs, baselineNormalSinceUs: nativeState.sinceUs});
+                quietSince ??= Date.now();
+                phase = 'episodes';
+                const events = await readSinkEvents(sinkPath);
+                const notReadyEvents = events.filter(event => event.name === notReadyRule.name && typeof event.episodeId === 'string' && event.episodeId);
+                const latestEpisodes = new Map();
+                for (const [index, event] of events.entries()) {
+                  if (event.name !== notReadyRule.name || typeof event.episodeId !== 'string' || !event.episodeId) continue;
+                  const receivedAt = Date.parse(event.receivedAt);
+                  if (!Number.isFinite(receivedAt) || !['firing', 'resolved'].includes(event.status))
+                    throw new Error('notReady sink event was malformed during the quiet baseline');
+                  const key = `${event.name}\0${event.episodeId}`;
+                  const previous = latestEpisodes.get(key);
+                  if (!previous || receivedAt > previous.receivedAt || (receivedAt === previous.receivedAt && index > previous.index))
+                    latestEpisodes.set(key, {event, receivedAt, index});
+                }
+                const unresolvedEpisodeCount = [...latestEpisodes.values()].filter(({event}) => event.status !== 'resolved').length;
+                Object.assign(quietBaselineEvidence, {observedAt: Date.now(),
+                  eventCount: Math.min(notReadyEvents.length, 10000), episodeCount: Math.min(latestEpisodes.size, 10000),
+                  unresolvedEpisodeCount: Math.min(unresolvedEpisodeCount, 10000), phase: 'episodes',
+                  predicate: unresolvedEpisodeCount > 0 ? 'unresolved-episodes' : 'episodes-resolved'});
+                if (unresolvedEpisodeCount > 0) {
+                  quietSince = undefined;
+                  nativeBaselineNormalOutcomeAtUs = undefined;
+                  quietBaselineEvidence.lastReset = {reason: 'unresolved-episodes', observedAt: Date.now()};
+                  return false;
+                }
+                quietSince ??= Date.now();
+                const stableMs = Date.now() - quietSince;
+                Object.assign(quietBaselineEvidence, {observedAt: Date.now(), stableMs, phase: 'stability',
+                  predicate: stableMs >= quietBaselineMs ? 'baseline-stable' : 'continuous-stability'});
+                return stableMs >= quietBaselineMs ? {stableMs, events} : false;
+              } catch (error) {
                 quietSince = undefined;
-                return false;
+                nativeOutcomeAnchorAtUs = undefined;
+                nativeBaselineNormalOutcomeAtUs = undefined;
+                const errorClass = error !== null && typeof error === 'object' ? error.name : undefined;
+                const httpStatus = error !== null && typeof error === 'object' ? (error.httpStatus ?? error.status) : undefined;
+                if (phase === 'readiness') {
+                  queryDurationMs = Math.min(Math.max(Date.now() - queryStartedAt, 0), 600000);
+                  quietBaselineEvidence.queryDurationMs = queryDurationMs;
+                }
+                quietBaselineEvidence.observedAt = Date.now();
+                quietBaselineEvidence.stableMs = 0;
+                quietBaselineEvidence.phase = 'request-error';
+                quietBaselineEvidence.predicate = phase === 'readiness' ? 'readiness-query-failed' :
+                  phase === 'native-state' ? 'native-state-query-failed' : 'sink-query-failed';
+                const requestError = {
+                  source: phase === 'readiness' ? 'query' : phase === 'native-state' ? 'native-state' : 'sink',
+                  ...(Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599 ? {httpStatus} : {}),
+                  ...(['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(errorClass) ? {errorClass} : {}),
+                };
+                quietBaselineEvidence.requestError = requestError;
+                quietBaselineEvidence.lastReset = {reason: 'request-error', observedAt: quietBaselineEvidence.observedAt,
+                  phase, requestError, queryDurationMs};
+                throw error;
               }
-              const events = await readSinkEvents(sinkPath);
-              const latestEpisodes = new Map();
-              for (const [index, event] of events.entries()) {
-                if (event.name !== notReadyRule.name || typeof event.episodeId !== 'string' || !event.episodeId) continue;
-                const receivedAt = Date.parse(event.receivedAt);
-                if (!Number.isFinite(receivedAt) || !['firing', 'resolved'].includes(event.status))
-                  throw new Error('notReady sink event was malformed during the quiet baseline');
-                const key = `${event.name}\0${event.episodeId}`;
-                const previous = latestEpisodes.get(key);
-                if (!previous || receivedAt > previous.receivedAt || (receivedAt === previous.receivedAt && index > previous.index))
-                  latestEpisodes.set(key, {event, receivedAt, index});
-              }
-              if ([...latestEpisodes.values()].some(({event}) => event.status !== 'resolved')) {
-                quietSince = undefined;
-                return false;
-              }
-              quietSince ??= Date.now();
-              const stableMs = Date.now() - quietSince;
-              return stableMs >= quietBaselineMs ? {stableMs, events} : false;
-            } catch (error) {
-              quietSince = undefined;
-              throw error;
-            }
-          }, {timeoutMs: resolveDeadline, intervalMs: 5000, description: 'notReady alert remains healthy and all earlier episodes resolved before native nginx stop'});
+            }, {timeoutMs: resolveDeadline, intervalMs: 5000, description: 'notReady alert remains healthy and all earlier episodes resolved before native nginx stop'});
+            Object.assign(quietBaselineEvidence, {observedAt: Date.now(), phase: 'complete', predicate: 'baseline-stable'});
+          } catch (cause) {
+            const {sanitizeRuntimeMatrixFailure} = await import('../../tests/observability/runtime-matrix.mjs');
+            const failure = Object.assign(new Error('notReady quiet baseline did not complete'), {
+              cause, nativeNginxAlert: quietBaselineEvidence,
+            });
+            evidence.nativeNginxAlert.failureDiagnostics = sanitizeRuntimeMatrixFailure(failure);
+            throw failure;
+          }
+          const nativeBaselineNormal = {alertId: quietBaselineEvidence.nativeAlertId,
+            outcomeAtUs: nativeBaselineNormalOutcomeAtUs, sinceUs: quietBaselineEvidence.nativeOutcomeSinceUs};
+          Object.assign(quietBaselineEvidence, {baselineNormalAlertId: nativeBaselineNormal.alertId,
+            baselineNormalOutcomeAtUs: nativeBaselineNormal.outcomeAtUs, baselineNormalSinceUs: nativeBaselineNormal.sinceUs});
           const previousNotReadyEpisodes = new Set(quietBaseline.events
             .filter(event => event.name === notReadyRule.name && typeof event.episodeId === 'string')
             .map(event => event.episodeId));
           const beforeNative = containerGeneration({run, name: nginxContainer.containerId});
           let nativeRestarted = false;
+          let nativePendingStartUs;
+          let nativePendingRuleId;
+          let nativePendingOutcomeAtUs;
           try {
             evidence.nativeNginxAlert.stage = 'failed-probe';
-            run(['stop', '--time', String(Math.ceil(config.platform.shutdownGraceMs / 1000)), nginxContainer.containerId]);
-            const stoppedAtUs = Date.now() * 1000;
+            const stopCallStartedAtUs = Date.now() * 1000;
+            quietBaselineEvidence.stopCallStartedAtUs = stopCallStartedAtUs;
+            let stopCallEndedAtUs;
+            try {
+              run(['stop', '--time', String(Math.ceil(config.platform.shutdownGraceMs / 1000)), nginxContainer.containerId]);
+            } finally {
+              stopCallEndedAtUs = Date.now() * 1000;
+              quietBaselineEvidence.stopCallEndedAtUs = stopCallEndedAtUs;
+            }
+            const stoppedAtUs = stopCallEndedAtUs;
             const stopped = containerGeneration({run, name: nginxContainer.containerId});
             if (stopped.id !== beforeNative.id || stopped.state.Running || stopped.state.OOMKilled)
               throw new Error('native nginx failure was not observed on its exact container generation');
             const failedNative = await nginxAvailability(0, stoppedAtUs);
+            const firstFailedProbeAtUs = failedNative.timestampUs;
+            if (!Number.isSafeInteger(firstFailedProbeAtUs) || firstFailedProbeAtUs <= stoppedAtUs)
+              throw Object.assign(new Error('native failure probe sample timestamp was invalid'), {fatal: true});
+            const failedProbeObservedAtUs = Date.now() * 1000;
+            quietBaselineEvidence.firstFailedProbeAtUs = firstFailedProbeAtUs;
+            quietBaselineEvidence.failedProbeObservedAtUs = failedProbeObservedAtUs;
+            quietBaselineEvidence.failedProbeSampleAtUs = firstFailedProbeAtUs;
             const errorMetrics = await waitFor(async () => {
               assertNodeHealth();
               const records = rows(await streamSearch({baseUrl, authorization, organization,
@@ -2949,11 +3266,64 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               return metricValues(records).some(value => value > 0) ? records.length : false;
             }, {timeoutMs: 60000, intervalMs: 2000, description: 'native probe error counter without raw error or URL metric labels'});
             evidence.nativeNginxAlert.stage = 'pending-firing';
-            const nativeFiring = await waitFor(async () => {
+            const nativeFiringProof = await waitFor(async () => {
               assertNodeHealth();
-              return (await readSinkEvents(sinkPath)).find(event => event.name === notReadyRule.name && event.status === 'firing' &&
-                !previousNotReadyEpisodes.has(event.episodeId) && Date.parse(event.receivedAt) * 1000 > stoppedAtUs) ?? false;
+              const nativeState = await readNativeAlertState();
+              Object.assign(quietBaselineEvidence, {nativeAlertId: nativeState.alertId, nativeOutcome: nativeState.state,
+                nativeOutcomeAtUs: nativeState.outcomeAtUs ?? null, nativeOutcomeSinceUs: nativeState.sinceUs ?? null,
+                observedAt: Date.now(), phase: 'pending-firing'});
+              if (nativeState.state === 'pending') {
+                if (!Number.isSafeInteger(nativeBaselineNormal.outcomeAtUs) || nativeState.sinceUs <= nativeBaselineNormal.outcomeAtUs) {
+                  nativePendingRuleId = undefined;
+                  nativePendingStartUs = undefined;
+                  nativePendingOutcomeAtUs = undefined;
+                  quietBaselineEvidence.pendingSinceUs = null;
+                  quietBaselineEvidence.predicate = 'pending-not-after-normal-baseline';
+                  return false;
+                }
+                if (nativePendingRuleId !== nativeState.alertId || nativePendingStartUs !== nativeState.sinceUs) {
+                  nativePendingRuleId = nativeState.alertId;
+                  nativePendingStartUs = nativeState.sinceUs;
+                  nativePendingOutcomeAtUs = nativeState.outcomeAtUs;
+                }
+                quietBaselineEvidence.pendingOutcomeAtUs = nativePendingOutcomeAtUs;
+                quietBaselineEvidence.pendingSinceUs = nativePendingStartUs;
+                quietBaselineEvidence.predicate = 'native-pending';
+                return false;
+              }
+              if (nativeState.state !== 'firing') {
+                nativePendingRuleId = undefined;
+                nativePendingStartUs = undefined;
+                quietBaselineEvidence.pendingSinceUs = null;
+                quietBaselineEvidence.predicate = 'native-state-not-firing';
+                return false;
+              }
+              if (nativePendingRuleId !== nativeState.alertId || !nativePendingWindowSatisfied(
+                nativePendingStartUs, nativeState.sinceUs, notReadyRule.pendingPeriodSec)) {
+                quietBaselineEvidence.pendingSinceUs = nativePendingStartUs ?? null;
+                quietBaselineEvidence.firingSinceUs = nativeState.sinceUs;
+                quietBaselineEvidence.pendingElapsedUs = Number.isSafeInteger(nativePendingStartUs) &&
+                  Number.isSafeInteger(nativeState.sinceUs) && nativeState.sinceUs >= nativePendingStartUs
+                  ? nativeState.sinceUs - nativePendingStartUs : null;
+                quietBaselineEvidence.predicate = 'pending-window-not-proven';
+                return false;
+              }
+              quietBaselineEvidence.pendingSinceUs = nativePendingStartUs;
+              quietBaselineEvidence.firingSinceUs = nativeState.sinceUs;
+              quietBaselineEvidence.pendingElapsedUs = nativeState.sinceUs - nativePendingStartUs;
+              const firingEvents = (await readSinkEvents(sinkPath)).filter(candidate => candidate.name === notReadyRule.name && candidate.status === 'firing');
+              if (firingEvents.some(candidate => !Number.isFinite(Date.parse(candidate.receivedAt))))
+                throw Object.assign(new Error('notReady sink firing event was malformed during native recovery'), {fatal: true});
+              const event = firingEvents.find(candidate => !previousNotReadyEpisodes.has(candidate.episodeId) &&
+                Date.parse(candidate.receivedAt) * 1000 > stoppedAtUs);
+              if (!event) return false;
+              const sinkReceivedAtUs = Date.parse(event.receivedAt) * 1000;
+              if (!nativeFiringProofSatisfied({pendingSinceUs: nativePendingStartUs, firingSinceUs: nativeState.sinceUs,
+                pendingPeriodSec: notReadyRule.pendingPeriodSec, sinkReceivedAtUs, stoppedAtUs})) return false;
+              return {event, nativeState, pendingSinceUs: nativePendingStartUs,
+                pendingElapsedUs: nativeState.sinceUs - nativePendingStartUs};
             }, {timeoutMs: fireDeadline, intervalMs: 5000, description: 'native nginx availability fires existing not-ready rule while Node stays healthy'});
+            const nativeFiring = nativeFiringProof.event;
             evidence.nativeNginxAlert.stage = 'post-firing-readiness';
             const firingReceivedAtMs = Date.parse(nativeFiring.receivedAt);
             evidence.nativeNginxAlert.firing = {
@@ -2961,8 +3331,6 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               receivedAtMs: Number.isFinite(firingReceivedAtMs) ? firingReceivedAtMs : null,
               pendingElapsedMs: Number.isFinite(firingReceivedAtMs) ? firingReceivedAtMs - stoppedAtUs / 1000 : null,
             };
-            if (Date.parse(nativeFiring.receivedAt) * 1000 - stoppedAtUs < config.telemetry.alerts.notReady.forMs * 1000)
-              throw new Error('native nginx availability alert did not preserve its configured pending window');
             await readyMetrics();
             evidence.nativeNginxAlert.stage = 'recovery';
             run(['start', nginxContainer.containerId]);
@@ -2983,10 +3351,31 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
               productionReadinessOwners: [...NODE_RUNTIME_TARGETS], missingOwnerQueryProof,
               healthyValue: healthyNative.value, failedValue: failedNative.value, recoveredValue: recoveredNative.value,
               baselineStableMs: quietBaseline.stableMs,
+              nativeAlertId: nativeFiringProof.nativeState.alertId,
+              baselineNormalAlertId: nativeBaselineNormal.alertId,
+              pendingAlertId: nativePendingRuleId,
+              pendingSinceUs: nativeFiringProof.pendingSinceUs,
+              baselineNormalOutcomeAtUs: nativeBaselineNormal.outcomeAtUs,
+              baselineNormalSinceUs: nativeBaselineNormal.sinceUs,
+              pendingOutcomeAtUs: nativePendingOutcomeAtUs,
+              firingOutcomeAtUs: nativeFiringProof.nativeState.outcomeAtUs,
+              firingSinceUs: nativeFiringProof.nativeState.sinceUs,
+              pendingElapsedUs: nativeFiringProof.pendingElapsedUs,
+              stopCallStartedAtUs: quietBaselineEvidence.stopCallStartedAtUs,
+              stopCallEndedAtUs: quietBaselineEvidence.stopCallEndedAtUs,
+              firstFailedProbeAtUs: quietBaselineEvidence.firstFailedProbeAtUs,
+              failedProbeObservedAtUs: quietBaselineEvidence.failedProbeObservedAtUs,
+              failedProbeSampleAtUs: quietBaselineEvidence.failedProbeSampleAtUs,
               errorMetricSamples: errorMetrics, rawErrorMessageMetricLabelAbsent: true, rawUrlMetricLabelAbsent: true,
               failedAtUs: stoppedAtUs, firingReceivedAt: nativeFiring.receivedAt, resolvedReceivedAt: nativeResolved.receivedAt,
               nodeOwners: [...NODE_RUNTIME_TARGETS], nodeHealthObservations, allNodeHealthObservationsPassed: true,
               freshNodeReadyMetricsBeforeFailureAtFiringAfterRecovery: true, exactContainerRecoveredWithoutOOM: true};
+          } catch (error) {
+            if (error !== null && typeof error === 'object' && error.nativeNginxRecovery === undefined &&
+                evidence.nativeNginxAlert.recoveryObservation !== undefined)
+              error.nativeNginxRecovery = evidence.nativeNginxAlert.recoveryObservation;
+            if (error !== null && typeof error === 'object') error.nativeNginxAlert = quietBaselineEvidence;
+            throw error;
           } finally {
             if (!nativeRestarted) run(['start', nginxContainer.containerId]);
           }
@@ -3028,13 +3417,23 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
     const diskRows = () => run(['exec', openObserveName, '/busybox', 'df', '-Pk', '/', '/data'])
       .split('\n').slice(1).filter(Boolean).map(line => {
         const fields = line.trim().split(/\s+/u);
-        return {mountPoint: fields.at(-1), totalBytes: Number(fields[1]) * 1024, usedBytes: Number(fields[2]) * 1024, usedPercent: Number(fields[4]?.replace('%', ''))};
+        return {mountPoint: fields.at(-1), totalBytes: Number(fields[1]) * 1024,
+          usedBytes: Number(fields[2]) * 1024, usedPercent: Number(fields[4]?.replace('%', ''))};
       });
-    const initialDiskRows = diskRows();
+    let diskBaseline;
+    try {
+      diskBaseline = await waitForDiskGuardBaseline({readDiskRows: diskRows, readGuardStatus: guardStatus});
+      evidence.diskPressurePreflight = diskBaseline;
+    } catch (error) {
+      evidence.diskPressurePreflight = error.diskPressurePreflight;
+      evidence.diskPressureStatus = 'FAIL';
+      throw error;
+    }
+    const initialDiskRows = diskBaseline.rows;
     const rootDisk = initialDiskRows.find(row => row.mountPoint === '/');
     const dataDisk = initialDiskRows.find(row => row.mountPoint === '/data');
-    if (!rootDisk || !dataDisk || guardStatus() !== 0 || !Number.isFinite(rootDisk.totalBytes) || !Number.isFinite(dataDisk.totalBytes))
-      throw new Error('OpenObserve disk guard preflight or bounded mount statistics are unavailable');
+    if (!rootDisk || !dataDisk)
+      throw new Error('OpenObserve bounded mount statistics are unavailable');
     const watermarkPercent = config.telemetry.openObserve.diskWatermarkPercent;
     const dataTargetBytes = Math.min(Math.floor(dataDisk.totalBytes * 0.83), Math.floor(storage.maxDiskBytes * 0.83));
     const writeBytes = dataTargetBytes - dataDisk.usedBytes;
@@ -3050,6 +3449,13 @@ export async function runObservabilityVerification({root = REPO_ROOT, run = dock
       '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16',
       '--mount', `type=volume,source=${storage.volumeName},target=/data`, '--entrypoint', 'node', toolchain.nodeImage, '-e'];
     const removePressureFile = identity => run([...helperArgs, `const fs=require('node:fs');const path=${JSON.stringify(pressurePath)};const expected={dev:${JSON.stringify(identity.dev)},ino:${JSON.stringify(identity.ino)}};let st;try{st=fs.lstatSync(path);}catch(error){if(error.code==='ENOENT')process.exit(0);throw error;}if(!st.isFile()||st.isSymbolicLink()||st.dev!==expected.dev||st.ino!==expected.ino)throw new Error('fixture pressure file identity changed; refusing cleanup');fs.unlinkSync(path);`]);
+    const trimPressureVolume = () => run(['run', '--rm', '--network', 'none', '--read-only', '--user', '0:0', '--cap-drop', 'ALL', '--cap-add', 'SYS_ADMIN',
+      '--security-opt', 'no-new-privileges:true', '--memory', '64m', '--pids-limit', '16',
+      '--mount', `type=bind,source=${probePath},target=/busybox,readonly`,
+      '--mount', `type=volume,source=${storage.volumeName},target=/data,readonly`,
+      '--entrypoint', '/busybox', toolchain.nodeImage, 'sh', '-ceu',
+      '/busybox sync -f /data && printf "G14_SYNCFS_COMPLETE\\n" && exec /busybox fstrim -v -o 0 -l "$1" /data',
+      'g14-pressure-cleanup', String(storage.maxDiskBytes)]);
     const dataTargetKiB = Math.floor(dataTargetBytes / 1024);
     const maxWriteKiB = Math.floor(maxWriteBytes / 1024);
     const rootCeilingKiB = Math.floor(rootDisk.totalBytes / 1024 * 0.85) - 8192;
@@ -3111,6 +3517,7 @@ keep=1`;
       throw new Error('scoped synthetic log ingestion did not pass before bounded disk pressure');
     let pressureIdentity;
     let pressureAfterRows;
+    let pressureFailure;
     try {
       const pressureWriterName = `${project}-disk-pressure-writer`;
       add(pressureWriterName);
@@ -3153,19 +3560,83 @@ keep=1`;
         generatedDataGuardRejected: true,
         nativeScopedIngestStatus: 503,
       };
-    } finally {
-      if (pressureIdentity) removePressureFile(pressureIdentity);
+    } catch (error) {
+      pressureFailure = error;
     }
+    let pressureCleanupFailed = false;
+    if (pressureIdentity) {
+      const cleanupTrim = {status: 'FAIL', offsetBytes: 0, lengthBytes: storage.maxDiskBytes, syncBeforeTrim: false, reportedBytes: null};
+      const cleanupStartedAt = new Date().toISOString();
+      let trimStartedAt;
+      try {
+        removePressureFile(pressureIdentity);
+        trimStartedAt = new Date().toISOString();
+        const trimOutput = trimPressureVolume();
+        const syncMarker = 'G14_SYNCFS_COMPLETE\n';
+        const syncIndex = trimOutput.indexOf(syncMarker);
+        const fstrimOutput = syncIndex < 0 ? null : trimOutput.slice(syncIndex + syncMarker.length).trim();
+        const reportedBytes = fstrimOutput?.match(/([0-9]+) bytes trimmed/u);
+        Object.assign(cleanupTrim, {status: 'PASS', startedAt: trimStartedAt, completedAt: new Date().toISOString(),
+          syncBeforeTrim: syncIndex >= 0,
+          stdout: fstrimOutput === null ? null : sensitiveValues.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, fstrimOutput),
+          reportedBytes: reportedBytes ? Number(reportedBytes[1]) : null});
+      } catch (error) {
+        pressureCleanupFailed = true;
+        cleanupErrors.push('cannot release the owned G14 disk pressure file and trim its fixture volume');
+        evidence.diskPressure ??= {status: 'FAIL'};
+        evidence.diskPressure.status = 'FAIL';
+        const commandStdout = String(error.stdout ?? '');
+        const syncMarker = 'G14_SYNCFS_COMPLETE\n';
+        const syncIndex = commandStdout.indexOf(syncMarker);
+        const fstrimOutput = syncIndex < 0 ? null : commandStdout.slice(syncIndex + syncMarker.length).trim();
+        Object.assign(cleanupTrim, {startedAt: trimStartedAt ?? cleanupStartedAt, completedAt: new Date().toISOString(),
+          syncBeforeTrim: syncIndex >= 0,
+          stdout: fstrimOutput === null ? null : sensitiveValues.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, fstrimOutput),
+          stderr: sensitiveValues.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, String(error.stderr ?? '')),
+          commandStatus: Number.isInteger(error.status) ? error.status : null,
+          error: sensitiveValues.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, String(error.message ?? error))});
+      }
+      evidence.diskPressure ??= {status: 'FAIL'};
+      evidence.diskPressure.cleanupTrim = cleanupTrim;
+    }
+    if (pressureFailure) throw pressureFailure;
+    if (pressureCleanupFailed) throw new Error('bounded fixture disk pressure cleanup failed');
+    let cleanupMounts;
     await waitFor(async () => {
-      const afterCleanup = diskRows();
+      const observedAt = new Date().toISOString();
+      let afterCleanup;
+      try {
+        afterCleanup = diskRows();
+      } catch (error) {
+        const safeError = sensitiveValues.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result,
+          String(error?.message ?? error));
+        cleanupMounts = {observedAt, rows: null, aggregateUsedPercent: null, guardExit: null, diskRowsError: safeError};
+        evidence.diskPressure.cleanupMounts = cleanupMounts;
+        return false;
+      }
       const data = afterCleanup.find(row => row.mountPoint === '/data');
       const root = afterCleanup.find(row => row.mountPoint === '/');
-      return data && root && data.usedPercent < watermarkPercent && guardStatus() === 0 &&
-        (root.usedBytes + data.usedBytes) * 100 / (root.totalBytes + data.totalBytes) < watermarkPercent;
+      const aggregateUsedPercent = data && root
+        ? (root.usedBytes + data.usedBytes) * 100 / (root.totalBytes + data.totalBytes) : null;
+      let recoveredGuardExit = null;
+      let guardError;
+      try { recoveredGuardExit = guardStatus(); }
+      catch (error) {
+        guardError = sensitiveValues.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result,
+          String(error?.message ?? error));
+      }
+      cleanupMounts = {rows: afterCleanup.map(({mountPoint, totalBytes, usedBytes, usedPercent}) =>
+        ({mountPoint, totalBytes, usedBytes, usedPercent})),
+        observedAt, aggregateUsedPercent: Number.isFinite(aggregateUsedPercent) ? Number(aggregateUsedPercent.toFixed(2)) : null,
+        guardExit: recoveredGuardExit, ...(guardError ? {guardError} : {})};
+      evidence.diskPressure.cleanupMounts = cleanupMounts;
+      return Boolean(data && root && data.usedPercent < watermarkPercent && recoveredGuardExit === 0 &&
+        Number.isFinite(aggregateUsedPercent) && aggregateUsedPercent < watermarkPercent);
     }, {timeoutMs: 30000, intervalMs: 1000, description: 'generated OpenObserve disk guard recovers after owned pressure file cleanup'});
     await waitFor(async () => await diskIngest(`${pressureProbeId}-recovered`) === 200,
       {timeoutMs: 65000, intervalMs: 2000, description: 'native OpenObserve scoped ingestion recovers after owned pressure file cleanup'});
     evidence.diskPressure.cleanupVerified = true;
+    evidence.diskPressure.cleanupMounts = cleanupMounts;
     evidence.diskPressure.recoveredIngestStatus = 200;
     evidence.diskPressureStatus = 'PASS';
 

@@ -1,0 +1,295 @@
+{
+  "status": "POSTCANONICAL_COMMANDS_CAPTURED",
+  "startedAtUtc": "2026-10-23T07:23:23.432356+00:00",
+  "endedAtUtc": "2026-10-23T07:30:47.881652+00:00",
+  "sourceStable": true,
+  "sourceBefore": {
+    "host": {
+      "baseSha": "cddbc5145f895ae9fa909d32c15427174fca599f",
+      "configSha256": "0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9",
+      "bomSha256": "dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab",
+      "imageRefs": {
+        "otelCollectorImage": "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6",
+        "openObserveImage": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+        "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+        "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+        "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+      },
+      "sourceFiles": {
+        "status": "PASS",
+        "fileCount": 1481,
+        "missingFileCount": 0,
+        "sha256": "9d652c69efb3eb9c2dfcb9179b2b60d7fe4ed5045565aca4357902742566a92c"
+      },
+      "runtimeArtifacts": {
+        "packages/platform-runtime/dist": {
+          "status": "PASS",
+          "fileCount": 4,
+          "sha256": "e3ad7de7820946931e0700b796ffbeed66559fb8a86b207d17f5128b3e306796"
+        },
+        "packages/platform-observability/dist": {
+          "status": "PASS",
+          "fileCount": 2,
+          "sha256": "f963c66d8390e203b37a1841c940ec31465be0c4f97779c7852dcf8381d53247"
+        }
+      },
+      "identityHash": "97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9"
+    },
+    "runner": {
+      "baseSha": "cddbc5145f895ae9fa909d32c15427174fca599f",
+      "configSha256": "0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9",
+      "bomSha256": "dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab",
+      "imageRefs": {
+        "otelCollectorImage": "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6",
+        "openObserveImage": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+        "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+        "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+        "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+      },
+      "sourceFiles": {
+        "status": "PASS",
+        "fileCount": 1481,
+        "missingFileCount": 0,
+        "sha256": "9d652c69efb3eb9c2dfcb9179b2b60d7fe4ed5045565aca4357902742566a92c"
+      },
+      "runtimeArtifacts": {
+        "packages/platform-runtime/dist": {
+          "status": "PASS",
+          "fileCount": 4,
+          "sha256": "e3ad7de7820946931e0700b796ffbeed66559fb8a86b207d17f5128b3e306796"
+        },
+        "packages/platform-observability/dist": {
+          "status": "PASS",
+          "fileCount": 2,
+          "sha256": "f963c66d8390e203b37a1841c940ec31465be0c4f97779c7852dcf8381d53247"
+        }
+      },
+      "identityHash": "97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9"
+    },
+    "head": "cddbc5145f895ae9fa909d32c15427174fca599f",
+    "gitStatus": " M apps/aroma-observer/src/runtime-composition.ts\n M docs/operations/observability.md\n M packages/platform-database/src/index.ts\n M packages/platform-testing/test/platform-packages.test.mjs\n M tests/compose/topology.test.mjs\n M tests/kafka/orders-inbox-live.test.mjs\n M tests/observability/alerts.test.mjs\n M tests/observability/runtime-matrix.mjs\n M tools/compose-smoke.mjs\n M tools/observability/generate.mjs\n M tools/observability/verify.mjs\n"
+  },
+  "sourceAfter": {
+    "host": {
+      "baseSha": "cddbc5145f895ae9fa909d32c15427174fca599f",
+      "configSha256": "0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9",
+      "bomSha256": "dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab",
+      "imageRefs": {
+        "otelCollectorImage": "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6",
+        "openObserveImage": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+        "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+        "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+        "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+      },
+      "sourceFiles": {
+        "status": "PASS",
+        "fileCount": 1481,
+        "missingFileCount": 0,
+        "sha256": "9d652c69efb3eb9c2dfcb9179b2b60d7fe4ed5045565aca4357902742566a92c"
+      },
+      "runtimeArtifacts": {
+        "packages/platform-runtime/dist": {
+          "status": "PASS",
+          "fileCount": 4,
+          "sha256": "e3ad7de7820946931e0700b796ffbeed66559fb8a86b207d17f5128b3e306796"
+        },
+        "packages/platform-observability/dist": {
+          "status": "PASS",
+          "fileCount": 2,
+          "sha256": "f963c66d8390e203b37a1841c940ec31465be0c4f97779c7852dcf8381d53247"
+        }
+      },
+      "identityHash": "97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9"
+    },
+    "runner": {
+      "baseSha": "cddbc5145f895ae9fa909d32c15427174fca599f",
+      "configSha256": "0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9",
+      "bomSha256": "dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab",
+      "imageRefs": {
+        "otelCollectorImage": "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6",
+        "openObserveImage": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+        "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+        "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+        "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+      },
+      "sourceFiles": {
+        "status": "PASS",
+        "fileCount": 1481,
+        "missingFileCount": 0,
+        "sha256": "9d652c69efb3eb9c2dfcb9179b2b60d7fe4ed5045565aca4357902742566a92c"
+      },
+      "runtimeArtifacts": {
+        "packages/platform-runtime/dist": {
+          "status": "PASS",
+          "fileCount": 4,
+          "sha256": "e3ad7de7820946931e0700b796ffbeed66559fb8a86b207d17f5128b3e306796"
+        },
+        "packages/platform-observability/dist": {
+          "status": "PASS",
+          "fileCount": 2,
+          "sha256": "f963c66d8390e203b37a1841c940ec31465be0c4f97779c7852dcf8381d53247"
+        }
+      },
+      "identityHash": "97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9"
+    },
+    "head": "cddbc5145f895ae9fa909d32c15427174fca599f",
+    "gitStatus": " M apps/aroma-observer/src/runtime-composition.ts\n M docs/operations/observability.md\n M packages/platform-database/src/index.ts\n M packages/platform-testing/test/platform-packages.test.mjs\n M tests/compose/topology.test.mjs\n M tests/kafka/orders-inbox-live.test.mjs\n M tests/observability/alerts.test.mjs\n M tests/observability/runtime-matrix.mjs\n M tools/compose-smoke.mjs\n M tools/observability/generate.mjs\n M tools/observability/verify.mjs\n"
+  },
+  "hostFreeBytes": {
+    "before": 14655053824,
+    "after": 14654771200,
+    "requiredFloor": 10737418240
+  },
+  "imageBuild": {
+    "argv": [
+      "pnpm",
+      "image:build",
+      "--build-arg",
+      "RUNTIME=aroma-observer",
+      "--target",
+      "runtime",
+      "--metadata-file",
+      "/dev/shm/pr179-fixture-2eb8c786-5771-49f7-92f7-3a2b35249017/r5-migration/image-build-f2ffecc03d3d.json",
+      "--load",
+      "--tag",
+      "coffee-pr179-wip15-image-f2ffecc03d3d:latest",
+      "."
+    ],
+    "exitCode": 0,
+    "tag": "coffee-pr179-wip15-image-f2ffecc03d3d:latest",
+    "imageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84",
+    "metadataBytes": 2508,
+    "metadataSha256": "392714211ea24d603a4919afb4a95d20a992ac37362652e7a75d77bdafe2e370",
+    "tagRemoved": true
+  },
+  "composeSmoke": {
+    "argv": [
+      "pnpm",
+      "test:compose-smoke",
+      "--",
+      "--recovery-proof",
+      "--project-name",
+      "coffee-pr179-wip15-smoke-f2ffecc03d3d"
+    ],
+    "exitCode": 0,
+    "project": "coffee-pr179-wip15-smoke-f2ffecc03d3d",
+    "newEvidenceDirs": [],
+    "remainingProjectResources": {
+      "container": [],
+      "network": [],
+      "volume": []
+    },
+    "postgresObserver": {
+      "status": "GUARD_FAILED",
+      "startedAtUtc": "2026-10-23T07:23:30.975061+00:00",
+      "endedAtUtc": "2026-10-23T07:26:43.401934+00:00",
+      "project": "coffee-pr179-wip15-smoke-f2ffecc03d3d",
+      "outerDindId": "7bc32dd6e075786c14c23bd963b9c9e24500a4d2ea597a752e960f0eaab07988",
+      "runnerId": "d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba",
+      "innerEngineId": "b93cefaa-13d0-4ba4-8d7e-b7005df889eb",
+      "samples": 72,
+      "firstSeenAtUtc": {
+        "postgres": "2026-10-23T07:23:52.001430+00:00"
+      },
+      "targets": {
+        "postgres": {
+          "name": "coffee-pr179-wip15-smoke-f2ffecc03d3d-postgres-proof",
+          "expectedImage": "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73",
+          "seen": true,
+          "disappeared": false,
+          "lastState": {
+            "id": "8808dd4740fbd22fb236c3aea993cc0cac0ac67525722a14f84a2ea3e797cf23",
+            "name": "/coffee-pr179-wip15-smoke-f2ffecc03d3d-postgres-proof",
+            "imageId": "sha256:1bea307dfb3ee30541a7acf7de14b58bcd6948da98e5d31a04c627c4d35ec64b",
+            "configuredImage": "postgres:17.11-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73",
+            "status": "running",
+            "running": true,
+            "startedAt": "2026-10-23T07:23:48.393505396Z",
+            "finishedAt": "0001-01-01T00:00:00Z",
+            "exitCode": 0,
+            "oomKilled": false,
+            "health": "healthy",
+            "healthFailingStreak": 0
+          },
+          "lastLogs": {
+            "atUtc": "2026-10-23T07:26:43.277473+00:00",
+            "exitCode": 0,
+            "stdoutBytes": 2308,
+            "stdoutSha256": "15f11efe29ed485dfc7dd5a3cb74cafbb054f151f59dcaa3c404107575ac16ee",
+            "stdoutStoredBytes": 2308,
+            "stdoutTruncated": false,
+            "stderrBytes": 897,
+            "stderrSha256": "c2035032333f4f70f582386f2ef6ba24ee95e1608f0f9032c10daa7aac7577c3",
+            "stderrStoredBytes": 897,
+            "stderrTruncated": false,
+            "safeSummary": {
+              "lineCount": 56,
+              "severityCounts": {
+                "LOG": 17,
+                "WARNING": 1
+              },
+              "classCounts": {
+                "timeout": 0,
+                "lock": 2,
+                "cancel": 0,
+                "connection": 4,
+                "startup": 9,
+                "other": 9
+              },
+              "timestamps": [
+                "2026-10-23 07:23:50.678 UTC",
+                "2026-10-23 07:23:50.692 UTC",
+                "2026-10-23 07:23:50.701 UTC",
+                "2026-10-23 07:23:50.777 UTC",
+                "2026-10-23 07:23:50.780 UTC",
+                "2026-10-23 07:23:50.781 UTC",
+                "2026-10-23 07:23:50.784 UTC",
+                "2026-10-23 07:23:50.812 UTC",
+                "2026-10-23 07:23:50.817 UTC",
+                "2026-10-23 07:23:49.389 UTC",
+                "2026-10-23 07:23:50.905 UTC",
+                "2026-10-23 07:23:50.905 UTC",
+                "2026-10-23 07:23:50.905 UTC",
+                "2026-10-23 07:23:50.914 UTC",
+                "2026-10-23 07:23:50.923 UTC",
+                "2026-10-23 07:23:50.932 UTC"
+              ]
+            }
+          },
+          "lastHealth": null,
+          "lastInspectError": {
+            "atUtc": "2026-10-23T07:23:46.818718+00:00",
+            "class": "NOT_FOUND",
+            "exitCode": 1,
+            "stderrBytes": 76,
+            "stderrSha256": "062c550f62755afbe0ed4f50819e8d4e5953866e82fdf5eccb0ee9e310f9c2b7"
+          }
+        },
+        "aromaObserver": {
+          "name": "coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1",
+          "expectedImageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84",
+          "seen": false,
+          "disappeared": false,
+          "lastState": null,
+          "lastLogs": null,
+          "lastHealth": null,
+          "lastInspectError": {
+            "atUtc": "2026-10-23T07:26:43.401893+00:00",
+            "class": "INSPECT_ERROR",
+            "exitCode": 1,
+            "stderrBytes": 109,
+            "stderrSha256": "bf6a86927f6b8b151190d4824e055a9ea5afbba1e1697ac2c2b7471cc0a77326"
+          }
+        }
+      },
+      "guardFailure": "aromaObserver:inspect-error",
+      "boundedWindowSeconds": 900,
+      "pollSeconds": 5.0,
+      "limit": "No SQL/API/env/credential reads; raw logs and health output are mode 0600."
+    }
+  },
+  "preloadedAliasesUnchanged": true,
+  "smokeImagePrefixAbsent": true,
+  "g14Pass": false,
+  "fullSuiteExecuted": false
+}

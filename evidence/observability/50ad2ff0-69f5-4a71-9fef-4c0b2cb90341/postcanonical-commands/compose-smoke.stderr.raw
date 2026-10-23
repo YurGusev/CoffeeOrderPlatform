@@ -1,0 +1,2207 @@
+$ node tools/compose-smoke.mjs -- --recovery-proof --project-name coffee-pr179-wip15-smoke-f2ffecc03d3d
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#8 CACHED
+
+#9 [runtime 6/9] COPY --from=build /runtime ./
+#9 CACHED
+
+#10 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#10 CACHED
+
+#11 [build 14/21] COPY apps ./apps
+#11 CACHED
+
+#12 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#12 CACHED
+
+#13 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#13 CACHED
+
+#14 [runtime 2/9] WORKDIR /app
+#14 CACHED
+
+#15 [workspace-manifests 2/3] WORKDIR /workspace
+#15 CACHED
+
+#16 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#16 CACHED
+
+#17 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#17 CACHED
+
+#18 [build 20/21] RUN test "edge-gateway" != "web" && pnpm --filter "@coffee-platform/edge-gateway" deploy --prod --legacy /runtime
+#18 CACHED
+
+#19 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#19 CACHED
+
+#20 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#20 CACHED
+
+#21 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#21 CACHED
+
+#22 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#22 CACHED
+
+#23 [build 17/21] COPY config ./config
+#23 CACHED
+
+#24 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#24 CACHED
+
+#25 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#25 CACHED
+
+#26 [build 16/21] COPY types ./types
+#26 CACHED
+
+#27 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#27 CACHED
+
+#28 [runtime 7/9] COPY --from=build /workspace/config ./config
+#28 CACHED
+
+#29 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#29 CACHED
+
+#30 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#30 CACHED
+
+#31 [librdkafka-build 2/5] WORKDIR /source
+#31 CACHED
+
+#32 [build 15/21] COPY packages ./packages
+#32 CACHED
+
+#33 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#33 CACHED
+
+#34 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#34 CACHED
+
+#35 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#35 CACHED
+
+#36 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#36 CACHED
+
+#37 [build 10/21] COPY patches ./patches
+#37 CACHED
+
+#38 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#38 CACHED
+
+#39 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:8d7008cca9deb7b6befc5e2f3ffa8f2fe114d2b073d50377a3488c096c94d2f4 done
+#41 exporting config sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49 done
+#41 sending tarball
+#41 sending tarball 2.5s done
+#41 DONE 2.5s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [build 14/21] COPY apps ./apps
+#8 CACHED
+
+#9 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#9 CACHED
+
+#10 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#10 CACHED
+
+#11 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#11 CACHED
+
+#12 [build 20/21] RUN test "api-public" != "web" && pnpm --filter "@coffee-platform/api-public" deploy --prod --legacy /runtime
+#12 CACHED
+
+#13 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#13 CACHED
+
+#14 [librdkafka-build 2/5] WORKDIR /source
+#14 CACHED
+
+#15 [runtime 6/9] COPY --from=build /runtime ./
+#15 CACHED
+
+#16 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#16 CACHED
+
+#17 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#17 CACHED
+
+#18 [build 10/21] COPY patches ./patches
+#18 CACHED
+
+#19 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#19 CACHED
+
+#20 [build 16/21] COPY types ./types
+#20 CACHED
+
+#21 [runtime 7/9] COPY --from=build /workspace/config ./config
+#21 CACHED
+
+#22 [build 17/21] COPY config ./config
+#22 CACHED
+
+#23 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#23 CACHED
+
+#24 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#24 CACHED
+
+#25 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#25 CACHED
+
+#26 [workspace-manifests 2/3] WORKDIR /workspace
+#26 CACHED
+
+#27 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#27 CACHED
+
+#28 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#28 CACHED
+
+#29 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#29 CACHED
+
+#30 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#30 CACHED
+
+#31 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#31 CACHED
+
+#32 [build 15/21] COPY packages ./packages
+#32 CACHED
+
+#33 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#33 CACHED
+
+#34 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#34 CACHED
+
+#35 [runtime 2/9] WORKDIR /app
+#35 CACHED
+
+#36 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#36 CACHED
+
+#37 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#37 CACHED
+
+#38 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#38 CACHED
+
+#39 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:d31b0b22b580ff626408c1afec6e78797230bc84acfbd1f2eb3cf2ec2e365718 done
+#41 exporting config sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71 done
+#41 sending tarball
+#41 sending tarball 2.3s done
+#41 DONE 2.4s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#8 CACHED
+
+#9 [build 17/21] COPY config ./config
+#9 CACHED
+
+#10 [build 14/21] COPY apps ./apps
+#10 CACHED
+
+#11 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#11 CACHED
+
+#12 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#12 CACHED
+
+#13 [workspace-manifests 2/3] WORKDIR /workspace
+#13 CACHED
+
+#14 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#14 CACHED
+
+#15 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#15 CACHED
+
+#16 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#16 CACHED
+
+#17 [runtime 2/9] WORKDIR /app
+#17 CACHED
+
+#18 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#18 CACHED
+
+#19 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#19 CACHED
+
+#20 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#20 CACHED
+
+#21 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#21 CACHED
+
+#22 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#22 CACHED
+
+#23 [runtime 6/9] COPY --from=build /runtime ./
+#23 CACHED
+
+#24 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#24 CACHED
+
+#25 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#25 CACHED
+
+#26 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#26 CACHED
+
+#27 [runtime 7/9] COPY --from=build /workspace/config ./config
+#27 CACHED
+
+#28 [build 15/21] COPY packages ./packages
+#28 CACHED
+
+#29 [build 10/21] COPY patches ./patches
+#29 CACHED
+
+#30 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#30 CACHED
+
+#31 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#31 CACHED
+
+#32 [librdkafka-build 2/5] WORKDIR /source
+#32 CACHED
+
+#33 [build 16/21] COPY types ./types
+#33 CACHED
+
+#34 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#34 CACHED
+
+#35 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#35 CACHED
+
+#36 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#36 CACHED
+
+#37 [build 20/21] RUN test "api-internal" != "web" && pnpm --filter "@coffee-platform/api-internal" deploy --prod --legacy /runtime
+#37 CACHED
+
+#38 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#38 CACHED
+
+#39 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:683dcf29135cfef53e7f1442bb7050f4fb3c674981d2b6bc35a6cf2f24292b9b done
+#41 exporting config sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620 done
+#41 sending tarball
+#41 sending tarball 2.2s done
+#41 DONE 2.3s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#8 CACHED
+
+#9 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#9 CACHED
+
+#10 [runtime 7/9] COPY --from=build /workspace/config ./config
+#10 CACHED
+
+#11 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#11 CACHED
+
+#12 [runtime 2/9] WORKDIR /app
+#12 CACHED
+
+#13 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#13 CACHED
+
+#14 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#14 CACHED
+
+#15 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#15 CACHED
+
+#16 [build 10/21] COPY patches ./patches
+#16 CACHED
+
+#17 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#17 CACHED
+
+#18 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#18 CACHED
+
+#19 [build 20/21] RUN test "customer-service" != "web" && pnpm --filter "@coffee-platform/customer-service" deploy --prod --legacy /runtime
+#19 CACHED
+
+#20 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#20 CACHED
+
+#21 [workspace-manifests 2/3] WORKDIR /workspace
+#21 CACHED
+
+#22 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#22 CACHED
+
+#23 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#23 CACHED
+
+#24 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#24 CACHED
+
+#25 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#25 CACHED
+
+#26 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#26 CACHED
+
+#27 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#27 CACHED
+
+#28 [build 17/21] COPY config ./config
+#28 CACHED
+
+#29 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#29 CACHED
+
+#30 [build 15/21] COPY packages ./packages
+#30 CACHED
+
+#31 [runtime 6/9] COPY --from=build /runtime ./
+#31 CACHED
+
+#32 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#32 CACHED
+
+#33 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#33 CACHED
+
+#34 [librdkafka-build 2/5] WORKDIR /source
+#34 CACHED
+
+#35 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#35 CACHED
+
+#36 [build 14/21] COPY apps ./apps
+#36 CACHED
+
+#37 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#37 CACHED
+
+#38 [build 16/21] COPY types ./types
+#38 CACHED
+
+#39 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:0ab6a42b62eef2eee9e04f54b99e658ef7acf0989a0cf3b308f638319eaa3551 done
+#41 exporting config sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4 done
+#41 sending tarball
+#41 sending tarball 2.3s done
+#41 DONE 2.3s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#9 CACHED
+
+#10 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#10 CACHED
+
+#11 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#11 CACHED
+
+#12 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#12 CACHED
+
+#13 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#13 CACHED
+
+#14 [librdkafka-build 2/5] WORKDIR /source
+#14 CACHED
+
+#15 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#15 CACHED
+
+#16 [build 15/21] COPY packages ./packages
+#16 CACHED
+
+#17 [build 17/21] COPY config ./config
+#17 CACHED
+
+#18 [runtime 7/9] COPY --from=build /workspace/config ./config
+#18 CACHED
+
+#19 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#19 CACHED
+
+#20 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#20 CACHED
+
+#21 [build 20/21] RUN test "catalog-service" != "web" && pnpm --filter "@coffee-platform/catalog-service" deploy --prod --legacy /runtime
+#21 CACHED
+
+#22 [runtime 6/9] COPY --from=build /runtime ./
+#22 CACHED
+
+#23 [build 14/21] COPY apps ./apps
+#23 CACHED
+
+#24 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#24 CACHED
+
+#25 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#25 CACHED
+
+#26 [build 10/21] COPY patches ./patches
+#26 CACHED
+
+#27 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#27 CACHED
+
+#28 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#28 CACHED
+
+#29 [workspace-manifests 2/3] WORKDIR /workspace
+#29 CACHED
+
+#30 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#30 CACHED
+
+#31 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#31 CACHED
+
+#32 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#32 CACHED
+
+#33 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#33 CACHED
+
+#34 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#34 CACHED
+
+#35 [build 16/21] COPY types ./types
+#35 CACHED
+
+#36 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#36 CACHED
+
+#37 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#37 CACHED
+
+#38 [runtime 2/9] WORKDIR /app
+#38 CACHED
+
+#39 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:f28c1b533ccce2747d89f7f8fe0da625d0de45976b33af73f9488d194827d946 done
+#41 exporting config sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd done
+#41 sending tarball
+#41 sending tarball 2.7s done
+#41 DONE 2.7s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 33.48kB 0.0s done
+#6 DONE 0.8s
+
+#7 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#7 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#7 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.5s done
+#7 DONE 0.8s
+
+#8 [build 15/21] COPY packages ./packages
+#8 CACHED
+
+#9 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#9 CACHED
+
+#10 [runtime 2/9] WORKDIR /app
+#10 CACHED
+
+#11 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#11 CACHED
+
+#12 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#12 CACHED
+
+#13 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#13 CACHED
+
+#14 [workspace-manifests 2/3] WORKDIR /workspace
+#14 CACHED
+
+#15 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#15 CACHED
+
+#16 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#16 CACHED
+
+#17 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#17 CACHED
+
+#18 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#18 CACHED
+
+#19 [runtime 6/9] COPY --from=build /runtime ./
+#19 CACHED
+
+#20 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#20 CACHED
+
+#21 [build 10/21] COPY patches ./patches
+#21 CACHED
+
+#22 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#22 CACHED
+
+#23 [librdkafka-build 2/5] WORKDIR /source
+#23 CACHED
+
+#24 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#24 CACHED
+
+#25 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#25 CACHED
+
+#26 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#26 CACHED
+
+#27 [build 16/21] COPY types ./types
+#27 CACHED
+
+#28 [runtime 7/9] COPY --from=build /workspace/config ./config
+#28 CACHED
+
+#29 [build 20/21] RUN test "catalog-supplier-sync" != "web" && pnpm --filter "@coffee-platform/catalog-supplier-sync" deploy --prod --legacy /runtime
+#29 CACHED
+
+#30 [build 14/21] COPY apps ./apps
+#30 CACHED
+
+#31 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#31 CACHED
+
+#32 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#32 CACHED
+
+#33 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#33 CACHED
+
+#34 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#34 CACHED
+
+#35 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#35 CACHED
+
+#36 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#36 CACHED
+
+#37 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#37 CACHED
+
+#38 [build 17/21] COPY config ./config
+#38 CACHED
+
+#39 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:ea03d26f4b3f3e11be33aafcd6f66262f568c734a36e96a817636e80596f2fa6 done
+#41 exporting config sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d done
+#41 sending tarball
+#41 sending tarball 2.4s done
+#41 DONE 2.4s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [build 14/21] COPY apps ./apps
+#8 CACHED
+
+#9 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#9 CACHED
+
+#10 [build 10/21] COPY patches ./patches
+#10 CACHED
+
+#11 [runtime 6/9] COPY --from=build /runtime ./
+#11 CACHED
+
+#12 [workspace-manifests 2/3] WORKDIR /workspace
+#12 CACHED
+
+#13 [runtime 7/9] COPY --from=build /workspace/config ./config
+#13 CACHED
+
+#14 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#14 CACHED
+
+#15 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#15 CACHED
+
+#16 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#16 CACHED
+
+#17 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#17 CACHED
+
+#18 [runtime 2/9] WORKDIR /app
+#18 CACHED
+
+#19 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#19 CACHED
+
+#20 [build 17/21] COPY config ./config
+#20 CACHED
+
+#21 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#21 CACHED
+
+#22 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#22 CACHED
+
+#23 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#23 CACHED
+
+#24 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#24 CACHED
+
+#25 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#25 CACHED
+
+#26 [librdkafka-build 2/5] WORKDIR /source
+#26 CACHED
+
+#27 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#27 CACHED
+
+#28 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#28 CACHED
+
+#29 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#29 CACHED
+
+#30 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#30 CACHED
+
+#31 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#31 CACHED
+
+#32 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#32 CACHED
+
+#33 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#33 CACHED
+
+#34 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#34 CACHED
+
+#35 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#35 CACHED
+
+#36 [build 15/21] COPY packages ./packages
+#36 CACHED
+
+#37 [build 20/21] RUN test "catalog-activation-worker" != "web" && pnpm --filter "@coffee-platform/catalog-activation-worker" deploy --prod --legacy /runtime
+#37 CACHED
+
+#38 [build 16/21] COPY types ./types
+#38 CACHED
+
+#39 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:5ef439423bcb05f16a892515ebb1f9242c89e1e4dbaddf7c8f35ca3e2650ec0d done
+#41 exporting config sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea done
+#41 sending tarball
+#41 sending tarball 2.3s done
+#41 DONE 2.3s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [runtime 6/9] COPY --from=build /runtime ./
+#8 CACHED
+
+#9 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#9 CACHED
+
+#10 [build 15/21] COPY packages ./packages
+#10 CACHED
+
+#11 [workspace-manifests 2/3] WORKDIR /workspace
+#11 CACHED
+
+#12 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#12 CACHED
+
+#13 [build 10/21] COPY patches ./patches
+#13 CACHED
+
+#14 [librdkafka-build 2/5] WORKDIR /source
+#14 CACHED
+
+#15 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#15 CACHED
+
+#16 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#16 CACHED
+
+#17 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#17 CACHED
+
+#18 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#18 CACHED
+
+#19 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#19 CACHED
+
+#20 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#20 CACHED
+
+#21 [build 20/21] RUN test "pricing-service" != "web" && pnpm --filter "@coffee-platform/pricing-service" deploy --prod --legacy /runtime
+#21 CACHED
+
+#22 [runtime 7/9] COPY --from=build /workspace/config ./config
+#22 CACHED
+
+#23 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#23 CACHED
+
+#24 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#24 CACHED
+
+#25 [build 16/21] COPY types ./types
+#25 CACHED
+
+#26 [runtime 2/9] WORKDIR /app
+#26 CACHED
+
+#27 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#27 CACHED
+
+#28 [build 14/21] COPY apps ./apps
+#28 CACHED
+
+#29 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#29 CACHED
+
+#30 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#30 CACHED
+
+#31 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#31 CACHED
+
+#32 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#32 CACHED
+
+#33 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#33 CACHED
+
+#34 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#34 CACHED
+
+#35 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#35 CACHED
+
+#36 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#36 CACHED
+
+#37 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#37 CACHED
+
+#38 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#38 CACHED
+
+#39 [build 17/21] COPY config ./config
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:fd5efadadab0540ae1aa43e115a925ab2267ca6a95e3a886671371cac7d71c79 done
+#41 exporting config sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576 done
+#41 sending tarball
+#41 sending tarball 2.3s done
+#41 DONE 2.4s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#8 CACHED
+
+#9 [workspace-manifests 2/3] WORKDIR /workspace
+#9 CACHED
+
+#10 [build 17/21] COPY config ./config
+#10 CACHED
+
+#11 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#11 CACHED
+
+#12 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#12 CACHED
+
+#13 [build 14/21] COPY apps ./apps
+#13 CACHED
+
+#14 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#14 CACHED
+
+#15 [runtime 6/9] COPY --from=build /runtime ./
+#15 CACHED
+
+#16 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#16 CACHED
+
+#17 [build 20/21] RUN test "orders-service" != "web" && pnpm --filter "@coffee-platform/orders-service" deploy --prod --legacy /runtime
+#17 CACHED
+
+#18 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#18 CACHED
+
+#19 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#19 CACHED
+
+#20 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#20 CACHED
+
+#21 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#21 CACHED
+
+#22 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#22 CACHED
+
+#23 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#23 CACHED
+
+#24 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#24 CACHED
+
+#25 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#25 CACHED
+
+#26 [build 10/21] COPY patches ./patches
+#26 CACHED
+
+#27 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#27 CACHED
+
+#28 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#28 CACHED
+
+#29 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#29 CACHED
+
+#30 [runtime 7/9] COPY --from=build /workspace/config ./config
+#30 CACHED
+
+#31 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#31 CACHED
+
+#32 [librdkafka-build 2/5] WORKDIR /source
+#32 CACHED
+
+#33 [runtime 2/9] WORKDIR /app
+#33 CACHED
+
+#34 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#34 CACHED
+
+#35 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#35 CACHED
+
+#36 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#36 CACHED
+
+#37 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#37 CACHED
+
+#38 [build 15/21] COPY packages ./packages
+#38 CACHED
+
+#39 [build 16/21] COPY types ./types
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:023d9f52bf8eaf32b1a5e6c1d4fd0fefc2c13895d9b9e2af60cfb317b863c1ff done
+#41 exporting config sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297 done
+#41 sending tarball
+#41 sending tarball 2.3s done
+#41 DONE 2.3s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#8 CACHED
+
+#9 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#9 CACHED
+
+#10 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#10 CACHED
+
+#11 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#11 CACHED
+
+#12 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#12 CACHED
+
+#13 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#13 CACHED
+
+#14 [build 10/21] COPY patches ./patches
+#14 CACHED
+
+#15 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#15 CACHED
+
+#16 [build 16/21] COPY types ./types
+#16 CACHED
+
+#17 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#17 CACHED
+
+#18 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#18 CACHED
+
+#19 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#19 CACHED
+
+#20 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#20 CACHED
+
+#21 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#21 CACHED
+
+#22 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#22 CACHED
+
+#23 [build 17/21] COPY config ./config
+#23 CACHED
+
+#24 [build 15/21] COPY packages ./packages
+#24 CACHED
+
+#25 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#25 CACHED
+
+#26 [librdkafka-build 2/5] WORKDIR /source
+#26 CACHED
+
+#27 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#27 CACHED
+
+#28 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#28 CACHED
+
+#29 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#29 CACHED
+
+#30 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#30 CACHED
+
+#31 [workspace-manifests 2/3] WORKDIR /workspace
+#31 CACHED
+
+#32 [runtime 2/9] WORKDIR /app
+#32 CACHED
+
+#33 [runtime 6/9] COPY --from=build /runtime ./
+#33 CACHED
+
+#34 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#34 CACHED
+
+#35 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#35 CACHED
+
+#36 [build 20/21] RUN test "orders-aroma-preparation" != "web" && pnpm --filter "@coffee-platform/orders-aroma-preparation" deploy --prod --legacy /runtime
+#36 CACHED
+
+#37 [runtime 7/9] COPY --from=build /workspace/config ./config
+#37 CACHED
+
+#38 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#38 CACHED
+
+#39 [build 14/21] COPY apps ./apps
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:ba82474b1e1e37f8069d4186c3e69f1ccb0196e21b3ccd85124e6a48db41d3bd done
+#41 exporting config sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4 done
+#41 sending tarball
+#41 sending tarball 2.3s done
+#41 DONE 2.3s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.4s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#8 CACHED
+
+#9 [runtime 2/9] WORKDIR /app
+#9 CACHED
+
+#10 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#10 CACHED
+
+#11 [build 20/21] RUN test "aroma-observer" != "web" && pnpm --filter "@coffee-platform/aroma-observer" deploy --prod --legacy /runtime
+#11 CACHED
+
+#12 [runtime 7/9] COPY --from=build /workspace/config ./config
+#12 CACHED
+
+#13 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#13 CACHED
+
+#14 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#14 CACHED
+
+#15 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#15 CACHED
+
+#16 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#16 CACHED
+
+#17 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#17 CACHED
+
+#18 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#18 CACHED
+
+#19 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#19 CACHED
+
+#20 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#20 CACHED
+
+#21 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#21 CACHED
+
+#22 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#22 CACHED
+
+#23 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#23 CACHED
+
+#24 [build 15/21] COPY packages ./packages
+#24 CACHED
+
+#25 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#25 CACHED
+
+#26 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#26 CACHED
+
+#27 [build 10/21] COPY patches ./patches
+#27 CACHED
+
+#28 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#28 CACHED
+
+#29 [build 16/21] COPY types ./types
+#29 CACHED
+
+#30 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#30 CACHED
+
+#31 [librdkafka-build 2/5] WORKDIR /source
+#31 CACHED
+
+#32 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#32 CACHED
+
+#33 [runtime 6/9] COPY --from=build /runtime ./
+#33 CACHED
+
+#34 [build 17/21] COPY config ./config
+#34 CACHED
+
+#35 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#35 CACHED
+
+#36 [workspace-manifests 2/3] WORKDIR /workspace
+#36 CACHED
+
+#37 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#37 CACHED
+
+#38 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#38 CACHED
+
+#39 [build 14/21] COPY apps ./apps
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:814a24403a38a5ed2761e8f7c3e1f47408215e0ad168d8e3dea5c54c256101a0 done
+#41 exporting config sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84 done
+#41 sending tarball
+#41 sending tarball 2.5s done
+#41 DONE 2.5s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#8 CACHED
+
+#9 [runtime 7/9] COPY --from=build /workspace/config ./config
+#9 CACHED
+
+#10 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#10 CACHED
+
+#11 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#11 CACHED
+
+#12 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#12 CACHED
+
+#13 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#13 CACHED
+
+#14 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#14 CACHED
+
+#15 [workspace-manifests 2/3] WORKDIR /workspace
+#15 CACHED
+
+#16 [build 20/21] RUN test "aroma-convergence" != "web" && pnpm --filter "@coffee-platform/aroma-convergence" deploy --prod --legacy /runtime
+#16 CACHED
+
+#17 [build 10/21] COPY patches ./patches
+#17 CACHED
+
+#18 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#18 CACHED
+
+#19 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#19 CACHED
+
+#20 [build 15/21] COPY packages ./packages
+#20 CACHED
+
+#21 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#21 CACHED
+
+#22 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#22 CACHED
+
+#23 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#23 CACHED
+
+#24 [librdkafka-build 2/5] WORKDIR /source
+#24 CACHED
+
+#25 [runtime 6/9] COPY --from=build /runtime ./
+#25 CACHED
+
+#26 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#26 CACHED
+
+#27 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#27 CACHED
+
+#28 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#28 CACHED
+
+#29 [runtime 2/9] WORKDIR /app
+#29 CACHED
+
+#30 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#30 CACHED
+
+#31 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#31 CACHED
+
+#32 [build 16/21] COPY types ./types
+#32 CACHED
+
+#33 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#33 CACHED
+
+#34 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#34 CACHED
+
+#35 [build 17/21] COPY config ./config
+#35 CACHED
+
+#36 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#36 CACHED
+
+#37 [build 14/21] COPY apps ./apps
+#37 CACHED
+
+#38 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#38 CACHED
+
+#39 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:b73b9b761a4710ca2753e8e1db813a6bb4ac1388d12c2be24aead25f4647781b done
+#41 exporting config sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4 done
+#41 sending tarball
+#41 sending tarball 2.3s done
+#41 DONE 2.3s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 0.3s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 33.48kB 0.0s done
+#6 DONE 0.1s
+
+#7 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#7 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.1s done
+#7 DONE 0.1s
+
+#8 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#8 CACHED
+
+#9 [build 20/21] RUN test "aroma-gateway" != "web" && pnpm --filter "@coffee-platform/aroma-gateway" deploy --prod --legacy /runtime
+#9 CACHED
+
+#10 [runtime 2/9] WORKDIR /app
+#10 CACHED
+
+#11 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#11 CACHED
+
+#12 [workspace-manifests 2/3] WORKDIR /workspace
+#12 CACHED
+
+#13 [runtime 7/9] COPY --from=build /workspace/config ./config
+#13 CACHED
+
+#14 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#14 CACHED
+
+#15 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#15 CACHED
+
+#16 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#16 CACHED
+
+#17 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#17 CACHED
+
+#18 [build 10/21] COPY patches ./patches
+#18 CACHED
+
+#19 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#19 CACHED
+
+#20 [build 16/21] COPY types ./types
+#20 CACHED
+
+#21 [librdkafka-build 2/5] WORKDIR /source
+#21 CACHED
+
+#22 [build 17/21] COPY config ./config
+#22 CACHED
+
+#23 [build 15/21] COPY packages ./packages
+#23 CACHED
+
+#24 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#24 CACHED
+
+#25 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#25 CACHED
+
+#26 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#26 CACHED
+
+#27 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#27 CACHED
+
+#28 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#28 CACHED
+
+#29 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#29 CACHED
+
+#30 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#30 CACHED
+
+#31 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#31 CACHED
+
+#32 [runtime 6/9] COPY --from=build /runtime ./
+#32 CACHED
+
+#33 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#33 CACHED
+
+#34 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#34 CACHED
+
+#35 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#35 CACHED
+
+#36 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#36 CACHED
+
+#37 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#37 CACHED
+
+#38 [build 14/21] COPY apps ./apps
+#38 CACHED
+
+#39 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:abe409be1bd80a1d40f5429a5c68a387f31eeb36cd5450bc6dcc103d66476c87 done
+#41 exporting config sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d done
+#41 sending tarball
+#41 sending tarball 3.1s done
+#41 DONE 3.1s
+
+#42 importing to docker
+#42 DONE 0.0s
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile:
+#1 transferring dockerfile: 7.92kB done
+#1 DONE 0.9s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.9
+#2 DONE 3.5s
+
+#3 docker-image://docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28
+#3 resolve docker.io/docker/dockerfile:1.9@sha256:fe40cf4e92cd0c467be2cfc30657a680ae2398318afd50b0c80585784c604f28 1.8s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#4 DONE 0.4s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 214B done
+#5 DONE 0.0s
+
+#6 [workspace-manifests 1/3] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#6 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 0.0s done
+#6 DONE 0.0s
+
+#7 [internal] load build context
+#7 transferring context: 33.48kB 0.0s done
+#7 DONE 0.1s
+
+#8 [librdkafka-build 5/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends patch   && node -e "const fs=require('node:fs'),crypto=require('node:crypto');if(crypto.createHash('sha256').update(fs.readFileSync('librdkafka-resume-wakeup.patch')).digest('hex')!==require('./toolchain-versions.json').librdkafkaPatchSha256)throw Error('LIBRDKAFKA_PATCH_HASH_MISMATCH')"   && patch --batch --forward --fuzz=0 --strip=1 --input=librdkafka-resume-wakeup.patch   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"
+#8 CACHED
+
+#9 [build 16/21] COPY types ./types
+#9 CACHED
+
+#10 [build 17/21] COPY config ./config
+#10 CACHED
+
+#11 [build  4/21] COPY --from=librdkafka-build /usr/local/include/librdkafka /usr/local/include/librdkafka
+#11 CACHED
+
+#12 [build  6/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#12 CACHED
+
+#13 [build  8/21] RUN --network=host npm install --global --no-fund --no-audit corepack@0.35.0   && corepack enable   && corepack prepare pnpm@11.24.0 --activate
+#13 CACHED
+
+#14 [librdkafka-build 2/5] WORKDIR /source
+#14 CACHED
+
+#15 [build 18/21] COPY scripts/check-node26-compatibility.mjs ./scripts/check-node26-compatibility.mjs
+#15 CACHED
+
+#16 [build  7/21] COPY --from=librdkafka-build /usr/local/lib/pkgconfig/rdkafka*.pc /usr/local/lib/pkgconfig/
+#16 CACHED
+
+#17 [workspace-manifests 3/3] RUN --mount=type=bind,source=apps,target=apps     --mount=type=bind,source=packages,target=packages     mkdir /manifests     && cp --parents apps/*/package.json packages/*/package.json packages/contracts/*/package.json packages/generated/*/package.json /manifests/
+#17 CACHED
+
+#18 [build  9/21] COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+#18 CACHED
+
+#19 [runtime 4/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#19 CACHED
+
+#20 [runtime 7/9] COPY --from=build /workspace/config ./config
+#20 CACHED
+
+#21 [librdkafka-build 4/5] COPY patches/librdkafka-resume-wakeup.patch config/toolchain-versions.json /source/
+#21 CACHED
+
+#22 [build 11/21] COPY --from=workspace-manifests /manifests/ ./
+#22 CACHED
+
+#23 [runtime 6/9] COPY --from=build /runtime ./
+#23 CACHED
+
+#24 [build 15/21] COPY packages ./packages
+#24 CACHED
+
+#25 [build 19/21] RUN node scripts/check-node26-compatibility.mjs   && pnpm exec tsc -b packages/platform-runtime/tsconfig.json --pretty false   && pnpm typecheck
+#25 CACHED
+
+#26 [runtime 8/9] COPY platform/launch-v1-connectivity-policy.json ./platform/launch-v1-connectivity-policy.json
+#26 CACHED
+
+#27 [runtime 5/9] COPY --from=librdkafka-build /usr/local/lib/librdkafka++.so* /usr/local/lib/
+#27 CACHED
+
+#28 [build 20/21] RUN test "realtime-gateway" != "web" && pnpm --filter "@coffee-platform/realtime-gateway" deploy --prod --legacy /runtime
+#28 CACHED
+
+#29 [runtime 2/9] WORKDIR /app
+#29 CACHED
+
+#30 [build 21/21] RUN node --input-type=commonjs <<'NODE'
+#30 CACHED
+
+#31 [build  3/21] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates python3 make g++ pkg-config libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#31 CACHED
+
+#32 [workspace-manifests 2/3] WORKDIR /workspace
+#32 CACHED
+
+#33 [build 10/21] COPY patches ./patches
+#33 CACHED
+
+#34 [build 13/21] COPY tsconfig.json tsconfig.base.json ./
+#34 CACHED
+
+#35 [runtime 3/9] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates libssl3 zlib1g libzstd1 liblz4-1 libsasl2-2 libcurl4   && rm -rf /var/lib/apt/lists/*
+#35 CACHED
+
+#36 [build 14/21] COPY apps ./apps
+#36 CACHED
+
+#37 [build 12/21] RUN --network=host pnpm install --frozen-lockfile --ignore-scripts   && cd node_modules/@confluentinc/kafka-javascript   && CKJS_LINKING=dynamic BUILD_LIBRDKAFKA=0 node ../../@mapbox/node-pre-gyp/bin/node-pre-gyp rebuild --nodedir=/usr/local   && cd /workspace   && ldd node_modules/@confluentinc/kafka-javascript/build/Release/confluent-kafka-javascript.node | grep --fixed-strings '/usr/local/lib/librdkafka.so.1'
+#37 CACHED
+
+#38 [librdkafka-build 3/5] RUN --network=host apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update   && apt-get install --yes --no-install-recommends ca-certificates curl gcc g++ make pkg-config libssl-dev zlib1g-dev libzstd-dev liblz4-dev libsasl2-dev libcurl4-openssl-dev   && curl --fail --location --retry 3 --output librdkafka.tar.gz "https://github.com/confluentinc/librdkafka/archive/refs/tags/v2.15.0.tar.gz"   && echo "259015220cdca708afe838b5aa79ebf1a5fb710fb4179cf918d390aed85d5dbc  librdkafka.tar.gz" | sha256sum --check --strict   && tar --extract --gzip --file librdkafka.tar.gz --strip-components=1   && ./configure --prefix=/usr/local   && make -j4   && make install   && test "$(PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion rdkafka)" = "2.15.0"   && test -f /usr/local/lib/librdkafka.so   && test -f /usr/local/lib/librdkafka++.so
+#38 CACHED
+
+#39 [build  5/21] COPY --from=librdkafka-build /usr/local/lib/librdkafka.so* /usr/local/lib/
+#39 CACHED
+
+#40 [runtime 9/9] COPY scripts/permission-audit.mjs scripts/permission-enforce.mjs ./scripts/
+#40 CACHED
+
+#41 exporting to docker image format
+#41 exporting layers done
+#41 exporting manifest sha256:9de4e6627c5ff578072ae829a738adebd4f36b58182a55308f2df8b46d39ebcb done
+#41 exporting config sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5 done
+#41 sending tarball
+#41 sending tarball 2.6s done
+#41 DONE 2.7s
+
+#42 importing to docker
+#42 DONE 0.0s
+$ node tools/nginx/generate-config.mjs --config config/platform.yaml --output apps/edge-nginx/generated/nginx.conf && node tools/nginx/check-config.mjs
+#0 building with "coffee-platform-mtu" instance using docker-container driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 1.61kB done
+#1 DONE 0.3s
+
+#2 [internal] load metadata for docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#2 DONE 0.6s
+
+#3 [internal] load metadata for docker.io/library/nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+#3 DONE 0.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 214B done
+#4 DONE 0.3s
+
+#5 [internal] load build context
+#5 transferring context: 1.68MB 0.1s done
+#5 DONE 0.8s
+
+#6 [edge-nginx 1/6] FROM docker.io/library/nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+#6 resolve docker.io/library/nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+#6 ...
+
+#7 [web-build 1/4] FROM docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+#7 resolve docker.io/library/node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae 1.3s done
+#7 DONE 1.4s
+
+#6 [edge-nginx 1/6] FROM docker.io/library/nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+#6 resolve docker.io/library/nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7 1.5s done
+#6 DONE 1.6s
+
+#8 [edge-nginx 2/6] RUN rm -f /etc/nginx/conf.d/default.conf /usr/bin/apt /usr/bin/apt-* /usr/bin/dpkg /usr/bin/dpkg-* /usr/sbin/apt-* /usr/sbin/dpkg-*  && rm -rf /usr/lib/apt /var/lib/apt /var/lib/dpkg  && rm -f /etc/nginx/nginx.conf  && mkdir -p /etc/nginx/snippets /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp  && chown -R 101:101 /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp  && chmod -R a=rX /etc/nginx /usr/share/nginx/html
+#8 CACHED
+
+#9 [edge-nginx 5/6] COPY apps/edge-nginx/snippets/upstream-tls.conf /etc/nginx/snippets/upstream-tls.conf
+#9 CACHED
+
+#10 [web-build 3/4] COPY . .
+#10 CACHED
+
+#11 [web-build 4/4] RUN --network=host npm install --global corepack@0.35.0 && corepack enable && pnpm install --frozen-lockfile && pnpm web:build  && node tools/nginx/generate-config.mjs --config config/platform.yaml --output apps/edge-nginx/generated/nginx.conf
+#11 CACHED
+
+#12 [web-build 2/4] WORKDIR /workspace
+#12 CACHED
+
+#13 [edge-nginx 4/6] COPY --from=web-build --chown=0:0 /workspace/apps/edge-nginx/generated/nginx.conf /etc/nginx/nginx.conf
+#13 CACHED
+
+#14 [edge-nginx 3/6] COPY --from=web-build --chown=0:0 /workspace/apps/web/dist/browser/ /usr/share/nginx/html/
+#14 CACHED
+
+#15 [edge-nginx 6/6] COPY apps/edge-nginx/snippets/business-headers.conf /etc/nginx/snippets/business-headers.conf
+#15 CACHED
+
+#16 exporting to docker image format
+#16 exporting layers done
+#16 exporting manifest sha256:142756ebc42902e6a4152d9bcb96ed40f6b168585783511dc7f7c9bdacf70594 0.1s done
+#16 exporting config sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3
+#16 exporting config sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3 0.1s done
+#16 sending tarball
+#16 ...
+
+#17 importing to docker
+#17 DONE 0.0s
+
+#16 exporting to docker image format
+#16 sending tarball 5.2s done
+#16 DONE 5.3s
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_kafka_event Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_kafka_event Creating 
+ Volume coffee-pr179-wip15-smoke-f2ffecc03d3d_kafka_data Creating 
+ Volume coffee-pr179-wip15-smoke-f2ffecc03d3d_kafka_data Creating 
+ Volume coffee-pr179-wip15-smoke-f2ffecc03d3d_kafka_data Created 
+ Volume coffee-pr179-wip15-smoke-f2ffecc03d3d_kafka_data Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_kafka_event Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_kafka_event Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Creating 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Running 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_edge_backend Creating 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-aroma-preparation-1 Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_edge_backend Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_host_ingress Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_host_ingress Creating 
+time="2026-10-23T07:26:42Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_internal_api Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_internal_api Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_provider_egress Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_provider_egress Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_public_api_backend Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_public_api_backend Creating 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_edge_backend Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_edge_backend Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Creating 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_public_api_backend Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_public_api_backend Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_provider_egress Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_provider_egress Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-provider-fixture-1 Creating 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-aroma-preparation-1 Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_internal_api Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_internal_api Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Creating 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-activation-worker-1 Creating 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-convergence-1 Creating 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-gateway-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_host_ingress Created 
+ Network coffee-pr179-wip15-smoke-f2ffecc03d3d_coffee_host_ingress Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-provider-fixture-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-activation-worker-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-supplier-sync-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-convergence-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-gateway-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-supplier-sync-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-nginx-1 Creating 
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+time="2026-10-23T07:26:43Z" level=warning msg="secrets `uid`, `gid` and `mode` are not supported, they will be ignored"
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-nginx-1 Created 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-gateway-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-provider-fixture-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-provider-fixture-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-activation-worker-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-aroma-preparation-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-convergence-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-gateway-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-aroma-preparation-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-activation-worker-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-convergence-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-supplier-sync-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-supplier-sync-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-nginx-1 Starting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-nginx-1 Started 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-provider-fixture-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-convergence-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-aroma-preparation-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-activation-worker-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-nginx-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-gateway-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-supplier-sync-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Waiting 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-provider-fixture-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-activation-worker-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-gateway-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-convergence-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-aroma-preparation-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-supplier-sync-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-nginx-1 Healthy 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-provider-fixture-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-convergence-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-aroma-preparation-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-supplier-sync-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-nginx-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-activation-worker-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-gateway-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-provider-fixture-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-nginx-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-gateway-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-activation-worker-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-supplier-sync-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-public-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-observer-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-pricing-service-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-aroma-convergence-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-realtime-gateway-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-edge-gateway-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-catalog-service-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-api-internal-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-customer-service-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-service-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-orders-aroma-preparation-1 Stopped 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Stopping 
+ Container coffee-pr179-wip15-smoke-f2ffecc03d3d-kafka-1 Stopped 

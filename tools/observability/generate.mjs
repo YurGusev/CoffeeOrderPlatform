@@ -255,6 +255,12 @@ export function createCollectorConfig({config, logFiles, exporterToken, openObse
         start_at: 'beginning',
         storage: 'file_storage',
         max_log_size: collector.maxLogRecordBytes,
+        retry_on_failure: {
+          enabled: true,
+          initial_interval: `${collector.retryInitialMs}ms`,
+          max_interval: `${collector.retryMaxMs}ms`,
+          max_elapsed_time: `${collector.retryWindowMs}ms`,
+        },
         operators: [
           ...sourceOwnerOperators,
           {

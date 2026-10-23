@@ -1,0 +1,19 @@
+Name:          coffee-platform-mtu
+Driver:        docker-container
+Last Activity: 2026-10-23 07:13:34 +0000 UTC
+
+Nodes:
+Name:                  coffee-platform-mtu0
+Endpoint:              unix:///dev/shm/pr179-fixture-2eb8c786-5771-49f7-92f7-3a2b35249017/docker.sock
+Driver Options:        network="coffee_platform_build_mtu"
+Status:                running
+BuildKit daemon flags: --allow-insecure-entitlement=network.host
+BuildKit version:      v0.33.1
+Platforms:             linux/amd64, linux/amd64/v2, linux/386
+Labels:
+ org.mobyproject.buildkit.worker.executor:         oci
+ org.mobyproject.buildkit.worker.hostname:         bcd8e987f2cf
+ org.mobyproject.buildkit.worker.network:          host
+ org.mobyproject.buildkit.worker.oci.process-mode: sandbox
+ org.mobyproject.buildkit.worker.selinux.enabled:  false
+ org.mobyproject.buildkit.worker.snapshotter:      overlayfs

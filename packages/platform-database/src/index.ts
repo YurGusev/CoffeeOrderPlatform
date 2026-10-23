@@ -263,10 +263,11 @@ export async function withTransaction<Result>(database: Database, options: Trans
       try {
         // Client disconnect/shutdown после начала COMMIT не доказывает rollback.
         reply = await command(data, lease, "COMMIT", data.config.terminalTimeoutMs, metadata);
-      } catch {
+      } catch (error) {
         state.state = "Unknown";
         destroy = true;
-        throw new DatabaseTransactionError("TRANSACTION_OUTCOME_UNKNOWN", metadata);
+        const failure = databaseFailure(error, metadata);
+        throw new DatabaseTransactionError("TRANSACTION_OUTCOME_UNKNOWN", metadata, failure.sqlState, failure.code);
       }
       if (reply.command === "ROLLBACK") {
         state.state = "RolledBack";

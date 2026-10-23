@@ -889,7 +889,7 @@ function startDatabaseProofContainer(
   projectName,
   networkName,
   credential,
-  { initialDatabase = "coffee_platform_customer", publishHost = false } = {},
+  { initialDatabase = "coffee_platform_customer", publishHost = false, ephemeralPgData = false } = {},
 ) {
   const container = `${projectName}-postgres-proof`;
   const args = [
@@ -913,6 +913,7 @@ function startDatabaseProofContainer(
     "1s",
     "--health-retries",
     "30",
+    ...(ephemeralPgData ? ["--tmpfs", "/var/lib/postgresql/data:rw,noexec,nosuid,size=536870912"] : []),
     ...(publishHost ? ["--publish", "127.0.0.1::5432"] : []),
     DATABASE_PROOF_IMAGE,
   ];
@@ -921,6 +922,22 @@ function startDatabaseProofContainer(
     runDocker(["network", "connect", "--alias", "coffee_postgres", "--alias", "customer_db", networkName, container]);
   }
   return container;
+}
+
+function assertEphemeralDatabaseProofStorage(container) {
+  const tmpfs = JSON.parse(runDocker(["inspect", "--format", "{{json .HostConfig.Tmpfs}}", container]));
+  const dataPath = "/var/lib/postgresql/data";
+  assert.ok(tmpfs?.[dataPath]?.split(",").includes("size=536870912"), "G14 PostgreSQL data tmpfs must have a 512 MiB limit");
+  const stat = runDocker(["exec", container, "stat", "-f", "-c", "%T|%S|%b", dataPath]).trim().split("|");
+  assert.equal(stat.length, 3, "G14 PostgreSQL data filesystem status must have three fields");
+  const [type, blockSizeText, blockCountText] = stat;
+  const blockSize = Number(blockSizeText);
+  const blockCount = Number(blockCountText);
+  const totalBytes = blockSize * blockCount;
+  assert.equal(type, "tmpfs", "G14 PostgreSQL data directory must be an actual tmpfs filesystem");
+  assert.ok(Number.isSafeInteger(blockSize) && blockSize > 0 && Number.isSafeInteger(blockCount) && blockCount > 0 &&
+    Number.isSafeInteger(totalBytes) && totalBytes === 536870912, "G14 PostgreSQL data tmpfs must have an actual 512 MiB capacity");
+  return {type: "tmpfs", destination: dataPath, sizeMiB: 512, durability: "ephemeral"};
 }
 
 function bootstrapDatabaseProofRole(container, admin, owner) {
@@ -3424,6 +3441,7 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
   let composeAttempted = false;
   const builtImages = [];
   let databaseProofContainer;
+  let databaseProofStorage;
   let recoveryDatabaseProof;
   let recoveryProofCredentials;
   let recoveryAdminUrl;
@@ -3527,8 +3545,12 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
             ? "postgres"
             : "coffee_platform_customer",
           publishHost: options.recoveryProof || options.aromaBindingProof || options.aromaCartProof,
+          ephemeralPgData: observability !== undefined,
         },
       );
+      if (observability !== undefined) {
+        databaseProofStorage = assertEphemeralDatabaseProofStorage(databaseProofContainer);
+      }
       await waitForDockerHealthy(databaseProofContainer);
       await waitForDatabaseProofReady(
         databaseProofContainer,
@@ -3838,7 +3860,7 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
           : "canonical-runtime-plus-local-kafka-fixture",
         kafkaRetention: options.aromaBindingProof || options.aromaCartProof ? undefined : options.databaseProof || options.customerProof ? undefined : kafkaRetention,
         recoveryProof: options.recoveryProof
-          ? {postgres: recoveryDatabaseProof, kafka: kafkaRetention, native: nativeFoundation, providerFixture: recoveryProviderFixtureCalls}
+          ? {postgres: recoveryDatabaseProof, postgresStorage: databaseProofStorage, kafka: kafkaRetention, native: nativeFoundation, providerFixture: recoveryProviderFixtureCalls}
           : undefined,
         aromaBindingProof: options.aromaBindingProof
           ? {services: ["api-internal", "aroma-gateway"], baseline: aromaBindingEvidence, restartReplay: aromaBindingRestartEvidence, durableBindingCount: 1, cleanup: aromaBindingCleanupReceipt}

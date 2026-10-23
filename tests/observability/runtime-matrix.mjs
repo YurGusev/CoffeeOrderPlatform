@@ -182,6 +182,142 @@ function sanitizeMetricFamilyObservation(value) {
   return {name: value.name, owners: [...value.owners], components};
 }
 
+function sanitizeNativeNginxAlert(value) {
+  const phases = ['readiness', 'native-state', 'episodes', 'request-error', 'stability', 'pending-firing', 'complete'];
+  const predicates = ['readiness-not-one', 'readiness-query-failed', 'native-state-query-failed', 'native-state-not-normal', 'awaiting-fresh-native-normal',
+    'native-state-not-firing', 'native-pending', 'pending-not-after-normal-baseline', 'pending-window-not-proven', 'sink-query-failed', 'unresolved-episodes',
+    'episodes-resolved', 'continuous-stability', 'baseline-stable'];
+  if (value === null || typeof value !== 'object' || Array.isArray(value) ||
+      !(value.queryValue === null || (typeof value.queryValue === 'number' && Number.isFinite(value.queryValue))) ||
+      !Number.isSafeInteger(value.observedAt) || value.observedAt < 0 ||
+      !Number.isSafeInteger(value.requiredStableMs) || value.requiredStableMs < 0 ||
+      !Number.isSafeInteger(value.stableMs) || value.stableMs < 0 ||
+      ['eventCount', 'episodeCount', 'unresolvedEpisodeCount'].some(key => !Number.isSafeInteger(value[key]) || value[key] < 0 || value[key] > 10000) ||
+      !phases.includes(value.phase) || !predicates.includes(value.predicate)) return undefined;
+  const sanitizeRequestError = requestError => {
+    if (requestError === null || typeof requestError !== 'object' || Array.isArray(requestError)) return undefined;
+    const safe = {
+      ...(['query', 'sink', 'native-state'].includes(requestError.source) ? {source: requestError.source} : {}),
+      ...(Number.isInteger(requestError.httpStatus) && requestError.httpStatus >= 100 && requestError.httpStatus <= 599
+        ? {httpStatus: requestError.httpStatus} : {}),
+      ...(['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(requestError.errorClass)
+        ? {errorClass: requestError.errorClass} : {}),
+    };
+    return Object.keys(safe).length > 0 ? safe : undefined;
+  };
+  const requestError = sanitizeRequestError(value.requestError);
+  const lastResetRequestError = sanitizeRequestError(value.lastReset?.requestError);
+  const lastResetHasValidRequestError = value.lastReset?.reason === 'request-error' &&
+    ['readiness', 'native-state', 'episodes'].includes(value.lastReset.phase) &&
+    Number.isSafeInteger(value.lastReset.queryDurationMs) && value.lastReset.queryDurationMs >= 0 && value.lastReset.queryDurationMs <= 600000 &&
+      ((value.lastReset.phase === 'readiness' && lastResetRequestError?.source === 'query') ||
+      (value.lastReset.phase === 'native-state' && lastResetRequestError?.source === 'native-state') ||
+      (value.lastReset.phase === 'episodes' && lastResetRequestError?.source === 'sink')) && lastResetRequestError !== undefined;
+  const lastReset = value.lastReset !== null && typeof value.lastReset === 'object' && !Array.isArray(value.lastReset) &&
+      ['readiness-not-one', 'unresolved-episodes', 'native-state-not-normal', 'native-normal-not-fresh', 'request-error'].includes(value.lastReset.reason) &&
+      Number.isSafeInteger(value.lastReset.observedAt) && value.lastReset.observedAt >= 0 &&
+      (value.lastReset.reason !== 'request-error' || lastResetHasValidRequestError) &&
+      (['native-state-not-normal', 'native-normal-not-fresh'].includes(value.lastReset.reason) &&
+        ['unknown', 'normal', 'pending', 'firing'].includes(value.lastReset.nativeOutcome) ||
+        !['native-state-not-normal', 'native-normal-not-fresh'].includes(value.lastReset.reason))
+    ? {
+      reason: value.lastReset.reason, observedAt: value.lastReset.observedAt,
+      ...(['native-state-not-normal', 'native-normal-not-fresh'].includes(value.lastReset.reason)
+        ? {nativeOutcome: value.lastReset.nativeOutcome} : {}),
+      ...(value.lastReset.reason === 'request-error'
+        ? {phase: value.lastReset.phase, queryDurationMs: value.lastReset.queryDurationMs, requestError: lastResetRequestError} : {}),
+    }
+    : undefined;
+  const queryDurationMs = Number.isSafeInteger(value.queryDurationMs) && value.queryDurationMs >= 0 && value.queryDurationMs <= 600000
+    ? value.queryDurationMs : undefined;
+  const nativeAlertId = typeof value.nativeAlertId === 'string' && /^[A-Za-z0-9]{27}$/u.test(value.nativeAlertId)
+    ? value.nativeAlertId : undefined;
+  const baselineNormalAlertId = typeof value.baselineNormalAlertId === 'string' && /^[A-Za-z0-9]{27}$/u.test(value.baselineNormalAlertId)
+    ? value.baselineNormalAlertId : undefined;
+  const pendingAlertId = typeof value.pendingAlertId === 'string' && /^[A-Za-z0-9]{27}$/u.test(value.pendingAlertId)
+    ? value.pendingAlertId : undefined;
+  const nativeOutcome = ['unknown', 'normal', 'pending', 'firing'].includes(value.nativeOutcome) ? value.nativeOutcome : undefined;
+  const safeNativeTimestamp = number => Number.isSafeInteger(number) && number > 0 && number <= Number.MAX_SAFE_INTEGER ? number : undefined;
+  const nativeOutcomeAtUs = safeNativeTimestamp(value.nativeOutcomeAtUs);
+  const nativeOutcomeSinceUs = safeNativeTimestamp(value.nativeOutcomeSinceUs);
+  const nativeOutcomeAnchorAtUs = safeNativeTimestamp(value.nativeOutcomeAnchorAtUs);
+  const baselineNormalOutcomeAtUs = safeNativeTimestamp(value.baselineNormalOutcomeAtUs);
+  const baselineNormalSinceUs = safeNativeTimestamp(value.baselineNormalSinceUs);
+  const pendingOutcomeAtUs = safeNativeTimestamp(value.pendingOutcomeAtUs);
+  const firingOutcomeAtUs = safeNativeTimestamp(value.firingOutcomeAtUs);
+  const pendingSinceUs = safeNativeTimestamp(value.pendingSinceUs);
+  const firingSinceUs = safeNativeTimestamp(value.firingSinceUs);
+  const pendingElapsedUs = Number.isSafeInteger(value.pendingElapsedUs) && value.pendingElapsedUs >= 0 && value.pendingElapsedUs <= 600_000_000
+    ? value.pendingElapsedUs : undefined;
+  const stopCallStartedAtUs = safeNativeTimestamp(value.stopCallStartedAtUs);
+  const stopCallEndedAtUs = safeNativeTimestamp(value.stopCallEndedAtUs);
+  const firstFailedProbeAtUs = safeNativeTimestamp(value.firstFailedProbeAtUs);
+  const failedProbeObservedAtUs = safeNativeTimestamp(value.failedProbeObservedAtUs);
+  const failedProbeSampleAtUs = safeNativeTimestamp(value.failedProbeSampleAtUs);
+  return {
+    queryValue: value.queryValue, observedAt: value.observedAt, requiredStableMs: value.requiredStableMs,
+    stableMs: value.stableMs, eventCount: value.eventCount, episodeCount: value.episodeCount,
+    unresolvedEpisodeCount: value.unresolvedEpisodeCount, phase: value.phase, predicate: value.predicate,
+    ...(requestError === undefined ? {} : {requestError}),
+    ...(queryDurationMs === undefined ? {} : {queryDurationMs}),
+    ...(lastReset === undefined ? {} : {lastReset}),
+    ...(nativeAlertId === undefined ? {} : {nativeAlertId}),
+    ...(baselineNormalAlertId === undefined ? {} : {baselineNormalAlertId}),
+    ...(pendingAlertId === undefined ? {} : {pendingAlertId}),
+    ...(nativeOutcome === undefined ? {} : {nativeOutcome}),
+    ...(nativeOutcomeAtUs === undefined ? {} : {nativeOutcomeAtUs}),
+    ...(nativeOutcomeSinceUs === undefined ? {} : {nativeOutcomeSinceUs}),
+    ...(nativeOutcomeAnchorAtUs === undefined ? {} : {nativeOutcomeAnchorAtUs}),
+    ...(baselineNormalOutcomeAtUs === undefined ? {} : {baselineNormalOutcomeAtUs}),
+    ...(baselineNormalSinceUs === undefined ? {} : {baselineNormalSinceUs}),
+    ...(pendingOutcomeAtUs === undefined ? {} : {pendingOutcomeAtUs}),
+    ...(firingOutcomeAtUs === undefined ? {} : {firingOutcomeAtUs}),
+    ...(pendingSinceUs === undefined ? {} : {pendingSinceUs}),
+    ...(firingSinceUs === undefined ? {} : {firingSinceUs}),
+    ...(pendingElapsedUs === undefined ? {} : {pendingElapsedUs}),
+    ...(stopCallStartedAtUs === undefined ? {} : {stopCallStartedAtUs}),
+    ...(stopCallEndedAtUs === undefined ? {} : {stopCallEndedAtUs}),
+    ...(firstFailedProbeAtUs === undefined ? {} : {firstFailedProbeAtUs}),
+    ...(failedProbeObservedAtUs === undefined ? {} : {failedProbeObservedAtUs}),
+    ...(failedProbeSampleAtUs === undefined ? {} : {failedProbeSampleAtUs}),
+  };
+}
+
+function sanitizeNativeNginxRecovery(value) {
+  const outcomes = ['QUERY_NOT_RUN', 'QUERY_ERROR', 'QUERY_SUCCEEDED', 'NO_TARGET_ROWS', 'NO_NUMERIC_TARGET_SAMPLE',
+    'NO_FRESH_TARGET_SAMPLE', 'MATCHED', 'VALUE_MISMATCH'];
+  if (value === null || typeof value !== 'object' || Array.isArray(value) ||
+      value.stage !== 'recovery' || !outcomes.includes(value.outcome) ||
+      !Number.isSafeInteger(value.requiredAfterUs) || value.requiredAfterUs <= 0 ||
+      !Number.isSafeInteger(value.observedAtUs) || value.observedAtUs <= 0 ||
+      !Number.isSafeInteger(value.rowCount) || value.rowCount < 0 || value.rowCount > 100 ||
+      !Number.isSafeInteger(value.matchingRowCount) || value.matchingRowCount < 0 || value.matchingRowCount > value.rowCount ||
+      (value.totalRowCount !== undefined && (!Number.isSafeInteger(value.totalRowCount) || value.totalRowCount < value.rowCount)) ||
+      (value.isPartial !== undefined && typeof value.isPartial !== 'boolean') ||
+      ![0, 1].includes(value.expectedValue)) return undefined;
+  if (value.failureCode !== undefined && !['FATAL_GUARD', 'WAIT_TIMEOUT'].includes(value.failureCode)) return undefined;
+  if (value.errorClass !== undefined && !['Error', 'TypeError', 'AbortError', 'TimeoutError'].includes(value.errorClass)) return undefined;
+  if (value.httpStatus !== undefined && (!Number.isInteger(value.httpStatus) || value.httpStatus < 100 || value.httpStatus > 599)) return undefined;
+  let latestTargetSample;
+  if (value.latestTargetSample !== undefined) {
+    const sample = value.latestTargetSample;
+    if (sample === null || typeof sample !== 'object' || Array.isArray(sample) ||
+        sample.service !== 'edge-nginx' || sample.statusClass !== '2xx' ||
+        !Number.isSafeInteger(sample.timestampUs) || sample.timestampUs <= 0 || !Number.isFinite(sample.value)) return undefined;
+    latestTargetSample = {service: 'edge-nginx', statusClass: '2xx', timestampUs: sample.timestampUs, value: sample.value};
+  }
+  return {
+    stage: 'recovery', outcome: value.outcome, requiredAfterUs: value.requiredAfterUs, observedAtUs: value.observedAtUs,
+    rowCount: value.rowCount, matchingRowCount: value.matchingRowCount, expectedValue: value.expectedValue,
+    ...(value.totalRowCount === undefined ? {} : {totalRowCount: value.totalRowCount}),
+    ...(value.isPartial === undefined ? {} : {isPartial: value.isPartial}),
+    ...(value.failureCode === undefined ? {} : {failureCode: value.failureCode}),
+    ...(value.errorClass === undefined ? {} : {errorClass: value.errorClass}),
+    ...(value.httpStatus === undefined ? {} : {httpStatus: value.httpStatus}),
+    ...(latestTargetSample === undefined ? {} : {latestTargetSample}),
+  };
+}
+
 export function sanitizeRuntimeMatrixFailure(error) {
   const primaryError = error instanceof AggregateError && error.cause instanceof Error ? error.cause : error;
   const name = primaryError !== null && typeof primaryError === 'object' ? primaryError.name : undefined;
@@ -192,6 +328,10 @@ export function sanitizeRuntimeMatrixFailure(error) {
   const stderr = primaryError !== null && typeof primaryError === 'object' ? primaryError.stderr : undefined;
   const metricFamilyObservation = primaryError !== null && typeof primaryError === 'object'
     ? sanitizeMetricFamilyObservation(primaryError.metricFamilyObservation) : undefined;
+  const nativeNginxAlert = primaryError !== null && typeof primaryError === 'object'
+    ? sanitizeNativeNginxAlert(primaryError.nativeNginxAlert) : undefined;
+  const nativeNginxRecovery = primaryError !== null && typeof primaryError === 'object'
+    ? sanitizeNativeNginxRecovery(primaryError.nativeNginxRecovery) : undefined;
   const frames = [];
   for (const line of stack.slice(0, 20_000).split('\n')) {
     const match = line.match(/(?:\(|at )((?:file:\/\/\/)?[^()\s]+):(\d+):(\d+)\)?$/u);
@@ -226,6 +366,8 @@ export function sanitizeRuntimeMatrixFailure(error) {
     frames,
     ...(childEvalFrames.length > 0 ? {childEvalFrames} : {}),
     ...(metricFamilyObservation === undefined ? {} : {metricFamilyObservation}),
+    ...(nativeNginxAlert === undefined ? {} : {nativeNginxAlert}),
+    ...(nativeNginxRecovery === undefined ? {} : {nativeNginxRecovery}),
   };
 }
 
@@ -405,10 +547,13 @@ async function forbiddenRuntimePackages() {
 
 function summarizeComposeReceipt(receipt, projectName) {
   const expectedHealth = ['/health/live', '/health/ready', '/metrics'];
+  const postgresStorage = receipt?.recoveryProof?.postgresStorage;
   if (receipt?.project !== projectName || receipt.runtimes !== 14 || receipt.nativeIngress !== 'edge-nginx' ||
       receipt.kafka !== true || receipt.ephemeralKafkaBroker !== true || receipt.credentialSource !== 'local-fixture' ||
       receipt.telemetry !== true || receipt.dbIntegrationProof !== true || receipt.gracefulShutdown !== true ||
       receipt.recoveryProof === null || typeof receipt.recoveryProof !== 'object' ||
+      postgresStorage?.type !== 'tmpfs' || postgresStorage.destination !== '/var/lib/postgresql/data' ||
+      postgresStorage.sizeMiB !== 512 || postgresStorage.durability !== 'ephemeral' ||
       !Array.isArray(receipt.healthEndpoints) || expectedHealth.some(path => !receipt.healthEndpoints.includes(path))) {
     fail('runtime matrix Compose receipt assertion failed');
   }
@@ -416,7 +561,7 @@ function summarizeComposeReceipt(receipt, projectName) {
     project: projectName, runtimes: 14, nativeIngress: 'edge-nginx', kafka: true,
     ephemeralKafkaBroker: true, credentialSource: 'local-fixture', telemetry: true,
     dbIntegrationProof: true, gracefulShutdown: true, healthEndpoints: expectedHealth,
-    recoveryProofPresent: true,
+    recoveryProofPresent: true, postgresStorage,
   };
 }
 

@@ -46,7 +46,7 @@ export function createAromaObserverComposition(): RuntimeComposition {
       cycle=async signal=>{
         try{if(!recovered){await store.recover(signal);recovered=true;}const result=await store.runOnce(gateway,signal);
           if(result!=="idle")workFailed=result==="failed";}
-        catch(error){workFailed=true;if(!signal.aborted)app.log.error({event:"aroma.observation.failed",reason:error instanceof Error?error.name:"UNKNOWN",...(error instanceof DatabaseTransactionError?{code:error.code,...(error.sqlState!==undefined&&/^[0-9A-Z]{5}$/.test(error.sqlState)?{sqlState:error.sqlState}:{})}:{})});}
+        catch(error){workFailed=true;if(!signal.aborted)app.log.error({event:"aroma.observation.failed",reason:error instanceof Error?error.name:"UNKNOWN",...(error instanceof DatabaseTransactionError?{code:error.code,...(error.sqlState!==undefined&&/^[0-9A-Z]{5}$/.test(error.sqlState)?{sqlState:error.sqlState}:{}),...(error.previousCode!==undefined?{previousCode:error.previousCode}:{})}:{})});}
         // Relay уже committed фактов независим от нового provider failure.
         try{await kafka.relay(outbox,database,signal);relayFailed=false;}
         catch(error){relayFailed=true;if(!signal.aborted)app.log.error({event:"aroma.observation.relay_failed",reason:error instanceof Error?error.name:"UNKNOWN"});}

@@ -192,6 +192,11 @@ Filelog сохраняет offsets через `file_storage` в отдельны
 применяется к ещё неизвестным файлам. Это предотвращает полный replay при
 обычном рестарте, но не гарантирует exactly-once доставку: downstream-сбой,
 ротация или удаление Docker log-файла всё ещё могут дать пропуск либо дубликат.
+При отказе downstream, включая `memory_limiter`, `filelog.retry_on_failure`
+приостанавливает чтение файла и повторяет текущий batch. Начальный интервал,
+максимальный интервал и окно повторов берутся из существующих
+`telemetry.collector.retryInitialMs`, `retryMaxMs` и `retryWindowMs`.
+После исчерпания окна batch отбрасывается, и чтение продолжается.
 Offset checkpoint не является бизнес-журналом и не заменяет восстановление
 OpenObserve data volume. Подробнее: upstream
 [File Storage Extension v0.162.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.162.0/extension/storage/filestorage/README.md)
