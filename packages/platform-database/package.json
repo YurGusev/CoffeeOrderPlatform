@@ -11,7 +11,8 @@
   "dependencies": {
     "pg": "8.23.0",
     "pg-copy-streams": "7.0.0",
-    "@coffee-platform/config": "workspace:*"
+    "@coffee-platform/config": "workspace:*",
+    "@opentelemetry/api": "1.9.1"
   },
   "devDependencies": {
     "@types/pg": "8.23.1",

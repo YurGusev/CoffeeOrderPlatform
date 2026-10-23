@@ -331,15 +331,28 @@ void test("convergence owner-role PostgreSQL + controlled fake Gateway", {timeou
       });
       await t.test("RecoveredApplied is reconcile-only even when current Desired has another difference; old UnknownOutcome stays immutable",async () => {
         await reset();
+        const {AromaConvergenceTelemetry} = await import("../../apps/aroma-convergence/dist/observability.js");
+        const telemetry = new AromaConvergenceTelemetry();
+        const waitUnknown = async expected => {
+          for (let tick = 0; tick < 100; tick++) {
+            if (telemetry.render().includes(`coffee_aroma_unknown_outcomes_current ${expected}`)) return;
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          assert.fail(`unresolved UnknownOutcome gauge did not reach ${expected}`);
+        };
+        assert.ok(!telemetry.render().some(line => line.startsWith("coffee_aroma_unknown_outcomes_current")));
         const cart=fake();
         cart.beforeMutation=async ({offerRef,request})=>{cart.lines=[line(offerRef,request.quantity)];throw new Error("controlled lost response");};
-        await createAromaConvergenceStore(runtime,short).runOnce(cart.gateway,signal);
+        await createAromaConvergenceStore(runtime,short,telemetry).runOnce(cart.gateway,signal);
+        await waitUnknown(1);
         const old=(await facts()).attempts[0];
         assert.equal(old.state,"UnknownOutcome");
         await freshDesired([target(OFFER,"2000")]);
         await waitBarrier();
         cart.beforeMutation=undefined;
-        await createAromaConvergenceStore(runtime,{...short,ownerInstanceId:owner2}).runOnce(cart.gateway,signal);
+        await createAromaConvergenceStore(runtime,{...short,ownerInstanceId:owner2},telemetry).runOnce(cart.gateway,signal);
+        await waitUnknown(0);
+        assert.ok(telemetry.render().includes("coffee_aroma_unknown_outcomes_total 1"));
         const result=await facts();
         assert.equal(cart.calls.length,1,"recovery Applied must never start a new unsafe call");
         assert.equal(result.reservations[0].state,"RecoveredApplied");

@@ -13,6 +13,7 @@ import {dirname, join, relative, resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {checkToolchainVersions} from './check-toolchain-versions.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PROFILE_NAMES = Object.freeze({parallel: [], singleThreaded: ['--singleThreaded']});
@@ -128,6 +129,7 @@ function parseArguments(argv) {
 
 export async function checkToolchainProfiles(root = REPO_ROOT) {
   const resolvedRoot = resolve(root);
+  await checkToolchainVersions(resolvedRoot);
   const profiles = {};
   for (const [name, args] of Object.entries(PROFILE_NAMES)) profiles[name] = await runProfile(resolvedRoot, name, args);
   const parallel = profiles.parallel;
@@ -144,6 +146,7 @@ export async function checkToolchainProfiles(root = REPO_ROOT) {
   return {
     schemaVersion: 1,
     authority: {
+      bomSha256: sha256(await readFile(join(resolvedRoot, 'config/toolchain-versions.json'))),
       node: '26.8.1',
       typescript: '7.0.2',
       compiler: 'typescript@7.0.2',

@@ -174,13 +174,15 @@ void test("exact 262144 UTF8 queued bytes are admitted and the next byte cleans 
 });
 void test("actual 5s write stall closes callback and drain waiters without blocking a healthy peer",{timeout:8000},async t=>{
  const hub=new RealtimeHub(config);t.after(()=>hub.destroy());const callback=new Sink(),drain=new Sink(),fast=new Sink();
- callback.callbackBlocked=true;drain.blocked=true;
  const start=performance.now();hub.open(callback,options());hub.open(drain,options());hub.open(fast,options());await turn();
+ callback.callbackBlocked=true;drain.blocked=true;
  await publish(hub,envelope());await sleep(config.coalesceMs+30);
  assert.match(fast.frames.join(""),/resource-invalidated.v1/);assert.equal(fast.destroyed,false);
  await sleep(Math.max(0,4800-(performance.now()-start)));assert.equal(callback.destroyed,false);assert.equal(drain.destroyed,false);
  while(!callback.destroyed||!drain.destroyed){assert.ok(performance.now()-start<6500);await sleep(10);}
  assert.ok(performance.now()-start>=5000);assert.equal(hub.stats().connections,1);assert.equal(hub.stats().queuedRecords,0);assert.equal(hub.stats().queuedBytes,0);
+  const stats=hub.stats();assert.equal(stats.invalidationAttempts,3);assert.equal(stats.invalidationDropped,1,"only a frame whose transport callback failed to complete is dropped; successful callback with pending drain is not");
+  assert.ok(stats.invalidationDropped>0);assert.ok(stats.invalidationAttempts>stats.invalidationDropped);assert.ok(stats.invalidationDropped/stats.invalidationAttempts<1);
  for(const sink of [callback,drain])for(const event of ["close","finish","error","drain"])assert.equal(sink.listenerCount(event),0);
  await hub.shutdown();
 });

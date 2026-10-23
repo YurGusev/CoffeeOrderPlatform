@@ -1,0 +1,336 @@
+{
+  "runId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+  "status": "PASS",
+  "alerts": [
+    {
+      "key": "notReady",
+      "name": "g14-v1-service-not-ready-synthetic",
+      "streamName": "platform_metrics_runtime_ready",
+      "queryType": "promql",
+      "query": "(min(platform_metrics_runtime_ready{service_name=~\"^(g14-synthetic)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"} or platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~\"^(g14-synthetic)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}))) == bool 1)) or vector(0)",
+      "comparator": "<=",
+      "threshold": 0,
+      "pendingPeriodSec": 300,
+      "episodeId": "3L5F8uVeiWq2OiwTRXgZhZF9YeE",
+      "firing": true,
+      "resolved": true
+    },
+    {
+      "key": "consumerLag",
+      "name": "g14-v1-consumer-lag",
+      "streamName": "platform_metrics_messaging_kafka_consumer_lag",
+      "queryType": "promql",
+      "query": "max(platform_metrics_messaging_kafka_consumer_lag{deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"})",
+      "comparator": ">",
+      "threshold": 0,
+      "pendingPeriodSec": 300,
+      "episodeId": "3L5F8ZKL057i9OilfKz7SdADCMu",
+      "firing": true,
+      "resolved": true
+    },
+    {
+      "key": "outboxOldestAge",
+      "name": "g14-v1-outbox-oldest-age",
+      "streamName": "platform_metrics_messaging_outbox_oldest_unpublished_age",
+      "queryType": "promql",
+      "query": "max(platform_metrics_messaging_outbox_oldest_unpublished_age{deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"})",
+      "comparator": ">",
+      "threshold": 0,
+      "pendingPeriodSec": 300,
+      "episodeId": "3L5F8hC7cPzXTDlXhwdChKeLfn0",
+      "firing": true,
+      "resolved": true
+    },
+    {
+      "key": "unknownOutcome",
+      "name": "g14-v1-unknown-outcome",
+      "streamName": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+      "queryType": "promql",
+      "query": "max(platform_metrics_coffee_aroma_unknown_outcomes_current{deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"})",
+      "comparator": ">",
+      "threshold": 0,
+      "pendingPeriodSec": 120,
+      "episodeId": "3L5Em2fxWAH2FlBmsDRDhDPsPL5",
+      "firing": true,
+      "resolved": true
+    },
+    {
+      "key": "sseDropRate",
+      "name": "g14-v1-sse-drop-rate",
+      "streamName": "platform_metrics_coffee_realtime_invalidation_dropped_total",
+      "queryType": "promql",
+      "query": "sum(rate(platform_metrics_coffee_realtime_invalidation_dropped_total{deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}[300s])) / clamp_min(sum(rate(platform_metrics_coffee_realtime_invalidation_attempts_total{deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}[300s])), 1e-12)",
+      "comparator": ">",
+      "threshold": 0.05,
+      "pendingPeriodSec": 300,
+      "episodeId": "3L5F8j6xKsinMFqRJlkBpyyEg8J",
+      "firing": true,
+      "resolved": true
+    }
+  ],
+  "inputMetrics": {
+    "notReady": {
+      "stream": "platform_metrics_runtime_ready",
+      "sampleCount": 74,
+      "matchingValues": 2
+    },
+    "consumerLag": {
+      "stream": "platform_metrics_messaging_kafka_consumer_lag",
+      "sampleCount": 76,
+      "matchingValues": 75
+    },
+    "outboxOldestAge": {
+      "stream": "platform_metrics_messaging_outbox_oldest_unpublished_age",
+      "sampleCount": 76,
+      "matchingValues": 75
+    },
+    "unknownOutcome": {
+      "stream": "platform_metrics_coffee_aroma_unknown_outcomes_current",
+      "sampleCount": 76,
+      "matchingValues": 75
+    },
+    "coffee_realtime_invalidation_attempts_total": {
+      "stream": "platform_metrics_coffee_realtime_invalidation_attempts_total",
+      "sampleCount": 76,
+      "positiveValues": 46
+    },
+    "coffee_realtime_invalidation_dropped_total": {
+      "stream": "platform_metrics_coffee_realtime_invalidation_dropped_total",
+      "sampleCount": 77,
+      "positiveValues": 46
+    }
+  },
+  "nativeNginxAvailability": {
+    "status": "PASS",
+    "runId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+    "ruleName": "g14-v1-service-not-ready",
+    "signal": "native HTTP availability; full-system readiness not claimed",
+    "containerId": "f14ee40da9872df2ecc15bae3aedeb6612575493c4c54141070b890fada9bfe3",
+    "pendingPeriodSec": 300,
+    "episodeId": "3L5HioPNyJtkpkJIGuaAxn6tc4N",
+    "productionReadinessOwners": [
+      "edge-gateway",
+      "api-public",
+      "api-internal",
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+      "realtime-gateway"
+    ],
+    "missingOwnerQueryProof": {
+      "status": "PASS",
+      "observedAt": 1792736609759,
+      "expectedProductionOwners": [
+        "edge-gateway",
+        "api-public",
+        "api-internal",
+        "customer-service",
+        "catalog-service",
+        "catalog-supplier-sync",
+        "catalog-activation-worker",
+        "pricing-service",
+        "orders-service",
+        "orders-aroma-preparation",
+        "aroma-observer",
+        "aroma-convergence",
+        "aroma-gateway",
+        "realtime-gateway"
+      ],
+      "cases": [
+        {
+          "scenario": "all-production-owners-ready",
+          "readinessServices": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "query": "((min(platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"} or platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}))) == bool 14)) and on() (count(platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}) > 0)) or vector(0)",
+          "expectedValue": 1,
+          "observedValue": 1
+        },
+        {
+          "scenario": "native-nginx-series-missing",
+          "readinessServices": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "query": "((min(platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"} or platform_metrics_httpcheck_status{service_name=\"g14-missing-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}))) == bool 14)) and on() (count(platform_metrics_httpcheck_status{service_name=\"g14-missing-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}) > 0)) or vector(0)",
+          "expectedValue": 0,
+          "observedValue": 0
+        },
+        {
+          "scenario": "one-production-owner-missing",
+          "readinessServices": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "g14-missing-owner"
+          ],
+          "query": "(min(platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|g14-missing-owner)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"} or platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|g14-missing-owner)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}))) == bool 14)) or vector(0)",
+          "expectedValue": 0,
+          "observedValue": 0
+        },
+        {
+          "scenario": "all-production-owners-missing",
+          "readinessServices": [
+            "g14-missing-owner"
+          ],
+          "query": "(min(platform_metrics_runtime_ready{service_name=~\"^(g14-missing-owner)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"} or platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~\"^(g14-missing-owner)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"development\"}))) == bool 1)) or vector(0)",
+          "expectedValue": 0,
+          "observedValue": 0
+        },
+        {
+          "scenario": "deployment-environment-mismatch",
+          "readinessServices": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "query": "((min(platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"production\",service_namespace=\"coffee-platform\",service_version=\"development\"} or platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"production\",service_namespace=\"coffee-platform\",service_version=\"development\"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"production\",service_namespace=\"coffee-platform\",service_version=\"development\"}))) == bool 14)) and on() (count(platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"production\",service_namespace=\"coffee-platform\",service_version=\"development\"}) > 0)) or vector(0)",
+          "expectedValue": 0,
+          "observedValue": 0
+        },
+        {
+          "scenario": "deployment-namespace-mismatch",
+          "readinessServices": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "query": "((min(platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"development\",service_namespace=\"g14-missing-namespace\",service_version=\"development\"} or platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"g14-missing-namespace\",service_version=\"development\"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"development\",service_namespace=\"g14-missing-namespace\",service_version=\"development\"}))) == bool 14)) and on() (count(platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"g14-missing-namespace\",service_version=\"development\"}) > 0)) or vector(0)",
+          "expectedValue": 0,
+          "observedValue": 0
+        },
+        {
+          "scenario": "deployment-release-mismatch",
+          "readinessServices": [
+            "edge-gateway",
+            "api-public",
+            "api-internal",
+            "customer-service",
+            "catalog-service",
+            "catalog-supplier-sync",
+            "catalog-activation-worker",
+            "pricing-service",
+            "orders-service",
+            "orders-aroma-preparation",
+            "aroma-observer",
+            "aroma-convergence",
+            "aroma-gateway",
+            "realtime-gateway"
+          ],
+          "query": "((min(platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"} or platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}) * (scalar(count(count by (service_name) (platform_metrics_runtime_ready{service_name=~\"^(edge-gateway|api-public|api-internal|customer-service|catalog-service|catalog-supplier-sync|catalog-activation-worker|pricing-service|orders-service|orders-aroma-preparation|aroma-observer|aroma-convergence|aroma-gateway|realtime-gateway)$\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}))) == bool 14)) and on() (count(platform_metrics_httpcheck_status{service_name=\"edge-nginx\",http_status_class=\"2xx\",deployment_environment=\"development\",service_namespace=\"coffee-platform\",service_version=\"sha256:0000000000000000000000000000000000000000000000000000000000000000\"}) > 0)) or vector(0)",
+          "expectedValue": 0,
+          "observedValue": 0
+        }
+      ]
+    },
+    "healthyValue": 1,
+    "failedValue": 0,
+    "recoveredValue": 1,
+    "baselineStableMs": 67225,
+    "nativeAlertId": "3L5GeOHTwnhlhVZt6zzP2puXU92",
+    "baselineNormalAlertId": "3L5GeOHTwnhlhVZt6zzP2puXU92",
+    "pendingAlertId": "3L5GeOHTwnhlhVZt6zzP2puXU92",
+    "pendingSinceUs": 1792736777019606,
+    "baselineNormalOutcomeAtUs": 1792736718856962,
+    "baselineNormalSinceUs": 1792736656921947,
+    "pendingOutcomeAtUs": 1792736777019606,
+    "firingOutcomeAtUs": 1792737138687350,
+    "firingSinceUs": 1792737138687350,
+    "pendingElapsedUs": 361667744,
+    "stopCallStartedAtUs": 1792736729524000,
+    "stopCallEndedAtUs": 1792736729881000,
+    "firstFailedProbeAtUs": 1792736734450091,
+    "failedProbeObservedAtUs": 1792736735268000,
+    "failedProbeSampleAtUs": 1792736734450091,
+    "errorMetricSamples": 1,
+    "rawErrorMessageMetricLabelAbsent": true,
+    "rawUrlMetricLabelAbsent": true,
+    "failedAtUs": 1792736729881000,
+    "firingReceivedAt": "2026-10-23T06:32:18.666Z",
+    "resolvedReceivedAt": "2026-10-23T06:34:18.426Z",
+    "nodeOwners": [
+      "edge-gateway",
+      "api-public",
+      "api-internal",
+      "customer-service",
+      "catalog-service",
+      "catalog-supplier-sync",
+      "catalog-activation-worker",
+      "pricing-service",
+      "orders-service",
+      "orders-aroma-preparation",
+      "aroma-observer",
+      "aroma-convergence",
+      "aroma-gateway",
+      "realtime-gateway"
+    ],
+    "nodeHealthObservations": 136,
+    "allNodeHealthObservationsPassed": true,
+    "freshNodeReadyMetricsBeforeFailureAtFiringAfterRecovery": true,
+    "exactContainerRecoveredWithoutOOM": true
+  }
+}

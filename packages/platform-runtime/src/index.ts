@@ -1,7 +1,9 @@
 import { readFile, stat } from "node:fs/promises";
+import { monitorEventLoopDelay, PerformanceObserver, performance as nodePerformance } from "node:perf_hooks";
 import type { Socket } from "node:net";
 import {TLSSocket} from "node:tls";
 import { Temporal } from "@js-temporal/polyfill";
+import { context as otelContext, SpanKind, SpanStatusCode, trace, type Span } from "@opentelemetry/api";
 import {
   loadPlatformConfig,
   type HealthConfig,
@@ -15,8 +17,13 @@ import {
   type KafkaCredentials,
 } from "@coffee-platform/kafka-runtime";
 import {
+  createPinoLogger,
   createCorrelationContext,
-  isTraceparent,
+  createTelemetryResource,
+  logRecordsDropped,
+  recordRuntimeHttpRequest,
+  setRuntimeReadiness,
+  telemetryDiagnostics,
   withCorrelationFields,
   type CorrelationContext,
 } from "@coffee-platform/observability";
@@ -33,6 +40,7 @@ import {
 } from "@coffee-platform/security";
 import type {TransportMode} from "@coffee-platform/config";
 import Fastify, {
+  type FastifyBaseLogger,
   type FastifyInstance,
   type FastifyReply,
   type FastifyRequest,
@@ -97,7 +105,40 @@ export type RuntimeIdentity = RuntimeComposition &
     bodyLimitBytes?: number;
     requiredDependencies?: readonly string[];
     transport?: RuntimeTransport;
+    telemetryLogRecordBytes?: number;
+    telemetryLogQueueCapacity?: number;
+    telemetryLogDiagnosticIntervalMs?: number;
+    releaseDigest?: string;
   }>;
+
+const runtimeRequestStarts = new WeakMap<Span, number>();
+const RUNTIME_HTTP_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
+
+export function completeRuntimeRequestTelemetry(
+  request: Pick<FastifyRequest, "runtimeSpan" | "method" | "routeOptions">,
+  statusCode: number | undefined,
+  outcome: "completed" | "deadline_exceeded" | "client_aborted" = "completed",
+): void {
+  const span = request.runtimeSpan;
+  if (span === null) return;
+  if (statusCode !== undefined) span.setAttribute("http.response.status_code", statusCode);
+  if (outcome !== "completed" || (statusCode !== undefined && Number.isInteger(statusCode) && statusCode >= 500 && statusCode <= 599))
+    span.setStatus({code: SpanStatusCode.ERROR});
+  span.setAttribute("outcome", outcome);
+  const startedAt = runtimeRequestStarts.get(span);
+  runtimeRequestStarts.delete(span);
+  if (startedAt !== undefined) {
+    const attributes = {
+      "http.request.method": RUNTIME_HTTP_METHODS.has(request.method) ? request.method : "_OTHER",
+      "http.route": request.routeOptions.url ?? "unknown",
+      "http.response.status_class": statusCode !== undefined && Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599 ? `${Math.floor(statusCode / 100)}xx` : "other",
+      outcome,
+    };
+    recordRuntimeHttpRequest(nodePerformance.now() - startedAt, attributes);
+  }
+  span.end();
+  request.runtimeSpan = null;
+}
 
 export type RuntimePhase = "starting" | "running" | "draining" | "stopped";
 export type RuntimeShutdownResult = Readonly<{
@@ -269,6 +310,7 @@ declare module "fastify" {
   interface FastifyRequest {
     correlationContext: CorrelationContext | null;
     runtimeContext: RuntimeRequestContext | null;
+    runtimeSpan: Span | null;
   }
   interface FastifyInstance {
     runtimeController: RuntimeController;
@@ -375,8 +417,42 @@ export async function createRuntime(
   const sockets = new Set<Socket>();
   const requests = new Set<AbortController>();
   const handlers = new Set<Promise<unknown>>();
-  const requestCleanup = new WeakMap<FastifyRequest, () => void>();
+  const requestCleanup = new WeakMap<FastifyRequest, (outcome?: "completed" | "deadline_exceeded" | "client_aborted") => void>();
   const pending = new Set<string>();
+  const eventLoopDelay = monitorEventLoopDelay({resolution: 20});
+  eventLoopDelay.enable();
+  let gcPauseCount = 0;
+  let gcPauseTotalMs = 0;
+  const gcObserver = new PerformanceObserver(list => {
+    for (const entry of list.getEntries()) {
+      gcPauseCount += 1;
+      gcPauseTotalMs += entry.duration;
+    }
+  });
+  gcObserver.observe({entryTypes: ["gc"]});
+  let previousEventLoopUtilization = nodePerformance.eventLoopUtilization();
+  const runtimeMetrics = (): readonly string[] => {
+    const utilization = nodePerformance.eventLoopUtilization(previousEventLoopUtilization);
+    previousEventLoopUtilization = nodePerformance.eventLoopUtilization();
+    const memory = process.memoryUsage();
+    const delayMs = (percentile: number): number => eventLoopDelay.count === 0 ? 0 : Number((eventLoopDelay.percentile(percentile) / 1e6).toFixed(3));
+    const lines = [
+      `runtime_event_loop_utilization ${Number(utilization.utilization.toFixed(6))}`,
+      `runtime_event_loop_delay_p50_ms ${delayMs(50)}`,
+      `runtime_event_loop_delay_p95_ms ${delayMs(95)}`,
+      `runtime_event_loop_delay_p99_ms ${delayMs(99)}`,
+      `runtime_event_loop_delay_samples ${eventLoopDelay.count}`,
+      `runtime_process_rss_bytes ${memory.rss}`,
+      `runtime_process_heap_used_bytes ${memory.heapUsed}`,
+      `runtime_process_heap_total_bytes ${memory.heapTotal}`,
+      `runtime_process_external_bytes ${memory.external}`,
+      `runtime_process_array_buffers_bytes ${memory.arrayBuffers}`,
+      `runtime_gc_pause_count_total ${gcPauseCount}`,
+      `runtime_gc_pause_total_ms ${Number(gcPauseTotalMs.toFixed(3))}`,
+    ];
+    eventLoopDelay.reset();
+    return lines;
+  };
   const acquired: RuntimeResource[] = [];
   const runningChecks = new Map<string, Promise<boolean>>();
   const stopped = Promise.withResolvers<RuntimeShutdownResult>();
@@ -391,6 +467,7 @@ export async function createRuntime(
     : identity.transport?.mode === "public-tls"
       ? identity.transport.publicTls === undefined ? undefined : createPublicTlsServerOptions(identity.transport.publicTls)
       : undefined;
+  const loggerInstance = createPinoLogger({runtime: identity.name, ...(identity.releaseDigest === undefined ? {} : {releaseDigest: identity.releaseDigest})}, identity.telemetryLogRecordBytes, undefined, identity.telemetryLogQueueCapacity, identity.telemetryLogDiagnosticIntervalMs);
   const app = Fastify({
     // Admission ниже сохраняет live/ready для уже принятого transport во время drain.
     return503OnClosing: false,
@@ -400,28 +477,14 @@ export async function createRuntime(
     ...(httpsOptions === undefined
       ? {}
       : {https: httpsOptions}),
-    logger: {
-      base: { runtime: identity.name },
-      serializers: {
-        req: (request: FastifyRequest) => {
-          const context = request.correlationContext;
-          const incoming = request.headers["traceparent"];
-          const traceparent =
-            context?.traceparent ??
-            (typeof incoming === "string" && isTraceparent(incoming)
-              ? incoming
-              : undefined);
-          return {
-            method: request.method,
-            ...(request.routeOptions?.url === undefined
-              ? {}
-              : { url: request.routeOptions.url }),
-            correlationId: context?.correlationId ?? request.id,
-            ...(traceparent === undefined ? {} : { traceparent }),
-          };
-        },
-      },
-    },
+    loggerInstance: loggerInstance as unknown as FastifyBaseLogger,
+    childLoggerFactory: (logger, bindings, options, request) => logger.child({
+      ...bindings,
+      ...withCorrelationFields(createCorrelationContext(
+        request.headers,
+        typeof bindings["reqId"] === "string" ? bindings["reqId"] : undefined,
+      )),
+    }, options),
     genReqId: (request) =>
       createCorrelationContext(request.headers).correlationId,
   });
@@ -443,6 +506,7 @@ export async function createRuntime(
       "runtime phase changed",
     );
     phase = next;
+    setRuntimeReadiness(false);
   };
   const track = <T>(name: string, work: () => Promise<T> | T): Promise<T> => {
     pending.add(name);
@@ -518,6 +582,7 @@ export async function createRuntime(
         },
         "runtime shutdown finished",
       );
+      try { loggerInstance.flush(); } catch { /* Shutdown logging is best effort and must not delay callers. */ }
       const result: RuntimeShutdownResult = { status, pending: unfinished };
       stopped.resolve(result);
       return result;
@@ -574,6 +639,7 @@ export async function createRuntime(
   });
   app.decorateRequest("correlationContext", null);
   app.decorateRequest("runtimeContext", null);
+  app.decorateRequest("runtimeSpan", null);
   app.server.on("connection", (socket: Socket) => {
     sockets.add(socket);
     socket.once("close", () => sockets.delete(socket));
@@ -597,7 +663,7 @@ export async function createRuntime(
       handlers.add(work);
       return work.finally(() => {
         handlers.delete(work);
-        if (reply.raw.destroyed) requestCleanup.get(request)?.();
+        if (reply.raw.destroyed) requestCleanup.get(request)?.("client_aborted");
       });
     };
   });
@@ -605,7 +671,20 @@ export async function createRuntime(
     const correlation = createCorrelationContext(request.headers, request.id);
     request.correlationContext = correlation;
     setCorrelationResponseHeaders(reply, correlation);
-    request.log = request.log.child(withCorrelationFields(correlation));
+    let parent = otelContext.active();
+    if (correlation.traceparent !== undefined) {
+      const [, traceId, spanId, flags] = correlation.traceparent.split("-");
+      if (traceId !== undefined && spanId !== undefined && flags !== undefined)
+        parent = trace.setSpanContext(parent, {traceId, spanId, traceFlags: Number.parseInt(flags, 16), isRemote: true});
+    }
+    const method = RUNTIME_HTTP_METHODS.has(request.method) ? request.method : "_OTHER";
+    const span = trace.getTracer("coffee-platform.runtime").startSpan(`HTTP ${method}`, {
+      kind: SpanKind.SERVER,
+      attributes: {"http.request.method": method, "http.route": request.routeOptions.url ?? "unknown"},
+    }, parent);
+    request.runtimeSpan = span;
+    runtimeRequestStarts.set(span, nodePerformance.now());
+    const active = trace.setSpan(parent, span);
     let transportIdentity: TransportIdentity | null = null;
     if (identity.transport?.mode === "mtls" && identity.transport.material !== undefined) {
       const socket = request.raw.socket;
@@ -641,7 +720,8 @@ export async function createRuntime(
         ? deadlineMs
         : (identity.deadlineProfiles?.[profile] ?? null);
     let accepted = false;
-    const cleanup = (): void => {
+    const cleanup = (outcome: "completed" | "deadline_exceeded" | "client_aborted" = "completed"): void => {
+      if (!reply.raw.writableFinished) completeRuntimeRequestTelemetry(request, reply.raw.headersSent ? reply.statusCode : undefined, outcome);
       clearTimeout(timer);
       requests.delete(abort);
       requestCleanup.delete(request);
@@ -653,14 +733,14 @@ export async function createRuntime(
     const inputClosed = (): void => {
       if (!request.raw.complete && !accepted) {
         abort.abort(new RuntimeError("RUNTIME_CLIENT_DISCONNECTED"));
-        cleanup();
+        cleanup("client_aborted");
       }
     };
     const responseClosed = (): void => {
       if (reply.raw.writableFinished) cleanup();
       else if (!accepted) {
         abort.abort(new RuntimeError("RUNTIME_CLIENT_DISCONNECTED"));
-        cleanup();
+        cleanup("client_aborted");
       }
     };
     const timer =
@@ -668,8 +748,8 @@ export async function createRuntime(
         ? undefined
         : setTimeout(() => {
             abort.abort(new RuntimeError("RUNTIME_REQUEST_DEADLINE"));
+            cleanup("deadline_exceeded");
             reply.raw.destroy();
-            cleanup();
           }, budget);
     timer?.unref();
     request.runtimeContext = {
@@ -689,10 +769,18 @@ export async function createRuntime(
     request.raw.once("close", inputClosed);
     reply.raw.once("close", responseClosed);
     reply.raw.once("finish", cleanup);
+    otelContext.with(active, done);
+  });
+  app.addHook("onError", (request, _reply, error, done) => {
+    request.runtimeSpan?.setAttribute("error.type", errorName(error));
+    done();
+  });
+  app.addHook("onResponse", (request, reply, done) => {
+    completeRuntimeRequestTelemetry(request, reply.statusCode);
     done();
   });
   app.addHook("onSend", async (request, reply, payload) => {
-    if (reply.raw.destroyed) requestCleanup.get(request)?.();
+    if (reply.raw.destroyed) requestCleanup.get(request)?.("client_aborted");
     return payload;
   });
   const checkDependency = (
@@ -711,7 +799,18 @@ export async function createRuntime(
     );
     const result = observeUntil(work, signal)
       .then(
-        (value) => value !== false,
+        (value) => {
+          if (value === false)
+            app.log.warn(
+              {
+                event: "runtime.readiness.failed",
+                dependency: dependency.name,
+                reason: "NotReady",
+              },
+              "runtime readiness failed",
+            );
+          return value !== false;
+        },
         (error: unknown) => {
           app.log.warn(
             {
@@ -758,6 +857,7 @@ export async function createRuntime(
           (await Promise.all(checks.map(checkDependency))).every(Boolean) &&
           phase === "running" &&
           app.server.listening;
+      setRuntimeReadiness(ready);
       return ready
         ? { status: "ready", runtime: identity.name }
         : reply.code(503).send({
@@ -779,6 +879,13 @@ export async function createRuntime(
           [
             "# platform foundation",
             `runtime_admission_rejected_total ${admissionRejected}`,
+            `telemetry_log_records_dropped_total ${logRecordsDropped()}`,
+            `telemetry_records_dropped_total ${telemetryDiagnostics().dropped}`,
+            `telemetry_export_failures_total ${telemetryDiagnostics().exportFailures}`,
+            `telemetry_serialization_rejections_total ${telemetryDiagnostics().serializationRejected}`,
+            `telemetry_queue_overflows_total ${telemetryDiagnostics().queueOverflows}`,
+            `telemetry_shutdown_losses_total ${telemetryDiagnostics().shutdownLoss}`,
+            ...runtimeMetrics(),
             ...(identity.metrics?.() ?? []),
             "",
           ].join("\n"),
@@ -789,6 +896,8 @@ export async function createRuntime(
     lifetime.abort(new RuntimeError("RUNTIME_DRAINING"));
   });
   app.addHook("onClose", async () => {
+    eventLoopDelay.disable();
+    gcObserver.disconnect();
     let stopFailed = false;
     for (const resource of [...acquired].reverse()) {
       closing.signal.throwIfAborted();
@@ -865,6 +974,10 @@ export function configuredRuntimeIdentity(
     deadlineProfiles: runtime.deadlineProfiles,
     concurrency: runtime.concurrency,
     bodyLimitBytes,
+    telemetryLogRecordBytes: config.telemetry.producer.maxRecordBytes,
+    telemetryLogQueueCapacity: config.telemetry.producer.queueCapacity,
+    telemetryLogDiagnosticIntervalMs: config.telemetry.producer.diagnosticIntervalMs,
+    releaseDigest: config.telemetry.releaseDigest,
     requiredDependencies: [
       ...(runtime.database === null ? [] : ["database"]),
       ...(runtime.kafka.producers.length === 0 &&
@@ -953,16 +1066,21 @@ export async function startConfiguredRuntime(
         ),
       });
     }
+    const exporterToken = secretAt(secretDocument as ScopedSecretDocument, "telemetry.exporterToken");
+    if (typeof exporterToken !== "string" || exporterToken.length === 0 || !service.secretRefs.includes("telemetry.exporterToken"))
+      throw new RuntimeError("RUNTIME_TELEMETRY_SECRET_SCOPE");
+    const telemetry = createTelemetryResource({...config.telemetry, environment: config.environment}, name, exporterToken, () => composition.metrics?.() ?? []);
+    const ownedComposition = appendOwnedComposition(composition, database, kafka, {
+      config,
+      secrets: (secretDocument as ScopedSecretDocument).secrets,
+    });
+    const telemetryComposition: RuntimeComposition = {
+      ...ownedComposition,
+      resources: [telemetry, ...(ownedComposition.resources ?? [])],
+    };
     return await startRuntime(
       {
-        ...configuredRuntimeIdentity(
-          config,
-          name,
-          appendOwnedComposition(composition, database, kafka, {
-            config,
-            secrets: (secretDocument as ScopedSecretDocument).secrets,
-          }),
-        ),
+        ...configuredRuntimeIdentity(config, name, telemetryComposition),
         transport,
       },
     );

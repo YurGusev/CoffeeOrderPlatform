@@ -15,6 +15,7 @@
     "@coffee-platform/observability": "workspace:*",
     "@confluentinc/kafka-javascript": "1.10.0",
     "@coffee-platform/platform-time": "workspace:*",
-    "@coffee-platform/outbox": "workspace:*"
+    "@coffee-platform/outbox": "workspace:*",
+    "@opentelemetry/api": "1.9.1"
   }
 }

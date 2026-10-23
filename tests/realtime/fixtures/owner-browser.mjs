@@ -38,14 +38,13 @@ export async function proveOwnerBrowser(f,{baseline,change,finish,scenario='posi
       const originalMode=(await stat(runtimePath)).mode&0o777;
       const source=runtimeOriginal.toString('utf8');
       const compositionAnchor='export function createRealtimeComposition() {';
-      const headerAnchor='reply.hijack();\n                reply.raw.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no", "X-Correlation-ID": correlationId });\n                const streamSocket = reply.raw.socket;\n                reply.raw.once("finish", () => streamSocket?.end());';
+      const headerAnchor='reply.raw.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no", "X-Correlation-ID": correlationId });\n                    const streamSocket = reply.raw.socket;\n                    reply.raw.once("finish", () => streamSocket?.end());';
       assert.equal(source.split(compositionAnchor).length-1,1,'compiled composition anchor must be unique');
       assert.equal(source.split('app.get("/events", {').length-1,1,'compiled /events route must be unique');
       assert.equal(source.split(headerAnchor).length-1,1,'compiled successful /events header anchor must be unique');
       const transformed=source
         .replace(compositionAnchor,`${compositionAnchor}\n    let issue12PrivateEofTriggered = false;`)
-        .replace(headerAnchor,`reply.hijack();
-                reply.raw.removeHeader("Transfer-Encoding");
+        .replace(headerAnchor,`reply.raw.removeHeader("Transfer-Encoding");
                 reply.raw.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "close", "X-Accel-Buffering": "no", "X-Correlation-ID": correlationId });
                 const streamSocket = reply.raw.socket;
                 reply.raw.once("finish", () => streamSocket?.end());

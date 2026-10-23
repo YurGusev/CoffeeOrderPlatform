@@ -3,6 +3,7 @@ import {access, readFile} from "node:fs/promises";
 import {spawn} from "node:child_process";
 import {dirname, join, resolve, relative} from "node:path";
 import {fileURLToPath} from "node:url";
+import {createRequire} from "node:module";
 
 const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PERMISSION_FIELDS = new Set([
@@ -151,11 +152,23 @@ function localizeReadPath(path, root) {
   return path === "/app" ? root : join(root, path.slice("/app/".length));
 }
 
-export function permissionFlags(manifest, mode, root = "/app", listenPort) {
+export function telemetryHostPort(config) {
+  let endpoint;
+  try {
+    endpoint = new URL(config.telemetry.collector.otlpEndpoint);
+  } catch {
+    fail('invalid telemetry ingest endpoint');
+  }
+  if (endpoint.protocol !== 'http:' || endpoint.hostname !== 'otel-collector' || !endpoint.port || Number(endpoint.port) < 1 || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) fail('invalid telemetry ingest endpoint');
+  return endpoint.host;
+}
+
+export function permissionFlags(manifest, mode, root = "/app", listenPort, telemetryEndpoint) {
   if (mode !== "audit" && mode !== "enforce") fail(`unknown mode ${mode}`);
   const flags = [mode === "audit" ? "--permission-audit" : "--permission"];
   const allowNet = [
     ...manifest.allowNet,
+    ...(telemetryEndpoint ? [telemetryEndpoint] : []),
     ...(listenPort ? [`0.0.0.0:${listenPort}`] : []),
   ];
   if (allowNet.length) flags.push(`--allow-net=${allowNet.join(",")}`);
@@ -198,7 +211,14 @@ export async function runPermissionMode(mode, argv, root = SCRIPT_ROOT) {
   const entryPath = resolveEntry(root, runtime, entry);
   const listenPort = process.env.PORT;
   if (!/^\d+$/.test(listenPort ?? "")) fail(`${runtime}: PORT is required`);
-  const flags = permissionFlags(manifest, mode, root, listenPort);
+  const appRequire = createRequire(join(root, 'package.json'));
+  const runtimeRequire = createRequire(root === '/app'
+    ? appRequire.resolve('@coffee-platform/runtime')
+    : join(root, 'packages/platform-runtime/package.json'));
+  const {load: parseYaml} = runtimeRequire('js-yaml');
+  const {parsePlatformConfig} = runtimeRequire('@coffee-platform/config');
+  const config = parsePlatformConfig(parseYaml(await readFile(process.env.COFFEE_CONFIG_FILE ?? join(root, 'config/platform.yaml'), 'utf8')));
+  const flags = permissionFlags(manifest, mode, root, listenPort, telemetryHostPort(config));
   if (mode === "audit") flags.push("--import", join(SCRIPT_ROOT, "scripts/permission-audit-listener.mjs"));
   const child = spawn(process.execPath, [...flags, entryPath, ...scriptArguments], {
     cwd: root,

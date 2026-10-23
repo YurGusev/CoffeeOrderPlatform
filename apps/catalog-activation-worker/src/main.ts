@@ -32,7 +32,7 @@ const composition:RuntimeComposition={
     http=createHttpClient({origin:`https://${target}`,tls:{material,targetEnvironment:context.config.environment,targetRuntime:"api-internal"},connections:1,pipelining:1});
     const binder=new CatalogActivationBindingClient(http);
     const store=createCatalogActivationStore(database);
-    const outbox=createSqlOutboxStore(database,{schema:"catalog"});
+    const outbox=createSqlOutboxStore(database,{schema:"catalog",topics:context.config.services["catalog-activation-worker"].kafka.producers});
     controller=new AbortController();
     processSignal.addEventListener("abort",()=>controller?.abort(processSignal.reason),{once:true});
     runCycle=async signal=>{

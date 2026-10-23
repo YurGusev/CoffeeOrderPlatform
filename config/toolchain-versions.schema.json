@@ -30,7 +30,18 @@
     "nginxSourceRevision",
     "pgCopyStreams",
     "typesPg",
-    "typesPgCopyStreams"
+    "typesPgCopyStreams",
+    "opentelemetryApi",
+    "opentelemetrySdkTraceBase",
+    "opentelemetrySdkMetrics",
+    "opentelemetryResources",
+    "opentelemetryContextAsyncHooks",
+    "opentelemetryExporterTraceOtlpHttp",
+    "opentelemetryExporterMetricsOtlpHttp",
+    "pino",
+    "otelCollectorImage",
+    "openObserveImage",
+    "bootstrapProbeSha256"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -92,6 +103,17 @@
     "nginxVersion": { "const": "1.31.6" },
     "nginxImageIndexDigest": { "const": "sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7" },
     "nginxLinuxAmd64Digest": { "const": "sha256:9c0f39aa1c46f5062ba080555a067ebb82d5f63a8cf4d63f6ef2e76fc9ff2d0c" },
-    "nginxSourceRevision": { "const": "a16f1329e13e7273c4103f75d863ca625b75109e" }
+    "nginxSourceRevision": { "const": "a16f1329e13e7273c4103f75d863ca625b75109e" },
+    "opentelemetryApi": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "opentelemetrySdkTraceBase": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "opentelemetrySdkMetrics": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "opentelemetryResources": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "opentelemetryContextAsyncHooks": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "opentelemetryExporterTraceOtlpHttp": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "opentelemetryExporterMetricsOtlpHttp": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "pino": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "otelCollectorImage": {"type": "string", "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"},
+    "openObserveImage": {"type": "string", "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"},
+    "bootstrapProbeSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
   }
 }

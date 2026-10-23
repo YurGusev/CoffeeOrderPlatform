@@ -1,0 +1,1264 @@
+issue: 64
+baseCommit: d6d860af092e3874f58d31506d473fe75dfc3d2f
+status: verified
+inputs:
+  - acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: evidence/handoffs/issue-60.yaml
+    issue: 60
+    sha256: c55f321fe2742b96d413377bb49689cdbc9b9860d2535e6945a2c61e4cb134bb
+  - acceptedMergeCommit: eb34befd76c0654e75d82637251dc4d12d0e0213
+    artifact: evidence/handoffs/issue-4.yaml
+    issue: 4
+    sha256: 42c823ab2fca8037c741a65e27658ee87877c0f01515e7d2faa9fcd684cb3f0a
+  - acceptedMergeCommit: d1f462838da15b25049842a241f4e3f6f75a6b4f
+    artifact: evidence/handoffs/issue-61.yaml
+    issue: 61
+    sha256: 3c83d9e42870a35baeb2f12c7dfb62901b316bab536a54a3dadd099ca172459b
+  - acceptedMergeCommit: 56b0e99275573b6bdc2461703b3221c5c678cfa6
+    artifact: evidence/handoffs/issue-62.yaml
+    issue: 62
+    sha256: 704a093a2e18fe3de8fe963ab4b56d16fa6670b87de3ac89ee6c06bc59ceab76
+  - acceptedMergeCommit: d16b41dd58db4494a1fb743fa741010249d7afa7
+    artifact: evidence/handoffs/issue-63.yaml
+    issue: 63
+    sha256: e6df7df6405c7f5da423aa151857b5791211bc2bdbde8508e808f18fd1d3e03c
+  - acceptedMergeCommit: 327474d917e1f3f1dfd9d12da8a1273775f8591f
+    artifact: evidence/handoffs/issue-162.yaml
+    issue: 162
+    sha256: f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54
+  - acceptedMergeCommit: d6d860af092e3874f58d31506d473fe75dfc3d2f
+    artifact: evidence/handoffs/issue-12.yaml
+    issue: 12
+    sha256: 447a52e667d23502d0c29a25311dd9e96a8e08f6030e666f797eb2aa2c8caa8f
+  - acceptedMergeCommit: 69cc341b6d9507f27c5e115aef519d0b96923bfc
+    artifact: docs/adr/ADR-0025-fastify-launch-recovery.md
+    issue: 60
+    sha256: 108de7042b7546cae60e4fe807fe1bb8640d464e37caed1bb5a147f0c1abc141
+outputs:
+  - artifact: .gitignore
+    sha256: ac492347816b8ed42554da151b866c5581e9c7a85f340301fb1500e190c779ad
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: apps/aroma-convergence/src/infrastructure/convergence-store.ts
+    sha256: 85e98ab99b270b254fa514b82b4ccbb9ee8b6e7e0ef86a56152988dc697a1b21
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: apps/aroma-convergence/src/observability.ts
+    sha256: db716467dfd9eb97e94bd355ef9edf1f1675cd1020427b3440ce9f6d6d04f338
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: apps/catalog-activation-worker/src/main.ts
+    sha256: 5286d5eb426a5f796099dea7bfbb9dcc898af79ccf336076980bc1095b76ed91
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: apps/edge-nginx/Dockerfile
+    sha256: c91f9c0cc21a9849c9060c0da3cdeb34d2593519be0bcd4e9d71bcb50110d899
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: apps/edge-nginx/snippets/business-headers.conf
+    sha256: bd6388e010f61a55aad9eefcd47c519bbdfaeb77856b314da89dc8b666391d19
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: apps/realtime-gateway/package.json
+    sha256: 78bcadcdda641d8e2538194a88389c39f5b50f00be1dcc922ddf5cdc85192720
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: apps/realtime-gateway/src/hub.ts
+    sha256: ede37d2e7c01e38f1cac81e170ab8a8f769f5c5514bb5cccb54663d4f25c31fa
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: apps/realtime-gateway/src/runtime-composition.ts
+    sha256: 40ba47ba1d9c2b94f9dd4d827bbb4ec24decd5e1d3e22c0cab4c8bec92e4f32d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: config/platform.schema.json
+    sha256: 3746ecb832d5369e0222e2a4e8ac32874103720b9b78ecbb1eb56965f65191ec
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: config/platform.yaml
+    sha256: 0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: config/service-catalog.json
+    sha256: c98ac6c44f0ef107d6b7f93cdad2766b2c9c3d033986b88de845b3c88c90cbd1
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: config/service-catalog.schema.json
+    sha256: 42f3c4b3be2e059438dd206f8542f2916c3aed674789a0113b8a8b3de89921b6
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: config/toolchain-versions.json
+    sha256: dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: config/toolchain-versions.schema.json
+    sha256: e5e1f1807eba8aeeef36f06cb4c2466a15ce302355ca8789631c064f57dc296d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: docs/launch/11_CONFIGURATION_AND_SECRETS.md
+    sha256: 93fd94b5074005aa478d60fd633c23ddf1fa26848f68468a0b34bfa2c11ef989
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md
+    sha256: b56a03e6cc32aaffc2e7e8d39737fb80669f83488f9d29aaf74e335fe5c766d3
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: docs/launch/21_LAUNCH_VERIFICATION_SPEC.md
+    sha256: a77dd1450e84e4466831b50afeff21189dcd63e0c4b34c3d3047bbad8b2ba92c
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md
+    sha256: 3d8869c554481dfa87b9fde66a9e377c9b60ce4140e8cfd41ea25042bf98730d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: docs/launch/README.md
+    sha256: 0f538189afb3c0eda523bdfbe16ce5280841fce0c6546d9df11a11576d219d28
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: docs/operations/observability.md
+    sha256: 484df075319faef63adb2d724fc246543116b21a9e328afdf2b94080e54d49d7
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: package.json
+    sha256: 71b837d8ee12ed7a1d95f8798845af1d33dda198664be1786f048b94750cc590
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-config/src/index.ts
+    sha256: c06b8d8f96a381052e78609f93f54074ed3a6f45dbeae9c297a1babb45433e2d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-database/package.json
+    sha256: decab3078a55e47022ba8ef82770a484219514c4970b5d3664230a8d72e10f59
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-database/src/index.ts
+    sha256: dbf8fd94334d3f7b810afbe83d615ab676bd1d34aef42702f3d39803ccf71214
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: packages/platform-database/src/internal.ts
+    sha256: d1571a3d5fdfcb74cfb732b729421f65a5d967cd34dd40e07f5affa252567d71
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-http/package.json
+    sha256: bffec0b53dfa8a093b0e1c486c3ca20ad9501e02149c93d16ab2a1b0c801365d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-http/src/index.ts
+    sha256: 228444cbc84ba1c9710b285ba3085ac7fa28358cf3bda8699e9beecdeb805f9a
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-inbox/package.json
+    sha256: 26b3e4705f47e44e789750513dc27d92268465e52c3f04849466557d6fce9f96
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-inbox/src/index.ts
+    sha256: bcd9f98b53e9b3b0fcc6702f063fb7cb4988a7a46ab9f99ea1f20118d2d9979f
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-kafka-runtime/package.json
+    sha256: 20d1a7891277c3ec4741cf9640f83a22dcf9c35d78d8f90df7387a3b267d9f04
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-kafka-runtime/src/index.ts
+    sha256: ca5c1537071bb461d079b5b59a0645ae0b212585f97bfa8e7e536e7668c0df92
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-kafka-runtime/src/native.ts
+    sha256: 195bc07fbd4693f54953774aa6871c69d69bf204c51439248b8ec9cf926b5f7f
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-observability/package.json
+    sha256: 92ecd452f9daf6fcc46ebe20beb0fea28e6243a615a1e932373d03ef7b69b9d9
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-observability/src/index.ts
+    sha256: 84600840ab34a68e9f069ebb2e393ae1ac1ca19ba78102502d7e2eb84df93a1a
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-outbox/package.json
+    sha256: 9aa9f7d6983d49d8cb937fd9249d01fc444a8ebe8008b536ce35847c10330db4
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-outbox/src/index.ts
+    sha256: d7a13390fb09d6d31633b2803289ff414f090dbb4b840d5c4645832dbe5f94ea
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-runtime/package.json
+    sha256: 79ce8e0082cb72cf0c6ebdbbffc769827b297b566ccc44778a91f63cd29e4114
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-runtime/src/index.ts
+    sha256: 0e531ed49d333688bf937710b07472dd2aa3941987c2a97e3b61f1a1f269c705
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: packages/platform-testing/test/platform-packages.test.mjs
+    sha256: 8ee8887f21ee82fa83d8dc2b3777615079bb0fb904f4ed65000c8570fb740319
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: pnpm-lock.yaml
+    sha256: 62d117c22e5efdcf716a345a3ffce15d16b8ff63d5e6a8b7a47669dd75696c22
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: scripts/check-service-catalog.mjs
+    sha256: de90bc487c00dad108b338ed55f05a6943cab9ab60f48774a153455988d1010d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: scripts/check-toolchain-profiles.mjs
+    sha256: efc3b9d82b8496e132ef58f47e8bf32d7fb0ef670fe0ef772addb0b27c8c0d15
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: scripts/check-toolchain-versions.mjs
+    sha256: 0afce952ae9847faf2b997d669adb74eb6572e283e87c039a534a35f850826db
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: scripts/config-lib.mjs
+    sha256: fcc648a6bbe27e9f7a4ff916d0b1b94c82d9f49c4a503a4be034566a04206ee9
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: scripts/permission-audit.mjs
+    sha256: 6914d6f4673338c2d4429c0c698ab7a29c2ae82346f5c4a4f693b6a126523f68
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: secrets/platform-secrets.schema.json
+    sha256: af0879a48cb4477e1cc3c6174e9662446f7cbe2b51358eb0fe22137a396ae7fd
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/aroma/convergence-live.test.mjs
+    sha256: 2b333faf39f88b5389ffe2ff9823881b788ab8fa0662f7885a15821c403ed12d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/compose/topology.test.mjs
+    sha256: ba9c2a29d918e69011a1f645b65dee622d6492991793fa1a70691c30c6834eca
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: tests/config/observability-bootstrap.test.mjs
+    sha256: e24046ce4ac6983f5eb7f8ea8dbcdfdc83bcb7488c2db7bb87c83e38a0bcbb96
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/config/platform-config.test.mjs
+    sha256: a184512e10f7ad38f4c32940da9d3eb3619d2440a1ebd7706b454081c70da38c
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/kafka/orders-inbox-live.test.mjs
+    sha256: 351187a0eccf5fb4a65178134a06931e4ea52388afb0ea21980b31d8c9026d84
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: tests/kafka/runtime.test.mjs
+    sha256: 48102657e1920986ab42689ade6e37cdabae44b823c98289cb4d46b999488c7c
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/nginx/image.test.mjs
+    sha256: fc1efabf6d3e48032a0bbf1218928e27df584692bbc793674e9addcc299157d0
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/observability/alerts.test.mjs
+    sha256: 844a9ffd4efdc9cd5f986e390319f3605bb2ed26b0b1755bcb53d27dc4e36e7d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: tests/observability/convergence-metrics-proof.mjs
+    sha256: c17c9241dab4e07a096b7d86cd04c8bddf901328abfc09355d89042b1ac964c0
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/observability/fixture.mjs
+    sha256: c42fcff19ed574e9c4c95d408ccd595c2b924e583c577e88dd0073fc54d7b06a
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/observability/launch-path.mjs
+    sha256: 5152ef00e3e27532e04e08068235fdee597bff6a6c124f96d66d1210135aa033
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/observability/orders-fixture.mjs
+    sha256: a49313caf55b3455997e3396466694bf6854f56d0520537509aa680842fe357f
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/observability/runtime-matrix-probe.mjs
+    sha256: c8a5d09f46ee4609f14dbc2bbf5c8564c237846d46a9389c4f5a4ca4aba29a56
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/observability/runtime-matrix.mjs
+    sha256: 593bd46986c97a6623b40949b09374b03513f2e7834fd55091fa33384be2c916
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: tests/observability/storage.test.mjs
+    sha256: f9b8a68f1f24ecd66de6e3289973c34267a297e5a06ed2e076d77bc08d1d829f
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/orders/aroma-preparation-live.test.mjs
+    sha256: 0f1521fb1685ea7c1780724a43b5873540c1c30d044243df527bcbf80aa746e5
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/orders/observability.test.mjs
+    sha256: cbe5f6467da945e18c7bc975f07f68fe55063dce8f3538bf6b060725a1c110c5
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/realtime/backpressure.test.mjs
+    sha256: 94649a8f70c12cb50ecc9edbef62102cd6a5756ad031dd40d09c87d50485276a
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/realtime/fixtures/harness.test.mjs
+    sha256: 87393021e2e23f7666e7b3c80071591f39a282e1221fc908fb9fca5b90d0a80b
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/realtime/fixtures/owner-browser.mjs
+    sha256: 0e4138bdd21e5199b8283465934310ba2e543c58b21055740f2af22a9f92e9af
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/realtime/fixtures/owner-publisher.mjs
+    sha256: 8c301699eee8dff63e85a1a0b97038552a0abf9b42aacb7f626fda1031e58fe8
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/realtime/fixtures/services.mjs
+    sha256: 9fc4f0f663671bb5686204685633d05d2b8bd34c294ac782990b568d4f17aae6
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/realtime/fixtures/setup.mjs
+    sha256: 82bd0af8e1a9c8118721f535567d9dde1e5f154b77dc719bfe0040618a80e7c6
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/realtime/soak.test.mjs
+    sha256: 8f4ebe759fba1d31b0371a6be12c8c6c09fd972925757e778a2cc23b51c30073
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/runtime/lifecycle.test.mjs
+    sha256: 10fde4622b2d4e1aaf93d3cc7ce295619ce9b37690f5a1f825672cc37415c9b6
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/runtime/permissions.test.mjs
+    sha256: eb77d3a585fdf76438c75c29e8d00ab203041ae01acadcfdce48611d61d49b7f
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tests/runtime/platform-http.test.mjs
+    sha256: 268538963fc7e4eaea944c251f193a8c7c252c5fb3b804d784d2386c1d0a871d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/compose-smoke.mjs
+    sha256: caa37c4f9d68881ec2125e0ee90c08d0e211c627d3c41958766036d17f465ff1
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: tools/config-bootstrap/index.mjs
+    sha256: f0000a85d124c34acf03b2beb7c844fe9f226169acbf6a3ee11071b31d0f5b62
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/docker-build.mjs
+    sha256: 88b2325206cbd80ecb892b8b7133c95d8c6803ed08338917b1d17f68bdcfb48b
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/nginx/check-config.mjs
+    sha256: 4dedee3668e643f9056cf99879ca2303652f3ce982ae84cb9d4c691f1f877854
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/nginx/generate.mjs
+    sha256: 94506699af4ac7f617d3e85fbf9d6ac44b83affc3e788ff00197339a5027a068
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/observability/alert-sink.mjs
+    sha256: a70c3f521f5133cb6e896ffa5359e68f203fe3cd5da602e145f6557718020d7f
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/observability/alerts.mjs
+    sha256: cc259efbac58105a8b443da68ad284254948ff1f348103b54e11ef88ed9a80b0
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/observability/bootstrap.mjs
+    sha256: 1795cb5ac316476959179fdec51977ab1f053948af953509bee077ddea57c35f
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/observability/generate.mjs
+    sha256: e9ce2b1a9e9295cd6f8ffaeb62e831fe52d149faf5fd545cf6d4db30e05f501d
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: tools/observability/health.mjs
+    sha256: aa35be55023cd8857f1f78eac7c48a1940ac9e8867416caba3fd483e68462665
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/observability/storage.mjs
+    sha256: 975be9227aee90ea0072dc0837d4b342866b85e6531a916b94125ddecaf49e67
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: false
+  - artifact: tools/observability/verify.mjs
+    sha256: dc77b6dcb1dda810da8a91d7dc099c0fe5048500ff814788cfca8ba383a4ee21
+    consumers: []
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: apps/aroma-observer/src/runtime-composition.ts
+    sha256: 839351744cbabbbaae2d6ef30e5953447df3231443c8d005d6c0cac0b0a2dfe1
+    consumers:
+      - 13
+    sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+    workingTreeModified: true
+  - artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/result.json
+    sha256: 80b371ddc38a7c2d9a6548c5371b5b87e48f79bfe291178a9205d57c6c741f9a
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/alert-transitions.json
+    sha256: 727fefaf15a5615e2c16c019a6dda94f2c5850de8ca937b7729304e945fb4b18
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/correlation-proof.json
+    sha256: c977861746aa695b4e81250625e08c7ec48829799ef409bcf0b038231739e5ee
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/host-transport.json
+    sha256: bcdda5c0f55f9a9ba1d62999f5ee5c4232c0ed7c6eb5d647245c149484d951b6
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/queue-loss-counters.json
+    sha256: 1a6a223ecc9e48a9898c7860ca50780ccc9ccdd2f3ada10558dd2cc4e470987d
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/redaction-scan.json
+    sha256: 6e07bab3af49af44779dea2e1885f60f77305df09f6a92f79b567eb7afb94290
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/retention-result.json
+    sha256: fdb8e66954ae1dcb0e7794ecd05b077cc908361a50096d033e1f659730dcf4f5
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/runtime-health-matrix.json
+    sha256: 513a45251404bec176ecb7b4941a7752459c37ff880de81b36a731f4f826efde
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/issue-64-host-cleanup.json
+    sha256: e69f432e5e9e2dd420eb08861584d0bbebc8a8de3355a25dee87beede55da5c0
+    consumers:
+      - 13
+    provenance:
+      classification: HISTORICAL_819_RETAINED
+      sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/alert-transitions.json
+    sha256: af30a88067ac58e94261066d1f5f4b22cceb711dc019609bc8880aef1a2703df
+    consumers:
+      - 13
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/correlation-proof.json
+    sha256: 16f042cd75852afffd194d4d686545d30b734f122d5e07b2c95dc8e4c1071434
+    consumers:
+      - 13
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/queue-loss-counters.json
+    sha256: 32e152383fc267f13d60357bcf51edaeb5ed4c19c0a39aec2438c3cc382483dd
+    consumers:
+      - 13
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/redaction-scan.json
+    sha256: d8d05e13b17d6f851727105683af28288761cffd8f1071ed8c5fbec9c2cd2ce7
+    consumers:
+      - 13
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/result.json
+    sha256: f96102bc91e5ba6166a91cd8ee19c25c3f45abaf9781222fe4eca48acec6cfbc
+    consumers:
+      - 13
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/retention-result.json
+    sha256: aa730fdfc9401c8449aabcd8ab0c4d667ed32a7059b6bc2e9c7853423347415f
+    consumers:
+      - 13
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/runtime-health-matrix.json
+    sha256: f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a
+    consumers:
+      - 13
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/actual-run-result.json
+    sha256: 9393313945853eaa2f119532f81cc17cabd3505bb26b5a1bffd2593f17331779
+    consumers:
+      - 72
+      - 74
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/command-index.json
+    sha256: 376d4fb291ec73850dc36f0f26d757ecf6afff3933f7f7455612b1443088861c
+    consumers:
+      - 72
+      - 74
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/build-metadata.json
+    sha256: 392714211ea24d603a4919afb4a95d20a992ac37362652e7a75d77bdafe2e370
+    consumers:
+      - 72
+      - 74
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/image-build.stdout.raw
+    sha256: ac7c36a58253cd5f8e6217a70d801e18b56e0311e364e5c6c367d78541a7d427
+    consumers:
+      - 72
+      - 74
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/image-build.stderr.raw
+    sha256: 11a8f1be251ed46e8ee8251e1f492986402ea430652b949371ce88dbae79d8a9
+    consumers:
+      - 72
+      - 74
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/compose-smoke.stdout.raw
+    sha256: 86599a0bf2d2dd2340c6c528039c4e1777d37e63fcb2a44392aadc5a72e7c104
+    consumers:
+      - 72
+      - 74
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/compose-smoke.stderr.raw
+    sha256: a7b73c9f2db7759838dd93c9201cc66fc6dd587e4a9fbca7eadc498be16cb526
+    consumers:
+      - 72
+      - 74
+  - artifact: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/root-acceptance.json
+    sha256: d4913decd4e906220ebddbf7edf3185b30f9333d805304ef485303ef4a31b47a
+    consumers:
+      - 72
+      - 74
+  - artifact: evidence/issue-64-local-checks.json
+    sha256: 8d02d60e4e80624db50879f74e7fde1a1f99f497e6a3b6a41a049f12844c10be
+    consumers:
+      - 13
+  - artifact: evidence/issue-64-checkbox-audit.json
+    sha256: e07442531399423511a475c214368c46ccfa2296cf8a986c1b8e18ee7b06ceb3
+    consumers:
+      - 13
+  - artifact: evidence/issue-64-host-cleanup-current-50ad2ff0-69f5-4a71-9fef-4c0b2cb90341.json
+    sha256: c1780f4dcf8a09f961c94536306abb1cdebe03443e71d7d5b164f173e4115f4f
+    consumers:
+      - 13
+  - artifact: .gitattributes
+    sha256: 0ecf95c874592b54ec3265489d14704f72785bb94d4c58d590f799e005b186bf
+    consumers:
+      - 13
+verification:
+  sourceMap: PASS_SOURCE_MAP_ONLY_NO_RUNTIME_CLAIM
+  fullsuite: PASS_ROOT_VERIFIED_WIP15_FULLSUITE
+  fullsuiteCounts:
+    tests: 951
+    passed: 874
+    failed: 0
+    cancelled: 0
+    skipped: 77
+    todo: 0
+  fullsuiteResponseCoverage: 'Root-accepted WIP15 fullsuite session 26956: exit 0; start plus 11 original polls are byte-verified with full stdout/stderr; this is not canonical G14.'
+  fullsuiteRetainedResponseCount: 12
+  fullsuiteLimitations:
+    - Accepted WIP15 fullsuite is package-test evidence, not canonical G14 or runtime acceptance.
+    - 77 skipped tests are not PASS; live opt-in checks were not run.
+    - Docker inventory delta and OOM delta were not measured.
+    - This package suite does not establish PostgreSQL persistence or durability.
+  runtimeImageMatrix: PASS_15_IMAGES_AND_14_ROLES
+  canonicalG14: PASS_ROOT_VERIFIED_CURRENT_CANONICAL
+  nestedComposeRecovery: PASS
+  standaloneComposeRecovery: PASS_ROOT_VERIFIED_POSTCANONICAL_COMMANDS
+  standaloneImageBuild: PASS_ROOT_VERIFIED_POSTCANONICAL_COMMANDS
+  canonicalImageToolingScan: PASS_CANONICAL_IMAGE_SCAN
+  standalonePrebuildToolingRescan: NOT_RUN
+  postCleanupChecks: PASS
+  postCleanupChecksStartedAtUtc: '2026-10-23T09:06:28.366764+00:00'
+  cleanupCompletedAtUtc: '2026-10-23T09:05:41.971990+00:00'
+  postCleanupChecksStartedAfterCleanup: true
+  hostCleanup: PASS
+  fullSystemG14: NOT_RUN_ISSUE13
+limitations:
+  - 'Отдельная consumer acceptance issue #13 не выполнялась; её статус остаётся NOT_RUN.'
+  - В fullsuite пропущено 77 проверок; пропуски не считаются PASS.
+  - Accepted WIP15 fullsuite is package-test evidence, not canonical G14 or runtime acceptance.
+  - 77 skipped tests are not PASS; live opt-in checks were not run.
+  - Docker inventory delta and OOM delta were not measured.
+  - This package suite does not establish PostgreSQL persistence or durability.
+  - 'Root-accepted WIP15 fullsuite session 26956: exit 0; start plus 11 original polls are byte-verified with full stdout/stderr; this is not canonical G14.'
+  - Запуск canonical под QEMU подтверждает функциональную интеграцию, но не native capacity.
+  - 'Данные disk pressure и cleanup относятся к принятому временному fixture и не доказывают native capacity или SLO issue #13.'
+  - Canonical image tooling scan PASS привязан к 15 image ID и принятому result.json; отдельный post-canonical rescan не запускался.
+  - Исторические WIP11–WIP14 runtime receipts сохранены отдельно и не подменяют текущий принятый WIP15 результат.
+  - Production deployment, реальные credentials и внешние alert destinations не проверялись.
+consumerContract:
+  issue: 13
+  status: pending
+  owner: Operations
+  requiredCommand: pnpm test:observability
+  sourceIdentity:
+    baseSha: cddbc5145f895ae9fa909d32c15427174fca599f
+    configSha256: 0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9
+    bomSha256: dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab
+    imageRefs:
+      otelCollectorImage: otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6
+      openObserveImage: public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7
+      nodeImage: node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+      kafkaImage: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+      nginxImage: nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+    sourceFiles:
+      status: PASS
+      fileCount: 1481
+      missingFileCount: 0
+      sha256: 9d652c69efb3eb9c2dfcb9179b2b60d7fe4ed5045565aca4357902742566a92c
+    runtimeArtifacts:
+      packages/platform-runtime/dist:
+        status: PASS
+        fileCount: 4
+        sha256: e3ad7de7820946931e0700b796ffbeed66559fb8a86b207d17f5128b3e306796
+      packages/platform-observability/dist:
+        status: PASS
+        fileCount: 2
+        sha256: f963c66d8390e203b37a1841c940ec31465be0c4f97779c7852dcf8381d53247
+    identityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+  isolatedResources: '{"project":"coffee-issue64-final-50ad2ff0","runtimes":14,"nativeIngress":"edge-nginx","kafka":true,"ephemeralKafkaBroker":true,"credentialSource":"local-fixture","telemetry":true,"dbIntegrationProof":true,"gracefulShutdown":true,"healthEndpoints":["/health/live","/health/ready","/metrics"],"recoveryProofPresent":true,"postgresStorage":{"type":"tmpfs","destination":"/var/lib/postgresql/data","sizeMiB":512,"durability":"ephemeral"}}'
+  expectedResult: 'Текущий WIP15 canonical принят; отдельная consumer acceptance issue #13 остаётся NOT_RUN.'
+  limitations: 'Этот handoff подтверждает только функциональный predecessor #64. Он не заявляет launch-level SLO, chaos/failure, native capacity или cold-cache acceptance; полный G14 issue #13 остаётся NOT_RUN до отдельной приёмки.'
+  verifiedCommand:
+    - docker
+    - exec
+    - '--user'
+    - '1000:1000'
+    - '--env'
+    - TMPDIR=/dev/shm
+    - '--workdir'
+    - /home/yurgusev/CoffeeOrderPlatform
+    - d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba
+    - pnpm
+    - test:observability
+    - '--'
+    - '--emulator'
+    - /dev/shm/pr179-fixture-2eb8c786-5771-49f7-92f7-3a2b35249017/qemu-x86_64-static-exec
+    - '--probe'
+    - /usr/bin/busybox
+  verifiedCommandContext: 'Текущий WIP15 canonical принят; отдельная consumer acceptance issue #13 остаётся pending.'
+  canonicalRunId: 50ad2ff0-69f5-4a71-9fef-4c0b2cb90341
+  configAuthority: config/platform.yaml
+  bomAuthority: config/toolchain-versions.json
+  externalNotifications: 'Запрещены: canonical evidence использует только изолированный run-local OpenObserve; внешние alert destinations и отправка уведомлений не настраиваются и не вызываются.'
+  sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+  actualCommand:
+    - docker
+    - exec
+    - '--user'
+    - '1000:1000'
+    - '--env'
+    - TMPDIR=/dev/shm
+    - '--workdir'
+    - /home/yurgusev/CoffeeOrderPlatform
+    - d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba
+    - pnpm
+    - test:observability
+    - '--'
+    - '--emulator'
+    - /dev/shm/pr179-fixture-2eb8c786-5771-49f7-92f7-3a2b35249017/qemu-x86_64-static-exec
+    - '--probe'
+    - /usr/bin/busybox
+createdAtUtc: '2026-10-23T06:49:24.664717+00:00'
+sourceIdentity:
+  baseSha: cddbc5145f895ae9fa909d32c15427174fca599f
+  configSha256: 0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9
+  bomSha256: dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab
+  imageRefs:
+    otelCollectorImage: otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6
+    openObserveImage: public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7
+    nodeImage: node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+    kafkaImage: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+    nginxImage: nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+  sourceFiles:
+    status: PASS
+    fileCount: 1481
+    missingFileCount: 0
+    sha256: 9d652c69efb3eb9c2dfcb9179b2b60d7fe4ed5045565aca4357902742566a92c
+  runtimeArtifacts:
+    packages/platform-runtime/dist:
+      status: PASS
+      fileCount: 4
+      sha256: e3ad7de7820946931e0700b796ffbeed66559fb8a86b207d17f5128b3e306796
+    packages/platform-observability/dist:
+      status: PASS
+      fileCount: 2
+      sha256: f963c66d8390e203b37a1841c940ec31465be0c4f97779c7852dcf8381d53247
+  identityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+currentG14:
+  status: PASS_ROOT_VERIFIED_CURRENT_CANONICAL
+  baseCommit: cddbc5145f895ae9fa909d32c15427174fca599f
+  runId: 50ad2ff0-69f5-4a71-9fef-4c0b2cb90341
+  receiptDirectory: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341
+  resultSha256: f96102bc91e5ba6166a91cd8ee19c25c3f45abaf9781222fe4eca48acec6cfbc
+  composeReceipt:
+    project: coffee-issue64-final-50ad2ff0
+    runtimes: 14
+    nativeIngress: edge-nginx
+    kafka: true
+    ephemeralKafkaBroker: true
+    credentialSource: local-fixture
+    telemetry: true
+    dbIntegrationProof: true
+    gracefulShutdown: true
+    healthEndpoints:
+      - /health/live
+      - /health/ready
+      - /metrics
+    recoveryProofPresent: true
+    postgresStorage:
+      type: tmpfs
+      destination: /var/lib/postgresql/data
+      sizeMiB: 512
+      durability: ephemeral
+  producerManifestSha256: c852c10809321f089d9e37195cb69e64df9f15ec9e5447709b093eccdf46706e
+  sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+  actualRunResultSha256: d95dc4b09785a2bd88783ef41bd6bcaba34002777766d6eef50b617cd7ab3510
+outputsRehashedAgainst: cddbc5145f895ae9fa909d32c15427174fca599f
+cleanup:
+  status: PASS
+  receipt: evidence/issue-64-host-cleanup-current-50ad2ff0-69f5-4a71-9fef-4c0b2cb90341.json
+  sha256: c1780f4dcf8a09f961c94536306abb1cdebe03443e71d7d5b164f173e4115f4f
+  handoffSelfSha256: OMIT_BY_PROTOCOL
+sourceIdentityHash: 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9
+evidence:
+  localChecks: evidence/issue-64-local-checks.json
+  localChecksSha256: 8d02d60e4e80624db50879f74e7fde1a1f99f497e6a3b6a41a049f12844c10be
+  checkboxAudit: evidence/issue-64-checkbox-audit.json
+  checkboxAuditSha256: e07442531399423511a475c214368c46ccfa2296cf8a986c1b8e18ee7b06ceb3
+  postcanonicalCommands:
+    acceptancePath: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/root-acceptance.json
+    acceptanceSha256: d4913decd4e906220ebddbf7edf3185b30f9333d805304ef485303ef4a31b47a
+    evidencePath: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/root-acceptance.json
+    actualSessionId: 57789
+    artifactHashes:
+      actual-run-result.json:
+        path: actual-run-result.json
+        sha256: 9393313945853eaa2f119532f81cc17cabd3505bb26b5a1bffd2593f17331779
+        bytes: 13830
+      command-index.json:
+        path: command-index.json
+        sha256: 376d4fb291ec73850dc36f0f26d757ecf6afff3933f7f7455612b1443088861c
+        bytes: 27072
+      build-metadata.json:
+        path: build-metadata.json
+        sha256: 392714211ea24d603a4919afb4a95d20a992ac37362652e7a75d77bdafe2e370
+        bytes: 2508
+      image-build.stdout.raw:
+        path: image-build.stdout.raw
+        sha256: ac7c36a58253cd5f8e6217a70d801e18b56e0311e364e5c6c367d78541a7d427
+        bytes: 874
+      image-build.stderr.raw:
+        path: image-build.stderr.raw
+        sha256: 11a8f1be251ed46e8ee8251e1f492986402ea430652b949371ce88dbae79d8a9
+        bytes: 7214
+      compose-smoke.stdout.raw:
+        path: compose-smoke.stdout.raw
+        sha256: 86599a0bf2d2dd2340c6c528039c4e1777d37e63fcb2a44392aadc5a72e7c104
+        bytes: 16345
+      compose-smoke.stderr.raw:
+        path: compose-smoke.stderr.raw
+        sha256: a7b73c9f2db7759838dd93c9201cc66fc6dd587e4a9fbca7eadc498be16cb526
+        bytes: 117557
+    originalToolResponses:
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-start.json
+        sha256: b7461fb49c760ae7a055cef6e1d9502fd518ccb4da81cd6a9e76d7f094268d11
+        bytes: 108
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll01.json
+        sha256: 666a0c19c3ccac13d8c93031caf043df6d5d2449f23b5302cfd0d5766f627351
+        bytes: 110
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll02.json
+        sha256: e709c21ae17b3ce42a14fe479d4d7662a3b58624dc45e0417803eeb7fb9bb54b
+        bytes: 110
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll03.json
+        sha256: af1d8d216e12375c48a409dda19cca605bcee849b007bd195c985e7be2fbbcf1
+        bytes: 110
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll04.json
+        sha256: 88dc3e64b8807d1aa91a89c25aa7dd9b89b54887821bef51055da2122efcb288
+        bytes: 110
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll05.json
+        sha256: aefe37f320fb7e29b35dcd308969872ce3198708232c7d8c5d59724ed7c5ffd1
+        bytes: 110
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll06.json
+        sha256: 92912b1606984a213c18d3eb8c286fc4f9f2ca91d777f29a3f5bc210fdfd17db
+        bytes: 109
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll07.json
+        sha256: 199e8302c4b5d95c38cbf1e400fb01d4367c164c03cb9e0e64014af7813ff007
+        bytes: 132
+      - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll08.json
+        sha256: 052373e560a5c43046da03ebfa7ad3c6d5e4b8dc8dbfd1bb64705d454f77b764
+        bytes: 126
+    commandArgv:
+      image-build:
+        - docker
+        - exec
+        - '--env'
+        - TMPDIR=/dev/shm
+        - '--env'
+        - BUILDX_BUILDER=coffee-platform-mtu
+        - '--user'
+        - '1000:1000'
+        - '--workdir'
+        - /home/yurgusev/CoffeeOrderPlatform
+        - d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba
+        - pnpm
+        - image:build
+        - '--build-arg'
+        - RUNTIME=aroma-observer
+        - '--target'
+        - runtime
+        - '--metadata-file'
+        - /dev/shm/pr179-fixture-2eb8c786-5771-49f7-92f7-3a2b35249017/r5-migration/image-build-f2ffecc03d3d.json
+        - '--load'
+        - '--tag'
+        - coffee-pr179-wip15-image-f2ffecc03d3d:latest
+        - .
+      compose-smoke:
+        - docker
+        - exec
+        - '--env'
+        - TMPDIR=/dev/shm
+        - '--env'
+        - BUILDX_BUILDER=coffee-platform-mtu
+        - '--user'
+        - '1000:1000'
+        - '--workdir'
+        - /home/yurgusev/CoffeeOrderPlatform
+        - d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba
+        - pnpm
+        - test:compose-smoke
+        - '--'
+        - '--recovery-proof'
+        - '--project-name'
+        - coffee-pr179-wip15-smoke-f2ffecc03d3d
+    commandExitCodes:
+      image-build: 0
+      compose-smoke: 0
+    imageId: sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84
+    retainedPreloadedAliases:
+      - tag: coffee-pr179-wip15-preload-fcda9335-edge-gateway:latest
+        imageId: sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49
+      - tag: coffee-pr179-wip15-preload-fcda9335-api-public:latest
+        imageId: sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71
+      - tag: coffee-pr179-wip15-preload-fcda9335-api-internal:latest
+        imageId: sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620
+      - tag: coffee-pr179-wip15-preload-fcda9335-customer-service:latest
+        imageId: sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4
+      - tag: coffee-pr179-wip15-preload-fcda9335-catalog-service:latest
+        imageId: sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd
+      - tag: coffee-pr179-wip15-preload-fcda9335-catalog-supplier-sync:latest
+        imageId: sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d
+      - tag: coffee-pr179-wip15-preload-fcda9335-catalog-activation-worker:latest
+        imageId: sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea
+      - tag: coffee-pr179-wip15-preload-fcda9335-pricing-service:latest
+        imageId: sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576
+      - tag: coffee-pr179-wip15-preload-fcda9335-orders-service:latest
+        imageId: sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297
+      - tag: coffee-pr179-wip15-preload-fcda9335-orders-aroma-preparation:latest
+        imageId: sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4
+      - tag: coffee-pr179-wip15-preload-fcda9335-aroma-observer:latest
+        imageId: sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84
+      - tag: coffee-pr179-wip15-preload-fcda9335-aroma-convergence:latest
+        imageId: sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4
+      - tag: coffee-pr179-wip15-preload-fcda9335-aroma-gateway:latest
+        imageId: sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d
+      - tag: coffee-pr179-wip15-preload-fcda9335-realtime-gateway:latest
+        imageId: sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5
+      - tag: coffee-pr179-wip15-preload-fcda9335-edge-nginx:latest
+        imageId: sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3
+    canonicalImageBomSha256: f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a
+    toolingScan:
+      status: PASS_CANONICAL_IMAGE_SCAN
+      canonicalResultArtifact: result.json
+      canonicalResultSha256: f96102bc91e5ba6166a91cd8ee19c25c3f45abaf9781222fe4eca48acec6cfbc
+      imageMatrixArtifact: runtime-health-matrix.json
+      imageMatrixArtifactSha256: f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a
+      nodeImageCount: 14
+      nodeImages:
+        - role: edge-gateway
+          imageId: sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49
+        - role: api-public
+          imageId: sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71
+        - role: api-internal
+          imageId: sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620
+        - role: customer-service
+          imageId: sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4
+        - role: catalog-service
+          imageId: sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd
+        - role: catalog-supplier-sync
+          imageId: sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d
+        - role: catalog-activation-worker
+          imageId: sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea
+        - role: pricing-service
+          imageId: sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576
+        - role: orders-service
+          imageId: sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297
+        - role: orders-aroma-preparation
+          imageId: sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4
+        - role: aroma-observer
+          imageId: sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84
+        - role: aroma-convergence
+          imageId: sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4
+        - role: aroma-gateway
+          imageId: sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d
+        - role: realtime-gateway
+          imageId: sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5
+      nginxImage:
+        role: edge-nginx
+        imageId: sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3
+      standaloneBuildImageId: sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84
+      standaloneBuildMatchesRole: aroma-observer
+      standaloneRescan: NOT_RUN
+  canonicalRunId: 50ad2ff0-69f5-4a71-9fef-4c0b2cb90341
+  hostCleanupReceipt: evidence/issue-64-host-cleanup-current-50ad2ff0-69f5-4a71-9fef-4c0b2cb90341.json
+  hostCleanupSha256: c1780f4dcf8a09f961c94536306abb1cdebe03443e71d7d5b164f173e4115f4f
+historical819:
+  sourceCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+  currentLiteralComposeComponent:
+    status: PASS_ROOT_VERIFIED_LITERAL_COMPOSE_CURRENT_HEAD
+    appliesToCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+    receiptDirectory: literal-compose-8191b5f-r2-20261018
+    exitCode: 0
+  currentG14:
+    status: PASS_ROOT_VERIFIED_CURRENT_CANONICAL
+    appliesToCommit: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+    runId: 55045c74-bf13-4ccd-a64d-ea973ea7aa40
+    receiptDirectory: evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40
+    resultSha256: 80b371ddc38a7c2d9a6548c5371b5b87e48f79bfe291178a9205d57c6c741f9a
+    postCaptureSha256: 9f186c1c058b586a6249a5513d5fd1aac352b87bea3f775c6da44e404d50f065
+  cleanup:
+    status: PASS
+    receipt: evidence/issue-64-host-cleanup.json
+    handoffSelfSha256: OMIT_BY_PROTOCOL
+  verification:
+    sourceRoot: SOURCE_ROOT_VERIFIED_RUNTIME_AND_CHECKS_PENDING
+    full8: PASS_ROOT_VERIFIED_CURRENT_HEAD_FULL8_AFTER_EXACT137
+    canonicalG14: PASS_ROOT_VERIFIED_CURRENT_CANONICAL
+    literalCompose: PASS_ROOT_VERIFIED_LITERAL_COMPOSE_CURRENT_HEAD
+    imageBuild: PASS_ROOT_VERIFIED_ALL_15_CURRENT_IMAGES_LOADED
+    hostCleanup: PASS
+    fullSystemG14: NOT_RUN_ISSUE13
+  consumerContract:
+    issue: 13
+    status: pending
+    owner: Operations
+    requiredCommand: pnpm test:observability
+    sourceIdentity:
+      baseSha: 8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e
+      configSha256: 0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9
+      bomSha256: dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab
+      imageRefs:
+        otelCollectorImage: otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6
+        openObserveImage: public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7
+        nodeImage: node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae
+        kafkaImage: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+        nginxImage: nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7
+      sourceFiles:
+        status: PASS
+        fileCount: 1469
+        missingFileCount: 0
+        sha256: 8a69e8db97e3e13d41cc00fba45c93e2148cd678588b7a7288a985a242b382fc
+      runtimeArtifacts:
+        packages/platform-runtime/dist:
+          status: PASS
+          fileCount: 4
+          sha256: fa5173d6de021b0e9d148a6536653cb4405d6af2a240634fe0e5fb9586be8812
+        packages/platform-observability/dist:
+          status: PASS
+          fileCount: 2
+          sha256: 1c120dd7bf1597d7343794a8ef6829826c5e9b4e8ef14ceb623d1d7ee7a783ec
+      identityHash: caf4e44491b41ffeef62343a671d04abf2ca57dbfdda2ff3829ea977508bf72e
+    isolatedResources: 'Canonical run 55045c74-bf13-4ccd-a64d-ea973ea7aa40: Compose project coffee-issue64-final-55045c74; Collector coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-collector и OpenObserve coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-openobserve; backend network coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-backend; producer network coffee-g14-55045c74-bf13-4ccd-a64d-ea973ea7aa40-producer; runtime-matrix networks coffee-issue64-final-55045c74_coffee_edge_backend, coffee-issue64-final-55045c74_coffee_public_api_backend, coffee-issue64-final-55045c74_coffee_internal_api, coffee-issue64-final-55045c74_coffee_kafka_event; private bounded OpenObserve /data ext4 fixture и runner tmpfs (/dev/shm, command workdir /dev/shm/obs-source-snapshot-64). Canonical runtime fixture cleanupVerified=true. Host-level cleanup выполнена; evidence/issue-64-host-cleanup.json и независимая root-проверка подтверждают удаление 5 контейнеров, 2 volumes, 1 custom runner image, loop18/backing file и 6 SHM directories; 25 foreign containers и foreign Snap17 сохранены.'
+    expectedResult: 'PASS для predecessor #64: фактический pnpm test:observability завершается с exit 0, 8/8 canonical producer artifacts приняты, все 27 обязательных canonical gates PASS, source/config/BOM и runtime inventory совпадают с receipt, cleanupVerified=true. Любой ненулевой exit, отсутствующий artifact/gate, FAIL/NOT_RUN или drift означает FAIL/NOT_RUN и оставляет acceptance #13/G14 закрытым. Это не принимает full-system G14: его статус остаётся NOT_RUN и требуется отдельная проверка владельца #13.'
+    limitations: 'Этот handoff подтверждает только функциональный predecessor #64. Он не заявляет launch-level SLO, chaos/failure, native capacity или cold-cache acceptance; полный G14 issue #13 остаётся NOT_RUN до отдельной приёмки.'
+    verifiedCommand:
+      - pnpm
+      - test:observability
+      - '--'
+      - '--emulator'
+      - /dev/shm/coffee-issue64-emulator/qemu-x86_64
+      - '--probe'
+      - /host-tools/busybox
+      - '--host-transport'
+      - /host-tools/host-transport.json
+    verifiedCommandContext: Фактический argv принятого canonical receipt после имени runner; QEMU emulator, probe и host-transport являются параметрами этого fixture и не подтверждают native capacity.
+    canonicalRunId: 55045c74-bf13-4ccd-a64d-ea973ea7aa40
+    configAuthority: config/platform.yaml
+    bomAuthority: config/toolchain-versions.json
+    externalNotifications: 'Запрещены: canonical evidence использует только изолированный run-local OpenObserve; внешние alert destinations и отправка уведомлений не настраиваются и не вызываются.'
+  warning: Historical evidence only; not current cddbc51 proof.
+postcanonicalCommands:
+  acceptancePath: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/root-acceptance.json
+  acceptanceSha256: d4913decd4e906220ebddbf7edf3185b30f9333d805304ef485303ef4a31b47a
+  evidencePath: evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/root-acceptance.json
+  actualSessionId: 57789
+  artifactHashes:
+    actual-run-result.json:
+      path: actual-run-result.json
+      sha256: 9393313945853eaa2f119532f81cc17cabd3505bb26b5a1bffd2593f17331779
+      bytes: 13830
+    command-index.json:
+      path: command-index.json
+      sha256: 376d4fb291ec73850dc36f0f26d757ecf6afff3933f7f7455612b1443088861c
+      bytes: 27072
+    build-metadata.json:
+      path: build-metadata.json
+      sha256: 392714211ea24d603a4919afb4a95d20a992ac37362652e7a75d77bdafe2e370
+      bytes: 2508
+    image-build.stdout.raw:
+      path: image-build.stdout.raw
+      sha256: ac7c36a58253cd5f8e6217a70d801e18b56e0311e364e5c6c367d78541a7d427
+      bytes: 874
+    image-build.stderr.raw:
+      path: image-build.stderr.raw
+      sha256: 11a8f1be251ed46e8ee8251e1f492986402ea430652b949371ce88dbae79d8a9
+      bytes: 7214
+    compose-smoke.stdout.raw:
+      path: compose-smoke.stdout.raw
+      sha256: 86599a0bf2d2dd2340c6c528039c4e1777d37e63fcb2a44392aadc5a72e7c104
+      bytes: 16345
+    compose-smoke.stderr.raw:
+      path: compose-smoke.stderr.raw
+      sha256: a7b73c9f2db7759838dd93c9201cc66fc6dd587e4a9fbca7eadc498be16cb526
+      bytes: 117557
+  originalToolResponses:
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-start.json
+      sha256: b7461fb49c760ae7a055cef6e1d9502fd518ccb4da81cd6a9e76d7f094268d11
+      bytes: 108
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll01.json
+      sha256: 666a0c19c3ccac13d8c93031caf043df6d5d2449f23b5302cfd0d5766f627351
+      bytes: 110
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll02.json
+      sha256: e709c21ae17b3ce42a14fe479d4d7662a3b58624dc45e0417803eeb7fb9bb54b
+      bytes: 110
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll03.json
+      sha256: af1d8d216e12375c48a409dda19cca605bcee849b007bd195c985e7be2fbbcf1
+      bytes: 110
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll04.json
+      sha256: 88dc3e64b8807d1aa91a89c25aa7dd9b89b54887821bef51055da2122efcb288
+      bytes: 110
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll05.json
+      sha256: aefe37f320fb7e29b35dcd308969872ce3198708232c7d8c5d59724ed7c5ffd1
+      bytes: 110
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll06.json
+      sha256: 92912b1606984a213c18d3eb8c286fc4f9f2ca91d777f29a3f5bc210fdfd17db
+      bytes: 109
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll07.json
+      sha256: 199e8302c4b5d95c38cbf1e400fb01d4367c164c03cb9e0e64014af7813ff007
+      bytes: 132
+    - path: /home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll08.json
+      sha256: 052373e560a5c43046da03ebfa7ad3c6d5e4b8dc8dbfd1bb64705d454f77b764
+      bytes: 126
+  commandArgv:
+    image-build:
+      - docker
+      - exec
+      - '--env'
+      - TMPDIR=/dev/shm
+      - '--env'
+      - BUILDX_BUILDER=coffee-platform-mtu
+      - '--user'
+      - '1000:1000'
+      - '--workdir'
+      - /home/yurgusev/CoffeeOrderPlatform
+      - d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba
+      - pnpm
+      - image:build
+      - '--build-arg'
+      - RUNTIME=aroma-observer
+      - '--target'
+      - runtime
+      - '--metadata-file'
+      - /dev/shm/pr179-fixture-2eb8c786-5771-49f7-92f7-3a2b35249017/r5-migration/image-build-f2ffecc03d3d.json
+      - '--load'
+      - '--tag'
+      - coffee-pr179-wip15-image-f2ffecc03d3d:latest
+      - .
+    compose-smoke:
+      - docker
+      - exec
+      - '--env'
+      - TMPDIR=/dev/shm
+      - '--env'
+      - BUILDX_BUILDER=coffee-platform-mtu
+      - '--user'
+      - '1000:1000'
+      - '--workdir'
+      - /home/yurgusev/CoffeeOrderPlatform
+      - d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba
+      - pnpm
+      - test:compose-smoke
+      - '--'
+      - '--recovery-proof'
+      - '--project-name'
+      - coffee-pr179-wip15-smoke-f2ffecc03d3d
+  commandExitCodes:
+    image-build: 0
+    compose-smoke: 0
+  imageId: sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84
+  retainedPreloadedAliases:
+    - tag: coffee-pr179-wip15-preload-fcda9335-edge-gateway:latest
+      imageId: sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49
+    - tag: coffee-pr179-wip15-preload-fcda9335-api-public:latest
+      imageId: sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71
+    - tag: coffee-pr179-wip15-preload-fcda9335-api-internal:latest
+      imageId: sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620
+    - tag: coffee-pr179-wip15-preload-fcda9335-customer-service:latest
+      imageId: sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4
+    - tag: coffee-pr179-wip15-preload-fcda9335-catalog-service:latest
+      imageId: sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd
+    - tag: coffee-pr179-wip15-preload-fcda9335-catalog-supplier-sync:latest
+      imageId: sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d
+    - tag: coffee-pr179-wip15-preload-fcda9335-catalog-activation-worker:latest
+      imageId: sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea
+    - tag: coffee-pr179-wip15-preload-fcda9335-pricing-service:latest
+      imageId: sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576
+    - tag: coffee-pr179-wip15-preload-fcda9335-orders-service:latest
+      imageId: sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297
+    - tag: coffee-pr179-wip15-preload-fcda9335-orders-aroma-preparation:latest
+      imageId: sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4
+    - tag: coffee-pr179-wip15-preload-fcda9335-aroma-observer:latest
+      imageId: sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84
+    - tag: coffee-pr179-wip15-preload-fcda9335-aroma-convergence:latest
+      imageId: sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4
+    - tag: coffee-pr179-wip15-preload-fcda9335-aroma-gateway:latest
+      imageId: sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d
+    - tag: coffee-pr179-wip15-preload-fcda9335-realtime-gateway:latest
+      imageId: sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5
+    - tag: coffee-pr179-wip15-preload-fcda9335-edge-nginx:latest
+      imageId: sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3
+  canonicalImageBomSha256: f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a
+  toolingScan:
+    status: PASS_CANONICAL_IMAGE_SCAN
+    canonicalResultArtifact: result.json
+    canonicalResultSha256: f96102bc91e5ba6166a91cd8ee19c25c3f45abaf9781222fe4eca48acec6cfbc
+    imageMatrixArtifact: runtime-health-matrix.json
+    imageMatrixArtifactSha256: f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a
+    nodeImageCount: 14
+    nodeImages:
+      - role: edge-gateway
+        imageId: sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49
+      - role: api-public
+        imageId: sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71
+      - role: api-internal
+        imageId: sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620
+      - role: customer-service
+        imageId: sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4
+      - role: catalog-service
+        imageId: sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd
+      - role: catalog-supplier-sync
+        imageId: sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d
+      - role: catalog-activation-worker
+        imageId: sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea
+      - role: pricing-service
+        imageId: sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576
+      - role: orders-service
+        imageId: sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297
+      - role: orders-aroma-preparation
+        imageId: sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4
+      - role: aroma-observer
+        imageId: sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84
+      - role: aroma-convergence
+        imageId: sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4
+      - role: aroma-gateway
+        imageId: sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d
+      - role: realtime-gateway
+        imageId: sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5
+    nginxImage:
+      role: edge-nginx
+      imageId: sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3
+    standaloneBuildImageId: sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84
+    standaloneBuildMatchesRole: aroma-observer
+    standaloneRescan: NOT_RUN
+evidenceTransport:
+  atUtc: '2026-10-23T09:17:42.230201+00:00'
+  artifact: .gitattributes
+  sha256: 0ecf95c874592b54ec3265489d14704f72785bb94d4c58d590f799e005b186bf
+  frozenSha256: efb8cc5b0e55424d875b5eccbad69ef414f1676f7e6414a45cafc2ccfd424c26
+  pattern: evidence/observability/*/postcanonical-commands/*.raw
+  attributes:
+    - '-whitespace'
+    - '-text'
+  rawArtifactSha256:
+    evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/image-build.stdout.raw: ac7c36a58253cd5f8e6217a70d801e18b56e0311e364e5c6c367d78541a7d427
+    evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/image-build.stderr.raw: 11a8f1be251ed46e8ee8251e1f492986402ea430652b949371ce88dbae79d8a9
+    evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/compose-smoke.stdout.raw: 86599a0bf2d2dd2340c6c528039c4e1777d37e63fcb2a44392aadc5a72e7c104
+    evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/compose-smoke.stderr.raw: a7b73c9f2db7759838dd93c9201cc66fc6dd587e4a9fbca7eadc498be16cb526
+  reason: 'Исходные stdout/stderr Docker сохраняются побайтно: пробелы и окончания строк входят в принятый SHA-256. Правило Git применяется только к raw-доказательствам standalone-команд.'
+  runtimeSourceChanged: false
+  sourceIdentityCaveat: Замороженная identity 97e5 относится к фактически проверенному дереву; после него изменены только metadata/evidence и правило Git для их хранения.

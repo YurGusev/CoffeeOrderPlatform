@@ -22,7 +22,7 @@ assert.equal(context.setGlobalContextManager(manager), true);
 const spans = [];
 let nextTrace = 0;
 assert.equal(trace.setGlobalTracerProvider({getTracer(name) {
-  assert.equal(name, "coffee-platform.orders-service");
+  assert.ok(["coffee-platform.orders-service", "coffee-platform.runtime"].includes(name));
   return {startSpan(spanName, options) {
     const parent = trace.getSpan(context.active());
     const spanContext = {traceId: parent?.spanContext().traceId ?? String(++nextTrace).padStart(32, "0"), spanId: String(spans.length + 1).padStart(16, "0"), traceFlags: 1};
@@ -38,7 +38,7 @@ assert.equal(trace.setGlobalTracerProvider({getTracer(name) {
 }}), true);
 const measurements = [];
 assert.equal(metrics.setGlobalMeterProvider({getMeter(name) {
-  assert.equal(name, "coffee-platform.orders-service");
+  assert.ok(["coffee-platform.orders-service", "coffee-platform.runtime"].includes(name));
   return {
     createCounter(instrument) {return {add(value, attributes) {measurements.push({instrument, value, attributes});}};},
     createHistogram(instrument) {return {record(value, attributes) {measurements.push({instrument, value, attributes});}};},

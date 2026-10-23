@@ -39,6 +39,7 @@ import {
   createDeliveryTables,
   dropDeliveryTables,
 } from "../scripts/db-live-proof.mjs";
+import {createRuntimeLoggingOverride} from "./observability/generate.mjs";
 
 const { Client } = pg;
 
@@ -564,7 +565,12 @@ async function materializeSecrets(secretsDir, options) {
   const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
     ? await createStubTransportMaterials(secretsDir, platformConfig.environment, publicHostname)
     : undefined;
-  const stubSecurityMaterial = stubTransportMaterials === undefined ? undefined : createStubSecurityMaterial();
+  const stubSecurityMaterial = stubTransportMaterials === undefined ? undefined : {
+    ...createStubSecurityMaterial(),
+    ...(options.observabilityExporterToken === undefined
+      ? {}
+      : {"telemetry.exporterToken": options.observabilityExporterToken}),
+  };
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
     if (options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
@@ -796,6 +802,7 @@ function ensureExternalNetwork(options) {
 }
 
 export async function writeScopedComposeOverride(projectName, options = {}) {
+  const loggingOverride = options.runtimeLogging ? createRuntimeLoggingOverride({config: options.runtimeLogging}).services : undefined;
   const path = join(
     SECRETS_TMPFS_ROOT,
     `coffee-platform-compose-${projectName}-${randomUUID().slice(0, 8)}.yaml`,
@@ -834,6 +841,7 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       "      NODE_EXTRA_CA_CERTS: /run/aroma-proof/provider-ca.crt",
       "    volumes:",
       `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-cart-proof:/run/aroma-proof:ro`,
+      ...(loggingOverride ? dumpYaml({logging: loggingOverride["aroma-gateway"].logging}, {noRefs: true}).trimEnd().split("\n").map((line) => `    ${line}`) : []),
       "  aroma-provider-fixture:",
       `    image: ${CUSTOMER_TEST_IMAGE}`,
       "    command: [node, /run/aroma-proof/provider-server.mjs]",
@@ -852,6 +860,9 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       "      interval: 1s",
       "      timeout: 1s",
       "      retries: 30",
+      ...(loggingOverride ? Object.entries(loggingOverride)
+        .filter(([service]) => service !== "aroma-gateway")
+        .flatMap(([service, definition]) => [`  ${service}:`, ...dumpYaml(definition, {noRefs: true}).trimEnd().split("\n").map((line) => `    ${line}`)]) : []),
     ] : []),
     "",
   ].join("\n");
@@ -878,7 +889,7 @@ function startDatabaseProofContainer(
   projectName,
   networkName,
   credential,
-  { initialDatabase = "coffee_platform_customer", publishHost = false } = {},
+  { initialDatabase = "coffee_platform_customer", publishHost = false, ephemeralPgData = false } = {},
 ) {
   const container = `${projectName}-postgres-proof`;
   const args = [
@@ -902,6 +913,7 @@ function startDatabaseProofContainer(
     "1s",
     "--health-retries",
     "30",
+    ...(ephemeralPgData ? ["--tmpfs", "/var/lib/postgresql/data:rw,noexec,nosuid,size=536870912"] : []),
     ...(publishHost ? ["--publish", "127.0.0.1::5432"] : []),
     DATABASE_PROOF_IMAGE,
   ];
@@ -910,6 +922,22 @@ function startDatabaseProofContainer(
     runDocker(["network", "connect", "--alias", "coffee_postgres", "--alias", "customer_db", networkName, container]);
   }
   return container;
+}
+
+function assertEphemeralDatabaseProofStorage(container) {
+  const tmpfs = JSON.parse(runDocker(["inspect", "--format", "{{json .HostConfig.Tmpfs}}", container]));
+  const dataPath = "/var/lib/postgresql/data";
+  assert.ok(tmpfs?.[dataPath]?.split(",").includes("size=536870912"), "G14 PostgreSQL data tmpfs must have a 512 MiB limit");
+  const stat = runDocker(["exec", container, "stat", "-f", "-c", "%T|%S|%b", dataPath]).trim().split("|");
+  assert.equal(stat.length, 3, "G14 PostgreSQL data filesystem status must have three fields");
+  const [type, blockSizeText, blockCountText] = stat;
+  const blockSize = Number(blockSizeText);
+  const blockCount = Number(blockCountText);
+  const totalBytes = blockSize * blockCount;
+  assert.equal(type, "tmpfs", "G14 PostgreSQL data directory must be an actual tmpfs filesystem");
+  assert.ok(Number.isSafeInteger(blockSize) && blockSize > 0 && Number.isSafeInteger(blockCount) && blockCount > 0 &&
+    Number.isSafeInteger(totalBytes) && totalBytes === 536870912, "G14 PostgreSQL data tmpfs must have an actual 512 MiB capacity");
+  return {type: "tmpfs", destination: dataPath, sizeMiB: 512, durability: "ephemeral"};
 }
 
 function bootstrapDatabaseProofRole(container, admin, owner) {
@@ -1362,16 +1390,58 @@ async function applyOrdersMigrations(port, credentials, platformConfig) {
   }
 }
 
-function readOrdersBrokerMessages(projectName, secretsDir, composeFile) {
-  const group = `orders-proof-${randomUUID().replaceAll("-", "")}`;
-  const script = [
-    "/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic coffee.orders.lifecycle.v1",
-    `  --group ${group} --from-beginning --max-messages 100 --timeout-ms 5000 2>/dev/null || true`,
-  ].join(" ");
-  const output = runCompose(projectName, secretsDir, ["exec", "-T", "kafka", "sh", "-ec", script], {composeFile});
-  return output.split("\n").flatMap((line) => {
-    try { return [JSON.parse(line)]; } catch { return []; }
-  });
+function readOrdersBrokerMessages(projectName, secretsDir, composeFile, topic) {
+  assert.match(topic?.name ?? "", /^[A-Za-z0-9._-]+$/u, "Orders recovery proof topic name is invalid");
+  assert.ok(Number.isSafeInteger(topic.partitions) && topic.partitions > 0, "Orders recovery proof partition count is invalid");
+  const offsetsOutput = runCompose(projectName, secretsDir, [
+    "exec", "-T", "kafka", "sh", "-ec",
+    `/opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic ${topic.name} --time -1`,
+  ], {composeFile});
+  const endOffsets = new Map();
+  for (const line of offsetsOutput.split(/\r?\n/u).filter(Boolean)) {
+    const [name, partitionText, offsetText, extra] = line.split(":");
+    if (!/^\d+$/u.test(partitionText ?? "") || !/^\d+$/u.test(offsetText ?? "")) {
+      throw new Error("Orders recovery proof Kafka offset snapshot is invalid");
+    }
+    const partition = Number(partitionText);
+    const offset = Number(offsetText);
+    if (extra !== undefined || name !== topic.name || !Number.isSafeInteger(partition) || partition < 0 ||
+        !Number.isSafeInteger(offset) || offset < 0 || endOffsets.has(partition)) {
+      throw new Error("Orders recovery proof Kafka offset snapshot is invalid");
+    }
+    endOffsets.set(partition, offset);
+  }
+  if (endOffsets.size !== topic.partitions || Array.from({length: topic.partitions}, (_, partition) => endOffsets.has(partition)).some((present) => !present)) {
+    throw new Error("Orders recovery proof Kafka offset snapshot is incomplete");
+  }
+  const snapshotCount = [...endOffsets.values()].reduce((total, offset) => total + offset, 0);
+  if (!Number.isSafeInteger(snapshotCount) || snapshotCount > 100) {
+    throw new Error("Orders recovery proof Kafka offset snapshot exceeds the 100-record bound");
+  }
+  const messages = [];
+  // This proof creates a fresh per-run, un-compacted topic; offset zero is its complete record range.
+  for (let partition = 0; partition < topic.partitions; partition += 1) {
+    const expectedCount = endOffsets.get(partition);
+    if (expectedCount === 0) continue;
+    const output = runCompose(projectName, secretsDir, [
+      "exec", "-T", "kafka", "sh", "-ec",
+      `/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic ${topic.name} --partition ${partition} --offset 0 --max-messages ${expectedCount} --timeout-ms 5000`,
+    ], {composeFile});
+    const lines = output.split(/\r?\n/u);
+    if (lines.at(-1) === "") lines.pop();
+    if (lines.length !== expectedCount) {
+      throw new Error(`Orders recovery proof Kafka snapshot expected ${expectedCount} records in partition ${partition}, received ${lines.length}`);
+    }
+    for (const line of lines) {
+      let message;
+      try { message = JSON.parse(line); } catch { throw new Error("Orders recovery proof Kafka snapshot contains invalid JSON"); }
+      if (message === null || typeof message !== "object" || Array.isArray(message)) {
+        throw new Error("Orders recovery proof Kafka snapshot contains an invalid record");
+      }
+      messages.push(message);
+    }
+  }
+  return messages;
 }
 
 async function assertOrdersOutboxBrokerRecovery(projectName, secretsDir, composeFile, port, credentials, platformConfig) {
@@ -1406,12 +1476,12 @@ async function assertOrdersOutboxBrokerRecovery(projectName, secretsDir, compose
     const pending = await read();
     assert.equal(pending?.state, "Pending", "OrderConfirmed must be pending while Orders runtime is stopped");
     const messageId = pending.message_id;
-    assert.equal(readOrdersBrokerMessages(projectName, secretsDir, composeFile).filter((event) => event.messageId === messageId).length,
+    assert.equal(readOrdersBrokerMessages(projectName, secretsDir, composeFile, platformConfig.kafka.topics.ordersLifecycle).filter((event) => event.messageId === messageId).length,
       0, "OrderConfirmed was published before the Orders relay restarted");
     runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile});
     stopped = false;
     assert.equal((await read())?.state, "Published", "Orders relay did not finalize the broker-acknowledged event");
-    const matched = () => readOrdersBrokerMessages(projectName, secretsDir, composeFile).filter((event) =>
+    const matched = () => readOrdersBrokerMessages(projectName, secretsDir, composeFile, platformConfig.kafka.topics.ordersLifecycle).filter((event) =>
       event.messageId === messageId && event.messageType === "OrderConfirmed.v1" && event.payload?.orderRef === orderRef);
     assert.equal(matched().length, 1, "Kafka did not retain exactly one published OrderConfirmed event");
     runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "orders-service"], {composeFile});
@@ -1419,7 +1489,8 @@ async function assertOrdersOutboxBrokerRecovery(projectName, secretsDir, compose
     runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile});
     stopped = false;
     assert.equal((await read())?.state, "Published", "Orders restart changed terminal Outbox state");
-    assert.equal(matched().length, 1, "Orders restart published a duplicate of a finalized Outbox event");
+    const matchedAfterRestart = matched().length;
+    assert.equal(matchedAfterRestart, 1, `Orders restart found ${matchedAfterRestart} matching finalized Outbox event(s); expected 1`);
     return {pendingBeforeRestart:true, brokerAcknowledged:true, publishedAfterRestart:true, duplicateAfterFinalize:false};
   } finally {
     if (stopped) {
@@ -3346,28 +3417,31 @@ function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   return rows;
 }
 
-async function main() {
-  const options = parseArguments(process.argv.slice(2));
+export async function runComposeSmoke({args = process.argv.slice(2), observability} = {}) {
+  const options = parseArguments(args);
+  if (observability !== undefined) {
+    assert.ok(observability && typeof observability === "object", "observability hooks must be an object");
+    assert.ok(
+      options.recoveryProof && !options.stubSecrets && !options.noBuild && !options.keep,
+      "observability hooks require --recovery-proof without --stub-secrets, --no-build or --keep",
+    );
+    assert.equal(typeof observability.exporterToken, "string", "observability exporterToken must be a string");
+    assert.ok(observability.exporterToken.length > 0, "observability exporterToken must not be empty");
+    assert.equal(typeof observability.onReady, "function", "observability onReady must be a function");
+    assert.equal(typeof observability.onCleanup, "function", "observability onCleanup must be a function");
+  }
   if (options.aromaBindingProof) assertAromaGatewaySocketAssociationRegression();
   const projectName =
     options.projectName ??
     `coffee-compose-smoke-${process.pid}-${randomUUID().slice(0, 8)}`;
-  assert.notEqual(projectName, "coffee-platform", "smoke must not use the main platform project");
-  assert.notEqual(projectName, "coffeeordersystem", "smoke must not use the legacy project");
-  for (const [resource, list] of [["container", "ps"], ["volume", "volume"], ["network", "network"]]) {
-    const args = list === "ps" ? ["ps", "--all", "--quiet"] : [list, "ls", "--quiet"];
-    assert.equal(runDocker([...args, "--filter", `label=com.docker.compose.project=${projectName}`]).trim(), "",
-      `smoke project already has ${resource} resources: ${projectName}; choose a new project name`);
-  }
-  const secretsDir = await mkdtemp(
-    join(SECRETS_TMPFS_ROOT, "coffee-platform-secrets-"),
-  );
+  let secretsDir;
   let provisionedNetwork = false;
   let databaseProofNetwork;
   let composeFile = COMPOSE_FILE;
   let composeAttempted = false;
   const builtImages = [];
   let databaseProofContainer;
+  let databaseProofStorage;
   let recoveryDatabaseProof;
   let recoveryProofCredentials;
   let recoveryAdminUrl;
@@ -3387,8 +3461,23 @@ async function main() {
   let aromaCartEvidence;
   let aromaCartRestartEvidence;
   let aromaCartCleanupReceipt;
-  const platformConfig = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  let observabilityContext;
+  let receipt;
+  let primaryError;
+  let cleanupHookError;
+  let standardCleanupError;
   try {
+    assert.notEqual(projectName, "coffee-platform", "smoke must not use the main platform project");
+    assert.notEqual(projectName, "coffeeordersystem", "smoke must not use the legacy project");
+    for (const [resource, list] of [["container", "ps"], ["volume", "volume"], ["network", "network"]]) {
+      const dockerArgs = list === "ps" ? ["ps", "--all", "--quiet"] : [list, "ls", "--quiet"];
+      assert.equal(runDocker([...dockerArgs, "--filter", `label=com.docker.compose.project=${projectName}`]).trim(), "",
+        `smoke project already has ${resource} resources: ${projectName}; choose a new project name`);
+    }
+    secretsDir = await mkdtemp(
+      join(SECRETS_TMPFS_ROOT, "coffee-platform-secrets-"),
+    );
+    const platformConfig = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
     if (options.recoveryProof) {
       const kafkaVolume = `${projectName}_kafka_data`;
       const existingVolumes = runDocker(["volume", "ls", "--format", "{{.Name}}", "--filter", `name=${kafkaVolume}`]).trim().split("\n");
@@ -3405,6 +3494,7 @@ async function main() {
       aromaBindingProof: options.aromaBindingProof,
       aromaCartProof: options.aromaCartProof,
       recoveryProof: options.recoveryProof,
+      runtimeLogging: observability ? platformConfig : undefined,
     });
     if (options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
       const networkNames = databaseProofNetworkNames(projectName);
@@ -3421,6 +3511,7 @@ async function main() {
     }
     const materialized = await materializeSecrets(secretsDir, {
       ...options,
+      observabilityExporterToken: observability?.exporterToken,
       databaseProofCredentials: databaseProofCredentials === undefined
         ? undefined
         : {[DATABASE_PROOF_RUNTIME]: databaseProofCredentials.owner},
@@ -3454,8 +3545,12 @@ async function main() {
             ? "postgres"
             : "coffee_platform_customer",
           publishHost: options.recoveryProof || options.aromaBindingProof || options.aromaCartProof,
+          ephemeralPgData: observability !== undefined,
         },
       );
+      if (observability !== undefined) {
+        databaseProofStorage = assertEphemeralDatabaseProofStorage(databaseProofContainer);
+      }
       await waitForDockerHealthy(databaseProofContainer);
       await waitForDatabaseProofReady(
         databaseProofContainer,
@@ -3630,6 +3725,24 @@ async function main() {
       assertTelemetryEnvironment(rows);
       assertSecretMounts(projectName, secretsDir, rows, composeFile);
       await assertReadiness(projectName, secretsDir, composeFile);
+      if (observability) {
+        const resolvedCompose = JSON.parse(runCompose(
+          projectName,
+          secretsDir,
+          ["config", "--format", "json"],
+          {composeFile},
+        ));
+        const networks = Object.fromEntries(Object.entries(resolvedCompose.networks ?? {}).map(([logicalName, network]) => {
+          assert.equal(typeof network.name, "string", `Compose network ${logicalName} has no resolved name`);
+          return [logicalName, network.name];
+        }));
+        observabilityContext = {
+          projectName,
+          runtimes: [...RUNTIMES],
+          networks,
+        };
+        await observability.onReady(observabilityContext);
+      }
       assertHostExposure(projectName, secretsDir, rows, composeFile);
       await assertNginxIngress(platformConfig.nginxTransport.publicHost,
         options.stubSecrets || options.recoveryProof ? materialized.transportMaterials.publicTls.caPem : undefined);
@@ -3644,6 +3757,8 @@ async function main() {
           ["stop", "orders-aroma-preparation"],
           {composeFile},
         );
+        let recoveryBodyFailed = false;
+        let recoveryBodyError;
         try {
           const fixture = await prepareKafkaNativeFixture(
             projectName,
@@ -3692,7 +3807,11 @@ async function main() {
               composeFile,
             ),
           };
-        } finally {
+        } catch (error) {
+          recoveryBodyFailed = true;
+          recoveryBodyError = error;
+        }
+        try {
           runCompose(
             projectName,
             secretsDir,
@@ -3707,7 +3826,17 @@ async function main() {
             30_000,
             composeFile,
           );
+        } catch (restoreError) {
+          if (recoveryBodyFailed) {
+            throw new AggregateError(
+              [recoveryBodyError, restoreError],
+              "Recovery proof and orders-aroma-preparation restoration both failed",
+              {cause: recoveryBodyError},
+            );
+          }
+          throw restoreError;
         }
+        if (recoveryBodyFailed) throw recoveryBodyError;
       }
     }
     if (!options.keep) {
@@ -3719,8 +3848,7 @@ async function main() {
       );
       assertStopped(projectName, secretsDir, composeFile);
     }
-    console.log(
-      JSON.stringify({
+    receipt = {
         project: projectName,
         runtimes: options.aromaBindingProof || options.aromaCartProof ? ["api-internal", "aroma-gateway"] : options.databaseProof || options.customerProof ? 1 : RUNTIMES.length,
         nativeIngress: options.databaseProof || options.customerProof ? undefined : "edge-nginx",
@@ -3732,7 +3860,7 @@ async function main() {
           : "canonical-runtime-plus-local-kafka-fixture",
         kafkaRetention: options.aromaBindingProof || options.aromaCartProof ? undefined : options.databaseProof || options.customerProof ? undefined : kafkaRetention,
         recoveryProof: options.recoveryProof
-          ? {postgres: recoveryDatabaseProof, kafka: kafkaRetention, native: nativeFoundation, providerFixture: recoveryProviderFixtureCalls}
+          ? {postgres: recoveryDatabaseProof, postgresStorage: databaseProofStorage, kafka: kafkaRetention, native: nativeFoundation, providerFixture: recoveryProviderFixtureCalls}
           : undefined,
         aromaBindingProof: options.aromaBindingProof
           ? {services: ["api-internal", "aroma-gateway"], baseline: aromaBindingEvidence, restartReplay: aromaBindingRestartEvidence, durableBindingCount: 1, cleanup: aromaBindingCleanupReceipt}
@@ -3747,82 +3875,104 @@ async function main() {
         customerIntegrationProof: options.customerProof,
         hostPublish: options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof ? [] : ["127.0.0.1:8443:8443"],
         gracefulShutdown: true,
-      }),
-    );
+      };
+  } catch (error) {
+    primaryError = error;
   } finally {
-    if (
-      recoveryDeliveryTables &&
-      !options.keep &&
-      recoveryAdminUrl &&
-      recoveryDeliveryDatabase &&
-      recoveryProofCredentials
-    ) {
+    if (observability) {
       try {
-        await dropDeliveryTables(
-          recoveryAdminUrl,
-          recoveryDeliveryDatabase,
-          recoveryProofCredentials.rolePasswords,
-        );
-      } catch {
-        /* preserve the original recovery proof result */
+        await observability.onCleanup(observabilityContext);
+      } catch (error) {
+        cleanupHookError = error;
       }
     }
-    for (const snapshot of [aromaBindingSnapshot, aromaCartSnapshot]) {
-      if (snapshot?.database && !options.keep) {
+    try {
+      if (
+        recoveryDeliveryTables &&
+        !options.keep &&
+        recoveryAdminUrl &&
+        recoveryDeliveryDatabase &&
+        recoveryProofCredentials
+      ) {
         try {
-          await snapshot.database.resource.stop(AbortSignal.timeout(10_000));
+          await dropDeliveryTables(
+            recoveryAdminUrl,
+            recoveryDeliveryDatabase,
+            recoveryProofCredentials.rolePasswords,
+          );
         } catch {
-          /* preserve the original smoke failure */
+          /* preserve the original recovery proof result */
         }
       }
-    }
-    if (composeAttempted && !options.keep) {
-      try {
-        runCompose(
-          projectName,
-          secretsDir,
-          ["down", "--volumes", "--remove-orphans"],
-          {composeFile},
+      for (const snapshot of [aromaBindingSnapshot, aromaCartSnapshot]) {
+        if (snapshot?.database && !options.keep) {
+          try {
+            await snapshot.database.resource.stop(AbortSignal.timeout(10_000));
+          } catch {
+            /* preserve the original smoke failure */
+          }
+        }
+      }
+      if (composeAttempted && !options.keep) {
+        try {
+          runCompose(
+            projectName,
+            secretsDir,
+            ["down", "--volumes", "--remove-orphans"],
+            {composeFile},
+          );
+        } catch {
+          /* preserve original smoke failure */
+        }
+      }
+      if (databaseProofContainer && !options.keep) {
+        try {
+          runDocker(["rm", "--force", "--volumes", databaseProofContainer]);
+        } catch {
+          /* preserve original smoke failure */
+        }
+      }
+      if (databaseProofNetwork && !options.keep) {
+        try {
+          runDocker(["network", "rm", databaseProofNetwork]);
+        } catch {
+          /* preserve original smoke failure */
+        }
+      }
+      if (provisionedNetwork && !options.keep) {
+        try {
+          runDocker(["network", "rm", EXTERNAL_POSTGRES_NETWORK]);
+        } catch {
+          /* never remove a network adopted by another workload */
+        }
+      }
+      removeBuiltRuntimeImages(builtImages, options);
+      if (composeFile !== COMPOSE_FILE && !options.keep)
+        await rm(composeFile, {force: true});
+      if (!options.keep && secretsDir) await rm(secretsDir, { recursive: true, force: true });
+      else if (options.keep && secretsDir)
+        console.log(
+          `compose-smoke: kept project=${projectName} secretsDir=${secretsDir}`,
         );
-      } catch {
-        /* preserve original smoke failure */
-      }
+    } catch (error) {
+      standardCleanupError = error;
     }
-    if (databaseProofContainer && !options.keep) {
-      try {
-        runDocker(["rm", "--force", "--volumes", databaseProofContainer]);
-      } catch {
-        /* preserve original smoke failure */
-      }
-    }
-    if (databaseProofNetwork && !options.keep) {
-      try {
-        runDocker(["network", "rm", databaseProofNetwork]);
-      } catch {
-        /* preserve original smoke failure */
-      }
-    }
-    if (provisionedNetwork && !options.keep) {
-      try {
-        runDocker(["network", "rm", EXTERNAL_POSTGRES_NETWORK]);
-      } catch {
-        /* never remove a network adopted by another workload */
-      }
-    }
-    removeBuiltRuntimeImages(builtImages, options);
-    if (composeFile !== COMPOSE_FILE && !options.keep)
-      await rm(composeFile, {force: true});
-    if (!options.keep) await rm(secretsDir, { recursive: true, force: true });
-    else
-      console.log(
-        `compose-smoke: kept project=${projectName} secretsDir=${secretsDir}`,
-      );
   }
+  const errors = [primaryError, standardCleanupError, cleanupHookError].filter(Boolean);
+  if (errors.length > 1) {
+    const messages = errors.map((error) => error instanceof Error ? error.message : String(error));
+    throw new AggregateError(errors, `compose-smoke failed: ${messages.join("; cleanup also failed: ")}`, {
+      cause: primaryError ?? standardCleanupError,
+    });
+  }
+  if (errors.length === 1) throw errors[0];
+  console.log(JSON.stringify(receipt));
+  return receipt;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    await main();
+    await runComposeSmoke();
   } catch (error) {
     console.error(
       `compose-smoke: FAIL: ${error instanceof Error ? error.message : String(error)}`,

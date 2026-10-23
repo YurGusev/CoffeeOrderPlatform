@@ -38,7 +38,7 @@ if(kind==='idp'){
         assert.equal(p.get('client_id'),fixture.config.browserOidc.clientId);assert.equal(p.get('redirect_uri'),fixture.config.browserOidc.redirectUri);
         assert.equal(createHash('sha256').update(p.get('code_verifier')??'').digest('base64url'),pending.challenge);
         const now=Math.floor(nowMs()/1000);
-        return send(res,200,{id_token:jwt({iss:fixture.config.browserOidc.issuer,aud:fixture.config.browserOidc.clientId,sub:'synthetic-provider-subject',actor_ref:'actor:issue12-transport',permissions:['orders:read:any'],nonce:pending.nonce,iat:now,exp:now+3600})});
+        return send(res,200,{id_token:jwt({iss:fixture.config.browserOidc.issuer,aud:fixture.config.browserOidc.clientId,sub:'synthetic-provider-subject',actor_ref:'actor:issue12-transport',permissions:['orders:read:any','orders:reconcile:any'],nonce:pending.nonce,iat:now,exp:now+3600})});
       }
       return fail(res,404,'FIXTURE_ROUTE_NOT_FOUND');
     })().catch(()=>{if(!res.headersSent)fail(res,400,'FIXTURE_REQUEST_REJECTED');else res.destroy();});

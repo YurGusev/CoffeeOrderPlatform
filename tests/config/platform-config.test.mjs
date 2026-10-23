@@ -17,6 +17,7 @@ import { dump as dumpYaml, load as parseYaml } from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
 
 import { parsePlatformConfig, PlatformConfigError, RUNTIME_NAMES } from "../../packages/platform-config/src/index.ts";
+import {loadPlatformConfig} from "../../scripts/config-lib.mjs";
 import {readRoutes, render} from "../../tools/nginx/generate.mjs";
 import { validateAllPermissionManifests } from "../../scripts/permission-audit.mjs";
 
@@ -84,6 +85,196 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
     () => parsePlatformConfig({...document, browserOidc: {...profile, allowedAlgorithms: ["none"]}}),
     PlatformConfigError,
   );
+});
+
+void test("telemetry config is strict, immutable, and rejects missing or inconsistent budgets", async () => {
+  const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+  const parsed = parsePlatformConfig(document);
+  const equalProducerExportBudget = structuredClone(document);
+  equalProducerExportBudget.telemetry.producer.exportTimeoutMs = 2_000;
+  equalProducerExportBudget.telemetry.producer.batchIntervalMs = 2_000;
+  assert.equal(parsePlatformConfig(equalProducerExportBudget).telemetry.producer.exportTimeoutMs, 2_000);
+  const producerExportExceedsInterval = structuredClone(document);
+  producerExportExceedsInterval.telemetry.producer.exportTimeoutMs = 2_000;
+  assert.throws(() => parsePlatformConfig(producerExportExceedsInterval), PlatformConfigError);
+  const alternateCollectorPort = structuredClone(document);
+  alternateCollectorPort.telemetry.collector.otlpEndpoint = "http://otel-collector:4319";
+  assert.equal(parsePlatformConfig(alternateCollectorPort).telemetry.collector.otlpEndpoint, "http://otel-collector:4319");
+  const collectorRootPath = structuredClone(document);
+  collectorRootPath.telemetry.collector.otlpEndpoint += "/";
+  assert.equal(parsePlatformConfig(collectorRootPath).telemetry.collector.otlpEndpoint, "http://otel-collector:4318/");
+  for (const [first, second] of [["otlpEndpoint", "healthEndpoint"], ["otlpEndpoint", "metricsEndpoint"], ["healthEndpoint", "metricsEndpoint"]]) {
+    const collidingCollectorPorts = structuredClone(document);
+    collidingCollectorPorts.telemetry.collector[first] = collidingCollectorPorts.telemetry.collector[second];
+    assert.throws(() => parsePlatformConfig(collidingCollectorPorts), PlatformConfigError, `${first}/${second}`);
+  }
+  const minimumTelemetryDiskBytes = 256 * 1024 * 1024;
+  const minimumDiskConfig = structuredClone(document);
+  minimumDiskConfig.telemetry.openObserve.maxDiskBytes = minimumTelemetryDiskBytes;
+  assert.equal(parsePlatformConfig(minimumDiskConfig).telemetry.openObserve.maxDiskBytes, minimumTelemetryDiskBytes);
+  const undersizedDiskConfig = structuredClone(document);
+  undersizedDiskConfig.telemetry.openObserve.maxDiskBytes = minimumTelemetryDiskBytes - 1;
+  assert.throws(() => parsePlatformConfig(undersizedDiskConfig), PlatformConfigError);
+  const platformSchema = JSON.parse(await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"));
+  assert.equal(platformSchema.$defs.telemetry.properties.openObserve.properties.maxDiskBytes.minimum, minimumTelemetryDiskBytes);
+  const collectorEndpointPattern = new RegExp(platformSchema.$defs.telemetry.properties.collector.properties.otlpEndpoint.pattern, "u");
+  assert.equal(collectorEndpointPattern.test("http://otel-collector:4319"), true);
+  assert.equal(collectorEndpointPattern.test("http://otel-collector:65535"), true);
+  assert.equal(collectorEndpointPattern.test("http://otel-collector:4318/"), true);
+  for (const endpoint of ["http://other-host:4318", "http://OTEL-COLLECTOR:4318", "http://otel-collector", "http://otel-collector:0", "http://otel-collector:80", "http://otel-collector:65536", "http://otel-collector:4318/v1/traces", "http://otel-collector:4318//", "http://otel-collector:4318?target=elsewhere", "http://otel-collector:4318?", "http://otel-collector:4318#"])
+    assert.equal(collectorEndpointPattern.test(endpoint), false, endpoint);
+  const genericOpenObserve = structuredClone(document);
+  genericOpenObserve.telemetry.openObserve.endpoint = "http://openobserve:5081";
+  assert.equal(parsePlatformConfig(genericOpenObserve).telemetry.openObserve.endpoint, "http://openobserve:5081");
+  const openObserveEndpointPattern = new RegExp(platformSchema.$defs.telemetry.properties.openObserve.properties.endpoint.pattern, "u");
+  assert.equal(openObserveEndpointPattern.test("http://openobserve:5080"), true);
+  assert.equal(openObserveEndpointPattern.test("http://openobserve:5081"), true);
+  for (const endpoint of ["http://openobserve.internal:5080", "http://openobserve", "http://openobserve:0", "http://openobserve:80", "http://openobserve:65536", "http://openobserve:5080/", "http://openobserve:5080/api", "http://openobserve:5080?", "http://openobserve:5080?next=x", "http://openobserve:5080#", "http://openobserve:5080#fragment", "http://user@openobserve:5080", "http://openobserve:5080@other.internal"])
+    assert.equal(openObserveEndpointPattern.test(endpoint), false, endpoint);
+  for (const endpoint of ["http://openobserve.internal:5080", "http://openobserve", "http://openobserve:0", "http://openobserve:80", "http://openobserve:65536", "http://openobserve:5080/", "http://openobserve:5080/api", "http://openobserve:5080?", "http://openobserve:5080?next=x", "http://openobserve:5080#", "http://openobserve:5080#fragment", "http://user@openobserve:5080", "http://openobserve:5080@other.internal"]) {
+    const invalidOpenObserveEndpoint = structuredClone(document);
+    invalidOpenObserveEndpoint.telemetry.openObserve.endpoint = endpoint;
+    assert.throws(() => parsePlatformConfig(invalidOpenObserveEndpoint), PlatformConfigError, endpoint);
+  }
+  const organizationPattern = new RegExp(platformSchema.$defs.telemetry.properties.openObserve.properties.organization.pattern, "u");
+  for (const organization of ["default", "_meta", "acme-corp", "team_1", "Org2"]) {
+    const validOrganization = structuredClone(document);
+    validOrganization.telemetry.openObserve.organization = organization;
+    assert.equal(organizationPattern.test(organization), true, organization);
+    assert.equal(parsePlatformConfig(validOrganization).telemetry.openObserve.organization, organization);
+  }
+  for (const organization of ["", "coffee/test", "team.one", "team one", "кофе", "~", "%", "?", "#", `team${String.fromCharCode(1)}1`]) {
+    const invalidOrganization = structuredClone(document);
+    invalidOrganization.telemetry.openObserve.organization = organization;
+    assert.equal(organizationPattern.test(organization), false, organization);
+    assert.throws(() => parsePlatformConfig(invalidOrganization), PlatformConfigError, organization);
+  }
+  assert.equal(parsed.telemetry.namespace, "coffee-platform");
+  assert.deepEqual([
+    parsed.telemetry.collector.memoryLimitMiB,
+    parsed.telemetry.collector.memorySpikeMiB,
+    parsed.telemetry.collector.containerMemoryMiB,
+  ], [256, 64, 1024]);
+  assert.equal(parsed.telemetry.openObserve.retentionDays, 3);
+  assert.deepEqual([
+    parsed.telemetry.openObserve.memTableMaxSizeMiB,
+    parsed.telemetry.openObserve.maxFileSizeInMemoryMiB,
+    parsed.telemetry.openObserve.maxFileSizeOnDiskMiB,
+    parsed.telemetry.openObserve.maxFileRetentionSeconds,
+    parsed.telemetry.openObserve.memPersistIntervalSeconds,
+  ], [128, 8, 8, 30, 2]);
+  assert.deepEqual(
+    [parsed.telemetry.openObserve.telemetryEnabled, parsed.telemetry.openObserve.mmdbDownloadEnabled, parsed.telemetry.openObserve.modelPricingEnabled],
+    [false, false, false],
+  );
+  assert.equal(parsed.telemetry.openObserve.deleteFilesDelayMinutes, 1);
+  assert.equal(parsed.telemetry.openObserve.jobCleanupWaitSeconds, 60);
+  assert.equal(parsed.telemetry.alerts.evaluationIntervalMs, 60_000);
+  assert.equal(parsed.telemetry.alerts.sseDropRate.threshold, 0.05);
+  assert.ok(Object.isFrozen(parsed.telemetry) && Object.isFrozen(parsed.telemetry.collector));
+  for (const changed of [
+    {...document, telemetry: undefined},
+    {...document, telemetry: Object.fromEntries(Object.entries(document.telemetry).filter(([key]) => key !== "nginxStatusEndpoint"))},
+    {...document, telemetry: {...document.telemetry, producer: {...document.telemetry.producer, extra: true}}},
+    {...document, telemetry: {...document.telemetry, nginxStatusEndpoint: "http://edge-nginx:65536/nginx_status"}},
+    ...["otlpEndpoint", "healthEndpoint", "metricsEndpoint"].flatMap((name) => [
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://other-host:4318"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://OTEL-COLLECTOR:4318"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:0"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:65536"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:80"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318/v1/traces"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318//"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318?target=elsewhere"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318?"}}},
+      {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, [name]: "http://otel-collector:4318#"}}},
+    ]),
+    {...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, queueCapacity: 32, batchSize: 64}}},
+    {...document, telemetry: {...document.telemetry, collector: Object.fromEntries(Object.entries(document.telemetry.collector).filter(([key]) => key !== "containerMemoryMiB"))}},
+    ...[0, 512.5, 320, Number.MAX_SAFE_INTEGER].map((containerMemoryMiB) => ({...document, telemetry: {...document.telemetry, collector: {...document.telemetry.collector, containerMemoryMiB}}})),
+    {...document, telemetry: {...document.telemetry, alerts: {...document.telemetry.alerts, unknownOutcome: {...document.telemetry.alerts.unknownOutcome, threshold: -1}}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, retentionDays: 1}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, diskWatermarkPercent: 100}}},
+    {...document, telemetry: {...document.telemetry, openObserve: Object.fromEntries(Object.entries(document.telemetry.openObserve).filter(([key]) => key !== "memPersistIntervalSeconds"))}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, maxFileSizeInMemoryMiB: 128}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, memTableMaxSizeMiB: document.telemetry.openObserve.memoryLimitMiB}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, maxFileSizeOnDiskMiB: 1025}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, memPersistIntervalSeconds: 31}}},
+    ...["logs", "traces", "metrics"].map((name) => ({...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, streams: {...document.telemetry.openObserve.streams, [name]: "Bad-Stream"}}}})),
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, bootstrapEmail: "not-an-email"}}},
+    {...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, deleteFilesDelayMinutes: 0}}},
+    ...["telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled"].map((key) => ({...document, telemetry: {...document.telemetry, openObserve: {...document.telemetry.openObserve, [key]: true}}})),
+    {...document, telemetry: {...document.telemetry, alerts: {...document.telemetry.alerts, evaluationIntervalMs: 1000}}},
+  ]) assert.throws(() => parsePlatformConfig(changed), PlatformConfigError);
+  assert.throws(() => parsePlatformConfig({...document, environment: "production"}), PlatformConfigError);
+  assert.match(parsePlatformConfig({...document, environment: "production", telemetry: {...document.telemetry, releaseDigest: `sha256:${"a".repeat(64)}`}}).telemetry.releaseDigest, /^sha256:/u);
+});
+
+void test("RED: config loader rejects enabling OpenObserve external requests", async () => {
+  for (const key of ["telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled"]) {
+    const root = await configRoot();
+    try {
+      const path = join(root, "config/platform.yaml");
+      const document = parseYaml(await readFile(path, "utf8"), {json: true});
+      document.telemetry.openObserve[key] = true;
+      await writeFile(path, dumpYaml(document), "utf8");
+      const result = run(root);
+      assert.notEqual(result.status, 0, key);
+      assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-SCHEMA|CONFIG-OBSERVABILITY-EGRESS/u, key);
+    } finally {
+      await rm(root, {recursive: true, force: true});
+    }
+  }
+});
+
+void test("RED: config loader rejects colliding Collector listener ports", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), {json: true});
+    document.telemetry.collector.metricsEndpoint = document.telemetry.collector.otlpEndpoint;
+    await writeFile(path, dumpYaml(document), "utf8");
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-PLATFORM-CONFIG/u);
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-PLATFORM-CONFIG/u);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+void test("RED: config loader and parser reject OpenObserve hosts outside its private service alias", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    const document = parseYaml(await readFile(path, "utf8"), {json: true});
+    document.telemetry.openObserve.endpoint = "http://openobserve.internal:5080";
+    await writeFile(path, dumpYaml(document), "utf8");
+    assert.throws(() => parsePlatformConfig(document), PlatformConfigError);
+    await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+    const result = run(root);
+    assert.notEqual(result.status, 0);
+    assert.match(`${result.stdout}\n${result.stderr}`, /CONFIG-SCHEMA/u);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+void test("RED: config loader and parser reject default and public TLS nginx status ports", async () => {
+  const root = await configRoot();
+  try {
+    const path = join(root, "config/platform.yaml");
+    for (const port of [80, 8443]) {
+      const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
+      document.telemetry.nginxStatusEndpoint = `http://edge-nginx:${port}/nginx_status`;
+      await writeFile(path, dumpYaml(document), "utf8");
+      assert.throws(() => parsePlatformConfig(document), PlatformConfigError);
+      await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+    }
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
 });
 
 void test("GREEN: Pricing bootstrap policy matches the immutable migration seed", async () => {
@@ -232,24 +423,30 @@ void test("NGINX reference admission retains 512 streams and a separate full pro
   const document = parseYaml(await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"), {json: true});
   const routes = readRoutes(parseYaml(await readFile(join(REPO_ROOT, "contracts/openapi/client-v1.yaml"), "utf8"), {json: true}));
   const profile = document.nginxTransport;
+  const statusEndpoint = document.telemetry.nginxStatusEndpoint;
   assert.equal(profile.limits.sseAdmissionConnections, 512);
   assert.equal(profile.limits.workerProcesses, 1);
   assert.equal(profile.limits.requestPoolBytes, 2048);
-  const reference = render(profile, routes);
+  const reference = render(profile, routes, statusEndpoint);
   const schema = JSON.parse(await readFile(join(REPO_ROOT, "config/nginx-profile.schema.json"), "utf8"));
   const validate = new Ajv2020({allErrors: true, strict: true}).compile(schema);
   assert.equal(validate(profile), true);
   assert.match(reference, /^worker_processes 1;$/m);
   assert.match(reference, /request_pool_size 2048;/u);
+  assert.match(reference, /listen 8081; server_name edge-nginx; location = \/nginx_status \{ stub_status; access_log off;/u);
+  assert.match(reference, /location = \/health\/ready \{ return 404; \}/u);
+  assert.match(reference, /location = \/metrics \{ return 404; \}/u);
+  assert.throws(() => render(profile, routes, "http://attacker.invalid:8081/nginx_status"), /private nginx status endpoint/u);
+  assert.throws(() => render(profile, routes, "http://edge-nginx:8443/nginx_status"), /must not share the public TLS port/u);
   for (const workerProcesses of [undefined, 0, 1.5, 3, "2; include /etc/passwd;"]) {
     const invalidProfile = structuredClone(profile);
     invalidProfile.limits.workerProcesses = workerProcesses;
-    assert.throws(() => render(invalidProfile, routes), /worker processes/u);
+    assert.throws(() => render(invalidProfile, routes, statusEndpoint), /worker processes/u);
   }
   for (const requestPoolBytes of [undefined, 0, 1024, 2048.5, 4096, "2048; include /etc/passwd;"]) {
     const invalidProfile = structuredClone(profile);
     invalidProfile.limits.requestPoolBytes = requestPoolBytes;
-    assert.throws(() => render(invalidProfile, routes), /request pool/u);
+    assert.throws(() => render(invalidProfile, routes, statusEndpoint), /request pool/u);
   }
   assert.match(reference, /worker_connections 2048;/u);
   assert.match(reference, /limit_conn edge_sse_admission 512;/u);
@@ -259,16 +456,16 @@ void test("NGINX reference admission retains 512 streams and a separate full pro
   const fullProfile = structuredClone(profile);
   fullProfile.limits.workerProcesses = 2;
   fullProfile.limits.workerConnections = 16384;
-  const full = render(fullProfile, routes);
+  const full = render(fullProfile, routes, statusEndpoint);
   assert.match(full, /^worker_processes 2;$/m);
   for (const sseAdmissionConnections of [513, 5000]) {
     const invalidProfile = structuredClone(profile);
     invalidProfile.limits.sseAdmissionConnections = sseAdmissionConnections;
     assert.equal(validate(invalidProfile), false);
-    assert.throws(() => render(invalidProfile, routes), /SSE admission/u);
+    assert.throws(() => render(invalidProfile, routes, statusEndpoint), /SSE admission/u);
   }
   fullProfile.limits.workerConnections = 1024;
-  assert.throws(() => render(fullProfile, routes), /worker.*headroom/u);
+  assert.throws(() => render(fullProfile, routes, statusEndpoint), /worker.*headroom/u);
   assert.equal(document.nginxTransport.limits.sseAdmissionConnections, 512);
 });
 

@@ -44,6 +44,14 @@ function validateProfile(profile, schema) {
   }
 }
 
+function nginxStatusPort(endpoint) {
+  const url = new URL(endpoint);
+  must(url.protocol === 'http:' && url.hostname === 'edge-nginx' && !url.username && !url.password && /^[1-9][0-9]{0,4}$/u.test(url.port) &&
+    Number(url.port) <= 65535 && url.pathname === '/nginx_status' && !url.search && !url.hash,
+  'invalid private nginx status endpoint');
+  return Number(url.port);
+}
+
 export function readRoutes(spec) {
   const result = [];
   for (const [path, operations] of Object.entries(spec.paths)) {
@@ -107,8 +115,10 @@ function routeBlock(route, profile) {
     }`;
 }
 
-export function render(profile, routes) {
+export function render(profile, routes, statusEndpoint) {
   const { tls, upstreams: u, limits: l } = profile;
+  const statusPort = nginxStatusPort(statusEndpoint);
+  must(statusPort !== profile.listen, 'nginx status listener must not share the public TLS port');
   must(l.sseAdmissionConnections <= 512, 'SSE admission must not exceed 512');
   must(l.workerProcesses === 1 || l.workerProcesses === 2, 'worker processes must be 1 or 2');
   must(l.requestPoolBytes === 2048, 'request pool allocation granularity must match the checked profile');
@@ -129,9 +139,13 @@ events { worker_connections ${l.workerConnections}; }
 http {
   include /etc/nginx/mime.types;
   default_type application/octet-stream;
-  log_format edge_safe escape=json '{"method":"$request_method","status":$status,"request_id":"$request_id","route":"$edge_route","request_bytes":$request_length,"response_bytes":$bytes_sent}';
+  log_format edge_safe escape=json '{"method":"$request_method","status":$status,"request_id":"$request_id","correlation_id":"$edge_log_correlation","traceparent":"$edge_traceparent","route":"$edge_route","request_bytes":$request_length,"response_bytes":$bytes_sent,"duration_seconds":$request_time}';
   access_log /dev/stdout edge_safe;
   map $uri $edge_route { default "unmatched"; ~^/api/client-v1/customers$ "client.customers"; ~^/api/client-v1/catalog/products$ "client.catalog.products"; ~^/api/client-v1/pricing/quotes$ "client.pricing.quotes"; ~^/api/client-v1/orders/ "client.orders"; =/events "events"; =/auth/session "auth.session"; =/auth/login "auth.login"; =/auth/callback "auth.callback"; =/auth/logout "auth.logout"; }
+  map $http_traceparent $edge_traceparent { default ""; "~^(?!ff)[a-f0-9]{2}-(?!0{32})[a-f0-9]{32}-(?!0{16})[a-f0-9]{16}-[a-f0-9]{2}$" $http_traceparent; }
+  map $http_x_correlation_id $edge_client_correlation { default ""; "~^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[1-5][A-Fa-f0-9]{3}-[89ABab][A-Fa-f0-9]{3}-[A-Fa-f0-9]{12}$" $http_x_correlation_id; }
+  map $edge_auth_correlation $edge_safe_auth_correlation { default ""; "~^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[1-5][A-Fa-f0-9]{3}-[89ABab][A-Fa-f0-9]{3}-[A-Fa-f0-9]{12}$" $edge_auth_correlation; }
+  map $edge_safe_auth_correlation $edge_log_correlation { "" $request_id; default $edge_safe_auth_correlation; }
   absolute_redirect off;
   client_body_temp_path /tmp/client_temp;
   proxy_temp_path /tmp/proxy_temp;
@@ -157,6 +171,7 @@ http {
   upstream api_public { server ${u.apiPublic.host}:${u.apiPublic.port}; keepalive 16; }
   upstream realtime_gateway { zone realtime_tls_state 64k; server ${u.realtime.host}:${u.realtime.port}; }
   server { listen 127.0.0.1:18080; location / { ${problem(503, 'AUTHORIZER_UNAVAILABLE', 'Authorization unavailable')} } }
+  server { listen ${statusPort}; server_name edge-nginx; location = /nginx_status { stub_status; access_log off; } location / { return 404; } }
   server {
     listen ${profile.listen} ssl;
     request_pool_size ${l.requestPoolBytes};
@@ -180,7 +195,7 @@ http {
     location = /auth/callback { limit_except GET { deny all; } if ($request_method = HEAD) { return 405; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/callback; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_login_cookie; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
     location = /auth/logout { limit_except POST { deny all; } proxy_pass_request_headers off; proxy_pass https://edge_gateway/auth/logout; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header X-Request-Id $request_id; include /etc/nginx/snippets/upstream-tls.conf; }
     if ($edge_oversized_raw_target) { return 414; }
-    location = /_edge/authorize { internal; limit_conn edge_auth_admission ${l.authAdmissionConnections}; proxy_pass https://edge_gateway/_edge/authorize; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_pass_request_body off; proxy_set_header Content-Length ''; proxy_set_header X-Original-Method $request_method; proxy_set_header X-Original-URI $request_uri; proxy_set_header X-Request-Id $request_id; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header Authorization ''; proxy_set_header X-Actor-Context ''; include /etc/nginx/snippets/upstream-tls.conf; }
+    location = /_edge/authorize { internal; limit_conn edge_auth_admission ${l.authAdmissionConnections}; proxy_pass https://edge_gateway/_edge/authorize; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_pass_request_body off; proxy_set_header Content-Length ''; proxy_set_header X-Original-Method $request_method; proxy_set_header X-Original-URI $request_uri; proxy_set_header X-Request-Id $request_id; proxy_set_header X-Correlation-Id $edge_client_correlation; proxy_set_header traceparent $edge_traceparent; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header Authorization ''; proxy_set_header X-Actor-Context ''; include /etc/nginx/snippets/upstream-tls.conf; }
     location = /health/ready { return 404; }
     location = /metrics { return 404; }
     location ^~ /api/internal-v1/ { ${problem(404, 'ROUTE_NOT_FOUND', 'Not found')} }
@@ -209,15 +224,16 @@ http {
 }
 
 export async function generate({ args = parseArgs(process.argv.slice(2)), root = ROOT } = {}) {
-  const [schema, spec, toolchain] = await Promise.all([
+  const [schema, spec, toolchain, platformConfig] = await Promise.all([
     readFile(resolve(root, 'config/nginx-profile.schema.json'), 'utf8').then(JSON.parse),
     readFile(resolve(root, 'contracts/openapi/client-v1.yaml'), 'utf8').then(text => loadYaml(text, { json: true })),
     readFile(resolve(root, 'config/toolchain-versions.json'), 'utf8').then(JSON.parse),
+    readFile(resolve(root, 'config/platform.yaml'), 'utf8').then(text => loadYaml(text, { json: true })),
   ]);
   must(toolchain.nginxImage === PIN && toolchain.nginxVersion === '1.31.6', 'nginx registry pin mismatch');
   const profile = await getProfile(args, root);
   validateProfile(profile, schema);
-  const text = render(profile, readRoutes(spec));
+  const text = render(profile, readRoutes(spec), platformConfig.telemetry?.nginxStatusEndpoint);
   const output = resolve(root, args.output ?? 'apps/edge-nginx/generated/nginx.conf');
   must(output.startsWith(`${resolve(root, 'apps/edge-nginx')}/`), 'output must be under apps/edge-nginx');
   await mkdir(dirname(output), { recursive: true });

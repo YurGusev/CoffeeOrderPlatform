@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import {randomBytes} from "node:crypto";
 import {readFile} from "node:fs/promises";
+import {setTimeout as sleep} from "node:timers/promises";
 import test from "node:test";
-import {Client} from "pg";
+import pg, {Client} from "pg";
 import {withCatalogPostgres} from "../../scripts/catalog-live-harness.mjs";
 import {createDatabase, withTransaction} from "../../packages/platform-database/dist/index.js";
 import {defineStatement} from "../../packages/platform-database/dist/owner.js";
 import {createSqlInboxStore,InboxProcessingError} from "../../packages/platform-inbox/dist/index.js";
-import {canonicalRequestHash} from "../../packages/platform-idempotency/dist/index.js";
+import {createSqlOutboxStore,relayOutboxBatch} from "../../packages/platform-outbox/dist/index.js";
+import {canonicalJson,canonicalRequestHash} from "../../packages/platform-idempotency/dist/index.js";
 import {parseEnvelope, processKafkaRecord} from "../../packages/platform-kafka-runtime/dist/index.js";
+import {metrics} from "@opentelemetry/api";
 
 const roles=["coffee_orders_service_rw","coffee_orders_prepare_rw","coffee_orders_observer_rw","coffee_orders_convergence_rw"];
 const migrations=["0001_create_orders","0002_create_order_items","0003_create_order_history","0004_create_order_contributions","0005_create_orders_idempotency","0006_create_orders_outbox","0007_order_grind_selection","0008_create_orders_inbox","0009_create_catalog_mapping_projection","0010_create_cart_desired","0011_create_cart_observed","0012_create_convergence_attempts","0013_create_convergence_leases","0014_create_mutation_reservations","0015_create_order_aroma_projections","0016_create_aroma_work_schedules"];
@@ -20,6 +23,18 @@ const envelope=(id="original")=>({envelopeVersion:"1",messageId:id,messageType:"
 const record=(value=envelope(),offset="1")=>({topic:"coffee.orders.lifecycle.v1",partition:0,offset,key:ORDER,value,headers:{}});
 const message=e=>({messageId:e.messageId,messageType:e.messageType,receivedAt:e.occurredAt,payloadHash:canonicalRequestHash(e),payload:e});
 const live={timeout:180000,skip:process.env.COFFEE_DB_LIVE_PROOF!=="1"?"set COFFEE_DB_LIVE_PROOF=1":false};
+const metricMeasurements=[];
+const observableCallbacks=new Map();
+assert.equal(metrics.setGlobalMeterProvider({getMeter(){return {
+  createHistogram(name){return {record(value,attributes){metricMeasurements.push({name,value,attributes});}};},
+  createObservableGauge(name){return {addCallback(callback){observableCallbacks.set(name,callback);}};},
+};}}),true);
+
+function observeGauge(name) {
+  const samples=[];
+  observableCallbacks.get(name)?.({observe(value,attributes){samples.push({value,attributes});}});
+  return samples;
+}
 
 async function fixture(run) {
   const receipt=await withCatalogPostgres(async({adminClient,port})=>{
@@ -69,7 +84,8 @@ async function fixture(run) {
 }
 
 void test("Orders consumer Inbox persists full envelope and commits offset only after owner transaction",live,async()=>fixture(async({preparation,read,options})=>{
-  const e=envelope();const opts=options(preparation);let commits=0;
+  metricMeasurements.length=0;
+  const e={...envelope(),traceparent:"01-11111111111111111111111111111111-2222222222222222-01"};const opts=options(preparation);let commits=0;
   opts.commit=async()=>{
     commits++;
     const row=(await read("SELECT * FROM orders.inbox_messages")).rows[0];
@@ -82,8 +98,85 @@ void test("Orders consumer Inbox persists full envelope and commits offset only 
     assert.ok(row.processed_at);assert.equal(row.quarantined_at,null);
     assert.equal((await read("SELECT * FROM orders.inbox_proof_effects")).rowCount,1);
   };
-  await processKafkaRecord(record(e),opts);
+  const connectDescriptor=Object.getOwnPropertyDescriptor(pg.Pool.prototype,"connect");
+  const originalConnect=pg.Pool.prototype.connect;
+  let signalCheckoutStarted;
+  let releaseCheckout;
+  const checkoutStarted=new Promise(resolve=>{signalCheckoutStarted=resolve;});
+  const checkoutGate=new Promise(resolve=>{releaseCheckout=resolve;});
+  let checkoutDelayed=false;
+  try {
+    pg.Pool.prototype.connect=async function(...args) {
+      if(!checkoutDelayed&&this.options.database==="coffee_platform_orders"&&this.options.user==="coffee_orders_prepare_rw") {
+        checkoutDelayed=true;
+        signalCheckoutStarted();
+        await checkoutGate;
+      }
+      return originalConnect.apply(this,args);
+    };
+    const processing=processKafkaRecord(record(e),opts);
+    await checkoutStarted;
+    await new Promise(resolve=>setTimeout(resolve,50));
+    releaseCheckout();
+    await processing;
+  } finally {
+    releaseCheckout();
+    if(connectDescriptor)Object.defineProperty(pg.Pool.prototype,"connect",connectDescriptor);
+    else delete pg.Pool.prototype.connect;
+  }
   assert.equal(commits,1);
+  const receivedAge=metricMeasurements.filter(sample=>sample.name==="messaging.inbox.received.age");
+  assert.equal(receivedAge.length,1);
+  assert.ok(receivedAge[0].value>=25,"Inbox age must include the controlled wait for owner DB checkout");
+}));
+
+void test("Outbox oldest age is current, scoped by configured topics and ignores terminal states",live,async()=>fixture(async({migrator,create})=>{
+  metricMeasurements.length=0;
+  const service=await create("coffee_orders_service_rw");
+  const topic="coffee.orders.lifecycle.v1",otherTopic="coffee.orders.cart.v1",emptyTopic="coffee.orders.unused.v1",unknownTopic="coffee.other.v1";
+  const nowMs=Date.parse("2026-10-14T00:00:00Z");
+  await migrator.query("INSERT INTO orders.orders(order_ref,customer_ref,customer_version,customer_display_name,customer_state,customer_state_proof_hash,created_by_actor_ref,last_modified_by_actor_ref) VALUES($1,$2,1,'fixture','Active',$3,'fixture','fixture')",[ORDER,"cus_00000000000000000000000001","a".repeat(64)]);
+  const rows=[
+    ["age-pending",topic,"2026-10-10T00:00:00Z","Pending"],
+    ["age-publishing",topic,"2026-10-11T00:00:00Z","Publishing"],
+    ["age-published",topic,"2026-10-01T00:00:00Z","Published"],
+    ["age-quarantined",topic,"2026-10-01T00:00:00Z","Quarantined"],
+    ["age-other-topic",otherTopic,"2026-10-13T12:00:00Z","Pending"],
+    ["age-unconfigured-topic",unknownTopic,"2026-10-01T00:00:00Z","Pending"],
+  ];
+  for(const [index,[id,destination,occurredAt,state]] of rows.entries()) {
+    const payload={id};
+    const envelope={envelopeVersion:"1",messageId:id,messageType:`AgeProof${index}`,occurredAt,producer:"orders-service",correlationId:`age-${index}`,causationId:null,traceparent:"00-11111111111111111111111111111111-2222222222222222-01",aggregate:{type:"Order",ref:ORDER,version:"1"},payload};
+    const hash=canonicalRequestHash(envelope);
+    await migrator.query(`INSERT INTO orders.outbox_messages(message_id,message_type,topic,aggregate_ref,aggregate_sequence,owner_version,partition_key,schema_version,envelope_bytes,envelope_hash,envelope,payload,payload_hash,occurred_at,correlation_id,causation_id,traceparent,state,lease_owner,lease_until,attempt,next_attempt_at,published_at,quarantined_at)
+      VALUES($1,$2,$3,$4::varchar(30),$5,'1',$4::text,'1',$6,$7,$8::jsonb,$9::jsonb,$7,$10::timestamptz,$11,NULL,$12,$13::varchar(16),$14,clock_timestamp(),0,clock_timestamp()-interval '1 day',CASE WHEN $13::varchar(16)='Published' THEN clock_timestamp() END,CASE WHEN $13::varchar(16)='Quarantined' THEN clock_timestamp() END)`,
+    [id,envelope.messageType,destination,ORDER,index+1,Buffer.from(canonicalJson(envelope)),hash,canonicalJson(envelope),canonicalJson(payload),occurredAt,envelope.correlationId,envelope.traceparent,state,state==="Publishing"?"age-proof":""]);
+  }
+  const store=createSqlOutboxStore(service,{schema:"orders",topics:[topic,otherTopic,emptyTopic]});
+  const ages=await withTransaction(service,{mode:"background"},transaction=>store.oldestUnpublishedAgesMs(transaction,nowMs));
+  assert.deepEqual(ages?.toSorted((left,right)=>left.topic.localeCompare(right.topic)),[{topic:otherTopic,ageMs:12*60*60*1000},{topic,ageMs:4*24*60*60*1000},{topic:emptyTopic,ageMs:0}]);
+  assert.equal(Math.max(...(ages??[]).map(age=>age.ageMs)),4*24*60*60*1000);
+  const unscoped=createSqlOutboxStore(service,{schema:"orders"});
+  assert.equal(await withTransaction(service,{mode:"background"},transaction=>unscoped.oldestUnpublishedAgesMs(transaction,nowMs)),null);
+
+  const firstRelay=await relayOutboxBatch(store,service,async()=>({kind:"ack"}),{nowMs:Date.now(),leaseOwner:"age-proof-relay",policy:{leaseMs:60_000,sendTimeoutMs:5_000,maxInFlight:1,retry:{baseMs:1,maxMs:10,maxAttempts:3}}});
+  assert.equal(firstRelay.published,1);
+  const expectedTopics=[emptyTopic,otherTopic,topic].toSorted();
+  const gaugeDeadline=performance.now()+pool.transactionTimeoutMs;
+  let gaugeSamples=[];
+  while(performance.now()<gaugeDeadline) {
+    gaugeSamples=observeGauge("messaging.outbox.oldest_unpublished.age");
+    const actualTopics=gaugeSamples.map(sample=>sample.attributes["messaging.destination.name"]).toSorted((left,right)=>left.localeCompare(right));
+    if(JSON.stringify(actualTopics)===JSON.stringify(expectedTopics))break;
+    await sleep(Math.min(10,gaugeDeadline-performance.now()));
+  }
+  assert.deepEqual(gaugeSamples.map(sample=>sample.attributes["messaging.destination.name"]).toSorted((left,right)=>left.localeCompare(right)),expectedTopics,"background refresh records every configured topic before the database transaction deadline");
+  assert.equal(gaugeSamples.find(sample=>sample.attributes["messaging.destination.name"]===emptyTopic)?.value,0);
+
+  const failingAgeStore=new Proxy(store,{get(target,key){if(key==="oldestUnpublishedAgesMs")return async()=>{throw new Error("diagnostic query failed")};const value=Reflect.get(target,key,target);return typeof value==="function"?value.bind(target):value;}});
+  const relay=await relayOutboxBatch(failingAgeStore,service,async()=>({kind:"ack"}),{nowMs:Date.now(),leaseOwner:"age-proof-relay",policy:{leaseMs:60_000,sendTimeoutMs:5_000,maxInFlight:1,retry:{baseMs:1,maxMs:10,maxAttempts:3}}});
+  assert.equal(relay.published,1,"age query failure must not change the relay outcome");
+  assert.deepEqual(observeGauge("messaging.outbox.oldest_unpublished.age"),[]);
 }));
 
 void test("same messageId is independent across consumers; metadata conflicts append source quarantine without terminal rewrite",live,async()=>fixture(async({preparation,convergence,read,options,migrator})=>{
@@ -257,6 +350,11 @@ void test("consumerName and envelope identity/hash are strict and sanitized befo
   const e=envelope("identity");
   for(const bad of [{...message(e),messageId:"different"},{...message(e),messageType:"Other.v1"},{...message(e),payloadHash:"0".repeat(64)}]) {
     await assert.rejects(tx(preparation,transaction=>inbox.begin(transaction,bad,"lease",0,30000)),{code:"INBOX_INVALID"});
+  }
+  for(const traceparent of [`ff-${"a".repeat(32)}-${"b".repeat(16)}-01`,`00-${"0".repeat(32)}-${"b".repeat(16)}-01`,`00-${"a".repeat(32)}-${"0".repeat(16)}-01`]) {
+    const invalidEnvelope={...e,messageId:`invalid-trace-${traceparent.slice(0,2)}-${traceparent.slice(3,5)}`,traceparent};
+    const invalidMessage={...message(invalidEnvelope),payloadHash:canonicalRequestHash(invalidEnvelope)};
+    await assert.rejects(tx(preparation,transaction=>inbox.begin(transaction,invalidMessage,"lease",0,30000)),{code:"INBOX_INVALID"});
   }
   await assert.rejects(tx(preparation,transaction=>inbox.quarantineRecord(transaction,{topic:"coffee.orders.lifecycle.v1",partition:0,offset:"01",envelope:e,reason:"INVALID"},0)),{code:"INBOX_INVALID"});
   await assert.rejects(tx(preparation,transaction=>inbox.quarantineRecord(transaction,{topic:"coffee.orders.lifecycle.v1",partition:0,offset:"9223372036854775808",envelope:e,reason:"INVALID"},0)),{code:"INBOX_INVALID"});

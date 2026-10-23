@@ -6,6 +6,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import { load as parseYaml } from "js-yaml";
 import {
   assertDatabaseAdmissionBudget,
+  parsePlatformConfig,
   PlatformConfigError,
 } from "../packages/platform-config/src/index.ts";
 
@@ -76,6 +77,7 @@ const ALLOWED_OPEN_SECRET_KEYS = new Set([
   "secretRef",
   "secretRefs",
   "optionalSecretRefs",
+  "infrastructureSecretScopes",
   "caPrivateKeyRuntimeAccess",
 ]);
 const ALLOWED_LOCATOR_ENV_KEYS = new Set([
@@ -265,6 +267,22 @@ function validate(schema, document, label, linkedSchemas = []) {
     const details = ajv.errorsText(validator.errors, { separator: "; " });
     fail("CONFIG-SCHEMA", `${label}: ${details}`);
   }
+}
+
+export async function loadServiceCatalog(root = REPO_ROOT) {
+  const path = join(root, "config/service-catalog.json");
+  const schema = await readJson(join(root, "config/service-catalog.schema.json"));
+  const catalog = await readJson(path);
+  validate(schema, catalog, path);
+  return catalog;
+}
+
+export async function infrastructureSecretEntries(scope, {root = REPO_ROOT} = {}) {
+  const catalog = await loadServiceCatalog(root);
+  const scopes = catalog.infrastructureSecretScopes;
+  if (typeof scope !== "string" || !Object.hasOwn(scopes, scope))
+    fail("CONFIG-SECRET-SCOPE", `${String(scope)}: unknown infrastructure secret scope`);
+  return scopes[scope].map(({name, ref}) => [name, ref]);
 }
 
 function sorted(values) {
@@ -531,6 +549,9 @@ export async function loadPlatformConfig(
   const nginxSchema = await readJson(join(root, "config/nginx-profile.schema.json"));
   const config = await readYaml(path);
   validate(schema, config, path, [nginxSchema]);
+  const openObserve = config.telemetry?.openObserve;
+  if (openObserve?.telemetryEnabled !== false || openObserve?.mmdbDownloadEnabled !== false || openObserve?.modelPricingEnabled !== false)
+    fail("CONFIG-OBSERVABILITY-EGRESS", "OpenObserve telemetry, MMDB downloads, and model-pricing sync must remain disabled in the private platform topology");
   checkConfigKeys(config);
   exactSet(config.services, NODE_RUNTIMES, "platform.yaml Node services");
   checkKafkaConfiguration(config);
@@ -541,7 +562,7 @@ export async function loadPlatformConfig(
     throw error;
   }
 
-  const catalog = await readJson(join(root, "config/service-catalog.json"));
+  const catalog = await loadServiceCatalog(root);
   const profile = await readJson(
     join(root, "platform/launch-v1-runtime-profile.json"),
   );
@@ -636,6 +657,12 @@ export async function loadPlatformConfig(
       if (!/^[a-z][a-zA-Z0-9-]*(\.[a-z][a-zA-Z0-9-]*)+$/.test(ref))
         fail("CONFIG-SECRET-REF", `${runtime}.${ref}: invalid secretRef`);
     }
+  }
+  try {
+    parsePlatformConfig(config);
+  } catch (error) {
+    if (error instanceof PlatformConfigError) fail("CONFIG-PLATFORM-CONFIG", error.message);
+    throw error;
   }
   return config;
 }

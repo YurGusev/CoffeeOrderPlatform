@@ -6,9 +6,14 @@ import {load as yaml} from 'js-yaml';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {runInNewContext} from 'node:vm';
-import {ROOT,sourceSnapshot,run,json,redact,PRODUCT_BUILD_TARGETS,productArgs} from './setup.mjs';
+import {ROOT,sourceSnapshot,run,json,redact,PRODUCT_BUILD_TARGETS,productArgs,LABEL,safeProductStartupFailure} from './setup.mjs';
 import {nowMs,SseDecoder, classifyResult, ulid, ulidTime, Histogram, assertCoverage, THRESHOLDS,FULL} from './protocol.mjs';
 import {render} from '../../../tools/nginx/generate.mjs';
+import {bootstrapOwnedOrdersKafka} from '../soak.test.mjs';
+
+async function nginxStatusEndpoint() {
+  return yaml(await readFile(new URL('../../../config/platform.yaml',import.meta.url),'utf8'),{json:true}).telemetry.nginxStatusEndpoint;
+}
 
 void test('operator-1 CLI help describes the approved profile without obsolete full5000',async()=>{
   const help=await run(process.execPath,['tests/realtime/soak.test.mjs','--help'],{cwd:ROOT});
@@ -16,6 +21,60 @@ void test('operator-1 CLI help describes the approved profile without obsolete f
   assert.match(help,/1 subscriber.*100.*1800000ms/u);
   assert.doesNotMatch(help,/5000|isolated-5000/u);
   assert.match(help,/512\/513/u);
+});
+
+void test('product startup diagnostics keep only allowlisted error codes and real source frames',()=>{
+  const source='apps/orders-aroma-preparation/src/runtime-composition.ts';
+  const logs=[
+    JSON.stringify({level:50,err:{type:'TypeError',code:'23505',sqlState:'08006',message:'startup-canary-secret ERR_CANARY_TOKEN',stack:`TypeError: startup-canary-secret\n    at configure (/app/${source}:21:13)\n    at leaked (/app/apps/orders-aroma-preparation/src/private-canary-token.ts:4:9)`}}),
+    `Error: AROMA_PREPARATION_CONFIG_MISSING startup-canary-secret SQLSTATE: 08006\n    at start (/app/${source}:56:17)`,
+  ].join('\n');
+  const result=safeProductStartupFailure(logs,[source]);
+  assert.deepEqual(result,{errorNames:['TypeError','Error'],errorCodes:['AROMA_PREPARATION_CONFIG_MISSING'],sqlStates:['23505','08006'],sourceFrames:[{path:source,line:21,column:13},{path:source,line:56,column:17}]});
+  assert.ok(result.errorNames.length<=4&&result.errorCodes.length<=8&&result.sqlStates.length<=4&&result.sourceFrames.length<=8,'startup error projection is bounded');
+  assert.doesNotMatch(JSON.stringify(result),/startup-canary-secret|private-canary-token|ERR_CANARY_TOKEN|\/app\//u);
+});
+
+void test('launch-path initializes offsets only for durable Orders owners on an owned empty tmpfs broker',async()=>{
+  const config=yaml(await readFile(new URL('../../../config/platform.yaml',import.meta.url),'utf8'));
+  const expected=[];
+  for(const serviceName of ['orders-service','orders-aroma-preparation'])for(const consumer of config.services[serviceName].kafka.consumers.filter(value=>value.processing==='durable'))for(const topic of consumer.topics)expected.push({groupId:consumer.groupId,topic});
+  const state={Id:'sha256:synthetic-broker',Image:'sha256:synthetic-image',State:{Running:true},Config:{Labels:{[LABEL]:'owned-run'}},HostConfig:{Tmpfs:{'/var/lib/kafka/data':'rw,size=1073741824'}},Mounts:[{Type:'tmpfs',Destination:'/var/lib/kafka/data'}]};
+  const reset=[];let cliCalls=0,receipt;
+  const runKafka=async(_broker,args)=>{
+    cliCalls++;
+    if(args[0]==='sh')return 'mounted\n';
+    if(args[0].endsWith('kafka-get-offsets.sh')){
+      const topic=args[args.indexOf('--topic')+1],definition=Object.values(config.kafka.topics).find(value=>value.name===topic);
+      return Array.from({length:definition.partitions},(_,partition)=>`${topic}:${partition}:0`).join('\n');
+    }
+    const groupId=args[args.indexOf('--group')+1];
+    if(args.includes('--reset-offsets')){reset.push({groupId,topic:args[args.indexOf('--topic')+1]});return '';}
+    const initialized=reset.filter(item=>item.groupId===groupId);
+    return initialized.flatMap(item=>{
+      const definition=Object.values(config.kafka.topics).find(value=>value.name===item.topic);
+      return Array.from({length:definition.partitions},(_,partition)=>`${groupId} ${item.topic} ${partition} 0 0 0 - -`);
+    }).join('\n');
+  };
+  const result=await bootstrapOwnedOrdersKafka({broker:'owned-kafka',runId:'owned-run',config,inspectBroker:async()=>state,runKafka,writeReceipt:async value=>{receipt=value;}});
+  assert.equal(result.verified,true);assert.equal(result.broker.freshTmpfsData,true);
+  assert.deepEqual(reset,expected.map(({groupId,topic})=>({groupId,topic})));
+  assert.ok(result.topics.every(topic=>topic.partitions.every(partition=>partition.endOffset==='0')));
+  assert.ok(result.groups.every(group=>group.partitions.every(partition=>partition.currentOffset==='0'&&partition.endOffset==='0'&&partition.lag==='0')));
+  assert.deepEqual(receipt,result);assert.ok(cliCalls>0);
+  reset.length=0;
+  const launchPath=await bootstrapOwnedOrdersKafka({broker:'owned-kafka',runId:'owned-run',config,owners:['orders-service','orders-aroma-preparation','aroma-convergence'],inspectBroker:async()=>state,runKafka,writeReceipt:async()=>{}});
+  const convergence=config.services['aroma-convergence'].kafka.consumers.find(value=>value.groupId==='aroma-convergence-v1');
+  assert.ok(convergence);
+  assert.deepEqual(reset.filter(item=>item.groupId==='aroma-convergence-v1').map(item=>item.topic),convergence.topics);
+  assert.ok(launchPath.groups.some(group=>group.groupId==='aroma-convergence-v1'&&group.topic===convergence.topics[0]&&group.partitions.every(partition=>partition.currentOffset==='0')));
+  const callsBeforeGuard=cliCalls;
+  await assert.rejects(bootstrapOwnedOrdersKafka({broker:'other-kafka',runId:'owned-run',config,inspectBroker:async()=>({...state,Config:{Labels:{[LABEL]:'foreign-run'}}}),runKafka,writeReceipt:async()=>{} }),/limited to this fixture broker/u);
+  await assert.rejects(bootstrapOwnedOrdersKafka({broker:'reused-kafka',runId:'owned-run',config,inspectBroker:async()=>({...state,HostConfig:{Tmpfs:{}}}),runKafka,writeReceipt:async()=>{} }),/newly launched tmpfs broker/u);
+  assert.equal(cliCalls,callsBeforeGuard,'ownership guards reject foreign or reused brokers before Kafka commands');
+  let mountCommands=0;
+  await assert.rejects(bootstrapOwnedOrdersKafka({broker:'unmounted-kafka',runId:'owned-run',config,inspectBroker:async()=>state,runKafka:async(_broker,args)=>{mountCommands++;return args[0]==='sh'?'not-mounted\n':runKafka(_broker,args);},writeReceipt:async()=>{} }),/active tmpfs mount/u);
+  assert.equal(mountCommands,1,'a broker without an active tmpfs mount is rejected before topic or group changes');
 });
 
 void test('operator-1 CLI requires a frozen manifest and never admits old full5000',async()=>{
@@ -297,10 +356,11 @@ void test('owner browser proof cannot execute CLI on import or replace full capa
 
 void test('nginx TLS cache and downstream write buffer are bounded without changing authorization TTL',async()=>{
   const profile=JSON.parse(await readFile(new URL('../../nginx/fixtures/profile.json',import.meta.url),'utf8'));
+  const statusEndpoint=await nginxStatusEndpoint();
   const config=render({...profile,tls:{...profile.tls,sessionCacheMiB:4,bufferBytes:4096}},[
     {path:'/events',method:'GET'},
     {path:'/api/client-v1/orders/{orderRef}',method:'GET'},
-  ]);
+  ],statusEndpoint);
   assert.match(config,/ssl_buffer_size 4096;/);
   assert.match(config,/ssl_session_cache shared:coffee_public_tls:4m;/);
   assert.match(config,/ssl_session_timeout 5m;/);
@@ -547,7 +607,7 @@ void test('client latency diagnostics separate replay without removing it from a
 });
 void test('realtime upstream TLS peer state is shared and bounded without changing auth or connection deadlines',async()=>{
   const profile=JSON.parse(await readFile(new URL('../../nginx/fixtures/profile.json',import.meta.url),'utf8'));
-  const text=render(profile,[{path:'/events',method:'GET'}]);
+  const text=render(profile,[{path:'/events',method:'GET'}],await nginxStatusEndpoint());
   assert.match(text,/upstream realtime_gateway \{ zone realtime_tls_state 64k; server /u);
   assert.match(text,/upstream edge_gateway \{ server /u);assert.match(text,/upstream api_public \{ server /u);
   assert.match(text,/proxy_connect_timeout 1s;/u);assert.match(text,/auth_request \/_edge\/authorize;/u);

@@ -160,11 +160,36 @@ restore каждой DB <=10m и совокупно <=30m на записанн�
 Владелец реализации — #64 (Operations), обязательный accepted
 predecessor #13. Он поставляет Collector/OpenObserve, exporters, alert evaluation
 и `pnpm test:observability`; #13 проверяет этот результат, а не создаёт backend.
+Внутри этой команды canonical `runtimeMetricMatrix` проверяет functional
+наблюдаемость всех 14 Node runtime в recovery-proof Compose запуске и native nginx.
+Это evidence не закрывает launch-level full-system G14: #13 отдельно принимает
+SLO, chaos/failure, capacity и полный browser/business/DB/Kafka/SSE путь.
+Handoff — `evidence/handoffs/issue-64.yaml`. В
+`evidence/observability/<run-id>/` обязательны `alert-transitions.json`,
+`correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`,
+`retention-result.json`, `runtime-health-matrix.json` и `result.json` с source,
+config/BOM/image digests. NOT_RUN/FAIL любого обязательного сценария сохраняет
+G14 закрытым. Внешние notifications запрещены. Единственная policy authority —
+`config/platform.yaml.telemetry`; [runbook](../operations/observability.md)
+не является вторым источником значений.
 Сквозной сценарий использует ограниченные по времени spans и W3C context/links;
 `orderRef` и correlation связывают долгоживущий order с несколькими traces.
 Бесконечный span на весь lifecycle заказа не требуется.
 
-Для каждого из 14 Node runtime проверить:
+Canonical runtime matrix #64 проверяет для каждого из 14 Node runtime реальные
+self-mTLS запросы к `/health/live`, `/health/ready`, text OpenMetrics и ожидаемые
+4xx, а также доступность OTLP HTTP/error и producer metrics. Матрица проверяет
+наличие 10 DB-waiting, 2 durable consumer-lag и 5 scoped Outbox-age series.
+Предшествующий launch проверяет lag preparation и realtime после реальной
+активности; вместе эти проверки охватывают все 3 consumer owners. Событийные и
+транзакционные samples допускаются только после реальной активности существующего
+owner launch (шесть ролей и SQL-backed convergence helper). Перед стандартным
+Compose cleanup все 15 final images сканируются по фактическим image IDs; запуск
+не использует `--keep`, закрепление контейнеров или отдельную parallel pipeline.
+Результат матрицы фиксируется ровно в поле `runtimeMetricMatrix`.
+
+Матрица #64 не доказывает full-system launch acceptance и не измеряет capacity.
+Для #13 остаются обязательными:
 
 - `/health/live` 200 при живом process;
 - `/health/ready` 200 только при готовых обязательных зависимостях и 503 при их
@@ -173,8 +198,15 @@ predecessor #13. Он поставляет Collector/OpenObserve, exporters, ale
   Outbox/Inbox backlog, Attempt/UnknownOutcome, SSE connections/drops;
 - один browser correlation id проходит edge→api-public→owner→DB log→Outbox→Kafka→projection worker→Realtime→edge→browser→owner refetch;
 - W3C traceparent сохраняется; network/DB spans не содержат body/secrets/PII;
-- alerts с test injection: service not ready 5m, consumer lag 5m,
-  Outbox oldest 5m, UnknownOutcome >0 2m, SSE drop rate >5% 5m;
+- alerts: существующий `notReady` 5m охватывает Node `runtime_ready` и native
+  nginx `httpcheck.status` класса `2xx`. При здоровых 14 Node остановить native
+  nginx, проверить переход probe `1→0`, firing после настроенного окна и resolved
+  того же episode после restart и перехода `0→1`. Сохранить Node not-ready
+  injection; сначала завершить synthetic alert transitions до business-owner
+  launch path, затем выдержать здоровый notReady baseline и resolved старые
+  episodes в течение evaluation interval плюс health interval; остальные
+  сценарии — consumer lag 5m, Outbox oldest 5m,
+  UnknownOutcome >0 2m, SSE drop rate >5% 5m;
 - canary secret/PII отсутствует в logs, traces, metrics labels, alerts, artifacts
   и browser bundle.
 
@@ -182,6 +214,16 @@ predecessor #13. Он поставляет Collector/OpenObserve, exporters, ale
 реальный private auth/API/SSE dependency path; static 200 или `nginx -t` не
 заменяет full-system readiness. Native access allowlist и collector/alerts
 принимает #64, transport-inclusive capacity и reconnect — #12/#13.
+Availability alert использует только private endpoint из
+`telemetry.nginxStatusEndpoint`: `http_check` публикует native `2xx` status как
+1 при доступности и 0 при probe failure, а существующий `notReady` применяет
+`min(runtime_ready or native_nginx_2xx) <= 0` с прежним окном 5m. Проверка
+останавливает nginx при здоровых 14 Node и подтверждает firing и resolved того
+же episode после восстановления. Этот сигнал не подменяет Node readiness и сам
+по себе не доказывает полную system readiness или capacity. Collector удаляет
+`http.status_code` из nginx probe datapoints для стабильной availability series
+и `error.message` из всех metric datapoints для защиты от утечки текста ошибок.
+Общий metric transform также удаляет `http.url`, чтобы probe endpoint не становился label.
 
 Topology gate отдельно доказывает: `api-public` монтирует только `client-v1`,
 `api-internal` — только `internal-v1`; Edge→owner и Browser→owner запрещены;

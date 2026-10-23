@@ -2,7 +2,7 @@ import {createPublicKey, type KeyObject} from "node:crypto";
 import {monitorEventLoopDelay} from "node:perf_hooks";
 import {setTimeout as delay} from "node:timers/promises";
 import {Temporal} from "@js-temporal/polyfill";
-import type {RuntimeComposition, RuntimeCompositionContext} from "@coffee-platform/runtime";
+import {completeRuntimeRequestTelemetry, type RuntimeComposition, type RuntimeCompositionContext} from "@coffee-platform/runtime";
 import {isActorContextTimeValid, verifyActorContextWithKeySet, type ActorContextClaims} from "@coffee-platform/security";
 import {clientV1Schemas} from "@coffee-platform/generated-client-v1/runtime-schemas.gen.js";
 import {RealtimeCapacityError, RealtimeHub} from "./hub.js";
@@ -129,13 +129,15 @@ export function createRealtimeComposition():RuntimeComposition & Readonly<{hub:(
         const lastEventId=onceHeader(request,"last-event-id");
         const duplicateCursor=request.raw.rawHeaders.filter((_,i,all)=>i%2===1&&all[i-1]?.toLowerCase()==="last-event-id").length>1;
         reply.hijack();
-        reply.raw.writeHead(200,{"Content-Type":"text/event-stream; charset=utf-8","Cache-Control":"no-cache, no-transform","Connection":"keep-alive","X-Accel-Buffering":"no","X-Correlation-ID":correlationId});
-        const streamSocket=reply.raw.socket;
-        reply.raw.once("finish",()=>streamSocket?.end());
-        try {owned.open(reply.raw,{signal:streamSignal,...(lastEventId===undefined&&!duplicateCursor?{}:{lastEventId:duplicateCursor?"":lastEventId!}),
-          validateActor:()=>isActorContextTimeValid(auth.claims,Math.floor(Temporal.Now.instant().epochMilliseconds/1000),5),
-        });}
-        catch(error){reply.raw.destroy();if(!(error instanceof RealtimeCapacityError)&&!streamSignal.aborted)throw error;}
+        try {
+          reply.raw.writeHead(200,{"Content-Type":"text/event-stream; charset=utf-8","Cache-Control":"no-cache, no-transform","Connection":"keep-alive","X-Accel-Buffering":"no","X-Correlation-ID":correlationId});
+          const streamSocket=reply.raw.socket;
+          reply.raw.once("finish",()=>streamSocket?.end());
+          try {owned.open(reply.raw,{signal:streamSignal,...(lastEventId===undefined&&!duplicateCursor?{}:{lastEventId:duplicateCursor?"":lastEventId!}),
+            validateActor:()=>isActorContextTimeValid(auth.claims,Math.floor(Temporal.Now.instant().epochMilliseconds/1000),5),
+          });}
+          catch(error){reply.raw.destroy();if(!(error instanceof RealtimeCapacityError)&&!streamSignal.aborted)throw error;}
+        } finally {completeRuntimeRequestTelemetry(request,reply.statusCode);}
       });
     },
   };

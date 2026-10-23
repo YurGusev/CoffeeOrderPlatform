@@ -24,6 +24,14 @@ try {
   assert.match(generated, /^error_log \/dev\/null;$/m, 'raw request-bearing error logs must not reach Collector');
   assert.ok(generated.includes('map "$edge_auth_status:$edge_actor_context:$edge_auth_correlation" $api_auth_target { default http://127.0.0.1:18080; ~^204:[^:]+:[^:]+$ https://api_public; }'));
   assert.match(generated, /auth_request_set \$edge_auth_correlation \$upstream_http_x_correlation_id;/);
+  assert.ok(generated.includes('map $http_traceparent $edge_traceparent { default ""; "~^(?!ff)[a-f0-9]{2}-(?!0{32})[a-f0-9]{32}-(?!0{16})[a-f0-9]{16}-[a-f0-9]{2}$" $http_traceparent; }'));
+  assert.ok(generated.includes('map $edge_auth_correlation $edge_safe_auth_correlation { default ""; "~^[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[1-5][A-Fa-f0-9]{3}-[89ABab][A-Fa-f0-9]{3}-[A-Fa-f0-9]{12}$" $edge_auth_correlation; }'));
+  assert.match(generated, /"duration_seconds":\$request_time/);
+  assert.match(generated, /server \{ listen 8081; server_name edge-nginx; location = \/nginx_status \{ stub_status; access_log off; \} location \/ \{ return 404; \} \}/);
+  assert.match(generated, /location = \/health\/ready \{ return 404; \}/);
+  assert.match(generated, /location = \/metrics \{ return 404; \}/);
+  assert.match(generated, /proxy_set_header traceparent \$edge_traceparent;/);
+  assert.doesNotMatch(generated, /proxy_set_header traceparent \$http_traceparent;/);
   assert.equal((generated.match(/location = \/api\/client-v1\/customers/g) ?? []).length, 1);
   assert.match(generated, /location = \/api\/client-v1\/customers \{\s+limit_except GET POST/);
   assert.match(generated, /location ~ \^\/api\/client-v1\/orders\/\[A-Za-z0-9_-\]\+\/items\/\[A-Za-z0-9_-\]\+\$ \{\s+limit_except DELETE PUT/);

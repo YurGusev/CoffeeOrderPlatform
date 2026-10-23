@@ -3,9 +3,11 @@ import {readFileSync} from "node:fs";
 import {load as parseYaml} from "js-yaml";
 import { generateKeyPairSync } from "node:crypto";
 import test from "node:test";
+import {createServer as createHttpServer} from "node:http";
 import {EventEmitter} from "node:events";
-import {Readable} from "node:stream";
+import {Readable, Writable} from "node:stream";
 import pg from "pg";
+import {context as otelContext, metrics, SpanStatusCode, trace} from "@opentelemetry/api";
 import {createRuntime} from "../../platform-runtime/dist/index.js";
 import {
   parsePlatformConfig,
@@ -14,10 +16,12 @@ import {
 import {
   correlationHeaders,
   createCorrelationContext,
-  createLogger,
+  createPinoLogger,
+  logRecordsDropped,
   isTraceparent,
   redactLogFields,
   withCorrelationFields,
+  createTelemetryResource,
 } from "../../platform-observability/src/index.ts";
 import {
   signActorContext,
@@ -30,6 +34,7 @@ import {
   parseServiceTransportMaterial,
 } from "../../platform-security/src/index.ts";
 import {withTransaction, createDatabase, DatabaseTransactionError} from "../../platform-database/dist/index.js";
+import {createHttpClient} from "../../platform-http/dist/index.js";
 import {defineStatement, defineCopy} from "../../platform-database/dist/owner.js";
 import {createSqlIdempotencyStore, canonicalRequestHash} from "../../platform-idempotency/dist/index.js";
 import {consumeOnce, createSqlInboxStore} from "../../platform-inbox/dist/index.js";
@@ -49,17 +54,84 @@ void test("config rejects unknown keys and requires the exact runtime set", () =
   assert.throws(() => parsePlatformConfig({...parsed, unknown: true}), PlatformConfigError);
 });
 
-void test("observability redacts nested secret fields", () => {
+void test("observability uses Pino and redacts nested request/provider/PII/error canaries", async () => {
+  const canary = "must-never-escape";
   assert.deepEqual(
-    redactLogFields({ actor: { token: "secret", value: "ok" } }),
-    { actor: { token: "[REDACTED]", value: "ok" } },
+    redactLogFields({ actor: { token: canary, value: "ok" }, request: {headers: {cookie: canary}, body: {customerName: canary}}, payload: canary, query: canary, provider: {message: canary}, credentials: {username: canary, password: canary}, "x-api-key": canary, private_key: canary, passwd: canary, err: new Error(canary) }),
+    { actor: { token: "[REDACTED]", value: "ok" }, request: {headers: "[REDACTED]", body: "[REDACTED]"}, payload: "[REDACTED]", query: "[REDACTED]", provider: "[REDACTED]", credentials: "[REDACTED]", "x-api-key": "[REDACTED]", private_key: "[REDACTED]", passwd: "[REDACTED]", err: "[REDACTED]" },
   );
   const records = [];
-  createLogger((record) => records.push(record), { runtime: "test" }).info(
-    "hello",
-    { password: "never-log" },
-  );
-  assert.equal(records[0].fields.password, "[REDACTED]");
+  const destination = new Writable({write(chunk, _encoding, callback) { records.push(chunk.toString()); callback(); }});
+  const logger = createPinoLogger({ runtime: "test" }, 16_384, destination, 1, 25);
+  logger.info({password: canary, err: new Error(canary)}, "hello");
+  logger.info({safe: {token: canary, toJSON() {return {token: canary};}}}, "custom serialization");
+  logger.child({token: canary}).child({actor: {email: canary}}).info({request: {body: {customerName: canary}}}, "nested");
+  const safeMarker = "pino-redaction-record-retained";
+  const pinoCanaries = ["pino-secret-canary", "pino-pii-canary", "pino-body-canary", "pino-header-canary", "pino-sql-canary", "pino-provider-canary"];
+  logger.info({
+    marker: safeMarker,
+    nested: {credentials: {secret: pinoCanaries[0]}, customer: {email: pinoCanaries[1]}},
+    request: {body: {value: pinoCanaries[2]}, headers: {authorization: pinoCanaries[3]}},
+    "db.statement": pinoCanaries[4],
+    provider: {response: pinoCanaries[5]},
+  }, "redaction canary record");
+  logger.flush();
+  assert.equal(JSON.stringify(records).includes(canary), false);
+  const redactionRecord = records.map(record => JSON.parse(record)).find(record => record.msg === "redaction canary record");
+  assert.ok(redactionRecord, "the redaction test record was serialized");
+  assert.equal(redactionRecord.marker, safeMarker, "safe marker remains in the same serialized record");
+  const serializedRedactionRecord = JSON.stringify(redactionRecord);
+  for (const value of pinoCanaries) assert.equal(serializedRedactionRecord.includes(value), false, "sensitive canary is absent from the retained record");
+  let responseRawReads = 0;
+  let responseHeadersReads = 0;
+  const completionMarker = "fastify-completion-record-retained";
+  logger.info({marker: completionMarker, res: {
+    statusCode: 303,
+    get raw() { responseRawReads += 1; return {headers: {cookie: "response-raw-cookie-canary"}}; },
+    get headers() { responseHeadersReads += 1; return {authorization: "response-header-canary"}; },
+  }}, "request completed");
+  const invalidStatusCanary = "invalid-response-status-canary";
+  logger.info({marker: completionMarker, res: {
+    statusCode: invalidStatusCanary,
+    get raw() { responseRawReads += 1; return invalidStatusCanary; },
+    get headers() { responseHeadersReads += 1; return invalidStatusCanary; },
+  }}, "invalid response status");
+  assert.equal(typeof logger.child, "function");
+  logger.flush();
+  const serializedCompletionRecords = records.map(record => JSON.parse(record));
+  const completionRecord = serializedCompletionRecords.find(record => record.msg === "request completed");
+  const invalidCompletionRecord = serializedCompletionRecords.find(record => record.msg === "invalid response status");
+  assert.ok(completionRecord, "the same Fastify completion record is retained");
+  assert.equal(completionRecord.marker, completionMarker);
+  assert.deepEqual(completionRecord.res, {statusCode: 303});
+  assert.ok(invalidCompletionRecord, "an invalid status does not drop the completion record");
+  assert.equal(invalidCompletionRecord.marker, completionMarker);
+  assert.deepEqual(invalidCompletionRecord.res, {});
+  assert.equal(responseRawReads, 0, "the response raw graph is never read");
+  assert.equal(responseHeadersReads, 0, "response headers are never read");
+  const serializedCompletionData = JSON.stringify([completionRecord, invalidCompletionRecord]);
+  assert.equal(serializedCompletionData.includes("response-raw-cookie-canary"), false);
+  assert.equal(serializedCompletionData.includes("response-header-canary"), false);
+  assert.equal(serializedCompletionData.includes(invalidStatusCanary), false);
+  const droppedBefore = logRecordsDropped();
+  const emitWarning = process.emitWarning.bind(process);
+  const warnings = [];
+  process.emitWarning = (warning, options) => {warnings.push({warning, options}); return process;};
+  try {
+  logger.info({largeSafeField: "x".repeat(20_000)}, "oversized");
+    logger.child({largeSafeField: "x".repeat(20_000)}).info("oversized child binding");
+    createPinoLogger({runtime: "test", largeSafeField: "x".repeat(20_000)}, 16_384, destination).info("oversized base binding");
+  } finally { process.emitWarning = emitWarning; }
+  await new Promise(resolve => setTimeout(resolve, 35));
+  const emitWarningAgain = process.emitWarning.bind(process);
+  process.emitWarning = (warning, options) => {warnings.push({warning, options}); return process;};
+  try { logger.info({largeSafeField: "x".repeat(20_000)}, "oversized after configured interval"); }
+  finally { process.emitWarning = emitWarningAgain; }
+  logger.flush();
+  assert.equal(logRecordsDropped(), droppedBefore + 4);
+  assert.equal(warnings.length, 2, "dropped logs emit diagnostics at the configured interval");
+  assert.equal(warnings[0].warning, "Structured log records dropped by configured telemetry bounds");
+  assert.equal(records.some(record => record.includes("oversized")), false, "oversized arguments and bindings are dropped before Pino serialization");
 });
 
 void test("observability preserves valid correlation and W3C trace context only", () => {
@@ -85,6 +157,11 @@ void test("observability preserves valid correlation and W3C trace context only"
     causationId: "msg_1",
   });
   assert.equal(isTraceparent(traceparent), true);
+  const futureVersionTraceparent = `01-${"a".repeat(32)}-${"b".repeat(16)}-01`;
+  assert.equal(isTraceparent(futureVersionTraceparent), true);
+  assert.equal(createCorrelationContext({traceparent: futureVersionTraceparent}).traceparent, futureVersionTraceparent);
+  assert.equal(isTraceparent(`ff-${"a".repeat(32)}-${"b".repeat(16)}-01`), false);
+  assert.equal(isTraceparent(`00-${"A".repeat(32)}-${"b".repeat(16)}-01`), false);
   assert.equal(
     isTraceparent(`00-${"0".repeat(32)}-bbbbbbbbbbbbbbbb-01`),
     false,
@@ -214,6 +291,165 @@ function mockDatabase(t, hook = () => undefined, ssl = false, poolOverrides = {}
   return {database, statements, releases, connection, options};
 }
 
+void test("database, HTTP and Outbox telemetry preserves owner parentage, bounded metrics and payload privacy", async t => {
+  let traces = "";
+  let exportedMetrics = "";
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {
+      const body = Buffer.concat(chunks).toString();
+      if (request.url === "/v1/traces") traces += body;
+      if (request.url === "/v1/metrics") exportedMetrics += body;
+      response.writeHead(200, {"content-type": "application/x-protobuf"});
+      response.end();
+    });
+  });
+  let outgoingTraceparent;
+  let forwardedCorrelation;
+  let forwardedCausation;
+  const service = createHttpServer((request, response) => {
+    if (request.url?.startsWith("/failed")) response.writeHead(503);
+    else {
+      outgoingTraceparent = request.headers.traceparent;
+      forwardedCorrelation = request.headers["x-correlation-id"];
+      forwardedCausation = request.headers["x-causation-id"];
+    }
+    response.end("ok");
+  });
+  await Promise.all([
+    new Promise(resolve => collector.listen(0, "127.0.0.1", resolve)),
+    new Promise(resolve => service.listen(0, "127.0.0.1", resolve)),
+  ]);
+  const collectorAddress = collector.address();
+  const serviceAddress = service.address();
+  assert.ok(collectorAddress && typeof collectorAddress === "object");
+  assert.ok(serviceAddress && typeof serviceAddress === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${collectorAddress.port}`},
+    producer: {queueCapacity: 32, maxRecordBytes: 16_384, batchSize: 16, batchIntervalMs: 60_000, exportTimeoutMs: 1_000, diagnosticIntervalMs: 60_000, flushTimeoutMs: 2_000},
+  }, "database-http-span-test", "test-token");
+  telemetry.start();
+  const {database} = mockDatabase(t);
+  await database.resource.start(new AbortController().signal);
+  const statement = defineStatement(database, "SELECT 'db-private-canary'");
+  const client = createHttpClient({origin: `http://127.0.0.1:${serviceAddress.port}`});
+  const ownerSpan = trace.getTracer("owner-test").startSpan("orders.owner.operation");
+  let transactionSpan;
+  let failedTransactionSpan;
+  let unknownTransactionSpan;
+  let ownerSpanEnded = false;
+  const endOwnerSpan = () => {if (!ownerSpanEnded) {ownerSpanEnded = true; ownerSpan.end();}};
+  const callerTraceparent = `00-${ownerSpan.spanContext().traceId}-${ownerSpan.spanContext().spanId}-01`;
+  let telemetryStopped = false;
+  try {
+    await otelContext.with(trace.setSpan(otelContext.active(), ownerSpan), async () => {
+      await withTransaction(database, {mode: "interactive"}, async transaction => {
+        transactionSpan = trace.getSpan(otelContext.active());
+        assert.ok(transactionSpan);
+        assert.equal(transactionSpan.spanContext().traceId, ownerSpan.spanContext().traceId);
+        assert.notEqual(transactionSpan.spanContext().spanId, ownerSpan.spanContext().spanId);
+        await statement(transaction, []);
+      });
+      assert.equal(transactionSpan.isRecording(), false);
+      await assert.rejects(withTransaction(database, {mode: "background"}, async () => {
+        failedTransactionSpan = trace.getSpan(otelContext.active());
+        throw new Error("db-private-canary");
+      }), /db-private-canary/u);
+      assert.equal(failedTransactionSpan.isRecording(), false);
+      let rejectRollback;
+      const {database: rollbackDatabase, connection: rollbackConnection, statements: rollbackStatements, releases: rollbackReleases} = mockDatabase(t, sql => sql === "ROLLBACK" ? new Promise((_, reject) => {rejectRollback = reject;}) : undefined);
+      rollbackConnection.release = destroy => {rollbackReleases.push(destroy); assert.equal(destroy, true); rejectRollback?.(new Error("socket closed"));};
+      await assert.rejects(otelContext.with(trace.setSpan(otelContext.active(), ownerSpan), () => withTransaction(rollbackDatabase, {mode: "background"}, async () => {
+        unknownTransactionSpan = trace.getSpan(otelContext.active());
+        throw new Error("rollback failed");
+      })), error => error.code === "DB_ROLLBACK_FAILED" && error.message === "DB_ROLLBACK_FAILED" && error.previousCode === "DB_QUERY_FAILED");
+      assert.equal(unknownTransactionSpan.isRecording(), false);
+      assert.equal(rollbackStatements.at(-1), "ROLLBACK");
+      assert.equal(rollbackStatements.includes("COMMIT"), false);
+      assert.deepEqual(rollbackReleases, [true]);
+      const inboxProbe = {begin: async () => ({kind: "acquired", record: {}}), markProcessed: async () => {}};
+      const inboxMessage = {messageId: "trace-inbox", messageType: "TraceProbe", receivedAt: "2026-01-01T00:00:00Z", payloadHash: "a".repeat(64), payload: {}};
+      let inboxSpan;
+      let handlerChildSpan;
+      const inboxResult = await consumeOnce(inboxProbe, {}, inboxMessage, "trace-consumer", 1_000, 10_000, async () => {
+        inboxSpan = trace.getSpan(otelContext.active());
+        handlerChildSpan = trace.getTracer("inbox-child-probe").startSpan("Inbox.handler.child");
+        handlerChildSpan.end();
+      }, "2026-01-01T00:00:00Z");
+      assert.equal(inboxResult.kind, "processed");
+      assert.equal(inboxSpan.name, "Inbox.consumeOnce");
+      assert.equal(handlerChildSpan.parentSpanContext.spanId, inboxSpan.spanContext().spanId);
+      assert.equal(handlerChildSpan.spanContext().traceId, inboxSpan.spanContext().traceId);
+      assert.equal(trace.getSpan(otelContext.active()), ownerSpan);
+      let failedInboxSpan;
+      await assert.rejects(consumeOnce(inboxProbe, {}, inboxMessage, "trace-consumer", 1_000, 10_000, async () => {
+        failedInboxSpan = trace.getSpan(otelContext.active());
+        throw new Error("inbox handler failed");
+      }, "2026-01-01T00:00:00Z"), /inbox handler failed/u);
+      assert.equal(failedInboxSpan.name, "Inbox.consumeOnce");
+      assert.equal(failedInboxSpan.parentSpanContext.spanId, ownerSpan.spanContext().spanId);
+      assert.equal(failedInboxSpan.isRecording(), false);
+      assert.equal(trace.getSpan(otelContext.active()), ownerSpan);
+      const response = await client.fetch("/private/entity-secret?token=query-secret", {headers: {
+        "x-correlation-id": "corr-safe",
+        "x-causation-id": "cause-safe",
+        traceparent: callerTraceparent,
+      }});
+      assert.equal(response.status, 200);
+      assert.equal((await client.fetch("/failed/entity-secret?token=query-secret")).status, 503);
+    });
+    const {database: deliveryDatabase} = deliverySqlDatabase(t);
+    const outbox = createSqlOutboxStore(deliveryDatabase);
+    const messages = [outboxFixture("trace-relay-00", "trace-aggregate-00", 1), outboxFixture("trace-relay-01", "trace-aggregate-01", 1)];
+    messages[1].traceparent = `01-${"c".repeat(32)}-${"d".repeat(16)}-01`;
+    messages[1].envelope.traceparent = messages[1].traceparent;
+    for (const message of messages) {
+      await withTransaction(deliveryDatabase, {mode: "background"}, transaction => outbox.enqueue(transaction, message));
+      let deliverySpan;
+      const delivered = await relayOutboxBatch(outbox, deliveryDatabase, async () => {
+        deliverySpan = trace.getSpan(otelContext.active());
+        assert.ok(deliverySpan);
+        assert.equal(deliverySpan.spanContext().traceId, message.traceparent.slice(3, 35));
+        assert.notEqual(deliverySpan.spanContext().spanId, message.traceparent.slice(36, 52));
+        return {kind: "ack"};
+      }, {nowMs: 100, leaseOwner: message.messageId, policy: {leaseMs: 1000, sendTimeoutMs: 100, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}}});
+      assert.equal(delivered.published, 1);
+      assert.equal(deliverySpan.isRecording(), false);
+    }
+    endOwnerSpan();
+    await client.close();
+    await telemetry.stop(new AbortController().signal);
+    telemetryStopped = true;
+  } finally {
+    endOwnerSpan();
+    await client.close();
+    await new Promise(resolve => collector.close(resolve));
+    await new Promise(resolve => service.close(resolve));
+    if (!telemetryStopped) await telemetry.stop(new AbortController().signal);
+  }
+  assert.ok(traces.includes("db.transaction"));
+  assert.ok(traces.includes("HTTP GET"));
+  assert.ok(traces.includes("Outbox.relay"));
+  assert.ok(traces.includes("transaction.outcome"));
+  assert.ok(traces.includes("unknown"));
+  assert.ok(traces.includes("http_5xx"));
+  assert.ok(traces.includes("UNEXPECTED"));
+  assert.equal(traces.includes("db-private-canary"), false);
+  assert.equal(traces.includes("entity-secret"), false);
+  assert.equal(traces.includes("query-secret"), false);
+  assert.equal(forwardedCorrelation, "corr-safe");
+  assert.equal(forwardedCausation, "cause-safe");
+  assert.equal(outgoingTraceparent, callerTraceparent);
+  assert.ok(exportedMetrics.includes("db.client.connection.checkout_wait"));
+  assert.ok(exportedMetrics.includes("db.client.connection.waiting"));
+  assert.ok(exportedMetrics.includes("db.client.transaction.duration"));
+  assert.ok(exportedMetrics.includes("db.client.transaction.count"));
+  assert.ok(exportedMetrics.includes("transaction.outcome"));
+  assert.ok(exportedMetrics.includes("unknown"));
+});
+
 void test('database opaque transaction: states, budgets, owner identity and terminal use', async t => {
   const {database, statements, releases, options} = mockDatabase(t);
   const query = defineStatement(database, 'SELECT $1::integer AS value');
@@ -249,7 +485,11 @@ void test('database opaque transaction: states, budgets, owner identity and term
 
 void test('database COMMIT blackhole: finite unknown, destroy, no rollback, native promise settled on close', async t => {
   let rejectCommit;
-  const {database, statements, releases, connection} = mockDatabase(t, sql => sql === 'COMMIT' ? new Promise((_, reject) => {rejectCommit = reject;}) : undefined);
+  let commitError;
+  const canary = 'db-commit-private-canary';
+  const {database, statements, releases, connection} = mockDatabase(t, sql => sql === 'COMMIT'
+    ? commitError === undefined ? new Promise((_, reject) => {rejectCommit = reject;}) : Promise.reject(commitError)
+    : undefined);
   connection.release = destroy => {releases.push(destroy); rejectCommit?.(new Error('socket closed'));};
   let saved;
   const started = performance.now();
@@ -257,12 +497,30 @@ void test('database COMMIT blackhole: finite unknown, destroy, no rollback, nati
     assert.equal(error.code, 'TRANSACTION_OUTCOME_UNKNOWN');
     assert.deepEqual(error.metadata, {correlationId: 'corr'});
     assert.equal(error.message, 'TRANSACTION_OUTCOME_UNKNOWN');
+    assert.equal(error.previousCode, 'DB_QUERY_TIMEOUT');
+    assert.equal(error.sqlState, undefined);
+    assert.equal(error.cause, undefined);
+    assert.equal(JSON.stringify({name: error.name, message: error.message, code: error.code, previousCode: error.previousCode, sqlState: error.sqlState}).includes(canary), false);
     return true;
   });
   assert.ok(performance.now() - started < 500);
   assert.equal(saved.state(), 'Unknown');
   assert.equal(statements.includes('ROLLBACK'), false);
   assert.deepEqual(releases, [true]);
+
+  commitError = Object.assign(new Error(canary), {code: '23514'});
+  await assert.rejects(withTransaction(database, {mode: 'interactive'}, async () => {}), error => {
+    assert.equal(error.code, 'TRANSACTION_OUTCOME_UNKNOWN');
+    assert.equal(error.previousCode, 'DB_QUERY_FAILED');
+    assert.equal(error.sqlState, '23514');
+    assert.equal(error.message, 'TRANSACTION_OUTCOME_UNKNOWN');
+    assert.equal(error.cause, undefined);
+    assert.equal(JSON.stringify({name: error.name, message: error.message, code: error.code, previousCode: error.previousCode, sqlState: error.sqlState}).includes(canary), false);
+    return true;
+  });
+  assert.equal(statements.filter(statement => statement === 'COMMIT').length, 2);
+  assert.equal(statements.includes('ROLLBACK'), false);
+  assert.deepEqual(releases, [true, true]);
   await database.resource.stop(new AbortController().signal);
   assert.equal(database.metrics().active, 0);
   assert.equal(database.metrics().pending, 0);
@@ -345,6 +603,11 @@ void test('database pool cap preserves healthy readiness and recovers admission'
 });
 
 void test('database bounded checkout queue reserves slots FIFO, keeps health, and removes canceled or expired waiters', async t => {
+  const waitingSamples = [];
+  t.mock.method(metrics, 'getMeter', () => ({
+    createGauge: name => ({record: (value, attributes) => waitingSamples.push({name, value, attributes})}),
+    createHistogram: () => ({record() {}}), createCounter: () => ({add() {}}),
+  }));
   const {database} = mockDatabase(t, () => undefined, false, {max: 1, maxWaiting: 2, checkoutTimeoutMs: 50});
   assert.equal(await database.readiness.check(new AbortController().signal), true);
   let finishFirst, finishSecond;
@@ -359,6 +622,7 @@ void test('database bounded checkout queue reserves slots FIFO, keeps health, an
   const second = withTransaction(database, {mode: 'interactive'}, async () => {entered.push('second'); secondEntered(); await secondGate;});
   const third = withTransaction(database, {mode: 'interactive'}, async () => {entered.push('third'); thirdEntered();});
   assert.equal(database.metrics().waiting, 2);
+  assert.deepEqual(waitingSamples.at(-1), {name: 'db.client.connection.waiting', value: 2, attributes: {'db.owner': 'other'}});
   await new Promise(resolve => setTimeout(resolve, 75));
   assert.equal(database.metrics().waiting, 2, 'transaction deadline bounds queue wait, not the physical connect budget');
   await assert.rejects(withTransaction(database, {mode: 'interactive'}, async () => {}), {code: 'DB_POOL_EXHAUSTED'});
@@ -369,6 +633,7 @@ void test('database bounded checkout queue reserves slots FIFO, keeps health, an
   await secondStarted;
   assert.deepEqual(entered, ['first', 'second']);
   assert.equal(database.metrics().waiting, 1);
+  assert.equal(waitingSamples.at(-1).value, 1);
   finishSecond();
   await thirdStarted;
   await Promise.all([first, second, third]);
@@ -391,6 +656,7 @@ void test('database bounded checkout queue reserves slots FIFO, keeps health, an
   assert.equal(boundedDatabase.metrics().saturationTotal, 1);
   finishBlocker();
   await blocker;
+  assert.equal(waitingSamples.at(-1).value, 0);
 });
 
 void test('database shutdown rejects queued checkouts without acquiring a connection', async t => {
@@ -515,11 +781,16 @@ void test("Kafka decode precedes Inbox; only known DB commit permits offset, dup
   const order=[]; let decision="acquired", tag="COMMIT", commits=0;
   const {database}=mockDatabase(t,sql=>{if(sql==="COMMIT"){order.push("db-commit");return{rows:[],rowCount:0,command:tag};}});
   const binding={processing:"durable",database,inbox:{
-    begin:async(_tx, message)=>{const envelope=kafkaEnvelope();assert.deepEqual(message.payload,envelope);assert.equal(message.payloadHash,canonicalRequestHash(envelope));assert.notEqual(message.payloadHash,canonicalRequestHash(envelope.payload));order.push("inbox");return{kind:decision};},
+    begin:async(_tx, message)=>{const envelope={...kafkaEnvelope(),traceparent:message.payload.traceparent};assert.deepEqual(message.payload,envelope);assert.equal(message.payloadHash,canonicalRequestHash(envelope));assert.notEqual(message.payloadHash,canonicalRequestHash(envelope.payload));order.push("inbox");return{kind:decision};},
     markProcessed:async()=>{order.push("processed");},
     quarantineRecord:async()=>{order.push("quarantine");return "created";},
   },decode:value=>{order.push("decode");return parseEnvelope(value,p=>p);},handle:async tx=>{assert.equal(tx.state(),"Active");order.push("owner+outbox");}};
   const options={runtime:"orders-aroma-preparation",groupId:"orders-aroma-preparation-v1",topics:[kafkaRecord().topic],binding,leaseMs:30000,maxMessageBytes:1048576,signal:new AbortController().signal,commit:async()=>{commits++;order.push("offset");}};
+  const futureVersionEnvelope={...kafkaEnvelope(),traceparent:`01-${"a".repeat(32)}-${"b".repeat(16)}-01`};
+  await processKafkaRecord({...kafkaRecord(),value:futureVersionEnvelope},options);
+  assert.deepEqual(order,["decode","inbox","owner+outbox","processed","db-commit","offset"]);
+  assert.equal(order.includes("quarantine"),false);
+  order.length=0;
   await processKafkaRecord(kafkaRecord(),options);
   assert.deepEqual(order,["decode","inbox","owner+outbox","processed","db-commit","offset"]);
   for(const kind of ["duplicate","conflict"]){decision=kind;order.length=0;await processKafkaRecord(kafkaRecord(),options);assert.ok(!order.includes("owner+outbox"));assert.equal(order.includes("quarantine"),kind==="conflict");}
@@ -780,6 +1051,23 @@ void test("SQL Outbox preserves stable messageId, recovers expired lease and fen
 
   const relayMessage = outboxFixture("relay-stable-id", "aggregate-relay", 1);
   await withTransaction(database, {mode: "background"}, transaction => store.enqueue(transaction, relayMessage));
+  const outboxSpans = [];
+  const originalGetTracer = Reflect.get(trace, "getTracer");
+  trace.getTracer = function(name, ...args) {
+    const tracer = originalGetTracer.call(this, name, ...args);
+    if (name !== "coffee-platform.outbox") return tracer;
+    return {...tracer, startSpan(spanName, ...spanArgs) {
+      const span = tracer.startSpan(spanName, ...spanArgs);
+      const captured = {name: spanName, statuses: [], ends: 0};
+      const setStatus = span.setStatus.bind(span);
+      const end = span.end.bind(span);
+      span.setStatus = status => {captured.statuses.push(status); return setStatus(status);};
+      span.end = (...endArgs) => {captured.ends++; return end(...endArgs);};
+      outboxSpans.push(captured);
+      return span;
+    }};
+  };
+  t.after(() => {trace.getTracer = originalGetTracer;});
   const sent = [];
   const relayResult = await relayOutboxBatch(store, database, async (claim, signal) => {
     assert.equal(signal.aborted, false);
@@ -789,6 +1077,11 @@ void test("SQL Outbox preserves stable messageId, recovers expired lease and fen
   assert.deepEqual(sent, [{messageId: relayMessage.messageId, envelopeMessageId: relayMessage.messageId, occurredAt: relayMessage.occurredAt, causationId: null}]);
   assert.deepEqual(relayResult, {claimed: 1, published: 1, failed: 0, unknown: 0, quarantined: 0});
   assert.equal(snapshot().outbox.get(relayMessage.messageId).state, "Published");
+  assert.deepEqual(outboxSpans.map(({name, statuses, ends}) => ({name, statuses, ends})), [
+    {name: "Outbox.poll", statuses: [], ends: 1},
+    {name: "Outbox.relay", statuses: [], ends: 1},
+  ]);
+  outboxSpans.length = 0;
 
   // A batch cannot start more native sends than maxInFlight, even with more ready rows.
   for (const id of ["bounded-a", "bounded-b", "bounded-c"]) {
@@ -811,6 +1104,86 @@ void test("SQL Outbox preserves stable messageId, recovers expired lease and fen
   }
   assert.deepEqual(await boundedBatch, {claimed: 2, published: 0, failed: 0, unknown: 2, quarantined: 0});
   assert.equal(activeSends, 0);
+  assert.equal(outboxSpans.filter(span => span.name === "Outbox.poll").length, 1);
+  assert.equal(outboxSpans.filter(span => span.name === "Outbox.relay").length, 2);
+  assert.ok(outboxSpans.every(span => span.statuses.length === 1 && span.statuses[0].code === SpanStatusCode.ERROR && span.ends === 1));
+
+  outboxSpans.length = 0;
+  const drainedResult = await relayOutboxBatch(store, database, async () => ({kind: "ack"}), {
+    nowMs: 301, leaseOwner: "publisher-drain", policy: {leaseMs: 100, sendTimeoutMs: 50, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}},
+  });
+  assert.equal(drainedResult.published, 1);
+  assert.ok(outboxSpans.every(span => span.statuses.length === 0 && span.ends === 1));
+
+  outboxSpans.length = 0;
+  const failedMessage = outboxFixture("relay-failed", "aggregate-relay-failed", 1);
+  await withTransaction(database, {mode: "background"}, transaction => store.enqueue(transaction, failedMessage));
+  const failedResult = await relayOutboxBatch(store, database, async () => ({kind: "failed", error: "send rejected"}), {
+    nowMs: 302, leaseOwner: "publisher-failed", policy: {leaseMs: 100, sendTimeoutMs: 50, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}},
+  });
+  assert.deepEqual(failedResult, {claimed: 1, published: 0, failed: 1, unknown: 0, quarantined: 0});
+  assert.equal(outboxSpans.length, 2);
+  assert.ok(outboxSpans.every(span => span.statuses.length === 1 && span.statuses[0].code === SpanStatusCode.ERROR && span.ends === 1));
+
+  outboxSpans.length = 0;
+  const thrownMessage = outboxFixture("relay-thrown-finalize", "aggregate-relay-thrown-finalize", 1);
+  await withTransaction(database, {mode: "background"}, transaction => store.enqueue(transaction, thrownMessage));
+  const failingFinalizeStore = Object.create(store);
+  failingFinalizeStore.finalize = async () => {throw new Error("finalize failed");};
+  const thrownResult = await relayOutboxBatch(failingFinalizeStore, database, async () => ({kind: "ack"}), {
+    nowMs: 302, leaseOwner: "publisher-thrown", policy: {leaseMs: 100, sendTimeoutMs: 50, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}},
+  });
+  assert.deepEqual(thrownResult, {claimed: 1, published: 0, failed: 0, unknown: 1, quarantined: 0});
+  assert.equal(outboxSpans.length, 2);
+  assert.ok(outboxSpans.every(span => span.statuses.length === 1 && span.statuses[0].code === SpanStatusCode.ERROR && span.ends === 1));
+});
+
+void test("Outbox age diagnostics run single-flight without gating delivery and drain before database shutdown", async t => {
+  const {database} = mockDatabase(t);
+  const message = outboxFixture("age-diagnostic-does-not-gate", "aggregate-age-diagnostic", 1);
+  const started = [Promise.withResolvers(), Promise.withResolvers()];
+  const gates = [Promise.withResolvers(), Promise.withResolvers()];
+  let diagnosticCalls = 0;
+  let claimAvailable = true;
+  const store = {
+    enqueue: async () => "created",
+    claim: async () => {
+      if (!claimAvailable) return [];
+      claimAvailable = false;
+      return [{message, payloadHash: canonicalRequestHash(message.envelope), state: "Publishing", attempt: 1, leaseOwner: "age-diagnostic-relay", leaseToken: 1n, leaseUntilMs: 500, nextAttemptAtMs: 400}];
+    },
+    finalize: async () => {},
+    fail: async () => "Pending",
+    oldestUnpublishedAgesMs: async () => {
+      const call = diagnosticCalls++;
+      started[call].resolve();
+      await gates[call].promise;
+      if (call === 0) throw new Error("diagnostic query failed");
+      return null;
+    },
+  };
+  const options = {nowMs: 400, leaseOwner: "age-diagnostic-relay", policy: {leaseMs: 100, sendTimeoutMs: 50, maxInFlight: 1, retry: {baseMs: 1, maxMs: 10, maxAttempts: 3}}};
+
+  const delivered = await relayOutboxBatch(store, database, async () => ({kind: "ack"}), options);
+  assert.equal(delivered.published, 1, "a delayed diagnostic must not delay claim or delivery");
+  await started[0].promise;
+  const overlapping = await relayOutboxBatch(store, database, async () => ({kind: "ack"}), options);
+  assert.equal(overlapping.claimed, 0);
+  assert.equal(diagnosticCalls, 1, "the same store must not start overlapping age queries");
+
+  gates[0].resolve();
+  while (database.metrics().pending > 0) await new Promise(resolve => setImmediate(resolve));
+  const retried = await relayOutboxBatch(store, database, async () => ({kind: "ack"}), options);
+  assert.equal(retried.claimed, 0);
+  await started[1].promise;
+  assert.equal(diagnosticCalls, 2, "a failed diagnostic releases the single-flight guard");
+  let stopped = false;
+  const shutdown = database.resource.stop(AbortSignal.timeout(1_000)).then(() => {stopped = true;});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(stopped, false, "database shutdown waits for the already-tracked diagnostic transaction");
+  gates[1].resolve();
+  await shutdown;
+  assert.equal(stopped, true);
 });
 
 void test("Inbox consumeOnce rollback leaves no partial Inbox/Outbox mark and permits retry", async t => {

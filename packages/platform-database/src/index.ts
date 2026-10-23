@@ -1,6 +1,21 @@
 import pg from "pg";
-import type {DatabasePoolConfig} from "@coffee-platform/config";
+import {RUNTIME_NAMES, type DatabasePoolConfig} from "@coffee-platform/config";
+import {context, metrics, SpanKind, SpanStatusCode, trace} from "@opentelemetry/api";
 import {bounded, databases, transactions, track, trackLease, type DatabaseData, type Lease, type TransactionData, type Waiter} from "./internal.js";
+
+const databaseTracer = trace.getTracer("coffee-platform.database");
+const runtimeOwners = new Set<string>(RUNTIME_NAMES);
+const safeOwner = (owner: string): string => runtimeOwners.has(owner) ? owner : "other";
+const boundedMetric = (record: () => void): void => { try { record(); } catch { /* Telemetry is an observational side effect. */ } };
+const recordCheckoutWait = (duration: number, attributes: Record<string, string>): void => boundedMetric(() =>
+  metrics.getMeter("coffee-platform.database").createHistogram("db.client.connection.checkout_wait", {unit: "ms"}).record(duration, attributes));
+const recordPoolWaiting = (data: DatabaseData): void => boundedMetric(() =>
+  metrics.getMeter("coffee-platform.database").createGauge("db.client.connection.waiting").record(data.waiters.length, {"db.owner": data.telemetryOwner}));
+const recordTransaction = (duration: number, attributes: Record<string, string>): void => boundedMetric(() => {
+  const meter = metrics.getMeter("coffee-platform.database");
+  meter.createHistogram("db.client.transaction.duration", {unit: "ms"}).record(duration, attributes);
+  meter.createCounter("db.client.transaction.count").add(1, attributes);
+});
 
 export type SqlScalar = string | number | bigint | boolean | Uint8Array | null;
 export type QueryResult<Row> = Readonly<{rows: readonly Row[]; rowCount: number}>;
@@ -64,6 +79,7 @@ async function acquire(data: DatabaseData, metadata: CorrelationMetadata, signal
   const rejectWaiter = (waiter: Waiter, error: Error): void => {
     const index = data.waiters.indexOf(waiter);
     if (index !== -1) data.waiters.splice(index, 1);
+    recordPoolWaiting(data);
     waiter.signal?.removeEventListener("abort", waiter.abort);
     data.shutdown.signal.removeEventListener("abort", waiter.shutdownAbort);
     waiter.reject(error);
@@ -83,6 +99,7 @@ async function acquire(data: DatabaseData, metadata: CorrelationMetadata, signal
         shutdownAbort: () => rejectWaiter(waiter, new DatabaseTransactionError("DB_STOPPED", metadata)),
       };
       data.waiters.push(waiter);
+      recordPoolWaiting(data);
       signal?.addEventListener("abort", waiter.abort, {once: true});
       data.shutdown.signal.addEventListener("abort", waiter.shutdownAbort, {once: true});
       if (signal?.aborted) waiter.abort();
@@ -131,6 +148,7 @@ function dispatchWaiters(data: DatabaseData): void {
   if (data.shutdown.signal.aborted) return;
   while (data.waiters.length > 0 && data.leases.size + data.acquiring < data.config.max) {
     const waiter = data.waiters.shift()!;
+    recordPoolWaiting(data);
     waiter.signal?.removeEventListener("abort", waiter.abort);
     data.shutdown.signal.removeEventListener("abort", waiter.shutdownAbort);
     data.acquiring++;
@@ -158,7 +176,7 @@ export function createDatabase(options: DatabaseOptions): Database {
   const pool = new pg.Pool({host: options.host, port: options.port, database: options.database, user: options.user, password: options.password,
     ssl: options.ssl === "prefer" ? true : options.ssl ?? false, max: c.max, connectionTimeoutMillis: c.checkoutTimeoutMs, idleTimeoutMillis: c.idleTimeoutMs,
     maxLifetimeSeconds: c.maxLifetimeMs / 1000, application_name: options.owner});
-  const data: DatabaseData = {pool, config: c, preferSsl: options.ssl === "prefer", shutdown: new AbortController(), leases: new Set(), pending: new Set(), healthy: false, saturated: 0, acquiring: 0, waiters: []};
+  const data: DatabaseData = {pool, config: c, telemetryOwner: safeOwner(options.owner), preferSsl: options.ssl === "prefer", shutdown: new AbortController(), leases: new Set(), pending: new Set(), healthy: false, saturated: 0, acquiring: 0, waiters: []};
   pool.on("error", () => {data.healthy = false;});
   const health = async (signal: AbortSignal): Promise<boolean> => {
     if (data.shutdown.signal.aborted) return false;
@@ -183,7 +201,7 @@ export function createDatabase(options: DatabaseOptions): Database {
     void data.ending.catch(() => {data.healthy = false;});
   };
   const database = Object.freeze({
-    resource: {name: "database", start: async (signal: AbortSignal): Promise<void> => { await health(signal); },
+    resource: {name: "database", start: async (signal: AbortSignal): Promise<void> => { recordPoolWaiting(data); await health(signal); },
       stop: async (_signal: AbortSignal): Promise<void> => {
         data.shutdown.abort();
         // Произвольный callback Promise не отменяем. Незавершённый ресурс увидит #61 и эскалирует fail-stop.
@@ -207,65 +225,99 @@ export async function withTransaction<Result>(database: Database, options: Trans
   };
   if (!["interactive", "background"].includes(options.mode)) throw new DatabaseTransactionError("DB_INVALID_CONFIGURATION", metadata);
   const signal = AbortSignal.any([data.shutdown.signal, AbortSignal.timeout(data.config.transactionTimeoutMs), ...(options.signal ? [options.signal] : [])]);
-  const lease = await acquire(data, metadata, signal);
-  const state: TransactionData = {database, lease, state: "NotStarted", signal, metadata, pending: 0};
-  const transaction = Object.freeze({state: () => state.state}) as Transaction;
-  transactions.set(transaction, state);
-  let began = false;
-  let destroy = false;
-  try {
-    began = true; // BEGIN мог достигнуть сервера даже если ответ потерян.
-    await command(data, lease, "BEGIN", data.config.terminalTimeoutMs, metadata, signal);
-    state.state = "Active";
-    const statementMs = options.mode === "interactive" ? data.config.interactiveStatementTimeoutMs : data.config.backgroundStatementTimeoutMs;
-    for (const [name, value] of [["lock_timeout", data.config.lockTimeoutMs], ["statement_timeout", statementMs], ["idle_in_transaction_session_timeout", data.config.idleTimeoutMs]] as const) {
-      await command(data, lease, `SET LOCAL ${name} = '${value}ms'`, data.config.terminalTimeoutMs, metadata, signal);
-    }
-    const result = await bounded(track(data, Promise.resolve().then(() => {
-      if (signal.aborted) throw new DatabaseTransactionError("DB_INTERRUPTED", metadata);
-      return callback(transaction);
-    })), data.config.transactionTimeoutMs,
-      () => new DatabaseTransactionError(signal.aborted ? "DB_INTERRUPTED" : "DB_QUERY_TIMEOUT", metadata), signal);
-    if (signal.aborted) throw new DatabaseTransactionError("DB_INTERRUPTED", metadata);
-    if (state.pending !== 0) throw new DatabaseTransactionError("DB_INVALID_TRANSITION", metadata);
-    state.state = "Committing";
-    let reply: pg.QueryResult;
+  const startedAt = performance.now();
+  const attributes = {"db.system.name": "postgresql", "db.operation.name": "transaction", "db.owner": data.telemetryOwner, "transaction.mode": options.mode};
+  const span = databaseTracer.startSpan("db.transaction", {kind: SpanKind.CLIENT, attributes});
+  const activeContext = trace.setSpan(context.active(), span);
+  let outcome: "committed" | "rolled_back" | "unknown" | "failed" = "failed";
+  const execute = async (): Promise<Result> => {
+    const checkoutStartedAt = performance.now();
+    let lease: Lease;
     try {
-      // Client disconnect/shutdown после начала COMMIT не доказывает rollback.
-      reply = await command(data, lease, "COMMIT", data.config.terminalTimeoutMs, metadata);
-    } catch {
-      state.state = "Unknown";
-      destroy = true;
-      throw new DatabaseTransactionError("TRANSACTION_OUTCOME_UNKNOWN", metadata);
+      lease = await acquire(data, metadata, signal);
+    } finally {
+      recordCheckoutWait(performance.now() - checkoutStartedAt, {"db.owner": data.telemetryOwner, "transaction.mode": options.mode});
     }
-    if (reply.command === "ROLLBACK") {
-      state.state = "RolledBack";
-      throw new DatabaseTransactionError("DB_TRANSACTION_ROLLED_BACK", metadata);
-    }
-    if (reply.command !== "COMMIT") {
-      state.state = "Unknown";
-      destroy = true;
-      throw new DatabaseTransactionError("TRANSACTION_OUTCOME_UNKNOWN", metadata);
-    }
-    state.state = "Committed";
-    return result;
-  } catch (error) {
-    if (began && ["NotStarted", "Active"].includes(state.state)) {
-      state.state = "RollingBack";
+    const state: TransactionData = {database, lease, state: "NotStarted", signal, metadata, pending: 0};
+    const transaction = Object.freeze({state: () => state.state}) as Transaction;
+    transactions.set(transaction, state);
+    let began = false;
+    let destroy = false;
+    try {
+      began = true; // BEGIN мог достигнуть сервера даже если ответ потерян.
+      await command(data, lease, "BEGIN", data.config.terminalTimeoutMs, metadata, signal);
+      state.state = "Active";
+      const statementMs = options.mode === "interactive" ? data.config.interactiveStatementTimeoutMs : data.config.backgroundStatementTimeoutMs;
+      for (const [name, value] of [["lock_timeout", data.config.lockTimeoutMs], ["statement_timeout", statementMs], ["idle_in_transaction_session_timeout", data.config.idleTimeoutMs]] as const) {
+        await command(data, lease, `SET LOCAL ${name} = '${value}ms'`, data.config.terminalTimeoutMs, metadata, signal);
+      }
+      const result = await bounded(track(data, Promise.resolve().then(() => {
+        if (signal.aborted) throw new DatabaseTransactionError("DB_INTERRUPTED", metadata);
+        return callback(transaction);
+      })), data.config.transactionTimeoutMs,
+        () => new DatabaseTransactionError(signal.aborted ? "DB_INTERRUPTED" : "DB_QUERY_TIMEOUT", metadata), signal);
+      if (signal.aborted) throw new DatabaseTransactionError("DB_INTERRUPTED", metadata);
+      if (state.pending !== 0) throw new DatabaseTransactionError("DB_INVALID_TRANSITION", metadata);
+      state.state = "Committing";
+      let reply: pg.QueryResult;
       try {
-        const reply = await command(data, lease, "ROLLBACK", data.config.terminalTimeoutMs, metadata);
-        if (reply.command !== "ROLLBACK") throw new Error("rollback tag");
-        state.state = "RolledBack";
-      } catch {
+        // Client disconnect/shutdown после начала COMMIT не доказывает rollback.
+        reply = await command(data, lease, "COMMIT", data.config.terminalTimeoutMs, metadata);
+      } catch (error) {
         state.state = "Unknown";
         destroy = true;
-        throw new DatabaseTransactionError("DB_ROLLBACK_FAILED", metadata, undefined, error instanceof DatabaseTransactionError ? error.code : "DB_QUERY_FAILED");
+        const failure = databaseFailure(error, metadata);
+        throw new DatabaseTransactionError("TRANSACTION_OUTCOME_UNKNOWN", metadata, failure.sqlState, failure.code);
       }
-    }
-    const failure = error;
-    if (failure instanceof DatabaseTransactionError && failure.code === "DB_CONNECTION_LOST") {destroy = true; data.healthy = false;}
-    throw failure;
-  } finally { release(data, lease, destroy); }
+      if (reply.command === "ROLLBACK") {
+        state.state = "RolledBack";
+        throw new DatabaseTransactionError("DB_TRANSACTION_ROLLED_BACK", metadata);
+      }
+      if (reply.command !== "COMMIT") {
+        state.state = "Unknown";
+        destroy = true;
+        throw new DatabaseTransactionError("TRANSACTION_OUTCOME_UNKNOWN", metadata);
+      }
+      state.state = "Committed";
+      outcome = "committed";
+      return result;
+    } catch (error) {
+      if (began && ["NotStarted", "Active"].includes(state.state)) {
+        state.state = "RollingBack";
+        try {
+          const reply = await command(data, lease, "ROLLBACK", data.config.terminalTimeoutMs, metadata);
+          if (reply.command !== "ROLLBACK") throw new Error("rollback tag");
+          state.state = "RolledBack";
+        } catch {
+          state.state = "Unknown";
+          destroy = true;
+          outcome = "unknown";
+          throw new DatabaseTransactionError("DB_ROLLBACK_FAILED", metadata, undefined, error instanceof DatabaseTransactionError ? error.code : "DB_QUERY_FAILED");
+        }
+      }
+      const failure = error;
+      if (state.state === "Unknown") outcome = "unknown";
+      else if (state.state === "RolledBack") outcome = "rolled_back";
+      if (failure instanceof DatabaseTransactionError && failure.code === "DB_CONNECTION_LOST") {destroy = true; data.healthy = false;}
+      throw failure;
+    } finally { release(data, lease, destroy); }
+  };
+  try {
+    return await context.with(activeContext, execute);
+  } catch (error) {
+    try {
+      span.setAttribute("failure.class", error instanceof DatabaseTransactionError ? error.code : "UNEXPECTED");
+      span.setStatus({code: SpanStatusCode.ERROR});
+    } catch { /* Telemetry is an observational side effect. */ }
+    throw error;
+  } finally {
+    const metricAttributes = {...attributes, "transaction.outcome": outcome};
+    recordTransaction(performance.now() - startedAt, metricAttributes);
+    try {
+      span.setAttribute("transaction.outcome", outcome);
+      span.end();
+    } catch { /* Telemetry is an observational side effect. */ }
+  }
 }
 
 export function quoteIdentifier(identifier: string): string {

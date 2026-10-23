@@ -1,7 +1,7 @@
 FROM node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae AS web-build
 WORKDIR /workspace
 COPY . .
-RUN npm install --global corepack@0.35.0 && corepack enable && pnpm install --frozen-lockfile && pnpm web:build \
+RUN --network=host npm install --global corepack@0.35.0 && corepack enable && pnpm install --frozen-lockfile && pnpm web:build \
  && node tools/nginx/generate-config.mjs --config config/platform.yaml --output apps/edge-nginx/generated/nginx.conf
 
 FROM nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7 AS edge-nginx

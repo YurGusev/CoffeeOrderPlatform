@@ -240,6 +240,42 @@ export type PricingPolicyConfig = Readonly<{
   roundingMode: "CEILING";
 }>;
 
+export type TelemetryConfig = Readonly<{
+  namespace: string;
+  releaseDigest: string;
+  nginxStatusEndpoint: string;
+  collector: Readonly<{
+    otlpEndpoint: string; healthEndpoint: string; metricsEndpoint: string;
+    memoryLimitMiB: number; memorySpikeMiB: number; containerMemoryMiB: number; memoryCheckIntervalMs: number;
+    batchSize: number; batchTimeoutMs: number; queueCapacity: number; queueConsumers: number;
+    exportTimeoutMs: number; retryInitialMs: number; retryMaxMs: number; retryWindowMs: number;
+    maxLogRecordBytes: number;
+  }>;
+  producer: Readonly<{
+    queueCapacity: number; maxRecordBytes: number; batchSize: number;
+    batchIntervalMs: number; exportTimeoutMs: number; diagnosticIntervalMs: number;
+    flushTimeoutMs: number;
+  }>;
+  logging: Readonly<{maxSizeMiB: number; maxFiles: number}>;
+  openObserve: Readonly<{
+    endpoint: string; organization: string; bootstrapEmail: string; validationMarker: "bootstrap-validation-placeholder"; memoryLimitMiB: number;
+    memTableMaxSizeMiB: number; maxFileSizeInMemoryMiB: number; maxFileSizeOnDiskMiB: number;
+    maxFileRetentionSeconds: number; memPersistIntervalSeconds: number;
+    telemetryEnabled: false; mmdbDownloadEnabled: false; modelPricingEnabled: false;
+    streams: Readonly<{logs: string; traces: string; metrics: string}>;
+    retentionDays: number; deleteFilesDelayMinutes: number; maxDiskBytes: number; diskWatermarkPercent: number;
+    compactionIntervalSeconds: number; jobCleanupWaitSeconds: number;
+  }>;
+  alerts: Readonly<{
+    version: 1; evaluationIntervalMs: number;
+    notReady: Readonly<{forMs: number; threshold: number}>;
+    consumerLag: Readonly<{forMs: number; threshold: number}>;
+    outboxOldestAge: Readonly<{forMs: number; threshold: number}>;
+    unknownOutcome: Readonly<{forMs: number; threshold: number}>;
+    sseDropRate: Readonly<{forMs: number; threshold: number}>;
+  }>;
+}>;
+
 export type PlatformConfig = Readonly<{
   $schema: "./platform.schema.json";
   schemaVersion: 1;
@@ -250,6 +286,7 @@ export type PlatformConfig = Readonly<{
   kafka: KafkaConfig;
   aroma: AromaConfig;
   pricingPolicy: PricingPolicyConfig;
+  telemetry: TelemetryConfig;
   browserOidc: BrowserOidcProfile | null;
   nginxTransport: Readonly<Record<string, unknown>>;
   security: Readonly<Record<string, unknown>>;
@@ -1254,6 +1291,111 @@ function browserOidcProfile(value: unknown, path: string): BrowserOidcProfile | 
   });
 }
 
+function telemetryConfig(value: unknown): TelemetryConfig {
+  const path = "config.telemetry";
+  const source = record(value, path);
+  exactKeys(source, ["namespace", "releaseDigest", "nginxStatusEndpoint", "collector", "producer", "logging", "openObserve", "alerts"], path);
+  const collector = record(source["collector"], `${path}.collector`);
+  exactKeys(collector, ["otlpEndpoint", "healthEndpoint", "metricsEndpoint", "memoryLimitMiB", "memorySpikeMiB", "containerMemoryMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
+  const producer = record(source["producer"], `${path}.producer`);
+  exactKeys(producer, ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], `${path}.producer`);
+  const logging = record(source["logging"], `${path}.logging`);
+  exactKeys(logging, ["maxSizeMiB", "maxFiles"], `${path}.logging`);
+  const openObserve = record(source["openObserve"], `${path}.openObserve`);
+  exactKeys(openObserve, ["endpoint", "organization", "bootstrapEmail", "validationMarker", "telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled", "memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "streams", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "diskWatermarkPercent", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
+  const streams = record(openObserve["streams"], `${path}.openObserve.streams`);
+  exactKeys(streams, ["logs", "traces", "metrics"], `${path}.openObserve.streams`);
+  for (const key of ["logs", "traces", "metrics"]) {
+    if (!/^[a-z][a-z0-9_]{0,62}$/u.test(stringValue(streams[key], `${path}.openObserve.streams.${key}`)))
+      throw new PlatformConfigError(`${path}.openObserve.streams.${key}`, "ожидалось ограниченное имя stream или префикса metric families");
+  }
+  const alerts = record(source["alerts"], `${path}.alerts`);
+  exactKeys(alerts, ["version", "evaluationIntervalMs", "notReady", "consumerLag", "outboxOldestAge", "unknownOutcome", "sseDropRate"], `${path}.alerts`);
+  const alert = (key: string): Readonly<{forMs: number; threshold: number}> => {
+    const item = record(alerts[key], `${path}.alerts.${key}`);
+    exactKeys(item, ["forMs", "threshold"], `${path}.alerts.${key}`);
+    const threshold = item["threshold"];
+    if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold < 0)
+      throw new PlatformConfigError(`${path}.alerts.${key}.threshold`, "ожидалось конечное неотрицательное число");
+    return Object.freeze({forMs: positiveIntegerValue(item["forMs"], `${path}.alerts.${key}.forMs`), threshold});
+  };
+  const endpoint = (input: unknown, field: string): string => {
+    const result = stringValue(input, field);
+    try {
+      const parsed = new URL(result);
+      if (parsed.protocol !== "http:" || parsed.username || parsed.password || parsed.hash) throw new Error();
+    } catch {
+      throw new PlatformConfigError(field, "ожидался внутренний HTTP endpoint без credentials и fragment");
+    }
+    return result;
+  };
+  const collectorEndpoint = (input: unknown, field: string): string => {
+    const result = endpoint(input, field);
+    const parsed = new URL(result);
+    if (!result.startsWith("http://otel-collector:") || parsed.hostname !== "otel-collector" || !parsed.port || Number(parsed.port) < 1 || parsed.pathname !== "/" || parsed.search || result.includes("?") || result.includes("#"))
+      throw new PlatformConfigError(field, "ожидался HTTP origin Collector с явным портом 1..65535 и только корневым путём");
+    return result;
+  };
+  const openObserveEndpoint = (input: unknown, field: string): string => {
+    const result = endpoint(input, field);
+    const parsed = new URL(result);
+    if (parsed.hostname !== "openobserve" || !parsed.port || Number(parsed.port) < 1 || parsed.pathname !== "/" || result.endsWith("/") || parsed.search || result.includes("?") || parsed.hash || result.includes("#") || result.includes("@"))
+      throw new PlatformConfigError(field, "ожидался HTTP origin OpenObserve по приватному alias openobserve с явным non-default портом");
+    return result;
+  };
+  const namespace = stringValue(source["namespace"], `${path}.namespace`);
+  const nginxStatusEndpoint = endpoint(source["nginxStatusEndpoint"], `${path}.nginxStatusEndpoint`);
+  const nginxStatusPort = Number(new URL(nginxStatusEndpoint).port);
+  if (!/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(nginxStatusEndpoint) || !nginxStatusPort || nginxStatusPort > 65535 || nginxStatusPort === 8443)
+    throw new PlatformConfigError(`${path}.nginxStatusEndpoint`, "ожидался приватный native nginx status endpoint");
+  const releaseDigest = stringValue(source["releaseDigest"], `${path}.releaseDigest`);
+  if (!/^[a-z][a-z0-9.-]{0,62}$/u.test(namespace) || !/^[a-zA-Z0-9._:-]{1,128}$/u.test(releaseDigest))
+    throw new PlatformConfigError(path, "некорректные namespace или releaseDigest");
+  const positive = (obj: UnknownRecord, keys: readonly string[], prefix: string): Record<string, number> =>
+    Object.fromEntries(keys.map(key => [key, positiveIntegerValue(obj[key], `${prefix}.${key}`)]));
+  const collectorValues = positive(collector, ["memoryLimitMiB", "memorySpikeMiB", "containerMemoryMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
+  const producerValues = positive(producer, ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], `${path}.producer`);
+  const loggingValues = positive(logging, ["maxSizeMiB", "maxFiles"], `${path}.logging`);
+  const storageValues = positive(openObserve, ["memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
+  const diskWatermarkPercent = integerValue(openObserve["diskWatermarkPercent"], `${path}.openObserve.diskWatermarkPercent`);
+  const openObserveBufferBudgetInvalid =
+    storageValues["maxDiskBytes"]! < 268435456 ||
+    storageValues["maxFileSizeInMemoryMiB"]! >= storageValues["memTableMaxSizeMiB"]! ||
+    storageValues["memTableMaxSizeMiB"]! >= storageValues["memoryLimitMiB"]! ||
+    storageValues["maxFileSizeOnDiskMiB"]! * 1024 * 1024 > storageValues["maxDiskBytes"]! ||
+    storageValues["memPersistIntervalSeconds"]! > storageValues["maxFileRetentionSeconds"]!;
+  if (openObserve["validationMarker"] !== "bootstrap-validation-placeholder")
+    throw new PlatformConfigError(`${path}.openObserve.validationMarker`, "ожидался несекретный startup marker");
+  if (openObserve["telemetryEnabled"] !== false || openObserve["mmdbDownloadEnabled"] !== false || openObserve["modelPricingEnabled"] !== false)
+    throw new PlatformConfigError(`${path}.openObserve`, "в приватной топологии OpenObserve запрещены внешние telemetry, MMDB downloads и model-pricing sync");
+  const bootstrapEmail = stringValue(openObserve["bootstrapEmail"], `${path}.openObserve.bootstrapEmail`);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(bootstrapEmail))
+    throw new PlatformConfigError(`${path}.openObserve.bootstrapEmail`, "ожидался email оператора bootstrap");
+  const organization = stringValue(openObserve["organization"], `${path}.openObserve.organization`);
+  if (!/^[A-Za-z0-9_-]+$/u.test(organization))
+    throw new PlatformConfigError(`${path}.openObserve.organization`, "ожидался идентификатор организации OpenObserve из букв, цифр, дефиса или подчёркивания");
+  const collectorGuardMiB = collectorValues["containerMemoryMiB"]! - collectorValues["memorySpikeMiB"]!;
+  const collectorContainerBytes = collectorValues["containerMemoryMiB"]! * 1024 * 1024;
+  const collectorPorts = [
+    Number(new URL(collectorEndpoint(collector["otlpEndpoint"], `${path}.collector.otlpEndpoint`)).port),
+    Number(new URL(collectorEndpoint(collector["healthEndpoint"], `${path}.collector.healthEndpoint`)).port),
+    Number(new URL(collectorEndpoint(collector["metricsEndpoint"], `${path}.collector.metricsEndpoint`)).port),
+  ];
+  if (new Set(collectorPorts).size !== collectorPorts.length)
+    throw new PlatformConfigError(`${path}.collector`, "порты OTLP, health и metrics Collector должны различаться");
+  if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorGuardMiB <= collectorValues["memoryLimitMiB"]! || !Number.isSafeInteger(collectorContainerBytes) || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]! || producerValues["exportTimeoutMs"]! > producerValues["batchIntervalMs"]! || openObserveBufferBudgetInvalid)
+    throw new PlatformConfigError(path, "telemetry budgets are inconsistent");
+  if (alerts["version"] !== 1) throw new PlatformConfigError(`${path}.alerts.version`, "поддерживается только версия 1");
+  return Object.freeze({
+    namespace, releaseDigest, nginxStatusEndpoint,
+    collector: Object.freeze({otlpEndpoint: collectorEndpoint(collector["otlpEndpoint"], `${path}.collector.otlpEndpoint`), healthEndpoint: collectorEndpoint(collector["healthEndpoint"], `${path}.collector.healthEndpoint`), metricsEndpoint: collectorEndpoint(collector["metricsEndpoint"], `${path}.collector.metricsEndpoint`), ...collectorValues} as TelemetryConfig["collector"]),
+    producer: Object.freeze(producerValues as TelemetryConfig["producer"]),
+    logging: Object.freeze(loggingValues as TelemetryConfig["logging"]),
+    openObserve: Object.freeze({endpoint: openObserveEndpoint(openObserve["endpoint"], `${path}.openObserve.endpoint`), organization, bootstrapEmail, validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, streams: Object.freeze({logs: stringValue(streams["logs"], `${path}.openObserve.streams.logs`), traces: stringValue(streams["traces"], `${path}.openObserve.streams.traces`), metrics: stringValue(streams["metrics"], `${path}.openObserve.streams.metrics`)}), ...storageValues, diskWatermarkPercent} as TelemetryConfig["openObserve"]),
+    alerts: Object.freeze({version: 1, evaluationIntervalMs: 60_000, notReady: alert("notReady"), consumerLag: alert("consumerLag"), outboxOldestAge: alert("outboxOldestAge"), unknownOutcome: alert("unknownOutcome"), sseDropRate: alert("sseDropRate")} as TelemetryConfig["alerts"]),
+  });
+}
+
 export function parsePlatformConfig(value: unknown): PlatformConfig {
   const source = record(value, "config");
   exactKeys(
@@ -1268,6 +1410,7 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       "kafka",
       "aroma",
       "pricingPolicy",
+      "telemetry",
       "security",
       "nginxTransport",
       "services",
@@ -1313,6 +1456,9 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     throw new PlatformConfigError("config.pricingPolicy", "некорректные значения версии или формулы Pricing");
   }
   const pricingPolicy: PricingPolicyConfig = Object.freeze({policyVersionRef: pricingRef, version: pricingVersion, currency: "RUB", markupBasisPoints: pricingMarkup, minimumMarginMinor: pricingMargin, quoteTtlSeconds: pricingTtl, quantityScale: 3, roundingMode: "CEILING"});
+  const telemetry = telemetryConfig(source["telemetry"]);
+  if (source["environment"] !== "development" && !/^sha256:[0-9a-f]{64}$/u.test(telemetry.releaseDigest))
+    throw new PlatformConfigError("config.telemetry.releaseDigest", "staging/production требуют immutable sha256 release digest");
   const shutdownGraceMs = positiveIntegerValue(
     platform["shutdownGraceMs"],
     "config.platform.shutdownGraceMs",
@@ -1359,6 +1505,7 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     kafka,
     aroma: aromaConfig(source["aroma"], "config.aroma"),
     pricingPolicy,
+    telemetry,
     browserOidc,
     nginxTransport,
     security: opaqueObject(source["security"], "config.security"),

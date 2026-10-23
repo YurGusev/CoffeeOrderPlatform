@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
+import {checkToolchainVersions} from '../scripts/check-toolchain-versions.mjs';
+
+await checkToolchainVersions();
 
 const NETWORK = "coffee_platform_build_mtu";
 const BUILDER = "coffee-platform-mtu";

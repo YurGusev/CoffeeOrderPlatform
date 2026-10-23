@@ -1,5 +1,18 @@
 # Единая конфигурация и единое хранилище секретов
 
+Observability #64 использует required `config/platform.yaml.telemetry`: endpoints,
+streams, producer/Collector limits, retention, disk breaker и alert windows без
+hidden defaults. Только Collector получает `telemetry.openObserveIngestToken`,
+trusted bootstrap — `telemetry.openObserveAdmin`; Node сохраняет producer ingest
+token. Generated config и secrets находятся в tmpfs. Normal OpenObserve runtime
+использует seeded persistent volume без admin secret. Новые encrypted leaves
+остаются fail-closed до provisioning; второй secrets/config source запрещён.
+OpenObserve writer limits (`memTableMaxSizeMiB`, два `maxFileSize*MiB`,
+`maxFileRetentionSeconds`, `memPersistIntervalSeconds`) обязательны и проходят
+schema/parser budget validation; точная политика и материализация описаны в
+[runbook](../operations/observability.md#bootstrap-и-storage).
+[Конкретный поток и runbook](../operations/observability.md).
+
 Reference-профиль #162 содержит 14 Node runtime и один native nginx по
 [29_NGINX_TRANSPORT_AND_AUTH.md](29_NGINX_TRANSPORT_AND_AUTH.md): public TLS scope
 принадлежит `edge-nginx`, signing/OIDC — private `edge-gateway`, `web` runtime

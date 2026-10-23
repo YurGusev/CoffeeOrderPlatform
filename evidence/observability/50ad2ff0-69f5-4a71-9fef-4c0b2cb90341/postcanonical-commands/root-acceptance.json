@@ -1,0 +1,351 @@
+{
+  "schema": "issue64-postcanonical-commands/v1",
+  "status": "PASS_ROOT_VERIFIED_POSTCANONICAL_COMMANDS",
+  "atUtc": "2026-10-23T07:35:10.384769+00:00",
+  "baseSha": "cddbc5145f895ae9fa909d32c15427174fca599f",
+  "sourceIdentityHash": "97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9",
+  "canonicalRunId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+  "actualSessionId": 57789,
+  "actualToolExitCode": 0,
+  "commandExitCodes": {
+    "image-build": 0,
+    "compose-smoke": 0
+  },
+  "captureDirectory": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813",
+  "artifactHashes": {
+    "actual-run-result.json": {
+      "path": "actual-run-result.json",
+      "sha256": "9393313945853eaa2f119532f81cc17cabd3505bb26b5a1bffd2593f17331779",
+      "bytes": 13830
+    },
+    "command-index.json": {
+      "path": "command-index.json",
+      "sha256": "376d4fb291ec73850dc36f0f26d757ecf6afff3933f7f7455612b1443088861c",
+      "bytes": 27072
+    },
+    "build-metadata.json": {
+      "path": "build-metadata.json",
+      "sha256": "392714211ea24d603a4919afb4a95d20a992ac37362652e7a75d77bdafe2e370",
+      "bytes": 2508
+    },
+    "image-build.stdout.raw": {
+      "path": "image-build.stdout.raw",
+      "sha256": "ac7c36a58253cd5f8e6217a70d801e18b56e0311e364e5c6c367d78541a7d427",
+      "bytes": 874
+    },
+    "image-build.stderr.raw": {
+      "path": "image-build.stderr.raw",
+      "sha256": "11a8f1be251ed46e8ee8251e1f492986402ea430652b949371ce88dbae79d8a9",
+      "bytes": 7214
+    },
+    "compose-smoke.stdout.raw": {
+      "path": "compose-smoke.stdout.raw",
+      "sha256": "86599a0bf2d2dd2340c6c528039c4e1777d37e63fcb2a44392aadc5a72e7c104",
+      "bytes": 16345
+    },
+    "compose-smoke.stderr.raw": {
+      "path": "compose-smoke.stderr.raw",
+      "sha256": "a7b73c9f2db7759838dd93c9201cc66fc6dd587e4a9fbca7eadc498be16cb526",
+      "bytes": 117557
+    }
+  },
+  "originalToolResponses": [
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-start.json",
+      "sha256": "b7461fb49c760ae7a055cef6e1d9502fd518ccb4da81cd6a9e76d7f094268d11",
+      "bytes": 108
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll01.json",
+      "sha256": "666a0c19c3ccac13d8c93031caf043df6d5d2449f23b5302cfd0d5766f627351",
+      "bytes": 110
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll02.json",
+      "sha256": "e709c21ae17b3ce42a14fe479d4d7662a3b58624dc45e0417803eeb7fb9bb54b",
+      "bytes": 110
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll03.json",
+      "sha256": "af1d8d216e12375c48a409dda19cca605bcee849b007bd195c985e7be2fbbcf1",
+      "bytes": 110
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll04.json",
+      "sha256": "88dc3e64b8807d1aa91a89c25aa7dd9b89b54887821bef51055da2122efcb288",
+      "bytes": 110
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll05.json",
+      "sha256": "aefe37f320fb7e29b35dcd308969872ce3198708232c7d8c5d59724ed7c5ffd1",
+      "bytes": 110
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll06.json",
+      "sha256": "92912b1606984a213c18d3eb8c286fc4f9f2ca91d777f29a3f5bc210fdfd17db",
+      "bytes": 109
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll07.json",
+      "sha256": "199e8302c4b5d95c38cbf1e400fb01d4367c164c03cb9e0e64014af7813ff007",
+      "bytes": 132
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll08.json",
+      "sha256": "052373e560a5c43046da03ebfa7ad3c6d5e4b8dc8dbfd1bb64705d454f77b764",
+      "bytes": 126
+    }
+  ],
+  "preloadAcceptanceSha256": "eb3e630049f2a55425f3f058f8b11ba99b9b3954a7b32bb0ec47b90a966349ec",
+  "retainedPreloadedAliases": [
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-edge-gateway:latest",
+      "imageId": "sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-api-public:latest",
+      "imageId": "sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-api-internal:latest",
+      "imageId": "sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-customer-service:latest",
+      "imageId": "sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-catalog-service:latest",
+      "imageId": "sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-catalog-supplier-sync:latest",
+      "imageId": "sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-catalog-activation-worker:latest",
+      "imageId": "sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-pricing-service:latest",
+      "imageId": "sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-orders-service:latest",
+      "imageId": "sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-orders-aroma-preparation:latest",
+      "imageId": "sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-aroma-observer:latest",
+      "imageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-aroma-convergence:latest",
+      "imageId": "sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-aroma-gateway:latest",
+      "imageId": "sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-realtime-gateway:latest",
+      "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+    },
+    {
+      "tag": "coffee-pr179-wip15-preload-fcda9335-edge-nginx:latest",
+      "imageId": "sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3"
+    }
+  ],
+  "structuredSmokeReceipt": {
+    "project": "coffee-pr179-wip15-smoke-f2ffecc03d3d",
+    "runtimes": 14,
+    "nativeIngress": "edge-nginx",
+    "kafka": true,
+    "kafkaCompatibility": true,
+    "ephemeralKafkaBroker": true,
+    "credentialSource": "local-fixture",
+    "kafkaRetention": {
+      "brokerAcknowledged": true,
+      "logDirectory": "/var/lib/kafka/data",
+      "volume": "coffee-pr179-wip15-smoke-f2ffecc03d3d_kafka_data",
+      "containerRecreated": true,
+      "sameComposeProject": true,
+      "recoveredHealthy": true,
+      "retainedRecord": true,
+      "replicationFactor": 1
+    },
+    "recoveryProof": {
+      "postgres": {
+        "port": 32879,
+        "databases": [
+          {
+            "name": "coffee_platform_customer",
+            "state": "created"
+          },
+          {
+            "name": "coffee_platform_catalog",
+            "state": "created"
+          },
+          {
+            "name": "coffee_platform_pricing",
+            "state": "created"
+          },
+          {
+            "name": "coffee_platform_orders",
+            "state": "created"
+          },
+          {
+            "name": "coffee_platform_integration",
+            "state": "created"
+          }
+        ],
+        "runtimeRoleCount": 10,
+        "idempotent": true
+      },
+      "kafka": {
+        "brokerAcknowledged": true,
+        "logDirectory": "/var/lib/kafka/data",
+        "volume": "coffee-pr179-wip15-smoke-f2ffecc03d3d_kafka_data",
+        "containerRecreated": true,
+        "sameComposeProject": true,
+        "recoveredHealthy": true,
+        "retainedRecord": true,
+        "replicationFactor": 1
+      },
+      "native": {
+        "ordered": {
+          "acknowledged": true,
+          "records": 3,
+          "partition": 1,
+          "offsets": [
+            "0",
+            "1",
+            "2"
+          ],
+          "maxActive": 1
+        },
+        "rebalance": {
+          "twoConsumersAssigned": true,
+          "bounded": true,
+          "recoveryTotal": [
+            0,
+            0
+          ]
+        },
+        "quarantine": {
+          "malformed": true,
+          "malformedHeader": "known-header-empty-value",
+          "conflict": true
+        },
+        "sigterm": {
+          "received": true,
+          "gateEntered": true,
+          "activeAtSignal": {
+            "consumerA": {
+              "active": 0,
+              "queued": 0,
+              "pending": 2,
+              "assigned": 6,
+              "saturationTotal": 0,
+              "unknownCommitTotal": 0,
+              "recoveryTotal": 0,
+              "lastCode": null
+            },
+            "consumerB": {
+              "active": 1,
+              "queued": 0,
+              "pending": 2,
+              "assigned": 6,
+              "saturationTotal": 0,
+              "unknownCommitTotal": 0,
+              "recoveryTotal": 0,
+              "lastCode": null
+            },
+            "total": 1
+          },
+          "closedMetrics": {
+            "consumerA": {
+              "active": 0,
+              "queued": 0,
+              "pending": 0,
+              "assigned": 0,
+              "saturationTotal": 0,
+              "unknownCommitTotal": 0,
+              "recoveryTotal": 0,
+              "lastCode": null
+            },
+            "consumerB": {
+              "active": 0,
+              "queued": 0,
+              "pending": 0,
+              "assigned": 0,
+              "saturationTotal": 0,
+              "unknownCommitTotal": 0,
+              "recoveryTotal": 0,
+              "lastCode": "KAFKA_REVOKED"
+            }
+          },
+          "ownerCount": 1
+        },
+        "dbCommitBeforeOffset": {
+          "code": "OFFSET_COMMIT_OUTCOME_UNKNOWN",
+          "redelivered": true,
+          "handlerCalls": 1
+        },
+        "outboxAckBeforeFinalize": {
+          "brokerAcked": true,
+          "recovered": true,
+          "stableMessageId": true
+        },
+        "ordersOutbox": {
+          "pendingBeforeRestart": true,
+          "brokerAcknowledged": true,
+          "publishedAfterRestart": true,
+          "duplicateAfterFinalize": false
+        },
+        "blackhole": {
+          "kind": "paused-broker",
+          "commitOutcome": "OFFSET_COMMIT_OUTCOME_UNKNOWN",
+          "bounded": true,
+          "commitElapsedMs": 2284,
+          "redelivered": false,
+          "recoveryObservation": "offset-committed",
+          "recovered": true,
+          "recordMessageId": "coffee-pr179-wip15-smoke-f2ffecc03d3d-broker-blackhole",
+          "recordPartition": 6,
+          "recordOffset": "0"
+        }
+      },
+      "providerFixture": {
+        "login": 1,
+        "catalog": 1,
+        "cart": 13,
+        "post": 0,
+        "put": 0,
+        "delete": 0
+      }
+    },
+    "telemetry": true,
+    "healthEndpoints": [
+      "/health/live",
+      "/health/ready",
+      "/metrics"
+    ],
+    "stubSecrets": false,
+    "dbIntegrationProof": true,
+    "customerIntegrationProof": false,
+    "hostPublish": [
+      "127.0.0.1:8443:8443"
+    ],
+    "gracefulShutdown": true
+  },
+  "standaloneReceiptFormat": "last JSON line of original stdout; CLI creates no evidence/observability directory",
+  "limitations": [
+    "Two earlier standalone attempts failed: PG query timeout and later observer readiness503; their exact causes remain unknown. Final observed run passed without source or timeout changes.",
+    "Optional continuous diagnostic observer GUARD_FAILED and later watcher NO_TARGETS_SEEN are not acceptance evidence; original command exit0 and structured final receipt are verified separately.",
+    "No native capacity/SLO/full-system G14 or PostgreSQL persistence-after-fixture-destruction claim."
+  ]
+}

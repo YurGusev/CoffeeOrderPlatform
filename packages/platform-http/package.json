@@ -9,6 +9,7 @@
   "types": "./dist/index.d.ts",
   "dependencies": {
     "undici": "8.10.1",
-    "@coffee-platform/security": "workspace:*"
+    "@coffee-platform/security": "workspace:*",
+    "@opentelemetry/api": "1.9.1"
   }
 }

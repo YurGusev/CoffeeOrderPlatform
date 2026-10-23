@@ -1,0 +1,165 @@
+{
+  "schema": "issue64-owned-fixture-cleanup/v1",
+  "status": "PASS",
+  "head": "cddbc5145f895ae9fa909d32c15427174fca599f",
+  "release": {
+    "canonicalHead": "cddbc5145f895ae9fa909d32c15427174fca599f",
+    "canonicalRunId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341"
+  },
+  "sourceIdentityHash": "97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9",
+  "startedAtUtc": "2026-10-23T08:23:26.231276+00:00",
+  "completedAtUtc": "2026-10-23T09:05:41.971990+00:00",
+  "actualFinalizationExitCode": 0,
+  "sealedManifestSha256": "59c5f688ce72a3db736a17fa76fabd5cfb693e6c80dee76de8fab917a9442d61",
+  "resumeHelperSha256": "714ad328ab026dcab057d8744865aa565a66a6df3f52b0fc91718230d00c60a0",
+  "verificationCommandIndex": {
+    "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/final-cleanup-validation-v2/command-index.json",
+    "sha256": "d06c094d3e9343cd02ae0275e509a9dcad95960d1555c7928c7cd0e911739f57"
+  },
+  "foreignBaseline": {
+    "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/fresh-baseline/4a7d6af1-bb0f-4e22-912d-13301c5e9604/foreign-baseline.json",
+    "sha256": "bb8806c1868a0310925c824f6207f2cc26978dbf8bfb0c90d822e6dfa7517a82",
+    "status": "FRESH_READ_ONLY_FOREIGN_BASELINE",
+    "captureDirectory": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/fresh-baseline/4a7d6af1-bb0f-4e22-912d-13301c5e9604",
+    "captureCommandsSha256": "271b84c65ffdb5f067e8d32791520199bf3d293f9b7072004cf2cb74dc6e644e"
+  },
+  "foreignImageBaseline": {
+    "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/fresh-baseline/4a7d6af1-bb0f-4e22-912d-13301c5e9604/foreign-image-baseline.json",
+    "sha256": "3433221d3e599c4bc0b9da80b5c4d794b9e64cae42b4850fa35ce47ce4107983",
+    "foreignImageCount": 24,
+    "status": "FRESH_READ_ONLY_FOREIGN_IMAGE_BASELINE",
+    "captureDirectory": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/fresh-baseline/4a7d6af1-bb0f-4e22-912d-13301c5e9604"
+  },
+  "foreignInventoryPreserved": true,
+  "foreignCounts": {
+    "containers": 25,
+    "networks": 21,
+    "volumes": 614,
+    "images": 24
+  },
+  "foreignLoopDevicesPreserved": 18,
+  "removed": {
+    "dind": "7bc32dd6e075786c14c23bd963b9c9e24500a4d2ea597a752e960f0eaab07988",
+    "runner": "d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba",
+    "volumes": [
+      "pr179-fixture-2eb8c786577149f792f73a2b35249017_r5_docker_data",
+      "pr179-fixture-2eb8c786577149f792f73a2b35249017_r5_docker_backing"
+    ],
+    "images": [
+      "sha256:cc6d568fdf8532837601bfda7583864b35131f9e42134decc4dac7b65dc8b724",
+      "sha256:977ee49bc3690cd4cd767ec30ef7ded9b1634b1d305242249f7c532b21a71234"
+    ],
+    "loopDetached": "/dev/loop18",
+    "shm": "/dev/shm/pr179-fixture-2eb8c786-5771-49f7-92f7-3a2b35249017",
+    "cleanupAnchor": "pr179-loop-cleanup-2eb8c7865771"
+  },
+  "hostFreeBytesAfter": 41748541440,
+  "priorExecutionResults": [
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/cleanup-execution/actual-command-result.json",
+      "sha256": "5ab3af034a45131f736b09237aeb87887e3487a3a0c860b2a0bcbf7b795dbfd7",
+      "exitCode": 1
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/cleanup-execution-final-v2/actual-command-result.json",
+      "sha256": "a627497dd05f82cf5886ed7998ae413dbf34ef2e6e8256c9cafa8134683b822a",
+      "exitCode": 1
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/cleanup-execution-final-v3/actual-command-result.json",
+      "sha256": "ef04612e07bdded70bbaf8cb03d9c46943749d5d6c0eee7628117893288c41c0",
+      "exitCode": 1
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/cleanup-resume-execution/actual-command-result.json",
+      "sha256": "875d56d6c562e2bd5d985db8f6d501df39f5d0ece4fe38081aaacd131ef96a27",
+      "exitCode": 1
+    }
+  ],
+  "continuationFacts": [
+    "После клиентского таймаута Buildx завершил удаление node и state volume; точный оставшийся инвентарь проверен перед продолжением.",
+    "Продолжение удалило собственные внешние ресурсы и отсоединило loop18; каталог SHM был сохранён, потому что Docker сам удалил docker.sock при остановке.",
+    "Финальный шаг подтвердил ровно семь ожидаемых записей без socket, шесть SHA и отсутствие symlinks; удалил только каталог UUID, затем повторно сверил полные посторонние инвентари и идентичность кода.",
+    "Неассоциированный block-device node /dev/loop18 может оставаться; sysfs backing entry отсутствует. Сам device node не удалялся.",
+    "После полного HOST-повтора удалены также собственные microbuilder container/state volume/network и приватная конфигурация; полные baseline IDs и image rows повторно совпали."
+  ],
+  "limitations": [
+    "Предыдущие exit1 сохранены как неуспешные частичные попытки; PASS относится к проверенному итоговому состоянию всего собственного стенда.",
+    "Удалены только ресурсы временного стенда issue64; global prune не выполнялся.",
+    "Отдельный предыдущий HOST pnpm test exit1 из-за foreign BuildKit сохранён отдельно; итоговый повтор на своём builder завершился 0."
+  ],
+  "translationOf": {
+    "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/root-cleanup-receipt.json",
+    "sha256": "f47fffd5764339ac980c334c43e9eaf46693f95d82b04ad492a327069d83f7c0",
+    "scope": "Только перевод поясняющего текста; факты, времена, SHA и результаты не изменены."
+  },
+  "mainStandCleanup": {
+    "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/root-cleanup-receipt-ru.json",
+    "sha256": "adce0151990c20a78a713e2dfc1a5a4adb3b7a3aca0be0a4778b540b04d55d65"
+  },
+  "finalVerification": {
+    "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-final-publication-62b85415-c639-48d1-8cdf-98d17aafb4c6/root-microcleanup-validation-v2/root-acceptance.json",
+    "sha256": "fae6bc90d5ef053914ac37f160728b8ff7a0c1d8a64514f204ab5ea85ec91147"
+  },
+  "finalVerificationOriginalToolResponse": {
+    "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-final-publication-62b85415-c639-48d1-8cdf-98d17aafb4c6/root-microcleanup-validation-v2/actual-tool-response.json",
+    "sha256": "a2cbfadd19154ecf7c31d9fa554eb640b1153d7efabdaf721586aed2d9c68658"
+  },
+  "microbuilderCleanup": {
+    "status": "PASS_VERIFIED_FINAL_STATE",
+    "verification": {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-own-microbuilder-cleanup-execute-a63be469-98f3-49e6-9369-bb47d9fce014/post-verification.json",
+      "sha256": "a4c745a9200a831fb11d93a17538be8520d39eb607534811c500c295c8b16921"
+    },
+    "completedAtUtc": "2026-10-23T09:02:47.463831+00:00",
+    "originalDeleteExitCodes": {
+      "container": 0,
+      "volume": 0,
+      "network": 0
+    },
+    "removed": {
+      "container": "a24713dd949694857a543f83e57d3d7dbb9d16aabfe3ae138aefdcfa107c4e0a",
+      "volume": "buildx_buildkit_pr179-microbuilder-59a40aca_state",
+      "network": "6d3763d67d287ad1eb4da15597346e3e2ae3a5bf94ad7f73647ed8722e1da699",
+      "shm": "/dev/shm/pr179-microbuilder-59a40aca-986c-4c79-b9a7-c23561b0e1ed"
+    },
+    "foreignInventoryPreserved": true,
+    "globalBuildxRegistryIdentityUnchanged": true,
+    "loopMappingsUnchanged": true,
+    "testTagsAbsent": true,
+    "priorPostcheckFailure": {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-own-microbuilder-cleanup-execute-a63be469-98f3-49e6-9369-bb47d9fce014/failure.json",
+      "sha256": "004aa6c5a2233f2b5538e3aaa56cd8f8d0f4b9054ae3dc79f4ec2182e644b669"
+    },
+    "failureClassification": {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-own-microbuilder-cleanup-execute-a63be469-98f3-49e6-9369-bb47d9fce014/failure-classification.json",
+      "sha256": "ee1aa9754a06abf0ec1df03b3fff7207f36e42e4831abc6d7a0a89d8b4bcd7db"
+    },
+    "limitation": "Первоначальная общая команда завершилась exit1 после успешных удалений из-за текста not-found; итоговое состояние подтверждено отдельной read-only проверкой."
+  },
+  "postMainCleanupFullsuite": {
+    "status": "PASS_ROOT_VERIFIED_ADDITIONAL_HOST_FULLSUITE",
+    "rootAcceptance": {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/post-cleanup-host-full-retry-759ba74c-fe8b-4b7a-a21f-7e14d18f108e/root-acceptance.json",
+      "sha256": "88559dbef6b2b5bb61d373e96444fa9de8dc4b91570e7c5e26b9b293a70e6e9a"
+    },
+    "actualSession": 19063,
+    "actualCommandExitCode": 0,
+    "counts": {
+      "tests": 951,
+      "pass": 874,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 77,
+      "todo": 0
+    },
+    "sourceUnchanged": true,
+    "sourceIdentityHash": "97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9",
+    "finishedBeforeMicrobuilderCleanup": true,
+    "earlierFailedHostAttempt": {
+      "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-cleanup-wip15-postcanonical-pending-smoke-2c2381e7-c898-48d4-9b92-3b8e07a5d8e4/post-cleanup-host-full-20261023T082613Z/root-failure-acceptance.json",
+      "sha256": "d60b4e4ff08e43656430d36b4df9598c802176310f77efdc511d0fedbbc01541"
+    },
+    "limitation": "Повтор выполнен на собственном временном BuildKit; чужой global builder перезапускался и не изменялся."
+  }
+}

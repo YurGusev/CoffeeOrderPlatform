@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
-import {cp,readFile,writeFile,mkdir,chmod,readdir,rm,rename} from 'node:fs/promises';
+import {cp,readFile,writeFile,mkdir,chmod,readdir,rm,rename,stat} from 'node:fs/promises';
 import {join,resolve,relative,dirname} from 'node:path';
 import {createRequire} from 'node:module';
 import {createHash,generateKeyPairSync,randomUUID,X509Certificate} from 'node:crypto';
@@ -12,7 +12,49 @@ import {isoNow,FULL,THRESHOLDS} from './protocol.mjs';
 export const ROOT=resolve(import.meta.dirname,'../../..');
 export const LABEL='coffee.issue12.realtime-soak';
 export const PRODUCT_BUILD_TARGETS=Object.freeze(['packages/contracts/pricing-v1','packages/contracts/orders-v1','apps/realtime-gateway','apps/edge-gateway','apps/api-public']);
+const STARTUP_ERROR_NAMES=new Set(['Error','TypeError','RangeError','SyntaxError','ReferenceError','URIError','EvalError','AggregateError','AssertionError']);
+const STARTUP_ERROR_CODES=new Set([
+  'AROMA_PREPARATION_CONFIG_MISSING','AROMA_PREPARATION_CONSUMER_INVALID','AROMA_PREPARATION_DEPENDENCIES_MISSING','AROMA_PREPARATION_NOT_CONFIGURED','AROMA_VERIFICATION_CONFIG_MISSING',
+  'KAFKA_CONFIG_INVALID','KAFKA_CONNECTION_FAILED','KAFKA_ENVELOPE_INVALID','KAFKA_HANDLER_FAILED','KAFKA_QUEUE_FULL','KAFKA_REVOKED','KAFKA_SHUTDOWN_TIMEOUT','KAFKA_STOPPED','OFFSET_COMMIT_OUTCOME_UNKNOWN',
+  'RUNTIME_DATABASE_CONFIG_MISMATCH','RUNTIME_DATABASE_SECRET_INVALID','RUNTIME_DATABASE_SECRET_SCOPE','RUNTIME_DUPLICATE_COMPOSITION','RUNTIME_INVALID_PLATFORM_CONFIG','RUNTIME_INVALID_RESOURCE_NAMES','RUNTIME_INVALID_TRANSITION','RUNTIME_KAFKA_SECRET_INVALID','RUNTIME_KAFKA_SECRET_SCOPE','RUNTIME_PUBLIC_BASE_URL_INVALID','RUNTIME_RESOURCE_STOP_FAILED','RUNTIME_STARTUP_DEADLINE','RUNTIME_TELEMETRY_SECRET_SCOPE','RUNTIME_TRANSPORT_NOT_CONFIGURED','RUNTIME_UNKNOWN_DEADLINE_PROFILE',
+  'ECONNREFUSED','ECONNRESET','EPIPE','ETIMEDOUT','ENOTFOUND','EAI_AGAIN','ERR_MODULE_NOT_FOUND','MODULE_NOT_FOUND','ERR_INVALID_ARG_TYPE','ERR_REQUIRE_ESM','ERR_PACKAGE_PATH_NOT_EXPORTED','ERR_INVALID_URL','ERR_TLS_CERT_ALTNAME_INVALID','ERR_STREAM_PREMATURE_CLOSE','ERR_SOCKET_CLOSED','ERR_OUT_OF_RANGE',
+]);
+const STARTUP_SQL_STATES=new Set(['08000','08001','08003','08004','08006','08007','08P01','23502','23503','23505','23514','28P01','3D000','40001','40P01','53300','57P01','57P03']);
 export function productArgs(role){return ['--env','COFFEE_CONFIG_FILE=/fixture/platform.yaml','--env',`COFFEE_RUNTIME_SECRETS_FILE=/fixture/${role}.yaml`,...(role==='edge-gateway'?['--env','NODE_EXTRA_CA_CERTS=/fixture/certs/ca.crt']:[]),'--IMAGE--','node','--enable-source-maps',`apps/${role}/dist/main.js`];}
+
+export function safeProductStartupFailure(logs,allowedPaths){
+  const allowed=new Set(allowedPaths.filter(path=>/^(?:apps|packages)\/[A-Za-z0-9._/-]+\.(?:mjs|js|ts)$/u.test(path)&&!path.split('/').includes('..')));
+  const errorNames=new Set(),errorCodes=new Set(),sqlStates=new Set(),sourceFrames=new Map();
+  const addName=value=>{if(typeof value==='string'&&STARTUP_ERROR_NAMES.has(value))errorNames.add(value);};
+  const inspectFields=value=>{
+    if(!value||typeof value!=='object'||Array.isArray(value))return;
+    const err=value.err&&typeof value.err==='object'?value.err:value;
+    addName(err.type);addName(err.name);
+    if(typeof err.code==='string'&&STARTUP_SQL_STATES.has(err.code))sqlStates.add(err.code);
+    for(const key of ['code','message'])if(typeof err[key]==='string')for(const match of err[key].matchAll(/\b[A-Z][A-Z0-9_]{2,79}\b/gu))if(STARTUP_ERROR_CODES.has(match[0]))errorCodes.add(match[0]);
+    for(const key of ['sqlState','sqlstate'])if(typeof err[key]==='string'&&STARTUP_SQL_STATES.has(err[key]))sqlStates.add(err[key]);
+    if(typeof err.message==='string')for(const match of err.message.matchAll(/\bSQLSTATE\s*[:=]?\s*([0-9A-Z]{5})\b/giu))if(STARTUP_SQL_STATES.has(match[1]))sqlStates.add(match[1]);
+    if(typeof err.stack==='string')addFrames(err.stack);
+  };
+  const addFrames=text=>{
+    const pattern=/(?:file:\/\/)?(\/app\/(?:apps|packages)\/[A-Za-z0-9._/-]+\.(?:mjs|js|ts)):(\d+):(\d+)/gu;
+    for(const match of text.matchAll(pattern)){
+      const path=match[1].slice('/app/'.length),line=Number(match[2]),column=Number(match[3]);
+      if(!allowed.has(path)||path.split('/').includes('..')||!Number.isSafeInteger(line)||line<1||!Number.isSafeInteger(column)||column<1)continue;
+      const key=`${path}:${line}:${column}`;if(!sourceFrames.has(key)&&sourceFrames.size<8)sourceFrames.set(key,{path,line,column});
+    }
+  };
+  for(const line of String(logs).split(/\r?\n/u).slice(-50)){
+    const text=line.slice(0,65536);
+    try{inspectFields(JSON.parse(text));}catch{}
+    const headline=/\b(Error|TypeError|RangeError|SyntaxError|ReferenceError|URIError|EvalError|AggregateError|AssertionError):/u.exec(text);
+    if(headline)addName(headline[1]);
+    for(const match of text.matchAll(/\b[A-Z][A-Z0-9_]{2,79}\b/gu))if(STARTUP_ERROR_CODES.has(match[0]))errorCodes.add(match[0]);
+    for(const match of text.matchAll(/\bSQLSTATE\s*[:=]?\s*([0-9A-Z]{5})\b/giu))if(STARTUP_SQL_STATES.has(match[1]))sqlStates.add(match[1]);
+    addFrames(text);
+  }
+  return {errorNames:[...errorNames].slice(0,4),errorCodes:[...errorCodes].slice(0,8),sqlStates:[...sqlStates].slice(0,4),sourceFrames:[...sourceFrames.values()]};
+}
 
 export const hash=text=>createHash('sha256').update(text).digest('hex');
 export async function readCgroupMemory(pid,reader=readFile){
@@ -45,16 +87,23 @@ export async function json(path,value,mode=0o644){
   finally{await rm(pending,{force:true});}
 }
 async function walk(dir,filter=()=>true){const files=[];for(const ent of await readdir(dir,{withFileTypes:true})){const p=join(dir,ent.name);if(!filter(p,ent))continue;if(ent.isDirectory())files.push(...await walk(p,filter));else if(ent.isFile())files.push(p);}return files;}
-export async function sourceSnapshot(privateDir) {
+export async function sourceSnapshot(privateDir,{launchPath=false}={}) {
   const target=join(privateDir,'app');await mkdir(target);
   const filter=p=> !/(?:^|\/)(?:dist|\.git|\.env[^/]*|\.tsbuildinfo|secrets)(?:\/|$)/u.test(p) && !p.endsWith('.tsbuildinfo');
   for(const name of ['packages','types','node_modules']) {
-    if(name==='node_modules')await run('cp',['-al',join(ROOT,name),join(target,name)]); // immutable installed libraries; never install/mutate shared hardlinks
+    if(name==='node_modules'){
+      const source=join(ROOT,name),destination=join(target,name);
+      const [sourceStat,targetStat]=await Promise.all([stat(source),stat(target)]);
+      // Hardlinks keep ordinary local snapshots cheap; isolated read-only checkouts may put work on tmpfs.
+      await run('cp',[sourceStat.dev===targetStat.dev?'-al':'-a',source,destination]);
+    }
     else await cp(join(ROOT,name),join(target,name),{recursive:true,verbatimSymlinks:true,filter});
   }
-  for(const name of ['edge-gateway','realtime-gateway','api-public'])await cp(join(ROOT,'apps',name),join(target,'apps',name),{recursive:true,verbatimSymlinks:true,filter});
+  const appNames=['edge-gateway','realtime-gateway','api-public',...(launchPath?['api-internal','orders-service','orders-aroma-preparation','aroma-convergence']:[])];
+  for(const name of appNames)await cp(join(ROOT,'apps',name),join(target,'apps',name),{recursive:true,verbatimSymlinks:true,filter});
   for(const name of ['package.json','pnpm-lock.yaml','pnpm-workspace.yaml','tsconfig.base.json'])await cp(join(ROOT,name),join(target,name));
   await cp(join(ROOT,'tests/realtime/fixtures'),join(target,'tests/realtime/fixtures'),{recursive:true});
+  if(launchPath){await mkdir(join(target,'tests/observability'),{recursive:true});await cp(join(ROOT,'tests/observability/convergence-metrics-proof.mjs'),join(target,'tests/observability/convergence-metrics-proof.mjs'));}
   await cp(join(ROOT,'contracts'),join(target,'contracts'),{recursive:true,filter});
   const sources={};
   for(const tree of ['packages','apps','types','tests','contracts'])for(const p of await walk(join(target,tree),filter)){
@@ -64,29 +113,30 @@ export async function sourceSnapshot(privateDir) {
   for(const p of ['package.json','pnpm-lock.yaml','tsconfig.base.json','pnpm-workspace.yaml'])sources[p]=hash(await readFile(join(target,p)));
   return {target,sources};
 }
-async function certificates(dir,environment) {
+async function certificates(dir,environment,{launchPath=false}={}) {
   await mkdir(dir,{recursive:true});
   const ssl=async(...args)=>run('openssl',args,{cwd:dir});
   await ssl('req','-x509','-newkey','rsa:2048','-nodes','-keyout','ca.key','-out','ca.crt','-subj','/CN=issue12-disposable-ca','-days','2');
   const ca=await readFile(join(dir,'ca.crt'),'utf8'), materials={},fingerprints={};
-  for(const name of ['edge-nginx','edge-gateway','realtime-gateway','api-public','orders-service','idp','public']){
+  const names=['edge-nginx','edge-gateway','realtime-gateway','api-public','orders-service',...(launchPath?['api-internal','orders-aroma-preparation']:[]),'idp','public'];
+  for(const name of names){
     const dns=name==='public'?'localhost':name==='idp'?'idp.fixture.invalid':`${name}.${environment}.svc.coffee-platform.internal`;
     const identity=name==='public'||name==='idp'?'':`,URI:spiffe://coffee-platform/${environment}/${name}`;
     await writeFile(join(dir,`${name}.ext`),`subjectAltName=DNS:${dns},DNS:${name}${identity}\nextendedKeyUsage=serverAuth,clientAuth\n`);
-    await ssl('req','-newkey','rsa:2048','-nodes','-keyout',`${name}.key`,'-out',`${name}.csr`,'-subj',`/CN=${dns}`);
+    await ssl('req','-newkey','rsa:2048','-nodes','-keyout',`${name}.key`,'-out',`${name}.csr`,'-subj',`/CN=${name}`);
     await ssl('x509','-req','-in',`${name}.csr`,'-CA','ca.crt','-CAkey','ca.key','-CAcreateserial','-out',`${name}.crt`,'-days','2','-extfile',`${name}.ext`);
     const certPem=await readFile(join(dir,`${name}.crt`),'utf8'),keyPem=await readFile(join(dir,`${name}.key`),'utf8');
     materials[name]={certPem,keyPem,caPem:ca};fingerprints[name]=new X509Certificate(certPem).fingerprint256;
   }
   return {materials,fingerprints};
 }
-async function kafkaMaterial(dir) {
+async function kafkaMaterial(dir,{launchPath=false}={}) {
   await mkdir(dir,{recursive:true});const password=randomUUID();
   const kt=async(...args)=>run('keytool',args,{cwd:dir});
   await kt('-genkeypair','-alias','kafka','-keyalg','RSA','-keysize','2048','-validity','2','-dname','CN=kafka','-ext','SAN=dns:kafka,dns:localhost,ip:127.0.0.1','-keystore','kafka.keystore.p12','-storetype','PKCS12','-storepass',password,'-keypass',password);
   await kt('-exportcert','-alias','kafka','-keystore','kafka.keystore.p12','-storepass',password,'-rfc','-file','kafka.crt');
   await kt('-importcert','-noprompt','-alias','kafka','-file','kafka.crt','-keystore','kafka.truststore.p12','-storetype','PKCS12','-storepass',password);
-  const credentials={};for(const name of ['broker','realtime','publisher','inspector'])credentials[name]={username:name,password:randomUUID()};
+  const credentials={};for(const name of ['broker','realtime','publisher','inspector',...(launchPath?['orders']:[])])credentials[name]={username:name,password:randomUUID()};
   const users=Object.entries(credentials).map(([n,v])=>`user_${n}="${v.password}"`).join(' ');
   await writeFile(join(dir,'kafka.keystore.password'),password+'\n');
   await writeFile(join(dir,'kafka_jaas.conf'),`KafkaServer { org.apache.kafka.common.security.plain.PlainLoginModule required username="broker" password="${credentials.broker.password}" ${users}; };\n`);
@@ -104,6 +154,11 @@ function keyset(){const a=generateKeyPairSync('ed25519'),b=generateKeyPairSync('
 export async function prepare(resultDir,options) {
   const privateDir=join(resultDir,'private');await mkdir(privateDir,{mode:0o700});
   const configText=await readFile(join(ROOT,'config/platform.yaml'),'utf8');const config=yaml(configText,{json:true});
+  if(options.launchPath){
+    config.postgres.host='coffee_postgres';
+    if(options.launchPath.telemetryConfig){const telemetryConfig=options.launchPath.telemetryConfig.telemetry??options.launchPath.telemetryConfig;config.telemetry=structuredClone(telemetryConfig);}
+    if(options.launchPath.telemetryEndpoint)config.telemetry.collector.otlpEndpoint=options.launchPath.telemetryEndpoint;
+  }
   assert.equal(config.nginxTransport.limits.sseAdmissionConnections,512,'reference admission must remain 512');
   assert.equal(config.nginxTransport.limits.workerConnections,2048,'reference worker budget drift');
   assert.equal(config.nginxTransport.limits.workerProcesses,1,'reference native worker count drift');
@@ -119,11 +174,11 @@ export async function prepare(resultDir,options) {
   const {render,readRoutes}=await import('../../../tools/nginx/generate.mjs');
   assert.equal(typeof render,'function','dependency: parent must expose the same native nginx renderer');
   const openapi=yaml(await readFile(join(ROOT,'contracts/openapi/client-v1.yaml'),'utf8'),{json:true});
-  const nginx=render(config.nginxTransport,readRoutes(openapi));await writeFile(join(privateDir,'nginx.conf'),nginx);
-  const {materials,fingerprints}=await certificates(join(privateDir,'certs'),config.environment);
-  const {credentials,fingerprint}=await kafkaMaterial(join(privateDir,'kafka'));
-  const actor=keyset(),api=keyset();
-  const synthetic={'security.actorContextEdgeSigningPrivateKey':actor.private,'security.actorContextEdgeVerificationPublicKeys':actor.verification,'security.apiPublicDelegationSigningPrivateKey':api.private,'edge.oidcClientSecret':'synthetic-public-pkce-fixture','edge.tlsCaBundle':materials.idp.caPem,'telemetry.exporterToken':'synthetic-no-export'};
+  const nginx=render(config.nginxTransport,readRoutes(openapi),config.telemetry.nginxStatusEndpoint);await writeFile(join(privateDir,'nginx.conf'),nginx);
+  const {materials,fingerprints}=await certificates(join(privateDir,'certs'),config.environment,{launchPath:Boolean(options.launchPath)});
+  const {credentials,fingerprint}=await kafkaMaterial(join(privateDir,'kafka'),{launchPath:Boolean(options.launchPath)});
+  const actor=keyset(),api=keyset(),orders=options.launchPath?keyset():undefined,internal=options.launchPath?keyset():undefined,pricing=options.launchPath?keyset():undefined;
+  const synthetic={'security.actorContextEdgeSigningPrivateKey':actor.private,'security.actorContextEdgeVerificationPublicKeys':actor.verification,'security.apiPublicDelegationSigningPrivateKey':api.private,...(orders?{'security.ordersServiceDelegationSigningPrivateKey':orders.private}:{}),'edge.oidcClientSecret':'synthetic-public-pkce-fixture','edge.tlsCaBundle':materials.idp.caPem,'telemetry.exporterToken':options.launchPath?.exporterToken??'synthetic-no-export'};
   for(const service of ['edge-gateway','realtime-gateway','api-public']){
     const secrets={};for(const ref of config.services[service].secretRefs){
       const value=ref===`security.serviceTransportKeys.${service}`?JSON.stringify(materials[service]):ref==='kafka.realtime'?credentials.realtime:synthetic[ref];
@@ -132,16 +187,29 @@ export async function prepare(resultDir,options) {
     if(service==='edge-gateway')setRef(secrets,'edge.tlsCaBundle',materials.idp.caPem);
     await json(join(privateDir,`${service}.yaml`),{schemaVersion:1,environment:config.environment,runtime:service,secrets},0o400);
   }
+  if(options.launchPath){
+    const service='api-internal',secrets={};
+    for(const ref of config.services[service].secretRefs){
+      const value=ref==='security.apiInternalDelegationSigningPrivateKey'?internal.private
+        :ref==='security.serviceVerificationKeys.orders-service'?orders.verification
+        :ref==='security.serviceVerificationKeys.pricing-service'?pricing.verification
+        :ref==='security.serviceTransportKeys.api-internal'?JSON.stringify(materials[service])
+        :ref==='telemetry.exporterToken'?synthetic['telemetry.exporterToken']:undefined;
+      assert.notEqual(value,undefined,`unhandled scoped synthetic ref: ${service}/${ref}`);setRef(secrets,ref,value);
+    }
+    await json(join(privateDir,`${service}.yaml`),{schemaVersion:1,environment:config.environment,runtime:service,secrets},0o400);
+  }
   const nginxDir=join(privateDir,'nginx-secrets');await mkdir(nginxDir,{mode:0o755});
   for(const [name,value] of Object.entries({'public.crt':materials.public.certPem,'public.key':materials.public.keyPem,'client.crt':materials['edge-nginx'].certPem,'client.key':materials['edge-nginx'].keyPem,'upstream-ca.crt':materials['edge-nginx'].caPem}))await writeFile(join(nginxDir,name),value,{mode:0o644});
-  const snapshot=await sourceSnapshot(privateDir);
+  const snapshot=await sourceSnapshot(privateDir,{launchPath:Boolean(options.launchPath)});
   const compilerPackage=JSON.parse(await readFile(join(snapshot.target,'node_modules/typescript/package.json'),'utf8'));
   assert.equal(compilerPackage.version,JSON.parse(await readFile(join(ROOT,'config/toolchain-versions.json'),'utf8')).typescript,'exact pinned TS7 compiler required');
-  const targets=options.fixtureCheck?['packages/platform-kafka-runtime','packages/platform-security','packages/generated/client-v1']:PRODUCT_BUILD_TARGETS;
+  const targets=options.fixtureCheck?['packages/platform-kafka-runtime','packages/platform-security','packages/generated/client-v1']:options.launchPath?[...PRODUCT_BUILD_TARGETS,'packages/platform-http','apps/api-internal','apps/orders-service','apps/orders-aroma-preparation','apps/aroma-convergence']:PRODUCT_BUILD_TARGETS;
   // Invoke the already installed native compiler directly. pnpm exec in a moved
   // workspace can auto-install; installing or mutating hardlinked modules is forbidden.
   const compiler=await run(process.execPath,['node_modules/typescript/bin/tsc','-b',...targets,'--force','--pretty','false'],{cwd:snapshot.target,timeout:120000});await writeFile(join(resultDir,'build.log'),compiler);
   const fixture={config,credentials,materials,actorKeys:actor.verification,apiKeys:api.verification,mode:options.mode,profile:options.profile,...(options.mode==='full'?FULL:options.smoke),subjects:100,shards:options.mode==='full'?1:Math.min(2,options.smoke.clients),thresholds,resultDir:'/results',fixtureCheck:options.fixtureCheck};
+  if(options.launchPath)fixture.launchPath={ordersServiceSigningPrivateKey:orders.private,exporterToken:options.launchPath.exporterToken??'synthetic-no-export'};
   await json(join(privateDir,'fixture.json'),fixture,0o400);
   const toolchain=JSON.parse(await readFile(join(ROOT,'config/toolchain-versions.json'),'utf8'));
   const dockerfile=await readFile(join(ROOT,'apps/edge-nginx/Dockerfile'),'utf8');const nodeImage=/FROM (node:[^ ]+)/u.exec(dockerfile)?.[1];assert.ok(nodeImage);

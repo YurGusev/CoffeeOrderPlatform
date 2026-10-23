@@ -6,6 +6,7 @@ import type {Database, Transaction, TransactionState, CorrelationMetadata} from 
 export type DatabaseData = {
   pool: Pool;
   config: DatabasePoolConfig;
+  telemetryOwner: string;
   preferSsl: boolean;
   shutdown: AbortController;
   leases: Set<Lease>;

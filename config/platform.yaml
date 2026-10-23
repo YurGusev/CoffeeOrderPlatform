@@ -106,6 +106,71 @@ pricingPolicy:
   quantityScale: 3
   roundingMode: CEILING
 
+telemetry:
+  namespace: coffee-platform
+  releaseDigest: development
+  nginxStatusEndpoint: http://edge-nginx:8081/nginx_status
+  collector:
+    otlpEndpoint: http://otel-collector:4318
+    healthEndpoint: http://otel-collector:13133
+    metricsEndpoint: http://otel-collector:8888
+    memoryLimitMiB: 256
+    memorySpikeMiB: 64
+    containerMemoryMiB: 1024
+    memoryCheckIntervalMs: 1000
+    batchSize: 128
+    batchTimeoutMs: 1000
+    queueCapacity: 512
+    queueConsumers: 2
+    exportTimeoutMs: 2000
+    retryInitialMs: 1000
+    retryMaxMs: 5000
+    retryWindowMs: 15000
+    maxLogRecordBytes: 65536
+  producer:
+    queueCapacity: 256
+    maxRecordBytes: 16384
+    batchSize: 64
+    batchIntervalMs: 1000
+    exportTimeoutMs: 1000
+    diagnosticIntervalMs: 10000
+    flushTimeoutMs: 2000
+  logging:
+    maxSizeMiB: 8
+    maxFiles: 3
+  openObserve:
+    endpoint: http://openobserve:5080
+    organization: default
+    bootstrapEmail: operations@coffee-platform.internal
+    validationMarker: bootstrap-validation-placeholder
+    telemetryEnabled: false
+    mmdbDownloadEnabled: false
+    modelPricingEnabled: false
+    memoryLimitMiB: 2048
+    memTableMaxSizeMiB: 128
+    maxFileSizeInMemoryMiB: 8
+    maxFileSizeOnDiskMiB: 8
+    maxFileRetentionSeconds: 30
+    memPersistIntervalSeconds: 2
+    streams:
+      logs: platform_logs
+      traces: platform_traces
+      metrics: platform_metrics
+    retentionDays: 3
+    deleteFilesDelayMinutes: 1
+    maxDiskBytes: 1073741824
+    diskWatermarkPercent: 80
+    compactionIntervalSeconds: 60
+    jobCleanupWaitSeconds: 60
+  alerts:
+    version: 1
+    evaluationIntervalMs: 60000
+    notReady: {forMs: 300000, threshold: 0}
+    consumerLag: {forMs: 300000, threshold: 0}
+    outboxOldestAge: {forMs: 300000, threshold: 0}
+    unknownOutcome: {forMs: 120000, threshold: 0}
+    sseDropRate: {forMs: 300000, threshold: 0.05}
+
 browserOidc: null
 
 security:

@@ -1,0 +1,780 @@
+{
+  "schema": "issue64-local-checks/v1",
+  "createdAtUtc": "2026-10-18T10:42:09.796023+00:00",
+  "state": "PREVIEW_ROOT_ACCEPTED_CURRENT_FROZEN_WIP",
+  "sourceIdentity": {
+    "baseSha": "cddbc5145f895ae9fa909d32c15427174fca599f",
+    "configSha256": "0a733f912b96cbf1f7dcd1bc896bf958f8bf1c62c336a213c5ec7b06b30088d9",
+    "bomSha256": "dbfb4ca9148313fe8f71c0ec515ddddcd88de8485590e9d7eec7713ed71c2bab",
+    "imageRefs": {
+      "otelCollectorImage": "otel/opentelemetry-collector-contrib:0.162.0@sha256:39923a8e431bd1f57be82411999d389fcfe40857492e4365456d97a4c1f74be6",
+      "openObserveImage": "public.ecr.aws/zinclabs/openobserve:v1.1.0@sha256:e4d0022fde1d51c15a7ec845f53d5aa69ecec5ad636f77d57cffd50c98a02ed7",
+      "nodeImage": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae",
+      "kafkaImage": "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+      "nginxImage": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+    },
+    "sourceFiles": {
+      "status": "PASS",
+      "fileCount": 1481,
+      "missingFileCount": 0,
+      "sha256": "9d652c69efb3eb9c2dfcb9179b2b60d7fe4ed5045565aca4357902742566a92c"
+    },
+    "runtimeArtifacts": {
+      "packages/platform-runtime/dist": {
+        "status": "PASS",
+        "fileCount": 4,
+        "sha256": "e3ad7de7820946931e0700b796ffbeed66559fb8a86b207d17f5128b3e306796"
+      },
+      "packages/platform-observability/dist": {
+        "status": "PASS",
+        "fileCount": 2,
+        "sha256": "f963c66d8390e203b37a1841c940ec31465be0c4f97779c7852dcf8381d53247"
+      }
+    },
+    "identityHash": "97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9"
+  },
+  "sourceAudit": {
+    "status": "PASS_SOURCE_MAP_ONLY_NO_RUNTIME_CLAIM",
+    "sourceRefs": 231,
+    "sourceOutputs": 86,
+    "acceptanceMapSha256": "1567f37a492140b401d506b6b3da85dc000d5d7f04ae301ad0c4bfbcad1b0d49"
+  },
+  "limitations": [
+    "Отдельная consumer acceptance issue #13 остаётся pending.",
+    "В fullsuite пропущено 77 проверок; пропуски не считаются PASS.",
+    "Accepted WIP15 fullsuite is package-test evidence, not canonical G14 or runtime acceptance.",
+    "77 skipped tests are not PASS; live opt-in checks were not run.",
+    "Docker inventory delta and OOM delta were not measured.",
+    "This package suite does not establish PostgreSQL persistence or durability.",
+    "Root-accepted WIP15 fullsuite session 26956: exit 0; start plus 11 original polls are byte-verified with full stdout/stderr; this is not canonical G14.",
+    "Canonical runtime-матрица проверила tooling для 15 точных image ID; отдельно приняты standalone pnpm image:build и pnpm test:compose-smoke -- --recovery-proof.",
+    "Отдельный post-canonical tooling rescan не запускался; вывод относится к scan в принятом canonical result.",
+    "Запуск canonical под QEMU подтверждает функциональную интеграцию, но не native capacity или SLO.",
+    "diskPressurePreflight/diskPressure и cleanup зафиксированы в evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/result.json и evidence/issue-64-host-cleanup-current-50ad2ff0-69f5-4a71-9fef-4c0b2cb90341.json; использовался временный fixture.",
+    "Исходный контракт — замороженный WIP15 на базе cddbc51 с source identity 97e5a5626eb09c1462ef724b73c9072ff02b2db0ddd66829689ce10288b63fe9; source map привязывает 231 ссылку.",
+    "Исторические WIP11–WIP14 runtime receipts сохранены отдельно и не подменяют текущие принятые WIP15 evidence.",
+    "Причина прежних эпизодов aroma-observer unhealthy/COMMIT и возможные потери при аварийном завершении не установлены.",
+    "Production deployment, реальные credentials и внешние alert destinations не проверялись.",
+    "В разрешённом scope обновлялся PR #179; эта запись не утверждает универсальное отсутствие других GitHub, production или alert mutations."
+  ],
+  "historical819": {
+    "sourceCommit": "8191b5f0a8f6a3a5aaa25b6c4901441fbf79933e",
+    "full8": {
+      "status": "PASS_ROOT_VERIFIED_CURRENT_HEAD_FULL8_AFTER_EXACT137",
+      "receipt": "/home/yurgusev/.cache/coffee-issue64-host/receipts/fullchecks-8191b5f-after-final-cache-20261018",
+      "acceptanceSha256": "312bf5262afe389f24a73b7c18b85dec38a24acc361946b5ccafd9cfffc3d70d",
+      "indexSha256": "da45aa73947d4eaa8ed73a831b0d825ed389e2c604e9c8db70c9dd5f04de2a4e",
+      "counts": {
+        "tests": 921,
+        "pass": 844,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 77
+      },
+      "liveOutbox": {
+        "tests": 1,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0
+      }
+    },
+    "canonicalArtifacts": [
+      {
+        "artifact": "evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/result.json",
+        "sha256": "80b371ddc38a7c2d9a6548c5371b5b87e48f79bfe291178a9205d57c6c741f9a"
+      },
+      {
+        "artifact": "evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/alert-transitions.json",
+        "sha256": "727fefaf15a5615e2c16c019a6dda94f2c5850de8ca937b7729304e945fb4b18"
+      },
+      {
+        "artifact": "evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/correlation-proof.json",
+        "sha256": "c977861746aa695b4e81250625e08c7ec48829799ef409bcf0b038231739e5ee"
+      },
+      {
+        "artifact": "evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/host-transport.json",
+        "sha256": "bcdda5c0f55f9a9ba1d62999f5ee5c4232c0ed7c6eb5d647245c149484d951b6"
+      },
+      {
+        "artifact": "evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/queue-loss-counters.json",
+        "sha256": "1a6a223ecc9e48a9898c7860ca50780ccc9ccdd2f3ada10558dd2cc4e470987d"
+      },
+      {
+        "artifact": "evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/redaction-scan.json",
+        "sha256": "6e07bab3af49af44779dea2e1885f60f77305df09f6a92f79b567eb7afb94290"
+      },
+      {
+        "artifact": "evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/retention-result.json",
+        "sha256": "fdb8e66954ae1dcb0e7794ecd05b077cc908361a50096d033e1f659730dcf4f5"
+      },
+      {
+        "artifact": "evidence/observability/55045c74-bf13-4ccd-a64d-ea973ea7aa40/runtime-health-matrix.json",
+        "sha256": "513a45251404bec176ecb7b4941a7752459c37ff880de81b36a731f4f826efde"
+      }
+    ],
+    "literalCompose": {
+      "status": "PASS_ROOT_VERIFIED_LITERAL_COMPOSE_CURRENT_HEAD",
+      "receipt": "/home/yurgusev/.cache/coffee-issue64-host/receipts/prepared-current-8191b5f-20261018/literal-compose-8191b5f-r2-20261018/root-verification.json",
+      "sha256": "3f9f8ba4c7add8bff0230b9a8e86d71e7d9c5b7951d3ff12f33b6f574969e151",
+      "command": [
+        "docker",
+        "exec",
+        "--user",
+        "1000:1000",
+        "--env",
+        "DOCKER_HOST=unix:///run/docker-socket-dir/docker.sock",
+        "--env",
+        "PATH=/inner-docker:/usr/local/bin:/usr/bin:/bin",
+        "--env",
+        "TMPDIR=/dev/shm",
+        "--workdir",
+        "/dev/shm/obs-source-snapshot-64",
+        "coffee-issue64-node-runner",
+        "pnpm",
+        "test:compose-smoke",
+        "--",
+        "--recovery-proof",
+        "--project-name",
+        "coffee-issue64-smoke-8191b5f"
+      ],
+      "exitCode": 0
+    },
+    "imageBuild": {
+      "status": "PASS_ROOT_VERIFIED_ALL_15_CURRENT_IMAGES_LOADED",
+      "receipt": "/home/yurgusev/.cache/coffee-issue64-host/receipts/native-15-image-prebuild-8191b5f-root-acceptance.json",
+      "sha256": "03abbcdab480eec3bf3e2c479467c869e2a3d80f2d9cf568d44a0dbea50ab2a8",
+      "imageCount": 15
+    },
+    "cleanup": {
+      "status": "ACTUAL_PASS",
+      "receipt": "evidence/issue-64-host-cleanup.json",
+      "sha256": "e69f432e5e9e2dd420eb08861584d0bbebc8a8de3355a25dee87beede55da5c0",
+      "steps": [
+        "release-and-process-guards-pass",
+        "fresh-resource-identities-pass",
+        "runner-stopped-removed",
+        "retired-runner-removed",
+        "dind-stopped-removed-anchor-retained",
+        "retired-dind-removed-anchor-retained",
+        "owned-volume-removed-and-unmounted",
+        "exact-loop18-detached-and-verified",
+        "anchor-stopped-removed-after-detach",
+        "guarded-backing-file-unlinked",
+        "only-exact-custom-runner-image-removed",
+        "six-owned-shm-directories-removed-after-durable-release"
+      ],
+      "actualFreedBackingAllocationBytes": 15531114496
+    },
+    "canonical": {
+      "status": "PASS_ROOT_VERIFIED_CURRENT_CANONICAL",
+      "runId": "55045c74-bf13-4ccd-a64d-ea973ea7aa40",
+      "receipt": "/home/yurgusev/.cache/coffee-issue64-host/receipts/prepared-current-8191b5f-20261018/prepared-clean-canonical-8191b5f/g14-run-8191b5f-r1-20261018",
+      "acceptanceSha256": "b3ba3c3dca9de4ba5c494c4d027e340ce466011060e1dd226540c9ebf02b9805",
+      "processExitCode": 0,
+      "sourceIdentityHash": "caf4e44491b41ffeef62343a671d04abf2ca57dbfdda2ff3829ea977508bf72e",
+      "postCaptureComparisons": {
+        "containerProjectionEqual": true,
+        "networkProjectionEqual": true,
+        "volumeProjectionEqual": true,
+        "daemonIdEqual": true,
+        "sourceIdentityMainStable": true,
+        "sourceIdentityRunnerStable": true,
+        "sourceIdentityCurrent": true,
+        "mainRunnerIdentityEqual": true,
+        "mainRunnerHeadEqual": true,
+        "mainRunnerClean": true,
+        "rawManifestExpectedShaStable": true
+      },
+      "rawManifestSha256": "61ae8d9ca3ae839bb5ead776ee9b403820b28e047416ef07e031c482252df320"
+    },
+    "warning": "Historical 819 metadata; not current cddbc51 evidence."
+  },
+  "fullsuite": {
+    "status": "PASS_ROOT_VERIFIED_WIP15_FULLSUITE",
+    "driverResultSha256": "6ca586033aac055ac6caf52b3bb539e2b2ff93fb262b6ae58d87a62132ba57a3",
+    "counts": {
+      "tests": 951,
+      "passed": 874,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 77,
+      "todo": 0
+    },
+    "rootAcceptanceSha256": "1c6b779a0a015a3d167b85e14cbc60a308a3ca80fd5be08d130f98ac331e287d",
+    "actualToolSessionId": 26956,
+    "actualResponseCoverage": "Root-accepted WIP15 fullsuite session 26956: exit 0; start plus 11 original polls are byte-verified with full stdout/stderr; this is not canonical G14.",
+    "retainedStructuredResponseCount": 12,
+    "limitations": [
+      "Accepted WIP15 fullsuite is package-test evidence, not canonical G14 or runtime acceptance.",
+      "77 skipped tests are not PASS; live opt-in checks were not run.",
+      "Docker inventory delta and OOM delta were not measured.",
+      "This package suite does not establish PostgreSQL persistence or durability."
+    ],
+    "liveOptinsNotRun": true,
+    "toolEvidence": "Root-accepted WIP15 fullsuite session 26956: exit 0; start plus 11 original polls are byte-verified with full stdout/stderr; this is not canonical G14."
+  },
+  "canonical": {
+    "status": "PASS_ROOT_VERIFIED_CURRENT_CANONICAL",
+    "runId": "50ad2ff0-69f5-4a71-9fef-4c0b2cb90341",
+    "acceptanceSha256": "a9b3f858973cabd76b694116224b7fe0d66a0c6490ce3ddcd85c05830b38fe2a",
+    "processExitCode": 0,
+    "nestedComposeReceipt": {
+      "project": "coffee-issue64-final-50ad2ff0",
+      "runtimes": 14,
+      "nativeIngress": "edge-nginx",
+      "kafka": true,
+      "ephemeralKafkaBroker": true,
+      "credentialSource": "local-fixture",
+      "telemetry": true,
+      "dbIntegrationProof": true,
+      "gracefulShutdown": true,
+      "healthEndpoints": [
+        "/health/live",
+        "/health/ready",
+        "/metrics"
+      ],
+      "recoveryProofPresent": true,
+      "postgresStorage": {
+        "type": "tmpfs",
+        "destination": "/var/lib/postgresql/data",
+        "sizeMiB": 512,
+        "durability": "ephemeral"
+      }
+    },
+    "producerManifestSha256": "c852c10809321f089d9e37195cb69e64df9f15ec9e5447709b093eccdf46706e",
+    "actualRunResultSha256": "d95dc4b09785a2bd88783ef41bd6bcaba34002777766d6eef50b617cd7ab3510"
+  },
+  "runtimeImageMatrix": {
+    "status": "PASS",
+    "imageCount": 15,
+    "runtimeRoleCount": 14,
+    "artifactSha256": "f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a",
+    "toolingScan": {
+      "status": "PASS_CANONICAL_IMAGE_SCAN",
+      "canonicalResultArtifact": "result.json",
+      "canonicalResultSha256": "f96102bc91e5ba6166a91cd8ee19c25c3f45abaf9781222fe4eca48acec6cfbc",
+      "imageMatrixArtifact": "runtime-health-matrix.json",
+      "imageMatrixArtifactSha256": "f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a",
+      "nodeImageCount": 14,
+      "nodeImages": [
+        {
+          "role": "edge-gateway",
+          "imageId": "sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49"
+        },
+        {
+          "role": "api-public",
+          "imageId": "sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71"
+        },
+        {
+          "role": "api-internal",
+          "imageId": "sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620"
+        },
+        {
+          "role": "customer-service",
+          "imageId": "sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4"
+        },
+        {
+          "role": "catalog-service",
+          "imageId": "sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd"
+        },
+        {
+          "role": "catalog-supplier-sync",
+          "imageId": "sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d"
+        },
+        {
+          "role": "catalog-activation-worker",
+          "imageId": "sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea"
+        },
+        {
+          "role": "pricing-service",
+          "imageId": "sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576"
+        },
+        {
+          "role": "orders-service",
+          "imageId": "sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297"
+        },
+        {
+          "role": "orders-aroma-preparation",
+          "imageId": "sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4"
+        },
+        {
+          "role": "aroma-observer",
+          "imageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84"
+        },
+        {
+          "role": "aroma-convergence",
+          "imageId": "sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4"
+        },
+        {
+          "role": "aroma-gateway",
+          "imageId": "sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d"
+        },
+        {
+          "role": "realtime-gateway",
+          "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+        }
+      ],
+      "nginxImage": {
+        "role": "edge-nginx",
+        "imageId": "sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3"
+      },
+      "standaloneBuildImageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84",
+      "standaloneBuildMatchesRole": "aroma-observer",
+      "standaloneRescan": "NOT_RUN"
+    }
+  },
+  "postcanonicalCommands": {
+    "status": "PASS_ROOT_VERIFIED_POSTCANONICAL_COMMANDS",
+    "acceptanceSha256": "d4913decd4e906220ebddbf7edf3185b30f9333d805304ef485303ef4a31b47a",
+    "actualSessionId": 57789,
+    "commandExitCodes": {
+      "image-build": 0,
+      "compose-smoke": 0
+    },
+    "captureDirectory": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813",
+    "rootAcceptanceArtifact": "evidence/observability/50ad2ff0-69f5-4a71-9fef-4c0b2cb90341/postcanonical-commands/root-acceptance.json",
+    "artifacts": {
+      "actual-run-result.json": "9393313945853eaa2f119532f81cc17cabd3505bb26b5a1bffd2593f17331779",
+      "command-index.json": "376d4fb291ec73850dc36f0f26d757ecf6afff3933f7f7455612b1443088861c",
+      "build-metadata.json": "392714211ea24d603a4919afb4a95d20a992ac37362652e7a75d77bdafe2e370",
+      "image-build.stdout.raw": "ac7c36a58253cd5f8e6217a70d801e18b56e0311e364e5c6c367d78541a7d427",
+      "image-build.stderr.raw": "11a8f1be251ed46e8ee8251e1f492986402ea430652b949371ce88dbae79d8a9",
+      "compose-smoke.stdout.raw": "86599a0bf2d2dd2340c6c528039c4e1777d37e63fcb2a44392aadc5a72e7c104",
+      "compose-smoke.stderr.raw": "a7b73c9f2db7759838dd93c9201cc66fc6dd587e4a9fbca7eadc498be16cb526"
+    },
+    "imageBuildArgv": [
+      "docker",
+      "exec",
+      "--env",
+      "TMPDIR=/dev/shm",
+      "--env",
+      "BUILDX_BUILDER=coffee-platform-mtu",
+      "--user",
+      "1000:1000",
+      "--workdir",
+      "/home/yurgusev/CoffeeOrderPlatform",
+      "d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba",
+      "pnpm",
+      "image:build",
+      "--build-arg",
+      "RUNTIME=aroma-observer",
+      "--target",
+      "runtime",
+      "--metadata-file",
+      "/dev/shm/pr179-fixture-2eb8c786-5771-49f7-92f7-3a2b35249017/r5-migration/image-build-f2ffecc03d3d.json",
+      "--load",
+      "--tag",
+      "coffee-pr179-wip15-image-f2ffecc03d3d:latest",
+      "."
+    ],
+    "composeSmokeArgv": [
+      "docker",
+      "exec",
+      "--env",
+      "TMPDIR=/dev/shm",
+      "--env",
+      "BUILDX_BUILDER=coffee-platform-mtu",
+      "--user",
+      "1000:1000",
+      "--workdir",
+      "/home/yurgusev/CoffeeOrderPlatform",
+      "d03af0d231c8cf3a93d7eadc2dd58acae743ee8754628c234df12816f67d4bba",
+      "pnpm",
+      "test:compose-smoke",
+      "--",
+      "--recovery-proof",
+      "--project-name",
+      "coffee-pr179-wip15-smoke-f2ffecc03d3d"
+    ],
+    "imageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84",
+    "originalToolResponses": [
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-start.json",
+        "sha256": "b7461fb49c760ae7a055cef6e1d9502fd518ccb4da81cd6a9e76d7f094268d11",
+        "bytes": 108
+      },
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll01.json",
+        "sha256": "666a0c19c3ccac13d8c93031caf043df6d5d2449f23b5302cfd0d5766f627351",
+        "bytes": 110
+      },
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll02.json",
+        "sha256": "e709c21ae17b3ce42a14fe479d4d7662a3b58624dc45e0417803eeb7fb9bb54b",
+        "bytes": 110
+      },
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll03.json",
+        "sha256": "af1d8d216e12375c48a409dda19cca605bcee849b007bd195c985e7be2fbbcf1",
+        "bytes": 110
+      },
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll04.json",
+        "sha256": "88dc3e64b8807d1aa91a89c25aa7dd9b89b54887821bef51055da2122efcb288",
+        "bytes": 110
+      },
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll05.json",
+        "sha256": "aefe37f320fb7e29b35dcd308969872ce3198708232c7d8c5d59724ed7c5ffd1",
+        "bytes": 110
+      },
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll06.json",
+        "sha256": "92912b1606984a213c18d3eb8c286fc4f9f2ca91d777f29a3f5bc210fdfd17db",
+        "bytes": 109
+      },
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll07.json",
+        "sha256": "199e8302c4b5d95c38cbf1e400fb01d4367c164c03cb9e0e64014af7813ff007",
+        "bytes": 132
+      },
+      {
+        "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/wip15-postcanonical-readiness-observer-49742eb1-3491-4196-a1c6-14ccd44a9813/actual-tool-response-poll08.json",
+        "sha256": "052373e560a5c43046da03ebfa7ad3c6d5e4b8dc8dbfd1bb64705d454f77b764",
+        "bytes": 126
+      }
+    ],
+    "retainedPreloadedAliases": [
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-edge-gateway:latest",
+        "imageId": "sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-api-public:latest",
+        "imageId": "sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-api-internal:latest",
+        "imageId": "sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-customer-service:latest",
+        "imageId": "sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-catalog-service:latest",
+        "imageId": "sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-catalog-supplier-sync:latest",
+        "imageId": "sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-catalog-activation-worker:latest",
+        "imageId": "sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-pricing-service:latest",
+        "imageId": "sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-orders-service:latest",
+        "imageId": "sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-orders-aroma-preparation:latest",
+        "imageId": "sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-aroma-observer:latest",
+        "imageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-aroma-convergence:latest",
+        "imageId": "sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-aroma-gateway:latest",
+        "imageId": "sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-realtime-gateway:latest",
+        "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+      },
+      {
+        "tag": "coffee-pr179-wip15-preload-fcda9335-edge-nginx:latest",
+        "imageId": "sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3"
+      }
+    ],
+    "runtimeImageMatrix": {
+      "status": "PASS",
+      "imageCount": 15,
+      "roleCount": 14,
+      "artifactSha256": "f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a"
+    },
+    "toolingScan": {
+      "status": "PASS_CANONICAL_IMAGE_SCAN",
+      "canonicalResultArtifact": "result.json",
+      "canonicalResultSha256": "f96102bc91e5ba6166a91cd8ee19c25c3f45abaf9781222fe4eca48acec6cfbc",
+      "imageMatrixArtifact": "runtime-health-matrix.json",
+      "imageMatrixArtifactSha256": "f8de079240b719dfa9a767d8ad0b856c02a970c073301a1573d0da27b748469a",
+      "nodeImageCount": 14,
+      "nodeImages": [
+        {
+          "role": "edge-gateway",
+          "imageId": "sha256:cc4fc6a3ce4ad2fa628d768fc059fae29be4a71a98572ca8799e8017c99aca49"
+        },
+        {
+          "role": "api-public",
+          "imageId": "sha256:1895016b018bb7d90deae6e525339a400185918261ff1808b5eac1b9192bca71"
+        },
+        {
+          "role": "api-internal",
+          "imageId": "sha256:e8afcc4ddbdd670ea4100adc70b6b9f69bc89913eb187a5b4859401d730ed620"
+        },
+        {
+          "role": "customer-service",
+          "imageId": "sha256:670e6f410f86a321f764330c78c77f129f2e592cef6f703c22bbb132a4449ff4"
+        },
+        {
+          "role": "catalog-service",
+          "imageId": "sha256:d0b2f1a0d13fab3fd61ae3a79de775ea1dddddbf279b04657ed0f9912a244efd"
+        },
+        {
+          "role": "catalog-supplier-sync",
+          "imageId": "sha256:a4aebe2642d7f8f26005d6f5618d412fdfc16fb4b57c080e50ea507baa5d7b4d"
+        },
+        {
+          "role": "catalog-activation-worker",
+          "imageId": "sha256:a080eec5981b586367d7055e7a997fc7ff9d5f24803ca1f1c36715df66c231ea"
+        },
+        {
+          "role": "pricing-service",
+          "imageId": "sha256:9ba5032b4d99e39212ac823519578df8db0bd66d8b42ce3490f2e5f25ae88576"
+        },
+        {
+          "role": "orders-service",
+          "imageId": "sha256:f74d1e521bcd3a3c3d3a632880325362d80ab4bcf3fb78bd0dda62d3120f9297"
+        },
+        {
+          "role": "orders-aroma-preparation",
+          "imageId": "sha256:1c6d71ed0117e90acc939f9b3918b815fc60566d5f3eb4b18edcbaf9f278cfb4"
+        },
+        {
+          "role": "aroma-observer",
+          "imageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84"
+        },
+        {
+          "role": "aroma-convergence",
+          "imageId": "sha256:9f576f713e75ecf9570030534a8759c4e7a73f66cf536368338f18065d34ddb4"
+        },
+        {
+          "role": "aroma-gateway",
+          "imageId": "sha256:c291a0973e50b063125e5ae02d1f3d04f1cc6f815af311a1d675fbb42679234d"
+        },
+        {
+          "role": "realtime-gateway",
+          "imageId": "sha256:1faf16a98ad7641e1137a98308e6f35a0d1a05c6a0c382424a2b9c430b555ae5"
+        }
+      ],
+      "nginxImage": {
+        "role": "edge-nginx",
+        "imageId": "sha256:92983857220f4eb4f46d652a7fb92db9fbb852b9314551c7b15effe0e08749f3"
+      },
+      "standaloneBuildImageId": "sha256:5975eb328a6e8c224ec26ecca2f11129198889e7a056beb4e7915f90664e6a84",
+      "standaloneBuildMatchesRole": "aroma-observer",
+      "standaloneRescan": "NOT_RUN"
+    }
+  },
+  "postCleanupChecks": {
+    "status": "PASS",
+    "receiptSha256": "53392d4696e8f0e2605ae1645cf88e5e8676877e49438de868b8a4c31789ce3f",
+    "cleanupReceiptSha256": "c1780f4dcf8a09f961c94536306abb1cdebe03443e71d7d5b164f173e4115f4f",
+    "cleanupCompletedAtUtc": "2026-10-23T09:05:41.971990+00:00",
+    "startedAtUtc": "2026-10-23T09:06:28.366764+00:00",
+    "startedAfterCleanup": true,
+    "checks": [
+      {
+        "command": [
+          "pnpm",
+          "versions:check"
+        ],
+        "startedAtUtc": "2026-10-23T09:06:28.366792+00:00",
+        "endedAtUtc": "2026-10-23T09:06:29.691171+00:00",
+        "exitCode": 0,
+        "logs": {
+          "stdout": {
+            "path": "01-stdout.log",
+            "bytes": 59,
+            "sha256": "4f209bc57a66b74d426ad038d68b828f21cfceeed2832583cecc880ddff40250"
+          },
+          "stderr": {
+            "path": "01-stderr.log",
+            "bytes": 44,
+            "sha256": "9ae3dda3af6420c4279c64252f1ee3f3a8f9f67d58a2cdaef992a0fd09204181"
+          }
+        }
+      },
+      {
+        "command": [
+          "pnpm",
+          "config:check"
+        ],
+        "startedAtUtc": "2026-10-23T09:06:29.696452+00:00",
+        "endedAtUtc": "2026-10-23T09:06:31.400393+00:00",
+        "exitCode": 0,
+        "logs": {
+          "stdout": {
+            "path": "02-stdout.log",
+            "bytes": 47,
+            "sha256": "471c6633119da3038e089f15612f019ef46058c27af56f048a89657b79356aa9"
+          },
+          "stderr": {
+            "path": "02-stderr.log",
+            "bytes": 41,
+            "sha256": "5c15db6edb72171d67432e7b9b344e95f55cebe32087279897a52e2762e9db73"
+          }
+        }
+      },
+      {
+        "command": [
+          "pnpm",
+          "lint"
+        ],
+        "startedAtUtc": "2026-10-23T09:06:31.406248+00:00",
+        "endedAtUtc": "2026-10-23T09:06:37.821863+00:00",
+        "exitCode": 0,
+        "logs": {
+          "stdout": {
+            "path": "03-stdout.log",
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stderr": {
+            "path": "03-stderr.log",
+            "bytes": 211,
+            "sha256": "7202bac981dc6be4ee697c6020fe87b950539f3a313d382b92814299d5f84e0f"
+          }
+        }
+      },
+      {
+        "command": [
+          "pnpm",
+          "typecheck"
+        ],
+        "startedAtUtc": "2026-10-23T09:06:37.826815+00:00",
+        "endedAtUtc": "2026-10-23T09:06:40.266076+00:00",
+        "exitCode": 0,
+        "logs": {
+          "stdout": {
+            "path": "04-stdout.log",
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stderr": {
+            "path": "04-stderr.log",
+            "bytes": 24,
+            "sha256": "5cfb036289d819b2a87e947d65f4532031dd37753f3cf2def0f77d398eea1737"
+          }
+        }
+      },
+      {
+        "command": [
+          "pnpm",
+          "security:secrets"
+        ],
+        "startedAtUtc": "2026-10-23T09:06:40.270807+00:00",
+        "endedAtUtc": "2026-10-23T09:06:41.990818+00:00",
+        "exitCode": 0,
+        "logs": {
+          "stdout": {
+            "path": "05-stdout.log",
+            "bytes": 84,
+            "sha256": "822fd4ef99e163069b9b50af0187acdd71016b005ba16e5e2cf73e691651dbce"
+          },
+          "stderr": {
+            "path": "05-stderr.log",
+            "bytes": 43,
+            "sha256": "8e2d7dd9d72a08526700ac02ef08c2a8b3f1d8389fe43832bd2f63e32864633c"
+          }
+        }
+      },
+      {
+        "command": [
+          "pnpm",
+          "profile:check"
+        ],
+        "startedAtUtc": "2026-10-23T09:06:41.995876+00:00",
+        "endedAtUtc": "2026-10-23T09:07:41.369205+00:00",
+        "exitCode": 0,
+        "logs": {
+          "stdout": {
+            "path": "06-stdout.log",
+            "bytes": 71,
+            "sha256": "ca6783ec7b5efe7974d1c4e762c8977411c1f21ee67acf57efd99275d2f4ec76"
+          },
+          "stderr": {
+            "path": "06-stderr.log",
+            "bytes": 44,
+            "sha256": "a88bc9673ad1014bc96a7b67a702075041b5b12206193859b281c3db16d7153e"
+          }
+        }
+      },
+      {
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "startedAtUtc": "2026-10-23T09:07:41.374446+00:00",
+        "endedAtUtc": "2026-10-23T09:07:41.394352+00:00",
+        "exitCode": 0,
+        "logs": {
+          "stdout": {
+            "path": "07-stdout.log",
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "stderr": {
+            "path": "07-stderr.log",
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        }
+      }
+    ]
+  },
+  "hostCleanup": {
+    "status": "PASS",
+    "receipt": "evidence/issue-64-host-cleanup-current-50ad2ff0-69f5-4a71-9fef-4c0b2cb90341.json",
+    "sha256": "c1780f4dcf8a09f961c94536306abb1cdebe03443e71d7d5b164f173e4115f4f"
+  },
+  "publication": {
+    "issue91": {
+      "status": "LOCAL_PROCESS_PASS",
+      "receiptSha256": "a51dd41fa2466d69063d0f222d196f01c6b4332bbb93f8fb28c5b4615838c18b"
+    },
+    "issue93": {
+      "status": "LOCAL_PROCESS_PASS",
+      "receiptSha256": "9bd2a76343845b761ce11b22ab98c4f06f372b09ebfa3a72c7df27a74a770c52"
+    },
+    "processFacts": {
+      "1": {
+        "status": "VERIFIED",
+        "proof": "Принятые merge-коммиты #60/#4/#61/#62/#63/#12 входят в accepted develop d6d860; семь handoff и текущий ADR-0025 совпадают с accepted develop. Исторический SHA ADR-0025 сохранён отдельно.",
+        "receiptSha256": "73f381bb60974c0ffe1cd656994e6a9334a6ad9078301a49dabc73d1ec61c907"
+      },
+      "90": {
+        "status": "VERIFIED",
+        "proof": "Локальная ветка feature/64-otel-openobserve содержит accepted develop d6d860; снимок GitHub 03:54Z подтверждает единственный PR179 в develop на этом HEAD.",
+        "receiptSha256": "73f381bb60974c0ffe1cd656994e6a9334a6ad9078301a49dabc73d1ec61c907"
+      },
+      "92": {
+        "status": "VERIFIED",
+        "proof": "В текущей работе второй issue не создавался; все выполненные remote-чтения и отсутствие issue-write подтверждены журналом этой сессии. Снимок GitHub подтверждает единственный open PR данной ветки.",
+        "receiptSha256": "73f381bb60974c0ffe1cd656994e6a9334a6ad9078301a49dabc73d1ec61c907"
+      },
+      "94": {
+        "status": "VERIFIED",
+        "proof": "#64 binds byte-exact accepted transport handoff#162 and accepted #12 handoff; #12 consumes the same#162. #162 merge is ancestor of #12/develop; #12 merge is ancestor of current baseHEAD. Dependencygraph routes#162 to#64 without reverse#64→#159..162 prerequisite. This accepts the source/process transport input, not native G14/capacity.",
+        "criterionEvidence": {
+          "path": "/home/yurgusev/.cache/coffee-issue64-host/receipts/pr179-resume-20261022/process94-transport-handoff-69e118f7-debe-431d-8728-9e36e79b09ed/root-acceptance.json",
+          "sha256": "0630e841933c4a754f1c03bf87aa23ee2ac5f73efb2bdef28ce9cf3dc5177b7a",
+          "bytes": 4159
+        },
+        "receiptSha256": "73f381bb60974c0ffe1cd656994e6a9334a6ad9078301a49dabc73d1ec61c907"
+      }
+    }
+  }
+}

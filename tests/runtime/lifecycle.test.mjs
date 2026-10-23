@@ -8,10 +8,13 @@ import {fileURLToPath} from "node:url";
 import {join} from "node:path";
 import {tmpdir} from "node:os";
 import test from "node:test";
+import {context as otelContext, metrics, SpanStatusCode, trace} from "@opentelemetry/api";
+import {createServer as createHttpServer} from "node:http";
 import {load as parseYaml} from "js-yaml";
 import {RUNTIME_NAMES, loadPlatformConfig} from "../../packages/platform-config/src/index.ts";
 import {
   assertScopedSecrets,
+  completeRuntimeRequestTelemetry,
   configuredRuntimeIdentity,
   createRuntime,
   RuntimeError,
@@ -23,6 +26,8 @@ import {nowInstant} from "../../packages/platform-time/src/index.ts";
 import {readRuntimeHealthStatuses, runRuntimeHealthcheck} from "../../packages/platform-runtime/src/healthcheck.ts";
 import {parsePublicTlsMaterial, parseServiceTransportMaterial, verifyTransportPeer} from "../../packages/platform-security/src/index.ts";
 import {checkInternalApiReady} from "../../apps/orders-service/src/infrastructure/internal-api-readiness.ts";
+import {createTelemetryResource, telemetryDiagnostics} from "../../packages/platform-observability/dist/index.js";
+import {createTelemetryResource as createSourceTelemetryResource} from "../../packages/platform-observability/src/index.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const health = {
@@ -62,6 +67,29 @@ async function waitFor(predicate, timeoutMs = 1_000) {
     if (Date.now() >= deadline) throw new Error("condition was not reached");
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+}
+
+function captureRuntimeSpans(t) {
+  const getTracer = trace.getTracer.bind(trace);
+  const spans = [];
+  t.mock.method(trace, "getTracer", function (name, ...args) {
+    const tracer = getTracer(name, ...args);
+    if (name !== "coffee-platform.runtime") return tracer;
+    return {...tracer, startSpan(spanName, options) {
+      const span = {
+        name: spanName,
+        attributes: {...options?.attributes},
+        ends: 0,
+        spanContext: () => ({traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", spanId: "bbbbbbbbbbbbbbbb", traceFlags: 1}),
+        setAttribute(key, value) { this.attributes[key] = value; },
+        setStatus(status) { this.status = status; },
+        end() { this.ends += 1; },
+      };
+      spans.push(span);
+      return span;
+    }};
+  });
+  return spans;
 }
 
 function addressOf(app) {
@@ -139,6 +167,354 @@ function runHealthcheckChild(environment) {
     child.once("close", (code, signal) => resolve({code, signal, output}));
   });
 }
+
+void test("runtime continues valid W3C parent and async request context into a server span", async (t) => {
+  let exportedSpans = "";
+  let exportedMetrics = Buffer.alloc(0);
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.resume();
+    request.on("end", () => {
+      const body = Buffer.concat(chunks);
+      if (request.url === "/v1/traces") exportedSpans += body.toString();
+      if (request.url === "/v1/metrics") exportedMetrics = Buffer.concat([exportedMetrics, body]);
+      response.writeHead(200, {"content-type": "application/x-protobuf"});
+      response.end();
+    });
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const collectorAddress = collector.address();
+  assert.ok(collectorAddress && typeof collectorAddress === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development",
+    namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${collectorAddress.port}`, queueCapacity: 16, batchSize: 4, batchTimeoutMs: 10, exportTimeoutMs: 100},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 4, batchIntervalMs: 60000, exportTimeoutMs: 100, diagnosticIntervalMs: 60000, flushTimeoutMs: 500},
+  }, "otel-context-test", "test-token");
+  const traceId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const parentSpanId = "bbbbbbbbbbbbbbbb";
+  let observed;
+  const app = await createRuntime(identity("otel-context-test", {
+    deadlineMs: 50,
+    resources: [telemetry],
+    configure: (instance) => {
+      instance.get("/telemetry-deadline", async (request) => {
+        await new Promise(resolve => request.runtimeContext.signal.addEventListener("abort", resolve, {once: true}));
+        return {status: "aborted"};
+      });
+      instance.get("/otel", async (request) => {
+        await new Promise(resolve => setTimeout(resolve, 1));
+        const active = trace.getSpan(otelContext.active())?.spanContext();
+        observed = {active, correlationId: request.correlationContext?.correlationId};
+        trace.getTracer("runtime-context-test").startActiveSpan("redaction-safe-marker-span", span => {
+          span.setAttribute("safe.redaction.marker", "otel-redaction-record-retained");
+          span.setAttribute("nested.credentials.secret", "otel-secret-canary");
+          span.setAttribute("nested.customer.email", "otel-pii-canary");
+          span.setAttribute("request.body", "otel-body-canary");
+          span.setAttribute("http.request.header.authorization", "otel-header-canary");
+          span.setAttribute("db.statement", "SELECT 'otel-sql-canary'");
+          span.setAttribute("provider.response", "otel-provider-canary");
+          span.addEvent("exception", {"exception.message": "otel-exception-canary", "exception.stacktrace": "otel-stack-canary"});
+          span.end();
+        });
+        return {traceId: active?.traceId};
+      });
+    },
+  }));
+  await app.runtimeController.start();
+  t.after(async () => {
+    await app.runtimeController.closeRuntime("SIGTERM");
+    await new Promise(resolve => collector.close(resolve));
+  });
+  const response = await app.inject({method: "GET", url: "/otel", headers: {
+    traceparent: `01-${traceId}-${parentSpanId}-01`,
+    "x-correlation-id": "11111111-1111-4111-8111-111111111111",
+  }});
+  assert.equal((await app.inject("/health/ready")).statusCode, 200);
+  assert.equal((await app.inject("/missing")).statusCode, 404);
+  assert.equal(response.statusCode, 200);
+  assert.equal(observed.active.traceId, traceId);
+  assert.notEqual(observed.active.spanId, parentSpanId);
+  assert.equal(observed.correlationId, "11111111-1111-4111-8111-111111111111");
+  assert.equal(response.json().traceId, traceId);
+  await assert.rejects(fetch(`http://127.0.0.1:${addressOf(app).port}/telemetry-deadline`));
+  await app.runtimeController.closeRuntime("SIGTERM");
+  await new Promise(resolve => collector.close(resolve));
+  assert.ok(exportedSpans.includes("redaction-safe-marker-span"), "the span carrying redaction canaries was exported");
+  assert.ok(exportedSpans.includes("otel-redaction-record-retained"), "the safe marker from that span was exported");
+  for (const canary of ["otel-secret-canary", "otel-pii-canary", "otel-body-canary", "otel-header-canary", "otel-sql-canary", "otel-provider-canary", "otel-exception-canary", "otel-stack-canary"])
+    assert.equal(exportedSpans.includes(canary), false, `OTLP export excludes ${canary}`);
+  for (const metric of ["runtime_http_requests_total", "runtime_http_request_duration_ms", "runtime_ready", "runtime_process_start_time_seconds", "telemetry_log_records_dropped_total", "telemetry_records_dropped_total", "telemetry_export_failures_total", "telemetry_shutdown_losses_total"])
+    assert.ok(exportedMetrics.includes(Buffer.from(metric)), `OTLP export contains ${metric}`);
+  for (const attribute of ["http.request.method", "http.route", "http.response.status_class", "/otel", "2xx", "4xx"])
+    assert.ok(exportedMetrics.includes(Buffer.from(attribute)), `request metrics include ${attribute}`);
+  for (const attribute of ["outcome", "deadline_exceeded", "other"])
+    assert.ok(exportedMetrics.includes(Buffer.from(attribute)), `aborted request metrics include ${attribute}`);
+});
+void test("telemetry span queue drops at its configured bound and records exporter failures", async (t) => {
+  const exportRequests = [];
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {
+      exportRequests.push({path: request.url, body: Buffer.concat(chunks)});
+      setTimeout(() => {response.writeHead(503); response.end();}, 25);
+    });
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development",
+    namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 1, maxRecordBytes: 1024, batchSize: 1, batchIntervalMs: 60000, exportTimeoutMs: 100, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "otel-bounds-test", "test-token");
+  const warnings = [];
+  t.mock.method(process, "emitWarning", (...args) => {warnings.push(args);});
+  const before = telemetryDiagnostics();
+  telemetry.start();
+  const tracer = trace.getTracer("otel-bounds-test");
+  for (let index = 0; index < 3; index++) tracer.startSpan(`bounded.${index}`).end();
+  const oversized = tracer.startSpan("oversized");
+  oversized.setAttribute("token", "span-warning-private-canary");
+  oversized.setAttribute("safe_attribute", "x".repeat(2_000));
+  oversized.end();
+  await telemetry.stop(new AbortController().signal);
+  await new Promise(resolve => collector.close(resolve));
+  const after = telemetryDiagnostics();
+  assert.ok(after.dropped >= before.dropped + 2);
+  assert.ok(after.exportFailures >= before.exportFailures + 1);
+  assert.equal(after.serializationRejected, before.serializationRejected + 1);
+  assert.ok(after.queueOverflows >= before.queueOverflows + 2);
+  assert.equal(warnings.length, 1, "span drops and the exporter failure share the configured diagnostic rate limit");
+  assert.equal(warnings[0][1]?.code, "OTEL_SPAN_DROPPED");
+  assert.equal(warnings.some(args => args.map(String).join(" ").includes("span-warning-private-canary")), false,
+    "diagnostics never include dropped span attributes");
+  assert.ok(exportRequests.length > 0);
+  assert.equal(exportRequests.filter(request => request.path === "/v1/traces").length, 1,
+    "only the single in-flight span batch is sent");
+  assert.equal(exportRequests.every(request => request.path === "/v1/traces" || request.path === "/v1/metrics"), true,
+    "telemetry exports only trace batches and metrics, never diagnostics as a separate payload");
+  assert.equal(exportRequests.some(request => request.body.includes(Buffer.from("span-warning-private-canary"))), false,
+    "dropped span contents are never exported");
+  t.after(() => new Promise(resolve => collector.close(resolve)));
+});
+
+void test("telemetry forceFlush immediately drains the final partial span batch", async (t) => {
+  const traceBatches = [];
+  let firstTraceRequestStarted;
+  const firstTraceStarted = new Promise(resolve => {firstTraceRequestStarted = resolve;});
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {
+      if (request.url === "/v1/traces") {
+        traceBatches.push(Buffer.concat(chunks));
+        if (traceBatches.length === 1) {
+          firstTraceRequestStarted();
+          setTimeout(() => {response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();}, 50);
+          return;
+        }
+      }
+      response.writeHead(200, {"content-type": "application/x-protobuf"});
+      response.end();
+    });
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createSourceTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 8, maxRecordBytes: 16384, batchSize: 2, batchIntervalMs: 60_000, exportTimeoutMs: 1_000, diagnosticIntervalMs: 60_000, flushTimeoutMs: 300},
+  }, "otel-flush-tail-test", "test-token");
+  t.after(async () => {if (collector.listening) await new Promise(resolve => collector.close(resolve));});
+  telemetry.start();
+  const tracer = trace.getTracer("otel-flush-tail-test");
+  for (let index = 0; index < 2; index++) tracer.startSpan(`flush.batch.${index}`).end();
+  await firstTraceStarted;
+  for (let index = 2; index < 5; index++) tracer.startSpan(`flush.batch.${index}`).end();
+  await telemetry.stop(new AbortController().signal);
+  await new Promise(resolve => collector.close(resolve));
+  const exported = Buffer.concat(traceBatches);
+  assert.equal(traceBatches.length, 3, "the multi-batch flush exports its partial tail immediately");
+  for (let index = 0; index < 5; index++)
+    assert.ok(exported.includes(Buffer.from(`flush.batch.${index}`)), `span ${index} was exported`);
+});
+
+void test("bounded Pino stdout queue reports drops without logging dropped content", async () => {
+  const moduleUrl = new URL("../../packages/platform-observability/dist/index.js", import.meta.url).href;
+  const script = `import {createPinoLogger,logRecordsDropped,telemetryDiagnostics} from ${JSON.stringify(moduleUrl)};
+const warnings=[];process.on('warning',warning=>warnings.push({code:warning.code,message:warning.message}));
+const logger=createPinoLogger({service:'pino-queue-proof'},16384,undefined,1,60000);
+for(let index=0;index<512;index++)logger.info({sample:'pino-queue-private-canary'+'x'.repeat(14000)},'bounded Pino stdout queue proof');
+setImmediate(()=>logger.flush(error=>{if(error){process.stderr.write('flush failed\\n');process.exitCode=1;return;}setImmediate(()=>process.stderr.write(JSON.stringify({dropped:logRecordsDropped(),queueOverflows:telemetryDiagnostics().queueOverflows,warnings})+'\\n'));}));`;
+  const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
+    cwd: root, stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout.pause();
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", chunk => {stdout += chunk;});
+  child.stderr.on("data", chunk => {stderr += chunk; if (stderr.includes("\n")) child.stdout.resume();});
+  const timeout = setTimeout(() => child.stdout.resume(), 5000);
+  const result = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({code, signal}));
+  });
+  clearTimeout(timeout);
+  assert.equal(result.code, 0, stderr);
+  const summary = JSON.parse(stderr.trim().split("\n").at(-1));
+  assert.ok(summary.dropped > 0, "the bounded async stdout queue drops records under pipe backpressure");
+  assert.equal(summary.queueOverflows, summary.dropped, "every Pino queue drop increments the runtime overflow counter");
+  assert.equal(summary.warnings.length, 1, "queue overflow emits one rate-limited warning");
+  assert.equal(summary.warnings[0].code, "LOG_RECORD_DROPPED");
+  assert.doesNotMatch(JSON.stringify(summary.warnings), /pino-queue-private-canary/u, "warning diagnostics exclude dropped log content");
+  assert.ok(stdout.length < 512 * 16384, "the child stdout pipe was bounded while records were dropped");
+});
+
+void test("telemetry preserves a final diagnostic when bounded shutdown drops an in-flight span", async () => {
+  const collector = createHttpServer((_request, response) => {
+    response.writeHead(200, {"content-type": "application/x-protobuf", connection: "close"});
+    response.end();
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 16, batchIntervalMs: 60000, exportTimeoutMs: 1000, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "otel-shutdown-loss-test", "test-token");
+  const before = telemetryDiagnostics();
+  telemetry.start();
+  trace.getTracer("otel-shutdown-loss-test").startSpan("shutdown.loss.probe").end();
+  const shutdown = new AbortController();
+  shutdown.abort(new Error("bounded shutdown probe"));
+  await telemetry.stop(shutdown.signal);
+  await new Promise(resolve => collector.close(resolve));
+  assert.equal(telemetryDiagnostics().shutdownLoss, before.shutdownLoss + 1);
+});
+
+void test("runtime owner metric bridge exports fixed gauges and counters while filtering unbounded attributes", async (t) => {
+  const payloads = [];
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {payloads.push(Buffer.concat(chunks)); response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();});
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development",
+    namespace: "coffee-platform", releaseDigest: "test", collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 4, batchIntervalMs: 60000, exportTimeoutMs: 500, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "otel-owner-metrics-test", "test-token", () => [
+    "coffee_realtime_connections 3",
+    "coffee_realtime_invalidation_dropped_total 2",
+    "coffee_realtime_connections{entity=\"ord_metric_canary\"} 90",
+    "coffee_aroma_mutation_calls_total{action=\"remove\"} 4",
+    "coffee_aroma_mutation_calls_total{action=\"order_ref_canary\"} 90",
+    "coffee_aroma_unknown_outcomes_current 2",
+  ]);
+  t.after(async () => {if (collector.listening) await new Promise(resolve => collector.close(resolve));});
+  telemetry.start();
+  metrics.getMeter("metric-attribute-view-test").createObservableGauge("metric.attribute.view.canary").addCallback(result => {
+    result.observe(1, {entity: "metric_entity_canary", "orders.result": "success"});
+  });
+  await telemetry.stop(new AbortController().signal);
+  await new Promise(resolve => collector.close(resolve));
+  const payload = Buffer.concat(payloads);
+  for (const name of ["coffee_realtime_connections", "coffee_realtime_invalidation_dropped_total", "coffee_aroma_mutation_calls_total", "coffee_aroma_unknown_outcomes_current", "metric.attribute.view.canary", "runtime_process_rss_bytes", "runtime_event_loop_delay_p95_ms", "runtime_process_start_time_seconds", "telemetry_log_records_dropped_total", "telemetry_records_dropped_total", "telemetry_export_failures_total", "telemetry_shutdown_losses_total"])
+    assert.ok(payload.includes(Buffer.from(name)), `OTLP export contains ${name}`);
+  for (const secret of ["ord_metric_canary", "order_ref_canary", "metric_entity_canary", "entity"])
+    assert.equal(payload.includes(Buffer.from(secret)), false, `${secret} is excluded from OTLP`);
+  assert.ok(payload.includes(Buffer.from("deployment.environment")) && payload.includes(Buffer.from("development")));
+  assert.ok(payload.includes(Buffer.from("remove")) && payload.includes(Buffer.from("orders.result")));
+});
+
+void test("telemetry starts before business resources and flushes their stop-time metrics and spans last", async (t) => {
+  const payloads = [];
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {payloads.push({path: request.url, body: Buffer.concat(chunks)}); response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();});
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const address = collector.address();
+  assert.ok(address && typeof address === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${address.port}`},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 4, batchIntervalMs: 60000, exportTimeoutMs: 500, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "otel-resource-order-test", "test-token");
+  const owner = {
+    name: "business-start-probe",
+    start() {metrics.getMeter("business-start-probe").createCounter("business.start.counter").add(1);},
+    stop() {
+      metrics.getMeter("business-stop-probe").createCounter("business.stop.counter").add(1);
+      const span = trace.getTracer("business-stop-probe").startSpan("business.shutdown.flush.probe");
+      span.end();
+    },
+    destroy() {},
+  };
+  t.after(async () => {if (collector.listening) await new Promise(resolve => collector.close(resolve));});
+  const app = await startApp(identity("telemetry-order-test", {resources: [telemetry, owner]}));
+  await stopApp(app);
+  await new Promise(resolve => collector.close(resolve));
+  assert.ok(payloads.some(({path, body}) => path === "/v1/metrics" && body.includes(Buffer.from("business.stop.counter"))));
+  assert.ok(payloads.some(({path, body}) => path === "/v1/metrics" && body.includes(Buffer.from("business.start.counter"))));
+  assert.ok(payloads.some(({path, body}) => path === "/v1/traces" && body.includes(Buffer.from("business.shutdown.flush.probe"))));
+});
+
+void test("SSE server span is exported at handshake while its stream stays open", async (t) => {
+  let exportedSpans = Buffer.alloc(0);
+  const collector = createHttpServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {exportedSpans = Buffer.concat([exportedSpans, Buffer.concat(chunks)]); response.writeHead(200, {"content-type": "application/x-protobuf"}); response.end();});
+  });
+  await new Promise(resolve => collector.listen(0, "127.0.0.1", resolve));
+  const collectorAddress = collector.address();
+  assert.ok(collectorAddress && typeof collectorAddress === "object");
+  const telemetry = createTelemetryResource({
+    environment: "development", namespace: "coffee-platform", releaseDigest: "test",
+    collector: {otlpEndpoint: `http://127.0.0.1:${collectorAddress.port}`},
+    producer: {queueCapacity: 16, maxRecordBytes: 16384, batchSize: 1, batchIntervalMs: 60000, exportTimeoutMs: 500, diagnosticIntervalMs: 60000, flushTimeoutMs: 1000},
+  }, "sse-span-handshake-test", "test-token");
+  const app = await startApp(identity("sse-span-handshake-test", {
+    resources: [telemetry],
+    configure(instance) {
+      instance.get("/events", (request, reply) => {
+        reply.hijack();
+        reply.raw.writeHead(200, {"Content-Type": "text/event-stream; charset=utf-8"});
+        reply.raw.write("event: stream-ready.v1\n\n");
+        completeRuntimeRequestTelemetry(request, 200);
+      });
+    },
+  }));
+  const port = addressOf(app).port;
+  const response = await new Promise((resolve, reject) => {
+    const request = httpRequest({host: "127.0.0.1", port, path: "/events"}, incoming => resolve({request, incoming}));
+    request.once("error", reject);
+    request.end();
+  });
+  t.after(async () => {
+    response.request.destroy();
+    response.incoming.destroy();
+    await stopApp(app);
+    if (collector.listening) await new Promise(resolve => collector.close(resolve));
+  });
+  await waitFor(() => exportedSpans.includes(Buffer.from("HTTP GET")));
+  assert.equal(response.incoming.complete, false, "the SSE response remains open after its request span is exported");
+  response.request.destroy();
+  response.incoming.destroy();
+  await stopApp(app);
+  await new Promise(resolve => collector.close(resolve));
+});
 
 void test("public Edge TLS accepts a browser client while internal TLS rejects a client without service identity", async (t) => {
   const material = await tlsMaterial(t);
@@ -372,8 +748,10 @@ void test("health endpoints expose live and ready states", async () => {
   assert.deepEqual(await stopApp(app), {status: "stopped", pending: []});
 });
 
-void test("readiness checks fail closed, recover, and expose correlation context", async () => {
+void test("readiness checks fail closed, recover, and expose correlation context", async (t) => {
+  const spans = captureRuntimeSpans(t);
   let dependencyReady = false;
+  const logs = [];
   const correlationId = "11111111-1111-4111-8111-111111111111";
   const traceparent = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01";
   const app = await createRuntime(identity("readiness-test", {
@@ -381,10 +759,14 @@ void test("readiness checks fail closed, recover, and expose correlation context
     requiredDependencies: ["database"],
     readinessChecks: [{name: "database", check: async () => dependencyReady}],
   }));
+  app.log.warn = (fields, message) => logs.push({fields, message});
   app.get("/context", async (request) => ({
     requestCorrelationId: request.correlationContext?.correlationId,
     deadlineUtc: request.runtimeContext?.deadlineUtc,
   }));
+  app.get("/client-error", async (_request, reply) => reply.code(404).send());
+  app.post("/malformed-json", async () => ({status: "handler must not run"}));
+  app.get("/server-error", async () => { throw new Error("synthetic server failure"); });
   await app.runtimeController.start();
   const notReady = await app.inject({
     method: "GET",
@@ -392,7 +774,9 @@ void test("readiness checks fail closed, recover, and expose correlation context
     headers: {"x-correlation-id": correlationId},
   });
   assert.equal(notReady.statusCode, 503);
+  assert.deepEqual(spans[0].status, {code: SpanStatusCode.ERROR});
   assert.deepEqual(notReady.json(), {status: "not-ready", runtime: "readiness-test"});
+  assert.deepEqual(logs, [{fields: {event: "runtime.readiness.failed", dependency: "database", reason: "NotReady"}, message: "runtime readiness failed"}]);
   dependencyReady = true;
   const ready = await app.inject({
     method: "GET",
@@ -400,6 +784,8 @@ void test("readiness checks fail closed, recover, and expose correlation context
     headers: {"x-correlation-id": correlationId, traceparent},
   });
   assert.equal(ready.statusCode, 200);
+  assert.equal(spans[1].status, undefined);
+  assert.equal(logs.length, 1);
   assert.equal(ready.headers["x-correlation-id"], correlationId);
   assert.equal(ready.headers.traceparent, traceparent);
   const context = await app.inject({
@@ -407,6 +793,15 @@ void test("readiness checks fail closed, recover, and expose correlation context
     url: "/context",
     headers: {"x-correlation-id": correlationId, traceparent},
   });
+  const clientError = await app.inject("/client-error");
+  assert.equal(clientError.statusCode, 404);
+  assert.equal(spans.at(-1).status, undefined);
+  const malformedJson = await app.inject({method: "POST", url: "/malformed-json", headers: {"content-type": "application/json"}, payload: "{"});
+  assert.equal(malformedJson.statusCode, 400);
+  assert.equal(spans.at(-1).status, undefined);
+  const serverError = await app.inject("/server-error");
+  assert.equal(serverError.statusCode, 500);
+  assert.deepEqual(spans.at(-1).status, {code: SpanStatusCode.ERROR});
   assert.equal(context.json().requestCorrelationId, correlationId);
   assert.match(context.json().deadlineUtc, /^\d{4}-\d{2}-\d{2}T/);
   const invalid = await app.inject({
@@ -417,6 +812,56 @@ void test("readiness checks fail closed, recover, and expose correlation context
   assert.match(invalid.headers["x-correlation-id"], /^[0-9a-f-]{36}$/);
   assert.equal(invalid.headers.traceparent, undefined);
   await stopApp(app);
+});
+
+void test("automatic request logs carry validated correlation fields", async () => {
+  const runtimePath = new URL("../../packages/platform-runtime/src/index.ts", import.meta.url).href;
+  const script = `
+    import {createRuntime} from ${JSON.stringify(runtimePath)};
+    const app = await createRuntime({name: "request-log-correlation-test", host: "127.0.0.1", port: 0, shutdownGraceMs: 100});
+    app.get("/log-context", async (request) => {
+      request.log.info("handler correlation probe");
+      return {ok: true};
+    });
+    await app.runtimeController.start();
+    await app.inject({method: "GET", url: "/log-context", headers: {
+      "x-correlation-id": "11111111-1111-4111-8111-111111111111",
+      traceparent: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+    }});
+    const invalid = await app.inject({method: "GET", url: "/log-context", headers: {
+      "x-correlation-id": "invalid",
+      traceparent: "invalid",
+    }});
+    process.stderr.write(JSON.stringify({fallbackCorrelationId: invalid.headers["x-correlation-id"]}) + "\\n");
+    await app.runtimeController.closeRuntime("SIGTERM");
+    await new Promise((resolve) => app.log.flush(resolve));
+  `;
+  const child = spawn(process.execPath, ["--experimental-strip-types", "--input-type=module", "-e", script], {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => { stdout += chunk; });
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  const exit = await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({code, signal}));
+  });
+  assert.equal(exit.code, 0, stderr);
+  const fallbackCorrelationId = JSON.parse(stderr.trim()).fallbackCorrelationId;
+  const records = stdout.split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  for (const message of ["incoming request", "request completed", "handler correlation probe"]) {
+    const eventRecords = records.filter((record) => record.runtime === "request-log-correlation-test" && record.msg === message);
+    const valid = eventRecords.find((record) => record.correlationId === "11111111-1111-4111-8111-111111111111");
+    assert.ok(valid, `${message} includes valid correlation ID`);
+    assert.equal(valid.traceparent, "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01");
+    const invalid = eventRecords.find((record) => record.correlationId === fallbackCorrelationId);
+    assert.ok(invalid, `${message} includes generated fallback correlation ID`);
+    assert.equal(Object.hasOwn(invalid, "traceparent"), false, `${message} omits invalid traceparent`);
+  }
 });
 
 void test("shutdown resources stop once in reverse order and repeated close is idempotent", async () => {
@@ -506,7 +951,8 @@ void test("premature GET response disconnect aborts the request signal", async (
   await stopApp(app);
 });
 
-void test("non-cooperative handler stays tracked after disconnect and forces fail-stop", async () => {
+void test("non-cooperative handler stays tracked after disconnect and forces fail-stop", async (t) => {
+  const spans = captureRuntimeSpans(t);
   let entered = false;
   let signal;
   const app = await createRuntime(identity("non-cooperative-test", {deadlineMs: 2_000, shutdownGraceMs: 40}));
@@ -523,11 +969,50 @@ void test("non-cooperative handler stays tracked after disconnect and forces fai
   await closeClientRequest(request);
   await waitFor(() => signal.aborted);
   assert.equal(signal.reason.code, "RUNTIME_CLIENT_DISCONNECTED");
+  await waitFor(() => spans[0]?.ends === 1);
+  assert.equal(spans[0].ends, 1);
+  assert.equal(spans[0].attributes.outcome, "client_aborted");
+  assert.equal(spans[0].attributes["http.response.status_code"], undefined);
+  assert.deepEqual(spans[0].status, {code: SpanStatusCode.ERROR});
   const result = await stopApp(app);
   assert.equal(result.status, "fail-stop");
   assert.deepEqual(result.pending, ["handlers"]);
   assert.equal(app.runtimeController.phase(), "stopped");
   assert.equal(app.server.listening, false);
+});
+
+void test("request deadline finishes telemetry for a non-cooperative handler", async (t) => {
+  const spans = captureRuntimeSpans(t);
+  let signal;
+  const app = await createRuntime(identity("deadline-blackhole-test", {deadlineMs: 30, shutdownGraceMs: 40}));
+  app.get("/blackhole", async (request) => {
+    signal = request.runtimeContext.signal;
+    await new Promise(() => {});
+  });
+  await app.runtimeController.start();
+  const {port} = addressOf(app);
+  await assert.rejects(fetch(`http://127.0.0.1:${port}/blackhole`));
+  await waitFor(() => signal?.aborted && spans[0]?.ends === 1);
+  assert.equal(signal.reason.code, "RUNTIME_REQUEST_DEADLINE");
+  assert.equal(spans[0].ends, 1);
+  assert.equal(spans[0].attributes.outcome, "deadline_exceeded");
+  assert.equal(spans[0].attributes["http.response.status_code"], undefined);
+  assert.deepEqual(spans[0].status, {code: SpanStatusCode.ERROR});
+  assert.equal((await stopApp(app)).status, "fail-stop");
+});
+
+void test("runtime server spans bound unrecognized HTTP methods", async (t) => {
+  const spans = captureRuntimeSpans(t);
+  const app = await createRuntime(identity("unrecognized-method-test"));
+  t.after(() => stopApp(app));
+  app.route({method: "TRACE", url: "/trace", handler: async () => ({status: "ok"})});
+  await app.runtimeController.start();
+  const {port} = addressOf(app);
+  const {response} = await requestJson(port, "/trace", {method: "TRACE"});
+  assert.equal(response.statusCode, 200);
+  assert.equal(spans[0].name, "HTTP _OTHER");
+  assert.equal(spans[0].attributes["http.request.method"], "_OTHER");
+  assert.equal(spans[0].ends, 1);
 });
 
 void test("partial POST input disconnects before the request is complete", async () => {
@@ -1035,6 +1520,7 @@ void test("configured realtime shutdown is bounded by 20s without changing other
   const config = await loadPlatformConfig(join(root, "config/platform.yaml"), (text) => parseYaml(text, {json: true}));
   assert.equal(configuredRuntimeIdentity(config, "realtime-gateway").shutdownGraceMs, 20000);
   assert.equal(configuredRuntimeIdentity(config, "orders-service").shutdownGraceMs, config.platform.shutdownGraceMs);
+  assert.equal(configuredRuntimeIdentity(config, "orders-service").telemetryLogDiagnosticIntervalMs, config.telemetry.producer.diagnosticIntervalMs);
 });
 
 void test("configured roots preserve null deadlines for api-internal and realtime-gateway", async () => {
@@ -1186,6 +1672,8 @@ void test("runtime metrics endpoint appends bounded composition metrics", async 
   const response = await app.inject({method: "GET", url: "/metrics"});
   assert.equal(response.statusCode, 200);
   assert.match(response.body, /runtime_admission_rejected_total 0/);
+  for (const metric of ["runtime_event_loop_utilization", "runtime_event_loop_delay_p95_ms", "runtime_process_rss_bytes", "runtime_process_heap_used_bytes", "runtime_process_external_bytes", "runtime_process_array_buffers_bytes", "runtime_gc_pause_count_total", "runtime_gc_pause_total_ms"])
+    assert.match(response.body, new RegExp(`^${metric} `, "m"));
   assert.match(response.body, /aroma_gateway_safe_read_attempts_total 1/);
 });
 

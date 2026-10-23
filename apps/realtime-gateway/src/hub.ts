@@ -1,5 +1,6 @@
 import {createHash, randomUUID} from "node:crypto";
 import {Temporal} from "@js-temporal/polyfill";
+import {trace} from "@opentelemetry/api";
 import type {EventEmitter} from "node:events";
 import type {RealtimeConfig} from "@coffee-platform/config";
 import type {KafkaEnvelope, RealtimeBinding} from "@coffee-platform/kafka-runtime";
@@ -21,6 +22,7 @@ type Frame = Readonly<{text:string;bytes:number;terminal?:true;subject?:string;r
 type Retained = Readonly<{id:string;subject:string;version:bigint;digest:string;dataDigest:string;frame:Frame;at:number;sequence:number}> & {supersededSequence?:number};
 type Connection = {
   sink:RealtimeSink; queue:Frame[]; bytes:number; closed:boolean; writing:number;
+  transported:WeakSet<Frame>;
   cleanup:()=>void; close:()=>void; drain:()=>void; pump:()=>void; enqueue:(frame:Frame,schedule?:boolean)=>boolean;
 };
 export class RealtimeCapacityError extends Error {
@@ -59,6 +61,8 @@ export class RealtimeHub {
   private evictions=0;
   private slowCloses=0;
   private authCloses=0;
+  private invalidationAttempts=0;
+  private invalidationDropped=0;
   private readonly now:()=>number;
   private readonly config:RealtimeConfig;
   public constructor(config:RealtimeConfig, now:()=>number=()=>performance.now()) {
@@ -73,12 +77,12 @@ export class RealtimeHub {
     };
   }
   public stats(){this.prune();let writingConnections=0,writingRecords=0;for(const connection of this.connections)if(!connection.closed&&connection.writing>0){writingConnections++;writingRecords+=connection.writing;}return {connections:this.connections.size,scheduledConnections:this.pumps.size,writingConnections,writingRecords,queuedRecords:this.queueRecords,queuedBytes:this.queueBytes,
-    ringRecords:this.ring.length,ringBytes:this.ringBytes,dedupEntries:this.ids.size,versionEntries:this.latest.size,pendingRecords:this.pending.size,slowCloses:this.slowCloses,authCloses:this.authCloses,evictions:this.evictions};}
+    ringRecords:this.ring.length,ringBytes:this.ringBytes,dedupEntries:this.ids.size,versionEntries:this.latest.size,pendingRecords:this.pending.size,slowCloses:this.slowCloses,authCloses:this.authCloses,evictions:this.evictions,invalidationAttempts:this.invalidationAttempts,invalidationDropped:this.invalidationDropped};}
   public metrics():readonly string[]{const s=this.stats();return [
     `coffee_realtime_connections ${s.connections}`,`coffee_realtime_scheduled_connections ${s.scheduledConnections}`,`coffee_realtime_writing_connections ${s.writingConnections}`,`coffee_realtime_writing_records ${s.writingRecords}`,
     `coffee_realtime_queue_records ${s.queuedRecords}`,`coffee_realtime_queue_bytes ${s.queuedBytes}`,
     `coffee_realtime_ring_records ${s.ringRecords}`,`coffee_realtime_ring_bytes ${s.ringBytes}`,`coffee_realtime_slow_close_total ${s.slowCloses}`,`coffee_realtime_ring_evictions_total ${s.evictions}`,
-    `coffee_realtime_auth_close_total ${s.authCloses}`,
+    `coffee_realtime_auth_close_total ${s.authCloses}`,`coffee_realtime_invalidation_attempts_total ${s.invalidationAttempts}`,`coffee_realtime_invalidation_dropped_total ${s.invalidationDropped}`,
   ];}
   public hasCapacity():boolean{return !this.stopped&&this.connections.size<this.config.maxConnections&&
     this.queueRecords+2<=this.config.totalQueueMaxRecords&&this.queueBytes+512<=this.config.totalQueueMaxBytes;}
@@ -145,18 +149,20 @@ export class RealtimeHub {
     if(previous!==undefined)previous.supersededSequence=record.sequence;
     this.pending.set(record.subject,record);this.prune();
     if(this.coalesceTimer===undefined){this.coalesceTimer=setTimeout(()=>{
-      this.coalesceTimer=undefined;this.prune();const pending=[...this.pending.values()].sort((a,b)=>a.sequence-b.sequence);this.pending.clear();
-      const selected=pending.map(event=>({sequence:event.sequence,frame:{...event.frame,subject:event.subject}}));
+      this.coalesceTimer=undefined;const fanout=trace.getTracer("coffee-platform.realtime-gateway").startSpan("realtime.sse.fanout");fanout.setAttribute("phase","fanout");this.prune();const pending=[...this.pending.values()].sort((a,b)=>a.sequence-b.sequence);this.pending.clear();
+      const selected=pending.map(event=>({sequence:event.sequence,frame:{...event.frame,subject:event.subject,sequence:event.sequence}}));
+      let saturated=false;
       for(const connection of this.connections){
         if(connection.closed)continue;
         const boundary=boundaries.get(connection)??0;let scheduled=false;
         for(const event of selected){
           if(event.sequence<=boundary)continue;
-          if(!connection.enqueue(event.frame,false)){if(connection.closed)break;continue;}
+          if(!connection.enqueue(event.frame,false)){saturated=true;if(connection.closed)break;continue;}
           scheduled=true;
         }
         if(scheduled&&!connection.closed)this.schedulePump(connection);
       }
+      fanout.setAttribute("result",saturated?"saturated":selected.length===0?"empty":"queued");fanout.end();
     },this.config.coalesceMs);this.coalesceTimer.unref();}
   }
   public open(sink:RealtimeSink, options:StreamOptions):Readonly<{close:()=>void}> {
@@ -172,12 +178,14 @@ export class RealtimeHub {
     let auth:ReturnType<typeof setInterval>|undefined;
     let deadline:ReturnType<typeof setTimeout>|undefined;
     let drainListener:(()=>void)|undefined;
-    const connection:Connection={sink,queue:[],bytes:0,closed:false,writing:0,cleanup:()=>{},close:()=>{},drain:()=>{},pump:()=>{},enqueue:()=>false};
+    const handshake=trace.getTracer("coffee-platform.realtime-gateway").startSpan("realtime.sse.handshake");handshake.setAttribute("phase","handshake");
+    const connection:Connection={sink,queue:[],bytes:0,closed:false,writing:0,transported:new WeakSet(),cleanup:()=>{},close:()=>{},drain:()=>{},pump:()=>{},enqueue:()=>false};
     const clearWrite=()=>{clearTimeout(deadline);deadline=undefined;if(drainListener!==undefined)sink.removeListener("drain",drainListener);drainListener=undefined;};
     const cleanup=()=>{
       if(connection.closed)return;connection.closed=true;clearWrite();clearInterval(heartbeat);clearInterval(auth);
       this.pumps.delete(connection);
       options.signal.removeEventListener("abort",close);sink.removeListener("close",cleanup);sink.removeListener("error",close);sink.removeListener("finish",cleanup);
+      for(const entry of connection.queue)if(entry.sequence!==undefined&&!connection.transported.has(entry))this.invalidationDropped=Math.min(Number.MAX_SAFE_INTEGER,this.invalidationDropped+1);
       this.queueBytes-=connection.bytes;this.queueRecords-=connection.queue.length;connection.queue=[];connection.bytes=0;
       this.connections.delete(connection);boundaries.delete(connection);
       if(this.connections.size===0)this.clearEncodedBatch();
@@ -204,7 +212,7 @@ export class RealtimeHub {
             const replay=event===undefined?frame(`event: stream-reset.v1\nretry: 3000\ndata: {"reason":"REPLAY_UNAVAILABLE"}\n\n`):{...event.frame,sequence:event.sequence};
             if(connection.queue.length+replays.length+1>this.config.queueMaxRecords||connection.bytes+replayBytes+replay.bytes>this.config.queueMaxBytes||
               this.queueRecords+replays.length+1>this.config.totalQueueMaxRecords||this.queueBytes+replayBytes+replay.bytes>this.config.totalQueueMaxBytes)break;
-            replays.push(replay);replayBytes+=replay.bytes;if(event===undefined){replayCursor=undefined;break;}
+            replays.push(replay);if(replay.sequence!==undefined)this.invalidationAttempts=Math.min(Number.MAX_SAFE_INTEGER,this.invalidationAttempts+1);replayBytes+=replay.bytes;if(event===undefined){replayCursor=undefined;break;}
           }
           if(replays.length===0){slowClose();return;}
           if(next===undefined)replayCursor=undefined;
@@ -220,6 +228,7 @@ export class RealtimeHub {
       const advance=()=>{
         if(!returned||!callbackDone||!drained||connection.closed)return;
         clearWrite();connection.writing=0;
+        for(const entry of batch)connection.transported.delete(entry);
         connection.queue.splice(0,batch.length);connection.bytes-=bytes;this.queueBytes-=bytes;this.queueRecords-=batch.length;
         const last=batch.at(-1)!;if(last.sequence!==undefined)replayCursor=last.sequence;
         if(head.terminal===true){cleanup();if(!sink.destroyed)sink.end();return;}
@@ -228,20 +237,21 @@ export class RealtimeHub {
       drainListener=()=>{drained=true;advance();};sink.once("drain",drainListener);
       deadline=setTimeout(slowClose,this.config.writeTimeoutMs);deadline.unref();
       try {
-        const writable=sink.write(this.encodeBatch(batch),error=>{if(error!==undefined&&error!==null){close();return;}callbackDone=true;advance();});
+        const writable=sink.write(this.encodeBatch(batch),error=>{if(error!==undefined&&error!==null){close();return;}for(const entry of batch)if(entry.sequence!==undefined)connection.transported.add(entry);callbackDone=true;advance();});
         drained=drained||writable;
         returned=true;advance();
       } catch {close();}
     };
     const enqueue=(next:Frame,schedule=true)=>{
       if(connection.closed)return false;
+      if(next.sequence!==undefined)this.invalidationAttempts=Math.min(Number.MAX_SAFE_INTEGER,this.invalidationAttempts+1);
       // Coalesce only a not-yet-written notification, never a control or cursor.
       const index=next.subject===undefined?-1:connection.queue.findIndex((entry,i)=>i>=connection.writing&&entry.subject===next.subject);
       const previous=index<0?undefined:connection.queue[index];
       const extra=next.bytes-(previous?.bytes??0);
       const records=previous===undefined?1:0;
       if(connection.queue.length+records>this.config.queueMaxRecords || connection.bytes+extra>this.config.queueMaxBytes ||
-        this.queueRecords+records>this.config.totalQueueMaxRecords || this.queueBytes+extra>this.config.totalQueueMaxBytes){slowClose();return false;}
+        this.queueRecords+records>this.config.totalQueueMaxRecords || this.queueBytes+extra>this.config.totalQueueMaxBytes){if(next.sequence!==undefined)this.invalidationDropped=Math.min(Number.MAX_SAFE_INTEGER,this.invalidationDropped+1);slowClose();return false;}
       // The selected hint is newer than the remaining queued live hints. Keep
       // its cursor last rather than replacing an older position in the wire.
       if(index>=0)connection.queue.splice(index,1);
@@ -254,6 +264,7 @@ export class RealtimeHub {
     connection.drain=()=>{
       replayCursor=undefined;clearInterval(heartbeat);clearInterval(auth);
       const remaining=connection.queue.slice(0,connection.writing);const bytes=remaining.reduce((sum,entry)=>sum+entry.bytes,0);
+      for(const entry of connection.queue.slice(connection.writing))if(entry.sequence!==undefined)this.invalidationDropped=Math.min(Number.MAX_SAFE_INTEGER,this.invalidationDropped+1);
       this.queueRecords-=connection.queue.length-remaining.length;this.queueBytes-=connection.bytes-bytes;
       connection.queue=remaining;connection.bytes=bytes;
       enqueue(frame(`event: stream-reset.v1\nretry: 3000\ndata: {"reason":"REPLAY_UNAVAILABLE"}\n\n`,true));
@@ -272,7 +283,7 @@ export class RealtimeHub {
         if(!valid){this.authCloses++;close();}
       },this.config.authCheckMs);auth.unref();
     }
-    return {close};
+    handshake.setAttribute("result","accepted");handshake.end();return {close};
   }
   public shutdown():Promise<void> {
     if(this.shutdownWork!==undefined)return this.shutdownWork;
