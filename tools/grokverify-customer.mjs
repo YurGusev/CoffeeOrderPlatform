@@ -4,17 +4,16 @@
  *
  * Поднимает только проект grokverify-customer-<run> с пустой tmpfs-базой,
  * гоняет HTTP-контракт сервиса и сверяет строки владельца. Чужие контейнеры,
- * тома и сети не останавливает и не удаляет. Секреты прогона остаются в tmp
- * и стираются вместе с контейнерами; в evidence попадают только ответы и
- * обезличенные счётчики.
+ * тома и сети не останавливает и не удаляет. Секреты прогона остаются в
+ * проверенном tmpfs /dev/shm и стираются вместе с контейнерами; в evidence
+ * попадают только ответы и обезличенные счётчики.
  */
 
 import {spawn} from "node:child_process";
 import {randomBytes, randomUUID, generateKeyPairSync, sign} from "node:crypto";
 import {existsSync} from "node:fs";
-import {chmod, mkdir, readFile, rm, statfs, writeFile} from "node:fs/promises";
+import {chmod, chown, lstat, mkdir, readFile, rm, stat, statfs, writeFile} from "node:fs/promises";
 import {createServer} from "node:net";
-import {tmpdir} from "node:os";
 import {basename, dirname, join, resolve, sep} from "node:path";
 import {request as httpsRequest} from "node:https";
 import {fileURLToPath} from "node:url";
@@ -26,6 +25,11 @@ const NODE_IMAGE = "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108d
 const PHONE = "+79161234567";
 const OTHER_PHONE = "+79031234567";
 const RUN_ID_PATTERN = /^[0-9]{8}t[0-9]{6}z-[0-9a-f]{6}$/u;
+const SECRET_ROOT = "/dev/shm";
+const TMPFS_MAGIC = 0x01021994;
+const RUNTIME_UID = 1000;
+const RUNTIME_GID = 1000;
+const REQUIRED_SCENARIOS = ["empty-ready", "create-customer", "search-customer", "replay-create", "duplicate-email"];
 
 const secrets = [];
 
@@ -141,11 +145,29 @@ async function ensureBuilt() {
     process.stderr.write("grokverify: pnpm install --frozen-lockfile\n");
     await run("pnpm", ["install", "--frozen-lockfile"], {inherit: true});
   }
-  if (!existsSync(entry)) {
-    process.stderr.write("grokverify: tsc -b apps/customer-service\n");
-    await run("pnpm", ["exec", "tsc", "-b", "apps/customer-service", "--pretty", "false"], {inherit: true});
-  }
+  process.stderr.write("grokverify: tsc -b apps/customer-service\n");
+  await run("pnpm", ["exec", "tsc", "-b", "apps/customer-service", "--pretty", "false"], {inherit: true});
   assert(existsSync(entry), "apps/customer-service/dist/main.js was not produced");
+}
+
+async function assertTmpfs(path) {
+  const stats = await statfs(path);
+  assert(stats.type === TMPFS_MAGIC, `${path} is not tmpfs; refusing to store secret material on a disk-backed filesystem`);
+}
+
+function secretDirectory(project) {
+  const directory = join(SECRET_ROOT, project);
+  const root = resolve(SECRET_ROOT);
+  assert(directory.startsWith(`${root}${sep}`) && basename(directory) === project, "secret directory escaped");
+  return directory;
+}
+
+async function ownRuntimeSecret(path) {
+  await chmod(path, 0o400);
+  await chown(path, RUNTIME_UID, RUNTIME_GID);
+  const fileStat = await stat(path);
+  assert((fileStat.mode & 0o777) === 0o400, "scoped secret mode is not 0400");
+  assert(fileStat.uid === RUNTIME_UID && fileStat.gid === RUNTIME_GID, "scoped secret owner is not the runtime uid");
 }
 
 async function ensureImage(image) {
@@ -234,7 +256,7 @@ async function writeSecretFile(path, environment, material, role, rolePassword, 
   remember(material.apiPublic.keyPem);
   remember(material.catalog.keyPem);
   await writeFile(path, `${JSON.stringify(document)}\n`, {mode: 0o400});
-  await chmod(path, 0o400);
+  await ownRuntimeSecret(path);
 }
 
 function composeFile({project, runId, root, port, database, passwordFile, secretsFile}) {
@@ -444,16 +466,18 @@ async function main() {
   const runId = newRunId();
   const project = projectName(runId);
   const port = await freePort();
-  const directory = join(tmpdir(), project);
+  await assertTmpfs(SECRET_ROOT);
+  const directory = secretDirectory(project);
   const evidenceDir = join(ROOT, "evidence/grokverify", runId);
-  assert(directory.startsWith(`${resolve(tmpdir())}${sep}`) && basename(directory) === project, "tmp directory escaped");
   const httpLog = [];
   const dbLog = {};
   const scenarios = [];
   const resultPath = join(evidenceDir, "result.json");
   const writeResult = async (status) => {
-    const covered = scenarios.filter((scenario) => scenario.status !== "not-covered");
-    const overall = status ?? (covered.every((scenario) => scenario.status === "pass") ? "pass" : "fail");
+    const passed = new Set(scenarios.filter((scenario) => scenario.status === "pass").map((scenario) => scenario.id));
+    const requiredDone = REQUIRED_SCENARIOS.every((id) => passed.has(id));
+    const failed = scenarios.some((scenario) => scenario.status === "fail") || status === "fail";
+    const overall = failed ? "fail" : status === "pass" && requiredDone ? "pass" : "incomplete";
     await mkdir(evidenceDir, {recursive: true, mode: 0o700});
     await writeFile(resultPath, `${JSON.stringify({slice: "customer-service", boundary: database, runId, status: overall, scenarios}, null, 2)}\n`);
     await writeFile(join(evidenceDir, "http.ndjson"), httpLog.map((line) => JSON.stringify(line)).join("\n") + (httpLog.length ? "\n" : ""));
@@ -462,6 +486,7 @@ async function main() {
   };
   try {
   await mkdir(directory, {recursive: true, mode: 0o700});
+  await assertTmpfs(directory);
   await mkdir(evidenceDir, {recursive: true, mode: 0o700});
   const password = remember(randomBytes(24).toString("hex"));
   const rolePassword = remember(randomBytes(24).toString("hex"));
@@ -739,7 +764,7 @@ async function main() {
     scenarios.push({id: "order-input", title: "Внутренний order-input для Orders", status: "not-covered", detail: "Граница api-internal → customer-service в этот срез не входит."});
     const overall = await writeResult("pass");
     process.stdout.write(`${JSON.stringify({runId, status: overall, evidence: evidenceDir, scenarios}, null, 2)}\n`);
-    return 0;
+    return overall === "pass" ? 0 : 1;
   } catch (error) {
     scenarios.push({id: "run", title: "Прогон", status: "fail", detail: detail(error)});
     await writeResult("fail");
@@ -772,7 +797,7 @@ async function tearDown(runId, {keepEvidence = true} = {}) {
   void keepEvidence;
   assertSafe(runId, RUN_ID_PATTERN, "run id");
   const project = projectName(runId);
-  const directory = join(tmpdir(), project);
+  const directory = secretDirectory(project);
   const composePath = join(directory, "compose.yaml");
   if (existsSync(composePath)) {
     await run("docker", ["compose", "-p", project, "-f", composePath, "down", "--volumes", "--remove-orphans"]).catch((error) => {
@@ -791,8 +816,13 @@ async function tearDown(runId, {keepEvidence = true} = {}) {
   await removeNetwork(`${project}-net`, runId);
   await removeProjectVolumes(project);
   if (existsSync(directory)) {
-    assert(directory.startsWith(`${resolve(tmpdir())}${sep}`) && basename(directory) === project, "refusing to delete tmp directory");
-    await rm(directory, {recursive: true, force: true});
+    assert(directory === secretDirectory(project), "refusing to delete secret directory");
+    const info = await lstat(directory);
+    if (info.isSymbolicLink()) await rm(directory);
+    else {
+      await assertTmpfs(directory);
+      await rm(directory, {recursive: true, force: true});
+    }
   }
 }
 

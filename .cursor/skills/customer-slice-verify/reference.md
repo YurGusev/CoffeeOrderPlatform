@@ -9,9 +9,11 @@
 `/etc/hosts` и не портом `5432` хоста.
 
 Роль runtime берётся из `GRANT USAGE ON SCHEMA customer TO ...` в миграциях.
-Пароль роли и ключи mTLS создаются на прогон, пишутся в каталог
-`/tmp/grokverify-customer-<run-id>/` с режимом `0400` и удаляются при
-остановке. В evidence их нет.
+Пароль роли и ключи mTLS создаются на прогон и пишутся в
+`/dev/shm/grokverify-customer-<run-id>/`. Каталог принимается только если
+`statfs` показывает tmpfs; диск, включая `/tmp`, отвергается. Файл scoped
+secrets получает владельца `1000:1000` и режим `0400`, как процесс в
+контейнере. Каталог удаляется при остановке. В evidence секретов нет.
 
 ## Команда
 
@@ -55,7 +57,7 @@ Node 26.8.1-bookworm-slim с теми же digest, что toolchain. Рычаг 
 
 | Файл | Содержимое |
 |---|---|
-| `result.json` | `status`: `pass` или `fail`; список сценариев |
+| `result.json` | `status`: `pass` после всех обязательных сценариев, `incomplete` на промежуточной записи, `fail` при сбое |
 | `http.ndjson` | одна строка на запрос: scenario, method, path, status, request, response |
 | `db.json` | после сценария: customers, audits, idempotencyCompleted, idempotencyRows, customerRef, status, version, emailMatches |
 | `service.log` | журнал процесса после удаления PEM и паролей |

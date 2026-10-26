@@ -22,10 +22,12 @@ description: Проверить customer-service живым прогоном п�
 node tools/grokverify-customer.mjs
 ```
 
-Нужны Node 26.8.1, pnpm и Docker. Скрипт сам ставит зависимости и собирает
-`apps/customer-service`, если `dist` ещё нет. Порт выбирается из 18410–18480
-на `127.0.0.1`. Postgres наружу не публикуется. Проект Compose называется
-`grokverify-customer-<run-id>`.
+Нужны Node 26.8.1, pnpm и Docker. Перед контейнерами скрипт каждый раз
+запускает инкрементальный `tsc -b apps/customer-service`, даже если `dist`
+уже есть. Зависимости ставит сам, если нет `js-yaml`. Порт выбирается из
+18410–18480 на `127.0.0.1`. Postgres наружу не публикуется. Проект Compose
+называется `grokverify-customer-<run-id>`. Секреты прогона пишутся только в
+проверенный tmpfs `/dev/shm`.
 
 Повторный запуск создаёт новый run-id и новую пустую базу. Код выхода `0` —
 все покрытые сценарии прошли. `1` — сбой. Контейнеры, сеть и tmpfs этого
@@ -45,7 +47,7 @@ node tools/grokverify-customer.mjs --down <run-id>
 
 Каталог `evidence/grokverify/<run-id>/` в git не входит.
 
-- `result.json` — `status` и сценарии. Это итог.
+- `result.json` — `status` и сценарии. `pass` пишется только когда все обязательные сценарии уже прошли. Промежуточная запись — `incomplete`, сбой — `fail`.
 - `http.ndjson` — метод, путь, статус и тело. Заголовков доверия там нет.
 - `db.json` — счётчики строк после сценариев и совпал ли email. Самого email в этом файле нет.
 - `service.log` — stdout сервиса после вырезания ключевого материала.
