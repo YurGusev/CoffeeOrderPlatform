@@ -1,0 +1,78 @@
+issue: 188
+baseCommit: c68bd899a7e71db28d47ec379791bf9a5876f065
+inputs:
+- issue: 182
+  acceptedMergeCommit: c0a9188af53539ccbe89b1aa25cfb814d5b9e296
+  artifact: evidence/handoffs/issue-182.yaml
+  sha256: 4634efeb3ac3172a7a908b4952ca64db65f832c0a79cd224e733fafa34b63e03
+- issue: 186
+  acceptedMergeCommit: c68bd899a7e71db28d47ec379791bf9a5876f065
+  artifact: evidence/handoffs/issue-186.yaml
+  sha256: 2ca711fa6de43925db9599ba0df88b59b470ee9fcc4410caf1c60e147b55487e
+research:
+  commit: 87b15ae23ed454d11fdb9cbd9955a06067ceb747
+  artifact: evidence/tasty/cart-decoder-inputs/2026-10-28-observation.json
+  sha256: b9b9d56b23e47aa25b621148aab41dc19169c19c573228a540ca0bc875b2f906
+  detail: Контролируемая обычная строка и восстановленный baseline; оригинальные тела не сохранены.
+authority:
+  detail: Владелец Architecture явно принял ADR-0038 и разрешил локальный decoder в беседе 28.10.2026; текущая правка
+    ADR входит в общий diff.
+outputs:
+- artifact: docs/adr/ADR-0038-tasty-readonly-boundaries.md
+  sha256: c3e979f148114276795a0b534b9cb1b175893a59ffd45d319b4bb2f0ff888f8a
+  consumers:
+  - 202
+- artifact: tsconfig.json
+  sha256: d7f5e9bf4ade28bf3313736b7c2715058ccf38810f47ed44642c4b24d791adbc
+  consumers:
+  - 202
+- artifact: apps/tasty-gateway/tsconfig.json
+  sha256: a6fb1618db185e5264bbf13110b266609ece32450bfa803a880a1f74e40fca51
+  consumers:
+  - 202
+- artifact: scripts/check-architecture.mjs
+  sha256: 5581a1ee12db8edc4477c4ad4e929ae23fcdb135f78c351fb8518edb42412b1c
+  consumers:
+  - 202
+- artifact: tests/architecture/checks.test.mjs
+  sha256: 7e71052269ac809cfe5f05e6727b65edcab56ab8bf5cd2ceda1d0c273235b9e7
+  consumers:
+  - 202
+- artifact: apps/tasty-gateway/src/infrastructure/provider/cart-decoder.ts
+  sha256: 7660a5135b5765470e334da5cb647b56c4ac0ed15d31d5648d59aff6ae38a7c3
+  consumers:
+  - 202
+- artifact: tests/tasty/cart-decoder.test.mjs
+  sha256: aa02332eef535a27494158994054b31ac874869ff0f3c515826c69a5453fa654
+  consumers:
+  - 202
+- artifact: docs/integrations/tasty/cart-decoder-inputs.md
+  sha256: 8e5058a6998ca5a9cfddb59aa02f237713f03fdeb239a6589a17431b7fcedb19
+  consumers:
+  - 202
+- artifact: evidence/tasty/cart-decoder-inputs/2026-10-28-observation.json
+  sha256: b9b9d56b23e47aa25b621148aab41dc19169c19c573228a540ca0bc875b2f906
+  consumers:
+  - 202
+verification:
+- command: pnpm install --frozen-lockfile
+  result: passed; 42 workspace projects, lockfile unchanged
+- command: pnpm exec tsc -b apps/tasty-gateway --pretty false && node --test tests/tasty/cart-decoder.test.mjs
+  result: passed; 5 tests
+- command: pnpm typecheck
+  result: passed
+- command: pnpm lint
+  result: passed
+- command: node --test --test-name-pattern='ARCH-PERMISSION' tests/architecture/checks.test.mjs
+  result: passed; 3 tests
+- command: pnpm architecture:check
+  result: passed
+- command: git diff --cached --check
+  result: passed
+limitations:
+- Decode не доказывает физическую полноту корзины, account/cartScope, CAS или recovery; completeness всегда Unproven.
+- Ground и варианты package проверены синтетически по частичному историческому evidence, не по полному raw ответу.
+- Inactive, blocked, gift, promocode, item_data и неизвестные типы отклоняются как unsupported; в decoder tests provider
+  calls не выполнялись; отдельно разрешённое исследование описано в research.
+- 'Runtime, provider integration, DB, deployment и допуск launch не проверялись; #13 и остальные prerequisites сохраняются.'
+status: locally-verified
