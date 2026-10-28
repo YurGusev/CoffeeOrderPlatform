@@ -1,0 +1,29 @@
+issue: 184
+baseCommit: e6439599be85a5fc8b83d99293064e877a2ff012
+inputs: []
+outputs:
+- artifact: docs/integrations/tasty/session.md
+  sha256: 1093f9062b2ba59c0f95d14ab6150ca034a0daff8bfab368fd9bb993a1673d62
+  consumers:
+  - 186
+- artifact: evidence/tasty/session/observations.json
+  sha256: 498fbc496a7793c73dbdb0797de985fdf1df72f23b43fca31ff32bc39a6dbf20
+  consumers:
+  - 186
+verification:
+- command: python3 -m json.tool evidence/tasty/session/observations.json
+  result: passed
+- command: sha256sum docs/integrations/tasty/session.md evidence/tasty/session/observations.json
+  result: passed; hashes указаны в outputs
+- command: git diff --cached --check
+  result: passed
+- command: for f in docs/integrations/tasty/session.md evidence/tasty/session/observations.json evidence/handoffs/issue-184.yaml;
+    do output=$(git diff --no-index --check /dev/null "$f" 2>&1); status=$?; [ "$status" -le 1 ] && [ -z "$output"
+    ] || exit 1; done
+  result: passed
+- manualReview: Сверка authorization и httpReceipts[6] с заметкой, приватности и SHA-256 исходников.
+  detail: Пройдено; исходные hashes и selectors указаны в session.md.
+limitations:
+- Фактические expiry, refresh, revocation, rate limits и восстановление после 401 не проверены.
+- 'Свежие provider calls, runtime и production не проверялись; интеграция в launch/runtime ждёт merge #13.'
+- Сохранённые исходники и их хеши не являются полными ответами HTTP.

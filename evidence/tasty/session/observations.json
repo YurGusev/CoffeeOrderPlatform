@@ -1,0 +1,34 @@
+{
+  "kind": "обезличенная производная проекция наблюдений; не provider response",
+  "api_base": "https://api.tastycoffee.ru/api/v1",
+  "date": "2026-10-25",
+  "receipts": [
+    {
+      "source": "первая заметка, разделы 2 и 9",
+      "observation": "login",
+      "method": "POST /auth/login",
+      "status": 200
+    },
+    {
+      "source": "первая заметка, раздел 2",
+      "observation": "Bearer на контрольном запросе",
+      "status": 200
+    },
+    {
+      "source": "первая заметка, разделы 2 и 9",
+      "observation": "bearer на контрольном запросе",
+      "status": 401
+    },
+    {
+      "source": "http-evidence.json httpReceipts[6] unauth-cart",
+      "observation": "корзина без токена",
+      "method": "GET /catalog/cart",
+      "status": 401
+    },
+    {
+      "source": "http-evidence.json authorization.expiresInSeconds; первая заметка, раздел 2",
+      "observation": "объявленный expires_in",
+      "seconds": 2592000
+    }
+  ]
+}
