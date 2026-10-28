@@ -1,0 +1,79 @@
+{
+  "kind": "обезличенная производная проекция наблюдений; не provider response",
+  "api_base": "https://api.tastycoffee.ru/api/v1",
+  "observedAt": "2026-10-25T16:56:30.356Z/2026-10-25T17:16:41.670Z",
+  "cases": [
+    {
+      "selector": "steps[15]",
+      "event": "quantity zero",
+      "product": "product-A",
+      "offer": "offer-bean-A",
+      "row": "row-bean-old",
+      "grind": null,
+      "package": "package-standard"
+    },
+    {
+      "selector": "steps[16]",
+      "event": "recreated",
+      "product": "product-A",
+      "offer": "offer-bean-A",
+      "row": "row-bean-new",
+      "grind": null,
+      "package": "package-standard"
+    },
+    {
+      "selector": "steps[17]",
+      "event": "grind omitted in request",
+      "product": "product-A",
+      "offer": "offer-ground-A",
+      "row": "row-ground-medium",
+      "grind": "grind-medium",
+      "package": "package-standard"
+    },
+    {
+      "selector": "steps[19]",
+      "event": "separate grind",
+      "product": "product-A",
+      "offer": "offer-ground-A",
+      "row": "row-ground-fine",
+      "grind": "grind-fine",
+      "package": "package-standard"
+    },
+    {
+      "selector": "steps[20]",
+      "event": "separate package",
+      "product": "product-A",
+      "offer": "offer-bean-A",
+      "row": "row-bean-other",
+      "grind": null,
+      "package": "package-white"
+    },
+    {
+      "selector": "steps[21]",
+      "event": "package changed",
+      "product": "product-A",
+      "offer": "offer-bean-A",
+      "row": "row-bean-other",
+      "grind": null,
+      "package": "package-kraft"
+    },
+    {
+      "selector": "steps[22]",
+      "event": "grind changed",
+      "product": "product-A",
+      "offer": "offer-ground-A",
+      "row": "row-ground-medium",
+      "grind": "grind-coarse",
+      "package": "package-standard"
+    },
+    {
+      "selector": "первая заметка, раздел 6",
+      "event": "no options; request fields absent, response null",
+      "product": "product-B",
+      "offer": "offer-other-B",
+      "row": "row-other-B",
+      "grind": null,
+      "package": null
+    }
+  ]
+}
