@@ -1,0 +1,29 @@
+{
+  "data": [
+    {
+      "id": 101,
+      "name": "Продукт A",
+      "type": "coffee",
+      "not_available": false,
+      "available_at": null,
+      "quantity_kg": 9999750,
+      "offers": [
+        {"id": 201, "name": "Зерно A", "type": "bean_coffee", "price": 490.8, "discount": 30, "weight": 250, "max_quantity": 39999, "not_available": false, "available_at": null, "grindings": [], "packages": [{"id": 301, "name": "Упаковка A"}]},
+        {"id": 202, "name": "Помол A", "type": "ground_coffee", "price": 490.8, "discount": null, "weight": 250, "max_quantity": 39999, "not_available": false, "available_at": null, "grindings": [{"id": 401, "name": "Помол A"}], "packages": [{"id": 301, "name": "Упаковка A"}]}
+      ]
+    },
+    {
+      "id": 102,
+      "name": "Продукт B",
+      "type": null,
+      "not_available": true,
+      "available_at": null,
+      "quantity_kg": 10000000,
+      "offers": [
+        {"id": 203, "name": "Зерно B", "type": "bean_coffee", "price": 604.5, "discount": null, "weight": 250, "max_quantity": 9999, "not_available": true, "available_at": null, "grindings": [], "packages": []},
+        {"id": 204, "name": "Зерно C", "type": null, "price": 425.8, "discount": null, "weight": 250, "max_quantity": 9999, "not_available": false, "available_at": null, "grindings": [], "packages": []}
+      ]
+    }
+  ],
+  "meta": {}
+}

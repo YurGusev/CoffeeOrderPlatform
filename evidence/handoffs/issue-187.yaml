@@ -1,0 +1,78 @@
+issue: 187
+baseCommit: c68bd899a7e71db28d47ec379791bf9a5876f065
+status: locally-verified
+scope: Первый этап raw lexeme carrier, принятый владельцем 28.10.2026; без Money и runtime.
+inputs:
+- issue: 181
+  acceptedMergeCommit: 4c828809896345810d3ce03e55adf27b5ac3a0a5
+  artifact: evidence/handoffs/issue-181.yaml
+  sha256: 74e45b946f23a403ec83f03c609805ff3d2d9548c4203582f89c28f918709be9
+- issue: 183
+  acceptedMergeCommit: 4c504ab9dada62ceec6a5e646111f9f521d98453
+  artifact: evidence/handoffs/issue-183.yaml
+  sha256: babaee983adf54a24bcd04a246af765bb52c4226ff792e5ef77afc32e94e1784
+- issue: 186
+  acceptedMergeCommit: c68bd899a7e71db28d47ec379791bf9a5876f065
+  artifact: evidence/handoffs/issue-186.yaml
+  sha256: 2ca711fa6de43925db9599ba0df88b59b470ee9fcc4410caf1c60e147b55487e
+outputs:
+- artifact: docs/adr/ADR-0038-tasty-readonly-boundaries.md
+  sha256: c3e979f148114276795a0b534b9cb1b175893a59ffd45d319b4bb2f0ff888f8a
+  consumers:
+  - 197
+- artifact: tsconfig.json
+  sha256: d7f5e9bf4ade28bf3313736b7c2715058ccf38810f47ed44642c4b24d791adbc
+  consumers:
+  - 197
+- artifact: apps/tasty-gateway/tsconfig.json
+  sha256: a6fb1618db185e5264bbf13110b266609ece32450bfa803a880a1f74e40fca51
+  consumers:
+  - 197
+- artifact: scripts/check-architecture.mjs
+  sha256: 5581a1ee12db8edc4477c4ad4e929ae23fcdb135f78c351fb8518edb42412b1c
+  consumers:
+  - 197
+- artifact: tests/architecture/checks.test.mjs
+  sha256: 7e71052269ac809cfe5f05e6727b65edcab56ab8bf5cd2ceda1d0c273235b9e7
+  consumers:
+  - 197
+- artifact: apps/tasty-gateway/src/infrastructure/provider/catalog-decoder.ts
+  sha256: f716fc810af96b1dfc28b650fba09aa5dec6b131321b256c4f4992fa3e1cc608
+  consumers:
+  - 197
+- artifact: tests/tasty/catalog-decoder.test.mjs
+  sha256: cb25e5c796f4bf95fab6fef542af1e941cfa98597a580bc86494eab5de2963a0
+  consumers:
+  - 197
+- artifact: docs/integrations/tasty/catalog-decoder-inputs.md
+  sha256: a5fda5ac3fe0b376e6f94c487e997c173a90c2f1a363acdf58f43946f4cb2393
+  consumers:
+  - 197
+- artifact: evidence/tasty/catalog-decoder-inputs/2026-10-28-observation.json
+  sha256: dd1671320817fbf1fe2b490fb95e6cbd1aa1cb639f1a2fd69d04963e164b401d
+  consumers:
+  - 197
+- artifact: evidence/tasty/catalog-decoder-inputs/catalog-decoder-fixture.json
+  sha256: 517634a17d940f3a396d0d0dc896c0f385d93b766b2978dc3208b23a0cb7238b
+  consumers:
+  - 197
+verification:
+- command: pnpm install --frozen-lockfile
+  result: passed; 42 workspace projects, lockfile unchanged
+- command: pnpm exec tsc -b apps/tasty-gateway --pretty false && node --test tests/tasty/catalog-decoder.test.mjs
+  result: passed; 2 tests
+- command: pnpm typecheck
+  result: passed
+- command: pnpm lint
+  result: passed
+- command: node --test --test-name-pattern='ARCH-PERMISSION' tests/architecture/checks.test.mjs
+  result: passed; 3 tests
+- command: pnpm architecture:check
+  result: passed
+- command: git diff --cached --check
+  result: passed
+limitations:
+- Владелец явно принял ADR и raw stage 28.10.2026; текущая редакция принятия находится в локальном diff.
+- 'Денежная нормализация, валюта, скидки, полная traversal и финансовый export #197 остаются NOT_PROVEN; успешный decode
+  не доказывает полноту каталога.'
+- 'Runtime, provider integration, DB, deployment и допуск launch не проверялись; #13 и остальные prerequisites сохраняются.'

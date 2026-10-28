@@ -1,0 +1,495 @@
+{
+  "kind": "Обезличенная производная выборка, не raw response и не принятый контракт decoder",
+  "observedAt": "2026-10-28T10:54:00.428Z",
+  "accountScope": "One operator research account; account ID excluded",
+  "apiBase": "https://api.tastycoffee.ru/api/v1",
+  "authorization": {
+    "source": "trusted config-bootstrap readTastyCredentials; credentials and token memory-only",
+    "tokenRetained": false,
+    "loginStatus": 200
+  },
+  "cycleScope": "В первом read-only цикле один login и три GET; здесь только два catalog GET. В этом цикле provider mutations не выполнялись.",
+  "numericLexemeMethod": "Node 26 JSON.parse reviver context.source, исходный numeric token до Number; не String(parsed).",
+  "receipts": [
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/products",
+      "startedAt": "2026-10-28T10:53:57.759Z",
+      "completedAt": "2026-10-28T10:53:59.981Z",
+      "status": 200,
+      "bodyBytes": 848659,
+      "transferCompleted": true,
+      "contentType": "application/json",
+      "originalBodySha256": "accb44fc8bf27ea13d2088434e6f2c8f9f64fb1234d0cb436c15c69745334eb2",
+      "originalBodyRetained": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/catalog/products?search=zz-input-research-no-match-20261028",
+      "startedAt": "2026-10-28T10:54:00.215Z",
+      "completedAt": "2026-10-28T10:54:00.411Z",
+      "status": 200,
+      "bodyBytes": 899,
+      "transferCompleted": true,
+      "contentType": "application/json",
+      "originalBodySha256": "5c6a92f9f7fb63946286daee7c2c711bc187afc39ca124c04fff0d8e3b6f92c6",
+      "originalBodyRetained": false
+    }
+  ],
+  "catalog": {
+    "kind": "Derived allowlisted observation, not a raw response or accepted decoder contract",
+    "envelopeFieldTypes": {
+      "data": [
+        "array"
+      ],
+      "meta": [
+        "object"
+      ]
+    },
+    "productFieldTypes": {
+      "available_at": [
+        "null",
+        "string"
+      ],
+      "card_product": [
+        "null",
+        "string"
+      ],
+      "category": [
+        "null"
+      ],
+      "category_hide_weight": [
+        "boolean"
+      ],
+      "category_id": [
+        "number"
+      ],
+      "has_info": [
+        "boolean"
+      ],
+      "id": [
+        "number"
+      ],
+      "image": [
+        "string"
+      ],
+      "info": [
+        "object"
+      ],
+      "is_new": [
+        "boolean"
+      ],
+      "keywords": [
+        "string"
+      ],
+      "label": [
+        "null",
+        "object"
+      ],
+      "name": [
+        "string"
+      ],
+      "not_available": [
+        "boolean"
+      ],
+      "offers": [
+        "array"
+      ],
+      "quantity_kg": [
+        "number"
+      ],
+      "skip_discount": [
+        "boolean"
+      ],
+      "sort_order": [
+        "number"
+      ],
+      "type": [
+        "null",
+        "string"
+      ]
+    },
+    "offerFieldTypes": {
+      "available_at": [
+        "null",
+        "string"
+      ],
+      "discount": [
+        "null",
+        "number"
+      ],
+      "grindings": [
+        "array"
+      ],
+      "id": [
+        "number"
+      ],
+      "image": [
+        "string"
+      ],
+      "is_coffee_or_tea": [
+        "boolean"
+      ],
+      "max_quantity": [
+        "number"
+      ],
+      "name": [
+        "string"
+      ],
+      "not_available": [
+        "boolean"
+      ],
+      "packages": [
+        "array"
+      ],
+      "price": [
+        "number"
+      ],
+      "type": [
+        "null",
+        "string"
+      ],
+      "weight": [
+        "number"
+      ]
+    },
+    "metaFieldTypes": {
+      "filters": [
+        "array"
+      ]
+    },
+    "productCount": 423,
+    "offerCount": 568,
+    "currencyFieldObserved": {
+      "product": false,
+      "offer": false,
+      "envelope": false,
+      "meta": false
+    },
+    "emptyFiltered": {
+      "status": 200,
+      "envelopeFieldTypes": {
+        "data": [
+          "array"
+        ],
+        "meta": [
+          "object"
+        ]
+      },
+      "dataCount": 0,
+      "metaFieldTypes": {
+        "filters": [
+          "array"
+        ],
+        "first_parent_category": [
+          "null"
+        ],
+        "opened_categories": [
+          "array"
+        ],
+        "parent_categories": [
+          "array"
+        ]
+      },
+      "proofScope": "Only this filtered query, not full catalog completeness"
+    },
+    "selectedProducts": [
+      {
+        "idAlias": "product-6",
+        "type": "coffee",
+        "not_available": false,
+        "quantityKgNumericLexeme": "1708250",
+        "offers": [
+          {
+            "idAlias": "offer-1",
+            "type": "bean_coffee",
+            "not_available": false,
+            "available_at": null,
+            "is_coffee_or_tea": true,
+            "price": {
+              "parsedType": "number",
+              "numericLexeme": "490.8",
+              "isNull": false
+            },
+            "discount": {
+              "parsedType": "null",
+              "numericLexeme": null,
+              "isNull": true
+            },
+            "weight": {
+              "parsedType": "number",
+              "numericLexeme": "250",
+              "isNull": false
+            },
+            "max_quantity": {
+              "parsedType": "number",
+              "numericLexeme": "6833",
+              "isNull": false
+            },
+            "grindingAliases": [],
+            "packageAliases": [
+              "packages-1",
+              "packages-2",
+              "packages-3",
+              "packages-4"
+            ]
+          },
+          {
+            "idAlias": "offer-2",
+            "type": "ground_coffee",
+            "not_available": false,
+            "available_at": null,
+            "is_coffee_or_tea": true,
+            "price": {
+              "parsedType": "number",
+              "numericLexeme": "490.8",
+              "isNull": false
+            },
+            "discount": {
+              "parsedType": "null",
+              "numericLexeme": null,
+              "isNull": true
+            },
+            "weight": {
+              "parsedType": "number",
+              "numericLexeme": "250",
+              "isNull": false
+            },
+            "max_quantity": {
+              "parsedType": "number",
+              "numericLexeme": "6833",
+              "isNull": false
+            },
+            "grindingAliases": [
+              "grindings-1",
+              "grindings-2",
+              "grindings-3"
+            ],
+            "packageAliases": [
+              "packages-1",
+              "packages-2",
+              "packages-3",
+              "packages-4"
+            ]
+          }
+        ]
+      },
+      {
+        "idAlias": "product-7",
+        "type": "coffee",
+        "not_available": false,
+        "quantityKgNumericLexeme": "149500",
+        "offers": [
+          {
+            "idAlias": "offer-3",
+            "type": "bean_coffee",
+            "not_available": false,
+            "available_at": null,
+            "is_coffee_or_tea": true,
+            "price": {
+              "parsedType": "number",
+              "numericLexeme": "604.5",
+              "isNull": false
+            },
+            "discount": {
+              "parsedType": "null",
+              "numericLexeme": null,
+              "isNull": true
+            },
+            "weight": {
+              "parsedType": "number",
+              "numericLexeme": "250",
+              "isNull": false
+            },
+            "max_quantity": {
+              "parsedType": "number",
+              "numericLexeme": "598",
+              "isNull": false
+            },
+            "grindingAliases": [],
+            "packageAliases": [
+              "packages-1",
+              "packages-2",
+              "packages-3",
+              "packages-4"
+            ]
+          }
+        ]
+      },
+      {
+        "idAlias": "product-8",
+        "type": "coffee",
+        "not_available": false,
+        "quantityKgNumericLexeme": "9999500",
+        "offers": [
+          {
+            "idAlias": "offer-4",
+            "type": "bean_coffee",
+            "not_available": false,
+            "available_at": null,
+            "is_coffee_or_tea": true,
+            "price": {
+              "parsedType": "number",
+              "numericLexeme": "425.8",
+              "isNull": false
+            },
+            "discount": {
+              "parsedType": "null",
+              "numericLexeme": null,
+              "isNull": true
+            },
+            "weight": {
+              "parsedType": "number",
+              "numericLexeme": "250",
+              "isNull": false
+            },
+            "max_quantity": {
+              "parsedType": "number",
+              "numericLexeme": "39998",
+              "isNull": false
+            },
+            "grindingAliases": [],
+            "packageAliases": [
+              "packages-1",
+              "packages-2",
+              "packages-3",
+              "packages-4"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "publicSources": [
+    {
+      "title": "Публичный шаблон договора поставки ООО «Тэйсти кофе»",
+      "sourcePage": "https://tastycoffee.ru/contacts/requisites",
+      "document": "https://storage.yandexcloud.net/coffee-opt-static/uploads/public/698/970/026/6989700263847628536009.pdf",
+      "checkedAt": "2026-10-28",
+      "selectors": [
+        "п. 2.2, стр. 1",
+        "п. 3.1, стр. 2"
+      ],
+      "summary": "Цена единицы согласовывается сторонами и указывается в счёте-фактуре, накладной или УПД. В разделе 3 не установлены правила API о валюте, scale, округлении и скидках.",
+      "scope": "Публичный шаблон; действующий договор исследованного аккаунта не подтверждён."
+    }
+  ],
+  "additionalObservation": {
+    "source": "/dev/shm/coffee-tasty-input-research-ZI05sn/numeric-target-observation.json",
+    "sourceSha256": "b3fe0bcc440bf9ae7488e918cd731d8b22f4fe37566f07da2bac61ff7a73fc29",
+    "numericLexemeMethod": "Node 26 JSON.parse reviver context.source; исходный numeric token, не String(parsed).",
+    "kind": "Additional derived numeric-token inventory and public-labelled target; not raw response or mutation authorization",
+    "observedAt": "2026-10-28T11:05:49.184Z",
+    "accountScope": "Same development credentials inventory; no account ID recorded",
+    "receipts": [
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "startedAt": "2026-10-28T11:05:45.931Z",
+        "completedAt": "2026-10-28T11:05:46.876Z",
+        "status": 200,
+        "bodyBytes": 55698,
+        "transferCompleted": true,
+        "contentType": "application/json"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/catalog/products",
+        "startedAt": "2026-10-28T11:05:46.879Z",
+        "completedAt": "2026-10-28T11:05:49.142Z",
+        "status": 200,
+        "bodyBytes": 848656,
+        "transferCompleted": true,
+        "contentType": "application/json",
+        "originalBodySha256": "3fe861c420e77c3ec625018e4c9d113a4ecbab9efced861b273fb42c80a9314a",
+        "originalBodyRetained": false
+      }
+    ],
+    "priceLexemeInventory": {
+      "offerCount": 568,
+      "numericLexemeCount": 568,
+      "fractionalDigitsHistogram": {
+        "0": 563,
+        "1": 5
+      },
+      "exponentLexemeCount": 0,
+      "negativeLexemeCount": 0,
+      "zeroLexemeCount": 0,
+      "proofScope": "This one response only; not an API money scale or rounding contract"
+    },
+    "target": {
+      "productMatches": 1,
+      "candidates": [
+        {
+          "productName": "Батч-Брю",
+          "offerName": "Кофе Tasty Coffee, смесь для фильтра \"Батч-Брю\", в зернах, 250 г",
+          "offerType": "bean_coffee",
+          "weightNumericLexeme": "250",
+          "priceNumericLexeme": "668",
+          "productNotAvailable": false,
+          "offerNotAvailable": false,
+          "packageNames": [
+            "Tasty Coffee",
+            "Белый",
+            "Крафт",
+            "Черный"
+          ],
+          "grindOptionsCount": 0
+        }
+      ],
+      "selectionRule": "one bean_coffee offer at weight 250, product and offer available; exact labelled package must be reconfirmed before any separately approved mutation"
+    },
+    "authorization": {
+      "loginStatus": 200,
+      "tokenRetained": false
+    }
+  },
+  "controlledObservation": {
+    "kind": "Обезличенные выбранные денежные факты одного явно разрешённого контролируемого цикла; не raw response",
+    "source": "/dev/shm/coffee-tasty-input-research-g0Qz5O/controlled-row-observation.json",
+    "sourceSha256": "706d409fc176e2c5c2db6f52949053bfb0330d0dcf07c32042cf8863986c63d4",
+    "startedAt": "2026-10-28T11:11:12.918Z",
+    "completedAt": "2026-10-28T11:11:18.110Z",
+    "approvalScope": "Один ADD и один DELETE собственной временной строки; checkout не разрешён.",
+    "requestCounts": {
+      "login": 1,
+      "GET": 5,
+      "ADD": 1,
+      "DELETE": 1
+    },
+    "allStatuses": 200,
+    "baselineRestored": true,
+    "rawBodiesRetained": false,
+    "credentialsRetained": false,
+    "selection": {
+      "productName": "Батч-Брю",
+      "offerType": "bean_coffee",
+      "weightNumericLexeme": "250",
+      "packageName": "Tasty Coffee",
+      "quantity": 1,
+      "offerPriceNumericLexeme": "668"
+    },
+    "selectedRowPrice": {
+      "type": "number",
+      "numericLexeme": "668"
+    },
+    "meta": {
+      "price_without_discount": {
+        "type": "number",
+        "numericLexeme": "668",
+        "isNull": false
+      },
+      "discount": {
+        "type": "number",
+        "numericLexeme": "30",
+        "isNull": false
+      },
+      "price": {
+        "type": "number",
+        "numericLexeme": "467.6",
+        "isNull": false
+      }
+    },
+    "limitations": "Одна обычная упаковка; не доказаны валюта, общая формула, округление или распределение net-цены по строкам."
+  }
+}
