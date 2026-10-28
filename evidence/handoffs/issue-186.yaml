@@ -1,0 +1,60 @@
+issue: 186
+baseCommit: 7a1bac3aaef268d83d8381f1043f171d79940f26
+status: locally-verified
+scope: Proposed ADR границ будущей read-only итерации Tasty; runtime не меняется.
+inputs:
+- issue: 181
+  acceptedMergeCommit: 4c828809896345810d3ce03e55adf27b5ac3a0a5
+  artifact: evidence/handoffs/issue-181.yaml
+  sha256: 74e45b946f23a403ec83f03c609805ff3d2d9548c4203582f89c28f918709be9
+- issue: 182
+  acceptedMergeCommit: c0a9188af53539ccbe89b1aa25cfb814d5b9e296
+  artifact: evidence/handoffs/issue-182.yaml
+  sha256: 4634efeb3ac3172a7a908b4952ca64db65f832c0a79cd224e733fafa34b63e03
+- issue: 183
+  acceptedMergeCommit: 4c504ab9dada62ceec6a5e646111f9f521d98453
+  artifact: evidence/handoffs/issue-183.yaml
+  sha256: babaee983adf54a24bcd04a246af765bb52c4226ff792e5ef77afc32e94e1784
+- issue: 184
+  acceptedMergeCommit: 7a1bac3aaef268d83d8381f1043f171d79940f26
+  artifact: evidence/handoffs/issue-184.yaml
+  sha256: 2c6fda83f3de87a64b07299ae85aebc359d51c92a51483e620634070e0860b40
+outputs:
+- artifact: docs/adr/ADR-0038-tasty-readonly-boundaries.md
+  sha256: 40eaf6ae373db0e57e39f026903d029077c8324e1910863379a2ac48c1714861
+  consumers:
+  - 187
+  - 188
+  - 194
+  - 195
+  - 196
+  - 197
+  - 198
+  - 199
+  - 200
+  - 201
+  - 202
+verification:
+- command: python3 -c 'import yaml; yaml.safe_load(open("evidence/handoffs/issue-186.yaml"))'
+  result: passed
+- command: sha256sum docs/adr/ADR-0038-tasty-readonly-boundaries.md evidence/handoffs/issue-181.yaml evidence/handoffs/issue-182.yaml
+    evidence/handoffs/issue-183.yaml evidence/handoffs/issue-184.yaml
+  result: passed
+- command: python3 -c 'import pathlib,re; p=pathlib.Path("docs/adr/ADR-0038-tasty-readonly-boundaries.md"); assert
+    all((p.parent/x).is_file() for x in re.findall(r"\]\(([^)]+)\)",p.read_text())); print("links PASS")'
+  result: passed
+- command: git diff --cached --check
+  result: passed
+- command: for f in docs/adr/ADR-0038-tasty-readonly-boundaries.md evidence/handoffs/issue-186.yaml; do output=$(git
+    diff --no-index --check /dev/null "$f" 2>&1); status=$?; [ "$status" -le 1 ] && [ -z "$output" ] || exit 1;
+    done
+  result: passed
+  detail: Для новых файлов diff возвращает 1; сообщений о whitespace нет.
+- manualReview: 'Сверка live issues #186–#188/#194–#202, входных evidence, ownership и отмеченных AROMA source symbols;
+    четыре merge commit являются предками baseCommit.'
+  result: passed
+limitations:
+- ADR Proposed; только владелец Architecture может принять его явно, merge не означает автоматическое Accepted.
+- 'Полный decoder corpus, money precision/currency и cart completeness не доказаны; #187/#188 остаются blocked,
+  полный export/activation не разрешены; account binding требует отдельного доказательства для #196/#202.'
+- 'Интеграция в launch/runtime ждёт merge #13; provider HTTP, runtime и production не проверялись.'
