@@ -1,0 +1,495 @@
+{
+  "kind": "обезличенная производная проекция; не raw HTTP body",
+  "observedAt": "2026-10-28T10:54:00.428Z",
+  "apiBase": "https://api.tastycoffee.ru/api/v1",
+  "sourceProjectionSha256": "841ef16cd06b7eb9f572035ff504e281a799f5b8df42e223dfb7e1e34546c435",
+  "requestSummary": {
+    "loginStatus": 200,
+    "tokenRetained": false,
+    "getCount": 3,
+    "getStatuses": [
+      200,
+      200,
+      200
+    ]
+  },
+  "cartReceipt": {
+    "method": "GET",
+    "path": "/api/v1/catalog/cart",
+    "startedAt": "2026-10-28T10:54:00.027Z",
+    "completedAt": "2026-10-28T10:54:00.215Z",
+    "status": 200,
+    "bodyBytes": 2972,
+    "transferCompleted": true
+  },
+  "originalCartBodySha256Reported": "09771410c3bb2caafd4a91b4e165477557e6f1dc9a18f4dc6c956d3f9fe3e4fe",
+  "cart": {
+    "envelopeFieldTypes": {
+      "data": [
+        "array"
+      ],
+      "meta": [
+        "object"
+      ]
+    },
+    "dataCount": 0,
+    "rowFieldTypes": {},
+    "metaFieldTypes": {
+      "categories": [
+        "array"
+      ],
+      "coffee_weight": [
+        "number"
+      ],
+      "discount": [
+        "number"
+      ],
+      "is_ambassador": [
+        "boolean"
+      ],
+      "last_order_address": [
+        "object"
+      ],
+      "multiplicity": [
+        "null"
+      ],
+      "price": [
+        "number"
+      ],
+      "price_without_discount": [
+        "number"
+      ],
+      "tea_weight": [
+        "number"
+      ],
+      "warning": [
+        "string"
+      ],
+      "weight": [
+        "number"
+      ]
+    },
+    "topLevelPaginationKeys": [],
+    "metaPaginationKeys": [],
+    "price": {
+      "type": "number",
+      "numericLexeme": "0"
+    },
+    "excludedPersonalMetadataValues": true
+  },
+  "historical": {
+    "httpEvidenceSha256": "4b9c132523826de7528adef56fe98fe9fd1d1c3a468be07f06dddeac341eb9ce",
+    "selector": "schema.cartFields",
+    "cartFieldTypes": {
+      "active": [
+        "boolean"
+      ],
+      "grinding_id": [
+        "null"
+      ],
+      "grindings": [
+        "array"
+      ],
+      "id": [
+        "number"
+      ],
+      "image": [
+        "string"
+      ],
+      "is_blocked": [
+        "boolean"
+      ],
+      "is_gift": [
+        "boolean"
+      ],
+      "is_promocode": [
+        "boolean"
+      ],
+      "item_data": [
+        "null"
+      ],
+      "max_quantity": [
+        "number"
+      ],
+      "name": [
+        "string"
+      ],
+      "offer_id": [
+        "number"
+      ],
+      "package_id": [
+        "number"
+      ],
+      "packages": [
+        "array"
+      ],
+      "price": [
+        "number"
+      ],
+      "product": [
+        "object"
+      ],
+      "quantity": [
+        "number"
+      ],
+      "type": [
+        "string"
+      ],
+      "weight": [
+        "number"
+      ]
+    },
+    "developerFixturesSha256": "9841fe68dd3db866344d7dd6a5e97d676854a2a28f191d7fbfd5dcbadbb620db",
+    "fixtureSelector": "cartTen.data[*]",
+    "selectedFixtureFields": [
+      "grinding_id",
+      "id",
+      "is_promocode",
+      "item_data",
+      "offer_id",
+      "package_id",
+      "quantity"
+    ],
+    "rawRowsIncluded": false
+  },
+  "target": {
+    "status": "OBSERVED_BASELINE_RESTORED",
+    "productName": "Батч-Брю",
+    "offerName": "Кофе Tasty Coffee, смесь для фильтра \"Батч-Брю\", в зернах, 250 г",
+    "offerType": "bean_coffee",
+    "weightNumericLexeme": "250",
+    "packageName": "Tasty Coffee",
+    "grindOptionsCount": 0,
+    "quantity": 1,
+    "sourceSha256": "b3fe0bcc440bf9ae7488e918cd731d8b22f4fe37566f07da2bac61ff7a73fc29",
+    "sourceObservedAt": "2026-10-28T11:05:49.184Z",
+    "secondCycleLoginStatus": 200,
+    "catalogReceipt": {
+      "method": "GET",
+      "path": "/api/v1/catalog/products",
+      "startedAt": "2026-10-28T11:05:46.879Z",
+      "completedAt": "2026-10-28T11:05:49.142Z",
+      "status": 200,
+      "bodyBytes": 848656,
+      "transferCompleted": true
+    }
+  },
+  "controlledRowObservation": {
+    "status": "OBSERVED_BASELINE_RESTORED",
+    "sourceSha256": "706d409fc176e2c5c2db6f52949053bfb0330d0dcf07c32042cf8863986c63d4",
+    "startedAt": "2026-10-28T11:11:12.918Z",
+    "completedAt": "2026-10-28T11:11:18.110Z",
+    "dispatches": {
+      "add": 1,
+      "delete": 1
+    },
+    "receipts": [
+      {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "startedAt": "2026-10-28T11:11:13.734Z",
+        "completedAt": "2026-10-28T11:11:14.627Z",
+        "status": 200,
+        "bodyBytes": 55698,
+        "transferCompleted": true
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/catalog/products",
+        "startedAt": "2026-10-28T11:11:14.629Z",
+        "completedAt": "2026-10-28T11:11:16.826Z",
+        "status": 200,
+        "bodyBytes": 848660,
+        "transferCompleted": true
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/catalog/cart",
+        "startedAt": "2026-10-28T11:11:16.877Z",
+        "completedAt": "2026-10-28T11:11:17.056Z",
+        "status": 200,
+        "bodyBytes": 2972,
+        "transferCompleted": true,
+        "originalBodySha256": "09771410c3bb2caafd4a91b4e165477557e6f1dc9a18f4dc6c956d3f9fe3e4fe"
+      },
+      {
+        "method": "POST",
+        "path": "/api/v1/catalog/cart",
+        "startedAt": "2026-10-28T11:11:17.058Z",
+        "completedAt": "2026-10-28T11:11:17.304Z",
+        "status": 200,
+        "bodyBytes": 11750,
+        "transferCompleted": true,
+        "originalBodySha256": "b32163ee17fc07e98ba08bf4602c9623a48c4d3ad1263cc53738ca4c150ab827"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/catalog/cart",
+        "startedAt": "2026-10-28T11:11:17.305Z",
+        "completedAt": "2026-10-28T11:11:17.522Z",
+        "status": 200,
+        "bodyBytes": 11750,
+        "transferCompleted": true,
+        "originalBodySha256": "b32163ee17fc07e98ba08bf4602c9623a48c4d3ad1263cc53738ca4c150ab827"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/catalog/cart",
+        "startedAt": "2026-10-28T11:11:17.526Z",
+        "completedAt": "2026-10-28T11:11:17.745Z",
+        "status": 200,
+        "bodyBytes": 11750,
+        "transferCompleted": true,
+        "originalBodySha256": "b32163ee17fc07e98ba08bf4602c9623a48c4d3ad1263cc53738ca4c150ab827"
+      },
+      {
+        "method": "DELETE",
+        "path": "/api/v1/catalog/cart/{own-row}",
+        "startedAt": "2026-10-28T11:11:17.747Z",
+        "completedAt": "2026-10-28T11:11:17.934Z",
+        "status": 200,
+        "bodyBytes": 2972,
+        "transferCompleted": true,
+        "originalBodySha256": "09771410c3bb2caafd4a91b4e165477557e6f1dc9a18f4dc6c956d3f9fe3e4fe"
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/catalog/cart",
+        "startedAt": "2026-10-28T11:11:17.934Z",
+        "completedAt": "2026-10-28T11:11:18.110Z",
+        "status": 200,
+        "bodyBytes": 2972,
+        "transferCompleted": true,
+        "originalBodySha256": "09771410c3bb2caafd4a91b4e165477557e6f1dc9a18f4dc6c956d3f9fe3e4fe"
+      }
+    ],
+    "baseline": {
+      "dataCount": 0,
+      "envelopeFieldTypes": {
+        "data": [
+          "array"
+        ],
+        "meta": [
+          "object"
+        ]
+      }
+    },
+    "filled": {
+      "dataCount": 1,
+      "envelopeFieldTypes": {
+        "data": [
+          "array"
+        ],
+        "meta": [
+          "object"
+        ]
+      },
+      "rowFieldTypes": {
+        "active": [
+          "boolean"
+        ],
+        "grinding_id": [
+          "null"
+        ],
+        "grindings": [
+          "array"
+        ],
+        "id": [
+          "number"
+        ],
+        "image": [
+          "string"
+        ],
+        "is_blocked": [
+          "boolean"
+        ],
+        "is_gift": [
+          "boolean"
+        ],
+        "is_promocode": [
+          "boolean"
+        ],
+        "item_data": [
+          "null"
+        ],
+        "max_quantity": [
+          "number"
+        ],
+        "name": [
+          "string"
+        ],
+        "offer_id": [
+          "number"
+        ],
+        "package_id": [
+          "number"
+        ],
+        "packages": [
+          "array"
+        ],
+        "price": [
+          "number"
+        ],
+        "product": [
+          "object"
+        ],
+        "quantity": [
+          "number"
+        ],
+        "type": [
+          "string"
+        ],
+        "weight": [
+          "number"
+        ]
+      },
+      "selectedRow": {
+        "id": {
+          "type": "number",
+          "alias": "own-row"
+        },
+        "offer_id": {
+          "type": "number",
+          "alias": "selected-offer_id"
+        },
+        "quantity": {
+          "type": "number",
+          "numericLexeme": "1"
+        },
+        "grinding_id": {
+          "type": "null",
+          "alias": null
+        },
+        "package_id": {
+          "type": "number",
+          "alias": "selected-package_id"
+        },
+        "is_gift": false,
+        "is_promocode": false,
+        "active": true,
+        "is_blocked": false,
+        "item_data": null,
+        "type": "bean_coffee",
+        "product": {
+          "id": {
+            "type": "number",
+            "alias": "selected-product"
+          },
+          "fieldTypes": {
+            "available_at": [
+              "null"
+            ],
+            "card_product": [
+              "null"
+            ],
+            "category": [
+              "null"
+            ],
+            "category_hide_weight": [
+              "boolean"
+            ],
+            "category_id": [
+              "number"
+            ],
+            "has_info": [
+              "boolean"
+            ],
+            "id": [
+              "number"
+            ],
+            "image": [
+              "string"
+            ],
+            "info": [
+              "object"
+            ],
+            "is_new": [
+              "boolean"
+            ],
+            "keywords": [
+              "string"
+            ],
+            "label": [
+              "null"
+            ],
+            "name": [
+              "string"
+            ],
+            "not_available": [
+              "boolean"
+            ],
+            "offers": [
+              "array"
+            ],
+            "packages": [
+              "array"
+            ],
+            "quantity_kg": [
+              "number"
+            ],
+            "skip_discount": [
+              "boolean"
+            ],
+            "sort_order": [
+              "number"
+            ],
+            "type": [
+              "string"
+            ]
+          }
+        }
+      },
+      "meta": {
+        "price": {
+          "type": "number",
+          "numericLexeme": "467.6",
+          "isNull": false
+        },
+        "price_without_discount": {
+          "type": "number",
+          "numericLexeme": "668",
+          "isNull": false
+        },
+        "discount": {
+          "type": "number",
+          "numericLexeme": "30",
+          "isNull": false
+        },
+        "weight": {
+          "type": "number",
+          "numericLexeme": "250",
+          "isNull": false
+        },
+        "coffee_weight": {
+          "type": "number",
+          "numericLexeme": "250",
+          "isNull": false
+        },
+        "tea_weight": {
+          "type": "number",
+          "numericLexeme": "0",
+          "isNull": false
+        },
+        "multiplicity": {
+          "type": "null",
+          "numericLexeme": null,
+          "isNull": true
+        }
+      }
+    },
+    "restored": {
+      "dataCount": 0,
+      "envelopeFieldTypes": {
+        "data": [
+          "array"
+        ],
+        "meta": [
+          "object"
+        ]
+      },
+      "fullInMemoryBaselineComparisonEqual": true
+    },
+    "rawBodiesRetained": false,
+    "credentialsRetained": false
+  }
+}
