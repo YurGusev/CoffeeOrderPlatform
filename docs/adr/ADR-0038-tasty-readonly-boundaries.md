@@ -3,7 +3,7 @@
 - Статус: **Accepted**. Владелец Architecture явно принял ADR 28.10.2026
   в текущей беседе и разрешил первый этап #187 без преобразования в Money.
   Это не разрешение runtime admission или новых provider mutations.
-- Дата: 2026-10-28. Scope: принятое решение для локальных декодеров, без изменения runtime.
+- Дата: 2026-10-28. Scope: локальные provider modules без изменения runtime.
 - Основание: [scope](../launch/00_SCOPE_AND_DECISIONS.md),
   [ownership](../launch/05_DATA_OWNERSHIP.md), [delivery graph](../launch/13_DELIVERY_DEPENDENCY_GRAPH.md),
   принятые исследования [каталога](../integrations/tasty/catalog.md),
@@ -44,7 +44,13 @@ caller и account/cartScope проверяются до вызова, полны
 Bearer и credentials не попадают в логи, browser или события. Секреты не
 появляются в данном ADR; точные scopes, service identity, маршруты, permissions,
 deadlines, лимиты и условия повторной авторизации требуют отдельной конкретизации
-и доказательств до реализации. Объявленный TTL не доказывает срок жизни токена.
+и доказательств до реализации. Для изолированного HTTP-клиента #194 владелец
+28.10.2026 явно принял [конкретизацию](../integrations/tasty/http-policy.md):
+фиксированные операции GET catalog/cart и отдельный auth POST login,
+обязательные `timeoutMs`/`maxResponseBytes` без production defaults, общий deadline
+до конца bounded body и безопасные typed failures без повторения запроса.
+Runtime/config wiring и account/cartScope проверяются отдельно в #196.
+Объявленный TTL не доказывает срок жизни токена.
 
 ## Что показывает текущий код
 
@@ -107,7 +113,7 @@ meta и нулевых наблюдённых итогов. Результат �
 полного physical snapshot. Ни meta, ни лишние provider fields не копируются
 в output/error. Успешный decode не разрешает mutation или автоматическую очистку.
 
-Привязка account/cartScope отдельно блокирует transport/runtime и internal read
+Привязка account/cartScope отдельно блокирует live transport/runtime и internal read
 #196/#202; чистый decoder не определяет авторизацию или выбор аккаунта.
 Для полного export/activation дополнительно нужны полнота обхода и сигнал
 завершения; число 423 и filtered empty не являются критерием. Финансовые правила,

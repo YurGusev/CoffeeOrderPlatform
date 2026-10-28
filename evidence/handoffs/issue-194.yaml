@@ -1,0 +1,62 @@
+issue: 194
+baseCommit: 1a5aab877429030b11d09f3eda962b6b84829202
+status: locally-verified
+scope: Изолированный HTTP-клиент и явно принятая владельцем локальная policy; без runtime/config/provider calls.
+inputs:
+- issue: 184
+  acceptedMergeCommit: 7a1bac3aaef268d83d8381f1043f171d79940f26
+  artifact: evidence/handoffs/issue-184.yaml
+  sha256: 2c6fda83f3de87a64b07299ae85aebc359d51c92a51483e620634070e0860b40
+- issue: 186
+  acceptedMergeCommit: c68bd899a7e71db28d47ec379791bf9a5876f065
+  artifact: evidence/handoffs/issue-186.yaml
+  sha256: 2ca711fa6de43925db9599ba0df88b59b470ee9fcc4410caf1c60e147b55487e
+- issue: 187
+  acceptedMergeCommit: 7b2eb6056b12adbd1987e9bd647331ad59c1d58f
+  artifact: docs/adr/ADR-0038-tasty-readonly-boundaries.md
+  sha256: c3e979f148114276795a0b534b9cb1b175893a59ffd45d319b4bb2f0ff888f8a
+outputs:
+- artifact: apps/tasty-gateway/src/infrastructure/provider/http-client.ts
+  sha256: 6d2a927848bb22fd077cd710bfd9508782877b7e40614f147b39ae259e7e579a
+  consumers:
+  - 195
+  - 196
+- artifact: tests/tasty/provider-http.test.mjs
+  sha256: a5a38ac4383d8f910917560b91d9a90e46be56d6fc1551c585f5d3b6bf10b0e1
+  consumers:
+  - 195
+  - 196
+- artifact: docs/integrations/tasty/http-policy.md
+  sha256: 8c60928fc00e147002aafbe7c13e0712d9f45351b14f8a6e24b7ebb6c96bb3d9
+  consumers:
+  - 195
+  - 196
+- artifact: docs/adr/ADR-0038-tasty-readonly-boundaries.md
+  sha256: a1cdc51024305f77a6acdbd9c51d5e6354c2c742a345d8a6f86edabd5e1543b5
+  consumers:
+  - 195
+  - 196
+verification:
+- command: pnpm install --frozen-lockfile
+  result: passed; 42 projects, lockfile unchanged
+- command: pnpm exec tsc -b apps/tasty-gateway --pretty false && node --test tests/tasty/provider-http.test.mjs
+  result: passed; 6 tests including 5 subtests; TASTY-HTTP-001 buffered deadline regression
+- command: pnpm typecheck
+  result: passed after TASTY-HTTP-001 fix
+- command: pnpm lint
+  result: passed after TASTY-HTTP-001 fix
+- command: pnpm architecture:check
+  result: passed; no runtime/permission/config changes
+- command: git diff --check
+  result: passed
+- command: pnpm exec tsc -b apps/tasty-gateway --pretty false && node --test tests/tasty/*.test.mjs
+  result: passed; 13/13 tests after TASTY-HTTP-001, independent tester
+- manualReview: Проверены YAML, относительные ссылки документации, accepted input ancestry и hashes, все 4 output
+    hashes.
+  result: passed
+limitations:
+- Все HTTP-запросы в тестах идут в локальный fixture server; live Tasty и production не проверялись.
+- 'Значения timeoutMs/maxResponseBytes обязательны без defaults; runtime/config wiring и scoped materialization
+  остаются #196.'
+- Account/cartScope, полнота каталога/корзины, money normalization, refresh/logout/revocation не доказаны и не реализованы.
+- Никакие provider mutation, retry, deployment или merge не выполнялись.
