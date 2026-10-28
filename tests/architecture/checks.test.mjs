@@ -507,6 +507,29 @@ void test("GREEN ARCH-PERMISSION: native nginx image needs no Node permission ma
   }
 });
 
+void test("ARCH-PERMISSION: source-only decoders stay offline; a main or package requires permissions", async () => {
+  const root = await mkdtemp(join(tmpdir(), "coffee-offline-decoder-"));
+  const app = join(root, "apps/tasty-gateway");
+  try {
+    await mkdir(join(app, "src/infrastructure/provider"), {recursive: true});
+    await mkdir(join(root, "config"));
+    await writeFile(join(root, "config/platform.yaml"), "schemaVersion: 1\n");
+    await writeFile(join(app, "src/infrastructure/provider/decoder.ts"), "export const decode = (value: unknown): unknown => value;\n");
+    const offline = run("check-architecture.mjs", root);
+    assert.equal(offline.status, 0, output(offline));
+    for (const file of ["src/main.ts", "package.json"]) {
+      const path = join(app, file);
+      await writeFile(path, file.endsWith(".json") ? "{}\n" : "export {};\n");
+      const runtime = run("check-architecture.mjs", root);
+      assert.notEqual(runtime.status, 0, output(runtime));
+      assert.match(output(runtime), /ARCH-PERMISSION/);
+      await rm(path);
+    }
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
 void test("RED: native librdkafka source patch cannot drift from its pinned checksum",async()=>{
   const root=await toolchainRoot();
   try{

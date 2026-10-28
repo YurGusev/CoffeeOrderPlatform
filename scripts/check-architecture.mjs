@@ -506,9 +506,9 @@ async function checkPermissionManifests(root) {
     ? (await readdir(join(root, 'apps'), { withFileTypes: true })).filter((entry) => {
         if (!entry.isDirectory()) return false;
         const appRoot = join(root, 'apps', entry.name);
-        // Native images have no Node Permission Model; keep the check for all Node sources.
+        // Native images and source-only modules are not runtimes; entrypoints/packages require permissions.
         if (entry.name === 'web') return existsSync(join(appRoot, 'src/main.ts'));
-        return existsSync(join(appRoot, 'src')) || existsSync(join(appRoot, 'package.json'));
+        return existsSync(join(appRoot, 'src/main.ts')) || existsSync(join(appRoot, 'package.json'));
       })
     : [];
   const candidates = ['permission-manifest.json', 'permissions.json', 'permission.json'];
