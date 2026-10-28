@@ -1,0 +1,34 @@
+issue: 185
+baseCommit: 4c504ab9dada62ceec6a5e646111f9f521d98453
+inputs:
+  - issue: 182
+    acceptedMergeCommit: c0a9188af53539ccbe89b1aa25cfb814d5b9e296
+    artifact: evidence/handoffs/issue-182.yaml
+    sha256: 4634efeb3ac3172a7a908b4952ca64db65f832c0a79cd224e733fafa34b63e03
+outputs:
+  - artifact: docs/integrations/tasty/recovery.md
+    sha256: a619858e7b1ee7e878769ada3cfc6f76dd640d60c216212dc00d92724075d272
+    consumers: [будущая отдельно специфицированная задача controlled mutation]
+verification:
+  - command: git merge-base --is-ancestor c0a9188af53539ccbe89b1aa25cfb814d5b9e296 HEAD
+    result: passed
+  - command: git show c0a9188af53539ccbe89b1aa25cfb814d5b9e296:evidence/handoffs/issue-182.yaml | sha256sum
+    result: passed; совпадает с input
+  - command: sha256sum evidence/handoffs/issue-182.yaml docs/integrations/tasty/identity.md evidence/tasty/identity/observations.json docs/integrations/tasty/recovery.md
+    result: passed; input и output hashes совпадают
+  - command: test -f docs/integrations/tasty/identity.md && test -f evidence/tasty/identity/observations.json && test -f docs/launch/04_AROMA_CART_SAFETY.md && test -f docs/launch/19_AROMA_CONVERGENCE_IMPLEMENTATION_SPEC.md
+    result: passed
+  - command: python3 -c 'import yaml; yaml.safe_load(open("evidence/handoffs/issue-185.yaml"))'
+    result: passed
+  - command: python3 -c 'import yaml; assert any("#13" in x for x in yaml.safe_load(open("evidence/handoffs/issue-185.yaml"))["limitations"])'
+    result: passed
+  - command: git diff --check
+    result: passed
+  - command: for f in docs/integrations/tasty/recovery.md evidence/handoffs/issue-185.yaml; do output=$(git diff --no-index --check /dev/null "$f" 2>&1); status=$?; [ "$status" -le 1 ] && [ -z "$output" ] || exit 1; done
+    result: passed
+  - manualReview: Сверка матрицы с issue, identity #182 и референсной спецификацией AROMA.
+    detail: Все сценарии NOT_RUN; исходный B0, рабочий B1, ограничения dispatch и внешнего writer описаны.
+limitations:
+  - Все эксперименты, включая response-loss, restart и действия внешнего writer, не выполнялись; guarantees для Tasty не доказаны.
+  - Shared-writer policy, принятый Tasty decoder/identity для полного сравнения корзины и завершение старого in-flight dispatch остаются blockers до новых unsafe действий.
+  - "Будущая controlled mutation требует Accepted ADR, доказанных входов и отдельного разрешения; интеграция в launch/runtime ждёт merge #13."
