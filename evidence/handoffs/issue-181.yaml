@@ -1,0 +1,36 @@
+issue: 181
+baseCommit: e6439599be85a5fc8b83d99293064e877a2ff012
+status: locally-verified
+scope: Историческое исследование чтения каталога и количества Tasty; runtime не меняется.
+inputs: []
+outputs:
+- artifact: docs/integrations/tasty/catalog.md
+  sha256: a3e9334c78f36f19dad04c545684dc05a37e3251b9c5877ec9ec3e7b62508e3a
+  consumers:
+  - 186
+  - 187
+- artifact: evidence/tasty/catalog/observations.json
+  sha256: 93be426625715216fc20da3354451385cda30c11c98f7476cf6b8256c576a5a2
+  consumers:
+  - 186
+  - 187
+verification:
+- command: python3 -m json.tool evidence/tasty/catalog/observations.json
+  result: passed
+- command: sha256sum docs/integrations/tasty/catalog.md evidence/tasty/catalog/observations.json
+  result: passed
+- command: git diff --cached --check
+  result: passed
+- command: for f in docs/integrations/tasty/catalog.md evidence/tasty/catalog/observations.json evidence/handoffs/issue-181.yaml;
+    do output=$(git diff --no-index --check /dev/null "$f" 2>&1); status=$?; [ "$status" -le 1 ] && [ -z "$output"
+    ] || exit 1; done
+  result: passed
+  detail: Код 1 ожидаем для разных файлов; сообщений о пробелах нет.
+- result: passed
+  manualReview: Ручная сверка с указанными selectors исходных заметки и JSON, проверка secrets/PII
+limitations:
+- 'Полнота и pagination NOT_PROVEN: блокируют полный export и activation с удалением отсутствующего хвоста для #186/#187.'
+- Семантика quantity_kg, пределы количества и причина исчезновения товара не доказаны; данные одного аккаунта за
+  25.10.2026 не подтверждают текущее поведение.
+- 'Исходные summaries не являются raw responses; runtime, повторные provider calls и production не проверялись.
+  Интеграция в launch/runtime ждёт merge #13.'

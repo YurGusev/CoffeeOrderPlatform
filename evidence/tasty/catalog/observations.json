@@ -1,0 +1,104 @@
+{
+  "kind": "Обезличенная производная сводка выбранных полей; не raw HTTP response",
+  "api_base": "https://api.tastycoffee.ru/api/v1",
+  "observation_interval_utc": [
+    "2026-10-25T16:56:30.356Z",
+    "2026-10-25T17:16:41.670Z"
+  ],
+  "account_scope": "Один исследованный аккаунт Tasty; без идентификатора аккаунта",
+  "sources": [
+    {
+      "path_relative_to_vault": "Проекты/CoffeeOrderPlatform/Tasty Coffee — исследование API для разработки и пакетной загрузки.md",
+      "sha256": "9d00987bf84cc608b3bd6cdab044885017ea960d507e9f2c0f15fafd306c7669"
+    },
+    {
+      "path_relative_to_vault": "Вложения/CoffeeOrderPlatform/Tasty/2026-10-25/http-evidence.json",
+      "sha256": "4b9c132523826de7528adef56fe98fe9fd1d1c3a468be07f06dddeac341eb9ce"
+    },
+    {
+      "path_relative_to_vault": "Вложения/CoffeeOrderPlatform/Tasty/2026-10-25/developer-fixtures.json",
+      "sha256": "9841fe68dd3db866344d7dd6a5e97d676854a2a28f191d7fbfd5dcbadbb620db"
+    }
+  ],
+  "observations": [
+    {
+      "id": "catalog-pages",
+      "endpoint": "GET /catalog/products",
+      "queries": [
+        "sort=name-asc",
+        "sort=name-asc&page=2&per_page=2"
+      ],
+      "status": 200,
+      "count_each": 423,
+      "same_ids_and_order": true,
+      "selectors": [
+        "исследование §5.1",
+        "http-evidence.json: httpReceipts[label=catalog-name-asc|catalog-page2-limit2]"
+      ]
+    },
+    {
+      "id": "catalog-drift",
+      "endpoint": "GET /catalog/products",
+      "queries": [
+        "sort=name-asc",
+        "без query"
+      ],
+      "initial_count": 423,
+      "later_count": 422,
+      "removed_alias": "product-A",
+      "added_count": 0,
+      "later_sets_equal": true,
+      "selectors": [
+        "исследование §5.2",
+        "http-evidence.json: catalogDrift, httpReceipts[label=catalog-name-asc-later|catalog-default-later]"
+      ]
+    },
+    {
+      "id": "filtered-empty",
+      "endpoint": "GET /catalog/products",
+      "query": "search=zz-integration-probe-no-match-20261025",
+      "status": 200,
+      "result_count": 0,
+      "selectors": [
+        "исследование §5.1",
+        "http-evidence.json: httpReceipts[label=catalog-search-no-match]"
+      ]
+    },
+    {
+      "id": "offer-weights",
+      "endpoint": "GET /catalog/products?sort=name-asc",
+      "product_alias": "product-B",
+      "quantity_kg": 9999750,
+      "offers": [
+        {
+          "offer_alias": "offer-A",
+          "weight": 250,
+          "max_quantity": 39999
+        },
+        {
+          "offer_alias": "offer-B",
+          "weight": 1000,
+          "max_quantity": 9999
+        }
+      ],
+      "selectors": [
+        "исследование §6, §6 Stock и quantity_kg",
+        "developer-fixtures.json: products[0].quantity_kg, products[0].offers[*].weight и max_quantity",
+        "исследование §7 (десять выбранных offers по 250 г)"
+      ]
+    },
+    {
+      "id": "fractional-quantity",
+      "endpoint": "POST /catalog/cart",
+      "quantity": 1.5,
+      "status": 422,
+      "before_count": 10,
+      "after_count": 10,
+      "changed_rows": 0,
+      "selectors": [
+        "исследование §10.3",
+        "http-evidence.json: steps[label=fractional-quantity]"
+      ]
+    }
+  ]
+}
