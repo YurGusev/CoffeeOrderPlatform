@@ -1,0 +1,37 @@
+issue: 183
+baseCommit: e6439599be85a5fc8b83d99293064e877a2ff012
+status: locally-verified
+scope: Историческое исследование цен и точности Tasty; runtime не меняется.
+inputs: []
+outputs:
+- artifact: docs/integrations/tasty/money.md
+  sha256: f6308d312a8e295d347165df8484d9fc09d3bc5321816fe4bc4fc69949ca231c
+  consumers:
+  - 186
+  - 187
+- artifact: evidence/tasty/money/observations.json
+  sha256: 733c4db024daccbba79fc850c16f66d49cb3b4355f9741c9d7c61e7d85be31ba
+  consumers:
+  - 186
+  - 187
+verification:
+- command: python3 -m json.tool evidence/tasty/money/observations.json
+  result: passed
+- command: sha256sum docs/integrations/tasty/money.md evidence/tasty/money/observations.json
+  result: passed
+- command: git diff --cached --check
+  result: passed
+- command: for f in docs/integrations/tasty/money.md evidence/tasty/money/observations.json evidence/handoffs/issue-183.yaml;
+    do output=$(git diff --no-index --check /dev/null "$f" 2>&1); status=$?; [ "$status" -le 1 ] && [ -z "$output"
+    ] || exit 1; done
+  result: passed
+  detail: Код 1 ожидаем для разных файлов; сообщений о пробелах нет.
+- result: passed
+  manualReview: Ручная сверка чисел и выводов с указанными selectors исходных заметки и JSON, проверка secrets/PII
+limitations:
+- 'Валюта API, точный источник закупочной цены и правило decimal → minor NOT_PROVEN; неоднозначная цена блокирует
+  нормализацию для #186/#187.'
+- Персональные и объёмные условия, скидки и распределение cart total по строкам не доказаны; raw numeric lexemes
+  не сохранены.
+- 'Данные одного аккаунта за 25.10.2026 не подтверждают текущее поведение. Runtime, provider calls и production
+  не проверялись; интеграция в launch/runtime ждёт merge #13.'
