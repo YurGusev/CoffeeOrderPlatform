@@ -1,0 +1,33 @@
+issue: 182
+baseCommit: e6439599be85a5fc8b83d99293064e877a2ff012
+inputs: []
+outputs:
+- artifact: docs/integrations/tasty/identity.md
+  sha256: 40e62ca2828df8b716b861b075f24d8ecde4e637028bb6f01a384d26338f735a
+  consumers:
+  - 186
+  - 188
+  - 185
+- artifact: evidence/tasty/identity/observations.json
+  sha256: 6911ba522ccc1c4aa9e5bee8cf4ece1ffa19cf7a13d1eaa81a72f53efc7aab47
+  consumers:
+  - 186
+  - 188
+  - 185
+verification:
+- command: python3 -m json.tool evidence/tasty/identity/observations.json
+  result: passed
+- command: sha256sum docs/integrations/tasty/identity.md evidence/tasty/identity/observations.json
+  result: passed; hashes указаны в outputs
+- command: git diff --cached --check
+  result: passed
+- command: for f in docs/integrations/tasty/identity.md evidence/tasty/identity/observations.json evidence/handoffs/issue-182.yaml;
+    do output=$(git diff --no-index --check /dev/null "$f" 2>&1); status=$?; [ "$status" -le 1 ] && [ -z "$output"
+    ] || exit 1; done
+  result: passed
+- manualReview: Сверка aliases, выбранных полей steps[15..22] и products[0], приватности и SHA-256 исходников.
+  detail: Пройдено; исходные hashes и selectors указаны в identity.md.
+limitations:
+- Наблюдение одного аккаунта от 25.10.2026; collision, merge и другие неизвестные случаи не доказаны.
+- 'Свежие provider calls, runtime и production не проверялись; интеграция в launch/runtime ждёт merge #13.'
+- Сохранённые исходники и их хеши не являются полными ответами HTTP.
