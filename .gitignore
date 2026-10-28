@@ -9,3 +9,4 @@ runtime-secrets/
 __pycache__/
 *.py[cod]
 evidence/observability/
+evidence/grokverify/

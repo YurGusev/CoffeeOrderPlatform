@@ -24,6 +24,7 @@ ADR-0025, prerequisites — `docs/launch/13_DELIVERY_DEPENDENCY_GRAPH.md`.
 | Kafka, commands/events, Outbox/Inbox | `event-driven-services` |
 | PostgreSQL, migrations, transactions, locks | `postgres-service-ownership` |
 | Customer, Catalog, supplier snapshot, Pricing | `customer-catalog-pricing` |
+| живой срез customer-service и его PostgreSQL | прочитать `.cursor/skills/customer-slice-verify/SKILL.md` |
 | Draft, Confirm, Order, Desired/Observed | `orders-lifecycle` |
 | AROMA Gateway, convergence, unsafe mutation | `aroma-cart-integration` |
 | React/operator UI/client-v1 | `react-operator-frontend` |
