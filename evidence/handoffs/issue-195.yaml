@@ -1,0 +1,56 @@
+issue: 195
+baseCommit: 364c3034e91f168dcb51d94ef64e34389fc90b52
+status: locally-verified
+scope: Изолированная single-flight session Tasty в памяти по явно принятой policy; без runtime/config/provider calls.
+inputs:
+- issue: 184
+  acceptedMergeCommit: 7a1bac3aaef268d83d8381f1043f171d79940f26
+  artifact: evidence/handoffs/issue-184.yaml
+  sha256: 2c6fda83f3de87a64b07299ae85aebc359d51c92a51483e620634070e0860b40
+- issue: 186
+  acceptedMergeCommit: c68bd899a7e71db28d47ec379791bf9a5876f065
+  artifact: evidence/handoffs/issue-186.yaml
+  sha256: 2ca711fa6de43925db9599ba0df88b59b470ee9fcc4410caf1c60e147b55487e
+- issue: 194
+  acceptedMergeCommit: 364c3034e91f168dcb51d94ef64e34389fc90b52
+  artifact: evidence/handoffs/issue-194.yaml
+  sha256: 0b3a4f61fabf170683d649e51091a821d89d5128d29bb91df9dff3ab6e321ca0
+outputs:
+- artifact: apps/tasty-gateway/src/infrastructure/provider/session.ts
+  sha256: 35aa0310271def61b2cb1ca810dca08b73a2c3718539f30d6908a86382c5a3df
+  consumers:
+  - 196
+- artifact: tests/tasty/provider-session.test.mjs
+  sha256: c8f6b339b269c6fa11f033e8b466b2286fa5383656607800134c0e90410e1b30
+  consumers:
+  - 196
+- artifact: docs/integrations/tasty/provider-session-policy.md
+  sha256: b1e50431338ee73f6ccff15f617f53e51492de923e151c56259bc16e751bb4f0
+  consumers:
+  - 196
+- artifact: docs/adr/ADR-0038-tasty-readonly-boundaries.md
+  sha256: fba31f4fd13a5923b842ca7b7d2253cd5e04e17d898352761265226e7e64fdac
+  consumers:
+  - 196
+verification:
+- command: pnpm exec tsc -b apps/tasty-gateway --pretty false && node --test tests/tasty/*.test.mjs
+  result: 'passed; 22/22 tests including 9 session tests, accepted #194, no temporary links'
+- command: pnpm typecheck
+  result: passed
+- command: pnpm lint
+  result: passed
+- command: pnpm architecture:check
+  result: passed
+- command: git diff --check
+  result: passed
+- manualReview: 'Проверены YAML, relative doc links, input ancestry/hashes и output hashes; все outputs handoff
+    #194 сверены на accepted merge.'
+  result: passed
+limitations:
+- Проверки используют локальный HTTP fixture; live login/expiry/revocation и production не проверялись.
+- Объявленный TTL ограничивает только локальный reuse; timeoutMs обязателен и берётся из принятого HTTP-клиента.
+- 'Scoped tmpfs/config wiring, production values и account/cartScope admission остаются #196; модуль не читает SOPS
+  или общий secret file.'
+- Ошибки login и текущий 401 требуют явного пересоздания session trusted владельцем; automatic retry/replay/refresh/logout
+  отсутствуют.
+- Никакие provider mutation, deployment или GitHub merge агентом не выполнялись.
