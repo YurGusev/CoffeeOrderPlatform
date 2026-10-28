@@ -1,0 +1,76 @@
+{
+  "kind": "Обезличенная производная сводка выбранных полей; не raw HTTP response",
+  "api_base": "https://api.tastycoffee.ru/api/v1",
+  "observation_interval_utc": [
+    "2026-10-25T16:56:30.356Z",
+    "2026-10-25T17:16:41.670Z"
+  ],
+  "account_scope": "Один исследованный аккаунт Tasty; без идентификатора аккаунта",
+  "sources": [
+    {
+      "path_relative_to_vault": "Проекты/CoffeeOrderPlatform/Tasty Coffee — исследование API для разработки и пакетной загрузки.md",
+      "sha256": "9d00987bf84cc608b3bd6cdab044885017ea960d507e9f2c0f15fafd306c7669"
+    },
+    {
+      "path_relative_to_vault": "Вложения/CoffeeOrderPlatform/Tasty/2026-10-25/http-evidence.json",
+      "sha256": "4b9c132523826de7528adef56fe98fe9fd1d1c3a468be07f06dddeac341eb9ce"
+    },
+    {
+      "path_relative_to_vault": "Вложения/CoffeeOrderPlatform/Tasty/2026-10-25/developer-fixtures.json",
+      "sha256": "9841fe68dd3db866344d7dd6a5e97d676854a2a28f191d7fbfd5dcbadbb620db"
+    }
+  ],
+  "raw_numeric_lexemes_retained": false,
+  "observations": [
+    {
+      "id": "offer-prices",
+      "endpoint": "GET /catalog/products?sort=name-asc",
+      "initial_offer_count": 568,
+      "fractional_offer_count": 5,
+      "selected_parsed_prices": [
+        490.8,
+        604.5,
+        425.8
+      ],
+      "selectors": [
+        "исследование §14",
+        "http-evidence.json: schema.initialOffers, schema.nonIntegerCatalogPrices, schema.nonIntegerCatalogPriceExamples[*].price"
+      ]
+    },
+    {
+      "id": "cart-ten",
+      "endpoint": "GET /catalog/cart",
+      "ordinary_line_count": 10,
+      "undiscounted_total": 7229,
+      "cart_total": 5060.3,
+      "discount": 30,
+      "selectors": [
+        "исследование §14",
+        "developer-fixtures.json: cartTen.data, cartTen.meta.price_without_discount, cartTen.meta.price, cartTen.meta.discount"
+      ]
+    },
+    {
+      "id": "cart-float-tail",
+      "endpoint": "POST /catalog/cart и последующий GET /catalog/cart",
+      "parsed_meta_price": 1638.6999999999998,
+      "selectors": [
+        "исследование §14",
+        "http-evidence.json: steps[label=ten-add-3].meta.price"
+      ]
+    },
+    {
+      "id": "currency",
+      "note": "В выбранных offer responses самостоятельное поле currency не наблюдалось; UI показывает рубли.",
+      "selectors": [
+        "исследование §14"
+      ]
+    },
+    {
+      "id": "offer-line",
+      "note": "В исследованных обычных строках cart line price отражала исходную цену offer; cart meta.price — итог.",
+      "selectors": [
+        "исследование §14"
+      ]
+    }
+  ]
+}
