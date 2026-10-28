@@ -50,6 +50,11 @@ deadlines, лимиты и условия повторной авторизац�
 обязательные `timeoutMs`/`maxResponseBytes` без production defaults, общий deadline
 до конца bounded body и безопасные typed failures без повторения запроса.
 Runtime/config wiring и account/cartScope проверяются отдельно в #196.
+Для session #195 владелец 28.10.2026 также принял
+[локальную policy](../integrations/tasty/provider-session-policy.md): private memory,
+single-flight, монотонный TTL и общий acquisition deadline, независимая отмена
+waiters, блокировка после ошибки login или текущего 401 до явного пересоздания
+instance. Повторения business read, refresh/logout и runtime admission нет.
 Объявленный TTL не доказывает срок жизни токена.
 
 ## Что показывает текущий код
