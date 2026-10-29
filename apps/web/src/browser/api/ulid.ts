@@ -13,9 +13,18 @@ function encode128(value: bigint): string {
   return encoded;
 }
 
-export function newUlidRef(prefix: "itm", now = currentEpochMilliseconds(), randomness = crypto.getRandomValues(new Uint8Array(10))): string {
+export function newUlidRef(
+  prefix: "itm",
+  now = currentEpochMilliseconds(),
+  randomness = crypto.getRandomValues(new Uint8Array(10)),
+): string {
   const timestamp = Math.floor(now);
-  if (!Number.isSafeInteger(timestamp) || timestamp < 0 || timestamp > MAX_TIMESTAMP || randomness.length !== 10) {
+  if (
+    !Number.isSafeInteger(timestamp) ||
+    timestamp < 0 ||
+    timestamp > MAX_TIMESTAMP ||
+    randomness.length !== 10
+  ) {
     throw new Error("Невозможно создать ULID identifier");
   }
   let random = 0n;

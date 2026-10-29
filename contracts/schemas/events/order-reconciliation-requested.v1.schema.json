@@ -3,7 +3,9 @@
   "$id": "https://coffeeorderplatform.local/contracts/schemas/events/order-reconciliation-requested.v1.schema.json",
   "title": "OrderReconciliationRequested.v1",
   "allOf": [
-    { "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope" },
+    {
+      "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope"
+    },
     {
       "type": "object",
       "required": ["messageType", "payload"],
@@ -14,7 +16,9 @@
           "type": "object",
           "properties": {
             "type": { "const": "Order" },
-            "ref": { "$ref": "../common/identifiers.v1.schema.json#/$defs/OrderRef" }
+            "ref": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/OrderRef"
+            }
           }
         },
         "payload": {
@@ -22,9 +26,15 @@
           "additionalProperties": false,
           "required": ["orderRef", "orderVersion", "requestedAt"],
           "properties": {
-            "orderRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/OrderRef" },
-            "orderVersion": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
-            "requestedAt": { "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp" }
+            "orderRef": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/OrderRef"
+            },
+            "orderVersion": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/Version"
+            },
+            "requestedAt": {
+              "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp"
+            }
           }
         }
       }

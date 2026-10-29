@@ -1,3 +1,3 @@
-const dependency = require('./dependency.js');
+const dependency = require("./dependency.js");
 
 module.exports = dependency;

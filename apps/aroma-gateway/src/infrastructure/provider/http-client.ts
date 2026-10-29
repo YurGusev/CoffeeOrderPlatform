@@ -6,7 +6,7 @@ import {
   type ProviderRejection,
   type ProviderUser,
 } from "./decoder.js";
-import {finishGatewaySpan, type GatewayTelemetry} from "../observability.js";
+import { finishGatewaySpan, type GatewayTelemetry } from "../observability.js";
 import {
   parseSetCookieHeaders,
   cookieHeader,
@@ -148,7 +148,11 @@ export class ProviderHttpClient {
 
   /** Local transport readiness only; no provider request is made. */
   isReady(): boolean {
-    return !this.#shutdown.signal.aborted && this.#origin.startsWith("https://") && this.#agent !== undefined;
+    return (
+      !this.#shutdown.signal.aborted &&
+      this.#origin.startsWith("https://") &&
+      this.#agent !== undefined
+    );
   }
 
   async *read(
@@ -182,7 +186,9 @@ export class ProviderHttpClient {
       throw new ProviderError("ProviderProtocolViolation");
     }
     const startedAt = performance.now();
-    const span = this.#options.telemetry?.startSpan("aroma.gateway.provider.login");
+    const span = this.#options.telemetry?.startSpan(
+      "aroma.gateway.provider.login",
+    );
     let failure: unknown;
     const combined = combineSignal(
       signal,
@@ -248,7 +254,10 @@ export class ProviderHttpClient {
       const cookies = parseSetCookieHeaders(response.headers, this.#originHost);
       return { profile, cookies };
     } catch (error) {
-      failure = error instanceof ProviderError ? error : new ProviderError("ProviderUnavailable");
+      failure =
+        error instanceof ProviderError
+          ? error
+          : new ProviderError("ProviderUnavailable");
       throw failure;
     } finally {
       try {
@@ -256,7 +265,9 @@ export class ProviderHttpClient {
       } catch {
         /* typed error is retained */
       }
-      this.#options.telemetry?.observeProviderLatency(performance.now() - startedAt);
+      this.#options.telemetry?.observeProviderLatency(
+        performance.now() - startedAt,
+      );
       if (span !== undefined) finishGatewaySpan(span, failure);
     }
   }
@@ -295,16 +306,21 @@ export class ProviderHttpClient {
       if (!positive(operation.quantity))
         throw new ProviderError("ProviderProtocolViolation");
       method = "PUT";
-      const payload: Record<string, unknown> = {quantity: operation.quantity};
-      if (operation.packing !== undefined && operation.packing !== null) payload["packing"] = operation.packing;
-      if (operation.grindId !== undefined && operation.grindId !== null) payload["grind_id"] = operation.grindId;
+      const payload: Record<string, unknown> = { quantity: operation.quantity };
+      if (operation.packing !== undefined && operation.packing !== null)
+        payload["packing"] = operation.packing;
+      if (operation.grindId !== undefined && operation.grindId !== null)
+        payload["grind_id"] = operation.grindId;
       body = JSON.stringify(payload);
       contentType = "application/json";
     } else {
       method = "DELETE";
     }
     const startedAt = performance.now();
-    const span = this.#options.telemetry?.startSpan("aroma.gateway.provider.mutation", {method});
+    const span = this.#options.telemetry?.startSpan(
+      "aroma.gateway.provider.mutation",
+      { method },
+    );
     let failure: unknown;
     const combined = combineSignal(
       signal,
@@ -360,7 +376,10 @@ export class ProviderHttpClient {
         );
       return { statusCode: response.status, body: bytes };
     } catch (error) {
-      failure = error instanceof ProviderError ? error : new ProviderError("ProviderUnavailable");
+      failure =
+        error instanceof ProviderError
+          ? error
+          : new ProviderError("ProviderUnavailable");
       throw failure;
     } finally {
       try {
@@ -368,7 +387,9 @@ export class ProviderHttpClient {
       } catch {
         /* typed error is retained */
       }
-      this.#options.telemetry?.observeProviderLatency(performance.now() - startedAt);
+      this.#options.telemetry?.observeProviderLatency(
+        performance.now() - startedAt,
+      );
       if (span !== undefined) finishGatewaySpan(span, failure);
     }
   }
@@ -384,7 +405,10 @@ export class ProviderHttpClient {
     const providerFetch = globalThis.fetch as unknown as ProviderFetch;
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const startedAt = performance.now();
-      const span = this.#options.telemetry?.startSpan("aroma.gateway.provider.read", {method});
+      const span = this.#options.telemetry?.startSpan(
+        "aroma.gateway.provider.read",
+        { method },
+      );
       const combined = combineSignal(
         signal,
         this.#shutdown.signal,
@@ -510,7 +534,9 @@ export class ProviderHttpClient {
             /* preserve the original typed error */
           }
         }
-        this.#options.telemetry?.observeProviderLatency(performance.now() - startedAt);
+        this.#options.telemetry?.observeProviderLatency(
+          performance.now() - startedAt,
+        );
         if (span !== undefined) finishGatewaySpan(span, failure);
       }
       try {

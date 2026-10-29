@@ -2,5 +2,9 @@
   "name": "@coffee/contracts/catalog-v1",
   "version": "1.0.0",
   "type": "module",
-  "exports": { ".": { "types": "./index.ts" } }
+  "exports": {
+    ".": {
+      "types": "./index.ts"
+    }
+  }
 }

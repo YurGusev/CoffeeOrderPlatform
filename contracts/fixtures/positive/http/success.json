@@ -58,7 +58,12 @@
           "availability": "Available",
           "mappingAvailable": true,
           "imageUrl": "https://catalog.example.test/coffee.png",
-          "grindOptions": [{"sourceGrindKeyHash":"4444444444444444444444444444444444444444444444444444444444444444","displayName":"Средний помол"}]
+          "grindOptions": [
+            {
+              "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444",
+              "displayName": "Средний помол"
+            }
+          ]
         }
       ],
       "nextCursor": null
@@ -160,10 +165,19 @@
       "version": "3",
       "projectionVersion": "5",
       "status": "Draft",
-      "customer": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "displayName": "Иван Петров"},
+      "customer": {
+        "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+        "displayName": "Иван Петров"
+      },
       "items": [],
       "pricing": null,
-      "aroma": {"state": "NotRequested", "desiredRevision": "0", "observedRevision": "0", "lastObservedAt": null, "blockers": []},
+      "aroma": {
+        "state": "NotRequested",
+        "desiredRevision": "0",
+        "observedRevision": "0",
+        "lastObservedAt": null,
+        "blockers": []
+      },
       "allowedActions": ["edit-items", "confirm"]
     }
   },
@@ -178,10 +192,19 @@
       "version": "4",
       "projectionVersion": "6",
       "status": "Draft",
-      "customer": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "displayName": "Иван Петров"},
+      "customer": {
+        "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+        "displayName": "Иван Петров"
+      },
       "items": [],
       "pricing": null,
-      "aroma": {"state": "NotRequested", "desiredRevision": "0", "observedRevision": "0", "lastObservedAt": null, "blockers": []},
+      "aroma": {
+        "state": "NotRequested",
+        "desiredRevision": "0",
+        "observedRevision": "0",
+        "lastObservedAt": null,
+        "blockers": []
+      },
       "allowedActions": ["edit-items", "confirm"]
     }
   },
@@ -196,10 +219,19 @@
       "version": "5",
       "projectionVersion": "7",
       "status": "Confirmed",
-      "customer": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "displayName": "Иван Петров"},
+      "customer": {
+        "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+        "displayName": "Иван Петров"
+      },
       "items": [],
       "pricing": null,
-      "aroma": {"state": "PendingObservation", "desiredRevision": "1", "observedRevision": "0", "lastObservedAt": null, "blockers": []},
+      "aroma": {
+        "state": "PendingObservation",
+        "desiredRevision": "1",
+        "observedRevision": "0",
+        "lastObservedAt": null,
+        "blockers": []
+      },
       "allowedActions": ["request-aroma-reconciliation"]
     }
   },
@@ -227,10 +259,19 @@
       "version": "5",
       "projectionVersion": "7",
       "status": "Confirmed",
-      "customer": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "displayName": "Иван Петров"},
+      "customer": {
+        "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+        "displayName": "Иван Петров"
+      },
       "items": [],
       "pricing": null,
-      "aroma": {"state": "PendingObservation", "desiredRevision": "1", "observedRevision": "0", "lastObservedAt": null, "blockers": []},
+      "aroma": {
+        "state": "PendingObservation",
+        "desiredRevision": "1",
+        "observedRevision": "0",
+        "lastObservedAt": null,
+        "blockers": []
+      },
       "allowedActions": ["request-aroma-reconciliation"]
     }
   },
@@ -240,7 +281,12 @@
     "status": 200,
     "mediaType": "application/json",
     "schema": "CustomerOrderInput",
-    "body": {"customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY", "customerVersion": "1", "displayName": "Иван Петров", "state": "Active"}
+    "body": {
+      "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "customerVersion": "1",
+      "displayName": "Иван Петров",
+      "state": "Active"
+    }
   },
   {
     "document": "internal-v1",
@@ -276,20 +322,20 @@
       "expiresAt": "2026-09-05T10:30:00Z",
       "currency": "RUB",
       "line": {
-          "lineNumber": 1,
-          "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
-          "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
-          "productDisplayName": "Кофе зерновой",
-          "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
-          "mappingRevision": "2",
-          "quantity": "1.5",
-          "unit": "kilogram",
-          "supplierUnitMinor": "900",
-          "unitMinor": "1200",
-          "lineTotalMinor": "1800",
-          "currency": "RUB",
-          "internalProofHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-        }
+        "lineNumber": 1,
+        "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+        "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+        "productDisplayName": "Кофе зерновой",
+        "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+        "mappingRevision": "2",
+        "quantity": "1.5",
+        "unit": "kilogram",
+        "supplierUnitMinor": "900",
+        "unitMinor": "1200",
+        "lineTotalMinor": "1800",
+        "currency": "RUB",
+        "internalProofHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
     }
   },
   {
@@ -303,7 +349,13 @@
       "providerSnapshotRef": "provider-snapshot-1",
       "capturedAt": "2026-09-05T10:04:00Z",
       "cartFingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      "lines": [{"offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "quantity": "1", "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444"}]
+      "lines": [
+        {
+          "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+          "quantity": "1",
+          "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444"
+        }
+      ]
     }
   },
   {
@@ -312,7 +364,13 @@
     "status": 200,
     "mediaType": "application/json",
     "schema": "AromaMutationResponse",
-    "body": {"operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2", "cartScopeRef": "aroma-primary", "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444", "state": "Acknowledged"}
+    "body": {
+      "operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2",
+      "cartScopeRef": "aroma-primary",
+      "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+      "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444",
+      "state": "Acknowledged"
+    }
   },
   {
     "document": "internal-v1",
@@ -320,7 +378,13 @@
     "status": 200,
     "mediaType": "application/json",
     "schema": "AromaMutationResponse",
-    "body": {"operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2", "cartScopeRef": "aroma-primary", "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ", "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444", "state": "Acknowledged"}
+    "body": {
+      "operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FB2",
+      "cartScopeRef": "aroma-primary",
+      "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+      "sourceGrindKeyHash": "4444444444444444444444444444444444444444444444444444444444444444",
+      "state": "Acknowledged"
+    }
   },
   {
     "document": "internal-v1",

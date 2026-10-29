@@ -1,9 +1,19 @@
 // AST import authority for Dependency Cruiser 18.2.0. The package/lock pin is owned by issue #3.
 const runtimes = [
-  'edge-gateway', 'api-public', 'api-internal', 'customer-service',
-  'catalog-service', 'catalog-supplier-sync', 'catalog-activation-worker',
-  'pricing-service', 'orders-service', 'orders-aroma-preparation',
-  'aroma-observer', 'aroma-convergence', 'aroma-gateway', 'realtime-gateway',
+  "edge-gateway",
+  "api-public",
+  "api-internal",
+  "customer-service",
+  "catalog-service",
+  "catalog-supplier-sync",
+  "catalog-activation-worker",
+  "pricing-service",
+  "orders-service",
+  "orders-aroma-preparation",
+  "aroma-observer",
+  "aroma-convergence",
+  "aroma-gateway",
+  "realtime-gateway",
 ];
 
 const crossRuntimeRules = runtimes.flatMap((source) =>
@@ -11,8 +21,9 @@ const crossRuntimeRules = runtimes.flatMap((source) =>
     .filter((target) => target !== source)
     .map((target) => ({
       name: `BOUND-IMPORT:${source}->${target}`,
-      severity: 'error',
-      comment: 'Runtime source roots never import another runtime implementation.',
+      severity: "error",
+      comment:
+        "Runtime source roots never import another runtime implementation.",
       from: { path: `^apps/${source}/` },
       to: { path: `^apps/${target}/` },
     })),
@@ -22,43 +33,51 @@ module.exports = {
   forbidden: [
     ...crossRuntimeRules,
     {
-      name: 'BOUND-IMPORT:browser-node-graph',
-      severity: 'error',
-      comment: 'Browser source never imports the Node entry or server runtime.',
-      from: { path: '^apps/web/src/browser/' },
-      to: { path: '^(apps/web/src/main\\.ts|packages/platform-runtime/|@coffee-platform/runtime$)' },
+      name: "BOUND-IMPORT:browser-node-graph",
+      severity: "error",
+      comment: "Browser source never imports the Node entry or server runtime.",
+      from: { path: "^apps/web/src/browser/" },
+      to: {
+        path: "^(apps/web/src/main\\.ts|packages/platform-runtime/|@coffee-platform/runtime$)",
+      },
     },
     {
-      name: 'BOUND-IMPORT:server-ui-graph',
-      severity: 'error',
-      comment: 'Server runtimes never import the browser UI package.',
-      from: { path: '^apps/(?!web/)' },
-      to: { path: '^@coffee-platform/ui$' },
+      name: "BOUND-IMPORT:server-ui-graph",
+      severity: "error",
+      comment: "Server runtimes never import the browser UI package.",
+      from: { path: "^apps/(?!web/)" },
+      to: { path: "^@coffee-platform/ui$" },
     },
     {
-      name: 'BOUND-IMPORT:ui-runtime-graph',
-      severity: 'error',
-      comment: 'UI package never imports runtime, contracts or generated business code.',
-      from: { path: '^packages/platform-ui/' },
-      to: { path: '^(apps/|packages/(contracts|generated|platform-runtime)/|@coffee-platform/(runtime|contracts-|generated-))' },
+      name: "BOUND-IMPORT:ui-runtime-graph",
+      severity: "error",
+      comment:
+        "UI package never imports runtime, contracts or generated business code.",
+      from: { path: "^packages/platform-ui/" },
+      to: {
+        path: "^(apps/|packages/(contracts|generated|platform-runtime)/|@coffee-platform/(runtime|contracts-|generated-))",
+      },
     },
     {
-      name: 'BOUND-IMPORT:shared-business-package',
-      severity: 'error',
-      from: { path: '^(apps|packages)/' },
-      to: { path: '^packages/(domain|models|shared-business)(/|$)' },
+      name: "BOUND-IMPORT:shared-business-package",
+      severity: "error",
+      from: { path: "^(apps|packages)/" },
+      to: { path: "^packages/(domain|models|shared-business)(/|$)" },
     },
     {
-      name: 'BOUND-IMPORT:frontend-server-boundary',
-      severity: 'error',
-      from: { path: '^apps/web/' },
-      to: { path: '^(apps/(?!web/)|.*(sql|migrations|provider-client))' },
+      name: "BOUND-IMPORT:frontend-server-boundary",
+      severity: "error",
+      from: { path: "^apps/web/" },
+      to: { path: "^(apps/(?!web/)|.*(sql|migrations|provider-client))" },
     },
   ],
   options: {
-    doNotFollow: { path: 'node_modules' },
+    doNotFollow: { path: "node_modules" },
     tsPreCompilationDeps: true,
     preserveSymlinks: false,
-    enhancedResolveOptions: { exportsFields: ['exports'], conditionNames: ['types', 'import', 'default'] },
+    enhancedResolveOptions: {
+      exportsFields: ["exports"],
+      conditionNames: ["types", "import", "default"],
+    },
   },
 };

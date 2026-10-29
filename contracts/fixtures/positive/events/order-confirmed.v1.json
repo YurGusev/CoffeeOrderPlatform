@@ -7,7 +7,11 @@
   "correlationId": "33333333-3333-4333-8333-333333333333",
   "causationId": null,
   "traceparent": "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
-  "aggregate": { "type": "Order", "ref": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV", "version": "7" },
+  "aggregate": {
+    "type": "Order",
+    "ref": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "version": "7"
+  },
   "payload": {
     "orderRef": "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     "orderVersion": "7",

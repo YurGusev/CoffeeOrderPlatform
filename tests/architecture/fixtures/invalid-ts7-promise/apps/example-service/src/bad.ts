@@ -1,2 +1,2 @@
 // oxlint-disable-next-line typescript/no-floating-promises
-Promise.resolve('unhandled');
+Promise.resolve("unhandled");

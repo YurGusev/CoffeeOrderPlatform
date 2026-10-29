@@ -1,4 +1,4 @@
-import {strict as assert} from "node:assert";
+import { strict as assert } from "node:assert";
 
 export type TestClock = Readonly<{
   nowMs(): number;
@@ -7,16 +7,25 @@ export type TestClock = Readonly<{
 }>;
 
 export function createTestClock(initialMs: number): TestClock {
-  if (!Number.isSafeInteger(initialMs) || initialMs < 0) throw new RangeError("initialMs должен быть неотрицательным целым числом");
+  if (!Number.isSafeInteger(initialMs) || initialMs < 0)
+    throw new RangeError("initialMs должен быть неотрицательным целым числом");
   let current = initialMs;
   return {
     nowMs: () => current,
     setMs: (value: number): void => {
-      if (!Number.isSafeInteger(value) || value < 0) throw new RangeError("clock value должен быть неотрицательным целым числом");
+      if (!Number.isSafeInteger(value) || value < 0)
+        throw new RangeError(
+          "clock value должен быть неотрицательным целым числом",
+        );
       current = value;
     },
     advanceMs: (value: number): void => {
-      if (!Number.isSafeInteger(value) || value < 0 || current + value > Number.MAX_SAFE_INTEGER) throw new RangeError("clock advance некорректен");
+      if (
+        !Number.isSafeInteger(value) ||
+        value < 0 ||
+        current + value > Number.MAX_SAFE_INTEGER
+      )
+        throw new RangeError("clock advance некорректен");
       current += value;
     },
   };
@@ -37,13 +46,27 @@ export function createDeferred<Result>(): Deferred<Result> {
   });
   return {
     promise,
-    resolve: (value: Result): void => { resolvePromise?.(value); },
-    reject: (reason?: unknown): void => { rejectPromise?.(reason); },
+    resolve: (value: Result): void => {
+      resolvePromise?.(value);
+    },
+    reject: (reason?: unknown): void => {
+      rejectPromise?.(reason);
+    },
   };
 }
 
-export async function assertEventually(predicate: () => boolean | Promise<boolean>, timeoutMs: number, intervalMs: number): Promise<void> {
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 0 || !Number.isSafeInteger(intervalMs) || intervalMs <= 0) throw new RangeError("окно assertEventually некорректно");
+export async function assertEventually(
+  predicate: () => boolean | Promise<boolean>,
+  timeoutMs: number,
+  intervalMs: number,
+): Promise<void> {
+  if (
+    !Number.isSafeInteger(timeoutMs) ||
+    timeoutMs < 0 ||
+    !Number.isSafeInteger(intervalMs) ||
+    intervalMs <= 0
+  )
+    throw new RangeError("окно assertEventually некорректно");
   const started = performance.now();
   while (performance.now() - started <= timeoutMs) {
     if (await predicate()) return;
@@ -52,11 +75,20 @@ export async function assertEventually(predicate: () => boolean | Promise<boolea
   assert.fail(`условие не выполнено за ${timeoutMs}ms`);
 }
 
-export async function assertRejectsCode(action: () => Promise<unknown>, expectedCode: string): Promise<void> {
+export async function assertRejectsCode(
+  action: () => Promise<unknown>,
+  expectedCode: string,
+): Promise<void> {
   try {
     await action();
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && error.code === expectedCode) return;
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === expectedCode
+    )
+      return;
     throw error;
   }
   assert.fail(`ожидалась ошибка с code=${expectedCode}`);

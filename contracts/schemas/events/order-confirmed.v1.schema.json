@@ -3,7 +3,9 @@
   "$id": "https://coffeeorderplatform.local/contracts/schemas/events/order-confirmed.v1.schema.json",
   "title": "OrderConfirmed.v1",
   "allOf": [
-    { "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope" },
+    {
+      "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope"
+    },
     {
       "type": "object",
       "required": ["messageType", "payload"],
@@ -13,13 +15,29 @@
         "payload": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["orderRef", "orderVersion", "customerRef", "confirmedAt", "contributionRevision"],
+          "required": [
+            "orderRef",
+            "orderVersion",
+            "customerRef",
+            "confirmedAt",
+            "contributionRevision"
+          ],
           "properties": {
-            "orderRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/OrderRef" },
-            "orderVersion": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
-            "customerRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/CustomerRef" },
-            "confirmedAt": { "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp" },
-            "contributionRevision": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" }
+            "orderRef": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/OrderRef"
+            },
+            "orderVersion": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/Version"
+            },
+            "customerRef": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/CustomerRef"
+            },
+            "confirmedAt": {
+              "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp"
+            },
+            "contributionRevision": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/Version"
+            }
           }
         }
       }

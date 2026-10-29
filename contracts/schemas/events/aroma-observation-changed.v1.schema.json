@@ -3,7 +3,9 @@
   "$id": "https://coffeeorderplatform.local/contracts/schemas/events/aroma-observation-changed.v1.schema.json",
   "title": "AromaObservationChanged.v1",
   "allOf": [
-    { "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope" },
+    {
+      "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope"
+    },
     {
       "type": "object",
       "required": ["messageType", "payload"],
@@ -13,13 +15,27 @@
         "payload": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["cartScopeRef", "observedRevision", "observedAt", "observationState", "cartFingerprint"],
+          "required": [
+            "cartScopeRef",
+            "observedRevision",
+            "observedAt",
+            "observationState",
+            "cartFingerprint"
+          ],
           "properties": {
-            "cartScopeRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/CartScopeRef" },
-            "observedRevision": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
-            "observedAt": { "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp" },
+            "cartScopeRef": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/CartScopeRef"
+            },
+            "observedRevision": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/Version"
+            },
+            "observedAt": {
+              "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp"
+            },
             "observationState": { "type": "string", "const": "Complete" },
-            "cartFingerprint": { "$ref": "../common/money-version-time.v1.schema.json#/$defs/HashSha256" }
+            "cartFingerprint": {
+              "$ref": "../common/money-version-time.v1.schema.json#/$defs/HashSha256"
+            }
           }
         }
       }

@@ -14,5 +14,9 @@
     { "path": "../../packages/generated/client-v1" },
     { "path": "../../packages/generated/edge-auth-v1" }
   ],
-  "include": ["src/browser/**/*.ts", "src/browser/**/*.tsx", "src/vite-env.d.ts"]
+  "include": [
+    "src/browser/**/*.ts",
+    "src/browser/**/*.tsx",
+    "src/vite-env.d.ts"
+  ]
 }

@@ -1,56 +1,866 @@
 [
-  {"document":"client-v1","operationId":"requestAromaReconciliation","status":400,"schema":"ErrorValidationFailed","body":{"type":"about:blank","title":"VALIDATION_FAILED","status":400,"code":"VALIDATION_FAILED","detail":"Request validation failed","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/request-aroma-reconciliation","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"searchCustomers","status":400,"schema":"ErrorInvalidCursor","body":{"type":"about:blank","title":"INVALID_CURSOR","status":400,"code":"INVALID_CURSOR","detail":"Cursor is invalid","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":401,"schema":"ErrorAuthenticationRequired","body":{"type":"about:blank","title":"AUTHENTICATION_REQUIRED","status":401,"code":"AUTHENTICATION_REQUIRED","detail":"Authentication is required","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":403,"schema":"ErrorActorContextInvalid","body":{"type":"about:blank","title":"ACTOR_CONTEXT_INVALID","status":403,"code":"ACTOR_CONTEXT_INVALID","detail":"Actor context is invalid","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":409,"schema":"ErrorCustomerPhoneConflict","body":{"type":"about:blank","title":"CUSTOMER_PHONE_CONFLICT","status":409,"code":"CUSTOMER_PHONE_CONFLICT","detail":"Phone is already registered","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":409,"schema":"ErrorCustomerEmailConflict","body":{"type":"about:blank","title":"CUSTOMER_EMAIL_CONFLICT","status":409,"code":"CUSTOMER_EMAIL_CONFLICT","detail":"Email is already registered","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":409,"schema":"ErrorIdempotencyConflict","body":{"type":"about:blank","title":"IDEMPOTENCY_CONFLICT","status":409,"code":"IDEMPOTENCY_CONFLICT","detail":"Idempotency key conflicts with a different request","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":409,"schema":"ErrorIdempotencyRequestInProgress","body":{"type":"about:blank","title":"IDEMPOTENCY_REQUEST_IN_PROGRESS","status":409,"code":"IDEMPOTENCY_REQUEST_IN_PROGRESS","detail":"The request is still in progress","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createPricingQuote","status":404,"schema":"ErrorCatalogProductNotFound","body":{"type":"about:blank","title":"CATALOG_PRODUCT_NOT_FOUND","status":404,"code":"CATALOG_PRODUCT_NOT_FOUND","detail":"Product is not in the active catalog","instance":"/api/client-v1/pricing/quotes","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createPricingQuote","status":409,"schema":"ErrorCatalogProductUnavailable","body":{"type":"about:blank","title":"CATALOG_PRODUCT_UNAVAILABLE","status":409,"code":"CATALOG_PRODUCT_UNAVAILABLE","detail":"Product is unavailable","instance":"/api/client-v1/pricing/quotes","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createPricingQuote","status":409,"schema":"ErrorCatalogRevisionChanged","body":{"type":"about:blank","title":"CATALOG_REVISION_CHANGED","status":409,"code":"CATALOG_REVISION_CHANGED","detail":"Catalog revision changed","instance":"/api/client-v1/pricing/quotes","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createPricingQuote","status":422,"schema":"ErrorPricingGrindNotAvailable","body":{"type":"about:blank","title":"PRICING_GRIND_NOT_AVAILABLE","status":422,"code":"PRICING_GRIND_NOT_AVAILABLE","detail":"Grind choice is unavailable","instance":"/api/client-v1/pricing/quotes","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"searchCatalogProducts","status":503,"schema":"ErrorCatalogSnapshotIncomplete","body":{"type":"about:blank","title":"CATALOG_SNAPSHOT_INCOMPLETE","status":503,"code":"CATALOG_SNAPSHOT_INCOMPLETE","detail":"No complete active catalog snapshot is available","instance":"/api/client-v1/catalog/products","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createPricingQuote","status":503,"schema":"ErrorCatalogUnavailable","body":{"type":"about:blank","title":"CATALOG_UNAVAILABLE","status":503,"code":"CATALOG_UNAVAILABLE","detail":"Catalog owner is unavailable","instance":"/api/client-v1/pricing/quotes","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createOrderDraft","status":404,"schema":"ErrorCustomerNotFound","body":{"type":"about:blank","title":"CUSTOMER_NOT_FOUND","status":404,"code":"CUSTOMER_NOT_FOUND","detail":"Customer does not exist","instance":"/api/client-v1/orders/drafts","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createOrderDraft","status":409,"schema":"ErrorCustomerNotActive","body":{"type":"about:blank","title":"CUSTOMER_NOT_ACTIVE","status":409,"code":"CUSTOMER_NOT_ACTIVE","detail":"Customer is not active","instance":"/api/client-v1/orders/drafts","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createOrderDraft","status":503,"schema":"ErrorCustomerUnavailable","body":{"type":"about:blank","title":"CUSTOMER_UNAVAILABLE","status":503,"code":"CUSTOMER_UNAVAILABLE","detail":"Customer owner is unavailable","instance":"/api/client-v1/orders/drafts","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"upsertOrderItem","status":404,"schema":"ErrorOrderNotFound","body":{"type":"about:blank","title":"ORDER_NOT_FOUND","status":404,"code":"ORDER_NOT_FOUND","detail":"Order does not exist","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"removeOrderItem","status":404,"schema":"ErrorOrderItemNotFound","body":{"type":"about:blank","title":"ORDER_ITEM_NOT_FOUND","status":404,"code":"ORDER_ITEM_NOT_FOUND","detail":"Order item does not exist","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"upsertOrderItem","status":409,"schema":"ErrorOrderVersionConflict","body":{"type":"about:blank","title":"ORDER_VERSION_CONFLICT","status":409,"code":"ORDER_VERSION_CONFLICT","detail":"Expected order version is stale","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"upsertOrderItem","status":409,"schema":"ErrorOrderQuoteStale","body":{"type":"about:blank","title":"ORDER_QUOTE_STALE","status":409,"code":"ORDER_QUOTE_STALE","detail":"Quote proof is stale","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"upsertOrderItem","status":409,"schema":"ErrorOrderNotEditable","body":{"type":"about:blank","title":"ORDER_NOT_EDITABLE","status":409,"code":"ORDER_NOT_EDITABLE","detail":"Order is not editable","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"confirmOrder","status":422,"schema":"ErrorOrderConfirmationRejected","body":{"type":"about:blank","title":"ORDER_CONFIRMATION_REJECTED","status":422,"code":"ORDER_CONFIRMATION_REJECTED","detail":"Order cannot be confirmed","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/confirm","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"confirmOrder","status":422,"schema":"ErrorOrderEmpty","body":{"type":"about:blank","title":"ORDER_EMPTY","status":422,"code":"ORDER_EMPTY","detail":"Order has no items","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/confirm","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"confirmOrder","status":422,"schema":"ErrorOrderDesiredOverflow","body":{"type":"about:blank","title":"ORDER_DESIRED_OVERFLOW","status":422,"code":"ORDER_DESIRED_OVERFLOW","detail":"Order quantity exceeds the supported total","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/confirm","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"upsertOrderItem","status":409,"schema":"ErrorOrderItemLimitExceeded","body":{"type":"about:blank","title":"ORDER_ITEM_LIMIT_EXCEEDED","status":409,"code":"ORDER_ITEM_LIMIT_EXCEEDED","detail":"Order item limit exceeded","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01ARZ3NDEKTSV4RRFFQ69G5FAY","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"upsertOrderItem","status":409,"schema":"ErrorOrderQuoteScopeMismatch","body":{"type":"about:blank","title":"ORDER_QUOTE_SCOPE_MISMATCH","status":409,"code":"ORDER_QUOTE_SCOPE_MISMATCH","detail":"Quote does not match this order item","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01ARZ3NDEKTSV4RRFFQ69G5FAY","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"requestAromaReconciliation","status":409,"schema":"ErrorAromaReconciliationNotAllowed","body":{"type":"about:blank","title":"AROMA_RECONCILIATION_NOT_ALLOWED","status":409,"code":"AROMA_RECONCILIATION_NOT_ALLOWED","detail":"Reconciliation is not allowed for this order","instance":"/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/request-aroma-reconciliation","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":410,"schema":"ErrorIdempotencyResultNotRetained","body":{"type":"about:blank","title":"IDEMPOTENCY_RESULT_NOT_RETAINED","status":410,"code":"IDEMPOTENCY_RESULT_NOT_RETAINED","detail":"The terminal result is no longer retained","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":503,"schema":"ErrorIdempotencyLookupUnavailable","body":{"type":"about:blank","title":"IDEMPOTENCY_LOOKUP_UNAVAILABLE","status":503,"code":"IDEMPOTENCY_LOOKUP_UNAVAILABLE","detail":"Idempotency lookup is unavailable","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":500,"schema":"ErrorIdempotencyResultInvalid","body":{"type":"about:blank","title":"IDEMPOTENCY_RESULT_INVALID","status":500,"code":"IDEMPOTENCY_RESULT_INVALID","detail":"Stored terminal result is invalid","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"streamOrderInvalidations","status":503,"schema":"ErrorRealtimeCapacityExceeded","body":{"type":"about:blank","title":"REALTIME_CAPACITY_EXCEEDED","status":503,"code":"REALTIME_CAPACITY_EXCEEDED","detail":"Realtime capacity is exhausted","instance":"/events","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"client-v1","operationId":"createCustomer","status":500,"schema":"ErrorInternalError","body":{"type":"about:blank","title":"INTERNAL_ERROR","status":500,"code":"INTERNAL_ERROR","detail":"Safe unexpected error","instance":"/api/client-v1/customers","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"removeAromaCartLine","status":400,"schema":"ErrorValidationFailed","body":{"type":"about:blank","title":"VALIDATION_FAILED","status":400,"code":"VALIDATION_FAILED","detail":"Request validation failed","instance":"/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:remove","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"removeAromaCartLine","status":401,"schema":"ErrorServiceAuthenticationRequired","body":{"type":"about:blank","title":"SERVICE_AUTHENTICATION_REQUIRED","status":401,"code":"SERVICE_AUTHENTICATION_REQUIRED","detail":"A valid service identity is required","instance":"/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:remove","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"removeAromaCartLine","status":403,"schema":"ErrorServiceDelegationInvalid","body":{"type":"about:blank","title":"SERVICE_DELEGATION_INVALID","status":403,"code":"SERVICE_DELEGATION_INVALID","detail":"Delegation context is invalid","instance":"/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:remove","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"getCustomerOrderInput","status":404,"schema":"ErrorCustomerNotFound","body":{"type":"about:blank","title":"CUSTOMER_NOT_FOUND","status":404,"code":"CUSTOMER_NOT_FOUND","detail":"Customer does not exist","instance":"/api/internal-v1/customers/cus_01ARZ3NDEKTSV4RRFFQ69G5FAY/order-input","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"getCustomerOrderInput","status":500,"schema":"ErrorInternalError","body":{"type":"about:blank","title":"INTERNAL_ERROR","status":500,"code":"INTERNAL_ERROR","detail":"Safe unexpected error","instance":"/api/internal-v1/customers/cus_01ARZ3NDEKTSV4RRFFQ69G5FAY/order-input","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"getCatalogPricingInput","status":404,"schema":"ErrorCatalogProductNotFound","body":{"type":"about:blank","title":"CATALOG_PRODUCT_NOT_FOUND","status":404,"code":"CATALOG_PRODUCT_NOT_FOUND","detail":"Product is not in the active catalog","instance":"/api/internal-v1/catalog/products/prd_01ARZ3NDEKTSV4RRFFQ69G5FAX/variants/var_01ARZ3NDEKTSV4RRFFQ69G5FAY/pricing-input","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"getCatalogPricingInput","status":503,"schema":"ErrorCatalogSnapshotIncomplete","body":{"type":"about:blank","title":"CATALOG_SNAPSHOT_INCOMPLETE","status":503,"code":"CATALOG_SNAPSHOT_INCOMPLETE","detail":"No complete active catalog snapshot is available","instance":"/api/internal-v1/catalog/products/prd_01ARZ3NDEKTSV4RRFFQ69G5FAX/variants/var_01ARZ3NDEKTSV4RRFFQ69G5FAY/pricing-input","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"getCatalogPricingInput","status":503,"schema":"ErrorCatalogUnavailable","body":{"type":"about:blank","title":"CATALOG_UNAVAILABLE","status":503,"code":"CATALOG_UNAVAILABLE","detail":"Catalog owner is unavailable","instance":"/api/internal-v1/catalog/products/prd_01ARZ3NDEKTSV4RRFFQ69G5FAX/variants/var_01ARZ3NDEKTSV4RRFFQ69G5FAY/pricing-input","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"verifyPricingQuote","status":404,"schema":"ErrorPricingQuoteNotFound","body":{"type":"about:blank","title":"PRICING_QUOTE_NOT_FOUND","status":404,"code":"PRICING_QUOTE_NOT_FOUND","detail":"Pricing quote does not exist","instance":"/api/internal-v1/pricing/quotes:verify","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"verifyPricingQuote","status":409,"schema":"ErrorPricingQuoteHashMismatch","body":{"type":"about:blank","title":"PRICING_QUOTE_HASH_MISMATCH","status":409,"code":"PRICING_QUOTE_HASH_MISMATCH","detail":"Quote hash does not match","instance":"/api/internal-v1/pricing/quotes:verify","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"verifyPricingQuote","status":409,"schema":"ErrorPricingQuoteExpired","body":{"type":"about:blank","title":"PRICING_QUOTE_EXPIRED","status":409,"code":"PRICING_QUOTE_EXPIRED","detail":"Pricing quote has expired","instance":"/api/internal-v1/pricing/quotes:verify","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"verifyPricingQuote","status":409,"schema":"ErrorPricingQuoteScopeMismatch","body":{"type":"about:blank","title":"PRICING_QUOTE_SCOPE_MISMATCH","status":409,"code":"PRICING_QUOTE_SCOPE_MISMATCH","detail":"Pricing quote scope does not match","instance":"/api/internal-v1/pricing/quotes:verify","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"verifyPricingQuote","status":503,"schema":"ErrorPricingPolicyUnavailable","body":{"type":"about:blank","title":"PRICING_POLICY_UNAVAILABLE","status":503,"code":"PRICING_POLICY_UNAVAILABLE","detail":"Pricing policy is unavailable","instance":"/api/internal-v1/pricing/quotes:verify","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"readAromaCartSnapshot","status":503,"schema":"ErrorAromaProviderUnavailable","body":{"type":"about:blank","title":"AROMA_PROVIDER_UNAVAILABLE","status":503,"code":"AROMA_PROVIDER_UNAVAILABLE","detail":"AROMA provider is unavailable","instance":"/api/internal-v1/aroma/cart-snapshots:read","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","body":{"type":"about:blank","title":"AROMA_OPERATION_REF_CONFLICT","status":409,"code":"AROMA_OPERATION_REF_CONFLICT","detail":"Operation reference conflicts with a previous request","instance":"/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:set-quantity","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationInProgress","body":{"type":"about:blank","title":"AROMA_OPERATION_IN_PROGRESS","status":409,"code":"AROMA_OPERATION_IN_PROGRESS","detail":"Operation is still in progress","instance":"/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:set-quantity","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationUnknownOutcome","body":{"type":"about:blank","title":"AROMA_OPERATION_UNKNOWN_OUTCOME","status":409,"code":"AROMA_OPERATION_UNKNOWN_OUTCOME","detail":"Provider outcome is unknown","instance":"/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:set-quantity","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"registerAromaOfferBinding","status":409,"schema":"ErrorAromaBindingConflict","body":{"type":"about:blank","title":"AROMA_BINDING_CONFLICT","status":409,"code":"AROMA_BINDING_CONFLICT","detail":"Immutable binding conflicts with stored identity","instance":"/api/internal-v1/aroma/offer-bindings","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"registerAromaOfferBinding","status":409,"schema":"ErrorAromaBindingSourceNotFound","body":{"type":"about:blank","title":"AROMA_BINDING_SOURCE_NOT_FOUND","status":409,"code":"AROMA_BINDING_SOURCE_NOT_FOUND","detail":"Source identity is not present","instance":"/api/internal-v1/aroma/offer-bindings","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"registerAromaOfferBinding","status":409,"schema":"ErrorAromaBindingSnapshotIncomplete","body":{"type":"about:blank","title":"AROMA_BINDING_SNAPSHOT_INCOMPLETE","status":409,"code":"AROMA_BINDING_SNAPSHOT_INCOMPLETE","detail":"The supplied snapshot is not complete","instance":"/api/internal-v1/aroma/offer-bindings","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}},
-  {"document":"internal-v1","operationId":"setAromaCartLineQuantity","status":404,"schema":"ErrorAromaCartItemNotFound","body":{"type":"about:blank","title":"AROMA_CART_ITEM_NOT_FOUND","status":404,"code":"AROMA_CART_ITEM_NOT_FOUND","detail":"Cart line was not present in the fresh provider snapshot","instance":"/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:set-quantity","correlationId":"11111111-1111-4111-8111-111111111111","errors":[]}}
+  {
+    "document": "client-v1",
+    "operationId": "requestAromaReconciliation",
+    "status": 400,
+    "schema": "ErrorValidationFailed",
+    "body": {
+      "type": "about:blank",
+      "title": "VALIDATION_FAILED",
+      "status": 400,
+      "code": "VALIDATION_FAILED",
+      "detail": "Request validation failed",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/request-aroma-reconciliation",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "searchCustomers",
+    "status": 400,
+    "schema": "ErrorInvalidCursor",
+    "body": {
+      "type": "about:blank",
+      "title": "INVALID_CURSOR",
+      "status": 400,
+      "code": "INVALID_CURSOR",
+      "detail": "Cursor is invalid",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 401,
+    "schema": "ErrorAuthenticationRequired",
+    "body": {
+      "type": "about:blank",
+      "title": "AUTHENTICATION_REQUIRED",
+      "status": 401,
+      "code": "AUTHENTICATION_REQUIRED",
+      "detail": "Authentication is required",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 403,
+    "schema": "ErrorActorContextInvalid",
+    "body": {
+      "type": "about:blank",
+      "title": "ACTOR_CONTEXT_INVALID",
+      "status": 403,
+      "code": "ACTOR_CONTEXT_INVALID",
+      "detail": "Actor context is invalid",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 409,
+    "schema": "ErrorCustomerPhoneConflict",
+    "body": {
+      "type": "about:blank",
+      "title": "CUSTOMER_PHONE_CONFLICT",
+      "status": 409,
+      "code": "CUSTOMER_PHONE_CONFLICT",
+      "detail": "Phone is already registered",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 409,
+    "schema": "ErrorCustomerEmailConflict",
+    "body": {
+      "type": "about:blank",
+      "title": "CUSTOMER_EMAIL_CONFLICT",
+      "status": 409,
+      "code": "CUSTOMER_EMAIL_CONFLICT",
+      "detail": "Email is already registered",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 409,
+    "schema": "ErrorIdempotencyConflict",
+    "body": {
+      "type": "about:blank",
+      "title": "IDEMPOTENCY_CONFLICT",
+      "status": 409,
+      "code": "IDEMPOTENCY_CONFLICT",
+      "detail": "Idempotency key conflicts with a different request",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 409,
+    "schema": "ErrorIdempotencyRequestInProgress",
+    "body": {
+      "type": "about:blank",
+      "title": "IDEMPOTENCY_REQUEST_IN_PROGRESS",
+      "status": 409,
+      "code": "IDEMPOTENCY_REQUEST_IN_PROGRESS",
+      "detail": "The request is still in progress",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "status": 404,
+    "schema": "ErrorCatalogProductNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "CATALOG_PRODUCT_NOT_FOUND",
+      "status": 404,
+      "code": "CATALOG_PRODUCT_NOT_FOUND",
+      "detail": "Product is not in the active catalog",
+      "instance": "/api/client-v1/pricing/quotes",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "status": 409,
+    "schema": "ErrorCatalogProductUnavailable",
+    "body": {
+      "type": "about:blank",
+      "title": "CATALOG_PRODUCT_UNAVAILABLE",
+      "status": 409,
+      "code": "CATALOG_PRODUCT_UNAVAILABLE",
+      "detail": "Product is unavailable",
+      "instance": "/api/client-v1/pricing/quotes",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "status": 409,
+    "schema": "ErrorCatalogRevisionChanged",
+    "body": {
+      "type": "about:blank",
+      "title": "CATALOG_REVISION_CHANGED",
+      "status": 409,
+      "code": "CATALOG_REVISION_CHANGED",
+      "detail": "Catalog revision changed",
+      "instance": "/api/client-v1/pricing/quotes",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "status": 422,
+    "schema": "ErrorPricingGrindNotAvailable",
+    "body": {
+      "type": "about:blank",
+      "title": "PRICING_GRIND_NOT_AVAILABLE",
+      "status": 422,
+      "code": "PRICING_GRIND_NOT_AVAILABLE",
+      "detail": "Grind choice is unavailable",
+      "instance": "/api/client-v1/pricing/quotes",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "searchCatalogProducts",
+    "status": 503,
+    "schema": "ErrorCatalogSnapshotIncomplete",
+    "body": {
+      "type": "about:blank",
+      "title": "CATALOG_SNAPSHOT_INCOMPLETE",
+      "status": 503,
+      "code": "CATALOG_SNAPSHOT_INCOMPLETE",
+      "detail": "No complete active catalog snapshot is available",
+      "instance": "/api/client-v1/catalog/products",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "status": 503,
+    "schema": "ErrorCatalogUnavailable",
+    "body": {
+      "type": "about:blank",
+      "title": "CATALOG_UNAVAILABLE",
+      "status": 503,
+      "code": "CATALOG_UNAVAILABLE",
+      "detail": "Catalog owner is unavailable",
+      "instance": "/api/client-v1/pricing/quotes",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createOrderDraft",
+    "status": 404,
+    "schema": "ErrorCustomerNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "CUSTOMER_NOT_FOUND",
+      "status": 404,
+      "code": "CUSTOMER_NOT_FOUND",
+      "detail": "Customer does not exist",
+      "instance": "/api/client-v1/orders/drafts",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createOrderDraft",
+    "status": 409,
+    "schema": "ErrorCustomerNotActive",
+    "body": {
+      "type": "about:blank",
+      "title": "CUSTOMER_NOT_ACTIVE",
+      "status": 409,
+      "code": "CUSTOMER_NOT_ACTIVE",
+      "detail": "Customer is not active",
+      "instance": "/api/client-v1/orders/drafts",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createOrderDraft",
+    "status": 503,
+    "schema": "ErrorCustomerUnavailable",
+    "body": {
+      "type": "about:blank",
+      "title": "CUSTOMER_UNAVAILABLE",
+      "status": 503,
+      "code": "CUSTOMER_UNAVAILABLE",
+      "detail": "Customer owner is unavailable",
+      "instance": "/api/client-v1/orders/drafts",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "upsertOrderItem",
+    "status": 404,
+    "schema": "ErrorOrderNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_NOT_FOUND",
+      "status": 404,
+      "code": "ORDER_NOT_FOUND",
+      "detail": "Order does not exist",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "removeOrderItem",
+    "status": 404,
+    "schema": "ErrorOrderItemNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_ITEM_NOT_FOUND",
+      "status": 404,
+      "code": "ORDER_ITEM_NOT_FOUND",
+      "detail": "Order item does not exist",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "upsertOrderItem",
+    "status": 409,
+    "schema": "ErrorOrderVersionConflict",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_VERSION_CONFLICT",
+      "status": 409,
+      "code": "ORDER_VERSION_CONFLICT",
+      "detail": "Expected order version is stale",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "upsertOrderItem",
+    "status": 409,
+    "schema": "ErrorOrderQuoteStale",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_QUOTE_STALE",
+      "status": 409,
+      "code": "ORDER_QUOTE_STALE",
+      "detail": "Quote proof is stale",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "upsertOrderItem",
+    "status": 409,
+    "schema": "ErrorOrderNotEditable",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_NOT_EDITABLE",
+      "status": 409,
+      "code": "ORDER_NOT_EDITABLE",
+      "detail": "Order is not editable",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01BX5ZZKBKACTAV9WEVGEMMVRY",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "confirmOrder",
+    "status": 422,
+    "schema": "ErrorOrderConfirmationRejected",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_CONFIRMATION_REJECTED",
+      "status": 422,
+      "code": "ORDER_CONFIRMATION_REJECTED",
+      "detail": "Order cannot be confirmed",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/confirm",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "confirmOrder",
+    "status": 422,
+    "schema": "ErrorOrderEmpty",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_EMPTY",
+      "status": 422,
+      "code": "ORDER_EMPTY",
+      "detail": "Order has no items",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/confirm",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "confirmOrder",
+    "status": 422,
+    "schema": "ErrorOrderDesiredOverflow",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_DESIRED_OVERFLOW",
+      "status": 422,
+      "code": "ORDER_DESIRED_OVERFLOW",
+      "detail": "Order quantity exceeds the supported total",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/confirm",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "upsertOrderItem",
+    "status": 409,
+    "schema": "ErrorOrderItemLimitExceeded",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_ITEM_LIMIT_EXCEEDED",
+      "status": 409,
+      "code": "ORDER_ITEM_LIMIT_EXCEEDED",
+      "detail": "Order item limit exceeded",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "upsertOrderItem",
+    "status": 409,
+    "schema": "ErrorOrderQuoteScopeMismatch",
+    "body": {
+      "type": "about:blank",
+      "title": "ORDER_QUOTE_SCOPE_MISMATCH",
+      "status": 409,
+      "code": "ORDER_QUOTE_SCOPE_MISMATCH",
+      "detail": "Quote does not match this order item",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/items/itm_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "requestAromaReconciliation",
+    "status": 409,
+    "schema": "ErrorAromaReconciliationNotAllowed",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_RECONCILIATION_NOT_ALLOWED",
+      "status": 409,
+      "code": "AROMA_RECONCILIATION_NOT_ALLOWED",
+      "detail": "Reconciliation is not allowed for this order",
+      "instance": "/api/client-v1/orders/ord_01ARZ3NDEKTSV4RRFFQ69G5FAV/commands/request-aroma-reconciliation",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 410,
+    "schema": "ErrorIdempotencyResultNotRetained",
+    "body": {
+      "type": "about:blank",
+      "title": "IDEMPOTENCY_RESULT_NOT_RETAINED",
+      "status": 410,
+      "code": "IDEMPOTENCY_RESULT_NOT_RETAINED",
+      "detail": "The terminal result is no longer retained",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 503,
+    "schema": "ErrorIdempotencyLookupUnavailable",
+    "body": {
+      "type": "about:blank",
+      "title": "IDEMPOTENCY_LOOKUP_UNAVAILABLE",
+      "status": 503,
+      "code": "IDEMPOTENCY_LOOKUP_UNAVAILABLE",
+      "detail": "Idempotency lookup is unavailable",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 500,
+    "schema": "ErrorIdempotencyResultInvalid",
+    "body": {
+      "type": "about:blank",
+      "title": "IDEMPOTENCY_RESULT_INVALID",
+      "status": 500,
+      "code": "IDEMPOTENCY_RESULT_INVALID",
+      "detail": "Stored terminal result is invalid",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "streamOrderInvalidations",
+    "status": 503,
+    "schema": "ErrorRealtimeCapacityExceeded",
+    "body": {
+      "type": "about:blank",
+      "title": "REALTIME_CAPACITY_EXCEEDED",
+      "status": 503,
+      "code": "REALTIME_CAPACITY_EXCEEDED",
+      "detail": "Realtime capacity is exhausted",
+      "instance": "/events",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 500,
+    "schema": "ErrorInternalError",
+    "body": {
+      "type": "about:blank",
+      "title": "INTERNAL_ERROR",
+      "status": 500,
+      "code": "INTERNAL_ERROR",
+      "detail": "Safe unexpected error",
+      "instance": "/api/client-v1/customers",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "removeAromaCartLine",
+    "status": 400,
+    "schema": "ErrorValidationFailed",
+    "body": {
+      "type": "about:blank",
+      "title": "VALIDATION_FAILED",
+      "status": 400,
+      "code": "VALIDATION_FAILED",
+      "detail": "Request validation failed",
+      "instance": "/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:remove",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "removeAromaCartLine",
+    "status": 401,
+    "schema": "ErrorServiceAuthenticationRequired",
+    "body": {
+      "type": "about:blank",
+      "title": "SERVICE_AUTHENTICATION_REQUIRED",
+      "status": 401,
+      "code": "SERVICE_AUTHENTICATION_REQUIRED",
+      "detail": "A valid service identity is required",
+      "instance": "/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:remove",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "removeAromaCartLine",
+    "status": 403,
+    "schema": "ErrorServiceDelegationInvalid",
+    "body": {
+      "type": "about:blank",
+      "title": "SERVICE_DELEGATION_INVALID",
+      "status": 403,
+      "code": "SERVICE_DELEGATION_INVALID",
+      "detail": "Delegation context is invalid",
+      "instance": "/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:remove",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "getCustomerOrderInput",
+    "status": 404,
+    "schema": "ErrorCustomerNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "CUSTOMER_NOT_FOUND",
+      "status": 404,
+      "code": "CUSTOMER_NOT_FOUND",
+      "detail": "Customer does not exist",
+      "instance": "/api/internal-v1/customers/cus_01ARZ3NDEKTSV4RRFFQ69G5FAY/order-input",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "getCustomerOrderInput",
+    "status": 500,
+    "schema": "ErrorInternalError",
+    "body": {
+      "type": "about:blank",
+      "title": "INTERNAL_ERROR",
+      "status": 500,
+      "code": "INTERNAL_ERROR",
+      "detail": "Safe unexpected error",
+      "instance": "/api/internal-v1/customers/cus_01ARZ3NDEKTSV4RRFFQ69G5FAY/order-input",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "getCatalogPricingInput",
+    "status": 404,
+    "schema": "ErrorCatalogProductNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "CATALOG_PRODUCT_NOT_FOUND",
+      "status": 404,
+      "code": "CATALOG_PRODUCT_NOT_FOUND",
+      "detail": "Product is not in the active catalog",
+      "instance": "/api/internal-v1/catalog/products/prd_01ARZ3NDEKTSV4RRFFQ69G5FAX/variants/var_01ARZ3NDEKTSV4RRFFQ69G5FAY/pricing-input",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "getCatalogPricingInput",
+    "status": 503,
+    "schema": "ErrorCatalogSnapshotIncomplete",
+    "body": {
+      "type": "about:blank",
+      "title": "CATALOG_SNAPSHOT_INCOMPLETE",
+      "status": 503,
+      "code": "CATALOG_SNAPSHOT_INCOMPLETE",
+      "detail": "No complete active catalog snapshot is available",
+      "instance": "/api/internal-v1/catalog/products/prd_01ARZ3NDEKTSV4RRFFQ69G5FAX/variants/var_01ARZ3NDEKTSV4RRFFQ69G5FAY/pricing-input",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "getCatalogPricingInput",
+    "status": 503,
+    "schema": "ErrorCatalogUnavailable",
+    "body": {
+      "type": "about:blank",
+      "title": "CATALOG_UNAVAILABLE",
+      "status": 503,
+      "code": "CATALOG_UNAVAILABLE",
+      "detail": "Catalog owner is unavailable",
+      "instance": "/api/internal-v1/catalog/products/prd_01ARZ3NDEKTSV4RRFFQ69G5FAX/variants/var_01ARZ3NDEKTSV4RRFFQ69G5FAY/pricing-input",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "verifyPricingQuote",
+    "status": 404,
+    "schema": "ErrorPricingQuoteNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "PRICING_QUOTE_NOT_FOUND",
+      "status": 404,
+      "code": "PRICING_QUOTE_NOT_FOUND",
+      "detail": "Pricing quote does not exist",
+      "instance": "/api/internal-v1/pricing/quotes:verify",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "verifyPricingQuote",
+    "status": 409,
+    "schema": "ErrorPricingQuoteHashMismatch",
+    "body": {
+      "type": "about:blank",
+      "title": "PRICING_QUOTE_HASH_MISMATCH",
+      "status": 409,
+      "code": "PRICING_QUOTE_HASH_MISMATCH",
+      "detail": "Quote hash does not match",
+      "instance": "/api/internal-v1/pricing/quotes:verify",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "verifyPricingQuote",
+    "status": 409,
+    "schema": "ErrorPricingQuoteExpired",
+    "body": {
+      "type": "about:blank",
+      "title": "PRICING_QUOTE_EXPIRED",
+      "status": 409,
+      "code": "PRICING_QUOTE_EXPIRED",
+      "detail": "Pricing quote has expired",
+      "instance": "/api/internal-v1/pricing/quotes:verify",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "verifyPricingQuote",
+    "status": 409,
+    "schema": "ErrorPricingQuoteScopeMismatch",
+    "body": {
+      "type": "about:blank",
+      "title": "PRICING_QUOTE_SCOPE_MISMATCH",
+      "status": 409,
+      "code": "PRICING_QUOTE_SCOPE_MISMATCH",
+      "detail": "Pricing quote scope does not match",
+      "instance": "/api/internal-v1/pricing/quotes:verify",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "verifyPricingQuote",
+    "status": 503,
+    "schema": "ErrorPricingPolicyUnavailable",
+    "body": {
+      "type": "about:blank",
+      "title": "PRICING_POLICY_UNAVAILABLE",
+      "status": 503,
+      "code": "PRICING_POLICY_UNAVAILABLE",
+      "detail": "Pricing policy is unavailable",
+      "instance": "/api/internal-v1/pricing/quotes:verify",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "readAromaCartSnapshot",
+    "status": 503,
+    "schema": "ErrorAromaProviderUnavailable",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_PROVIDER_UNAVAILABLE",
+      "status": 503,
+      "code": "AROMA_PROVIDER_UNAVAILABLE",
+      "detail": "AROMA provider is unavailable",
+      "instance": "/api/internal-v1/aroma/cart-snapshots:read",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_OPERATION_REF_CONFLICT",
+      "status": 409,
+      "code": "AROMA_OPERATION_REF_CONFLICT",
+      "detail": "Operation reference conflicts with a previous request",
+      "instance": "/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:set-quantity",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationInProgress",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_OPERATION_IN_PROGRESS",
+      "status": 409,
+      "code": "AROMA_OPERATION_IN_PROGRESS",
+      "detail": "Operation is still in progress",
+      "instance": "/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:set-quantity",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationUnknownOutcome",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_OPERATION_UNKNOWN_OUTCOME",
+      "status": 409,
+      "code": "AROMA_OPERATION_UNKNOWN_OUTCOME",
+      "detail": "Provider outcome is unknown",
+      "instance": "/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:set-quantity",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "registerAromaOfferBinding",
+    "status": 409,
+    "schema": "ErrorAromaBindingConflict",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_BINDING_CONFLICT",
+      "status": 409,
+      "code": "AROMA_BINDING_CONFLICT",
+      "detail": "Immutable binding conflicts with stored identity",
+      "instance": "/api/internal-v1/aroma/offer-bindings",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "registerAromaOfferBinding",
+    "status": 409,
+    "schema": "ErrorAromaBindingSourceNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_BINDING_SOURCE_NOT_FOUND",
+      "status": 409,
+      "code": "AROMA_BINDING_SOURCE_NOT_FOUND",
+      "detail": "Source identity is not present",
+      "instance": "/api/internal-v1/aroma/offer-bindings",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "registerAromaOfferBinding",
+    "status": 409,
+    "schema": "ErrorAromaBindingSnapshotIncomplete",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_BINDING_SNAPSHOT_INCOMPLETE",
+      "status": 409,
+      "code": "AROMA_BINDING_SNAPSHOT_INCOMPLETE",
+      "detail": "The supplied snapshot is not complete",
+      "instance": "/api/internal-v1/aroma/offer-bindings",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  },
+  {
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 404,
+    "schema": "ErrorAromaCartItemNotFound",
+    "body": {
+      "type": "about:blank",
+      "title": "AROMA_CART_ITEM_NOT_FOUND",
+      "status": 404,
+      "code": "AROMA_CART_ITEM_NOT_FOUND",
+      "detail": "Cart line was not present in the fresh provider snapshot",
+      "instance": "/api/internal-v1/aroma/cart-lines/off_01ARZ3NDEKTSV4RRFFQ69G5FAZ:set-quantity",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "errors": []
+    }
+  }
 ]

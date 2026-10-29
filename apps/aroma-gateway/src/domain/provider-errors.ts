@@ -21,7 +21,11 @@ export class ProviderError extends Error {
   readonly responseBytesReceived: boolean;
   readonly statusCode: number | undefined;
 
-  constructor(code: ProviderErrorCode, responseBytesReceived = false, statusCode?: number) {
+  constructor(
+    code: ProviderErrorCode,
+    responseBytesReceived = false,
+    statusCode?: number,
+  ) {
     super(code);
     this.name = "ProviderError";
     this.code = code;

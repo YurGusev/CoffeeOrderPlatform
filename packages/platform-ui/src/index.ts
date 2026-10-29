@@ -3,7 +3,11 @@ export type { AlertProps } from "./components/alert.js";
 export { Badge } from "./components/badge.js";
 export type { BadgeProps } from "./components/badge.js";
 export { Button } from "./components/button.js";
-export type { ButtonProps, ButtonSize, ButtonVariant } from "./components/button.js";
+export type {
+  ButtonProps,
+  ButtonSize,
+  ButtonVariant,
+} from "./components/button.js";
 export { Dialog } from "./components/dialog.js";
 export type { DialogCloseReason, DialogProps } from "./components/dialog.js";
 export { Empty } from "./components/empty.js";

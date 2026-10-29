@@ -1,5 +1,8 @@
 import type { ReactElement, ReactNode } from "react";
-import { Link as AriaLink, type LinkProps as AriaLinkProps } from "react-aria-components";
+import {
+  Link as AriaLink,
+  type LinkProps as AriaLinkProps,
+} from "react-aria-components";
 import { cn } from "../cn.js";
 
 export type LinkProps = Omit<AriaLinkProps, "children" | "className"> & {
@@ -7,7 +10,11 @@ export type LinkProps = Omit<AriaLinkProps, "children" | "className"> & {
   className?: string;
 };
 
-export function Link({ children, className, ...props }: LinkProps): ReactElement {
+export function Link({
+  children,
+  className,
+  ...props
+}: LinkProps): ReactElement {
   return (
     <AriaLink
       {...props}

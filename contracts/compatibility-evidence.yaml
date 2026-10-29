@@ -148,11 +148,11 @@ approvedResponseExpansions:
     route: /api/client-v1/orders/{orderRef}/commands/confirm
     operationId: confirmOrder
     status: 422
-    beforeRef: '#/components/responses/RecoveryOrderConfirmationRejected'
+    beforeRef: "#/components/responses/RecoveryOrderConfirmationRejected"
     afterRefs:
-      - '#/components/schemas/ErrorOrderConfirmationRejected'
-      - '#/components/schemas/ErrorOrderEmpty'
-      - '#/components/schemas/ErrorOrderDesiredOverflow'
+      - "#/components/schemas/ErrorOrderConfirmationRejected"
+      - "#/components/schemas/ErrorOrderEmpty"
+      - "#/components/schemas/ErrorOrderDesiredOverflow"
     issue: 8
     fixture: contracts/fixtures/positive/http/problems.json
     fixtureCases:
@@ -175,7 +175,7 @@ approvedInternalCallerExpansions:
       x-audience: [pricing-service, aroma-convergence]
       x-caller: null
       x-callers: [pricing-service, aroma-convergence]
-      x-auth: 'mTLS; signed-delegation for pricing-service; scoped-mTLS identity for aroma-convergence'
+      x-auth: "mTLS; signed-delegation for pricing-service; scoped-mTLS identity for aroma-convergence"
     manifestBefore: pricing-service
     manifestAfter: [pricing-service, aroma-convergence]
     issue: 11

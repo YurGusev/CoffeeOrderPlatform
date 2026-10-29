@@ -1,8 +1,13 @@
-import {createHmac} from "node:crypto";
-import type {KeyObject} from "node:crypto";
+import { createHmac } from "node:crypto";
+import type { KeyObject } from "node:crypto";
 
 export const SOURCE_IDENTITY_SCHEME = "hmac-sha256-v1" as const;
-export const SOURCE_ENTITY_TYPES = ["product", "variant", "offer", "grind"] as const;
+export const SOURCE_ENTITY_TYPES = [
+  "product",
+  "variant",
+  "offer",
+  "grind",
+] as const;
 
 export type SourceEntityType = (typeof SOURCE_ENTITY_TYPES)[number];
 export type SourceIdentityKey = Uint8Array | KeyObject;
@@ -13,9 +18,10 @@ export type SourceIdentityInput = Readonly<{
   rawProviderIdentifier: string;
 }>;
 
-export type SourceIdentityRequest = SourceIdentityInput & Readonly<{
-  sourceIdentityKey: SourceIdentityKey;
-}>;
+export type SourceIdentityRequest = SourceIdentityInput &
+  Readonly<{
+    sourceIdentityKey: SourceIdentityKey;
+  }>;
 
 export type SourceIdentityHash = string & {
   readonly __sourceIdentityHash: unique symbol;
@@ -45,7 +51,11 @@ export class SourceIdentityValidationError extends Error {
 
 const SUPPLIER_REF_PATTERN = /^sup_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const HASH_PATTERN = /^[0-9a-f]{64}$/u;
-const INPUT_KEYS = ["supplierRef", "entityType", "rawProviderIdentifier"] as const;
+const INPUT_KEYS = [
+  "supplierRef",
+  "entityType",
+  "rawProviderIdentifier",
+] as const;
 const REQUEST_KEYS = [...INPUT_KEYS, "sourceIdentityKey"] as const;
 
 function invalid(code: SourceIdentityValidationCode): never {
@@ -56,42 +66,75 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function hasExactlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+function hasExactlyKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
   const actual = Object.keys(value);
-  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+  return (
+    actual.length === keys.length &&
+    keys.every((key) => Object.hasOwn(value, key))
+  );
 }
 
-
 function isNulFreeNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && !value.includes("\u0000") && value.isWellFormed();
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    !value.includes("\u0000") &&
+    value.isWellFormed()
+  );
 }
 
 export function isSourceEntityType(value: unknown): value is SourceEntityType {
-  return value === "product" || value === "variant" || value === "offer" || value === "grind";
+  return (
+    value === "product" ||
+    value === "variant" ||
+    value === "offer" ||
+    value === "grind"
+  );
 }
 
-export function isSourceIdentityKey(value: unknown): value is SourceIdentityKey {
+export function isSourceIdentityKey(
+  value: unknown,
+): value is SourceIdentityKey {
   if (value instanceof Uint8Array) return value.byteLength > 0;
   if (!isRecord(value)) return false;
-  return value["type"] === "secret" && typeof value["export"] === "function" &&
-    typeof value["symmetricKeySize"] === "number" && value["symmetricKeySize"] > 0;
+  return (
+    value["type"] === "secret" &&
+    typeof value["export"] === "function" &&
+    typeof value["symmetricKeySize"] === "number" &&
+    value["symmetricKeySize"] > 0
+  );
 }
 
-export function assertSourceIdentityInput(value: unknown): asserts value is SourceIdentityInput {
-  if (!isRecord(value) || !hasExactlyKeys(value, INPUT_KEYS)) invalid("INVALID_INPUT");
-  if (typeof value["supplierRef"] !== "string" || !SUPPLIER_REF_PATTERN.test(value["supplierRef"]) || value["supplierRef"].includes("\u0000")) {
+export function assertSourceIdentityInput(
+  value: unknown,
+): asserts value is SourceIdentityInput {
+  if (!isRecord(value) || !hasExactlyKeys(value, INPUT_KEYS))
+    invalid("INVALID_INPUT");
+  if (
+    typeof value["supplierRef"] !== "string" ||
+    !SUPPLIER_REF_PATTERN.test(value["supplierRef"]) ||
+    value["supplierRef"].includes("\u0000")
+  ) {
     invalid("INVALID_SUPPLIER_REF");
   }
   if (!isSourceEntityType(value["entityType"])) invalid("INVALID_ENTITY_TYPE");
-  if (!isNulFreeNonEmptyString(value["rawProviderIdentifier"])) invalid("INVALID_RAW_PROVIDER_IDENTIFIER");
+  if (!isNulFreeNonEmptyString(value["rawProviderIdentifier"]))
+    invalid("INVALID_RAW_PROVIDER_IDENTIFIER");
 }
 
-export function validateSourceIdentityInput(value: unknown): SourceIdentityInput {
+export function validateSourceIdentityInput(
+  value: unknown,
+): SourceIdentityInput {
   assertSourceIdentityInput(value);
   return value;
 }
 
-export function isSourceIdentityInput(value: unknown): value is SourceIdentityInput {
+export function isSourceIdentityInput(
+  value: unknown,
+): value is SourceIdentityInput {
   try {
     assertSourceIdentityInput(value);
     return true;
@@ -100,13 +143,18 @@ export function isSourceIdentityInput(value: unknown): value is SourceIdentityIn
   }
 }
 
-export function assertSourceIdentityKey(value: unknown): asserts value is SourceIdentityKey {
+export function assertSourceIdentityKey(
+  value: unknown,
+): asserts value is SourceIdentityKey {
   if (!isSourceIdentityKey(value)) invalid("INVALID_KEY");
 }
 
-export function frameSourceIdentityMessage(input: SourceIdentityInput): Uint8Array {
+export function frameSourceIdentityMessage(
+  input: SourceIdentityInput,
+): Uint8Array {
   assertSourceIdentityInput(input);
-  const normalizedProviderIdentifier = input.rawProviderIdentifier.normalize("NFC");
+  const normalizedProviderIdentifier =
+    input.rawProviderIdentifier.normalize("NFC");
   return Buffer.concat([
     Buffer.from(SOURCE_IDENTITY_SCHEME, "utf8"),
     Buffer.from([0x00]),
@@ -118,13 +166,18 @@ export function frameSourceIdentityMessage(input: SourceIdentityInput): Uint8Arr
   ]);
 }
 
-export function computeSourceIdentityHash(input: SourceIdentityInput, sourceIdentityKey: SourceIdentityKey): SourceIdentityHash {
+export function computeSourceIdentityHash(
+  input: SourceIdentityInput,
+  sourceIdentityKey: SourceIdentityKey,
+): SourceIdentityHash {
   assertSourceIdentityInput(input);
   assertSourceIdentityKey(sourceIdentityKey);
 
   let digest: string;
   try {
-    digest = createHmac("sha256", sourceIdentityKey).update(frameSourceIdentityMessage(input)).digest("hex");
+    digest = createHmac("sha256", sourceIdentityKey)
+      .update(frameSourceIdentityMessage(input))
+      .digest("hex");
   } catch {
     invalid("INVALID_KEY");
   }
@@ -132,8 +185,11 @@ export function computeSourceIdentityHash(input: SourceIdentityInput, sourceIden
   return digest as SourceIdentityHash;
 }
 
-export function createSourceIdentity(request: SourceIdentityRequest): SourceIdentity {
-  if (!isRecord(request) || !hasExactlyKeys(request, REQUEST_KEYS)) invalid("INVALID_INPUT");
+export function createSourceIdentity(
+  request: SourceIdentityRequest,
+): SourceIdentity {
+  if (!isRecord(request) || !hasExactlyKeys(request, REQUEST_KEYS))
+    invalid("INVALID_INPUT");
   assertSourceIdentityInput({
     supplierRef: request["supplierRef"],
     entityType: request["entityType"],
@@ -142,10 +198,13 @@ export function createSourceIdentity(request: SourceIdentityRequest): SourceIden
   assertSourceIdentityKey(request["sourceIdentityKey"]);
   return Object.freeze({
     sourceIdentityScheme: SOURCE_IDENTITY_SCHEME,
-    sourceIdentityHash: computeSourceIdentityHash({
-      supplierRef: request["supplierRef"],
-      entityType: request["entityType"],
-      rawProviderIdentifier: request["rawProviderIdentifier"],
-    }, request["sourceIdentityKey"]),
+    sourceIdentityHash: computeSourceIdentityHash(
+      {
+        supplierRef: request["supplierRef"],
+        entityType: request["entityType"],
+        rawProviderIdentifier: request["rawProviderIdentifier"],
+      },
+      request["sourceIdentityKey"],
+    ),
   });
 }

@@ -1,3 +1,3 @@
-import sqlite from 'node:sqlite';
+import sqlite from "node:sqlite";
 
 export const database = sqlite;

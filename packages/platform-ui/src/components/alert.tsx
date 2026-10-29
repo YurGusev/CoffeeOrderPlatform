@@ -17,12 +17,25 @@ const toneClasses: Record<AlertTone, string> = {
   warning: "border-warning-border bg-warning-bg text-warning-text",
 };
 
-export function Alert({ children, className, title, tone = "info" }: AlertProps): ReactElement {
+export function Alert({
+  children,
+  className,
+  title,
+  tone = "info",
+}: AlertProps): ReactElement {
   const role = tone === "danger" ? "alert" : "status";
   const live = tone === "danger" ? "assertive" : "polite";
 
   return (
-    <div aria-live={live} className={cn("rounded-control border p-4 text-sm", toneClasses[tone], className)} role={role}>
+    <div
+      aria-live={live}
+      className={cn(
+        "rounded-control border p-4 text-sm",
+        toneClasses[tone],
+        className,
+      )}
+      role={role}
+    >
       {title ? <p className="mb-1 font-semibold">{title}</p> : null}
       <div>{children}</div>
     </div>

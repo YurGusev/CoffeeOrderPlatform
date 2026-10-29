@@ -1,3 +1,3 @@
-import { dependency } from './dependency';
+import { dependency } from "./dependency";
 
 export { dependency };

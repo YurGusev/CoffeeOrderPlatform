@@ -1,53 +1,136 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://coffeeorderplatform.local/schemas/database-ownership.v1.schema.json",
-  "type": "object", "additionalProperties": false,
-  "required": ["$schema", "schemaVersion", "authorityRef", "databases", "runtimeClaims", "dataOwners", "deny"],
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "authorityRef",
+    "databases",
+    "runtimeClaims",
+    "dataOwners",
+    "deny"
+  ],
   "properties": {
-    "$schema": {"const": "./database-ownership.schema.json"},
-    "schemaVersion": {"const": 1},
-    "authorityRef": {"const": "docs/launch/05_DATA_OWNERSHIP.md"},
-    "databases": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/database"}},
-    "runtimeClaims": {"type": "array", "minItems": 15, "maxItems": 15, "items": {"$ref": "#/$defs/claim"}},
-    "dataOwners": {"type": "array", "minItems": 11, "maxItems": 11, "items": {"$ref": "#/$defs/dataOwner"}},
+    "$schema": { "const": "./database-ownership.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "authorityRef": { "const": "docs/launch/05_DATA_OWNERSHIP.md" },
+    "databases": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/database" }
+    },
+    "runtimeClaims": {
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
+      "items": { "$ref": "#/$defs/claim" }
+    },
+    "dataOwners": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": { "$ref": "#/$defs/dataOwner" }
+    },
     "deny": {
-      "type": "object", "additionalProperties": false,
-      "required": ["databases", "roles", "crossOwnerSql", "runtimeDdl", "unownedMigrationPath"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "databases",
+        "roles",
+        "crossOwnerSql",
+        "runtimeDdl",
+        "unownedMigrationPath"
+      ],
       "properties": {
-        "databases": {"const": ["coffeeorderdb", "coffeeorder_staging"]},
-        "roles": {"const": ["postgres", "coffee_orders_rw", "coffee_platform_superuser"]},
-        "crossOwnerSql": {"const": true}, "runtimeDdl": {"const": true}, "unownedMigrationPath": {"const": true}
+        "databases": { "const": ["coffeeorderdb", "coffeeorder_staging"] },
+        "roles": {
+          "const": ["postgres", "coffee_orders_rw", "coffee_platform_superuser"]
+        },
+        "crossOwnerSql": { "const": true },
+        "runtimeDdl": { "const": true },
+        "unownedMigrationPath": { "const": true }
       }
     }
   },
   "$defs": {
-    "runtimeName": {"enum": ["edge-gateway", "api-public", "api-internal", "edge-nginx", "customer-service", "catalog-service", "catalog-supplier-sync", "catalog-activation-worker", "pricing-service", "orders-service", "orders-aroma-preparation", "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"]},
-    "databaseName": {"enum": ["coffee_platform_customer", "coffee_platform_catalog", "coffee_platform_pricing", "coffee_platform_orders", "coffee_platform_integration"]},
+    "runtimeName": {
+      "enum": [
+        "edge-gateway",
+        "api-public",
+        "api-internal",
+        "edge-nginx",
+        "customer-service",
+        "catalog-service",
+        "catalog-supplier-sync",
+        "catalog-activation-worker",
+        "pricing-service",
+        "orders-service",
+        "orders-aroma-preparation",
+        "aroma-observer",
+        "aroma-convergence",
+        "aroma-gateway",
+        "realtime-gateway"
+      ]
+    },
+    "databaseName": {
+      "enum": [
+        "coffee_platform_customer",
+        "coffee_platform_catalog",
+        "coffee_platform_pricing",
+        "coffee_platform_orders",
+        "coffee_platform_integration"
+      ]
+    },
     "database": {
-      "type": "object", "additionalProperties": false,
-      "required": ["name", "owner", "migrationOwner", "migratorRole", "migrationPath"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "owner",
+        "migrationOwner",
+        "migratorRole",
+        "migrationPath"
+      ],
       "properties": {
-        "name": {"$ref": "#/$defs/databaseName"},
-        "owner": {"enum": ["customer", "catalog", "pricing", "orders", "integration"]},
-        "migrationOwner": {"$ref": "#/$defs/runtimeName"},
-        "migratorRole": {"type": "string", "pattern": "^coffee_[a-z]+_migrator$"},
-        "migrationPath": {"type": "string", "pattern": "^apps/[a-z0-9-]+/migrations$"}
+        "name": { "$ref": "#/$defs/databaseName" },
+        "owner": {
+          "enum": ["customer", "catalog", "pricing", "orders", "integration"]
+        },
+        "migrationOwner": { "$ref": "#/$defs/runtimeName" },
+        "migratorRole": {
+          "type": "string",
+          "pattern": "^coffee_[a-z]+_migrator$"
+        },
+        "migrationPath": {
+          "type": "string",
+          "pattern": "^apps/[a-z0-9-]+/migrations$"
+        }
       }
     },
     "claim": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["runtime", "database", "role", "secretRef"],
       "properties": {
-        "runtime": {"$ref": "#/$defs/runtimeName"},
-        "database": {"anyOf": [{"$ref": "#/$defs/databaseName"}, {"type": "null"}]},
-        "role": {"type": ["string", "null"]},
-        "secretRef": {"type": ["string", "null"]}
+        "runtime": { "$ref": "#/$defs/runtimeName" },
+        "database": {
+          "anyOf": [{ "$ref": "#/$defs/databaseName" }, { "type": "null" }]
+        },
+        "role": { "type": ["string", "null"] },
+        "secretRef": { "type": ["string", "null"] }
       }
     },
     "dataOwner": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["aggregate", "owner"],
-      "properties": {"aggregate": {"type": "string", "minLength": 1}, "owner": {"type": "string", "minLength": 1}}
+      "properties": {
+        "aggregate": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 }
+      }
     }
   }
 }

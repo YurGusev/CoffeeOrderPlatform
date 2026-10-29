@@ -1,4 +1,4 @@
-import {context, trace, SpanStatusCode} from "@opentelemetry/api";
+import { context, trace, SpanStatusCode } from "@opentelemetry/api";
 
 export const PRICING_SPAN_NAMES = [
   "pricing.idempotency.precheck",
@@ -11,18 +11,40 @@ export const PRICING_SPAN_NAMES = [
 ] as const;
 
 export type PricingSpanName = (typeof PRICING_SPAN_NAMES)[number];
-export type PricingCreateOutcome = "created" | "replayed" | "conflict" | "in_progress" | "error";
+export type PricingCreateOutcome =
+  "created" | "replayed" | "conflict" | "in_progress" | "error";
 export type PricingCatalogReadOutcome = "success" | "error";
-export type PricingVerifyOutcome = "valid" | "not_found" | "hash_mismatch" | "expired" | "scope_mismatch" | "error";
+export type PricingVerifyOutcome =
+  | "valid"
+  | "not_found"
+  | "hash_mismatch"
+  | "expired"
+  | "scope_mismatch"
+  | "error";
 export type PricingCatalogRetryOutcome = "no_retry" | "recovered" | "mixed";
-export type PricingDatabaseOutcome = "committed" | "replayed" | "conflict" | "in_progress" | "unknown" | "error";
+export type PricingDatabaseOutcome =
+  "committed" | "replayed" | "conflict" | "in_progress" | "unknown" | "error";
 
 const OUTCOMES = {
   create: ["created", "replayed", "conflict", "in_progress", "error"],
   catalogRead: ["success", "error"],
-  verify: ["valid", "not_found", "hash_mismatch", "expired", "scope_mismatch", "error"],
+  verify: [
+    "valid",
+    "not_found",
+    "hash_mismatch",
+    "expired",
+    "scope_mismatch",
+    "error",
+  ],
   catalogRetry: ["no_retry", "recovered", "mixed"],
-  database: ["committed", "replayed", "conflict", "in_progress", "unknown", "error"],
+  database: [
+    "committed",
+    "replayed",
+    "conflict",
+    "in_progress",
+    "unknown",
+    "error",
+  ],
 } as const;
 
 const METRIC_NAMES = {
@@ -43,7 +65,10 @@ export class PricingTelemetry {
   readonly #counters = new Map<string, number>();
   readonly #tracer = trace.getTracer("coffee-platform.pricing-service");
 
-  public async observe<T>(name: PricingSpanName, work: () => Promise<T>): Promise<T> {
+  public async observe<T>(
+    name: PricingSpanName,
+    work: () => Promise<T>,
+  ): Promise<T> {
     if (!(PRICING_SPAN_NAMES as readonly string[]).includes(name)) {
       throw new TypeError("Unsupported Pricing span name");
     }
@@ -52,7 +77,7 @@ export class PricingTelemetry {
     try {
       return await context.with(trace.setSpan(context.active(), span), work);
     } catch (error) {
-      span.setStatus({code: SpanStatusCode.ERROR});
+      span.setStatus({ code: SpanStatusCode.ERROR });
       throw error;
     } finally {
       span.end();
@@ -67,7 +92,7 @@ export class PricingTelemetry {
     try {
       return context.with(trace.setSpan(context.active(), span), work);
     } catch (error) {
-      span.setStatus({code: SpanStatusCode.ERROR});
+      span.setStatus({ code: SpanStatusCode.ERROR });
       throw error;
     } finally {
       span.end();
@@ -96,8 +121,14 @@ export class PricingTelemetry {
 
   public observeDuration(milliseconds: number): void {
     if (!Number.isFinite(milliseconds) || milliseconds < 0) return;
-    this.#counters.set(DURATION_TOTAL, (this.#counters.get(DURATION_TOTAL) ?? 0) + milliseconds);
-    this.#counters.set(DURATION_COUNT, (this.#counters.get(DURATION_COUNT) ?? 0) + 1);
+    this.#counters.set(
+      DURATION_TOTAL,
+      (this.#counters.get(DURATION_TOTAL) ?? 0) + milliseconds,
+    );
+    this.#counters.set(
+      DURATION_COUNT,
+      (this.#counters.get(DURATION_COUNT) ?? 0) + 1,
+    );
   }
 
   public quoteLineCount(count: number): void {
@@ -108,9 +139,11 @@ export class PricingTelemetry {
   }
 
   public render(): readonly string[] {
-    const outcomes = (Object.keys(OUTCOMES) as (keyof typeof OUTCOMES)[]).flatMap(kind => {
+    const outcomes = (
+      Object.keys(OUTCOMES) as (keyof typeof OUTCOMES)[]
+    ).flatMap((kind) => {
       const metric = METRIC_NAMES[kind];
-      return OUTCOMES[kind].map(outcome => {
+      return OUTCOMES[kind].map((outcome) => {
         const labelled = `${metric}{outcome="${outcome}"}`;
         return `${labelled} ${this.#counters.get(labelled) ?? 0}`;
       });
@@ -119,7 +152,7 @@ export class PricingTelemetry {
       ...outcomes,
       `${DURATION_TOTAL} ${this.#counters.get(DURATION_TOTAL) ?? 0}`,
       `${DURATION_COUNT} ${this.#counters.get(DURATION_COUNT) ?? 0}`,
-      ...LINE_COUNT_BUCKETS.map(bucket => {
+      ...LINE_COUNT_BUCKETS.map((bucket) => {
         const labelled = `${LINE_COUNT_METRIC}{bucket="${bucket}"}`;
         return `${labelled} ${this.#counters.get(labelled) ?? 0}`;
       }),

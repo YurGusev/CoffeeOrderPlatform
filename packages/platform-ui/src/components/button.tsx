@@ -1,5 +1,8 @@
 import type { ReactElement, ReactNode, Ref } from "react";
-import { Button as AriaButton, type ButtonProps as AriaButtonProps } from "react-aria-components";
+import {
+  Button as AriaButton,
+  type ButtonProps as AriaButtonProps,
+} from "react-aria-components";
 import { cn } from "../cn.js";
 
 /** Adapted from shadcn/ui's React Aria button source; tokens stay package-owned. */
@@ -19,7 +22,8 @@ export type ButtonProps = Omit<AriaButtonProps, "children" | "className"> & {
 
 const variantClasses: Record<ButtonVariant, string> = {
   danger: "bg-danger-bg text-ink hover:bg-danger-bg/80",
-  primary: "bg-primary text-on-primary hover:bg-[color-mix(in_srgb,var(--cos-action-primary-surface-hover)_82%,black)]",
+  primary:
+    "bg-primary text-on-primary hover:bg-[color-mix(in_srgb,var(--cos-action-primary-surface-hover)_82%,black)]",
   secondary: "border border-border bg-surface text-ink hover:bg-surface-muted",
   quiet: "bg-transparent text-ink hover:bg-surface-muted",
 };
@@ -63,7 +67,11 @@ export function Button({
         {startIcon}
         <span>{children}</span>
         {endIcon}
-        {isPending ? <span className="sr-only" role="status">Операция выполняется</span> : null}
+        {isPending ? (
+          <span className="sr-only" role="status">
+            Операция выполняется
+          </span>
+        ) : null}
       </AriaButton>
     </span>
   );

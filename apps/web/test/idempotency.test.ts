@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { beforeEach, test, vi } from "vitest";
 import type { ProblemDetails } from "@coffee-platform/generated-client-v1";
-import { isTerminalCommandProblem, isTerminalProblemForCommand } from "../src/browser/api/client.js";
+import {
+  isTerminalCommandProblem,
+  isTerminalProblemForCommand,
+} from "../src/browser/api/client.js";
 import {
   beginIntent,
   browserFingerprint,
@@ -18,17 +21,29 @@ const prefix = "coffee-platform:intent:v1:";
 class MemoryStorage implements Storage {
   readonly #values = new Map<string, string>();
 
-  get length(): number { return this.#values.size; }
+  get length(): number {
+    return this.#values.size;
+  }
 
-  clear(): void { this.#values.clear(); }
+  clear(): void {
+    this.#values.clear();
+  }
 
-  getItem(key: string): string | null { return this.#values.get(key) ?? null; }
+  getItem(key: string): string | null {
+    return this.#values.get(key) ?? null;
+  }
 
-  key(index: number): string | null { return [...this.#values.keys()][index] ?? null; }
+  key(index: number): string | null {
+    return [...this.#values.keys()][index] ?? null;
+  }
 
-  removeItem(key: string): void { this.#values.delete(key); }
+  removeItem(key: string): void {
+    this.#values.delete(key);
+  }
 
-  setItem(key: string, value: string): void { this.#values.set(key, value); }
+  setItem(key: string, value: string): void {
+    this.#values.set(key, value);
+  }
 }
 
 let sessionStorage: MemoryStorage;
@@ -55,23 +70,80 @@ test("classifies terminal command outcomes by protocol code instead of HTTP clas
     title: code,
     type: "about:blank",
   });
-  assert.equal(isTerminalCommandProblem(problem("VALIDATION_FAILED", 400)), true);
-  assert.equal(isTerminalCommandProblem(problem("ORDER_VERSION_CONFLICT", 409)), true);
-  assert.equal(isTerminalCommandProblem(problem("IDEMPOTENCY_CONFLICT", 409)), false);
-  assert.equal(isTerminalCommandProblem(problem("IDEMPOTENCY_REQUEST_IN_PROGRESS", 409)), false);
-  assert.equal(isTerminalCommandProblem(problem("AUTHENTICATION_REQUIRED", 401)), false);
-  assert.equal(isTerminalCommandProblem(problem("CATALOG_UNAVAILABLE", 503)), false);
-  assert.equal(isTerminalCommandProblem(problem("UNKNOWN_COMMAND_ERROR", 400)), false);
-  assert.equal(isTerminalProblemForCommand("create-draft", problem("ORDER_VERSION_CONFLICT", 409)), false);
-  assert.equal(isTerminalProblemForCommand("put-item", problem("ORDER_VERSION_CONFLICT", 409)), true);
-  assert.equal(isTerminalProblemForCommand("put-item", problem("ORDER_VERSION_CONFLICT", 422)), false);
-  assert.equal(isTerminalProblemForCommand("create-draft", problem("VALIDATION_FAILED", 400)), true);
-  assert.equal(isTerminalProblemForCommand("create-draft", problem("VALIDATION_FAILED", 422)), false);
+  assert.equal(
+    isTerminalCommandProblem(problem("VALIDATION_FAILED", 400)),
+    true,
+  );
+  assert.equal(
+    isTerminalCommandProblem(problem("ORDER_VERSION_CONFLICT", 409)),
+    true,
+  );
+  assert.equal(
+    isTerminalCommandProblem(problem("IDEMPOTENCY_CONFLICT", 409)),
+    false,
+  );
+  assert.equal(
+    isTerminalCommandProblem(problem("IDEMPOTENCY_REQUEST_IN_PROGRESS", 409)),
+    false,
+  );
+  assert.equal(
+    isTerminalCommandProblem(problem("AUTHENTICATION_REQUIRED", 401)),
+    false,
+  );
+  assert.equal(
+    isTerminalCommandProblem(problem("CATALOG_UNAVAILABLE", 503)),
+    false,
+  );
+  assert.equal(
+    isTerminalCommandProblem(problem("UNKNOWN_COMMAND_ERROR", 400)),
+    false,
+  );
+  assert.equal(
+    isTerminalProblemForCommand(
+      "create-draft",
+      problem("ORDER_VERSION_CONFLICT", 409),
+    ),
+    false,
+  );
+  assert.equal(
+    isTerminalProblemForCommand(
+      "put-item",
+      problem("ORDER_VERSION_CONFLICT", 409),
+    ),
+    true,
+  );
+  assert.equal(
+    isTerminalProblemForCommand(
+      "put-item",
+      problem("ORDER_VERSION_CONFLICT", 422),
+    ),
+    false,
+  );
+  assert.equal(
+    isTerminalProblemForCommand(
+      "create-draft",
+      problem("VALIDATION_FAILED", 400),
+    ),
+    true,
+  );
+  assert.equal(
+    isTerminalProblemForCommand(
+      "create-draft",
+      problem("VALIDATION_FAILED", 422),
+    ),
+    false,
+  );
 });
 
 test("fingerprint канонизирует порядок ключей JSON object", async () => {
-  const left = await browserFingerprint({ quantity: "2", product: { b: 2, a: 1 } });
-  const right = await browserFingerprint({ product: { a: 1, b: 2 }, quantity: "2" });
+  const left = await browserFingerprint({
+    quantity: "2",
+    product: { b: 2, a: 1 },
+  });
+  const right = await browserFingerprint({
+    product: { a: 1, b: 2 },
+    quantity: "2",
+  });
   assert.equal(left, right);
 });
 
@@ -80,7 +152,9 @@ test("перекрывающиеся create-draft сохраняют один in
   const digestResult = new Promise<ArrayBuffer>((resolve) => {
     releaseDigest = resolve;
   });
-  const digest = vi.spyOn(globalThis.crypto.subtle, "digest").mockReturnValue(digestResult);
+  const digest = vi
+    .spyOn(globalThis.crypto.subtle, "digest")
+    .mockReturnValue(digestResult);
   const input = {
     actorRef: "operator-1",
     body: { customerRef: "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV" },
@@ -136,35 +210,44 @@ test("late response не восстанавливает intent после sessio
 });
 
 test("kind, method и path должны образовывать разрешённую команду", async () => {
-  await assert.rejects(beginIntent({
-    actorRef: "operator-1",
-    body: null,
-    kind: "confirm-order",
-    method: "DELETE",
-    path: `/api/client-v1/orders/${orderRef}/commands/confirm`,
-  }), /allowlist/u);
+  await assert.rejects(
+    beginIntent({
+      actorRef: "operator-1",
+      body: null,
+      kind: "confirm-order",
+      method: "DELETE",
+      path: `/api/client-v1/orders/${orderRef}/commands/confirm`,
+    }),
+    /allowlist/u,
+  );
   assert.equal(sessionStorage.length, 0);
 });
 
 test("повреждённая или переименованная metadata блокирует новую команду", async () => {
   const storageKey = "123e4567-e89b-42d3-a456-426614174000";
-  sessionStorage.setItem(`${prefix}${storageKey}`, JSON.stringify({
-    actorRef: "operator-1",
-    createdAt: "2026-09-29T00:00:00Z",
-    fingerprint: "a".repeat(64),
-    key: "223e4567-e89b-42d3-a456-426614174000",
-    kind: "create-draft",
-    method: "POST",
-    path: "/api/client-v1/orders/drafts",
-    state: "ambiguous",
-    version: 1,
-  }));
+  sessionStorage.setItem(
+    `${prefix}${storageKey}`,
+    JSON.stringify({
+      actorRef: "operator-1",
+      createdAt: "2026-09-29T00:00:00Z",
+      fingerprint: "a".repeat(64),
+      key: "223e4567-e89b-42d3-a456-426614174000",
+      kind: "create-draft",
+      method: "POST",
+      path: "/api/client-v1/orders/drafts",
+      state: "ambiguous",
+      version: 1,
+    }),
+  );
   assert.equal(readPendingIntents().corrupt, true);
-  await assert.rejects(beginIntent({
-    actorRef: "operator-1",
-    body: { customerRef: "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV" },
-    kind: "create-draft",
-    method: "POST",
-    path: "/api/client-v1/orders/drafts",
-  }), /Повреждённые данные/u);
+  await assert.rejects(
+    beginIntent({
+      actorRef: "operator-1",
+      body: { customerRef: "cus_01ARZ3NDEKTSV4RRFFQ69G5FAV" },
+      kind: "create-draft",
+      method: "POST",
+      path: "/api/client-v1/orders/drafts",
+    }),
+    /Повреждённые данные/u,
+  );
 });

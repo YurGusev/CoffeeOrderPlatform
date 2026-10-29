@@ -26,7 +26,8 @@ export type BegunIntent = Readonly<{
 
 const PREFIX = "coffee-platform:intent:v1:";
 const RECOVERY_DISCARDED_WARNING = "coffee-platform:recovery-discarded:v1";
-export const PENDING_INTENTS_CHANGED = "coffee-platform:pending-intents-changed";
+export const PENDING_INTENTS_CHANGED =
+  "coffee-platform:pending-intents-changed";
 const utcFormatter = new Intl.DateTimeFormat("sv-SE", {
   day: "2-digit",
   hour: "2-digit",
@@ -46,18 +47,37 @@ const allowedKinds = new Set<CommandKind>([
   "confirm-order",
   "request-reconciliation",
 ]);
-const allowedPath = /^\/api\/client-v1\/(?:customers|pricing\/quotes|orders\/drafts|orders\/ord_[0-9A-HJKMNP-TV-Z]{26}(?:\/items\/itm_[0-9A-HJKMNP-TV-Z]{26}|\/commands\/(?:confirm|request-aroma-reconciliation))?)$/u;
-const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/u;
-const orderCommandPath = /^\/api\/client-v1\/orders\/(ord_[0-9A-HJKMNP-TV-Z]{26})(?:\/items\/itm_[0-9A-HJKMNP-TV-Z]{26}|\/commands\/(?:confirm|request-aroma-reconciliation))$/u;
+const allowedPath =
+  /^\/api\/client-v1\/(?:customers|pricing\/quotes|orders\/drafts|orders\/ord_[0-9A-HJKMNP-TV-Z]{26}(?:\/items\/itm_[0-9A-HJKMNP-TV-Z]{26}|\/commands\/(?:confirm|request-aroma-reconciliation))?)$/u;
+const uuidPattern =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/u;
+const orderCommandPath =
+  /^\/api\/client-v1\/orders\/(ord_[0-9A-HJKMNP-TV-Z]{26})(?:\/items\/itm_[0-9A-HJKMNP-TV-Z]{26}|\/commands\/(?:confirm|request-aroma-reconciliation))$/u;
 
-function matchesCommand(kind: CommandKind, method: PendingIntent["method"], path: string): boolean {
-  if (kind === "create-customer") return method === "POST" && path === "/api/client-v1/customers";
-  if (kind === "create-quote") return method === "POST" && path === "/api/client-v1/pricing/quotes";
-  if (kind === "create-draft") return method === "POST" && path === "/api/client-v1/orders/drafts";
-  if (kind === "put-item") return method === "PUT" && /\/items\/itm_[0-9A-HJKMNP-TV-Z]{26}$/u.test(path);
-  if (kind === "delete-item") return method === "DELETE" && /\/items\/itm_[0-9A-HJKMNP-TV-Z]{26}$/u.test(path);
-  if (kind === "confirm-order") return method === "POST" && path.endsWith("/commands/confirm");
-  return method === "POST" && path.endsWith("/commands/request-aroma-reconciliation");
+function matchesCommand(
+  kind: CommandKind,
+  method: PendingIntent["method"],
+  path: string,
+): boolean {
+  if (kind === "create-customer")
+    return method === "POST" && path === "/api/client-v1/customers";
+  if (kind === "create-quote")
+    return method === "POST" && path === "/api/client-v1/pricing/quotes";
+  if (kind === "create-draft")
+    return method === "POST" && path === "/api/client-v1/orders/drafts";
+  if (kind === "put-item")
+    return (
+      method === "PUT" && /\/items\/itm_[0-9A-HJKMNP-TV-Z]{26}$/u.test(path)
+    );
+  if (kind === "delete-item")
+    return (
+      method === "DELETE" && /\/items\/itm_[0-9A-HJKMNP-TV-Z]{26}$/u.test(path)
+    );
+  if (kind === "confirm-order")
+    return method === "POST" && path.endsWith("/commands/confirm");
+  return (
+    method === "POST" && path.endsWith("/commands/request-aroma-reconciliation")
+  );
 }
 
 function storage(): Storage | undefined {
@@ -69,27 +89,41 @@ function storage(): Storage | undefined {
 }
 
 function isIntent(value: unknown): value is PendingIntent {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return false;
   const item = value as Record<string, unknown>;
-  return item["version"] === 1
-    && typeof item["actorRef"] === "string"
-    && item["actorRef"].length > 0
-    && typeof item["createdAt"] === "string"
-    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(item["createdAt"])
-    && typeof item["fingerprint"] === "string"
-    && /^[a-f0-9]{64}$/u.test(item["fingerprint"])
-    && typeof item["key"] === "string"
-    && uuidPattern.test(item["key"])
-    && allowedKinds.has(item["kind"] as CommandKind)
-    && ["POST", "PUT", "DELETE"].includes(String(item["method"]))
-    && typeof item["path"] === "string"
-    && allowedPath.test(item["path"])
-    && matchesCommand(item["kind"] as CommandKind, item["method"] as PendingIntent["method"], item["path"])
-    && ["pending", "ambiguous"].includes(String(item["state"]));
+  return (
+    item["version"] === 1 &&
+    typeof item["actorRef"] === "string" &&
+    item["actorRef"].length > 0 &&
+    typeof item["createdAt"] === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(item["createdAt"]) &&
+    typeof item["fingerprint"] === "string" &&
+    /^[a-f0-9]{64}$/u.test(item["fingerprint"]) &&
+    typeof item["key"] === "string" &&
+    uuidPattern.test(item["key"]) &&
+    allowedKinds.has(item["kind"] as CommandKind) &&
+    ["POST", "PUT", "DELETE"].includes(String(item["method"])) &&
+    typeof item["path"] === "string" &&
+    allowedPath.test(item["path"]) &&
+    matchesCommand(
+      item["kind"] as CommandKind,
+      item["method"] as PendingIntent["method"],
+      item["path"],
+    ) &&
+    ["pending", "ambiguous"].includes(String(item["state"]))
+  );
 }
 
 function intentScope(kind: CommandKind, path: string): string {
-  if (["put-item", "delete-item", "confirm-order", "request-reconciliation"].includes(kind)) {
+  if (
+    [
+      "put-item",
+      "delete-item",
+      "confirm-order",
+      "request-reconciliation",
+    ].includes(kind)
+  ) {
     const match = orderCommandPath.exec(path);
     if (match?.[1]) return `/api/client-v1/orders/${match[1]}`;
   }
@@ -99,22 +133,29 @@ function intentScope(kind: CommandKind, path: string): string {
 function canonicalValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalValue);
   if (typeof value !== "object" || value === null) return value;
-  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, entry]) => [key, canonicalValue(entry)]));
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, canonicalValue(entry)]),
+  );
 }
 
 async function sha256(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export async function browserFingerprint(body: unknown): Promise<string> {
   return sha256(JSON.stringify(canonicalValue(body ?? null)));
 }
 
-export function readPendingIntents(): Readonly<{ corrupt: boolean; items: PendingIntent[] }> {
+export function readPendingIntents(): Readonly<{
+  corrupt: boolean;
+  items: PendingIntent[];
+}> {
   const target = storage();
   if (!target) return { corrupt: false, items: [] };
   const items: PendingIntent[] = [];
@@ -137,23 +178,36 @@ export function readPendingIntents(): Readonly<{ corrupt: boolean; items: Pendin
   return { corrupt, items };
 }
 
-export async function beginIntent(input: Readonly<{
-  actorRef: string;
-  body: unknown;
-  kind: CommandKind;
-  method: PendingIntent["method"];
-  path: string;
-}>): Promise<BegunIntent> {
+export async function beginIntent(
+  input: Readonly<{
+    actorRef: string;
+    body: unknown;
+    kind: CommandKind;
+    method: PendingIntent["method"];
+    path: string;
+  }>,
+): Promise<BegunIntent> {
   const target = storage();
-  if (!target) throw new Error("Хранилище восстановления этой вкладки недоступно");
-  if (!allowedKinds.has(input.kind) || !allowedPath.test(input.path) || !matchesCommand(input.kind, input.method, input.path)) {
+  if (!target)
+    throw new Error("Хранилище восстановления этой вкладки недоступно");
+  if (
+    !allowedKinds.has(input.kind) ||
+    !allowedPath.test(input.path) ||
+    !matchesCommand(input.kind, input.method, input.path)
+  ) {
     throw new Error("Команда не входит в allowlist восстановления");
   }
   const fingerprint = await browserFingerprint(input.body);
   const snapshot = readPendingIntents();
-  if (snapshot.corrupt) throw new Error("Повреждённые данные восстановления требуют новой защищённой сессии");
-  const existing = snapshot.items.find((item) => item.actorRef === input.actorRef
-    && intentScope(item.kind, item.path) === intentScope(input.kind, input.path));
+  if (snapshot.corrupt)
+    throw new Error(
+      "Повреждённые данные восстановления требуют новой защищённой сессии",
+    );
+  const existing = snapshot.items.find(
+    (item) =>
+      item.actorRef === input.actorRef &&
+      intentScope(item.kind, item.path) === intentScope(input.kind, input.path),
+  );
   if (existing) return { created: false, intent: existing };
   const intent: PendingIntent = {
     actorRef: input.actorRef,
@@ -178,7 +232,12 @@ export function markIntentAmbiguous(intent: PendingIntent): void {
   if (!target || !current) return;
   try {
     const parsed: unknown = JSON.parse(current);
-    if (!isIntent(parsed) || parsed.key !== intent.key || parsed.actorRef !== intent.actorRef) return;
+    if (
+      !isIntent(parsed) ||
+      parsed.key !== intent.key ||
+      parsed.actorRef !== intent.actorRef
+    )
+      return;
   } catch {
     return;
   }

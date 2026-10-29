@@ -1,17 +1,19 @@
-import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import test from 'node:test';
+import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import test from "node:test";
 
-const root = resolve(import.meta.dirname, '../..');
+const root = resolve(import.meta.dirname, "../..");
 
-void test('generated TS7 types preserve real contract constructs', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'contracts-types-'));
-  const client = join(root, 'packages/generated/client-v1/src/index.js');
-  const internal = join(root, 'packages/generated/internal-v1/src/index.js');
-  await writeFile(join(directory, 'check.ts'), `
+void test("generated TS7 types preserve real contract constructs", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "contracts-types-"));
+  const client = join(root, "packages/generated/client-v1/src/index.js");
+  const internal = join(root, "packages/generated/internal-v1/src/index.js");
+  await writeFile(
+    join(directory, "check.ts"),
+    `
 import type { CustomerCreateRequest, CustomerSearchResponse, PricingQuoteCreateRequest } from '${client}';
 import type { AromaCatalogExportRecord, AromaCartSnapshotReadRequest } from '${internal}';
 const phone: CustomerCreateRequest = { displayName: 'Клиент', phone: '+79991234567' };
@@ -30,9 +32,21 @@ const invalidRecord: AromaCatalogExportRecord = { ...discriminated, recordType: 
 // @ts-expect-error Referenced const is preserved.
 const invalidRef: AromaCartSnapshotReadRequest = { cartScopeRef: 'other' };
 void [phone, email, both, nullable, discriminated, referenced, quote, missingContact, invalidNullable, invalidRecord, invalidRef];
-`);
-  await writeFile(join(directory, 'tsconfig.json'), JSON.stringify({ extends: join(root, 'tsconfig.base.json'), compilerOptions: { noEmit: true, types: [], lib: ['ES2025', 'DOM'] }, include: ['check.ts'] }));
-  const result = spawnSync(join(root, 'node_modules/.bin/tsc'), ['-p', directory], { cwd: root, encoding: 'utf8' });
+`,
+  );
+  await writeFile(
+    join(directory, "tsconfig.json"),
+    JSON.stringify({
+      extends: join(root, "tsconfig.base.json"),
+      compilerOptions: { noEmit: true, types: [], lib: ["ES2025", "DOM"] },
+      include: ["check.ts"],
+    }),
+  );
+  const result = spawnSync(
+    join(root, "node_modules/.bin/tsc"),
+    ["-p", directory],
+    { cwd: root, encoding: "utf8" },
+  );
   await rm(directory, { recursive: true, force: true });
   assert.equal(result.status, 0, result.stdout || result.stderr);
 });

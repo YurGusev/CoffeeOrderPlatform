@@ -1,5 +1,5 @@
-import {createHash} from "node:crypto";
-import type {PricingQuoteResponse} from "@coffee-platform/contracts-pricing-v1";
+import { createHash } from "node:crypto";
+import type { PricingQuoteResponse } from "@coffee-platform/contracts-pricing-v1";
 
 type PublicQuote = Omit<PricingQuoteResponse, "hash">;
 
@@ -20,7 +20,9 @@ export type AppliedPricingPolicy = Readonly<{
 }>;
 
 function digest(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
+  return createHash("sha256")
+    .update(JSON.stringify(value), "utf8")
+    .digest("hex");
 }
 
 function orderedPublicQuote(quote: PublicQuote) {
@@ -32,17 +34,24 @@ function orderedPublicQuote(quote: PublicQuote) {
     createdAt: quote.createdAt,
     expiresAt: quote.expiresAt,
     currency: quote.currency,
-    lines: [...quote.lines].sort((a, b) => a.lineNumber - b.lineNumber).map(line => ({
-      lineNumber: line.lineNumber,
-      productRef: line.productRef,
-      variantRef: line.variantRef,
-      productDisplayName: line.productDisplayName,
-      quantity: line.quantity,
-      unit: line.unit,
-      unitMinor: line.unitMinor,
-      lineTotalMinor: line.lineTotalMinor,
-      ...(line.sourceGrindKeyHash === undefined ? {} : {sourceGrindKeyHash:line.sourceGrindKeyHash,grindDisplayName:line.grindDisplayName}),
-    })),
+    lines: [...quote.lines]
+      .sort((a, b) => a.lineNumber - b.lineNumber)
+      .map((line) => ({
+        lineNumber: line.lineNumber,
+        productRef: line.productRef,
+        variantRef: line.variantRef,
+        productDisplayName: line.productDisplayName,
+        quantity: line.quantity,
+        unit: line.unit,
+        unitMinor: line.unitMinor,
+        lineTotalMinor: line.lineTotalMinor,
+        ...(line.sourceGrindKeyHash === undefined
+          ? {}
+          : {
+              sourceGrindKeyHash: line.sourceGrindKeyHash,
+              grindDisplayName: line.grindDisplayName,
+            }),
+      })),
     totalMinor: quote.totalMinor,
   };
 }
@@ -53,15 +62,24 @@ export function hashPublicQuote(quote: PublicQuote): string {
 }
 
 /** The private proof commits to the public facts and every applied line/policy fact. */
-export function hashInternalQuote(quote: PublicQuote, policy: AppliedPricingPolicy, proofLines: readonly PricingProofLine[]): string {
+export function hashInternalQuote(
+  quote: PublicQuote,
+  policy: AppliedPricingPolicy,
+  proofLines: readonly PricingProofLine[],
+): string {
   const publicFacts = orderedPublicQuote(quote);
-  const byNumber = new Map(proofLines.map(line => [line.lineNumber, line]));
-  if (byNumber.size !== proofLines.length || byNumber.size !== publicFacts.lines.length) throw new TypeError("PRICING_PROOF_LINES_INVALID");
+  const byNumber = new Map(proofLines.map((line) => [line.lineNumber, line]));
+  if (
+    byNumber.size !== proofLines.length ||
+    byNumber.size !== publicFacts.lines.length
+  )
+    throw new TypeError("PRICING_PROOF_LINES_INVALID");
   return digest({
     ...publicFacts,
-    lines: publicFacts.lines.map(line => {
+    lines: publicFacts.lines.map((line) => {
       const proof = byNumber.get(line.lineNumber);
-      if (proof === undefined) throw new TypeError("PRICING_PROOF_LINES_INVALID");
+      if (proof === undefined)
+        throw new TypeError("PRICING_PROOF_LINES_INVALID");
       return {
         ...line,
         offerRef: proof.offerRef,

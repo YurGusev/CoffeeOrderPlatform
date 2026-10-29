@@ -3,7 +3,9 @@
   "$id": "https://coffeeorderplatform.local/contracts/schemas/events/catalog-snapshot-activated.v1.schema.json",
   "title": "CatalogSnapshotActivated.v1",
   "allOf": [
-    { "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope" },
+    {
+      "$ref": "../common/message-envelope.v1.schema.json#/$defs/MessageEnvelope"
+    },
     {
       "type": "object",
       "required": ["messageType", "payload"],
@@ -25,15 +27,25 @@
             "contentHash"
           ],
           "properties": {
-            "supplierRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/SupplierRef" },
-            "snapshotRef": { "$ref": "../common/identifiers.v1.schema.json#/$defs/SnapshotRef" },
-            "snapshotRevision": { "$ref": "../common/identifiers.v1.schema.json#/$defs/Version" },
-            "activatedAt": { "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp" },
+            "supplierRef": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/SupplierRef"
+            },
+            "snapshotRef": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/SnapshotRef"
+            },
+            "snapshotRevision": {
+              "$ref": "../common/identifiers.v1.schema.json#/$defs/Version"
+            },
+            "activatedAt": {
+              "$ref": "../common/money-version-time.v1.schema.json#/$defs/Timestamp"
+            },
             "productCount": { "type": "integer", "minimum": 0 },
             "variantCount": { "type": "integer", "minimum": 0 },
             "offerCount": { "type": "integer", "minimum": 0 },
             "batchCount": { "type": "integer", "minimum": 0 },
-            "contentHash": { "$ref": "../common/money-version-time.v1.schema.json#/$defs/HashSha256" }
+            "contentHash": {
+              "$ref": "../common/money-version-time.v1.schema.json#/$defs/HashSha256"
+            }
           }
         }
       }

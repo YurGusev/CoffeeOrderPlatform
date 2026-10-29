@@ -3,7 +3,7 @@ import {
   CustomerDomainError,
   type CustomerOrderInput,
 } from "../domain/customer.js";
-import type {CustomerStore} from "../infrastructure/postgres/customer-store.js";
+import type { CustomerStore } from "../infrastructure/postgres/customer-store.js";
 
 export async function getCustomerOrderInput(
   store: CustomerStore,
@@ -13,9 +13,16 @@ export async function getCustomerOrderInput(
   try {
     assertCustomerRef(customerRef);
   } catch {
-    throw new CustomerDomainError("CUSTOMER_NOT_FOUND", "customer was not found");
+    throw new CustomerDomainError(
+      "CUSTOMER_NOT_FOUND",
+      "customer was not found",
+    );
   }
   const result = await store.getOrderInput(customerRef, signal);
-  if (result === null) throw new CustomerDomainError("CUSTOMER_NOT_FOUND", "customer was not found");
+  if (result === null)
+    throw new CustomerDomainError(
+      "CUSTOMER_NOT_FOUND",
+      "customer was not found",
+    );
   return result;
 }

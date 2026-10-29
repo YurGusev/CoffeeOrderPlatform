@@ -20,18 +20,14 @@
       },
       "networkZone": "private-edge-backend",
       "dbPrincipal": null,
-      "httpSurfaces": [
-        "public-edge"
-      ],
+      "httpSurfaces": ["public-edge"],
       "secretRefs": [
         "edge.oidcClientSecret",
         "security.actorContextEdgeSigningPrivateKey",
         "security.serviceTransportKeys.edge-gateway",
         "telemetry.exporterToken"
       ],
-      "optionalSecretRefs": [
-        "edge.tlsCaBundle"
-      ],
+      "optionalSecretRefs": ["edge.tlsCaBundle"],
       "implemented": false
     },
     {
@@ -44,9 +40,7 @@
       },
       "networkZone": "public-api-backend",
       "dbPrincipal": null,
-      "httpSurfaces": [
-        "client-v1"
-      ],
+      "httpSurfaces": ["client-v1"],
       "secretRefs": [
         "security.apiPublicDelegationSigningPrivateKey",
         "security.actorContextEdgeVerificationPublicKeys",
@@ -65,9 +59,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": null,
-      "httpSurfaces": [
-        "internal-v1"
-      ],
+      "httpSurfaces": ["internal-v1"],
       "secretRefs": [
         "security.apiInternalDelegationSigningPrivateKey",
         "security.serviceVerificationKeys.orders-service",
@@ -87,10 +79,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_customer_rw",
-      "httpSurfaces": [
-        "client-v1-owner",
-        "internal-v1-owner"
-      ],
+      "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
       "secretRefs": [
         "postgres.customer",
         "security.customerCursorSigningPrivateKey",
@@ -112,10 +101,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_catalog_api_ro",
-      "httpSurfaces": [
-        "client-v1-owner",
-        "internal-v1-owner"
-      ],
+      "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
       "secretRefs": [
         "postgres.catalogApi",
         "security.catalogCursorSigningPrivateKey",
@@ -136,9 +122,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_catalog_import_rw",
-      "httpSurfaces": [
-        "health-only"
-      ],
+      "httpSurfaces": ["health-only"],
       "secretRefs": [
         "postgres.catalogImport",
         "security.serviceTransportKeys.catalog-supplier-sync",
@@ -175,10 +159,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_pricing_rw",
-      "httpSurfaces": [
-        "client-v1-owner",
-        "internal-v1-owner"
-      ],
+      "httpSurfaces": ["client-v1-owner", "internal-v1-owner"],
       "secretRefs": [
         "postgres.pricing",
         "security.pricingServiceDelegationSigningPrivateKey",
@@ -199,9 +180,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_orders_service_rw",
-      "httpSurfaces": [
-        "client-v1-owner"
-      ],
+      "httpSurfaces": ["client-v1-owner"],
       "secretRefs": [
         "postgres.ordersService",
         "kafka.orders",
@@ -222,9 +201,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_orders_prepare_rw",
-      "httpSurfaces": [
-        "health-only"
-      ],
+      "httpSurfaces": ["health-only"],
       "secretRefs": [
         "postgres.ordersPreparation",
         "kafka.orders",
@@ -243,9 +220,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_orders_observer_rw",
-      "httpSurfaces": [
-        "health-only"
-      ],
+      "httpSurfaces": ["health-only"],
       "secretRefs": [
         "postgres.aromaObserver",
         "kafka.orders",
@@ -264,9 +239,7 @@
       },
       "networkZone": "internal-api",
       "dbPrincipal": "coffee_orders_convergence_rw",
-      "httpSurfaces": [
-        "health-only"
-      ],
+      "httpSurfaces": ["health-only"],
       "secretRefs": [
         "postgres.aromaConvergence",
         "kafka.orders",
@@ -285,10 +258,7 @@
       },
       "networkZone": "provider-egress",
       "dbPrincipal": "coffee_aroma_gateway_rw",
-      "httpSurfaces": [
-        "internal-v1-owner",
-        "provider-outbound"
-      ],
+      "httpSurfaces": ["internal-v1-owner", "provider-outbound"],
       "secretRefs": [
         "postgres.aromaGateway",
         "aroma.email",
@@ -311,9 +281,7 @@
       },
       "networkZone": "private-edge-backend",
       "dbPrincipal": null,
-      "httpSurfaces": [
-        "events"
-      ],
+      "httpSurfaces": ["events"],
       "secretRefs": [
         "kafka.realtime",
         "security.actorContextEdgeVerificationPublicKeys",
@@ -333,10 +301,7 @@
       },
       "networkZone": "public-ingress",
       "dbPrincipal": null,
-      "httpSurfaces": [
-        "public-edge",
-        "web-assets"
-      ],
+      "httpSurfaces": ["public-edge", "web-assets"],
       "secretRefs": [
         "edge.tlsPrivateKey",
         "edge.tlsCertificate",
@@ -379,12 +344,8 @@
     }
   ],
   "surfaceIsolation": {
-    "api-public": [
-      "client-v1"
-    ],
-    "api-internal": [
-      "internal-v1"
-    ],
+    "api-public": ["client-v1"],
+    "api-internal": ["internal-v1"],
     "edgeDirectOwnerRoutingAllowed": false,
     "ownerHostPortPublishingAllowed": false,
     "nativeNginxPublishedBind": "127.0.0.1:8443"
@@ -562,12 +523,7 @@
       "NFC(rawProviderIdentifier)"
     ],
     "separatorByte": 0,
-    "entityTypes": [
-      "product",
-      "variant",
-      "offer",
-      "grind"
-    ],
+    "entityTypes": ["product", "variant", "offer", "grind"],
     "supplierRefPolicy": "canonical-sup-ulid",
     "rawProviderIdentifierPolicy": "non-empty-nul-free-nfc-no-trim-no-case-fold",
     "outputEncoding": "lowercase-hex",

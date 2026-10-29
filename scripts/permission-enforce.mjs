@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import {fileURLToPath} from "node:url";
-import {runPermissionMode} from "./permission-audit.mjs";
+import { fileURLToPath } from "node:url";
+import { runPermissionMode } from "./permission-audit.mjs";
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);

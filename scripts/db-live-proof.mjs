@@ -111,7 +111,9 @@ async function waitForPostgres(adminUrl) {
       await sleep(250);
     }
   }
-  fail("PostgreSQL published TCP endpoint did not become ready within 20 seconds");
+  fail(
+    "PostgreSQL published TCP endpoint did not become ready within 20 seconds",
+  );
 }
 
 async function createClient(url) {
@@ -331,7 +333,13 @@ function foundationPool(max = 2) {
   };
 }
 
-function databaseConnectionOptions(adminUrl, roleEntry, password, port, max = 2) {
+function databaseConnectionOptions(
+  adminUrl,
+  roleEntry,
+  password,
+  port,
+  max = 2,
+) {
   const parsed = new URL(adminUrl);
   return {
     owner: "issue62-live-proof",
@@ -427,7 +435,7 @@ export function exportedSQLContract(schemaName = FOUNDATION_SCHEMA) {
   const owner = `${schema}.${foundationIdentifier(DELIVERY_OWNER)}`;
   return {
     schema: schemaName,
-    tables: {inbox, quarantine, outbox, owner},
+    tables: { inbox, quarantine, outbox, owner },
     ddl: {
       inbox: `CREATE TABLE ${inbox} (
         message_id text PRIMARY KEY,
@@ -493,7 +501,12 @@ export function exportedSQLContract(schemaName = FOUNDATION_SCHEMA) {
   };
 }
 
-export async function createDeliveryTables(adminUrl, database, rolePasswords, runtimeRole) {
+export async function createDeliveryTables(
+  adminUrl,
+  database,
+  rolePasswords,
+  runtimeRole,
+) {
   const migrator = await createClient(
     replaceDatabase(adminUrl, database.name, {
       user: database.migratorRole,
@@ -501,7 +514,7 @@ export async function createDeliveryTables(adminUrl, database, rolePasswords, ru
     }),
   );
   const contract = exportedSQLContract();
-  const {inbox, quarantine, outbox, owner} = contract.tables;
+  const { inbox, quarantine, outbox, owner } = contract.tables;
   try {
     await migrator.query(`${Object.values(contract.ddl).join("\n")}
       GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${inbox}, ${quarantine}, ${outbox}, ${owner}
@@ -510,7 +523,7 @@ export async function createDeliveryTables(adminUrl, database, rolePasswords, ru
   } finally {
     await migrator.end();
   }
-  return {inbox, quarantine, outbox, owner};
+  return { inbox, quarantine, outbox, owner };
 }
 
 export async function dropDeliveryTables(adminUrl, database, rolePasswords) {
@@ -530,7 +543,13 @@ export async function dropDeliveryTables(adminUrl, database, rolePasswords) {
   }
 }
 
-function deliveryMessage(messageId, aggregateRef, aggregateSequence, payload, messageType = "Issue63.LiveEvent") {
+function deliveryMessage(
+  messageId,
+  aggregateRef,
+  aggregateSequence,
+  payload,
+  messageType = "Issue63.LiveEvent",
+) {
   // Preserve a nanosecond envelope even though PostgreSQL timestamps round to microseconds.
   const occurredAt = new Date().toISOString().replace("Z", "123456Z");
   const correlationId = `correlation-${messageId}`;
@@ -554,7 +573,11 @@ function deliveryMessage(messageId, aggregateRef, aggregateSequence, payload, me
       correlationId,
       causationId: null,
       traceparent,
-      aggregate: {type: "Issue63Aggregate", ref: aggregateRef, version: ownerVersion},
+      aggregate: {
+        type: "Issue63Aggregate",
+        ref: aggregateRef,
+        version: ownerVersion,
+      },
       payload,
     },
     payload,
@@ -586,7 +609,7 @@ async function deliveryRows(adminUrl, database, table, where, parameters = []) {
   }
 }
 
-async function runDeliveryProof({adminUrl, port, roleMap, rolePasswords}) {
+async function runDeliveryProof({ adminUrl, port, roleMap, rolePasswords }) {
   const database = roleMap.databases.find(
     (candidate) => candidate.name === FOUNDATION_DATABASE,
   );
@@ -596,7 +619,7 @@ async function runDeliveryProof({adminUrl, port, roleMap, rolePasswords}) {
   );
   if (!runtime) fail("missing orders-service runtime role for delivery proof");
   await createDeliveryTables(adminUrl, database, rolePasswords, runtime.role);
-  const roleEntry = {database: database.name, role: runtime.role};
+  const roleEntry = { database: database.name, role: runtime.role };
   const password = rolePasswords[roleEntry.role];
   let databaseA;
   let databaseB;
@@ -604,12 +627,40 @@ async function runDeliveryProof({adminUrl, port, roleMap, rolePasswords}) {
   let recoveredDatabase;
   let unknownDatabase;
   try {
-    const [{createDatabase: createFoundationDatabase, withTransaction, DatabaseTransactionError}, {createSqlInboxStore}, {createSqlOutboxStore}, {defineStatement}, {canonicalJson, canonicalRequestHash}] = await Promise.all([
-      import(pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/index.js")).href),
-      import(pathToFileURL(join(REPO_ROOT, "packages/platform-inbox/dist/index.js")).href),
-      import(pathToFileURL(join(REPO_ROOT, "packages/platform-outbox/dist/index.js")).href),
-      import(pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/owner.js")).href),
-      import(pathToFileURL(join(REPO_ROOT, "packages/platform-idempotency/dist/index.js")).href),
+    const [
+      {
+        createDatabase: createFoundationDatabase,
+        withTransaction,
+        DatabaseTransactionError,
+      },
+      { createSqlInboxStore },
+      { createSqlOutboxStore },
+      { defineStatement },
+      { canonicalJson, canonicalRequestHash },
+    ] = await Promise.all([
+      import(
+        pathToFileURL(
+          join(REPO_ROOT, "packages/platform-database/dist/index.js"),
+        ).href
+      ),
+      import(
+        pathToFileURL(join(REPO_ROOT, "packages/platform-inbox/dist/index.js"))
+          .href
+      ),
+      import(
+        pathToFileURL(join(REPO_ROOT, "packages/platform-outbox/dist/index.js"))
+          .href
+      ),
+      import(
+        pathToFileURL(
+          join(REPO_ROOT, "packages/platform-database/dist/owner.js"),
+        ).href
+      ),
+      import(
+        pathToFileURL(
+          join(REPO_ROOT, "packages/platform-idempotency/dist/index.js"),
+        ).href
+      ),
     ]);
     databaseA = createFoundationDatabase(
       databaseConnectionOptions(adminUrl, roleEntry, password, port),
@@ -634,203 +685,617 @@ async function runDeliveryProof({adminUrl, port, roleMap, rolePasswords}) {
       schema: FOUNDATION_SCHEMA,
       table: DELIVERY_OUTBOX,
     });
-    const ownerWriteA = defineDeliveryOwnerStatement(databaseA, defineStatement);
-    const base = deliveryMessage("issue63-base", "aggregate-base", 1, {value: "base"});
+    const ownerWriteA = defineDeliveryOwnerStatement(
+      databaseA,
+      defineStatement,
+    );
+    const base = deliveryMessage("issue63-base", "aggregate-base", 1, {
+      value: "base",
+    });
     const toInbox = (message) => inboxMessage(message, canonicalRequestHash);
     const baseInbox = toInbox(base);
     let baseBegin;
     let baseOutbox;
-    await withTransaction(databaseA, {mode: "interactive", correlationId: "issue63-base"}, async (transaction) => {
-      baseBegin = await inboxA.begin(transaction, baseInbox, "consumer-a", Date.now(), 10_000);
-      if (baseBegin.kind !== "acquired") fail(`base Inbox decision was ${baseBegin.kind}`);
-      await ownerWriteA(transaction, [base.messageId, base.aggregateRef, "base", base.occurredAt]);
-      baseOutbox = await outboxA.enqueue(transaction, base);
-      await inboxA.markProcessed(transaction, base.messageId, "consumer-a", new Date().toISOString());
-    });
-    if (baseOutbox !== "created") fail(`base Outbox decision was ${baseOutbox}`);
+    await withTransaction(
+      databaseA,
+      { mode: "interactive", correlationId: "issue63-base" },
+      async (transaction) => {
+        baseBegin = await inboxA.begin(
+          transaction,
+          baseInbox,
+          "consumer-a",
+          Date.now(),
+          10_000,
+        );
+        if (baseBegin.kind !== "acquired")
+          fail(`base Inbox decision was ${baseBegin.kind}`);
+        await ownerWriteA(transaction, [
+          base.messageId,
+          base.aggregateRef,
+          "base",
+          base.occurredAt,
+        ]);
+        baseOutbox = await outboxA.enqueue(transaction, base);
+        await inboxA.markProcessed(
+          transaction,
+          base.messageId,
+          "consumer-a",
+          new Date().toISOString(),
+        );
+      },
+    );
+    if (baseOutbox !== "created")
+      fail(`base Outbox decision was ${baseOutbox}`);
 
-    const baseOwner = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_OWNER, "WHERE message_id = $1", [base.messageId]);
-    const baseInboxRows = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_INBOX, "WHERE message_id = $1", [base.messageId]);
-    const baseOutboxRows = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_OUTBOX, "WHERE message_id = $1", [base.messageId]);
-    if (baseOwner.rowCount !== 1 || baseInboxRows.rows[0]?.state !== "Processed" || baseOutboxRows.rowCount !== 1)
+    const baseOwner = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_OWNER,
+      "WHERE message_id = $1",
+      [base.messageId],
+    );
+    const baseInboxRows = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_INBOX,
+      "WHERE message_id = $1",
+      [base.messageId],
+    );
+    const baseOutboxRows = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_OUTBOX,
+      "WHERE message_id = $1",
+      [base.messageId],
+    );
+    if (
+      baseOwner.rowCount !== 1 ||
+      baseInboxRows.rows[0]?.state !== "Processed" ||
+      baseOutboxRows.rowCount !== 1
+    )
       fail("Inbox, owner state and Outbox were not committed atomically");
 
-    const rolledBack = deliveryMessage("issue63-rollback", "aggregate-rollback", 1, {value: "rollback"});
+    const rolledBack = deliveryMessage(
+      "issue63-rollback",
+      "aggregate-rollback",
+      1,
+      { value: "rollback" },
+    );
     let rollbackCode;
     try {
-      await withTransaction(databaseA, {mode: "interactive", correlationId: "issue63-rollback"}, async (transaction) => {
-        const begin = await inboxA.begin(transaction, toInbox(rolledBack), "consumer-rollback", Date.now(), 10_000);
-        if (begin.kind !== "acquired") fail(`rollback Inbox decision was ${begin.kind}`);
-        await ownerWriteA(transaction, [rolledBack.messageId, rolledBack.aggregateRef, "rolled-back", rolledBack.occurredAt]);
-        await outboxA.enqueue(transaction, rolledBack);
-        await inboxA.markProcessed(transaction, rolledBack.messageId, "consumer-rollback", new Date().toISOString());
-        throw new DatabaseTransactionError("DB_QUERY_FAILED");
-      });
+      await withTransaction(
+        databaseA,
+        { mode: "interactive", correlationId: "issue63-rollback" },
+        async (transaction) => {
+          const begin = await inboxA.begin(
+            transaction,
+            toInbox(rolledBack),
+            "consumer-rollback",
+            Date.now(),
+            10_000,
+          );
+          if (begin.kind !== "acquired")
+            fail(`rollback Inbox decision was ${begin.kind}`);
+          await ownerWriteA(transaction, [
+            rolledBack.messageId,
+            rolledBack.aggregateRef,
+            "rolled-back",
+            rolledBack.occurredAt,
+          ]);
+          await outboxA.enqueue(transaction, rolledBack);
+          await inboxA.markProcessed(
+            transaction,
+            rolledBack.messageId,
+            "consumer-rollback",
+            new Date().toISOString(),
+          );
+          throw new DatabaseTransactionError("DB_QUERY_FAILED");
+        },
+      );
     } catch (error) {
       rollbackCode = error?.code;
     }
-    const rolledBackOwner = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_OWNER, "WHERE message_id = $1", [rolledBack.messageId]);
-    const rolledBackInbox = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_INBOX, "WHERE message_id = $1", [rolledBack.messageId]);
-    const rolledBackOutbox = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_OUTBOX, "WHERE message_id = $1", [rolledBack.messageId]);
-    if (rollbackCode !== "DB_QUERY_FAILED" || rolledBackOwner.rowCount !== 0 || rolledBackInbox.rowCount !== 0 || rolledBackOutbox.rowCount !== 0)
+    const rolledBackOwner = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_OWNER,
+      "WHERE message_id = $1",
+      [rolledBack.messageId],
+    );
+    const rolledBackInbox = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_INBOX,
+      "WHERE message_id = $1",
+      [rolledBack.messageId],
+    );
+    const rolledBackOutbox = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_OUTBOX,
+      "WHERE message_id = $1",
+      [rolledBack.messageId],
+    );
+    if (
+      rollbackCode !== "DB_QUERY_FAILED" ||
+      rolledBackOwner.rowCount !== 0 ||
+      rolledBackInbox.rowCount !== 0 ||
+      rolledBackOutbox.rowCount !== 0
+    )
       fail("rollback left partial Inbox, owner or Outbox state");
-    await withTransaction(databaseA, {mode: "interactive", correlationId: "issue63-rollback-retry"}, async (transaction) => {
-      const begin = await inboxA.begin(transaction, toInbox(rolledBack), "consumer-retry", Date.now(), 10_000);
-      if (begin.kind !== "acquired") fail(`rollback retry Inbox decision was ${begin.kind}`);
-      await ownerWriteA(transaction, [rolledBack.messageId, rolledBack.aggregateRef, "retry", rolledBack.occurredAt]);
-      if (await outboxA.enqueue(transaction, rolledBack) !== "created") fail("rollback retry did not create Outbox");
-      await inboxA.markProcessed(transaction, rolledBack.messageId, "consumer-retry", new Date().toISOString());
-    });
+    await withTransaction(
+      databaseA,
+      { mode: "interactive", correlationId: "issue63-rollback-retry" },
+      async (transaction) => {
+        const begin = await inboxA.begin(
+          transaction,
+          toInbox(rolledBack),
+          "consumer-retry",
+          Date.now(),
+          10_000,
+        );
+        if (begin.kind !== "acquired")
+          fail(`rollback retry Inbox decision was ${begin.kind}`);
+        await ownerWriteA(transaction, [
+          rolledBack.messageId,
+          rolledBack.aggregateRef,
+          "retry",
+          rolledBack.occurredAt,
+        ]);
+        if ((await outboxA.enqueue(transaction, rolledBack)) !== "created")
+          fail("rollback retry did not create Outbox");
+        await inboxA.markProcessed(
+          transaction,
+          rolledBack.messageId,
+          "consumer-retry",
+          new Date().toISOString(),
+        );
+      },
+    );
     for (const expected of [base, rolledBack]) {
-      const claim = (await withTransaction(databaseA, {mode: "background"}, (transaction) => outboxA.claim(transaction, Date.now(), "publisher-seed", 1, 5_000)))[0];
-      if (!claim || claim.message.messageId !== expected.messageId) fail(`seed Outbox claim was ${claim?.message.messageId ?? "empty"}`);
-      await withTransaction(databaseA, {mode: "background"}, (transaction) => outboxA.finalize(transaction, claim.message.messageId, claim.leaseOwner, claim.leaseToken));
+      const claim = (
+        await withTransaction(
+          databaseA,
+          { mode: "background" },
+          (transaction) =>
+            outboxA.claim(transaction, Date.now(), "publisher-seed", 1, 5_000),
+        )
+      )[0];
+      if (!claim || claim.message.messageId !== expected.messageId)
+        fail(`seed Outbox claim was ${claim?.message.messageId ?? "empty"}`);
+      await withTransaction(databaseA, { mode: "background" }, (transaction) =>
+        outboxA.finalize(
+          transaction,
+          claim.message.messageId,
+          claim.leaseOwner,
+          claim.leaseToken,
+        ),
+      );
     }
 
     let duplicateDecision;
     let conflictDecision;
     let quarantineDecision;
-    await withTransaction(databaseA, {mode: "interactive", correlationId: "issue63-duplicate"}, async (transaction) => {
-      duplicateDecision = await inboxA.begin(transaction, baseInbox, "consumer-duplicate", Date.now(), 10_000);
-      if (duplicateDecision.kind !== "duplicate") fail(`same Inbox payload returned ${duplicateDecision.kind}`);
-      const duplicateOutbox = await outboxA.enqueue(transaction, base);
-      if (duplicateOutbox !== "duplicate") fail(`same Outbox message returned ${duplicateOutbox}`);
-    });
-    const conflicting = {...base, envelope: {...base.envelope, producer: "other-producer"}};
-    await withTransaction(databaseA, {mode: "interactive", correlationId: "issue63-conflict"}, async (transaction) => {
-      conflictDecision = await inboxA.begin(transaction, toInbox(conflicting), "consumer-conflict", Date.now(), 10_000);
-      if (conflictDecision.kind !== "conflict") fail(`different Inbox payload returned ${conflictDecision.kind}`);
-      quarantineDecision = await inboxA.quarantineRecord(transaction, {
-        topic: base.topic,
-        partition: 0,
-        offset: "63-conflict-1",
-        messageId: conflicting.messageId,
-        messageType: conflicting.messageType,
-        envelope: conflicting.envelope,
-        reason: "MESSAGE_ID_PAYLOAD_CONFLICT",
-      }, Date.now());
-    });
-    if (quarantineDecision !== "created") fail(`Inbox conflict quarantine returned ${quarantineDecision}`);
-    const quarantineRepeat = await withTransaction(databaseA, {mode: "interactive"}, (transaction) => inboxA.quarantineRecord(transaction, {
-      topic: base.topic,
-      partition: 0,
-      offset: "63-conflict-1",
-      messageId: conflicting.messageId,
-      messageType: conflicting.messageType,
-      envelope: conflicting.envelope,
-      reason: "MESSAGE_ID_PAYLOAD_CONFLICT",
-    }, Date.now()));
-    if (quarantineRepeat !== "duplicate") fail(`duplicate quarantine returned ${quarantineRepeat}`);
+    await withTransaction(
+      databaseA,
+      { mode: "interactive", correlationId: "issue63-duplicate" },
+      async (transaction) => {
+        duplicateDecision = await inboxA.begin(
+          transaction,
+          baseInbox,
+          "consumer-duplicate",
+          Date.now(),
+          10_000,
+        );
+        if (duplicateDecision.kind !== "duplicate")
+          fail(`same Inbox payload returned ${duplicateDecision.kind}`);
+        const duplicateOutbox = await outboxA.enqueue(transaction, base);
+        if (duplicateOutbox !== "duplicate")
+          fail(`same Outbox message returned ${duplicateOutbox}`);
+      },
+    );
+    const conflicting = {
+      ...base,
+      envelope: { ...base.envelope, producer: "other-producer" },
+    };
+    await withTransaction(
+      databaseA,
+      { mode: "interactive", correlationId: "issue63-conflict" },
+      async (transaction) => {
+        conflictDecision = await inboxA.begin(
+          transaction,
+          toInbox(conflicting),
+          "consumer-conflict",
+          Date.now(),
+          10_000,
+        );
+        if (conflictDecision.kind !== "conflict")
+          fail(`different Inbox payload returned ${conflictDecision.kind}`);
+        quarantineDecision = await inboxA.quarantineRecord(
+          transaction,
+          {
+            topic: base.topic,
+            partition: 0,
+            offset: "63-conflict-1",
+            messageId: conflicting.messageId,
+            messageType: conflicting.messageType,
+            envelope: conflicting.envelope,
+            reason: "MESSAGE_ID_PAYLOAD_CONFLICT",
+          },
+          Date.now(),
+        );
+      },
+    );
+    if (quarantineDecision !== "created")
+      fail(`Inbox conflict quarantine returned ${quarantineDecision}`);
+    const quarantineRepeat = await withTransaction(
+      databaseA,
+      { mode: "interactive" },
+      (transaction) =>
+        inboxA.quarantineRecord(
+          transaction,
+          {
+            topic: base.topic,
+            partition: 0,
+            offset: "63-conflict-1",
+            messageId: conflicting.messageId,
+            messageType: conflicting.messageType,
+            envelope: conflicting.envelope,
+            reason: "MESSAGE_ID_PAYLOAD_CONFLICT",
+          },
+          Date.now(),
+        ),
+    );
+    if (quarantineRepeat !== "duplicate")
+      fail(`duplicate quarantine returned ${quarantineRepeat}`);
 
     const sameSequenceAggregate = "aggregate-different-message-types";
-    const differentTypeA = deliveryMessage("issue63-type-a", sameSequenceAggregate, 1, {value: "type-a"}, "Issue63.TypeA");
-    const differentTypeB = deliveryMessage("issue63-type-b", sameSequenceAggregate, 1, {value: "type-b"}, "Issue63.TypeB");
-    const directOutboxInsert = (database) => defineStatement(database, `INSERT INTO ${foundationIdentifier(FOUNDATION_SCHEMA)}.${foundationIdentifier(DELIVERY_OUTBOX)}
+    const differentTypeA = deliveryMessage(
+      "issue63-type-a",
+      sameSequenceAggregate,
+      1,
+      { value: "type-a" },
+      "Issue63.TypeA",
+    );
+    const differentTypeB = deliveryMessage(
+      "issue63-type-b",
+      sameSequenceAggregate,
+      1,
+      { value: "type-b" },
+      "Issue63.TypeB",
+    );
+    const directOutboxInsert = (database) =>
+      defineStatement(
+        database,
+        `INSERT INTO ${foundationIdentifier(FOUNDATION_SCHEMA)}.${foundationIdentifier(DELIVERY_OUTBOX)}
       (message_id, message_type, topic, aggregate_ref, aggregate_sequence, owner_version,
        partition_key, schema_version, envelope, payload, payload_hash, occurred_at,
        correlation_id, causation_id, traceparent, state, lease_owner, lease_token,
        lease_until, attempt, next_attempt_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12::timestamptz,
        $13, $14, $15, 'Pending', '', 0, clock_timestamp(), 0, clock_timestamp())
-      ON CONFLICT (aggregate_ref, aggregate_sequence) DO NOTHING RETURNING message_id`);
-    const insertDifferentType = (statement, transaction, message) => statement(transaction, [
-      message.messageId,
-      message.messageType,
-      message.topic,
-      message.aggregateRef,
-      message.aggregateSequence,
-      message.ownerVersion,
-      message.partitionKey,
-      message.schemaVersion,
-      canonicalJson(message.envelope),
-      canonicalJson(message.payload),
-      canonicalRequestHash(message.envelope),
-      message.occurredAt,
-      message.correlationId,
-      null,
-      message.traceparent,
-    ]);
+      ON CONFLICT (aggregate_ref, aggregate_sequence) DO NOTHING RETURNING message_id`,
+      );
+    const insertDifferentType = (statement, transaction, message) =>
+      statement(transaction, [
+        message.messageId,
+        message.messageType,
+        message.topic,
+        message.aggregateRef,
+        message.aggregateSequence,
+        message.ownerVersion,
+        message.partitionKey,
+        message.schemaVersion,
+        canonicalJson(message.envelope),
+        canonicalJson(message.payload),
+        canonicalRequestHash(message.envelope),
+        message.occurredAt,
+        message.correlationId,
+        null,
+        message.traceparent,
+      ]);
     const directOutboxInsertA = directOutboxInsert(databaseA);
     const directOutboxInsertB = directOutboxInsert(databaseB);
     const [differentTypeResultA, differentTypeResultB] = await Promise.all([
-      withTransaction(databaseA, {mode: "interactive", correlationId: "issue63-type-a"}, (transaction) => insertDifferentType(directOutboxInsertA, transaction, differentTypeA)),
-      withTransaction(databaseB, {mode: "interactive", correlationId: "issue63-type-b"}, (transaction) => insertDifferentType(directOutboxInsertB, transaction, differentTypeB)),
+      withTransaction(
+        databaseA,
+        { mode: "interactive", correlationId: "issue63-type-a" },
+        (transaction) =>
+          insertDifferentType(directOutboxInsertA, transaction, differentTypeA),
+      ),
+      withTransaction(
+        databaseB,
+        { mode: "interactive", correlationId: "issue63-type-b" },
+        (transaction) =>
+          insertDifferentType(directOutboxInsertB, transaction, differentTypeB),
+      ),
     ]);
-    const differentTypeRows = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_OUTBOX, "WHERE aggregate_ref = $1", [sameSequenceAggregate]);
-    const differentTypeAccepted = [differentTypeResultA, differentTypeResultB].filter((result) => result.rowCount === 1).length;
-    const differentTypeConflicts = [differentTypeResultA, differentTypeResultB].filter((result) => result.rowCount === 0).length;
-    if (differentTypeAccepted !== 1 || differentTypeConflicts !== 1 || differentTypeRows.rowCount !== 1)
-      fail(`aggregate sequence uniqueness accepted ${differentTypeAccepted} and conflicted ${differentTypeConflicts} rows=${differentTypeRows.rowCount}`);
-    const uniqueClaim = (await withTransaction(databaseA, {mode: "background"}, (transaction) => outboxA.claim(transaction, Date.now(), "publisher-unique", 1, 5_000)))[0];
-    if (!uniqueClaim || uniqueClaim.message.aggregateRef !== sameSequenceAggregate) fail("missing unique sequence fixture claim");
-    await withTransaction(databaseA, {mode: "background"}, (transaction) => outboxA.finalize(transaction, uniqueClaim.message.messageId, uniqueClaim.leaseOwner, uniqueClaim.leaseToken));
+    const differentTypeRows = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_OUTBOX,
+      "WHERE aggregate_ref = $1",
+      [sameSequenceAggregate],
+    );
+    const differentTypeAccepted = [
+      differentTypeResultA,
+      differentTypeResultB,
+    ].filter((result) => result.rowCount === 1).length;
+    const differentTypeConflicts = [
+      differentTypeResultA,
+      differentTypeResultB,
+    ].filter((result) => result.rowCount === 0).length;
+    if (
+      differentTypeAccepted !== 1 ||
+      differentTypeConflicts !== 1 ||
+      differentTypeRows.rowCount !== 1
+    )
+      fail(
+        `aggregate sequence uniqueness accepted ${differentTypeAccepted} and conflicted ${differentTypeConflicts} rows=${differentTypeRows.rowCount}`,
+      );
+    const uniqueClaim = (
+      await withTransaction(databaseA, { mode: "background" }, (transaction) =>
+        outboxA.claim(transaction, Date.now(), "publisher-unique", 1, 5_000),
+      )
+    )[0];
+    if (
+      !uniqueClaim ||
+      uniqueClaim.message.aggregateRef !== sameSequenceAggregate
+    )
+      fail("missing unique sequence fixture claim");
+    await withTransaction(databaseA, { mode: "background" }, (transaction) =>
+      outboxA.finalize(
+        transaction,
+        uniqueClaim.message.messageId,
+        uniqueClaim.leaseOwner,
+        uniqueClaim.leaseToken,
+      ),
+    );
 
-    const orderedOne = deliveryMessage("issue63-order-1", "aggregate-a-order", 1, {value: "one"});
-    const orderedTwo = deliveryMessage("issue63-order-2", "aggregate-a-order", 2, {value: "two"});
-    const independent = deliveryMessage("issue63-independent-1", "aggregate-b-independent", 1, {value: "independent"});
-    await withTransaction(databaseA, {mode: "interactive", correlationId: "issue63-order-seed"}, async (transaction) => {
-      for (const message of [orderedOne, orderedTwo, independent]) {
-        if (await outboxA.enqueue(transaction, message) !== "created") fail(`seed Outbox did not create ${message.messageId}`);
-      }
-    });
-    const firstClaim = await withTransaction(databaseA, {mode: "background"}, (transaction) => outboxA.claim(transaction, Date.now(), "publisher-order-a", 1, 5_000));
-    if (firstClaim.length !== 1 || firstClaim[0].message.messageId !== orderedOne.messageId)
-      fail(`first ordered claim was ${firstClaim.map((claim) => claim.message.messageId).join(",")}`);
-    const secondClaim = await withTransaction(databaseB, {mode: "background"}, (transaction) => outboxB.claim(transaction, Date.now(), "publisher-order-b", 1, 5_000));
-    if (secondClaim.length !== 1 || secondClaim[0].message.messageId !== independent.messageId)
-      fail(`independent aggregate claim was ${secondClaim.map((claim) => claim.message.messageId).join(",")}`);
+    const orderedOne = deliveryMessage(
+      "issue63-order-1",
+      "aggregate-a-order",
+      1,
+      { value: "one" },
+    );
+    const orderedTwo = deliveryMessage(
+      "issue63-order-2",
+      "aggregate-a-order",
+      2,
+      { value: "two" },
+    );
+    const independent = deliveryMessage(
+      "issue63-independent-1",
+      "aggregate-b-independent",
+      1,
+      { value: "independent" },
+    );
+    await withTransaction(
+      databaseA,
+      { mode: "interactive", correlationId: "issue63-order-seed" },
+      async (transaction) => {
+        for (const message of [orderedOne, orderedTwo, independent]) {
+          if ((await outboxA.enqueue(transaction, message)) !== "created")
+            fail(`seed Outbox did not create ${message.messageId}`);
+        }
+      },
+    );
+    const firstClaim = await withTransaction(
+      databaseA,
+      { mode: "background" },
+      (transaction) =>
+        outboxA.claim(transaction, Date.now(), "publisher-order-a", 1, 5_000),
+    );
+    if (
+      firstClaim.length !== 1 ||
+      firstClaim[0].message.messageId !== orderedOne.messageId
+    )
+      fail(
+        `first ordered claim was ${firstClaim.map((claim) => claim.message.messageId).join(",")}`,
+      );
+    const secondClaim = await withTransaction(
+      databaseB,
+      { mode: "background" },
+      (transaction) =>
+        outboxB.claim(transaction, Date.now(), "publisher-order-b", 1, 5_000),
+    );
+    if (
+      secondClaim.length !== 1 ||
+      secondClaim[0].message.messageId !== independent.messageId
+    )
+      fail(
+        `independent aggregate claim was ${secondClaim.map((claim) => claim.message.messageId).join(",")}`,
+      );
     await Promise.all([
-      withTransaction(databaseA, {mode: "background"}, (transaction) => outboxA.finalize(transaction, firstClaim[0].message.messageId, firstClaim[0].leaseOwner, firstClaim[0].leaseToken)),
-      withTransaction(databaseB, {mode: "background"}, (transaction) => outboxB.finalize(transaction, secondClaim[0].message.messageId, secondClaim[0].leaseOwner, secondClaim[0].leaseToken)),
+      withTransaction(databaseA, { mode: "background" }, (transaction) =>
+        outboxA.finalize(
+          transaction,
+          firstClaim[0].message.messageId,
+          firstClaim[0].leaseOwner,
+          firstClaim[0].leaseToken,
+        ),
+      ),
+      withTransaction(databaseB, { mode: "background" }, (transaction) =>
+        outboxB.finalize(
+          transaction,
+          secondClaim[0].message.messageId,
+          secondClaim[0].leaseOwner,
+          secondClaim[0].leaseToken,
+        ),
+      ),
     ]);
-    const secondOrderClaim = await withTransaction(databaseB, {mode: "background"}, (transaction) => outboxB.claim(transaction, Date.now(), "publisher-order-b", 1, 5_000));
-    if (secondOrderClaim.length !== 1 || secondOrderClaim[0].message.messageId !== orderedTwo.messageId)
-      fail(`second ordered claim was ${secondOrderClaim.map((claim) => claim.message.messageId).join(",")}`);
-    await withTransaction(databaseB, {mode: "background"}, (transaction) => outboxB.finalize(transaction, secondOrderClaim[0].message.messageId, secondOrderClaim[0].leaseOwner, secondOrderClaim[0].leaseToken));
+    const secondOrderClaim = await withTransaction(
+      databaseB,
+      { mode: "background" },
+      (transaction) =>
+        outboxB.claim(transaction, Date.now(), "publisher-order-b", 1, 5_000),
+    );
+    if (
+      secondOrderClaim.length !== 1 ||
+      secondOrderClaim[0].message.messageId !== orderedTwo.messageId
+    )
+      fail(
+        `second ordered claim was ${secondOrderClaim.map((claim) => claim.message.messageId).join(",")}`,
+      );
+    await withTransaction(databaseB, { mode: "background" }, (transaction) =>
+      outboxB.finalize(
+        transaction,
+        secondOrderClaim[0].message.messageId,
+        secondOrderClaim[0].leaseOwner,
+        secondOrderClaim[0].leaseToken,
+      ),
+    );
 
-    crashDatabase = createFoundationDatabase(databaseConnectionOptions(adminUrl, roleEntry, password, port));
+    crashDatabase = createFoundationDatabase(
+      databaseConnectionOptions(adminUrl, roleEntry, password, port),
+    );
     await crashDatabase.resource.start(AbortSignal.timeout(1000));
-    const crashOutbox = createSqlOutboxStore(crashDatabase, {schema: FOUNDATION_SCHEMA, table: DELIVERY_OUTBOX});
-    const crashMessage = deliveryMessage("issue63-lease-recovery", "aggregate-lease", 1, {value: "lease"});
-    await withTransaction(crashDatabase, {mode: "background"}, (transaction) => crashOutbox.enqueue(transaction, crashMessage));
-    const oldClaim = (await withTransaction(crashDatabase, {mode: "background"}, (transaction) => crashOutbox.claim(transaction, Date.now(), "publisher-old", 1, 50)))[0];
-    if (!oldClaim || oldClaim.message.messageId !== crashMessage.messageId) fail("expired lease fixture was not claimed");
+    const crashOutbox = createSqlOutboxStore(crashDatabase, {
+      schema: FOUNDATION_SCHEMA,
+      table: DELIVERY_OUTBOX,
+    });
+    const crashMessage = deliveryMessage(
+      "issue63-lease-recovery",
+      "aggregate-lease",
+      1,
+      { value: "lease" },
+    );
+    await withTransaction(
+      crashDatabase,
+      { mode: "background" },
+      (transaction) => crashOutbox.enqueue(transaction, crashMessage),
+    );
+    const oldClaim = (
+      await withTransaction(
+        crashDatabase,
+        { mode: "background" },
+        (transaction) =>
+          crashOutbox.claim(transaction, Date.now(), "publisher-old", 1, 50),
+      )
+    )[0];
+    if (!oldClaim || oldClaim.message.messageId !== crashMessage.messageId)
+      fail("expired lease fixture was not claimed");
     await closeDatabase(crashDatabase);
     crashDatabase = undefined;
     await sleep(100);
-    recoveredDatabase = createFoundationDatabase(databaseConnectionOptions(adminUrl, roleEntry, password, port));
+    recoveredDatabase = createFoundationDatabase(
+      databaseConnectionOptions(adminUrl, roleEntry, password, port),
+    );
     await recoveredDatabase.resource.start(AbortSignal.timeout(1000));
-    const recoveredOutbox = createSqlOutboxStore(recoveredDatabase, {schema: FOUNDATION_SCHEMA, table: DELIVERY_OUTBOX});
+    const recoveredOutbox = createSqlOutboxStore(recoveredDatabase, {
+      schema: FOUNDATION_SCHEMA,
+      table: DELIVERY_OUTBOX,
+    });
     let staleFenceCode;
     try {
-      await withTransaction(recoveredDatabase, {mode: "background"}, (transaction) => recoveredOutbox.finalize(transaction, oldClaim.message.messageId, oldClaim.leaseOwner, oldClaim.leaseToken));
+      await withTransaction(
+        recoveredDatabase,
+        { mode: "background" },
+        (transaction) =>
+          recoveredOutbox.finalize(
+            transaction,
+            oldClaim.message.messageId,
+            oldClaim.leaseOwner,
+            oldClaim.leaseToken,
+          ),
+      );
     } catch (error) {
       staleFenceCode = error?.code;
     }
-    const recoveredClaim = (await withTransaction(recoveredDatabase, {mode: "background"}, (transaction) => recoveredOutbox.claim(transaction, Date.now(), "publisher-new", 1, 5_000)))[0];
-    if (!recoveredClaim || recoveredClaim.message.messageId !== oldClaim.message.messageId) fail("expired Outbox lease was not recoverable");
-    await withTransaction(recoveredDatabase, {mode: "background"}, (transaction) => recoveredOutbox.finalize(transaction, recoveredClaim.message.messageId, recoveredClaim.leaseOwner, recoveredClaim.leaseToken));
-    if (staleFenceCode !== "OUTBOX_LEASE_INVALID") fail(`stale Outbox fence returned ${staleFenceCode ?? "no error"}`);
+    const recoveredClaim = (
+      await withTransaction(
+        recoveredDatabase,
+        { mode: "background" },
+        (transaction) =>
+          recoveredOutbox.claim(
+            transaction,
+            Date.now(),
+            "publisher-new",
+            1,
+            5_000,
+          ),
+      )
+    )[0];
+    if (
+      !recoveredClaim ||
+      recoveredClaim.message.messageId !== oldClaim.message.messageId
+    )
+      fail("expired Outbox lease was not recoverable");
+    await withTransaction(
+      recoveredDatabase,
+      { mode: "background" },
+      (transaction) =>
+        recoveredOutbox.finalize(
+          transaction,
+          recoveredClaim.message.messageId,
+          recoveredClaim.leaseOwner,
+          recoveredClaim.leaseToken,
+        ),
+    );
+    if (staleFenceCode !== "OUTBOX_LEASE_INVALID")
+      fail(`stale Outbox fence returned ${staleFenceCode ?? "no error"}`);
     await closeDatabase(recoveredDatabase);
     recoveredDatabase = undefined;
 
-    const unknownMessage = deliveryMessage("issue63-db-unknown", "aggregate-unknown", 1, {value: "unknown"});
+    const unknownMessage = deliveryMessage(
+      "issue63-db-unknown",
+      "aggregate-unknown",
+      1,
+      { value: "unknown" },
+    );
     const proxy = await openBlackholeProxy(port, "COMMIT");
-    unknownDatabase = createFoundationDatabase(databaseConnectionOptions(adminUrl, roleEntry, password, proxy.port));
+    unknownDatabase = createFoundationDatabase(
+      databaseConnectionOptions(adminUrl, roleEntry, password, proxy.port),
+    );
     let unknownCode;
     try {
       await unknownDatabase.resource.start(AbortSignal.timeout(1000));
-      const unknownInbox = createSqlInboxStore(unknownDatabase, {schema: FOUNDATION_SCHEMA, table: DELIVERY_INBOX, quarantineTable: DELIVERY_QUARANTINE});
-      const unknownOutbox = createSqlOutboxStore(unknownDatabase, {schema: FOUNDATION_SCHEMA, table: DELIVERY_OUTBOX});
-      const unknownOwner = defineDeliveryOwnerStatement(unknownDatabase, defineStatement);
+      const unknownInbox = createSqlInboxStore(unknownDatabase, {
+        schema: FOUNDATION_SCHEMA,
+        table: DELIVERY_INBOX,
+        quarantineTable: DELIVERY_QUARANTINE,
+      });
+      const unknownOutbox = createSqlOutboxStore(unknownDatabase, {
+        schema: FOUNDATION_SCHEMA,
+        table: DELIVERY_OUTBOX,
+      });
+      const unknownOwner = defineDeliveryOwnerStatement(
+        unknownDatabase,
+        defineStatement,
+      );
       try {
-        await withTransaction(unknownDatabase, {mode: "interactive", correlationId: "issue63-db-unknown"}, async (transaction) => {
-          const begin = await unknownInbox.begin(transaction, toInbox(unknownMessage), "consumer-unknown", Date.now(), 10_000);
-          if (begin.kind !== "acquired") fail(`DB unknown Inbox decision was ${begin.kind}`);
-          await unknownOwner(transaction, [unknownMessage.messageId, unknownMessage.aggregateRef, "unknown", unknownMessage.occurredAt]);
-          if (await unknownOutbox.enqueue(transaction, unknownMessage) !== "created") fail("DB unknown Outbox was not created");
-          await unknownInbox.markProcessed(transaction, unknownMessage.messageId, "consumer-unknown", new Date().toISOString());
-        });
+        await withTransaction(
+          unknownDatabase,
+          { mode: "interactive", correlationId: "issue63-db-unknown" },
+          async (transaction) => {
+            const begin = await unknownInbox.begin(
+              transaction,
+              toInbox(unknownMessage),
+              "consumer-unknown",
+              Date.now(),
+              10_000,
+            );
+            if (begin.kind !== "acquired")
+              fail(`DB unknown Inbox decision was ${begin.kind}`);
+            await unknownOwner(transaction, [
+              unknownMessage.messageId,
+              unknownMessage.aggregateRef,
+              "unknown",
+              unknownMessage.occurredAt,
+            ]);
+            if (
+              (await unknownOutbox.enqueue(transaction, unknownMessage)) !==
+              "created"
+            )
+              fail("DB unknown Outbox was not created");
+            await unknownInbox.markProcessed(
+              transaction,
+              unknownMessage.messageId,
+              "consumer-unknown",
+              new Date().toISOString(),
+            );
+          },
+        );
       } catch (error) {
         unknownCode = error?.code;
       }
@@ -839,13 +1304,43 @@ async function runDeliveryProof({adminUrl, port, roleMap, rolePasswords}) {
       unknownDatabase = undefined;
       await proxy.close();
     }
-    if (unknownCode !== "TRANSACTION_OUTCOME_UNKNOWN") fail(`DB unknown returned ${unknownCode ?? "no error"}`);
-    const unknownInboxRows = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_INBOX, "WHERE message_id = $1", [unknownMessage.messageId]);
-    const unknownOutboxRows = await deliveryRows(adminUrl, FOUNDATION_DATABASE, DELIVERY_OUTBOX, "WHERE message_id = $1", [unknownMessage.messageId]);
-    if (unknownInboxRows.rowCount !== 1 || unknownInboxRows.rows[0]?.state !== "Processed" || unknownOutboxRows.rowCount !== 1 || unknownOutboxRows.rows[0]?.state !== "Pending")
+    if (unknownCode !== "TRANSACTION_OUTCOME_UNKNOWN")
+      fail(`DB unknown returned ${unknownCode ?? "no error"}`);
+    const unknownInboxRows = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_INBOX,
+      "WHERE message_id = $1",
+      [unknownMessage.messageId],
+    );
+    const unknownOutboxRows = await deliveryRows(
+      adminUrl,
+      FOUNDATION_DATABASE,
+      DELIVERY_OUTBOX,
+      "WHERE message_id = $1",
+      [unknownMessage.messageId],
+    );
+    if (
+      unknownInboxRows.rowCount !== 1 ||
+      unknownInboxRows.rows[0]?.state !== "Processed" ||
+      unknownOutboxRows.rowCount !== 1 ||
+      unknownOutboxRows.rows[0]?.state !== "Pending"
+    )
       fail("DB unknown did not preserve durable Inbox/Outbox state");
-    const replayAfterUnknown = await withTransaction(databaseA, {mode: "interactive"}, (transaction) => inboxA.begin(transaction, toInbox(unknownMessage), "consumer-replay", Date.now(), 10_000));
-    if (replayAfterUnknown.kind !== "duplicate") fail(`DB unknown replay returned ${replayAfterUnknown.kind}`);
+    const replayAfterUnknown = await withTransaction(
+      databaseA,
+      { mode: "interactive" },
+      (transaction) =>
+        inboxA.begin(
+          transaction,
+          toInbox(unknownMessage),
+          "consumer-replay",
+          Date.now(),
+          10_000,
+        ),
+    );
+    if (replayAfterUnknown.kind !== "duplicate")
+      fail(`DB unknown replay returned ${replayAfterUnknown.kind}`);
 
     return {
       transport: "postgresql-only",
@@ -881,10 +1376,13 @@ async function runDeliveryProof({adminUrl, port, roleMap, rolePasswords}) {
         outboxConflict: true,
       },
       payloadHash: {
-        inboxValidated: baseBegin.record.payloadHash === canonicalRequestHash(base.envelope),
+        inboxValidated:
+          baseBegin.record.payloadHash === canonicalRequestHash(base.envelope),
         outboxValidated: baseOutbox === "created",
         conflictQuarantined: quarantineDecision === "created",
-        recoveredClaimValidated: recoveredClaim.payloadHash === canonicalRequestHash(recoveredClaim.message.envelope),
+        recoveredClaimValidated:
+          recoveredClaim.payloadHash ===
+          canonicalRequestHash(recoveredClaim.message.envelope),
       },
       differentMessageTypeSequence: {
         concurrent: true,
@@ -893,12 +1391,17 @@ async function runDeliveryProof({adminUrl, port, roleMap, rolePasswords}) {
         durableRows: differentTypeRows.rowCount,
       },
       aggregateOrdering: {
-        sameAggregate: [firstClaim[0].message.aggregateSequence.toString(), secondOrderClaim[0].message.aggregateSequence.toString()],
+        sameAggregate: [
+          firstClaim[0].message.aggregateSequence.toString(),
+          secondOrderClaim[0].message.aggregateSequence.toString(),
+        ],
         sequenceBarrier: true,
-        otherAggregateIndependent: secondClaim[0].message.aggregateRef === independent.aggregateRef,
+        otherAggregateIndependent:
+          secondClaim[0].message.aggregateRef === independent.aggregateRef,
       },
       crashAfterClaimBeforeFinalize: {
-        stableMessageId: oldClaim.message.messageId === recoveredClaim.message.messageId,
+        stableMessageId:
+          oldClaim.message.messageId === recoveredClaim.message.messageId,
         recovered: true,
         staleFenceCode,
         brokerAckProof: "not-run",
@@ -908,7 +1411,8 @@ async function runDeliveryProof({adminUrl, port, roleMap, rolePasswords}) {
         durableInboxState: unknownInboxRows.rows[0]?.state,
         durableOutboxState: unknownOutboxRows.rows[0]?.state,
         replay: replayAfterUnknown.kind,
-        stableMessageId: unknownOutboxRows.rows[0]?.message_id === unknownMessage.messageId,
+        stableMessageId:
+          unknownOutboxRows.rows[0]?.message_id === unknownMessage.messageId,
       },
     };
   } finally {
@@ -944,13 +1448,22 @@ function packetQueries(buffer, queries, extendedQueries = []) {
     if (length < 4 || buffer.length - offset < length + 1) break;
     if (buffer[offset] === 0x51) {
       const body = buffer.subarray(offset + 5, offset + length + 1);
-      queries.push(body.toString("utf8").replace(/\0.*$/s, "").trim().toUpperCase());
+      queries.push(
+        body.toString("utf8").replace(/\0.*$/s, "").trim().toUpperCase(),
+      );
     } else if (buffer[offset] === 0x50) {
       const body = buffer.subarray(offset + 5, offset + length + 1);
       const statementEnd = body.indexOf(0);
-      const queryEnd = statementEnd < 0 ? -1 : body.indexOf(0, statementEnd + 1);
+      const queryEnd =
+        statementEnd < 0 ? -1 : body.indexOf(0, statementEnd + 1);
       if (queryEnd >= 0)
-        extendedQueries.push(body.subarray(statementEnd + 1, queryEnd).toString("utf8").trim().toUpperCase());
+        extendedQueries.push(
+          body
+            .subarray(statementEnd + 1, queryEnd)
+            .toString("utf8")
+            .trim()
+            .toUpperCase(),
+        );
     }
     offset += length + 1;
   }
@@ -966,7 +1479,8 @@ function packetCommandTags(buffer, tags) {
     if (type === 0x43) {
       const body = buffer.subarray(offset + 5, offset + length + 1);
       const terminator = body.indexOf(0);
-      if (terminator >= 0) tags.push(body.subarray(0, terminator).toString("utf8"));
+      if (terminator >= 0)
+        tags.push(body.subarray(0, terminator).toString("utf8"));
     }
     offset += length + 1;
   }
@@ -991,8 +1505,13 @@ export async function openBlackholeProxy(
     fail("blackhole command occurrence must be a positive safe integer");
   if (!Number.isSafeInteger(dropReplyAt) || dropReplyAt < 1)
     fail("blackhole reply occurrence must be a positive safe integer");
-  if (blockExtendedQuery !== undefined && (typeof blockExtendedQuery !== "string" || blockExtendedQuery.trim() === ""))
-    fail("blackhole extended-query barrier must name a non-empty query fragment");
+  if (
+    blockExtendedQuery !== undefined &&
+    (typeof blockExtendedQuery !== "string" || blockExtendedQuery.trim() === "")
+  )
+    fail(
+      "blackhole extended-query barrier must name a non-empty query fragment",
+    );
   const observed = [];
   const sockets = new Set();
   const commandWaiters = new Map();
@@ -1022,7 +1541,8 @@ export async function openBlackholeProxy(
     peerCloseWaiters.clear();
   };
   const signalCommand = (command) => {
-    for (const waiter of commandWaiters.get(command) ?? []) waiter.resolve({ command });
+    for (const waiter of commandWaiters.get(command) ?? [])
+      waiter.resolve({ command });
     commandWaiters.delete(command);
   };
   const signalReplyDropped = (value) => {
@@ -1032,11 +1552,11 @@ export async function openBlackholeProxy(
   };
   const signalQueryBlocked = (query) => {
     blockedQuery = query;
-    for (const waiter of queryBlockWaiters) waiter.resolve({query});
+    for (const waiter of queryBlockWaiters) waiter.resolve({ query });
     queryBlockWaiters.clear();
   };
   const signalPeerClosed = () => {
-    for (const waiter of peerCloseWaiters) waiter.resolve({closedPeers});
+    for (const waiter of peerCloseWaiters) waiter.resolve({ closedPeers });
     peerCloseWaiters.clear();
   };
   const waitFor = (waiters, predicate, timeoutMs, description) => {
@@ -1056,7 +1576,9 @@ export async function openBlackholeProxy(
       };
       const timer = setTimeout(() => {
         waiters.delete?.(waiter);
-        reject(new Error(`blackhole protocol barrier timed out: ${description}`));
+        reject(
+          new Error(`blackhole protocol barrier timed out: ${description}`),
+        );
       }, timeoutMs);
       if (waiters.add) waiters.add(waiter);
       else waiters.push(waiter);
@@ -1098,7 +1620,11 @@ export async function openBlackholeProxy(
         signalCommand(command);
         if (command !== commandToDrop) continue;
         matchingCommands += 1;
-        if (!dropCommandOnce && matchingCommands === dropReplyAt && (!dropOnce || dropArmed)) {
+        if (
+          !dropCommandOnce &&
+          matchingCommands === dropReplyAt &&
+          (!dropOnce || dropArmed)
+        ) {
           dropResponses = true;
           dropArmed = false;
         }
@@ -1134,7 +1660,11 @@ export async function openBlackholeProxy(
       replyBuffer = Buffer.concat([replyBuffer, chunk]);
       replyBuffer = packetCommandTags(replyBuffer, before);
       if (replyDropped === undefined && before.includes(commandToDrop)) {
-        signalReplyDropped({command: commandToDrop, tag: commandToDrop, bytes: droppedReplyBytes});
+        signalReplyDropped({
+          command: commandToDrop,
+          tag: commandToDrop,
+          bytes: droppedReplyBytes,
+        });
       }
     });
   });
@@ -1174,7 +1704,8 @@ export async function openBlackholeProxy(
       );
     },
     waitForQueryBlocked(timeoutMs = 5_000) {
-      if (blockedQuery !== undefined) return Promise.resolve({query: blockedQuery});
+      if (blockedQuery !== undefined)
+        return Promise.resolve({ query: blockedQuery });
       return waitFor(
         queryBlockWaiters,
         () => blockedQuery !== undefined,
@@ -1183,15 +1714,19 @@ export async function openBlackholeProxy(
       );
     },
     releaseBlockedQuery() {
-      if (blockedQueryRelease === undefined) fail("blackhole extended-query barrier was not blocked");
+      if (blockedQueryRelease === undefined)
+        fail("blackhole extended-query barrier was not blocked");
       const release = blockedQueryRelease;
       blockedQueryRelease = undefined;
       release();
     },
     waitForPeerClosed(previousClosedPeers = 0, timeoutMs = 5_000) {
       if (!Number.isSafeInteger(previousClosedPeers) || previousClosedPeers < 0)
-        fail("blackhole peer-close baseline must be a non-negative safe integer");
-      if (closedPeers > previousClosedPeers) return Promise.resolve({closedPeers});
+        fail(
+          "blackhole peer-close baseline must be a non-negative safe integer",
+        );
+      if (closedPeers > previousClosedPeers)
+        return Promise.resolve({ closedPeers });
       return waitFor(
         peerCloseWaiters,
         () => closedPeers > previousClosedPeers,
@@ -1203,7 +1738,9 @@ export async function openBlackholeProxy(
       for (const socket of sockets) socket.destroy();
     },
     async close() {
-      rejectBarriers(new Error("blackhole proxy closed before protocol barrier"));
+      rejectBarriers(
+        new Error("blackhole proxy closed before protocol barrier"),
+      );
       for (const socket of sockets) socket.destroy();
       await new Promise((resolvePromise) => server.close(resolvePromise));
     },
@@ -1244,18 +1781,24 @@ async function waitForClosedPeers(proxy, deadlineMs = 1000) {
   return proxy.closedPeers;
 }
 
-async function runCommitBlackholeProof({ adminUrl, roleEntry, password, port }) {
+async function runCommitBlackholeProof({
+  adminUrl,
+  roleEntry,
+  password,
+  port,
+}) {
   const { createDatabase, withTransaction } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/index.js"))
-      .href,
+      .href
   );
   const { defineStatement } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/owner.js"))
-      .href,
+      .href
   );
   const { canonicalRequestHash, createSqlIdempotencyStore } = await import(
-    pathToFileURL(join(REPO_ROOT, "packages/platform-idempotency/dist/index.js"))
-      .href,
+    pathToFileURL(
+      join(REPO_ROOT, "packages/platform-idempotency/dist/index.js"),
+    ).href
   );
   const proxy = await openBlackholeProxy(port, "COMMIT");
   const database = createDatabase(
@@ -1265,8 +1808,15 @@ async function runCommitBlackholeProof({ adminUrl, roleEntry, password, port }) 
     schema: FOUNDATION_SCHEMA,
     table: IDEMPOTENCY_RECORDS,
   });
-  const identity = { actorRef: "actor-62", scope: "commit-command", key: "blackhole-62" };
-  const requestHash = canonicalRequestHash({ command: "commit-blackhole", issue: 62 });
+  const identity = {
+    actorRef: "actor-62",
+    scope: "commit-command",
+    key: "blackhole-62",
+  };
+  const requestHash = canonicalRequestHash({
+    command: "commit-blackhole",
+    issue: 62,
+  });
   const response = { status: 201, body: { accepted: true } };
   const startedAt = Date.now();
   let code;
@@ -1293,7 +1843,8 @@ async function runCommitBlackholeProof({ adminUrl, roleEntry, password, port }) 
             10000,
             60000,
           );
-          if (acquired.kind !== "acquired") fail("commit blackhole idempotency was not acquired");
+          if (acquired.kind !== "acquired")
+            fail("commit blackhole idempotency was not acquired");
           await proofDatabase(transaction, ["commit-blackhole", "committed"]);
           await idempotency.complete(
             transaction,
@@ -1313,15 +1864,21 @@ async function runCommitBlackholeProof({ adminUrl, roleEntry, password, port }) 
       metricsBeforeStop.idle !== 0 ||
       metricsBeforeStop.pending !== 0
     )
-      fail(`commit blackhole left metrics active=${metricsBeforeStop.active}, idle=${metricsBeforeStop.idle}, pending=${metricsBeforeStop.pending}`);
+      fail(
+        `commit blackhole left metrics active=${metricsBeforeStop.active}, idle=${metricsBeforeStop.idle}, pending=${metricsBeforeStop.pending}`,
+      );
     closedPeersBeforeStop = await waitForClosedPeers(proxy);
   } finally {
     await closeDatabase(database);
     await proxy.close();
   }
   if (code !== "TRANSACTION_OUTCOME_UNKNOWN")
-    fail(`commit blackhole returned ${code ?? "no error"}; commands=${proxy.observed.join(",")}`);
-  const verifier = await createClient(replaceDatabase(adminUrl, roleEntry.database));
+    fail(
+      `commit blackhole returned ${code ?? "no error"}; commands=${proxy.observed.join(",")}`,
+    );
+  const verifier = await createClient(
+    replaceDatabase(adminUrl, roleEntry.database),
+  );
   let rows;
   try {
     rows = await verifier.query(
@@ -1361,7 +1918,9 @@ async function runCommitBlackholeProof({ adminUrl, roleEntry, password, port }) 
     fail(`commit blackhole command sequence was ${proxy.observed.join(",")}`);
   const wallClockMs = Date.now() - startedAt;
   if (wallClockMs >= 3000 || closedPeersBeforeStop < 1)
-    fail(`commit blackhole bound/release evidence failed: ${wallClockMs}ms, closedPeersBeforeStop=${closedPeersBeforeStop}`);
+    fail(
+      `commit blackhole bound/release evidence failed: ${wallClockMs}ms, closedPeersBeforeStop=${closedPeersBeforeStop}`,
+    );
   return {
     code,
     durableCommit: true,
@@ -1376,18 +1935,24 @@ async function runCommitBlackholeProof({ adminUrl, roleEntry, password, port }) 
   };
 }
 
-async function runCaughtSqlRollbackProof({ adminUrl, roleEntry, password, port }) {
+async function runCaughtSqlRollbackProof({
+  adminUrl,
+  roleEntry,
+  password,
+  port,
+}) {
   const { createDatabase, withTransaction } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/index.js"))
-      .href,
+      .href
   );
   const { defineStatement } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/owner.js"))
-      .href,
+      .href
   );
   const { canonicalRequestHash, createSqlIdempotencyStore } = await import(
-    pathToFileURL(join(REPO_ROOT, "packages/platform-idempotency/dist/index.js"))
-      .href,
+    pathToFileURL(
+      join(REPO_ROOT, "packages/platform-idempotency/dist/index.js"),
+    ).href
   );
   const databaseA = createDatabase(
     databaseConnectionOptions(adminUrl, roleEntry, password, port),
@@ -1403,13 +1968,23 @@ async function runCaughtSqlRollbackProof({ adminUrl, roleEntry, password, port }
     schema: FOUNDATION_SCHEMA,
     table: IDEMPOTENCY_RECORDS,
   });
-  const identity = { actorRef: "actor-62", scope: "caught-sql", key: "rollback-62" };
-  const requestHash = canonicalRequestHash({ command: "caught-sql", issue: 62 });
+  const identity = {
+    actorRef: "actor-62",
+    scope: "caught-sql",
+    key: "rollback-62",
+  };
+  const requestHash = canonicalRequestHash({
+    command: "caught-sql",
+    issue: 62,
+  });
   const ownerWrite = defineStatement(
     databaseB,
     `INSERT INTO ${foundationIdentifier(FOUNDATION_RECORDS)} (record_key, record_value) VALUES ($1, $2)`,
   );
-  const failingStatement = defineStatement(databaseA, "SELECT * FROM issue62_missing_table");
+  const failingStatement = defineStatement(
+    databaseA,
+    "SELECT * FROM issue62_missing_table",
+  );
   let code;
   let retryDecision;
   try {
@@ -1418,34 +1993,42 @@ async function runCaughtSqlRollbackProof({ adminUrl, roleEntry, password, port }
       databaseB.resource.start(AbortSignal.timeout(1000)),
     ]);
     try {
-      await withTransaction(databaseA, { mode: "background" }, async (transaction) => {
-        const acquired = await storeA.acquire(
-          transaction,
-          identity,
-          requestHash,
-          "caught-sql-owner",
-          Date.now(),
-          10000,
-          60000,
-        );
-        if (acquired.kind !== "acquired") fail("caught SQL proof did not acquire idempotency");
-        try {
-          await failingStatement(transaction, []);
-        } catch {
-          // The owner deliberately catches the SQL failure; PostgreSQL marks
-          // the transaction aborted, so COMMIT must return command tag ROLLBACK.
-        }
-      });
+      await withTransaction(
+        databaseA,
+        { mode: "background" },
+        async (transaction) => {
+          const acquired = await storeA.acquire(
+            transaction,
+            identity,
+            requestHash,
+            "caught-sql-owner",
+            Date.now(),
+            10000,
+            60000,
+          );
+          if (acquired.kind !== "acquired")
+            fail("caught SQL proof did not acquire idempotency");
+          try {
+            await failingStatement(transaction, []);
+          } catch {
+            // The owner deliberately catches the SQL failure; PostgreSQL marks
+            // the transaction aborted, so COMMIT must return command tag ROLLBACK.
+          }
+        },
+      );
     } catch (error) {
       code = error?.code;
     }
-    const verifier = await createClient(replaceDatabase(adminUrl, roleEntry.database));
+    const verifier = await createClient(
+      replaceDatabase(adminUrl, roleEntry.database),
+    );
     try {
       const ownerRows = await verifier.query(
         `SELECT record_value FROM ${foundationIdentifier(FOUNDATION_SCHEMA)}.${foundationIdentifier(FOUNDATION_RECORDS)} WHERE record_key = $1`,
         ["caught-sql-owner-state"],
       );
-      if (ownerRows.rowCount !== 0) fail("caught SQL rollback committed owner state");
+      if (ownerRows.rowCount !== 0)
+        fail("caught SQL rollback committed owner state");
     } finally {
       await verifier.end();
     }
@@ -1463,7 +2046,10 @@ async function runCaughtSqlRollbackProof({ adminUrl, roleEntry, password, port }
           60000,
         );
         if (decision.kind !== "acquired") return decision.kind;
-        await ownerWrite(transaction, ["caught-sql-owner-state", "retry-committed"]);
+        await ownerWrite(transaction, [
+          "caught-sql-owner-state",
+          "retry-committed",
+        ]);
         await storeB.complete(transaction, identity, "caught-sql-retry", {
           status: 200,
           body: "retry-committed",
@@ -1481,10 +2067,15 @@ async function runCaughtSqlRollbackProof({ adminUrl, roleEntry, password, port }
   return { code, nextCall: retryDecision, falseReplay: false };
 }
 
-async function runRollbackBlackholeProof({ adminUrl, roleEntry, password, port }) {
+async function runRollbackBlackholeProof({
+  adminUrl,
+  roleEntry,
+  password,
+  port,
+}) {
   const { createDatabase, withTransaction } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/index.js"))
-      .href,
+      .href
   );
   const proxy = await openBlackholeProxy(port, "ROLLBACK");
   const database = createDatabase(
@@ -1514,7 +2105,9 @@ async function runRollbackBlackholeProof({ adminUrl, roleEntry, password, port }
       metricsBeforeStop.pending !== 0 ||
       metricsBeforeStop.idle !== 0
     )
-      fail(`rollback blackhole left metrics active=${metricsBeforeStop.active}, pending=${metricsBeforeStop.pending}, idle=${metricsBeforeStop.idle}`);
+      fail(
+        `rollback blackhole left metrics active=${metricsBeforeStop.active}, pending=${metricsBeforeStop.pending}, idle=${metricsBeforeStop.idle}`,
+      );
     closedPeersBeforeStop = await waitForClosedPeers(proxy);
   } finally {
     await closeDatabase(database);
@@ -1523,10 +2116,14 @@ async function runRollbackBlackholeProof({ adminUrl, roleEntry, password, port }
   if (code !== "DB_ROLLBACK_FAILED")
     fail(`rollback blackhole returned ${code ?? "no error"}`);
   if (!proxy.observed.includes("ROLLBACK"))
-    fail(`rollback blackhole did not issue ROLLBACK: ${proxy.observed.join(",")}`);
+    fail(
+      `rollback blackhole did not issue ROLLBACK: ${proxy.observed.join(",")}`,
+    );
   const wallClockMs = Date.now() - startedAt;
   if (wallClockMs >= 3000 || closedPeersBeforeStop < 1)
-    fail(`rollback blackhole bound/release evidence failed: ${wallClockMs}ms, closedPeersBeforeStop=${closedPeersBeforeStop}`);
+    fail(
+      `rollback blackhole bound/release evidence failed: ${wallClockMs}ms, closedPeersBeforeStop=${closedPeersBeforeStop}`,
+    );
   return {
     code,
     destroyed: true,
@@ -1542,15 +2139,16 @@ async function runRollbackBlackholeProof({ adminUrl, roleEntry, password, port }
 async function runIdempotencyProof(adminUrl, roleEntry, password, port) {
   const { createDatabase, withTransaction } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/index.js"))
-      .href,
+      .href
   );
   const { defineStatement } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/owner.js"))
-      .href,
+      .href
   );
   const { canonicalRequestHash, createSqlIdempotencyStore } = await import(
-    pathToFileURL(join(REPO_ROOT, "packages/platform-idempotency/dist/index.js"))
-      .href,
+    pathToFileURL(
+      join(REPO_ROOT, "packages/platform-idempotency/dist/index.js"),
+    ).href
   );
   const databaseA = createDatabase(
     databaseConnectionOptions(adminUrl, roleEntry, password, port),
@@ -1566,7 +2164,11 @@ async function runIdempotencyProof(adminUrl, roleEntry, password, port) {
     schema: FOUNDATION_SCHEMA,
     table: IDEMPOTENCY_RECORDS,
   });
-  const identity = { actorRef: "actor-62", scope: "orders-command", key: "request-62" };
+  const identity = {
+    actorRef: "actor-62",
+    scope: "orders-command",
+    key: "request-62",
+  };
   const requestHash = canonicalRequestHash({ command: "issue-62", value: 62 });
   const otherHash = canonicalRequestHash({ command: "issue-62", value: 63 });
   const now = Date.now();
@@ -1601,7 +2203,10 @@ async function runIdempotencyProof(adminUrl, roleEntry, password, port) {
         );
         if (decision.kind === "acquired") {
           if (holdMs > 0) await sleep(holdMs);
-          await ownerWrite(transaction, ["idempotency-owner-state", "one-owner-mutation"]);
+          await ownerWrite(transaction, [
+            "idempotency-owner-state",
+            "one-owner-mutation",
+          ]);
           await store.complete(transaction, identity, owner, response);
         }
         return decision.kind;
@@ -1616,49 +2221,114 @@ async function runIdempotencyProof(adminUrl, roleEntry, password, port) {
       databaseB,
       { mode: "background" },
       async (transaction) =>
-        storeB.acquire(transaction, identity, requestHash, "replay-owner", now, 10000, 60000),
+        storeB.acquire(
+          transaction,
+          identity,
+          requestHash,
+          "replay-owner",
+          now,
+          10000,
+          60000,
+        ),
     );
     const conflict = await withTransaction(
       databaseB,
       { mode: "background" },
       async (transaction) =>
-        storeB.acquire(transaction, identity, otherHash, "conflict-owner", now, 10000, 60000),
+        storeB.acquire(
+          transaction,
+          identity,
+          otherHash,
+          "conflict-owner",
+          now,
+          10000,
+          60000,
+        ),
     );
-    const unknownIdentity = { actorRef: "actor-62", scope: "orders-command", key: "unknown-62" };
-    await withTransaction(databaseB, { mode: "background" }, async (transaction) => {
-      await seedExpired(transaction, [
-        unknownIdentity.actorRef,
-        unknownIdentity.scope,
-        unknownIdentity.key,
-        requestHash,
-        "unknown-owner",
-        now - 1,
-        now - 60000,
-        now + 60000,
-      ]);
-    });
+    const unknownIdentity = {
+      actorRef: "actor-62",
+      scope: "orders-command",
+      key: "unknown-62",
+    };
+    await withTransaction(
+      databaseB,
+      { mode: "background" },
+      async (transaction) => {
+        await seedExpired(transaction, [
+          unknownIdentity.actorRef,
+          unknownIdentity.scope,
+          unknownIdentity.key,
+          requestHash,
+          "unknown-owner",
+          now - 1,
+          now - 60000,
+          now + 60000,
+        ]);
+      },
+    );
     const expired = await withTransaction(
       databaseB,
       { mode: "background" },
       async (transaction) =>
-        storeB.acquire(transaction, unknownIdentity, requestHash, "recovery-owner", now, 10000, 60000),
+        storeB.acquire(
+          transaction,
+          unknownIdentity,
+          requestHash,
+          "recovery-owner",
+          now,
+          10000,
+          60000,
+        ),
     );
     const terminalReplayBodies = [];
     for (const [index, body] of [null, "plain-string"].entries()) {
-      const replayIdentity = { actorRef: "actor-62", scope: "orders-command", key: `body-${index}` };
+      const replayIdentity = {
+        actorRef: "actor-62",
+        scope: "orders-command",
+        key: `body-${index}`,
+      };
       const replayHash = canonicalRequestHash({ body });
-      await withTransaction(databaseB, { mode: "background" }, async (transaction) => {
-        const acquired = await storeB.acquire(transaction, replayIdentity, replayHash, `body-owner-${index}`, now, 10000, 60000);
-        if (acquired.kind !== "acquired") fail(`terminal body ${index} was not acquired`);
-        await storeB.complete(transaction, replayIdentity, `body-owner-${index}`, { status: 200, body });
-      });
+      await withTransaction(
+        databaseB,
+        { mode: "background" },
+        async (transaction) => {
+          const acquired = await storeB.acquire(
+            transaction,
+            replayIdentity,
+            replayHash,
+            `body-owner-${index}`,
+            now,
+            10000,
+            60000,
+          );
+          if (acquired.kind !== "acquired")
+            fail(`terminal body ${index} was not acquired`);
+          await storeB.complete(
+            transaction,
+            replayIdentity,
+            `body-owner-${index}`,
+            { status: 200, body },
+          );
+        },
+      );
       const terminalReplay = await withTransaction(
         databaseB,
         { mode: "background" },
         async (transaction) =>
-          storeB.acquire(transaction, replayIdentity, replayHash, `body-replay-${index}`, now, 10000, 60000),
+          storeB.acquire(
+            transaction,
+            replayIdentity,
+            replayHash,
+            `body-replay-${index}`,
+            now,
+            10000,
+            60000,
+          ),
       );
-      if (terminalReplay.kind !== "replay" || !Object.is(terminalReplay.response.body, body))
+      if (
+        terminalReplay.kind !== "replay" ||
+        !Object.is(terminalReplay.response.body, body)
+      )
         fail(`terminal body ${index} was not replayable`);
       terminalReplayBodies.push(terminalReplay.response.body);
     }
@@ -1675,11 +2345,14 @@ async function runIdempotencyProof(adminUrl, roleEntry, password, port) {
       fail(`idempotency acquired decisions were ${decisions.join(",")}`);
     if (replay.kind !== "replay") fail("restart replay was not terminal");
     if (conflict.kind !== "conflict") fail("hash conflict was not detected");
-    if (expired.kind !== "in_progress") fail("expired unknown lease was reacquired");
-    if (ownerState.rowCount !== 1) fail("owner mutation was not atomic with idempotency completion");
+    if (expired.kind !== "in_progress")
+      fail("expired unknown lease was reacquired");
+    if (ownerState.rowCount !== 1)
+      fail("owner mutation was not atomic with idempotency completion");
     return {
       decisions,
-      acquiredCount: decisions.filter((decision) => decision === "acquired").length,
+      acquiredCount: decisions.filter((decision) => decision === "acquired")
+        .length,
       replayable: replay.kind === "replay",
       conflict: conflict.kind === "conflict",
       expiredLeaseRequiresRecovery: expired.kind === "in_progress",
@@ -1694,11 +2367,11 @@ async function runIdempotencyProof(adminUrl, roleEntry, password, port) {
 async function runMigrationDriftProof(adminUrl, database, rolePasswords) {
   const { createDatabase } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/index.js"))
-      .href,
+      .href
   );
   const { applyMigrations, migrationChecksum } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-migrations/dist/index.js"))
-      .href,
+      .href
   );
   const parsed = new URL(adminUrl);
   const foundation = createDatabase({
@@ -1730,8 +2403,18 @@ async function runMigrationDriftProof(adminUrl, database, rolePasswords) {
     const driftSql = "SELECT 62";
     await applyMigrations(
       foundation,
-      [{ id: migration.id, sql: driftSql, checksum: migrationChecksum(driftSql) }],
-      { schema: FOUNDATION_SCHEMA, ledgerTable: MIGRATION_LEDGER, lockKey: "issue62-live-migration-proof" },
+      [
+        {
+          id: migration.id,
+          sql: driftSql,
+          checksum: migrationChecksum(driftSql),
+        },
+      ],
+      {
+        schema: FOUNDATION_SCHEMA,
+        ledgerTable: MIGRATION_LEDGER,
+        lockKey: "issue62-live-migration-proof",
+      },
     );
   } catch (error) {
     driftRejected = error?.code === "MIGRATION_CHECKSUM_DRIFT";
@@ -1742,14 +2425,19 @@ async function runMigrationDriftProof(adminUrl, database, rolePasswords) {
   return { driftRejected, applied: migration.id };
 }
 
-async function runCopyInterruptionProof({ adminUrl, roleEntry, password, port }) {
+async function runCopyInterruptionProof({
+  adminUrl,
+  roleEntry,
+  password,
+  port,
+}) {
   const { createDatabase, withTransaction } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/index.js"))
-      .href,
+      .href
   );
   const { defineCopy } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/owner.js"))
-      .href,
+      .href
   );
   const database = createDatabase(
     databaseConnectionOptions(adminUrl, roleEntry, password, port),
@@ -1760,7 +2448,12 @@ async function runCopyInterruptionProof({ adminUrl, roleEntry, password, port })
   let yielded = 0;
   try {
     await database.resource.start(AbortSignal.timeout(1000));
-    const copy = defineCopy(database, COPY_RECORDS, ["value"], FOUNDATION_SCHEMA);
+    const copy = defineCopy(
+      database,
+      COPY_RECORDS,
+      ["value"],
+      FOUNDATION_SCHEMA,
+    );
     source = Readable.from(
       (async function* () {
         for (let index = 0; ; index += 1) {
@@ -1786,7 +2479,9 @@ async function runCopyInterruptionProof({ adminUrl, roleEntry, password, port })
   } finally {
     await closeDatabase(database);
   }
-  const verifier = await createClient(replaceDatabase(adminUrl, roleEntry.database));
+  const verifier = await createClient(
+    replaceDatabase(adminUrl, roleEntry.database),
+  );
   let count;
   try {
     count = await verifier.query(
@@ -1798,8 +2493,11 @@ async function runCopyInterruptionProof({ adminUrl, roleEntry, password, port })
   if (code !== "DB_INTERRUPTED")
     fail(`COPY interruption returned ${code ?? "no error"}`);
   if (!source?.destroyed || yielded === 0)
-    fail(`COPY interruption did not stop its source: destroyed=${source?.destroyed}, yielded=${yielded}`);
-  if (Number(count.rows[0].count) !== 0) fail("COPY interruption committed rows");
+    fail(
+      `COPY interruption did not stop its source: destroyed=${source?.destroyed}, yielded=${yielded}`,
+    );
+  if (Number(count.rows[0].count) !== 0)
+    fail("COPY interruption committed rows");
   return {
     code,
     rowsAfterRollback: Number(count.rows[0].count),
@@ -1816,7 +2514,7 @@ async function runReadinessAndSaturationProof({
 }) {
   const { createDatabase, withTransaction } = await import(
     pathToFileURL(join(REPO_ROOT, "packages/platform-database/dist/index.js"))
-      .href,
+      .href
   );
   const database = createDatabase(
     databaseConnectionOptions(adminUrl, roleEntry, password, port, 1),
@@ -1825,28 +2523,42 @@ async function runReadinessAndSaturationProof({
   let first;
   try {
     await database.resource.start(AbortSignal.timeout(1000));
-    const readyBefore = await database.readiness.check(AbortSignal.timeout(1000));
-    const hold = new Promise((resolvePromise) => setTimeout(resolvePromise, 220));
+    const readyBefore = await database.readiness.check(
+      AbortSignal.timeout(1000),
+    );
+    const hold = new Promise((resolvePromise) =>
+      setTimeout(resolvePromise, 220),
+    );
     first = withTransaction(database, { mode: "interactive" }, async () => {
       await hold;
       return "held";
     });
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 30));
-    const readyDuring = await database.readiness.check(AbortSignal.timeout(1000));
+    const readyDuring = await database.readiness.check(
+      AbortSignal.timeout(1000),
+    );
     try {
-      await withTransaction(database, { mode: "interactive" }, async () => "second");
+      await withTransaction(
+        database,
+        { mode: "interactive" },
+        async () => "second",
+      );
     } catch (error) {
       secondCode = error?.code;
     }
     const saturated = database.metrics();
     await first;
-    const readyAfter = await database.readiness.check(AbortSignal.timeout(1000));
+    const readyAfter = await database.readiness.check(
+      AbortSignal.timeout(1000),
+    );
     if (!readyBefore || !readyDuring || !readyAfter)
       fail("transient pool saturation changed required readiness");
     if (secondCode !== "DB_POOL_EXHAUSTED")
       fail(`pool saturation returned ${secondCode ?? "no error"}`);
     database.resource.destroy();
-    const readyAfterDestroy = await database.readiness.check(AbortSignal.timeout(100));
+    const readyAfterDestroy = await database.readiness.check(
+      AbortSignal.timeout(100),
+    );
     if (readyAfterDestroy) fail("destroyed database remained ready");
     return {
       readyBefore,
@@ -1884,47 +2596,89 @@ async function runDatabaseFoundationProof({
   try {
     let transaction;
     try {
-      transaction = await runCommitBlackholeProof({ adminUrl, roleEntry, password, port });
+      transaction = await runCommitBlackholeProof({
+        adminUrl,
+        roleEntry,
+        password,
+        port,
+      });
     } catch (error) {
       fail(`commit proof: ${error.message}`);
     }
     let rollback;
     try {
-      rollback = await runRollbackBlackholeProof({ adminUrl, roleEntry, password, port });
+      rollback = await runRollbackBlackholeProof({
+        adminUrl,
+        roleEntry,
+        password,
+        port,
+      });
     } catch (error) {
       fail(`rollback proof: ${error.message}`);
     }
     let caughtSqlRollback;
     try {
-      caughtSqlRollback = await runCaughtSqlRollbackProof({ adminUrl, roleEntry, password, port });
+      caughtSqlRollback = await runCaughtSqlRollbackProof({
+        adminUrl,
+        roleEntry,
+        password,
+        port,
+      });
     } catch (error) {
       fail(`caught SQL proof: ${error.message}`);
     }
     let idempotency;
     try {
-      idempotency = await runIdempotencyProof(adminUrl, roleEntry, password, port);
+      idempotency = await runIdempotencyProof(
+        adminUrl,
+        roleEntry,
+        password,
+        port,
+      );
     } catch (error) {
       fail(`idempotency proof: ${error.message}`);
     }
     let migration;
     try {
-      migration = await runMigrationDriftProof(adminUrl, prepared.database, rolePasswords);
+      migration = await runMigrationDriftProof(
+        adminUrl,
+        prepared.database,
+        rolePasswords,
+      );
     } catch (error) {
       fail(`migration proof: ${error.message}`);
     }
     let copy;
     try {
-      copy = await runCopyInterruptionProof({ adminUrl, roleEntry, password, port });
+      copy = await runCopyInterruptionProof({
+        adminUrl,
+        roleEntry,
+        password,
+        port,
+      });
     } catch (error) {
       fail(`COPY proof: ${error.message}`);
     }
     let readiness;
     try {
-      readiness = await runReadinessAndSaturationProof({ adminUrl, roleEntry, password, port });
+      readiness = await runReadinessAndSaturationProof({
+        adminUrl,
+        roleEntry,
+        password,
+        port,
+      });
     } catch (error) {
       fail(`readiness proof: ${error.message}`);
     }
-    return { transaction, rollback, caughtSqlRollback, idempotency, migration, copy, readiness };
+    return {
+      transaction,
+      rollback,
+      caughtSqlRollback,
+      idempotency,
+      migration,
+      copy,
+      readiness,
+    };
   } finally {
     try {
       await dropFoundationTables(adminUrl, prepared.database, rolePasswords);
@@ -1935,17 +2689,28 @@ async function runDatabaseFoundationProof({
 }
 
 async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
-  const catalog = roleMap.databases.find((database) => database.name === "coffee_platform_catalog");
+  const catalog = roleMap.databases.find(
+    (database) => database.name === "coffee_platform_catalog",
+  );
   if (!catalog) fail("missing Catalog database in role map");
   const migrationNames = [
-    "0001_supplier_snapshots.sql", "0002_snapshot_batches.sql", "0003_snapshot_staging.sql",
-    "0004_catalog_active.sql", "0005_catalog_identity.sql", "0006_catalog_outbox.sql",
-    "0007_catalog_grants.sql", "0008_catalog_active_read.sql", "0009_active_snapshot_freshness.sql",
+    "0001_supplier_snapshots.sql",
+    "0002_snapshot_batches.sql",
+    "0003_snapshot_staging.sql",
+    "0004_catalog_active.sql",
+    "0005_catalog_identity.sql",
+    "0006_catalog_outbox.sql",
+    "0007_catalog_grants.sql",
+    "0008_catalog_active_read.sql",
+    "0009_active_snapshot_freshness.sql",
   ];
   const migrationDirectory = join(REPO_ROOT, "apps/catalog-service/migrations");
-  const migrator = await createClient(replaceDatabase(adminUrl, catalog.name, {
-    user: catalog.migratorRole, password: rolePasswords[catalog.migratorRole],
-  }));
+  const migrator = await createClient(
+    replaceDatabase(adminUrl, catalog.name, {
+      user: catalog.migratorRole,
+      password: rolePasswords[catalog.migratorRole],
+    }),
+  );
   const appliedMigrations = [];
   try {
     await migrator.query(`CREATE TABLE IF NOT EXISTS catalog.platform_schema_migrations (
@@ -1956,7 +2721,10 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
       await migrator.query(sql);
       await migrator.query(
         "INSERT INTO catalog.platform_schema_migrations (id,checksum) VALUES ($1,$2)",
-        [name.slice(0, -4), createHash("sha256").update(sql, "utf8").digest("hex")],
+        [
+          name.slice(0, -4),
+          createHash("sha256").update(sql, "utf8").digest("hex"),
+        ],
       );
       appliedMigrations.push(name.slice(0, -4));
     }
@@ -1964,9 +2732,13 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
     await migrator.end();
   }
 
-  const connectRole = async (role) => createClient(replaceDatabase(adminUrl, catalog.name, {
-    user: role, password: rolePasswords[role],
-  }));
+  const connectRole = async (role) =>
+    createClient(
+      replaceDatabase(adminUrl, catalog.name, {
+        user: role,
+        password: rolePasswords[role],
+      }),
+    );
   const activation = await connectRole("coffee_catalog_activate_rw");
   const api = await connectRole("coffee_catalog_api_ro");
   const importer = await connectRole("coffee_catalog_import_rw");
@@ -1976,7 +2748,8 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
       await client.query(sql);
     } catch (error) {
       sqlstates[key] = error.code ?? null;
-      if (error.code !== "42501") fail(`${key}: expected SQLSTATE 42501, got ${error.code ?? "none"}`);
+      if (error.code !== "42501")
+        fail(`${key}: expected SQLSTATE 42501, got ${error.code ?? "none"}`);
       outcomes[key] = true;
       return true;
     }
@@ -1993,9 +2766,15 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
       "INSERT INTO catalog.supplier_snapshots (snapshot_ref,supplier_ref,provider_snapshot_ref,state,declared_batch_count,declared_product_count,declared_variant_count,declared_offer_count,content_hash,received_at) VALUES ($1,$2,'live-proof','Received',0,1,0,0,repeat('a',64),clock_timestamp())",
       [snapshotRef, supplierRef],
     );
-    await activation.query("SELECT snapshot_ref FROM catalog.supplier_snapshots WHERE snapshot_ref=$1", [snapshotRef]);
+    await activation.query(
+      "SELECT snapshot_ref FROM catalog.supplier_snapshots WHERE snapshot_ref=$1",
+      [snapshotRef],
+    );
     outcomes.activationStagingSelect = true;
-    await activation.query("UPDATE catalog.supplier_snapshots SET state='Active' WHERE snapshot_ref=$1", [snapshotRef]);
+    await activation.query(
+      "UPDATE catalog.supplier_snapshots SET state='Active' WHERE snapshot_ref=$1",
+      [snapshotRef],
+    );
     await activation.query(
       "INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ($1,$2,'Live proof','live proof')",
       [snapshotRef, productRef],
@@ -2009,15 +2788,28 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
 
     const occurredAt = new Date().toISOString();
     const envelope = {
-      envelopeVersion: "1", messageId, messageType: "CatalogSnapshotActivated.v1", occurredAt,
-      producer: "db-live-proof", correlationId: "catalog-live-proof", causationId: null,
+      envelopeVersion: "1",
+      messageId,
+      messageType: "CatalogSnapshotActivated.v1",
+      occurredAt,
+      producer: "db-live-proof",
+      correlationId: "catalog-live-proof",
+      causationId: null,
       traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
-      aggregate: {type: "Catalog", ref: "catalog", version: "1"},
-      payload: {snapshotRef, snapshotRevision: "1"},
+      aggregate: { type: "Catalog", ref: "catalog", version: "1" },
+      payload: { snapshotRef, snapshotRevision: "1" },
     };
     await activation.query(
       `INSERT INTO catalog.outbox_messages (message_id,message_type,topic,aggregate_ref,aggregate_sequence,owner_version,partition_key,schema_version,envelope,payload,payload_hash,occurred_at,correlation_id,causation_id,traceparent,state,lease_owner,lease_token,lease_until,attempt,next_attempt_at) VALUES ($1,$2,'coffee.catalog.snapshot.v1','catalog',1,'1','catalog','1',$3::jsonb,$4::jsonb,repeat('b',64),$5,$6,NULL,$7,'Pending','',0,$5,0,$5)`,
-      [messageId, "CatalogSnapshotActivated.v1", JSON.stringify(envelope), JSON.stringify(envelope.payload), occurredAt, "catalog-live-proof", envelope.traceparent],
+      [
+        messageId,
+        "CatalogSnapshotActivated.v1",
+        JSON.stringify(envelope),
+        JSON.stringify(envelope.payload),
+        occurredAt,
+        "catalog-live-proof",
+        envelope.traceparent,
+      ],
     );
     await activation.query(
       "UPDATE catalog.outbox_messages SET state='Publishing',lease_owner='live-proof',lease_token=1,lease_until=clock_timestamp() + interval '1 minute' WHERE message_id=$1",
@@ -2026,43 +2818,120 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
     outcomes.activationOutboxInsert = true;
     outcomes.activationOutboxUpdate = true;
 
-    for (const view of ["active_products", "active_variants", "active_offer_mappings", "active_availability", "active_snapshot_metadata"]) {
+    for (const view of [
+      "active_products",
+      "active_variants",
+      "active_offer_mappings",
+      "active_availability",
+      "active_snapshot_metadata",
+    ]) {
       await api.query(`SELECT * FROM catalog.${view}`);
     }
-    const metadata = await api.query("SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata");
-    if (metadata.rows.length !== 1 || metadata.rows[0].snapshot_ref !== snapshotRef || metadata.rows[0].snapshot_revision !== "1") {
-      fail("API role must see the committed Catalog pointer and decimal-string revision");
+    const metadata = await api.query(
+      "SELECT snapshot_ref,snapshot_revision FROM catalog.active_snapshot_metadata",
+    );
+    if (
+      metadata.rows.length !== 1 ||
+      metadata.rows[0].snapshot_ref !== snapshotRef ||
+      metadata.rows[0].snapshot_revision !== "1"
+    ) {
+      fail(
+        "API role must see the committed Catalog pointer and decimal-string revision",
+      );
     }
     outcomes.apiActiveViewsSelect = true;
     const activeProduct = await api.query(
       "SELECT metadata.snapshot_revision, product.product_ref FROM catalog.active_snapshot_metadata AS metadata JOIN catalog.active_products AS product ON product.snapshot_ref = metadata.snapshot_ref WHERE product.product_ref=$1",
       [productRef],
     );
-    if (activeProduct.rows.length !== 1 || activeProduct.rows[0].product_ref !== productRef || activeProduct.rows[0].snapshot_revision !== "1") {
+    if (
+      activeProduct.rows.length !== 1 ||
+      activeProduct.rows[0].product_ref !== productRef ||
+      activeProduct.rows[0].snapshot_revision !== "1"
+    ) {
       fail("API role must read only the committed active product and revision");
     }
     outcomes.apiActiveProjectionRead = true;
-    await expectDenied(api, "apiCatalogStateSelect", "SELECT * FROM catalog.catalog_state");
-    await expectDenied(api, "apiStagingSelect", "SELECT * FROM catalog.supplier_snapshots");
-    await expectDenied(api, "apiStagingInsert", `INSERT INTO catalog.supplier_snapshots (snapshot_ref,supplier_ref) VALUES ('${snapshotRef}','${supplierRef}')`);
-    await expectDenied(api, "apiStagingUpdate", `UPDATE catalog.supplier_snapshots SET state='Rejected' WHERE snapshot_ref='${snapshotRef}'`);
-    await expectDenied(api, "apiActiveInsert", `INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('${snapshotRef}','prd_00000000000000000000000001','Denied','denied')`);
-    await expectDenied(api, "apiActiveUpdate", "UPDATE catalog.catalog_state SET active_snapshot_revision=2 WHERE id=true");
-    await expectDenied(importer, "importActiveSelect", "SELECT * FROM catalog.active_products");
-    await expectDenied(importer, "importActiveInsert", `INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('${snapshotRef}','prd_00000000000000000000000002','Denied','denied')`);
-    await expectDenied(importer, "importActiveUpdate", "UPDATE catalog.catalog_state SET active_snapshot_revision=2 WHERE id=true");
-    await expectDenied(importer, "importOutboxSelect", "SELECT * FROM catalog.outbox_messages");
-    await expectDenied(importer, "importOutboxInsert", "INSERT INTO catalog.outbox_messages (message_id) VALUES ('denied')");
-    await expectDenied(importer, "importOutboxUpdate", "UPDATE catalog.outbox_messages SET state='Published' WHERE message_id='missing'");
+    await expectDenied(
+      api,
+      "apiCatalogStateSelect",
+      "SELECT * FROM catalog.catalog_state",
+    );
+    await expectDenied(
+      api,
+      "apiStagingSelect",
+      "SELECT * FROM catalog.supplier_snapshots",
+    );
+    await expectDenied(
+      api,
+      "apiStagingInsert",
+      `INSERT INTO catalog.supplier_snapshots (snapshot_ref,supplier_ref) VALUES ('${snapshotRef}','${supplierRef}')`,
+    );
+    await expectDenied(
+      api,
+      "apiStagingUpdate",
+      `UPDATE catalog.supplier_snapshots SET state='Rejected' WHERE snapshot_ref='${snapshotRef}'`,
+    );
+    await expectDenied(
+      api,
+      "apiActiveInsert",
+      `INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('${snapshotRef}','prd_00000000000000000000000001','Denied','denied')`,
+    );
+    await expectDenied(
+      api,
+      "apiActiveUpdate",
+      "UPDATE catalog.catalog_state SET active_snapshot_revision=2 WHERE id=true",
+    );
+    await expectDenied(
+      importer,
+      "importActiveSelect",
+      "SELECT * FROM catalog.active_products",
+    );
+    await expectDenied(
+      importer,
+      "importActiveInsert",
+      `INSERT INTO catalog.products (snapshot_ref,product_ref,display_name,display_name_sort_key) VALUES ('${snapshotRef}','prd_00000000000000000000000002','Denied','denied')`,
+    );
+    await expectDenied(
+      importer,
+      "importActiveUpdate",
+      "UPDATE catalog.catalog_state SET active_snapshot_revision=2 WHERE id=true",
+    );
+    await expectDenied(
+      importer,
+      "importOutboxSelect",
+      "SELECT * FROM catalog.outbox_messages",
+    );
+    await expectDenied(
+      importer,
+      "importOutboxInsert",
+      "INSERT INTO catalog.outbox_messages (message_id) VALUES ('denied')",
+    );
+    await expectDenied(
+      importer,
+      "importOutboxUpdate",
+      "UPDATE catalog.outbox_messages SET state='Published' WHERE message_id='missing'",
+    );
 
     const foreignConnect = {};
     const apiForeignConnect = {};
-    for (const database of ["coffee_platform_customer", "coffee_platform_pricing", "coffee_platform_orders", "coffee_platform_integration"]) {
-      for (const {role, checks} of [{role: "coffee_catalog_activate_rw", checks: foreignConnect}, {role: "coffee_catalog_api_ro", checks: apiForeignConnect}]) {
+    for (const database of [
+      "coffee_platform_customer",
+      "coffee_platform_pricing",
+      "coffee_platform_orders",
+      "coffee_platform_integration",
+    ]) {
+      for (const { role, checks } of [
+        { role: "coffee_catalog_activate_rw", checks: foreignConnect },
+        { role: "coffee_catalog_api_ro", checks: apiForeignConnect },
+      ]) {
         const client = new Client({
           connectionString: replaceDatabase(adminUrl, database, {
-            user: role, password: rolePasswords[role],
-          }), connectionTimeoutMillis: 1000, query_timeout: 2000,
+            user: role,
+            password: rolePasswords[role],
+          }),
+          connectionTimeoutMillis: 1000,
+          query_timeout: 2000,
         });
         client.on("error", () => {});
         try {
@@ -2070,16 +2939,32 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
           checks[database] = { denied: false, sqlstate: null };
           fail(`${role} unexpectedly connected to ${database}`);
         } catch (error) {
-          checks[database] = { denied: error.code === "42501", sqlstate: error.code ?? null };
-          if (error.code !== "42501") fail(`${role} CONNECT ${database}: expected SQLSTATE 42501, got ${error.code ?? "none"}`);
+          checks[database] = {
+            denied: error.code === "42501",
+            sqlstate: error.code ?? null,
+          };
+          if (error.code !== "42501")
+            fail(
+              `${role} CONNECT ${database}: expected SQLSTATE 42501, got ${error.code ?? "none"}`,
+            );
         } finally {
           await client.end().catch(() => undefined);
         }
       }
     }
-    outcomes.connectDeniedToForeignDatabases = Object.values(foreignConnect).every((entry) => entry.denied);
-    outcomes.apiConnectDeniedToForeignDatabases = Object.values(apiForeignConnect).every((entry) => entry.denied);
-    return { appliedMigrations, outcomes, sqlstates, foreignConnect, apiForeignConnect };
+    outcomes.connectDeniedToForeignDatabases = Object.values(
+      foreignConnect,
+    ).every((entry) => entry.denied);
+    outcomes.apiConnectDeniedToForeignDatabases = Object.values(
+      apiForeignConnect,
+    ).every((entry) => entry.denied);
+    return {
+      appliedMigrations,
+      outcomes,
+      sqlstates,
+      foreignConnect,
+      apiForeignConnect,
+    };
   } finally {
     await importer.end();
     await api.end();
@@ -2089,8 +2974,8 @@ async function runCatalogActivationProof({ adminUrl, roleMap, rolePasswords }) {
 
 async function writeEvidence(evidenceDir, result) {
   if (!evidenceDir) return;
-  await mkdir(evidenceDir, {recursive: true});
-  const {foundation, delivery, ...legacyResult} = result;
+  await mkdir(evidenceDir, { recursive: true });
+  const { foundation, delivery, ...legacyResult } = result;
   await writeFile(
     join(evidenceDir, `issue-3-db-live-proof-${result.runId}.json`),
     `${JSON.stringify(legacyResult, null, 2)}\n`,
@@ -2106,7 +2991,7 @@ async function writeEvidence(evidenceDir, result) {
   if (delivery) {
     await writeFile(
       join(evidenceDir, `issue-63-db-live-proof-${result.runId}.json`),
-      `${JSON.stringify({schemaVersion: 1, runId: result.runId, delivery}, null, 2)}\n`,
+      `${JSON.stringify({ schemaVersion: 1, runId: result.runId, delivery }, null, 2)}\n`,
       "utf8",
     );
   }
@@ -2289,7 +3174,11 @@ export async function runLiveProof({
     let catalogActivation;
     phase = "catalog-activation-postgresql-proof";
     try {
-      catalogActivation = await runCatalogActivationProof({ adminUrl, roleMap, rolePasswords });
+      catalogActivation = await runCatalogActivationProof({
+        adminUrl,
+        roleMap,
+        rolePasswords,
+      });
     } catch (error) {
       fail(`Catalog activation PostgreSQL proof: ${error.message}`);
     }
@@ -2321,7 +3210,7 @@ export async function runLiveProof({
         foreignInsertDeniedCount,
       },
       legacy: { databases: LEGACY_DATABASES, unchanged: legacyUnchanged },
-      ...(binding === undefined ? {} : {binding}),
+      ...(binding === undefined ? {} : { binding }),
       foundation,
       delivery,
       catalogActivation,

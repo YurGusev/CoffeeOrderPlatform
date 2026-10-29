@@ -1,1 +1,1 @@
-export const runtime = 'permissioned';
+export const runtime = "permissioned";

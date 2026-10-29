@@ -1,34 +1,351 @@
 [
-  {"case":"missing-field","document":"client-v1","operationId":"createCustomer","status":201,"schema":"CustomerResponse","base":"client-v1|createCustomer|201|CustomerResponse","delete":[["customerRef"]]},
-  {"case":"additional-field","document":"client-v1","operationId":"getOrderCard","status":200,"schema":"OrderCardResponse","base":"client-v1|createOrderDraft|201|OrderCardResponse","add":[[["unexpected"],"not-allowed"]]},
-  {"case":"invalid-ref-ulid","document":"client-v1","operationId":"createCustomer","status":201,"schema":"CustomerResponse","base":"client-v1|createCustomer|201|CustomerResponse","set":[[["customerRef"],"cus_invalid"]]},
-  {"case":"invalid-uuid","document":"client-v1","operationId":"streamOrderInvalidations","status":200,"schema":"SseStreamReady","streamFile":"order-invalidations.json","streamIndex":0,"set":[[["connectionId"],"not-a-uuid"]]},
-  {"case":"invalid-hash","document":"client-v1","operationId":"createPricingQuote","status":201,"schema":"PricingQuoteResponse","base":"client-v1|createPricingQuote|201|PricingQuoteResponse","set":[[["hash"],"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]]},
-  {"case":"invalid-traceparent","document":"client-v1","operationId":"createCustomer","target":"common","schema":"Traceparent","value":"invalid"},
-  {"case":"invalid-timestamp","document":"client-v1","operationId":"createCustomer","status":201,"schema":"CustomerResponse","base":"client-v1|createCustomer|201|CustomerResponse","set":[[["createdAt"],"2026-09-05T15:00:00+05:00"]]},
-  {"case":"invalid-calendar-timestamp","document":"client-v1","operationId":"createCustomer","status":201,"schema":"CustomerResponse","base":"client-v1|createCustomer|201|CustomerResponse","set":[[["createdAt"],"2026-02-31T00:00:00Z"]],"expectedKeyword":"format","expectedPath":"/createdAt"},
-  {"case":"numeric-version","document":"client-v1","operationId":"getOrderCard","status":200,"schema":"OrderCardResponse","base":"client-v1|createOrderDraft|201|OrderCardResponse","set":[[["version"],1]]},
-  {"case":"numeric-money","document":"client-v1","operationId":"createPricingQuote","status":201,"schema":"PricingQuoteResponse","base":"client-v1|createPricingQuote|201|PricingQuoteResponse","set":[[["totalMinor"],1800]]},
-  {"case":"numeric-quantity","document":"client-v1","operationId":"createPricingQuote","target":"request","schema":"PricingQuoteCreateRequest","body":{"customerRef":"cus_01ARZ3NDEKTSV4RRFFQ69G5FAY","lines":[{"productRef":"prd_01ARZ3NDEKTSV4RRFFQ69G5FAX","variantRef":"var_01ARZ3NDEKTSV4RRFFQ69G5FAY","quantity":1}]}},
-  {"case":"noncanonical-decimal","document":"client-v1","operationId":"createPricingQuote","target":"request","schema":"PricingQuoteCreateRequest","body":{"customerRef":"cus_01ARZ3NDEKTSV4RRFFQ69G5FAY","lines":[{"productRef":"prd_01ARZ3NDEKTSV4RRFFQ69G5FAX","variantRef":"var_01ARZ3NDEKTSV4RRFFQ69G5FAY","quantity":"1.0000"}]}},
-  {"case":"invalid-enum","document":"client-v1","operationId":"searchCatalogProducts","status":200,"schema":"CatalogSearchResponse","base":"client-v1|searchCatalogProducts|200|CatalogSearchResponse","set":[[["items",0,"availability"],"Unknown"]]},
-  {"case":"invalid-cross-field","document":"client-v1","operationId":"createCustomer","target":"request","schema":"CustomerCreateRequest","body":{"displayName":"Иван"}},
-  {"case":"actor-provider-credentials-public","document":"client-v1","operationId":"createCustomer","target":"request","schema":"CustomerCreateRequest","body":{"displayName":"Иван","phone":"+79991234567","actor":"operator-1","providerToken":"secret"}},
-  {"case":"wrong-problem-status","document":"client-v1","operationId":"requestAromaReconciliation","status":400,"schema":"ErrorValidationFailed","baseProblem":"client-v1|requestAromaReconciliation|400|ErrorValidationFailed","set":[[["status"],422]]},
-  {"case":"wrong-problem-code","document":"client-v1","operationId":"requestAromaReconciliation","status":400,"schema":"ErrorValidationFailed","baseProblem":"client-v1|requestAromaReconciliation|400|ErrorValidationFailed","set":[[["code"],"INTERNAL_ERROR"]]},
-  {"case":"invalid-problem-instance","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["instance"],"http://["]],"expectedKeyword":"format","expectedPath":"/instance"},
-  {"case":"invalid-problem-instance-leading-digit-scheme","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["instance"],"1:abc"]],"expectedKeyword":"pattern","expectedPath":"/instance"},
-  {"case":"invalid-problem-instance-empty-scheme","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["instance"],":abc"]],"expectedKeyword":"pattern","expectedPath":"/instance"},
-  {"case":"invalid-problem-instance-path-brackets","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["instance"],"/[::1]"]],"expectedKeyword":"pattern","expectedPath":"/instance"},
-  {"case":"invalid-problem-instance-space","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["instance"],"/has space"]],"expectedKeyword":"pattern","expectedPath":"/instance"},
-  {"case":"invalid-problem-type-leading-digit-scheme","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["type"],"1:abc"]],"expectedKeyword":"pattern","expectedPath":"/type"},
-  {"case":"invalid-problem-type-empty-scheme","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["type"],":abc"]],"expectedKeyword":"pattern","expectedPath":"/type"},
-  {"case":"invalid-problem-type-path-brackets","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["type"],"/[::1]"]],"expectedKeyword":"pattern","expectedPath":"/type"},
-  {"case":"invalid-problem-type-space","document":"internal-v1","operationId":"setAromaCartLineQuantity","status":409,"schema":"ErrorAromaOperationRefConflict","baseProblem":"internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict","set":[[["type"],"/has space"]],"expectedKeyword":"pattern","expectedPath":"/type"},
-  {"case":"zero-provider-quantity","document":"internal-v1","operationId":"setAromaCartLineQuantity","target":"request","schema":"AromaSetQuantityRequest","body":{"operationRef":"op_01ARZ3NDEKTSV4RRFFQ69G5FAY","cartScopeRef":"aroma-primary","quantity":"0"},"expectedKeyword":"pattern","expectedPath":"/quantity"},
-  {"case":"unsupported-representation","document":"client-v1","operationId":"searchCustomers","status":200,"mediaType":"application/xml","schema":"CustomerSearchResponse"},
-  {"case":"pii-secret-provider-body-sse","document":"client-v1","operationId":"streamOrderInvalidations","status":200,"schema":"SseResourceInvalidated","streamFile":"order-invalidations.json","streamIndex":1,"add":[[["email"],"pii@example.test"],[["providerSecret"],"secret"],[["providerBody"],{"status":200}]]},
-  {"case":"binding-additional-field","document":"internal-v1","operationId":"registerAromaOfferBinding","target":"request","schema":"AromaOfferBindingRequest","body":{"offerRef":"off_01ARZ3NDEKTSV4RRFFQ69G5FAZ","supplierRef":"sup_01ARZ3NDEKTSV4RRFFQ69G5FAY","snapshotRef":"snp_01ARZ3NDEKTSV4RRFFQ69G5FB0","sourceIdentityScheme":"hmac-sha256-v1","sourceOfferKeyHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","rawProviderOfferId":"secret"},"expectedKeyword":"additionalProperties","expectedPath":""},
-  {"case":"wrong-order-empty-code","document":"client-v1","operationId":"confirmOrder","status":422,"schema":"ErrorOrderEmpty","baseProblem":"client-v1|confirmOrder|422|ErrorOrderEmpty","set":[[["code"],"ORDER_DESIRED_OVERFLOW"]]},
-  {"case":"wrong-order-item-limit-status","document":"client-v1","operationId":"upsertOrderItem","status":409,"schema":"ErrorOrderItemLimitExceeded","baseProblem":"client-v1|upsertOrderItem|409|ErrorOrderItemLimitExceeded","set":[[["status"],422]]}
+  {
+    "case": "missing-field",
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 201,
+    "schema": "CustomerResponse",
+    "base": "client-v1|createCustomer|201|CustomerResponse",
+    "delete": [["customerRef"]]
+  },
+  {
+    "case": "additional-field",
+    "document": "client-v1",
+    "operationId": "getOrderCard",
+    "status": 200,
+    "schema": "OrderCardResponse",
+    "base": "client-v1|createOrderDraft|201|OrderCardResponse",
+    "add": [[["unexpected"], "not-allowed"]]
+  },
+  {
+    "case": "invalid-ref-ulid",
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 201,
+    "schema": "CustomerResponse",
+    "base": "client-v1|createCustomer|201|CustomerResponse",
+    "set": [[["customerRef"], "cus_invalid"]]
+  },
+  {
+    "case": "invalid-uuid",
+    "document": "client-v1",
+    "operationId": "streamOrderInvalidations",
+    "status": 200,
+    "schema": "SseStreamReady",
+    "streamFile": "order-invalidations.json",
+    "streamIndex": 0,
+    "set": [[["connectionId"], "not-a-uuid"]]
+  },
+  {
+    "case": "invalid-hash",
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "status": 201,
+    "schema": "PricingQuoteResponse",
+    "base": "client-v1|createPricingQuote|201|PricingQuoteResponse",
+    "set": [
+      [
+        ["hash"],
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      ]
+    ]
+  },
+  {
+    "case": "invalid-traceparent",
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "target": "common",
+    "schema": "Traceparent",
+    "value": "invalid"
+  },
+  {
+    "case": "invalid-timestamp",
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 201,
+    "schema": "CustomerResponse",
+    "base": "client-v1|createCustomer|201|CustomerResponse",
+    "set": [[["createdAt"], "2026-09-05T15:00:00+05:00"]]
+  },
+  {
+    "case": "invalid-calendar-timestamp",
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "status": 201,
+    "schema": "CustomerResponse",
+    "base": "client-v1|createCustomer|201|CustomerResponse",
+    "set": [[["createdAt"], "2026-02-31T00:00:00Z"]],
+    "expectedKeyword": "format",
+    "expectedPath": "/createdAt"
+  },
+  {
+    "case": "numeric-version",
+    "document": "client-v1",
+    "operationId": "getOrderCard",
+    "status": 200,
+    "schema": "OrderCardResponse",
+    "base": "client-v1|createOrderDraft|201|OrderCardResponse",
+    "set": [[["version"], 1]]
+  },
+  {
+    "case": "numeric-money",
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "status": 201,
+    "schema": "PricingQuoteResponse",
+    "base": "client-v1|createPricingQuote|201|PricingQuoteResponse",
+    "set": [[["totalMinor"], 1800]]
+  },
+  {
+    "case": "numeric-quantity",
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "target": "request",
+    "schema": "PricingQuoteCreateRequest",
+    "body": {
+      "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "lines": [
+        {
+          "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+          "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+          "quantity": 1
+        }
+      ]
+    }
+  },
+  {
+    "case": "noncanonical-decimal",
+    "document": "client-v1",
+    "operationId": "createPricingQuote",
+    "target": "request",
+    "schema": "PricingQuoteCreateRequest",
+    "body": {
+      "customerRef": "cus_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "lines": [
+        {
+          "productRef": "prd_01ARZ3NDEKTSV4RRFFQ69G5FAX",
+          "variantRef": "var_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+          "quantity": "1.0000"
+        }
+      ]
+    }
+  },
+  {
+    "case": "invalid-enum",
+    "document": "client-v1",
+    "operationId": "searchCatalogProducts",
+    "status": 200,
+    "schema": "CatalogSearchResponse",
+    "base": "client-v1|searchCatalogProducts|200|CatalogSearchResponse",
+    "set": [[["items", 0, "availability"], "Unknown"]]
+  },
+  {
+    "case": "invalid-cross-field",
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "target": "request",
+    "schema": "CustomerCreateRequest",
+    "body": { "displayName": "Иван" }
+  },
+  {
+    "case": "actor-provider-credentials-public",
+    "document": "client-v1",
+    "operationId": "createCustomer",
+    "target": "request",
+    "schema": "CustomerCreateRequest",
+    "body": {
+      "displayName": "Иван",
+      "phone": "+79991234567",
+      "actor": "operator-1",
+      "providerToken": "secret"
+    }
+  },
+  {
+    "case": "wrong-problem-status",
+    "document": "client-v1",
+    "operationId": "requestAromaReconciliation",
+    "status": 400,
+    "schema": "ErrorValidationFailed",
+    "baseProblem": "client-v1|requestAromaReconciliation|400|ErrorValidationFailed",
+    "set": [[["status"], 422]]
+  },
+  {
+    "case": "wrong-problem-code",
+    "document": "client-v1",
+    "operationId": "requestAromaReconciliation",
+    "status": 400,
+    "schema": "ErrorValidationFailed",
+    "baseProblem": "client-v1|requestAromaReconciliation|400|ErrorValidationFailed",
+    "set": [[["code"], "INTERNAL_ERROR"]]
+  },
+  {
+    "case": "invalid-problem-instance",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["instance"], "http://["]],
+    "expectedKeyword": "format",
+    "expectedPath": "/instance"
+  },
+  {
+    "case": "invalid-problem-instance-leading-digit-scheme",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["instance"], "1:abc"]],
+    "expectedKeyword": "pattern",
+    "expectedPath": "/instance"
+  },
+  {
+    "case": "invalid-problem-instance-empty-scheme",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["instance"], ":abc"]],
+    "expectedKeyword": "pattern",
+    "expectedPath": "/instance"
+  },
+  {
+    "case": "invalid-problem-instance-path-brackets",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["instance"], "/[::1]"]],
+    "expectedKeyword": "pattern",
+    "expectedPath": "/instance"
+  },
+  {
+    "case": "invalid-problem-instance-space",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["instance"], "/has space"]],
+    "expectedKeyword": "pattern",
+    "expectedPath": "/instance"
+  },
+  {
+    "case": "invalid-problem-type-leading-digit-scheme",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["type"], "1:abc"]],
+    "expectedKeyword": "pattern",
+    "expectedPath": "/type"
+  },
+  {
+    "case": "invalid-problem-type-empty-scheme",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["type"], ":abc"]],
+    "expectedKeyword": "pattern",
+    "expectedPath": "/type"
+  },
+  {
+    "case": "invalid-problem-type-path-brackets",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["type"], "/[::1]"]],
+    "expectedKeyword": "pattern",
+    "expectedPath": "/type"
+  },
+  {
+    "case": "invalid-problem-type-space",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "status": 409,
+    "schema": "ErrorAromaOperationRefConflict",
+    "baseProblem": "internal-v1|setAromaCartLineQuantity|409|ErrorAromaOperationRefConflict",
+    "set": [[["type"], "/has space"]],
+    "expectedKeyword": "pattern",
+    "expectedPath": "/type"
+  },
+  {
+    "case": "zero-provider-quantity",
+    "document": "internal-v1",
+    "operationId": "setAromaCartLineQuantity",
+    "target": "request",
+    "schema": "AromaSetQuantityRequest",
+    "body": {
+      "operationRef": "op_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "cartScopeRef": "aroma-primary",
+      "quantity": "0"
+    },
+    "expectedKeyword": "pattern",
+    "expectedPath": "/quantity"
+  },
+  {
+    "case": "unsupported-representation",
+    "document": "client-v1",
+    "operationId": "searchCustomers",
+    "status": 200,
+    "mediaType": "application/xml",
+    "schema": "CustomerSearchResponse"
+  },
+  {
+    "case": "pii-secret-provider-body-sse",
+    "document": "client-v1",
+    "operationId": "streamOrderInvalidations",
+    "status": 200,
+    "schema": "SseResourceInvalidated",
+    "streamFile": "order-invalidations.json",
+    "streamIndex": 1,
+    "add": [
+      [["email"], "pii@example.test"],
+      [["providerSecret"], "secret"],
+      [["providerBody"], { "status": 200 }]
+    ]
+  },
+  {
+    "case": "binding-additional-field",
+    "document": "internal-v1",
+    "operationId": "registerAromaOfferBinding",
+    "target": "request",
+    "schema": "AromaOfferBindingRequest",
+    "body": {
+      "offerRef": "off_01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+      "supplierRef": "sup_01ARZ3NDEKTSV4RRFFQ69G5FAY",
+      "snapshotRef": "snp_01ARZ3NDEKTSV4RRFFQ69G5FB0",
+      "sourceIdentityScheme": "hmac-sha256-v1",
+      "sourceOfferKeyHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rawProviderOfferId": "secret"
+    },
+    "expectedKeyword": "additionalProperties",
+    "expectedPath": ""
+  },
+  {
+    "case": "wrong-order-empty-code",
+    "document": "client-v1",
+    "operationId": "confirmOrder",
+    "status": 422,
+    "schema": "ErrorOrderEmpty",
+    "baseProblem": "client-v1|confirmOrder|422|ErrorOrderEmpty",
+    "set": [[["code"], "ORDER_DESIRED_OVERFLOW"]]
+  },
+  {
+    "case": "wrong-order-item-limit-status",
+    "document": "client-v1",
+    "operationId": "upsertOrderItem",
+    "status": 409,
+    "schema": "ErrorOrderItemLimitExceeded",
+    "baseProblem": "client-v1|upsertOrderItem|409|ErrorOrderItemLimitExceeded",
+    "set": [[["status"], 422]]
+  }
 ]
