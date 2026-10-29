@@ -15,7 +15,7 @@ import { spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { runInNewContext } from "node:vm";
-import { isAbsolute, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { createRuntimeLoggingOverride } from "../../tools/observability/generate.mjs";
 import { canonicalRequestHash } from "../../packages/platform-idempotency/dist/index.js";
@@ -4367,7 +4367,6 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
     externalRecoveryMigrationCredentialRequest,
     externalPostgresConnectArgs,
     isExternalRecoveryProof,
-    readExternalRecoveryProofCredentials,
     runComposeSmoke,
     writeScopedComposeOverride,
   } = await import("../../tools/compose-smoke.mjs");
@@ -4375,12 +4374,6 @@ void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared 
     "f1e587a5c52948bcf232cdc3e644859a7ed24db7dc4fd84be65f36a397cedf6a";
   const containerId =
     "267958ce276e65d96c4a5d2cfc4541de35f9785de3dd15c04c34798cf7b1c85f";
-  const launchIdentity = {
-    schemaVersion: 1,
-    runId: "20261026T000000Z-1234567",
-    candidateSha: `1234567${"0".repeat(33)}`,
-    baseConfigSha256: "a".repeat(64),
-  };
   assert.deepEqual(externalPostgresConnectArgs(networkId, containerId), [
     "network",
     "connect",
