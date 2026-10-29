@@ -296,7 +296,6 @@ telemetry:
   collector:
     otlpEndpoint: http://otel-collector:4318
     healthEndpoint: http://otel-collector:13133
-    metricsEndpoint: http://otel-collector:8888
     memoryLimitMiB: 256
     memorySpikeMiB: 64
     containerMemoryMiB: 1024
@@ -321,33 +320,18 @@ telemetry:
   logging:
     maxSizeMiB: 8
     maxFiles: 3
-  openObserve:
-    endpoint: http://openobserve:5080
-    organization: default
-    bootstrapEmail: operations@coffee-platform.internal
-    validationMarker: bootstrap-validation-placeholder
-    telemetryEnabled: false
-    mmdbDownloadEnabled: false
-    modelPricingEnabled: false
-    memoryLimitMiB: 2048
-    memTableMaxSizeMiB: 128
-    maxFileSizeInMemoryMiB: 8
-    maxFileSizeOnDiskMiB: 8
-    maxFileRetentionSeconds: 30
-    memPersistIntervalSeconds: 2
-    streams:
-      logs: platform_logs
-      traces: platform_traces
-      metrics: platform_metrics
-    retentionDays: 3
-    deleteFilesDelayMinutes: 1
-    maxDiskBytes: 1073741824
-    diskWatermarkPercent: 80
-    compactionIntervalSeconds: 60
-    jobCleanupWaitSeconds: 60
+  diskWatermarkPercent: 80
+  externalReportingEnabled: false
+  grafana: { endpoint: http://grafana:3000, memoryLimitMiB: 256, maxDiskBytes: 1073741824 }
+  loki: { endpoint: http://loki:3100, memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3 }
+  prometheus: { endpoint: http://prometheus:9090, memoryLimitMiB: 512, maxDiskBytes: 1073741824, retentionDays: 3 }
+  tempo: { endpoint: http://tempo:3200, otlpEndpoint: http://tempo:4318, memoryLimitMiB: 768, maxDiskBytes: 1073741824, retentionDays: 3 }
   alerts:
     version: 1
     evaluationIntervalMs: 60000
+    notificationEndpoint: http://alert-sink:9091/alerts
+    diskUsage: { forMs: 0 }
+    sinkMemoryMiB: 128
     notReady: { forMs: 300000, threshold: 0 }
     consumerLag: { forMs: 300000, threshold: 0 }
     outboxOldestAge: { forMs: 300000, threshold: 0 }

@@ -1,158 +1,78 @@
 import {randomUUID} from 'node:crypto';
 import {OBSERVABILITY_TARGETS} from './generate.mjs';
 
-const ALERT_API = '/api/v2';
-const MANAGEMENT_API = '/api';
 const ALERT_METRICS = [
   {key: 'notReady', slug: 'service-not-ready', metric: 'runtime_ready', operator: '<='},
-  {key: 'consumerLag', slug: 'consumer-lag', metric: 'messaging.kafka.consumer.lag', operator: '>'},
-  {key: 'outboxOldestAge', slug: 'outbox-oldest-age', metric: 'messaging.outbox.oldest_unpublished.age', operator: '>'},
+  {key: 'consumerLag', slug: 'consumer-lag', metric: 'messaging_kafka_consumer_lag_messages', operator: '>'},
+  {key: 'outboxOldestAge', slug: 'outbox-oldest-age', metric: 'messaging_outbox_oldest_unpublished_age_milliseconds', operator: '>'},
   {key: 'unknownOutcome', slug: 'unknown-outcome', metric: 'coffee_aroma_unknown_outcomes_current', operator: '>'},
   {key: 'sseDropRate', slug: 'sse-drop-rate', metric: 'coffee_realtime_invalidation_dropped_total', operator: '>'},
 ];
-const READINESS_SERVICES = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
 
 function required(value, name) {
   if (value === undefined || value === null || value === '') throw new Error(`${name} is required`);
   return value;
 }
 
-function metricStream(prefix, name) {
-  return `${prefix}_${name}`.replace(/[^a-zA-Z0-9_]/gu, '_');
-}
-
-function quotedLabelValue(value, name) {
-  const identity = required(value, name);
-  if (typeof identity !== 'string') throw new Error(`${name} must be a nonempty string`);
-  return JSON.stringify(identity);
-}
-
-function promqlFor(rule, streams, windowSeconds, readinessServices, identityMatchers) {
-  const select = metric => `${metric}{${identityMatchers}}`;
-  if (rule.key === 'notReady') {
-    const owners = `^(${readinessServices.join('|')})$`;
-    const runtimeReady = `${streams.runtime_ready}{service_name=~"${owners}",${identityMatchers}}`;
-    const nginxHttpCheck = `${streams.httpcheck_status}{service_name="edge-nginx",http_status_class="2xx",${identityMatchers}}`;
-    const readiness = `min(${runtimeReady} or ${nginxHttpCheck}) * (scalar(count(count by (service_name) (${runtimeReady}))) == bool ${readinessServices.length})`;
-    const requiresNginx = readinessServices.length === READINESS_SERVICES.length &&
-      readinessServices.every((service, index) => service === READINESS_SERVICES[index]);
-    return requiresNginx
-      ? `((${readiness}) and on() (count(${nginxHttpCheck}) > 0)) or vector(0)`
-      : `(${readiness}) or vector(0)`;
-  }
-  if (rule.key === 'sseDropRate') {
-    const dropped = select(streams.coffee_realtime_invalidation_dropped_total);
-    const attempts = select(streams.coffee_realtime_invalidation_attempts_total);
-    return `sum(rate(${dropped}[${windowSeconds}s])) / clamp_min(sum(rate(${attempts}[${windowSeconds}s])), 1e-12)`;
-  }
-  return `max(${select(streams[rule.metric])})`;
-}
-
 export function createAlertDefinitions({config, readinessServices} = {}) {
   const telemetry = required(config?.telemetry, 'telemetry');
   const alerts = required(telemetry.alerts, 'telemetry.alerts');
-  const version = alerts.version;
-  if (!Number.isSafeInteger(version) || version < 1) throw new Error('telemetry.alerts.version must be a positive integer');
-  const evaluationIntervalMs = alerts.evaluationIntervalMs;
-  if (!Number.isSafeInteger(evaluationIntervalMs) || evaluationIntervalMs <= 0 || evaluationIntervalMs % 60000 !== 0)
-    throw new Error('telemetry.alerts.evaluationIntervalMs must be a positive whole number of minutes');
-  const evaluationIntervalMinutes = evaluationIntervalMs / 60000;
-  const prefix = required(telemetry.openObserve?.streams?.metrics, 'telemetry.openObserve.streams.metrics');
-  const identityMatchers = [
-    `deployment_environment=${quotedLabelValue(config.environment, 'environment')}`,
-    `service_namespace=${quotedLabelValue(telemetry.namespace, 'telemetry.namespace')}`,
-    `service_version=${quotedLabelValue(telemetry.releaseDigest, 'telemetry.releaseDigest')}`,
-  ].join(',');
-  const expectedReadinessServices = readinessServices ?? READINESS_SERVICES;
-  if (!Array.isArray(expectedReadinessServices) || expectedReadinessServices.length === 0 ||
-    expectedReadinessServices.some(service => typeof service !== 'string' || !/^[a-z0-9][a-z0-9-]*$/u.test(service)) ||
-    new Set(expectedReadinessServices).size !== expectedReadinessServices.length)
+  if (!Number.isSafeInteger(alerts.version) || alerts.version < 1) throw new Error('telemetry.alerts.version must be a positive integer');
+  if (!Number.isSafeInteger(alerts.evaluationIntervalMs) || alerts.evaluationIntervalMs <= 0 || alerts.evaluationIntervalMs % 1000 !== 0)
+    throw new Error('telemetry.alerts.evaluationIntervalMs must be a positive whole number of seconds');
+  const labels = [
+    ['deployment_environment', config.environment], ['service_namespace', telemetry.namespace], ['service_version', telemetry.releaseDigest],
+  ].map(([name, value]) => {
+    if (typeof value !== 'string' || !value) throw new Error(`${name} must be a nonempty string`);
+    return `${name}=${JSON.stringify(value)}`;
+  }).join(',');
+  const allServices = OBSERVABILITY_TARGETS.filter(service => service !== 'edge-nginx');
+  const services = readinessServices ?? allServices;
+  if (!Array.isArray(services) || services.length === 0 || services.some(service => typeof service !== 'string' || !/^[a-z0-9][a-z0-9-]*$/u.test(service)) || new Set(services).size !== services.length)
     throw new Error('readinessServices must contain unique service names');
-  const streamNames = Object.fromEntries(ALERT_METRICS.map(({metric}) => [metric, metricStream(prefix, metric)]));
-  streamNames.coffee_realtime_invalidation_attempts_total = metricStream(prefix, 'coffee_realtime_invalidation_attempts_total');
-  streamNames.httpcheck_status = metricStream(prefix, 'httpcheck_status');
-
-  return ALERT_METRICS.map(rule => {
-    const threshold = required(alerts[rule.key]?.threshold, `telemetry.alerts.${rule.key}.threshold`);
-    const forMs = alerts[rule.key]?.forMs;
-    if (typeof threshold !== 'number' || !Number.isFinite(threshold) || !Number.isSafeInteger(forMs) || forMs <= 0)
+  const runtime = `runtime_ready{service_name=~"^(${services.join('|')})$",${labels}}`;
+  const nginx = `probe_success{service_name="otel-collector",probe_owner="edge-nginx",${labels}}`;
+  const readiness = `min(${runtime} or ${nginx}) * (scalar(count(count by (service_name) (${runtime}))) == bool ${services.length})`;
+  const production = readinessServices === undefined || (services.length === allServices.length && services.every((service, index) => service === allServices[index]));
+  const definitions = ALERT_METRICS.map(rule => {
+    const {threshold, forMs} = required(alerts[rule.key], `telemetry.alerts.${rule.key}`);
+    if (typeof threshold !== 'number' || !Number.isFinite(threshold) || !Number.isSafeInteger(forMs) || forMs <= 0 || forMs % 1000 !== 0)
       throw new Error(`invalid alert config: ${rule.key}`);
-    return {
-      key: rule.key,
-      name: `g14-v${version}-${rule.slug}${rule.key === 'notReady' && readinessServices !== undefined &&
-        (expectedReadinessServices.length !== READINESS_SERVICES.length || expectedReadinessServices.some((service, index) => service !== READINESS_SERVICES[index])) ? '-synthetic' : ''}`,
-      streamName: streamNames[rule.metric],
-      metricName: rule.metric,
-      threshold,
-      operator: rule.operator,
-      evaluationIntervalMinutes,
-      pendingPeriodSec: forMs / 1000,
-      queryCondition: {
-        type: 'promql',
-        promql: promqlFor(rule, streamNames, forMs / 1000, expectedReadinessServices, identityMatchers),
-        promql_condition: {column: 'value', operator: rule.operator, value: threshold},
-      },
-    };
+    const select = metric => `${metric}{${labels}}`;
+    const query = rule.key === 'notReady' ? (production ? `((${readiness}) and on() (count(${nginx}) > 0)) or vector(0)` : `(${readiness}) or vector(0)`)
+      : rule.key === 'sseDropRate' ? `sum(rate(${select(rule.metric)}[${forMs / 1000}s])) / clamp_min(sum(rate(${select('coffee_realtime_invalidation_attempts_total')}[${forMs / 1000}s])), 1e-12)`
+      : `max(${select(rule.metric)})`;
+    return {key: rule.key, name: `g14-v${alerts.version}-${rule.slug}${rule.key === 'notReady' && !production ? '-synthetic' : ''}`,
+      metric: rule.metric, threshold, operator: rule.operator, forMs, query};
   });
-}
-
-async function request({fetchImpl, baseUrl, path, authorization, method = 'POST', body}) {
-  const response = await fetchImpl(new URL(path, baseUrl), {
-    method,
-    headers: {Authorization: authorization, 'Content-Type': 'application/json'},
-    ...(body === undefined ? {} : {body: JSON.stringify(body)}),
-    signal: AbortSignal.timeout(5000),
-  });
-  if (!response.ok) throw new Error(`OpenObserve API ${method} ${path} returned HTTP ${response.status}`);
-  const text = await response.text();
-  return text.length === 0 ? undefined : JSON.parse(text);
-}
-
-export async function installNativeAlert({baseUrl, organization, authorization, definition, fetchImpl = fetch} = {}) {
-  required(baseUrl, 'baseUrl');
-  required(organization, 'organization');
-  required(authorization, 'authorization');
-  required(definition, 'definition');
-  await request({fetchImpl, baseUrl, path: `${ALERT_API}/${organization}/alerts`, authorization, body: {
-    name: definition.name,
-    stream_type: 'metrics',
-    stream_name: definition.streamName,
-    is_real_time: false,
-    query_condition: definition.queryCondition,
-    trigger_condition: {period: definition.evaluationIntervalMinutes, operator: '>=', threshold: 1, frequency: definition.evaluationIntervalMinutes, frequency_type: 'minutes', silence: 0},
-    destinations: ['g14-local'],
-    enabled: true,
-    pending_period_sec: definition.pendingPeriodSec,
-    notify_on_recovery: true,
-    recovery_destinations: ['g14-local'],
-    keep_firing_for: 0,
-  }});
-  return definition;
-}
-
-export async function installNativeAlerts({config, baseUrl, organization, authorization, readinessServices, fetchImpl = fetch} = {}) {
-  required(baseUrl, 'baseUrl');
-  required(organization, 'organization');
-  required(authorization, 'authorization');
-  const definitions = createAlertDefinitions({config, readinessServices});
-  const api = (path, args = {}) => request({fetchImpl, baseUrl, path, authorization, ...args});
-
-  await api(`${MANAGEMENT_API}/${organization}/alerts/templates`, {body: {
-    name: 'g14-local-template',
-    body: '{"status":"{alert_status}","episode_id":"{episode_id}","name":"{alert_name}"}',
-    type: 'http', title: '', kind: 'custom',
-  }});
-  await api(`${MANAGEMENT_API}/${organization}/alerts/destinations`, {body: {
-    name: 'g14-local', url: 'http://127.0.0.1:9091/alerts', method: 'post', type: 'http',
-    template: 'g14-local-template', skip_tls_verify: false, headers: {'Content-Type': 'application/json'},
-  }});
-
-  for (const definition of definitions) {
-    await installNativeAlert({baseUrl, organization, authorization, definition, fetchImpl});
-  }
+  if (typeof telemetry.diskWatermarkPercent !== 'number' || !Number.isFinite(telemetry.diskWatermarkPercent) || telemetry.diskWatermarkPercent <= 0 || telemetry.diskWatermarkPercent > 100)
+    throw new Error('telemetry.diskWatermarkPercent must be a percentage');
+  const diskForMs = required(alerts.diskUsage, 'telemetry.alerts.diskUsage').forMs;
+  if (!Number.isSafeInteger(diskForMs) || diskForMs < 0 || diskForMs % 1000 !== 0) throw new Error('invalid alert config: diskUsage');
+  const diskSelector = `{mountpoint=~"/telemetry-storage/(grafana|loki|prometheus|tempo)",service_name="otel-collector",${labels}}`;
+  definitions.push({key: 'diskWatermark', name: `g14-v${alerts.version}-disk-watermark`,
+    metric: 'node_filesystem_free_bytes', threshold: telemetry.diskWatermarkPercent, operator: '>=', forMs: diskForMs,
+    query: `100 * (1 - node_filesystem_free_bytes${diskSelector} / node_filesystem_size_bytes${diskSelector})`});
   return definitions;
 }
 
-export function newRunId() {
-  return randomUUID();
+export function createGrafanaAlertProvisioning(config, {notificationUrl} = {}) {
+  required(notificationUrl, 'notificationUrl');
+  const rules = createAlertDefinitions({config}).map(rule => ({
+    uid: rule.name, title: rule.name, condition: 'B',
+    data: [
+      {refId: 'A', datasourceUid: 'prometheus', relativeTimeRange: {from: Math.max(rule.forMs / 1000, 600), to: 0},
+        model: {refId: 'A', datasource: {type: 'prometheus', uid: 'prometheus'}, expr: rule.query, instant: true, range: false, intervalMs: 1000, maxDataPoints: 43200}},
+      {refId: 'B', datasourceUid: '__expr__', relativeTimeRange: {from: 0, to: 0},
+        model: {refId: 'B', datasource: {type: '__expr__', uid: '__expr__'}, type: 'math', expression: `$A ${rule.operator} ${rule.threshold}`, intervalMs: 1000, maxDataPoints: 43200}},
+    ],
+    noDataState: ['notReady', 'diskWatermark'].includes(rule.key) ? 'Alerting' : 'OK', execErrState: 'Alerting', for: `${rule.forMs / 1000}s`,
+  }));
+  return {
+    alerts: {apiVersion: 1, groups: [{orgId: 1, name: 'g14', folder: 'Operations', interval: `${config.telemetry.alerts.evaluationIntervalMs / 1000}s`, rules}]},
+    contacts: {apiVersion: 1, contactPoints: [{orgId: 1, name: 'g14-local', receivers: [{uid: 'g14-local', type: 'webhook', settings: {url: notificationUrl, httpMethod: 'POST'}, disableResolveMessage: false}]}],
+      policies: [{orgId: 1, receiver: 'g14-local', group_by: ['alertname'], group_wait: '0s', group_interval: '1m', repeat_interval: '4h'}]},
+  };
 }
+
+export function newRunId() { return randomUUID(); }

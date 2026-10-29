@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createRuntimeLoggingOverride, discoverContainerLogs, OBSERVABILITY_TARGETS} from '../../tools/observability/generate.mjs';
+import {prometheusMetricName} from '../../tools/observability/verify.mjs';
 import {
   buildRuntimeMatrixProbe, COMMON_TEXT_FAMILIES, NODE_RUNTIME_ROLES, OWNER_TEXT_FAMILIES,
   OPTIONAL_OWNER_TEXT_FAMILIES, summarizeRuntimeProbeOutput,
@@ -48,7 +49,7 @@ const FAILURE_METRIC_COMPONENTS = new Map([
     'telemetry_log_records_dropped_total', 'telemetry_records_dropped_total', 'telemetry_export_failures_total',
     'telemetry_serialization_rejections_total', 'telemetry_queue_overflows_total', 'telemetry_shutdown_losses_total',
     'runtime_process_start_time_seconds', 'db.client.connection.waiting', 'messaging.kafka.consumer.lag',
-    'messaging.outbox.oldest_unpublished.age', 'nginx_connections_current', 'httpcheck.status',
+    'messaging.outbox.oldest_unpublished.age', 'nginx_connections_current', 'probe_success',
   ].map(name => [name, ['']]),
 ]);
 const FAILURE_METRIC_OWNERS = new Set([...NODE_RUNTIME_ROLES, 'edge-nginx']);
@@ -106,13 +107,12 @@ export function runtimeMetricFamilies(config) {
     {name: 'messaging.kafka.consumer.lag', owners: durableKafkaOwners, components: ['']},
     {name: 'messaging.outbox.oldest_unpublished.age', owners: REQUIRED_OUTBOX_OWNERS, components: ['']},
     {name: 'nginx_connections_current', owners: ['edge-nginx'], components: ['']},
-    {name: 'httpcheck.status', owners: ['edge-nginx'], components: [''], attributes: {http_status_class: '2xx'}},
+    {name: 'probe_success', owners: ['edge-nginx'], components: [''], ownerLabel: 'probe_owner', attributes: {service_name: 'otel-collector'}},
   ];
 }
 
-export function sanitizeRuntimeMetricMatches(family, matches, metricsPrefix) {
-  if (typeof metricsPrefix !== 'string' || !/^[a-zA-Z0-9_]+$/u.test(metricsPrefix) ||
-      typeof family?.name !== 'string' || family.name.length === 0 ||
+export function sanitizeRuntimeMetricMatches(family, matches) {
+  if (typeof family?.name !== 'string' || family.name.length === 0 ||
       !Array.isArray(family?.owners) || family.owners.length === 0 ||
       family.owners.some(owner => typeof owner !== 'string' || owner.length === 0) ||
       new Set(family.owners).size !== family.owners.length ||
@@ -122,7 +122,7 @@ export function sanitizeRuntimeMetricMatches(family, matches, metricsPrefix) {
   }
   if (!Array.isArray(matches) || matches.length !== family.components.length) fail('runtime matrix OTLP family components incomplete');
   const expectedStreams = family.components.map(component =>
-    `${metricsPrefix}_${family.name.replace(/[^a-zA-Z0-9_]/gu, '_')}${component}`);
+    `${prometheusMetricName(family.name)}${component}`);
   const seen = new Set();
   const sanitized = [];
   for (const match of matches) {
@@ -162,7 +162,7 @@ function sanitizeMetricFamilyObservation(value) {
         component.presentOwners.length + component.missingOwners.length !== value.owners.length ||
         value.owners.some(owner => component.presentOwners.includes(owner) === component.missingOwners.includes(owner)) ||
         (component.presentOwners.length === 0) !== (component.sampleCount === 0) ||
-        (!component.streamPresent && (component.sampleCount !== 0 || component.presentOwners.length > 0 || component.queryFailure !== undefined)) ||
+        (!component.streamPresent && (component.sampleCount !== 0 || component.presentOwners.length > 0)) ||
         (component.queryFailure !== undefined && (component.queryFailure === null || typeof component.queryFailure !== 'object' || Array.isArray(component.queryFailure) ||
           Object.keys(component.queryFailure).some(key => !['outcome', 'httpStatus', 'errorClass'].includes(key)) ||
           component.queryFailure.outcome !== 'QUERY_FAILED' || component.presentOwners.length > 0 || component.sampleCount !== 0))) return undefined;
@@ -651,7 +651,7 @@ export async function verifyRuntimeMetricMatrix({
     for (const family of expected) {
       setPhase(`otlp-family:${family.name}`);
       const result = await verifyMetricFamily({...family, startTimeUs: phaseStartUs});
-      const matches = sanitizeRuntimeMetricMatches(family, result, config.telemetry.openObserve.streams.metrics);
+      const matches = sanitizeRuntimeMetricMatches(family, result);
       verifiedMetrics.push({name: family.name, owners: [...family.owners], components: [...family.components],
         ...(family.attributes === undefined ? {} : {attributes: {...family.attributes}}), matches, status: 'PASS'});
     }
@@ -696,7 +696,7 @@ export async function verifyRuntimeMetricMatrix({
     loggingPolicy: loggingPolicyEvidence,
     runtimeMetrics: {
       status: 'PASS', roles: probes, otlpFamilies: verifiedMetrics,
-      legacyTextScope: 'Only /metrics text callbacks and runtime foundation counters; OTLP-only process, database and Kafka instruments are verified through their OpenObserve streams.',
+      legacyTextScope: 'Only /metrics text callbacks and runtime foundation counters; OTLP-only process, database and Kafka instruments are verified through Prometheus.',
       legacyTextFamilies: {
         common: [...COMMON_TEXT_FAMILIES],
         ownerSpecific: Object.fromEntries(Object.entries(OWNER_TEXT_FAMILIES).map(([role, names]) => [role, [...names]])),

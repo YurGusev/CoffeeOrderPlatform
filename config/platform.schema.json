@@ -457,7 +457,12 @@
         "collector",
         "producer",
         "logging",
-        "openObserve",
+        "diskWatermarkPercent",
+        "externalReportingEnabled",
+        "grafana",
+        "loki",
+        "prometheus",
+        "tempo",
         "alerts"
       ],
       "properties": {
@@ -476,7 +481,6 @@
           "required": [
             "otlpEndpoint",
             "healthEndpoint",
-            "metricsEndpoint",
             "memoryLimitMiB",
             "memorySpikeMiB",
             "containerMemoryMiB",
@@ -497,10 +501,6 @@
               "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"
             },
             "healthEndpoint": {
-              "type": "string",
-              "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"
-            },
-            "metricsEndpoint": {
               "type": "string",
               "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"
             },
@@ -550,80 +550,50 @@
             "maxFiles": { "type": "integer", "minimum": 1 }
           }
         },
-        "openObserve": {
+        "diskWatermarkPercent": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "externalReportingEnabled": { "const": false },
+        "grafana": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "endpoint",
-            "organization",
-            "bootstrapEmail",
-            "validationMarker",
-            "telemetryEnabled",
-            "mmdbDownloadEnabled",
-            "modelPricingEnabled",
-            "memoryLimitMiB",
-            "memTableMaxSizeMiB",
-            "maxFileSizeInMemoryMiB",
-            "maxFileSizeOnDiskMiB",
-            "maxFileRetentionSeconds",
-            "memPersistIntervalSeconds",
-            "streams",
-            "retentionDays",
-            "deleteFilesDelayMinutes",
-            "maxDiskBytes",
-            "diskWatermarkPercent",
-            "compactionIntervalSeconds",
-            "jobCleanupWaitSeconds"
-          ],
+          "required": ["endpoint", "memoryLimitMiB", "maxDiskBytes"],
           "properties": {
-            "endpoint": {
-              "type": "string",
-              "pattern": "^http://openobserve:(?!80$)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
-            },
-            "organization": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
-            "bootstrapEmail": {
-              "type": "string",
-              "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
-            },
-            "validationMarker": { "const": "bootstrap-validation-placeholder" },
-            "telemetryEnabled": { "const": false },
-            "mmdbDownloadEnabled": { "const": false },
-            "modelPricingEnabled": { "const": false },
-            "memoryLimitMiB": { "type": "integer", "minimum": 1 },
-            "memTableMaxSizeMiB": { "type": "integer", "minimum": 1 },
-            "maxFileSizeInMemoryMiB": { "type": "integer", "minimum": 1 },
-            "maxFileSizeOnDiskMiB": { "type": "integer", "minimum": 1 },
-            "maxFileRetentionSeconds": { "type": "integer", "minimum": 1 },
-            "memPersistIntervalSeconds": { "type": "integer", "minimum": 1 },
-            "streams": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["logs", "traces", "metrics"],
-              "properties": {
-                "logs": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
-                },
-                "traces": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
-                },
-                "metrics": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
-                }
-              }
-            },
-            "retentionDays": { "type": "integer", "minimum": 3 },
-            "deleteFilesDelayMinutes": { "type": "integer", "minimum": 1 },
-            "maxDiskBytes": { "type": "integer", "minimum": 268435456 },
-            "diskWatermarkPercent": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 99
-            },
-            "compactionIntervalSeconds": { "type": "integer", "minimum": 1 },
-            "jobCleanupWaitSeconds": { "type": "integer", "minimum": 1 }
+            "endpoint": {"type": "string", "pattern": "^http://grafana:(?!80$)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"},
+            "memoryLimitMiB": {"type": "integer", "minimum": 1},
+            "maxDiskBytes": {"type": "integer", "minimum": 268435456}
+          }
+        },
+        "loki": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "memoryLimitMiB", "maxDiskBytes", "retentionDays"],
+          "properties": {
+            "endpoint": {"type": "string", "pattern": "^http://loki:(?!80$)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"},
+            "memoryLimitMiB": {"type": "integer", "minimum": 1},
+            "maxDiskBytes": {"type": "integer", "minimum": 268435456},
+            "retentionDays": {"type": "integer", "minimum": 3}
+          }
+        },
+        "prometheus": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "memoryLimitMiB", "maxDiskBytes", "retentionDays"],
+          "properties": {
+            "endpoint": {"type": "string", "pattern": "^http://prometheus:(?!80$)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"},
+            "memoryLimitMiB": {"type": "integer", "minimum": 1},
+            "maxDiskBytes": {"type": "integer", "minimum": 268435456},
+            "retentionDays": {"type": "integer", "minimum": 3}
+          }
+        },
+        "tempo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "memoryLimitMiB", "maxDiskBytes", "retentionDays", "otlpEndpoint"],
+          "properties": {
+            "endpoint": {"type": "string", "pattern": "^http://tempo:(?!80$)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"},
+            "memoryLimitMiB": {"type": "integer", "minimum": 1},
+            "maxDiskBytes": {"type": "integer", "minimum": 268435456},
+            "retentionDays": {"type": "integer", "minimum": 3},
+            "otlpEndpoint": {"type": "string", "pattern": "^http://tempo:(?!80$)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"}
           }
         },
         "alerts": {
@@ -632,6 +602,9 @@
           "required": [
             "version",
             "evaluationIntervalMs",
+            "notificationEndpoint",
+            "diskUsage",
+            "sinkMemoryMiB",
             "notReady",
             "consumerLag",
             "outboxOldestAge",
@@ -641,6 +614,9 @@
           "properties": {
             "version": { "type": "integer", "const": 1 },
             "evaluationIntervalMs": { "type": "integer", "const": 60000 },
+            "notificationEndpoint": { "const": "http://alert-sink:9091/alerts" },
+            "diskUsage": { "type": "object", "additionalProperties": false, "required": ["forMs"], "properties": { "forMs": { "const": 0 } } },
+            "sinkMemoryMiB": { "type": "integer", "minimum": 1 },
             "notReady": { "$ref": "#/$defs/alertThreshold" },
             "consumerLag": { "$ref": "#/$defs/alertThreshold" },
             "outboxOldestAge": { "$ref": "#/$defs/alertThreshold" },

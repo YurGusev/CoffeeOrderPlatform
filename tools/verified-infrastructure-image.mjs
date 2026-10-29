@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from "node:util";
 import { validateLaunchContext } from "../verification/launch/v1/report.mjs";
 
 const IMAGE_ID = /^sha256:[a-f0-9]{64}$/u;
-const KAFKA_TAG = /^coffee-g12-[a-f0-9]{12}-kafka:latest$/u;
+const VERIFIED_TAG = /^coffee-g12-[a-f0-9]{12}-(?:kafka|storage-helper):latest$/u;
 const KAFKA_RUNTIME_MARKER = "coffee-platform-kafka:verified-artifact-required";
 const MAX_EVIDENCE_BYTES = 512 * 1024 * 1024;
 const MAX_METADATA_BYTES = 64 * 1024;
@@ -141,17 +141,17 @@ function inspectDockerImage(run, reference) {
   return Object.freeze({ imageId, tags: tags ?? [] });
 }
 
-function validateBaseMaterial(baseMaterial, kafkaImage) {
+function validateBaseMaterial(baseMaterial, baseImage, target) {
   if (
     !exactKeys(baseMaterial, [
       "sourceRef",
       "platformManifestDigest",
       "indexArtifact",
     ]) ||
-    baseMaterial.sourceRef !== kafkaImage ||
+    baseMaterial.sourceRef !== baseImage ||
     !IMAGE_ID.test(baseMaterial.platformManifestDigest ?? "") ||
     !exactKeys(baseMaterial.indexArtifact, ["path", "sha256", "sizeBytes"]) ||
-    baseMaterial.indexArtifact.path !== "artifacts/kafka-base-index.json" ||
+    baseMaterial.indexArtifact.path !== `artifacts/${target}-base-index.json` ||
     !/^[a-f0-9]{64}$/u.test(baseMaterial.indexArtifact.sha256 ?? "") ||
     !Number.isSafeInteger(baseMaterial.indexArtifact.sizeBytes) ||
     baseMaterial.indexArtifact.sizeBytes < 1 ||
@@ -161,7 +161,7 @@ function validateBaseMaterial(baseMaterial, kafkaImage) {
   return true;
 }
 
-function validateBinding(binding, receipt, context, environment) {
+function validateBinding(binding, receipt, context, environment, target) {
   return (
     exactKeys(binding, [
       "status",
@@ -196,11 +196,11 @@ function validateBinding(binding, receipt, context, environment) {
     ]) &&
     binding.invocation.entryPoint === "docker buildx build" &&
     binding.invocation.builder === "coffee-platform-mtu" &&
-    binding.invocation.target === "kafka" &&
+    binding.invocation.target === target &&
     binding.invocation.platform === "linux/amd64" &&
     binding.invocation.provenance === "mode=min" &&
     binding.invocation.output === "oci-layout-directory" &&
-    receipt.target === "kafka"
+    receipt.target === target
   );
 }
 
@@ -211,7 +211,7 @@ export async function loadVerifiedGateImage({
   validateContext = validateLaunchContext,
   loadImage = true,
 } = {}) {
-  if (target !== "kafka") fail("G12_KAFKA_TARGET_INVALID");
+  if (!["kafka", "storage-helper"].includes(target)) fail("G12_KAFKA_TARGET_INVALID");
   if (typeof contextFile !== "string" || !isAbsolute(contextFile))
     fail("G12_KAFKA_LAUNCH_CONTEXT_REQUIRED");
   const active = await validateContext(contextFile);
@@ -252,7 +252,8 @@ export async function loadVerifiedGateImage({
   )
     fail("G12_KAFKA_SOURCE_IDENTITY_INVALID");
   const toolchain = parseJson(toolchainBytes);
-  if (!/@sha256:[a-f0-9]{64}$/u.test(toolchain.kafkaImage ?? ""))
+  const baseImage = target === "kafka" ? toolchain.kafkaImage : toolchain.nodeImage;
+  if (!/@sha256:[a-f0-9]{64}$/u.test(baseImage ?? ""))
     fail("G12_KAFKA_BASE_IMAGE_INVALID");
 
   const supplyChainDir = join(
@@ -264,14 +265,14 @@ export async function loadVerifiedGateImage({
       maxBytes: MAX_EVIDENCE_BYTES,
     }),
   );
-  const receiptPath = join(supplyChainDir, "artifacts/kafka-receipt.json");
+  const receiptPath = join(supplyChainDir, `artifacts/${target}-receipt.json`);
   const receiptBytes = await readEvidenceFile(receiptPath, {
     maxBytes: MAX_METADATA_BYTES,
   });
   const receiptSha256 = sha256(receiptBytes);
   const receipt = parseJson(receiptBytes);
-  const expectedTag = `coffee-g12-${sha256(Buffer.from(context.runId)).slice(0, 12)}-kafka:latest`;
-  const image = result.kafka;
+  const expectedTag = `coffee-g12-${sha256(Buffer.from(context.runId)).slice(0, 12)}-${target}:latest`;
+  const image = target === "kafka" ? result.kafka : result.storageHelper;
   if (
     !exactKeys(image, [
       "path",
@@ -282,10 +283,10 @@ export async function loadVerifiedGateImage({
       "ociArtifactPath",
       "ociArtifactSha256",
     ]) ||
-    image.path !== "artifacts/kafka-receipt.json" ||
+    image.path !== `artifacts/${target}-receipt.json` ||
     image.receiptSha256 !== receiptSha256 ||
     image.importTag !== expectedTag ||
-    image.ociArtifactPath !== "artifacts/kafka.oci.tar" ||
+    image.ociArtifactPath !== `artifacts/${target}.oci.tar` ||
     !exactKeys(receipt, [
       "schemaVersion",
       "gate",
@@ -318,9 +319,9 @@ export async function loadVerifiedGateImage({
     receipt.configSha256 !== context.baseConfigSha256 ||
     receipt.toolchainVersionsSha256 !== environment.toolchainVersionsSha256 ||
     receipt.lockfileSha256 !== environment.lockfileSha256 ||
-    receipt.target !== "kafka" ||
+    receipt.target !== target ||
     receipt.importTag !== expectedTag ||
-    receipt.baseImage !== toolchain.kafkaImage ||
+    receipt.baseImage !== baseImage ||
     !IMAGE_ID.test(receipt.imageId ?? "") ||
     !IMAGE_ID.test(receipt.manifestDigest ?? "") ||
     !IMAGE_ID.test(receipt.platformManifestDigest ?? "") ||
@@ -332,6 +333,7 @@ export async function loadVerifiedGateImage({
       receipt,
       context,
       environment,
+      target,
     ) ||
     !exactKeys(receipt.ociArtifact, [
       "path",
@@ -340,7 +342,7 @@ export async function loadVerifiedGateImage({
       "layoutTreeSha256",
       "layoutBytes",
     ]) ||
-    receipt.ociArtifact.path !== "artifacts/kafka.oci.tar" ||
+    receipt.ociArtifact.path !== `artifacts/${target}.oci.tar` ||
     !/^[a-f0-9]{64}$/u.test(receipt.ociArtifact.sha256 ?? "") ||
     !Number.isSafeInteger(receipt.ociArtifact.sizeBytes) ||
     receipt.ociArtifact.sizeBytes < 1 ||
@@ -367,11 +369,11 @@ export async function loadVerifiedGateImage({
     fail("G12_KAFKA_RECEIPT_INVALID");
 
   const sourceDigest = /@sha256:([a-f0-9]{64})$/u.exec(
-    toolchain.kafkaImage,
+    baseImage,
   )?.[1];
   const baseMaterial = receipt.baseMaterial;
   if (
-    !validateBaseMaterial(baseMaterial, toolchain.kafkaImage) ||
+    !validateBaseMaterial(baseMaterial, baseImage, target) ||
     baseMaterial.indexArtifact.sha256 !== sourceDigest
   )
     fail("G12_KAFKA_BASE_MATERIAL_INVALID");
@@ -407,7 +409,7 @@ export async function loadVerifiedGateImage({
   )
     fail("G12_KAFKA_BASE_MATERIAL_INVALID");
 
-  const artifactPath = join(supplyChainDir, "artifacts/kafka.oci.tar");
+  const artifactPath = join(supplyChainDir, `artifacts/${target}.oci.tar`);
   if (!within(supplyChainDir, artifactPath))
     fail("G12_KAFKA_ARTIFACT_PATH_INVALID");
   const artifactBytes = await readEvidenceFile(artifactPath, {
@@ -419,10 +421,10 @@ export async function loadVerifiedGateImage({
   )
     fail("G12_KAFKA_ARTIFACT_HASH_MISMATCH");
   const provenanceImages = result.provenance?.images?.filter(
-    (entry) => entry.service === "kafka",
+    (entry) => entry.service === target,
   );
   const expectedProvenanceImage = {
-    service: "kafka",
+    service: target,
     imageId: receipt.imageId,
     manifestDigest: receipt.manifestDigest,
     platformManifestDigest: receipt.platformManifestDigest,
@@ -439,13 +441,15 @@ export async function loadVerifiedGateImage({
 
   let imported = false;
   if (loadImage) {
-    let runtimeMarker;
-    try {
-      runtimeMarker = inspectDockerImage(run, KAFKA_RUNTIME_MARKER);
-    } catch {
-      fail("G12_KAFKA_RUNTIME_MARKER_UNKNOWN");
+    if (target === "kafka") {
+      let runtimeMarker;
+      try {
+        runtimeMarker = inspectDockerImage(run, KAFKA_RUNTIME_MARKER);
+      } catch {
+        fail("G12_KAFKA_RUNTIME_MARKER_UNKNOWN");
+      }
+      if (runtimeMarker) fail("G12_KAFKA_RUNTIME_MARKER_PRESENT");
     }
-    if (runtimeMarker) fail("G12_KAFKA_RUNTIME_MARKER_PRESENT");
     const priorImage = inspectDockerImage(run, receipt.imageId);
     if (priorImage) {
       if (priorImage.imageId !== receipt.imageId)
@@ -497,11 +501,12 @@ export function removeVerifiedGateImage({
   image,
   run = dockerRun,
 } = {}) {
-  if (target !== "kafka") fail("G12_KAFKA_TARGET_INVALID");
+  if (!["kafka", "storage-helper"].includes(target)) fail("G12_KAFKA_TARGET_INVALID");
   if (!image || image.imported !== true) return false;
   if (
     !IMAGE_ID.test(image.imageId ?? "") ||
-    !KAFKA_TAG.test(image.importTag ?? "")
+    !VERIFIED_TAG.test(image.importTag ?? "") ||
+    !image.importTag.endsWith(`-${target}:latest`)
   )
     fail("G12_KAFKA_CLEANUP_OWNERSHIP_INVALID");
   const inspected = inspectDockerImage(run, image.imageId);

@@ -302,7 +302,6 @@ export type TelemetryConfig = Readonly<{
   collector: Readonly<{
     otlpEndpoint: string;
     healthEndpoint: string;
-    metricsEndpoint: string;
     memoryLimitMiB: number;
     memorySpikeMiB: number;
     containerMemoryMiB: number;
@@ -327,31 +326,18 @@ export type TelemetryConfig = Readonly<{
     flushTimeoutMs: number;
   }>;
   logging: Readonly<{ maxSizeMiB: number; maxFiles: number }>;
-  openObserve: Readonly<{
-    endpoint: string;
-    organization: string;
-    bootstrapEmail: string;
-    validationMarker: "bootstrap-validation-placeholder";
-    memoryLimitMiB: number;
-    memTableMaxSizeMiB: number;
-    maxFileSizeInMemoryMiB: number;
-    maxFileSizeOnDiskMiB: number;
-    maxFileRetentionSeconds: number;
-    memPersistIntervalSeconds: number;
-    telemetryEnabled: false;
-    mmdbDownloadEnabled: false;
-    modelPricingEnabled: false;
-    streams: Readonly<{ logs: string; traces: string; metrics: string }>;
-    retentionDays: number;
-    deleteFilesDelayMinutes: number;
-    maxDiskBytes: number;
-    diskWatermarkPercent: number;
-    compactionIntervalSeconds: number;
-    jobCleanupWaitSeconds: number;
-  }>;
+  diskWatermarkPercent: number;
+  externalReportingEnabled: false;
+  grafana: Readonly<{ endpoint: string; memoryLimitMiB: number; maxDiskBytes: number }>;
+  loki: Readonly<{ endpoint: string; memoryLimitMiB: number; maxDiskBytes: number; retentionDays: number }>;
+  prometheus: Readonly<{ endpoint: string; memoryLimitMiB: number; maxDiskBytes: number; retentionDays: number }>;
+  tempo: Readonly<{ endpoint: string; otlpEndpoint: string; memoryLimitMiB: number; maxDiskBytes: number; retentionDays: number }>;
   alerts: Readonly<{
     version: 1;
     evaluationIntervalMs: number;
+    notificationEndpoint: "http://alert-sink:9091/alerts";
+    diskUsage: Readonly<{forMs: 0}>;
+    sinkMemoryMiB: number;
     notReady: Readonly<{ forMs: number; threshold: number }>;
     consumerLag: Readonly<{ forMs: number; threshold: number }>;
     outboxOldestAge: Readonly<{ forMs: number; threshold: number }>;
@@ -1997,7 +1983,12 @@ function telemetryConfig(value: unknown): TelemetryConfig {
       "collector",
       "producer",
       "logging",
-      "openObserve",
+      "diskWatermarkPercent",
+      "externalReportingEnabled",
+      "grafana",
+      "loki",
+      "prometheus",
+      "tempo",
       "alerts",
     ],
     path,
@@ -2008,7 +1999,6 @@ function telemetryConfig(value: unknown): TelemetryConfig {
     [
       "otlpEndpoint",
       "healthEndpoint",
-      "metricsEndpoint",
       "memoryLimitMiB",
       "memorySpikeMiB",
       "containerMemoryMiB",
@@ -2041,56 +2031,15 @@ function telemetryConfig(value: unknown): TelemetryConfig {
   );
   const logging = record(source["logging"], `${path}.logging`);
   exactKeys(logging, ["maxSizeMiB", "maxFiles"], `${path}.logging`);
-  const openObserve = record(source["openObserve"], `${path}.openObserve`);
-  exactKeys(
-    openObserve,
-    [
-      "endpoint",
-      "organization",
-      "bootstrapEmail",
-      "validationMarker",
-      "telemetryEnabled",
-      "mmdbDownloadEnabled",
-      "modelPricingEnabled",
-      "memoryLimitMiB",
-      "memTableMaxSizeMiB",
-      "maxFileSizeInMemoryMiB",
-      "maxFileSizeOnDiskMiB",
-      "maxFileRetentionSeconds",
-      "memPersistIntervalSeconds",
-      "streams",
-      "retentionDays",
-      "deleteFilesDelayMinutes",
-      "maxDiskBytes",
-      "diskWatermarkPercent",
-      "compactionIntervalSeconds",
-      "jobCleanupWaitSeconds",
-    ],
-    `${path}.openObserve`,
-  );
-  const streams = record(openObserve["streams"], `${path}.openObserve.streams`);
-  exactKeys(
-    streams,
-    ["logs", "traces", "metrics"],
-    `${path}.openObserve.streams`,
-  );
-  for (const key of ["logs", "traces", "metrics"]) {
-    if (
-      !/^[a-z][a-z0-9_]{0,62}$/u.test(
-        stringValue(streams[key], `${path}.openObserve.streams.${key}`),
-      )
-    )
-      throw new PlatformConfigError(
-        `${path}.openObserve.streams.${key}`,
-        "ожидалось ограниченное имя stream или префикса metric families",
-      );
-  }
   const alerts = record(source["alerts"], `${path}.alerts`);
   exactKeys(
     alerts,
     [
       "version",
       "evaluationIntervalMs",
+      "notificationEndpoint",
+      "diskUsage",
+      "sinkMemoryMiB",
       "notReady",
       "consumerLag",
       "outboxOldestAge",
@@ -2154,27 +2103,6 @@ function telemetryConfig(value: unknown): TelemetryConfig {
       throw new PlatformConfigError(
         field,
         "ожидался HTTP origin Collector с явным портом 1..65535 и только корневым путём",
-      );
-    return result;
-  };
-  const openObserveEndpoint = (input: unknown, field: string): string => {
-    const result = endpoint(input, field);
-    const parsed = new URL(result);
-    if (
-      parsed.hostname !== "openobserve" ||
-      !parsed.port ||
-      Number(parsed.port) < 1 ||
-      parsed.pathname !== "/" ||
-      result.endsWith("/") ||
-      parsed.search ||
-      result.includes("?") ||
-      parsed.hash ||
-      result.includes("#") ||
-      result.includes("@")
-    )
-      throw new PlatformConfigError(
-        field,
-        "ожидался HTTP origin OpenObserve по приватному alias openobserve с явным non-default портом",
       );
     return result;
   };
@@ -2256,68 +2184,29 @@ function telemetryConfig(value: unknown): TelemetryConfig {
     ["maxSizeMiB", "maxFiles"],
     `${path}.logging`,
   );
-  const storageValues = positive(
-    openObserve,
-    [
-      "memoryLimitMiB",
-      "memTableMaxSizeMiB",
-      "maxFileSizeInMemoryMiB",
-      "maxFileSizeOnDiskMiB",
-      "maxFileRetentionSeconds",
-      "memPersistIntervalSeconds",
-      "retentionDays",
-      "deleteFilesDelayMinutes",
-      "maxDiskBytes",
-      "compactionIntervalSeconds",
-      "jobCleanupWaitSeconds",
-    ],
-    `${path}.openObserve`,
-  );
-  const diskWatermarkPercent = integerValue(
-    openObserve["diskWatermarkPercent"],
-    `${path}.openObserve.diskWatermarkPercent`,
-  );
-  const openObserveBufferBudgetInvalid =
-    storageValues["maxDiskBytes"]! < 268435456 ||
-    storageValues["maxFileSizeInMemoryMiB"]! >=
-      storageValues["memTableMaxSizeMiB"]! ||
-    storageValues["memTableMaxSizeMiB"]! >= storageValues["memoryLimitMiB"]! ||
-    storageValues["maxFileSizeOnDiskMiB"]! * 1024 * 1024 >
-      storageValues["maxDiskBytes"]! ||
-    storageValues["memPersistIntervalSeconds"]! >
-      storageValues["maxFileRetentionSeconds"]!;
-  if (openObserve["validationMarker"] !== "bootstrap-validation-placeholder")
-    throw new PlatformConfigError(
-      `${path}.openObserve.validationMarker`,
-      "ожидался несекретный startup marker",
-    );
-  if (
-    openObserve["telemetryEnabled"] !== false ||
-    openObserve["mmdbDownloadEnabled"] !== false ||
-    openObserve["modelPricingEnabled"] !== false
-  )
-    throw new PlatformConfigError(
-      `${path}.openObserve`,
-      "в приватной топологии OpenObserve запрещены внешние telemetry, MMDB downloads и model-pricing sync",
-    );
-  const bootstrapEmail = stringValue(
-    openObserve["bootstrapEmail"],
-    `${path}.openObserve.bootstrapEmail`,
-  );
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(bootstrapEmail))
-    throw new PlatformConfigError(
-      `${path}.openObserve.bootstrapEmail`,
-      "ожидался email оператора bootstrap",
-    );
-  const organization = stringValue(
-    openObserve["organization"],
-    `${path}.openObserve.organization`,
-  );
-  if (!/^[A-Za-z0-9_-]+$/u.test(organization))
-    throw new PlatformConfigError(
-      `${path}.openObserve.organization`,
-      "ожидался идентификатор организации OpenObserve из букв, цифр, дефиса или подчёркивания",
-    );
+  if (source["externalReportingEnabled"] !== false) throw new PlatformConfigError(`${path}.externalReportingEnabled`, "внешняя телеметрия запрещена");
+  const diskWatermarkPercent = integerValue(source["diskWatermarkPercent"], `${path}.diskWatermarkPercent`);
+  const backend = (name: "grafana" | "loki" | "prometheus" | "tempo") => {
+    const field = `${path}.${name}`;
+    const item = record(source[name], field);
+    const keys = ["endpoint", "memoryLimitMiB", "maxDiskBytes", ...(name === "grafana" ? [] : ["retentionDays"]), ...(name === "tempo" ? ["otlpEndpoint"] : [])];
+    exactKeys(item, keys, field);
+    const privateEndpoint = (key: string) => {
+      const result = endpoint(item[key], `${field}.${key}`);
+      const parsed = new URL(result);
+      if (parsed.hostname !== name || !parsed.port || Number(parsed.port) < 1 || parsed.pathname !== "/" || parsed.search || result.includes("?") || result.includes("#") || result.includes("@") || result.endsWith("/"))
+        throw new PlatformConfigError(`${field}.${key}`, "ожидался приватный HTTP origin с явным портом");
+      return result;
+    };
+    const values = positive(item, ["memoryLimitMiB", "maxDiskBytes", ...(name === "grafana" ? [] : ["retentionDays"])], field);
+    if (values["maxDiskBytes"]! < 268435456 || (name !== "grafana" && values["retentionDays"]! < 3))
+      throw new PlatformConfigError(field, "недопустимый бюджет telemetry storage");
+    return Object.freeze({endpoint: privateEndpoint("endpoint"), ...values, ...(name === "tempo" ? {otlpEndpoint: privateEndpoint("otlpEndpoint")} : {})});
+  };
+  const grafana = backend("grafana") as TelemetryConfig["grafana"];
+  const loki = backend("loki") as TelemetryConfig["loki"];
+  const prometheus = backend("prometheus") as TelemetryConfig["prometheus"];
+  const tempo = backend("tempo") as TelemetryConfig["tempo"];
   const collectorGuardMiB =
     collectorValues["containerMemoryMiB"]! - collectorValues["memorySpikeMiB"]!;
   const collectorContainerBytes =
@@ -2339,24 +2228,15 @@ function telemetryConfig(value: unknown): TelemetryConfig {
         ),
       ).port,
     ),
-    Number(
-      new URL(
-        collectorEndpoint(
-          collector["metricsEndpoint"],
-          `${path}.collector.metricsEndpoint`,
-        ),
-      ).port,
-    ),
   ];
   if (new Set(collectorPorts).size !== collectorPorts.length)
     throw new PlatformConfigError(
       `${path}.collector`,
-      "порты OTLP, health и metrics Collector должны различаться",
+      "порты OTLP и health Collector должны различаться",
     );
   if (
     diskWatermarkPercent < 1 ||
     diskWatermarkPercent > 99 ||
-    storageValues["retentionDays"]! < 3 ||
     alerts["evaluationIntervalMs"] !== 60_000 ||
     collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! ||
     collectorGuardMiB <= collectorValues["memoryLimitMiB"]! ||
@@ -2364,10 +2244,14 @@ function telemetryConfig(value: unknown): TelemetryConfig {
     collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! ||
     collectorValues["batchSize"]! > collectorValues["queueCapacity"]! ||
     producerValues["batchSize"]! > producerValues["queueCapacity"]! ||
-    producerValues["exportTimeoutMs"]! > producerValues["batchIntervalMs"]! ||
-    openObserveBufferBudgetInvalid
+    producerValues["exportTimeoutMs"]! > producerValues["batchIntervalMs"]!
   )
     throw new PlatformConfigError(path, "telemetry budgets are inconsistent");
+  const diskUsage = record(alerts["diskUsage"], `${path}.alerts.diskUsage`);
+  exactKeys(diskUsage, ["forMs"], `${path}.alerts.diskUsage`);
+  if (diskUsage["forMs"] !== 0) throw new PlatformConfigError(`${path}.alerts.diskUsage.forMs`, "ожидалось немедленное предупреждение");
+  if (alerts["notificationEndpoint"] !== "http://alert-sink:9091/alerts")
+    throw new PlatformConfigError(`${path}.alerts.notificationEndpoint`, "ожидался приватный alert sink");
   if (alerts["version"] !== 1)
     throw new PlatformConfigError(
       `${path}.alerts.version`,
@@ -2386,42 +2270,22 @@ function telemetryConfig(value: unknown): TelemetryConfig {
         collector["healthEndpoint"],
         `${path}.collector.healthEndpoint`,
       ),
-      metricsEndpoint: collectorEndpoint(
-        collector["metricsEndpoint"],
-        `${path}.collector.metricsEndpoint`,
-      ),
       ...collectorValues,
     } as TelemetryConfig["collector"]),
     producer: Object.freeze(producerValues as TelemetryConfig["producer"]),
     logging: Object.freeze(loggingValues as TelemetryConfig["logging"]),
-    openObserve: Object.freeze({
-      endpoint: openObserveEndpoint(
-        openObserve["endpoint"],
-        `${path}.openObserve.endpoint`,
-      ),
-      organization,
-      bootstrapEmail,
-      validationMarker: "bootstrap-validation-placeholder",
-      telemetryEnabled: false,
-      mmdbDownloadEnabled: false,
-      modelPricingEnabled: false,
-      streams: Object.freeze({
-        logs: stringValue(streams["logs"], `${path}.openObserve.streams.logs`),
-        traces: stringValue(
-          streams["traces"],
-          `${path}.openObserve.streams.traces`,
-        ),
-        metrics: stringValue(
-          streams["metrics"],
-          `${path}.openObserve.streams.metrics`,
-        ),
-      }),
-      ...storageValues,
-      diskWatermarkPercent,
-    } as TelemetryConfig["openObserve"]),
+    diskWatermarkPercent,
+    externalReportingEnabled: false,
+    grafana,
+    loki,
+    prometheus,
+    tempo,
     alerts: Object.freeze({
       version: 1,
       evaluationIntervalMs: 60_000,
+      notificationEndpoint: "http://alert-sink:9091/alerts",
+      diskUsage: Object.freeze({forMs: 0}),
+      sinkMemoryMiB: positiveIntegerValue(alerts["sinkMemoryMiB"], `${path}.alerts.sinkMemoryMiB`),
       notReady: alert("notReady"),
       consumerLag: alert("consumerLag"),
       outboxOldestAge: alert("outboxOldestAge"),

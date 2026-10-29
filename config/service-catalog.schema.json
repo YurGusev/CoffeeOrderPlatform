@@ -41,21 +41,13 @@
     "infrastructureSecretScopes": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["otel-collector", "openobserve-bootstrap"],
+      "required": ["otel-collector", "grafana-bootstrap"],
       "properties": {
         "otel-collector": {
-          "const": [
-            { "name": "exporterToken", "ref": "telemetry.exporterToken" },
-            {
-              "name": "openObserveIngestToken",
-              "ref": "telemetry.openObserveIngestToken"
-            }
-          ]
+          "const": [{ "name": "exporterToken", "ref": "telemetry.exporterToken" }]
         },
-        "openobserve-bootstrap": {
-          "const": [
-            { "name": "admin-secret", "ref": "telemetry.openObserveAdmin" }
-          ]
+        "grafana-bootstrap": {
+          "const": [{ "name": "admin-secret", "ref": "telemetry.grafanaAdmin" }]
         }
       }
     },

@@ -47,8 +47,12 @@
     "opentelemetryExporterTraceOtlpHttp",
     "opentelemetryExporterMetricsOtlpHttp",
     "pino",
+    "alloy",
     "otelCollectorImage",
-    "openObserveImage",
+    "grafanaImage",
+    "lokiImage",
+    "prometheusImage",
+    "tempoImage",
     "bootstrapProbeSha256",
     "browserHelperNodeImage"
   ],
@@ -155,11 +159,24 @@
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+$"
     },
+    "alloy": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "otelCollectorImage": {
       "type": "string",
       "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"
     },
-    "openObserveImage": {
+    "grafanaImage": {
+      "type": "string",
+      "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"
+    },
+    "lokiImage": {
+      "type": "string",
+      "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"
+    },
+    "prometheusImage": {
+      "type": "string",
+      "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"
+    },
+    "tempoImage": {
       "type": "string",
       "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"
     },

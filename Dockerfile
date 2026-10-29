@@ -149,6 +149,11 @@ RUN set -eu; \
     rm -f /tmp/apk.before /tmp/apk.after /tmp/apk.expected
 USER appuser
 
+FROM ${NODE_IMAGE} AS storage-helper
+RUN --network=host apk add --no-cache --upgrade e2fsprogs util-linux libcrypto3 libssl3 \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+  && command -v mkfs.ext4 && command -v losetup && command -v blkid && command -v truncate
+
 FROM ${NODE_IMAGE} AS runtime
 
 ENV NODE_ENV=production

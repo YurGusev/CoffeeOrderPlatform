@@ -357,14 +357,18 @@ restore каждой DB <=10m и совокупно <=30m на записанн�
 
 ## 8. Observability gate
 
-Владелец реализации — #64 (Operations), обязательный accepted
-predecessor #13. Он поставляет Collector/OpenObserve, exporters, alert evaluation
-и `pnpm test:observability`; #13 проверяет этот результат, а не создаёт backend.
+Владелец текущего стека — #210 (Operations), обязательный accepted
+predecessor #13 после merge и приёмки handoff. Он заменяет OpenObserve-specific
+часть #64 отдельными Grafana/Loki/Prometheus/Tempo и готовым Alloy по
+[ADR-0040](../adr/ADR-0040-grafana-observability.md). Producer guarantees #64
+сохраняются; #13 проверяет результат, а не создаёт backend. Component proofs
+самого #210 выполняются до merge без зависимости от собственного accepted handoff.
 Внутри этой команды canonical `runtimeMetricMatrix` проверяет functional
 наблюдаемость всех 14 Node runtime в recovery-proof Compose запуске и native nginx.
 Это evidence не закрывает launch-level full-system G14: #13 отдельно принимает
 SLO, chaos/failure, capacity и полный browser/business/DB/Kafka/SSE путь.
-Handoff — `evidence/handoffs/issue-64.yaml`. В
+Новый handoff — `evidence/handoffs/issue-210.yaml`; исторический
+`evidence/handoffs/issue-64.yaml` не переписывается. В
 `evidence/observability/<run-id>/` обязательны `alert-transitions.json`,
 `correlation-proof.json`, `redaction-scan.json`, `queue-loss-counters.json`,
 `retention-result.json`, `runtime-health-matrix.json` и `result.json` с source,
@@ -372,6 +376,11 @@ config/BOM/image digests. NOT_RUN/FAIL любого обязательного �
 G14 закрытым. Внешние notifications запрещены. Единственная policy authority —
 `config/platform.yaml.telemetry`; [runbook](../operations/observability.md)
 не является вторым источником значений.
+Для нового стека владелец согласовал отдельные ограниченные persistent volumes,
+retention три дня, штатные отказы/восстановление и alert на 80% заполнения.
+Loki использует native WAL threshold 0.8; Prometheus и Tempo не обязаны
+возвращать HTTP 503 при 80%. Alert не подменяет ingestion guard. Проверка TTL
+в ускоренном изолированном профиле явно отделяется от elapsed 72h production proof.
 Сквозной сценарий использует ограниченные по времени spans и W3C context/links;
 `orderRef` и correlation связывают долгоживущий order с несколькими traces.
 Бесконечный span на весь lifecycle заказа не требуется.
@@ -614,7 +623,7 @@ duplicate/conflict, `unknownCommitTotal`, recovery и last machine code.
 payload, envelope, message body, key, SQL, credentials, secret material и
 correlation identifiers не являются metric labels. `correlationId`,
 `causationId`, `traceparent` можно передавать как correlation fields в log/trace.
-`#64` добавляет collector/exporter и alert evaluation; #63 не подменяет G14.
+`#64` добавляет producer/collector foundation; #210 заменяет backend и alert evaluation. #63 не подменяет G14.
 
 `#63` также передаёт business consumers typed decoder/handler boundary и
 owner-local migration contract. Business event schemas, provider semantics,

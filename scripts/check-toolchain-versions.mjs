@@ -461,6 +461,7 @@ async function checkManifest(root) {
       "native source patch must match config/toolchain-versions.json.librdkafkaPatchSha256",
     );
   for (const key of [
+    "alloy",
     "opentelemetryApi",
     "pino",
     "opentelemetrySdkTraceBase",
@@ -475,7 +476,7 @@ async function checkManifest(root) {
   }
   if (!/^[0-9a-f]{64}$/.test(manifest.bootstrapProbeSha256 ?? ""))
     fail("TELEMETRY-BOM", "bootstrapProbeSha256: required static probe hash");
-  for (const key of ["otelCollectorImage", "openObserveImage"]) {
+  for (const key of ["otelCollectorImage", "grafanaImage", "lokiImage", "prometheusImage", "tempoImage"]) {
     if (
       !/^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$/.test(
         manifest[key] ?? "",

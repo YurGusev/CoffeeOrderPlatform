@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {delimiter, join} from 'node:path';
 import test from 'node:test';
 import {provisionStorage, removeStorage} from '../../tools/observability/storage.mjs';
+import {loadVerifiedGateImage} from '../../tools/verified-infrastructure-image.mjs';
 
-const name = 'coffee-g14-00000000-0000-4000-8000-000000000001-data';
-const nodeImage = `node:fixture@sha256:${'a'.repeat(64)}`;
+const name = 'coffee-g14-00000000-0000-4000-8000-000000000001-loki-data';
+const storageHelperImage = `sha256:${'a'.repeat(64)}`;
 const labels = lifecycle => ({'coffee.owner': 'operations', 'coffee.lifecycle': lifecycle});
 
 function runStorageHelper(args, fileState) {
@@ -108,11 +110,11 @@ void test('bounded telemetry storage preserves unrelated volumes and cleanup exc
     if (args[0] === 'volume' && args[1] === 'inspect') return JSON.stringify([{Labels: {'coffee.owner': 'another-project'}}]);
     return '';
   };
-  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run}), /unrelated telemetry volume/u);
+  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run}), /unrelated telemetry volume/u);
   assert.equal(calls.length, 1, 'no creation, mount, formatting or delete before ownership validation');
-  assert.throws(() => removeStorage({storage: {volumeName: 'coffee-platform-observability-data', backingVolume: 'coffee-platform-observability-data-backing', device: '/dev/loop17'}, nodeImage, run}), /disposable G14 storage/u);
+  assert.throws(() => removeStorage({storage: {volumeName: 'coffee-platform-observability-data', backingVolume: 'coffee-platform-observability-data-backing', device: '/dev/loop17'}, storageHelperImage, run}), /disposable G14 storage/u);
   assert.equal(calls.length, 1);
-  assert.throws(() => provisionStorage({name, maxDiskBytes: Infinity, nodeImage, run}), /Invalid bounded/u);
+  assert.throws(() => provisionStorage({name, maxDiskBytes: Infinity, storageHelperImage, run}), /Invalid bounded/u);
 });
 
 void test('fixture cleanup validates both owners before removing or detaching storage', () => {
@@ -121,13 +123,13 @@ void test('fixture cleanup validates both owners before removing or detaching st
     calls.push(args);
     return JSON.stringify([{Labels: {'coffee.owner': 'operations', 'coffee.lifecycle': args.at(-1).endsWith('-backing') ? 'persistent' : 'fixture'}}]);
   };
-  assert.throws(() => removeStorage({storage: {volumeName: name, backingVolume: `${name}-backing`, device: '/dev/loop17'}, nodeImage, run}), /unrelated telemetry volume/u);
+  assert.throws(() => removeStorage({storage: {volumeName: name, backingVolume: `${name}-backing`, device: '/dev/loop17'}, storageHelperImage, run}), /unrelated telemetry volume/u);
   assert.ok(calls.every(args => args[0] === 'volume' && args[1] === 'inspect'));
 });
 
 void test('owned telemetry volume is rebound to a renumbered loop without touching its backing data', () => {
   const harness = storageHarness({previousDevice: '/dev/loop17', attached: false});
-  assert.deepEqual(provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: harness.run}), {
+  assert.deepEqual(provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: harness.run}), {
     volumeName: name, backingVolume: `${name}-backing`, device: '/dev/loop18', maxDiskBytes: 1073741824,
   });
   assert.ok(harness.calls.some(args => args[0] === 'volume' && args[1] === 'rm' && args[2] === name));
@@ -141,7 +143,7 @@ void test('owned telemetry volume is rebound to a renumbered loop without touchi
 
 void test('telemetry provisioning rejects foreign or active named volumes before attaching a loop', () => {
   for (const harness of [storageHarness({previousDevice: '/dev/loop17', foreignNamed: true}), storageHarness({previousDevice: '/dev/loop17', foreignDriver: true}), storageHarness({previousDevice: '/dev/loop17', active: true})]) {
-    assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: harness.run}));
+    assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: harness.run}));
     assert.equal(harness.calls.some(args => args[0] === 'run'), false);
     assert.equal(harness.calls.some(args => args[0] === 'volume' && args[1] === 'rm'), false);
     assert.equal(harness.calls.some(args => args[0] === 'volume' && args[1] === 'create'), false);
@@ -150,7 +152,7 @@ void test('telemetry provisioning rejects foreign or active named volumes before
 
 void test('owned data volume without its backing fails closed before creating or attaching storage', () => {
   const harness = storageHarness({previousDevice: '/dev/loop17', backingExists: false});
-  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: harness.run}), /missing its backing volume/u);
+  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: harness.run}), /missing its backing volume/u);
   assert.equal(harness.calls.length, 2);
   assert.equal(harness.calls.some(args => args[0] === 'volume' && args[1] === 'create'), false);
   assert.equal(harness.calls.some(args => args[0] === 'run'), false);
@@ -160,7 +162,7 @@ void test('owned data volume without its backing fails closed before creating or
 void test('existing storage refuses a missing or symlink backing file while fresh storage formats safely', () => {
   for (const fileState of ['missing', 'symlink']) {
     const harness = storageHarness({previousDevice: '/dev/loop17'});
-    assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: runWithShellHelper(harness, fileState)}), /storage helper rejected backing file/u);
+    assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: runWithShellHelper(harness, fileState)}), /storage helper rejected backing file/u);
     const attachCall = harness.calls.find(args => args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup --find'));
     assert.equal(attachCall.at(-1), 'true');
     const result = runStorageHelper(attachCall, fileState);
@@ -171,7 +173,7 @@ void test('existing storage refuses a missing or symlink backing file while fres
   }
 
   const fresh = storageHarness({attached: true});
-  assert.deepEqual(provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: runWithShellHelper(fresh, 'missing')}), {
+  assert.deepEqual(provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: runWithShellHelper(fresh, 'missing')}), {
     volumeName: name, backingVolume: `${name}-backing`, device: '/dev/loop18', maxDiskBytes: 1073741824,
   });
   const freshAttach = fresh.calls.find(args => args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup --find'));
@@ -184,13 +186,13 @@ void test('existing storage refuses a missing or symlink backing file while fres
 
 void test('telemetry failure detaches only a verified new loop and leaves a reused loop alone', () => {
   const attached = storageHarness({attached: true, failCreate: true});
-  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: attached.run}), /volume create failed/u);
+  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: attached.run}), /volume create failed/u);
   const cleanup = attached.calls.find(args => args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup -d'));
   assert.ok(cleanup);
   assert.equal(cleanup.at(-1), '/dev/loop18');
   assert.match(cleanup[cleanup.indexOf('-ceu') + 1], /losetup -j \/storage\/telemetry\.ext4[\s\S]*grep -Fx "\$1"; losetup -d "\$1"/u);
 
-  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: storageHarness({attached: true, failCreate: true, failCleanup: true}).run}), error => {
+  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: storageHarness({attached: true, failCreate: true, failCleanup: true}).run}), error => {
     assert.ok(error instanceof AggregateError);
     assert.equal(error.message, 'Telemetry storage provisioning and loop cleanup failed');
     assert.deepEqual(error.errors.map(cause => cause.message), ['volume create failed', 'cleanup failed']);
@@ -198,13 +200,69 @@ void test('telemetry failure detaches only a verified new loop and leaves a reus
   });
 
   const failedRebind = storageHarness({previousDevice: '/dev/loop17', attached: true, failRemove: true});
-  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: failedRebind.run}), /volume is in use/u);
+  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: failedRebind.run}), /volume is in use/u);
   assert.deepEqual(failedRebind.calls.find(args => args[0] === 'volume' && args[1] === 'rm'), ['volume', 'rm', name]);
   assert.ok(failedRebind.calls.some(args => args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup -d')));
   assert.ok(failedRebind.volumes.has(name));
   assert.ok(failedRebind.volumes.has(`${name}-backing`));
 
   const reused = storageHarness({previousDevice: '/dev/loop18', attached: false, failCreate: true});
-  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, nodeImage, run: reused.run}), /volume create failed/u);
+  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: reused.run}), /volume create failed/u);
   assert.equal(reused.calls.some(args => args[0] === 'run' && args[args.indexOf('-ceu') + 1]?.includes('losetup -d')), false);
+});
+
+void test('storage helper rejects image tags and uses the verified ID for every privileged operation', () => {
+  const harness = storageHarness({attached: true, failCreate: true});
+  for (const image of [undefined, `node:fixture@${storageHelperImage}`, 'storage-helper:latest']) {
+    assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage: image, run: harness.run}), /Invalid bounded/u);
+    assert.throws(() => removeStorage({storage: {volumeName: name, backingVolume: `${name}-backing`, device: '/dev/loop18'}, storageHelperImage: image, run: harness.run}), /Invalid verified/u);
+  }
+  assert.equal(harness.calls.length, 0);
+  assert.throws(() => provisionStorage({name, maxDiskBytes: 1073741824, storageHelperImage, run: harness.run}), /volume create failed/u);
+  assert.equal(harness.calls.filter(args => args[0] === 'run').length, 2);
+  assert.ok(harness.calls.filter(args => args[0] === 'run').every(args => args.includes(storageHelperImage)));
+  const cleanup = storageHarness({previousDevice: '/dev/loop18'});
+  removeStorage({storage: {volumeName: name, backingVolume: `${name}-backing`, device: '/dev/loop18'}, storageHelperImage, run: cleanup.run});
+  assert.ok(cleanup.calls.find(args => args[0] === 'run').includes(storageHelperImage));
+});
+
+void test('G12 binds storage helper to the Node base, receipt, index and image', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'coffee-storage-proof-'));
+  try {
+    const candidateRoot = join(root, 'candidate');
+    const evidenceDir = join(root, 'evidence');
+    const artifacts = join(evidenceDir, 'gates/G12_SUPPLY_CHAIN/artifacts/supply-chain/artifacts');
+    mkdirSync(join(candidateRoot, 'config'), {recursive: true});
+    mkdirSync(artifacts, {recursive: true});
+    const hash = value => createHash('sha256').update(value).digest('hex');
+    const runId = 'storage-fixture';
+    const candidateSha = 'a'.repeat(40);
+    const treeSha = 'b'.repeat(40);
+    const manifestDigest = `sha256:${'c'.repeat(64)}`;
+    const platformDigest = `sha256:${'d'.repeat(64)}`;
+    const index = Buffer.from(JSON.stringify({schemaVersion: 2, mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [{mediaType: 'application/vnd.oci.image.manifest.v1+json', digest: platformDigest, size: 1, platform: {os: 'linux', architecture: 'amd64'}}]}));
+    const baseImage = `node:fixture@sha256:${hash(index)}`;
+    const platform = Buffer.from('platform');
+    const toolchain = Buffer.from(JSON.stringify({nodeImage: baseImage}));
+    const lockfile = Buffer.from('lock');
+    const context = {runId, candidateSha, baseConfigSha256: hash(platform)};
+    const environment = {runId, candidateSha, candidatePath: candidateRoot, dirty: false, configSha256: hash(platform), treeSha, toolchainVersionsSha256: hash(toolchain), lockfileSha256: hash(lockfile)};
+    for (const [path, data] of [[join(candidateRoot, 'config/platform.yaml'), platform], [join(candidateRoot, 'config/toolchain-versions.json'), toolchain], [join(candidateRoot, 'pnpm-lock.yaml'), lockfile]]) {
+      writeFileSync(path, data, {mode: 0o644}); chmodSync(path, 0o644);
+    }
+    writeFileSync(join(evidenceDir, 'environment.json'), JSON.stringify(environment), {mode: 0o600});
+    const artifact = Buffer.from('artifact');
+    const baseMaterial = {sourceRef: baseImage, platformManifestDigest: platformDigest, indexArtifact: {path: 'artifacts/storage-helper-base-index.json', sha256: hash(index), sizeBytes: index.length}};
+    const receipt = {schemaVersion: 1, gate: 'G12_SUPPLY_CHAIN', status: 'PASS', runId, candidateSha, treeSha, configSha256: hash(platform), toolchainVersionsSha256: hash(toolchain), lockfileSha256: hash(lockfile), target: 'storage-helper', importTag: `coffee-g12-${hash(runId).slice(0, 12)}-storage-helper:latest`, baseImage, imageId: storageHelperImage, manifestDigest, platformManifestDigest: platformDigest, provenanceStatus: 'INCOMPLETE_LOCAL_CONTEXT', provenanceSha256: 'e'.repeat(64), attestationSha256: 'f'.repeat(64), buildInputBinding: {status: 'OBSERVED', sourceCommit: candidateSha, sourceTreeSha: treeSha, archiveSha256: '1'.repeat(64), archiveSizeBytes: 1, extractedTreeSha256: '2'.repeat(64), extractedBytes: 1, sourceKind: 'git-archive-local-context', buildkitMaterialsCompleteness: 'INCOMPLETE_LOCAL_CONTEXT', invocation: {entryPoint: 'docker buildx build', builder: 'coffee-platform-mtu', target: 'storage-helper', platform: 'linux/amd64', provenance: 'mode=min', output: 'oci-layout-directory'}}, ociArtifact: {path: 'artifacts/storage-helper.oci.tar', sha256: hash(artifact), sizeBytes: artifact.length, layoutTreeSha256: '3'.repeat(64), layoutBytes: 1}, baseMaterial};
+    const receiptBytes = Buffer.from(JSON.stringify(receipt));
+    const image = {path: 'artifacts/storage-helper-receipt.json', receiptSha256: hash(receiptBytes), imageId: receipt.imageId, importTag: receipt.importTag, manifestDigest, ociArtifactPath: receipt.ociArtifact.path, ociArtifactSha256: hash(artifact)};
+    const result = {gate: 'G12_SUPPLY_CHAIN', status: 'PASS', code: 'G12_SCAN_CLEAN', runId, candidateSha, storageHelper: image, provenance: {status: 'PASS', sourceRevision: candidateSha, treeSha, configSha256: hash(platform), toolchainVersionsSha256: hash(toolchain), lockfileSha256: hash(lockfile), images: [{service: 'storage-helper', imageId: receipt.imageId, manifestDigest, platformManifestDigest: platformDigest, provenanceStatus: 'PASS', metadataSha256: receipt.provenanceSha256, attestationSha256: receipt.attestationSha256, baseMaterial}]}};
+    for (const [path, data] of [[join(artifacts, '../result.json'), JSON.stringify(result)], [join(artifacts, 'storage-helper-receipt.json'), receiptBytes], [join(artifacts, 'storage-helper.oci.tar'), artifact], [join(artifacts, 'storage-helper-base-index.json'), index]]) writeFileSync(path, data, {mode: 0o600});
+    const options = {target: 'storage-helper', contextFile: join(root, 'context'), loadImage: false, validateContext: async () => ({context, candidateRoot, evidenceDir})};
+    const validated = await loadVerifiedGateImage(options);
+    assert.equal(validated.imageId, storageHelperImage);
+    assert.ok(Object.isFrozen(validated));
+    writeFileSync(join(artifacts, 'storage-helper-base-index.json'), '{}');
+    await assert.rejects(loadVerifiedGateImage(options), /G12_KAFKA_BASE_MATERIAL_INVALID/u);
+  } finally { rmSync(root, {recursive: true, force: true}); }
 });

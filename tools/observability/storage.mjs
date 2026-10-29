@@ -1,13 +1,13 @@
 import {execFileSync} from 'node:child_process';
-import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {loadPlatformConfig} from '../../scripts/config-lib.mjs';
+import {loadVerifiedGateImage} from '../verified-infrastructure-image.mjs';
 
 // Operations создаёт отдельную файловую систему: telemetry не может заполнить business disk.
-export function provisionStorage({name, maxDiskBytes, nodeImage, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}).trim()}) {
-  if (!/^coffee-[a-z0-9-]+$/u.test(name) || !Number.isSafeInteger(maxDiskBytes) || maxDiskBytes < 268435456 || !/@sha256:[0-9a-f]{64}$/u.test(nodeImage)) throw new Error('Invalid bounded telemetry storage specification');
+export function provisionStorage({name, maxDiskBytes, storageHelperImage, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']}).trim()}) {
+  if (!/^coffee-[a-z0-9-]+$/u.test(name) || !Number.isSafeInteger(maxDiskBytes) || maxDiskBytes < 268435456 || !/^sha256:[0-9a-f]{64}$/u.test(storageHelperImage)) throw new Error('Invalid bounded telemetry storage specification');
   const backingVolume = `${name}-backing`;
-  const lifecycle = /^coffee-g14-[a-f0-9-]{36}-data$/u.test(name) ? 'fixture' : 'persistent';
+  const lifecycle = /^coffee-g14-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(name) ? 'fixture' : 'persistent';
   const owned = volume => {
     let info;
     try { info = JSON.parse(run(['volume', 'inspect', volume]))[0]; }
@@ -26,7 +26,7 @@ export function provisionStorage({name, maxDiskBytes, nodeImage, run = args => e
     if (run(['ps', '--all', '--filter', `volume=${name}`, '--format', '{{.ID}}']).trim()) throw new Error('Cannot rebind an active telemetry volume');
   }
   run(['volume', 'create', '--label', 'coffee.owner=operations', '--label', `coffee.lifecycle=${lifecycle}`, backingVolume]);
-  const attachment = JSON.parse(run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, nodeImage, 'sh', '-ceu', `
+  const attachment = JSON.parse(run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', `
     if [ -L /storage/telemetry.ext4 ]; then exit 1; fi
     if [ -e /storage/telemetry.ext4 ]; then
       test -f /storage/telemetry.ext4
@@ -57,7 +57,7 @@ export function provisionStorage({name, maxDiskBytes, nodeImage, run = args => e
   } catch (error) {
     if (attached === true && validDevice) {
       try {
-        run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, nodeImage, 'sh', '-ceu', 'losetup -j /storage/telemetry.ext4 | cut -d : -f 1 | grep -Fx "$1"; losetup -d "$1"', 'storage', device]);
+        run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', 'losetup -j /storage/telemetry.ext4 | cut -d : -f 1 | grep -Fx "$1"; losetup -d "$1"', 'storage', device]);
       } catch (cleanupError) {
         throw new AggregateError([error, cleanupError], 'Telemetry storage provisioning and loop cleanup failed');
       }
@@ -66,15 +66,16 @@ export function provisionStorage({name, maxDiskBytes, nodeImage, run = args => e
   }
 }
 
-export function removeStorage({storage, nodeImage, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']})}) {
-  if (!/^coffee-g14-[a-f0-9-]{36}-data$/u.test(storage.volumeName) || storage.backingVolume !== `${storage.volumeName}-backing` || !/^\/dev\/loop[0-9]+$/u.test(storage.device)) throw new Error('Cleanup is restricted to disposable G14 storage');
+export function removeStorage({storage, storageHelperImage, run = args => execFileSync('docker', args, {encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe']})}) {
+  if (!/^sha256:[0-9a-f]{64}$/u.test(storageHelperImage)) throw new Error('Invalid verified telemetry storage helper image');
+  if (!/^coffee-g14-[a-f0-9-]{36}-(?:grafana|loki|prometheus|tempo)-data$/u.test(storage.volumeName) || storage.backingVolume !== `${storage.volumeName}-backing` || !/^\/dev\/loop[0-9]+$/u.test(storage.device)) throw new Error('Cleanup is restricted to disposable G14 storage');
   for (const volume of [storage.volumeName, storage.backingVolume]) {
     const info = JSON.parse(run(['volume', 'inspect', volume]))[0];
     if (info?.Labels?.['coffee.owner'] !== 'operations' || info.Labels['coffee.lifecycle'] !== 'fixture') throw new Error('Refusing to remove unrelated telemetry volume');
   }
   run(['volume', 'rm', storage.volumeName]);
   // Сопоставление backing file проверяется до detach; чужой loop device не трогаем.
-  run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${storage.backingVolume},target=/storage`, nodeImage, 'sh', '-ceu', 'losetup -j /storage/telemetry.ext4 | cut -d : -f 1 | grep -Fx "$1"; losetup -d "$1"', 'storage', storage.device]);
+  run(['run', '--rm', '--privileged', '--network', 'none', '--mount', `type=volume,source=${storage.backingVolume},target=/storage`, storageHelperImage, 'sh', '-ceu', 'losetup -j /storage/telemetry.ext4 | cut -d : -f 1 | grep -Fx "$1"; losetup -d "$1"', 'storage', storage.device]);
   run(['volume', 'rm', storage.backingVolume]);
 }
 
@@ -82,9 +83,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const index = process.argv.indexOf('--name');
     if (index < 0 || !process.argv[index + 1]) throw new Error('--name is required');
+    const storeIndex = process.argv.indexOf('--store');
+    const store = process.argv[storeIndex + 1];
+    if (storeIndex < 0 || !['grafana', 'loki', 'prometheus', 'tempo'].includes(store)) throw new Error('--store must be grafana, loki, prometheus or tempo');
     const config = await loadPlatformConfig();
-    const bom = JSON.parse(await readFile(new URL('../../config/toolchain-versions.json', import.meta.url), 'utf8'));
-    console.log(JSON.stringify(provisionStorage({name: process.argv[index + 1], maxDiskBytes: config.telemetry.openObserve.maxDiskBytes, nodeImage: bom.nodeImage})));
+    const image = await loadVerifiedGateImage({target: 'storage-helper'});
+    console.log(JSON.stringify(provisionStorage({name: process.argv[index + 1], maxDiskBytes: config.telemetry[store].maxDiskBytes, storageHelperImage: image.imageId})));
   } catch (error) {
     console.error(`telemetry storage: ${error.message}`);
     process.exitCode = 1;

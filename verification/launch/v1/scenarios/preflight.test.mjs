@@ -22,7 +22,7 @@ import { deriveLaunchKafkaRegistryTarget } from "../../../../packages/platform-c
 
 const requiredIssues = [
   2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 17, 18, 19, 60, 61, 62, 63, 64,
-  119, 162,
+  119, 162, 210,
 ];
 const expectedScripts = [
   ...new Set(
