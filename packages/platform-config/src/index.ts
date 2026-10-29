@@ -1,4 +1,31 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+export {
+  CANONICAL_DATABASE_OWNERS,
+  deriveLaunchDatabaseName,
+  deriveRuntimeDatabaseTarget,
+  validateLaunchDatabaseIdentity,
+  validateLaunchRunIdentity,
+  verifyLaunchConfigBytes,
+} from "./launch-database-target.js";
+export type {
+  DatabaseOwnershipDocument,
+  LaunchConfigAttestation,
+  LaunchDatabaseIdentity,
+  LaunchRunIdentity,
+  RuntimeDatabaseTarget,
+} from "./launch-database-target.js";
+export {
+  CANONICAL_KAFKA_TOPIC_NAMES,
+  deriveLaunchKafkaRegistryTarget,
+  deriveRuntimeKafkaTarget,
+  launchKafkaLogicalTopic,
+  launchKafkaPhysicalName,
+} from "./launch-kafka-target.js";
+export type {
+  LaunchKafkaRegistryTarget,
+  LaunchKafkaTarget,
+} from "./launch-kafka-target.js";
 
 export const RUNTIME_NAMES = [
   "edge-gateway",
@@ -67,6 +94,7 @@ export type DatabasePoolConfig = Readonly<{
 }>;
 export type PostgresConfig = Readonly<{
   host: string;
+  bootstrapUsername: "coffeeuser";
   port: number;
   sslMode: "prefer" | "require" | "verify-full";
   maxConnections: number;
@@ -344,10 +372,175 @@ export type PlatformConfig = Readonly<{
   pricingPolicy: PricingPolicyConfig;
   telemetry: TelemetryConfig;
   browserOidc: BrowserOidcProfile | null;
+  databaseIsolation: Readonly<{ enabled: boolean }>;
+  kafkaNamespaceIsolation: boolean;
+  unitCoverage: UnitCoverageVerificationConfig | null;
   nginxTransport: Readonly<Record<string, unknown>>;
   security: Readonly<Record<string, unknown>>;
   services: Readonly<Record<RuntimeName, RuntimeConfig>>;
 }>;
+
+export type SecurityScanVerificationConfig = Readonly<{
+  enabled: true;
+  cpu: 2;
+  memoryMiB: 2048;
+  parallel: 1;
+  minimumFreeDiskGiB: 20;
+  maximumDatabaseAgeHours: 24;
+  egressRepositories: readonly [
+    "ghcr.io/aquasecurity/trivy-db",
+    "ghcr.io/aquasecurity/trivy-java-db",
+  ];
+}>;
+
+export type UnitCoverageVerificationConfig = Readonly<{
+  thresholds: Readonly<{ lines: 90; functions: 90; branches: 85 }>;
+  criticalModules: readonly Readonly<{
+    id: string;
+    sourceRoots: readonly string[];
+    coverageRoots: readonly string[];
+    format: "js" | "mjs";
+  }>[];
+  testFiles: readonly string[];
+}>;
+
+const UNIT_COVERAGE_MODULES = [
+  {
+    id: "platform-config",
+    sourceRoots: ["packages/platform-config/src"],
+    coverageRoots: ["packages/platform-config/dist"],
+    format: "js",
+  },
+  {
+    id: "trusted-config-bootstrap",
+    sourceRoots: ["tools/config-bootstrap"],
+    coverageRoots: ["tools/config-bootstrap"],
+    format: "mjs",
+  },
+  {
+    id: "platform-runtime",
+    sourceRoots: ["packages/platform-runtime/src"],
+    coverageRoots: ["packages/platform-runtime/dist"],
+    format: "js",
+  },
+  {
+    id: "persistence-foundation",
+    sourceRoots: [
+      "packages/platform-database/src",
+      "packages/platform-migrations/src",
+    ],
+    coverageRoots: [
+      "packages/platform-database/dist",
+      "packages/platform-migrations/dist",
+    ],
+    format: "js",
+  },
+  {
+    id: "durable-delivery",
+    sourceRoots: [
+      "packages/platform-outbox/src",
+      "packages/platform-inbox/src",
+      "packages/platform-idempotency/src",
+    ],
+    coverageRoots: [
+      "packages/platform-outbox/dist",
+      "packages/platform-inbox/dist",
+      "packages/platform-idempotency/dist",
+    ],
+    format: "js",
+  },
+  {
+    id: "kafka-runtime",
+    sourceRoots: ["packages/platform-kafka-runtime/src"],
+    coverageRoots: ["packages/platform-kafka-runtime/dist"],
+    format: "js",
+  },
+  {
+    id: "security-trust",
+    sourceRoots: [
+      "packages/platform-security/src",
+      "packages/platform-http/src",
+    ],
+    coverageRoots: [
+      "packages/platform-security/dist",
+      "packages/platform-http/dist",
+    ],
+    format: "js",
+  },
+  {
+    id: "customer-service",
+    sourceRoots: ["apps/customer-service/src"],
+    coverageRoots: ["apps/customer-service/dist"],
+    format: "js",
+  },
+  {
+    id: "catalog-service",
+    sourceRoots: [
+      "apps/catalog-service/src",
+      "apps/catalog-supplier-sync/src",
+      "apps/catalog-activation-worker/src",
+    ],
+    coverageRoots: [
+      "apps/catalog-service/dist",
+      "apps/catalog-supplier-sync/dist",
+      "apps/catalog-activation-worker/dist",
+    ],
+    format: "js",
+  },
+  {
+    id: "pricing-service",
+    sourceRoots: ["apps/pricing-service/src"],
+    coverageRoots: ["apps/pricing-service/dist"],
+    format: "js",
+  },
+  {
+    id: "orders-service",
+    sourceRoots: ["apps/orders-service/src"],
+    coverageRoots: ["apps/orders-service/dist"],
+    format: "js",
+  },
+  {
+    id: "aroma-convergence",
+    sourceRoots: ["apps/aroma-convergence/src"],
+    coverageRoots: ["apps/aroma-convergence/dist"],
+    format: "js",
+  },
+  {
+    id: "aroma-preparation",
+    sourceRoots: ["apps/orders-aroma-preparation/src"],
+    coverageRoots: ["apps/orders-aroma-preparation/dist"],
+    format: "js",
+  },
+  {
+    id: "aroma-observer",
+    sourceRoots: ["apps/aroma-observer/src"],
+    coverageRoots: ["apps/aroma-observer/dist"],
+    format: "js",
+  },
+  {
+    id: "aroma-gateway",
+    sourceRoots: ["apps/aroma-gateway/src"],
+    coverageRoots: ["apps/aroma-gateway/dist"],
+    format: "js",
+  },
+  {
+    id: "public-api-trust",
+    sourceRoots: [
+      "apps/api-public/src",
+      "apps/api-internal/src",
+      "apps/edge-gateway/src",
+      "apps/realtime-gateway/src",
+    ],
+    coverageRoots: [
+      "apps/api-public/dist",
+      "apps/api-internal/dist",
+      "apps/edge-gateway/dist",
+      "apps/realtime-gateway/dist",
+    ],
+    format: "js",
+  },
+] as const;
+const UNIT_COVERAGE_TEST_FILE_COUNT = 60;
 
 export class PlatformConfigError extends Error {
   public readonly path: string;
@@ -419,6 +612,171 @@ function stringArray(value: unknown, path: string): readonly string[] {
   if (!Array.isArray(value))
     throw new PlatformConfigError(path, "ожидался массив строк");
   return value.map((entry, index) => stringValue(entry, `${path}[${index}]`));
+}
+
+export function parseSecurityScanVerification(
+  value: unknown,
+): SecurityScanVerificationConfig {
+  const path = "config.verification.securityScan";
+  const source = record(value, path);
+  exactKeys(
+    source,
+    [
+      "enabled",
+      "cpu",
+      "memoryMiB",
+      "parallel",
+      "minimumFreeDiskGiB",
+      "maximumDatabaseAgeHours",
+      "egressRepositories",
+    ],
+    path,
+  );
+  if (source["enabled"] !== true)
+    throw new PlatformConfigError(
+      `${path}.enabled`,
+      "G12 обязателен и должен быть включён",
+    );
+  const constants = {
+    cpu: [source["cpu"], 2],
+    memoryMiB: [source["memoryMiB"], 2048],
+    parallel: [source["parallel"], 1],
+    minimumFreeDiskGiB: [source["minimumFreeDiskGiB"], 20],
+    maximumDatabaseAgeHours: [source["maximumDatabaseAgeHours"], 24],
+  } as const;
+  for (const [key, [actual, expected]] of Object.entries(constants)) {
+    if (actual !== expected)
+      throw new PlatformConfigError(
+        `${path}.${key}`,
+        `ожидалось нормативное значение ${expected}`,
+      );
+  }
+  const egressRepositories = stringArray(
+    source["egressRepositories"],
+    `${path}.egressRepositories`,
+  );
+  const expectedRepositories = [
+    "ghcr.io/aquasecurity/trivy-db",
+    "ghcr.io/aquasecurity/trivy-java-db",
+  ] as const;
+  if (
+    egressRepositories.length !== expectedRepositories.length ||
+    egressRepositories.some(
+      (entry, index) => entry !== expectedRepositories[index],
+    )
+  ) {
+    throw new PlatformConfigError(
+      `${path}.egressRepositories`,
+      "разрешены только официальные GHCR Trivy vulnerability DB registries",
+    );
+  }
+  return Object.freeze({
+    enabled: true,
+    cpu: 2,
+    memoryMiB: 2048,
+    parallel: 1,
+    minimumFreeDiskGiB: 20,
+    maximumDatabaseAgeHours: 24,
+    egressRepositories: Object.freeze([
+      ...expectedRepositories,
+    ]) as unknown as SecurityScanVerificationConfig["egressRepositories"],
+  });
+}
+
+function parseUnitCoverageVerification(
+  value: unknown,
+): UnitCoverageVerificationConfig {
+  const path = "config.verification.unitCoverage";
+  const source = record(value, path);
+  exactKeys(source, ["thresholds", "criticalModules", "testFiles"], path);
+  const thresholdSource = record(source["thresholds"], `${path}.thresholds`);
+  exactKeys(
+    thresholdSource,
+    ["lines", "functions", "branches"],
+    `${path}.thresholds`,
+  );
+  if (
+    thresholdSource["lines"] !== 90 ||
+    thresholdSource["functions"] !== 90 ||
+    thresholdSource["branches"] !== 85
+  )
+    throw new PlatformConfigError(
+      `${path}.thresholds`,
+      "ожидаются нормативные floors 90/90/85 для lines/functions/branches",
+    );
+  if (!Array.isArray(source["criticalModules"]))
+    throw new PlatformConfigError(
+      `${path}.criticalModules`,
+      "ожидался массив критических модулей",
+    );
+  const criticalModules = source["criticalModules"].map((entry, index) => {
+    const modulePath = `${path}.criticalModules[${index}]`;
+    const item = record(entry, modulePath);
+    exactKeys(
+      item,
+      ["id", "sourceRoots", "coverageRoots", "format"],
+      modulePath,
+    );
+    const id = stringValue(item["id"], `${modulePath}.id`);
+    const expected = UNIT_COVERAGE_MODULES[index];
+    const sourceRoots = stringArray(
+      item["sourceRoots"],
+      `${modulePath}.sourceRoots`,
+    );
+    const coverageRoots = stringArray(
+      item["coverageRoots"],
+      `${modulePath}.coverageRoots`,
+    );
+    if (sourceRoots.length === 0 || coverageRoots.length === 0)
+      throw new PlatformConfigError(
+        modulePath,
+        "каждому модулю нужны source и coverage roots",
+      );
+    const format = item["format"];
+    if (format !== "js" && format !== "mjs")
+      throw new PlatformConfigError(
+        `${modulePath}.format`,
+        "ожидался js или mjs",
+      );
+    if (
+      !expected ||
+      id !== expected.id ||
+      JSON.stringify(sourceRoots) !== JSON.stringify(expected.sourceRoots) ||
+      JSON.stringify(coverageRoots) !==
+        JSON.stringify(expected.coverageRoots) ||
+      format !== expected.format
+    )
+      throw new PlatformConfigError(
+        modulePath,
+        "критический inventory имеет неверный порядок, состав или artifact mapping",
+      );
+    return Object.freeze({ id, sourceRoots, coverageRoots, format });
+  });
+  if (criticalModules.length !== UNIT_COVERAGE_MODULES.length)
+    throw new PlatformConfigError(
+      `${path}.criticalModules`,
+      "неполный критический inventory",
+    );
+  const testFiles = stringArray(source["testFiles"], `${path}.testFiles`);
+  if (
+    testFiles.length !== UNIT_COVERAGE_TEST_FILE_COUNT ||
+    new Set(testFiles).size !== testFiles.length ||
+    testFiles.some(
+      (file) =>
+        !/^(?:(?:tests|packages)\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\.test\.mjs|verification\/launch\/v1\/scenarios\/backup-restore\.test\.mjs)$/u.test(
+          file,
+        ),
+    )
+  )
+    throw new PlatformConfigError(
+      `${path}.testFiles`,
+      `ожидается ровно ${UNIT_COVERAGE_TEST_FILE_COUNT} уникальных путей локальных .test.mjs файлов`,
+    );
+  return Object.freeze({
+    thresholds: Object.freeze({ lines: 90, functions: 90, branches: 85 }),
+    criticalModules: Object.freeze(criticalModules),
+    testFiles,
+  });
 }
 
 function exactStringArray<T extends string>(
@@ -1354,12 +1712,18 @@ function runtimeConfig(
   });
 }
 
-function postgresConfig(value: unknown, path: string): PostgresConfig {
+function postgresConfig(
+  value: unknown,
+  path: string,
+  environment: EnvironmentName,
+  databaseIsolationEnabled: boolean,
+): PostgresConfig {
   const postgres = record(value, path);
   exactKeys(
     postgres,
     [
       "host",
+      "bootstrapUsername",
       "port",
       "sslMode",
       "maxConnections",
@@ -1386,8 +1750,31 @@ function postgresConfig(value: unknown, path: string): PostgresConfig {
       "первый запуск разрешает только одну serial rollout replica",
     );
   }
+  const host = stringValue(postgres["host"], `${path}.host`);
+  const bootstrapUsername = stringValue(
+    postgres["bootstrapUsername"],
+    `${path}.bootstrapUsername`,
+  );
+  if (bootstrapUsername !== "coffeeuser")
+    throw new PlatformConfigError(
+      `${path}.bootstrapUsername`,
+      "canonical bootstrap LOGIN must be coffeeuser",
+    );
+  if (host !== "coffee_postgres") {
+    if (!/^\/dev\/shm\/coffee-g17-[a-f0-9]{16,64}$/u.test(host))
+      throw new PlatformConfigError(
+        `${path}.host`,
+        "разрешён только canonical endpoint или private G17 Unix socket path",
+      );
+    if (environment === "production" || !databaseIsolationEnabled)
+      throw new PlatformConfigError(
+        `${path}.host`,
+        "G17 Unix socket разрешён только вне production при включённой database isolation",
+      );
+  }
   return Object.freeze({
-    host: stringValue(postgres["host"], `${path}.host`),
+    host,
+    bootstrapUsername,
     port: positiveIntegerValue(postgres["port"], `${path}.port`),
     sslMode,
     maxConnections: positiveIntegerValue(
@@ -2064,8 +2451,45 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       "services",
     ],
     "config",
-    ["browserOidc"],
+    ["browserOidc", "verification"],
   );
+  if (source["verification"] !== undefined) {
+    const verification = record(source["verification"], "config.verification");
+    exactKeys(
+      verification,
+      ["aromaSandbox", "securityScan", "unitCoverage"],
+      "config.verification",
+      ["databaseIsolation", "kafkaNamespaceIsolation"],
+    );
+    if (verification["aromaSandbox"] !== null)
+      record(verification["aromaSandbox"], "config.verification.aromaSandbox");
+    parseSecurityScanVerification(verification["securityScan"]);
+    parseUnitCoverageVerification(verification["unitCoverage"]);
+    if (verification["databaseIsolation"] !== undefined) {
+      const isolation = record(
+        verification["databaseIsolation"],
+        "config.verification.databaseIsolation",
+      );
+      exactKeys(
+        isolation,
+        ["enabled"],
+        "config.verification.databaseIsolation",
+      );
+      if (typeof isolation["enabled"] !== "boolean")
+        throw new PlatformConfigError(
+          "config.verification.databaseIsolation.enabled",
+          "ожидался explicit boolean",
+        );
+    }
+    if (
+      verification["kafkaNamespaceIsolation"] !== undefined &&
+      typeof verification["kafkaNamespaceIsolation"] !== "boolean"
+    )
+      throw new PlatformConfigError(
+        "config.verification.kafkaNamespaceIsolation",
+        "ожидался explicit boolean",
+      );
+  }
   if (source["$schema"] !== "./platform.schema.json")
     throw new PlatformConfigError(
       "config.$schema",
@@ -2196,7 +2620,24 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       ),
     ]),
   ) as Record<RuntimeName, RuntimeConfig>;
-  const postgres = postgresConfig(source["postgres"], "config.postgres");
+  const verification =
+    source["verification"] === undefined
+      ? undefined
+      : record(source["verification"], "config.verification");
+  const isolation =
+    verification?.["databaseIsolation"] === undefined
+      ? undefined
+      : record(
+          verification["databaseIsolation"],
+          "config.verification.databaseIsolation",
+        );
+  const databaseIsolationEnabled = isolation?.["enabled"] === true;
+  const postgres = postgresConfig(
+    source["postgres"],
+    "config.postgres",
+    source["environment"],
+    databaseIsolationEnabled,
+  );
   const browserOidc = browserOidcProfile(
     source["browserOidc"] ?? null,
     "config.browserOidc",
@@ -2218,6 +2659,14 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     pricingPolicy,
     telemetry,
     browserOidc,
+    databaseIsolation: Object.freeze({
+      enabled: isolation?.["enabled"] === true,
+    }),
+    kafkaNamespaceIsolation: verification?.["kafkaNamespaceIsolation"] === true,
+    unitCoverage:
+      verification?.["unitCoverage"] === undefined
+        ? null
+        : parseUnitCoverageVerification(verification["unitCoverage"]),
     nginxTransport,
     security: opaqueObject(source["security"], "config.security"),
     services: Object.freeze(typedServices),
@@ -2226,10 +2675,28 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
 
 export type ConfigParser = (text: string, sourcePath: string) => unknown;
 
+export type LoadedPlatformConfig = Readonly<{
+  config: PlatformConfig;
+  sourceSha256: string;
+  sourceBytes: Uint8Array;
+}>;
+
+export async function loadPlatformConfigWithSource(
+  path: string,
+  parse: ConfigParser = (text) => JSON.parse(text) as unknown,
+): Promise<LoadedPlatformConfig> {
+  const bytes = await readFile(path);
+  const text = bytes.toString("utf8");
+  return Object.freeze({
+    config: parsePlatformConfig(parse(text, path)),
+    sourceSha256: createHash("sha256").update(bytes).digest("hex"),
+    sourceBytes: bytes,
+  });
+}
+
 export async function loadPlatformConfig(
   path: string,
   parse: ConfigParser = (text) => JSON.parse(text) as unknown,
 ): Promise<PlatformConfig> {
-  const text = await readFile(path, "utf8");
-  return parsePlatformConfig(parse(text, path));
+  return (await loadPlatformConfigWithSource(path, parse)).config;
 }

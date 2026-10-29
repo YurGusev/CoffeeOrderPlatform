@@ -819,18 +819,27 @@ export async function loadPlatformConfig(
   return config;
 }
 
-export async function loadEncryptedSecrets(root = REPO_ROOT) {
-  const path = join(root, "secrets/platform.secrets.sops.yaml");
+export async function validateEncryptedSecretsDocument(
+  root,
+  document,
+  label = join(root, "secrets/platform.secrets.sops.yaml"),
+) {
   const schema = await readJson(
     join(root, "secrets/platform-secrets.schema.json"),
   );
-  const document = await readYaml(path);
-  validate(schema, document, path);
+  validate(schema, document, label);
   checkEncryptedLeaves(document);
   if (!ENC_RE.test(document.sops.mac))
-    fail("CONFIG-SOPS-MAC", `${path}: invalid encrypted SOPS MAC`);
+    fail("CONFIG-SOPS-MAC", `${label}: invalid encrypted SOPS MAC`);
   const rules = await readYaml(join(root, ".sops.yaml"));
   checkSopsRecipients(document, rules);
+  return document;
+}
+
+export async function loadEncryptedSecrets(root = REPO_ROOT) {
+  const path = join(root, "secrets/platform.secrets.sops.yaml");
+  const document = await readYaml(path);
+  await validateEncryptedSecretsDocument(root, document, path);
   verifySopsMacIfRequested(path);
   return document;
 }

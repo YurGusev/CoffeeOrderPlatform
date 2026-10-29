@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { access } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
@@ -16,6 +17,29 @@ void test("all 14 Node permission manifests match the connectivity policy; nativ
   const manifests = await validateAllPermissionManifests(root);
   assert.equal(manifests.length, 14);
   assert.equal(new Set(manifests.map((manifest) => manifest.runtime)).size, 14);
+  const databaseRuntimes = new Set([
+    "customer-service",
+    "catalog-service",
+    "catalog-supplier-sync",
+    "catalog-activation-worker",
+    "pricing-service",
+    "orders-service",
+    "orders-aroma-preparation",
+    "aroma-observer",
+    "aroma-convergence",
+    "aroma-gateway",
+  ]);
+  for (const manifest of manifests) {
+    assert.ok(
+      manifest.allowFsRead.includes("/run/coffee-launch/context.json"),
+      `${manifest.runtime} cannot read its launch context`,
+    );
+    assert.equal(
+      manifest.allowFsRead.includes("/app/config/database-ownership.json"),
+      databaseRuntimes.has(manifest.runtime),
+      `${manifest.runtime} database ownership read permission differs from its DB claim`,
+    );
+  }
   await assert.rejects(
     access(new URL("../../config/permissions/web.json", import.meta.url)),
     { code: "ENOENT" },
@@ -64,7 +88,9 @@ void test("enforce flags allow addons only for Kafka runtimes", async () => {
     ),
   );
   assert.equal(
-    telemetryFlags.some((flag) => flag.includes("openobserve")),
+    telemetryFlags.some(
+      (flag) => flag.startsWith("--allow-net=") && flag.includes("openobserve"),
+    ),
     false,
   );
   for (const endpoint of [
@@ -110,4 +136,48 @@ void test("Node Permission Model audit permits an operation while enforce denies
     enforced.stderr,
     /ERR_ACCESS_DENIED|Access to this API has been restricted/,
   );
+});
+
+void test("enforced runtimes can read only their exact launch context and claimed database ownership", async () => {
+  const ownershipPath = join(root, "config/database-ownership.json");
+  const contextPath = "/run/coffee-launch/context.json";
+  const source = `import {readFileSync} from 'node:fs';
+const ownershipPath=${JSON.stringify(ownershipPath)};
+let ownershipBytes=0;
+try { ownershipBytes=readFileSync(ownershipPath).byteLength; } catch {}
+process.stdout.write(JSON.stringify({ownershipBytes,
+  ownershipAllowed:process.permission.has('fs.read',ownershipPath),
+  contextAllowed:process.permission.has('fs.read',${JSON.stringify(contextPath)}),
+  siblingContextAllowed:process.permission.has('fs.read','/run/coffee-launch/other.json'),
+  toolchainAllowed:process.permission.has('fs.read',${JSON.stringify(join(root, "config/toolchain-versions.json"))})}));`;
+
+  const runChild = async (runtime) => {
+    const manifest = await validatePermissionManifest(root, runtime);
+    const child = spawnSync(
+      process.execPath,
+      [
+        ...permissionFlags(manifest, "enforce", root),
+        "--input-type=module",
+        "--eval",
+        source,
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+    assert.equal(child.status, 0, child.stderr);
+    return JSON.parse(child.stdout);
+  };
+
+  const orders = await runChild("orders-service");
+  assert.ok(orders.ownershipBytes > 0);
+  assert.equal(orders.ownershipAllowed, true);
+  assert.equal(orders.contextAllowed, true);
+  assert.equal(orders.siblingContextAllowed, false);
+  assert.equal(orders.toolchainAllowed, false);
+
+  const publicApi = await runChild("api-public");
+  assert.equal(publicApi.ownershipBytes, 0);
+  assert.equal(publicApi.ownershipAllowed, false);
+  assert.equal(publicApi.contextAllowed, true);
+  assert.equal(publicApi.siblingContextAllowed, false);
+  assert.equal(publicApi.toolchainAllowed, false);
 });

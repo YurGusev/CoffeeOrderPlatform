@@ -9,6 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -18,10 +19,14 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 import {
   parsePlatformConfig,
+  parseSecurityScanVerification,
   PlatformConfigError,
   RUNTIME_NAMES,
-} from "../../packages/platform-config/src/index.ts";
-import { loadPlatformConfig } from "../../scripts/config-lib.mjs";
+} from "../../packages/platform-config/dist/index.js";
+import {
+  loadPlatformConfig,
+  validateEncryptedSecretsDocument,
+} from "../../scripts/config-lib.mjs";
 import { readRoutes, render } from "../../tools/nginx/generate.mjs";
 import { validateAllPermissionManifests } from "../../scripts/permission-audit.mjs";
 
@@ -38,6 +43,7 @@ async function configRoot() {
   await cp(join(REPO_ROOT, "secrets"), join(root, "secrets"), {
     recursive: true,
   });
+  await chmod(join(root, "secrets/platform.secrets.sops.yaml"), 0o600);
   await cp(join(REPO_ROOT, "compose.yaml"), join(root, "compose.yaml"));
   await cp(join(REPO_ROOT, ".sops.yaml"), join(root, ".sops.yaml"));
   await mkdir(join(root, "apps/pricing-service/migrations"), {
@@ -113,6 +119,282 @@ void test("GREEN: platform parser preserves a null or fully explicit browser OID
       }),
     PlatformConfigError,
   );
+});
+
+void test("G16 sandbox verification stays optional, strict and outside runtime config", async () => {
+  const path = join(REPO_ROOT, "config/platform.yaml");
+  const document = parseYaml(await readFile(path, "utf8"), { json: true });
+  const defaultView = parsePlatformConfig(document);
+  const nullPolicyDocument = structuredClone(document);
+  nullPolicyDocument.verification = {
+    ...document.verification,
+    aromaSandbox: null,
+  };
+  assert.deepEqual(
+    parsePlatformConfig(nullPolicyDocument).services,
+    defaultView.services,
+  );
+  assert.deepEqual(
+    parsePlatformConfig(nullPolicyDocument).databaseIsolation,
+    defaultView.databaseIsolation,
+  );
+  assert.deepEqual(nullPolicyDocument.verification, {
+    ...document.verification,
+    aromaSandbox: null,
+  });
+  assert.deepEqual(defaultView.databaseIsolation, {
+    enabled: document.verification?.databaseIsolation?.enabled === true,
+  });
+  const absentIsolationDocument = structuredClone(document);
+  delete absentIsolationDocument.verification.databaseIsolation;
+  assert.deepEqual(
+    parsePlatformConfig(absentIsolationDocument).databaseIsolation,
+    { enabled: false },
+  );
+  assert.equal(Object.hasOwn(defaultView, "verification"), false);
+  assert.equal(
+    Object.hasOwn(defaultView.services["aroma-convergence"], "verification"),
+    false,
+  );
+  assert.ok(
+    document.verification.aromaSandbox === null ||
+      (document.verification.aromaSandbox !== null &&
+        typeof document.verification.aromaSandbox === "object"),
+  );
+  await loadPlatformConfig(REPO_ROOT);
+
+  const { publicKey } = generateKeyPairSync("ed25519");
+  const sandboxPolicy = {
+    mode: "controlled-live-existing-account",
+    origin: "https://controlled-live.example.invalid",
+    accountFingerprint: `sha256:${"a".repeat(64)}`,
+    credentialRefs: ["aroma.email", "aroma.password"],
+    existingAccountException: {
+      authority: "user-2026-10-23",
+      origin: "https://controlled-live.example.invalid",
+      accountFingerprint: `sha256:${"a".repeat(64)}`,
+    },
+    productionOrigins: [],
+    productionAccountFingerprints: [],
+    trustedApprovers: [
+      {
+        keyId: "test-key",
+        approver: "test-approver",
+        publicKeyPem: publicKey.export({ type: "spki", format: "pem" }),
+      },
+    ],
+    resourceLimits: { postgresMemoryMiB: 1024, postgresTmpfsMiB: 512 },
+  };
+  const configured = structuredClone(document);
+  configured.verification = {
+    ...document.verification,
+    aromaSandbox: sandboxPolicy,
+  };
+  const configuredView = parsePlatformConfig(configured);
+  assert.equal(Object.hasOwn(configuredView, "verification"), false);
+  assert.deepEqual(
+    configuredView.databaseIsolation,
+    defaultView.databaseIsolation,
+  );
+  assert.deepEqual(configuredView.services, defaultView.services);
+
+  const root = await configRoot();
+  try {
+    const configPath = join(root, "config/platform.yaml");
+    await writeFile(configPath, dumpYaml(configured), "utf8");
+    await loadPlatformConfig(root);
+    const schema = JSON.parse(
+      await readFile(join(root, "config/platform.schema.json"), "utf8"),
+    );
+    const nginxSchema = JSON.parse(
+      await readFile(join(root, "config/nginx-profile.schema.json"), "utf8"),
+    );
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    ajv.addSchema(nginxSchema);
+    const validate = ajv.compile(schema);
+    assert.equal(validate(configured), true, JSON.stringify(validate.errors));
+
+    const invalidDocuments = [
+      {
+        ...structuredClone(configured),
+        verification: { aromaSandbox: sandboxPolicy, unknown: true },
+      },
+      {
+        ...structuredClone(configured),
+        verification: { aromaSandbox: { ...sandboxPolicy, unknown: true } },
+      },
+      {
+        ...structuredClone(configured),
+        verification: {
+          aromaSandbox: { ...sandboxPolicy, mode: "vendor-sandbox" },
+        },
+      },
+      {
+        ...structuredClone(configured),
+        verification: {
+          aromaSandbox: {
+            ...sandboxPolicy,
+            credentialRefs: ["aroma.sandbox.email", "other.scope"],
+          },
+        },
+      },
+      {
+        ...structuredClone(configured),
+        verification: {
+          aromaSandbox: {
+            ...sandboxPolicy,
+            existingAccountException: undefined,
+          },
+        },
+      },
+      {
+        ...structuredClone(configured),
+        verification: {
+          aromaSandbox: {
+            ...sandboxPolicy,
+            resourceLimits: {
+              ...sandboxPolicy.resourceLimits,
+              postgresMemoryMiB: 2048,
+            },
+          },
+        },
+      },
+      {
+        ...structuredClone(configured),
+        verification: {
+          aromaSandbox: {
+            ...sandboxPolicy,
+            trustedApprovers: [
+              {
+                ...sandboxPolicy.trustedApprovers[0],
+                publicKeyPem:
+                  "-----BEGIN PRIVATE KEY-----\\nPLACEHOLDER\\n-----END PRIVATE KEY-----",
+              },
+            ],
+          },
+        },
+      },
+    ];
+    for (const invalid of invalidDocuments) {
+      assert.equal(validate(invalid), false);
+      await writeFile(configPath, dumpYaml(invalid), "utf8");
+      await assert.rejects(loadPlatformConfig(root), /CONFIG-SCHEMA/u);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+void test("G17 private socket endpoint requires an isolated non-production config", async () => {
+  const document = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+    { json: true },
+  );
+  const socketHost = `/dev/shm/coffee-g17-${"a".repeat(16)}`;
+  const standalone = structuredClone(document);
+  standalone.postgres.host = socketHost;
+  standalone.verification.databaseIsolation.enabled = true;
+  assert.equal(parsePlatformConfig(standalone).postgres.host, socketHost);
+
+  const schema = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/platform.schema.json"), "utf8"),
+  );
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  ajv.addSchema(
+    JSON.parse(
+      await readFile(
+        join(REPO_ROOT, "config/nginx-profile.schema.json"),
+        "utf8",
+      ),
+    ),
+  );
+  const validate = ajv.compile(schema);
+  assert.equal(validate(standalone), true, JSON.stringify(validate.errors));
+  const arbitrary = structuredClone(standalone);
+  arbitrary.postgres.host = "/tmp/coffee-g17-aaaaaaaaaaaaaaaa";
+  assert.equal(validate(arbitrary), false);
+  assert.throws(
+    () => parsePlatformConfig(arbitrary),
+    (error) =>
+      error instanceof PlatformConfigError &&
+      error.path === "config.postgres.host",
+  );
+
+  const isolationDisabled = structuredClone(standalone);
+  isolationDisabled.verification.databaseIsolation.enabled = false;
+  assert.throws(
+    () => parsePlatformConfig(isolationDisabled),
+    (error) =>
+      error instanceof PlatformConfigError &&
+      error.path === "config.postgres.host",
+  );
+  const production = structuredClone(standalone);
+  production.environment = "production";
+  production.telemetry.releaseDigest = `sha256:${"b".repeat(64)}`;
+  assert.throws(
+    () => parsePlatformConfig(production),
+    (error) =>
+      error instanceof PlatformConfigError &&
+      error.path === "config.postgres.host",
+  );
+  assert.equal(parsePlatformConfig(document).postgres.host, "coffee_postgres");
+  assert.equal(
+    parsePlatformConfig(document).postgres.bootstrapUsername,
+    "coffeeuser",
+  );
+  const wrongBootstrapUsername = structuredClone(document);
+  wrongBootstrapUsername.postgres.bootstrapUsername = "postgres";
+  assert.equal(validate(wrongBootstrapUsername), false);
+  assert.throws(
+    () => parsePlatformConfig(wrongBootstrapUsername),
+    (error) =>
+      error instanceof PlatformConfigError &&
+      error.path === "config.postgres.bootstrapUsername",
+  );
+});
+
+void test("G12 scanner policy is strict verification-only configuration", async () => {
+  const document = parseYaml(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+    { json: true },
+  );
+  const expected = {
+    enabled: true,
+    cpu: 2,
+    memoryMiB: 2048,
+    parallel: 1,
+    minimumFreeDiskGiB: 20,
+    maximumDatabaseAgeHours: 24,
+    egressRepositories: [
+      "ghcr.io/aquasecurity/trivy-db",
+      "ghcr.io/aquasecurity/trivy-java-db",
+    ],
+  };
+  assert.deepEqual(
+    parseSecurityScanVerification(document.verification.securityScan),
+    expected,
+  );
+  const parsed = parsePlatformConfig(document);
+  assert.equal(Object.hasOwn(parsed, "verification"), false);
+  assert.equal(Object.hasOwn(parsed, "securityScan"), false);
+  for (const changed of [
+    { ...expected, enabled: false },
+    { ...expected, cpu: 3 },
+    { ...expected, parallel: 2 },
+    { ...expected, maximumDatabaseAgeHours: 25 },
+    {
+      ...expected,
+      egressRepositories: [
+        ...expected.egressRepositories,
+        "mirror.gcr.io/aquasec/trivy-db",
+      ],
+    },
+    { ...expected, ignoreUnfixed: true },
+  ])
+    assert.throws(
+      () => parseSecurityScanVerification(changed),
+      PlatformConfigError,
+    );
 });
 
 void test("telemetry config is strict, immutable, and rejects missing or inconsistent budgets", async () => {
@@ -838,10 +1120,23 @@ void test("AROMA workflow: mutation switch is explicit, convergence-only and ind
     { json: true },
   );
   const runtime = document.services["aroma-convergence"];
-  assert.equal(runtime.mutationsEnabled, false);
+  if (runtime.mutationsEnabled) {
+    assert.equal(document.environment, "development");
+    assert.equal(
+      document.verification?.aromaSandbox?.mode,
+      "controlled-live-existing-account",
+    );
+  }
   assert.equal(runtime.mutationCapability, true);
   assert.equal(
     parsePlatformConfig(document).services["aroma-convergence"]
+      .mutationsEnabled,
+    runtime.mutationsEnabled,
+  );
+  const disabled = structuredClone(document);
+  disabled.services["aroma-convergence"].mutationsEnabled = false;
+  assert.equal(
+    parsePlatformConfig(disabled).services["aroma-convergence"]
       .mutationsEnabled,
     false,
   );
@@ -1346,10 +1641,92 @@ void test("GREEN: launch inventory is 14 Node runtimes plus native nginx with Ed
   });
 });
 
-void test("GREEN: canonical config and encrypted secrets pass the foundation checker", () => {
+void test("GREEN: canonical config and optional encrypted Tasty and OpenAI credentials pass the foundation checker", async () => {
   const result = run(REPO_ROOT);
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /15 runtimes/);
+  const document = parseYaml(
+    await readFile(
+      join(REPO_ROOT, "secrets/platform.secrets.sops.yaml"),
+      "utf8",
+    ),
+    { json: true },
+  );
+  const credentials = {
+    login: "ENC[AES256_GCM,data:dA==,iv:aQ==,tag:dA==,type:str]",
+    password: "ENC[AES256_GCM,data:cA==,iv:aQ==,tag:dA==,type:str]",
+  };
+  for (const environment of Object.values(document.environments)) {
+    environment.tasty = { ...credentials };
+  }
+  await validateEncryptedSecretsDocument(REPO_ROOT, document);
+  const environment = document.environments.development;
+  environment.openai = { apiKey: credentials.password };
+  await validateEncryptedSecretsDocument(REPO_ROOT, document);
+  for (const invalid of [
+    { apiKey: "plaintext-api-key" },
+    {},
+    { apiKey: credentials.password, token: credentials.password },
+  ]) {
+    environment.openai = invalid;
+    await assert.rejects(
+      validateEncryptedSecretsDocument(REPO_ROOT, document),
+      /CONFIG-SCHEMA/,
+    );
+  }
+  delete environment.openai;
+  await validateEncryptedSecretsDocument(REPO_ROOT, document);
+  for (const invalid of [
+    { ...credentials, login: "plaintext-login" },
+    { ...credentials, password: "plaintext-password" },
+    { login: credentials.login },
+    { password: credentials.password },
+    { ...credentials, token: credentials.password },
+  ]) {
+    document.environments.development.tasty = invalid;
+    await assert.rejects(
+      validateEncryptedSecretsDocument(REPO_ROOT, document),
+      /CONFIG-SCHEMA/,
+    );
+  }
+});
+
+void test("Tasty local input retries empty fields and sends credentials only to SOPS stdin", () => {
+  const result = spawnSync(
+    "python3",
+    [
+      "-c",
+      String.raw`
+import contextlib, getpass, io, json, runpy, subprocess
+from unittest.mock import patch
+
+path = "tools/config-bootstrap/store-tasty-credentials.py"
+output = io.StringIO()
+with patch("getpass.getpass", side_effect=["", "\0", "fixture-login", "", "fixture-password"]) as prompt, patch("subprocess.run") as store, contextlib.redirect_stdout(output):
+    runpy.run_path(path, run_name="__main__")
+assert prompt.call_count == 5
+store.assert_called_once()
+args, kwargs = store.call_args
+assert args[0][:3] == ["sops", "set", "--value-stdin"]
+assert args[0][-1] == '["environments"]["development"]["tasty"]'
+assert json.loads(kwargs["input"]) == {"login": "fixture-login", "password": "fixture-password"}
+assert kwargs["check"] is True
+assert kwargs["stdout"] == kwargs["stderr"] == subprocess.DEVNULL
+assert "fixture-login" not in str(args) + output.getvalue()
+assert "fixture-password" not in str(args) + output.getvalue()
+with patch("getpass.getpass", side_effect=getpass.GetPassWarning), patch("subprocess.run") as store:
+    try:
+        runpy.run_path(path, run_name="__main__")
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError("Hidden input must fail closed without a terminal")
+    store.assert_not_called()
+`,
+    ],
+    { cwd: REPO_ROOT, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });
 
 void test("GREEN: canonical source identity and Catalog staging authority are synchronized", async () => {

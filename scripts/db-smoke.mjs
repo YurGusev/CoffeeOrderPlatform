@@ -3,7 +3,7 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { replaceDatabase, readJson, validateRoleMap } from "./db-bootstrap.mjs";
+import { readJson, validateRoleMap } from "./db-bootstrap.mjs";
 import { exportedSQLContract } from "./db-live-proof.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -146,123 +146,178 @@ export function validateDeliverySqlContract(contract = exportedSQLContract()) {
 }
 
 function isPermissionDenied(error) {
-  return (
-    error?.code === "42501" ||
-    /permission denied|not authorized/i.test(String(error?.message ?? ""))
-  );
+  return error?.code === "42501";
 }
 
 async function closeClient(client) {
   if (client && typeof client.end === "function") await client.end();
 }
 
-async function verifyOwnWrite(client, runtime) {
-  const probe = `coffee_platform_db_smoke_probe_${runtime.role.replaceAll("-", "_")}`;
-  let transactionStarted = false;
-  try {
-    await client.query("BEGIN");
-    transactionStarted = true;
-    await client.query(
-      `CREATE TEMP TABLE "${probe}" (probe_id integer PRIMARY KEY, runtime text NOT NULL) ON COMMIT DROP`,
-    );
-    await client.query(
-      `INSERT INTO "${probe}" (probe_id, runtime) VALUES (1, $1)`,
-      [runtime.runtime],
-    );
-    const result = await client.query(
-      `SELECT count(*)::integer AS count FROM "${probe}"`,
-    );
-    if (
-      result.rows?.[0]?.count !== 1 &&
-      String(result.rows?.[0]?.count) !== "1"
-    )
-      fail(`${runtime.runtime}: own DB temporary write did not round-trip`);
-    await client.query("ROLLBACK");
-    transactionStarted = false;
-  } finally {
-    if (transactionStarted) {
-      try {
-        await client.query("ROLLBACK");
-      } catch {
-        /* preserve the original smoke failure */
-      }
-    }
-  }
-}
-
 export async function runDatabaseSmoke({
-  baseAdminUrl,
   roleMap,
   ownership,
-  rolePasswords,
+  databaseByOwner,
+  readRuntimeCredential,
   connectClient,
-  isolatedTarget,
+  host,
+  port,
+  expectedSystemIdentifier,
+  runId,
 }) {
-  validateSmokeTarget(isolatedTarget);
   validateRoleMap(roleMap, ownership);
   const structural = validateDeliverySqlContract();
   if (
-    !rolePasswords ||
-    typeof rolePasswords !== "object" ||
-    Array.isArray(rolePasswords)
+    typeof readRuntimeCredential !== "function" ||
+    typeof connectClient !== "function" ||
+    !databaseByOwner ||
+    typeof databaseByOwner !== "object" ||
+    !/^[a-z0-9][a-z0-9_-]{5,31}$/iu.test(runId ?? "") ||
+    typeof expectedSystemIdentifier !== "string" ||
+    !/^[0-9]{1,20}$/u.test(expectedSystemIdentifier) ||
+    typeof host !== "string" ||
+    !Number.isInteger(port) ||
+    port < 1 ||
+    port > 65535
   )
-    fail("role passwords must come from the scoped decrypted secret bundle");
+    fail("context-bound runtime smoke inputs are invalid");
   const cases = buildSmokeCases(roleMap, ownership);
-  const results = [];
+  const ownerByDatabase = new Map(
+    ownership.databases.map((database) => [database.name, database.owner]),
+  );
+  const expectedOwnerSet = ownership.databases
+    .map(({ owner }) => owner)
+    .sort((left, right) => left.localeCompare(right));
+  if (
+    JSON.stringify(Object.keys(databaseByOwner).sort()) !==
+    JSON.stringify(expectedOwnerSet)
+  )
+    fail("runtime owner database set is not canonical");
+  const roleByRuntime = new Map(
+    roleMap.databases.flatMap((database) =>
+      database.runtimeRoles.map((runtime) => [
+        runtime.runtime,
+        { ...runtime, owner: ownerByDatabase.get(database.name) },
+      ]),
+    ),
+  );
+  const ownOperations = [];
+  const foreignConnectionDenials = [];
   for (const smokeCase of cases) {
-    const password = rolePasswords[smokeCase.role];
-    if (typeof password !== "string" || password.length === 0)
-      fail(`${smokeCase.runtime}: missing scoped role secret`);
-    const targetDatabase = `${isolatedTarget.databasePrefix}${smokeCase.database.replace("coffee_platform_", "")}`;
+    const runtime = roleByRuntime.get(smokeCase.runtime);
+    const owner = runtime?.owner;
+    const databaseOwner = ownerByDatabase.get(smokeCase.database);
+    const database = databaseByOwner[databaseOwner];
+    const expectedDatabase = databaseOwner
+      ? `coffee_verify_${runId.toLowerCase().replace("-", "_")}_${databaseOwner}`
+      : null;
+    if (
+      !owner ||
+      !databaseOwner ||
+      typeof database !== "string" ||
+      database !== expectedDatabase
+    )
+      fail("runtime owner database target is invalid");
+    const credential = await readRuntimeCredential({
+      owner,
+      runtime: smokeCase.runtime,
+      expectedSystemIdentifier,
+    });
+    if (
+      credential?.username !== smokeCase.role ||
+      typeof credential.password !== "string" ||
+      credential.password.length === 0 ||
+      credential.password.includes("\0")
+    )
+      fail("runtime credential does not match the canonical role claim");
     let client;
     try {
       client = await connectClient({
         runtime: smokeCase.runtime,
         role: smokeCase.role,
-        database: targetDatabase,
-        password,
-        url: replaceDatabase(baseAdminUrl, targetDatabase, {
-          user: smokeCase.role,
-          password,
-        }),
+        database,
+        host,
+        port,
+        username: credential.username,
+        password: credential.password,
       });
-      if (smokeCase.kind === "own-write") {
-        await verifyOwnWrite(client, smokeCase);
+      if (smokeCase.kind === "own-write" && databaseOwner === owner) {
+        const identity = await client.query(
+          "SELECT current_database() AS database, current_user AS role",
+        );
+        if (
+          identity.rows?.[0]?.database !== database ||
+          identity.rows?.[0]?.role !== smokeCase.role
+        )
+          fail("runtime connected to an unexpected database identity");
+        const allowedTable = Object.entries(runtime.tables).find(([, grants]) =>
+          grants.includes("SELECT"),
+        )?.[0];
+        if (!allowedTable || !/^[a-z][a-z0-9_]*$/u.test(allowedTable))
+          fail("runtime role has no canonical SELECT probe target");
+        const schema = roleMap.databases.find(
+          (entry) => entry.name === smokeCase.database,
+        )?.schema;
+        if (!schema || !/^[a-z][a-z0-9_]*$/u.test(schema))
+          fail("runtime role schema is invalid");
+        await client.query(
+          `SELECT 1 FROM "${schema}"."${allowedTable}" LIMIT 0`,
+        );
+        ownOperations.push({
+          runtime: smokeCase.runtime,
+          owner,
+          database,
+          role: smokeCase.role,
+          schema,
+          table: allowedTable,
+          operation: "SELECT",
+          outcome: "allowed",
+        });
       } else {
-        fail(`${smokeCase.runtime}: foreign database accepted a connection`);
+        if (
+          smokeCase.kind !== "foreign-connect-denied" ||
+          databaseOwner === owner
+        )
+          fail("runtime smoke case does not match owner target");
+        fail("foreign database accepted a runtime connection");
       }
-      results.push({ ...smokeCase, outcome: "unexpected-success" });
     } catch (error) {
       if (
         smokeCase.kind !== "foreign-connect-denied" ||
         !isPermissionDenied(error)
       )
         throw error;
-      results.push({ ...smokeCase, outcome: "permission-denied" });
+      foreignConnectionDenials.push({
+        runtime: smokeCase.runtime,
+        owner,
+        databaseOwner,
+        role: smokeCase.role,
+        database,
+        sqlState: "42501",
+        outcome: "permission-denied",
+      });
     } finally {
       await closeClient(client);
     }
   }
   return {
-    runId: isolatedTarget.runId,
+    runId,
     structural,
-    ownWriteCount: results.filter(
-      (result) =>
-        result.kind === "own-write" && result.outcome === "unexpected-success",
-    ).length,
-    foreignDeniedCount: results.filter(
-      (result) =>
-        result.kind === "foreign-connect-denied" &&
-        result.outcome === "permission-denied",
-    ).length,
-    caseCount: results.length,
+    ownOperations,
+    foreignConnectionDenials,
+    ownOperationCount: ownOperations.length,
+    foreignDeniedCount: foreignConnectionDenials.length,
+    caseCount: ownOperations.length + foreignConnectionDenials.length,
   };
 }
 
 async function main(argv) {
   const roleMap = await readJson(DEFAULT_ROLE_MAP);
   const ownership = await readJson(DEFAULT_OWNERSHIP);
-  if (argv.length === 0 || argv.includes("--plan")) {
+  const contextPath = process.env.COFFEE_LAUNCH_CONTEXT_FILE;
+  if (
+    (argv.length === 1 && argv[0] === "--plan") ||
+    (argv.length === 0 && !contextPath)
+  ) {
     console.log(
       JSON.stringify(
         {
@@ -275,41 +330,78 @@ async function main(argv) {
     );
     return;
   }
-  if (!argv.includes("--execute"))
+  if (argv.length !== 0 || !contextPath)
     fail(
-      "use --plan for offline cases or --execute for an explicitly approved isolated target",
+      "live smoke requires the launch runner context; --execute is unsupported",
     );
-  const isolatedTarget = validateSmokeTarget({
-    enabled: process.env.COFFEE_DB_SMOKE_ENABLED === "true",
-    runId: process.env.COFFEE_DB_SMOKE_RUN_ID,
-    databasePrefix: process.env.COFFEE_DB_SMOKE_DATABASE_PREFIX,
-  });
-  const baseAdminUrl = process.env.COFFEE_DB_ADMIN_URL;
-  if (!baseAdminUrl) fail("COFFEE_DB_ADMIN_URL is required for live smoke");
-  let rolePasswords;
-  try {
-    rolePasswords = JSON.parse(process.env.COFFEE_DB_ROLE_PASSWORDS_JSON ?? "");
-  } catch (error) {
-    fail(`scoped role secret bundle is not valid JSON (${error.message})`);
-  }
   const { Client } = await import("pg").catch(() => {
     fail(
-      "the pg dependency is required only for --execute; no network was attempted",
+      "the pg dependency is required only for context-bound live smoke; no network was attempted",
     );
   });
-  const result = await runDatabaseSmoke({
-    baseAdminUrl,
-    roleMap,
-    ownership,
-    rolePasswords,
-    isolatedTarget,
-    connectClient: async ({ url }) => {
-      const client = new Client(url);
-      await client.connect();
-      return client;
+  const { loadPlatformConfig } = await import("./config-lib.mjs");
+  const config = await loadPlatformConfig(REPO_ROOT);
+  const { runG09DatabaseBoundaryStage } =
+    await import("../verification/launch/v1/scenarios/migrations.mjs");
+  await runG09DatabaseBoundaryStage({
+    root: REPO_ROOT,
+    contextPath,
+    verifyBoundaries: async ({
+      databases,
+      expectedSystemIdentifier,
+      context,
+    }) => {
+      const databaseByOwner = Object.fromEntries(
+        databases.map(({ owner, database }) => [owner, database]),
+      );
+      const runtimeCredentials = new Map();
+      return runDatabaseSmoke({
+        roleMap,
+        ownership,
+        databaseByOwner,
+        runId: context.runId,
+        expectedSystemIdentifier,
+        host: config.postgres.host,
+        port: config.postgres.port,
+        readRuntimeCredential: async ({ owner, runtime: runtimeName }) => {
+          if (!runtimeCredentials.has(runtimeName)) {
+            const { readG08MigrationCredential } =
+              await import("../tools/config-bootstrap/index.mjs");
+            runtimeCredentials.set(
+              runtimeName,
+              await readG08MigrationCredential({
+                root: REPO_ROOT,
+                contextPath,
+                owner,
+                kind: "runtime",
+                runtime: runtimeName,
+                expectedSystemIdentifier,
+              }),
+            );
+          }
+          return runtimeCredentials.get(runtimeName);
+        },
+        connectClient: async ({ host, port, database, username, password }) => {
+          const client = new Client({
+            host,
+            port,
+            database,
+            user: username,
+            password,
+            ssl: false,
+            connectionTimeoutMillis: 3_000,
+          });
+          try {
+            await client.connect();
+            return client;
+          } catch (error) {
+            await client.end().catch(() => {});
+            throw error;
+          }
+        },
+      });
     },
   });
-  console.log(JSON.stringify(result, null, 2));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url))

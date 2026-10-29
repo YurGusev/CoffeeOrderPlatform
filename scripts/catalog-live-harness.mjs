@@ -11,6 +11,7 @@ import {
   applyMigrations,
   migrationChecksum,
 } from "../packages/platform-migrations/dist/index.js";
+import { validateLaunchDatabaseIdentity } from "../packages/platform-config/dist/index.js";
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
@@ -32,13 +33,13 @@ const pool = Object.freeze({
 async function docker(...args) {
   return exec("docker", args, { timeout: 120_000 });
 }
-async function waitForPostgres(port) {
+async function waitForPostgres(port, targetDatabase = databaseName) {
   let last;
   for (let attempt = 0; attempt < 80; attempt++) {
     const client = new Client({
       host: "127.0.0.1",
       port,
-      database: databaseName,
+      database: targetDatabase,
       user: "postgres",
       password,
       ssl: false,
@@ -214,92 +215,177 @@ async function proveMigrations(database, adminClient, set) {
   };
 }
 
-export async function withCatalogPostgres(run) {
+export async function withCatalogPostgres(
+  run,
+  { skipCatalogInitialization = false, launchIdentity } = {},
+) {
+  assert.equal(typeof run, "function");
+  assert.equal(typeof skipCatalogInitialization, "boolean");
+  const validatedLaunchIdentity =
+    launchIdentity === undefined
+      ? undefined
+      : validateLaunchDatabaseIdentity(launchIdentity);
+  assert.ok(
+    !skipCatalogInitialization || validatedLaunchIdentity,
+    "Catalog initialization may only be skipped for a validated launch identity",
+  );
   const name = `coffee-catalog-${process.pid}-${randomBytes(4).toString("hex")}`;
+  const runLabelKey = "io.coffeeorderplatform.catalog-live-harness.run";
+  const runLabel = validatedLaunchIdentity
+    ? `${validatedLaunchIdentity.runId}-${randomBytes(8).toString("hex")}`
+    : `${name}-${randomBytes(8).toString("hex")}`;
+  const targetDatabase = skipCatalogInitialization ? "postgres" : databaseName;
   let adminDatabase;
   let runtimeDatabase;
   let adminClient;
   let result;
+  let containerId;
+  let containerIdentity;
+  let inspectContainer;
+  let assertOwnedContainer;
+  let launchAttempted = false;
+  let primaryError;
+  let cleanupError;
+  let containerRemoved = false;
   let teardownMs;
   try {
+    launchAttempted = true;
     await docker(
       "run",
       "--detach",
       "--rm",
       "--name",
       name,
+      "--label",
+      `${runLabelKey}=${runLabel}`,
       "--env",
       `POSTGRES_PASSWORD=${password}`,
       "--env",
-      `POSTGRES_DB=${databaseName}`,
+      `POSTGRES_DB=${targetDatabase}`,
       "--publish",
       "127.0.0.1::5432",
       image,
-    );
-    const mapped = await docker("port", name, "5432/tcp");
-    const match = /:(\d+)\s*$/u.exec(mapped.stdout);
-    if (match === null)
-      throw new Error(
-        `cannot determine disposable PostgreSQL port: ${mapped.stdout}`,
+    ).then(({ stdout }) => {
+      const reportedId = stdout.trim();
+      if (!/^[0-9a-f]{64}$/u.test(reportedId))
+        throw new Error("disposable PostgreSQL container CID is unavailable");
+      containerId = reportedId;
+    });
+    inspectContainer = async () => {
+      const format = `{{.Id}}|{{.Name}}|{{.Image}}|{{.Config.Image}}|{{index .Config.Labels "${runLabelKey}"}}|{{json (index .NetworkSettings.Ports "5432/tcp")}}`;
+      const { stdout } = await docker(
+        "inspect",
+        "--format",
+        format,
+        containerId,
       );
-    const port = Number(match[1]);
-    await waitForPostgres(port);
+      const fields = stdout.trim().split("|");
+      assert.equal(fields.length, 6, "selected container identity fields");
+      const bindings = JSON.parse(fields[5]);
+      assert.ok(Array.isArray(bindings));
+      assert.equal(bindings.length, 1, "one published PostgreSQL port");
+      return {
+        id: fields[0],
+        name: fields[1],
+        imageId: fields[2],
+        configuredImage: fields[3],
+        runLabel: fields[4],
+        hostIp: bindings[0]?.HostIp,
+        hostPort: bindings[0]?.HostPort,
+      };
+    };
+    assertOwnedContainer = (actual, expected) => {
+      assert.equal(actual.id, containerId, "disposable PostgreSQL CID drift");
+      assert.equal(actual.name, `/${name}`, "disposable PostgreSQL name drift");
+      assert.match(actual.imageId, /^sha256:[0-9a-f]{64}$/u);
+      assert.equal(actual.configuredImage, image, "PostgreSQL image pin drift");
+      assert.equal(actual.runLabel, runLabel, "disposable run label drift");
+      assert.equal(
+        actual.hostIp,
+        "127.0.0.1",
+        "PostgreSQL must bind loopback only",
+      );
+      assert.match(actual.hostPort, /^[1-9][0-9]*$/u);
+      if (expected) assert.deepEqual(actual, expected);
+    };
+    containerIdentity = await inspectContainer();
+    assertOwnedContainer(containerIdentity);
+    const port = Number(containerIdentity.hostPort);
+    await waitForPostgres(port, targetDatabase);
+    assertOwnedContainer(await inspectContainer(), containerIdentity);
     adminClient = new Client({
       host: "127.0.0.1",
       port,
-      database: databaseName,
+      database: targetDatabase,
       user: "postgres",
       password,
       ssl: false,
     });
     await adminClient.connect();
-    const runtimePassword = `runtime-${randomBytes(12).toString("hex")}`;
-    await adminClient.query(
-      `CREATE ROLE coffee_catalog_import_rw LOGIN PASSWORD '${runtimePassword}'`,
-    );
-    adminDatabase = createDatabase({
-      owner: "catalog-migrator-proof",
-      database: databaseName,
-      allowedDatabase: databaseName,
-      host: "127.0.0.1",
-      port,
-      user: "postgres",
-      password,
-      ssl: false,
-      pool,
-      shutdownGraceMs: 40_000,
-    });
-    await adminDatabase.resource.start(new AbortController().signal);
-    const set = await migrations();
-    const { firstApply, secondApply, migrationProof } = await proveMigrations(
-      adminDatabase,
-      adminClient,
-      set,
-    );
-    runtimeDatabase = createDatabase({
-      owner: "catalog-supplier-sync",
-      database: databaseName,
-      allowedDatabase: databaseName,
-      host: "127.0.0.1",
-      port,
-      user: "coffee_catalog_import_rw",
-      password: runtimePassword,
-      ssl: false,
-      pool,
-      shutdownGraceMs: 40_000,
-    });
-    await runtimeDatabase.resource.start(new AbortController().signal);
+    let firstApply = [];
+    let secondApply = [];
+    let migrationProof;
+    let runtimePassword;
+    if (!skipCatalogInitialization) {
+      assertOwnedContainer(await inspectContainer(), containerIdentity);
+      runtimePassword = `runtime-${randomBytes(12).toString("hex")}`;
+      await adminClient.query(
+        `CREATE ROLE coffee_catalog_import_rw LOGIN PASSWORD '${runtimePassword}'`,
+      );
+      adminDatabase = createDatabase({
+        owner: "catalog-migrator-proof",
+        database: databaseName,
+        allowedDatabase: databaseName,
+        host: "127.0.0.1",
+        port,
+        user: "postgres",
+        password,
+        ssl: false,
+        pool,
+        shutdownGraceMs: 40_000,
+      });
+      await adminDatabase.resource.start(new AbortController().signal);
+      const set = await migrations();
+      ({ firstApply, secondApply, migrationProof } = await proveMigrations(
+        adminDatabase,
+        adminClient,
+        set,
+      ));
+      runtimeDatabase = createDatabase({
+        owner: "catalog-supplier-sync",
+        database: databaseName,
+        allowedDatabase: databaseName,
+        host: "127.0.0.1",
+        port,
+        user: "coffee_catalog_import_rw",
+        password: runtimePassword,
+        ssl: false,
+        pool,
+        shutdownGraceMs: 40_000,
+      });
+      await runtimeDatabase.resource.start(new AbortController().signal);
+    }
+    assertOwnedContainer(await inspectContainer(), containerIdentity);
     result = await run({
-      database: runtimeDatabase,
+      ...(runtimeDatabase ? { database: runtimeDatabase } : {}),
       adminClient,
       firstApply,
       secondApply,
-      migrationProof,
+      ...(migrationProof ? { migrationProof } : {}),
       container: name,
+      containerId,
+      containerImageId: containerIdentity.imageId,
       port,
-      runtimePassword,
-      databaseName,
+      ...(runtimePassword ? { runtimePassword } : {}),
+      databaseName: targetDatabase,
+      catalogInitialized: !skipCatalogInitialization,
+      runLabel,
+      ...(validatedLaunchIdentity
+        ? { launchIdentity: validatedLaunchIdentity }
+        : {}),
     });
+  } catch (error) {
+    primaryError = error;
   } finally {
     const teardownStart = performance.now();
     if (runtimeDatabase !== undefined)
@@ -312,18 +398,59 @@ export async function withCatalogPostgres(run) {
         .catch(() => undefined);
     if (adminClient !== undefined)
       await adminClient.end().catch(() => undefined);
-    await docker("rm", "--force", "--volumes", name);
-    assert.equal(
-      (
-        await docker("ps", "--all", "--quiet", "--filter", `name=^/${name}$`)
-      ).stdout.trim(),
-      "",
-    );
+    if (launchAttempted && !containerId) {
+      cleanupError = new Error(
+        "disposable PostgreSQL launch outcome is unknown; no name-based cleanup attempted",
+      );
+    } else if (containerId) {
+      try {
+        const idFilter = `id=${String(containerId)}`;
+        const listed = await docker(
+          "ps",
+          "--all",
+          "--quiet",
+          "--no-trunc",
+          "--filter",
+          idFilter,
+        );
+        const ids = listed.stdout.trim().split(/\s+/u).filter(Boolean);
+        if (ids.length === 0) {
+          containerRemoved = true;
+        } else {
+          assert.deepEqual(ids, [containerId], "exact container ID lookup");
+          assert.equal(typeof inspectContainer, "function");
+          assert.equal(typeof assertOwnedContainer, "function");
+          const currentIdentity = await inspectContainer();
+          assertOwnedContainer(currentIdentity, containerIdentity);
+          await docker("rm", "--force", "--volumes", containerId);
+          const after = await docker(
+            "ps",
+            "--all",
+            "--quiet",
+            "--no-trunc",
+            "--filter",
+            idFilter,
+          );
+          assert.equal(after.stdout.trim(), "", "exact container CID remains");
+          containerRemoved = true;
+        }
+      } catch (error) {
+        cleanupError = error;
+      }
+    }
     teardownMs = performance.now() - teardownStart;
-    assert.ok(teardownMs < 40_000, "teardown exceeded shutdown budget");
+    if (teardownMs >= 40_000)
+      cleanupError ??= new Error("teardown exceeded shutdown budget");
   }
+  if (primaryError && cleanupError)
+    throw new AggregateError(
+      [primaryError, cleanupError],
+      "catalog PostgreSQL callback failed and owned-container cleanup was not verified",
+    );
+  if (primaryError) throw primaryError;
+  if (cleanupError) throw cleanupError;
   return {
     ...result,
-    cleanup: { containerRemoved: true, teardownMs, shutdownBudgetMs: 40_000 },
+    cleanup: { containerRemoved, teardownMs, shutdownBudgetMs: 40_000 },
   };
 }

@@ -9,7 +9,9 @@
     "/app/node_modules",
     "/app/packages",
     "/app/package.json",
-    "/run/secrets/coffee-platform.yaml"
+    "/run/secrets/coffee-platform.yaml",
+    "/run/coffee-launch/context.json",
+    "/app/config/database-ownership.json"
   ],
   "allowFsWrite": [],
   "allowChildProcess": false,

@@ -9,6 +9,7 @@
     "schemaVersion",
     "environment",
     "toolchainRef",
+    "verification",
     "platform",
     "postgres",
     "kafka",
@@ -29,6 +30,112 @@
     "toolchainRef": {
       "type": "string",
       "const": "config/toolchain-versions.json"
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aromaSandbox", "securityScan", "unitCoverage"],
+      "properties": {
+        "aromaSandbox": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/aromaSandboxVerification" }
+          ]
+        },
+        "securityScan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled",
+            "cpu",
+            "memoryMiB",
+            "parallel",
+            "minimumFreeDiskGiB",
+            "maximumDatabaseAgeHours",
+            "egressRepositories"
+          ],
+          "properties": {
+            "enabled": { "const": true },
+            "cpu": { "const": 2 },
+            "memoryMiB": { "const": 2048 },
+            "parallel": { "const": 1 },
+            "minimumFreeDiskGiB": { "const": 20 },
+            "maximumDatabaseAgeHours": { "const": 24 },
+            "egressRepositories": {
+              "const": [
+                "ghcr.io/aquasecurity/trivy-db",
+                "ghcr.io/aquasecurity/trivy-java-db"
+              ]
+            }
+          }
+        },
+        "databaseIsolation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": { "enabled": { "type": "boolean" } }
+        },
+        "kafkaNamespaceIsolation": { "type": "boolean", "default": false },
+        "unitCoverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["thresholds", "criticalModules", "testFiles"],
+          "properties": {
+            "thresholds": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["lines", "functions", "branches"],
+              "properties": {
+                "lines": { "const": 90 },
+                "functions": { "const": 90 },
+                "branches": { "const": 85 }
+              }
+            },
+            "criticalModules": {
+              "type": "array",
+              "minItems": 16,
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "sourceRoots", "coverageRoots", "format"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+                  "sourceRoots": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^(packages|apps|tools)/[a-z0-9-]+/src$|^tools/config-bootstrap$"
+                    }
+                  },
+                  "coverageRoots": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^(packages|apps)/[a-z0-9-]+/dist$|^tools/config-bootstrap$"
+                    }
+                  },
+                  "format": { "enum": ["js", "mjs"] }
+                }
+              }
+            },
+            "testFiles": {
+              "type": "array",
+              "minItems": 60,
+              "maxItems": 60,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^(?:(?:tests|packages)/[a-z0-9-]+(?:/[a-z0-9-]+)*\\.test\\.mjs|verification/launch/v1/scenarios/backup-restore\\.test\\.mjs)$"
+              }
+            }
+          }
+        }
+      }
     },
     "platform": { "$ref": "#/$defs/platform" },
     "postgres": { "$ref": "#/$defs/postgres" },
@@ -240,6 +347,106 @@
     }
   ],
   "$defs": {
+    "aromaSandboxVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "origin",
+        "accountFingerprint",
+        "credentialRefs",
+        "existingAccountException",
+        "productionOrigins",
+        "productionAccountFingerprints",
+        "trustedApprovers",
+        "resourceLimits"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "const": "controlled-live-existing-account"
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 512,
+          "pattern": "^https://[^/?#\\s]+$"
+        },
+        "accountFingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "credentialRefs": {
+          "type": "array",
+          "const": ["aroma.email", "aroma.password"]
+        },
+        "existingAccountException": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["authority", "origin", "accountFingerprint"],
+          "properties": {
+            "authority": { "type": "string", "const": "user-2026-10-23" },
+            "origin": {
+              "type": "string",
+              "minLength": 9,
+              "maxLength": 512,
+              "pattern": "^https://[^/?#\\s]+$"
+            },
+            "accountFingerprint": {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            }
+          }
+        },
+        "productionOrigins": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 9,
+            "maxLength": 512,
+            "pattern": "^https://[^/?#\\s]+$"
+          }
+        },
+        "productionAccountFingerprints": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+        },
+        "trustedApprovers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["keyId", "approver", "publicKeyPem"],
+            "properties": {
+              "keyId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+              "approver": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,64}$"
+              },
+              "publicKeyPem": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^-----BEGIN PUBLIC KEY-----\\r?\\n[A-Za-z0-9+/=\\r\\n\\t ]+-----END PUBLIC KEY-----\\s*$"
+              }
+            }
+          }
+        },
+        "resourceLimits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["postgresMemoryMiB", "postgresTmpfsMiB"],
+          "properties": {
+            "postgresMemoryMiB": { "type": "integer", "const": 1024 },
+            "postgresTmpfsMiB": { "type": "integer", "const": 512 }
+          }
+        }
+      }
+    },
     "telemetry": {
       "type": "object",
       "additionalProperties": false,
@@ -939,6 +1146,7 @@
       "additionalProperties": false,
       "required": [
         "host",
+        "bootstrapUsername",
         "port",
         "sslMode",
         "maxConnections",
@@ -946,7 +1154,14 @@
         "rolloutReplicas"
       ],
       "properties": {
-        "host": { "type": "string", "const": "coffee_postgres" },
+        "host": {
+          "type": "string",
+          "anyOf": [
+            { "const": "coffee_postgres" },
+            { "pattern": "^/dev/shm/coffee-g17-[a-f0-9]{16,64}$" }
+          ]
+        },
+        "bootstrapUsername": { "type": "string", "const": "coffeeuser" },
         "port": { "type": "integer", "const": 5432 },
         "sslMode": {
           "type": "string",

@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://coffeeorderplatform.local/schemas/database-role-map.v1.schema.json",
+  "$id": "https://coffeeorderplatform.local/schemas/database-role-map.v2.schema.json",
   "type": "object",
   "additionalProperties": false,
   "required": ["$schema", "schemaVersion", "authorityRef", "databases"],
   "properties": {
     "$schema": { "const": "./database-role-map.schema.json" },
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "authorityRef": { "const": "docs/launch/05_DATA_OWNERSHIP.md" },
     "databases": {
       "type": "array",
@@ -60,6 +60,46 @@
             "minItems": 1,
             "uniqueItems": true,
             "items": { "$ref": "#/$defs/privilege" }
+          }
+        },
+        "columnUpdates": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "supplier_snapshots": {
+              "const": [
+                "state",
+                "failure_code",
+                "declared_batch_count",
+                "declared_product_count",
+                "declared_variant_count",
+                "declared_offer_count",
+                "content_hash",
+                "received_at"
+              ]
+            },
+            "source_identities": {
+              "const": ["last_seen_snapshot_ref", "state"]
+            },
+            "orders": {
+              "const": [
+                "status",
+                "version",
+                "customer_ref",
+                "customer_version",
+                "customer_display_name",
+                "customer_state",
+                "customer_state_proof_hash",
+                "currency",
+                "confirmed_at",
+                "updated_at",
+                "last_modified_by_actor_ref"
+              ]
+            },
+            "convergence_work": {
+              "const": ["dirty", "next_attempt_at", "updated_at"]
+            }
           }
         }
       }

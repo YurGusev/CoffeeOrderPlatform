@@ -133,6 +133,35 @@ fixture `aroma.email`, `aroma.password`, `edge.oidcClientSecret` и
 `telemetry.exporterToken` остаются **не provisioned для внешних систем**;
 наличие encrypted поля не доказывает доступ к провайдеру.
 
+### Учётные данные Tasty Coffee
+
+Логин и пароль Tasty Coffee хранятся только в
+`secrets/platform.secrets.sops.yaml` под
+`environments.development.tasty.login` и `environments.development.tasty.password`.
+Секция `tasty` необязательна; если она есть, оба поля обязательны и зашифрованы.
+Runtime не получает эти данные: `secretRefs` и outbound permissions не меняются.
+Для операторской проверки входа `readTastyCredentials` из trusted
+`config-bootstrap` возвращает только логин и пароль выбранного окружения в памяти.
+
+Для локального ввода выполнить из корня репозитория следующую команду.
+Оба значения вводятся без отображения, передаются SOPS через stdin и не попадают
+в аргументы процесса, shell history или plaintext-файл. Команда заменяет только
+ветку `environments.development.tasty`; значения AROMA не меняются. После каждого
+поля нажать Enter; при пустом значении программа запросит это поле повторно.
+
+```bash
+python3 tools/config-bootstrap/store-tasty-credentials.py
+```
+
+Только после сообщения об успешной записи выполнить проверки:
+
+```bash
+SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm config:check
+SOPS_AGE_KEY_FILE=/home/yurgusev/.config/sops/age/keys.txt pnpm security:secrets
+```
+
+Успех этих проверок подтверждает структуру и SOPS MAC, но не вход в Tasty Coffee.
+
 ## PostgreSQL
 
 Безопасный offline plan не подключается к серверу:

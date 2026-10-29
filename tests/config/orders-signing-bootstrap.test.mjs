@@ -176,12 +176,12 @@ void test("isolated Compose fixture supplies the scoped Orders signer that match
     "utf8",
   );
   assert.ok(
-    /"security\.ordersServiceDelegationSigningPrivateKey": ordersService\.privateKey/u.test(
+    /"security\.ordersServiceDelegationSigningPrivateKey":\s*ordersService\.privateKey/u.test(
       source,
     ),
   );
   assert.ok(
-    /"security\.serviceVerificationKeys\.orders-service": ordersService\.verificationKeys/u.test(
+    /"security\.serviceVerificationKeys\.orders-service":\s*ordersService\.verificationKeys/u.test(
       source,
     ),
   );

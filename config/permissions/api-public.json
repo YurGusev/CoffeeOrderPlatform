@@ -14,7 +14,8 @@
     "/app/node_modules",
     "/app/packages",
     "/app/package.json",
-    "/run/secrets/coffee-platform.yaml"
+    "/run/secrets/coffee-platform.yaml",
+    "/run/coffee-launch/context.json"
   ],
   "allowFsWrite": [],
   "allowChildProcess": false,

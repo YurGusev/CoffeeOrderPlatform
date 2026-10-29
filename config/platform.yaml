@@ -2,6 +2,188 @@ $schema: ./platform.schema.json
 schemaVersion: 1
 environment: development
 toolchainRef: config/toolchain-versions.json
+verification:
+  aromaSandbox: null
+  securityScan:
+    enabled: true
+    cpu: 2
+    memoryMiB: 2048
+    parallel: 1
+    minimumFreeDiskGiB: 20
+    maximumDatabaseAgeHours: 24
+    egressRepositories:
+      - ghcr.io/aquasecurity/trivy-db
+      - ghcr.io/aquasecurity/trivy-java-db
+  databaseIsolation:
+    enabled: false
+  kafkaNamespaceIsolation: false
+  unitCoverage:
+    thresholds:
+      lines: 90
+      functions: 90
+      branches: 85
+    criticalModules:
+      - id: platform-config
+        sourceRoots: [packages/platform-config/src]
+        coverageRoots: [packages/platform-config/dist]
+        format: js
+      - id: trusted-config-bootstrap
+        sourceRoots: [tools/config-bootstrap]
+        coverageRoots: [tools/config-bootstrap]
+        format: mjs
+      - id: platform-runtime
+        sourceRoots: [packages/platform-runtime/src]
+        coverageRoots: [packages/platform-runtime/dist]
+        format: js
+      - id: persistence-foundation
+        sourceRoots:
+          [packages/platform-database/src, packages/platform-migrations/src]
+        coverageRoots:
+          [packages/platform-database/dist, packages/platform-migrations/dist]
+        format: js
+      - id: durable-delivery
+        sourceRoots:
+          [
+            packages/platform-outbox/src,
+            packages/platform-inbox/src,
+            packages/platform-idempotency/src,
+          ]
+        coverageRoots:
+          [
+            packages/platform-outbox/dist,
+            packages/platform-inbox/dist,
+            packages/platform-idempotency/dist,
+          ]
+        format: js
+      - id: kafka-runtime
+        sourceRoots: [packages/platform-kafka-runtime/src]
+        coverageRoots: [packages/platform-kafka-runtime/dist]
+        format: js
+      - id: security-trust
+        sourceRoots:
+          [packages/platform-security/src, packages/platform-http/src]
+        coverageRoots:
+          [packages/platform-security/dist, packages/platform-http/dist]
+        format: js
+      - id: customer-service
+        sourceRoots: [apps/customer-service/src]
+        coverageRoots: [apps/customer-service/dist]
+        format: js
+      - id: catalog-service
+        sourceRoots:
+          [
+            apps/catalog-service/src,
+            apps/catalog-supplier-sync/src,
+            apps/catalog-activation-worker/src,
+          ]
+        coverageRoots:
+          [
+            apps/catalog-service/dist,
+            apps/catalog-supplier-sync/dist,
+            apps/catalog-activation-worker/dist,
+          ]
+        format: js
+      - id: pricing-service
+        sourceRoots: [apps/pricing-service/src]
+        coverageRoots: [apps/pricing-service/dist]
+        format: js
+      - id: orders-service
+        sourceRoots: [apps/orders-service/src]
+        coverageRoots: [apps/orders-service/dist]
+        format: js
+      - id: aroma-convergence
+        sourceRoots: [apps/aroma-convergence/src]
+        coverageRoots: [apps/aroma-convergence/dist]
+        format: js
+      - id: aroma-preparation
+        sourceRoots: [apps/orders-aroma-preparation/src]
+        coverageRoots: [apps/orders-aroma-preparation/dist]
+        format: js
+      - id: aroma-observer
+        sourceRoots: [apps/aroma-observer/src]
+        coverageRoots: [apps/aroma-observer/dist]
+        format: js
+      - id: aroma-gateway
+        sourceRoots: [apps/aroma-gateway/src]
+        coverageRoots: [apps/aroma-gateway/dist]
+        format: js
+      - id: public-api-trust
+        sourceRoots:
+          [
+            apps/api-public/src,
+            apps/api-internal/src,
+            apps/edge-gateway/src,
+            apps/realtime-gateway/src,
+          ]
+        coverageRoots:
+          [
+            apps/api-public/dist,
+            apps/api-internal/dist,
+            apps/edge-gateway/dist,
+            apps/realtime-gateway/dist,
+          ]
+        format: js
+    testFiles:
+      - packages/platform-testing/test/platform-packages.test.mjs
+      - tests/config/platform-config.test.mjs
+      - tests/config/observability-bootstrap.test.mjs
+      - tests/runtime/lifecycle.test.mjs
+      - tests/runtime/platform-http.test.mjs
+      - tests/runtime/permissions.test.mjs
+      - tests/kafka/runtime.test.mjs
+      - tests/edge-auth/oidc-auth.test.mjs
+      - tests/edge-auth/routes.test.mjs
+      - tests/customer/customer-http.test.mjs
+      - tests/catalog/ingestion.test.mjs
+      - tests/catalog/catalog-owner.test.mjs
+      - tests/catalog/catalog-root.test.mjs
+      - tests/catalog/stream.test.mjs
+      - tests/catalog/activation-binding-client.test.mjs
+      - tests/catalog/activation-contracts.test.mjs
+      - tests/catalog/activation-events.test.mjs
+      - tests/catalog/activation-identity.test.mjs
+      - tests/catalog/activation-validation.test.mjs
+      - tests/pricing/pricing-formula.test.mjs
+      - tests/orders/order-card.test.mjs
+      - tests/orders/contract.test.mjs
+      - tests/orders/order-contribution.test.mjs
+      - tests/orders/row-schemas.test.mjs
+      - tests/aroma/provider-decoder.test.mjs
+      - tests/aroma/provider-http.test.mjs
+      - tests/aroma/provider-session.test.mjs
+      - tests/aroma/cart-reader.test.mjs
+      - tests/aroma/api-internal-operations.test.mjs
+      - tests/aroma/safe-read-http.test.mjs
+      - tests/aroma/scoping-provenance.test.mjs
+      - tests/aroma/source-identity.test.mjs
+      - tests/aroma/convergence-domain.test.mjs
+      - tests/aroma/worker-gateway-client.test.mjs
+      - packages/platform-security/test/actor-context.test.mjs
+      - verification/launch/v1/scenarios/backup-restore.test.mjs
+      - tests/pricing/create-pricing-quote.test.mjs
+      - tests/pricing/catalog-client.test.mjs
+      - tests/pricing/pricing-http.test.mjs
+      - tests/orders/owner-http.test.mjs
+      - tests/orders/upstream-clients.test.mjs
+      - tests/customer/customer-normalization.test.mjs
+      - tests/aroma/provider-cart-mutator.test.mjs
+      - tests/aroma/gateway-operations-http.test.mjs
+      - tests/pricing/quote-proof.test.mjs
+      - tests/pricing/pricing-observability.test.mjs
+      - tests/pricing/pricing-public-api.test.mjs
+      - tests/pricing/pricing-internal-api.test.mjs
+      - tests/orders/public-api.test.mjs
+      - tests/orders/security.test.mjs
+      - tests/orders/observability.test.mjs
+      - tests/aroma/provider-catalog-source.test.mjs
+      - tests/aroma/gateway-production-composition.test.mjs
+      - tests/aroma/binding-http.test.mjs
+      - tests/aroma/catalog-export.test.mjs
+      - tests/edge-auth/operations.test.mjs
+      - tests/realtime/auth.test.mjs
+      - tests/realtime/contract.test.mjs
+      - tests/realtime/replay.test.mjs
+      - tests/realtime/backpressure.test.mjs
 
 platform:
   publicBaseUrl: https://localhost:8443
@@ -30,6 +212,7 @@ platform:
 
 postgres:
   host: coffee_postgres
+  bootstrapUsername: coffeeuser
   port: 5432
   sslMode: prefer
   maxConnections: 96
