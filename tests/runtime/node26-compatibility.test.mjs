@@ -180,3 +180,64 @@ void test("host compatibility gate defers only the Docker-built native addon", (
     "deferred-to-image-build",
   );
 });
+
+void test("root scripts do not invalidate the dependency manifest but are restored for build commands", async () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const dockerfile = await readFile(join(root, "Dockerfile"), "utf8");
+  const normalization = dockerfile.match(
+    /node -e '([^']+)' \/package\.json \/manifests\/package\.json/u,
+  );
+  assert.ok(
+    normalization,
+    "Dockerfile must normalize the root install manifest",
+  );
+  assert.match(
+    dockerfile,
+    /COPY --from=workspace-manifests \/manifests\/ \.\//u,
+  );
+  assert.match(dockerfile, /COPY pnpm-lock\.yaml pnpm-workspace\.yaml \.\//u);
+  assert.match(dockerfile, /COPY patches \.\/patches/u);
+  assert.match(dockerfile, /COPY package\.json \.\//u);
+  assert.ok(
+    dockerfile.indexOf("COPY package.json ./") >
+      dockerfile.indexOf("node-pre-gyp rebuild") &&
+      dockerfile.indexOf("COPY package.json ./") <
+        dockerfile.indexOf("pnpm typecheck"),
+    "full root scripts must return after native compilation and before typecheck",
+  );
+
+  const directory = await mkdtemp(join(tmpdir(), "root-manifest-cache-"));
+  try {
+    const input = join(directory, "package.json");
+    const output = join(directory, "normalized.json");
+    const manifest = JSON.parse(
+      await readFile(join(root, "package.json"), "utf8"),
+    );
+    const first = { ...manifest, scripts: { ...manifest.scripts } };
+    await writeFile(input, JSON.stringify(first));
+    const run = () =>
+      spawnSync(process.execPath, ["-e", normalization[1], input, output], {
+        encoding: "utf8",
+      });
+    assert.equal(run().status, 0);
+    const normalized = await readFile(output, "utf8");
+    const changedScripts = {
+      ...first,
+      scripts: { ...first.scripts, "test:unit": "node changed-entry.mjs" },
+    };
+    await writeFile(input, JSON.stringify(changedScripts));
+    assert.equal(run().status, 0);
+    assert.equal(await readFile(output, "utf8"), normalized);
+    const installManifest = JSON.parse(normalized);
+    const expectedInstallManifest = { ...first };
+    delete expectedInstallManifest.scripts;
+    assert.deepEqual(installManifest, expectedInstallManifest);
+    assert.equal(changedScripts.scripts["test:unit"], "node changed-entry.mjs");
+    assert.equal(
+      manifest.scripts["test:unit"],
+      "node --experimental-strip-types verification/launch/v1/scenarios/unit.mjs",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

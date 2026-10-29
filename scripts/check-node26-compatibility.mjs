@@ -44,7 +44,7 @@ const EXPECTED_IDS = new Set([
 const EXPECTED_COMPONENTS = Object.freeze({
   fastify: {
     package: "fastify",
-    version: "5.12.1",
+    version: "5.12.2",
     kind: "runtime",
     probe: "fastify-factory",
     required: true,

@@ -93,6 +93,23 @@ class LaunchAuthorityTests(unittest.TestCase):
     def test_positive_fixture_is_accepted(self) -> None:
         VALIDATOR.validate_root(FIXTURE_ROOT)
 
+    def test_foundation_keeps_the_approved_index_and_target_platform_binding(self) -> None:
+        baseline = fixture_doc("runtime-foundation-decision.json")
+        VALIDATOR.validate_foundation(baseline)
+        image = baseline["productionImage"]
+        cases = (
+            ("indexDigest", "sha256:" + "0" * 64),
+            ("platformManifestDigest", "sha256:" + "0" * 64),
+            ("platform", "linux/arm64"),
+            ("reference", f"node:{image['tag']}@{image['platformManifestDigest']}"),
+        )
+        for field, value in cases:
+            with self.subTest(field=field):
+                candidate = deepcopy(baseline)
+                candidate["productionImage"][field] = value
+                with self.assertRaisesRegex(VALIDATOR.AuthorityError, f"foundation.productionImage.{field}"):
+                    VALIDATOR.validate_foundation(candidate)
+
     def test_catalog_profile_contains_both_exact_callers(self) -> None:
         rows = fixture_doc("launch-v1-runtime-profile.json")["internalOperationAllowlist"]
         self.assertEqual(

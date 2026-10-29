@@ -28,6 +28,9 @@ if (process.argv.includes("--web-served-proof")) {
 }
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const registry = JSON.parse(
+  await readFile(join(root, "config/toolchain-versions.json"), "utf8"),
+);
 const suffix = `${process.pid}`;
 const nginxImage = `coffee-edge-nginx:issue162-${suffix}`;
 const backendImage = `coffee-edge-cutover-fixture:issue162-${suffix}`;
@@ -411,6 +414,8 @@ try {
   ]);
   docker(
     "build",
+    "--build-arg",
+    `NODE_IMAGE=${registry.browserHelperNodeImage}`,
     "--file",
     "tests/nginx/fixtures/Dockerfile.cutover",
     "--tag",

@@ -196,6 +196,8 @@ try {
     );
   docker(
     "build",
+    "--build-arg",
+    `NODE_IMAGE=${registry.browserHelperNodeImage}`,
     "--file",
     "tests/nginx/fixtures/Dockerfile",
     "--tag",
@@ -356,7 +358,7 @@ try {
       network,
       "--entrypoint",
       "node",
-      registry.nodeImage,
+      registry.browserHelperNodeImage,
       "-e",
       'fetch("http://edge-nginx:8081/nginx_status").then(async response=>{const body=await response.text();if(response.status!==200||!/^Active connections: \\d+\\s+server accepts handled requests\\s+\\d+\\s+\\d+\\s+\\d+\\s+Reading: \\d+\\s+Writing: \\d+\\s+Waiting: \\d+\\s*$/u.test(body)){console.error(JSON.stringify({status:response.status,body}));process.exit(1)}process.stdout.write(body)}).catch(error=>{console.error(error);process.exit(2)})',
     );

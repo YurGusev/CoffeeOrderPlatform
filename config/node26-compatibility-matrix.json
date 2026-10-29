@@ -11,7 +11,7 @@
     {
       "id": "fastify",
       "package": "fastify",
-      "version": "5.12.1",
+      "version": "5.12.2",
       "kind": "runtime",
       "probe": "fastify-factory",
       "required": true,

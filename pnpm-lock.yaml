@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  "@hey-api/json-schema-ref-parser@0.0.0-next-20260824173136>js-yaml": 5.2.2
+
 patchedDependencies:
   "@react-types/shared@3.36.1": 6d2be2fb416b65bc3a4aafe22d74cefc9b9b51cbb486031b96d70cd089a5bcfd
 
@@ -35,8 +38,8 @@ importers:
         specifier: 18.2.0
         version: 18.2.0
       js-yaml:
-        specifier: 4.2.0
-        version: 4.2.0
+        specifier: 4.3.2
+        version: 4.3.2
       oxlint:
         specifier: 1.80.0
         version: 1.80.0(oxlint-tsgolint@7.0.2001)
@@ -57,7 +60,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
 
   apps/api-internal:
     dependencies:
@@ -173,8 +176,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       undici:
-        specifier: 8.10.1
-        version: 8.10.1
+        specifier: 8.12.3
+        version: 8.12.3
 
   apps/aroma-observer:
     dependencies:
@@ -481,7 +484,7 @@ importers:
         version: 4.13.0(playwright-core@1.62.1)
       "@tailwindcss/vite":
         specifier: 4.3.3
-        version: 4.3.3(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
+        version: 4.3.3(vite@8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
       "@types/react":
         specifier: 19.2.17
         version: 19.2.17
@@ -495,8 +498,8 @@ importers:
         specifier: 4.3.3
         version: 4.3.3
       vite:
-        specifier: 8.2.2
-        version: 8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
+        specifier: 8.2.4
+        version: 8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
 
   packages/contracts/aroma-v1:
     dependencies:
@@ -624,8 +627,8 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       undici:
-        specifier: 8.10.1
-        version: 8.10.1
+        specifier: 8.12.3
+        version: 8.12.3
 
   packages/platform-idempotency:
     dependencies:
@@ -750,14 +753,14 @@ importers:
         specifier: 1.9.1
         version: 1.9.1
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.2
+        version: 5.12.2
       js-yaml:
-        specifier: 4.2.0
-        version: 4.2.0
+        specifier: 4.3.2
+        version: 4.3.2
       undici:
-        specifier: 8.10.1
-        version: 8.10.1
+        specifier: 8.12.3
+        version: 8.12.3
 
   packages/platform-security:
     dependencies:
@@ -1089,6 +1092,7 @@ packages:
         integrity: sha512-JOERgZCxRM06FEJ5kEWxlSRChah6MmXDx3KwCruqEv/iEyLkTokCSemf2y1w8oIHtfrr8EVTpzebq/31vn2Cpg==,
       }
     engines: { node: ^18.19.0 || >=20.6.0 }
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       "@opentelemetry/api": ">=1.3.0 <1.10.0"
 
@@ -2339,16 +2343,16 @@ packages:
         integrity: sha512-g6KuKWmFXc0fID8WWH0jit4g0AGBoJhCkJMb1RmbsSEUNvQ+ZC8D6CUZ+GtF8nMzSPXnhiePyyqqipzNNEnHjg==,
       }
 
-  fast-uri@3.1.6:
+  fast-uri@3.1.8:
     resolution:
       {
-        integrity: sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==,
+        integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==,
       }
 
-  fast-uri@4.1.3:
+  fast-uri@4.1.5:
     resolution:
       {
-        integrity: sha512-7+72G6vLt7jjNas8SmSATx2qeyRIjxeqO3i4IkmDTxlqYZRKANhOe1bnovcp4WZmvsYrp60WyqPyHqgRiX0yXw==,
+        integrity: sha512-vZeoMRB4epNr7QfdHxel7te/RcX16CxyXI07JCCTFWZA2s4v1azGNESRj+2EoaHSaWFL/Z3GmKT2jF6A202jLg==,
       }
 
   fastify-plugin@6.0.0:
@@ -2357,10 +2361,10 @@ packages:
         integrity: sha512-fZOty7z3O7vOliF6d8bHE3wiEh1KcNnKEQensSgTk9C1DvN6nRLS++XVd86v33Hw/8u9Un8A1zDrQ8ujcQDHEg==,
       }
 
-  fastify@5.12.1:
+  fastify@5.12.2:
     resolution:
       {
-        integrity: sha512-FWi+tQvwxR/PeRX7Z2mhfEF5ozJ3jn9asiiclzKXNSzJRHAYcU924aIOKAdHFJ+YIKieh3cqr1IwCOvTr41B3Q==,
+        integrity: sha512-npAgfhAigNiLOhCZEg7uFWThMrYoiDX/7/VyzicXSrVSXz6K/KYekW+QpOk7WOnZER0U7MmjvoDHV6qO5x4wKg==,
       }
 
   fastq@1.20.3:
@@ -2549,17 +2553,17 @@ packages:
       }
     hasBin: true
 
-  js-yaml@4.2.0:
+  js-yaml@4.3.2:
     resolution:
       {
-        integrity: sha512-ePWsvanv0DWuDRsW8dnt+R4jQ31SCRCQ7hhNcPXZPsoBZiemuZNYGf7adZdqX2D86j6rvKp3RpCxVTSb8WQlOw==,
+        integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==,
       }
     hasBin: true
 
-  js-yaml@5.2.0:
+  js-yaml@5.2.2:
     resolution:
       {
-        integrity: sha512-YeLUMlvR4Ou1B119LIaM0r65JvbOBooJDc9yEu0dClb/uSC5P4FrLU8OCCz/HXWvtPoIrR0dRzABTjo1sTN9Bw==,
+        integrity: sha512-dayzUzKkJ1MkuUtZglSebU43utNXH0OWQByK9rKOOuYIO8M5TV1y+n8ALMdG0rdzBnfNkOmZEqrURepb0ejqBw==,
       }
     hasBin: true
 
@@ -3392,10 +3396,10 @@ packages:
         integrity: sha512-w6AxtubXa2wTXAUsZMMWERrsIRAdrK0Sc+FUytWvYAhBJLyuI4llrMIC1DtlNSdI99EI86KZum2MMq3EAZlF9Q==,
       }
 
-  source-map-js@1.2.1:
+  source-map-js@1.2.2:
     resolution:
       {
-        integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==,
+        integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==,
       }
     engines: { node: ">=0.10.0" }
 
@@ -3553,10 +3557,10 @@ packages:
         integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==,
       }
 
-  undici@8.10.1:
+  undici@8.12.3:
     resolution:
       {
-        integrity: sha512-YQ3WlbqjYMmNpdvDH64jAgLjxuAR9+649calDWhbshYaeQGO2bR4nI94ORJmwI3J9YhoKQnpyGOK+0zlWS5N5Q==,
+        integrity: sha512-+fdndUTwBP86cVjihTp21hZHo7d6oj1c/47XPA3lL8mM0XHs+C4EkcjmgRsFnFk2f/UONGDy9ItBItmXsLOQHw==,
       }
     engines: { node: ">=22.19.0" }
 
@@ -3575,10 +3579,10 @@ packages:
       }
     engines: { node: ">=18.12.0" }
 
-  vite@8.2.2:
+  vite@8.2.4:
     resolution:
       {
-        integrity: sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q==,
+        integrity: sha512-lfauXnrf2x0p+UoA+wXh0dgFWnUjCyG6Js95KBkgaCwUU9k0DAHI4W6Q0WCx+h+5g+Alce1y4Zi2QjjK0UvGBw==,
       }
     engines: { node: ^20.19.0 || >=22.12.0 }
     hasBin: true
@@ -3732,7 +3736,7 @@ snapshots:
     dependencies:
       "@mapbox/node-pre-gyp": 2.0.3(supports-color@7.2.0)
       bindings: 1.5.0
-      js-yaml: 4.2.0
+      js-yaml: 4.3.2
       nan: 2.28.0
       tar: 7.5.22
     transitivePeerDependencies:
@@ -3743,7 +3747,7 @@ snapshots:
     dependencies:
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
-      fast-uri: 4.1.3
+      fast-uri: 4.1.5
 
   "@fastify/error@4.2.0": {}
 
@@ -3787,7 +3791,7 @@ snapshots:
     dependencies:
       "@jsdevtools/ono": 7.1.3
       "@types/json-schema": 7.0.15
-      js-yaml: 5.2.0
+      js-yaml: 5.2.2
 
   "@hey-api/openapi-ts@0.0.0-next-20260824173136":
     dependencies:
@@ -4103,7 +4107,7 @@ snapshots:
       jiti: 2.7.0
       lightningcss: 1.32.0
       magic-string: 0.30.21
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
       tailwindcss: 4.3.3
 
   "@tailwindcss/oxide-android-arm64@4.3.3":
@@ -4157,12 +4161,12 @@ snapshots:
       "@tailwindcss/oxide-win32-arm64-msvc": 4.3.3
       "@tailwindcss/oxide-win32-x64-msvc": 4.3.3
 
-  "@tailwindcss/vite@4.3.3(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))":
+  "@tailwindcss/vite@4.3.3(vite@8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))":
     dependencies:
       "@tailwindcss/node": 4.3.3
       "@tailwindcss/oxide": 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
 
   "@tanstack/query-core@5.102.8": {}
 
@@ -4276,13 +4280,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.1
 
-  "@vitest/mocker@4.1.11(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))":
+  "@vitest/mocker@4.1.11(vite@8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))":
     dependencies:
       "@vitest/spy": 4.1.11
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
 
   "@vitest/pretty-format@4.1.11":
     dependencies:
@@ -4337,7 +4341,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.6
+      fast-uri: 3.1.8
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -4494,7 +4498,7 @@ snapshots:
       "@fastify/merge-json-schemas": 0.2.1
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
-      fast-uri: 4.1.3
+      fast-uri: 4.1.5
       json-schema-ref-resolver: 3.0.0
       rfdc: 1.4.1
 
@@ -4502,13 +4506,13 @@ snapshots:
     dependencies:
       fast-decode-uri-component: 1.0.1
 
-  fast-uri@3.1.6: {}
+  fast-uri@3.1.8: {}
 
-  fast-uri@4.1.3: {}
+  fast-uri@4.1.5: {}
 
   fastify-plugin@6.0.0: {}
 
-  fastify@5.12.1:
+  fastify@5.12.2:
     dependencies:
       "@fastify/ajv-compiler": 4.0.6
       "@fastify/error": 4.2.0
@@ -4608,11 +4612,11 @@ snapshots:
 
   jiti@2.7.0: {}
 
-  js-yaml@4.2.0:
+  js-yaml@4.3.2:
     dependencies:
       argparse: 2.0.1
 
-  js-yaml@5.2.0:
+  js-yaml@5.2.2:
     dependencies:
       argparse: 2.0.1
 
@@ -4625,7 +4629,7 @@ snapshots:
   json-schema-resolver@3.0.0(supports-color@7.2.0):
     dependencies:
       debug: 4.4.3(supports-color@7.2.0)
-      fast-uri: 3.1.6
+      fast-uri: 3.1.8
       rfdc: 1.4.1
     transitivePeerDependencies:
       - supports-color
@@ -4902,7 +4906,7 @@ snapshots:
     dependencies:
       nanoid: 3.3.18
       picocolors: 1.1.1
-      source-map-js: 1.2.1
+      source-map-js: 1.2.2
 
   postgres-array@2.0.0: {}
 
@@ -5069,7 +5073,7 @@ snapshots:
     dependencies:
       atomic-sleep: 1.0.0
 
-  source-map-js@1.2.1: {}
+  source-map-js@1.2.2: {}
 
   split2@4.2.0: {}
 
@@ -5160,7 +5164,7 @@ snapshots:
 
   undici-types@8.3.0: {}
 
-  undici@8.10.1: {}
+  undici@8.12.3: {}
 
   use-sync-external-store@1.7.0(react@19.2.8):
     dependencies:
@@ -5168,7 +5172,7 @@ snapshots:
 
   verkit@0.3.0: {}
 
-  vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0):
+  vite@8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.5
@@ -5181,10 +5185,10 @@ snapshots:
       jiti: 2.7.0
       yaml: 2.9.0
 
-  vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)):
+  vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.0)(vite@8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:
       "@vitest/expect": 4.1.11
-      "@vitest/mocker": 4.1.11(vite@8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
+      "@vitest/mocker": 4.1.11(vite@8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0))
       "@vitest/pretty-format": 4.1.11
       "@vitest/runner": 4.1.11
       "@vitest/snapshot": 4.1.11
@@ -5201,7 +5205,7 @@ snapshots:
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.1
-      vite: 8.2.2(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.4(@types/node@26.4.0)(jiti@2.7.0)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       "@opentelemetry/api": 1.9.1

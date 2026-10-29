@@ -13,6 +13,6 @@
     "@coffee-platform/runtime": "workspace:*",
     "@coffee-platform/security": "workspace:*",
     "@opentelemetry/api": "1.9.1",
-    "undici": "8.10.1"
+    "undici": "8.12.3"
   }
 }
