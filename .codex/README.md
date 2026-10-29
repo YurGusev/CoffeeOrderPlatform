@@ -1,14 +1,14 @@
-# Sol, Luna и Astra для CoffeeOrderPlatform
+# Sol и Terra для CoffeeOrderPlatform
 
 Локальная адаптация [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator).
 
-| Режим | Root | Luna | Reviewer | Лимит субагентов |
+| Режим | Root | Исполнительские роли | Reviewer | Лимит субагентов |
 |---|---|---|---|---|
-| Обычный | GPT-6.1 Sol, reasoning из настроек пользователя | GPT-6 Luna high | GPT-6 Astra medium | 4 |
-| Большой | GPT-6.1 Sol medium | GPT-6 Luna high | GPT-6 Astra medium | 8 |
+| Обычный | GPT-6.1 Sol, reasoning из настроек пользователя | GPT-6.1 Terra: explorer/researcher low, worker/tester xhigh | GPT-6.1 Sol high | 4 |
+| Большой | GPT-6.1 Sol medium | GPT-6.1 Terra: explorer/researcher low, worker/tester xhigh | GPT-6.1 Sol high | 8 |
 
 Лимит исключает корневого агента; это потолок, а не обязательное число.
-Начинать с одного Luna для содержательной подзадачи; добавлять остальных только
+Начинать с одного исполнителя для содержательной подзадачи; добавлять остальных только
 для независимой работы. Для простого изменения субагенты не нужны.
 
 Из корня проекта:
@@ -28,15 +28,14 @@ reasoning root и лимит субагентов через CLI overrides. Гл
 Проект задаёт GPT-6.1 Sol как модель root по умолчанию; reasoning берётся из выбора
 пользователя или его настроек. В Desktop и параметрами запуска модель можно
 переопределить; тогда фактическая модель root может отличаться от схемы ниже,
-а reviewer останется GPT-6 Astra. Для воспроизводимого большого режима использовать
+а reviewer останется GPT-6.1 Sol high. Для воспроизводимого большого режима использовать
 команду выше в терминале. Она не переключает открытые задачи Desktop.
 
 Навык `$astra-orchestrator` находится в `.agents/skills/astra-orchestrator`;
 после изменения конфигурации агентов использовать новую сессию. Глобальные
 настройки не изменяются.
-Роли explorer, worker, tester и researcher закреплены на GPT-6 Luna high;
-reviewer закреплён на GPT-6 Astra medium в обоих режимах.
-Глобальная luna_worker в проекте использует worker без фиксированного xhigh.
+Роли explorer и researcher закреплены на GPT-6.1 Terra low, worker и tester —
+на GPT-6.1 Terra xhigh; reviewer закреплён на GPT-6.1 Sol high в обоих режимах.
 
 ## Передача работы и возврат замечаний
 
@@ -47,20 +46,20 @@ reviewer закреплён на GPT-6 Astra medium в обоих режимах
        +---------------+---------------+
        |               |               |
     explorer         worker        researcher
-      Luna            Luna            Luna
+      Terra           Terra           Terra
        +---------------+---------------+
                        |
                      tester
-                      Luna
+                      Terra
                        |
                     reviewer
-                     Astra
+                      Sol
                        |
                   GPT-6.1 Sol
                integrate + verify
 ```
 
-Root — основной агент задачи; reviewer — отдельный субагент Astra.
+Root — основной агент задачи; reviewer — отдельный субагент Sol.
 Reviewer сообщает root замечания, рекомендуемую роль и критерии приёмки.
 Root организует исправления, tester проверяет их, reviewer повторяет ревью.
 Подробные правила — в [навыке оркестратора](../.agents/skills/astra-orchestrator/SKILL.md#цикл-ревью-и-исправлений).
