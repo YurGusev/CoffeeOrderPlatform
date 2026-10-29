@@ -1,4 +1,4 @@
-FROM node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae AS web-build
+FROM node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146 AS web-build
 WORKDIR /workspace
 COPY . .
 RUN --network=host npm install --global corepack@0.35.0 && corepack enable && pnpm install --frozen-lockfile && pnpm web:build \
