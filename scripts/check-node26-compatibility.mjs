@@ -588,10 +588,7 @@ export async function checkNode26Compatibility(root = REPO_ROOT, options = {}) {
     status: failures.length === 0 ? "passed" : "failed",
     failures,
   };
-  if (
-    options.strictCandidate &&
-    report.candidate?.status !== "passed"
-  ) {
+  if (options.strictCandidate && report.candidate?.status !== "passed") {
     report.status = "failed";
     report.failures.push(
       `openapi candidate: ${report.candidate?.reason ?? report.candidate?.status ?? "missing"}`,

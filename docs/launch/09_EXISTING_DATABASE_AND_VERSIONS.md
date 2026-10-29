@@ -4,14 +4,14 @@
 
 Для локальной разработки уже используется PostgreSQL 17:
 
-| Параметр | Значение |
-|---|---|
-| Контейнер | `coffee_postgres` |
-| Версия сервера | PostgreSQL `17.11` |
-| Образ | `postgres:17-alpine` |
-| Адрес с host | `localhost:5432` |
-| Адрес из общей Docker network | `coffee_postgres:5432` |
-| Существующие legacy-БД | `coffeeorderdb`, `coffeeorder_staging` |
+| Параметр                      | Значение                               |
+| ----------------------------- | -------------------------------------- |
+| Контейнер                     | `coffee_postgres`                      |
+| Версия сервера                | PostgreSQL `17.11`                     |
+| Образ                         | `postgres:17-alpine`                   |
+| Адрес с host                  | `localhost:5432`                       |
+| Адрес из общей Docker network | `coffee_postgres:5432`                 |
+| Существующие legacy-БД        | `coffeeorderdb`, `coffeeorder_staging` |
 
 Новый репозиторий **не поднимает второй PostgreSQL-контейнер** и не включает
 сервис `postgres` в свой Compose. `coffeeorderdb` принадлежит CoffeeOrderSystem:
@@ -22,13 +22,13 @@
 создать на существующем PostgreSQL-сервере после проверки server identity и
 явного запуска admin-only bootstrap:
 
-| БД | Единственный владелец миграций | Runtime с правом записи |
-|---|---|---|
-| `coffee_platform_customer` | `customer-service` | `customer-service` |
-| `coffee_platform_catalog` | `catalog_migrator` | `catalog-service` (read-only), `catalog-supplier-sync` (staging writer), `catalog-activation-worker` (active/Outbox writer) через отдельные роли |
-| `coffee_platform_pricing` | `pricing-service` | `pricing-service` |
-| `coffee_platform_orders` | `orders-service` | runtime Orders через отдельные роли с явным allowlist таблиц |
-| `coffee_platform_integration` | `aroma-gateway` | `aroma-gateway` |
+| БД                            | Единственный владелец миграций | Runtime с правом записи                                                                                                                          |
+| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `coffee_platform_customer`    | `customer-service`             | `customer-service`                                                                                                                               |
+| `coffee_platform_catalog`     | `catalog_migrator`             | `catalog-service` (read-only), `catalog-supplier-sync` (staging writer), `catalog-activation-worker` (active/Outbox writer) через отдельные роли |
+| `coffee_platform_pricing`     | `pricing-service`              | `pricing-service`                                                                                                                                |
+| `coffee_platform_orders`      | `orders-service`               | runtime Orders через отдельные роли с явным allowlist таблиц                                                                                     |
+| `coffee_platform_integration` | `aroma-gateway`                | `aroma-gateway`                                                                                                                                  |
 
 Для каждой БД создаются migration-role `<context>_migrator` для DDL и одна или
 несколько явно названных runtime-ролей из нормативной спецификации сервиса.
@@ -61,13 +61,13 @@ Dependency Cruiser читает `.dependency-cruiser.cjs` и проверяет:
 
 ```ts
 // apps/orders-service/src/confirm.ts
-import { CustomerRepository } from '../../customer-service/src/repository.js';
+import { CustomerRepository } from "../../customer-service/src/repository.js";
 ```
 
 Разрешённый вариант:
 
 ```ts
-import type { CustomerSummary } from '@coffee/contracts/customer-v1';
+import type { CustomerSummary } from "@coffee/contracts/customer-v1";
 ```
 
 В `tests/architecture/fixtures/invalid-import/` хранится минимальный намеренно
@@ -102,39 +102,39 @@ app-role каждого runtime: запись в свою БД должна бы
 Node.js 26 выбран осознанно, хотя ещё имеет статус Current. В manifests
 запрещены `latest`, `*`, `^` и `~`; images фиксируются также по digest.
 
-| Компонент | Принятая версия | Примечание |
-|---|---|---|
-| Node.js | `26.8.1` Current | production/dev/CI, без fallback на Node 24 |
-| npm | `11.19.0` | версия из Node 26.8.1 distribution |
-| pnpm | `11.24.0` | точный `packageManager` pin |
-| TypeScript | `7.0.2` | единственный native Go `tsc`; TS5/6 и compiler API запрещены |
-| Fastify | `5.12.1` | полный JSON Schema request/response |
-| PostgreSQL server | существующий `17.11` | временное исключение: общий legacy server; upgrade не входит в этот PR |
-| `pg` | `8.23.0` | прямой driver baseline |
-| Apache Kafka broker | `4.3.1` KRaft | `apache/kafka:4.3.1@sha256:<digest>` |
-| `@confluentinc/kafka-javascript` | `1.10.0` | провести Node 26 compatibility test |
-| React / React DOM | `19.2.8` | новый frontend |
-| React Router DOM | `7.18.3` | data/router APIs только по frontend ADR |
-| TanStack Query | `5.102.8` | server state |
-| Vite | `8.2.2` | build/dev server |
-| Vitest | `4.1.11` | unit/component tests |
-| Playwright | `1.62.1` | browser E2E |
-| OpenAPI Specification | `3.2.0` | проверить поддержку всем toolchain; downgrade требует ADR |
-| `@fastify/swagger` | `9.8.1` | contract publication |
-| `@hey-api/openapi-ts` | `0.0.0-next-20260824173136` | кандидат types-only codegen; принятие только после OpenAPI 3.2 golden gates #4 |
-| Spectral CLI | `6.16.3` | contract lint |
-| AJV | `8.20.0` | runtime JSON Schema validation |
-| Pino | `10.3.1` | structured logging |
-| `libphonenumber-js` | `1.13.12` | Customer phone parsing, region RU, output E.164 |
-| OpenTelemetry API | `1.9.1` | tracing/metrics API |
-| Dependency Cruiser | `18.2.0` | architecture boundaries |
-| Oxlint | `1.80.0` | structural/syntax linting |
-| `oxlint-tsgolint` | `7.0.2001` | type-aware linting, exact line TypeScript 7.0.2 |
-| Prettier | `3.9.6` | formatting |
-| SOPS | `3.13.3` | единый encrypted secrets file |
-| age | `1.3.2` | recipients/identity для SOPS |
-| Docker Engine | `29.7.2` | подтверждённая версия host |
-| Docker Compose plugin | `5.4.0` | подтверждённая версия host |
+| Компонент                        | Принятая версия             | Примечание                                                                     |
+| -------------------------------- | --------------------------- | ------------------------------------------------------------------------------ |
+| Node.js                          | `26.8.1` Current            | production/dev/CI, без fallback на Node 24                                     |
+| npm                              | `11.19.0`                   | версия из Node 26.8.1 distribution                                             |
+| pnpm                             | `11.24.0`                   | точный `packageManager` pin                                                    |
+| TypeScript                       | `7.0.2`                     | единственный native Go `tsc`; TS5/6 и compiler API запрещены                   |
+| Fastify                          | `5.12.1`                    | полный JSON Schema request/response                                            |
+| PostgreSQL server                | существующий `17.11`        | временное исключение: общий legacy server; upgrade не входит в этот PR         |
+| `pg`                             | `8.23.0`                    | прямой driver baseline                                                         |
+| Apache Kafka broker              | `4.3.1` KRaft               | `apache/kafka:4.3.1@sha256:<digest>`                                           |
+| `@confluentinc/kafka-javascript` | `1.10.0`                    | провести Node 26 compatibility test                                            |
+| React / React DOM                | `19.2.8`                    | новый frontend                                                                 |
+| React Router DOM                 | `7.18.3`                    | data/router APIs только по frontend ADR                                        |
+| TanStack Query                   | `5.102.8`                   | server state                                                                   |
+| Vite                             | `8.2.2`                     | build/dev server                                                               |
+| Vitest                           | `4.1.11`                    | unit/component tests                                                           |
+| Playwright                       | `1.62.1`                    | browser E2E                                                                    |
+| OpenAPI Specification            | `3.2.0`                     | проверить поддержку всем toolchain; downgrade требует ADR                      |
+| `@fastify/swagger`               | `9.8.1`                     | contract publication                                                           |
+| `@hey-api/openapi-ts`            | `0.0.0-next-20260824173136` | кандидат types-only codegen; принятие только после OpenAPI 3.2 golden gates #4 |
+| Spectral CLI                     | `6.16.3`                    | contract lint                                                                  |
+| AJV                              | `8.20.0`                    | runtime JSON Schema validation                                                 |
+| Pino                             | `10.3.1`                    | structured logging                                                             |
+| `libphonenumber-js`              | `1.13.12`                   | Customer phone parsing, region RU, output E.164                                |
+| OpenTelemetry API                | `1.9.1`                     | tracing/metrics API                                                            |
+| Dependency Cruiser               | `18.2.0`                    | architecture boundaries                                                        |
+| Oxlint                           | `1.80.0`                    | structural/syntax linting                                                      |
+| `oxlint-tsgolint`                | `7.0.2001`                  | type-aware linting, exact line TypeScript 7.0.2                                |
+| Prettier                         | `3.9.6`                     | formatting                                                                     |
+| SOPS                             | `3.13.3`                    | единый encrypted secrets file                                                  |
+| age                              | `1.3.2`                     | recipients/identity для SOPS                                                   |
+| Docker Engine                    | `29.7.2`                    | подтверждённая версия host                                                     |
+| Docker Compose plugin            | `5.4.0`                     | подтверждённая версия host                                                     |
 
 ## 4. Обязательное использование возможностей Node.js 26
 

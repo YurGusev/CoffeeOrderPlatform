@@ -1,34 +1,45 @@
 #!/usr/bin/env node
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { checkDatabaseOwnership } from './check-database-ownership.mjs';
+import { readdir, readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { checkDatabaseOwnership } from "./check-database-ownership.mjs";
 
-const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const ACCEPTED_DEPENDENCY_CRUISER = '18.2.0';
-const FORBIDDEN_ROOTS = ['packages/domain', 'packages/models', 'packages/shared-business'];
+const SCRIPT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ACCEPTED_DEPENDENCY_CRUISER = "18.2.0";
+const FORBIDDEN_ROOTS = [
+  "packages/domain",
+  "packages/models",
+  "packages/shared-business",
+];
 const ALLOWED_PLATFORM_PACKAGES = new Set([
-  '@coffee-platform/config',
-  '@coffee-platform/database',
-  '@coffee-platform/idempotency',
-  '@coffee-platform/inbox',
-  '@coffee-platform/kafka-runtime',
-  '@coffee-platform/migrations',
-  '@coffee-platform/observability',
-  '@coffee-platform/outbox',
-  '@coffee-platform/platform-http',
-  '@coffee-platform/platform-time',
-  '@coffee-platform/runtime',
-  '@coffee-platform/security',
-  '@coffee-platform/testing',
-  '@coffee-platform/ui',
+  "@coffee-platform/config",
+  "@coffee-platform/database",
+  "@coffee-platform/idempotency",
+  "@coffee-platform/inbox",
+  "@coffee-platform/kafka-runtime",
+  "@coffee-platform/migrations",
+  "@coffee-platform/observability",
+  "@coffee-platform/outbox",
+  "@coffee-platform/platform-http",
+  "@coffee-platform/platform-time",
+  "@coffee-platform/runtime",
+  "@coffee-platform/security",
+  "@coffee-platform/testing",
+  "@coffee-platform/ui",
 ]);
 
 function isAllowedPlatformPackage(name) {
-  const root = name.startsWith("@") ? name.split("/").slice(0, 2).join("/") : name.split("/")[0];
-  return ALLOWED_PLATFORM_PACKAGES.has(name) || ALLOWED_PLATFORM_PACKAGES.has(root) || root.startsWith("@coffee-platform/contracts-") || root.startsWith("@coffee-platform/generated-");
+  const root = name.startsWith("@")
+    ? name.split("/").slice(0, 2).join("/")
+    : name.split("/")[0];
+  return (
+    ALLOWED_PLATFORM_PACKAGES.has(name) ||
+    ALLOWED_PLATFORM_PACKAGES.has(root) ||
+    root.startsWith("@coffee-platform/contracts-") ||
+    root.startsWith("@coffee-platform/generated-")
+  );
 }
 
 function fail(rule, message) {
@@ -42,7 +53,7 @@ async function walk(root) {
   const result = [];
   for (const entry of await readdir(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
-    if (entry.isDirectory()) result.push(...await walk(path));
+    if (entry.isDirectory()) result.push(...(await walk(path)));
     else result.push(path);
   }
   return result;
@@ -50,50 +61,110 @@ async function walk(root) {
 
 async function checkPackageDependencies(root) {
   const files = [
-    join(root, 'package.json'),
-    ...await walk(join(root, 'apps')),
-    ...await walk(join(root, 'packages')),
-  ].filter((path) => path.endsWith('package.json') && existsSync(path));
+    join(root, "package.json"),
+    ...(await walk(join(root, "apps"))),
+    ...(await walk(join(root, "packages"))),
+  ].filter((path) => path.endsWith("package.json") && existsSync(path));
   for (const path of files) {
-    const json = JSON.parse(await readFile(path, 'utf8'));
-    const dependencies = { ...json.dependencies, ...json.devDependencies, ...json.peerDependencies, ...json.optionalDependencies };
+    const json = JSON.parse(await readFile(path, "utf8"));
+    const dependencies = {
+      ...json.dependencies,
+      ...json.devDependencies,
+      ...json.peerDependencies,
+      ...json.optionalDependencies,
+    };
     for (const [name, value] of Object.entries(dependencies)) {
-      if (typeof value !== 'string') continue;
-      if (value.includes('/apps/') || value.startsWith('file:../apps') || value.startsWith('link:../apps')) {
-        fail('BOUND-IMPORT', `${path} declares runtime implementation dependency ${name} -> ${value}`);
+      if (typeof value !== "string") continue;
+      if (
+        value.includes("/apps/") ||
+        value.startsWith("file:../apps") ||
+        value.startsWith("link:../apps")
+      ) {
+        fail(
+          "BOUND-IMPORT",
+          `${path} declares runtime implementation dependency ${name} -> ${value}`,
+        );
       }
-      if (name.startsWith('@coffee-platform/') && !isAllowedPlatformPackage(name)) {
-        fail('BOUND-IMPORT', `${path} declares forbidden shared business package ${name}`);
+      if (
+        name.startsWith("@coffee-platform/") &&
+        !isAllowedPlatformPackage(name)
+      ) {
+        fail(
+          "BOUND-IMPORT",
+          `${path} declares forbidden shared business package ${name}`,
+        );
       }
-      if (name.toLowerCase() === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${path} declares forbidden Axios dependency`);
-      if (path === join(root, 'apps/aroma-gateway/package.json') && ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(name)) {
-        fail('ARCH-TYPED-PROVIDER-HTTP', `${path} declares alternate provider HTTP client ${name}; use native fetch/Undici`);
+      if (name.toLowerCase() === "axios")
+        fail(
+          "ARCH-FORBIDDEN-HTTP",
+          `${path} declares forbidden Axios dependency`,
+        );
+      if (
+        path === join(root, "apps/aroma-gateway/package.json") &&
+        ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(name)
+      ) {
+        fail(
+          "ARCH-TYPED-PROVIDER-HTTP",
+          `${path} declares alternate provider HTTP client ${name}; use native fetch/Undici`,
+        );
       }
-      if (GENERIC_RETRY_DEPENDENCY_RE.test(name)) fail('ARCH-GENERIC-RETRY', `${path} declares forbidden generic retry dependency ${name}`);
-      if (name === 'zod' || name.startsWith('zod/')) fail('ARCH-FORBIDDEN-SCHEMA', `${path} declares forbidden Zod schema mirror`);
-      if (/^(?:@radix-ui\/|@base-ui\/|lucide-react$|class-variance-authority$)/.test(name)) {
-        fail('ARCH-FORBIDDEN-UI-DEPENDENCY', `${path} declares forbidden UI dependency ${name}`);
+      if (GENERIC_RETRY_DEPENDENCY_RE.test(name))
+        fail(
+          "ARCH-GENERIC-RETRY",
+          `${path} declares forbidden generic retry dependency ${name}`,
+        );
+      if (name === "zod" || name.startsWith("zod/"))
+        fail(
+          "ARCH-FORBIDDEN-SCHEMA",
+          `${path} declares forbidden Zod schema mirror`,
+        );
+      if (
+        /^(?:@radix-ui\/|@base-ui\/|lucide-react$|class-variance-authority$)/.test(
+          name,
+        )
+      ) {
+        fail(
+          "ARCH-FORBIDDEN-UI-DEPENDENCY",
+          `${path} declares forbidden UI dependency ${name}`,
+        );
       }
-      if (/^(?:@?[^/]+\/)?(?:ffi(?:-napi)?|sqlite3?|better-sqlite3|vfs|virtual-fs|virtual_fs|memfs)$/i.test(name)) {
-        fail('ARCH-FORBIDDEN-NATIVE', `${path} declares forbidden FFI/SQLite/VFS dependency ${name}`);
+      if (
+        /^(?:@?[^/]+\/)?(?:ffi(?:-napi)?|sqlite3?|better-sqlite3|vfs|virtual-fs|virtual_fs|memfs)$/i.test(
+          name,
+        )
+      ) {
+        fail(
+          "ARCH-FORBIDDEN-NATIVE",
+          `${path} declares forbidden FFI/SQLite/VFS dependency ${name}`,
+        );
       }
     }
   }
 }
 
-const GENERIC_RETRY_DEPENDENCY_RE = /(?:^|[/_-])(?:async-retry|cockatiel|exponential-backoff|fetch-retry|p-retry|promise-retry|retry-as-promised)(?:$|[/_-])/i;
+const GENERIC_RETRY_DEPENDENCY_RE =
+  /(?:^|[/_-])(?:async-retry|cockatiel|exponential-backoff|fetch-retry|p-retry|promise-retry|retry-as-promised)(?:$|[/_-])/i;
 const LITERAL_POSTGRES_URL_RE = /["'`](?:postgres(?:ql)?:\/\/)/i;
-const GENERIC_RETRY_WRAPPER_RE = /(?<![.\w])(?:doRetry|executeWithRetry|performRetry|retry|retryAsync|retryOperation|retryWithBackoff|runWithRetry|withRetry)\s*(?:<[^;\n]*?>\s*)?\(/;
+const GENERIC_RETRY_WRAPPER_RE =
+  /(?<![.\w])(?:doRetry|executeWithRetry|performRetry|retry|retryAsync|retryOperation|retryWithBackoff|runWithRetry|withRetry)\s*(?:<[^;\n]*?>\s*)?\(/;
 const AROMA_GATEWAY_SOURCE_RE = /(?:^|\/)apps\/aroma-gateway\//;
-const TYPED_PROVIDER_HTTP_CLIENT_RE = /(?:^|\/)apps\/aroma-gateway\/src\/infrastructure\/provider\/http-client\.(?:cts|mts|ts)$/;
-const ALTERNATE_PROVIDER_HTTP_MODULE_RE = /^(?:node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
-const GENERIC_PROVIDER_HTTP_MODULE_RE = /^(?:@fastify\/http-proxy|http-proxy|node:(?:http|http2|https|net|tls)|(?:http|http2|https|net|tls)|undici|node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
-const CATALOG_SQL_MUTATION_RE = /\b(?:insert\s+into|update|delete\s+from|truncate(?:\s+table)?|create\s+table|alter\s+table|drop\s+table)\s+"?catalog"?\s*\.\s*"?(?:catalog_state|products|variants|offer_mappings|availability)"?\b/i;
-const CATALOG_API_PRIVATE_TABLE_RE = /\b(?:from|join|into|update|table)\s+"?catalog"?\s*\.\s*"?(?:catalog_state|supplier_snapshots|snapshot_[a-z_]+|products|variants|offer_mappings|availability|source_identities|offer_binding_acks|outbox_messages)"?\b/i;
-const CATALOG_API_OUTBOUND_RE = /\b(?:from|import\s*\()\s*['"](?:@coffee-platform\/platform-http|node:(?:http|https|net|tls)|(?:http|https|net|tls))\b|\b(?:globalThis\.)?fetch\s*\(/i;
-const GENERIC_PROVIDER_PROXY_RE = /(?<![.\w])(?:forward(?:Request|Response)?|passThrough|proxy)\s*(?:<[^;\n]*?>\s*)?(?:=|\()/i;
-const MODULE_SPECIFIER_RE = /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]|\brequire\s*\(\s*['"]([^'"]+)['"]/g;
-const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
+const TYPED_PROVIDER_HTTP_CLIENT_RE =
+  /(?:^|\/)apps\/aroma-gateway\/src\/infrastructure\/provider\/http-client\.(?:cts|mts|ts)$/;
+const ALTERNATE_PROVIDER_HTTP_MODULE_RE =
+  /^(?:node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
+const GENERIC_PROVIDER_HTTP_MODULE_RE =
+  /^(?:@fastify\/http-proxy|http-proxy|node:(?:http|http2|https|net|tls)|(?:http|http2|https|net|tls)|undici|node-fetch|cross-fetch|got|ky|superagent)(?:\/|$)/i;
+const CATALOG_SQL_MUTATION_RE =
+  /\b(?:insert\s+into|update|delete\s+from|truncate(?:\s+table)?|create\s+table|alter\s+table|drop\s+table)\s+"?catalog"?\s*\.\s*"?(?:catalog_state|products|variants|offer_mappings|availability)"?\b/i;
+const CATALOG_API_PRIVATE_TABLE_RE =
+  /\b(?:from|join|into|update|table)\s+"?catalog"?\s*\.\s*"?(?:catalog_state|supplier_snapshots|snapshot_[a-z_]+|products|variants|offer_mappings|availability|source_identities|offer_binding_acks|outbox_messages)"?\b/i;
+const CATALOG_API_OUTBOUND_RE =
+  /\b(?:from|import\s*\()\s*['"](?:@coffee-platform\/platform-http|node:(?:http|https|net|tls)|(?:http|https|net|tls))\b|\b(?:globalThis\.)?fetch\s*\(/i;
+const GENERIC_PROVIDER_PROXY_RE =
+  /(?<![.\w])(?:forward(?:Request|Response)?|passThrough|proxy)\s*(?:<[^;\n]*?>\s*)?(?:=|\()/i;
+const MODULE_SPECIFIER_RE =
+  /\bfrom\s*['"]([^'"]+)['"]|\bimport\s*(?:\(\s*)?['"]([^'"]+)['"]|\brequire\s*\(\s*['"]([^'"]+)['"]/g;
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
 
 function moduleSpecifiers(source) {
   return [...source.matchAll(MODULE_SPECIFIER_RE)]
@@ -102,29 +173,46 @@ function moduleSpecifiers(source) {
 }
 
 function hasExplicitAny(source) {
-  const withoutQuotedLiterals = source.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""');
+  const withoutQuotedLiterals = source.replace(
+    /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,
+    '""',
+  );
   return /(?:\bas\s+any\b|:\s*any\b|<any>)/m.test(withoutQuotedLiterals);
 }
 
 function isTypeScriptSource(path) {
-  return /\.(?:ts|tsx|mts|cts)$/.test(path) && !/(?:[\\/])(dist|node_modules|provenance)(?:[\\/])/.test(path);
+  return (
+    /\.(?:ts|tsx|mts|cts)$/.test(path) &&
+    !/(?:[\\/])(dist|node_modules|provenance)(?:[\\/])/.test(path)
+  );
 }
 
 async function collectSourceFiles(root) {
-  return (await Promise.all(['apps', 'packages'].map((target) => walk(join(root, target)))))
+  return (
+    await Promise.all(
+      ["apps", "packages"].map((target) => walk(join(root, target))),
+    )
+  )
     .flat()
     .filter(isTypeScriptSource);
 }
 
 function sourceLabel(path, root) {
-  return relative(root, path).replaceAll('\\', '/');
+  return relative(root, path).replaceAll("\\", "/");
 }
 
 function sourceCandidates(candidate) {
   const normalized = resolve(candidate);
-  const withoutRuntimeExtension = normalized.replace(/\.(?:mjs|cjs|js|jsx)$/, '');
+  const withoutRuntimeExtension = normalized.replace(
+    /\.(?:mjs|cjs|js|jsx)$/,
+    "",
+  );
   const bases = [...new Set([normalized, withoutRuntimeExtension])];
-  return bases.flatMap((base) => [base, ...SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`), ...SOURCE_EXTENSIONS.map((extension) => join(base, `index${extension}`))]);
+  return bases.flatMap((base) => [
+    base,
+    ...SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`),
+    ...SOURCE_EXTENSIONS.map((extension) => join(base, `index${extension}`)),
+  ]);
 }
 
 function resolveSourceCandidate(candidate, files) {
@@ -132,44 +220,62 @@ function resolveSourceCandidate(candidate, files) {
 }
 
 function packageNameForSpecifier(specifier) {
-  return specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+  return specifier.startsWith("@")
+    ? specifier.split("/").slice(0, 2).join("/")
+    : specifier.split("/")[0];
 }
 
 function resolveGraphImport(fromPath, specifier, files, workspacePackages) {
-  if (specifier.startsWith('.')) {
+  if (specifier.startsWith(".")) {
     return resolveSourceCandidate(join(dirname(fromPath), specifier), files);
   }
   const packageName = packageNameForSpecifier(specifier);
   const packageRoot = workspacePackages.get(packageName);
   if (!packageRoot) return undefined;
-  const subpath = specifier.slice(packageName.length).replace(/^\/+/, '');
-  const candidate = subpath ? join(packageRoot, 'src', subpath) : join(packageRoot, 'src', 'index');
+  const subpath = specifier.slice(packageName.length).replace(/^\/+/, "");
+  const candidate = subpath
+    ? join(packageRoot, "src", subpath)
+    : join(packageRoot, "src", "index");
   return resolveSourceCandidate(candidate, files);
 }
 
 function graphFromEntries(entries, root, workspacePackages = new Map()) {
-  const modules = new Map(entries.map(({ path, source }) => {
-    const absolutePath = resolve(root, path);
-    return [absolutePath, { path: absolutePath, source, imports: [], edges: [] }];
-  }));
+  const modules = new Map(
+    entries.map(({ path, source }) => {
+      const absolutePath = resolve(root, path);
+      return [
+        absolutePath,
+        { path: absolutePath, source, imports: [], edges: [] },
+      ];
+    }),
+  );
   const files = new Set(modules.keys());
   for (const module of modules.values()) {
     module.imports = [...new Set(moduleSpecifiers(module.source))];
     module.edges = module.imports.map((specifier) => ({
       specifier,
-      target: resolveGraphImport(module.path, specifier, files, workspacePackages),
+      target: resolveGraphImport(
+        module.path,
+        specifier,
+        files,
+        workspacePackages,
+      ),
     }));
   }
   return { modules, root, workspacePackages };
 }
 
 async function workspacePackageRoots(root) {
-  const packageFiles = [join(root, 'package.json'), ...await walk(join(root, 'apps')), ...await walk(join(root, 'packages'))]
-    .filter((path) => path.endsWith('package.json') && existsSync(path));
+  const packageFiles = [
+    join(root, "package.json"),
+    ...(await walk(join(root, "apps"))),
+    ...(await walk(join(root, "packages"))),
+  ].filter((path) => path.endsWith("package.json") && existsSync(path));
   const packages = new Map();
   for (const path of packageFiles) {
-    const document = JSON.parse(await readFile(path, 'utf8'));
-    if (typeof document.name === 'string') packages.set(document.name, dirname(path));
+    const document = JSON.parse(await readFile(path, "utf8"));
+    if (typeof document.name === "string")
+      packages.set(document.name, dirname(path));
   }
   return packages;
 }
@@ -184,7 +290,7 @@ function appRuntimeFor(label) {
 }
 
 function isBrowserLabel(label) {
-  return label.startsWith('apps/web/src/browser/');
+  return label.startsWith("apps/web/src/browser/");
 }
 
 function isServerLabel(label) {
@@ -192,19 +298,33 @@ function isServerLabel(label) {
 }
 
 function isUiLabel(label) {
-  return label.startsWith('packages/platform-ui/src/');
+  return label.startsWith("packages/platform-ui/src/");
 }
 
 function isNodeSpecifier(specifier) {
-  return specifier.startsWith('node:') || /^(?:assert|buffer|child_process|crypto|fs|http|https|net|os|path|stream|url|util|worker_threads)$/.test(specifier);
+  return (
+    specifier.startsWith("node:") ||
+    /^(?:assert|buffer|child_process|crypto|fs|http|https|net|os|path|stream|url|util|worker_threads)$/.test(
+      specifier,
+    )
+  );
 }
 
 function isUiTransportSpecifier(specifier) {
-  return specifier.startsWith('@tanstack/') || specifier === 'effect' || specifier.startsWith('@effect/');
+  return (
+    specifier.startsWith("@tanstack/") ||
+    specifier === "effect" ||
+    specifier.startsWith("@effect/")
+  );
 }
 
 function isForbiddenUiTarget(label) {
-  return label.startsWith('apps/') || isPathUnder(label, 'packages/platform-runtime') || isPathUnder(label, 'packages/contracts') || isPathUnder(label, 'packages/generated');
+  return (
+    label.startsWith("apps/") ||
+    isPathUnder(label, "packages/platform-runtime") ||
+    isPathUnder(label, "packages/contracts") ||
+    isPathUnder(label, "packages/generated")
+  );
 }
 
 function checkGraphContext(graph, roots, context) {
@@ -218,32 +338,88 @@ function checkGraphContext(graph, roots, context) {
     if (!module) continue;
     const label = sourceLabel(path, graph.root);
     for (const edge of module.edges) {
-      const targetLabel = edge.target ? sourceLabel(edge.target, graph.root) : undefined;
-      if (context.kind === 'browser') {
-        if (edge.coreModule || isNodeSpecifier(edge.specifier) || edge.specifier === '@coffee-platform/runtime') {
-          fail('BOUND-BROWSER-NODE', `${label} -> ${edge.specifier}: browser graph reaches Node/runtime module`);
+      const targetLabel = edge.target
+        ? sourceLabel(edge.target, graph.root)
+        : undefined;
+      if (context.kind === "browser") {
+        if (
+          edge.coreModule ||
+          isNodeSpecifier(edge.specifier) ||
+          edge.specifier === "@coffee-platform/runtime"
+        ) {
+          fail(
+            "BOUND-BROWSER-NODE",
+            `${label} -> ${edge.specifier}: browser graph reaches Node/runtime module`,
+          );
         }
-        if (targetLabel && (targetLabel === 'apps/web/src/main.ts' || (targetLabel.startsWith('apps/') && !targetLabel.startsWith('apps/web/')) || isPathUnder(targetLabel, 'packages/platform-runtime'))) {
-          fail('BOUND-BROWSER-NODE', `${label} -> ${targetLabel}: browser graph reaches Node/server source`);
+        if (
+          targetLabel &&
+          (targetLabel === "apps/web/src/main.ts" ||
+            (targetLabel.startsWith("apps/") &&
+              !targetLabel.startsWith("apps/web/")) ||
+            isPathUnder(targetLabel, "packages/platform-runtime"))
+        ) {
+          fail(
+            "BOUND-BROWSER-NODE",
+            `${label} -> ${targetLabel}: browser graph reaches Node/server source`,
+          );
         }
       }
-      if (context.kind === 'server' && (edge.specifier === '@coffee-platform/ui' || (targetLabel && isUiLabel(targetLabel)))) {
-        fail('BOUND-SERVER-UI', `${label} -> ${edge.specifier || targetLabel}: server graph reaches browser UI package`);
+      if (
+        context.kind === "server" &&
+        (edge.specifier === "@coffee-platform/ui" ||
+          (targetLabel && isUiLabel(targetLabel)))
+      ) {
+        fail(
+          "BOUND-SERVER-UI",
+          `${label} -> ${edge.specifier || targetLabel}: server graph reaches browser UI package`,
+        );
       }
-      if (context.kind === 'ui') {
-        if (edge.coreModule || isNodeSpecifier(edge.specifier)) fail('BOUND-UI-NODE', `${label} -> ${edge.specifier}: UI graph reaches Node module`);
-        if (isUiTransportSpecifier(edge.specifier)) fail('BOUND-UI-QUERY', `${label} -> ${edge.specifier}: UI graph reaches transport/state library`);
-        if (edge.specifier === '@coffee-platform/runtime' || (targetLabel && isForbiddenUiTarget(targetLabel))) {
-          fail('BOUND-UI-RUNTIME', `${label} -> ${edge.specifier || targetLabel}: UI graph reaches runtime/business source`);
+      if (context.kind === "ui") {
+        if (edge.coreModule || isNodeSpecifier(edge.specifier))
+          fail(
+            "BOUND-UI-NODE",
+            `${label} -> ${edge.specifier}: UI graph reaches Node module`,
+          );
+        if (isUiTransportSpecifier(edge.specifier))
+          fail(
+            "BOUND-UI-QUERY",
+            `${label} -> ${edge.specifier}: UI graph reaches transport/state library`,
+          );
+        if (
+          edge.specifier === "@coffee-platform/runtime" ||
+          (targetLabel && isForbiddenUiTarget(targetLabel))
+        ) {
+          fail(
+            "BOUND-UI-RUNTIME",
+            `${label} -> ${edge.specifier || targetLabel}: UI graph reaches runtime/business source`,
+          );
         }
       }
-      if (context.kind === 'app' && edge.specifier.startsWith('@coffee-platform/') && !isAllowedPlatformPackage(edge.specifier)) {
-        fail('BOUND-IMPORT', `${label} -> ${edge.specifier}: only versioned contracts and platform technical packages are allowed`);
+      if (
+        context.kind === "app" &&
+        edge.specifier.startsWith("@coffee-platform/") &&
+        !isAllowedPlatformPackage(edge.specifier)
+      ) {
+        fail(
+          "BOUND-IMPORT",
+          `${label} -> ${edge.specifier}: only versioned contracts and platform technical packages are allowed`,
+        );
       }
-      if (context.kind === 'app' && targetLabel) {
+      if (context.kind === "app" && targetLabel) {
         const targetRuntime = appRuntimeFor(targetLabel);
-        if (targetRuntime && targetRuntime !== context.runtime) fail('BOUND-IMPORT', `${label} -> ${targetLabel}: runtime implementation boundary crossed transitively`);
-        if (/^packages\/(domain|models|shared-business)(\/|$)/.test(targetLabel)) fail('BOUND-IMPORT', `${label} -> ${targetLabel}: shared business package forbidden transitively`);
+        if (targetRuntime && targetRuntime !== context.runtime)
+          fail(
+            "BOUND-IMPORT",
+            `${label} -> ${targetLabel}: runtime implementation boundary crossed transitively`,
+          );
+        if (
+          /^packages\/(domain|models|shared-business)(\/|$)/.test(targetLabel)
+        )
+          fail(
+            "BOUND-IMPORT",
+            `${label} -> ${targetLabel}: shared business package forbidden transitively`,
+          );
       }
       if (edge.target) queue.push(edge.target);
     }
@@ -251,64 +427,112 @@ function checkGraphContext(graph, roots, context) {
 }
 
 function checkTransitiveBoundaries(graph) {
-  const browserRoots = [...graph.modules.keys()].filter((path) => isBrowserLabel(sourceLabel(path, graph.root)));
-  const serverRoots = [...graph.modules.keys()].filter((path) => isServerLabel(sourceLabel(path, graph.root)));
-  const uiRoots = [...graph.modules.keys()].filter((path) => isUiLabel(sourceLabel(path, graph.root)));
-  const appRoots = [...graph.modules.keys()].filter((path) => appRuntimeFor(sourceLabel(path, graph.root)));
-  checkGraphContext(graph, browserRoots, { kind: 'browser' });
-  checkGraphContext(graph, serverRoots, { kind: 'server' });
-  checkGraphContext(graph, uiRoots, { kind: 'ui' });
-  for (const runtime of new Set(appRoots.map((path) => appRuntimeFor(sourceLabel(path, graph.root)))) ) {
-    checkGraphContext(graph, appRoots.filter((path) => appRuntimeFor(sourceLabel(path, graph.root)) === runtime), { kind: 'app', runtime });
+  const browserRoots = [...graph.modules.keys()].filter((path) =>
+    isBrowserLabel(sourceLabel(path, graph.root)),
+  );
+  const serverRoots = [...graph.modules.keys()].filter((path) =>
+    isServerLabel(sourceLabel(path, graph.root)),
+  );
+  const uiRoots = [...graph.modules.keys()].filter((path) =>
+    isUiLabel(sourceLabel(path, graph.root)),
+  );
+  const appRoots = [...graph.modules.keys()].filter((path) =>
+    appRuntimeFor(sourceLabel(path, graph.root)),
+  );
+  checkGraphContext(graph, browserRoots, { kind: "browser" });
+  checkGraphContext(graph, serverRoots, { kind: "server" });
+  checkGraphContext(graph, uiRoots, { kind: "ui" });
+  for (const runtime of new Set(
+    appRoots.map((path) => appRuntimeFor(sourceLabel(path, graph.root))),
+  )) {
+    checkGraphContext(
+      graph,
+      appRoots.filter(
+        (path) => appRuntimeFor(sourceLabel(path, graph.root)) === runtime,
+      ),
+      { kind: "app", runtime },
+    );
   }
 }
 
-function dependencyCruiserSourceGraph(result, root, sourceFiles, workspacePackages) {
+function dependencyCruiserSourceGraph(
+  result,
+  root,
+  sourceFiles,
+  workspacePackages,
+) {
   const files = new Set(sourceFiles);
   const modules = new Map();
   for (const dependencyModule of result.modules ?? []) {
-    if (typeof dependencyModule.source !== 'string') continue;
+    if (typeof dependencyModule.source !== "string") continue;
     const path = resolve(root, dependencyModule.source);
     if (!files.has(path)) continue;
     modules.set(path, { path, imports: [], edges: [] });
   }
 
   for (const dependencyModule of result.modules ?? []) {
-    if (typeof dependencyModule.source !== 'string') continue;
+    if (typeof dependencyModule.source !== "string") continue;
     const path = resolve(root, dependencyModule.source);
     const module = modules.get(path);
     if (!module) continue;
     for (const dependency of dependencyModule.dependencies ?? []) {
       const specifier = dependency.module;
-      if (typeof specifier !== 'string' || specifier === '✖') continue;
+      if (typeof specifier !== "string" || specifier === "✖") continue;
       let target;
-      if (!dependency.couldNotResolve && typeof dependency.resolved === 'string' && /^(?:apps|packages)\//.test(dependency.resolved)) {
-        target = resolveSourceCandidate(resolve(root, dependency.resolved), files);
+      if (
+        !dependency.couldNotResolve &&
+        typeof dependency.resolved === "string" &&
+        /^(?:apps|packages)\//.test(dependency.resolved)
+      ) {
+        target = resolveSourceCandidate(
+          resolve(root, dependency.resolved),
+          files,
+        );
       }
       target ??= resolveGraphImport(path, specifier, files, workspacePackages);
       module.imports.push(specifier);
-      module.edges.push({ coreModule: dependency.coreModule === true, specifier, target });
+      module.edges.push({
+        coreModule: dependency.coreModule === true,
+        specifier,
+        target,
+      });
     }
   }
   return { modules, root, workspacePackages };
 }
 
 export function checkTransitiveSourceGraph(entries, options = {}) {
-  checkTransitiveBoundaries(graphFromEntries(entries, options.root ?? '/repo', options.workspacePackages ?? new Map()));
+  checkTransitiveBoundaries(
+    graphFromEntries(
+      entries,
+      options.root ?? "/repo",
+      options.workspacePackages ?? new Map(),
+    ),
+  );
 }
 
 function forbiddenModuleKind(moduleName) {
   const normalized = moduleName.toLowerCase();
-  if (normalized === 'axios' || normalized.startsWith('axios-') || normalized.includes('/axios')) return 'axios';
-  if (/(?:^|[/:@_-])(?:sqlite|sqlite3|better-sqlite3|ffi|ffi-napi|vfs|virtual-fs|virtual_fs)(?:$|[/:@_.-])/.test(normalized)) return 'native';
+  if (
+    normalized === "axios" ||
+    normalized.startsWith("axios-") ||
+    normalized.includes("/axios")
+  )
+    return "axios";
+  if (
+    /(?:^|[/:@_-])(?:sqlite|sqlite3|better-sqlite3|ffi|ffi-napi|vfs|virtual-fs|virtual_fs)(?:$|[/:@_.-])/.test(
+      normalized,
+    )
+  )
+    return "native";
   return null;
 }
 
 function findSwitchBody(source, openingBrace) {
   let depth = 0;
   for (let index = openingBrace; index < source.length; index += 1) {
-    if (source[index] === '{') depth += 1;
-    if (source[index] === '}') {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") {
       depth -= 1;
       if (depth === 0) return source.slice(openingBrace + 1, index);
     }
@@ -317,163 +541,419 @@ function findSwitchBody(source, openingBrace) {
 }
 
 function checkStaticSource(path, source) {
-  const label = path.replaceAll('\\', '/');
-  const isUiPackage = label.includes('/packages/platform-ui/');
-  const isBrowserSource = label.includes('/apps/web/src/browser/');
+  const label = path.replaceAll("\\", "/");
+  const isUiPackage = label.includes("/packages/platform-ui/");
+  const isBrowserSource = label.includes("/apps/web/src/browser/");
   const isRealtimeSource = /(?:^|\/)apps\/realtime-gateway\//.test(label);
-  if (isRealtimeSource && /\b(?:select\s+|insert\s+into\s+|update\s+[\w."\s]+\s+set\s+|delete\s+from\s+|(?:create|alter|drop|truncate)\s+table\s+)/i.test(source)) {
-    fail('BOUND-REALTIME-SQL', `${label}: realtime gateway must not contain SQL`);
+  if (
+    isRealtimeSource &&
+    /\b(?:select\s+|insert\s+into\s+|update\s+[\w."\s]+\s+set\s+|delete\s+from\s+|(?:create|alter|drop|truncate)\s+table\s+)/i.test(
+      source,
+    )
+  ) {
+    fail(
+      "BOUND-REALTIME-SQL",
+      `${label}: realtime gateway must not contain SQL`,
+    );
   }
-  if (label.endsWith('/apps/orders-service/src/application/confirm-order.ts')) {
-    const parameters = /\bfunction\s+confirmOrder\s*\(([^)]*)\)/u.exec(source)?.[1] ?? '';
-    if (!/^\s*store\s*:\s*Pick<\s*OrderStore\s*,\s*["']replay["']\s*\|\s*["']precheck["']\s*\|\s*["']confirm["']\s*>\s*,\s*input\s*:\s*CommandContext\s*&\s*Readonly<\s*\{[^}]*\}\s*>\s*$/u.test(parameters) ||
-      /\b(?:fetch|setTimeout)\s*\(|\.\s*(?:publish|send|getOrderInput|verify)\s*\(/u.test(source)) {
-      fail('ARCH-ORDERS-CONFIRM-BOUNDARY', `${label}: Confirm application requirements must contain only the owner Store and command context`);
+  if (label.endsWith("/apps/orders-service/src/application/confirm-order.ts")) {
+    const parameters =
+      /\bfunction\s+confirmOrder\s*\(([^)]*)\)/u.exec(source)?.[1] ?? "";
+    if (
+      !/^\s*store\s*:\s*Pick<\s*OrderStore\s*,\s*["']replay["']\s*\|\s*["']precheck["']\s*\|\s*["']confirm["']\s*>\s*,\s*input\s*:\s*CommandContext\s*&\s*Readonly<\s*\{[^}]*\}\s*>\s*$/u.test(
+        parameters,
+      ) ||
+      /\b(?:fetch|setTimeout)\s*\(|\.\s*(?:publish|send|getOrderInput|verify)\s*\(/u.test(
+        source,
+      )
+    ) {
+      fail(
+        "ARCH-ORDERS-CONFIRM-BOUNDARY",
+        `${label}: Confirm application requirements must contain only the owner Store and command context`,
+      );
     }
   }
-  if (label.endsWith('/apps/orders-service/src/infrastructure/database/order-store.ts') &&
-    /\.\s*(?:publish|produce|send|relay)\s*\(/iu.test(source)) {
-    fail('ARCH-ORDERS-OUTBOX', `${label}: owner transaction cannot publish to Kafka directly`);
+  if (
+    label.endsWith(
+      "/apps/orders-service/src/infrastructure/database/order-store.ts",
+    ) &&
+    /\.\s*(?:publish|produce|send|relay)\s*\(/iu.test(source)
+  ) {
+    fail(
+      "ARCH-ORDERS-OUTBOX",
+      `${label}: owner transaction cannot publish to Kafka directly`,
+    );
   }
-  if (label.endsWith('/apps/orders-service/src/domain/order-contribution.ts') &&
-    /\bofferRef\s*(?::|=)\s*\w+\s*(?:\[|\.get\s*\()/iu.test(source)) {
-    fail('ARCH-ORDERS-FROZEN-OFFER', `${label}: persisted contribution must not remap the frozen offer`);
+  if (
+    label.endsWith("/apps/orders-service/src/domain/order-contribution.ts") &&
+    /\bofferRef\s*(?::|=)\s*\w+\s*(?:\[|\.get\s*\()/iu.test(source)
+  ) {
+    fail(
+      "ARCH-ORDERS-FROZEN-OFFER",
+      `${label}: persisted contribution must not remap the frozen offer`,
+    );
   }
-  if (label.endsWith('/apps/orders-service/src/domain/order-card.ts') &&
-    /\b(?:desired(?:Revision|\.revision|\.version)\s*={2,3}\s*observed(?:Revision|\.revision|\.version)|observed(?:Revision|\.revision|\.version)\s*={2,3}\s*desired(?:Revision|\.revision|\.version))\b/iu.test(source)) {
-    fail('ARCH-ORDERS-INSYNC-PROOF', `${label}: revision equality cannot prove InSync`);
+  if (
+    label.endsWith("/apps/orders-service/src/domain/order-card.ts") &&
+    /\b(?:desired(?:Revision|\.revision|\.version)\s*={2,3}\s*observed(?:Revision|\.revision|\.version)|observed(?:Revision|\.revision|\.version)\s*={2,3}\s*desired(?:Revision|\.revision|\.version))\b/iu.test(
+      source,
+    )
+  ) {
+    fail(
+      "ARCH-ORDERS-INSYNC-PROOF",
+      `${label}: revision equality cannot prove InSync`,
+    );
   }
   if (/(?:^|\/)apps\//.test(label) && LITERAL_POSTGRES_URL_RE.test(source)) {
-    fail('ARCH-POSTGRES-URL', `${label}: literal PostgreSQL connection URL is forbidden in app source; use scoped platform configuration`);
+    fail(
+      "ARCH-POSTGRES-URL",
+      `${label}: literal PostgreSQL connection URL is forbidden in app source; use scoped platform configuration`,
+    );
   }
-  if (AROMA_GATEWAY_SOURCE_RE.test(label) && !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label)) {
+  if (
+    AROMA_GATEWAY_SOURCE_RE.test(label) &&
+    !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label)
+  ) {
     if (/(?<![.\w])(?:globalThis\s*\.\s*)?fetch\s*\(/.test(source)) {
-      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: provider HTTP fetch must stay inside the typed provider http-client`);
+      fail(
+        "ARCH-TYPED-PROVIDER-HTTP",
+        `${label}: provider HTTP fetch must stay inside the typed provider http-client`,
+      );
     }
     if (GENERIC_PROVIDER_PROXY_RE.test(source)) {
-      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: generic provider proxy/forwarder is forbidden outside the typed provider http-client`);
+      fail(
+        "ARCH-TYPED-PROVIDER-HTTP",
+        `${label}: generic provider proxy/forwarder is forbidden outside the typed provider http-client`,
+      );
     }
   }
-  if (AROMA_GATEWAY_SOURCE_RE.test(label) && GENERIC_RETRY_WRAPPER_RE.test(source)) {
-    fail('ARCH-GENERIC-RETRY', `${label}: generic retry wrapper is forbidden; retry ownership must remain explicit and bounded`);
+  if (
+    AROMA_GATEWAY_SOURCE_RE.test(label) &&
+    GENERIC_RETRY_WRAPPER_RE.test(source)
+  ) {
+    fail(
+      "ARCH-GENERIC-RETRY",
+      `${label}: generic retry wrapper is forbidden; retry ownership must remain explicit and bounded`,
+    );
   }
-  if (/\b(?:new\s+Date\s*\(|Date\s*\.\s*(?:now|parse|UTC)\s*\()/m.test(source)) {
-    fail('ARCH-TEMPORAL', `${label}: mutable Date API is forbidden; use Temporal`);
+  if (
+    /\b(?:new\s+Date\s*\(|Date\s*\.\s*(?:now|parse|UTC)\s*\()/m.test(source)
+  ) {
+    fail(
+      "ARCH-TEMPORAL",
+      `${label}: mutable Date API is forbidden; use Temporal`,
+    );
   }
   for (const moduleName of moduleSpecifiers(source)) {
-    if (isRealtimeSource && /^@coffee-platform\/database(?:\/|$)/.test(moduleName)) {
-      fail('BOUND-DB-CLIENT', `${label}: realtime gateway cannot import database capabilities`);
+    if (
+      isRealtimeSource &&
+      /^@coffee-platform\/database(?:\/|$)/.test(moduleName)
+    ) {
+      fail(
+        "BOUND-DB-CLIENT",
+        `${label}: realtime gateway cannot import database capabilities`,
+      );
     }
-    if (AROMA_GATEWAY_SOURCE_RE.test(label) && ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(moduleName)) {
-      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: alternate provider HTTP client ${moduleName} is forbidden; use native fetch/Undici`);
+    if (
+      AROMA_GATEWAY_SOURCE_RE.test(label) &&
+      ALTERNATE_PROVIDER_HTTP_MODULE_RE.test(moduleName)
+    ) {
+      fail(
+        "ARCH-TYPED-PROVIDER-HTTP",
+        `${label}: alternate provider HTTP client ${moduleName} is forbidden; use native fetch/Undici`,
+      );
     }
-    if (AROMA_GATEWAY_SOURCE_RE.test(label) && !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label) && GENERIC_PROVIDER_HTTP_MODULE_RE.test(moduleName)) {
-      fail('ARCH-TYPED-PROVIDER-HTTP', `${label}: generic provider HTTP module ${moduleName} is forbidden outside the typed provider http-client`);
+    if (
+      AROMA_GATEWAY_SOURCE_RE.test(label) &&
+      !TYPED_PROVIDER_HTTP_CLIENT_RE.test(label) &&
+      GENERIC_PROVIDER_HTTP_MODULE_RE.test(moduleName)
+    ) {
+      fail(
+        "ARCH-TYPED-PROVIDER-HTTP",
+        `${label}: generic provider HTTP module ${moduleName} is forbidden outside the typed provider http-client`,
+      );
     }
-    if (isUiPackage && /^(?:@radix-ui\/|@base-ui\/|lucide-react$|class-variance-authority$)/.test(moduleName)) {
-      fail('ARCH-FORBIDDEN-UI-DEPENDENCY', `${label}: forbidden UI dependency ${moduleName}`);
+    if (
+      isUiPackage &&
+      /^(?:@radix-ui\/|@base-ui\/|lucide-react$|class-variance-authority$)/.test(
+        moduleName,
+      )
+    ) {
+      fail(
+        "ARCH-FORBIDDEN-UI-DEPENDENCY",
+        `${label}: forbidden UI dependency ${moduleName}`,
+      );
     }
-    if (isBrowserSource && (isNodeSpecifier(moduleName) || moduleName === '@coffee-platform/runtime')) {
-      fail('BOUND-BROWSER-NODE', `${label}: browser source imports Node/runtime module ${moduleName}`);
+    if (
+      isBrowserSource &&
+      (isNodeSpecifier(moduleName) || moduleName === "@coffee-platform/runtime")
+    ) {
+      fail(
+        "BOUND-BROWSER-NODE",
+        `${label}: browser source imports Node/runtime module ${moduleName}`,
+      );
     }
-    if (label.endsWith('/apps/web/src/main.ts') && /(?:^|\/)browser(?:\/|$)/.test(moduleName)) {
-      fail('BOUND-NODE-BROWSER', `${label}: Node entry imports browser source ${moduleName}`);
+    if (
+      label.endsWith("/apps/web/src/main.ts") &&
+      /(?:^|\/)browser(?:\/|$)/.test(moduleName)
+    ) {
+      fail(
+        "BOUND-NODE-BROWSER",
+        `${label}: Node entry imports browser source ${moduleName}`,
+      );
     }
-    if (/(?:^|\/)apps\/(?!web\/)[^/]+\//.test(label) && (moduleName === "@coffee-platform/ui" || /packages\/platform-ui\//.test(moduleName))) {
-      fail('BOUND-SERVER-UI', `${label}: server runtime imports browser UI package`);
+    if (
+      /(?:^|\/)apps\/(?!web\/)[^/]+\//.test(label) &&
+      (moduleName === "@coffee-platform/ui" ||
+        /packages\/platform-ui\//.test(moduleName))
+    ) {
+      fail(
+        "BOUND-SERVER-UI",
+        `${label}: server runtime imports browser UI package`,
+      );
     }
-    if (isUiPackage && isNodeSpecifier(moduleName)) fail('BOUND-UI-NODE', `${label}: UI package imports Node module ${moduleName}`);
-    if (isUiPackage && isUiTransportSpecifier(moduleName)) fail('BOUND-UI-QUERY', `${label}: UI package imports transport/state module ${moduleName}`);
-    if (/contracts\/fixtures|fixtures\/.*\.json/.test(moduleName)) fail('BOUND-CONTRACT-FIXTURE', `${label}: production source imports contract fixture ${moduleName}`);
-    const internalContract = /(?:^|[/@])(?:generated|contracts)-internal-v1(?:\/|$)/.test(moduleName);
-    const browserContract = /(?:^|\/)apps\/web\//.test(label) && /^@coffee-platform\/contracts-(?:customer|catalog|pricing|orders|aroma)-v1$/.test(moduleName);
-    if (/(?:^|\/)apps\/(?:web|api-public)\//.test(label) && (internalContract || browserContract)) {
-      fail('BOUND-CONTRACT-AUDIENCE', `${label}: browser/public graph imports internal contract ${moduleName}`);
+    if (isUiPackage && isNodeSpecifier(moduleName))
+      fail(
+        "BOUND-UI-NODE",
+        `${label}: UI package imports Node module ${moduleName}`,
+      );
+    if (isUiPackage && isUiTransportSpecifier(moduleName))
+      fail(
+        "BOUND-UI-QUERY",
+        `${label}: UI package imports transport/state module ${moduleName}`,
+      );
+    if (/contracts\/fixtures|fixtures\/.*\.json/.test(moduleName))
+      fail(
+        "BOUND-CONTRACT-FIXTURE",
+        `${label}: production source imports contract fixture ${moduleName}`,
+      );
+    const internalContract =
+      /(?:^|[/@])(?:generated|contracts)-internal-v1(?:\/|$)/.test(moduleName);
+    const browserContract =
+      /(?:^|\/)apps\/web\//.test(label) &&
+      /^@coffee-platform\/contracts-(?:customer|catalog|pricing|orders|aroma)-v1$/.test(
+        moduleName,
+      );
+    if (
+      /(?:^|\/)apps\/(?:web|api-public)\//.test(label) &&
+      (internalContract || browserContract)
+    ) {
+      fail(
+        "BOUND-CONTRACT-AUDIENCE",
+        `${label}: browser/public graph imports internal contract ${moduleName}`,
+      );
     }
-    if (label.startsWith('apps/') && /^(?:@fastify\/swagger|@scalar\/)/.test(moduleName)) {
-      fail('ARCH-RUNTIME-DOCS', `${label}: runtime Swagger/Scalar route is forbidden for launch`);
+    if (
+      label.startsWith("apps/") &&
+      /^(?:@fastify\/swagger|@scalar\/)/.test(moduleName)
+    ) {
+      fail(
+        "ARCH-RUNTIME-DOCS",
+        `${label}: runtime Swagger/Scalar route is forbidden for launch`,
+      );
     }
-    const databaseFoundation = /(?:^|\/)packages\/platform-database\//.test(label);
-    const kafkaFoundation = /(?:^|\/)packages\/platform-kafka-runtime\//.test(label);
-    if ((moduleName.startsWith('@confluentinc/kafka-javascript') || /platform-kafka-runtime\/(?:src|dist)\//.test(moduleName)) && !kafkaFoundation)
-      fail('BOUND-KAFKA-CLIENT', `${label}: native Kafka client belongs to platform-kafka-runtime`);
-    const ownerAdapter = /(?:^|\/)packages\/platform-(?:database|idempotency|migrations|inbox|outbox)\//.test(label) || /(?:^|\/)apps\/[^/]+\/(?:src\/)?(?:infrastructure|repositories)\//.test(label);
-    if ((moduleName === 'pg' || moduleName.startsWith('pg/') || moduleName === 'pg-copy-streams') && !databaseFoundation)
-      fail('BOUND-DB-CLIENT', `${label}: native PostgreSQL driver belongs to platform-database`);
-    if (moduleName === '@coffee-platform/database/owner' && !ownerAdapter)
-      fail('BOUND-DB-CLIENT', `${label}: SQL capabilities belong to owner infrastructure/repositories`);
-    if (/platform-database\/(?:src|dist)\//.test(moduleName) && !databaseFoundation)
-      fail('BOUND-DB-CLIENT', `${label}: private database implementation import is forbidden`);
+    const databaseFoundation = /(?:^|\/)packages\/platform-database\//.test(
+      label,
+    );
+    const kafkaFoundation = /(?:^|\/)packages\/platform-kafka-runtime\//.test(
+      label,
+    );
+    if (
+      (moduleName.startsWith("@confluentinc/kafka-javascript") ||
+        /platform-kafka-runtime\/(?:src|dist)\//.test(moduleName)) &&
+      !kafkaFoundation
+    )
+      fail(
+        "BOUND-KAFKA-CLIENT",
+        `${label}: native Kafka client belongs to platform-kafka-runtime`,
+      );
+    const ownerAdapter =
+      /(?:^|\/)packages\/platform-(?:database|idempotency|migrations|inbox|outbox)\//.test(
+        label,
+      ) ||
+      /(?:^|\/)apps\/[^/]+\/(?:src\/)?(?:infrastructure|repositories)\//.test(
+        label,
+      );
+    if (
+      (moduleName === "pg" ||
+        moduleName.startsWith("pg/") ||
+        moduleName === "pg-copy-streams") &&
+      !databaseFoundation
+    )
+      fail(
+        "BOUND-DB-CLIENT",
+        `${label}: native PostgreSQL driver belongs to platform-database`,
+      );
+    if (moduleName === "@coffee-platform/database/owner" && !ownerAdapter)
+      fail(
+        "BOUND-DB-CLIENT",
+        `${label}: SQL capabilities belong to owner infrastructure/repositories`,
+      );
+    if (
+      /platform-database\/(?:src|dist)\//.test(moduleName) &&
+      !databaseFoundation
+    )
+      fail(
+        "BOUND-DB-CLIENT",
+        `${label}: private database implementation import is forbidden`,
+      );
     if (/^(?:effect|@effect\/)/.test(moduleName))
-      fail('BOUND-DB-CLIENT', `${label}: Effect runtime is superseded by ADR-0025`);
+      fail(
+        "BOUND-DB-CLIENT",
+        `${label}: Effect runtime is superseded by ADR-0025`,
+      );
     const kind = forbiddenModuleKind(moduleName);
-    if (kind === 'axios') fail('ARCH-FORBIDDEN-HTTP', `${label}: Axios import ${moduleName} is forbidden; use native fetch/Undici`);
-    if (kind === 'native') fail('ARCH-FORBIDDEN-NATIVE', `${label}: experimental FFI/SQLite/VFS import ${moduleName} is forbidden without an ADR allowlist`);
+    if (kind === "axios")
+      fail(
+        "ARCH-FORBIDDEN-HTTP",
+        `${label}: Axios import ${moduleName} is forbidden; use native fetch/Undici`,
+      );
+    if (kind === "native")
+      fail(
+        "ARCH-FORBIDDEN-NATIVE",
+        `${label}: experimental FFI/SQLite/VFS import ${moduleName} is forbidden without an ADR allowlist`,
+      );
   }
   if (isUiPackage && /\bfetch\s*\(/m.test(source)) {
-    fail('BOUND-UI-NETWORK', `${label}: UI package cannot perform network calls`);
+    fail(
+      "BOUND-UI-NETWORK",
+      `${label}: UI package cannot perform network calls`,
+    );
   }
-  if (/^\s*(?:const\s+[^=]+\s*=\s*)?require\s*\(|\bmodule\.exports\b|\bexports\.[A-Za-z_$]/m.test(source)) {
-    fail('TS7-ESM', `${label}: CommonJS require/module.exports is forbidden`);
+  if (
+    /^\s*(?:const\s+[^=]+\s*=\s*)?require\s*\(|\bmodule\.exports\b|\bexports\.[A-Za-z_$]/m.test(
+      source,
+    )
+  ) {
+    fail("TS7-ESM", `${label}: CommonJS require/module.exports is forbidden`);
   }
-  for (const moduleName of moduleSpecifiers(source).filter((specifier) => specifier.startsWith('.'))) {
-    if (!moduleName.endsWith('.js') && !moduleName.endsWith('.css')) fail('TS7-ESM', `${label}: relative import ${moduleName} must use a .js runtime specifier`);
+  for (const moduleName of moduleSpecifiers(source).filter((specifier) =>
+    specifier.startsWith("."),
+  )) {
+    if (!moduleName.endsWith(".js") && !moduleName.endsWith(".css"))
+      fail(
+        "TS7-ESM",
+        `${label}: relative import ${moduleName} must use a .js runtime specifier`,
+      );
   }
-  if (/\benum\s+[A-Za-z_$][\w$]*/m.test(source)) fail('TS7-ERASABLE', `${label}: enum is non-erasable syntax; use a literal union`);
-  if (hasExplicitAny(source)) fail('TS7-UNSAFE-ANY', `${label}: explicit any is forbidden`);
-  if (/\bas\s+[A-Z][A-Za-z0-9_$]*(?:Ref|Version)\b/m.test(source)) fail('TS7-BRAND-CAST', `${label}: direct identifier brand cast is forbidden; parse and validate at the boundary`);
+  if (/\benum\s+[A-Za-z_$][\w$]*/m.test(source))
+    fail(
+      "TS7-ERASABLE",
+      `${label}: enum is non-erasable syntax; use a literal union`,
+    );
+  if (hasExplicitAny(source))
+    fail("TS7-UNSAFE-ANY", `${label}: explicit any is forbidden`);
+  if (/\bas\s+[A-Z][A-Za-z0-9_$]*(?:Ref|Version)\b/m.test(source))
+    fail(
+      "TS7-BRAND-CAST",
+      `${label}: direct identifier brand cast is forbidden; parse and validate at the boundary`,
+    );
 
-  if (/\beval\s*\(|\bnew\s+Function\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*["']/m.test(source)) {
-    fail('TS7-EVAL', label + ': dynamic code execution is forbidden');
+  if (
+    /\beval\s*\(|\bnew\s+Function\s*\(|\b(?:setTimeout|setInterval)\s*\(\s*["']/m.test(
+      source,
+    )
+  ) {
+    fail("TS7-EVAL", label + ": dynamic code execution is forbidden");
   }
   for (const match of source.matchAll(/\bswitch\s*\([^)]*\)\s*\{/g)) {
-    const body = findSwitchBody(source, match.index + match[0].lastIndexOf('{'));
-    if (!/\bdefault\s*:/.test(body)) fail('TS7-EXHAUSTIVE-SWITCH', `${label}: state switch must have an exhaustive default/never branch`);
+    const body = findSwitchBody(
+      source,
+      match.index + match[0].lastIndexOf("{"),
+    );
+    if (!/\bdefault\s*:/.test(body))
+      fail(
+        "TS7-EXHAUSTIVE-SWITCH",
+        `${label}: state switch must have an exhaustive default/never branch`,
+      );
   }
-  if (/^\s*(?:Promise\.(?:resolve|reject)|[A-Za-z_$][\w$]*(?:Async|Promise))\s*\([^;]*\);\s*$/m.test(source)) {
-    fail('TS7-PROMISE', `${label}: promise expression is not awaited, returned, or explicitly voided`);
+  if (
+    /^\s*(?:Promise\.(?:resolve|reject)|[A-Za-z_$][\w$]*(?:Async|Promise))\s*\([^;]*\);\s*$/m.test(
+      source,
+    )
+  ) {
+    fail(
+      "TS7-PROMISE",
+      `${label}: promise expression is not awaited, returned, or explicitly voided`,
+    );
   }
-  if (/\bOrderVersion\b/.test(source) && /\bProjectionVersion\b/.test(source) && /===|!==|<=|>=|<|>/.test(source)) {
-    fail('TS7-VERSION-MIX', `${label}: OrderVersion and ProjectionVersion cannot be compared or mixed`);
+  if (
+    /\bOrderVersion\b/.test(source) &&
+    /\bProjectionVersion\b/.test(source) &&
+    /===|!==|<=|>=|<|>/.test(source)
+  ) {
+    fail(
+      "TS7-VERSION-MIX",
+      `${label}: OrderVersion and ProjectionVersion cannot be compared or mixed`,
+    );
   }
 }
 
 async function checkStaticSources(root) {
   const sourceFiles = await collectSourceFiles(root);
-  for (const path of sourceFiles) checkStaticSource(path, await readFile(path, 'utf8'));
+  for (const path of sourceFiles)
+    checkStaticSource(path, await readFile(path, "utf8"));
 }
 
 async function checkCatalogActiveWriters(root) {
-  const sourceFiles = (await Promise.all(['apps', 'packages'].map((target) => walk(join(root, target))))).flat();
+  const sourceFiles = (
+    await Promise.all(
+      ["apps", "packages"].map((target) => walk(join(root, target))),
+    )
+  ).flat();
   for (const path of sourceFiles) {
-    const label = path.slice(root.length + 1).replaceAll('\\', '/');
+    const label = path.slice(root.length + 1).replaceAll("\\", "/");
     const isMigration = /\.sql$/i.test(path);
     const isRuntimeSource = /\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs)$/i.test(path);
     if (!isMigration && !isRuntimeSource) continue;
-    if (!CATALOG_SQL_MUTATION_RE.test(await readFile(path, 'utf8'))) continue;
+    if (!CATALOG_SQL_MUTATION_RE.test(await readFile(path, "utf8"))) continue;
     const allowed = isMigration
-      ? label.startsWith('apps/catalog-service/migrations/')
-      : isRuntimeSource && label.startsWith('apps/catalog-activation-worker/');
+      ? label.startsWith("apps/catalog-service/migrations/")
+      : isRuntimeSource && label.startsWith("apps/catalog-activation-worker/");
     if (!allowed) {
-      fail('ARCH-CATALOG-WRITER', `${label}: active Catalog tables may only be mutated by catalog-activation-worker; schema migrations belong to catalog-service`);
+      fail(
+        "ARCH-CATALOG-WRITER",
+        `${label}: active Catalog tables may only be mutated by catalog-activation-worker; schema migrations belong to catalog-service`,
+      );
     }
   }
 }
 
 async function checkCatalogApiBoundary(root) {
-  for (const path of (await walk(join(root, 'apps/catalog-service/src'))).filter(isTypeScriptSource)) {
-    const source = await readFile(path, 'utf8');
+  for (const path of (
+    await walk(join(root, "apps/catalog-service/src"))
+  ).filter(isTypeScriptSource)) {
+    const source = await readFile(path, "utf8");
     const label = sourceLabel(path, root);
-    if (CATALOG_API_PRIVATE_TABLE_RE.test(source)) fail('ARCH-CATALOG-API-BOUNDARY', `${label}: Catalog API may SELECT only active views`);
-    if (CATALOG_API_OUTBOUND_RE.test(source)) fail('ARCH-CATALOG-API-BOUNDARY', `${label}: Catalog owner cannot import outbound/provider HTTP clients`);
+    if (CATALOG_API_PRIVATE_TABLE_RE.test(source))
+      fail(
+        "ARCH-CATALOG-API-BOUNDARY",
+        `${label}: Catalog API may SELECT only active views`,
+      );
+    if (CATALOG_API_OUTBOUND_RE.test(source))
+      fail(
+        "ARCH-CATALOG-API-BOUNDARY",
+        `${label}: Catalog owner cannot import outbound/provider HTTP clients`,
+      );
   }
 }
 
 function findCatalogRowsArray(schema, propertyName = null) {
-  if (!schema || typeof schema !== 'object') return null;
-  if (schema.type === 'array' && schema.items && typeof schema.items === 'object') {
+  if (!schema || typeof schema !== "object") return null;
+  if (
+    schema.type === "array" &&
+    schema.items &&
+    typeof schema.items === "object"
+  ) {
     const item = schema.items;
-    if (item.type === 'object' || (item.properties && typeof item.properties === 'object') || /(?:product|variant|offer|catalog)[-_ ]?(?:row|record|item)/i.test(item.$ref ?? '')) return propertyName ?? 'array';
+    if (
+      item.type === "object" ||
+      (item.properties && typeof item.properties === "object") ||
+      /(?:product|variant|offer|catalog)[-_ ]?(?:row|record|item)/i.test(
+        item.$ref ?? "",
+      )
+    )
+      return propertyName ?? "array";
   }
   for (const [key, value] of Object.entries(schema)) {
     const found = Array.isArray(value)
@@ -485,114 +965,232 @@ function findCatalogRowsArray(schema, propertyName = null) {
 }
 
 async function checkCatalogEventSchemas(root) {
-  const eventsRoot = join(root, 'contracts/schemas/events');
+  const eventsRoot = join(root, "contracts/schemas/events");
   for (const path of await walk(eventsRoot)) {
-    if (!/^catalog.*\.schema\.json$/i.test(path.slice(eventsRoot.length + 1))) continue;
+    if (!/^catalog.*\.schema\.json$/i.test(path.slice(eventsRoot.length + 1)))
+      continue;
     let schema;
     try {
-      schema = JSON.parse(await readFile(path, 'utf8'));
+      schema = JSON.parse(await readFile(path, "utf8"));
     } catch (error) {
-      fail('ARCH-CATALOG-EVENT-ROWS', `${path.slice(root.length + 1)}: invalid Catalog event schema: ${error.message}`);
+      fail(
+        "ARCH-CATALOG-EVENT-ROWS",
+        `${path.slice(root.length + 1)}: invalid Catalog event schema: ${error.message}`,
+      );
     }
     const rowsProperty = findCatalogRowsArray(schema);
     if (rowsProperty) {
-      fail('ARCH-CATALOG-EVENT-ROWS', `${path.slice(root.length + 1)}: Catalog Kafka events must publish references/revisions, not full Catalog row arrays (found ${rowsProperty})`);
+      fail(
+        "ARCH-CATALOG-EVENT-ROWS",
+        `${path.slice(root.length + 1)}: Catalog Kafka events must publish references/revisions, not full Catalog row arrays (found ${rowsProperty})`,
+      );
     }
   }
 }
 
 async function checkPermissionManifests(root) {
-  const appEntries = existsSync(join(root, 'apps'))
-    ? (await readdir(join(root, 'apps'), { withFileTypes: true })).filter((entry) => {
-        if (!entry.isDirectory()) return false;
-        const appRoot = join(root, 'apps', entry.name);
-        // Native images and source-only modules are not runtimes; entrypoints/packages require permissions.
-        if (entry.name === 'web') return existsSync(join(appRoot, 'src/main.ts'));
-        return existsSync(join(appRoot, 'src/main.ts')) || existsSync(join(appRoot, 'package.json'));
-      })
+  const appEntries = existsSync(join(root, "apps"))
+    ? (await readdir(join(root, "apps"), { withFileTypes: true })).filter(
+        (entry) => {
+          if (!entry.isDirectory()) return false;
+          const appRoot = join(root, "apps", entry.name);
+          // Native images and source-only modules are not runtimes; entrypoints/packages require permissions.
+          if (entry.name === "web")
+            return existsSync(join(appRoot, "src/main.ts"));
+          return (
+            existsSync(join(appRoot, "src/main.ts")) ||
+            existsSync(join(appRoot, "package.json"))
+          );
+        },
+      )
     : [];
-  const candidates = ['permission-manifest.json', 'permissions.json', 'permission.json'];
-  const centralRoot = join(root, 'config', 'permissions');
+  const candidates = [
+    "permission-manifest.json",
+    "permissions.json",
+    "permission.json",
+  ];
+  const centralRoot = join(root, "config", "permissions");
   const centralFiles = existsSync(centralRoot)
-    ? (await readdir(centralRoot, { withFileTypes: true })).filter((entry) => entry.isFile() && entry.name.endsWith('.json') && !entry.name.endsWith('.schema.json')).map((entry) => entry.name.slice(0, -5))
+    ? (await readdir(centralRoot, { withFileTypes: true }))
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            entry.name.endsWith(".json") &&
+            !entry.name.endsWith(".schema.json"),
+        )
+        .map((entry) => entry.name.slice(0, -5))
     : [];
   const appNames = new Set(appEntries.map((entry) => entry.name));
   const unknownCentral = centralFiles.filter((name) => !appNames.has(name));
-  if (appEntries.length > 0 && unknownCentral.length) fail('ARCH-PERMISSION', `unknown central runtime permission manifest ${unknownCentral.join(', ')}`);
+  if (appEntries.length > 0 && unknownCentral.length)
+    fail(
+      "ARCH-PERMISSION",
+      `unknown central runtime permission manifest ${unknownCentral.join(", ")}`,
+    );
   const manifests = [];
   for (const entry of appEntries) {
-    const appRoot = join(root, 'apps', entry.name);
-    const paths = candidates.filter((name) => existsSync(join(appRoot, name))).map((name) => join(appRoot, name));
-    if (paths.length > 1) fail('ARCH-PERMISSION', `apps/${entry.name}: multiple permission manifests`);
+    const appRoot = join(root, "apps", entry.name);
+    const paths = candidates
+      .filter((name) => existsSync(join(appRoot, name)))
+      .map((name) => join(appRoot, name));
+    if (paths.length > 1)
+      fail(
+        "ARCH-PERMISSION",
+        `apps/${entry.name}: multiple permission manifests`,
+      );
     if (paths.length === 1) {
-      if (existsSync(join(centralRoot, `${entry.name}.json`))) fail('ARCH-PERMISSION', `apps/${entry.name}: duplicate local and central permission manifests`);
+      if (existsSync(join(centralRoot, `${entry.name}.json`)))
+        fail(
+          "ARCH-PERMISSION",
+          `apps/${entry.name}: duplicate local and central permission manifests`,
+        );
       manifests.push({ app: entry.name, path: paths[0] });
     } else {
       const centralPath = join(centralRoot, `${entry.name}.json`);
-      if (existsSync(centralPath)) manifests.push({ app: entry.name, path: centralPath, central: true });
+      if (existsSync(centralPath))
+        manifests.push({ app: entry.name, path: centralPath, central: true });
     }
   }
   // During the initial skeleton phase there is no permission inventory yet.
   // Once a manifest or platform config is materialized, every runtime must
   // carry the same explicit five capability classes.
-  if (appEntries.length === 0 || (manifests.length === 0 && !existsSync(join(root, 'config/platform.yaml')))) return;
+  if (
+    appEntries.length === 0 ||
+    (manifests.length === 0 && !existsSync(join(root, "config/platform.yaml")))
+  )
+    return;
   if (manifests.length !== appEntries.length) {
-    const missing = appEntries.filter((entry) => !manifests.some((item) => item.app === entry.name)).map((entry) => entry.name);
-    fail('ARCH-PERMISSION', `runtime permission manifest missing for ${missing.join(', ')}`);
+    const missing = appEntries
+      .filter((entry) => !manifests.some((item) => item.app === entry.name))
+      .map((entry) => entry.name);
+    fail(
+      "ARCH-PERMISSION",
+      `runtime permission manifest missing for ${missing.join(", ")}`,
+    );
   }
-  for (const {app, path} of manifests) {
+  for (const { app, path } of manifests) {
     let document;
     try {
-      document = JSON.parse(await readFile(path, 'utf8'));
+      document = JSON.parse(await readFile(path, "utf8"));
     } catch (error) {
-      fail('ARCH-PERMISSION', `apps/${app}: invalid permission manifest: ${error.message}`);
+      fail(
+        "ARCH-PERMISSION",
+        `apps/${app}: invalid permission manifest: ${error.message}`,
+      );
     }
-    if (document.runtime !== app) fail('ARCH-PERMISSION', `apps/${app}: runtime identity must be ${app}`);
-    if (document.schemaVersion !== 1) fail('ARCH-PERMISSION', `apps/${app}: schemaVersion must be 1`);
+    if (document.runtime !== app)
+      fail("ARCH-PERMISSION", `apps/${app}: runtime identity must be ${app}`);
+    if (document.schemaVersion !== 1)
+      fail("ARCH-PERMISSION", `apps/${app}: schemaVersion must be 1`);
     const permissions = document.permissions ?? document;
-    if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) fail('ARCH-PERMISSION', `apps/${app}: permissions object is required`);
-    const arrayKey = (shortName, centralName) => Object.hasOwn(permissions, centralName) ? centralName : shortName;
-    for (const [shortName, centralName] of [['net', 'allowNet'], ['fsRead', 'allowFsRead'], ['fsWrite', 'allowFsWrite']]) {
+    if (
+      !permissions ||
+      typeof permissions !== "object" ||
+      Array.isArray(permissions)
+    )
+      fail("ARCH-PERMISSION", `apps/${app}: permissions object is required`);
+    const arrayKey = (shortName, centralName) =>
+      Object.hasOwn(permissions, centralName) ? centralName : shortName;
+    for (const [shortName, centralName] of [
+      ["net", "allowNet"],
+      ["fsRead", "allowFsRead"],
+      ["fsWrite", "allowFsWrite"],
+    ]) {
       const key = arrayKey(shortName, centralName);
-      if (!Array.isArray(permissions[key]) || permissions[key].some((value) => typeof value !== 'string')) {
-        fail('ARCH-PERMISSION', `apps/${app}: permissions.${key} must be an explicit string array`);
+      if (
+        !Array.isArray(permissions[key]) ||
+        permissions[key].some((value) => typeof value !== "string")
+      ) {
+        fail(
+          "ARCH-PERMISSION",
+          `apps/${app}: permissions.${key} must be an explicit string array`,
+        );
       }
     }
-    for (const [shortName, centralName] of [['childProcess', 'allowChildProcess'], ['worker', 'allowWorker'], ['addon', 'allowAddons'], ['ffi', 'allowFfi']]) {
+    for (const [shortName, centralName] of [
+      ["childProcess", "allowChildProcess"],
+      ["worker", "allowWorker"],
+      ["addon", "allowAddons"],
+      ["ffi", "allowFfi"],
+    ]) {
       const key = arrayKey(shortName, centralName);
-      if (!Object.hasOwn(permissions, key) || typeof permissions[key] !== 'boolean') fail('ARCH-PERMISSION', `apps/${app}: permissions.${key} must be an explicit boolean`);
+      if (
+        !Object.hasOwn(permissions, key) ||
+        typeof permissions[key] !== "boolean"
+      )
+        fail(
+          "ARCH-PERMISSION",
+          `apps/${app}: permissions.${key} must be an explicit boolean`,
+        );
     }
-    if (permissions.allowFfi === true) fail('ARCH-FORBIDDEN-NATIVE', `apps/${app}: FFI capability requires an explicit ADR allowlist`);
+    if (permissions.allowFfi === true)
+      fail(
+        "ARCH-FORBIDDEN-NATIVE",
+        `apps/${app}: FFI capability requires an explicit ADR allowlist`,
+      );
   }
 }
 
 async function runDependencyCruiser(root, configPath) {
-  const targets = ['apps', 'packages'].filter((path) => existsSync(join(root, path)));
-  if (targets.length === 0) return { skipped: true, reason: 'runtime roots are not materialized before issue #3' };
+  const targets = ["apps", "packages"].filter((path) =>
+    existsSync(join(root, path)),
+  );
+  if (targets.length === 0)
+    return {
+      skipped: true,
+      reason: "runtime roots are not materialized before issue #3",
+    };
 
-  const sourceFiles = (await collectSourceFiles(root))
-    .map((path) => path.slice(root.length + 1));
-  if (sourceFiles.length === 0) return { skipped: true, reason: 'no TypeScript sources are materialized' };
+  const sourceFiles = (await collectSourceFiles(root)).map((path) =>
+    path.slice(root.length + 1),
+  );
+  if (sourceFiles.length === 0)
+    return { skipped: true, reason: "no TypeScript sources are materialized" };
 
-  const executable = resolve(SCRIPT_ROOT, 'node_modules/.bin/depcruise');
-  const result = spawnSync(executable, ['--config', configPath, '--output-type', 'json', ...sourceFiles], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, NO_UPDATE_NOTIFIER: '1' },
-  });
-  if (result.error) fail('BOUND-IMPORT', `Dependency Cruiser ${ACCEPTED_DEPENDENCY_CRUISER} unavailable: ${result.error.message}`);
+  const executable = resolve(SCRIPT_ROOT, "node_modules/.bin/depcruise");
+  const result = spawnSync(
+    executable,
+    ["--config", configPath, "--output-type", "json", ...sourceFiles],
+    {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, NO_UPDATE_NOTIFIER: "1" },
+    },
+  );
+  if (result.error)
+    fail(
+      "BOUND-IMPORT",
+      `Dependency Cruiser ${ACCEPTED_DEPENDENCY_CRUISER} unavailable: ${result.error.message}`,
+    );
   let graph;
   try {
     graph = JSON.parse(result.stdout);
   } catch {
-    fail('BOUND-IMPORT', `${result.stdout}\n${result.stderr}`.trim() || 'Dependency Cruiser did not return an AST graph');
+    fail(
+      "BOUND-IMPORT",
+      `${result.stdout}\n${result.stderr}`.trim() ||
+        "Dependency Cruiser did not return an AST graph",
+    );
   }
   if (graph.summary?.error > 0) {
-    const diagnostic = graph.summary.violations?.map((violation) => `${violation.rule.name} ${violation.from} -> ${violation.to}`).join('; ');
-    fail('BOUND-IMPORT', diagnostic || 'Dependency Cruiser rejected the import graph');
+    const diagnostic = graph.summary.violations
+      ?.map(
+        (violation) =>
+          `${violation.rule.name} ${violation.from} -> ${violation.to}`,
+      )
+      .join("; ");
+    fail(
+      "BOUND-IMPORT",
+      diagnostic || "Dependency Cruiser rejected the import graph",
+    );
   }
   checkTransitiveBoundaries(
-    dependencyCruiserSourceGraph(graph, root, sourceFilesAbsolute(root, sourceFiles), await workspacePackageRoots(root)),
+    dependencyCruiserSourceGraph(
+      graph,
+      root,
+      sourceFilesAbsolute(root, sourceFiles),
+      await workspacePackageRoots(root),
+    ),
   );
   return { skipped: false };
 }
@@ -604,33 +1202,42 @@ function sourceFilesAbsolute(root, sourceFiles) {
 export async function checkArchitecture(root = SCRIPT_ROOT) {
   const resolvedRoot = resolve(root);
   for (const path of FORBIDDEN_ROOTS) {
-    if (existsSync(join(resolvedRoot, path))) fail('BOUND-IMPORT', `${path} is a forbidden shared business root`);
+    if (existsSync(join(resolvedRoot, path)))
+      fail("BOUND-IMPORT", `${path} is a forbidden shared business root`);
   }
   await checkPackageDependencies(resolvedRoot);
   await checkStaticSources(resolvedRoot);
   await checkCatalogActiveWriters(resolvedRoot);
   await checkCatalogApiBoundary(resolvedRoot);
   await checkCatalogEventSchemas(resolvedRoot);
-  if (existsSync(join(resolvedRoot, 'config/database-ownership.json')) && existsSync(join(resolvedRoot, 'config/service-catalog.json'))) {
+  if (
+    existsSync(join(resolvedRoot, "config/database-ownership.json")) &&
+    existsSync(join(resolvedRoot, "config/service-catalog.json"))
+  ) {
     await checkDatabaseOwnership(resolvedRoot);
   }
   await checkPermissionManifests(resolvedRoot);
-  const configPath = resolve(SCRIPT_ROOT, '.dependency-cruiser.cjs');
-  if (!existsSync(configPath) || !(await stat(configPath)).isFile()) fail('BOUND-IMPORT', '.dependency-cruiser.cjs is missing');
+  const configPath = resolve(SCRIPT_ROOT, ".dependency-cruiser.cjs");
+  if (!existsSync(configPath) || !(await stat(configPath)).isFile())
+    fail("BOUND-IMPORT", ".dependency-cruiser.cjs is missing");
   return await runDependencyCruiser(resolvedRoot, configPath);
 }
 
 export { checkStaticSource };
 
 function parseRoot(argv) {
-  const index = argv.indexOf('--root');
+  const index = argv.indexOf("--root");
   return index === -1 ? SCRIPT_ROOT : resolve(argv[index + 1]);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const result = await checkArchitecture(parseRoot(process.argv.slice(2)));
-    console.log(result.skipped ? `architecture: passed (${result.reason})` : `architecture: passed with Dependency Cruiser ${ACCEPTED_DEPENDENCY_CRUISER}`);
+    console.log(
+      result.skipped
+        ? `architecture: passed (${result.reason})`
+        : `architecture: passed with Dependency Cruiser ${ACCEPTED_DEPENDENCY_CRUISER}`,
+    );
   } catch (error) {
     console.error(`architecture: FAIL: ${error.message}`);
     process.exitCode = 1;

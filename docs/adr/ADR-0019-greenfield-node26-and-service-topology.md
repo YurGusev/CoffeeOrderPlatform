@@ -35,12 +35,12 @@ companion artifacts под `platform/**`, которых в новом репо�
 
 Единая runtime identity первого запуска:
 
-| Компонент | Значение |
-|---|---|
-| Node.js | `26.8.1` |
-| npm | `11.19.0` |
-| Corepack | `0.35.0` |
-| pnpm | `11.24.0` |
+| Компонент        | Значение                                                  |
+| ---------------- | --------------------------------------------------------- |
+| Node.js          | `26.8.1`                                                  |
+| npm              | `11.19.0`                                                 |
+| Corepack         | `0.35.0`                                                  |
+| pnpm             | `11.24.0`                                                 |
 | Production image | `node:26.8.1-bookworm-slim@sha256:<verified-real-digest>` |
 
 Placeholder digest не допускается в materialized #3. Один exact digest

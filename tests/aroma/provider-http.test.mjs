@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ProviderHttpClient } from "../../apps/aroma-gateway/dist/infrastructure/provider/http-client.js";
-import {cookieHeader, deserializeCookieMaterial} from "../../apps/aroma-gateway/dist/infrastructure/provider/cookie-jar.js";
+import {
+  cookieHeader,
+  deserializeCookieMaterial,
+} from "../../apps/aroma-gateway/dist/infrastructure/provider/cookie-jar.js";
 
 const options = {
   origin: "https://provider.test",
@@ -198,9 +201,39 @@ void test("Provider read accepts the observed hyphenated cookie Expires without 
 });
 
 void test("persisted cookie material cannot inject request headers", () => {
-  const material = JSON.stringify([{name: "october_session", value: "ok\r\nX-Injected: yes", domain: "provider.test", path: "/", expiresAt: null, secure: true, httpOnly: true, sameSite: null}]);
-  assert.throws(() => deserializeCookieMaterial(material), {code: "ProviderProtocolViolation"});
-  assert.equal(cookieHeader([{name: "october_session", value: "ok\r\nX-Injected: yes", domain: "provider.test", path: "/", expiresAt: null, secure: true, httpOnly: true, sameSite: null}], "provider.test"), "");
+  const material = JSON.stringify([
+    {
+      name: "october_session",
+      value: "ok\r\nX-Injected: yes",
+      domain: "provider.test",
+      path: "/",
+      expiresAt: null,
+      secure: true,
+      httpOnly: true,
+      sameSite: null,
+    },
+  ]);
+  assert.throws(() => deserializeCookieMaterial(material), {
+    code: "ProviderProtocolViolation",
+  });
+  assert.equal(
+    cookieHeader(
+      [
+        {
+          name: "october_session",
+          value: "ok\r\nX-Injected: yes",
+          domain: "provider.test",
+          path: "/",
+          expiresAt: null,
+          secure: true,
+          httpOnly: true,
+          sameSite: null,
+        },
+      ],
+      "provider.test",
+    ),
+    "",
+  );
 });
 
 void test("Provider cart safe GET waits at least 250 ms after releasing the failed body", async (t) => {
@@ -294,33 +327,83 @@ void test("provider login, mutation, and read failures record latency and error 
   const spans = [];
   const latencies = [];
   const telemetry = {
-    metrics: {increment() {}, result() {}},
-    observeProviderLatency(value) { latencies.push(value); },
+    metrics: { increment() {}, result() {} },
+    observeProviderLatency(value) {
+      latencies.push(value);
+    },
     startSpan(name) {
-      const observed = {name, statuses: 0, exceptions: 0, ends: 0};
+      const observed = { name, statuses: 0, exceptions: 0, ends: 0 };
       spans.push(observed);
       return {
         setAttribute() {},
-        setStatus() { observed.statuses++; },
-        recordException() { observed.exceptions++; },
-        end() { observed.ends++; },
+        setStatus() {
+          observed.statuses++;
+        },
+        recordException() {
+          observed.exceptions++;
+        },
+        end() {
+          observed.ends++;
+        },
       };
     },
   };
-  const client = new ProviderHttpClient({...options, telemetry});
+  const client = new ProviderHttpClient({ ...options, telemetry });
   t.after(() => client.close());
-  t.mock.method(globalThis, "fetch", async () => { throw new Error("provider unavailable"); });
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("provider unavailable");
+  });
 
-  await assert.rejects(client.login({email: "operator@example.test", password: "not-emitted"}, signal()), {code: "ProviderUnavailable"});
-  await assert.rejects(client.mutate({kind: "add-cart-line", offerId: "1", quantity: 1}, signal()), {code: "ProviderUnavailable"});
-  await assert.rejects(collect(client.read({kind: "catalog-page", page: 1, pageSize: 1}, signal())), {code: "ProviderUnavailable"});
+  await assert.rejects(
+    client.login(
+      { email: "operator@example.test", password: "not-emitted" },
+      signal(),
+    ),
+    { code: "ProviderUnavailable" },
+  );
+  await assert.rejects(
+    client.mutate(
+      { kind: "add-cart-line", offerId: "1", quantity: 1 },
+      signal(),
+    ),
+    { code: "ProviderUnavailable" },
+  );
+  await assert.rejects(
+    collect(
+      client.read({ kind: "catalog-page", page: 1, pageSize: 1 }, signal()),
+    ),
+    { code: "ProviderUnavailable" },
+  );
 
   assert.equal(latencies.length, 3);
-  assert.deepEqual(spans.map(({name, statuses, exceptions, ends}) => ({name, statuses, exceptions, ends})), [
-    {name: "aroma.gateway.provider.login", statuses: 1, exceptions: 1, ends: 1},
-    {name: "aroma.gateway.provider.mutation", statuses: 1, exceptions: 1, ends: 1},
-    {name: "aroma.gateway.provider.read", statuses: 1, exceptions: 1, ends: 1},
-  ]);
+  assert.deepEqual(
+    spans.map(({ name, statuses, exceptions, ends }) => ({
+      name,
+      statuses,
+      exceptions,
+      ends,
+    })),
+    [
+      {
+        name: "aroma.gateway.provider.login",
+        statuses: 1,
+        exceptions: 1,
+        ends: 1,
+      },
+      {
+        name: "aroma.gateway.provider.mutation",
+        statuses: 1,
+        exceptions: 1,
+        ends: 1,
+      },
+      {
+        name: "aroma.gateway.provider.read",
+        statuses: 1,
+        exceptions: 1,
+        ends: 1,
+      },
+    ],
+  );
 });
 
 void test("Provider cart retry shutdown during delay запрещает второй dispatch", async (t) => {
@@ -512,29 +595,70 @@ void test("Provider login использует только observed JSON contra
 });
 
 void test("Provider mutation transport uses the exact observed cart URLs and typed payloads", async (t) => {
-  const client = new ProviderHttpClient({...options, maxResponseBytes: 1_024});
+  const client = new ProviderHttpClient({
+    ...options,
+    maxResponseBytes: 1_024,
+  });
   t.after(() => client.close());
   const calls = [];
-  const cookie = {name: "october_session", value: "secret", domain: "provider.test", path: "/", expiresAt: null, secure: true, httpOnly: true, sameSite: "lax"};
+  const cookie = {
+    name: "october_session",
+    value: "secret",
+    domain: "provider.test",
+    path: "/",
+    expiresAt: null,
+    secure: true,
+    httpOnly: true,
+    sameSite: "lax",
+  };
   t.mock.method(globalThis, "fetch", async (url, init) => {
-    calls.push({url, init});
-    return new Response("{}", {status: 200, headers: {"content-type": "application/json"}});
+    calls.push({ url, init });
+    return new Response("{}", {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
   });
-  await client.mutate({kind: "add-cart-line", offerId: "300000", quantity: 1, packing: "Aroma"}, signal(), [cookie]);
-  await client.mutate({kind: "set-cart-line-quantity", cartLineId: "300001", quantity: 2, packing: "Aroma"}, signal(), [cookie]);
-  await client.mutate({kind: "remove-cart-line", cartLineId: "300001"}, signal(), [cookie]);
+  await client.mutate(
+    { kind: "add-cart-line", offerId: "300000", quantity: 1, packing: "Aroma" },
+    signal(),
+    [cookie],
+  );
+  await client.mutate(
+    {
+      kind: "set-cart-line-quantity",
+      cartLineId: "300001",
+      quantity: 2,
+      packing: "Aroma",
+    },
+    signal(),
+    [cookie],
+  );
+  await client.mutate(
+    { kind: "remove-cart-line", cartLineId: "300001" },
+    signal(),
+    [cookie],
+  );
 
   assert.equal(calls.length, 3);
   assert.equal(calls[0].url, "https://provider.test/api/v1/cart/");
   assert.equal(calls[0].init.method, "POST");
-  assert.equal(calls[0].init.headers["content-type"], "application/x-www-form-urlencoded");
+  assert.equal(
+    calls[0].init.headers["content-type"],
+    "application/x-www-form-urlencoded",
+  );
   assert.equal(calls[0].init.headers.cookie, "october_session=secret");
-  assert.deepEqual(Object.fromEntries(new URLSearchParams(calls[0].init.body)), {offer_id: "300000", quantity: "1", packing: "Aroma"});
+  assert.deepEqual(
+    Object.fromEntries(new URLSearchParams(calls[0].init.body)),
+    { offer_id: "300000", quantity: "1", packing: "Aroma" },
+  );
 
   assert.equal(calls[1].url, "https://provider.test/api/v1/cart/300001");
   assert.equal(calls[1].init.method, "PUT");
   assert.equal(calls[1].init.headers["content-type"], "application/json");
-  assert.deepEqual(JSON.parse(calls[1].init.body), {quantity: 2, packing: "Aroma"});
+  assert.deepEqual(JSON.parse(calls[1].init.body), {
+    quantity: 2,
+    packing: "Aroma",
+  });
 
   assert.equal(calls[2].url, "https://provider.test/api/v1/cart/300001");
   assert.equal(calls[2].init.method, "DELETE");
@@ -542,16 +666,32 @@ void test("Provider mutation transport uses the exact observed cart URLs and typ
 });
 
 void test("Provider mutation transport decodes a typed provider rejection without retry", async (t) => {
-  const client = new ProviderHttpClient({...options, maxResponseBytes: 2_048});
+  const client = new ProviderHttpClient({
+    ...options,
+    maxResponseBytes: 2_048,
+  });
   t.after(() => client.close());
   let calls = 0;
   t.mock.method(globalThis, "fetch", async () => {
     calls += 1;
-    return new Response(JSON.stringify({error: "duplicate", errors: {offer_id: ["already in cart"]}}), {status: 422, headers: {"content-type": "application/json"}});
+    return new Response(
+      JSON.stringify({
+        error: "duplicate",
+        errors: { offer_id: ["already in cart"] },
+      }),
+      { status: 422, headers: { "content-type": "application/json" } },
+    );
   });
-  const result = await client.mutate({kind: "add-cart-line", offerId: "300000", quantity: 1}, signal());
+  const result = await client.mutate(
+    { kind: "add-cart-line", offerId: "300000", quantity: 1 },
+    signal(),
+  );
   assert.equal(result.statusCode, 422);
-  assert.deepEqual(result.rejection, {statusCode: 422, effect: "unknown", errorFieldNames: ["offer_id"]});
+  assert.deepEqual(result.rejection, {
+    statusCode: 422,
+    effect: "unknown",
+    errorFieldNames: ["offer_id"],
+  });
   assert.equal(calls, 1);
 });
 

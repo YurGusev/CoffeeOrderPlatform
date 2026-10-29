@@ -20,7 +20,9 @@
     "$schema": { "const": "./runtime-foundation-decision.schema.json" },
     "schemaVersion": { "const": 1 },
     "decisionId": { "const": "ADR-COP-RUNTIME-001" },
-    "decisionRef": { "const": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md" },
+    "decisionRef": {
+      "const": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md"
+    },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
@@ -35,14 +37,27 @@
     "productionImage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "tag", "indexDigest", "platform", "platformManifestDigest", "reference"],
+      "required": [
+        "repository",
+        "tag",
+        "indexDigest",
+        "platform",
+        "platformManifestDigest",
+        "reference"
+      ],
       "properties": {
         "repository": { "const": "docker.io/library/node" },
         "tag": { "const": "26.8.1-bookworm-slim" },
-        "indexDigest": { "const": "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e" },
+        "indexDigest": {
+          "const": "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e"
+        },
         "platform": { "const": "linux/amd64" },
-        "platformManifestDigest": { "const": "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae" },
-        "reference": { "const": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae" }
+        "platformManifestDigest": {
+          "const": "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
+        },
+        "reference": {
+          "const": "node:26.8.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
+        }
       }
     },
     "registryVerification": {
@@ -51,8 +66,12 @@
       "required": ["verifiedAt", "command", "digestPolicy"],
       "properties": {
         "verifiedAt": { "type": "string", "format": "date" },
-        "command": { "const": "docker buildx imagetools inspect node:26.8.1-bookworm-slim" },
-        "digestPolicy": { "const": "record-index-and-pin-target-platform-manifest" }
+        "command": {
+          "const": "docker buildx imagetools inspect node:26.8.1-bookworm-slim"
+        },
+        "digestPolicy": {
+          "const": "record-index-and-pin-target-platform-manifest"
+        }
       }
     },
     "toolchainDecision": {
@@ -75,7 +94,9 @@
         "typescript": { "const": "typescript@7.0.2" },
         "structuralLinter": { "const": "oxlint@1.80.0" },
         "typeAwareLinter": { "const": "oxlint-tsgolint@7.0.2001" },
-        "openApiGenerator": { "const": "@hey-api/openapi-ts@0.0.0-next-20260824173136" },
+        "openApiGenerator": {
+          "const": "@hey-api/openapi-ts@0.0.0-next-20260824173136"
+        },
         "openApiGeneratorPlugin": { "const": "@hey-api/typescript" },
         "generatorMode": { "const": "types-only" },
         "compilerLanes": { "const": 1 }

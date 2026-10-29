@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {execFileSync} from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,9 +63,21 @@ void test("GREEN/RED: DB admission reserves one serial rollout without changing 
     join(ROOT, "config/platform.yaml"),
     (text) => parseYaml(text, { json: true }),
   );
-  const declaredOwners = roleMap.databases.flatMap(database => database.runtimeRoles.map(role => ({runtime: role.runtime, database: database.name})));
-  assert.deepEqual(declaredOwners.map(owner => owner.runtime).sort(), Object.entries(config.services).filter(([, service]) => service.database !== null).map(([runtime]) => runtime).sort());
-  for (const owner of declaredOwners) assert.equal(config.services[owner.runtime].database, owner.database);
+  const declaredOwners = roleMap.databases.flatMap((database) =>
+    database.runtimeRoles.map((role) => ({
+      runtime: role.runtime,
+      database: database.name,
+    })),
+  );
+  assert.deepEqual(
+    declaredOwners.map((owner) => owner.runtime).sort(),
+    Object.entries(config.services)
+      .filter(([, service]) => service.database !== null)
+      .map(([runtime]) => runtime)
+      .sort(),
+  );
+  for (const owner of declaredOwners)
+    assert.equal(config.services[owner.runtime].database, owner.database);
   const budget = assertDatabaseAdmissionBudget({
     services: config.services,
     postgres: config.postgres,
@@ -89,7 +101,7 @@ void test("GREEN/RED: DB admission reserves one serial rollout without changing 
     () =>
       assertDatabaseAdmissionBudget({
         services: config.services,
-        postgres: {...config.postgres, rolloutReplicas: 2},
+        postgres: { ...config.postgres, rolloutReplicas: 2 },
       }),
     (error) =>
       error instanceof PlatformConfigError &&
@@ -106,11 +118,17 @@ void test("GREEN/RED: DB admission reserves one serial rollout without changing 
     originalPoolMax,
   );
   assert.equal(config.services["orders-service"].dbPool.max, 4);
-  assert.equal(config.services["orders-service"].dbPool.terminalTimeoutMs, 2000);
-  assert.equal(config.services["orders-service"].dbPool.transactionTimeoutMs, 10000);
+  assert.equal(
+    config.services["orders-service"].dbPool.terminalTimeoutMs,
+    2000,
+  );
+  assert.equal(
+    config.services["orders-service"].dbPool.transactionTimeoutMs,
+    10000,
+  );
   const source = parseYaml(
     await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
-    {json: true},
+    { json: true },
   );
   assert.throws(
     () =>
@@ -129,7 +147,9 @@ void test("GREEN/RED: DB admission reserves one serial rollout without changing 
       }),
     (error) =>
       error instanceof PlatformConfigError &&
-      /DB timeout должен быть меньше platform\.shutdownGraceMs/u.test(error.message),
+      /DB timeout должен быть меньше platform\.shutdownGraceMs/u.test(
+        error.message,
+      ),
   );
 });
 
@@ -301,7 +321,11 @@ void test("GREEN: bootstrap executes an idempotent plan through an injected clie
 });
 
 void test("GREEN: smoke matrix is isolated and checks every own/cross-owner pair", () => {
-  const offline = JSON.parse(execFileSync(process.execPath, [join(ROOT, "scripts/db-smoke.mjs")], {encoding: "utf8"}));
+  const offline = JSON.parse(
+    execFileSync(process.execPath, [join(ROOT, "scripts/db-smoke.mjs")], {
+      encoding: "utf8",
+    }),
+  );
   assert.deepEqual(offline.roleCases, buildSmokeCases(roleMap, ownership));
   assert.deepEqual(offline.structural, validateDeliverySqlContract());
   assert.equal(offline.structural.liveDatabase, false);

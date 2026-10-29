@@ -11,22 +11,28 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import {createWriteStream} from "node:fs";
+import { createWriteStream } from "node:fs";
 import { Buffer } from "node:buffer";
 import { execFileSync, spawn } from "node:child_process";
-import {request as httpsRequest} from "node:https";
+import { request as httpsRequest } from "node:https";
 import { join, resolve } from "node:path";
 import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dump as dumpYaml, load as parseYaml } from "js-yaml";
-import {parsePublicTlsHostname} from "../packages/platform-security/src/index.ts";
-import {createDatabase, withTransaction} from "../packages/platform-database/dist/index.js";
-import {defineStatement} from "../packages/platform-database/dist/owner.js";
-import {ensureNginxSecretOwnership} from "./config-bootstrap/index.mjs";
-import {applyMigrations, migrationChecksum} from "../packages/platform-migrations/dist/index.js";
-import {OfferBindingStore} from "../apps/aroma-gateway/dist/infrastructure/database/offer-binding-store.js";
-import {OrderStore} from "../apps/orders-service/dist/infrastructure/database/order-store.js";
-import {createSourceIdentity} from "../apps/aroma-gateway/dist/domain/source-identity.js";
+import { parsePublicTlsHostname } from "../packages/platform-security/src/index.ts";
+import {
+  createDatabase,
+  withTransaction,
+} from "../packages/platform-database/dist/index.js";
+import { defineStatement } from "../packages/platform-database/dist/owner.js";
+import { ensureNginxSecretOwnership } from "./config-bootstrap/index.mjs";
+import {
+  applyMigrations,
+  migrationChecksum,
+} from "../packages/platform-migrations/dist/index.js";
+import { OfferBindingStore } from "../apps/aroma-gateway/dist/infrastructure/database/offer-binding-store.js";
+import { OrderStore } from "../apps/orders-service/dist/infrastructure/database/order-store.js";
+import { createSourceIdentity } from "../apps/aroma-gateway/dist/domain/source-identity.js";
 import pg from "pg";
 import {
   SERVER_IDENTITY_SQL,
@@ -39,7 +45,7 @@ import {
   createDeliveryTables,
   dropDeliveryTables,
 } from "../scripts/db-live-proof.mjs";
-import {createRuntimeLoggingOverride} from "./observability/generate.mjs";
+import { createRuntimeLoggingOverride } from "./observability/generate.mjs";
 
 const { Client } = pg;
 
@@ -128,7 +134,8 @@ function parseArguments(argv) {
     else if (argument === "--database-proof") options.databaseProof = true;
     else if (argument === "--customer-proof") options.customerProof = true;
     else if (argument === "--recovery-proof") options.recoveryProof = true;
-    else if (argument === "--aroma-binding-proof") options.aromaBindingProof = true;
+    else if (argument === "--aroma-binding-proof")
+      options.aromaBindingProof = true;
     else if (argument === "--aroma-cart-proof") options.aromaCartProof = true;
     else if (argument === "--keep") options.keep = true;
     else if (argument === "--project-name") {
@@ -145,11 +152,31 @@ function parseArguments(argv) {
       throw new Error(`unknown option ${argument}\n\n${usage()}`);
     }
   }
-  if ([options.databaseProof, options.customerProof, options.recoveryProof, options.aromaBindingProof, options.aromaCartProof].filter(Boolean).length > 1)
-    throw new Error("--database-proof, --customer-proof, --recovery-proof, --aroma-binding-proof and --aroma-cart-proof are mutually exclusive");
+  if (
+    [
+      options.databaseProof,
+      options.customerProof,
+      options.recoveryProof,
+      options.aromaBindingProof,
+      options.aromaCartProof,
+    ].filter(Boolean).length > 1
+  )
+    throw new Error(
+      "--database-proof, --customer-proof, --recovery-proof, --aroma-binding-proof and --aroma-cart-proof are mutually exclusive",
+    );
   if (options.recoveryProof && options.stubSecrets)
-    throw new Error("--recovery-proof requires generated fixture credentials, not --stub-secrets");
-  if (!options.stubSecrets && !options.databaseProof && !options.customerProof && !options.recoveryProof && !options.aromaBindingProof && !options.aromaCartProof && !process.env.SOPS_AGE_KEY_FILE) {
+    throw new Error(
+      "--recovery-proof requires generated fixture credentials, not --stub-secrets",
+    );
+  if (
+    !options.stubSecrets &&
+    !options.databaseProof &&
+    !options.customerProof &&
+    !options.recoveryProof &&
+    !options.aromaBindingProof &&
+    !options.aromaCartProof &&
+    !process.env.SOPS_AGE_KEY_FILE
+  ) {
     throw new Error(
       "SOPS_AGE_KEY_FILE is required for decrypted scoped secrets; use --stub-secrets only for topology smoke without DB/provider proof",
     );
@@ -174,15 +201,19 @@ function runCompose(projectName, secretsDir, args, options = {}) {
     ...process.env,
     COFFEE_COMPOSE_SECRETS_DIR: secretsDir,
   };
-  return execFileSync("docker", composeArgs(projectName, args, options.composeFile), {
-    cwd: ROOT,
-    env,
-    encoding: "utf8",
-    stdio: options.inherit
-      ? "inherit"
-      : [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-    input: options.input,
-  });
+  return execFileSync(
+    "docker",
+    composeArgs(projectName, args, options.composeFile),
+    {
+      cwd: ROOT,
+      env,
+      encoding: "utf8",
+      stdio: options.inherit
+        ? "inherit"
+        : [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
+      input: options.input,
+    },
+  );
 }
 
 function spawnCompose(projectName, secretsDir, args, options = {}) {
@@ -190,33 +221,50 @@ function spawnCompose(projectName, secretsDir, args, options = {}) {
     ...process.env,
     COFFEE_COMPOSE_SECRETS_DIR: secretsDir,
   };
-  const child = spawn("docker", composeArgs(projectName, args, options.composeFile), {
-    cwd: ROOT,
-    env,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  const child = spawn(
+    "docker",
+    composeArgs(projectName, args, options.composeFile),
+    {
+      cwd: ROOT,
+      env,
+      stdio: ["pipe", "pipe", "pipe"],
+    },
+  );
   let output = "";
   let errorOutput = "";
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk) => { output += chunk; options.onOutput?.(chunk); });
-  child.stderr.on("data", (chunk) => { errorOutput += chunk; });
+  child.stdout.on("data", (chunk) => {
+    output += chunk;
+    options.onOutput?.(chunk);
+  });
+  child.stderr.on("data", (chunk) => {
+    errorOutput += chunk;
+  });
   child.stdin.end(options.input ?? "");
   const done = new Promise((resolvePromise, reject) => {
     child.once("error", reject);
     child.once("close", (code, signal) => {
-      if (code === 0) resolvePromise({output, errorOutput, signal});
-      else reject(new Error(`docker compose exec exited ${code ?? signal}: ${errorOutput.trim()}`));
+      if (code === 0) resolvePromise({ output, errorOutput, signal });
+      else
+        reject(
+          new Error(
+            `docker compose exec exited ${code ?? signal}: ${errorOutput.trim()}`,
+          ),
+        );
     });
   });
-  return {child, done};
+  return { child, done };
 }
 
 function runDocker(args, options = {}) {
   return execFileSync("docker", args, {
     cwd: ROOT,
     encoding: "utf8",
-    env: options.env === undefined ? process.env : {...process.env, ...options.env},
+    env:
+      options.env === undefined
+        ? process.env
+        : { ...process.env, ...options.env },
     stdio: options.inherit
       ? "inherit"
       : [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
@@ -228,23 +276,35 @@ function runDockerAsync(args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn("docker", args, {
       cwd: ROOT,
-      env: options.env === undefined ? process.env : {...process.env, ...options.env},
+      env:
+        options.env === undefined
+          ? process.env
+          : { ...process.env, ...options.env },
       stdio: options.inherit ? "inherit" : ["ignore", "pipe", "pipe"],
     });
     let errorOutput = "";
     if (!options.inherit) {
       child.stderr.setEncoding("utf8");
-      child.stderr.on("data", (chunk) => { errorOutput += chunk; });
+      child.stderr.on("data", (chunk) => {
+        errorOutput += chunk;
+      });
     }
     child.once("error", reject);
     child.once("close", (code, signal) => {
       if (code === 0) resolve();
-      else reject(new Error(`docker exited ${code ?? signal}: ${errorOutput.trim()}`));
+      else
+        reject(
+          new Error(`docker exited ${code ?? signal}: ${errorOutput.trim()}`),
+        );
     });
   });
 }
 
-export function buildRuntimeImages(projectName, runtimes = RUNTIMES, builtImages = []) {
+export function buildRuntimeImages(
+  projectName,
+  runtimes = RUNTIMES,
+  builtImages = [],
+) {
   for (const runtime of runtimes) {
     execFileSync(
       process.execPath,
@@ -267,13 +327,16 @@ export function buildRuntimeImages(projectName, runtimes = RUNTIMES, builtImages
     process.execPath,
     [
       join(ROOT, "tools/docker-build.mjs"),
-      "--file", "apps/edge-nginx/Dockerfile",
-      "--target", "edge-nginx",
+      "--file",
+      "apps/edge-nginx/Dockerfile",
+      "--target",
+      "edge-nginx",
       "--load",
-      "-t", "coffee-platform-edge-nginx:local",
+      "-t",
+      "coffee-platform-edge-nginx:local",
       ROOT,
     ],
-    {cwd: ROOT, env: process.env, stdio: "inherit"},
+    { cwd: ROOT, env: process.env, stdio: "inherit" },
   );
 }
 
@@ -310,29 +373,33 @@ async function writeStubSecret(
       if (!Object.hasOwn(current, segment)) current[segment] = {};
       current = current[segment];
     }
-    current[segments.at(-1)] = securityMaterial?.[ref] ?? (ref === `security.serviceTransportKeys.${runtime}`
-      ? transportMaterial
-      : ref === "aroma.email"
-        ? "issue10-safe-read@example.invalid"
-        : ref === "aroma.password"
-          ? "compose-aroma-fixture-password"
-          : ref === "edge.tlsPrivateKey" && publicTlsMaterial !== undefined
-        ? publicTlsMaterial.keyPem
-        : ref === "edge.tlsCertificate" && publicTlsMaterial !== undefined
-          ? publicTlsMaterial.certPem
-      : ref.startsWith("postgres.") && databaseCredential !== undefined
-        ? databaseCredential
-        : ref.startsWith("kafka.") && kafkaCredential !== undefined
-          ? kafkaCredential
-        : ref.startsWith("postgres.")
-          ? {
-              username: `compose_${runtime.replaceAll("-", "_")}`,
-              password: "compose-smoke-placeholder",
-            }
-          : "compose-smoke-placeholder");
+    current[segments.at(-1)] =
+      securityMaterial?.[ref] ??
+      (ref === `security.serviceTransportKeys.${runtime}`
+        ? transportMaterial
+        : ref === "aroma.email"
+          ? "issue10-safe-read@example.invalid"
+          : ref === "aroma.password"
+            ? "compose-aroma-fixture-password"
+            : ref === "edge.tlsPrivateKey" && publicTlsMaterial !== undefined
+              ? publicTlsMaterial.keyPem
+              : ref === "edge.tlsCertificate" && publicTlsMaterial !== undefined
+                ? publicTlsMaterial.certPem
+                : ref.startsWith("postgres.") &&
+                    databaseCredential !== undefined
+                  ? databaseCredential
+                  : ref.startsWith("kafka.") && kafkaCredential !== undefined
+                    ? kafkaCredential
+                    : ref.startsWith("postgres.")
+                      ? {
+                          username: `compose_${runtime.replaceAll("-", "_")}`,
+                          password: "compose-smoke-placeholder",
+                        }
+                      : "compose-smoke-placeholder");
   }
   for (const ref of optionalRefs) {
-    const value = ref === "edge.tlsCaBundle" ? publicTlsMaterial?.caPem : undefined;
+    const value =
+      ref === "edge.tlsCaBundle" ? publicTlsMaterial?.caPem : undefined;
     if (value === undefined) continue;
     const segments = ref.split(".");
     let current = secrets;
@@ -351,10 +418,13 @@ function createEd25519KeySet() {
   const keyPair = () => generateKeyPairSync("ed25519");
   const active = keyPair();
   const previous = keyPair();
-  const publicPem = (key) => key.export({type: "spki", format: "pem"});
+  const publicPem = (key) => key.export({ type: "spki", format: "pem" });
   return {
-    privateKey: active.privateKey.export({type: "pkcs8", format: "pem"}),
-    verificationKeys: {active: publicPem(active.publicKey), previous: publicPem(previous.publicKey)},
+    privateKey: active.privateKey.export({ type: "pkcs8", format: "pem" }),
+    verificationKeys: {
+      active: publicPem(active.publicKey),
+      previous: publicPem(previous.publicKey),
+    },
   };
 }
 
@@ -369,47 +439,91 @@ function createStubSecurityMaterial() {
   return {
     "security.actorContextEdgeSigningPrivateKey": actor.privateKey,
     "security.actorContextEdgeVerificationPublicKeys": actor.verificationKeys,
-    "security.apiPublicDelegationSigningPrivateKey": apiPublicDelegation.privateKey,
-    "security.apiInternalDelegationSigningPrivateKey": apiInternalDelegation.privateKey,
-    "security.ordersServiceDelegationSigningPrivateKey": ordersService.privateKey,
-    "security.serviceVerificationKeys.orders-service": ordersService.verificationKeys,
-    "security.serviceVerificationKeys.pricing-service": pricingService.verificationKeys,
-    "security.pricingServiceDelegationSigningPrivateKey": pricingService.privateKey,
+    "security.apiPublicDelegationSigningPrivateKey":
+      apiPublicDelegation.privateKey,
+    "security.apiInternalDelegationSigningPrivateKey":
+      apiInternalDelegation.privateKey,
+    "security.ordersServiceDelegationSigningPrivateKey":
+      ordersService.privateKey,
+    "security.serviceVerificationKeys.orders-service":
+      ordersService.verificationKeys,
+    "security.serviceVerificationKeys.pricing-service":
+      pricingService.verificationKeys,
+    "security.pricingServiceDelegationSigningPrivateKey":
+      pricingService.privateKey,
     "security.customerCursorSigningPrivateKey": customerCursor.privateKey,
-    "security.customerCursorVerificationPublicKeys": customerCursor.verificationKeys,
+    "security.customerCursorVerificationPublicKeys":
+      customerCursor.verificationKeys,
     "security.catalogCursorSigningPrivateKey": catalogCursor.privateKey,
-    "security.delegationVerificationKeys.api-public": apiPublicDelegation.verificationKeys,
-    "security.delegationVerificationKeys.api-internal": apiInternalDelegation.verificationKeys,
+    "security.delegationVerificationKeys.api-public":
+      apiPublicDelegation.verificationKeys,
+    "security.delegationVerificationKeys.api-internal":
+      apiInternalDelegation.verificationKeys,
   };
 }
 
-async function writeCustomerProofFixtures(secretsDir, securityMaterial, transportMaterials) {
+async function writeCustomerProofFixtures(
+  secretsDir,
+  securityMaterial,
+  transportMaterials,
+) {
   const fixtures = {
     signing: join(secretsDir, "customer-test-signing.json"),
     publicTransport: join(secretsDir, "customer-test-api-public.json"),
     internalTransport: join(secretsDir, "customer-test-api-internal.json"),
   };
-  await writeFile(fixtures.signing, JSON.stringify({
-    public: securityMaterial["security.apiPublicDelegationSigningPrivateKey"],
-    internal: securityMaterial["security.apiInternalDelegationSigningPrivateKey"],
-  }) + "\n", {encoding: "utf8", mode: 0o400});
-  await writeFile(fixtures.publicTransport, transportMaterials.service.get("api-public"), {encoding: "utf8", mode: 0o400});
-  await writeFile(fixtures.internalTransport, transportMaterials.service.get("api-internal"), {encoding: "utf8", mode: 0o400});
+  await writeFile(
+    fixtures.signing,
+    JSON.stringify({
+      public: securityMaterial["security.apiPublicDelegationSigningPrivateKey"],
+      internal:
+        securityMaterial["security.apiInternalDelegationSigningPrivateKey"],
+    }) + "\n",
+    { encoding: "utf8", mode: 0o400 },
+  );
+  await writeFile(
+    fixtures.publicTransport,
+    transportMaterials.service.get("api-public"),
+    { encoding: "utf8", mode: 0o400 },
+  );
+  await writeFile(
+    fixtures.internalTransport,
+    transportMaterials.service.get("api-internal"),
+    { encoding: "utf8", mode: 0o400 },
+  );
   for (const path of Object.values(fixtures)) await chmod(path, 0o400);
   return fixtures;
 }
 
-async function createStubTransportMaterials(secretsDir, environment, publicHostname) {
+async function createStubTransportMaterials(
+  secretsDir,
+  environment,
+  publicHostname,
+) {
   const directory = join(secretsDir, "transport-ca");
-  await mkdir(directory, {recursive: true, mode: 0o700});
+  await mkdir(directory, { recursive: true, mode: 0o700 });
   const caKey = join(directory, "ca.key");
   const caCert = join(directory, "ca.crt");
   const serial = join(directory, "ca.srl");
-  execFileSync("openssl", [
-    "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-    "-keyout", caKey, "-out", caCert, "-days", "1",
-    "-subj", "/CN=coffee-platform-compose-smoke-ca",
-  ], {stdio: "ignore"});
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      caKey,
+      "-out",
+      caCert,
+      "-days",
+      "1",
+      "-subj",
+      "/CN=coffee-platform-compose-smoke-ca",
+    ],
+    { stdio: "ignore" },
+  );
   const caPem = await readFile(caCert, "utf8");
   const materials = new Map();
   for (const [index, runtime] of [...RUNTIMES, "edge-nginx"].entries()) {
@@ -418,56 +532,158 @@ async function createStubTransportMaterials(secretsDir, environment, publicHostn
     const csr = `${prefix}.csr`;
     const cert = `${prefix}.crt`;
     const ext = `${prefix}.ext`;
-    await writeFile(ext, [
-      `subjectAltName=URI:spiffe://coffee-platform/${environment}/${runtime},DNS:${runtime}.${environment}.svc.coffee-platform.internal`,
-      "extendedKeyUsage=serverAuth,clientAuth",
-      "",
-    ].join("\n"), {encoding: "utf8", mode: 0o400});
-    execFileSync("openssl", [
-      "req", "-new", "-newkey", "rsa:2048", "-nodes",
-      "-keyout", key, "-out", csr, "-subj", `/CN=${runtime}`,
-    ], {stdio: "ignore"});
-    execFileSync("openssl", [
-      "x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey,
-      ...(index === 0 ? ["-CAcreateserial"] : ["-CAserial", serial]),
-      "-out", cert, "-days", "1", "-sha256", "-extfile", ext,
-    ], {stdio: "ignore"});
-    const sanOutput = execFileSync("openssl", ["x509", "-in", cert, "-noout", "-ext", "subjectAltName"], {encoding: "utf8"});
-    assert.match(sanOutput, new RegExp(`URI:spiffe://coffee-platform/${environment}/${runtime}(?:,|\\s)`));
-    assert.match(sanOutput, new RegExp(`DNS:${runtime}\\.${environment}\\.svc\\.coffee-platform\\.internal`));
-    materials.set(runtime, JSON.stringify({
-      caPem,
-      certPem: await readFile(cert, "utf8"),
-      keyPem: await readFile(key, "utf8"),
-    }));
+    await writeFile(
+      ext,
+      [
+        `subjectAltName=URI:spiffe://coffee-platform/${environment}/${runtime},DNS:${runtime}.${environment}.svc.coffee-platform.internal`,
+        "extendedKeyUsage=serverAuth,clientAuth",
+        "",
+      ].join("\n"),
+      { encoding: "utf8", mode: 0o400 },
+    );
+    execFileSync(
+      "openssl",
+      [
+        "req",
+        "-new",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-keyout",
+        key,
+        "-out",
+        csr,
+        "-subj",
+        `/CN=${runtime}`,
+      ],
+      { stdio: "ignore" },
+    );
+    execFileSync(
+      "openssl",
+      [
+        "x509",
+        "-req",
+        "-in",
+        csr,
+        "-CA",
+        caCert,
+        "-CAkey",
+        caKey,
+        ...(index === 0 ? ["-CAcreateserial"] : ["-CAserial", serial]),
+        "-out",
+        cert,
+        "-days",
+        "1",
+        "-sha256",
+        "-extfile",
+        ext,
+      ],
+      { stdio: "ignore" },
+    );
+    const sanOutput = execFileSync(
+      "openssl",
+      ["x509", "-in", cert, "-noout", "-ext", "subjectAltName"],
+      { encoding: "utf8" },
+    );
+    assert.match(
+      sanOutput,
+      new RegExp(
+        `URI:spiffe://coffee-platform/${environment}/${runtime}(?:,|\\s)`,
+      ),
+    );
+    assert.match(
+      sanOutput,
+      new RegExp(
+        `DNS:${runtime}\\.${environment}\\.svc\\.coffee-platform\\.internal`,
+      ),
+    );
+    materials.set(
+      runtime,
+      JSON.stringify({
+        caPem,
+        certPem: await readFile(cert, "utf8"),
+        keyPem: await readFile(key, "utf8"),
+      }),
+    );
   }
   const publicCaKey = join(directory, "edge-public-ca.key");
   const publicCaCert = join(directory, "edge-public-ca.crt");
-  execFileSync("openssl", [
-    "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-    "-keyout", publicCaKey, "-out", publicCaCert, "-days", "1",
-    "-subj", "/CN=coffee-platform-compose-public-ca",
-    "-addext", "basicConstraints=critical,CA:TRUE",
-    "-addext", "keyUsage=critical,keyCertSign,cRLSign",
-  ], {stdio: "ignore"});
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      publicCaKey,
+      "-out",
+      publicCaCert,
+      "-days",
+      "1",
+      "-subj",
+      "/CN=coffee-platform-compose-public-ca",
+      "-addext",
+      "basicConstraints=critical,CA:TRUE",
+      "-addext",
+      "keyUsage=critical,keyCertSign,cRLSign",
+    ],
+    { stdio: "ignore" },
+  );
   const publicCaPem = await readFile(publicCaCert, "utf8");
   const publicKey = join(directory, "edge-public.key");
   const publicCsr = join(directory, "edge-public.csr");
   const publicCert = join(directory, "edge-public.crt");
   const publicExt = join(directory, "edge-public.ext");
-  await writeFile(publicExt, [
-    `subjectAltName=DNS:${publicHostname}`,
-    "extendedKeyUsage=serverAuth",
-    "",
-  ].join("\n"), {encoding: "utf8", mode: 0o400});
-  execFileSync("openssl", [
-    "req", "-new", "-newkey", "rsa:2048", "-nodes",
-    "-keyout", publicKey, "-out", publicCsr, "-subj", `/CN=${publicHostname}`,
-  ], {stdio: "ignore"});
-  execFileSync("openssl", [
-    "x509", "-req", "-in", publicCsr, "-CA", publicCaCert, "-CAkey", publicCaKey,
-    "-CAcreateserial", "-out", publicCert, "-days", "1", "-sha256", "-extfile", publicExt,
-  ], {stdio: "ignore"});
+  await writeFile(
+    publicExt,
+    [
+      `subjectAltName=DNS:${publicHostname}`,
+      "extendedKeyUsage=serverAuth",
+      "",
+    ].join("\n"),
+    { encoding: "utf8", mode: 0o400 },
+  );
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-new",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      publicKey,
+      "-out",
+      publicCsr,
+      "-subj",
+      `/CN=${publicHostname}`,
+    ],
+    { stdio: "ignore" },
+  );
+  execFileSync(
+    "openssl",
+    [
+      "x509",
+      "-req",
+      "-in",
+      publicCsr,
+      "-CA",
+      publicCaCert,
+      "-CAkey",
+      publicCaKey,
+      "-CAcreateserial",
+      "-out",
+      publicCert,
+      "-days",
+      "1",
+      "-sha256",
+      "-extfile",
+      publicExt,
+    ],
+    { stdio: "ignore" },
+  );
   return {
     service: materials,
     publicTls: {
@@ -479,7 +695,9 @@ async function createStubTransportMaterials(secretsDir, environment, publicHostn
 }
 
 async function readDatabaseProofCredentials() {
-  const ownership = await readJson(join(ROOT, "config/database-ownership.json"));
+  const ownership = await readJson(
+    join(ROOT, "config/database-ownership.json"),
+  );
   const owner = ownership.runtimeClaims.find(
     (candidate) => candidate.runtime === DATABASE_PROOF_RUNTIME,
   );
@@ -499,7 +717,9 @@ async function readDatabaseProofCredentials() {
 }
 
 async function readRecoveryProofCredentials() {
-  const ownership = await readJson(join(ROOT, "config/database-ownership.json"));
+  const ownership = await readJson(
+    join(ROOT, "config/database-ownership.json"),
+  );
   const roleMap = await readJson(join(ROOT, "config/database-role-map.json"));
   const runtimeClaims = ownership.runtimeClaims.filter(
     (claim) => claim.database !== null && claim.role !== null,
@@ -561,19 +781,43 @@ async function materializeSecrets(secretsDir, options) {
     await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
     { json: true },
   );
-  const publicHostname = parsePublicTlsHostname(platformConfig.platform?.publicBaseUrl);
-  const stubTransportMaterials = options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
-    ? await createStubTransportMaterials(secretsDir, platformConfig.environment, publicHostname)
-    : undefined;
-  const stubSecurityMaterial = stubTransportMaterials === undefined ? undefined : {
-    ...createStubSecurityMaterial(),
-    ...(options.observabilityExporterToken === undefined
-      ? {}
-      : {"telemetry.exporterToken": options.observabilityExporterToken}),
-  };
+  const publicHostname = parsePublicTlsHostname(
+    platformConfig.platform?.publicBaseUrl,
+  );
+  const stubTransportMaterials =
+    options.stubSecrets ||
+    options.databaseProof ||
+    options.customerProof ||
+    options.recoveryProof ||
+    options.aromaBindingProof ||
+    options.aromaCartProof
+      ? await createStubTransportMaterials(
+          secretsDir,
+          platformConfig.environment,
+          publicHostname,
+        )
+      : undefined;
+  const stubSecurityMaterial =
+    stubTransportMaterials === undefined
+      ? undefined
+      : {
+          ...createStubSecurityMaterial(),
+          ...(options.observabilityExporterToken === undefined
+            ? {}
+            : {
+                "telemetry.exporterToken": options.observabilityExporterToken,
+              }),
+        };
   for (const runtime of RUNTIMES) {
     const path = join(secretsDir, `${runtime}.yaml`);
-    if (options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
+    if (
+      options.stubSecrets ||
+      options.databaseProof ||
+      options.customerProof ||
+      options.recoveryProof ||
+      options.aromaBindingProof ||
+      options.aromaCartProof
+    ) {
       const service = platformConfig.services[runtime];
       await writeStubSecret(
         path,
@@ -582,10 +826,19 @@ async function materializeSecrets(secretsDir, options) {
         service.secretRefs,
         service.optionalSecretRefs ?? [],
         options.databaseProofCredentials?.[runtime] ??
-          options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[runtime],
-        options.stubSecrets || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof ? kafkaCredential : undefined,
+          options.recoveryProofCredentials?.databaseCredentialsByRuntime?.[
+            runtime
+          ],
+        options.stubSecrets ||
+          options.recoveryProof ||
+          options.aromaBindingProof ||
+          options.aromaCartProof
+          ? kafkaCredential
+          : undefined,
         stubTransportMaterials?.service.get(runtime),
-        runtime === "edge-gateway" ? stubTransportMaterials?.publicTls : undefined,
+        runtime === "edge-gateway"
+          ? stubTransportMaterials?.publicTls
+          : undefined,
         stubSecurityMaterial,
       );
     } else {
@@ -595,17 +848,26 @@ async function materializeSecrets(secretsDir, options) {
         encoding: "utf8",
         stdio: ["ignore", "ignore", "pipe"],
       });
-      const kafkaRefs = platformConfig.services[runtime].secretRefs.filter((ref) => ref.startsWith("kafka."));
+      const kafkaRefs = platformConfig.services[runtime].secretRefs.filter(
+        (ref) => ref.startsWith("kafka."),
+      );
       if (kafkaRefs.length > 0) {
-        const document = parseYaml(await readFile(path, "utf8"), {json: true});
+        const document = parseYaml(await readFile(path, "utf8"), {
+          json: true,
+        });
         for (const ref of kafkaRefs) {
           const segments = ref.split(".");
           let target = document.secrets;
-          for (const segment of segments.slice(0, -1)) target = target[segment] ??= {};
+          for (const segment of segments.slice(0, -1))
+            target = target[segment] ??= {};
           target[segments.at(-1)] = kafkaCredential;
         }
         await chmod(path, 0o600);
-        await writeFile(path, dumpYaml(document, {noRefs: true, lineWidth: 120}), {encoding: "utf8", mode: 0o400});
+        await writeFile(
+          path,
+          dumpYaml(document, { noRefs: true, lineWidth: 120 }),
+          { encoding: "utf8", mode: 0o400 },
+        );
         await chmod(path, 0o400);
       }
     }
@@ -632,10 +894,21 @@ async function materializeSecrets(secretsDir, options) {
     );
   }
   const nginxPath = join(secretsDir, "edge-nginx");
-  if (options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
+  if (
+    options.stubSecrets ||
+    options.databaseProof ||
+    options.customerProof ||
+    options.recoveryProof ||
+    options.aromaBindingProof ||
+    options.aromaCartProof
+  ) {
     const runtime = "edge-nginx";
     const service = platformConfig.services[runtime];
-    const refs = service?.secretRefs ?? ["edge.tlsPrivateKey", "edge.tlsCertificate", "security.serviceTransportKeys.edge-nginx"];
+    const refs = service?.secretRefs ?? [
+      "edge.tlsPrivateKey",
+      "edge.tlsCertificate",
+      "security.serviceTransportKeys.edge-nginx",
+    ];
     const optionalRefs = service?.optionalSecretRefs ?? [];
     const documentPath = join(secretsDir, "edge-nginx.yaml");
     await writeStubSecret(
@@ -650,8 +923,12 @@ async function materializeSecrets(secretsDir, options) {
       stubTransportMaterials.publicTls,
       stubSecurityMaterial,
     );
-    const document = parseYaml(await readFile(documentPath, "utf8"), {json: true});
-    const transport = JSON.parse(document.secrets.security.serviceTransportKeys[runtime]);
+    const document = parseYaml(await readFile(documentPath, "utf8"), {
+      json: true,
+    });
+    const transport = JSON.parse(
+      document.secrets.security.serviceTransportKeys[runtime],
+    );
     const files = {
       "public.crt": document.secrets.edge.tlsCertificate,
       "public.key": document.secrets.edge.tlsPrivateKey,
@@ -659,14 +936,14 @@ async function materializeSecrets(secretsDir, options) {
       "client.crt": transport.certPem,
       "client.key": transport.keyPem,
     };
-    await mkdir(nginxPath, {recursive: true, mode: 0o700});
+    await mkdir(nginxPath, { recursive: true, mode: 0o700 });
     for (const [name, content] of Object.entries(files)) {
       const path = join(nginxPath, name);
-      await writeFile(path, content, {encoding: "utf8", mode: 0o400});
+      await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
       await chmod(path, 0o400);
     }
     await ensureNginxSecretOwnership(nginxPath);
-    await rm(documentPath, {force: true});
+    await rm(documentPath, { force: true });
   } else {
     execFileSync(process.execPath, [BOOTSTRAP, "--runtime", "edge-nginx"], {
       cwd: ROOT,
@@ -675,7 +952,11 @@ async function materializeSecrets(secretsDir, options) {
       stdio: ["ignore", "ignore", "pipe"],
     });
   }
-  return {kafkaCredential, securityMaterial: stubSecurityMaterial, transportMaterials: stubTransportMaterials};
+  return {
+    kafkaCredential,
+    securityMaterial: stubSecurityMaterial,
+    transportMaterials: stubTransportMaterials,
+  };
 }
 
 async function materializeKafkaTls(secretsDir) {
@@ -685,77 +966,104 @@ async function materializeKafkaTls(secretsDir) {
   const keystore = join(kafkaDir, "kafka.keystore.p12");
   const certificate = join(kafkaDir, "kafka.crt");
   const truststore = join(kafkaDir, "kafka.truststore.p12");
-  execFileSync("keytool", [
-    "-genkeypair",
-    "-alias",
-    "kafka",
-    "-keyalg",
-    "RSA",
-    "-keysize",
-    "2048",
-    "-validity",
-    "1",
-    "-dname",
-    "CN=kafka",
-    "-ext",
-    "SAN=dns:kafka,dns:localhost,ip:127.0.0.1",
-    "-keystore",
-    keystore,
-    "-storetype",
-    "PKCS12",
-    "-storepass",
-    password,
-    "-keypass",
-    password,
-  ], { stdio: "ignore" });
-  execFileSync("keytool", [
-    "-exportcert",
-    "-alias",
-    "kafka",
-    "-keystore",
-    keystore,
-    "-storepass",
-    password,
-    "-rfc",
-    "-file",
-    certificate,
-  ], { stdio: "ignore" });
-  execFileSync("keytool", [
-    "-importcert",
-    "-noprompt",
-    "-alias",
-    "kafka",
-    "-file",
-    certificate,
-    "-keystore",
-    truststore,
-    "-storetype",
-    "PKCS12",
-    "-storepass",
-    password,
-  ], { stdio: "ignore" });
-  await writeFile(join(kafkaDir, "kafka.keystore.password"), `${password}\n`, { encoding: "utf8", mode: 0o400 });
-  await writeFile(join(kafkaDir, "kafka_jaas.conf"), [
-    "KafkaServer {",
-    "  org.apache.kafka.common.security.plain.PlainLoginModule required",
-    `  username="kafka" password="${password}" user_kafka="${password}";`,
-    "};",
-    "",
-  ].join("\n"), { encoding: "utf8", mode: 0o400 });
-  await writeFile(join(kafkaDir, "client.properties"), [
-    "security.protocol=SASL_SSL",
-    "sasl.mechanism=PLAIN",
-    `sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka" password="${password}";`,
-    "ssl.truststore.type=PKCS12",
-    "ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.p12",
-    `ssl.truststore.password=${password}`,
-    "ssl.endpoint.identification.algorithm=",
-    "",
-  ].join("\n"), { encoding: "utf8", mode: 0o400 });
+  execFileSync(
+    "keytool",
+    [
+      "-genkeypair",
+      "-alias",
+      "kafka",
+      "-keyalg",
+      "RSA",
+      "-keysize",
+      "2048",
+      "-validity",
+      "1",
+      "-dname",
+      "CN=kafka",
+      "-ext",
+      "SAN=dns:kafka,dns:localhost,ip:127.0.0.1",
+      "-keystore",
+      keystore,
+      "-storetype",
+      "PKCS12",
+      "-storepass",
+      password,
+      "-keypass",
+      password,
+    ],
+    { stdio: "ignore" },
+  );
+  execFileSync(
+    "keytool",
+    [
+      "-exportcert",
+      "-alias",
+      "kafka",
+      "-keystore",
+      keystore,
+      "-storepass",
+      password,
+      "-rfc",
+      "-file",
+      certificate,
+    ],
+    { stdio: "ignore" },
+  );
+  execFileSync(
+    "keytool",
+    [
+      "-importcert",
+      "-noprompt",
+      "-alias",
+      "kafka",
+      "-file",
+      certificate,
+      "-keystore",
+      truststore,
+      "-storetype",
+      "PKCS12",
+      "-storepass",
+      password,
+    ],
+    { stdio: "ignore" },
+  );
+  await writeFile(join(kafkaDir, "kafka.keystore.password"), `${password}\n`, {
+    encoding: "utf8",
+    mode: 0o400,
+  });
+  await writeFile(
+    join(kafkaDir, "kafka_jaas.conf"),
+    [
+      "KafkaServer {",
+      "  org.apache.kafka.common.security.plain.PlainLoginModule required",
+      `  username="kafka" password="${password}" user_kafka="${password}";`,
+      "};",
+      "",
+    ].join("\n"),
+    { encoding: "utf8", mode: 0o400 },
+  );
+  await writeFile(
+    join(kafkaDir, "client.properties"),
+    [
+      "security.protocol=SASL_SSL",
+      "sasl.mechanism=PLAIN",
+      `sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="kafka" password="${password}";`,
+      "ssl.truststore.type=PKCS12",
+      "ssl.truststore.location=/etc/kafka/secrets/kafka.truststore.p12",
+      `ssl.truststore.password=${password}`,
+      "ssl.endpoint.identification.algorithm=",
+      "",
+    ].join("\n"),
+    { encoding: "utf8", mode: 0o400 },
+  );
   for (const path of [kafkaDir, keystore, certificate, truststore]) {
     await chown(path, 1000, 1000);
   }
-  for (const name of ["kafka.keystore.password", "kafka_jaas.conf", "client.properties"]) {
+  for (const name of [
+    "kafka.keystore.password",
+    "kafka_jaas.conf",
+    "client.properties",
+  ]) {
     const path = join(kafkaDir, name);
     await chown(path, 1000, 1000);
     await chmod(path, 0o400);
@@ -802,7 +1110,9 @@ function ensureExternalNetwork(options) {
 }
 
 export async function writeScopedComposeOverride(projectName, options = {}) {
-  const loggingOverride = options.runtimeLogging ? createRuntimeLoggingOverride({config: options.runtimeLogging}).services : undefined;
+  const loggingOverride = options.runtimeLogging
+    ? createRuntimeLoggingOverride({ config: options.runtimeLogging }).services
+    : undefined;
   const path = join(
     SECRETS_TMPFS_ROOT,
     `coffee-platform-compose-${projectName}-${randomUUID().slice(0, 8)}.yaml`,
@@ -813,57 +1123,78 @@ export async function writeScopedComposeOverride(projectName, options = {}) {
       `  ${network}:`,
       `    name: ${network === EXTERNAL_POSTGRES_NETWORK && options.sharedPostgres ? network : `${projectName}_${network}`}`,
       `    external: ${network === EXTERNAL_POSTGRES_NETWORK ? "true" : "false"}`,
-      ...(network === "coffee_provider_egress" && (options.aromaCartProof || options.recoveryProof)
+      ...(network === "coffee_provider_egress" &&
+      (options.aromaCartProof || options.recoveryProof)
         ? ["    internal: true"]
         : []),
     ]),
-    ...(options.aromaBindingProof ? [
-      "",
-      "services:",
-      "  aroma-gateway:",
-      "    networks: !override",
-      "      - coffee_internal_api",
-      "      - coffee_postgres_data",
-      "    environment:",
-      "      NODE_OPTIONS: --enable-source-maps --import=/app/dist/.aroma-proof-tls-observer.mjs",
-      "    volumes:",
-      `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-gateway-tls-observer.mjs:/app/dist/.aroma-proof-tls-observer.mjs:ro`,
-    ] : []),
-    ...(options.aromaCartProof || options.recoveryProof ? [
-      "",
-      "services:",
-      "  aroma-gateway:",
-      "    networks: !override",
-      "      - coffee_internal_api",
-      "      - coffee_postgres_data",
-      "      - coffee_provider_egress",
-      "    environment:",
-      "      NODE_EXTRA_CA_CERTS: /run/aroma-proof/provider-ca.crt",
-      "    volumes:",
-      `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-cart-proof:/run/aroma-proof:ro`,
-      ...(loggingOverride ? dumpYaml({logging: loggingOverride["aroma-gateway"].logging}, {noRefs: true}).trimEnd().split("\n").map((line) => `    ${line}`) : []),
-      "  aroma-provider-fixture:",
-      `    image: ${CUSTOMER_TEST_IMAGE}`,
-      "    command: [node, /run/aroma-proof/provider-server.mjs]",
-      "    networks:",
-      "      coffee_provider_egress:",
-      "        aliases:",
-      "          - aromateacoffee.ru",
-      "    volumes:",
-      `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-cart-proof:/run/aroma-proof`,
-      "    healthcheck:",
-      "      test:",
-      "        - CMD",
-      "        - node",
-      "        - -e",
-      "        - const net=require('node:net'); const socket=net.connect(443, '127.0.0.1', () => { socket.destroy(); process.exit(0); }); socket.on('error', () => process.exit(1));",
-      "      interval: 1s",
-      "      timeout: 1s",
-      "      retries: 30",
-      ...(loggingOverride ? Object.entries(loggingOverride)
-        .filter(([service]) => service !== "aroma-gateway")
-        .flatMap(([service, definition]) => [`  ${service}:`, ...dumpYaml(definition, {noRefs: true}).trimEnd().split("\n").map((line) => `    ${line}`)]) : []),
-    ] : []),
+    ...(options.aromaBindingProof
+      ? [
+          "",
+          "services:",
+          "  aroma-gateway:",
+          "    networks: !override",
+          "      - coffee_internal_api",
+          "      - coffee_postgres_data",
+          "    environment:",
+          "      NODE_OPTIONS: --enable-source-maps --import=/app/dist/.aroma-proof-tls-observer.mjs",
+          "    volumes:",
+          `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-gateway-tls-observer.mjs:/app/dist/.aroma-proof-tls-observer.mjs:ro`,
+        ]
+      : []),
+    ...(options.aromaCartProof || options.recoveryProof
+      ? [
+          "",
+          "services:",
+          "  aroma-gateway:",
+          "    networks: !override",
+          "      - coffee_internal_api",
+          "      - coffee_postgres_data",
+          "      - coffee_provider_egress",
+          "    environment:",
+          "      NODE_EXTRA_CA_CERTS: /run/aroma-proof/provider-ca.crt",
+          "    volumes:",
+          `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-cart-proof:/run/aroma-proof:ro`,
+          ...(loggingOverride
+            ? dumpYaml(
+                { logging: loggingOverride["aroma-gateway"].logging },
+                { noRefs: true },
+              )
+                .trimEnd()
+                .split("\n")
+                .map((line) => `    ${line}`)
+            : []),
+          "  aroma-provider-fixture:",
+          `    image: ${CUSTOMER_TEST_IMAGE}`,
+          "    command: [node, /run/aroma-proof/provider-server.mjs]",
+          "    networks:",
+          "      coffee_provider_egress:",
+          "        aliases:",
+          "          - aromateacoffee.ru",
+          "    volumes:",
+          `      - \${COFFEE_COMPOSE_SECRETS_DIR}/aroma-cart-proof:/run/aroma-proof`,
+          "    healthcheck:",
+          "      test:",
+          "        - CMD",
+          "        - node",
+          "        - -e",
+          "        - const net=require('node:net'); const socket=net.connect(443, '127.0.0.1', () => { socket.destroy(); process.exit(0); }); socket.on('error', () => process.exit(1));",
+          "      interval: 1s",
+          "      timeout: 1s",
+          "      retries: 30",
+          ...(loggingOverride
+            ? Object.entries(loggingOverride)
+                .filter(([service]) => service !== "aroma-gateway")
+                .flatMap(([service, definition]) => [
+                  `  ${service}:`,
+                  ...dumpYaml(definition, { noRefs: true })
+                    .trimEnd()
+                    .split("\n")
+                    .map((line) => `    ${line}`),
+                ])
+            : []),
+        ]
+      : []),
     "",
   ].join("\n");
   await writeFile(path, content, { encoding: "utf8", mode: 0o400 });
@@ -889,7 +1220,11 @@ function startDatabaseProofContainer(
   projectName,
   networkName,
   credential,
-  { initialDatabase = "coffee_platform_customer", publishHost = false, ephemeralPgData = false } = {},
+  {
+    initialDatabase = "coffee_platform_customer",
+    publishHost = false,
+    ephemeralPgData = false,
+  } = {},
 ) {
   const container = `${projectName}-postgres-proof`;
   const args = [
@@ -898,7 +1233,15 @@ function startDatabaseProofContainer(
     "--name",
     container,
     "--network",
-    ...(publishHost ? ["bridge"] : [networkName, "--network-alias", "coffee_postgres", "--network-alias", "customer_db"]),
+    ...(publishHost
+      ? ["bridge"]
+      : [
+          networkName,
+          "--network-alias",
+          "coffee_postgres",
+          "--network-alias",
+          "customer_db",
+        ]),
     "--env",
     `POSTGRES_USER=${credential.username}`,
     "--env",
@@ -913,31 +1256,77 @@ function startDatabaseProofContainer(
     "1s",
     "--health-retries",
     "30",
-    ...(ephemeralPgData ? ["--tmpfs", "/var/lib/postgresql/data:rw,noexec,nosuid,size=536870912"] : []),
+    ...(ephemeralPgData
+      ? ["--tmpfs", "/var/lib/postgresql/data:rw,noexec,nosuid,size=536870912"]
+      : []),
     ...(publishHost ? ["--publish", "127.0.0.1::5432"] : []),
     DATABASE_PROOF_IMAGE,
   ];
   runDocker(args);
   if (publishHost) {
-    runDocker(["network", "connect", "--alias", "coffee_postgres", "--alias", "customer_db", networkName, container]);
+    runDocker([
+      "network",
+      "connect",
+      "--alias",
+      "coffee_postgres",
+      "--alias",
+      "customer_db",
+      networkName,
+      container,
+    ]);
   }
   return container;
 }
 
 function assertEphemeralDatabaseProofStorage(container) {
-  const tmpfs = JSON.parse(runDocker(["inspect", "--format", "{{json .HostConfig.Tmpfs}}", container]));
+  const tmpfs = JSON.parse(
+    runDocker(["inspect", "--format", "{{json .HostConfig.Tmpfs}}", container]),
+  );
   const dataPath = "/var/lib/postgresql/data";
-  assert.ok(tmpfs?.[dataPath]?.split(",").includes("size=536870912"), "G14 PostgreSQL data tmpfs must have a 512 MiB limit");
-  const stat = runDocker(["exec", container, "stat", "-f", "-c", "%T|%S|%b", dataPath]).trim().split("|");
-  assert.equal(stat.length, 3, "G14 PostgreSQL data filesystem status must have three fields");
+  assert.ok(
+    tmpfs?.[dataPath]?.split(",").includes("size=536870912"),
+    "G14 PostgreSQL data tmpfs must have a 512 MiB limit",
+  );
+  const stat = runDocker([
+    "exec",
+    container,
+    "stat",
+    "-f",
+    "-c",
+    "%T|%S|%b",
+    dataPath,
+  ])
+    .trim()
+    .split("|");
+  assert.equal(
+    stat.length,
+    3,
+    "G14 PostgreSQL data filesystem status must have three fields",
+  );
   const [type, blockSizeText, blockCountText] = stat;
   const blockSize = Number(blockSizeText);
   const blockCount = Number(blockCountText);
   const totalBytes = blockSize * blockCount;
-  assert.equal(type, "tmpfs", "G14 PostgreSQL data directory must be an actual tmpfs filesystem");
-  assert.ok(Number.isSafeInteger(blockSize) && blockSize > 0 && Number.isSafeInteger(blockCount) && blockCount > 0 &&
-    Number.isSafeInteger(totalBytes) && totalBytes === 536870912, "G14 PostgreSQL data tmpfs must have an actual 512 MiB capacity");
-  return {type: "tmpfs", destination: dataPath, sizeMiB: 512, durability: "ephemeral"};
+  assert.equal(
+    type,
+    "tmpfs",
+    "G14 PostgreSQL data directory must be an actual tmpfs filesystem",
+  );
+  assert.ok(
+    Number.isSafeInteger(blockSize) &&
+      blockSize > 0 &&
+      Number.isSafeInteger(blockCount) &&
+      blockCount > 0 &&
+      Number.isSafeInteger(totalBytes) &&
+      totalBytes === 536870912,
+    "G14 PostgreSQL data tmpfs must have an actual 512 MiB capacity",
+  );
+  return {
+    type: "tmpfs",
+    destination: dataPath,
+    sizeMiB: 512,
+    durability: "ephemeral",
+  };
 }
 
 function bootstrapDatabaseProofRole(container, admin, owner) {
@@ -981,7 +1370,7 @@ function assertDatabaseProofRole(container, admin, owner) {
       "--command",
       `SELECT json_build_object('isSuperuser', rolsuper, 'canCreateDb', rolcreatedb, 'canCreateRole', rolcreaterole, 'bypassRls', rolbypassrls, 'connect', has_database_privilege('${owner.username}', 'coffee_platform_customer', 'CONNECT'), 'create', has_database_privilege('${owner.username}', 'coffee_platform_customer', 'CREATE')) FROM pg_roles WHERE rolname = '${owner.username}'`,
     ],
-    {input: ""},
+    { input: "" },
   ).trim();
   const role = JSON.parse(output.split("\n").at(-1));
   assert.deepEqual(
@@ -999,72 +1388,170 @@ function assertDatabaseProofRole(container, admin, owner) {
 }
 
 function bootstrapCustomerProofRoles(container, admin) {
-  const migrator = {username: "coffee_customer_migrator", password: `compose-migrator-${randomUUID()}`};
-  runDocker(["exec", "--interactive", container, "psql", "--username", admin.username, "--dbname", "coffee_platform_customer", "--no-psqlrc"], {
-    input: [
-      `CREATE ROLE "${migrator.username}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${migrator.password}';`,
-      `GRANT CONNECT, CREATE ON DATABASE "coffee_platform_customer" TO "${migrator.username}";`,
-      `CREATE DATABASE "coffee_platform_customer_foreign";`,
-      `REVOKE ALL ON DATABASE "coffee_platform_customer_foreign" FROM PUBLIC;`,
-      "",
-    ].join("\n"),
-  });
-  return {migrator, foreignDatabase: "coffee_platform_customer_foreign"};
+  const migrator = {
+    username: "coffee_customer_migrator",
+    password: `compose-migrator-${randomUUID()}`,
+  };
+  runDocker(
+    [
+      "exec",
+      "--interactive",
+      container,
+      "psql",
+      "--username",
+      admin.username,
+      "--dbname",
+      "coffee_platform_customer",
+      "--no-psqlrc",
+    ],
+    {
+      input: [
+        `CREATE ROLE "${migrator.username}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD '${migrator.password}';`,
+        `GRANT CONNECT, CREATE ON DATABASE "coffee_platform_customer" TO "${migrator.username}";`,
+        `CREATE DATABASE "coffee_platform_customer_foreign";`,
+        `REVOKE ALL ON DATABASE "coffee_platform_customer_foreign" FROM PUBLIC;`,
+        "",
+      ].join("\n"),
+    },
+  );
+  return { migrator, foreignDatabase: "coffee_platform_customer_foreign" };
 }
 
-async function runCustomerIntegrationProof(projectName, secretsDir, credentials, roles, composeFile) {
-  const databaseUrl = (username, password, database, host = "customer_db") => `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:5432/${database}`;
+async function runCustomerIntegrationProof(
+  projectName,
+  secretsDir,
+  credentials,
+  roles,
+  composeFile,
+) {
+  const databaseUrl = (username, password, database, host = "customer_db") =>
+    `postgresql://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:5432/${database}`;
   const environment = [
-    "run", "--rm", "--add-host", "customer-harness:127.0.0.1", "--add-host", "coffee_postgres:127.0.0.1", "--network", `${projectName}_coffee_public_api_backend`, "--network", `${projectName}_coffee_postgres_data`,
-    "--volume", `${ROOT}:/workspace:ro`,
-    "--volume", `${secretsDir}:/run/customer-secrets:ro`,
-    "--volume", `${secretsDir}/customer-logs:/run/customer-logs:rw`,
-    "--workdir", "/workspace",
-    "--env", "CUSTOMER_INTEGRATION_REQUIRED=1",
-    "--env", "CUSTOMER_TEST_ENVIRONMENT=development",
-    "--env", "CUSTOMER_SERVICE_ORIGIN=https://customer-service:4101",
-    "--env", "CUSTOMER_TEST_SIGNING_KEY_FILE=/run/customer-secrets/customer-test-signing.json",
-    "--env", "CUSTOMER_TEST_CLIENT_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-public.json",
-    "--env", "CUSTOMER_TEST_INTERNAL_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-internal.json",
-    "--env", "CUSTOMER_DATABASE_URL",
-    "--env", "CUSTOMER_RUNTIME_DATABASE_URL",
-    "--env", "CUSTOMER_MIGRATOR_DATABASE_URL",
-    "--env", "CUSTOMER_FOREIGN_DATABASE_URL",
-    "--env", "CUSTOMER_TEST_LOG_FILE=/run/customer-logs/customer-service.log",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_CONFIG_FILE=/workspace/config/platform.yaml",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_SECRETS_FILE=/run/customer-secrets/customer-service.yaml",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_HOST=customer_db",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_PORT=5432",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_CLIENT_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-public.json",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON={}",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_ACTOR_REF=actor_customer_test",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_SERVICE_ORIGIN=https://customer-harness:4101",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_DB_ADAPTER_LOG_FILE=/run/customer-logs/db-adapter.log",
-    "--env", "CUSTOMER_UNKNOWN_COMMIT_ENTRY=/workspace/apps/customer-service/dist/main.js",
+    "run",
+    "--rm",
+    "--add-host",
+    "customer-harness:127.0.0.1",
+    "--add-host",
+    "coffee_postgres:127.0.0.1",
+    "--network",
+    `${projectName}_coffee_public_api_backend`,
+    "--network",
+    `${projectName}_coffee_postgres_data`,
+    "--volume",
+    `${ROOT}:/workspace:ro`,
+    "--volume",
+    `${secretsDir}:/run/customer-secrets:ro`,
+    "--volume",
+    `${secretsDir}/customer-logs:/run/customer-logs:rw`,
+    "--workdir",
+    "/workspace",
+    "--env",
+    "CUSTOMER_INTEGRATION_REQUIRED=1",
+    "--env",
+    "CUSTOMER_TEST_ENVIRONMENT=development",
+    "--env",
+    "CUSTOMER_SERVICE_ORIGIN=https://customer-service:4101",
+    "--env",
+    "CUSTOMER_TEST_SIGNING_KEY_FILE=/run/customer-secrets/customer-test-signing.json",
+    "--env",
+    "CUSTOMER_TEST_CLIENT_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-public.json",
+    "--env",
+    "CUSTOMER_TEST_INTERNAL_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-internal.json",
+    "--env",
+    "CUSTOMER_DATABASE_URL",
+    "--env",
+    "CUSTOMER_RUNTIME_DATABASE_URL",
+    "--env",
+    "CUSTOMER_MIGRATOR_DATABASE_URL",
+    "--env",
+    "CUSTOMER_FOREIGN_DATABASE_URL",
+    "--env",
+    "CUSTOMER_TEST_LOG_FILE=/run/customer-logs/customer-service.log",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_CONFIG_FILE=/workspace/config/platform.yaml",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_SECRETS_FILE=/run/customer-secrets/customer-service.yaml",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_HOST=customer_db",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_DB_TARGET_PORT=5432",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_CLIENT_TRANSPORT_FILE=/run/customer-secrets/customer-test-api-public.json",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_HEADERS_JSON={}",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_ACTOR_REF=actor_customer_test",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_SERVICE_ORIGIN=https://customer-harness:4101",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_DB_ADAPTER_LOG_FILE=/run/customer-logs/db-adapter.log",
+    "--env",
+    "CUSTOMER_UNKNOWN_COMMIT_ENTRY=/workspace/apps/customer-service/dist/main.js",
     CUSTOMER_TEST_IMAGE,
-    "sh", "-lc",
+    "sh",
+    "-lc",
     "node --experimental-strip-types --test --test-concurrency=1 tests/customer/customer-normalization.test.mjs && node --experimental-strip-types --test --test-concurrency=1 tests/customer/customer-schema.test.mjs && node --experimental-strip-types --test --test-concurrency=1 tests/customer/customer-live.test.mjs",
   ];
-  await mkdir(join(secretsDir, "customer-logs"), {recursive: true, mode: 0o700});
-  await writeFile(join(secretsDir, "customer-logs/customer-service.log"), "", {encoding: "utf8", mode: 0o600});
-  await writeFile(join(secretsDir, "customer-logs/db-adapter.log"), "", {encoding: "utf8", mode: 0o600});
+  await mkdir(join(secretsDir, "customer-logs"), {
+    recursive: true,
+    mode: 0o700,
+  });
+  await writeFile(join(secretsDir, "customer-logs/customer-service.log"), "", {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  await writeFile(join(secretsDir, "customer-logs/db-adapter.log"), "", {
+    encoding: "utf8",
+    mode: 0o600,
+  });
   const logPath = join(secretsDir, "customer-logs/customer-service.log");
-  const log = createWriteStream(logPath, {flags: "w", mode: 0o600});
-  const logProcess = spawnCompose(projectName, secretsDir, ["logs", "--no-log-prefix", "--follow", "customer-service"], {composeFile});
+  const log = createWriteStream(logPath, { flags: "w", mode: 0o600 });
+  const logProcess = spawnCompose(
+    projectName,
+    secretsDir,
+    ["logs", "--no-log-prefix", "--follow", "customer-service"],
+    { composeFile },
+  );
   void logProcess.done.catch(() => {});
   logProcess.child.stdout.pipe(log);
   logProcess.child.stderr.pipe(log);
   try {
-  await runDockerAsync(environment, {inherit: true, env: {
-    CUSTOMER_DATABASE_URL: databaseUrl(credentials.owner.username, credentials.owner.password, "coffee_platform_customer"),
-    CUSTOMER_RUNTIME_DATABASE_URL: databaseUrl(credentials.owner.username, credentials.owner.password, "coffee_platform_customer"),
-    CUSTOMER_MIGRATOR_DATABASE_URL: databaseUrl(roles.migrator.username, roles.migrator.password, "coffee_platform_customer"),
-    CUSTOMER_FOREIGN_DATABASE_URL: databaseUrl(credentials.owner.username, credentials.owner.password, roles.foreignDatabase),
-    CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL: `postgresql://${encodeURIComponent(credentials.owner.username)}:${encodeURIComponent(credentials.owner.password)}@127.0.0.1:5432/coffee_platform_customer`,
-    CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL: databaseUrl(credentials.owner.username, credentials.owner.password, "coffee_platform_customer", "customer_db"),
-  }});
+    await runDockerAsync(environment, {
+      inherit: true,
+      env: {
+        CUSTOMER_DATABASE_URL: databaseUrl(
+          credentials.owner.username,
+          credentials.owner.password,
+          "coffee_platform_customer",
+        ),
+        CUSTOMER_RUNTIME_DATABASE_URL: databaseUrl(
+          credentials.owner.username,
+          credentials.owner.password,
+          "coffee_platform_customer",
+        ),
+        CUSTOMER_MIGRATOR_DATABASE_URL: databaseUrl(
+          roles.migrator.username,
+          roles.migrator.password,
+          "coffee_platform_customer",
+        ),
+        CUSTOMER_FOREIGN_DATABASE_URL: databaseUrl(
+          credentials.owner.username,
+          credentials.owner.password,
+          roles.foreignDatabase,
+        ),
+        CUSTOMER_UNKNOWN_COMMIT_DATABASE_URL: `postgresql://${encodeURIComponent(credentials.owner.username)}:${encodeURIComponent(credentials.owner.password)}@127.0.0.1:5432/coffee_platform_customer`,
+        CUSTOMER_UNKNOWN_COMMIT_OBSERVER_DATABASE_URL: databaseUrl(
+          credentials.owner.username,
+          credentials.owner.password,
+          "coffee_platform_customer",
+          "customer_db",
+        ),
+      },
+    });
   } finally {
     logProcess.child.kill("SIGTERM");
     log.end();
@@ -1119,7 +1606,7 @@ async function waitForDatabaseProofReady(
           "--command",
           "SELECT pg_postmaster_start_time()",
         ],
-        {input: ""},
+        { input: "" },
       ).trim();
       const currentStart = output.split("\n").at(-1);
       if (currentStart !== undefined && currentStart === postmasterStart)
@@ -1185,7 +1672,15 @@ async function waitForPostgresClient(connectionString, timeoutMs = 60_000) {
 
 async function bootstrapRecoveryDatabases(container, proofCredentials) {
   const port = publishedDatabasePort(container);
-  const adminUrl = ["postgresql://", encodeURIComponent(proofCredentials.admin.username), ":", encodeURIComponent(proofCredentials.admin.password), "@127.0.0.1:", port, "/postgres"].join("");
+  const adminUrl = [
+    "postgresql://",
+    encodeURIComponent(proofCredentials.admin.username),
+    ":",
+    encodeURIComponent(proofCredentials.admin.password),
+    "@127.0.0.1:",
+    port,
+    "/postgres",
+  ].join("");
   await waitForPostgresClient(adminUrl);
   const adminClient = await createPostgresClient(adminUrl);
   try {
@@ -1233,17 +1728,35 @@ function proofDatabaseOptions(runtime, service, port, credential) {
 }
 
 async function applyAromaBindingMigration(port, credentials, platformConfig) {
-  const database = platformConfig.databases?.integration ?? "coffee_platform_integration";
-  const integration = credentials.roleMap.databases.find((candidate) => candidate.name === database);
+  const database =
+    platformConfig.databases?.integration ?? "coffee_platform_integration";
+  const integration = credentials.roleMap.databases.find(
+    (candidate) => candidate.name === database,
+  );
   assert.ok(integration, "aroma binding integration database is missing");
   const migratorPassword = credentials.rolePasswords[integration.migratorRole];
   assert.ok(migratorPassword, "aroma binding migrator password is missing");
-  const migrator = createDatabase(proofDatabaseOptions(
-    "aroma-binding-migrator",
-    {database, dbPool: {max: 2, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 2000, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}},
-    port,
-    {username: integration.migratorRole, password: migratorPassword},
-  ));
+  const migrator = createDatabase(
+    proofDatabaseOptions(
+      "aroma-binding-migrator",
+      {
+        database,
+        dbPool: {
+          max: 2,
+          checkoutTimeoutMs: 250,
+          lockTimeoutMs: 250,
+          interactiveStatementTimeoutMs: 2000,
+          backgroundStatementTimeoutMs: 5000,
+          terminalTimeoutMs: 2000,
+          transactionTimeoutMs: 10000,
+          idleTimeoutMs: 30000,
+          maxLifetimeMs: 1800000,
+        },
+      },
+      port,
+      { username: integration.migratorRole, password: migratorPassword },
+    ),
+  );
   await migrator.resource.start(AbortSignal.timeout(10_000));
   try {
     const migrationIds = [
@@ -1257,8 +1770,11 @@ async function applyAromaBindingMigration(port, credentials, platformConfig) {
     ];
     const migrations = [];
     for (const id of migrationIds) {
-      const sql = await readFile(join(ROOT, `apps/aroma-gateway/migrations/${id}.sql`), "utf8");
-      migrations.push({id, sql, checksum: migrationChecksum(sql)});
+      const sql = await readFile(
+        join(ROOT, `apps/aroma-gateway/migrations/${id}.sql`),
+        "utf8",
+      );
+      migrations.push({ id, sql, checksum: migrationChecksum(sql) });
     }
     await applyMigrations(migrator, migrations, {
       schema: "integration",
@@ -1273,17 +1789,26 @@ async function applyAromaBindingMigration(port, credentials, platformConfig) {
 async function applyCatalogMigrations(port, credentials, platformConfig) {
   const service = platformConfig.services["catalog-supplier-sync"];
   const database = service?.database;
-  assert.equal(database, "coffee_platform_catalog", "Catalog recovery proof database is missing");
-  const catalog = credentials.roleMap.databases.find((candidate) => candidate.name === database);
+  assert.equal(
+    database,
+    "coffee_platform_catalog",
+    "Catalog recovery proof database is missing",
+  );
+  const catalog = credentials.roleMap.databases.find(
+    (candidate) => candidate.name === database,
+  );
   assert.ok(catalog, "Catalog recovery proof role map is missing");
   const migratorPassword = credentials.rolePasswords[catalog.migratorRole];
-  assert.ok(migratorPassword, "Catalog recovery proof migrator password is missing");
-  const migrator = createDatabase(proofDatabaseOptions(
-    "catalog-compose-migrator",
-    service,
-    port,
-    {username: catalog.migratorRole, password: migratorPassword},
-  ));
+  assert.ok(
+    migratorPassword,
+    "Catalog recovery proof migrator password is missing",
+  );
+  const migrator = createDatabase(
+    proofDatabaseOptions("catalog-compose-migrator", service, port, {
+      username: catalog.migratorRole,
+      password: migratorPassword,
+    }),
+  );
   await migrator.resource.start(AbortSignal.timeout(10_000));
   try {
     const migrationIds = [
@@ -1299,8 +1824,11 @@ async function applyCatalogMigrations(port, credentials, platformConfig) {
     ];
     const migrations = [];
     for (const id of migrationIds) {
-      const sql = await readFile(join(ROOT, `apps/catalog-service/migrations/${id}.sql`), "utf8");
-      migrations.push({id, sql, checksum: migrationChecksum(sql)});
+      const sql = await readFile(
+        join(ROOT, `apps/catalog-service/migrations/${id}.sql`),
+        "utf8",
+      );
+      migrations.push({ id, sql, checksum: migrationChecksum(sql) });
     }
     await applyMigrations(migrator, migrations, {
       schema: "catalog",
@@ -1315,17 +1843,26 @@ async function applyCatalogMigrations(port, credentials, platformConfig) {
 async function applyPricingMigrations(port, credentials, platformConfig) {
   const service = platformConfig.services["pricing-service"];
   const database = service?.database;
-  assert.equal(database, "coffee_platform_pricing", "Pricing recovery proof database is missing");
-  const pricing = credentials.roleMap.databases.find((candidate) => candidate.name === database);
+  assert.equal(
+    database,
+    "coffee_platform_pricing",
+    "Pricing recovery proof database is missing",
+  );
+  const pricing = credentials.roleMap.databases.find(
+    (candidate) => candidate.name === database,
+  );
   assert.ok(pricing, "Pricing recovery proof role map is missing");
   const migratorPassword = credentials.rolePasswords[pricing.migratorRole];
-  assert.ok(migratorPassword, "Pricing recovery proof migrator password is missing");
-  const migrator = createDatabase(proofDatabaseOptions(
-    "pricing-compose-migrator",
-    service,
-    port,
-    {username: pricing.migratorRole, password: migratorPassword},
-  ));
+  assert.ok(
+    migratorPassword,
+    "Pricing recovery proof migrator password is missing",
+  );
+  const migrator = createDatabase(
+    proofDatabaseOptions("pricing-compose-migrator", service, port, {
+      username: pricing.migratorRole,
+      password: migratorPassword,
+    }),
+  );
   await migrator.resource.start(AbortSignal.timeout(10_000));
   try {
     const migrationIds = [
@@ -1337,8 +1874,11 @@ async function applyPricingMigrations(port, credentials, platformConfig) {
     ];
     const migrations = [];
     for (const id of migrationIds) {
-      const sql = await readFile(join(ROOT, `apps/pricing-service/migrations/${id}.sql`), "utf8");
-      migrations.push({id, sql, checksum: migrationChecksum(sql)});
+      const sql = await readFile(
+        join(ROOT, `apps/pricing-service/migrations/${id}.sql`),
+        "utf8",
+      );
+      migrations.push({ id, sql, checksum: migrationChecksum(sql) });
     }
     await applyMigrations(migrator, migrations, {
       schema: "pricing",
@@ -1353,32 +1893,60 @@ async function applyPricingMigrations(port, credentials, platformConfig) {
 async function applyOrdersMigrations(port, credentials, platformConfig) {
   const service = platformConfig.services["orders-service"];
   const database = service?.database;
-  assert.equal(database, "coffee_platform_orders", "Orders recovery proof database is missing");
-  const orders = credentials.roleMap.databases.find((candidate) => candidate.name === database);
+  assert.equal(
+    database,
+    "coffee_platform_orders",
+    "Orders recovery proof database is missing",
+  );
+  const orders = credentials.roleMap.databases.find(
+    (candidate) => candidate.name === database,
+  );
   assert.ok(orders, "Orders recovery proof role map is missing");
   const migratorPassword = credentials.rolePasswords[orders.migratorRole];
-  assert.ok(migratorPassword, "Orders recovery proof migrator password is missing");
-  const migrator = createDatabase(proofDatabaseOptions(
-    "orders-compose-migrator",
-    service,
-    port,
-    {username: orders.migratorRole, password: migratorPassword},
-  ));
+  assert.ok(
+    migratorPassword,
+    "Orders recovery proof migrator password is missing",
+  );
+  const migrator = createDatabase(
+    proofDatabaseOptions("orders-compose-migrator", service, port, {
+      username: orders.migratorRole,
+      password: migratorPassword,
+    }),
+  );
   await migrator.resource.start(AbortSignal.timeout(10_000));
   try {
     const migrationIds = [
-      "0001_create_orders", "0002_create_order_items", "0003_create_order_history",
-      "0004_create_order_contributions", "0005_create_orders_idempotency", "0006_create_orders_outbox",
-      "0007_order_grind_selection", "0008_create_orders_inbox", "0009_create_catalog_mapping_projection",
-      "0010_create_cart_desired", "0011_create_cart_observed", "0012_create_convergence_attempts",
-      "0013_create_convergence_leases", "0014_create_mutation_reservations", "0015_create_order_aroma_projections",
-      "0016_create_aroma_work_schedules", "0017_allow_cart_outbox", "0018_guard_order_card_projection",
-      "0019_read_guarded_aroma_card","0020_guard_cart_fact_batches","0021_optimize_observed_format_checks","0022_terminal_cart_item_rejection","0023_ascii_observed_identity",
+      "0001_create_orders",
+      "0002_create_order_items",
+      "0003_create_order_history",
+      "0004_create_order_contributions",
+      "0005_create_orders_idempotency",
+      "0006_create_orders_outbox",
+      "0007_order_grind_selection",
+      "0008_create_orders_inbox",
+      "0009_create_catalog_mapping_projection",
+      "0010_create_cart_desired",
+      "0011_create_cart_observed",
+      "0012_create_convergence_attempts",
+      "0013_create_convergence_leases",
+      "0014_create_mutation_reservations",
+      "0015_create_order_aroma_projections",
+      "0016_create_aroma_work_schedules",
+      "0017_allow_cart_outbox",
+      "0018_guard_order_card_projection",
+      "0019_read_guarded_aroma_card",
+      "0020_guard_cart_fact_batches",
+      "0021_optimize_observed_format_checks",
+      "0022_terminal_cart_item_rejection",
+      "0023_ascii_observed_identity",
     ];
     const migrations = [];
     for (const id of migrationIds) {
-      const sql = await readFile(join(ROOT, `apps/orders-service/migrations/${id}.sql`), "utf8");
-      migrations.push({id, sql, checksum: migrationChecksum(sql)});
+      const sql = await readFile(
+        join(ROOT, `apps/orders-service/migrations/${id}.sql`),
+        "utf8",
+      );
+      migrations.push({ id, sql, checksum: migrationChecksum(sql) });
     }
     await applyMigrations(migrator, migrations, {
       schema: "orders",
@@ -1391,52 +1959,113 @@ async function applyOrdersMigrations(port, credentials, platformConfig) {
 }
 
 function readOrdersBrokerMessages(projectName, secretsDir, composeFile, topic) {
-  assert.match(topic?.name ?? "", /^[A-Za-z0-9._-]+$/u, "Orders recovery proof topic name is invalid");
-  assert.ok(Number.isSafeInteger(topic.partitions) && topic.partitions > 0, "Orders recovery proof partition count is invalid");
-  const offsetsOutput = runCompose(projectName, secretsDir, [
-    "exec", "-T", "kafka", "sh", "-ec",
-    `/opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic ${topic.name} --time -1`,
-  ], {composeFile});
+  assert.match(
+    topic?.name ?? "",
+    /^[A-Za-z0-9._-]+$/u,
+    "Orders recovery proof topic name is invalid",
+  );
+  assert.ok(
+    Number.isSafeInteger(topic.partitions) && topic.partitions > 0,
+    "Orders recovery proof partition count is invalid",
+  );
+  const offsetsOutput = runCompose(
+    projectName,
+    secretsDir,
+    [
+      "exec",
+      "-T",
+      "kafka",
+      "sh",
+      "-ec",
+      `/opt/kafka/bin/kafka-get-offsets.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic ${topic.name} --time -1`,
+    ],
+    { composeFile },
+  );
   const endOffsets = new Map();
   for (const line of offsetsOutput.split(/\r?\n/u).filter(Boolean)) {
     const [name, partitionText, offsetText, extra] = line.split(":");
-    if (!/^\d+$/u.test(partitionText ?? "") || !/^\d+$/u.test(offsetText ?? "")) {
+    if (
+      !/^\d+$/u.test(partitionText ?? "") ||
+      !/^\d+$/u.test(offsetText ?? "")
+    ) {
       throw new Error("Orders recovery proof Kafka offset snapshot is invalid");
     }
     const partition = Number(partitionText);
     const offset = Number(offsetText);
-    if (extra !== undefined || name !== topic.name || !Number.isSafeInteger(partition) || partition < 0 ||
-        !Number.isSafeInteger(offset) || offset < 0 || endOffsets.has(partition)) {
+    if (
+      extra !== undefined ||
+      name !== topic.name ||
+      !Number.isSafeInteger(partition) ||
+      partition < 0 ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      endOffsets.has(partition)
+    ) {
       throw new Error("Orders recovery proof Kafka offset snapshot is invalid");
     }
     endOffsets.set(partition, offset);
   }
-  if (endOffsets.size !== topic.partitions || Array.from({length: topic.partitions}, (_, partition) => endOffsets.has(partition)).some((present) => !present)) {
-    throw new Error("Orders recovery proof Kafka offset snapshot is incomplete");
+  if (
+    endOffsets.size !== topic.partitions ||
+    Array.from({ length: topic.partitions }, (_, partition) =>
+      endOffsets.has(partition),
+    ).some((present) => !present)
+  ) {
+    throw new Error(
+      "Orders recovery proof Kafka offset snapshot is incomplete",
+    );
   }
-  const snapshotCount = [...endOffsets.values()].reduce((total, offset) => total + offset, 0);
+  const snapshotCount = [...endOffsets.values()].reduce(
+    (total, offset) => total + offset,
+    0,
+  );
   if (!Number.isSafeInteger(snapshotCount) || snapshotCount > 100) {
-    throw new Error("Orders recovery proof Kafka offset snapshot exceeds the 100-record bound");
+    throw new Error(
+      "Orders recovery proof Kafka offset snapshot exceeds the 100-record bound",
+    );
   }
   const messages = [];
   // This proof creates a fresh per-run, un-compacted topic; offset zero is its complete record range.
   for (let partition = 0; partition < topic.partitions; partition += 1) {
     const expectedCount = endOffsets.get(partition);
     if (expectedCount === 0) continue;
-    const output = runCompose(projectName, secretsDir, [
-      "exec", "-T", "kafka", "sh", "-ec",
-      `/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic ${topic.name} --partition ${partition} --offset 0 --max-messages ${expectedCount} --timeout-ms 5000`,
-    ], {composeFile});
+    const output = runCompose(
+      projectName,
+      secretsDir,
+      [
+        "exec",
+        "-T",
+        "kafka",
+        "sh",
+        "-ec",
+        `/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic ${topic.name} --partition ${partition} --offset 0 --max-messages ${expectedCount} --timeout-ms 5000`,
+      ],
+      { composeFile },
+    );
     const lines = output.split(/\r?\n/u);
     if (lines.at(-1) === "") lines.pop();
     if (lines.length !== expectedCount) {
-      throw new Error(`Orders recovery proof Kafka snapshot expected ${expectedCount} records in partition ${partition}, received ${lines.length}`);
+      throw new Error(
+        `Orders recovery proof Kafka snapshot expected ${expectedCount} records in partition ${partition}, received ${lines.length}`,
+      );
     }
     for (const line of lines) {
       let message;
-      try { message = JSON.parse(line); } catch { throw new Error("Orders recovery proof Kafka snapshot contains invalid JSON"); }
-      if (message === null || typeof message !== "object" || Array.isArray(message)) {
-        throw new Error("Orders recovery proof Kafka snapshot contains an invalid record");
+      try {
+        message = JSON.parse(line);
+      } catch {
+        throw new Error(
+          "Orders recovery proof Kafka snapshot contains invalid JSON",
+        );
+      }
+      if (
+        message === null ||
+        typeof message !== "object" ||
+        Array.isArray(message)
+      ) {
+        throw new Error(
+          "Orders recovery proof Kafka snapshot contains an invalid record",
+        );
       }
       messages.push(message);
     }
@@ -1444,75 +2073,234 @@ function readOrdersBrokerMessages(projectName, secretsDir, composeFile, topic) {
   return messages;
 }
 
-async function assertOrdersOutboxBrokerRecovery(projectName, secretsDir, composeFile, port, credentials, platformConfig) {
+async function assertOrdersOutboxBrokerRecovery(
+  projectName,
+  secretsDir,
+  composeFile,
+  port,
+  credentials,
+  platformConfig,
+) {
   const service = platformConfig.services["orders-service"];
   const credential = credentials.databaseCredentialsByRuntime["orders-service"];
-  assert.ok(service && credential, "Orders recovery proof runtime credentials are missing");
-  const database = createDatabase(proofDatabaseOptions("orders-service", service, port, credential));
+  assert.ok(
+    service && credential,
+    "Orders recovery proof runtime credentials are missing",
+  );
+  const database = createDatabase(
+    proofDatabaseOptions("orders-service", service, port, credential),
+  );
   await database.resource.start(AbortSignal.timeout(10_000));
-  const readOutbox = defineStatement(database, "SELECT state, message_id FROM orders.outbox_messages WHERE aggregate_ref=$1");
+  const readOutbox = defineStatement(
+    database,
+    "SELECT state, message_id FROM orders.outbox_messages WHERE aggregate_ref=$1",
+  );
   let stopped = false;
   try {
-    runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "orders-service"], {composeFile});
+    runCompose(
+      projectName,
+      secretsDir,
+      ["stop", "--timeout", "30", "orders-service"],
+      { composeFile },
+    );
     stopped = true;
     const store = new OrderStore(database);
     const actorRef = "compose-orders-actor";
-    const meta = () => ({actorRef, identity:{actorRef, scope:"a".repeat(64), key:randomUUID()}, correlationId:randomUUID(),
-      traceparent:"00-11111111111111111111111111111111-2222222222222222-01"});
+    const meta = () => ({
+      actorRef,
+      identity: { actorRef, scope: "a".repeat(64), key: randomUUID() },
+      correlationId: randomUUID(),
+      traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
+    });
     const ref = (prefix) => `${prefix}_00000000000000000000000001`;
     const customerRef = ref("cus");
-    const draft = await store.createDraft({...meta(), customer:{customerRef, customerVersion:"1", displayName:"Compose owner proof", state:"Active"}});
+    const draft = await store.createDraft({
+      ...meta(),
+      customer: {
+        customerRef,
+        customerVersion: "1",
+        displayName: "Compose owner proof",
+        state: "Active",
+      },
+    });
     const orderRef = draft.body.orderRef;
-    const item = {productRef:ref("prd"), variantRef:ref("var"), productDisplayName:"Compose coffee", unit:"piece",
-      quantityMilli:"1000", quoteRef:ref("prq"), quoteLineNumber:1, quoteHash:"d".repeat(64), internalProofHash:"e".repeat(64),
-      quoteExpiresAt:Temporal.Now.instant().add({hours:1}).toString(), policyVersionRef:ref("pvr"), catalogSnapshotRevision:"1",
-      mappingRevision:"1", offerRef:ref("off"), unitMinor:"150", lineTotalMinor:"150", currency:"RUB"};
-    const updated = await store.putItem({...meta(), orderRef, itemRef:ref("itm"), expectedVersion:draft.body.version,
-      request:{expectedVersion:draft.body.version, productRef:item.productRef, variantRef:item.variantRef, quantity:"1",
-        quoteRef:item.quoteRef, quoteLineNumber:1, quoteHash:item.quoteHash}, item});
-    const confirmed = await store.confirm({...meta(), orderRef, expectedVersion:updated.body.version});
-    assert.equal(confirmed.body.status, "Confirmed", "Orders did not persist Confirm before relay restart");
-    const read = () => withTransaction(database, {mode:"background"}, async (tx) => (await readOutbox(tx, [orderRef])).rows[0]);
+    const item = {
+      productRef: ref("prd"),
+      variantRef: ref("var"),
+      productDisplayName: "Compose coffee",
+      unit: "piece",
+      quantityMilli: "1000",
+      quoteRef: ref("prq"),
+      quoteLineNumber: 1,
+      quoteHash: "d".repeat(64),
+      internalProofHash: "e".repeat(64),
+      quoteExpiresAt: Temporal.Now.instant().add({ hours: 1 }).toString(),
+      policyVersionRef: ref("pvr"),
+      catalogSnapshotRevision: "1",
+      mappingRevision: "1",
+      offerRef: ref("off"),
+      unitMinor: "150",
+      lineTotalMinor: "150",
+      currency: "RUB",
+    };
+    const updated = await store.putItem({
+      ...meta(),
+      orderRef,
+      itemRef: ref("itm"),
+      expectedVersion: draft.body.version,
+      request: {
+        expectedVersion: draft.body.version,
+        productRef: item.productRef,
+        variantRef: item.variantRef,
+        quantity: "1",
+        quoteRef: item.quoteRef,
+        quoteLineNumber: 1,
+        quoteHash: item.quoteHash,
+      },
+      item,
+    });
+    const confirmed = await store.confirm({
+      ...meta(),
+      orderRef,
+      expectedVersion: updated.body.version,
+    });
+    assert.equal(
+      confirmed.body.status,
+      "Confirmed",
+      "Orders did not persist Confirm before relay restart",
+    );
+    const read = () =>
+      withTransaction(
+        database,
+        { mode: "background" },
+        async (tx) => (await readOutbox(tx, [orderRef])).rows[0],
+      );
     const pending = await read();
-    assert.equal(pending?.state, "Pending", "OrderConfirmed must be pending while Orders runtime is stopped");
+    assert.equal(
+      pending?.state,
+      "Pending",
+      "OrderConfirmed must be pending while Orders runtime is stopped",
+    );
     const messageId = pending.message_id;
-    assert.equal(readOrdersBrokerMessages(projectName, secretsDir, composeFile, platformConfig.kafka.topics.ordersLifecycle).filter((event) => event.messageId === messageId).length,
-      0, "OrderConfirmed was published before the Orders relay restarted");
-    runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile});
+    assert.equal(
+      readOrdersBrokerMessages(
+        projectName,
+        secretsDir,
+        composeFile,
+        platformConfig.kafka.topics.ordersLifecycle,
+      ).filter((event) => event.messageId === messageId).length,
+      0,
+      "OrderConfirmed was published before the Orders relay restarted",
+    );
+    runCompose(
+      projectName,
+      secretsDir,
+      ["up", "--detach", "--wait", "--no-build", "orders-service"],
+      { composeFile },
+    );
     stopped = false;
-    assert.equal((await read())?.state, "Published", "Orders relay did not finalize the broker-acknowledged event");
-    const matched = () => readOrdersBrokerMessages(projectName, secretsDir, composeFile, platformConfig.kafka.topics.ordersLifecycle).filter((event) =>
-      event.messageId === messageId && event.messageType === "OrderConfirmed.v1" && event.payload?.orderRef === orderRef);
-    assert.equal(matched().length, 1, "Kafka did not retain exactly one published OrderConfirmed event");
-    runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "orders-service"], {composeFile});
+    assert.equal(
+      (await read())?.state,
+      "Published",
+      "Orders relay did not finalize the broker-acknowledged event",
+    );
+    const matched = () =>
+      readOrdersBrokerMessages(
+        projectName,
+        secretsDir,
+        composeFile,
+        platformConfig.kafka.topics.ordersLifecycle,
+      ).filter(
+        (event) =>
+          event.messageId === messageId &&
+          event.messageType === "OrderConfirmed.v1" &&
+          event.payload?.orderRef === orderRef,
+      );
+    assert.equal(
+      matched().length,
+      1,
+      "Kafka did not retain exactly one published OrderConfirmed event",
+    );
+    runCompose(
+      projectName,
+      secretsDir,
+      ["stop", "--timeout", "30", "orders-service"],
+      { composeFile },
+    );
     stopped = true;
-    runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile});
+    runCompose(
+      projectName,
+      secretsDir,
+      ["up", "--detach", "--wait", "--no-build", "orders-service"],
+      { composeFile },
+    );
     stopped = false;
-    assert.equal((await read())?.state, "Published", "Orders restart changed terminal Outbox state");
+    assert.equal(
+      (await read())?.state,
+      "Published",
+      "Orders restart changed terminal Outbox state",
+    );
     const matchedAfterRestart = matched().length;
-    assert.equal(matchedAfterRestart, 1, `Orders restart found ${matchedAfterRestart} matching finalized Outbox event(s); expected 1`);
-    return {pendingBeforeRestart:true, brokerAcknowledged:true, publishedAfterRestart:true, duplicateAfterFinalize:false};
+    assert.equal(
+      matchedAfterRestart,
+      1,
+      `Orders restart found ${matchedAfterRestart} matching finalized Outbox event(s); expected 1`,
+    );
+    return {
+      pendingBeforeRestart: true,
+      brokerAcknowledged: true,
+      publishedAfterRestart: true,
+      duplicateAfterFinalize: false,
+    };
   } finally {
     if (stopped) {
-      try { runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "orders-service"], {composeFile}); }
-      catch { /* preserve the original proof error; outer recovery cleanup owns the stack */ }
+      try {
+        runCompose(
+          projectName,
+          secretsDir,
+          ["up", "--detach", "--wait", "--no-build", "orders-service"],
+          { composeFile },
+        );
+      } catch {
+        /* preserve the original proof error; outer recovery cleanup owns the stack */
+      }
     }
     await database.resource.stop(AbortSignal.timeout(10_000));
   }
 }
 
-async function seedAromaBindingSnapshot(port, credentials, platformConfig, runId) {
+async function seedAromaBindingSnapshot(
+  port,
+  credentials,
+  platformConfig,
+  runId,
+) {
   const service = platformConfig.services["aroma-gateway"];
   const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
-  assert.ok(service && credential, "aroma gateway database credentials are missing");
-  const database = createDatabase(proofDatabaseOptions("aroma-gateway", service, port, credential));
+  assert.ok(
+    service && credential,
+    "aroma gateway database credentials are missing",
+  );
+  const database = createDatabase(
+    proofDatabaseOptions("aroma-gateway", service, port, credential),
+  );
   await database.resource.start(AbortSignal.timeout(10_000));
   const store = new OfferBindingStore(database);
   const supplierRef = "sup_00000000000000000000000001";
   const snapshotRef = "snp_00000000000000000000000001";
   const identities = [
-    {supplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "a".repeat(64), rawProviderOfferId: `compose-proof-raw-provider-canary-${runId}`},
-    {supplierRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "b".repeat(64), rawProviderOfferId: `compose-proof-raw-provider-second-${runId}`},
+    {
+      supplierRef,
+      sourceIdentityScheme: "hmac-sha256-v1",
+      sourceOfferKeyHash: "a".repeat(64),
+      rawProviderOfferId: `compose-proof-raw-provider-canary-${runId}`,
+    },
+    {
+      supplierRef,
+      sourceIdentityScheme: "hmac-sha256-v1",
+      sourceOfferKeyHash: "b".repeat(64),
+      rawProviderOfferId: `compose-proof-raw-provider-second-${runId}`,
+    },
   ];
   try {
     await store.beginExport(snapshotRef, supplierRef);
@@ -1522,68 +2310,193 @@ async function seedAromaBindingSnapshot(port, credentials, platformConfig, runId
     await database.resource.stop(AbortSignal.timeout(10_000));
     throw error;
   }
-  return {database, supplierRef, snapshotRef, identities, rawCanary: identities[0].rawProviderOfferId};
+  return {
+    database,
+    supplierRef,
+    snapshotRef,
+    identities,
+    rawCanary: identities[0].rawProviderOfferId,
+  };
 }
 
-async function createUntrustedAromaProofMaterial(secretsDir, environment, serverCaPem) {
+async function createUntrustedAromaProofMaterial(
+  secretsDir,
+  environment,
+  serverCaPem,
+) {
   const directory = join(secretsDir, "aroma-proof-untrusted");
-  await mkdir(directory, {recursive: true, mode: 0o700});
+  await mkdir(directory, { recursive: true, mode: 0o700 });
   const caKey = join(directory, "ca.key");
   const caCert = join(directory, "ca.crt");
   const key = join(directory, "caller.key");
   const csr = join(directory, "caller.csr");
   const cert = join(directory, "caller.crt");
   const ext = join(directory, "caller.ext");
-  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKey, "-out", caCert, "-days", "1", "-subj", "/CN=compose-smoke-untrusted-ca"], {stdio: "ignore"});
-  await writeFile(ext, `subjectAltName=URI:spiffe://coffee-platform/${environment}/catalog-activation-worker\\nextendedKeyUsage=clientAuth\\n`, {encoding: "utf8", mode: 0o400});
-  execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", csr, "-subj", "/CN=catalog-activation-worker"], {stdio: "ignore"});
-  execFileSync("openssl", ["x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey, "-CAcreateserial", "-out", cert, "-days", "1", "-sha256", "-extfile", ext], {stdio: "ignore"});
-  return JSON.stringify({caPem: serverCaPem, certPem: await readFile(cert, "utf8"), keyPem: await readFile(key, "utf8")});
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      caKey,
+      "-out",
+      caCert,
+      "-days",
+      "1",
+      "-subj",
+      "/CN=compose-smoke-untrusted-ca",
+    ],
+    { stdio: "ignore" },
+  );
+  await writeFile(
+    ext,
+    `subjectAltName=URI:spiffe://coffee-platform/${environment}/catalog-activation-worker\\nextendedKeyUsage=clientAuth\\n`,
+    { encoding: "utf8", mode: 0o400 },
+  );
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-new",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      key,
+      "-out",
+      csr,
+      "-subj",
+      "/CN=catalog-activation-worker",
+    ],
+    { stdio: "ignore" },
+  );
+  execFileSync(
+    "openssl",
+    [
+      "x509",
+      "-req",
+      "-in",
+      csr,
+      "-CA",
+      caCert,
+      "-CAkey",
+      caKey,
+      "-CAcreateserial",
+      "-out",
+      cert,
+      "-days",
+      "1",
+      "-sha256",
+      "-extfile",
+      ext,
+    ],
+    { stdio: "ignore" },
+  );
+  return JSON.stringify({
+    caPem: serverCaPem,
+    certPem: await readFile(cert, "utf8"),
+    keyPem: await readFile(key, "utf8"),
+  });
 }
 
-async function writeAromaBindingProofFixtures(secretsDir, materialized, environment, tlsObserver) {
+async function writeAromaBindingProofFixtures(
+  secretsDir,
+  materialized,
+  environment,
+  tlsObserver,
+) {
   assert.ok(tlsObserver, "aroma binding TLS observer is missing");
   const directory = join(secretsDir, "aroma-proof");
-  await mkdir(directory, {recursive: true, mode: 0o700});
+  await mkdir(directory, { recursive: true, mode: 0o700 });
   const writeMaterial = async (name, value) => {
     const path = join(directory, name);
-    await writeFile(path, value, {encoding: "utf8", mode: 0o400});
+    await writeFile(path, value, { encoding: "utf8", mode: 0o400 });
     await chmod(path, 0o400);
     return path;
   };
-  const caller = await writeMaterial("caller.json", materialized.transportMaterials.service.get("catalog-activation-worker"));
-  const foreign = await writeMaterial("foreign.json", materialized.transportMaterials.service.get("orders-service"));
-  const gateway = await writeMaterial("gateway.json", materialized.transportMaterials.service.get("aroma-gateway"));
-  const apiInternal = await writeMaterial("api-internal.json", JSON.stringify({
-    material: JSON.parse(materialized.transportMaterials.service.get("api-internal")),
-    signingKey: materialized.securityMaterial["security.apiInternalDelegationSigningPrivateKey"],
-  }));
-  const untrusted = await writeMaterial("untrusted.json", await createUntrustedAromaProofMaterial(secretsDir, environment, JSON.parse(materialized.transportMaterials.service.get("aroma-gateway")).caPem));
-  return {directory, caller, foreign, gateway, apiInternal, untrusted};
+  const caller = await writeMaterial(
+    "caller.json",
+    materialized.transportMaterials.service.get("catalog-activation-worker"),
+  );
+  const foreign = await writeMaterial(
+    "foreign.json",
+    materialized.transportMaterials.service.get("orders-service"),
+  );
+  const gateway = await writeMaterial(
+    "gateway.json",
+    materialized.transportMaterials.service.get("aroma-gateway"),
+  );
+  const apiInternal = await writeMaterial(
+    "api-internal.json",
+    JSON.stringify({
+      material: JSON.parse(
+        materialized.transportMaterials.service.get("api-internal"),
+      ),
+      signingKey:
+        materialized.securityMaterial[
+          "security.apiInternalDelegationSigningPrivateKey"
+        ],
+    }),
+  );
+  const untrusted = await writeMaterial(
+    "untrusted.json",
+    await createUntrustedAromaProofMaterial(
+      secretsDir,
+      environment,
+      JSON.parse(materialized.transportMaterials.service.get("aroma-gateway"))
+        .caPem,
+    ),
+  );
+  return { directory, caller, foreign, gateway, apiInternal, untrusted };
 }
 
 function findAromaTrackedSocket(trackedSockets, suppliedSocket) {
   if (suppliedSocket === undefined || suppliedSocket === null) return undefined;
   const suppliedParent = suppliedSocket._parent;
-  const hasSuppliedParent = suppliedParent !== undefined && suppliedParent !== null;
-  return trackedSockets.find(({socket}) => {
+  const hasSuppliedParent =
+    suppliedParent !== undefined && suppliedParent !== null;
+  return trackedSockets.find(({ socket }) => {
     if (socket === suppliedSocket) return true;
     if (hasSuppliedParent && socket === suppliedParent) return true;
     const trackedParent = socket?._parent;
-    const hasTrackedParent = trackedParent !== undefined && trackedParent !== null;
+    const hasTrackedParent =
+      trackedParent !== undefined && trackedParent !== null;
     if (hasTrackedParent && trackedParent === suppliedSocket) return true;
-    return hasSuppliedParent && hasTrackedParent && trackedParent === suppliedParent;
+    return (
+      hasSuppliedParent && hasTrackedParent && trackedParent === suppliedParent
+    );
   });
 }
 
 function assertAromaGatewaySocketAssociationRegression() {
   const sharedParent = {};
-  const knownSocket = {_parent: sharedParent};
-  const tracked = [{socket: knownSocket, remotePort: 41001, localPort: 4301}];
-  assert.equal(findAromaTrackedSocket(tracked, knownSocket), tracked[0], "direct socket identity must match");
-  assert.equal(findAromaTrackedSocket(tracked, {_parent: sharedParent}), tracked[0], "shared parent identity must match");
-  assert.equal(findAromaTrackedSocket([{socket: {_parent: undefined}}], {_parent: undefined}), undefined, "missing parents must not match");
-  assert.equal(findAromaTrackedSocket([{socket: knownSocket}], {}), undefined, "unknown socket must not match");
+  const knownSocket = { _parent: sharedParent };
+  const tracked = [{ socket: knownSocket, remotePort: 41001, localPort: 4301 }];
+  assert.equal(
+    findAromaTrackedSocket(tracked, knownSocket),
+    tracked[0],
+    "direct socket identity must match",
+  );
+  assert.equal(
+    findAromaTrackedSocket(tracked, { _parent: sharedParent }),
+    tracked[0],
+    "shared parent identity must match",
+  );
+  assert.equal(
+    findAromaTrackedSocket([{ socket: { _parent: undefined } }], {
+      _parent: undefined,
+    }),
+    undefined,
+    "missing parents must not match",
+  );
+  assert.equal(
+    findAromaTrackedSocket([{ socket: knownSocket }], {}),
+    undefined,
+    "unknown socket must not match",
+  );
 }
 
 const AROMA_BINDING_TLS_OBSERVER_SOURCE = `import {Server as TLSServer} from "node:tls";
@@ -1660,13 +2573,23 @@ TLSServer.prototype.emit = function (event, ...args) {
 
 async function prepareAromaBindingTlsObserver(secretsDir) {
   const observer = join(secretsDir, "aroma-gateway-tls-observer.mjs");
-  await writeFile(observer, AROMA_BINDING_TLS_OBSERVER_SOURCE, {encoding: "utf8", mode: 0o400});
+  await writeFile(observer, AROMA_BINDING_TLS_OBSERVER_SOURCE, {
+    encoding: "utf8",
+    mode: 0o400,
+  });
   await chmod(observer, 0o400);
   await chown(observer, 1000, 1000);
-  return {observer};
+  return { observer };
 }
 
-function aromaBindingProofSource({phase, supplierRef, snapshotRef, identities, environment, rawCanary}) {
+function aromaBindingProofSource({
+  phase,
+  supplierRef,
+  snapshotRef,
+  identities,
+  environment,
+  rawCanary,
+}) {
   return `import {readFile} from "node:fs/promises";
 import {request as httpsRequest} from "node:https";
 import {sign} from "node:crypto";
@@ -1674,7 +2597,7 @@ import {sign} from "node:crypto";
 const phase = ${JSON.stringify(phase)};
 const supplierRef = ${JSON.stringify(supplierRef)};
 const snapshotRef = ${JSON.stringify(snapshotRef)};
-const identities = ${JSON.stringify(identities.map(({sourceOfferKeyHash}) => sourceOfferKeyHash))};
+const identities = ${JSON.stringify(identities.map(({ sourceOfferKeyHash }) => sourceOfferKeyHash))};
 const expectedEnvironment = ${JSON.stringify(environment)};
 const rawCanary = ${JSON.stringify(rawCanary)};
 const operationId = "registerAromaOfferBinding";
@@ -1813,15 +2736,55 @@ if (phase === "replay") {
 }`;
 }
 
-async function runAromaBindingProofFixture(projectName, secretsDir, composeFile, fixture, phase, snapshot, environment) {
-  const beforeEvents = aromaGatewayTlsProofEvents(projectName, secretsDir, composeFile);
-  const source = aromaBindingProofSource({phase, supplierRef: snapshot.supplierRef, snapshotRef: snapshot.snapshotRef, identities: snapshot.identities, environment, rawCanary: snapshot.rawCanary});
-  const output = runDocker(["run", "--rm", "--interactive", "--network", `${projectName}_coffee_internal_api`, "--volume", `${fixture.directory}:/run/aroma-proof:ro`, CUSTOMER_TEST_IMAGE, "node", "--input-type=module"], {input: source});
+async function runAromaBindingProofFixture(
+  projectName,
+  secretsDir,
+  composeFile,
+  fixture,
+  phase,
+  snapshot,
+  environment,
+) {
+  const beforeEvents = aromaGatewayTlsProofEvents(
+    projectName,
+    secretsDir,
+    composeFile,
+  );
+  const source = aromaBindingProofSource({
+    phase,
+    supplierRef: snapshot.supplierRef,
+    snapshotRef: snapshot.snapshotRef,
+    identities: snapshot.identities,
+    environment,
+    rawCanary: snapshot.rawCanary,
+  });
+  const output = runDocker(
+    [
+      "run",
+      "--rm",
+      "--interactive",
+      "--network",
+      `${projectName}_coffee_internal_api`,
+      "--volume",
+      `${fixture.directory}:/run/aroma-proof:ro`,
+      CUSTOMER_TEST_IMAGE,
+      "node",
+      "--input-type=module",
+    ],
+    { input: source },
+  );
   const line = output.trim().split("\\n").filter(Boolean).at(-1);
   assert.ok(line, `aroma binding ${phase} fixture returned no evidence`);
   const result = JSON.parse(line);
   if (result.untrustedClientPort !== undefined) {
-    assertAromaGatewayClientCertificateVerification(projectName, secretsDir, composeFile, beforeEvents, result.untrustedClientPort, phase);
+    assertAromaGatewayClientCertificateVerification(
+      projectName,
+      secretsDir,
+      composeFile,
+      beforeEvents,
+      result.untrustedClientPort,
+      phase,
+    );
     result.untrustedClientCertificate = "tls-rejected";
     result.gatewayClientCertificateVerification = true;
     delete result.untrustedClientPort;
@@ -1829,21 +2792,46 @@ async function runAromaBindingProofFixture(projectName, secretsDir, composeFile,
   return result;
 }
 
-async function queryAromaBindingCount(port, snapshot, credentials, platformConfig) {
+async function queryAromaBindingCount(
+  port,
+  snapshot,
+  credentials,
+  platformConfig,
+) {
   const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
-  const connectionString = ["postgresql://", encodeURIComponent(credential.username), ":", encodeURIComponent(credential.password), "@127.0.0.1:", port, "/", platformConfig.services["aroma-gateway"].database].join("");
+  const connectionString = [
+    "postgresql://",
+    encodeURIComponent(credential.username),
+    ":",
+    encodeURIComponent(credential.password),
+    "@127.0.0.1:",
+    port,
+    "/",
+    platformConfig.services["aroma-gateway"].database,
+  ].join("");
   const client = await createPostgresClient(connectionString);
   try {
-    const result = await client.query("SELECT count(*)::int AS count FROM integration.provider_offer_bindings WHERE supplier_ref = $1", [snapshot.supplierRef]);
+    const result = await client.query(
+      "SELECT count(*)::int AS count FROM integration.provider_offer_bindings WHERE supplier_ref = $1",
+      [snapshot.supplierRef],
+    );
     return result.rows[0]?.count;
   } finally {
     await client.end();
   }
 }
 
-async function assertAromaBindingTopology(projectName, secretsDir, composeFile) {
+async function assertAromaBindingTopology(
+  projectName,
+  secretsDir,
+  composeFile,
+) {
   const rows = serviceRows(projectName, secretsDir, composeFile);
-  assert.equal(rows.length, 2, "aroma binding proof must start exactly two Compose services");
+  assert.equal(
+    rows.length,
+    2,
+    "aroma binding proof must start exactly two Compose services",
+  );
   const byService = new Map(rows.map((row) => [row.Service, row]));
   for (const runtime of ["api-internal", "aroma-gateway"]) {
     const row = byService.get(runtime);
@@ -1851,19 +2839,38 @@ async function assertAromaBindingTopology(projectName, secretsDir, composeFile) 
     assert.equal(row.State, "running", `${runtime} is not running`);
     assert.equal(row.Health, "healthy", `${runtime} is not healthy`);
     const container = JSON.parse(runDocker(["inspect", row.ID]))[0];
-    const networks = Object.keys(container.NetworkSettings.Networks ?? {}).sort();
-    const expected = runtime === "api-internal"
-      ? [`${projectName}_coffee_internal_api`]
-      : [`${projectName}_coffee_internal_api`, `${projectName}_coffee_postgres_data`].sort();
-    assert.deepEqual(networks, expected, `${runtime} connected to an unexpected network`);
-    assert.equal(networks.some((network) => network.includes("coffee_provider_egress")), false, `${runtime} connected to provider egress`);
+    const networks = Object.keys(
+      container.NetworkSettings.Networks ?? {},
+    ).sort();
+    const expected =
+      runtime === "api-internal"
+        ? [`${projectName}_coffee_internal_api`]
+        : [
+            `${projectName}_coffee_internal_api`,
+            `${projectName}_coffee_postgres_data`,
+          ].sort();
+    assert.deepEqual(
+      networks,
+      expected,
+      `${runtime} connected to an unexpected network`,
+    );
+    assert.equal(
+      networks.some((network) => network.includes("coffee_provider_egress")),
+      false,
+      `${runtime} connected to provider egress`,
+    );
   }
   return byService;
 }
 
 function aromaGatewayTlsProofEvents(projectName, secretsDir, composeFile) {
   const marker = "AROMA_BINDING_TLS_PROOF ";
-  return runCompose(projectName, secretsDir, ["logs", "--no-color", "--no-log-prefix", "--tail", "200", "aroma-gateway"], {composeFile})
+  return runCompose(
+    projectName,
+    secretsDir,
+    ["logs", "--no-color", "--no-log-prefix", "--tail", "200", "aroma-gateway"],
+    { composeFile },
+  )
     .split("\n")
     .flatMap((line) => {
       const markerIndex = line.indexOf(marker);
@@ -1876,18 +2883,38 @@ function aromaGatewayTlsProofEvents(projectName, secretsDir, composeFile) {
     });
 }
 
-function assertAromaGatewayClientCertificateVerification(projectName, secretsDir, composeFile, beforeEvents, localPort, phase) {
-  const beforeMaxSequence = Math.max(0, ...beforeEvents.map((event) => typeof event.sequence === "number" ? event.sequence : 0));
-  const event = aromaGatewayTlsProofEvents(projectName, secretsDir, composeFile).find((candidate) =>
-    candidate.event === "tlsClientError" &&
-    candidate.category === "client-certificate-verification" &&
-    candidate.errorCode !== "unknown" &&
-    typeof candidate.authorizationError === "string" &&
-    candidate.sequence > beforeMaxSequence &&
-    candidate.localPort === 4301 &&
-    candidate.remotePort === localPort,
+function assertAromaGatewayClientCertificateVerification(
+  projectName,
+  secretsDir,
+  composeFile,
+  beforeEvents,
+  localPort,
+  phase,
+) {
+  const beforeMaxSequence = Math.max(
+    0,
+    ...beforeEvents.map((event) =>
+      typeof event.sequence === "number" ? event.sequence : 0,
+    ),
   );
-  assert.ok(event, `aroma binding ${phase} has no Gateway-side client certificate verification error for this connection`);
+  const event = aromaGatewayTlsProofEvents(
+    projectName,
+    secretsDir,
+    composeFile,
+  ).find(
+    (candidate) =>
+      candidate.event === "tlsClientError" &&
+      candidate.category === "client-certificate-verification" &&
+      candidate.errorCode !== "unknown" &&
+      typeof candidate.authorizationError === "string" &&
+      candidate.sequence > beforeMaxSequence &&
+      candidate.localPort === 4301 &&
+      candidate.remotePort === localPort,
+  );
+  assert.ok(
+    event,
+    `aroma binding ${phase} has no Gateway-side client certificate verification error for this connection`,
+  );
 }
 
 function parseComposePs(output) {
@@ -1997,7 +3024,7 @@ function assertSecretMounts(
         "-e",
         "const fs=require('node:fs'); const {execFileSync}=require('node:child_process'); const s=fs.statSync(process.env.COFFEE_RUNTIME_SECRETS_FILE); const df=execFileSync('df',['-T','/run/secrets'],{encoding:'utf8'}); console.log(JSON.stringify({mode:s.mode & 0o777,uid:process.getuid(),tmpfs:df.includes('tmpfs')}));",
       ],
-      {composeFile},
+      { composeFile },
     ).trim();
     const mode = JSON.parse(modeOutput.split("\n").at(-1));
     assert.deepEqual(
@@ -2009,21 +3036,44 @@ function assertSecretMounts(
   const nginx = rows.get("edge-nginx");
   const nginxContainer = JSON.parse(runDocker(["inspect", nginx.ID]))[0];
   const nginxSecretFiles = [
-    "public.crt", "public.key", "upstream-ca.crt", "client.crt", "client.key",
+    "public.crt",
+    "public.key",
+    "upstream-ca.crt",
+    "client.crt",
+    "client.key",
   ];
   assert.equal(nginxContainer.Config.User, "101:101");
-  assert.equal(nginxContainer.Mounts.some((mount) => mount.Destination === "/run/secrets/coffee-platform.yaml"), false);
+  assert.equal(
+    nginxContainer.Mounts.some(
+      (mount) => mount.Destination === "/run/secrets/coffee-platform.yaml",
+    ),
+    false,
+  );
   for (const name of nginxSecretFiles) {
     const destination = `/run/secrets/edge-nginx/${name}`;
-    const mount = nginxContainer.Mounts.find((candidate) => candidate.Destination === destination);
+    const mount = nginxContainer.Mounts.find(
+      (candidate) => candidate.Destination === destination,
+    );
     assert.ok(mount, `edge-nginx scoped secret ${destination} is absent`);
     assert.equal(mount.RW, false, `${destination} must be read-only`);
-    assert.equal(resolve(mount.Source), resolve(join(secretsDir, "edge-nginx", name)));
+    assert.equal(
+      resolve(mount.Source),
+      resolve(join(secretsDir, "edge-nginx", name)),
+    );
   }
-  const nginxSecretReadback = runCompose(projectName, secretsDir, [
-    "exec", "-T", "edge-nginx", "sh", "-ceu",
-    "for path in /run/secrets/edge-nginx/public.crt /run/secrets/edge-nginx/public.key /run/secrets/edge-nginx/upstream-ca.crt /run/secrets/edge-nginx/client.crt /run/secrets/edge-nginx/client.key; do test -r \"$path\"; test ! -w \"$path\"; test \"$(stat -c '%u:%g:%a' \"$path\")\" = 101:101:400; done",
-  ], {composeFile});
+  const nginxSecretReadback = runCompose(
+    projectName,
+    secretsDir,
+    [
+      "exec",
+      "-T",
+      "edge-nginx",
+      "sh",
+      "-ceu",
+      'for path in /run/secrets/edge-nginx/public.crt /run/secrets/edge-nginx/public.key /run/secrets/edge-nginx/upstream-ca.crt /run/secrets/edge-nginx/client.crt /run/secrets/edge-nginx/client.key; do test -r "$path"; test ! -w "$path"; test "$(stat -c \'%u:%g:%a\' "$path")" = 101:101:400; done',
+    ],
+    { composeFile },
+  );
   assert.equal(nginxSecretReadback.trim(), "");
 }
 
@@ -2037,8 +3087,8 @@ function assertKafkaDurableRetention(
   const produceScript = [
     `topic=${topic}`,
     `message=${message}`,
-    "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --create --if-not-exists --topic \"$topic\" --partitions 1 --replication-factor 1 >/dev/null",
-    "printf '%s\\n' \"$message\" | /opt/kafka/bin/kafka-console-producer.sh --sync --command-property acks=all --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic \"$topic\"",
+    '/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --create --if-not-exists --topic "$topic" --partitions 1 --replication-factor 1 >/dev/null',
+    'printf \'%s\\n\' "$message" | /opt/kafka/bin/kafka-console-producer.sh --sync --command-property acks=all --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic "$topic"',
     "printf 'broker-ack:%s' \"$message\"",
   ].join("\n");
   const before = serviceRows(projectName, secretsDir, composeFile).find(
@@ -2046,9 +3096,21 @@ function assertKafkaDurableRetention(
   );
   assert.ok(before, "Kafka is absent before retention proof");
   const beforeContainer = JSON.parse(runDocker(["inspect", before.ID]))[0];
-  const logVolume = beforeContainer.Mounts.find((mount) => mount.Type === "volume" && mount.Destination === "/var/lib/kafka/data");
-  assert.equal(logVolume?.Name, `${projectName}_kafka_data`, "Kafka log directory must use the project volume");
-  assert.ok(beforeContainer.Config.Env.includes(`KAFKA_LOG_DIRS=${logVolume.Destination}`), "Kafka configured log directory differs from its volume");
+  const logVolume = beforeContainer.Mounts.find(
+    (mount) =>
+      mount.Type === "volume" && mount.Destination === "/var/lib/kafka/data",
+  );
+  assert.equal(
+    logVolume?.Name,
+    `${projectName}_kafka_data`,
+    "Kafka log directory must use the project volume",
+  );
+  assert.ok(
+    beforeContainer.Config.Env.includes(
+      `KAFKA_LOG_DIRS=${logVolume.Destination}`,
+    ),
+    "Kafka configured log directory differs from its volume",
+  );
   assert.equal(
     beforeContainer.Config.Labels?.["com.docker.compose.project"],
     projectName,
@@ -2058,7 +3120,7 @@ function assertKafkaDurableRetention(
     projectName,
     secretsDir,
     ["exec", "-T", "kafka", "sh", "-ec", produceScript],
-    {composeFile},
+    { composeFile },
   ).trim();
   assert.equal(
     acknowledged,
@@ -2070,13 +3132,13 @@ function assertKafkaDurableRetention(
     projectName,
     secretsDir,
     ["rm", "--force", "--stop", "--volumes", "kafka"],
-    {composeFile},
+    { composeFile },
   );
   runCompose(
     projectName,
     secretsDir,
     ["up", "--detach", "--wait", "--no-build", "kafka"],
-    {composeFile},
+    { composeFile },
   );
 
   const after = serviceRows(projectName, secretsDir, composeFile).find(
@@ -2087,7 +3149,14 @@ function assertKafkaDurableRetention(
   assert.equal(after.State, "running", "Kafka is not running after recreate");
   assert.equal(after.Health, "healthy", "Kafka is not healthy after recreate");
   const afterContainer = JSON.parse(runDocker(["inspect", after.ID]))[0];
-  assert.ok(afterContainer.Mounts.some((mount) => mount.Name === logVolume.Name && mount.Destination === logVolume.Destination), "Kafka recreate changed its log volume");
+  assert.ok(
+    afterContainer.Mounts.some(
+      (mount) =>
+        mount.Name === logVolume.Name &&
+        mount.Destination === logVolume.Destination,
+    ),
+    "Kafka recreate changed its log volume",
+  );
   assert.equal(
     afterContainer.Config.Labels?.["com.docker.compose.project"],
     projectName,
@@ -2097,15 +3166,15 @@ function assertKafkaDurableRetention(
   const recoveryScript = [
     `topic=${topic}`,
     `message=${message}`,
-    "received=$(/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic \"$topic\" --group \"$topic-recovery\" --from-beginning --max-messages 1 --timeout-ms 15000 | tr -d '\\r')",
-    "test \"$received\" = \"$message\"",
+    'received=$(/opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --topic "$topic" --group "$topic-recovery" --from-beginning --max-messages 1 --timeout-ms 15000 | tr -d \'\\r\')',
+    'test "$received" = "$message"',
     "printf '%s' \"$received\"",
   ].join("\n");
   const retained = runCompose(
     projectName,
     secretsDir,
     ["exec", "-T", "kafka", "sh", "-ec", recoveryScript],
-    {composeFile},
+    { composeFile },
   ).trim();
   assert.equal(
     retained,
@@ -2124,24 +3193,46 @@ function assertKafkaDurableRetention(
   };
 }
 
-function prepareRecoveryKafkaBootstrap(projectName, secretsDir, platformConfig, composeFile) {
-  runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "kafka"], {composeFile, inherit: true});
-  const client = "--bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties";
+function prepareRecoveryKafkaBootstrap(
+  projectName,
+  secretsDir,
+  platformConfig,
+  composeFile,
+) {
+  runCompose(
+    projectName,
+    secretsDir,
+    ["up", "--detach", "--wait", "--no-build", "kafka"],
+    { composeFile, inherit: true },
+  );
+  const client =
+    "--bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties";
   const script = [];
   for (const topic of Object.values(platformConfig.kafka.topics)) {
     for (const name of [topic.name, topic.dlq]) {
-      script.push(`/opt/kafka/bin/kafka-topics.sh ${client} --create --if-not-exists --topic ${JSON.stringify(name)} --partitions ${topic.partitions} --replication-factor 1 >/dev/null`);
+      script.push(
+        `/opt/kafka/bin/kafka-topics.sh ${client} --create --if-not-exists --topic ${JSON.stringify(name)} --partitions ${topic.partitions} --replication-factor 1 >/dev/null`,
+      );
     }
   }
   for (const service of Object.values(platformConfig.services)) {
-    for (const consumer of service.kafka.consumers.filter(entry => entry.processing === "durable")) {
+    for (const consumer of service.kafka.consumers.filter(
+      (entry) => entry.processing === "durable",
+    )) {
       for (const topic of consumer.topics) {
         // Только новый изолированный broker: durable runtime не выбирает offset сам.
-        script.push(`/opt/kafka/bin/kafka-consumer-groups.sh ${client} --group ${JSON.stringify(consumer.groupId)} --topic ${JSON.stringify(topic)} --reset-offsets --to-earliest --execute >/dev/null`);
+        script.push(
+          `/opt/kafka/bin/kafka-consumer-groups.sh ${client} --group ${JSON.stringify(consumer.groupId)} --topic ${JSON.stringify(topic)} --reset-offsets --to-earliest --execute >/dev/null`,
+        );
       }
     }
   }
-  runCompose(projectName, secretsDir, ["exec", "-T", "kafka", "sh", "-ec", script.join("\n")], {composeFile});
+  runCompose(
+    projectName,
+    secretsDir,
+    ["exec", "-T", "kafka", "sh", "-ec", script.join("\n")],
+    { composeFile },
+  );
 }
 
 async function prepareKafkaNativeFixture(
@@ -2152,12 +3243,14 @@ async function prepareKafkaNativeFixture(
 ) {
   const platformConfig = parseYaml(
     await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
-    {json: true},
+    { json: true },
   );
   const lifecycleTopic = platformConfig.kafka.topics.ordersLifecycle.name;
   const mappingTopic = platformConfig.kafka.topics.catalogMapping.name;
-  const lifecyclePartitions = platformConfig.kafka.topics.ordersLifecycle.partitions;
-  const mappingPartitions = platformConfig.kafka.topics.catalogMapping.partitions;
+  const lifecyclePartitions =
+    platformConfig.kafka.topics.ordersLifecycle.partitions;
+  const mappingPartitions =
+    platformConfig.kafka.topics.catalogMapping.partitions;
   const malformed = `issue63-malformed-${runId}`;
   const malformedEnvelope = {
     envelopeVersion: "1",
@@ -2168,8 +3261,12 @@ async function prepareKafkaNativeFixture(
     correlationId: `correlation-${malformed}`,
     causationId: null,
     traceparent: `00-${randomUUID().replaceAll("-", "")}-${randomUUID().replaceAll("-", "").slice(0, 16)}-01`,
-    aggregate: {type: "Issue63.Proof", ref: `issue63-malformed-${runId}`, version: "1"},
-    payload: {value: "malformed-header", sequence: 1},
+    aggregate: {
+      type: "Issue63.Proof",
+      ref: `issue63-malformed-${runId}`,
+      version: "1",
+    },
+    payload: { value: "malformed-header", sequence: 1 },
   };
   const malformedEncoded = Buffer.from(
     JSON.stringify(malformedEnvelope),
@@ -2190,9 +3287,9 @@ async function prepareKafkaNativeFixture(
     projectName,
     secretsDir,
     ["exec", "-T", "kafka", "sh", "-ec", script],
-    {composeFile},
+    { composeFile },
   );
-  return {lifecycleTopic, mappingTopic, malformed, malformedEnvelope};
+  return { lifecycleTopic, mappingTopic, malformed, malformedEnvelope };
 }
 
 function nativeFoundationSource({
@@ -2519,7 +3616,7 @@ console.log(JSON.stringify({
 }));`;
 }
 
-function nativeKafkaBlackholeSource({runId, mappingTopic}) {
+function nativeKafkaBlackholeSource({ runId, mappingTopic }) {
   return `import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -2731,8 +3828,12 @@ async function runKafkaBlackholeProof(
     correlationId: `${runId}-broker-blackhole-correlation`,
     causationId: null,
     traceparent: `00-${trace}-${trace.slice(0, 16)}-01`,
-    aggregate: {type: "Issue63.Proof", ref: `${runId}-broker-blackhole-aggregate`, version: "1"},
-    payload: {sequence: 1, value: "broker-blackhole"},
+    aggregate: {
+      type: "Issue63.Proof",
+      ref: `${runId}-broker-blackhole-aggregate`,
+      version: "1",
+    },
+    payload: { sequence: 1, value: "broker-blackhole" },
   };
   const encoded = Buffer.from(JSON.stringify(envelope), "utf8").toString(
     "base64",
@@ -2746,7 +3847,7 @@ async function runKafkaBlackholeProof(
     projectName,
     secretsDir,
     ["exec", "-T", "kafka", "sh", "-ec", resetAndProduce],
-    {composeFile},
+    { composeFile },
   );
 
   const kafka = serviceRows(projectName, secretsDir, composeFile).find(
@@ -2787,7 +3888,7 @@ async function runKafkaBlackholeProof(
         reject(new Error(`${prefix} was not observed within ${timeoutMs}ms`));
       }, timeoutMs);
       timer.unref?.();
-      waiters.push({prefix, resolve, reject, timer});
+      waiters.push({ prefix, resolve, reject, timer });
     });
   };
   const child = spawnCompose(
@@ -2796,7 +3897,7 @@ async function runKafkaBlackholeProof(
     ["exec", "-T", "orders-service", "node", "--input-type=module"],
     {
       composeFile,
-      input: nativeKafkaBlackholeSource({runId, mappingTopic}),
+      input: nativeKafkaBlackholeSource({ runId, mappingTopic }),
       onOutput,
     },
   );
@@ -2818,7 +3919,7 @@ async function runKafkaBlackholeProof(
             "-ec",
             "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties >/dev/null",
           ],
-          {composeFile},
+          { composeFile },
         );
         return;
       } catch (error) {
@@ -2831,8 +3932,12 @@ async function runKafkaBlackholeProof(
     );
   };
   void child.done.then(
-    () => { finished = true; },
-    () => { finished = true; },
+    () => {
+      finished = true;
+    },
+    () => {
+      finished = true;
+    },
   );
   try {
     const readyLine = await waitForLine("BLACKHOLE_READY:", 15000);
@@ -2865,12 +3970,18 @@ async function runKafkaBlackholeProof(
       `fetch('http://127.0.0.1:${port}/release').then(() => process.exit(0)).catch(() => process.exit(1))`,
     ]);
     await child.done;
-    const finalLine = [...outputLines].reverse().find((line) => line.startsWith("{"));
+    const finalLine = [...outputLines]
+      .reverse()
+      .find((line) => line.startsWith("{"));
     assert.ok(finalLine, "paused-broker proof did not return evidence JSON");
     const evidence = JSON.parse(finalLine);
     assert.equal(evidence.kind, "paused-broker");
     assert.equal(evidence.commitOutcome, "OFFSET_COMMIT_OUTCOME_UNKNOWN");
-    assert.ok(Number.isSafeInteger(evidence.commitElapsedMs) && evidence.commitElapsedMs >= 0, "paused-broker commit elapsed bound evidence is missing");
+    assert.ok(
+      Number.isSafeInteger(evidence.commitElapsedMs) &&
+        evidence.commitElapsedMs >= 0,
+      "paused-broker commit elapsed bound evidence is missing",
+    );
     assert.equal(evidence.bounded, true);
     assert.equal(evidence.recovered, true);
     assert.equal(evidence.recordMessageId, messageId);
@@ -2889,14 +4000,25 @@ async function runKafkaBlackholeProof(
           "-ec",
           `/opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 --command-config /etc/kafka/secrets/client.properties --group orders-catalog-mapping-v2 --describe`,
         ],
-        {composeFile},
+        { composeFile },
       );
       const committed = offsetOutput
         .split("\n")
         .map((line) => line.trim().split(/\s+/u))
-        .find((fields) => fields[0] === "orders-catalog-mapping-v2" && fields[1] === mappingTopic && fields[2] === String(evidence.recordPartition));
-      assert.ok(committed, "paused-broker proof did not expose the recovered group offset");
-      assert.ok(BigInt(committed[3]) >= BigInt(evidence.recordOffset) + 1n, "paused-broker group offset did not advance after recovery");
+        .find(
+          (fields) =>
+            fields[0] === "orders-catalog-mapping-v2" &&
+            fields[1] === mappingTopic &&
+            fields[2] === String(evidence.recordPartition),
+        );
+      assert.ok(
+        committed,
+        "paused-broker proof did not expose the recovered group offset",
+      );
+      assert.ok(
+        BigInt(committed[3]) >= BigInt(evidence.recordOffset) + 1n,
+        "paused-broker group offset did not advance after recovery",
+      );
     }
     return evidence;
   } finally {
@@ -2916,35 +4038,89 @@ async function runKafkaBlackholeProof(
   }
 }
 
-async function assertReadiness(projectName, secretsDir, composeFile = COMPOSE_FILE) {
+async function assertReadiness(
+  projectName,
+  secretsDir,
+  composeFile = COMPOSE_FILE,
+) {
   for (const runtime of RUNTIMES) {
-    await waitForRuntimeReadiness(projectName, secretsDir, runtime, 200, 10_000, composeFile);
-    runCompose(projectName, secretsDir, [
-      "exec", "-T", runtime, ...RUNTIME_HEALTHCHECK,
-      "/health/live", "/metrics",
-    ], {composeFile});
+    await waitForRuntimeReadiness(
+      projectName,
+      secretsDir,
+      runtime,
+      200,
+      10_000,
+      composeFile,
+    );
+    runCompose(
+      projectName,
+      secretsDir,
+      [
+        "exec",
+        "-T",
+        runtime,
+        ...RUNTIME_HEALTHCHECK,
+        "/health/live",
+        "/metrics",
+      ],
+      { composeFile },
+    );
   }
-  runCompose(projectName, secretsDir, ["exec", "-T", "edge-nginx", "nginx", "-t", "-q"], {composeFile});
+  runCompose(
+    projectName,
+    secretsDir,
+    ["exec", "-T", "edge-nginx", "nginx", "-t", "-q"],
+    { composeFile },
+  );
 }
 
 async function assertNginxIngress(publicHost, caPem) {
-  const probe = (path) => new Promise((resolveProbe, reject) => {
-    const request = httpsRequest({
-      hostname: "127.0.0.1", port: 8443, path, method: "GET", servername: publicHost,
-      ...(caPem ? {ca: caPem} : {}), minVersion: "TLSv1.3", rejectUnauthorized: true,
-      timeout: 5_000,
-    }, (response) => {
-      response.resume();
-      response.once("end", () => resolveProbe({status: response.statusCode, contentType: response.headers["content-type"]}));
+  const probe = (path) =>
+    new Promise((resolveProbe, reject) => {
+      const request = httpsRequest(
+        {
+          hostname: "127.0.0.1",
+          port: 8443,
+          path,
+          method: "GET",
+          servername: publicHost,
+          ...(caPem ? { ca: caPem } : {}),
+          minVersion: "TLSv1.3",
+          rejectUnauthorized: true,
+          timeout: 5_000,
+        },
+        (response) => {
+          response.resume();
+          response.once("end", () =>
+            resolveProbe({
+              status: response.statusCode,
+              contentType: response.headers["content-type"],
+            }),
+          );
+        },
+      );
+      request.once("timeout", () =>
+        request.destroy(new Error("nginx ingress probe timed out")),
+      );
+      request.once("error", reject);
+      request.end();
     });
-    request.once("timeout", () => request.destroy(new Error("nginx ingress probe timed out")));
-    request.once("error", reject);
-    request.end();
-  });
-  assert.equal((await probe("/health/live")).status, 200, "nginx TLS live route is unavailable");
+  assert.equal(
+    (await probe("/health/live")).status,
+    200,
+    "nginx TLS live route is unavailable",
+  );
   const session = await probe("/auth/session");
-  assert.equal(session.status, 401, "nginx did not reach the private Edge session route");
-  assert.match(session.contentType ?? "", /^application\/problem\+json/, "session denial must remain typed");
+  assert.equal(
+    session.status,
+    401,
+    "nginx did not reach the private Edge session route",
+  );
+  assert.match(
+    session.contentType ?? "",
+    /^application\/problem\+json/,
+    "session denial must remain typed",
+  );
 }
 
 function runtimeHealthStatus(
@@ -2957,14 +4133,8 @@ function runtimeHealthStatus(
   const output = runCompose(
     projectName,
     secretsDir,
-    [
-      "exec",
-      "-T",
-      runtime,
-      ...RUNTIME_HEALTH_STATUSES,
-      path,
-    ],
-    {composeFile},
+    ["exec", "-T", runtime, ...RUNTIME_HEALTH_STATUSES, path],
+    { composeFile },
   ).trim();
   return Number(output.split("\n").at(-1));
 }
@@ -2997,7 +4167,12 @@ async function waitForRuntimeReadiness(
   let failure;
   while (Date.now() < deadline) {
     try {
-      status = runtimeReadinessStatus(projectName, secretsDir, runtime, composeFile);
+      status = runtimeReadinessStatus(
+        projectName,
+        secretsDir,
+        runtime,
+        composeFile,
+      );
       failure = undefined;
     } catch (error) {
       status = 0;
@@ -3008,7 +4183,7 @@ async function waitForRuntimeReadiness(
   }
   throw new Error(
     `${runtime} readiness did not reach ${expected}; last status was ${status}`,
-    {cause: failure},
+    { cause: failure },
   );
 }
 
@@ -3081,27 +4256,72 @@ function assertHostExposure(
   rows,
   composeFile = COMPOSE_FILE,
 ) {
-  const nginxContainer = JSON.parse(runDocker(["inspect", rows.get("edge-nginx").ID]))[0];
-  const edgeContainer = JSON.parse(runDocker(["inspect", rows.get("edge-gateway").ID]))[0];
-  const effectiveCompose = JSON.parse(runCompose(projectName, secretsDir, ["config", "--format", "json"], {composeFile}));
-  const hostNetwork = JSON.parse(runDocker(["network", "inspect", effectiveCompose.networks.coffee_host_ingress.name]))[0];
-  assert.deepEqual(Object.keys(hostNetwork.Containers ?? {}), [nginxContainer.Id], "coffee_host_ingress must contain only edge-nginx");
-  const edgeNetwork = JSON.parse(runDocker(["network", "inspect", effectiveCompose.networks.coffee_edge_backend.name]))[0];
-  assert.ok(Object.hasOwn(edgeNetwork.Containers ?? {}, nginxContainer.Id), "edge-nginx must join coffee_edge_backend");
-  assert.ok(Object.hasOwn(edgeNetwork.Containers ?? {}, edgeContainer.Id), "edge-gateway must join coffee_edge_backend");
+  const nginxContainer = JSON.parse(
+    runDocker(["inspect", rows.get("edge-nginx").ID]),
+  )[0];
+  const edgeContainer = JSON.parse(
+    runDocker(["inspect", rows.get("edge-gateway").ID]),
+  )[0];
+  const effectiveCompose = JSON.parse(
+    runCompose(projectName, secretsDir, ["config", "--format", "json"], {
+      composeFile,
+    }),
+  );
+  const hostNetwork = JSON.parse(
+    runDocker([
+      "network",
+      "inspect",
+      effectiveCompose.networks.coffee_host_ingress.name,
+    ]),
+  )[0];
+  assert.deepEqual(
+    Object.keys(hostNetwork.Containers ?? {}),
+    [nginxContainer.Id],
+    "coffee_host_ingress must contain only edge-nginx",
+  );
+  const edgeNetwork = JSON.parse(
+    runDocker([
+      "network",
+      "inspect",
+      effectiveCompose.networks.coffee_edge_backend.name,
+    ]),
+  )[0];
+  assert.ok(
+    Object.hasOwn(edgeNetwork.Containers ?? {}, nginxContainer.Id),
+    "edge-nginx must join coffee_edge_backend",
+  );
+  assert.ok(
+    Object.hasOwn(edgeNetwork.Containers ?? {}, edgeContainer.Id),
+    "edge-gateway must join coffee_edge_backend",
+  );
   assert.equal(
-    runCompose(projectName, secretsDir, ["port", "edge-nginx", "8443"], {composeFile}).trim(),
+    runCompose(projectName, secretsDir, ["port", "edge-nginx", "8443"], {
+      composeFile,
+    }).trim(),
     "127.0.0.1:8443",
     "edge-nginx must expose only the loopback HTTPS binding",
   );
-  const nginxBindings = nginxContainer.HostConfig.PortBindings?.["8443/tcp"] ?? [];
-  assert.deepEqual(nginxBindings.map((binding) => ({hostIp: binding.HostIp, hostPort: binding.HostPort})), [
-    {hostIp: "127.0.0.1", hostPort: "8443"},
-  ]);
+  const nginxBindings =
+    nginxContainer.HostConfig.PortBindings?.["8443/tcp"] ?? [];
+  assert.deepEqual(
+    nginxBindings.map((binding) => ({
+      hostIp: binding.HostIp,
+      hostPort: binding.HostPort,
+    })),
+    [{ hostIp: "127.0.0.1", hostPort: "8443" }],
+  );
   for (const runtime of RUNTIMES) {
-    const container = JSON.parse(runDocker(["inspect", rows.get(runtime).ID]))[0];
-    const bindings = Object.values(container.HostConfig.PortBindings ?? {}).flat();
-    assert.deepEqual(bindings, [], `${runtime} unexpectedly publishes a host port`);
+    const container = JSON.parse(
+      runDocker(["inspect", rows.get(runtime).ID]),
+    )[0];
+    const bindings = Object.values(
+      container.HostConfig.PortBindings ?? {},
+    ).flat();
+    assert.deepEqual(
+      bindings,
+      [],
+      `${runtime} unexpectedly publishes a host port`,
+    );
   }
 }
 
@@ -3121,28 +4341,139 @@ function assertStopped(projectName, secretsDir, composeFile = COMPOSE_FILE) {
   }
 }
 
-async function prepareAromaCartProviderFixture(secretsDir, initialCartFixture = "add-one-get.json") {
+async function prepareAromaCartProviderFixture(
+  secretsDir,
+  initialCartFixture = "add-one-get.json",
+) {
   const directory = join(secretsDir, "aroma-cart-proof");
-  await mkdir(directory, {recursive: true, mode: 0o700});
+  await mkdir(directory, { recursive: true, mode: 0o700 });
   const caKey = join(directory, "provider-ca.key");
   const caCert = join(directory, "provider-ca.crt");
   const key = join(directory, "provider.key");
   const csr = join(directory, "provider.csr");
   const cert = join(directory, "provider.crt");
   const ext = join(directory, "provider.ext");
-  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", caKey, "-out", caCert, "-days", "1", "-subj", "/CN=issue10-aroma-provider-fixture"], {stdio: "ignore"});
-  await writeFile(ext, "subjectAltName=DNS:aromateacoffee.ru\nextendedKeyUsage=serverAuth\n", {encoding: "utf8", mode: 0o400});
-  execFileSync("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", csr, "-subj", "/CN=aromateacoffee.ru"], {stdio: "ignore"});
-  execFileSync("openssl", ["x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey, "-CAcreateserial", "-out", cert, "-days", "1", "-sha256", "-extfile", ext], {stdio: "ignore"});
-  await writeFile(join(directory, "add-one-get.json"), await readFile(join(ROOT, "evidence/aroma-provider/2026-09-12-cart-mutations", initialCartFixture), "utf8"), {encoding: "utf8", mode: 0o400});
-  const scopedGateway = parseYaml(await readFile(join(secretsDir, "aroma-gateway.yaml"), "utf8"), {json: true});
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-x509",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      caKey,
+      "-out",
+      caCert,
+      "-days",
+      "1",
+      "-subj",
+      "/CN=issue10-aroma-provider-fixture",
+    ],
+    { stdio: "ignore" },
+  );
+  await writeFile(
+    ext,
+    "subjectAltName=DNS:aromateacoffee.ru\nextendedKeyUsage=serverAuth\n",
+    { encoding: "utf8", mode: 0o400 },
+  );
+  execFileSync(
+    "openssl",
+    [
+      "req",
+      "-new",
+      "-newkey",
+      "rsa:2048",
+      "-nodes",
+      "-keyout",
+      key,
+      "-out",
+      csr,
+      "-subj",
+      "/CN=aromateacoffee.ru",
+    ],
+    { stdio: "ignore" },
+  );
+  execFileSync(
+    "openssl",
+    [
+      "x509",
+      "-req",
+      "-in",
+      csr,
+      "-CA",
+      caCert,
+      "-CAkey",
+      caKey,
+      "-CAcreateserial",
+      "-out",
+      cert,
+      "-days",
+      "1",
+      "-sha256",
+      "-extfile",
+      ext,
+    ],
+    { stdio: "ignore" },
+  );
+  await writeFile(
+    join(directory, "add-one-get.json"),
+    await readFile(
+      join(
+        ROOT,
+        "evidence/aroma-provider/2026-09-12-cart-mutations",
+        initialCartFixture,
+      ),
+      "utf8",
+    ),
+    { encoding: "utf8", mode: 0o400 },
+  );
+  const scopedGateway = parseYaml(
+    await readFile(join(secretsDir, "aroma-gateway.yaml"), "utf8"),
+    { json: true },
+  );
   const supplierRef = "sup_00000000000000000000000001";
-  const catalogIdentityKey = Buffer.from(scopedGateway.secrets.aroma.catalogIdentityKeyV1, "utf8");
-  const grinds = Array.from({length: 12}, (_, index) => ({id: String(index + 1), name: `Fixture grind ${index + 1}`}));
-  await writeFile(join(directory, "catalog-grinds.json"), JSON.stringify(grinds) + "\n", {encoding: "utf8", mode: 0o400});
-  await writeFile(join(directory, "selected-grind.json"), JSON.stringify({rawId: "1", sourceGrindKeyHash: createSourceIdentity({supplierRef, entityType: "grind", rawProviderIdentifier: "1", sourceIdentityKey: catalogIdentityKey}).sourceIdentityHash}) + "\n", {encoding: "utf8", mode: 0o400});
-  await writeFile(join(directory, "provider-count.json"), JSON.stringify({login: 0, catalog: 0, cart: 0, post: 0, put: 0, delete: 0}) + "\n", {encoding: "utf8", mode: 0o600});
-  await writeFile(join(directory, "provider-server.mjs"), `import {createServer} from "node:https";
+  const catalogIdentityKey = Buffer.from(
+    scopedGateway.secrets.aroma.catalogIdentityKeyV1,
+    "utf8",
+  );
+  const grinds = Array.from({ length: 12 }, (_, index) => ({
+    id: String(index + 1),
+    name: `Fixture grind ${index + 1}`,
+  }));
+  await writeFile(
+    join(directory, "catalog-grinds.json"),
+    JSON.stringify(grinds) + "\n",
+    { encoding: "utf8", mode: 0o400 },
+  );
+  await writeFile(
+    join(directory, "selected-grind.json"),
+    JSON.stringify({
+      rawId: "1",
+      sourceGrindKeyHash: createSourceIdentity({
+        supplierRef,
+        entityType: "grind",
+        rawProviderIdentifier: "1",
+        sourceIdentityKey: catalogIdentityKey,
+      }).sourceIdentityHash,
+    }) + "\n",
+    { encoding: "utf8", mode: 0o400 },
+  );
+  await writeFile(
+    join(directory, "provider-count.json"),
+    JSON.stringify({
+      login: 0,
+      catalog: 0,
+      cart: 0,
+      post: 0,
+      put: 0,
+      delete: 0,
+    }) + "\n",
+    { encoding: "utf8", mode: 0o600 },
+  );
+  await writeFile(
+    join(directory, "provider-server.mjs"),
+    `import {createServer} from "node:https";
 import {readFile, writeFile} from "node:fs/promises";
 const key = await readFile("/run/aroma-proof/provider.key");
 const cert = await readFile("/run/aroma-proof/provider.crt");
@@ -3215,8 +4546,14 @@ const shutdown = () => server.close((error) => { if (error) throw error; });
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
 server.listen(443, "0.0.0.0");
-`, {encoding: "utf8", mode: 0o400});
-  return {directory, caCert: join(directory, "provider-ca.crt"), countFile: join(directory, "provider-count.json")};
+`,
+    { encoding: "utf8", mode: 0o400 },
+  );
+  return {
+    directory,
+    caCert: join(directory, "provider-ca.crt"),
+    countFile: join(directory, "provider-count.json"),
+  };
 }
 
 function aromaCartProofSource(environment, expectedInitialQuantity) {
@@ -3282,11 +4619,42 @@ const afterLost = await requestApi(caller, readPath, readBody);
 if (afterLost.status !== 200 || afterLost.body?.lines?.[0]?.quantity !== "4") throw new Error("lost post-dispatch effect was not visible on fresh read-back");
 console.log(JSON.stringify({unauthorizedStatus: unauthorized.status, spoofedDelegationStatus: spoofed.status, malformedStatus: malformed.status, successStatus: safe.status, sanitizedSnapshot: true, providerMaterialRedacted: true, typedSuccess: true, freshCartReadBack: true, exactReplaySameBytes: true, unknownOutcomeAfterMalformed: true, unknownOutcomeAfterLost: true, unknownReplayWithoutRedispatch: true, providerAccess: false, providerKind: "local-fake", liveProviderAcceptance: false, providerCalls: await readCounts()}));
 `;
-  return source.replace("__ENV__", environment).replace("__INITIAL_QUANTITY__", expectedInitialQuantity).replace("__AFTER_SET_QUANTITY__", expectedInitialQuantity === "1" ? "2" : "4").replace("__AFTER_REMOVE_LINES__", expectedInitialQuantity === "1" ? "0" : "1");
+  return source
+    .replace("__ENV__", environment)
+    .replace("__INITIAL_QUANTITY__", expectedInitialQuantity)
+    .replace(
+      "__AFTER_SET_QUANTITY__",
+      expectedInitialQuantity === "1" ? "2" : "4",
+    )
+    .replace(
+      "__AFTER_REMOVE_LINES__",
+      expectedInitialQuantity === "1" ? "0" : "1",
+    );
 }
 
-async function runAromaCartProofFixture(projectName, secretsDir, composeFile, fixture, environment, expectedInitialQuantity = "1") {
-  const output = runDocker(["run", "--rm", "--interactive", "--network", `${projectName}_coffee_internal_api`, "--volume", `${fixture.directory}:/run/aroma-proof:ro`, CUSTOMER_TEST_IMAGE, "node", "--input-type=module"], {input: aromaCartProofSource(environment, expectedInitialQuantity)});
+async function runAromaCartProofFixture(
+  projectName,
+  secretsDir,
+  composeFile,
+  fixture,
+  environment,
+  expectedInitialQuantity = "1",
+) {
+  const output = runDocker(
+    [
+      "run",
+      "--rm",
+      "--interactive",
+      "--network",
+      `${projectName}_coffee_internal_api`,
+      "--volume",
+      `${fixture.directory}:/run/aroma-proof:ro`,
+      CUSTOMER_TEST_IMAGE,
+      "node",
+      "--input-type=module",
+    ],
+    { input: aromaCartProofSource(environment, expectedInitialQuantity) },
+  );
   const line = output.trim().split("\\n").filter(Boolean).at(-1);
   assert.ok(line, "aroma cart fixture returned no evidence");
   return JSON.parse(line);
@@ -3295,8 +4663,13 @@ async function runAromaCartProofFixture(projectName, secretsDir, composeFile, fi
 async function seedAromaCartReadBinding(port, credentials, platformConfig) {
   const service = platformConfig.services["aroma-gateway"];
   const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
-  assert.ok(service && credential, "aroma gateway database credentials are missing");
-  const database = createDatabase(proofDatabaseOptions("aroma-gateway", service, port, credential));
+  assert.ok(
+    service && credential,
+    "aroma gateway database credentials are missing",
+  );
+  const database = createDatabase(
+    proofDatabaseOptions("aroma-gateway", service, port, credential),
+  );
   await database.resource.start(AbortSignal.timeout(10_000));
   const store = new OfferBindingStore(database);
   const supplierRef = "sup_00000000000000000000000001";
@@ -3304,54 +4677,108 @@ async function seedAromaCartReadBinding(port, credentials, platformConfig) {
   const offerRef = "off_00000000000000000000000001";
   try {
     await store.beginExport(snapshotRef, supplierRef);
-    await store.recordBatch(snapshotRef, supplierRef, [{
+    await store.recordBatch(snapshotRef, supplierRef, [
+      {
+        supplierRef,
+        sourceIdentityScheme: "hmac-sha256-v1",
+        sourceOfferKeyHash: "d".repeat(64),
+        rawProviderOfferId: "300000",
+        rawProviderProductId: "300001",
+        rawProviderVariantId: "300000",
+        packing: "Aroma",
+        grindId: "1",
+      },
+    ]);
+    await store.completeExport(snapshotRef, "e".repeat(64));
+    await store.register({
+      offerRef,
       supplierRef,
+      snapshotRef,
       sourceIdentityScheme: "hmac-sha256-v1",
       sourceOfferKeyHash: "d".repeat(64),
-      rawProviderOfferId: "300000",
-      rawProviderProductId: "300001",
-      rawProviderVariantId: "300000",
-      packing: "Aroma",
-      grindId: "1",
-    }]);
-    await store.completeExport(snapshotRef, "e".repeat(64));
-    await store.register({offerRef, supplierRef, snapshotRef, sourceIdentityScheme: "hmac-sha256-v1", sourceOfferKeyHash: "d".repeat(64)});
+    });
   } catch (error) {
     await database.resource.stop(AbortSignal.timeout(10_000));
     throw error;
   }
-  return {database, supplierRef, snapshotRef, offerRef};
+  return { database, supplierRef, snapshotRef, offerRef };
 }
 
 async function assertAromaCartTopology(projectName, secretsDir, composeFile) {
   const rows = serviceRows(projectName, secretsDir, composeFile);
-  assert.equal(rows.length, 3, "aroma cart proof must start exactly three services");
+  assert.equal(
+    rows.length,
+    3,
+    "aroma cart proof must start exactly three services",
+  );
   const byService = new Map(rows.map((row) => [row.Service, row]));
-  for (const runtime of ["api-internal", "aroma-gateway", "aroma-provider-fixture"]) {
+  for (const runtime of [
+    "api-internal",
+    "aroma-gateway",
+    "aroma-provider-fixture",
+  ]) {
     const row = byService.get(runtime);
     assert.ok(row, `${runtime} is absent from aroma cart proof`);
     assert.equal(row.State, "running", `${runtime} is not running`);
     assert.equal(row.Health, "healthy", `${runtime} is not healthy`);
     const container = JSON.parse(runDocker(["inspect", row.ID]))[0];
-    const networks = Object.keys(container.NetworkSettings.Networks ?? {}).sort();
-    const expected = runtime === "api-internal" ? [`${projectName}_coffee_internal_api`] : runtime === "aroma-gateway" ? [`${projectName}_coffee_internal_api`, `${projectName}_coffee_postgres_data`, `${projectName}_coffee_provider_egress`].sort() : [`${projectName}_coffee_provider_egress`];
-    assert.deepEqual(networks, expected, `${runtime} connected to an unexpected network`);
+    const networks = Object.keys(
+      container.NetworkSettings.Networks ?? {},
+    ).sort();
+    const expected =
+      runtime === "api-internal"
+        ? [`${projectName}_coffee_internal_api`]
+        : runtime === "aroma-gateway"
+          ? [
+              `${projectName}_coffee_internal_api`,
+              `${projectName}_coffee_postgres_data`,
+              `${projectName}_coffee_provider_egress`,
+            ].sort()
+          : [`${projectName}_coffee_provider_egress`];
+    assert.deepEqual(
+      networks,
+      expected,
+      `${runtime} connected to an unexpected network`,
+    );
   }
   return byService;
 }
 
 async function readAromaCartProviderCounts(countFile) {
   const counts = JSON.parse(await readFile(countFile, "utf8"));
-  assert.deepEqual(Object.keys(counts).sort(), ["cart", "catalog", "delete", "login", "post", "put"]);
+  assert.deepEqual(Object.keys(counts).sort(), [
+    "cart",
+    "catalog",
+    "delete",
+    "login",
+    "post",
+    "put",
+  ]);
   return counts;
 }
 
-async function readAromaMutationJournal(port, credentials, platformConfig, operationRefs) {
+async function readAromaMutationJournal(
+  port,
+  credentials,
+  platformConfig,
+  operationRefs,
+) {
   const service = platformConfig.services["aroma-gateway"];
   const credential = credentials.databaseCredentialsByRuntime["aroma-gateway"];
   const database = service.database;
-  assert.ok(service && credential, "aroma gateway journal credentials are missing");
-  const client = new Client({host: "127.0.0.1", port, database, user: credential.username, password: credential.password, ssl: false, connectionTimeoutMillis: 10_000});
+  assert.ok(
+    service && credential,
+    "aroma gateway journal credentials are missing",
+  );
+  const client = new Client({
+    host: "127.0.0.1",
+    port,
+    database,
+    user: credential.username,
+    password: credential.password,
+    ssl: false,
+    connectionTimeoutMillis: 10_000,
+  });
   await client.connect();
   try {
     const result = await client.query(
@@ -3381,9 +4808,16 @@ async function readAromaMutationJournal(port, credentials, platformConfig, opera
 }
 
 function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
-  assert.equal(rows.length, 4, "cart mutation proof must persist exactly four journal rows");
+  assert.equal(
+    rows.length,
+    4,
+    "cart mutation proof must persist exactly four journal rows",
+  );
   const byRef = new Map(rows.map((row) => [row.operationRef, row]));
-  const acknowledged = ["op_00000000000000000000000001", "op_00000000000000000000000002"];
+  const acknowledged = [
+    "op_00000000000000000000000001",
+    "op_00000000000000000000000002",
+  ];
   for (const operationRef of acknowledged) {
     const row = byRef.get(operationRef);
     assert.ok(row, `missing acknowledged journal row ${operationRef}`);
@@ -3417,20 +4851,45 @@ function assertAromaMutationJournal(rows, sourceGrindKeyHash) {
   return rows;
 }
 
-export async function runComposeSmoke({args = process.argv.slice(2), observability} = {}) {
+export async function runComposeSmoke({
+  args = process.argv.slice(2),
+  observability,
+} = {}) {
   const options = parseArguments(args);
   if (observability !== undefined) {
-    assert.ok(observability && typeof observability === "object", "observability hooks must be an object");
     assert.ok(
-      options.recoveryProof && !options.stubSecrets && !options.noBuild && !options.keep,
+      observability && typeof observability === "object",
+      "observability hooks must be an object",
+    );
+    assert.ok(
+      options.recoveryProof &&
+        !options.stubSecrets &&
+        !options.noBuild &&
+        !options.keep,
       "observability hooks require --recovery-proof without --stub-secrets, --no-build or --keep",
     );
-    assert.equal(typeof observability.exporterToken, "string", "observability exporterToken must be a string");
-    assert.ok(observability.exporterToken.length > 0, "observability exporterToken must not be empty");
-    assert.equal(typeof observability.onReady, "function", "observability onReady must be a function");
-    assert.equal(typeof observability.onCleanup, "function", "observability onCleanup must be a function");
+    assert.equal(
+      typeof observability.exporterToken,
+      "string",
+      "observability exporterToken must be a string",
+    );
+    assert.ok(
+      observability.exporterToken.length > 0,
+      "observability exporterToken must not be empty",
+    );
+    assert.equal(
+      typeof observability.onReady,
+      "function",
+      "observability onReady must be a function",
+    );
+    assert.equal(
+      typeof observability.onCleanup,
+      "function",
+      "observability onCleanup must be a function",
+    );
   }
-  if (options.aromaBindingProof) assertAromaGatewaySocketAssociationRegression();
+  if (options.aromaBindingProof)
+    assertAromaGatewaySocketAssociationRegression();
   const projectName =
     options.projectName ??
     `coffee-compose-smoke-${process.pid}-${randomUUID().slice(0, 8)}`;
@@ -3467,36 +4926,88 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
   let cleanupHookError;
   let standardCleanupError;
   try {
-    assert.notEqual(projectName, "coffee-platform", "smoke must not use the main platform project");
-    assert.notEqual(projectName, "coffeeordersystem", "smoke must not use the legacy project");
-    for (const [resource, list] of [["container", "ps"], ["volume", "volume"], ["network", "network"]]) {
-      const dockerArgs = list === "ps" ? ["ps", "--all", "--quiet"] : [list, "ls", "--quiet"];
-      assert.equal(runDocker([...dockerArgs, "--filter", `label=com.docker.compose.project=${projectName}`]).trim(), "",
-        `smoke project already has ${resource} resources: ${projectName}; choose a new project name`);
+    assert.notEqual(
+      projectName,
+      "coffee-platform",
+      "smoke must not use the main platform project",
+    );
+    assert.notEqual(
+      projectName,
+      "coffeeordersystem",
+      "smoke must not use the legacy project",
+    );
+    for (const [resource, list] of [
+      ["container", "ps"],
+      ["volume", "volume"],
+      ["network", "network"],
+    ]) {
+      const dockerArgs =
+        list === "ps" ? ["ps", "--all", "--quiet"] : [list, "ls", "--quiet"];
+      assert.equal(
+        runDocker([
+          ...dockerArgs,
+          "--filter",
+          `label=com.docker.compose.project=${projectName}`,
+        ]).trim(),
+        "",
+        `smoke project already has ${resource} resources: ${projectName}; choose a new project name`,
+      );
     }
     secretsDir = await mkdtemp(
       join(SECRETS_TMPFS_ROOT, "coffee-platform-secrets-"),
     );
-    const platformConfig = parseYaml(await readFile(join(ROOT, "config/platform.yaml"), "utf8"), {json: true});
+    const platformConfig = parseYaml(
+      await readFile(join(ROOT, "config/platform.yaml"), "utf8"),
+      { json: true },
+    );
     if (options.recoveryProof) {
       const kafkaVolume = `${projectName}_kafka_data`;
-      const existingVolumes = runDocker(["volume", "ls", "--format", "{{.Name}}", "--filter", `name=${kafkaVolume}`]).trim().split("\n");
-      assert.equal(existingVolumes.includes(kafkaVolume), false, "recovery proof requires a fresh Kafka volume before offset bootstrap");
+      const existingVolumes = runDocker([
+        "volume",
+        "ls",
+        "--format",
+        "{{.Name}}",
+        "--filter",
+        `name=${kafkaVolume}`,
+      ])
+        .trim()
+        .split("\n");
+      assert.equal(
+        existingVolumes.includes(kafkaVolume),
+        false,
+        "recovery proof requires a fresh Kafka volume before offset bootstrap",
+      );
     }
-    const databaseProofCredentials = options.databaseProof || options.customerProof
-      ? await readDatabaseProofCredentials()
-      : undefined;
-    recoveryProofCredentials = options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
-      ? await readRecoveryProofCredentials()
-      : undefined;
+    const databaseProofCredentials =
+      options.databaseProof || options.customerProof
+        ? await readDatabaseProofCredentials()
+        : undefined;
+    recoveryProofCredentials =
+      options.recoveryProof ||
+      options.aromaBindingProof ||
+      options.aromaCartProof
+        ? await readRecoveryProofCredentials()
+        : undefined;
     composeFile = await writeScopedComposeOverride(projectName, {
-      sharedPostgres: !(options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof),
+      sharedPostgres: !(
+        options.databaseProof ||
+        options.customerProof ||
+        options.recoveryProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof
+      ),
       aromaBindingProof: options.aromaBindingProof,
       aromaCartProof: options.aromaCartProof,
       recoveryProof: options.recoveryProof,
       runtimeLogging: observability ? platformConfig : undefined,
     });
-    if (options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
+    if (
+      options.databaseProof ||
+      options.customerProof ||
+      options.recoveryProof ||
+      options.aromaBindingProof ||
+      options.aromaCartProof
+    ) {
       const networkNames = databaseProofNetworkNames(projectName);
       for (const networkName of networkNames) {
         try {
@@ -3504,7 +5015,9 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
         } catch {
           continue;
         }
-        throw new Error(`database proof network already exists: ${networkName}`);
+        throw new Error(
+          `database proof network already exists: ${networkName}`,
+        );
       }
       databaseProofNetwork = `${projectName}_${EXTERNAL_POSTGRES_NETWORK}`;
       createDatabaseProofNetwork(databaseProofNetwork);
@@ -3512,62 +5025,130 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
     const materialized = await materializeSecrets(secretsDir, {
       ...options,
       observabilityExporterToken: observability?.exporterToken,
-      databaseProofCredentials: databaseProofCredentials === undefined
-        ? undefined
-        : {[DATABASE_PROOF_RUNTIME]: databaseProofCredentials.owner},
+      databaseProofCredentials:
+        databaseProofCredentials === undefined
+          ? undefined
+          : { [DATABASE_PROOF_RUNTIME]: databaseProofCredentials.owner },
       recoveryProofCredentials,
     });
-    if (options.aromaBindingProof) aromaBindingTlsObserver = await prepareAromaBindingTlsObserver(secretsDir);
+    if (options.aromaBindingProof)
+      aromaBindingTlsObserver =
+        await prepareAromaBindingTlsObserver(secretsDir);
     if (options.aromaCartProof || options.recoveryProof) {
-      aromaCartProviderFixture = await prepareAromaCartProviderFixture(secretsDir, options.recoveryProof ? "remove-owned-get.json" : "add-one-get.json");
+      aromaCartProviderFixture = await prepareAromaCartProviderFixture(
+        secretsDir,
+        options.recoveryProof ? "remove-owned-get.json" : "add-one-get.json",
+      );
     }
     if (options.aromaCartProof) {
       const directory = join(secretsDir, "aroma-cart-proof");
-      await writeFile(join(directory, "caller.json"), materialized.transportMaterials.service.get("aroma-observer"), {encoding: "utf8", mode: 0o400});
-      await writeFile(join(directory, "convergence.json"), materialized.transportMaterials.service.get("aroma-convergence"), {encoding: "utf8", mode: 0o400});
-      await writeFile(join(directory, "foreign.json"), materialized.transportMaterials.service.get("orders-service"), {encoding: "utf8", mode: 0o400});
-      aromaCartFixture = {directory};
+      await writeFile(
+        join(directory, "caller.json"),
+        materialized.transportMaterials.service.get("aroma-observer"),
+        { encoding: "utf8", mode: 0o400 },
+      );
+      await writeFile(
+        join(directory, "convergence.json"),
+        materialized.transportMaterials.service.get("aroma-convergence"),
+        { encoding: "utf8", mode: 0o400 },
+      );
+      await writeFile(
+        join(directory, "foreign.json"),
+        materialized.transportMaterials.service.get("orders-service"),
+        { encoding: "utf8", mode: 0o400 },
+      );
+      aromaCartFixture = { directory };
     }
-    runCompose(projectName, secretsDir, ["config", "--quiet"], {composeFile});
-    if (!options.databaseProof && !options.customerProof && !options.recoveryProof && !options.aromaBindingProof && !options.aromaCartProof)
+    runCompose(projectName, secretsDir, ["config", "--quiet"], { composeFile });
+    if (
+      !options.databaseProof &&
+      !options.customerProof &&
+      !options.recoveryProof &&
+      !options.aromaBindingProof &&
+      !options.aromaCartProof
+    )
       provisionedNetwork = ensureExternalNetwork(options);
-    if (options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof) {
-      const postgresCredentials = options.databaseProof || options.customerProof
-        ? databaseProofCredentials
-        : recoveryProofCredentials;
-      assert.ok(postgresCredentials, "PostgreSQL proof credentials are missing");
+    if (
+      options.databaseProof ||
+      options.customerProof ||
+      options.recoveryProof ||
+      options.aromaBindingProof ||
+      options.aromaCartProof
+    ) {
+      const postgresCredentials =
+        options.databaseProof || options.customerProof
+          ? databaseProofCredentials
+          : recoveryProofCredentials;
+      assert.ok(
+        postgresCredentials,
+        "PostgreSQL proof credentials are missing",
+      );
       databaseProofContainer = startDatabaseProofContainer(
         projectName,
         databaseProofNetwork,
         postgresCredentials.admin,
         {
-          initialDatabase: options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
-            ? "postgres"
-            : "coffee_platform_customer",
-          publishHost: options.recoveryProof || options.aromaBindingProof || options.aromaCartProof,
+          initialDatabase:
+            options.recoveryProof ||
+            options.aromaBindingProof ||
+            options.aromaCartProof
+              ? "postgres"
+              : "coffee_platform_customer",
+          publishHost:
+            options.recoveryProof ||
+            options.aromaBindingProof ||
+            options.aromaCartProof,
           ephemeralPgData: observability !== undefined,
         },
       );
       if (observability !== undefined) {
-        databaseProofStorage = assertEphemeralDatabaseProofStorage(databaseProofContainer);
+        databaseProofStorage = assertEphemeralDatabaseProofStorage(
+          databaseProofContainer,
+        );
       }
       await waitForDockerHealthy(databaseProofContainer);
       await waitForDatabaseProofReady(
         databaseProofContainer,
         postgresCredentials.admin,
-        options.recoveryProof || options.aromaBindingProof || options.aromaCartProof ? "postgres" : "coffee_platform_customer",
+        options.recoveryProof ||
+          options.aromaBindingProof ||
+          options.aromaCartProof
+          ? "postgres"
+          : "coffee_platform_customer",
       );
       if (options.aromaBindingProof) {
-        recoveryDatabaseProof = await bootstrapRecoveryDatabases(databaseProofContainer, postgresCredentials);
+        recoveryDatabaseProof = await bootstrapRecoveryDatabases(
+          databaseProofContainer,
+          postgresCredentials,
+        );
         const port = recoveryDatabaseProof.port;
-        await applyAromaBindingMigration(port, recoveryProofCredentials, platformConfig);
-        aromaBindingSnapshot = await seedAromaBindingSnapshot(port, recoveryProofCredentials, platformConfig, projectName);
+        await applyAromaBindingMigration(
+          port,
+          recoveryProofCredentials,
+          platformConfig,
+        );
+        aromaBindingSnapshot = await seedAromaBindingSnapshot(
+          port,
+          recoveryProofCredentials,
+          platformConfig,
+          projectName,
+        );
       } else if (options.aromaCartProof) {
-        recoveryDatabaseProof = await bootstrapRecoveryDatabases(databaseProofContainer, postgresCredentials);
+        recoveryDatabaseProof = await bootstrapRecoveryDatabases(
+          databaseProofContainer,
+          postgresCredentials,
+        );
         const port = recoveryDatabaseProof.port;
-        await applyAromaBindingMigration(port, recoveryProofCredentials, platformConfig);
-        aromaCartSnapshot = await seedAromaCartReadBinding(port, recoveryProofCredentials, platformConfig);
-
+        await applyAromaBindingMigration(
+          port,
+          recoveryProofCredentials,
+          platformConfig,
+        );
+        aromaCartSnapshot = await seedAromaCartReadBinding(
+          port,
+          recoveryProofCredentials,
+          platformConfig,
+        );
       } else if (options.databaseProof || options.customerProof) {
         bootstrapDatabaseProofRole(
           databaseProofContainer,
@@ -3579,22 +5160,46 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
           postgresCredentials.admin,
           postgresCredentials.owner,
         );
-        if (options.customerProof) customerProofRoles = bootstrapCustomerProofRoles(databaseProofContainer, postgresCredentials.admin);
+        if (options.customerProof)
+          customerProofRoles = bootstrapCustomerProofRoles(
+            databaseProofContainer,
+            postgresCredentials.admin,
+          );
       } else {
         recoveryDatabaseProof = await bootstrapRecoveryDatabases(
           databaseProofContainer,
           postgresCredentials,
         );
-        await applyAromaBindingMigration(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
-        await applyCatalogMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
-        if (options.recoveryProof) {
-          await applyPricingMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
-          await applyOrdersMigrations(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig);
-        }
-        const deliveryDatabase = recoveryProofCredentials.roleMap.databases.find(
-          (candidate) => candidate.name === "coffee_platform_orders",
+        await applyAromaBindingMigration(
+          recoveryDatabaseProof.port,
+          recoveryProofCredentials,
+          platformConfig,
         );
-        assert.ok(deliveryDatabase, "recovery proof orders database is missing");
+        await applyCatalogMigrations(
+          recoveryDatabaseProof.port,
+          recoveryProofCredentials,
+          platformConfig,
+        );
+        if (options.recoveryProof) {
+          await applyPricingMigrations(
+            recoveryDatabaseProof.port,
+            recoveryProofCredentials,
+            platformConfig,
+          );
+          await applyOrdersMigrations(
+            recoveryDatabaseProof.port,
+            recoveryProofCredentials,
+            platformConfig,
+          );
+        }
+        const deliveryDatabase =
+          recoveryProofCredentials.roleMap.databases.find(
+            (candidate) => candidate.name === "coffee_platform_orders",
+          );
+        assert.ok(
+          deliveryDatabase,
+          "recovery proof orders database is missing",
+        );
         const ordersRole = deliveryDatabase.runtimeRoles.find(
           (candidate) => candidate.runtime === "orders-service",
         );
@@ -3620,88 +5225,360 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
             : RUNTIMES,
         builtImages,
       );
-    if (options.customerProof) await writeCustomerProofFixtures(secretsDir, materialized.securityMaterial, materialized.transportMaterials);
-    if (options.aromaBindingProof) aromaBindingFixture = await writeAromaBindingProofFixtures(secretsDir, materialized, platformConfig.environment, aromaBindingTlsObserver);
-    const upArguments = options.databaseProof || options.customerProof
-      ? [
-          "up",
-          "--detach",
-          "--wait",
-          "--no-build",
-          DATABASE_PROOF_RUNTIME,
-        ]
-      : options.aromaBindingProof || options.aromaCartProof
-        ? ["up", "--detach", "--wait", "--no-build", "api-internal", "aroma-gateway", ...(options.aromaCartProof ? ["aroma-provider-fixture"] : [])]
-        : ["up", "--detach", "--wait", "--no-build"];
+    if (options.customerProof)
+      await writeCustomerProofFixtures(
+        secretsDir,
+        materialized.securityMaterial,
+        materialized.transportMaterials,
+      );
+    if (options.aromaBindingProof)
+      aromaBindingFixture = await writeAromaBindingProofFixtures(
+        secretsDir,
+        materialized,
+        platformConfig.environment,
+        aromaBindingTlsObserver,
+      );
+    const upArguments =
+      options.databaseProof || options.customerProof
+        ? ["up", "--detach", "--wait", "--no-build", DATABASE_PROOF_RUNTIME]
+        : options.aromaBindingProof || options.aromaCartProof
+          ? [
+              "up",
+              "--detach",
+              "--wait",
+              "--no-build",
+              "api-internal",
+              "aroma-gateway",
+              ...(options.aromaCartProof ? ["aroma-provider-fixture"] : []),
+            ]
+          : ["up", "--detach", "--wait", "--no-build"];
     composeAttempted = true;
-    if (options.recoveryProof) prepareRecoveryKafkaBootstrap(projectName, secretsDir, platformConfig, composeFile);
-    runCompose(projectName, secretsDir, upArguments, {composeFile, inherit: true});
-    const rows = options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof
-      ? new Map(
-          serviceRows(projectName, secretsDir, composeFile).map((row) => [row.Service, row]),
-        )
-      : assertHealthy(projectName, secretsDir, composeFile);
+    if (options.recoveryProof)
+      prepareRecoveryKafkaBootstrap(
+        projectName,
+        secretsDir,
+        platformConfig,
+        composeFile,
+      );
+    runCompose(projectName, secretsDir, upArguments, {
+      composeFile,
+      inherit: true,
+    });
+    const rows =
+      options.databaseProof ||
+      options.customerProof ||
+      options.aromaBindingProof ||
+      options.aromaCartProof
+        ? new Map(
+            serviceRows(projectName, secretsDir, composeFile).map((row) => [
+              row.Service,
+              row,
+            ]),
+          )
+        : assertHealthy(projectName, secretsDir, composeFile);
     let kafkaRetention;
     let nativeFoundation;
     if (options.aromaBindingProof) {
-      assert.ok(aromaBindingSnapshot && aromaBindingFixture && recoveryDatabaseProof, "aroma binding proof fixtures are missing");
-      const initialRows = await assertAromaBindingTopology(projectName, secretsDir, composeFile);
-      aromaBindingEvidence = await runAromaBindingProofFixture(projectName, secretsDir, composeFile, aromaBindingFixture, "baseline", aromaBindingSnapshot, platformConfig.environment);
-      const afterRegisterCount = await queryAromaBindingCount(recoveryDatabaseProof.port, aromaBindingSnapshot, recoveryProofCredentials, platformConfig);
-      assert.equal(afterRegisterCount, 1, "allowed registration did not create exactly one durable binding");
-      runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "aroma-gateway"], {composeFile, inherit: true});
-      runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "aroma-gateway"], {composeFile, inherit: true});
-      const restartedRows = await assertAromaBindingTopology(projectName, secretsDir, composeFile);
-      assert.equal(restartedRows.get("api-internal")?.ID, initialRows.get("api-internal")?.ID, "api-internal was restarted unexpectedly");
-      assert.equal(restartedRows.get("aroma-gateway")?.State, "running", "aroma-gateway did not restart");
-      aromaBindingRestartEvidence = await runAromaBindingProofFixture(projectName, secretsDir, composeFile, aromaBindingFixture, "replay", aromaBindingSnapshot, platformConfig.environment);
-      const afterRestartCount = await queryAromaBindingCount(recoveryDatabaseProof.port, aromaBindingSnapshot, recoveryProofCredentials, platformConfig);
-      assert.equal(afterRestartCount, 1, "restart replay created a second binding");
-      const boundedLogs = runCompose(projectName, secretsDir, ["logs", "--no-color", "--no-log-prefix", "--tail", "200", "api-internal", "aroma-gateway"], {composeFile});
-      assert.ok(boundedLogs.length <= 100_000, "proof logs exceeded the bounded redaction window");
+      assert.ok(
+        aromaBindingSnapshot && aromaBindingFixture && recoveryDatabaseProof,
+        "aroma binding proof fixtures are missing",
+      );
+      const initialRows = await assertAromaBindingTopology(
+        projectName,
+        secretsDir,
+        composeFile,
+      );
+      aromaBindingEvidence = await runAromaBindingProofFixture(
+        projectName,
+        secretsDir,
+        composeFile,
+        aromaBindingFixture,
+        "baseline",
+        aromaBindingSnapshot,
+        platformConfig.environment,
+      );
+      const afterRegisterCount = await queryAromaBindingCount(
+        recoveryDatabaseProof.port,
+        aromaBindingSnapshot,
+        recoveryProofCredentials,
+        platformConfig,
+      );
+      assert.equal(
+        afterRegisterCount,
+        1,
+        "allowed registration did not create exactly one durable binding",
+      );
+      runCompose(
+        projectName,
+        secretsDir,
+        ["stop", "--timeout", "30", "aroma-gateway"],
+        { composeFile, inherit: true },
+      );
+      runCompose(
+        projectName,
+        secretsDir,
+        ["up", "--detach", "--wait", "--no-build", "aroma-gateway"],
+        { composeFile, inherit: true },
+      );
+      const restartedRows = await assertAromaBindingTopology(
+        projectName,
+        secretsDir,
+        composeFile,
+      );
+      assert.equal(
+        restartedRows.get("api-internal")?.ID,
+        initialRows.get("api-internal")?.ID,
+        "api-internal was restarted unexpectedly",
+      );
+      assert.equal(
+        restartedRows.get("aroma-gateway")?.State,
+        "running",
+        "aroma-gateway did not restart",
+      );
+      aromaBindingRestartEvidence = await runAromaBindingProofFixture(
+        projectName,
+        secretsDir,
+        composeFile,
+        aromaBindingFixture,
+        "replay",
+        aromaBindingSnapshot,
+        platformConfig.environment,
+      );
+      const afterRestartCount = await queryAromaBindingCount(
+        recoveryDatabaseProof.port,
+        aromaBindingSnapshot,
+        recoveryProofCredentials,
+        platformConfig,
+      );
+      assert.equal(
+        afterRestartCount,
+        1,
+        "restart replay created a second binding",
+      );
+      const boundedLogs = runCompose(
+        projectName,
+        secretsDir,
+        [
+          "logs",
+          "--no-color",
+          "--no-log-prefix",
+          "--tail",
+          "200",
+          "api-internal",
+          "aroma-gateway",
+        ],
+        { composeFile },
+      );
+      assert.ok(
+        boundedLogs.length <= 100_000,
+        "proof logs exceeded the bounded redaction window",
+      );
       const redactionCanaries = [
         aromaBindingSnapshot.rawCanary,
         recoveryProofCredentials.admin.password,
-        recoveryProofCredentials.databaseCredentialsByRuntime["aroma-gateway"].password,
+        recoveryProofCredentials.databaseCredentialsByRuntime["aroma-gateway"]
+          .password,
         materialized.kafkaCredential.password,
       ];
       for (const canary of redactionCanaries) {
-        assert.equal(boundedLogs.includes(canary), false, "proof logs exposed a secret or raw provider canary");
-        assert.equal(JSON.stringify({aromaBindingEvidence, aromaBindingRestartEvidence}).includes(canary), false, "proof output exposed a secret or raw provider canary");
+        assert.equal(
+          boundedLogs.includes(canary),
+          false,
+          "proof logs exposed a secret or raw provider canary",
+        );
+        assert.equal(
+          JSON.stringify({
+            aromaBindingEvidence,
+            aromaBindingRestartEvidence,
+          }).includes(canary),
+          false,
+          "proof output exposed a secret or raw provider canary",
+        );
       }
-      aromaBindingCleanupReceipt = {composeProject: projectName, disposableDatabase: databaseProofContainer, fixture: "--rm", networks: [`${projectName}_coffee_internal_api`, `${projectName}_coffee_postgres_data`], boundedLogLines: 200, redacted: true};
+      aromaBindingCleanupReceipt = {
+        composeProject: projectName,
+        disposableDatabase: databaseProofContainer,
+        fixture: "--rm",
+        networks: [
+          `${projectName}_coffee_internal_api`,
+          `${projectName}_coffee_postgres_data`,
+        ],
+        boundedLogLines: 200,
+        redacted: true,
+      };
     } else if (options.aromaCartProof) {
-      assert.ok(aromaCartSnapshot && aromaCartFixture && aromaCartProviderFixture && recoveryDatabaseProof && recoveryProofCredentials, "aroma cart proof fixtures are missing");
-      const initialRows = await assertAromaCartTopology(projectName, secretsDir, composeFile);
-      const selectedGrind = JSON.parse(await readFile(join(aromaCartFixture.directory, "selected-grind.json"), "utf8"));
-      aromaCartEvidence = await runAromaCartProofFixture(projectName, secretsDir, composeFile, aromaCartFixture, platformConfig.environment);
-      const firstCounts = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
-      assert.deepEqual(firstCounts, {login: 1, catalog: 0, cart: 11, post: 1, put: 2, delete: 1}, "cart mutation provider call counts were not exact");
+      assert.ok(
+        aromaCartSnapshot &&
+          aromaCartFixture &&
+          aromaCartProviderFixture &&
+          recoveryDatabaseProof &&
+          recoveryProofCredentials,
+        "aroma cart proof fixtures are missing",
+      );
+      const initialRows = await assertAromaCartTopology(
+        projectName,
+        secretsDir,
+        composeFile,
+      );
+      const selectedGrind = JSON.parse(
+        await readFile(
+          join(aromaCartFixture.directory, "selected-grind.json"),
+          "utf8",
+        ),
+      );
+      aromaCartEvidence = await runAromaCartProofFixture(
+        projectName,
+        secretsDir,
+        composeFile,
+        aromaCartFixture,
+        platformConfig.environment,
+      );
+      const firstCounts = await readAromaCartProviderCounts(
+        aromaCartProviderFixture.countFile,
+      );
+      assert.deepEqual(
+        firstCounts,
+        { login: 1, catalog: 0, cart: 11, post: 1, put: 2, delete: 1 },
+        "cart mutation provider call counts were not exact",
+      );
       const operationRefs = [
         "op_00000000000000000000000001",
         "op_00000000000000000000000002",
         "op_00000000000000000000000003",
         "op_00000000000000000000000004",
       ];
-      const firstJournalRows = assertAromaMutationJournal(await readAromaMutationJournal(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig, operationRefs), selectedGrind.sourceGrindKeyHash);
-      aromaCartEvidence = {...aromaCartEvidence, journalRows: firstJournalRows, realPostgresJournal: true, providerAccess: false, providerKind: "local-fake", liveProviderAcceptance: false};
-      runCompose(projectName, secretsDir, ["stop", "--timeout", "30", "aroma-gateway"], {composeFile, inherit: true});
-      runCompose(projectName, secretsDir, ["up", "--detach", "--wait", "--no-build", "aroma-gateway"], {composeFile, inherit: true});
-      const restartedRows = await assertAromaCartTopology(projectName, secretsDir, composeFile);
-      assert.equal(restartedRows.get("api-internal")?.ID, initialRows.get("api-internal")?.ID, "api-internal was restarted unexpectedly");
-      aromaCartRestartEvidence = await runAromaCartProofFixture(projectName, secretsDir, composeFile, aromaCartFixture, platformConfig.environment, "4");
-      const secondCounts = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
-      assert.deepEqual(secondCounts, {login: 1, catalog: 0, cart: 15, post: 1, put: 2, delete: 1}, "restart did not reuse the encrypted PostgreSQL session or replay terminal mutations");
-      const secondJournalRows = assertAromaMutationJournal(await readAromaMutationJournal(recoveryDatabaseProof.port, recoveryProofCredentials, platformConfig, operationRefs), selectedGrind.sourceGrindKeyHash);
-      assert.deepEqual(secondJournalRows, firstJournalRows, "restart changed durable mutation journal rows");
-      aromaCartRestartEvidence = {...aromaCartRestartEvidence, journalRows: secondJournalRows, realPostgresJournal: true, providerAccess: false, providerKind: "local-fake", liveProviderAcceptance: false};
-      const boundedLogs = runCompose(projectName, secretsDir, ["logs", "--no-color", "--no-log-prefix", "--tail", "200", "api-internal", "aroma-gateway", "aroma-provider-fixture"], {composeFile});
-      assert.ok(boundedLogs.length <= 100_000, "proof logs exceeded the bounded redaction window");
-      for (const canary of ["fixture-cookie", '"id": 300000', '"id":300000', recoveryProofCredentials.admin.password, recoveryProofCredentials.databaseCredentialsByRuntime["aroma-gateway"].password, materialized.kafkaCredential.password]) {
-        assert.equal(boundedLogs.includes(canary), false, "safe-read logs exposed a secret or raw provider canary");
-        assert.equal(JSON.stringify({aromaCartEvidence, aromaCartRestartEvidence}).includes(canary), false, "safe-read evidence exposed a secret or raw provider canary");
+      const firstJournalRows = assertAromaMutationJournal(
+        await readAromaMutationJournal(
+          recoveryDatabaseProof.port,
+          recoveryProofCredentials,
+          platformConfig,
+          operationRefs,
+        ),
+        selectedGrind.sourceGrindKeyHash,
+      );
+      aromaCartEvidence = {
+        ...aromaCartEvidence,
+        journalRows: firstJournalRows,
+        realPostgresJournal: true,
+        providerAccess: false,
+        providerKind: "local-fake",
+        liveProviderAcceptance: false,
+      };
+      runCompose(
+        projectName,
+        secretsDir,
+        ["stop", "--timeout", "30", "aroma-gateway"],
+        { composeFile, inherit: true },
+      );
+      runCompose(
+        projectName,
+        secretsDir,
+        ["up", "--detach", "--wait", "--no-build", "aroma-gateway"],
+        { composeFile, inherit: true },
+      );
+      const restartedRows = await assertAromaCartTopology(
+        projectName,
+        secretsDir,
+        composeFile,
+      );
+      assert.equal(
+        restartedRows.get("api-internal")?.ID,
+        initialRows.get("api-internal")?.ID,
+        "api-internal was restarted unexpectedly",
+      );
+      aromaCartRestartEvidence = await runAromaCartProofFixture(
+        projectName,
+        secretsDir,
+        composeFile,
+        aromaCartFixture,
+        platformConfig.environment,
+        "4",
+      );
+      const secondCounts = await readAromaCartProviderCounts(
+        aromaCartProviderFixture.countFile,
+      );
+      assert.deepEqual(
+        secondCounts,
+        { login: 1, catalog: 0, cart: 15, post: 1, put: 2, delete: 1 },
+        "restart did not reuse the encrypted PostgreSQL session or replay terminal mutations",
+      );
+      const secondJournalRows = assertAromaMutationJournal(
+        await readAromaMutationJournal(
+          recoveryDatabaseProof.port,
+          recoveryProofCredentials,
+          platformConfig,
+          operationRefs,
+        ),
+        selectedGrind.sourceGrindKeyHash,
+      );
+      assert.deepEqual(
+        secondJournalRows,
+        firstJournalRows,
+        "restart changed durable mutation journal rows",
+      );
+      aromaCartRestartEvidence = {
+        ...aromaCartRestartEvidence,
+        journalRows: secondJournalRows,
+        realPostgresJournal: true,
+        providerAccess: false,
+        providerKind: "local-fake",
+        liveProviderAcceptance: false,
+      };
+      const boundedLogs = runCompose(
+        projectName,
+        secretsDir,
+        [
+          "logs",
+          "--no-color",
+          "--no-log-prefix",
+          "--tail",
+          "200",
+          "api-internal",
+          "aroma-gateway",
+          "aroma-provider-fixture",
+        ],
+        { composeFile },
+      );
+      assert.ok(
+        boundedLogs.length <= 100_000,
+        "proof logs exceeded the bounded redaction window",
+      );
+      for (const canary of [
+        "fixture-cookie",
+        '"id": 300000',
+        '"id":300000',
+        recoveryProofCredentials.admin.password,
+        recoveryProofCredentials.databaseCredentialsByRuntime["aroma-gateway"]
+          .password,
+        materialized.kafkaCredential.password,
+      ]) {
+        assert.equal(
+          boundedLogs.includes(canary),
+          false,
+          "safe-read logs exposed a secret or raw provider canary",
+        );
+        assert.equal(
+          JSON.stringify({
+            aromaCartEvidence,
+            aromaCartRestartEvidence,
+          }).includes(canary),
+          false,
+          "safe-read evidence exposed a secret or raw provider canary",
+        );
       }
-      aromaCartCleanupReceipt = {composeProject: projectName, disposableDatabase: databaseProofContainer, providerFixture: "aroma-provider-fixture", fixture: "--rm", networks: [`${projectName}_coffee_internal_api`, `${projectName}_coffee_postgres_data`, `${projectName}_coffee_provider_egress`], boundedLogLines: 200, redacted: true};
+      aromaCartCleanupReceipt = {
+        composeProject: projectName,
+        disposableDatabase: databaseProofContainer,
+        providerFixture: "aroma-provider-fixture",
+        fixture: "--rm",
+        networks: [
+          `${projectName}_coffee_internal_api`,
+          `${projectName}_coffee_postgres_data`,
+          `${projectName}_coffee_provider_egress`,
+        ],
+        boundedLogLines: 200,
+        redacted: true,
+      };
     } else if (options.databaseProof) {
       const row = rows.get(DATABASE_PROOF_RUNTIME);
       assert.ok(row, `${DATABASE_PROOF_RUNTIME} is absent from Compose ps`);
@@ -3715,7 +5592,13 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
       );
     } else if (options.customerProof) {
       assert.ok(customerProofRoles, "customer proof roles are missing");
-      await runCustomerIntegrationProof(projectName, secretsDir, databaseProofCredentials, customerProofRoles, composeFile);
+      await runCustomerIntegrationProof(
+        projectName,
+        secretsDir,
+        databaseProofCredentials,
+        customerProofRoles,
+        composeFile,
+      );
     } else {
       kafkaRetention = assertKafkaDurableRetention(
         projectName,
@@ -3726,16 +5609,23 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
       assertSecretMounts(projectName, secretsDir, rows, composeFile);
       await assertReadiness(projectName, secretsDir, composeFile);
       if (observability) {
-        const resolvedCompose = JSON.parse(runCompose(
-          projectName,
-          secretsDir,
-          ["config", "--format", "json"],
-          {composeFile},
-        ));
-        const networks = Object.fromEntries(Object.entries(resolvedCompose.networks ?? {}).map(([logicalName, network]) => {
-          assert.equal(typeof network.name, "string", `Compose network ${logicalName} has no resolved name`);
-          return [logicalName, network.name];
-        }));
+        const resolvedCompose = JSON.parse(
+          runCompose(projectName, secretsDir, ["config", "--format", "json"], {
+            composeFile,
+          }),
+        );
+        const networks = Object.fromEntries(
+          Object.entries(resolvedCompose.networks ?? {}).map(
+            ([logicalName, network]) => {
+              assert.equal(
+                typeof network.name,
+                "string",
+                `Compose network ${logicalName} has no resolved name`,
+              );
+              return [logicalName, network.name];
+            },
+          ),
+        );
         observabilityContext = {
           projectName,
           runtimes: [...RUNTIMES],
@@ -3744,18 +5634,30 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
         await observability.onReady(observabilityContext);
       }
       assertHostExposure(projectName, secretsDir, rows, composeFile);
-      await assertNginxIngress(platformConfig.nginxTransport.publicHost,
-        options.stubSecrets || options.recoveryProof ? materialized.transportMaterials.publicTls.caPem : undefined);
+      await assertNginxIngress(
+        platformConfig.nginxTransport.publicHost,
+        options.stubSecrets || options.recoveryProof
+          ? materialized.transportMaterials.publicTls.caPem
+          : undefined,
+      );
       if (options.recoveryProof) {
-        assert.ok(aromaCartProviderFixture, "recovery proof local provider fixture is missing");
-        const providerFixtureCalls = await readAromaCartProviderCounts(aromaCartProviderFixture.countFile);
-        assert.ok(providerFixtureCalls.catalog >= 1, "recovery proof did not reach the local provider fixture for Catalog traversal");
+        assert.ok(
+          aromaCartProviderFixture,
+          "recovery proof local provider fixture is missing",
+        );
+        const providerFixtureCalls = await readAromaCartProviderCounts(
+          aromaCartProviderFixture.countFile,
+        );
+        assert.ok(
+          providerFixtureCalls.catalog >= 1,
+          "recovery proof did not reach the local provider fixture for Catalog traversal",
+        );
         recoveryProviderFixtureCalls = providerFixtureCalls;
         runCompose(
           projectName,
           secretsDir,
           ["stop", "orders-aroma-preparation"],
-          {composeFile},
+          { composeFile },
         );
         let recoveryBodyFailed = false;
         let recoveryBodyError;
@@ -3770,24 +5672,58 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
             projectName,
             secretsDir,
             ["exec", "-T", "orders-service", "node", "--input-type=module"],
-            {composeFile, input: nativeFoundationSource({runId: projectName, ...fixture})},
+            {
+              composeFile,
+              input: nativeFoundationSource({ runId: projectName, ...fixture }),
+            },
           ).trim();
           const foundationLine = foundationOutput
             .split("\n")
             .map((line) => line.trim())
             .filter(Boolean)
             .at(-1);
-          assert.ok(foundationLine, "native foundation proof did not return evidence JSON");
+          assert.ok(
+            foundationLine,
+            "native foundation proof did not return evidence JSON",
+          );
           const normalEvidence = JSON.parse(foundationLine);
-          assert.equal(normalEvidence.sigterm?.received, true, "SIGTERM fixture did not observe the signal");
-          assert.equal(normalEvidence.sigterm?.gateEntered, true, "SIGTERM fixture did not gate a handler");
-          assert.ok(normalEvidence.sigterm?.activeAtSignal?.total >= 1, "SIGTERM fixture had no active handler at signal time");
-          assert.equal(normalEvidence.sigterm?.ownerCount, 1, "SIGTERM fixture owner effect was not durable");
-          assert.ok(normalEvidence.sigterm?.closedMetrics, "SIGTERM fixture closed metrics are missing");
-          for (const metrics of Object.values(normalEvidence.sigterm.closedMetrics)) {
-            assert.equal(metrics.assigned, 0, "SIGTERM fixture left a partition assigned");
+          assert.equal(
+            normalEvidence.sigterm?.received,
+            true,
+            "SIGTERM fixture did not observe the signal",
+          );
+          assert.equal(
+            normalEvidence.sigterm?.gateEntered,
+            true,
+            "SIGTERM fixture did not gate a handler",
+          );
+          assert.ok(
+            normalEvidence.sigterm?.activeAtSignal?.total >= 1,
+            "SIGTERM fixture had no active handler at signal time",
+          );
+          assert.equal(
+            normalEvidence.sigterm?.ownerCount,
+            1,
+            "SIGTERM fixture owner effect was not durable",
+          );
+          assert.ok(
+            normalEvidence.sigterm?.closedMetrics,
+            "SIGTERM fixture closed metrics are missing",
+          );
+          for (const metrics of Object.values(
+            normalEvidence.sigterm.closedMetrics,
+          )) {
+            assert.equal(
+              metrics.assigned,
+              0,
+              "SIGTERM fixture left a partition assigned",
+            );
             assert.equal(metrics.active, 0, "SIGTERM fixture left active work");
-            assert.equal(metrics.pending, 0, "SIGTERM fixture left pending work");
+            assert.equal(
+              metrics.pending,
+              0,
+              "SIGTERM fixture left pending work",
+            );
           }
           nativeFoundation = {
             ...normalEvidence,
@@ -3815,8 +5751,14 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
           runCompose(
             projectName,
             secretsDir,
-            ["up", "--detach", "--wait", "--no-build", "orders-aroma-preparation"],
-            {composeFile},
+            [
+              "up",
+              "--detach",
+              "--wait",
+              "--no-build",
+              "orders-aroma-preparation",
+            ],
+            { composeFile },
           );
           await waitForRuntimeReadiness(
             projectName,
@@ -3831,7 +5773,7 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
             throw new AggregateError(
               [recoveryBodyError, restoreError],
               "Recovery proof and orders-aroma-preparation restoration both failed",
-              {cause: recoveryBodyError},
+              { cause: recoveryBodyError },
             );
           }
           throw restoreError;
@@ -3840,42 +5782,116 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
       }
     }
     if (!options.keep) {
-      runCompose(
-        projectName,
-        secretsDir,
-        ["stop", "--timeout", "30"],
-        {composeFile, inherit: true},
-      );
+      runCompose(projectName, secretsDir, ["stop", "--timeout", "30"], {
+        composeFile,
+        inherit: true,
+      });
       assertStopped(projectName, secretsDir, composeFile);
     }
     receipt = {
-        project: projectName,
-        runtimes: options.aromaBindingProof || options.aromaCartProof ? ["api-internal", "aroma-gateway"] : options.databaseProof || options.customerProof ? 1 : RUNTIMES.length,
-        nativeIngress: options.databaseProof || options.customerProof ? undefined : "edge-nginx",
-        kafka: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
-        kafkaCompatibility: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
-        ephemeralKafkaBroker: !(options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof),
-        credentialSource: options.stubSecrets || options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof
+      project: projectName,
+      runtimes:
+        options.aromaBindingProof || options.aromaCartProof
+          ? ["api-internal", "aroma-gateway"]
+          : options.databaseProof || options.customerProof
+            ? 1
+            : RUNTIMES.length,
+      nativeIngress:
+        options.databaseProof || options.customerProof
+          ? undefined
+          : "edge-nginx",
+      kafka:
+        options.aromaBindingProof || options.aromaCartProof
+          ? false
+          : !(options.databaseProof || options.customerProof),
+      kafkaCompatibility:
+        options.aromaBindingProof || options.aromaCartProof
+          ? false
+          : !(options.databaseProof || options.customerProof),
+      ephemeralKafkaBroker: !(
+        options.databaseProof ||
+        options.customerProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof
+      ),
+      credentialSource:
+        options.stubSecrets ||
+        options.databaseProof ||
+        options.customerProof ||
+        options.recoveryProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof
           ? "local-fixture"
           : "canonical-runtime-plus-local-kafka-fixture",
-        kafkaRetention: options.aromaBindingProof || options.aromaCartProof ? undefined : options.databaseProof || options.customerProof ? undefined : kafkaRetention,
-        recoveryProof: options.recoveryProof
-          ? {postgres: recoveryDatabaseProof, postgresStorage: databaseProofStorage, kafka: kafkaRetention, native: nativeFoundation, providerFixture: recoveryProviderFixtureCalls}
-          : undefined,
-        aromaBindingProof: options.aromaBindingProof
-          ? {services: ["api-internal", "aroma-gateway"], baseline: aromaBindingEvidence, restartReplay: aromaBindingRestartEvidence, durableBindingCount: 1, cleanup: aromaBindingCleanupReceipt}
-          : undefined,
-        aromaCartProof: options.aromaCartProof
-          ? {services: ["api-internal", "aroma-gateway", "aroma-provider-fixture"], baseline: aromaCartEvidence, restartReplay: aromaCartRestartEvidence, providerCalls: {first: aromaCartEvidence?.providerCalls, restart: aromaCartRestartEvidence?.providerCalls}, cleanup: aromaCartCleanupReceipt}
-          : undefined,
-        telemetry: options.aromaBindingProof || options.aromaCartProof ? false : !(options.databaseProof || options.customerProof),
-        healthEndpoints: options.customerProof ? [] : ["/health/live", "/health/ready", "/metrics"],
-        stubSecrets: options.stubSecrets || options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof,
-        dbIntegrationProof: options.databaseProof || options.customerProof || options.recoveryProof || options.aromaBindingProof || options.aromaCartProof,
-        customerIntegrationProof: options.customerProof,
-        hostPublish: options.databaseProof || options.customerProof || options.aromaBindingProof || options.aromaCartProof ? [] : ["127.0.0.1:8443:8443"],
-        gracefulShutdown: true,
-      };
+      kafkaRetention:
+        options.aromaBindingProof || options.aromaCartProof
+          ? undefined
+          : options.databaseProof || options.customerProof
+            ? undefined
+            : kafkaRetention,
+      recoveryProof: options.recoveryProof
+        ? {
+            postgres: recoveryDatabaseProof,
+            postgresStorage: databaseProofStorage,
+            kafka: kafkaRetention,
+            native: nativeFoundation,
+            providerFixture: recoveryProviderFixtureCalls,
+          }
+        : undefined,
+      aromaBindingProof: options.aromaBindingProof
+        ? {
+            services: ["api-internal", "aroma-gateway"],
+            baseline: aromaBindingEvidence,
+            restartReplay: aromaBindingRestartEvidence,
+            durableBindingCount: 1,
+            cleanup: aromaBindingCleanupReceipt,
+          }
+        : undefined,
+      aromaCartProof: options.aromaCartProof
+        ? {
+            services: [
+              "api-internal",
+              "aroma-gateway",
+              "aroma-provider-fixture",
+            ],
+            baseline: aromaCartEvidence,
+            restartReplay: aromaCartRestartEvidence,
+            providerCalls: {
+              first: aromaCartEvidence?.providerCalls,
+              restart: aromaCartRestartEvidence?.providerCalls,
+            },
+            cleanup: aromaCartCleanupReceipt,
+          }
+        : undefined,
+      telemetry:
+        options.aromaBindingProof || options.aromaCartProof
+          ? false
+          : !(options.databaseProof || options.customerProof),
+      healthEndpoints: options.customerProof
+        ? []
+        : ["/health/live", "/health/ready", "/metrics"],
+      stubSecrets:
+        options.stubSecrets ||
+        options.databaseProof ||
+        options.customerProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof,
+      dbIntegrationProof:
+        options.databaseProof ||
+        options.customerProof ||
+        options.recoveryProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof,
+      customerIntegrationProof: options.customerProof,
+      hostPublish:
+        options.databaseProof ||
+        options.customerProof ||
+        options.aromaBindingProof ||
+        options.aromaCartProof
+          ? []
+          : ["127.0.0.1:8443:8443"],
+      gracefulShutdown: true,
+    };
   } catch (error) {
     primaryError = error;
   } finally {
@@ -3919,7 +5935,7 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
             projectName,
             secretsDir,
             ["down", "--volumes", "--remove-orphans"],
-            {composeFile},
+            { composeFile },
           );
         } catch {
           /* preserve original smoke failure */
@@ -3948,8 +5964,9 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
       }
       removeBuiltRuntimeImages(builtImages, options);
       if (composeFile !== COMPOSE_FILE && !options.keep)
-        await rm(composeFile, {force: true});
-      if (!options.keep && secretsDir) await rm(secretsDir, { recursive: true, force: true });
+        await rm(composeFile, { force: true });
+      if (!options.keep && secretsDir)
+        await rm(secretsDir, { recursive: true, force: true });
       else if (options.keep && secretsDir)
         console.log(
           `compose-smoke: kept project=${projectName} secretsDir=${secretsDir}`,
@@ -3958,19 +5975,30 @@ export async function runComposeSmoke({args = process.argv.slice(2), observabili
       standardCleanupError = error;
     }
   }
-  const errors = [primaryError, standardCleanupError, cleanupHookError].filter(Boolean);
+  const errors = [primaryError, standardCleanupError, cleanupHookError].filter(
+    Boolean,
+  );
   if (errors.length > 1) {
-    const messages = errors.map((error) => error instanceof Error ? error.message : String(error));
-    throw new AggregateError(errors, `compose-smoke failed: ${messages.join("; cleanup also failed: ")}`, {
-      cause: primaryError ?? standardCleanupError,
-    });
+    const messages = errors.map((error) =>
+      error instanceof Error ? error.message : String(error),
+    );
+    throw new AggregateError(
+      errors,
+      `compose-smoke failed: ${messages.join("; cleanup also failed: ")}`,
+      {
+        cause: primaryError ?? standardCleanupError,
+      },
+    );
   }
   if (errors.length === 1) throw errors[0];
   console.log(JSON.stringify(receipt));
   return receipt;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
   try {
     await runComposeSmoke();
   } catch (error) {

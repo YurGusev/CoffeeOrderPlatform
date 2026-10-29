@@ -15,17 +15,17 @@
 этого запуска стоимость обучения и привязку HTTP/SQL/frontend к RC/unstable API.
 Это решение о риске проекта, а не утверждение о нежизнеспособности Effect.
 
-| Область | Единственная authority |
-|---|---|
-| HTTP и lifecycle | Fastify, явный process composition root |
-| Выполнение | async/await, AbortSignal, ограниченный concurrency |
-| Контракты | OpenAPI + общие JSON Schema definitions без DTO-дублей |
-| Генерация | types-only `@hey-api/typescript` по ADR-0022; fetch client принадлежит #9 |
-| PostgreSQL | `pg`, параметризованный SQL, owner-local atomic operations |
-| Доставка | Confluent Kafka; PostgreSQL Idempotency/Inbox/Outbox |
-| Frontend | React Router + TanStack Query; SSE invalidation/refetch |
-| Диагностика | Pino, OpenTelemetry; Collector Contrib → OpenObserve |
-| Тесты | существующий `node:test` backend, Vitest frontend и Playwright |
+| Область          | Единственная authority                                                    |
+| ---------------- | ------------------------------------------------------------------------- |
+| HTTP и lifecycle | Fastify, явный process composition root                                   |
+| Выполнение       | async/await, AbortSignal, ограниченный concurrency                        |
+| Контракты        | OpenAPI + общие JSON Schema definitions без DTO-дублей                    |
+| Генерация        | types-only `@hey-api/typescript` по ADR-0022; fetch client принадлежит #9 |
+| PostgreSQL       | `pg`, параметризованный SQL, owner-local atomic operations                |
+| Доставка         | Confluent Kafka; PostgreSQL Idempotency/Inbox/Outbox                      |
+| Frontend         | React Router + TanStack Query; SSE invalidation/refetch                   |
+| Диагностика      | Pino, OpenTelemetry; Collector Contrib → OpenObserve                      |
+| Тесты            | существующий `node:test` backend, Vitest frontend и Playwright            |
 
 Версии редактируются в `config/toolchain-versions.json`; recovery восстанавливает
 проверяемую materialization #3 без обновления pins. Новый observability backend

@@ -4,219 +4,725 @@
   "title": "CoffeeOrderPlatform launch configuration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "schemaVersion", "environment", "toolchainRef", "platform", "postgres", "kafka", "aroma", "pricingPolicy", "telemetry", "security", "nginxTransport", "services"],
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "environment",
+    "toolchainRef",
+    "platform",
+    "postgres",
+    "kafka",
+    "aroma",
+    "pricingPolicy",
+    "telemetry",
+    "security",
+    "nginxTransport",
+    "services"
+  ],
   "properties": {
-    "$schema": {"type": "string", "const": "./platform.schema.json"},
-    "schemaVersion": {"type": "integer", "const": 1},
-    "environment": {"type": "string", "enum": ["development", "staging", "production"]},
-    "toolchainRef": {"type": "string", "const": "config/toolchain-versions.json"},
-    "platform": {"$ref": "#/$defs/platform"},
-    "postgres": {"$ref": "#/$defs/postgres"},
-    "kafka": {"$ref": "#/$defs/kafka"},
-    "aroma": {"$ref": "#/$defs/aroma"},
-    "pricingPolicy": {"$ref": "#/$defs/pricingPolicy"},
-    "telemetry": {"$ref": "#/$defs/telemetry"},
-    "security": {"$ref": "#/$defs/security"},
-    "nginxTransport": {"$ref": "./nginx-profile.schema.json"},
-    "browserOidc": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/browserOidcProfile"}]},
+    "$schema": { "type": "string", "const": "./platform.schema.json" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "staging", "production"]
+    },
+    "toolchainRef": {
+      "type": "string",
+      "const": "config/toolchain-versions.json"
+    },
+    "platform": { "$ref": "#/$defs/platform" },
+    "postgres": { "$ref": "#/$defs/postgres" },
+    "kafka": { "$ref": "#/$defs/kafka" },
+    "aroma": { "$ref": "#/$defs/aroma" },
+    "pricingPolicy": { "$ref": "#/$defs/pricingPolicy" },
+    "telemetry": { "$ref": "#/$defs/telemetry" },
+    "security": { "$ref": "#/$defs/security" },
+    "nginxTransport": { "$ref": "./nginx-profile.schema.json" },
+    "browserOidc": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/browserOidcProfile" }]
+    },
     "services": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "edge-gateway", "api-public", "api-internal", "customer-service",
-        "catalog-service", "catalog-supplier-sync", "catalog-activation-worker",
-        "pricing-service", "orders-service", "orders-aroma-preparation",
-        "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
+        "edge-gateway",
+        "api-public",
+        "api-internal",
+        "customer-service",
+        "catalog-service",
+        "catalog-supplier-sync",
+        "catalog-activation-worker",
+        "pricing-service",
+        "orders-service",
+        "orders-aroma-preparation",
+        "aroma-observer",
+        "aroma-convergence",
+        "aroma-gateway",
+        "realtime-gateway"
       ],
       "properties": {
-        "edge-gateway": {"$ref": "#/$defs/service"},
-        "api-public": {"$ref": "#/$defs/service"},
-        "api-internal": {"$ref": "#/$defs/service"},
-        "customer-service": {"$ref": "#/$defs/service"},
-        "catalog-service": {"$ref": "#/$defs/service"},
-        "catalog-supplier-sync": {"$ref": "#/$defs/service"},
-        "catalog-activation-worker": {"$ref": "#/$defs/service"},
-        "pricing-service": {"$ref": "#/$defs/service"},
-        "orders-service": {"$ref": "#/$defs/service"},
-        "orders-aroma-preparation": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["aromaPreparation"], "properties": {"aromaPreparation": {"$ref": "#/$defs/aromaPreparation"}}}]},
-        "aroma-observer": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["aromaObservation"], "properties": {"aromaObservation": {"$ref": "#/$defs/aromaObservation"}}}]},
-        "aroma-convergence": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["mutationsEnabled", "aromaConvergence"], "properties": {"mutationsEnabled": {"type": "boolean"}, "aromaConvergence": {"$ref": "#/$defs/aromaConvergence"}}}]},
-        "aroma-gateway": {"$ref": "#/$defs/service"},
-        "realtime-gateway": {"type": "object", "allOf": [{"$ref": "#/$defs/service"}, {"required": ["realtime"], "properties": {"realtime": {"$ref": "#/$defs/realtime"}}}]}
+        "edge-gateway": { "$ref": "#/$defs/service" },
+        "api-public": { "$ref": "#/$defs/service" },
+        "api-internal": { "$ref": "#/$defs/service" },
+        "customer-service": { "$ref": "#/$defs/service" },
+        "catalog-service": { "$ref": "#/$defs/service" },
+        "catalog-supplier-sync": { "$ref": "#/$defs/service" },
+        "catalog-activation-worker": { "$ref": "#/$defs/service" },
+        "pricing-service": { "$ref": "#/$defs/service" },
+        "orders-service": { "$ref": "#/$defs/service" },
+        "orders-aroma-preparation": {
+          "type": "object",
+          "allOf": [
+            { "$ref": "#/$defs/service" },
+            {
+              "required": ["aromaPreparation"],
+              "properties": {
+                "aromaPreparation": { "$ref": "#/$defs/aromaPreparation" }
+              }
+            }
+          ]
+        },
+        "aroma-observer": {
+          "type": "object",
+          "allOf": [
+            { "$ref": "#/$defs/service" },
+            {
+              "required": ["aromaObservation"],
+              "properties": {
+                "aromaObservation": { "$ref": "#/$defs/aromaObservation" }
+              }
+            }
+          ]
+        },
+        "aroma-convergence": {
+          "type": "object",
+          "allOf": [
+            { "$ref": "#/$defs/service" },
+            {
+              "required": ["mutationsEnabled", "aromaConvergence"],
+              "properties": {
+                "mutationsEnabled": { "type": "boolean" },
+                "aromaConvergence": { "$ref": "#/$defs/aromaConvergence" }
+              }
+            }
+          ]
+        },
+        "aroma-gateway": { "$ref": "#/$defs/service" },
+        "realtime-gateway": {
+          "type": "object",
+          "allOf": [
+            { "$ref": "#/$defs/service" },
+            {
+              "required": ["realtime"],
+              "properties": { "realtime": { "$ref": "#/$defs/realtime" } }
+            }
+          ]
+        }
       },
-      "allOf": [{"properties": {
-        "edge-gateway": {"$ref": "#/$defs/noAromaWorkflow"},
-        "api-public": {"$ref": "#/$defs/noAromaWorkflow"},
-        "api-internal": {"$ref": "#/$defs/noAromaWorkflow"},
-        "customer-service": {"$ref": "#/$defs/noAromaWorkflow"},
-        "catalog-service": {"$ref": "#/$defs/noAromaWorkflow"},
-        "catalog-supplier-sync": {"$ref": "#/$defs/noAromaWorkflow"},
-        "catalog-activation-worker": {"$ref": "#/$defs/noAromaWorkflow"},
-        "pricing-service": {"$ref": "#/$defs/noAromaWorkflow"},
-        "orders-service": {"$ref": "#/$defs/noAromaWorkflow"},
-        "orders-aroma-preparation": {"type": "object", "properties": {"mutationsEnabled": false, "aromaObservation": false, "aromaConvergence": false}},
-        "aroma-observer": {"type": "object", "properties": {"mutationsEnabled": false, "aromaPreparation": false, "aromaConvergence": false}},
-        "aroma-convergence": {"type": "object", "properties": {"aromaPreparation": false, "aromaObservation": false}},
-        "aroma-gateway": {"$ref": "#/$defs/noAromaWorkflow"},
-        "realtime-gateway": {"$ref": "#/$defs/noAromaWorkflow"}
-      }}, {"properties": {
-        "edge-gateway": {"type": "object", "properties": {"realtime": false}},
-        "api-public": {"type": "object", "properties": {"realtime": false}},
-        "api-internal": {"type": "object", "properties": {"realtime": false}},
-        "web": {"type": "object", "properties": {"realtime": false}},
-        "customer-service": {"type": "object", "properties": {"realtime": false}},
-        "catalog-service": {"type": "object", "properties": {"realtime": false}},
-        "catalog-supplier-sync": {"type": "object", "properties": {"realtime": false}},
-        "catalog-activation-worker": {"type": "object", "properties": {"realtime": false}},
-        "pricing-service": {"type": "object", "properties": {"realtime": false}},
-        "orders-service": {"type": "object", "properties": {"realtime": false}},
-        "orders-aroma-preparation": {"type": "object", "properties": {"realtime": false}},
-        "aroma-observer": {"type": "object", "properties": {"realtime": false}},
-        "aroma-convergence": {"type": "object", "properties": {"realtime": false}},
-        "aroma-gateway": {"type": "object", "properties": {"realtime": false}}
-      }}]
-    }
-  },
-  "allOf": [{"if": {"properties": {"environment": {"enum": ["staging", "production"]}}, "required": ["environment"]}, "then": {"properties": {"telemetry": {"type": "object", "properties": {"releaseDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}}}}],
-  "$defs": {
-    "telemetry": {
-      "type": "object", "additionalProperties": false,
-      "required": ["namespace", "releaseDigest", "nginxStatusEndpoint", "collector", "producer", "logging", "openObserve", "alerts"],
-      "properties": {
-        "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9.-]{0,62}$"},
-        "releaseDigest": {"type": "string", "pattern": "^[a-zA-Z0-9._:-]{1,128}$"},
-        "nginxStatusEndpoint": {"type": "string", "pattern": "^http://edge-nginx:(?!80/)(?!8443/)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/nginx_status$"},
-        "collector": {
-          "type": "object", "additionalProperties": false,
-          "required": ["otlpEndpoint", "healthEndpoint", "metricsEndpoint", "memoryLimitMiB", "memorySpikeMiB", "containerMemoryMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"],
+      "allOf": [
+        {
           "properties": {
-            "otlpEndpoint": {"type": "string", "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"}, "healthEndpoint": {"type": "string", "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"}, "metricsEndpoint": {"type": "string", "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"},
-            "memoryLimitMiB": {"type": "integer", "minimum": 1}, "memorySpikeMiB": {"type": "integer", "minimum": 1}, "containerMemoryMiB": {"type": "integer", "minimum": 1}, "memoryCheckIntervalMs": {"type": "integer", "minimum": 1}, "batchSize": {"type": "integer", "minimum": 1}, "batchTimeoutMs": {"type": "integer", "minimum": 1}, "queueCapacity": {"type": "integer", "minimum": 1}, "queueConsumers": {"type": "integer", "minimum": 1}, "exportTimeoutMs": {"type": "integer", "minimum": 1}, "retryInitialMs": {"type": "integer", "minimum": 1}, "retryMaxMs": {"type": "integer", "minimum": 1}, "retryWindowMs": {"type": "integer", "minimum": 1}, "maxLogRecordBytes": {"type": "integer", "minimum": 1}
+            "edge-gateway": { "$ref": "#/$defs/noAromaWorkflow" },
+            "api-public": { "$ref": "#/$defs/noAromaWorkflow" },
+            "api-internal": { "$ref": "#/$defs/noAromaWorkflow" },
+            "customer-service": { "$ref": "#/$defs/noAromaWorkflow" },
+            "catalog-service": { "$ref": "#/$defs/noAromaWorkflow" },
+            "catalog-supplier-sync": { "$ref": "#/$defs/noAromaWorkflow" },
+            "catalog-activation-worker": { "$ref": "#/$defs/noAromaWorkflow" },
+            "pricing-service": { "$ref": "#/$defs/noAromaWorkflow" },
+            "orders-service": { "$ref": "#/$defs/noAromaWorkflow" },
+            "orders-aroma-preparation": {
+              "type": "object",
+              "properties": {
+                "mutationsEnabled": false,
+                "aromaObservation": false,
+                "aromaConvergence": false
+              }
+            },
+            "aroma-observer": {
+              "type": "object",
+              "properties": {
+                "mutationsEnabled": false,
+                "aromaPreparation": false,
+                "aromaConvergence": false
+              }
+            },
+            "aroma-convergence": {
+              "type": "object",
+              "properties": {
+                "aromaPreparation": false,
+                "aromaObservation": false
+              }
+            },
+            "aroma-gateway": { "$ref": "#/$defs/noAromaWorkflow" },
+            "realtime-gateway": { "$ref": "#/$defs/noAromaWorkflow" }
           }
         },
-        "producer": {"type": "object", "additionalProperties": false, "required": ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], "properties": {"queueCapacity": {"type": "integer", "minimum": 1}, "maxRecordBytes": {"type": "integer", "minimum": 1}, "batchSize": {"type": "integer", "minimum": 1}, "batchIntervalMs": {"type": "integer", "minimum": 1}, "exportTimeoutMs": {"type": "integer", "minimum": 1}, "diagnosticIntervalMs": {"type": "integer", "minimum": 1}, "flushTimeoutMs": {"type": "integer", "minimum": 1}}},
-        "logging": {"type": "object", "additionalProperties": false, "required": ["maxSizeMiB", "maxFiles"], "properties": {"maxSizeMiB": {"type": "integer", "minimum": 1}, "maxFiles": {"type": "integer", "minimum": 1}}},
-        "openObserve": {"type": "object", "additionalProperties": false, "required": ["endpoint", "organization", "bootstrapEmail", "validationMarker", "telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled", "memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "streams", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "diskWatermarkPercent", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], "properties": {"endpoint": {"type": "string", "pattern": "^http://openobserve:(?!80$)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"}, "organization": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"}, "bootstrapEmail": {"type": "string", "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"}, "validationMarker": {"const": "bootstrap-validation-placeholder"}, "telemetryEnabled": {"const": false}, "mmdbDownloadEnabled": {"const": false}, "modelPricingEnabled": {"const": false}, "memoryLimitMiB": {"type": "integer", "minimum": 1}, "memTableMaxSizeMiB": {"type": "integer", "minimum": 1}, "maxFileSizeInMemoryMiB": {"type": "integer", "minimum": 1}, "maxFileSizeOnDiskMiB": {"type": "integer", "minimum": 1}, "maxFileRetentionSeconds": {"type": "integer", "minimum": 1}, "memPersistIntervalSeconds": {"type": "integer", "minimum": 1}, "streams": {"type": "object", "additionalProperties": false, "required": ["logs", "traces", "metrics"], "properties": {"logs": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$"}, "traces": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$"}, "metrics": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$"}}}, "retentionDays": {"type": "integer", "minimum": 3}, "deleteFilesDelayMinutes": {"type": "integer", "minimum": 1}, "maxDiskBytes": {"type": "integer", "minimum": 268435456}, "diskWatermarkPercent": {"type": "integer", "minimum": 1, "maximum": 99}, "compactionIntervalSeconds": {"type": "integer", "minimum": 1}, "jobCleanupWaitSeconds": {"type": "integer", "minimum": 1}}},
-        "alerts": {"type": "object", "additionalProperties": false, "required": ["version", "evaluationIntervalMs", "notReady", "consumerLag", "outboxOldestAge", "unknownOutcome", "sseDropRate"], "properties": {"version": {"type": "integer", "const": 1}, "evaluationIntervalMs": {"type": "integer", "const": 60000}, "notReady": {"$ref": "#/$defs/alertThreshold"}, "consumerLag": {"$ref": "#/$defs/alertThreshold"}, "outboxOldestAge": {"$ref": "#/$defs/alertThreshold"}, "unknownOutcome": {"$ref": "#/$defs/alertThreshold"}, "sseDropRate": {"$ref": "#/$defs/alertThreshold"}}}
+        {
+          "properties": {
+            "edge-gateway": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "api-public": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "api-internal": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "web": { "type": "object", "properties": { "realtime": false } },
+            "customer-service": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "catalog-service": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "catalog-supplier-sync": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "catalog-activation-worker": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "pricing-service": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "orders-service": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "orders-aroma-preparation": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "aroma-observer": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "aroma-convergence": {
+              "type": "object",
+              "properties": { "realtime": false }
+            },
+            "aroma-gateway": {
+              "type": "object",
+              "properties": { "realtime": false }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "environment": { "enum": ["staging", "production"] } },
+        "required": ["environment"]
+      },
+      "then": {
+        "properties": {
+          "telemetry": {
+            "type": "object",
+            "properties": {
+              "releaseDigest": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
       }
-    },
-    "alertThreshold": {"type": "object", "additionalProperties": false, "required": ["forMs", "threshold"], "properties": {"forMs": {"type": "integer", "minimum": 1}, "threshold": {"type": "number", "minimum": 0}}},
-    "realtime": {
-      "type": "object", "additionalProperties": false,
-      "required": ["shutdownGraceMs", "maxConnections", "queueMaxRecords", "queueMaxBytes", "totalQueueMaxRecords", "totalQueueMaxBytes", "ringMaxRecords", "ringMaxBytes", "ringMaxAgeMs", "coalesceMs", "writeTimeoutMs", "heartbeatMs", "authCheckMs", "maxEventDataBytes", "rssBudgetBytes", "fdBudget"],
+    }
+  ],
+  "$defs": {
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "namespace",
+        "releaseDigest",
+        "nginxStatusEndpoint",
+        "collector",
+        "producer",
+        "logging",
+        "openObserve",
+        "alerts"
+      ],
       "properties": {
-        "shutdownGraceMs": {"type": "integer", "minimum": 1, "maximum": 20000},
-        "maxConnections": {"type": "integer", "minimum": 1, "maximum": 512},
-        "queueMaxRecords": {"type": "integer", "minimum": 1, "maximum": 64},
-        "queueMaxBytes": {"type": "integer", "minimum": 1, "maximum": 262144},
-        "totalQueueMaxRecords": {"type": "integer", "minimum": 1, "maximum": 262144},
-        "totalQueueMaxBytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
-        "ringMaxRecords": {"type": "integer", "minimum": 1, "maximum": 10000},
-        "ringMaxBytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
-        "ringMaxAgeMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "coalesceMs": {"type": "integer", "minimum": 1, "maximum": 250},
-        "writeTimeoutMs": {"type": "integer", "minimum": 1, "maximum": 5000},
-        "heartbeatMs": {"type": "integer", "minimum": 1, "maximum": 15000},
-        "authCheckMs": {"type": "integer", "minimum": 1, "maximum": 30000},
-        "maxEventDataBytes": {"type": "integer", "minimum": 1, "maximum": 2048},
-        "rssBudgetBytes": {"type": "integer", "minimum": 1, "maximum": 536870912},
-        "fdBudget": {"type": "integer", "minimum": 1, "maximum": 12288}
+        "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,62}$" },
+        "releaseDigest": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._:-]{1,128}$"
+        },
+        "nginxStatusEndpoint": {
+          "type": "string",
+          "pattern": "^http://edge-nginx:(?!80/)(?!8443/)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/nginx_status$"
+        },
+        "collector": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "otlpEndpoint",
+            "healthEndpoint",
+            "metricsEndpoint",
+            "memoryLimitMiB",
+            "memorySpikeMiB",
+            "containerMemoryMiB",
+            "memoryCheckIntervalMs",
+            "batchSize",
+            "batchTimeoutMs",
+            "queueCapacity",
+            "queueConsumers",
+            "exportTimeoutMs",
+            "retryInitialMs",
+            "retryMaxMs",
+            "retryWindowMs",
+            "maxLogRecordBytes"
+          ],
+          "properties": {
+            "otlpEndpoint": {
+              "type": "string",
+              "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"
+            },
+            "healthEndpoint": {
+              "type": "string",
+              "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"
+            },
+            "metricsEndpoint": {
+              "type": "string",
+              "pattern": "^http://otel-collector:(?!80(?:/|$))(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$"
+            },
+            "memoryLimitMiB": { "type": "integer", "minimum": 1 },
+            "memorySpikeMiB": { "type": "integer", "minimum": 1 },
+            "containerMemoryMiB": { "type": "integer", "minimum": 1 },
+            "memoryCheckIntervalMs": { "type": "integer", "minimum": 1 },
+            "batchSize": { "type": "integer", "minimum": 1 },
+            "batchTimeoutMs": { "type": "integer", "minimum": 1 },
+            "queueCapacity": { "type": "integer", "minimum": 1 },
+            "queueConsumers": { "type": "integer", "minimum": 1 },
+            "exportTimeoutMs": { "type": "integer", "minimum": 1 },
+            "retryInitialMs": { "type": "integer", "minimum": 1 },
+            "retryMaxMs": { "type": "integer", "minimum": 1 },
+            "retryWindowMs": { "type": "integer", "minimum": 1 },
+            "maxLogRecordBytes": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "queueCapacity",
+            "maxRecordBytes",
+            "batchSize",
+            "batchIntervalMs",
+            "exportTimeoutMs",
+            "diagnosticIntervalMs",
+            "flushTimeoutMs"
+          ],
+          "properties": {
+            "queueCapacity": { "type": "integer", "minimum": 1 },
+            "maxRecordBytes": { "type": "integer", "minimum": 1 },
+            "batchSize": { "type": "integer", "minimum": 1 },
+            "batchIntervalMs": { "type": "integer", "minimum": 1 },
+            "exportTimeoutMs": { "type": "integer", "minimum": 1 },
+            "diagnosticIntervalMs": { "type": "integer", "minimum": 1 },
+            "flushTimeoutMs": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "logging": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxSizeMiB", "maxFiles"],
+          "properties": {
+            "maxSizeMiB": { "type": "integer", "minimum": 1 },
+            "maxFiles": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "openObserve": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "endpoint",
+            "organization",
+            "bootstrapEmail",
+            "validationMarker",
+            "telemetryEnabled",
+            "mmdbDownloadEnabled",
+            "modelPricingEnabled",
+            "memoryLimitMiB",
+            "memTableMaxSizeMiB",
+            "maxFileSizeInMemoryMiB",
+            "maxFileSizeOnDiskMiB",
+            "maxFileRetentionSeconds",
+            "memPersistIntervalSeconds",
+            "streams",
+            "retentionDays",
+            "deleteFilesDelayMinutes",
+            "maxDiskBytes",
+            "diskWatermarkPercent",
+            "compactionIntervalSeconds",
+            "jobCleanupWaitSeconds"
+          ],
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "pattern": "^http://openobserve:(?!80$)(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+            },
+            "organization": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+            "bootstrapEmail": {
+              "type": "string",
+              "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+            },
+            "validationMarker": { "const": "bootstrap-validation-placeholder" },
+            "telemetryEnabled": { "const": false },
+            "mmdbDownloadEnabled": { "const": false },
+            "modelPricingEnabled": { "const": false },
+            "memoryLimitMiB": { "type": "integer", "minimum": 1 },
+            "memTableMaxSizeMiB": { "type": "integer", "minimum": 1 },
+            "maxFileSizeInMemoryMiB": { "type": "integer", "minimum": 1 },
+            "maxFileSizeOnDiskMiB": { "type": "integer", "minimum": 1 },
+            "maxFileRetentionSeconds": { "type": "integer", "minimum": 1 },
+            "memPersistIntervalSeconds": { "type": "integer", "minimum": 1 },
+            "streams": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["logs", "traces", "metrics"],
+              "properties": {
+                "logs": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                },
+                "traces": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                },
+                "metrics": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,62}$"
+                }
+              }
+            },
+            "retentionDays": { "type": "integer", "minimum": 3 },
+            "deleteFilesDelayMinutes": { "type": "integer", "minimum": 1 },
+            "maxDiskBytes": { "type": "integer", "minimum": 268435456 },
+            "diskWatermarkPercent": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
+            },
+            "compactionIntervalSeconds": { "type": "integer", "minimum": 1 },
+            "jobCleanupWaitSeconds": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "alerts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "evaluationIntervalMs",
+            "notReady",
+            "consumerLag",
+            "outboxOldestAge",
+            "unknownOutcome",
+            "sseDropRate"
+          ],
+          "properties": {
+            "version": { "type": "integer", "const": 1 },
+            "evaluationIntervalMs": { "type": "integer", "const": 60000 },
+            "notReady": { "$ref": "#/$defs/alertThreshold" },
+            "consumerLag": { "$ref": "#/$defs/alertThreshold" },
+            "outboxOldestAge": { "$ref": "#/$defs/alertThreshold" },
+            "unknownOutcome": { "$ref": "#/$defs/alertThreshold" },
+            "sseDropRate": { "$ref": "#/$defs/alertThreshold" }
+          }
+        }
       }
     },
-    "noAromaWorkflow": {"type": "object", "properties": {"mutationsEnabled": false, "aromaPreparation": false, "aromaObservation": false, "aromaConvergence": false}},
+    "alertThreshold": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forMs", "threshold"],
+      "properties": {
+        "forMs": { "type": "integer", "minimum": 1 },
+        "threshold": { "type": "number", "minimum": 0 }
+      }
+    },
+    "realtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shutdownGraceMs",
+        "maxConnections",
+        "queueMaxRecords",
+        "queueMaxBytes",
+        "totalQueueMaxRecords",
+        "totalQueueMaxBytes",
+        "ringMaxRecords",
+        "ringMaxBytes",
+        "ringMaxAgeMs",
+        "coalesceMs",
+        "writeTimeoutMs",
+        "heartbeatMs",
+        "authCheckMs",
+        "maxEventDataBytes",
+        "rssBudgetBytes",
+        "fdBudget"
+      ],
+      "properties": {
+        "shutdownGraceMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20000
+        },
+        "maxConnections": { "type": "integer", "minimum": 1, "maximum": 512 },
+        "queueMaxRecords": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "queueMaxBytes": { "type": "integer", "minimum": 1, "maximum": 262144 },
+        "totalQueueMaxRecords": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "totalQueueMaxBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "ringMaxRecords": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "ringMaxBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "ringMaxAgeMs": { "type": "integer", "minimum": 1, "maximum": 300000 },
+        "coalesceMs": { "type": "integer", "minimum": 1, "maximum": 250 },
+        "writeTimeoutMs": { "type": "integer", "minimum": 1, "maximum": 5000 },
+        "heartbeatMs": { "type": "integer", "minimum": 1, "maximum": 15000 },
+        "authCheckMs": { "type": "integer", "minimum": 1, "maximum": 30000 },
+        "maxEventDataBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2048
+        },
+        "rssBudgetBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 536870912
+        },
+        "fdBudget": { "type": "integer", "minimum": 1, "maximum": 12288 }
+      }
+    },
+    "noAromaWorkflow": {
+      "type": "object",
+      "properties": {
+        "mutationsEnabled": false,
+        "aromaPreparation": false,
+        "aromaObservation": false,
+        "aromaConvergence": false
+      }
+    },
     "aromaPreparation": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
       "required": ["pollIntervalMs", "batchSize", "maxOrders", "maxLines"],
       "properties": {
-        "pollIntervalMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "batchSize": {"type": "integer", "minimum": 1, "maximum": 1000},
-        "maxOrders": {"type": "integer", "minimum": 1, "maximum": 10000},
-        "maxLines": {"type": "integer", "minimum": 1, "maximum": 10000}
+        "pollIntervalMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "batchSize": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "maxOrders": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxLines": { "type": "integer", "minimum": 1, "maximum": 10000 }
       }
     },
     "aromaObservation": {
-      "type": "object", "additionalProperties": false,
-      "required": ["pollIntervalMs", "intervalMs", "leaseMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pollIntervalMs",
+        "intervalMs",
+        "leaseMs",
+        "maxSnapshotAgeMs",
+        "maxLines",
+        "maxResponseBytes"
+      ],
       "properties": {
-        "pollIntervalMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "intervalMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "leaseMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "maxSnapshotAgeMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "maxLines": {"type": "integer", "minimum": 1, "maximum": 10000},
-        "maxResponseBytes": {"type": "integer", "const": 2097152}
+        "pollIntervalMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "intervalMs": { "type": "integer", "minimum": 1, "maximum": 300000 },
+        "leaseMs": { "type": "integer", "minimum": 1, "maximum": 300000 },
+        "maxSnapshotAgeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "maxLines": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxResponseBytes": { "type": "integer", "const": 2097152 }
       }
     },
     "aromaConvergence": {
-      "type": "object", "additionalProperties": false,
-      "required": ["pollIntervalMs", "leaseMs", "heartbeatIntervalMs", "providerDeadlineMs", "safetyMarginMs", "retryBackoffMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pollIntervalMs",
+        "leaseMs",
+        "heartbeatIntervalMs",
+        "providerDeadlineMs",
+        "safetyMarginMs",
+        "retryBackoffMs",
+        "maxSnapshotAgeMs",
+        "maxLines",
+        "maxResponseBytes"
+      ],
       "properties": {
-        "pollIntervalMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "leaseMs": {"type": "integer", "const": 30000},
-        "heartbeatIntervalMs": {"type": "integer", "const": 10000},
-        "providerDeadlineMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "safetyMarginMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "retryBackoffMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "maxSnapshotAgeMs": {"type": "integer", "minimum": 1, "maximum": 300000},
-        "maxLines": {"type": "integer", "minimum": 1, "maximum": 10000},
-        "maxResponseBytes": {"type": "integer", "const": 2097152}
+        "pollIntervalMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "leaseMs": { "type": "integer", "const": 30000 },
+        "heartbeatIntervalMs": { "type": "integer", "const": 10000 },
+        "providerDeadlineMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "safetyMarginMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "retryBackoffMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "maxSnapshotAgeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "maxLines": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxResponseBytes": { "type": "integer", "const": 2097152 }
       }
     },
     "pricingPolicy": {
-      "type": "object", "additionalProperties": false,
-      "required": ["policyVersionRef", "version", "currency", "markupBasisPoints", "minimumMarginMinor", "quoteTtlSeconds", "quantityScale", "roundingMode"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policyVersionRef",
+        "version",
+        "currency",
+        "markupBasisPoints",
+        "minimumMarginMinor",
+        "quoteTtlSeconds",
+        "quantityScale",
+        "roundingMode"
+      ],
       "properties": {
-        "policyVersionRef": {"type": "string", "pattern": "^pvr_[0-9A-HJKMNP-TV-Z]{26}$"},
-        "version": {"type": "string", "pattern": "^[1-9][0-9]*$"},
-        "currency": {"const": "RUB"},
-        "markupBasisPoints": {"type": "integer", "minimum": 0, "maximum": 100000},
-        "minimumMarginMinor": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$"},
-        "quoteTtlSeconds": {"type": "integer", "minimum": 60, "maximum": 3600},
-        "quantityScale": {"const": 3},
-        "roundingMode": {"const": "CEILING"}
+        "policyVersionRef": {
+          "type": "string",
+          "pattern": "^pvr_[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "version": { "type": "string", "pattern": "^[1-9][0-9]*$" },
+        "currency": { "const": "RUB" },
+        "markupBasisPoints": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "minimumMarginMinor": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "quoteTtlSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3600
+        },
+        "quantityScale": { "const": 3 },
+        "roundingMode": { "const": "CEILING" }
       }
     },
-    "positiveInteger": {"type": "integer", "minimum": 1},
-    "nonNegativeInteger": {"type": "integer", "minimum": 0},
+    "positiveInteger": { "type": "integer", "minimum": 1 },
+    "nonNegativeInteger": { "type": "integer", "minimum": 0 },
     "browserOidcProfile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["issuer", "clientId", "authorizationUrl", "tokenUrl", "jwksUrl", "redirectUri", "allowedAlgorithms", "actorRefClaim", "permissionsClaim"],
+      "required": [
+        "issuer",
+        "clientId",
+        "authorizationUrl",
+        "tokenUrl",
+        "jwksUrl",
+        "redirectUri",
+        "allowedAlgorithms",
+        "actorRefClaim",
+        "permissionsClaim"
+      ],
       "properties": {
-        "issuer": {"type": "string", "minLength": 1},
-        "clientId": {"type": "string", "minLength": 1},
-        "authorizationUrl": {"type": "string", "minLength": 1},
-        "tokenUrl": {"type": "string", "minLength": 1},
-        "jwksUrl": {"type": "string", "minLength": 1},
-        "redirectUri": {"type": "string", "minLength": 1},
-        "allowedAlgorithms": {"const": ["RS256"]},
-        "actorRefClaim": {"type": "string", "minLength": 1},
-        "permissionsClaim": {"type": "string", "minLength": 1}
+        "issuer": { "type": "string", "minLength": 1 },
+        "clientId": { "type": "string", "minLength": 1 },
+        "authorizationUrl": { "type": "string", "minLength": 1 },
+        "tokenUrl": { "type": "string", "minLength": 1 },
+        "jwksUrl": { "type": "string", "minLength": 1 },
+        "redirectUri": { "type": "string", "minLength": 1 },
+        "allowedAlgorithms": { "const": ["RS256"] },
+        "actorRefClaim": { "type": "string", "minLength": 1 },
+        "permissionsClaim": { "type": "string", "minLength": 1 }
       }
     },
     "stringArray": {
       "type": "array",
-      "items": {"type": "string", "minLength": 1},
+      "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
     },
     "health": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["livePath", "readyPath", "metricsPath", "intervalMs", "timeoutMs", "startupGraceMs", "failureThreshold", "successThreshold"],
+      "required": [
+        "livePath",
+        "readyPath",
+        "metricsPath",
+        "intervalMs",
+        "timeoutMs",
+        "startupGraceMs",
+        "failureThreshold",
+        "successThreshold"
+      ],
       "properties": {
-        "livePath": {"type": "string", "const": "/health/live"},
-        "readyPath": {"type": "string", "const": "/health/ready"},
-        "metricsPath": {"type": "string", "const": "/metrics"},
-        "intervalMs": {"type": "integer", "const": 5000},
-        "timeoutMs": {"type": "integer", "const": 1000},
-        "startupGraceMs": {"type": "integer", "const": 30000},
-        "failureThreshold": {"type": "integer", "const": 3},
-        "successThreshold": {"type": "integer", "const": 1}
+        "livePath": { "type": "string", "const": "/health/live" },
+        "readyPath": { "type": "string", "const": "/health/ready" },
+        "metricsPath": { "type": "string", "const": "/metrics" },
+        "intervalMs": { "type": "integer", "const": 5000 },
+        "timeoutMs": { "type": "integer", "const": 1000 },
+        "startupGraceMs": { "type": "integer", "const": 30000 },
+        "failureThreshold": { "type": "integer", "const": 3 },
+        "successThreshold": { "type": "integer", "const": 1 }
       }
     },
     "dbPool": {
       "type": ["object", "null"],
       "additionalProperties": false,
-      "required": ["max", "checkoutTimeoutMs", "lockTimeoutMs", "interactiveStatementTimeoutMs", "backgroundStatementTimeoutMs", "terminalTimeoutMs", "transactionTimeoutMs", "idleTimeoutMs", "maxLifetimeMs"],
+      "required": [
+        "max",
+        "checkoutTimeoutMs",
+        "lockTimeoutMs",
+        "interactiveStatementTimeoutMs",
+        "backgroundStatementTimeoutMs",
+        "terminalTimeoutMs",
+        "transactionTimeoutMs",
+        "idleTimeoutMs",
+        "maxLifetimeMs"
+      ],
       "properties": {
         "max": { "type": "integer", "minimum": 0, "maximum": 64 },
         "maxWaiting": { "type": "integer", "minimum": 0, "maximum": 100 },
@@ -260,20 +766,45 @@
     "permissions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["manifest", "net", "fsRead", "fsWrite", "childProcess", "workers"],
+      "required": [
+        "manifest",
+        "net",
+        "fsRead",
+        "fsWrite",
+        "childProcess",
+        "workers"
+      ],
       "properties": {
-        "manifest": {"type": "string", "pattern": "^config/permissions/[a-z0-9-]+\\.json$"},
-        "net": {"$ref": "#/$defs/stringArray"},
-        "fsRead": {"$ref": "#/$defs/stringArray"},
-        "fsWrite": {"$ref": "#/$defs/stringArray"},
-        "childProcess": {"type": "boolean", "const": false},
-        "workers": {"type": "boolean", "const": false}
+        "manifest": {
+          "type": "string",
+          "pattern": "^config/permissions/[a-z0-9-]+\\.json$"
+        },
+        "net": { "$ref": "#/$defs/stringArray" },
+        "fsRead": { "$ref": "#/$defs/stringArray" },
+        "fsWrite": { "$ref": "#/$defs/stringArray" },
+        "childProcess": { "type": "boolean", "const": false },
+        "workers": { "type": "boolean", "const": false }
       }
     },
     "service": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["transportMode", "listen", "health", "deadlineMs", "deadlineProfiles", "concurrency", "replicas", "dbPool", "database", "kafka", "outbound", "secretRefs", "permissions", "mutationCapability"],
+      "required": [
+        "transportMode",
+        "listen",
+        "health",
+        "deadlineMs",
+        "deadlineProfiles",
+        "concurrency",
+        "replicas",
+        "dbPool",
+        "database",
+        "kafka",
+        "outbound",
+        "secretRefs",
+        "permissions",
+        "mutationCapability"
+      ],
       "properties": {
         "transportMode": { "type": "string", "enum": ["public-tls", "mtls"] },
         "listen": {
@@ -292,9 +823,9 @@
           "additionalProperties": false,
           "required": ["intervalMs", "startupImport", "overlapPolicy"],
           "properties": {
-            "intervalMs": {"type": "integer", "const": 3600000},
-            "startupImport": {"type": "boolean", "const": true},
-            "overlapPolicy": {"type": "string", "const": "skip"}
+            "intervalMs": { "type": "integer", "const": 3600000 },
+            "startupImport": { "type": "boolean", "const": true },
+            "overlapPolicy": { "type": "string", "const": "skip" }
           }
         },
         "deadlineProfiles": {
@@ -318,63 +849,112 @@
         "kafka": { "$ref": "#/$defs/kafkaAccess" },
         "outbound": { "$ref": "#/$defs/stringArray" },
         "secretRefs": {
-          "type": "array", "uniqueItems": true, "minItems": 0,
-          "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 0,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"
+          }
         },
         "optionalSecretRefs": {
-          "type": "array", "uniqueItems": true, "minItems": 0,
-          "items": {"type": "string", "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"}
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 0,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-zA-Z0-9-]*(\\.[a-z][a-zA-Z0-9-]*)+$"
+          }
         },
-        "permissions": {"$ref": "#/$defs/permissions"},
-        "mutationCapability": {"type": "boolean"},
+        "permissions": { "$ref": "#/$defs/permissions" },
+        "mutationCapability": { "type": "boolean" },
         "catalogSnapshotProof": {
-          "type": "object", "additionalProperties": false,
+          "type": "object",
+          "additionalProperties": false,
           "required": ["maxAgeMs"],
-          "properties": {"maxAgeMs": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}}
+          "properties": {
+            "maxAgeMs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
         },
-        "mutationsEnabled": {"type": "boolean"},
-        "aromaPreparation": {"$ref": "#/$defs/aromaPreparation"},
-        "aromaObservation": {"$ref": "#/$defs/aromaObservation"},
-        "aromaConvergence": {"$ref": "#/$defs/aromaConvergence"},
-        "realtime": {"$ref": "#/$defs/realtime"}
+        "mutationsEnabled": { "type": "boolean" },
+        "aromaPreparation": { "$ref": "#/$defs/aromaPreparation" },
+        "aromaObservation": { "$ref": "#/$defs/aromaObservation" },
+        "aromaConvergence": { "$ref": "#/$defs/aromaConvergence" },
+        "realtime": { "$ref": "#/$defs/realtime" }
       }
     },
     "platform": {
-      "type": "object", "additionalProperties": false,
-      "required": ["publicBaseUrl", "shutdownGraceMs", "requestDeadlineMs", "bodyLimitBytes", "health", "outbox"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicBaseUrl",
+        "shutdownGraceMs",
+        "requestDeadlineMs",
+        "bodyLimitBytes",
+        "health",
+        "outbox"
+      ],
       "properties": {
-        "publicBaseUrl": {"type": "string", "pattern": "^https://[^\\s]+$"},
-        "shutdownGraceMs": {"type": "integer", "const": 30000},
-        "requestDeadlineMs": {"type": "integer", "const": 5000},
-        "bodyLimitBytes": {"type": "integer", "const": 1048576},
+        "publicBaseUrl": { "type": "string", "pattern": "^https://[^\\s]+$" },
+        "shutdownGraceMs": { "type": "integer", "const": 30000 },
+        "requestDeadlineMs": { "type": "integer", "const": 5000 },
+        "bodyLimitBytes": { "type": "integer", "const": 1048576 },
 
-        "health": {"$ref": "#/$defs/health"},
+        "health": { "$ref": "#/$defs/health" },
         "outbox": {
-          "type": "object", "additionalProperties": false,
-          "required": ["pollIntervalMs", "batchSize", "claimLeaseMs", "maxAttempts", "backoffMs", "publishedRetentionHours", "failedRetentionHours", "invalidSchemaAction"],
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pollIntervalMs",
+            "batchSize",
+            "claimLeaseMs",
+            "maxAttempts",
+            "backoffMs",
+            "publishedRetentionHours",
+            "failedRetentionHours",
+            "invalidSchemaAction"
+          ],
           "properties": {
-            "pollIntervalMs": {"type": "integer", "const": 250},
-            "batchSize": {"type": "integer", "const": 100},
-            "claimLeaseMs": {"type": "integer", "const": 30000},
-            "maxAttempts": {"type": "integer", "const": 12},
-            "backoffMs": {"type": "array", "const": [1000, 5000, 30000, 60000]},
-            "publishedRetentionHours": {"type": "integer", "const": 168},
-            "failedRetentionHours": {"type": "integer", "const": 720},
-            "invalidSchemaAction": {"type": "string", "const": "quarantine"}
+            "pollIntervalMs": { "type": "integer", "const": 250 },
+            "batchSize": { "type": "integer", "const": 100 },
+            "claimLeaseMs": { "type": "integer", "const": 30000 },
+            "maxAttempts": { "type": "integer", "const": 12 },
+            "backoffMs": {
+              "type": "array",
+              "const": [1000, 5000, 30000, 60000]
+            },
+            "publishedRetentionHours": { "type": "integer", "const": 168 },
+            "failedRetentionHours": { "type": "integer", "const": 720 },
+            "invalidSchemaAction": { "type": "string", "const": "quarantine" }
           }
         }
       }
     },
     "postgres": {
-      "type": "object", "additionalProperties": false,
-      "required": ["host", "port", "sslMode", "maxConnections", "reservedConnections", "rolloutReplicas"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "port",
+        "sslMode",
+        "maxConnections",
+        "reservedConnections",
+        "rolloutReplicas"
+      ],
       "properties": {
-        "host": {"type": "string", "const": "coffee_postgres"},
-        "port": {"type": "integer", "const": 5432},
-        "sslMode": {"type": "string", "enum": ["prefer", "require", "verify-full"]},
-        "maxConnections": {"type": "integer", "minimum": 96},
-        "reservedConnections": {"type": "integer", "const": 32},
-        "rolloutReplicas": {"type": "integer", "const": 1}
+        "host": { "type": "string", "const": "coffee_postgres" },
+        "port": { "type": "integer", "const": 5432 },
+        "sslMode": {
+          "type": "string",
+          "enum": ["prefer", "require", "verify-full"]
+        },
+        "maxConnections": { "type": "integer", "minimum": 96 },
+        "reservedConnections": { "type": "integer", "const": 32 },
+        "rolloutReplicas": { "type": "integer", "const": 1 }
       }
     },
     "kafka": {
@@ -388,12 +968,20 @@
         "delivery"
       ],
       "properties": {
-        "brokers": {"type": "array", "const": ["kafka:9092"]},
-        "clientProtocol": {"type": "string", "const": "SASL_SSL"},
-        "autoTopicCreation": {"type": "boolean", "const": false},
+        "brokers": { "type": "array", "const": ["kafka:9092"] },
+        "clientProtocol": { "type": "string", "const": "SASL_SSL" },
+        "autoTopicCreation": { "type": "boolean", "const": false },
         "topics": {
-          "type": "object", "additionalProperties": false,
-          "required": ["catalogSnapshot", "catalogMapping", "ordersLifecycle", "aromaCommands", "aromaEvents", "realtimeInvalidate"],
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "catalogSnapshot",
+            "catalogMapping",
+            "ordersLifecycle",
+            "aromaCommands",
+            "aromaEvents",
+            "realtimeInvalidate"
+          ],
           "properties": {
             "catalogSnapshot": { "$ref": "#/$defs/topic" },
             "catalogMapping": { "$ref": "#/$defs/topic" },
@@ -457,76 +1045,208 @@
       }
     },
     "topic": {
-      "type": "object", "additionalProperties": false, "required": ["name", "partitions", "retentionHours", "dlq"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "partitions", "retentionHours", "dlq"],
       "properties": {
-        "name": {"type": "string", "pattern": "^coffee\\.[a-z.]+\\.v[0-9]+$"},
-        "partitions": {"type": "integer", "minimum": 1},
-        "retentionHours": {"type": "integer", "minimum": 1},
-        "dlq": {"type": "string", "pattern": "^coffee\\.[a-z.]+\\.v[0-9]+\\.dlq$"}
+        "name": { "type": "string", "pattern": "^coffee\\.[a-z.]+\\.v[0-9]+$" },
+        "partitions": { "type": "integer", "minimum": 1 },
+        "retentionHours": { "type": "integer", "minimum": 1 },
+        "dlq": {
+          "type": "string",
+          "pattern": "^coffee\\.[a-z.]+\\.v[0-9]+\\.dlq$"
+        }
       }
     },
     "aroma": {
-      "type": "object", "additionalProperties": false, "required": ["supplierRef", "scopeRef", "origin", "redirectsAllowed", "defaultPacking"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supplierRef",
+        "scopeRef",
+        "origin",
+        "redirectsAllowed",
+        "defaultPacking"
+      ],
       "properties": {
-        "supplierRef": {"type": "string", "const": "sup_00000000000000000000000001"},
-        "scopeRef": {"type": "string", "const": "aroma-primary"},
-        "origin": {
-          "type": "object", "additionalProperties": false, "required": ["scheme", "host", "port"],
-          "properties": {"scheme": {"type": "string", "const": "https"}, "host": {"type": "string", "const": "aromateacoffee.ru"}, "port": {"type": "integer", "const": 443}}
+        "supplierRef": {
+          "type": "string",
+          "const": "sup_00000000000000000000000001"
         },
-        "redirectsAllowed": {"type": "boolean", "const": false},
-        "defaultPacking": {"type": "string", "const": "Aroma"}
+        "scopeRef": { "type": "string", "const": "aroma-primary" },
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme", "host", "port"],
+          "properties": {
+            "scheme": { "type": "string", "const": "https" },
+            "host": { "type": "string", "const": "aromateacoffee.ru" },
+            "port": { "type": "integer", "const": 443 }
+          }
+        },
+        "redirectsAllowed": { "type": "boolean", "const": false },
+        "defaultPacking": { "type": "string", "const": "Aroma" }
       }
     },
     "security": {
-      "type": "object", "additionalProperties": false, "required": ["actorContext", "catalogCursor", "customerCursor", "serviceTrustBundles", "delegation"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actorContext",
+        "catalogCursor",
+        "customerCursor",
+        "serviceTrustBundles",
+        "delegation"
+      ],
       "properties": {
-        "actorContext": {"$ref": "#/$defs/signingPolicy"},
-        "catalogCursor": {"$ref": "#/$defs/signingPolicy"},
-        "customerCursor": {"allOf": [{"$ref": "#/$defs/signingPolicy"}, {"type": "object", "required": ["previousKeyTrustUntilEpochSeconds"]}]},
+        "actorContext": { "$ref": "#/$defs/signingPolicy" },
+        "catalogCursor": { "$ref": "#/$defs/signingPolicy" },
+        "customerCursor": {
+          "allOf": [
+            { "$ref": "#/$defs/signingPolicy" },
+            {
+              "type": "object",
+              "required": ["previousKeyTrustUntilEpochSeconds"]
+            }
+          ]
+        },
         "serviceTrustBundles": {
-          "type": "object", "additionalProperties": false, "required": ["activeKid", "previousKid", "overlapHours", "publicKeys"],
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "activeKid",
+            "previousKid",
+            "overlapHours",
+            "publicKeys"
+          ],
           "properties": {
-            "activeKid": {"type": "string", "const": "transport-v1"},
-            "previousKid": {"type": "string", "const": "transport-v0"},
-            "overlapHours": {"type": "integer", "const": 12},
+            "activeKid": { "type": "string", "const": "transport-v1" },
+            "previousKid": { "type": "string", "const": "transport-v0" },
+            "overlapHours": { "type": "integer", "const": 12 },
             "publicKeys": {
-              "type": "object", "additionalProperties": false, "required": [
-                "edge-gateway", "api-public", "api-internal", "edge-nginx", "customer-service", "catalog-service",
-                "catalog-supplier-sync", "catalog-activation-worker", "pricing-service", "orders-service",
-                "orders-aroma-preparation", "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "edge-gateway",
+                "api-public",
+                "api-internal",
+                "edge-nginx",
+                "customer-service",
+                "catalog-service",
+                "catalog-supplier-sync",
+                "catalog-activation-worker",
+                "pricing-service",
+                "orders-service",
+                "orders-aroma-preparation",
+                "aroma-observer",
+                "aroma-convergence",
+                "aroma-gateway",
+                "realtime-gateway"
               ],
               "properties": {
-                "edge-gateway": {"$ref": "#/$defs/publicKeyPair"}, "api-public": {"$ref": "#/$defs/publicKeyPair"}, "api-internal": {"$ref": "#/$defs/publicKeyPair"}, "edge-nginx": {"$ref": "#/$defs/publicKeyPair"}, "customer-service": {"$ref": "#/$defs/publicKeyPair"}, "catalog-service": {"$ref": "#/$defs/publicKeyPair"}, "catalog-supplier-sync": {"$ref": "#/$defs/publicKeyPair"}, "catalog-activation-worker": {"$ref": "#/$defs/publicKeyPair"}, "pricing-service": {"$ref": "#/$defs/publicKeyPair"}, "orders-service": {"$ref": "#/$defs/publicKeyPair"}, "orders-aroma-preparation": {"$ref": "#/$defs/publicKeyPair"}, "aroma-observer": {"$ref": "#/$defs/publicKeyPair"}, "aroma-convergence": {"$ref": "#/$defs/publicKeyPair"}, "aroma-gateway": {"$ref": "#/$defs/publicKeyPair"}, "realtime-gateway": {"$ref": "#/$defs/publicKeyPair"}
+                "edge-gateway": { "$ref": "#/$defs/publicKeyPair" },
+                "api-public": { "$ref": "#/$defs/publicKeyPair" },
+                "api-internal": { "$ref": "#/$defs/publicKeyPair" },
+                "edge-nginx": { "$ref": "#/$defs/publicKeyPair" },
+                "customer-service": { "$ref": "#/$defs/publicKeyPair" },
+                "catalog-service": { "$ref": "#/$defs/publicKeyPair" },
+                "catalog-supplier-sync": { "$ref": "#/$defs/publicKeyPair" },
+                "catalog-activation-worker": {
+                  "$ref": "#/$defs/publicKeyPair"
+                },
+                "pricing-service": { "$ref": "#/$defs/publicKeyPair" },
+                "orders-service": { "$ref": "#/$defs/publicKeyPair" },
+                "orders-aroma-preparation": { "$ref": "#/$defs/publicKeyPair" },
+                "aroma-observer": { "$ref": "#/$defs/publicKeyPair" },
+                "aroma-convergence": { "$ref": "#/$defs/publicKeyPair" },
+                "aroma-gateway": { "$ref": "#/$defs/publicKeyPair" },
+                "realtime-gateway": { "$ref": "#/$defs/publicKeyPair" }
               }
             }
           }
         },
         "delegation": {
-          "type": "object", "additionalProperties": false, "required": ["publicActor", "internalService"],
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["publicActor", "internalService"],
           "properties": {
-            "publicActor": {"type": "object", "additionalProperties": false, "required": ["issuer", "audience", "maxTtlSeconds", "clockSkewSeconds"], "properties": {"issuer": {"type": "string", "const": "api-public"}, "audience": {"type": "string", "const": "owner-service"}, "maxTtlSeconds": {"type": "integer", "const": 60}, "clockSkewSeconds": {"type": "integer", "const": 5}}},
-            "internalService": {"type": "object", "additionalProperties": false, "required": ["issuer", "maxTtlRule", "gatewayMutationCaller"], "properties": {"issuer": {"type": "string", "const": "api-internal"}, "maxTtlRule": {"type": "string", "const": "remaining-request-deadline-plus-5s-skew"}, "gatewayMutationCaller": {"type": "string", "const": "aroma-convergence"}}}
+            "publicActor": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "issuer",
+                "audience",
+                "maxTtlSeconds",
+                "clockSkewSeconds"
+              ],
+              "properties": {
+                "issuer": { "type": "string", "const": "api-public" },
+                "audience": { "type": "string", "const": "owner-service" },
+                "maxTtlSeconds": { "type": "integer", "const": 60 },
+                "clockSkewSeconds": { "type": "integer", "const": 5 }
+              }
+            },
+            "internalService": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["issuer", "maxTtlRule", "gatewayMutationCaller"],
+              "properties": {
+                "issuer": { "type": "string", "const": "api-internal" },
+                "maxTtlRule": {
+                  "type": "string",
+                  "const": "remaining-request-deadline-plus-5s-skew"
+                },
+                "gatewayMutationCaller": {
+                  "type": "string",
+                  "const": "aroma-convergence"
+                }
+              }
+            }
           }
         }
       }
     },
     "signingPolicy": {
-      "type": "object", "additionalProperties": false, "required": ["algorithm", "activeKid", "previousKid", "maxAgeSeconds", "clockSkewSeconds", "overlapSeconds", "verificationKeys"],
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "activeKid",
+        "previousKid",
+        "maxAgeSeconds",
+        "clockSkewSeconds",
+        "overlapSeconds",
+        "verificationKeys"
+      ],
       "properties": {
-        "algorithm": {"type": "string", "const": "Ed25519"},
-        "activeKid": {"type": "string", "minLength": 1},
-        "previousKid": {"type": "string", "minLength": 1},
-        "maxAgeSeconds": {"type": "integer", "minimum": 1},
-        "clockSkewSeconds": {"type": "integer", "minimum": 0},
-        "overlapSeconds": {"type": "integer", "minimum": 1},
-        "previousKeyTrustUntilEpochSeconds": {"type": "integer", "minimum": 0},
-        "verificationKeys": {"type": "object", "additionalProperties": false, "minProperties": 2, "patternProperties": {"^[a-zA-Z0-9-]+$": {"type": "string", "minLength": 1}}}
+        "algorithm": { "type": "string", "const": "Ed25519" },
+        "activeKid": { "type": "string", "minLength": 1 },
+        "previousKid": { "type": "string", "minLength": 1 },
+        "maxAgeSeconds": { "type": "integer", "minimum": 1 },
+        "clockSkewSeconds": { "type": "integer", "minimum": 0 },
+        "overlapSeconds": { "type": "integer", "minimum": 1 },
+        "previousKeyTrustUntilEpochSeconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verificationKeys": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 2,
+          "patternProperties": {
+            "^[a-zA-Z0-9-]+$": { "type": "string", "minLength": 1 }
+          }
+        }
       }
     },
     "publicKeyPair": {
-      "type": "object", "additionalProperties": false, "required": ["active", "previous"],
-      "properties": {"active": {"type": "string", "minLength": 1}, "previous": {"type": "string", "minLength": 1}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["active", "previous"],
+      "properties": {
+        "active": { "type": "string", "minLength": 1 },
+        "previous": { "type": "string", "minLength": 1 }
+      }
     }
   }
 }

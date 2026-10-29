@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import {checkStaticSource} from "../../scripts/check-architecture.mjs";
+import { checkStaticSource } from "../../scripts/check-architecture.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const FIXTURES = join(REPO_ROOT, "tests/architecture/fixtures");
@@ -84,8 +92,11 @@ async function toolchainRoot() {
   await cp(join(REPO_ROOT, "platform"), join(root, "platform"), {
     recursive: true,
   });
-  await mkdir(join(root,"patches"));
-  await cp(join(REPO_ROOT,"patches/librdkafka-resume-wakeup.patch"),join(root,"patches/librdkafka-resume-wakeup.patch"));
+  await mkdir(join(root, "patches"));
+  await cp(
+    join(REPO_ROOT, "patches/librdkafka-resume-wakeup.patch"),
+    join(root, "patches/librdkafka-resume-wakeup.patch"),
+  );
   return root;
 }
 
@@ -111,14 +122,26 @@ void test("GREEN: accepted manifests pass all direct checkers deterministically"
   }
 });
 
-void test("RED BOUND-DB-CLIENT: realtime infrastructure cannot import owner database capabilities",()=>{
-  assert.throws(()=>checkStaticSource("apps/realtime-gateway/src/infrastructure/database.ts",
-    'import * as owner from "@coffee-platform/database/owner"; export const forbidden=owner;'),/BOUND-DB-CLIENT/);
+void test("RED BOUND-DB-CLIENT: realtime infrastructure cannot import owner database capabilities", () => {
+  assert.throws(
+    () =>
+      checkStaticSource(
+        "apps/realtime-gateway/src/infrastructure/database.ts",
+        'import * as owner from "@coffee-platform/database/owner"; export const forbidden=owner;',
+      ),
+    /BOUND-DB-CLIENT/,
+  );
 });
 
-void test("RED BOUND-REALTIME-SQL: realtime infrastructure cannot contain SQL",()=>{
-  assert.throws(()=>checkStaticSource("apps/realtime-gateway/src/infrastructure/query.ts",
-    'export const forbidden="SELECT 1";'),/BOUND-REALTIME-SQL/);
+void test("RED BOUND-REALTIME-SQL: realtime infrastructure cannot contain SQL", () => {
+  assert.throws(
+    () =>
+      checkStaticSource(
+        "apps/realtime-gateway/src/infrastructure/query.ts",
+        'export const forbidden="SELECT 1";',
+      ),
+    /BOUND-REALTIME-SQL/,
+  );
 });
 
 void test("RED BOUND-IMPORT: Orders cannot import Catalog internal repository", () => {
@@ -141,160 +164,289 @@ void test("RED BOUND-IMPORT: Catalog cannot import Orders infrastructure DB", ()
   assert.match(output(result), /catalog-service.*orders-service/s);
 });
 
-for (const {name, path, source, rule} of [
+for (const { name, path, source, rule } of [
   {
-    name: "external Confirm requirement", path: "apps/orders-service/src/application/confirm-order.ts",
-    source: "export async function confirmOrder(customerClient) { return customerClient.getOrderInput(); }",
+    name: "external Confirm requirement",
+    path: "apps/orders-service/src/application/confirm-order.ts",
+    source:
+      "export async function confirmOrder(customerClient) { return customerClient.getOrderInput(); }",
     rule: "ARCH-ORDERS-CONFIRM-BOUNDARY",
   },
   {
-    name: "unnamed third Confirm requirement", path: "apps/orders-service/src/application/confirm-order.ts",
-    source: "export async function confirmOrder(store: Pick<OrderStore, 'replay'|'precheck'|'confirm'>, input: CommandContext&Readonly<{orderRef:string}>, external: unknown) { return store.confirm(input); }",
+    name: "unnamed third Confirm requirement",
+    path: "apps/orders-service/src/application/confirm-order.ts",
+    source:
+      "export async function confirmOrder(store: Pick<OrderStore, 'replay'|'precheck'|'confirm'>, input: CommandContext&Readonly<{orderRef:string}>, external: unknown) { return store.confirm(input); }",
     rule: "ARCH-ORDERS-CONFIRM-BOUNDARY",
   },
   {
-    name: "Kafka publish in owner transaction", path: "apps/orders-service/src/infrastructure/database/order-store.ts",
-    source: "export async function confirm(tx, kafkaProducer) { await kafkaProducer.publish({messageType: 'OrderConfirmed.v1'}); }",
+    name: "Kafka publish in owner transaction",
+    path: "apps/orders-service/src/infrastructure/database/order-store.ts",
+    source:
+      "export async function confirm(tx, kafkaProducer) { await kafkaProducer.publish({messageType: 'OrderConfirmed.v1'}); }",
     rule: "ARCH-ORDERS-OUTBOX",
   },
   {
-    name: "aliased broker publish in owner transaction", path: "apps/orders-service/src/infrastructure/database/order-store.ts",
-    source: "export async function confirm(tx, broker) { await broker.publish({messageType: 'OrderConfirmed.v1'}); }",
+    name: "aliased broker publish in owner transaction",
+    path: "apps/orders-service/src/infrastructure/database/order-store.ts",
+    source:
+      "export async function confirm(tx, broker) { await broker.publish({messageType: 'OrderConfirmed.v1'}); }",
     rule: "ARCH-ORDERS-OUTBOX",
   },
   {
-    name: "automatic frozen-offer remapping", path: "apps/orders-service/src/domain/order-contribution.ts",
-    source: "export function remap(items, catalog) { return items.map(item => ({...item, offerRef: catalog[item.productRef]})); }",
+    name: "automatic frozen-offer remapping",
+    path: "apps/orders-service/src/domain/order-contribution.ts",
+    source:
+      "export function remap(items, catalog) { return items.map(item => ({...item, offerRef: catalog[item.productRef]})); }",
     rule: "ARCH-ORDERS-FROZEN-OFFER",
   },
   {
-    name: "aliased frozen-offer remapping", path: "apps/orders-service/src/domain/order-contribution.ts",
-    source: "export function remap(items, lookup) { return items.map(item => ({...item, offerRef: lookup[item.productRef]})); }",
+    name: "aliased frozen-offer remapping",
+    path: "apps/orders-service/src/domain/order-contribution.ts",
+    source:
+      "export function remap(items, lookup) { return items.map(item => ({...item, offerRef: lookup[item.productRef]})); }",
     rule: "ARCH-ORDERS-FROZEN-OFFER",
   },
   {
-    name: "revision-equality InSync", path: "apps/orders-service/src/domain/order-card.ts",
-    source: "export const isInSync = (desiredRevision, observedRevision) => desiredRevision === observedRevision;",
+    name: "revision-equality InSync",
+    path: "apps/orders-service/src/domain/order-card.ts",
+    source:
+      "export const isInSync = (desiredRevision, observedRevision) => desiredRevision === observedRevision;",
     rule: "ARCH-ORDERS-INSYNC-PROOF",
   },
   {
-    name: "aliased revision-equality InSync", path: "apps/orders-service/src/domain/order-card.ts",
-    source: "export const isInSync = (desired, observed) => desired.version === observed.version;",
+    name: "aliased revision-equality InSync",
+    path: "apps/orders-service/src/domain/order-card.ts",
+    source:
+      "export const isInSync = (desired, observed) => desired.version === observed.version;",
     rule: "ARCH-ORDERS-INSYNC-PROOF",
   },
 ]) {
   void test(`RED ${rule}: Orders rejects ${name}`, async () => {
     const root = await mkdtemp(join(tmpdir(), "coffee-orders-boundary-"));
     try {
-      await mkdir(join(root, path, ".."), {recursive:true});
+      await mkdir(join(root, path, ".."), { recursive: true });
       await writeFile(join(root, path), source);
       const result = run("check-architecture.mjs", root);
       assert.notEqual(result.status, 0, output(result));
       assert.match(output(result), new RegExp(rule));
     } finally {
-      await rm(root, {recursive:true, force:true});
+      await rm(root, { recursive: true, force: true });
     }
   });
 }
 
-for (const targetRuntime of ["catalog-activation-worker","api-internal","orders-service","pricing-service","customer-service"]) {
+for (const targetRuntime of [
+  "catalog-activation-worker",
+  "api-internal",
+  "orders-service",
+  "pricing-service",
+  "customer-service",
+]) {
   void test(`RED BOUND-IMPORT: catalog-supplier-sync -> ${targetRuntime}`, async () => {
-    const root=await mkdtemp(join(tmpdir(),"coffee-catalog-boundary-"));
-    const source="apps/catalog-supplier-sync/src/boundary.ts";
-    const target=`apps/${targetRuntime}/src/internal.ts`;
+    const root = await mkdtemp(join(tmpdir(), "coffee-catalog-boundary-"));
+    const source = "apps/catalog-supplier-sync/src/boundary.ts";
+    const target = `apps/${targetRuntime}/src/internal.ts`;
     try {
-      await mkdir(join(root,"apps/catalog-supplier-sync/src"),{recursive:true});
-      await mkdir(join(root,`apps/${targetRuntime}/src`),{recursive:true});
-      await writeFile(join(root,target),'export const internal = "private";\n');
-      await writeFile(join(root,source),`import {internal} from "../../${targetRuntime}/src/internal.js";\nvoid internal;\n`);
-      const result=run("check-architecture.mjs",root);
-      assert.notEqual(result.status,0,output(result));
-      assert.ok(output(result).includes("BOUND-IMPORT"),output(result));
-      assert.ok(output(result).includes(`${source} -> ${target}`),output(result));
-      assert.doesNotMatch(output(result),/unavailable|did not return an AST graph/u);
-    } finally { await rm(root,{recursive:true,force:true}); }
+      await mkdir(join(root, "apps/catalog-supplier-sync/src"), {
+        recursive: true,
+      });
+      await mkdir(join(root, `apps/${targetRuntime}/src`), { recursive: true });
+      await writeFile(
+        join(root, target),
+        'export const internal = "private";\n',
+      );
+      await writeFile(
+        join(root, source),
+        `import {internal} from "../../${targetRuntime}/src/internal.js";\nvoid internal;\n`,
+      );
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.ok(output(result).includes("BOUND-IMPORT"), output(result));
+      assert.ok(
+        output(result).includes(`${source} -> ${target}`),
+        output(result),
+      );
+      assert.doesNotMatch(
+        output(result),
+        /unavailable|did not return an AST graph/u,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 }
 
-for (const targetRuntime of ["catalog-service","customer-service","orders-service","aroma-gateway"]) {
+for (const targetRuntime of [
+  "catalog-service",
+  "customer-service",
+  "orders-service",
+  "aroma-gateway",
+]) {
   void test(`RED BOUND-IMPORT: pricing-service -> ${targetRuntime}`, async () => {
-    const root=await mkdtemp(join(tmpdir(),"coffee-pricing-boundary-"));
-    const source="apps/pricing-service/src/application/boundary.ts";
-    const target=`apps/${targetRuntime}/src/internal.ts`;
+    const root = await mkdtemp(join(tmpdir(), "coffee-pricing-boundary-"));
+    const source = "apps/pricing-service/src/application/boundary.ts";
+    const target = `apps/${targetRuntime}/src/internal.ts`;
     try {
-      await mkdir(join(root,"apps/pricing-service/src/application"),{recursive:true});
-      await mkdir(join(root,`apps/${targetRuntime}/src`),{recursive:true});
-      await writeFile(join(root,target),'export const internal = "private";\n');
-      await writeFile(join(root,source),`import {internal} from "../../../${targetRuntime}/src/internal.js";\nvoid internal;\n`);
-      const result=run("check-architecture.mjs",root);
-      assert.notEqual(result.status,0,output(result));
-      assert.match(output(result),/BOUND-IMPORT/u);
-      assert.ok(output(result).includes(`${source} -> ${target}`),output(result));
-    } finally {await rm(root,{recursive:true,force:true});}
+      await mkdir(join(root, "apps/pricing-service/src/application"), {
+        recursive: true,
+      });
+      await mkdir(join(root, `apps/${targetRuntime}/src`), { recursive: true });
+      await writeFile(
+        join(root, target),
+        'export const internal = "private";\n',
+      );
+      await writeFile(
+        join(root, source),
+        `import {internal} from "../../../${targetRuntime}/src/internal.js";\nvoid internal;\n`,
+      );
+      const result = run("check-architecture.mjs", root);
+      assert.notEqual(result.status, 0, output(result));
+      assert.match(output(result), /BOUND-IMPORT/u);
+      assert.ok(
+        output(result).includes(`${source} -> ${target}`),
+        output(result),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 }
 
 void test("GREEN: Catalog importer uses allowed contract and platform packages", async () => {
-  const root=await mkdtemp(join(tmpdir(),"coffee-catalog-packages-"));
+  const root = await mkdtemp(join(tmpdir(), "coffee-catalog-packages-"));
   try {
-    await mkdir(join(root,"apps/catalog-supplier-sync/src/infrastructure"),{recursive:true});
-    await symlink(join(REPO_ROOT,"apps/catalog-supplier-sync/node_modules"),join(root,"apps/catalog-supplier-sync/node_modules"),"dir");
-    await writeFile(join(root,"apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts"),[
-      'import {catalogBatchHash} from "@coffee-platform/contracts-aroma-v1";',
-      'import {withTransaction} from "@coffee-platform/database";',
-      'import {defineCopy} from "@coffee-platform/database/owner";',
-      'import type {HttpClient} from "@coffee-platform/platform-http";',
-      'void [catalogBatchHash,withTransaction,defineCopy];',
-      'export type Client = HttpClient;',
-    ].join("\n"));
-    const result=run("check-architecture.mjs",root);
-    assert.equal(result.status,0,output(result));
-    assert.match(output(result),/passed with Dependency Cruiser/u);
-  } finally { await rm(root,{recursive:true,force:true}); }
+    await mkdir(join(root, "apps/catalog-supplier-sync/src/infrastructure"), {
+      recursive: true,
+    });
+    await symlink(
+      join(REPO_ROOT, "apps/catalog-supplier-sync/node_modules"),
+      join(root, "apps/catalog-supplier-sync/node_modules"),
+      "dir",
+    );
+    await writeFile(
+      join(
+        root,
+        "apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts",
+      ),
+      [
+        'import {catalogBatchHash} from "@coffee-platform/contracts-aroma-v1";',
+        'import {withTransaction} from "@coffee-platform/database";',
+        'import {defineCopy} from "@coffee-platform/database/owner";',
+        'import type {HttpClient} from "@coffee-platform/platform-http";',
+        "void [catalogBatchHash,withTransaction,defineCopy];",
+        "export type Client = HttpClient;",
+      ].join("\n"),
+    );
+    const result = run("check-architecture.mjs", root);
+    assert.equal(result.status, 0, output(result));
+    assert.match(output(result), /passed with Dependency Cruiser/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("GREEN: Catalog importer implementation stays in owner infrastructure", async () => {
-  const ownerPath = join(REPO_ROOT, "apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts");
-  const legacyPath = join(REPO_ROOT, "apps/catalog-supplier-sync/src/catalog-import-store.ts");
-  assert.equal(existsSync(legacyPath), false, "SQL owner imports must not remain in the application root");
-  assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
+  const ownerPath = join(
+    REPO_ROOT,
+    "apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts",
+  );
+  const legacyPath = join(
+    REPO_ROOT,
+    "apps/catalog-supplier-sync/src/catalog-import-store.ts",
+  );
+  assert.equal(
+    existsSync(legacyPath),
+    false,
+    "SQL owner imports must not remain in the application root",
+  );
+  assert.match(
+    await readFile(ownerPath, "utf8"),
+    /@coffee-platform\/database\/owner/u,
+  );
 });
 
 void test("GREEN: Catalog activation SQL stays in owner infrastructure", async () => {
-  const ownerPath = join(REPO_ROOT, "apps/catalog-activation-worker/src/infrastructure/activation-store.ts");
-  const legacyPath = join(REPO_ROOT, "apps/catalog-activation-worker/src/activation-store.ts");
-  assert.equal(existsSync(legacyPath), false, "Catalog activation SQL must not remain in the application root");
-  assert.match(await readFile(ownerPath, "utf8"), /@coffee-platform\/database\/owner/u);
+  const ownerPath = join(
+    REPO_ROOT,
+    "apps/catalog-activation-worker/src/infrastructure/activation-store.ts",
+  );
+  const legacyPath = join(
+    REPO_ROOT,
+    "apps/catalog-activation-worker/src/activation-store.ts",
+  );
+  assert.equal(
+    existsSync(legacyPath),
+    false,
+    "Catalog activation SQL must not remain in the application root",
+  );
+  assert.match(
+    await readFile(ownerPath, "utf8"),
+    /@coffee-platform\/database\/owner/u,
+  );
 });
 
 for (const [source, rule] of [
-  ['export const staging = "SELECT * FROM catalog.snapshot_offers";', "ARCH-CATALOG-API-BOUNDARY"],
-  ['export const directTable = "SELECT * FROM catalog.catalog_state";', "ARCH-CATALOG-API-BOUNDARY"],
-  ['import type {HttpClient} from "@coffee-platform/platform-http"; export type ProviderClient = HttpClient;', "ARCH-CATALOG-API-BOUNDARY"],
-  ['export const foreign = "postgresql://localhost/coffee_platform_pricing";', "ARCH-POSTGRES-URL"],
+  [
+    'export const staging = "SELECT * FROM catalog.snapshot_offers";',
+    "ARCH-CATALOG-API-BOUNDARY",
+  ],
+  [
+    'export const directTable = "SELECT * FROM catalog.catalog_state";',
+    "ARCH-CATALOG-API-BOUNDARY",
+  ],
+  [
+    'import type {HttpClient} from "@coffee-platform/platform-http"; export type ProviderClient = HttpClient;',
+    "ARCH-CATALOG-API-BOUNDARY",
+  ],
+  [
+    'export const foreign = "postgresql://localhost/coffee_platform_pricing";',
+    "ARCH-POSTGRES-URL",
+  ],
 ]) {
   void test(`RED ARCH-CATALOG-API-BOUNDARY: catalog-service rejects ${source.slice(0, 40)}`, async () => {
     const root = await mkdtemp(join(tmpdir(), "coffee-catalog-api-boundary-"));
     try {
-      await mkdir(join(root, "apps/catalog-service/src/infrastructure"), {recursive: true});
-      await writeFile(join(root, "apps/catalog-service/src/infrastructure/catalog-read-store.ts"), `${source}\n`);
+      await mkdir(join(root, "apps/catalog-service/src/infrastructure"), {
+        recursive: true,
+      });
+      await writeFile(
+        join(
+          root,
+          "apps/catalog-service/src/infrastructure/catalog-read-store.ts",
+        ),
+        `${source}\n`,
+      );
       const result = run("check-architecture.mjs", root);
       assert.notEqual(result.status, 0, output(result));
       assert.match(output(result), new RegExp(rule, "u"));
-    } finally { await rm(root, {recursive: true, force: true}); }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 }
 
 void test("RED BOUND-DB-CLAIM: architecture rejects write-capable Catalog API role", async () => {
   const root = await authorityRoot();
   try {
-    await writeFile(join(root, "runtime-environment.json"), JSON.stringify({bindings: [{
-      runtime: "catalog-service", database: "coffee_platform_catalog", role: "coffee_catalog_activate_rw",
-    }]}));
+    await writeFile(
+      join(root, "runtime-environment.json"),
+      JSON.stringify({
+        bindings: [
+          {
+            runtime: "catalog-service",
+            database: "coffee_platform_catalog",
+            role: "coffee_catalog_activate_rw",
+          },
+        ],
+      }),
+    );
     const result = run("check-architecture.mjs", root);
     assert.notEqual(result.status, 0, output(result));
     assert.match(output(result), /BOUND-DB-CLAIM.*catalog-service/u);
-  } finally { await rm(root, {recursive: true, force: true}); }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18.2.0 wrapper", () => {
@@ -304,7 +456,10 @@ void test("GREEN: versioned contract import is accepted by Dependency Cruiser 18
 });
 
 void test("RED BOUND-CONTRACT-AUDIENCE: browser cannot reach internal types through a domain re-export", () => {
-  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-browser-transitive-internal"));
+  const result = run(
+    "check-architecture.mjs",
+    join(FIXTURES, "invalid-browser-transitive-internal"),
+  );
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /BOUND-CONTRACT-AUDIENCE/);
 });
@@ -496,14 +651,20 @@ void test("RED ARCH-PERMISSION: every materialized runtime must declare all perm
 void test("GREEN ARCH-PERMISSION: native nginx image needs no Node permission manifest", async () => {
   const root = await mkdtemp(join(tmpdir(), "coffee-native-permission-"));
   try {
-    await mkdir(join(root, "apps", "edge-nginx"), {recursive: true});
+    await mkdir(join(root, "apps", "edge-nginx"), { recursive: true });
     await mkdir(join(root, "config"));
-    await writeFile(join(root, "apps", "edge-nginx", "Dockerfile"), "FROM scratch\n");
-    await writeFile(join(root, "config", "platform.yaml"), "schemaVersion: 1\n");
+    await writeFile(
+      join(root, "apps", "edge-nginx", "Dockerfile"),
+      "FROM scratch\n",
+    );
+    await writeFile(
+      join(root, "config", "platform.yaml"),
+      "schemaVersion: 1\n",
+    );
     const result = run("check-architecture.mjs", root);
     assert.equal(result.status, 0, output(result));
   } finally {
-    await rm(root, {recursive: true, force: true});
+    await rm(root, { recursive: true, force: true });
   }
 });
 
@@ -511,10 +672,13 @@ void test("ARCH-PERMISSION: source-only decoders stay offline; a main or package
   const root = await mkdtemp(join(tmpdir(), "coffee-offline-decoder-"));
   const app = join(root, "apps/tasty-gateway");
   try {
-    await mkdir(join(app, "src/infrastructure/provider"), {recursive: true});
+    await mkdir(join(app, "src/infrastructure/provider"), { recursive: true });
     await mkdir(join(root, "config"));
     await writeFile(join(root, "config/platform.yaml"), "schemaVersion: 1\n");
-    await writeFile(join(app, "src/infrastructure/provider/decoder.ts"), "export const decode = (value: unknown): unknown => value;\n");
+    await writeFile(
+      join(app, "src/infrastructure/provider/decoder.ts"),
+      "export const decode = (value: unknown): unknown => value;\n",
+    );
     const offline = run("check-architecture.mjs", root);
     assert.equal(offline.status, 0, output(offline));
     for (const file of ["src/main.ts", "package.json"]) {
@@ -526,16 +690,21 @@ void test("ARCH-PERMISSION: source-only decoders stay offline; a main or package
       await rm(path);
     }
   } finally {
-    await rm(root, {recursive: true, force: true});
+    await rm(root, { recursive: true, force: true });
   }
 });
 
-void test("RED: native librdkafka source patch cannot drift from its pinned checksum",async()=>{
-  const root=await toolchainRoot();
-  try{
-    const path=join(root,"patches/librdkafka-resume-wakeup.patch");await writeFile(path,(await readFile(path,"utf8"))+"\n");
-    const result=run("check-toolchain-versions.mjs",root);assert.notEqual(result.status,0,output(result));assert.match(output(result),/LIBRDKAFKA-PATCH/);
-  }finally{await rm(root,{recursive:true,force:true});}
+void test("RED: native librdkafka source patch cannot drift from its pinned checksum", async () => {
+  const root = await toolchainRoot();
+  try {
+    const path = join(root, "patches/librdkafka-resume-wakeup.patch");
+    await writeFile(path, (await readFile(path, "utf8")) + "\n");
+    const result = run("check-toolchain-versions.mjs", root);
+    assert.notEqual(result.status, 0, output(result));
+    assert.match(output(result), /LIBRDKAFKA-PATCH/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("GREEN: exact TS7 toolchain manifest, lockfile and config baseline passes", async () => {
@@ -544,12 +713,16 @@ void test("GREEN: exact TS7 toolchain manifest, lockfile and config baseline pas
   const root = await toolchainRoot();
   try {
     const cache = join(root, "apps/web/node_modules/.vite/deps");
-    await mkdir(cache, {recursive: true});
-    await writeFile(join(cache, "package.json"), "not a source manifest", "utf8");
+    await mkdir(cache, { recursive: true });
+    await writeFile(
+      join(cache, "package.json"),
+      "not a source manifest",
+      "utf8",
+    );
     const cached = run("check-toolchain-versions.mjs", root);
     assert.equal(cached.status, 0, output(cached));
   } finally {
-    await rm(root, {recursive: true, force: true});
+    await rm(root, { recursive: true, force: true });
   }
 });
 
@@ -733,44 +906,73 @@ void test("RED BOUND-DB-CLIENT: handlers cannot import raw pg or SQL capabilitie
   const root = await mkdtemp(join(tmpdir(), "coffee-db-boundary-"));
   const directory = join(root, "apps/orders-service/src");
   try {
-    await mkdir(directory, {recursive: true});
-    for (const moduleName of ["pg", "pg-copy-streams", "@coffee-platform/database/owner", "../../../packages/platform-database/dist/internal.js", "@effect/sql-pg"]) {
-      await writeFile(join(directory, "handler.ts"), `import * as forbidden from ${JSON.stringify(moduleName)};\nvoid forbidden;\n`);
+    await mkdir(directory, { recursive: true });
+    for (const moduleName of [
+      "pg",
+      "pg-copy-streams",
+      "@coffee-platform/database/owner",
+      "../../../packages/platform-database/dist/internal.js",
+      "@effect/sql-pg",
+    ]) {
+      await writeFile(
+        join(directory, "handler.ts"),
+        `import * as forbidden from ${JSON.stringify(moduleName)};\nvoid forbidden;\n`,
+      );
       const result = run("check-architecture.mjs", root);
       assert.notEqual(result.status, 0, output(result));
       assert.match(output(result), /BOUND-DB-CLIENT/);
     }
-  } finally {await rm(root, {recursive: true, force: true});}
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("RED BOUND-KAFKA-CLIENT: handlers cannot bypass bounded delivery", async () => {
   const root = await mkdtemp(join(tmpdir(), "coffee-kafka-boundary-"));
   const directory = join(root, "apps/orders-service/src");
   try {
-    await mkdir(directory, {recursive: true});
-    for (const moduleName of ["@confluentinc/kafka-javascript", "@confluentinc/kafka-javascript/promisified", "../../../packages/platform-kafka-runtime/dist/native.js"]) {
-      await writeFile(join(directory, "handler.ts"), `import * as forbidden from ${JSON.stringify(moduleName)};\nvoid forbidden;\n`);
+    await mkdir(directory, { recursive: true });
+    for (const moduleName of [
+      "@confluentinc/kafka-javascript",
+      "@confluentinc/kafka-javascript/promisified",
+      "../../../packages/platform-kafka-runtime/dist/native.js",
+    ]) {
+      await writeFile(
+        join(directory, "handler.ts"),
+        `import * as forbidden from ${JSON.stringify(moduleName)};\nvoid forbidden;\n`,
+      );
       const result = run("check-architecture.mjs", root);
       assert.notEqual(result.status, 0, output(result));
       assert.match(output(result), /BOUND-KAFKA-CLIENT/);
     }
-  } finally {await rm(root, {recursive: true, force: true});}
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("RED ARCH-POSTGRES-URL: app source cannot contain a literal PostgreSQL URL", () => {
-  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-postgres-url"));
+  const result = run(
+    "check-architecture.mjs",
+    join(FIXTURES, "invalid-postgres-url"),
+  );
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-POSTGRES-URL/);
 });
 
 void test("RED ARCH-TYPED-PROVIDER-HTTP: AROMA Gateway fetch stays in the typed provider client", () => {
-  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-provider-fetch"));
+  const result = run(
+    "check-architecture.mjs",
+    join(FIXTURES, "invalid-provider-fetch"),
+  );
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
 });
 
 void test("RED ARCH-TYPED-PROVIDER-HTTP: AROMA Gateway cannot add a generic proxy", () => {
-  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-provider-proxy"));
+  const result = run(
+    "check-architecture.mjs",
+    join(FIXTURES, "invalid-provider-proxy"),
+  );
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
 });
@@ -779,38 +981,72 @@ void test("RED ARCH-TYPED-PROVIDER-HTTP: alternate HTTP clients cannot bypass th
   const root = await mkdtemp(join(tmpdir(), "coffee-provider-http-"));
   const directory = join(root, "apps/aroma-gateway/src");
   try {
-    await mkdir(directory, {recursive: true});
-    for (const moduleName of ["node-fetch", "cross-fetch", "got", "ky", "superagent", "node:http2"]) {
-      await writeFile(join(directory, "bad.ts"), `import * as client from ${JSON.stringify(moduleName)};\nvoid client;\n`);
+    await mkdir(directory, { recursive: true });
+    for (const moduleName of [
+      "node-fetch",
+      "cross-fetch",
+      "got",
+      "ky",
+      "superagent",
+      "node:http2",
+    ]) {
+      await writeFile(
+        join(directory, "bad.ts"),
+        `import * as client from ${JSON.stringify(moduleName)};\nvoid client;\n`,
+      );
       const result = run("check-architecture.mjs", root);
       assert.notEqual(result.status, 0, output(result));
       assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
     }
     await rm(join(directory, "bad.ts"));
-    const typedClient = join(directory, "infrastructure/provider/http-client.ts");
-    await mkdir(join(directory, "infrastructure/provider"), {recursive: true});
-    await writeFile(typedClient, 'import * as client from "node-fetch";\nvoid client;\n');
+    const typedClient = join(
+      directory,
+      "infrastructure/provider/http-client.ts",
+    );
+    await mkdir(join(directory, "infrastructure/provider"), {
+      recursive: true,
+    });
+    await writeFile(
+      typedClient,
+      'import * as client from "node-fetch";\nvoid client;\n',
+    );
     let result = run("check-architecture.mjs", root);
     assert.notEqual(result.status, 0, output(result));
     assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
     await rm(typedClient);
-    for (const bucket of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
-      await writeFile(join(root, "apps/aroma-gateway/package.json"), JSON.stringify({[bucket]: {"cross-fetch": "1.0.0"}}));
+    for (const bucket of [
+      "dependencies",
+      "devDependencies",
+      "peerDependencies",
+      "optionalDependencies",
+    ]) {
+      await writeFile(
+        join(root, "apps/aroma-gateway/package.json"),
+        JSON.stringify({ [bucket]: { "cross-fetch": "1.0.0" } }),
+      );
       result = run("check-architecture.mjs", root);
       assert.notEqual(result.status, 0, `${bucket}: ${output(result)}`);
       assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
     }
-  } finally {await rm(root, {recursive: true, force: true});}
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 void test("RED ARCH-GENERIC-RETRY: generic retry dependency is forbidden", () => {
-  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-generic-retry-dependency"));
+  const result = run(
+    "check-architecture.mjs",
+    join(FIXTURES, "invalid-generic-retry-dependency"),
+  );
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-GENERIC-RETRY/);
 });
 
 void test("RED ARCH-GENERIC-RETRY: unsafe provider mutation cannot use a generic retry wrapper", () => {
-  const result = run("check-architecture.mjs", join(FIXTURES, "invalid-generic-retry-wrapper"));
+  const result = run(
+    "check-architecture.mjs",
+    join(FIXTURES, "invalid-generic-retry-wrapper"),
+  );
   assert.notEqual(result.status, 0, output(result));
   assert.match(output(result), /ARCH-GENERIC-RETRY/);
 });
@@ -820,7 +1056,10 @@ void test("RED ARCH-TYPED-PROVIDER-HTTP: provider transport imports stay in the 
   try {
     const directory = join(root, "apps/aroma-gateway/src/application");
     await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, "provider.ts"), 'import { Agent } from "undici";\nvoid Agent;\n');
+    await writeFile(
+      join(directory, "provider.ts"),
+      'import { Agent } from "undici";\nvoid Agent;\n',
+    );
     const result = run("check-architecture.mjs", root);
     assert.notEqual(result.status, 0, output(result));
     assert.match(output(result), /ARCH-TYPED-PROVIDER-HTTP/);
@@ -837,8 +1076,14 @@ void test("RED BOUND-IMPORT: a runtime cannot import a foreign owner's database 
     const catalog = join(root, "apps/catalog-service/src");
     await mkdir(orders, { recursive: true });
     await mkdir(catalog, { recursive: true });
-    await writeFile(join(catalog, "database-url.ts"), "export const databaseUrl = process.env.DATABASE_URL;\n");
-    await writeFile(join(orders, "main.ts"), 'import { databaseUrl } from "../../catalog-service/src/database-url.js";\nvoid databaseUrl;\n');
+    await writeFile(
+      join(catalog, "database-url.ts"),
+      "export const databaseUrl = process.env.DATABASE_URL;\n",
+    );
+    await writeFile(
+      join(orders, "main.ts"),
+      'import { databaseUrl } from "../../catalog-service/src/database-url.js";\nvoid databaseUrl;\n',
+    );
     const result = run("check-architecture.mjs", root);
     assert.notEqual(result.status, 0, output(result));
     assert.match(output(result), /BOUND-IMPORT/);
@@ -853,7 +1098,10 @@ void test("RED ARCH-CATALOG-WRITER: foreign app cannot mutate active Catalog tab
   try {
     const directory = join(root, "apps/orders-service/src/infrastructure");
     await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, "rogue-writer.ts"), 'const query = "UPDATE catalog.catalog_state SET active_snapshot_ref = $1";\nvoid query;\n');
+    await writeFile(
+      join(directory, "rogue-writer.ts"),
+      'const query = "UPDATE catalog.catalog_state SET active_snapshot_ref = $1";\nvoid query;\n',
+    );
     const result = run("check-architecture.mjs", root);
     assert.notEqual(result.status, 0, output(result));
     assert.match(output(result), /ARCH-CATALOG-WRITER/);
@@ -865,19 +1113,30 @@ void test("RED ARCH-CATALOG-WRITER: foreign app cannot mutate active Catalog tab
 
 void test("RED ARCH-CATALOG-WRITER: packages rogue writer is rejected while catalog-service migrations remain allowed", async () => {
   const root = await mkdtemp(join(tmpdir(), "coffee-packages-catalog-writer-"));
-  const migrationRoot = await mkdtemp(join(tmpdir(), "coffee-catalog-migration-owner-"));
+  const migrationRoot = await mkdtemp(
+    join(tmpdir(), "coffee-catalog-migration-owner-"),
+  );
   try {
     const directory = join(root, "packages/rogue/src");
     await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, "writer.ts"), 'const query = "UPDATE catalog.catalog_state SET active_snapshot_ref = $1";\nvoid query;\n');
+    await writeFile(
+      join(directory, "writer.ts"),
+      'const query = "UPDATE catalog.catalog_state SET active_snapshot_ref = $1";\nvoid query;\n',
+    );
     const result = run("check-architecture.mjs", root);
     assert.notEqual(result.status, 0, output(result));
     assert.match(output(result), /ARCH-CATALOG-WRITER/);
-    assert.ok(output(result).includes("packages/rogue/src/writer.ts"), output(result));
+    assert.ok(
+      output(result).includes("packages/rogue/src/writer.ts"),
+      output(result),
+    );
 
     const migrations = join(migrationRoot, "apps/catalog-service/migrations");
     await mkdir(migrations, { recursive: true });
-    await writeFile(join(migrations, "0001-catalog.sql"), 'CREATE TABLE catalog.products (id text PRIMARY KEY);\n');
+    await writeFile(
+      join(migrations, "0001-catalog.sql"),
+      "CREATE TABLE catalog.products (id text PRIMARY KEY);\n",
+    );
     const acceptedMigration = run("check-architecture.mjs", migrationRoot);
     assert.equal(acceptedMigration.status, 0, output(acceptedMigration));
   } finally {
@@ -891,13 +1150,27 @@ void test("RED ARCH-CATALOG-EVENT-ROWS: Catalog event schemas cannot publish ful
   try {
     const directory = join(root, "contracts/schemas/events");
     await mkdir(directory, { recursive: true });
-    await writeFile(join(directory, "catalog-snapshot-activated.v1.schema.json"), JSON.stringify({
-      title: "CatalogSnapshotActivated.v1",
-      properties: { payload: { type: "object", properties: {
-        snapshotRef: { type: "string" },
-        products: { type: "array", items: { type: "object", properties: { productRef: { type: "string" } } },
-      } } },
-    } }));
+    await writeFile(
+      join(directory, "catalog-snapshot-activated.v1.schema.json"),
+      JSON.stringify({
+        title: "CatalogSnapshotActivated.v1",
+        properties: {
+          payload: {
+            type: "object",
+            properties: {
+              snapshotRef: { type: "string" },
+              products: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: { productRef: { type: "string" } },
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
     const result = run("check-architecture.mjs", root);
     assert.notEqual(result.status, 0, output(result));
     assert.match(output(result), /ARCH-CATALOG-EVENT-ROWS/);

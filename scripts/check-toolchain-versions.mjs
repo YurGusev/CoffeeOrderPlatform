@@ -76,14 +76,16 @@ const ROOT_DEV_DEPENDENCIES = Object.freeze({
 });
 
 const DEPENDENCY_TO_MANIFEST_KEY = Object.freeze({
-  "pino": "pino",
+  pino: "pino",
   "@opentelemetry/api": "opentelemetryApi",
   "@opentelemetry/sdk-trace-base": "opentelemetrySdkTraceBase",
   "@opentelemetry/sdk-metrics": "opentelemetrySdkMetrics",
   "@opentelemetry/resources": "opentelemetryResources",
   "@opentelemetry/context-async-hooks": "opentelemetryContextAsyncHooks",
-  "@opentelemetry/exporter-trace-otlp-http": "opentelemetryExporterTraceOtlpHttp",
-  "@opentelemetry/exporter-metrics-otlp-http": "opentelemetryExporterMetricsOtlpHttp",
+  "@opentelemetry/exporter-trace-otlp-http":
+    "opentelemetryExporterTraceOtlpHttp",
+  "@opentelemetry/exporter-metrics-otlp-http":
+    "opentelemetryExporterMetricsOtlpHttp",
 
   "@confluentinc/kafka-javascript": "confluentKafkaJavaScript",
   "@fastify/swagger": "fastifySwagger",
@@ -248,10 +250,15 @@ async function checkPackageManifests(root) {
     for (const [name, value] of allDependencies(manifest)) {
       checkDependencySpec(value, `${pathLabel}:${name}`);
       const manifestKey = DEPENDENCY_TO_MANIFEST_KEY[name];
-      if (manifestKey)
-        exact(value, bom[manifestKey], `${pathLabel}:${name}`);
-      if (name === "pg-copy-streams" && pathLabel !== "packages/platform-database/package.json")
-        fail("DATABASE-COPY-SCOPE", `${pathLabel}: COPY driver belongs to platform-database`);
+      if (manifestKey) exact(value, bom[manifestKey], `${pathLabel}:${name}`);
+      if (
+        name === "pg-copy-streams" &&
+        pathLabel !== "packages/platform-database/package.json"
+      )
+        fail(
+          "DATABASE-COPY-SCOPE",
+          `${pathLabel}: COPY driver belongs to platform-database`,
+        );
       if (name === "typescript") {
         typescriptManifestCount += 1;
         if (path !== join(root, "package.json"))
@@ -273,9 +280,21 @@ async function checkPackageManifests(root) {
     }
     if (pathLabel === "packages/platform-database/package.json") {
       exact(manifest.dependencies?.pg, EXPECTED.pg, `${pathLabel}:pg`);
-      exact(manifest.dependencies?.["pg-copy-streams"], EXPECTED.pgCopyStreams, `${pathLabel}:pg-copy-streams`);
-      exact(manifest.devDependencies?.["@types/pg"], EXPECTED.typesPg, `${pathLabel}:@types/pg`);
-      exact(manifest.devDependencies?.["@types/pg-copy-streams"], EXPECTED.typesPgCopyStreams, `${pathLabel}:@types/pg-copy-streams`);
+      exact(
+        manifest.dependencies?.["pg-copy-streams"],
+        EXPECTED.pgCopyStreams,
+        `${pathLabel}:pg-copy-streams`,
+      );
+      exact(
+        manifest.devDependencies?.["@types/pg"],
+        EXPECTED.typesPg,
+        `${pathLabel}:@types/pg`,
+      );
+      exact(
+        manifest.devDependencies?.["@types/pg-copy-streams"],
+        EXPECTED.typesPgCopyStreams,
+        `${pathLabel}:@types/pg-copy-streams`,
+      );
     }
     if (path === join(root, "package.json")) {
       exact(manifest.engines?.node, EXPECTED.node, "package.json.engines.node");
@@ -384,16 +403,40 @@ async function checkLockfile(root, manifest) {
 
 async function checkManifest(root) {
   const manifest = await readJson(join(root, "config/toolchain-versions.json"));
-  const patch = await readFile(join(root,"patches/librdkafka-resume-wakeup.patch"));
-  if (!/^[0-9a-f]{64}$/.test(manifest.librdkafkaPatchSha256??"") ||
-      createHash("sha256").update(patch).digest("hex")!==manifest.librdkafkaPatchSha256)
-    fail("LIBRDKAFKA-PATCH","native source patch must match config/toolchain-versions.json.librdkafkaPatchSha256");
-  for (const key of ['opentelemetryApi', 'pino', 'opentelemetrySdkTraceBase', 'opentelemetrySdkMetrics', 'opentelemetryResources', 'opentelemetryContextAsyncHooks', 'opentelemetryExporterTraceOtlpHttp', 'opentelemetryExporterMetricsOtlpHttp']) {
-    if (!/^\d+\.\d+\.\d+$/.test(manifest[key] ?? '')) fail('TELEMETRY-BOM', `${key}: required exact BOM ref`);
+  const patch = await readFile(
+    join(root, "patches/librdkafka-resume-wakeup.patch"),
+  );
+  if (
+    !/^[0-9a-f]{64}$/.test(manifest.librdkafkaPatchSha256 ?? "") ||
+    createHash("sha256").update(patch).digest("hex") !==
+      manifest.librdkafkaPatchSha256
+  )
+    fail(
+      "LIBRDKAFKA-PATCH",
+      "native source patch must match config/toolchain-versions.json.librdkafkaPatchSha256",
+    );
+  for (const key of [
+    "opentelemetryApi",
+    "pino",
+    "opentelemetrySdkTraceBase",
+    "opentelemetrySdkMetrics",
+    "opentelemetryResources",
+    "opentelemetryContextAsyncHooks",
+    "opentelemetryExporterTraceOtlpHttp",
+    "opentelemetryExporterMetricsOtlpHttp",
+  ]) {
+    if (!/^\d+\.\d+\.\d+$/.test(manifest[key] ?? ""))
+      fail("TELEMETRY-BOM", `${key}: required exact BOM ref`);
   }
-  if (!/^[0-9a-f]{64}$/.test(manifest.bootstrapProbeSha256 ?? '')) fail('TELEMETRY-BOM', 'bootstrapProbeSha256: required static probe hash');
-  for (const key of ['otelCollectorImage', 'openObserveImage']) {
-    if (!/^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$/.test(manifest[key] ?? '')) fail('TELEMETRY-BOM', `${key}: required immutable image ref`);
+  if (!/^[0-9a-f]{64}$/.test(manifest.bootstrapProbeSha256 ?? ""))
+    fail("TELEMETRY-BOM", "bootstrapProbeSha256: required static probe hash");
+  for (const key of ["otelCollectorImage", "openObserveImage"]) {
+    if (
+      !/^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$/.test(
+        manifest[key] ?? "",
+      )
+    )
+      fail("TELEMETRY-BOM", `${key}: required immutable image ref`);
   }
   const foundation = await readJson(
     join(root, "platform/runtime-foundation-decision.json"),
@@ -415,9 +458,21 @@ async function checkManifest(root) {
     "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
     "config/toolchain-versions.json.nginxImage",
   );
-  exact(manifest.nginxImageIndexDigest, "sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7", "nginx OCI index digest");
-  exact(manifest.nginxLinuxAmd64Digest, "sha256:9c0f39aa1c46f5062ba080555a067ebb82d5f63a8cf4d63f6ef2e76fc9ff2d0c", "nginx linux/amd64 manifest digest");
-  exact(manifest.nginxSourceRevision, "a16f1329e13e7273c4103f75d863ca625b75109e", "nginx official image source revision");
+  exact(
+    manifest.nginxImageIndexDigest,
+    "sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7",
+    "nginx OCI index digest",
+  );
+  exact(
+    manifest.nginxLinuxAmd64Digest,
+    "sha256:9c0f39aa1c46f5062ba080555a067ebb82d5f63a8cf4d63f6ef2e76fc9ff2d0c",
+    "nginx linux/amd64 manifest digest",
+  );
+  exact(
+    manifest.nginxSourceRevision,
+    "a16f1329e13e7273c4103f75d863ca625b75109e",
+    "nginx official image source revision",
+  );
   if (
     !/^node:26\.8\.1-bookworm-slim@sha256:[0-9a-f]{64}$/.test(
       manifest.nodeImage,
@@ -549,7 +604,10 @@ async function checkTsConfigs(root) {
     }
 
     if (label.startsWith("packages/")) {
-      const base = relative(dirname(path), join(root, "tsconfig.base.json")).replaceAll("\\", "/");
+      const base = relative(
+        dirname(path),
+        join(root, "tsconfig.base.json"),
+      ).replaceAll("\\", "/");
       if (document.extends !== base)
         fail("TS7-REFERENCES", `${label} must extend ${base}`);
       for (const key of ["composite", "declaration", "isolatedDeclarations"]) {

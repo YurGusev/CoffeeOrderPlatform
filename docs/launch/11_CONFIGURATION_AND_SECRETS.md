@@ -23,10 +23,10 @@ Reference-профиль #162 содержит 14 Node runtime и один nativ
 
 ## 1. Ровно два нормативных файла
 
-| Назначение | Путь | Содержимое | Git |
-|---|---|---|---|
-| Все несекретные настройки | `config/platform.yaml` | endpoints, ports, timeouts, pools, limits, feature flags, topic names, runtime permission allowlists и ссылки на secret keys | хранится открыто |
-| Все секреты | `secrets/platform.secrets.sops.yaml` | пароли, private keys, tokens, provider credentials и encryption keys | хранится только в SOPS-encrypted виде |
+| Назначение                | Путь                                 | Содержимое                                                                                                                   | Git                                   |
+| ------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Все несекретные настройки | `config/platform.yaml`               | endpoints, ports, timeouts, pools, limits, feature flags, topic names, runtime permission allowlists и ссылки на secret keys | хранится открыто                      |
+| Все секреты               | `secrets/platform.secrets.sops.yaml` | пароли, private keys, tokens, provider credentials и encryption keys                                                         | хранится только в SOPS-encrypted виде |
 
 Другие `.env`, `.env.local`, service-specific config files, отдельные password
 files и секреты в Compose/CI запрещены. Допускаются только JSON Schemas,
@@ -62,12 +62,12 @@ kafka:
 
 services:
   customer-service:
-    listen: {host: 0.0.0.0, port: 4101}
+    listen: { host: 0.0.0.0, port: 4101 }
     database: coffee_platform_customer
     secretRefs: [postgres.customer]
     outbound: []
-    kafka: {topics: [], groups: []}
-    permissions: {net: [coffee_postgres:5432], fsRead: [], fsWrite: []}
+    kafka: { topics: [], groups: [] }
+    permissions: { net: [coffee_postgres:5432], fsRead: [], fsWrite: [] }
 ```
 
 Файл обязан содержать точное множество 15 runtime из `10_RUNTIME_CATALOG.md`:
@@ -176,15 +176,15 @@ Inventory authority — это encrypted paths в `secrets/platform.secrets.sops
 `config/platform.yaml`, `config/service-catalog.json` и
 `platform/launch-v1-runtime-profile.json`. Production wiring для затронутых runtime:
 
-| Runtime | Secret refs |
-|---|---|
-| `edge-nginx` | `edge.tlsPrivateKey`, `edge.tlsCertificate`, `security.serviceTransportKeys.edge-nginx` — public pair и собственная mTLS identity; нового ключа пока нет в зашифрованном source, до provisioning startup fail-closed |
-| `edge-gateway` | `edge.oidcClientSecret`, `security.actorContextEdgeSigningPrivateKey`, `security.serviceTransportKeys.edge-gateway`, `telemetry.exporterToken` |
-| `api-public` | `security.apiPublicDelegationSigningPrivateKey`, `security.actorContextEdgeVerificationPublicKeys`, `security.serviceTransportKeys.api-public`, `telemetry.exporterToken` |
-| `api-internal` | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceVerificationKeys.pricing-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken` |
+| Runtime            | Secret refs                                                                                                                                                                                                                                                                                         |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `edge-nginx`       | `edge.tlsPrivateKey`, `edge.tlsCertificate`, `security.serviceTransportKeys.edge-nginx` — public pair и собственная mTLS identity; нового ключа пока нет в зашифрованном source, до provisioning startup fail-closed                                                                                |
+| `edge-gateway`     | `edge.oidcClientSecret`, `security.actorContextEdgeSigningPrivateKey`, `security.serviceTransportKeys.edge-gateway`, `telemetry.exporterToken`                                                                                                                                                      |
+| `api-public`       | `security.apiPublicDelegationSigningPrivateKey`, `security.actorContextEdgeVerificationPublicKeys`, `security.serviceTransportKeys.api-public`, `telemetry.exporterToken`                                                                                                                           |
+| `api-internal`     | `security.apiInternalDelegationSigningPrivateKey`, `security.serviceVerificationKeys.orders-service`, `security.serviceVerificationKeys.pricing-service`, `security.serviceTransportKeys.api-internal`, `telemetry.exporterToken`                                                                   |
 | `customer-service` | `postgres.customer`, `security.customerCursorSigningPrivateKey`, `security.customerCursorVerificationPublicKeys`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.customer-service`, `telemetry.exporterToken` |
-| `catalog-service` | `postgres.catalogApi`, `security.catalogCursorSigningPrivateKey`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.catalog-service`, `telemetry.exporterToken` |
-| `pricing-service` | `postgres.pricing`, `security.pricingServiceDelegationSigningPrivateKey`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.pricing-service`, `telemetry.exporterToken` |
+| `catalog-service`  | `postgres.catalogApi`, `security.catalogCursorSigningPrivateKey`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.catalog-service`, `telemetry.exporterToken`                                                  |
+| `pricing-service`  | `postgres.pricing`, `security.pricingServiceDelegationSigningPrivateKey`, `security.delegationVerificationKeys.api-public`, `security.delegationVerificationKeys.api-internal`, `security.serviceTransportKeys.pricing-service`, `telemetry.exporterToken`                                          |
 
 `edge-nginx` использует `public-tls`: его публичный listener предъявляет
 `edge.tlsCertificate` с парой `edge.tlsPrivateKey`, но не требует service

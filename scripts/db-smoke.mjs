@@ -98,7 +98,9 @@ export function validateDeliverySqlContract(contract = exportedSQLContract()) {
     ) ||
     new Set(tableNames).size !== tableNames.length
   )
-    fail("delivery SQL contract tables must be distinct owner-local qualified identifiers");
+    fail(
+      "delivery SQL contract tables must be distinct owner-local qualified identifiers",
+    );
   const inbox = requireSql(
     contract,
     "inbox",
@@ -131,7 +133,7 @@ export function validateDeliverySqlContract(contract = exportedSQLContract()) {
     source: "exportedSQLContract",
     liveDatabase: false,
     realKafka: false,
-    tables: {...tables},
+    tables: { ...tables },
     checks: [
       "inbox-message-hash-state-lease",
       "quarantine-topic-partition-offset-hash",
@@ -263,7 +265,10 @@ async function main(argv) {
   if (argv.length === 0 || argv.includes("--plan")) {
     console.log(
       JSON.stringify(
-        {structural: validateDeliverySqlContract(), roleCases: buildSmokeCases(roleMap, ownership)},
+        {
+          structural: validateDeliverySqlContract(),
+          roleCases: buildSmokeCases(roleMap, ownership),
+        },
         null,
         2,
       ),

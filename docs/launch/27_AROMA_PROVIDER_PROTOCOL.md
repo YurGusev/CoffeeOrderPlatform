@@ -35,14 +35,14 @@ identity строки. Отсутствующий помол означает о
 `0bf3b7d525444fee1a190bd86fc8b9500a709662`; перечисленные файлы без локальных
 изменений. Пути ниже относительны корню **System**, не Platform:
 
-| Источник | Участок и значение |
-|---|---|
-| `docs/Интеграция/01_Архитектура_интеграции_AROMA.md` | §11.3–12: историческая проверка login от 2026-04-24, hosts и cookies |
-| `src/CoffeeOrderSystem.Modules.Orders/Infrastructure/Integrations/Aroma/AromaSessionRefreshService.cs` | `CreateLoginRequest`, `ProbeAsync`, `ApplySetCookieUpdates`: login и обновление сессии |
-| `src/CoffeeOrderSystem.Modules.Orders/Infrastructure/Integrations/Aroma/AromaCartReadClient.cs` | `CreateCartReadRequest`, `ParseSuccessResponse`, payload types: чтение корзины |
-| `src/CoffeeOrderSystem.Modules.Orders/Infrastructure/Integrations/Aroma/AromaCartClient.cs` | `CreateCartAddRequest`, `CreateCartUpdateRequest`, `CreateCartDeleteRequest` и callers: мутации |
-| `src/CoffeeOrderSystem.Modules.Orders/Infrastructure/Integrations/Aroma/AromaCartResponseValidator.cs` | `ValidateAddedItem`, `ValidateCartItemQuantity`: интерпретация успешных ответов |
-| `src/CoffeeOrderSystem.Modules.Catalog/Infrastructure/External/AromaCatalogLookupService.cs` | `BuildFullSnapshotUri`, `FetchPageAsync`, `ValidateSnapshotPage`, payload types: каталог |
+| Источник                                                                                               | Участок и значение                                                                              |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| `docs/Интеграция/01_Архитектура_интеграции_AROMA.md`                                                   | §11.3–12: историческая проверка login от 2026-04-24, hosts и cookies                            |
+| `src/CoffeeOrderSystem.Modules.Orders/Infrastructure/Integrations/Aroma/AromaSessionRefreshService.cs` | `CreateLoginRequest`, `ProbeAsync`, `ApplySetCookieUpdates`: login и обновление сессии          |
+| `src/CoffeeOrderSystem.Modules.Orders/Infrastructure/Integrations/Aroma/AromaCartReadClient.cs`        | `CreateCartReadRequest`, `ParseSuccessResponse`, payload types: чтение корзины                  |
+| `src/CoffeeOrderSystem.Modules.Orders/Infrastructure/Integrations/Aroma/AromaCartClient.cs`            | `CreateCartAddRequest`, `CreateCartUpdateRequest`, `CreateCartDeleteRequest` и callers: мутации |
+| `src/CoffeeOrderSystem.Modules.Orders/Infrastructure/Integrations/Aroma/AromaCartResponseValidator.cs` | `ValidateAddedItem`, `ValidateCartItemQuantity`: интерпретация успешных ответов                 |
+| `src/CoffeeOrderSystem.Modules.Catalog/Infrastructure/External/AromaCatalogLookupService.cs`           | `BuildFullSnapshotUri`, `FetchPageAsync`, `ValidateSnapshotPage`, payload types: каталог        |
 
 Это свидетельства документации и поведения клиента. Unit tests System с
 `StringContent`/подставными HTTP handlers — синтетические fixtures, не captures.
@@ -56,15 +56,15 @@ identity строки. Отсутствующий помол означает о
 
 Все пути ниже относятся к provider API, а не к InternalApiV1.
 
-| Операция | Запрос | Интерпретация ответа в System |
-|---|---|---|
-| Login | `POST /api/v1/auth/login`, JSON `{email,password}` | Успешный status и обязательные cookies; затем probes |
-| User probe | `GET /api/v1/user` | Успешный HTTP status |
-| Cart read | `GET /api/v1/cart/?timestamp=<ISO time>` | JSON object с `products` |
-| Полный каталог | `GET /api/v1/catalog/wholesale/products?page=1&per_page=<page size>` и следующие страницы | JSON `{data,meta}` |
-| Добавление строки | `POST /api/v1/cart/?timestamp=<ISO time>`, form-urlencoded `offer_id`, `quantity`, `packing`, optional `grind_id` | JSON корзины с целевой позицией; возможна ошибка даже в 2xx |
-| Абсолютное количество | `PUT /api/v1/cart/{cartItemId}?timestamp=<ISO time>`, JSON `quantity`, `packing`, optional `grind_id` | JSON корзины с целевой строкой |
-| Удаление строки | `DELETE /api/v1/cart/{cartItemId}?timestamp=<ISO time>`, без body | В controlled-сценарии 2026-09-12 удаление дало 200, повторное удаление той же строки — 404; это не общая гарантия provider 404 |
+| Операция              | Запрос                                                                                                            | Интерпретация ответа в System                                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Login                 | `POST /api/v1/auth/login`, JSON `{email,password}`                                                                | Успешный status и обязательные cookies; затем probes                                                                           |
+| User probe            | `GET /api/v1/user`                                                                                                | Успешный HTTP status                                                                                                           |
+| Cart read             | `GET /api/v1/cart/?timestamp=<ISO time>`                                                                          | JSON object с `products`                                                                                                       |
+| Полный каталог        | `GET /api/v1/catalog/wholesale/products?page=1&per_page=<page size>` и следующие страницы                         | JSON `{data,meta}`                                                                                                             |
+| Добавление строки     | `POST /api/v1/cart/?timestamp=<ISO time>`, form-urlencoded `offer_id`, `quantity`, `packing`, optional `grind_id` | JSON корзины с целевой позицией; возможна ошибка даже в 2xx                                                                    |
+| Абсолютное количество | `PUT /api/v1/cart/{cartItemId}?timestamp=<ISO time>`, JSON `quantity`, `packing`, optional `grind_id`             | JSON корзины с целевой строкой                                                                                                 |
+| Удаление строки       | `DELETE /api/v1/cart/{cartItemId}?timestamp=<ISO time>`, без body                                                 | В controlled-сценарии 2026-09-12 удаление дало 200, повторное удаление той же строки — 404; это не общая гарантия provider 404 |
 
 Cart requests используют `Accept: application/json`, `x-timestamp`, `Origin`,
 `Referer: <origin>/lk` и Gateway-owned `Cookie`. Login использует Accept,
@@ -180,17 +180,17 @@ provider bodies не выводились и не сохранялись. POST/P
 отправлялись. Успех чтения без них не доказывает их необязательность для
 mutation или полного provider HTTP pipeline.
 
-| Время UTC | Авторизация | Метод и путь | Status / content-type | Полнота и наблюдение |
-|---|---|---|---|---|
-| 2026-09-08T15:09:11Z | public | `GET /api/v1/catalog/wholesale/products?page=1&per_page=10` | 200 / `application/json` | 167 195 bytes, полное тело; `data` 10, `meta`: `current_page=1`, `from=1`, `to=10`, `last_page=47`, `per_page=10`, `total=466`; response установил cookies |
-| 2026-09-08T15:04:56Z | public | `GET /api/v1/catalog/wholesale/products?page=47&per_page=10` | 200 / `application/json` | 171 671 bytes, полное тело; `data` 6, `meta`: `current_page=47`, `from=461`, `to=466`, `last_page=47`, `per_page=10`, `total=466`; `links` содержат абсолютные URLs с host `dev.aromateacoffee.ru` |
-| 2026-09-08T15:11:27Z | public | `GET /api/v1/user` | 403 / `application/json` | 39 bytes, полное тело; top-level `{error}` |
-| 2026-09-08T15:11:27Z | public | `GET /api/v1/cart/` | 403 / `application/json` | 39 bytes, полное тело; top-level `{error}` |
-| 2026-09-08T15:13:58Z | public | `GET /api/v1/catalog/wholesale/products?page=233&per_page=10` | 200 / `application/json` | 2 110 bytes, полное тело; `data=[]`, `meta.current_page=233`, `meta.last_page=47`, `meta.total=466` |
-| 2026-09-08T15:04:57Z | authenticated | `POST /api/v1/auth/login` | 200 / `application/json` | 678 bytes, полное тело; top-level `{data}`, cookies установлены |
-| 2026-09-08T15:04:58Z | authenticated | `GET /api/v1/user` | 200 / `application/json` | 678 bytes, полное тело; top-level `{data}`, email совпал с import только при in-memory сравнении |
-| 2026-09-08T15:04:58Z | authenticated | `GET /api/v1/cart/` | 200 / `application/json` | 114 bytes, полное тело; `{prices,products}`, `products=[]`; массивы `prices.categories`, `weights`, `discounts`, `prices` пусты, `prices.total` имеет `default` и `promo` |
-| 2026-09-08T15:04:58Z | authenticated | `GET /api/v1/catalog/wholesale/products?page=47&per_page=10` | 200 / `application/json` | 171 671 bytes, полное тело; в этой выборке форма и цены совпали с public read |
+| Время UTC            | Авторизация   | Метод и путь                                                  | Status / content-type    | Полнота и наблюдение                                                                                                                                                                               |
+| -------------------- | ------------- | ------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-08T15:09:11Z | public        | `GET /api/v1/catalog/wholesale/products?page=1&per_page=10`   | 200 / `application/json` | 167 195 bytes, полное тело; `data` 10, `meta`: `current_page=1`, `from=1`, `to=10`, `last_page=47`, `per_page=10`, `total=466`; response установил cookies                                         |
+| 2026-09-08T15:04:56Z | public        | `GET /api/v1/catalog/wholesale/products?page=47&per_page=10`  | 200 / `application/json` | 171 671 bytes, полное тело; `data` 6, `meta`: `current_page=47`, `from=461`, `to=466`, `last_page=47`, `per_page=10`, `total=466`; `links` содержат абсолютные URLs с host `dev.aromateacoffee.ru` |
+| 2026-09-08T15:11:27Z | public        | `GET /api/v1/user`                                            | 403 / `application/json` | 39 bytes, полное тело; top-level `{error}`                                                                                                                                                         |
+| 2026-09-08T15:11:27Z | public        | `GET /api/v1/cart/`                                           | 403 / `application/json` | 39 bytes, полное тело; top-level `{error}`                                                                                                                                                         |
+| 2026-09-08T15:13:58Z | public        | `GET /api/v1/catalog/wholesale/products?page=233&per_page=10` | 200 / `application/json` | 2 110 bytes, полное тело; `data=[]`, `meta.current_page=233`, `meta.last_page=47`, `meta.total=466`                                                                                                |
+| 2026-09-08T15:04:57Z | authenticated | `POST /api/v1/auth/login`                                     | 200 / `application/json` | 678 bytes, полное тело; top-level `{data}`, cookies установлены                                                                                                                                    |
+| 2026-09-08T15:04:58Z | authenticated | `GET /api/v1/user`                                            | 200 / `application/json` | 678 bytes, полное тело; top-level `{data}`, email совпал с import только при in-memory сравнении                                                                                                   |
+| 2026-09-08T15:04:58Z | authenticated | `GET /api/v1/cart/`                                           | 200 / `application/json` | 114 bytes, полное тело; `{prices,products}`, `products=[]`; массивы `prices.categories`, `weights`, `discounts`, `prices` пусты, `prices.total` имеет `default` и `promo`                          |
+| 2026-09-08T15:04:58Z | authenticated | `GET /api/v1/catalog/wholesale/products?page=47&per_page=10`  | 200 / `application/json` | 171 671 bytes, полное тело; в этой выборке форма и цены совпали с public read                                                                                                                      |
 
 Для HTML `GET /wholesale` основной host вернул страницу `KillBot user
 verification` (`200 text/html`) и не показал каталог, карточки, frontend bundle,
@@ -219,11 +219,11 @@ verification` (`200 text/html`) и не показал каталог, карт�
 
 Наблюдались только свойства cookies, без значений:
 
-| Cookie | Domain | Path | Secure | HttpOnly | SameSite | Expiry |
-|---|---|---|---|---|---|---|
-| `dcCNXv` | не указан | `/` | отсутствует | отсутствует | `Lax` | присутствует |
-| `october_session` | `aromateacoffee.ru` | `/` | отсутствует | присутствует | `lax` | присутствует |
-| `aroma_auth` | `aromateacoffee.ru` | `/` | отсутствует | присутствует | `lax` | присутствует |
+| Cookie            | Domain              | Path | Secure      | HttpOnly     | SameSite | Expiry       |
+| ----------------- | ------------------- | ---- | ----------- | ------------ | -------- | ------------ |
+| `dcCNXv`          | не указан           | `/`  | отсутствует | отсутствует  | `Lax`    | присутствует |
+| `october_session` | `aromateacoffee.ru` | `/`  | отсутствует | присутствует | `lax`    | присутствует |
+| `aroma_auth`      | `aromateacoffee.ru` | `/`  | отсутствует | присутствует | `lax`    | присутствует |
 
 Public catalog read также установил `dcCNXv` и `october_session`; login добавил
 `aroma_auth`; последующие user/cart/catalog reads обновляли
@@ -250,11 +250,11 @@ Public catalog read также установил `dcCNXv` и `october_session`;
 Cookie/credentials не передавались; POST/PUT/DELETE не выполнялись.
 Body и Set-Cookie не сохранялись и не выводились. Результаты:
 
-| Путь | Status / content-type | Проверенные несекретные признаки |
-|---|---|---|
+| Путь                                                   | Status / content-type  | Проверенные несекретные признаки                                                                                   |
+| ------------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `/api/v1/catalog/wholesale/products?page=1&per_page=1` | 200 / application/json | Полное тело 19 600 байт; object, `data` array длиной 1; meta: current_page=1, last_page=466, total=466, per_page=1 |
-| `/api/v1/user` | 403 / application/json | Полное тело 39 байт, JSON object |
-| `/api/v1/cart/` | 403 / application/json | Полное тело 39 байт, JSON object |
+| `/api/v1/user`                                         | 403 / application/json | Полное тело 39 байт, JSON object                                                                                   |
+| `/api/v1/cart/`                                        | 403 / application/json | Полное тело 39 байт, JSON object                                                                                   |
 
 Это актуальное доказательство доступности первой страницы каталога на основном
 host без авторизации и отсутствия redirect в этих трёх запросах. Это не capture
@@ -275,12 +275,12 @@ Probe использовал тот же фиксированный `https://aro
 verification, запрет redirects, in-memory CookieJar, timeout 20 секунд и
 лимит чтения 2 097 153 байта. После завершения процесса память сессии освобождена.
 
-| Операция | Результат |
-|---|---|
-| `POST /api/v1/auth/login` с JSON email/password | 200, application/json, полный JSON object; cookies получены |
-| `GET /api/v1/user` с этой сессией | 200, application/json, полный JSON object; email в ответе совпал с импортированным (сравнение в памяти) |
-| `GET /api/v1/cart/` с этой сессией | 200, application/json, полный JSON object, `products: []` |
-| `GET /api/v1/catalog/wholesale/products?page=1&per_page=1` с этой сессией | 200, application/json, полный JSON object, один product в `data` |
+| Операция                                                                  | Результат                                                                                               |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/auth/login` с JSON email/password                           | 200, application/json, полный JSON object; cookies получены                                             |
+| `GET /api/v1/user` с этой сессией                                         | 200, application/json, полный JSON object; email в ответе совпал с импортированным (сравнение в памяти) |
+| `GET /api/v1/cart/` с этой сессией                                        | 200, application/json, полный JSON object, `products: []`                                               |
+| `GET /api/v1/catalog/wholesale/products?page=1&per_page=1` с этой сессией | 200, application/json, полный JSON object, один product в `data`                                        |
 
 Login и все три чтения работают на одном основном host для предоставленного
 аккаунта без redirect. Это закрывает вопрос доступности этих endpoints с
@@ -372,17 +372,17 @@ packing/grind сохраняют ограничения provider mutations. Ис
 
 ## Итоговая таблица исследования
 
-| Вопрос | Подтверждённый факт | Доказательство | Что осталось неизвестным | Влияние на adapter |
-|---|---|---|---|---|
-| Currency и scale цены | Provider wire не содержит currency/scale; интеграционная policy отдельно принимает `offers[].price` как RUB и точное умножение на 100 для одной упаковки/штуки | API catalog и принятое решение [`28_AROMA_CATALOG_PRICING_POLICY.md`](28_AROMA_CATALOG_PRICING_POLICY.md) | Provider-specific metadata не выводится из wire | Применять принятое RUB×100 mapping; нулевую цену сохранять как `0`, переводить `Available` в локальное `Unavailable` и не считать это supplier stock claim |
-| Price basis | Price связан с конкретным offer; owner policy фиксирует его как цену одной упаковки/штуки без пересчёта на кг | Один product с четырьмя offer IDs, `weight` 200/1000 и `is_grinded` 0/1 плюс owner policy 2026-09-18 | Provider wire не раскрывает скидки, налоги и округление; provider price basis metadata отсутствует | Хранить принятое package/piece basis; не считать цену за кг/упаковку формулой |
-| Quantity unit, дробность и bounds | Provider wire не содержит unit metadata; owner policy 2026-09-18 задаёт `unit=piece`, `sold_by_piece=false` этому не препятствует; quantity `1` наблюдалась в cart | Bounded safe reads 2026-09-18, transformed report и owner policy | Integer/decimal admission, min/max/step и серверные ограничения | Применять только `piece` policy; bounds/дробность без отдельного доказательства отклонять до journal/provider dispatch |
-| Offer/variant identity | В выборке один product имеет отдельные offer IDs для веса 200/1000 и `is_grinded` 0/1 | `data[].offers[].id/name/params[]` на page 47; IDs обезличены в отчёте наблюдений | Гарантия для всех категорий и достаточность одного offer ID для mutation | Считать offer key отдельной identity; сохранять variant params и требовать binding |
-| `packing` и `grind` | Catalog показывает `is_grinded`; в непустой cart 2026-09-18 наблюдались `packing=null`, `grind_id=null` | Live catalog shape и bounded cart GET 2026-09-18 | Допустимые non-null values, связь с offer/cart line и обязательность пары | Не синтезировать provider mutation payload из имени offer или null observation |
-| Cart item identity | Непустая cart shape и отдельные line/offer identity fields наблюдались; raw IDs не сохранялись в transformed report | Bounded cart GET 2026-09-18; ранее сохранённые controlled captures | Correlation текущей line с Catalog binding, duplicate policy и общая uniqueness guarantee | Разрешать line только через fresh exact unique binding; один read не делает offerRef line identity |
-| Session flow | На основном host login/user/cart/catalog работают без redirect; текущая реализация хранит зашифрованную session materialization и допускает bounded safe re-auth только до partial output/unsafe dispatch | Финальный последовательный probe 2026-09-08 и локальные session/journal проверки; cookie properties в разделе выше | Provider TTL/refresh/invalidation и обязательность companion cookie остаются неизвестными | После unsafe dispatch re-auth и повтор mutation запрещены; pre-dispatch safe re-auth ограничен одним bounded переходом и не является доказательством provider TTL |
-| Pagination | Ответ `{data,links,meta}`; при `per_page=10` `total=466`, `last_page=47`; links ведут на `dev` host | page 1/page 47 200; page 233 ранее дал 200 с пустым data при `last_page=47` | Snapshot isolation и точная server policy для out-of-range pages | Строить same-origin pages самостоятельно и fail closed на неожиданный empty/out-of-range |
-| Mutation semantics | Ограниченный сценарий 12 сентября подтвердил add, set quantity 1→2, duplicate POST 422, delete и repeated delete 404 для одного offer | [`2026-09-12-cart-mutations`](../../evidence/aroma-provider/2026-09-12-cart-mutations/README.md) | Глобальные bounds/fractions, остальные packing/grind combinations, effect неоднозначных ответов и session refresh | Только Dispatched barrier + fresh read; наблюдённый сценарий не разрешает blind retry или обобщение на другие offers |
+| Вопрос                            | Подтверждённый факт                                                                                                                                                                                       | Доказательство                                                                                                     | Что осталось неизвестным                                                                                          | Влияние на adapter                                                                                                                                                |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Currency и scale цены             | Provider wire не содержит currency/scale; интеграционная policy отдельно принимает `offers[].price` как RUB и точное умножение на 100 для одной упаковки/штуки                                            | API catalog и принятое решение [`28_AROMA_CATALOG_PRICING_POLICY.md`](28_AROMA_CATALOG_PRICING_POLICY.md)          | Provider-specific metadata не выводится из wire                                                                   | Применять принятое RUB×100 mapping; нулевую цену сохранять как `0`, переводить `Available` в локальное `Unavailable` и не считать это supplier stock claim        |
+| Price basis                       | Price связан с конкретным offer; owner policy фиксирует его как цену одной упаковки/штуки без пересчёта на кг                                                                                             | Один product с четырьмя offer IDs, `weight` 200/1000 и `is_grinded` 0/1 плюс owner policy 2026-09-18               | Provider wire не раскрывает скидки, налоги и округление; provider price basis metadata отсутствует                | Хранить принятое package/piece basis; не считать цену за кг/упаковку формулой                                                                                     |
+| Quantity unit, дробность и bounds | Provider wire не содержит unit metadata; owner policy 2026-09-18 задаёт `unit=piece`, `sold_by_piece=false` этому не препятствует; quantity `1` наблюдалась в cart                                        | Bounded safe reads 2026-09-18, transformed report и owner policy                                                   | Integer/decimal admission, min/max/step и серверные ограничения                                                   | Применять только `piece` policy; bounds/дробность без отдельного доказательства отклонять до journal/provider dispatch                                            |
+| Offer/variant identity            | В выборке один product имеет отдельные offer IDs для веса 200/1000 и `is_grinded` 0/1                                                                                                                     | `data[].offers[].id/name/params[]` на page 47; IDs обезличены в отчёте наблюдений                                  | Гарантия для всех категорий и достаточность одного offer ID для mutation                                          | Считать offer key отдельной identity; сохранять variant params и требовать binding                                                                                |
+| `packing` и `grind`               | Catalog показывает `is_grinded`; в непустой cart 2026-09-18 наблюдались `packing=null`, `grind_id=null`                                                                                                   | Live catalog shape и bounded cart GET 2026-09-18                                                                   | Допустимые non-null values, связь с offer/cart line и обязательность пары                                         | Не синтезировать provider mutation payload из имени offer или null observation                                                                                    |
+| Cart item identity                | Непустая cart shape и отдельные line/offer identity fields наблюдались; raw IDs не сохранялись в transformed report                                                                                       | Bounded cart GET 2026-09-18; ранее сохранённые controlled captures                                                 | Correlation текущей line с Catalog binding, duplicate policy и общая uniqueness guarantee                         | Разрешать line только через fresh exact unique binding; один read не делает offerRef line identity                                                                |
+| Session flow                      | На основном host login/user/cart/catalog работают без redirect; текущая реализация хранит зашифрованную session materialization и допускает bounded safe re-auth только до partial output/unsafe dispatch | Финальный последовательный probe 2026-09-08 и локальные session/journal проверки; cookie properties в разделе выше | Provider TTL/refresh/invalidation и обязательность companion cookie остаются неизвестными                         | После unsafe dispatch re-auth и повтор mutation запрещены; pre-dispatch safe re-auth ограничен одним bounded переходом и не является доказательством provider TTL |
+| Pagination                        | Ответ `{data,links,meta}`; при `per_page=10` `total=466`, `last_page=47`; links ведут на `dev` host                                                                                                       | page 1/page 47 200; page 233 ранее дал 200 с пустым data при `last_page=47`                                        | Snapshot isolation и точная server policy для out-of-range pages                                                  | Строить same-origin pages самостоятельно и fail closed на неожиданный empty/out-of-range                                                                          |
+| Mutation semantics                | Ограниченный сценарий 12 сентября подтвердил add, set quantity 1→2, duplicate POST 422, delete и repeated delete 404 для одного offer                                                                     | [`2026-09-12-cart-mutations`](../../evidence/aroma-provider/2026-09-12-cart-mutations/README.md)                   | Глобальные bounds/fractions, остальные packing/grind combinations, effect неоднозначных ответов и session refresh | Только Dispatched barrier + fresh read; наблюдённый сценарий не разрешает blind retry или обобщение на другие offers                                              |
 
 ### Решения, которые adapter уже может принять
 
@@ -474,7 +474,7 @@ provider captures. Migration применялась только к disposable I
 
 - `pnpm config:check` — exit 0: `platform config: OK (15 runtimes, development)`.
 - `pnpm security:secrets` — exit 0: `security material: OK (development,
-  encrypted repository leaves and runtime scopes)`. Единственная repository
+encrypted repository leaves and runtime scopes)`. Единственная repository
   copy import удалена после byte-identical сохранения; encrypted copy находится
   по `/home/yurgusev/.local/share/coffee-platform/imports/aroma-import.secrets.sops.yaml`
   (каталог `0700`, файл `0600`, SHA-256
@@ -484,7 +484,7 @@ provider captures. Migration применялась только к disposable I
   `pnpm contracts:test`, `pnpm architecture:check`, `pnpm db:smoke`,
   `pnpm typecheck`, `pnpm lint` — exit 0.
 - `COFFEE_DB_LIVE_PROOF=1 node --test tests/aroma/binding-http.test.mjs
-  tests/aroma/binding-live.test.mjs tests/compose/topology.test.mjs` — exit 0;
+tests/aroma/binding-live.test.mjs tests/compose/topology.test.mjs` — exit 0;
   binding-live не skipped. Проверены immutable replay, оба conflict paths,
   unknown/incomplete snapshot cases, grants, restart/lost-answer и обе реальные
   конкурентные directions. Race-failure был в harness: contender запускался до
@@ -529,7 +529,7 @@ provider captures. Migration применялась только к disposable I
   topology smoke. Исторический `bootstrap-first: Query read timeout` в текущем
   bounded прогоне не воспроизведён; отдельная причинность для него не
   объявляется установленной. Наблюдаемый `expected ... to wait for export row
-  lock` устранён детерминированным DB barrier и после этого два live proof
+lock` устранён детерминированным DB barrier и после этого два live proof
   направления прошли.
 
 ### Границы и оставшаяся реализация #10

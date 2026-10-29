@@ -351,7 +351,7 @@ function consumerConfig(options: NativeConsumerOptions): NativeConfig {
     "queued.min.messages": 1,
     "queued.max.messages.kbytes": queueBytes(options),
     "fetch.queue.backoff.ms": consumerPollTimeout(options),
-    "offset_commit_cb": true,
+    offset_commit_cb: true,
     "statistics.interval.ms": options.receiveTimeoutMs,
     // An idle Fetch must not hold broker health traffic for the whole receive
     // deadline. Keep that deadline and broker-confirmed commit ACK unchanged.
@@ -406,7 +406,9 @@ function partitions(value: unknown): readonly NativePartition[] {
   return Object.freeze(value.map((entry) => partition(entry)));
 }
 
-function nativeHeaders(value: unknown): Readonly<Record<string, string | null>> {
+function nativeHeaders(
+  value: unknown,
+): Readonly<Record<string, string | null>> {
   if (value === null || typeof value !== "object")
     throw error("NATIVE_RECORD_INVALID");
   const result: Record<string, string | null> = Object.create(null) as Record<
@@ -645,7 +647,11 @@ function consumerCommitFailureCode(value: unknown): NativeKafkaErrorCode {
   }
 }
 
-function commitKey(topic: string, partitionNumber: number, offset: string): string {
+function commitKey(
+  topic: string,
+  partitionNumber: number,
+  offset: string,
+): string {
   return `${topic}\u0000${partitionNumber}\u0000${offset}`;
 }
 
@@ -986,19 +992,26 @@ export async function createNativeConsumer(
   client.on("disconnected", () => {
     if (state !== "closing" && state !== "closed") state = "failed";
   });
-  if (onStatistics !== undefined) client.on("event.stats", (event: unknown) => {
-    if (event === null || typeof event !== "object" || Array.isArray(event)) return;
-    const message = (event as Record<string, unknown>)["message"];
-    if (typeof message !== "string") return;
-    let snapshot: unknown;
-    try {
-      snapshot = JSON.parse(message) as unknown;
-    } catch {
-      return;
-    }
-    if (snapshot === null || typeof snapshot !== "object" || Array.isArray(snapshot)) return;
-    onStatistics(snapshot);
-  });
+  if (onStatistics !== undefined)
+    client.on("event.stats", (event: unknown) => {
+      if (event === null || typeof event !== "object" || Array.isArray(event))
+        return;
+      const message = (event as Record<string, unknown>)["message"];
+      if (typeof message !== "string") return;
+      let snapshot: unknown;
+      try {
+        snapshot = JSON.parse(message) as unknown;
+      } catch {
+        return;
+      }
+      if (
+        snapshot === null ||
+        typeof snapshot !== "object" ||
+        Array.isArray(snapshot)
+      )
+        return;
+      onStatistics(snapshot);
+    });
   const connect = (): Promise<void> => {
     if (state === "connected") return Promise.resolve();
     if (state === "failed")
@@ -1255,12 +1268,22 @@ export async function createNativeConsumer(
           // Assignment precedes asynchronous latest-offset resolution. A
           // cached high watermark follows a real Fetch response: readiness
           // before this boundary could silently skip the first live hint.
-          return assigned.length > 0 && assigned.every((target) => {
-            const offsets = client.getWatermarkOffsets(target.topic, target.partition);
-            if (offsets === null || typeof offsets !== "object") return false;
-            const high = (offsets as Record<string, unknown>)["highOffset"];
-            return typeof high === "number" && Number.isSafeInteger(high) && high >= 0;
-          });
+          return (
+            assigned.length > 0 &&
+            assigned.every((target) => {
+              const offsets = client.getWatermarkOffsets(
+                target.topic,
+                target.partition,
+              );
+              if (offsets === null || typeof offsets !== "object") return false;
+              const high = (offsets as Record<string, unknown>)["highOffset"];
+              return (
+                typeof high === "number" &&
+                Number.isSafeInteger(high) &&
+                high >= 0
+              );
+            })
+          );
         }
         return true;
       })

@@ -5,8 +5,8 @@ packages:
   - packages/generated/*
 ignoreScripts: true
 allowBuilds:
-  '@confluentinc/kafka-javascript': true
+  "@confluentinc/kafka-javascript": true
 minimumReleaseAgeExclude:
   - undici@8.10.1
 patchedDependencies:
-  '@react-types/shared@3.36.1': patches/@react-types__shared@3.36.1.patch
+  "@react-types/shared@3.36.1": patches/@react-types__shared@3.36.1.patch

@@ -5,13 +5,13 @@
 labels, независимо от рабочего каталога терминала и исходного worktree.
 Она не выполняет `up`, сборки, миграции, deployment и не читает секреты.
 
-| Группа | Состав |
-|---|---|
-| `platform` | Compose-проект `coffee-platform` |
-| `legacy` | `coffeeordersystem`, кроме общего PostgreSQL |
-| `db` | Только `coffeeordersystem/postgres` (`coffee_postgres`) |
-| `n8n` | Compose-проект `n8n` |
-| `gitea` | Compose-проект `gitea-test` |
+| Группа     | Состав                                                  |
+| ---------- | ------------------------------------------------------- |
+| `platform` | Compose-проект `coffee-platform`                        |
+| `legacy`   | `coffeeordersystem`, кроме общего PostgreSQL            |
+| `db`       | Только `coffeeordersystem/postgres` (`coffee_postgres`) |
+| `n8n`      | Compose-проект `n8n`                                    |
+| `gitea`    | Compose-проект `gitea-test`                             |
 
 ```bash
 coffee-containers legacy status

@@ -72,28 +72,28 @@ config hash, encrypted secrets-file hash и run-id resources. Secret values не
 `id`, `version`, `mandatory`, `owner`, `predecessors`, `command`, `timeout`,
 `inputs`, `expectedArtifacts`, `passCriteria`, `cleanup`, `rerunPolicy`.
 
-| ID | Владелец | Exact command | PASS |
-|---|---|---|---|
-| `G00_PREFLIGHT` | Platform | `pnpm launch:verify:preflight` | clean SHA; accepted GitHub PR/handoffs #14/#19/#2–#12/#16–#18/#60/#61/#62/#63/#64; authority repo exact; no legacy DB target |
-| `G01_INSTALL` | Platform | `pnpm install --frozen-lockfile` | lock unchanged; no lifecycle/network surprise outside allowlist |
-| `G02_GENERATED` | Contracts | `pnpm contracts:check-generated` | generated tree byte-equal, no drift |
-| `G03_STATIC` | Platform | `pnpm format:check && pnpm lint && pnpm typecheck` | все exit 0, warnings budget 0 |
-| `G04_UNIT` | Domain owners | `pnpm test:unit -- --coverage` | exit 0; changed critical modules meet declared thresholds |
-| `G05_CONTRACTS` | Contracts | `pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test` | positive/negative fixtures pass, no unapproved breaking change |
-| `G06_ARCHITECTURE` | Architecture | `pnpm architecture:check` | all GREEN pass; every RED fails with source/target/rule |
-| `G07_CONFIG_SECURITY` | Security | `pnpm versions:check && pnpm config:check && pnpm security:secrets` | exact pins/SOPS/scopes/redaction; zero plaintext/canary leak |
-| `G08_MIGRATIONS` | DB owners | `pnpm test:migrations:clean && pnpm test:migrations:forward` | five empty DBs reach exact schema; rerun no-op; legacy unchanged |
-| `G09_DB_BOUNDARIES` | DB owners | `pnpm db:smoke` | allowlisted operations pass; every cross-owner access denied |
-| `G10_INTEGRATION` | Service owners | `pnpm test:integration` | HTTP/DB/Kafka/idempotency/concurrency suites pass |
-| `G11_RECOVERY` | Reliability | `pnpm test:recovery` | duplicate/crash/replay/rebalance/lease/fence/reservation matrix pass |
-| `G12_SUPPLY_CHAIN` | Security | `pnpm security:scan` | SBOM/provenance produced; zero critical/high exploitable finding |
-| `G13_COMPOSE` | Platform | `pnpm test:compose-smoke` | all runtimes ready, dependency failure/graceful stop pass |
-| `G14_OBSERVABILITY` | Operations | `pnpm test:observability` | health/metrics/traces/correlation/alerts/redaction pass |
-| `G15_BROWSER` | Frontend | `pnpm test:playwright` | Chromium critical/accessibility/deep-link/conflict/realtime pass |
-| `G16_AROMA_SANDBOX` | Integration+Reliability | `pnpm test:aroma-sandbox -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"` | controlled GET→≤1 mutation→GET/lost-response/recovery/restore pass |
-| `G17_BACKUP_RESTORE` | DB owners | `pnpm test:backup-restore` | five dumps restored into new DBs; schema/data/invariants match |
-| `G18_ROLLBACK` | Operations | `pnpm test:mutation-disable-rollback` | mutation off, observer/Orders/recovery remain healthy, no state loss |
-| `G19_REPORT` | Release owner | `pnpm launch:verify:report` | Russian report, checksums, defects and deterministic decision valid |
+| ID                    | Владелец                | Exact command                                                                      | PASS                                                                                                                         |
+| --------------------- | ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `G00_PREFLIGHT`       | Platform                | `pnpm launch:verify:preflight`                                                     | clean SHA; accepted GitHub PR/handoffs #14/#19/#2–#12/#16–#18/#60/#61/#62/#63/#64; authority repo exact; no legacy DB target |
+| `G01_INSTALL`         | Platform                | `pnpm install --frozen-lockfile`                                                   | lock unchanged; no lifecycle/network surprise outside allowlist                                                              |
+| `G02_GENERATED`       | Contracts               | `pnpm contracts:check-generated`                                                   | generated tree byte-equal, no drift                                                                                          |
+| `G03_STATIC`          | Platform                | `pnpm format:check && pnpm lint && pnpm typecheck`                                 | все exit 0, warnings budget 0                                                                                                |
+| `G04_UNIT`            | Domain owners           | `pnpm test:unit -- --coverage`                                                     | exit 0; changed critical modules meet declared thresholds                                                                    |
+| `G05_CONTRACTS`       | Contracts               | `pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test` | positive/negative fixtures pass, no unapproved breaking change                                                               |
+| `G06_ARCHITECTURE`    | Architecture            | `pnpm architecture:check`                                                          | all GREEN pass; every RED fails with source/target/rule                                                                      |
+| `G07_CONFIG_SECURITY` | Security                | `pnpm versions:check && pnpm config:check && pnpm security:secrets`                | exact pins/SOPS/scopes/redaction; zero plaintext/canary leak                                                                 |
+| `G08_MIGRATIONS`      | DB owners               | `pnpm test:migrations:clean && pnpm test:migrations:forward`                       | five empty DBs reach exact schema; rerun no-op; legacy unchanged                                                             |
+| `G09_DB_BOUNDARIES`   | DB owners               | `pnpm db:smoke`                                                                    | allowlisted operations pass; every cross-owner access denied                                                                 |
+| `G10_INTEGRATION`     | Service owners          | `pnpm test:integration`                                                            | HTTP/DB/Kafka/idempotency/concurrency suites pass                                                                            |
+| `G11_RECOVERY`        | Reliability             | `pnpm test:recovery`                                                               | duplicate/crash/replay/rebalance/lease/fence/reservation matrix pass                                                         |
+| `G12_SUPPLY_CHAIN`    | Security                | `pnpm security:scan`                                                               | SBOM/provenance produced; zero critical/high exploitable finding                                                             |
+| `G13_COMPOSE`         | Platform                | `pnpm test:compose-smoke`                                                          | all runtimes ready, dependency failure/graceful stop pass                                                                    |
+| `G14_OBSERVABILITY`   | Operations              | `pnpm test:observability`                                                          | health/metrics/traces/correlation/alerts/redaction pass                                                                      |
+| `G15_BROWSER`         | Frontend                | `pnpm test:playwright`                                                             | Chromium critical/accessibility/deep-link/conflict/realtime pass                                                             |
+| `G16_AROMA_SANDBOX`   | Integration+Reliability | `pnpm test:aroma-sandbox -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"`        | controlled GET→≤1 mutation→GET/lost-response/recovery/restore pass                                                           |
+| `G17_BACKUP_RESTORE`  | DB owners               | `pnpm test:backup-restore`                                                         | five dumps restored into new DBs; schema/data/invariants match                                                               |
+| `G18_ROLLBACK`        | Operations              | `pnpm test:mutation-disable-rollback`                                              | mutation off, observer/Orders/recovery remain healthy, no state loss                                                         |
+| `G19_REPORT`          | Release owner           | `pnpm launch:verify:report`                                                        | Russian report, checksums, defects and deterministic decision valid                                                          |
 
 Порядок обязателен: G00→G01→G02→G03; затем G04–G12; G13; G14–G18; G19.
 Gate не запускается при failed predecessor, кроме G19: отчёт с решением

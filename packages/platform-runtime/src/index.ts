@@ -1,9 +1,19 @@
 import { readFile, stat } from "node:fs/promises";
-import { monitorEventLoopDelay, PerformanceObserver, performance as nodePerformance } from "node:perf_hooks";
+import {
+  monitorEventLoopDelay,
+  PerformanceObserver,
+  performance as nodePerformance,
+} from "node:perf_hooks";
 import type { Socket } from "node:net";
-import {TLSSocket} from "node:tls";
+import { TLSSocket } from "node:tls";
 import { Temporal } from "@js-temporal/polyfill";
-import { context as otelContext, SpanKind, SpanStatusCode, trace, type Span } from "@opentelemetry/api";
+import {
+  context as otelContext,
+  SpanKind,
+  SpanStatusCode,
+  trace,
+  type Span,
+} from "@opentelemetry/api";
 import {
   loadPlatformConfig,
   type HealthConfig,
@@ -38,7 +48,7 @@ import {
   type ServiceTransportMaterial,
   type TransportIdentity,
 } from "@coffee-platform/security";
-import type {TransportMode} from "@coffee-platform/config";
+import type { TransportMode } from "@coffee-platform/config";
 import Fastify, {
   type FastifyBaseLogger,
   type FastifyInstance,
@@ -112,7 +122,15 @@ export type RuntimeIdentity = RuntimeComposition &
   }>;
 
 const runtimeRequestStarts = new WeakMap<Span, number>();
-const RUNTIME_HTTP_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
+const RUNTIME_HTTP_METHODS = new Set([
+  "GET",
+  "HEAD",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "OPTIONS",
+]);
 
 export function completeRuntimeRequestTelemetry(
   request: Pick<FastifyRequest, "runtimeSpan" | "method" | "routeOptions">,
@@ -121,17 +139,32 @@ export function completeRuntimeRequestTelemetry(
 ): void {
   const span = request.runtimeSpan;
   if (span === null) return;
-  if (statusCode !== undefined) span.setAttribute("http.response.status_code", statusCode);
-  if (outcome !== "completed" || (statusCode !== undefined && Number.isInteger(statusCode) && statusCode >= 500 && statusCode <= 599))
-    span.setStatus({code: SpanStatusCode.ERROR});
+  if (statusCode !== undefined)
+    span.setAttribute("http.response.status_code", statusCode);
+  if (
+    outcome !== "completed" ||
+    (statusCode !== undefined &&
+      Number.isInteger(statusCode) &&
+      statusCode >= 500 &&
+      statusCode <= 599)
+  )
+    span.setStatus({ code: SpanStatusCode.ERROR });
   span.setAttribute("outcome", outcome);
   const startedAt = runtimeRequestStarts.get(span);
   runtimeRequestStarts.delete(span);
   if (startedAt !== undefined) {
     const attributes = {
-      "http.request.method": RUNTIME_HTTP_METHODS.has(request.method) ? request.method : "_OTHER",
+      "http.request.method": RUNTIME_HTTP_METHODS.has(request.method)
+        ? request.method
+        : "_OTHER",
       "http.route": request.routeOptions.url ?? "unknown",
-      "http.response.status_class": statusCode !== undefined && Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599 ? `${Math.floor(statusCode / 100)}xx` : "other",
+      "http.response.status_class":
+        statusCode !== undefined &&
+        Number.isInteger(statusCode) &&
+        statusCode >= 100 &&
+        statusCode <= 599
+          ? `${Math.floor(statusCode / 100)}xx`
+          : "other",
       outcome,
     };
     recordRuntimeHttpRequest(nodePerformance.now() - startedAt, attributes);
@@ -180,30 +213,74 @@ function secretRecord(value: unknown): value is Record<string, unknown> {
 
 function secretAt(document: ScopedSecretDocument, ref: string): unknown {
   let value: unknown = document.secrets;
-  for (const segment of ref.split(".")) value = secretRecord(value) ? value[segment] : undefined;
+  for (const segment of ref.split("."))
+    value = secretRecord(value) ? value[segment] : undefined;
   return value;
 }
 
-function transportMaterial(document: ScopedSecretDocument, refs: readonly string[], optionalRefs: readonly string[], environment: string, runtime: RuntimeName, mode: TransportMode, publicHostname?: string): RuntimeTransport {
-  const refsForTransport = refs.filter((ref) => ref === `security.serviceTransportKeys.${runtime}`);
+function transportMaterial(
+  document: ScopedSecretDocument,
+  refs: readonly string[],
+  optionalRefs: readonly string[],
+  environment: string,
+  runtime: RuntimeName,
+  mode: TransportMode,
+  publicHostname?: string,
+): RuntimeTransport {
+  const refsForTransport = refs.filter(
+    (ref) => ref === `security.serviceTransportKeys.${runtime}`,
+  );
   const ref = refsForTransport[0];
-  if (refsForTransport.length !== 1 || ref === undefined) return {environment, runtime, mode, setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE"};
+  if (refsForTransport.length !== 1 || ref === undefined)
+    return {
+      environment,
+      runtime,
+      mode,
+      setupError: "RUNTIME_TRANSPORT_SECRET_SCOPE",
+    };
   try {
-    const material = parseServiceTransportMaterial(secretAt(document, ref), environment, runtime);
-    if (mode !== "public-tls") return {environment, runtime, mode, material};
-    if (publicHostname === undefined || refs.filter((value) => value === "edge.tlsPrivateKey").length !== 1 || refs.filter((value) => value === "edge.tlsCertificate").length !== 1) {
-      return {environment, runtime, mode, material, setupError: "RUNTIME_PUBLIC_TLS_SECRET_SCOPE"};
+    const material = parseServiceTransportMaterial(
+      secretAt(document, ref),
+      environment,
+      runtime,
+    );
+    if (mode !== "public-tls") return { environment, runtime, mode, material };
+    if (
+      publicHostname === undefined ||
+      refs.filter((value) => value === "edge.tlsPrivateKey").length !== 1 ||
+      refs.filter((value) => value === "edge.tlsCertificate").length !== 1
+    ) {
+      return {
+        environment,
+        runtime,
+        mode,
+        material,
+        setupError: "RUNTIME_PUBLIC_TLS_SECRET_SCOPE",
+      };
     }
-    const publicCaPem = optionalRefs.includes("edge.tlsCaBundle") ? secretAt(document, "edge.tlsCaBundle") : undefined;
+    const publicCaPem = optionalRefs.includes("edge.tlsCaBundle")
+      ? secretAt(document, "edge.tlsCaBundle")
+      : undefined;
     return {
       environment,
       runtime,
       mode,
       material,
-      publicTls: parsePublicTlsMaterial(secretAt(document, "edge.tlsPrivateKey"), secretAt(document, "edge.tlsCertificate"), publicHostname, publicCaPem),
+      publicTls: parsePublicTlsMaterial(
+        secretAt(document, "edge.tlsPrivateKey"),
+        secretAt(document, "edge.tlsCertificate"),
+        publicHostname,
+        publicCaPem,
+      ),
     };
   } catch (error) {
-    return {environment, runtime, mode, setupError: error instanceof Error ? error.name : "TransportValidationError"};
+    return {
+      environment,
+      runtime,
+      mode,
+      setupError:
+        error instanceof Error ? error.name : "TransportValidationError",
+    };
   }
 }
 
@@ -257,16 +334,22 @@ function ownKafkaCredential(
     value = secretRecord(value) ? value[segment] : undefined;
   if (
     !secretRecord(value) ||
-    !["password,username", "caPem,password,username"].includes(Object.keys(value).sort().join(",")) ||
+    !["password,username", "caPem,password,username"].includes(
+      Object.keys(value).sort().join(","),
+    ) ||
     [value["username"], value["password"]].some(
       (field) => typeof field !== "string" || field.length === 0,
-    ) || (value["caPem"] !== undefined && (typeof value["caPem"] !== "string" || value["caPem"].length === 0))
+    ) ||
+    (value["caPem"] !== undefined &&
+      (typeof value["caPem"] !== "string" || value["caPem"].length === 0))
   )
     throw new RuntimeError("RUNTIME_KAFKA_SECRET_INVALID");
   return {
     username: value["username"] as string,
     password: value["password"] as string,
-    ...(value["caPem"] === undefined ? {} : {caPem: value["caPem"] as string}),
+    ...(value["caPem"] === undefined
+      ? {}
+      : { caPem: value["caPem"] as string }),
   };
 }
 
@@ -290,10 +373,22 @@ function appendOwnedComposition(
   }
   return {
     ...composition,
-    configure: (app: FastifyInstance, signal: AbortSignal, ownedDatabase?: Database, ownedKafka?: KafkaRuntime, ownedContext?: RuntimeCompositionContext) => {
+    configure: (
+      app: FastifyInstance,
+      signal: AbortSignal,
+      ownedDatabase?: Database,
+      ownedKafka?: KafkaRuntime,
+      ownedContext?: RuntimeCompositionContext,
+    ) => {
       if (kafka)
         void kafka.whenFailed.then(() => app.runtimeController.closeRuntime());
-      return composition.configure?.(app, signal, database ?? ownedDatabase, kafka ?? ownedKafka, context ?? ownedContext);
+      return composition.configure?.(
+        app,
+        signal,
+        database ?? ownedDatabase,
+        kafka ?? ownedKafka,
+        context ?? ownedContext,
+      );
     },
     resources: [
       ...owned.map((owner) => owner.resource),
@@ -417,25 +512,33 @@ export async function createRuntime(
   const sockets = new Set<Socket>();
   const requests = new Set<AbortController>();
   const handlers = new Set<Promise<unknown>>();
-  const requestCleanup = new WeakMap<FastifyRequest, (outcome?: "completed" | "deadline_exceeded" | "client_aborted") => void>();
+  const requestCleanup = new WeakMap<
+    FastifyRequest,
+    (outcome?: "completed" | "deadline_exceeded" | "client_aborted") => void
+  >();
   const pending = new Set<string>();
-  const eventLoopDelay = monitorEventLoopDelay({resolution: 20});
+  const eventLoopDelay = monitorEventLoopDelay({ resolution: 20 });
   eventLoopDelay.enable();
   let gcPauseCount = 0;
   let gcPauseTotalMs = 0;
-  const gcObserver = new PerformanceObserver(list => {
+  const gcObserver = new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       gcPauseCount += 1;
       gcPauseTotalMs += entry.duration;
     }
   });
-  gcObserver.observe({entryTypes: ["gc"]});
+  gcObserver.observe({ entryTypes: ["gc"] });
   let previousEventLoopUtilization = nodePerformance.eventLoopUtilization();
   const runtimeMetrics = (): readonly string[] => {
-    const utilization = nodePerformance.eventLoopUtilization(previousEventLoopUtilization);
+    const utilization = nodePerformance.eventLoopUtilization(
+      previousEventLoopUtilization,
+    );
     previousEventLoopUtilization = nodePerformance.eventLoopUtilization();
     const memory = process.memoryUsage();
-    const delayMs = (percentile: number): number => eventLoopDelay.count === 0 ? 0 : Number((eventLoopDelay.percentile(percentile) / 1e6).toFixed(3));
+    const delayMs = (percentile: number): number =>
+      eventLoopDelay.count === 0
+        ? 0
+        : Number((eventLoopDelay.percentile(percentile) / 1e6).toFixed(3));
     const lines = [
       `runtime_event_loop_utilization ${Number(utilization.utilization.toFixed(6))}`,
       `runtime_event_loop_delay_p50_ms ${delayMs(50)}`,
@@ -459,32 +562,63 @@ export async function createRuntime(
   let transportError: string | undefined;
   if (identity.transport !== undefined) {
     transportError = identity.transport.setupError;
-    if (transportError === undefined && identity.transport.material === undefined) transportError = "RUNTIME_TRANSPORT_MATERIAL_MISSING";
-    if (transportError === undefined && identity.transport.mode === "public-tls" && identity.transport.publicTls === undefined) transportError = "RUNTIME_PUBLIC_TLS_MATERIAL_MISSING";
+    if (
+      transportError === undefined &&
+      identity.transport.material === undefined
+    )
+      transportError = "RUNTIME_TRANSPORT_MATERIAL_MISSING";
+    if (
+      transportError === undefined &&
+      identity.transport.mode === "public-tls" &&
+      identity.transport.publicTls === undefined
+    )
+      transportError = "RUNTIME_PUBLIC_TLS_MATERIAL_MISSING";
   }
-  const httpsOptions = identity.transport?.mode === "mtls"
-    ? identity.transport.material === undefined ? undefined : createMutualTlsServerOptions(identity.transport.material)
-    : identity.transport?.mode === "public-tls"
-      ? identity.transport.publicTls === undefined ? undefined : createPublicTlsServerOptions(identity.transport.publicTls)
-      : undefined;
-  const loggerInstance = createPinoLogger({runtime: identity.name, ...(identity.releaseDigest === undefined ? {} : {releaseDigest: identity.releaseDigest})}, identity.telemetryLogRecordBytes, undefined, identity.telemetryLogQueueCapacity, identity.telemetryLogDiagnosticIntervalMs);
+  const httpsOptions =
+    identity.transport?.mode === "mtls"
+      ? identity.transport.material === undefined
+        ? undefined
+        : createMutualTlsServerOptions(identity.transport.material)
+      : identity.transport?.mode === "public-tls"
+        ? identity.transport.publicTls === undefined
+          ? undefined
+          : createPublicTlsServerOptions(identity.transport.publicTls)
+        : undefined;
+  const loggerInstance = createPinoLogger(
+    {
+      runtime: identity.name,
+      ...(identity.releaseDigest === undefined
+        ? {}
+        : { releaseDigest: identity.releaseDigest }),
+    },
+    identity.telemetryLogRecordBytes,
+    undefined,
+    identity.telemetryLogQueueCapacity,
+    identity.telemetryLogDiagnosticIntervalMs,
+  );
   const app = Fastify({
     // Admission ниже сохраняет live/ready для уже принятого transport во время drain.
     return503OnClosing: false,
     ...(identity.bodyLimitBytes === undefined
       ? {}
       : { bodyLimit: identity.bodyLimitBytes }),
-    ...(httpsOptions === undefined
-      ? {}
-      : {https: httpsOptions}),
+    ...(httpsOptions === undefined ? {} : { https: httpsOptions }),
     loggerInstance: loggerInstance as unknown as FastifyBaseLogger,
-    childLoggerFactory: (logger, bindings, options, request) => logger.child({
-      ...bindings,
-      ...withCorrelationFields(createCorrelationContext(
-        request.headers,
-        typeof bindings["reqId"] === "string" ? bindings["reqId"] : undefined,
-      )),
-    }, options),
+    childLoggerFactory: (logger, bindings, options, request) =>
+      logger.child(
+        {
+          ...bindings,
+          ...withCorrelationFields(
+            createCorrelationContext(
+              request.headers,
+              typeof bindings["reqId"] === "string"
+                ? bindings["reqId"]
+                : undefined,
+            ),
+          ),
+        },
+        options,
+      ),
     genReqId: (request) =>
       createCorrelationContext(request.headers).correlationId,
   });
@@ -582,7 +716,11 @@ export async function createRuntime(
         },
         "runtime shutdown finished",
       );
-      try { loggerInstance.flush(); } catch { /* Shutdown logging is best effort and must not delay callers. */ }
+      try {
+        loggerInstance.flush();
+      } catch {
+        /* Shutdown logging is best effort and must not delay callers. */
+      }
       const result: RuntimeShutdownResult = { status, pending: unfinished };
       stopped.resolve(result);
       return result;
@@ -609,7 +747,10 @@ export async function createRuntime(
             signal.throwIfAborted();
             await identity.configure?.(app, signal);
             signal.throwIfAborted();
-            if (transportError !== undefined) throw new RuntimeError(`RUNTIME_TRANSPORT_NOT_CONFIGURED:${transportError}`);
+            if (transportError !== undefined)
+              throw new RuntimeError(
+                `RUNTIME_TRANSPORT_NOT_CONFIGURED:${transportError}`,
+              );
             await app.listen({ host: identity.host, port: identity.port });
             signal.throwIfAborted();
             for (const resource of resources) {
@@ -663,7 +804,8 @@ export async function createRuntime(
       handlers.add(work);
       return work.finally(() => {
         handlers.delete(work);
-        if (reply.raw.destroyed) requestCleanup.get(request)?.("client_aborted");
+        if (reply.raw.destroyed)
+          requestCleanup.get(request)?.("client_aborted");
       });
     };
   });
@@ -675,22 +817,43 @@ export async function createRuntime(
     if (correlation.traceparent !== undefined) {
       const [, traceId, spanId, flags] = correlation.traceparent.split("-");
       if (traceId !== undefined && spanId !== undefined && flags !== undefined)
-        parent = trace.setSpanContext(parent, {traceId, spanId, traceFlags: Number.parseInt(flags, 16), isRemote: true});
+        parent = trace.setSpanContext(parent, {
+          traceId,
+          spanId,
+          traceFlags: Number.parseInt(flags, 16),
+          isRemote: true,
+        });
     }
-    const method = RUNTIME_HTTP_METHODS.has(request.method) ? request.method : "_OTHER";
-    const span = trace.getTracer("coffee-platform.runtime").startSpan(`HTTP ${method}`, {
-      kind: SpanKind.SERVER,
-      attributes: {"http.request.method": method, "http.route": request.routeOptions.url ?? "unknown"},
-    }, parent);
+    const method = RUNTIME_HTTP_METHODS.has(request.method)
+      ? request.method
+      : "_OTHER";
+    const span = trace.getTracer("coffee-platform.runtime").startSpan(
+      `HTTP ${method}`,
+      {
+        kind: SpanKind.SERVER,
+        attributes: {
+          "http.request.method": method,
+          "http.route": request.routeOptions.url ?? "unknown",
+        },
+      },
+      parent,
+    );
     request.runtimeSpan = span;
     runtimeRequestStarts.set(span, nodePerformance.now());
     const active = trace.setSpan(parent, span);
     let transportIdentity: TransportIdentity | null = null;
-    if (identity.transport?.mode === "mtls" && identity.transport.material !== undefined) {
+    if (
+      identity.transport?.mode === "mtls" &&
+      identity.transport.material !== undefined
+    ) {
       const socket = request.raw.socket;
       try {
-        if (!(socket instanceof TLSSocket) || !socket.authorized) throw new Error("unauthorized TLS peer");
-        transportIdentity = verifyTransportPeer(socket.getPeerCertificate(), identity.transport.environment);
+        if (!(socket instanceof TLSSocket) || !socket.authorized)
+          throw new Error("unauthorized TLS peer");
+        transportIdentity = verifyTransportPeer(
+          socket.getPeerCertificate(),
+          identity.transport.environment,
+        );
       } catch {
         void reply.code(401).send();
         return;
@@ -707,7 +870,11 @@ export async function createRuntime(
         requests.size >= (identity.concurrency ?? Infinity))
     ) {
       admissionRejected += 1;
-      if (phase === "running" && identity.admissionResponse?.(request, reply) === true) return;
+      if (
+        phase === "running" &&
+        identity.admissionResponse?.(request, reply) === true
+      )
+        return;
       void reply.code(503).send();
       return;
     }
@@ -720,8 +887,16 @@ export async function createRuntime(
         ? deadlineMs
         : (identity.deadlineProfiles?.[profile] ?? null);
     let accepted = false;
-    const cleanup = (outcome: "completed" | "deadline_exceeded" | "client_aborted" = "completed"): void => {
-      if (!reply.raw.writableFinished) completeRuntimeRequestTelemetry(request, reply.raw.headersSent ? reply.statusCode : undefined, outcome);
+    const cleanup = (
+      outcome:
+        "completed" | "deadline_exceeded" | "client_aborted" = "completed",
+    ): void => {
+      if (!reply.raw.writableFinished)
+        completeRuntimeRequestTelemetry(
+          request,
+          reply.raw.headersSent ? reply.statusCode : undefined,
+          outcome,
+        );
       clearTimeout(timer);
       requests.delete(abort);
       requestCleanup.delete(request);
@@ -817,7 +992,7 @@ export async function createRuntime(
               event: "runtime.readiness.failed",
               dependency: dependency.name,
               reason: errorName(error),
-              ...(error instanceof RuntimeError ? {code: error.code} : {}),
+              ...(error instanceof RuntimeError ? { code: error.code } : {}),
             },
             "runtime readiness failed",
           );
@@ -959,7 +1134,8 @@ export function configuredRuntimeIdentity(
   composition: RuntimeComposition = {},
 ): RuntimeIdentity {
   const runtime = config.services[name];
-  const shutdownGraceMs = runtime.realtime?.shutdownGraceMs ?? config.platform["shutdownGraceMs"];
+  const shutdownGraceMs =
+    runtime.realtime?.shutdownGraceMs ?? config.platform["shutdownGraceMs"];
   const bodyLimitBytes = config.platform["bodyLimitBytes"];
   if (typeof shutdownGraceMs !== "number" || typeof bodyLimitBytes !== "number")
     throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
@@ -976,7 +1152,8 @@ export function configuredRuntimeIdentity(
     bodyLimitBytes,
     telemetryLogRecordBytes: config.telemetry.producer.maxRecordBytes,
     telemetryLogQueueCapacity: config.telemetry.producer.queueCapacity,
-    telemetryLogDiagnosticIntervalMs: config.telemetry.producer.diagnosticIntervalMs,
+    telemetryLogDiagnosticIntervalMs:
+      config.telemetry.producer.diagnosticIntervalMs,
     releaseDigest: config.telemetry.releaseDigest,
     requiredDependencies: [
       ...(runtime.database === null ? [] : ["database"]),
@@ -1023,14 +1200,25 @@ export async function startConfiguredRuntime(
     config.services[name].secretRefs,
   );
   const service = config.services[name];
-  const shutdownGraceMs = service.realtime?.shutdownGraceMs ?? config.platform["shutdownGraceMs"];
+  const shutdownGraceMs =
+    service.realtime?.shutdownGraceMs ?? config.platform["shutdownGraceMs"];
   if (typeof shutdownGraceMs !== "number")
     throw new RuntimeError("RUNTIME_INVALID_PLATFORM_CONFIG");
   let database: Database | undefined;
   let kafka: KafkaRuntime | undefined;
   let transport: RuntimeTransport | undefined;
   try {
-    transport = transportMaterial(secretDocument as ScopedSecretDocument, service.secretRefs, service.optionalSecretRefs, config.environment, name, service.transportMode, service.transportMode === "public-tls" ? publicHostname(config) : undefined);
+    transport = transportMaterial(
+      secretDocument as ScopedSecretDocument,
+      service.secretRefs,
+      service.optionalSecretRefs,
+      config.environment,
+      name,
+      service.transportMode,
+      service.transportMode === "public-tls"
+        ? publicHostname(config)
+        : undefined,
+    );
     if (service.database !== null) {
       if (service.dbPool === null)
         throw new RuntimeError("RUNTIME_DATABASE_CONFIG_MISMATCH");
@@ -1066,24 +1254,39 @@ export async function startConfiguredRuntime(
         ),
       });
     }
-    const exporterToken = secretAt(secretDocument as ScopedSecretDocument, "telemetry.exporterToken");
-    if (typeof exporterToken !== "string" || exporterToken.length === 0 || !service.secretRefs.includes("telemetry.exporterToken"))
+    const exporterToken = secretAt(
+      secretDocument as ScopedSecretDocument,
+      "telemetry.exporterToken",
+    );
+    if (
+      typeof exporterToken !== "string" ||
+      exporterToken.length === 0 ||
+      !service.secretRefs.includes("telemetry.exporterToken")
+    )
       throw new RuntimeError("RUNTIME_TELEMETRY_SECRET_SCOPE");
-    const telemetry = createTelemetryResource({...config.telemetry, environment: config.environment}, name, exporterToken, () => composition.metrics?.() ?? []);
-    const ownedComposition = appendOwnedComposition(composition, database, kafka, {
-      config,
-      secrets: (secretDocument as ScopedSecretDocument).secrets,
-    });
+    const telemetry = createTelemetryResource(
+      { ...config.telemetry, environment: config.environment },
+      name,
+      exporterToken,
+      () => composition.metrics?.() ?? [],
+    );
+    const ownedComposition = appendOwnedComposition(
+      composition,
+      database,
+      kafka,
+      {
+        config,
+        secrets: (secretDocument as ScopedSecretDocument).secrets,
+      },
+    );
     const telemetryComposition: RuntimeComposition = {
       ...ownedComposition,
       resources: [telemetry, ...(ownedComposition.resources ?? [])],
     };
-    return await startRuntime(
-      {
-        ...configuredRuntimeIdentity(config, name, telemetryComposition),
-        transport,
-      },
-    );
+    return await startRuntime({
+      ...configuredRuntimeIdentity(config, name, telemetryComposition),
+      transport,
+    });
   } catch (error) {
     kafka?.resource.destroy();
     database?.resource.destroy();
