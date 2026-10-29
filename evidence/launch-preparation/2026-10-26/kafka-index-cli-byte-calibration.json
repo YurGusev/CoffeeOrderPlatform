@@ -1,0 +1,12 @@
+{
+  "capturedAtUtc": "2026-10-26T09:38:55.809956+00:00",
+  "scope": "Read-only public Kafka index byte calibration; no gate PASS",
+  "exitCode": 0,
+  "sourceRef": "apache/kafka:4.3.2@sha256:852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7",
+  "bytes": 1609,
+  "sha256": "852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7",
+  "matchesPinnedDigest": true,
+  "trailingNewline": false,
+  "trimmedSha256": "852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7",
+  "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

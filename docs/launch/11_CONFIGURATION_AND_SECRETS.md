@@ -85,6 +85,24 @@ allowlist. Отсутствующее значение не берётся из 
 Перед provisioning и ротацией следовать этому порядку; единственный ключ в `/tmp`
 не является постоянным хранилищем.
 
+### Изоляция verification DB
+
+По [ADR-0036](../adr/ADR-0036-launch-database-isolation.md) единственный YAML
+сохраняет canonical DB names и disabled-by-default
+`verification.databaseIsolation.enabled: false`. Явно включённый verification
+candidate вне production вычисляет пять run-scoped имён из canonical ownership
+и проверенных run-id/candidate SHA. Context не передаёт готовые DB names, grants
+или credentials. Runtime получает только locator `COFFEE_LAUNCH_CONTEXT_FILE`
+read-only regular файла metadata, проверяет base config SHA-256 и policy до DB
+connect. Compose монтирует этот файл readonly только для такого candidate.
+Отсутствующий context при enabled policy, context при disabled policy, symlink,
+writable файл, неправильный SHA/owner и production завершаются ошибкой.
+
+G18 хранит base и фактический config digest раздельно: только отключённый
+`aroma-convergence` допускает единственную config-only замену ADR-0035.
+Остальные runtime и восстановленный R обязаны использовать исходные байты B.
+Этот metadata locator не является третьим источником настроек или секретов.
+
 ## 3. Структура `secrets/platform.secrets.sops.yaml`
 
 До шифрования логическая схема имеет следующий вид; в Git каждое значение
@@ -367,3 +385,15 @@ encrypted paths и public metadata, но не plaintext. Проверяются 
 overlap, restart всех затронутых runtime, rollback и audit record.
 Компрометация общего файла считается компрометацией всех environments и требует
 полной ротации; это осознанная цена требования «один файл».
+
+## 8. Verification backup G17
+
+Владелец 24 октября 2026 разрешил существующему trusted bootstrap использовать
+закреплённый age 1.3.2, public recipients из `.sops.yaml` и документированный age
+identity locator для backup/restore только пяти run-scoped verification DB.
+Точный scope:
+[принятое предложение G17](../../evidence/launch-preparation/2026-10-24/remaining-gates-authority-proposal.md).
+Dump шифруется потоком, restore получает plaintext только через pipe. Ciphertext
+и hashes сохраняются в evidence; runtime не получает age key, общий decrypted
+bundle или новый secret scope. Отдельная bootstrap operation сначала проверяет
+run/SHA/server/owner/source/restore targets и запрещает production/legacy.

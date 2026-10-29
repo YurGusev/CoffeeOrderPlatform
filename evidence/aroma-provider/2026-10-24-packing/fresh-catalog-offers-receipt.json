@@ -1,0 +1,89 @@
+{
+  "purpose": "bounded fresh read-only catalog lookup for historical Aroma packing candidates",
+  "accountFingerprintVerified": true,
+  "providerCalls": {
+    "login": 1,
+    "catalogPage": 10
+  },
+  "pageSize": 10,
+  "maxPages": 10,
+  "pagesRead": 10,
+  "offers": [
+    {
+      "page": 6,
+      "providerOfferId": "445",
+      "categorySlugs": [
+        "espresso-smesi"
+      ],
+      "weight": "1000",
+      "grindOptionsSummary": {
+        "isGrinded": false,
+        "grindParamSlugs": []
+      },
+      "explicitPackingFieldPresent": false
+    },
+    {
+      "page": 6,
+      "providerOfferId": "447",
+      "categorySlugs": [
+        "espresso-smesi"
+      ],
+      "weight": "1000",
+      "grindOptionsSummary": {
+        "isGrinded": true,
+        "grindParamSlugs": []
+      },
+      "explicitPackingFieldPresent": false
+    },
+    {
+      "page": 5,
+      "providerOfferId": "473",
+      "categorySlugs": [
+        "espresso-smesi"
+      ],
+      "weight": "1000",
+      "grindOptionsSummary": {
+        "isGrinded": false,
+        "grindParamSlugs": []
+      },
+      "explicitPackingFieldPresent": false
+    },
+    {
+      "page": 5,
+      "providerOfferId": "475",
+      "categorySlugs": [
+        "espresso-smesi"
+      ],
+      "weight": "1000",
+      "grindOptionsSummary": {
+        "isGrinded": true,
+        "grindParamSlugs": []
+      },
+      "explicitPackingFieldPresent": false
+    },
+    {
+      "page": 9,
+      "providerOfferId": "479",
+      "categorySlugs": [
+        "espresso-smesi"
+      ],
+      "weight": "1000",
+      "grindOptionsSummary": {
+        "isGrinded": true,
+        "grindParamSlugs": []
+      },
+      "explicitPackingFieldPresent": false
+    }
+  ],
+  "missingProviderOfferIds": [
+    "441",
+    "443",
+    "453",
+    "485",
+    "487"
+  ],
+  "failureCode": null,
+  "scopedMaterialRemoved": true,
+  "status": "LOOKUP_INCOMPLETE",
+  "observedAtUtc": "2026-10-24T11:03:35.587Z"
+}

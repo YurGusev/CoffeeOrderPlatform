@@ -1,0 +1,31 @@
+{
+  "kind": "test-only-source-acceptance",
+  "recordedAtUtc": "2026-10-26T23:14:02.526594+00:00",
+  "file": "tests/config/observability-bootstrap.test.mjs",
+  "beforeRootSha256": "1aee90982d56a50f3e2958f3e6ca66d5f01873eaf515430ddb79b7bbd1190ab2",
+  "afterRootSha256": "5082775cc2e5b13f3e701b6becceaa040d9c9e31e090053651c160e361223caf",
+  "ownPatchSha256": "715e8d0e815ec5395637c725d2433b4e8a9f62a80056aa8815e8ebb6cd922aab",
+  "foreignWorkPreserved": "Reverse application of own patch in temporary copy reproduces exact original shared Root hash; production unchanged",
+  "checks": {
+    "worker": "1/1PASS private flat846; format/typeawarelint/diff PASS",
+    "root": {
+      "command": [
+        "/home/yurgusev/.local/usr/bin/node",
+        "--experimental-strip-types",
+        "--test",
+        "--test-name-pattern=G15 child credentials reuse the unchanged parent G08 receipt only through exact OIDC lineage",
+        "tests/config/observability-bootstrap.test.mjs"
+      ],
+      "startedAtUtc": "2026-10-26T23:13:01.452855+00:00",
+      "finishedAtUtc": "2026-10-26T23:13:07.617267+00:00",
+      "exitCode": 0,
+      "logSha256": "ee87e272634a42d4846adce9d4ce12047c03b30bf2c62096ff74b767807a8b20",
+      "scope": "Root shared file own patch only; isolated lineage fixtures/fake readonly PG; foreign Tasty preserved"
+    },
+    "astra": "Accepted; trust refusals precede credential exposure; context restoration verified"
+  },
+  "limits": [
+    "Fake read-only PG client, no live database proof",
+    "FullG04 not repeated after test delta"
+  ]
+}

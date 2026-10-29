@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "kind": "G07_STANDALONE_OPERATOR_SUMMARY",
+  "status": "PASS_STANDALONE_NON_ADMISSION",
+  "runId": "20261026T211309Z-ca13aa4",
+  "candidateSha": "ca13aa4558decacf794a852d6c30f7d956c34994",
+  "candidateRoot": "/home/yurgusev/.cache/coffee-issue13/alpine-secret-output-candidate-20261026T204940Z",
+  "contextFile": "/home/yurgusev/CoffeeOrderPlatform/evidence/launch/20261026T211309Z-ca13aa4/context.json",
+  "commandResult": {
+    "command": [
+      "env",
+      "-u",
+      "SOPS_AGE_KEY_FILE",
+      "bash",
+      "-c",
+      "pnpm versions:check && pnpm config:check && pnpm security:secrets"
+    ],
+    "exitCode": 0,
+    "startedAtUtc": "2026-10-26T21:13:19.312051+00:00",
+    "finishedAtUtc": "2026-10-26T21:13:24.191468+00:00",
+    "runId": "20261026T211309Z-ca13aa4",
+    "candidateSha": "ca13aa4558decacf794a852d6c30f7d956c34994",
+    "watchdogSignalSent": false,
+    "watchdogTarget": {
+      "pid": 3412751,
+      "startTicks": "39567727"
+    },
+    "logPath": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/g07-secret-output-command.log",
+    "logSha256": "7fae0992443958dbd5da5c0cf5f626e54081f29f98346ca4f64d43f8fb41e4b9",
+    "scope": "Standalone diagnostic G07 config/security material; no ordered-run admission"
+  },
+  "scope": "Фактические versions:check, config:check, security:secrets; без расшифровки SOPS и без ordered-run admission.",
+  "limitations": [
+    "Runtime materialization, реальная расшифровка и deployment этими командами не проверяются.",
+    "Статусы других run/SHA не переносятся."
+  ]
+}

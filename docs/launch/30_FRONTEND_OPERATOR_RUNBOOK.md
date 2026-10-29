@@ -18,6 +18,19 @@ pnpm dev:browser
 `apps/edge-nginx/Dockerfile`. API, `/auth/*` и `/events` остаются same-origin через
 nginx; отдельный Node server для SPA не запускается.
 
+### Быстрый цикл разработки
+
+При уже установленных зависимостях запустите `pnpm dev:browser` из корня
+репозитория. После изменений общего пакета `@coffee-platform/ui` выполните
+`pnpm ui:build`: browser импортирует его из `dist`. Для проверки изменений в
+другом терминале используйте `pnpm test:ui` или `pnpm test:web-queries` по
+затронутой области и `pnpm typecheck` для TypeScript. Для backend существуют,
+например, `pnpm test:customer-unit` и `pnpm test:pricing-property`.
+
+Vite-конфигурация не содержит API proxy: один `dev:browser` не проверяет полную
+same-origin авторизацию и интеграцию с API. Для неё нужны nginx и соответствующие
+backend/fixture-проверки. Быстрый цикл не заменяет проверки перед поставкой из раздела 6 и launch gates.
+
 ## 2. Маршруты
 
 - `/` — HTTP redirect nginx на `/app/customers`;

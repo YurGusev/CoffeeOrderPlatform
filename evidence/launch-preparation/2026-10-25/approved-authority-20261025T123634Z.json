@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-10-25T12:36:34.617962+00:00",
+  "authority": "Explicit human reply in this conversation; authorizes the exact proposed scopes, not gate PASS",
+  "approvals": [
+    {
+      "gate": "G15",
+      "proposal": "evidence/launch-preparation/2026-10-25/g15-oidc-authority-proposal.md",
+      "proposalSha256": "f7172d7bbf77ded82d231f31b7be4202660ddcf0bdee82fda65e757855d700b9",
+      "explicitUserAnswer": "Разрешаю точный вариант B"
+    },
+    {
+      "gate": "G08",
+      "proposal": "evidence/launch-preparation/2026-10-25/g08-role-map-authority-proposal.md",
+      "proposalSha256": "3d636b68fe9ac7f152a7e9306525fc413c53a6cd5702256dc47bc03b17c3f5ed",
+      "explicitUserAnswer": "Разрешаю точный план G08"
+    },
+    {
+      "gate": "G12",
+      "proposal": "evidence/launch-preparation/2026-10-25/g12-security-patches-authority-proposal.md",
+      "proposalSha256": "bf7ead7443b78404baf78c561a697654de6170eac9359843fcef1078da424521",
+      "explicitUserAnswer": "Разрешаю точный patch-план G12"
+    }
+  ],
+  "limits": [
+    "No GitHub push/PR/issue mutation authorized for #13",
+    "No live AROMA/provider mutation or external IdP registration",
+    "No production login claim for G15 synthetic profile",
+    "Persistent server installation follows development/readiness and requires actual-state verification"
+  ]
+}

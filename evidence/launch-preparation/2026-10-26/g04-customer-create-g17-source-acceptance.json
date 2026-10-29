@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T18:53:46.118738+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "files": {
+    "tests/customer/customer-http.test.mjs": "4a9e193a6ecca3b20cfd77417a2338458937ebd1bed95a7b9378ea062aa90cab",
+    "verification/launch/v1/scenarios/backup-restore.test.mjs": "a9b6740ab0e56c5b2b0486ea1ef28bdaf032eb81734f4b97c4315877aca0cc26"
+  },
+  "scope": [
+    "Customer create secondcaller must reject wrongsuccess200 and invalid201DTO without replayheader/privatecanary; positive201 preserved.",
+    "G17 G00 serveridentity snapshot removed afterread fails before secretaccess; exactfixturebytes/mode and builtins restored."
+  ],
+  "checks": {
+    "worker": "Bothnarrow1/1+format/typeawarelint/diffPASS",
+    "rootIndependent": "Both1/1PASS;G174166.45ms",
+    "astra": "Acceptedboth"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/customer-public-forward-guard-20261026/root-independent.log": "4ee84d6dfced55863d9c4d4930c00649de7d8255b7f0d9e18ddf7a79cf401573",
+    "/home/yurgusev/.cache/coffee-issue13/customer-public-forward-guard-20261026/result.json": "c6a37cc1f3029dcedc50c1ca808d06bd60c8dd50b939da3b3bdfc172ac0c7b70",
+    "/home/yurgusev/.cache/coffee-issue13/g17-g00-toctou-20261026/root-independent.log": "4dab27b0414695f894d04e8343eac5754450ef8c91b685aefe6e76d976ca4e53",
+    "/home/yurgusev/.cache/coffee-issue13/g17-g00-toctou-20261026/receipt.json": "fa2813184f8035560f2cb67188a262f59f174218f50a63e20cc9d663f5eb1e3d"
+  },
+  "limitations": [
+    "Fake HTTP owner/controlledfilesystem/SOPS markerfixture; not actual network/PG/SOPS decryption or concurrentattack.",
+    "Not included in fullG04f330ccf."
+  ]
+}

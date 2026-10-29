@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-24T11:38:17.774054+00:00",
+  "userAuthorization": "Разрешаю этот probe и точный cleanup",
+  "technicalSetupCorrection": "Exclude only operator arming env from trusted bootstrap env. Same approved physical write budget; first setup had zero provider calls.",
+  "previousOperationId": "24efc3a4-b49e-4b6c-943d-905ec733a7a8",
+  "previousReceiptSha256": "b72d4164d8469df672f634a42ca10cd3ab503c5f5b807f99946c60546c7ffb00",
+  "previousMarkerPreserved": "packing-probe-24efc3a4-b49e-4b6c-943d-905ec733a7a8-pre-provider-failure.marker",
+  "operatorSha256": "64b37305ce8abe73201caea5c8c8a63f5cba51eced58dde4549031a95e4760e2",
+  "totalPostBudget": 1,
+  "totalDeleteBudget": 1,
+  "postBudgetUsed": 0,
+  "deleteBudgetUsed": 0
+}

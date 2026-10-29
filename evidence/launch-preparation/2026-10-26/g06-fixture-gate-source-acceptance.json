@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "kind": "SOURCE_TEST_ACCEPTANCE_NOT_GATE_ADMISSION",
+  "capturedAtUtc": "2026-10-26T22:07:17.112671+00:00",
+  "status": "ACCEPTED_SOURCE_ONLY",
+  "problem": "G06 architecture:check did not execute the required existing GREEN/RED fixture matrix; toolchain fixtures also omitted the workspace file consumed by the checker.",
+  "changes": [
+    {
+      "target": "package.json",
+      "path": "/home/yurgusev/.cache/coffee-issue13/g06-fixture-gate-connection-20261027/own.patch",
+      "sha256": "318f44ab34d6ca1533a553fb8148b25202efc9f325822fedcfd8a427c511ddea",
+      "resultSha256": "f2a4214a00bdee48dace33120abb699ac4e4258c8e443060dd5e5dc43c25886e"
+    },
+    {
+      "target": "tests/architecture/checks.test.mjs",
+      "path": "/home/yurgusev/.cache/coffee-issue13/g06-workspace-fixture-20261027/own.patch",
+      "sha256": "120ed302012a1c6894b3e74b047251dc3a7a72e1334df360fc3cbe12707bec11",
+      "resultSha256": "6a82f2ad9e68bb7df904e2c8d512353740572ab475ea4088bac87daa97f75f4c"
+    }
+  ],
+  "astraReview": "Accepted package command and one-line fixture input restoration; no source policy, graph, assertions or budget changes. Reviewer did not run checks.",
+  "beforeDiagnostic": {
+    "command": [
+      "env",
+      "-u",
+      "SOPS_AGE_KEY_FILE",
+      "/home/yurgusev/.local/usr/bin/node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-name-pattern=^(?:RED|GREEN: (?!canonical and single-threaded))",
+      "tests/architecture/checks.test.mjs"
+    ],
+    "exitCode": 1,
+    "startedAtUtc": "2026-10-26T21:52:52.211791+00:00",
+    "finishedAtUtc": "2026-10-26T21:53:28.334664+00:00",
+    "runId": "20261026T215241Z-08dd5da",
+    "candidateSha": "08dd5da26739bb571204686ebafcd8941e6029a1",
+    "watchdogSignalSent": false,
+    "watchdogTarget": {
+      "pid": 3445259,
+      "startTicks": "39805017"
+    },
+    "logPath": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/g06-source-binding-fixtures-command.log",
+    "logSha256": "991f55dead2e3c997a5e8b055556193bf72dac95facbfb4aabab8913a91a5bc3",
+    "scope": "Standalone supplemental G06 GREEN/RED fixture diagnostic; no ordered-run admission",
+    "testsSelected": 68,
+    "testsPassed": 62,
+    "testsFailed": 6,
+    "testsSkipped": 0,
+    "reason": "All six failures were missing pnpm-workspace.yaml from toolchainRoot fixture; full lint parity test deliberately not selected."
+  },
+  "afterAffectedDiagnostic": {
+    "command": [
+      "env",
+      "-u",
+      "SOPS_AGE_KEY_FILE",
+      "/home/yurgusev/.local/usr/bin/node",
+      "--test",
+      "--test-concurrency=1",
+      "--test-name-pattern=GREEN: exact TS7 toolchain|RED TS7-(?:BASELINE|BACKEND|FRONTEND|REFERENCES):|RED TOOLCHAIN-FINAL-IMAGE",
+      "tests/architecture/checks.test.mjs"
+    ],
+    "exitCode": 0,
+    "startedAtUtc": "2026-10-26T22:01:09.858770+00:00",
+    "finishedAtUtc": "2026-10-26T22:01:11.379104+00:00",
+    "runId": "20261026T220104Z-2b9da3b",
+    "candidateSha": "2b9da3bc882b437d2d066d15a1c5ec09b692ce18",
+    "watchdogSignalSent": false,
+    "watchdogTarget": {
+      "pid": 3453182,
+      "startTicks": "39854782"
+    },
+    "logPath": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/g06-architecture-affected-command.log",
+    "logSha256": "424f93e103302501737890fdc936fd47ef0b56ca10b6d47e80e5f249aee06b09",
+    "scope": "Standalone supplemental G06 six affected fixture checks after workspace fix; not full G06 or ordered-run admission",
+    "testsSelected": 6,
+    "testsPassed": 6,
+    "testsFailed": 0,
+    "testsSkipped": 0
+  },
+  "candidate": {
+    "candidateRoot": "/home/yurgusev/.cache/coffee-issue13/alpine-architecture-candidate-20261026T215956Z",
+    "candidateSha": "2b9da3bc882b437d2d066d15a1c5ec09b692ce18",
+    "baseSha": "08dd5da26739bb571204686ebafcd8941e6029a1",
+    "sourceRepoRoot": "/home/yurgusev/CoffeeOrderPlatform",
+    "localRef": "refs/verification/issue-13/2b9da3b",
+    "acceptedBaseCommit": "e6439599be85a5fc8b83d99293064e877a2ff012",
+    "paths": [
+      "package.json",
+      "tests/architecture/checks.test.mjs"
+    ],
+    "sourcePatches": [
+      {
+        "target": "package.json",
+        "path": "/home/yurgusev/.cache/coffee-issue13/g06-fixture-gate-connection-20261027/own.patch",
+        "sha256": "318f44ab34d6ca1533a553fb8148b25202efc9f325822fedcfd8a427c511ddea",
+        "resultSha256": "f2a4214a00bdee48dace33120abb699ac4e4258c8e443060dd5e5dc43c25886e"
+      },
+      {
+        "target": "tests/architecture/checks.test.mjs",
+        "path": "/home/yurgusev/.cache/coffee-issue13/g06-workspace-fixture-20261027/own.patch",
+        "sha256": "120ed302012a1c6894b3e74b047251dc3a7a72e1334df360fc3cbe12707bec11",
+        "resultSha256": "6a82f2ad9e68bb7df904e2c8d512353740572ab475ea4088bac87daa97f75f4c"
+      }
+    ],
+    "candidateFileHashes": {
+      "package.json": "f2a4214a00bdee48dace33120abb699ac4e4258c8e443060dd5e5dc43c25886e",
+      "tests/architecture/checks.test.mjs": "6a82f2ad9e68bb7df904e2c8d512353740572ab475ea4088bac87daa97f75f4c"
+    },
+    "configSha256": "554b8f976a2ef62ca9b3f3d794696e5f7ce1afe8b23b6a00ea703d17f70fa663",
+    "toolchainSha256": "45653b6e931e3dbde8a7d2d811eda7fbc33c4495a1a87e4f7a7d1420cb194367",
+    "lockSha256": "2d715689f38ba90a9e3f937433a6e766f773d952b26451075da31f6147bb18ab",
+    "encryptedSecretsSha256": "490f3bcabdf05e1a3f4e81f98f29950bcbfd232e1879875576062cad0c5e46cd",
+    "scope": "Clean standalone diagnostic candidate; G06 requires existing full GREEN/RED fixture suite, fixed missing workspace input. No launch context or gate admission; native forks separate; Tasty excluded.",
+    "metadata": {
+      "path": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/alpine-architecture-candidate.json",
+      "sha256": "f00cc17576ba4d8c14826e9fab3c2bb0d00fa7b4d5c2ed88f6e0201312ec21eb"
+    },
+    "offlineFrozenInstallExit": 0,
+    "offlineInstallLog": {
+      "path": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/architecture-offline-install.log",
+      "sha256": "89f92508d1df37f189cef219a1d9a6f75b11f6b232ff0612e6ed57e9045c674d"
+    }
+  },
+  "g06EarlierResultErratum": "ca13aa4 architecture:check exit0 tested source tree only. It did not satisfy the full G06 GREEN/RED acceptance criterion; no aggregate or full G06 PASS is claimed.",
+  "remaining": [
+    "Run G03 on the clean candidate, then exact full pnpm architecture:check including lint parity with no test filtering/skips within900 seconds.",
+    "G03/G04/G05/full G06 on this candidate NOT_RUN. No previous SHA results transfer."
+  ]
+}

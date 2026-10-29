@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-10-25T21:49:04.948513+00:00",
+  "scope": "Exact approved Alpine base identity and read-only command inventory; no mounts/storage mutation or native addon calibration",
+  "imageRef": "node:26.8.1-alpine3.24@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3",
+  "image": {
+    "id": "sha256:89824ea3fb69002f51789e1e40a2f389aeb70dc4b9349ac2b467c5ba11d506cb",
+    "os": "linux",
+    "architecture": "amd64",
+    "repoDigests": [
+      "node@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3"
+    ]
+  },
+  "exitCode": 0,
+  "selectedOutput": "MISSING:mkfs.ext4\n/sbin/blkid\n/sbin/losetup\nlosetup: unrecognized option: version\nBusyBox v1.37.0 (2026-01-10 15:38:28 UTC) multi-call binary.\n\nUsage: losetup [-rP] [-o OFS] {-f|LOOPDEV} FILE: associate loop devices\n\tlosetup -c LOOPDEV: reread file size\n\tlosetup -d LOOPDEV: disassociate\n\tlosetup -a: show status\n\tlosetup -f: show next free loop device\n\n\t-o OFS\tStart OFS bytes into FILE\n\t-P\tScan for partitions\n\t-r\tRead-only\n\t-f\tShow/use next free loop device\n{\"node\":\"26.8.1\",\"platform\":\"linux\",\"arch\":\"x64\",\"glibcVersionRuntime\":null,\"muslLoaderPresent\":true}\n",
+  "pullLogSha256": "6c8c12191fa6fcee68f43a0079d8ca6802c5d7eaebca8a1bfbfc09e30a59083d",
+  "containerRemoved": true
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "atUtc": "2026-10-26T15:41:35.833406+00:00",
+  "status": "ACCEPTED",
+  "scope": "Astra source review and independent 67-runner + 34-topology QA; actual corrected runtime NOT_RUN",
+  "files": {
+    "tools/compose-smoke.mjs": "1aa6c85498dfa214a3129865d5018400550476f3025390327d4afba510ec22ef",
+    "verification/launch/v1/runner.test.mjs": "25695dd1240fb8e1cf7c7fd0b077636cc13d0787ccd3d6371edf56d042aa2c75",
+    "tests/compose/topology.test.mjs": "fe9f536f3d8e8d81501942f4a504afc8196c135fd1c61d3ea9d64b93c44ca5ba"
+  },
+  "rootBeforeHashes": {
+    "tools/compose-smoke.mjs": "78335fb1ab6536cf0ed9bca2a264b1d6ad902c6f19dabf6147a84ba121d32508",
+    "verification/launch/v1/runner.test.mjs": "e6fb868ebefdfc6a6334230978f527190db0c97ed30a826abb169cb411ba9b61",
+    "tests/compose/topology.test.mjs": "8c7e9bf731af9c72d7f72de893c7bf4aa185f72f62c1a685ce6532381d7bd4a1"
+  },
+  "ownPatchSha256": "4b34c935ca6728469abf30258d6b7286d4e512aee812159a8c3962580b2cfba3",
+  "preservedGuarantees": [
+    "Strict four-field DB/Kafka identity validators",
+    "Shared real factory for core identity",
+    "Separate closed metadata required before G14/G15 external credential reads",
+    "No G14/G15 silent downgrade to G13"
+  ],
+  "qaReceipts": [
+    "/home/yurgusev/.cache/coffee-issue13/g18-identity-independent-qa-20261026/runner.receipt.json",
+    "/home/yurgusev/.cache/coffee-issue13/g18-identity-independent-qa-20261026/topology.receipt.json"
+  ],
+  "actualOriginalFailure": "evidence/launch/20261026T144856Z-67dfaca/gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-failure.json"
+}

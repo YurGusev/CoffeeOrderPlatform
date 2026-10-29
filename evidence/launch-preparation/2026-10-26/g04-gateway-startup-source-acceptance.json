@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T18:31:34.836204+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "file": "/home/yurgusev/CoffeeOrderPlatform/packages/platform-testing/test/platform-packages.test.mjs",
+  "fileSha256": "5ce02f687abe3d500a8e6a9df4f58c3bc1d2eef3b3448781b91924825e4543c5",
+  "scope": "Production startup recoverAfterRestart(undefined,signal) must pass null cutoff and turn Dispatched into UnknownOutcome with one guarded recovery UPDATE.",
+  "workerNarrow": "PASS1/1; format/typeawarelint/diffPASS",
+  "rootIndependent": "PASS1/1",
+  "astra": "Accepted",
+  "rootLogSha256": "2381984128a027746f86f5110a29875b59ec746754ac7a1ad1ca3cd2cd398ba3",
+  "ownPatchSha256": "fd8d843db5370756eefdf26813a93c82eee746d9a60f086ad612f7789d0748e7",
+  "limitations": [
+    "Strict SQL mock checks query/binds, not real PostgreSQL effects or entire startup composition.",
+    "Not part of last full G04."
+  ]
+}

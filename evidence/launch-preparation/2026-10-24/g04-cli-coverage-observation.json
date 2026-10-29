@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "command": "node --test --experimental-test-coverage --test-name-pattern='CLI rejects' --test-reporter=lcov tests/config/observability-bootstrap.test.mjs",
+  "exitCode": 0,
+  "scope": "single existing CLI test, standard pinned Node reporter; no G04 threshold admission",
+  "sourceChanged": false,
+  "privateLcovPath": "/tmp/issue13-bootstrap-cli-before.lcov",
+  "lcovSha256": "08a57028f5c107488e14cce1b4f5426373aa52bd1e01c0afcb31d94999b01a45",
+  "observedFunctionCounters": [
+    "FNDA:2,assertLocatorEnv",
+    "FNDA:1,materializeRuntimeSecrets"
+  ],
+  "observedCliLineCounters": [
+    "DA:667,2",
+    "DA:668,2",
+    "DA:669,2",
+    "DA:670,2",
+    "DA:671,2",
+    "DA:672,2",
+    "DA:673,2",
+    "DA:674,0",
+    "DA:675,0",
+    "DA:676,2",
+    "DA:677,2",
+    "DA:678,0",
+    "DA:679,0",
+    "DA:680,2",
+    "DA:681,2",
+    "DA:682,2",
+    "DA:683,2",
+    "DA:684,2"
+  ],
+  "conclusion": "CLI materialization path is accounted by native coverage despite intentionally cleaned child env; no locator workaround justified"
+}

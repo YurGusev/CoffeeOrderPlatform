@@ -111,7 +111,7 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
 | Fastify                          | `5.12.1`                    | полный JSON Schema request/response                                            |
 | PostgreSQL server                | существующий `17.11`        | временное исключение: общий legacy server; upgrade не входит в этот PR         |
 | `pg`                             | `8.23.0`                    | прямой driver baseline                                                         |
-| Apache Kafka broker              | `4.3.1` KRaft               | `apache/kafka:4.3.1@sha256:<digest>`                                           |
+| Apache Kafka broker              | `4.3.2` KRaft               | `apache/kafka:4.3.2@sha256:<digest>`                                           |
 | `@confluentinc/kafka-javascript` | `1.10.0`                    | провести Node 26 compatibility test                                            |
 | React / React DOM                | `19.2.8`                    | новый frontend                                                                 |
 | React Router DOM                 | `7.18.3`                    | data/router APIs только по frontend ADR                                        |
@@ -162,7 +162,7 @@ Node.js 26 выбран осознанно, хотя ещё имеет стат�
 
 - OpenAPI 3.2 используется для `$self`, современных security/webhook описаний и
   строгой обработки external references; toolchain обязан доказать поддержку 3.2.
-- Kafka 4.3.1 запускается только в KRaft; auto-topic creation выключен, новый
+- Kafka 4.3.2 запускается только в KRaft; auto-topic creation выключен, новый
   consumer protocol включается только после compatibility/rebalance tests.
 - TypeScript 7 используется по [ADR-0022](../adr/ADR-0022-ts7-native-toolchain.md):
   строгие ESM/erasable boundaries, Oxlint+tsgolint, без TS5/6 compatibility lane.

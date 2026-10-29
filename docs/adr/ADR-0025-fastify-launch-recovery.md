@@ -69,6 +69,12 @@ Fastify не является их admission. Владельцы и prerequisite
   evaluation. Operations реализует их до G14 #13. Потеря telemetry не блокирует
   business path; bounded buffering, drops, retention и redaction проверяются.
 
+G12 supply-chain scan запускается после G07 config/security и до G08 migrations.
+G10 integration, G11 recovery и G13 Compose требуют успешный G12, поскольку
+используют проверенные runtime images; G13 также требует успешный G11. При FAIL
+G12 независимые G08 и G09 могут пройти, а эти Kafka-consuming gates остаются
+NOT_RUN. G19 сохраняет fail-closed решение и не превращает частичный run в допуск.
+
 Contract task #4 может начаться после #60 независимо от runtime hardening.
 Business writers ждут нужные foundation handoffs; общий Effect admission больше
 не нужен. #50–#55 закрываются как superseded после merge #60, не как implemented.

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T19:44:31.014083+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "files": {
+    "tests/config/observability-bootstrap.test.mjs": "c167c4436def8052a1fb0a207d306acb5ceb9ee6018a6b9f9d06d22f77197aad",
+    "tests/orders/public-api.test.mjs": "ee95cf0b00e555465a093a1678b82ac16f76ace5b57e63c485015d880b376dfb"
+  },
+  "scope": [
+    "Secret cleanup helper: Linux EISDIR is propagated and owned fixture directory preserved.",
+    "Orders public ingress: x-actor-ref and x-actor-role rejected before verifier/owner, with valid same-app confirm control."
+  ],
+  "checks": {
+    "worker": "Both target1/1,format,type-awarelint,diffPASS",
+    "rootIndependent": "Cleanup1/1PASS1990.77ms;Orders1/1PASS1787.38ms",
+    "astra": "Accepted both"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/g04-cleanup-test-20261026T193600Z/cleanup-regression.patch": "b9e41a0e52f20c1b233282d8c412075a90dbe211857b68f3d9f1576e502aac9b",
+    "/home/yurgusev/.cache/coffee-issue13/g04-cleanup-test-20261026T193600Z/root-independent.log": "0ed01b990d311970e12090dace2199b32dbcaf2597278e8df4d466556a9d134f",
+    "/home/yurgusev/.cache/coffee-issue13/orders-identity-header-ambiguity-20261027/own.patch": "d1797f3cdf1b9d46f4ee42138580ccdeb257f97ed31ac7d442cf86ee9945c5c5",
+    "/home/yurgusev/.cache/coffee-issue13/orders-identity-header-ambiguity-20261027/final-receipt.json": "2fdf735bf641ee7705408a31548213a8640bc14f0c27ec964528ad77be948418",
+    "/home/yurgusev/.cache/coffee-issue13/orders-identity-header-ambiguity-20261027/root-independent.log": "9ef9fd291aaba497c128f8cd80a08edd1a073537f904bf994f3537f5f01570a0"
+  },
+  "limitations": [
+    "Cleanup controlled Linux filesystem fixture; CLI finally propagation read, not executed by this test.",
+    "Orders verifier adapter is a stub; crypto/TLS are not proven.",
+    "Earlier duplicate actor-array probe is REJECTED/INAPPLICABLE because inject coalesces values; no PASS claimed.",
+    "No full G04 rerun for these deltas yet.",
+    "Foreign Tasty changes preserved; apply only own patches to verification candidates."
+  ]
+}

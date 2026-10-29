@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "checkedAtUtc": "2026-10-24T17:53:00Z",
+  "repository": "https://github.com/YurGusev/CoffeeOrderPlatform",
+  "remoteMutation": false,
+  "closedIssueQueries": ["coverage", "thresholds", "покрытие"],
+  "reviewedClosedIssuesAndComments": [
+    {"number": 6, "finding": "Coverage относится к forward/checksum, grants и architecture RED; числовых unit floors нет."},
+    {"number": 10, "finding": "Описан пробел architecture RED coverage; числовых unit floors нет."},
+    {"number": 12, "finding": "Thresholds относятся к SSE/capacity/recompute; это не unit coverage."},
+    {"number": 18, "finding": "Запрещено изменять прежние business thresholds; unit floors не заданы."},
+    {"number": 31, "finding": "Запрещено повышать foundation budgets; unit floors не заданы."},
+    {"number": 32, "finding": "Заданы security и foundation regression ограничения; unit floors не заданы."},
+    {"number": 64, "finding": "Thresholds относятся к alert/capacity; unit floors не заданы."}
+  ],
+  "obsidianRoot": "/home/yurgusev/Documents/Obsidian Vault/Проекты/CoffeeOrderPlatform",
+  "obsidianFinding": "Прежняя архитектурная память требует critical coverage без чисел. Числа 90/90/85 появляются в текущих записях #13 после решения ADR-0037, поэтому не являются историческим основанием.",
+  "conclusion": "В проверенных источниках принятый числовой unit coverage policy не обнаружен; новая политика разработана по прямому поручению пользователя.",
+  "authority": "docs/adr/ADR-0037-unit-coverage-policy.md",
+  "floorsBeforeFirstMeasurement": {"lines": 90, "functions": 90, "branches": 85},
+  "limitations": "Поиск ограничен указанными GitHub queries, найденными issues/comments и проектной памятью Obsidian; это не доказательство отсутствия любых исторических упоминаний вне этих источников."
+}

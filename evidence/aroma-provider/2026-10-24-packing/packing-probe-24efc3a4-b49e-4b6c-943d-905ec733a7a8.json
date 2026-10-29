@@ -1,0 +1,33 @@
+{
+  "purpose": "bounded out-of-G16 exact-line packing probe",
+  "operationId": "24efc3a4-b49e-4b6c-943d-905ec733a7a8",
+  "operationIds": {
+    "add": "24efc3a4-b49e-4b6c-943d-905ec733a7a8:add",
+    "delete": "24efc3a4-b49e-4b6c-943d-905ec733a7a8:delete"
+  },
+  "offerId": "445",
+  "requestedPacking": "Aroma",
+  "origin": "https://aromateacoffee.ru",
+  "createdAtUtc": "2026-10-24T11:29:06.590Z",
+  "expiresAtUtc": "2026-10-24T13:29:06.590Z",
+  "accountVerified": false,
+  "accountFingerprint": null,
+  "baselineCartFingerprint": null,
+  "postCartFingerprint": null,
+  "preDeleteCartFingerprint": null,
+  "postDeleteCartFingerprint": null,
+  "observedPacking": null,
+  "loginAttempts": 0,
+  "logicalSafeReads": 0,
+  "physicalSafeReadAttemptUpperBound": 0,
+  "unsafePostAttempts": 0,
+  "unsafeDeleteAttempts": 0,
+  "packingMismatchExceptionUsed": false,
+  "postOutcome": "not-started",
+  "deleteOutcome": "not-started",
+  "cleanupStatus": "not-started",
+  "failureCode": "PACKING_PROBE_FAILED",
+  "scopedMaterialRemoved": true,
+  "status": "FAIL",
+  "finishedAtUtc": "2026-10-24T11:29:06.805Z"
+}

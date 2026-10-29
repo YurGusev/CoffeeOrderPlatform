@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T18:27:46.450379+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "files": {
+    "apps/api-public/src/index.ts": "0759eb033e5d0e1f43d30d4528699efe29a85512bc483ec2c959d75f5cc62d16",
+    "tests/customer/customer-http.test.mjs": "8f358d9605fe089ebd3a2e64088d83b67835ee89a0464d99e1b7d57640147668",
+    "packages/platform-testing/test/platform-packages.test.mjs": "9d05ec36121714f8c14946e217a3b021eb7b2c1b643a01861b4f36d78805dca1"
+  },
+  "scope": [
+    "Customer sendForward preserves OpenAPI success statuses create201/search200; any wrong nominal success yields safe503, existing errors unchanged.",
+    "Customer malformed owner search DTO sanitization with body/header canaries.",
+    "Preparation advisory lock SQLSTATE40001 propagates normalized DB_QUERY_FAILED, rolls back and prevents downstream durable effects."
+  ],
+  "checks": {
+    "worker": "Customer compile+24/24 HTTP tests; Preparation13/13; format/typeawarelint/diffPASS",
+    "rootIndependent": "Customer24/24PASS2574.10ms; Preparation13/13PASS1669.28ms",
+    "astra": "Accepted both"
+  },
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/customer-success-status-20261026T182204Z/root-independent.log",
+      "sha256": "e22caa7bf330e9a5d5cabd9433a81a1a0a8d1f41c1984f3b8530957775fd641e"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/customer-success-status-20261026T182204Z/receipt.json",
+      "sha256": "d320c7e724c03db51ced48bf70b46ff10cd203728f8ebd2360ceab1fe939d997"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/preparation-lock-failure-20261026T182403Z/root-independent.log",
+      "sha256": "93f507a851da48fbbb4f7f03c8793a522098283eb3e21a1472a1fca218c302d6"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/preparation-lock-failure-20261026T182403Z/qa-receipt.json",
+      "sha256": "af41d86436e68846d0bc05326c8d49dc364bb70bbc787388794431c16d271753"
+    }
+  ],
+  "limitations": [
+    "Injected HTTP/SQL mocks; live mTLS/network/PG contention not established.",
+    "These changes are not in G04 run20261026T180137Z-0a6a0b3; product fix requires new candidate/G12."
+  ]
+}

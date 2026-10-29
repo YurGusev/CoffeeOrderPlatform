@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-10-26T09:33:10.301004+00:00",
+  "source": "Explicit human reply in current chat",
+  "proposal": {
+    "path": "/home/yurgusev/CoffeeOrderPlatform/evidence/launch-preparation/2026-10-26/g12-kafka-runtime-authority-proposal-v3.md",
+    "sha256": "60c9dfabe30e84924977dbea6ccbde37cb762736cca544c64bee8eb1d516365a"
+  },
+  "answer": "Разрешаю точный план Kafka v3",
+  "scope": "Exact approved derived Kafka target, only existing two APK library upgrades, shared exact scanned OCI importer, named runtime callers and tests; unchangedpins20targets40reports/thresholds/budgets",
+  "excluded": "Gate graph/order change pending separate proposal; no publication/deployment or provider mutation"
+}

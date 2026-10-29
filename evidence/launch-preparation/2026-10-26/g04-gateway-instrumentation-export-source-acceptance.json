@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-27T01:55:41.823936+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "files": [
+    {
+      "path": "packages/platform-testing/test/platform-packages.test.mjs",
+      "beforeSha256": "ee02924ecb78042dbb23c969fdb64223fb0fea7f07941ae34a08b4923568ccc7",
+      "afterSha256": "1632379b17d21bdd6923c445596725781bf502bbdf9135cf0f0a60256fb15273",
+      "ownPatch": "/home/yurgusev/.cache/coffee-issue13/g04-gateway-dist-import-correction-20261027/gateway-corrected-own.patch",
+      "ownPatchSha256": "8e7813c9f4a99034168831ee64678c99ce8bef689078e9e99f36c12ca2c9a64d"
+    },
+    {
+      "path": "tests/aroma/catalog-export.test.mjs",
+      "beforeSha256": "ae07c426b54128069e00fefc05b67c68e6261c195c84f15c7b8dbd140e7f557e",
+      "afterSha256": "7d7e2a0b6b26452befa8abc8b5ab97090a74acce81cfce468d0070d9f49bdc75",
+      "ownPatch": "/home/yurgusev/.cache/coffee-issue13/catalog-export-grind-options-20261027/own.patch",
+      "ownPatchSha256": "f2230e5a78d32be899dbf2029cfabfc5d3ab253bfddc1606d93fcec40ba860b3"
+    }
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "status": "Accepted",
+    "resolvedFindings": [
+      "G04-GW-001"
+    ]
+  },
+  "rootIndependentVerification": [
+    {
+      "passed": 19,
+      "failed": 0,
+      "result": "/home/yurgusev/.cache/coffee-issue13/g04-gateway-dist-import-correction-20261027/receipt.json",
+      "sha256": "30746efa36df1eeba0e4509812cc230e3818480cc9d612793b015d6cff9b01ef"
+    },
+    {
+      "passed": 1,
+      "failed": 0,
+      "result": "/home/yurgusev/.cache/coffee-issue13/catalog-export-grind-options-20261027/root-independent-result.json",
+      "sha256": "30a5b3543015d31cbc3e5a5c7522eba44ab61d7d81fa89607a2e0bd09b6e21e2"
+    }
+  ],
+  "limits": [
+    "Real telemetry with strictSQLmocks and realsource/export withfetchshim only",
+    "No livePG/provider/spanexport proof",
+    "Fullcoverage delta NOT_RUN, floors90/90/85unchanged",
+    "RootHEAD/SOPS/bootstrap andallprioracceptedhunks preserved"
+  ]
+}

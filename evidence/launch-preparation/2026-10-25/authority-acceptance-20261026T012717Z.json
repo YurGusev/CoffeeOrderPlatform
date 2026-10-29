@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-26T01:27:17.991625+00:00",
+  "authority": "Direct human answers in this conversation; operator record, not a cryptographic signature or runtime proof",
+  "issue": 13,
+  "approved": [
+    {
+      "proposalPath": "/home/yurgusev/CoffeeOrderPlatform/evidence/launch-preparation/2026-10-25/g12-storage-helper-authority-proposal.md",
+      "proposalSha256": "d5227791e62359e410b123b685d1bd8f5f5ad696a7a077720ed8665a8006eaf6",
+      "questionCallId": "call_8666129365b64131b1b888cbc91feed6",
+      "humanAnswer": "Разрешаю точный план",
+      "scope": "Exact proposal only"
+    },
+    {
+      "proposalPath": "/home/yurgusev/CoffeeOrderPlatform/evidence/launch-preparation/2026-10-25/g13-g15-external-postgres-authority-proposal.md",
+      "proposalSha256": "cbfe2890de8b0a87f45f3e2b75bca1e199bc10cbffda115644262f7293f3372b",
+      "questionCallId": "call_4d1270443c714d1da9b712003c8d641c",
+      "humanAnswer": "Разрешаю точный план G13/G15",
+      "scope": "Exact proposal only"
+    }
+  ],
+  "notGranted": [
+    "GitHub writes",
+    "unscoped provider mutations",
+    "legacy DB or role changes",
+    "unconditional permanent deployment before readiness"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T19:30:30.792103+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "scope": "Восстановить уже объявленный OpenAPI ответ Pricing 422 PRICING_GRIND_NOT_AVAILABLE; отвергать несоответствующие status/code и сохранять безопасный публичный problem.",
+  "files": {
+    "apps/api-public/src/index.ts": "858904a485db99ab142c0438cad6e5c94ad739ae2e86a190b1b9c065f4638ca9",
+    "tests/pricing/pricing-public-api.test.mjs": "3fe92b053cd454567d864b69e23803414b85cf6f425016fe248e6482644f7331"
+  },
+  "checks": {
+    "worker": "RED:503 вместо422; после исправления Pricing6/6, compile, format, type-aware lint, diff PASS",
+    "rootIndependent": "Полные Customer+Pricing30/30 PASS;0skip/todo/cancel",
+    "astra": "Accepted"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/pricing-422-fix-20261027/own.patch": "d835c9a94ec4d4ea4eee826f287ab6efd47daa0e33c3d7dbce8cbfcac8f7e7fa",
+    "/home/yurgusev/.cache/coffee-issue13/pricing-422-fix-20261027/receipt.json": "29b1a8c20dc202f4a46ada2a44a82d957bb975fedb37880dbb04d7d524d0c29f",
+    "/home/yurgusev/.cache/coffee-issue13/customer-create-guard-placement-20261026T192106Z/root-complete-customer-pricing.log": "30f5a07685bc52020e84f4b13786d6c5bd0769a0c12cefebbd24beb5e629ca40"
+  },
+  "limitations": [
+    "HTTP unit mocks; live service/mTLS и общий admission не проверены этим результатом.",
+    "G03/G04 на новом чистом кандидате выполняются отдельно."
+  ]
+}

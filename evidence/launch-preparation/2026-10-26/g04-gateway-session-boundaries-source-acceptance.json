@@ -1,0 +1,34 @@
+{
+  "kind": "test-only-source-acceptance",
+  "recordedAtUtc": "2026-10-26T23:08:51.418870+00:00",
+  "file": "tests/aroma/provider-session.test.mjs",
+  "beforeSha256": "208c10054e252abe2475b309a6ee14eed863c61eae34f932f5efc94078b1479d",
+  "afterSha256": "e00969abb014e38182037b40b3927c37af02ae21c165b86ce96c4600cf57928a",
+  "ownPatchSha256": "5e1571a4287fb49dcc9207d03050f604f73e2e14ae8c6b5c9431d1a158e91cf4",
+  "checks": {
+    "workerTargeted": "2/2PASS; format/typeawarelint/diff PASS",
+    "rootTargeted": {
+      "command": [
+        "/home/yurgusev/.local/usr/bin/node",
+        "--test",
+        "--test-name-pattern=session acquisition is concurrent single-flight, cache bounded, and DB material is encrypted|safe read retries only an empty pre-dispatch 401 and never retries after yielding bytes",
+        "/home/yurgusev/.cache/coffee-issue13/gateway-session-boundaries-20261027/tests/aroma/provider-session.test.mjs"
+      ],
+      "startedAtUtc": "2026-10-26T23:06:58.269430+00:00",
+      "finishedAtUtc": "2026-10-26T23:06:58.908718+00:00",
+      "exitCode": 0,
+      "logSha256": "0d0464ca15081d81b67b8348d3cdb01d72e3b53a562341998f892b62748cbbfd",
+      "scope": "Two existing Gateway session tests; fixtures/memory store, no provider or PostgreSQL runtime"
+    },
+    "astra": "Accepted; original assertions preserved"
+  },
+  "behavior": [
+    "Partial bytes then auth failure cannot trigger a second read/login",
+    "Bounded decrypted session cache evicts prior handle and reloads encrypted store without login"
+  ],
+  "limitations": [
+    "cap1 eviction/reload does not establish multicandidate LRU ordering",
+    "MemoryStore/fake transport; no real PostgreSQL/provider",
+    "FullG04 coverage not repeated after this delta"
+  ]
+}

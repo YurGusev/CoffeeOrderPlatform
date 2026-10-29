@@ -1,0 +1,56 @@
+{
+  "format": "g04-orders-gateway-http-source-integration-v1",
+  "recordedAt": "2026-10-27T02:26:31.224833+00:00",
+  "files": {
+    "packages/platform-testing/test/platform-packages.test.mjs": "9c729f8fa04045a127cc5c35cddf6074383c3141ae15dddb467f5768c96ddc1e",
+    "tests/aroma/provider-http.test.mjs": "6f1ddb01a6c715d8e660859ba588e61ca9b03300fc6bb0ff38e4b79d31b0ad6c",
+    "tests/aroma/binding-http.test.mjs": "c399c9d24a1b23c44425b3cbd4f6df8beb1f12effc70b37075fc1d108e8b689c",
+    "tests/aroma/gateway-operations-http.test.mjs": "0ac08e9c028bcec38bd8f2558f9b0d21a30024ec74d47c0c763fa7a6b976daa7",
+    "tests/aroma/catalog-export.test.mjs": "eebb574dcf08af062754998b71faab2644c382af3d18a95a67a3d08f2f234c90"
+  },
+  "patches": {
+    "orders": "17526f8db547ba9f3bba7e09631f1e0287e7824e98f8a75c40d6289314e410c7",
+    "gateway": "f7684b62fa1b1596f487b7db1d3315cff9b0ee4aed9f61eadcd177c0c618d923"
+  },
+  "review": "Astra Accepted Orders; G04-GW-BODY-001 closed with valid DTO/whitespace and three real sensitivity failures",
+  "workerQa": {
+    "orders": "1/1 focused PASS",
+    "gateway": "4/4 focused PASS",
+    "bodyLimitSensitivity": "3/3 expected status assertion failures without bodyLimit"
+  },
+  "rootQa": {
+    "gateway": {
+      "passed": 50,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/home/yurgusev/.cache/coffee-issue13/root-orders-gateway-toolchain-qa-20261027/gateway.log",
+      "logSha256": "32b399b996bfe74ad334d0bd4a518d2d854b3d0210a0cda00b34157780f39f26"
+    },
+    "orders": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/home/yurgusev/.cache/coffee-issue13/root-orders-gateway-toolchain-qa-20261027/orders.log",
+      "logSha256": "22489f7c72578a4a51b8e3962013a7feb39d26baf0f01a6f8e330429e55a9836"
+    },
+    "architecture": {
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0,
+      "log": "/home/yurgusev/.cache/coffee-issue13/root-orders-gateway-toolchain-qa-20261027/architecture.log",
+      "logSha256": "29b45fd5d70bdda8a30f4bc6b976712f34ded138877a984e0970be7768736aa1"
+    },
+    "toolchain": {
+      "exitCode": 0,
+      "logSha256": "4f209bc57a66b74d426ad038d68b828f21cfceeed2832583cecc880ddff40250"
+    }
+  },
+  "protectedHashesUnchanged": {
+    "secrets/platform.secrets.sops.yaml": "907ee787fa30c904a3770e262eb92cce5e0c8973716bd372c6afc2a7bd84dca2",
+    "tools/config-bootstrap/index.mjs": "005cd40b62da0df078644be2c2e08efea12e2f57ea8165902e49ad5810787817"
+  },
+  "notRun": [
+    "new full G04 coverage",
+    "real PostgreSQL/provider/TLS"
+  ]
+}

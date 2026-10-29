@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "kind": "source-acceptance",
+  "observedAtUtc": "2026-10-26T20:42:22.338076+00:00",
+  "scope": "Test-only regression of signed operation delegation at Gateway HTTP route; not gate admission",
+  "files": [
+    {
+      "path": "tests/aroma/gateway-operations-http.test.mjs",
+      "sha256": "a28a1eb19b41f98a7d53047c83ddb108423ea023cde9e6f5a4d0cdaccddc474c"
+    }
+  ],
+  "sourceUnchanged": {
+    "path": "apps/aroma-gateway/src/transport/http/index.ts",
+    "sha256": "5f0d9a85a8fa37b87b96c3a3b904434fbc6f0a5b0fe4331086a57e359f6fb9a3"
+  },
+  "ownPatch": {
+    "path": "/home/yurgusev/.cache/coffee-issue13/gateway-http-regression-20261027/own.patch",
+    "sha256": "9bd572f4beb49f5dee287c3cf01a114f6e8ea68eecf2b17663d3a0a0dc617efa"
+  },
+  "regression": "Validly signed remove operation sent to set-quantity route is rejected with403 SERVICE_DELEGATION_INVALID before executor, after a successful positive control. Existing remove positive control verifies matching signature/keyset.",
+  "rootCheck": {
+    "command": [
+      "env",
+      "-u",
+      "SOPS_AGE_KEY_FILE",
+      "node",
+      "--test",
+      "tests/aroma/gateway-operations-http.test.mjs"
+    ],
+    "exitCode": 0,
+    "testsPassed": 4,
+    "testsFailed": 0,
+    "skippedTodoCancelled": 0,
+    "durationMs": 1330.978809,
+    "log": "/home/yurgusev/.cache/coffee-issue13/gateway-http-regression-20261027/root-independent.log",
+    "logSha256": "ccb574ce8e95a4309a708666e1e4ec861312ba8881031b2f272399498dc14039"
+  },
+  "workerChecks": {
+    "httpFilesTestsPassed": 12,
+    "prettier": 0,
+    "oxlint": 0,
+    "diffCheck": 0
+  },
+  "astraReview": {
+    "status": "Accepted",
+    "findings": [],
+    "testExecution": "Not run by reviewer"
+  },
+  "limitations": [
+    "Fastify app.inject with fixture transport identity and executor; real cryptographic signer/keyset is used.",
+    "No live TLS/provider/DB proof; full G04 not rerun for this delta."
+  ]
+}

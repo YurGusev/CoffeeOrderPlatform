@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T19:36:33.130528+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "scope": "GATEWAY-REDIRECT-001: существующий mutation transport test проверяет отказ от307foreignLocation с manualredirect и одним запросом только на originalorigin.",
+  "files": {
+    "tests/aroma/provider-http.test.mjs": "ab4edd7a2fe2d91865c891f4378755f11dfa10fa214b1a3a17057916e7599dbc"
+  },
+  "checks": {
+    "worker": "Target1/1PASS,format/type-awarelint/diffPASS",
+    "rootIndependent": "Target1/1PASS,388.85ms",
+    "astra": "Accepted"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/gateway-redirect-qa-20261027/own.patch": "bbb0ce7c0cc3d2b61a0f00e205e84fea248362a0bf39326433bed6bfa7517c7b",
+    "/home/yurgusev/.cache/coffee-issue13/gateway-redirect-qa-20261027/checks.json": "24d8958db78ee53d11382fe56f81aaf5f2ed98858ed00924e5121f1fa83e4feb",
+    "/home/yurgusev/.cache/coffee-issue13/gateway-redirect-qa-20261027/root-independent.log": "4afe7aa6862bca226b9f1ebc7533ccf42f9230403d515d0085acd0f33e8d12bc"
+  },
+  "limitations": [
+    "Stubfetch проверяет клиентский control flow, не поведение реального провайдера/proxy.",
+    "Не входит в завершённый fullG04ac9e415."
+  ]
+}

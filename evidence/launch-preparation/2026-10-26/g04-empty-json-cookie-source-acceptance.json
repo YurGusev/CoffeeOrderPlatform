@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T20:25:23.253509+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "files": {
+    "apps/api-public/src/index.ts": "f25169d87381b832ef786d59b812154d77d090f71e834e8fb4c5cefe623f5d4c",
+    "apps/customer-service/src/http/index.ts": "71a54a392cd1c5cd3fdf2962d8c8882b65e814e531387947d50eaebd5000a4be",
+    "tests/customer/customer-http.test.mjs": "92488e05cd8e7c1c052ffb8e39ad72cdd25140277412bdfbd8a3485b3899e336",
+    "tests/aroma/provider-session.test.mjs": "208c10054e252abe2475b309a6ee14eed863c61eae34f932f5efc94078b1479d"
+  },
+  "scope": [
+    "Normal empty JSON create in Customer/api-public restores400VALIDATION_FAILED withno-store/noowner; validbodylessreplayunchanged.",
+    "Observed Expires-deletion through realProviderHttpClient/sessionmerge/encryptedrestore retainsrotatedhostonlycompanion anddoesnotresendexpiredsession."
+  ],
+  "checks": {
+    "worker": "EmptyJSONRED500both, tsc2appsPASS;bothpublicfiles29/29,provider-session29/29;format/type-awarelintPASS",
+    "rootIndependent": "Customer+Catalog29/29PASS2896.696646ms;provider-session29/29PASS",
+    "astra": "Accepted both deltas"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/customer-empty-json/apps__api-public__src__index.ts.own.patch": "00a01a90e29feb8946d9f154977710b9885f73182d0c06fc6eea5afffe31c285",
+    "/home/yurgusev/.cache/coffee-issue13/customer-empty-json/apps__customer-service__src__http__index.ts.own.patch": "fa38190fd689664ae46920d19b1498181bb371098d9f9902a35642139e41fc8b",
+    "/home/yurgusev/.cache/coffee-issue13/customer-empty-json/tests__customer__customer-http.test.mjs.own.patch": "07d31ad76a66a84d5644c91f7da56e0bb884a7329f1c9728d225de384bb07baa",
+    "/home/yurgusev/.cache/coffee-issue13/customer-empty-json/checks.json": "d9875c31c565499b9b5fad9f34039a24634aaaf5b89e91d939545fe6a8c32163",
+    "/home/yurgusev/.cache/coffee-issue13/customer-empty-json/red.log": "3f0258313c0b72e48f4e7c3b1b14525f1da5094660292db0b77d77115095bcbe",
+    "/home/yurgusev/.cache/coffee-issue13/customer-empty-json/red-public.log": "e12b7ba7b9f699cf2a5aa636c4d52305d07a038f1521e588968ed5c529e1c13e",
+    "/home/yurgusev/.cache/coffee-issue13/customer-empty-json/root-independent.log": "ddbf3cadb73ff0e56e2a14ce5b0558ba7bb1d5afa420abdd01b093c6faed7d4e",
+    "/home/yurgusev/.cache/coffee-issue13/provider-cookie-expiry-20261027/own.patch": "f67ed933a3deb7fd10ddef85bed53d4b6c23762284d5a9ebdd97de19756411bb",
+    "/home/yurgusev/.cache/coffee-issue13/provider-cookie-expiry-20261027/qa-receipt.json": "074134255217892aae1cbaa1f4d31f39fef8feb38d8c7762b6db5ec425d87009",
+    "/home/yurgusev/.cache/coffee-issue13/provider-cookie-expiry-20261027/root-independent.log": "41b9928008a46a6cd5c379473fca1386ac1a6b59f84bebc6f56222eb11240591"
+  },
+  "limitations": [
+    "client-v1requestBody.required=falseforreplay; normalcreatecaseonly.",
+    "Fastifyinject/fetchstub/MemoryStore; no liveprovider/TLS/PG proof.",
+    "FullG0450ba947/947 didnotincludethesedeltas; nextfullG04pendingwhileheavyNative7runs."
+  ]
+}

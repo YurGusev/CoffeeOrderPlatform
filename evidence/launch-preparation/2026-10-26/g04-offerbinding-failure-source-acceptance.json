@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T18:37:10.215848+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "file": "/home/yurgusev/CoffeeOrderPlatform/packages/platform-testing/test/platform-packages.test.mjs",
+  "fileSha256": "13c5377a480c96fb6314a49a423ef7403f6fa51d9035510c953b2b1b38baa7d9",
+  "scope": "Real OfferBindingStore failExport after a committed batch marks Failed and preserves diagnostic batch; register rejects even with member=true and creates no binding.",
+  "checks": {
+    "worker": "PASS1/1; format/typeawarelint/diffPASS",
+    "rootIndependent": "PASS1/1 1690.04ms",
+    "astra": "Accepted"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/offerbinding-failexport-20261026T185000Z/receipt.json": "46cd36b77a5160812b709884e584dcb2768851f98f87573f3164987d9931dda1",
+    "/home/yurgusev/.cache/coffee-issue13/offerbinding-failexport-20261026T185000Z/own.patch": "0aa5232898fcbcbe67266f2f5e11711c2b9e348b79b7c02b0953442716150bf8",
+    "/home/yurgusev/.cache/coffee-issue13/offerbinding-failexport-20261026T185000Z/root-independent.log": "71563c8513f91a2ac246a4b157bea42543bfd8c5a590378de1a0f65061478d6a"
+  },
+  "limitations": [
+    "SQLmock; not real PostgreSQL durable commit/rollback.",
+    "Not included in latest fullG04."
+  ]
+}

@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "issue": 10,
+  "acceptedMergeCommit": "4b2cad1dab30af66ad0b2fe64da280222e506574",
+  "handoffPath": "evidence/handoffs/issue-10.yaml",
+  "handoffSha256": "4d23f7ca941bbfbe3d02505a887d6750babfd04ed7ced7b398ccd46fdad67b37",
+  "scope": "read-only historical admission audit; no replacement or acceptance implied",
+  "total": 34,
+  "matches": 16,
+  "mismatches": 18,
+  "outputs": [
+    {
+      "artifact": "apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql",
+      "claimedSha256": "9590251d2b8889843e0a2f84e14dacc659d81279a9cc1f97c64afafcf231ccd9",
+      "actualSha256": "9590251d2b8889843e0a2f84e14dacc659d81279a9cc1f97c64afafcf231ccd9",
+      "matches": true
+    },
+    {
+      "artifact": "apps/aroma-gateway/package.json",
+      "claimedSha256": "5609b9f725d5b32c1d88e9637f1cb7f1dd8cd2fa5759c3f8386ec3941722c530",
+      "actualSha256": "5609b9f725d5b32c1d88e9637f1cb7f1dd8cd2fa5759c3f8386ec3941722c530",
+      "matches": true
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/application/cart-reader.ts",
+      "claimedSha256": "56d594dfe9298f29d95a2eb569eb0cf834db3756d377f9bb86debe1513cf0c70",
+      "actualSha256": "ce266bb3126cb3eb6e66b262c54c9eb231cd360bc3796d6020dbe98a2ba462da",
+      "matches": false
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/application/catalog-export.ts",
+      "claimedSha256": "649f38746f97975fe45e7f9727d11223df528f78327269e0a10f558684dba374",
+      "actualSha256": "2c664c06bbb84052ead913ef425db338859dce88d5eca10fdef8e440fe642249",
+      "matches": false
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/application/provider-cart-mutator.ts",
+      "claimedSha256": "0f41b46bd587a50990d8d211cee62cb46f0232d23de3ffcd4bac6d80d07056fa",
+      "actualSha256": "236ff6bf7e24785499f9d9b81d3bacc1de56e1e4979749460ede8481e6672a82",
+      "matches": false
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/application/provider-catalog-source.ts",
+      "claimedSha256": "5b437e81744126f3a09889481293cd22d9f8e929634845d59e8663eea982bd94",
+      "actualSha256": "fdc4a2cd2f0de02b8d6491dd8239f19b1406c7fa82b68708da47a5fd55c9916c",
+      "matches": false
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts",
+      "claimedSha256": "c78ea35367c588c9268923d0664e334ef7aa95b66e249abe072f6d57a550ffff",
+      "actualSha256": "679171a3fb570be7dc25ae70c027baa734d4bbbfb68e77ebb1e671f93f3646a9",
+      "matches": false
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/infrastructure/observability.ts",
+      "claimedSha256": "8f4ca1a34f75b4d4f5a74fa1077ec4bbf9207fe1d4cae45183eb3eb190c6ec0e",
+      "actualSha256": "8f4ca1a34f75b4d4f5a74fa1077ec4bbf9207fe1d4cae45183eb3eb190c6ec0e",
+      "matches": true
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/infrastructure/provider/decoder.ts",
+      "claimedSha256": "caed941c2560f8864005caeb89e6884f8f8438f9f13c624cc00c609ff9efb35c",
+      "actualSha256": "394075596e804164fc770ad9c591bcb327d2599788020b68896255193eca2467",
+      "matches": false
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/infrastructure/provider/http-client.ts",
+      "claimedSha256": "15b0464947b8fe6b88a003ad1331d589f4d2b14f10ecf488af9966859640ad14",
+      "actualSha256": "8e54bfa607339d305d39d307230d2eb772a9613548a22c673abbef44cd4dddc7",
+      "matches": false
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/infrastructure/provider/session.ts",
+      "claimedSha256": "1d76679f4d7030774d609b1355a3b539315cdd535f82e0e6bb2d6a995cd124f9",
+      "actualSha256": "1d76679f4d7030774d609b1355a3b539315cdd535f82e0e6bb2d6a995cd124f9",
+      "matches": true
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/main.ts",
+      "claimedSha256": "ca81758381d1e02b4d8d510918ecf4bef36bc89e95dd03ea639cdd86d26f0187",
+      "actualSha256": "5baba8fcd3c78fba27a858bde59e80df929bcbe297178193212efa749c426266",
+      "matches": false
+    },
+    {
+      "artifact": "apps/aroma-gateway/src/transport/http/index.ts",
+      "claimedSha256": "3c1eac6e8b4236e06ae14e662ea7b787cdefab7bd9d901a54d7a51425a66da25",
+      "actualSha256": "84b9a56a325ee178c9f92c740fe9e3cb5832861bbba75206495f9f9681903a2e",
+      "matches": false
+    },
+    {
+      "artifact": "docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md",
+      "claimedSha256": "d2dfaf5eb00f98142538af07c70cf4aaad749cbbf05b062fcd0247c1c625e7aa",
+      "actualSha256": "98c969094686c548d8b5627b24e14c589d27f43234647ea578488fccc09b44d1",
+      "matches": false
+    },
+    {
+      "artifact": "docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md",
+      "claimedSha256": "54f92f080ca5052e97191da92fb71cdd200f8a1ea383451e220b4a7336d97693",
+      "actualSha256": "e6edd67b49613c194b7e3158f7e6bc06e4e1f1cc3cdaa9396e62e2c8c5237ebf",
+      "matches": false
+    },
+    {
+      "artifact": "evidence/aroma-provider/2026-09-14-pricing-observations.json",
+      "claimedSha256": "c581596331eb1d248a965ef3979bcb5a904e647090f72775ecea4d9a6e642c92",
+      "actualSha256": "c581596331eb1d248a965ef3979bcb5a904e647090f72775ecea4d9a6e642c92",
+      "matches": true
+    },
+    {
+      "artifact": "packages/platform-runtime/src/index.ts",
+      "claimedSha256": "a8326986c8e6d68b09038f4c46d7c0cf68b1a0fef1d765a87d00688967c35272",
+      "actualSha256": "a8326986c8e6d68b09038f4c46d7c0cf68b1a0fef1d765a87d00688967c35272",
+      "matches": true
+    },
+    {
+      "artifact": "pnpm-lock.yaml",
+      "claimedSha256": "5d1b9090bdf13d5e30a05fe342eed9e5020692afc926991ab278ff4d6895dc62",
+      "actualSha256": "5d1b9090bdf13d5e30a05fe342eed9e5020692afc926991ab278ff4d6895dc62",
+      "matches": true
+    },
+    {
+      "artifact": "scripts/check-architecture.mjs",
+      "claimedSha256": "dbc74cff5d8d91f2185fa5249ee7d65d34921b9c723a76dafe99cc12682b86ed",
+      "actualSha256": "dbc74cff5d8d91f2185fa5249ee7d65d34921b9c723a76dafe99cc12682b86ed",
+      "matches": true
+    },
+    {
+      "artifact": "tests/architecture/checks.test.mjs",
+      "claimedSha256": "da6033d35a00703b1556169b0c811a00983f9e680fb61eb01b812d8430b3ddd6",
+      "actualSha256": "da6033d35a00703b1556169b0c811a00983f9e680fb61eb01b812d8430b3ddd6",
+      "matches": true
+    },
+    {
+      "artifact": "tests/architecture/fixtures/invalid-generic-retry-dependency/package.json",
+      "claimedSha256": "daf1731cf14bef60cc7951d3af4fe520913b7c5ada51a060c0f012b896c1ad41",
+      "actualSha256": "daf1731cf14bef60cc7951d3af4fe520913b7c5ada51a060c0f012b896c1ad41",
+      "matches": true
+    },
+    {
+      "artifact": "tests/architecture/fixtures/invalid-generic-retry-wrapper/apps/aroma-gateway/src/retry.ts",
+      "claimedSha256": "f5ee2b74f46a79882d1d11b35d6338d927448c3776fb651e2ba1ea49639da4ae",
+      "actualSha256": "f5ee2b74f46a79882d1d11b35d6338d927448c3776fb651e2ba1ea49639da4ae",
+      "matches": true
+    },
+    {
+      "artifact": "tests/architecture/fixtures/invalid-postgres-url/apps/orders-service/src/bad.ts",
+      "claimedSha256": "ed98b1737137adff9c754da63df2b77fdc7fd60e665f9adf0dd41cf291b6edc9",
+      "actualSha256": "ed98b1737137adff9c754da63df2b77fdc7fd60e665f9adf0dd41cf291b6edc9",
+      "matches": true
+    },
+    {
+      "artifact": "tests/architecture/fixtures/invalid-provider-fetch/apps/aroma-gateway/src/bad.ts",
+      "claimedSha256": "e8421d5ef4bd749a972cd8c799ee36d3b34a8a58604c16aed6bb6ee3eed2f96d",
+      "actualSha256": "e8421d5ef4bd749a972cd8c799ee36d3b34a8a58604c16aed6bb6ee3eed2f96d",
+      "matches": true
+    },
+    {
+      "artifact": "tests/architecture/fixtures/invalid-provider-proxy/apps/aroma-gateway/src/bad.ts",
+      "claimedSha256": "c9bdb37566e72a5630274fdfdb0dce091a22b6293ba35de556bd9652a6ac739d",
+      "actualSha256": "c9bdb37566e72a5630274fdfdb0dce091a22b6293ba35de556bd9652a6ac739d",
+      "matches": true
+    },
+    {
+      "artifact": "tests/aroma/catalog-export.test.mjs",
+      "claimedSha256": "30b6dadc007bf1d140cf86a69fb74e480824b34c9c28eabd475ed5088238a063",
+      "actualSha256": "907014d961b36f4a6892a1ca2b34f9ef8dc51ed5ff1a43cc17ff8fb50b69d9b2",
+      "matches": false
+    },
+    {
+      "artifact": "tests/aroma/gateway-production-composition.test.mjs",
+      "claimedSha256": "c24c669eac9860038e4bf26d6eb8d8e4069709c035985214aa255092d69a3b10",
+      "actualSha256": "b26b43570bc42deac1bec738c1a29e121c6534d171d45e06abe618926aada50f",
+      "matches": false
+    },
+    {
+      "artifact": "tests/aroma/mutation-journal.test.mjs",
+      "claimedSha256": "d0e3e3a6d204fea7ebc53445bf5a8c80b05c3ab474260c3b55613f8b34cd3a8c",
+      "actualSha256": "0661cc2f3ca067e8d4a71cf06a888b31ec8e780d8fc83b23e850ffe45ca222b6",
+      "matches": false
+    },
+    {
+      "artifact": "tests/aroma/provider-catalog-source.test.mjs",
+      "claimedSha256": "d5a26f973c6a206792807d065cd8aa2adb5e95c6697d57ab931d0d8ead64c27e",
+      "actualSha256": "9caa9e0d9e2e26abccbdc01abbbc72a56600759b8cfd9e7a09b1d8fe13d527f2",
+      "matches": false
+    },
+    {
+      "artifact": "tests/aroma/provider-decoder.test.mjs",
+      "claimedSha256": "e2bb6e7ca1e2272902076d58338052757ee0cb9ab3448607790a9d01f5b1d2ae",
+      "actualSha256": "d9ceb307fd7aa707bc1185286c7865b9b50f7578b0745b125e131ecfb6b73a1b",
+      "matches": false
+    },
+    {
+      "artifact": "tests/aroma/provider-http.test.mjs",
+      "claimedSha256": "3f14c018e72de502b72d2811605ea7e6350590506ca32401416960c9e58dee5d",
+      "actualSha256": "3f14c018e72de502b72d2811605ea7e6350590506ca32401416960c9e58dee5d",
+      "matches": true
+    },
+    {
+      "artifact": "tests/aroma/provider-session.test.mjs",
+      "claimedSha256": "6b6c78eba43b9a3c920c62d91c3250ee0ab1590b4ee17368246946a8744df6db",
+      "actualSha256": "2412f613985f2fb29412ebdec95ea066d6421ba3a992f3931aad6742227e9c5a",
+      "matches": false
+    },
+    {
+      "artifact": "tests/runtime/lifecycle.test.mjs",
+      "claimedSha256": "9e68b0e240e4fdb75434a520256ab3a6415a524360cdae3b31c3b2e1a180b6ac",
+      "actualSha256": "9e68b0e240e4fdb75434a520256ab3a6415a524360cdae3b31c3b2e1a180b6ac",
+      "matches": true
+    },
+    {
+      "artifact": "tools/compose-smoke.mjs",
+      "claimedSha256": "fecd0b5f06790c63bb8647a64ca6ab75902f1ddf48b88547adfaafb993e34b0a",
+      "actualSha256": "e26002e2e28e424acea3391422348456225770f1809dd0f704d715225e924010",
+      "matches": false
+    }
+  ]
+}

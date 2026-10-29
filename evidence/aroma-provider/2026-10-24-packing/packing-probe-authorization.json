@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "authorizedAtUtc": "2026-10-24T11:29:06.478854+00:00",
+  "userAuthorization": "Разрешаю этот probe и точный cleanup",
+  "operatorSha256": "70949e6ababafe8cb8efa0c721662eeaff2a72d6e82d2963cdd1e3594ce1cf31",
+  "providerOfferId": "445",
+  "maximumQuantity": "1",
+  "maxPostAttempts": 1,
+  "maxDeleteAttempts": 1,
+  "maxLogicalSafeReads": 4,
+  "maxPhysicalSafeReadAttemptUpperBound": 8,
+  "packingMismatchCleanupException": "only exact singleton line created by this probe after two matching full GETs",
+  "globalG16GuardChanged": false,
+  "g16Admission": false
+}

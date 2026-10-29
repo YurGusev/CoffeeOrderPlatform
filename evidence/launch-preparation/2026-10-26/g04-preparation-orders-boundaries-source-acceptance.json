@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-27T01:32:07.627627+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "path": "packages/platform-testing/test/platform-packages.test.mjs",
+  "beforeSha256": "eea379cf8abd04ef53eaeda6b46db9c57f1874e2cb5a6700d9c74274dab9c0ef",
+  "afterSha256": "ee02924ecb78042dbb23c969fdb64223fb0fea7f07941ae34a08b4923568ccc7",
+  "patch": "/home/yurgusev/.cache/coffee-issue13/g04-multiservice-boundaries-20261027/own.patch",
+  "patchSha256": "0e271eef95118ef117f6cf0d70fb93914bd9cad9024bdbdce61ec387a168a85b",
+  "review": {
+    "model": "gpt-6-astra",
+    "status": "Accepted"
+  },
+  "rootIndependentResult": {
+    "path": "/home/yurgusev/.cache/coffee-issue13/g04-multiservice-boundaries-20261027/root-independent-result.json",
+    "sha256": "3e7fce8b247e98bffe87d53513317aacdd92df61068270636a1ae198cb5bf856",
+    "passedTests": 17,
+    "failedTests": 0
+  },
+  "cases": [
+    "Production Preparation telemetry on existing successful recovery/unchanged and Inbox refusal SQL scenarios",
+    "Duplicate quote line for different valid item rejected with no committed effects",
+    "Valid100-item draft rejects101st item, rollback and state unchanged",
+    "Empty Draft Confirm rejected without Desired/Outbox/history/idempotency effects"
+  ],
+  "limits": [
+    "Strict SQL mocks, not realPGatomicity",
+    "Full G04 coverage delta NOT_RUN",
+    "No runtime source, thresholds, schemas, credentials or RootHEAD changes"
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "status": "PACKING_PROVEN_FOR_OFFER_445_ONLY",
+  "scope": "authenticated read-only existing-account source discovery; not G16 admission",
+  "accountFingerprintVerified": true,
+  "providerCartMutations": 2,
+  "providerProfileMutations": 0,
+  "typedLogins": 3,
+  "catalogPagesRead": 1,
+  "catalogProductsObserved": 10,
+  "catalogPackingFactsFound": 0,
+  "catalogScope": "only first page; no complete-catalog negative claim",
+  "uiGetPath": "/lk",
+  "httpStatus": 200,
+  "productJavascriptDiscovered": false,
+  "titleClassification": "verification-like",
+  "inlineStructuralMarkers": [
+    "document.cookie",
+    "atob"
+  ],
+  "initialChallengeHeuristicWasIncomplete": true,
+  "htmlBodiesPersisted": false,
+  "authenticatedInlineScriptsPersisted": false,
+  "cookiesOrProfilePersisted": false,
+  "scopedTmpfsRemoved": true,
+  "canonicalDefaultsChanged": false,
+  "liveProviderPackingSemanticsProven": true,
+  "guardRelaxed": false,
+  "publicChallengeReaEvidenceIds": [
+    "ev_5aad39b7f9ee8333f76fb487fb937557f58dc3bbe1b2db0f7e96fc3394c8fc7b",
+    "ev_88d9f57a4fba9c1daf8cc2f493145247d7a07947df2c97a1a7fe04cd2ada9ef1"
+  ],
+  "reaScope": "public verification page, not provider product source; no bypass",
+  "operatorReviewedSha256": "ec8d67bbf72d9e8bbcad90984f88648ffa096d7e77a6fe1e05d72b59efcf6505",
+  "operatorFinalSha256": "d787759d4dd92c2df57bda21001ffa1462c1816fa82953ebf691b18f52f386cc",
+  "laterOperatorDelta": "only safe source metadata/typed catalog page read; no new mutation or secret output",
+  "astraClosedFindings": [
+    "PACKING-READ-001",
+    "PACKING-READ-002"
+  ],
+  "recordedAtUtc": "2026-10-24T11:41:26.760457+00:00",
+  "historicalDatabaseResearch": {
+    "explicitUserAuthorization": true,
+    "readOnly": true,
+    "database": "coffeeorderdb",
+    "launchDatabaseTarget": false,
+    "sourceReceipt": "packing_sanitized_receipt.json",
+    "sourceSql": "packing_readonly.sql",
+    "currentAromaRows": 19844,
+    "currentAromaDistinctOffers": 150,
+    "observedAromaRows": 155,
+    "allMappingPackingValuesNull": true,
+    "candidateCoffee1000gOffers": 23,
+    "dataAgeDaysApprox": 29,
+    "rawProviderProvenanceProven": false,
+    "freshProviderLookupRequired": true,
+    "legacyCodeOrModelsCopied": false
+  },
+  "freshHistoricalOfferLookup": {
+    "receipt": "fresh-catalog-offers-receipt.json",
+    "status": "LOOKUP_INCOMPLETE",
+    "accountFingerprintVerified": true,
+    "loginCalls": 1,
+    "catalogPagesRead": 10,
+    "pageSize": 10,
+    "foundProviderOfferIds": [
+      "445",
+      "447",
+      "473",
+      "475",
+      "479"
+    ],
+    "wholeBean1000gCoffeeCandidateIds": [
+      "445",
+      "473"
+    ],
+    "explicitPackingFieldPresent": false,
+    "scopedTmpfsRemoved": true,
+    "providerCartMutations": 0,
+    "providerProfileMutations": 0,
+    "operatorSha256": "3f52584317174dfb454a76b4c3259348b7b964401f246ca3c4d298dfbcd8e088",
+    "astraClosedFindings": [
+      "PACKING-CATALOG-001",
+      "PACKING-CATALOG-002"
+    ]
+  },
+  "g16GuardAnalysis": {
+    "catalogPackingAbsent": true,
+    "immutableSourceBindingOmitsAbsentFacts": true,
+    "cartObservationDoesNotUpdateCatalogBinding": true,
+    "bindingPackingGuardCannotPassCurrentCatalog": true,
+    "guardRelaxed": false,
+    "boundedProtocolProbePreparedOnly": true
+  },
+  "freshPackingProbe": {
+    "schemaVersion": 1,
+    "status": "PROVEN_FOR_OFFER_445_ONLY",
+    "sourceReceipt": "packing-probe-94dc4950-4c10-4c7c-ab2d-62e46ccb9d46.json",
+    "receiptSha256": "63a9ad4b968dfdc4e405c1d31705596ec68c00c0243c1d04ef04c3a4d1160284",
+    "operatorSha256": "64b37305ce8abe73201caea5c8c8a63f5cba51eced58dde4549031a95e4760e2",
+    "providerOfferId": "445",
+    "packing": "Aroma",
+    "grindId": null,
+    "grindFactBasis": "COMPLETE + createdLineProven from reviewed exactProbeLine: grindId===null before both post/pre-delete reads",
+    "quantity": 1,
+    "accountFingerprint": "sha256:2f8dd83aa108ac1734086d80886592520ec814ae4912bc0f0dcfc2deeceffe2f",
+    "observedAtUtc": "2026-10-24T11:38:20.779Z",
+    "baselineRestored": true,
+    "scopedMaterialRemoved": true,
+    "packingMismatchExceptionUsed": false,
+    "g16Admission": false,
+    "globalGuardChanged": false,
+    "calls": {
+      "login": 1,
+      "logicalSafeReads": 4,
+      "physicalSafeReadAttemptUpperBound": 8,
+      "post": 1,
+      "delete": 1
+    }
+  },
+  "g16Admission": false
+}

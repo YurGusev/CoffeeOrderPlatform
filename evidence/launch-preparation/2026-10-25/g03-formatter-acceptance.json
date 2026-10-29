@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-25T01:24:03.303178+00:00",
+  "authorization": {
+    "questionCall": "call_c0886558d67d4a078271ec71157cf2d0",
+    "humanAnswer": "\u0420\u0430\u0437\u0440\u0435\u0448\u0430\u044e \u0443\u043a\u0430\u0437\u0430\u043d\u043d\u044b\u0439 formatter scope \u0438 baseline",
+    "proposal": "evidence/launch-preparation/2026-10-24/g03-format-policy-authority-proposal.md",
+    "originalInventorySha256": "2133d049cedc1c3324b920f1a0b89a8b8d49e26b0214d4a5b07c4e701cffbd58"
+  },
+  "formatterVersion": "3.9.6",
+  "eligibleFiles": 637,
+  "changedFiles": 531,
+  "protectedFilesUnchangedDuringBaseline": 1646,
+  "outsideScopeChangesDuringBaseline": [],
+  "preFormatRecoveryArchive": {
+    "path": "/home/yurgusev/.cache/coffee-issue13/g03-baseline-20261025T012010Z/pre-format-source.tar.gz",
+    "sha256": "602d3d0d9888e131c6b72bcca5019197fe53096f42aeae4cc03ee9812f0e08b5",
+    "mode": "0600"
+  },
+  "firstWriteExitCode": 0,
+  "firstCheck": {
+    "exitCode": 1,
+    "reason": "Pinned Prettier changed formatting again for five files, with no concurrent source edits. Failure retained.",
+    "log": "g03-first-check-failed.log"
+  },
+  "secondPassPaths": [
+    "apps/aroma-gateway/src/transport/http/index.ts",
+    "apps/catalog-service/src/application/search-catalog.ts",
+    "apps/catalog-service/src/main.ts",
+    "apps/orders-service/src/infrastructure/database/order-store.ts",
+    "packages/platform-outbox/src/index.ts"
+  ],
+  "formatterOutputParity": {
+    "matchedFiles": 637,
+    "mismatches": [],
+    "method": "Current bytes equal pinned Prettier output of archived pre-baseline bytes; at most two deterministic passes. No semantic edits between these snapshots."
+  },
+  "workingTreeExactCommand": {
+    "schemaVersion": 1,
+    "gateId": "G03_STATIC",
+    "scope": "actual standalone working-tree command; not clean-candidate launch admission",
+    "command": "pnpm format:check && pnpm lint && pnpm typecheck",
+    "secondPassPaths": [
+      "apps/aroma-gateway/src/transport/http/index.ts",
+      "apps/catalog-service/src/application/search-catalog.ts",
+      "apps/catalog-service/src/main.ts",
+      "apps/orders-service/src/infrastructure/database/order-store.ts",
+      "packages/platform-outbox/src/index.ts"
+    ],
+    "exitCode": 0,
+    "startedAtUtc": "2026-10-25T01:21:35.772802+00:00",
+    "finishedAtUtc": "2026-10-25T01:22:16.847415+00:00",
+    "logSha256": "f02157547be6b696c9459f42bc5b6caf324b32d2d30d31a8314b01eb70a2864e"
+  },
+  "candidateVerification": {
+    "candidateSha": "2ddf8a352b0df0c45bbf2dfe0a28bebfce4b9986",
+    "runId": "20261025T012855Z-2ddf8a3",
+    "result": "PASS",
+    "evidence": "evidence/launch/20261025T012855Z-2ddf8a3/gates/G03_STATIC/artifacts/static-result.json",
+    "scope": "Standalone exact command on clean candidate, not ordered launch admission. Baseline inventory remains the pre-test-correction snapshot."
+  },
+  "inventorySha256": "16b7090a640767dea0b181195a2d2e1076f859e5c404c00168ed2853c0c84251"
+}

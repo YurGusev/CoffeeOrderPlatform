@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T18:23:12.945718+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "file": "/home/yurgusev/CoffeeOrderPlatform/tests/config/observability-bootstrap.test.mjs",
+  "fileSha256": "c55ab90e9d33cfaa1b53d55408c56096049bf65fcd29c6245bbe37cdaa71dde1",
+  "scope": [
+    "Reject orphan G15 lineage markers before PostgreSQL connection.",
+    "Reject bundle removed after read and receipt removed after realpath; restore exact owned fixture bytes/mode and mocked builtins."
+  ],
+  "checks": {
+    "workerNarrow": "PASS 1/1",
+    "rootIndependentNarrow": "PASS 1/1, 17494.88 ms",
+    "workerFormatTypeAwareLintDiff": "PASS",
+    "astra": "Accepted"
+  },
+  "artifacts": [
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/bootstrap-orphan-g15-20261026T180201Z/own.patch",
+      "sha256": "4084024e0ca155ddc6450135f641cce4fdb8998f06cdf349fa1bed41036954b0"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/bootstrap-snapshot-toctou-20261026T180809Z/own.patch",
+      "sha256": "07414fa51ad128d5d7f0138d5d3b7e6b80622c595b33cc16213a1f01406e1955"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/bootstrap-snapshot-toctou-20261026T180809Z/root-independent.log",
+      "sha256": "e45b610e9da6a48e5b79201b3c7b4d32f19fa5fb186fa19667d365c0d2e93e39"
+    }
+  ],
+  "limitations": [
+    "Deterministic Node filesystem mocks and readonly PostgreSQL mock; not a real concurrent filesystem attack or PostgreSQL durability proof.",
+    "These deltas are not in full G04 run 20261026T180137Z-0a6a0b3.",
+    "Root file contains unrelated Tasty WIP; integrate only own patches into private #13 candidate."
+  ]
+}

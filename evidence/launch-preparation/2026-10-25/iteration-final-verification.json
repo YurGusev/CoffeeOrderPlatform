@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-25T01:35:36.963234+00:00",
+  "candidateSha": "2ddf8a352b0df0c45bbf2dfe0a28bebfce4b9986",
+  "runId": "20261025T012855Z-2ddf8a3",
+  "decision": "НЕ ДОПУСТИТЬ",
+  "scope": "Standalone verification of authorized formatter baseline and subsequent test corrections. No new full G00–G19 launch run or cross-SHA admission.",
+  "G03": {
+    "status": "PASS",
+    "command": "pnpm format:check && pnpm lint && pnpm typecheck",
+    "evidence": "evidence/launch/20261025T012855Z-2ddf8a3/gates/G03_STATIC/artifacts/static-result.json"
+  },
+  "G04": {
+    "status": "FAIL",
+    "failureCode": "UNIT_COVERAGE_THRESHOLD_FAILED",
+    "unitTests": {
+      "tests": 474,
+      "pass": 474,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "criticalModulesMeasured": 16,
+    "floors": {
+      "lines": 90,
+      "functions": 90,
+      "branches": 85
+    },
+    "passingModules": [
+      "platform-config",
+      "platform-runtime"
+    ],
+    "failingModules": [
+      "trusted-config-bootstrap",
+      "persistence-foundation",
+      "durable-delivery",
+      "kafka-runtime",
+      "security-trust",
+      "customer-service",
+      "catalog-service",
+      "pricing-service",
+      "orders-service",
+      "aroma-convergence",
+      "aroma-preparation",
+      "aroma-observer",
+      "aroma-gateway",
+      "public-api-trust"
+    ],
+    "evidence": "evidence/launch/20261025T012855Z-2ddf8a3/gates/G04_UNIT/artifacts/unit-result.json"
+  },
+  "independentGateSuites": {
+    "status": "PASS",
+    "tests": 130,
+    "pass": 130,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "command": "node --test --test-concurrency=1 verification/launch/v1/runner.test.mjs verification/launch/v1/scenarios/preflight.test.mjs tests/runtime/permissions.test.mjs tests/compose/topology.test.mjs tests/database/db-bootstrap.test.mjs tests/tools/security-scan.test.mjs",
+    "log": "/tmp/issue13-post-format-gate-final-20261025.log",
+    "logSha256": "58b3fe9397f0a96ddde6cdf79dff2d3131f20f0a96440320fa88b17ca3dec1d8",
+    "archivedLog": "evidence/launch-preparation/2026-10-25/gate-suites-final.log"
+  },
+  "finalChecks": {
+    "securitySecrets": "PASS",
+    "gitDiffCheck": "PASS",
+    "candidateGitClean": true,
+    "sourceParityFiles": 1405,
+    "rootAndAstraSourceParity": "PASS",
+    "historicalPreparationChecksums": "57/57 PASS",
+    "standaloneChecksums": "8/8 PASS for each of 4edff8a and 2ddf8a3",
+    "astraFormatterReview": "ACCEPTED",
+    "astraElevenTestDeltaReview": "ACCEPTED",
+    "astraFinalNumericalEvidenceReview": "ACCEPTED",
+    "documentationReview": "Astra accepted facts/handoff/Obsidian; G03-ARCHIVE-001 corrected by root and independently checked against actual clean HEAD"
+  },
+  "cleanup": "host-prerequisites-and-cleanup.json",
+  "formatterScratchCleanup": "formatter-scratch-cleanup.json",
+  "noRemoteMutation": true,
+  "noProviderRequests": true,
+  "runtimeStackStarted": false,
+  "sourceFreeze": true
+}

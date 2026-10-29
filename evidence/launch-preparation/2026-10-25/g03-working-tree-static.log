@@ -1,0 +1,5 @@
+$ node scripts/format.mjs
+Checking formatting...
+All matched files use Prettier code style!
+$ oxlint --type-aware --deny-warnings --ignore-pattern 'tests/architecture/fixtures/**' --ignore-pattern 'packages/generated/**' --ignore-pattern 'packages/platform-ui/provenance/**' apps packages scripts tests verification
+$ tsc -b --pretty false

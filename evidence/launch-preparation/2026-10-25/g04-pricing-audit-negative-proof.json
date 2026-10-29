@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "scope": "Negative mutation of test fixture only; no production source modification",
+  "sourceSha256": "11ac988d798088d2ca637e2bfb7cb5349e91948a3a886c5e462dbfba62def608",
+  "expectedFailure": "earlier SELECT failure must not satisfy audit-attempt proof",
+  "exitCode": 1,
+  "observedAuditAttemptAssertionFailure": true,
+  "logSha256": "7fa21540032a9011432a45d90fe284bd6ca50cf4a0e98b14ef1d9609355005b3",
+  "temporaryCopyRemoved": true,
+  "productionTestUnchanged": true,
+  "capturedAtUtc": "2026-10-25T15:01:07.214835+00:00"
+}

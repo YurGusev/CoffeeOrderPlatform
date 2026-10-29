@@ -1,0 +1,5 @@
+apps/aroma-gateway/src/transport/http/index.ts 317ms
+apps/catalog-service/src/application/search-catalog.ts 96ms
+apps/catalog-service/src/main.ts 37ms
+apps/orders-service/src/infrastructure/database/order-store.ts 270ms
+packages/platform-outbox/src/index.ts 159ms

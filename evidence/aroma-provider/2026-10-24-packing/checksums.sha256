@@ -1,0 +1,16 @@
+b9604729f90e93366b3c20ebfc6068d69ad8fc0ddde36f48cb7cb9694d8d1e8b  evidence/aroma-provider/2026-10-24-packing/README.md
+f2a042a986eb5f8b696a671d1dbff385ea7d52187d55f64cf4c709d124cc59f6  evidence/aroma-provider/2026-10-24-packing/authenticated-catalog-shape-receipt.json
+4e82ebe10cc2e3786f9a3c57094132eb52fc3ca479b9fed07729642741c63ac8  evidence/aroma-provider/2026-10-24-packing/authenticated-ui-metadata-receipt.json
+db3f610fec89d2099b1fcef7600556b02ba84fa57cf27626aea0ccad7437e20a  evidence/aroma-provider/2026-10-24-packing/authenticated-ui-source-receipt.json
+e95f94fe9ee7bb663bd1032be54f311c05be51dfbdac62d5b8342d1c96cc7373  evidence/aroma-provider/2026-10-24-packing/conclusions.json
+dab7989193a0c98454f1e1ceda4e59e57a2a8346ca64e8667f078a567e3c1ab4  evidence/aroma-provider/2026-10-24-packing/fresh-catalog-offers-receipt.json
+a27f0fde8b2f6f8c2adcebd176b090a210615c218196612bbd0d6dc377ca95d9  evidence/aroma-provider/2026-10-24-packing/packing-probe-24efc3a4-b49e-4b6c-943d-905ec733a7a8-pre-provider-failure.marker
+b72d4164d8469df672f634a42ca10cd3ab503c5f5b807f99946c60546c7ffb00  evidence/aroma-provider/2026-10-24-packing/packing-probe-24efc3a4-b49e-4b6c-943d-905ec733a7a8.json
+63a9ad4b968dfdc4e405c1d31705596ec68c00c0243c1d04ef04c3a4d1160284  evidence/aroma-provider/2026-10-24-packing/packing-probe-94dc4950-4c10-4c7c-ab2d-62e46ccb9d46.json
+f52b5e393444101fd4cb5395af67f2d8cb828045154190e4fc50115ae05fead2  evidence/aroma-provider/2026-10-24-packing/packing-probe-authorization-setup-correction.json
+18f58f34a39b73caca8c2dc38e2cd073973be3a87a2e3923e1ebbf7bcc041ddc  evidence/aroma-provider/2026-10-24-packing/packing-probe-authorization.json
+2f29a7750baa1fdebb41b0dbae11ed57eb8067eefeefd749aedbbc0d6cbc0ebd  evidence/aroma-provider/2026-10-24-packing/packing-probe-consumed.marker
+58bfd77bc88be465cf62e6915459c4f5c14d02bc31c29e5c4c653849cd1143bc  evidence/aroma-provider/2026-10-24-packing/packing-probe-plan.md
+2ae7f8d6f81ac624a0daedc04322e7e0767c0fd47be8bd10e4aad4e065f4b742  evidence/aroma-provider/2026-10-24-packing/packing-wire-facts.json
+7eed407f2622c6aeba0413ed992966cc86a5b7bb463b07f7d986a6d662105be1  evidence/aroma-provider/2026-10-24-packing/packing_readonly.sql
+3bf377b7ab473563e3fea57a208d40c6c28ade48921bb82cd30a1b86fe4ca7ca  evidence/aroma-provider/2026-10-24-packing/packing_sanitized_receipt.json

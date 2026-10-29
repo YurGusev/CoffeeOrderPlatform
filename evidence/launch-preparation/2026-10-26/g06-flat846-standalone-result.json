@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_STANDALONE",
+  "scope": "Actual command success on same flat846 candidate; not ordered G00-G19 admission",
+  "commandResult": {
+    "command": [
+      "env",
+      "-u",
+      "SOPS_AGE_KEY_FILE",
+      "pnpm",
+      "architecture:check"
+    ],
+    "exitCode": 0,
+    "startedAtUtc": "2026-10-26T23:01:44.052065+00:00",
+    "finishedAtUtc": "2026-10-26T23:02:30.183240+00:00",
+    "runId": "20261026T225308Z-846858a",
+    "candidateSha": "846858acf97b559de3884d18d54c55695d5a2d6d",
+    "watchdogSignalSent": false,
+    "watchdogTarget": {
+      "pid": 3503286,
+      "startTicks": "40218201"
+    },
+    "logPath": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/g06-flat-846-command.log",
+    "logSha256": "3c8e86737957232047d099323df67dcb8017affd63420e659e8be0f60a5077f2",
+    "scope": "Standalone G06_ARCHITECTURE on same-SHA flat846858a checkout; prior nested-clone FAIL preserved; no admission"
+  },
+  "testCounts": {
+    "passed": 73,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "limitations": [
+    "Other gate results are not inherited from older SHA/run",
+    "Runtime/provider/CPU behavior not established by this static gate"
+  ],
+  "observedFacts": {
+    "architectureChecker": "PASS",
+    "fixtures": "73/73 including GREEN/RED and canonical/single-threaded Oxlint diagnostic parity",
+    "priorCommandOnlyEvidence": "Not equivalent to this full architecture fixture run"
+  }
+}

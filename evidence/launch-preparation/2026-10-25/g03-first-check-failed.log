@@ -1,0 +1,9 @@
+$ node scripts/format.mjs
+Checking formatting...
+[warn] apps/aroma-gateway/src/transport/http/index.ts
+[warn] apps/catalog-service/src/application/search-catalog.ts
+[warn] apps/catalog-service/src/main.ts
+[warn] apps/orders-service/src/infrastructure/database/order-store.ts
+[warn] packages/platform-outbox/src/index.ts
+[warn] Code style issues found in 5 files. Run Prettier with --write to fix.
+[ELIFECYCLE] Command failed with exit code 1.

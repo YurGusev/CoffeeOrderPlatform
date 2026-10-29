@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-27T00:26:01.440960+00:00",
+  "status": "SOURCE_ACCEPTED_NARROW_TESTS_PASS_FULL_G04_PENDING",
+  "file": "/home/yurgusev/CoffeeOrderPlatform/tests/config/observability-bootstrap.test.mjs",
+  "currentRootFileSha256": "f1f5ab37e2ec72709e30265c228f03f4128ea09c0b5c8ee7b3b9929066bd1faa",
+  "review": "Root and Astra accepted saved-bundle round-trip failure guards and NSS partial tmpfs cleanup; foreign/earlier Root hunks preserved",
+  "checks": [
+    {
+      "integrationProof": "/home/yurgusev/.cache/coffee-issue13/g04-g08-roundtrip-root-integration-proof.json",
+      "integrationProofSha256": "08a2bf74b62bde394c84187643fa5ebbf9eef78bb4b579cfc746ff021eeaba12",
+      "ownPatchSha256": "dee8a7e1cb668383df7a420194181383d5177142bcd21a9b4f4b6d5f77f943a6",
+      "reverseRestoresOriginalRootBytes": true,
+      "independentLog": "/home/yurgusev/.cache/coffee-issue13/g04-g08-roundtrip-root-independent.log",
+      "logSha256": "e13b5ee938328b6e5d783d5410c7b1018150cd011292a67b9112311e419ac393",
+      "passed": 2,
+      "skipped": 0,
+      "exitCode": 0
+    },
+    {
+      "integrationProof": "/home/yurgusev/.cache/coffee-issue13/g04-g15-nss-root-integration-proof.json",
+      "integrationProofSha256": "1d0f8e6a3084ebb174efa4a304118d2476433672d1644333069d2d4253bba8c8",
+      "ownPatchSha256": "7533711391592c9531a2b1d2d78b9a393ed0ff7b1c9f002c3e0446dc30792cd0",
+      "reverseRestoresOriginalRootBytes": true,
+      "independentLog": "/home/yurgusev/.cache/coffee-issue13/g04-g15-nss-root-independent.log",
+      "logSha256": "14019fbbdd200437121adadbe9b69cc9d81f15f36ce22154c76a950b3e84815e",
+      "passed": 1,
+      "skipped": 0,
+      "exitCode": 0
+    }
+  ],
+  "runtimeBootstrapSha256Unchanged": "005cd40b62da0df078644be2c2e08efea12e2f57ea8165902e49ad5810787817",
+  "encryptedSopsSha256Unchanged": "907ee787fa30c904a3770e262eb92cce5e0c8973716bd372c6afc2a7bd84dca2",
+  "limits": [
+    "Fake SOPS and injected subprocess error; real SOPS/PG/NSS import/provider not proven",
+    "No full G04 coverage rerun; no threshold or affinity changes"
+  ]
+}
