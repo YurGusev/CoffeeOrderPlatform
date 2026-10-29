@@ -361,6 +361,12 @@ export function openStream(
   return stream;
 }
 export async function nativeProducer() {
+  const { assertFixtureKafkaNamespaceBound } = await import("./setup.mjs");
+  const physicalTargets = assertFixtureKafkaNamespaceBound(
+    fixture.config,
+    "orders-service",
+    fixture.launchIdentity,
+  );
   const { createNativeProducer } =
     await import("../../../packages/platform-kafka-runtime/dist/native.js");
   const producer = await createNativeProducer({
@@ -372,6 +378,7 @@ export async function nativeProducer() {
     clientId: `issue12-publisher-${process.pid}`,
     maxPending: 10000,
     maxMessageBytes: 1048576,
+    physicalTargets,
     sendTimeoutMs: 5000,
     receiveTimeoutMs: 5000,
     commitTimeoutMs: 5000,

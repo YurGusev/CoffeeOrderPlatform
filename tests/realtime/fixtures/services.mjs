@@ -3,13 +3,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import https from "node:https";
-import {
-  createHash,
-  createPublicKey,
-  generateKeyPairSync,
-  randomUUID,
-  sign,
-} from "node:crypto";
+import { createPublicKey, generateKeyPairSync, randomUUID } from "node:crypto";
 import {
   createMutualTlsServerOptions,
   parseServiceTransportMaterial,
@@ -18,6 +12,7 @@ import {
 } from "../../../packages/platform-security/dist/index.js";
 
 import { nowMs } from "./protocol.mjs";
+import { createOidcProviderServer } from "./oidc-provider.mjs";
 const fixture = JSON.parse(await readFile("/fixture/fixture.json", "utf8"));
 const kind = process.argv[2];
 const send = (res, status, body, extra = {}) => {
@@ -58,101 +53,17 @@ if (kind === "idp") {
     use: "sig",
     alg: "RS256",
   };
-  const codes = new Map();
   const material = fixture.materials.idp;
-  const jwt = (claims) => {
-    const head = Buffer.from(
-        JSON.stringify({ alg: "RS256", typ: "JWT", kid: jwk.kid }),
-      ).toString("base64url"),
-      body = Buffer.from(JSON.stringify(claims)).toString("base64url");
-    return `${head}.${body}.${sign("RSA-SHA256", Buffer.from(`${head}.${body}`), key.privateKey).toString("base64url")}`;
-  };
-  server = https.createServer(
-    { key: material.keyPem, cert: material.certPem, minVersion: "TLSv1.3" },
-    (req, res) => {
-      void (async () => {
-        const url = new URL(req.url, "https://idp.fixture.invalid");
-        if (req.method === "GET" && url.pathname === "/health/live")
-          return send(res, 200, { live: true });
-        if (req.method === "GET" && url.pathname === "/keys")
-          return send(res, 200, { keys: [jwk] });
-        if (req.method === "GET" && url.pathname === "/authorize") {
-          for (const [code, data] of codes)
-            if (data.expires < nowMs()) codes.delete(code);
-          assert.ok(codes.size < 1000);
-          assert.equal(
-            url.searchParams.get("client_id"),
-            fixture.config.browserOidc.clientId,
-          );
-          assert.equal(
-            url.searchParams.get("redirect_uri"),
-            fixture.config.browserOidc.redirectUri,
-          );
-          assert.equal(url.searchParams.get("response_type"), "code");
-          assert.equal(url.searchParams.get("code_challenge_method"), "S256");
-          const nonce = url.searchParams.get("nonce"),
-            state = url.searchParams.get("state"),
-            challenge = url.searchParams.get("code_challenge");
-          assert.ok(nonce && state && challenge);
-          const code = randomUUID();
-          codes.set(code, { nonce, challenge, expires: nowMs() + 60000 });
-          const callback = new URL(fixture.config.browserOidc.redirectUri);
-          callback.searchParams.set("code", code);
-          callback.searchParams.set("state", state);
-          res.writeHead(302, {
-            location: callback.href,
-            "cache-control": "no-store",
-          });
-          return res.end();
-        }
-        if (req.method === "POST" && url.pathname === "/token") {
-          const chunks = [];
-          let bytes = 0;
-          for await (const c of req) {
-            bytes += c.length;
-            assert.ok(bytes <= 8192);
-            chunks.push(c);
-          }
-          const p = new URLSearchParams(Buffer.concat(chunks).toString());
-          const pending = codes.get(p.get("code"));
-          codes.delete(p.get("code"));
-          assert.ok(
-            pending && pending.expires > nowMs(),
-            "unknown/expired/single-use code",
-          );
-          assert.equal(p.get("grant_type"), "authorization_code");
-          assert.equal(p.get("client_id"), fixture.config.browserOidc.clientId);
-          assert.equal(
-            p.get("redirect_uri"),
-            fixture.config.browserOidc.redirectUri,
-          );
-          assert.equal(
-            createHash("sha256")
-              .update(p.get("code_verifier") ?? "")
-              .digest("base64url"),
-            pending.challenge,
-          );
-          const now = Math.floor(nowMs() / 1000);
-          return send(res, 200, {
-            id_token: jwt({
-              iss: fixture.config.browserOidc.issuer,
-              aud: fixture.config.browserOidc.clientId,
-              sub: "synthetic-provider-subject",
-              actor_ref: "actor:issue12-transport",
-              permissions: ["orders:read:any", "orders:reconcile:any"],
-              nonce: pending.nonce,
-              iat: now,
-              exp: now + 3600,
-            }),
-          });
-        }
-        return fail(res, 404, "FIXTURE_ROUTE_NOT_FOUND");
-      })().catch(() => {
-        if (!res.headersSent) fail(res, 400, "FIXTURE_REQUEST_REJECTED");
-        else res.destroy();
-      });
-    },
-  );
+  server = createOidcProviderServer({
+    tlsKeyPem: material.keyPem,
+    tlsCertificatePem: material.certPem,
+    profile: fixture.config.browserOidc,
+    signingKey: key.privateKey,
+    jwk,
+    actorRef: "actor:issue12-transport",
+    permissions: ["orders:read:any", "orders:reconcile:any"],
+    onFail: (res, status, code) => fail(res, status, code),
+  });
   server.listen(443, "0.0.0.0");
 } else if (kind === "orders") {
   const material = parseServiceTransportMaterial(

@@ -1,0 +1,1349 @@
+import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import test from "node:test";
+import { load } from "js-yaml";
+import {
+  G15_BROWSER_REQUIRED_CHECKS,
+  createG15BrowserNetworkMonitor,
+  buildG15RealtimeAuthCloseInvocation,
+  proveNaturalSseReauthentication,
+  expectedG15CompletedResponse,
+  hasG15OrderRefetchAfterReady,
+  hasG15ReadForRequest,
+  hasG15OrderRealtimeRefetch,
+  matchesG15Mutation,
+  parseG15RealtimeAuthCloseMetric,
+  proveG15Browser,
+  validateG15BrowserEvidence,
+  validateG15BrowserRuntimeArtifact,
+} from "../../tools/g15-browser-proof.mjs";
+import {
+  validateG15BrowserChildContext,
+  validateG15BrowserChildProcess,
+  validateG15BrowserFailureReceipt,
+  validateG15BrowserParentRuntime,
+  persistG15BrowserFailureFromChild,
+  validateG15BrowserChildFailureDiagnostic,
+  prepareG15BrowserChildCheckout,
+} from "../../verification/launch/v1/scenarios/browser.mjs";
+
+const RUN_ID = "20261025T132252Z-085cdd6";
+const CANDIDATE_SHA = "a".repeat(40);
+const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const ORDER_REF = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+const ITEM_REF = "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+
+function validEvidence() {
+  const hash = "b".repeat(64);
+  const summary = (tableNames) => ({
+    state: "Completed",
+    idempotencyRows: 1,
+    resourceSha256: hash,
+    tableCounts: Object.fromEntries(tableNames.map((name) => [name, 1])),
+    businessDigest: hash,
+  });
+  const checkDetails = {
+    oidcLogin: { authenticatedSession: true, servedIngress: true },
+    servedAssets: { scriptCount: 1, stylesheetCount: 1 },
+    customerLostResponseReplay: {
+      responseDroppedAtEdge: true,
+      completedReplayReadOnly: true,
+      pendingMetadataPiiFree: true,
+      replayStatus: 201,
+      replayed: true,
+    },
+    ownerRestartReadOnlyReplay: {
+      restartVerified: true,
+      sameIntentKeyRetained: true,
+      replayStatus: 201,
+      replayed: true,
+      ownerEffectsStable: true,
+    },
+    draftReplayAfterNewCard: {
+      secondCardCreatedFirst: true,
+      olderDraftReplayed: true,
+      olderCardDifferentFromNewCard: true,
+      replayStatus: 201,
+      replayed: true,
+    },
+    quoteLostResponseReplay: {
+      completedReplayReadOnly: true,
+      quoteSnapshotStable: true,
+      replayStatus: 201,
+      replayed: true,
+    },
+    draftItemPutAndEdit: {
+      createPutCompleted: true,
+      editPutCompleted: true,
+      createPutStatus: 200,
+      editPutStatus: 200,
+      itemCount: 1,
+    },
+    draftItemDelete: {
+      completed: true,
+      deleteStatus: 200,
+      deletedItemCount: 0,
+    },
+    inProgressReplay: {
+      status: 409,
+      problemCode: "IDEMPOTENCY_REQUEST_IN_PROGRESS",
+      keyRetained: true,
+      state: "Acquired",
+    },
+    notRetainedReplay: {
+      absent: true,
+      keySha256: hash,
+      status: 410,
+      problemCode: "IDEMPOTENCY_RESULT_NOT_RETAINED",
+      keyRetained: true,
+    },
+    lookupUnavailableReplay: {
+      status: 503,
+      problemCode: "IDEMPOTENCY_LOOKUP_UNAVAILABLE",
+      restoreVerified: true,
+      keyRetained: true,
+    },
+    sseRefetch: {
+      readyEvents: 1,
+      invalidations: 1,
+      ownerRefetches: 1,
+      invalidationObserved: true,
+      sameOrderRefetched: true,
+      projectionCaughtUp: true,
+    },
+    sameOrderStaleReplay: {
+      staleGetCancelledOrIgnored: true,
+      historicalReplayStatus: 200,
+      historicalReplayUsed: true,
+      sameOrderVerified: true,
+      projectionAdvanced: true,
+      olderReplayDidNotDowngrade: true,
+      ownerEffectsStable: true,
+    },
+    naturalSseReauthentication: {
+      authCloseCountDelta: 1,
+      eventSourceResponseDelta: 1,
+      streamReadyDelta: 1,
+      lastEventIdResumed: true,
+      sameActor: true,
+      sessionCookieStable: true,
+      ownerRefetchAfterReady: true,
+      within120Seconds: true,
+    },
+    optimisticConflict: {
+      status: 409,
+      ownerStateUnchanged: true,
+      staleVersionRejected: true,
+    },
+    deepLinkReload: { directRouteLoaded: true, reloadFetchedOwner: true },
+    apiFallback: { status: 404, jsonResponse: true, indexHtml: false },
+    assetFallback: {
+      missingStatus: 404,
+      missingReturnedIndex: false,
+      servedScriptCount: 1,
+      servedStylesheetCount: 1,
+    },
+    accessibility: {
+      customer: { violations: 0, seriousOrCritical: 0 },
+      order: { violations: 0, seriousOrCritical: 0 },
+    },
+    logoutAndActorSwitch: {
+      logoutStatus: 204,
+      sessionCookieCleared: true,
+      pendingIntentsCleared: true,
+      restrictedAccountSelected: true,
+    },
+    restrictedPermissionDenied: {
+      customerReadStatus: 403,
+      customerCreateStatus: 403,
+      ownerWriteAbsent: true,
+      businessBefore: {
+        tableCounts: {
+          customers: 1,
+          addresses: 1,
+          channelLinks: 1,
+          audit: 1,
+        },
+        businessDigest: hash,
+      },
+      businessAfter: {
+        tableCounts: {
+          customers: 1,
+          addresses: 1,
+          channelLinks: 1,
+          audit: 1,
+        },
+        businessDigest: hash,
+      },
+      businessUnchanged: true,
+      keySha256: hash,
+    },
+    noConfirmOrReconcile: { forbiddenMutationRequests: 0 },
+  };
+  return {
+    schemaVersion: 1,
+    runId: RUN_ID,
+    candidateSha: CANDIDATE_SHA,
+    status: "passed",
+    verificationOnly: true,
+    productionLogin: false,
+    checks: Object.fromEntries(
+      G15_BROWSER_REQUIRED_CHECKS.map((name) => [
+        name,
+        { passed: true, ...checkDetails[name] },
+      ]),
+    ),
+    owners: {
+      customer: summary(["customers", "addresses", "audit"]),
+      orders: {
+        draft: summary(["orders", "items", "history", "outbox"]),
+        put: summary(["orders", "item", "history", "outbox"]),
+        delete: summary(["orders", "item", "history", "outbox"]),
+      },
+      pricing: summary(["quotes", "quoteLines", "audit"]),
+    },
+    browser: {
+      driverStatus: "READY",
+      imageIdSha256: hash,
+      networkIdSha256: hash,
+      cleanup: "EXACT_OWNED_CONTAINER_REMOVED",
+      browserContexts: 1,
+      eventSourceResponses: 1,
+    },
+  };
+}
+
+void test("G15 mutation matcher admits only exact approved owner writes", () => {
+  assert.equal(
+    matchesG15Mutation(
+      {
+        url: "https://localhost:8443/api/client-v1/customers",
+        method: "POST",
+      },
+      "customer.create",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesG15Mutation(
+      {
+        url: "https://localhost:8443/api/client-v1/orders/drafts",
+        method: "POST",
+      },
+      "orders.draft.create",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesG15Mutation(
+      {
+        url: "https://localhost:8443/api/client-v1/pricing/quotes",
+        method: "POST",
+      },
+      "pricing.quote.create",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesG15Mutation(
+      {
+        url: `https://localhost:8443/api/client-v1/orders/${ORDER_REF}/items/${ITEM_REF}`,
+        method: "PUT",
+      },
+      "orders.item.put",
+      { orderRef: ORDER_REF, itemRef: ITEM_REF },
+    ),
+    true,
+  );
+  assert.equal(
+    matchesG15Mutation(
+      {
+        url: `https://localhost:8443/api/client-v1/orders/${ORDER_REF}/items/${ITEM_REF}`,
+        method: "DELETE",
+      },
+      "orders.item.delete",
+      { orderRef: ORDER_REF, itemRef: ITEM_REF },
+    ),
+    true,
+  );
+  for (const request of [
+    { url: "https://example.invalid/api/client-v1/customers", method: "POST" },
+    {
+      url: "https://localhost:8443/api/client-v1/customers?x=1",
+      method: "POST",
+    },
+    {
+      url: "https://localhost:8443/api/client-v1/orders/confirm",
+      method: "POST",
+    },
+    {
+      url: `https://localhost:8443/api/client-v1/orders/${ORDER_REF}/items/${ITEM_REF}`,
+      method: "POST",
+    },
+  ])
+    assert.equal(matchesG15Mutation(request, "customer.create"), false);
+  assert.equal(
+    matchesG15Mutation(
+      {
+        url: `https://localhost:8443/api/client-v1/orders/${ORDER_REF}/items/${ITEM_REF}`,
+        method: "PUT",
+      },
+      "orders.item.put",
+      { orderRef: `${ORDER_REF}x`, itemRef: ITEM_REF },
+    ),
+    false,
+  );
+  assert.equal(
+    matchesG15Mutation(
+      {
+        url: `https://localhost:8443/api/client-v1/orders/${ORDER_REF}/items/${ITEM_REF}?reconcile=1`,
+        method: "DELETE",
+      },
+      "orders.item.delete",
+      { orderRef: ORDER_REF, itemRef: ITEM_REF },
+    ),
+    false,
+  );
+});
+
+void test("G15 natural SSE wait propagates a stop request immediately", async () => {
+  let stopChecks = 0;
+  const runtimeContext = {
+    async readRealtimeAuthCloseCount() {
+      return 4;
+    },
+    throwIfStopRequested() {
+      stopChecks += 1;
+      throw new Error("G18_STOP_REQUESTED_SIGTERM");
+    },
+    ownerEvidence: {
+      async snapshot() {
+        return { state: "Completed" };
+      },
+    },
+  };
+  const browserContext = {
+    async cookies() {
+      return [{ name: "__Host-coffee-session", value: "session-fixture" }];
+    },
+  };
+  const page = {
+    getByText() {
+      return {
+        async waitFor() {},
+        async textContent() {
+          return "Заказ ord_01ARZ3NDEKTSV4RRFFQ69G5FAV · версия представления 7";
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    proveNaturalSseReauthentication({
+      page,
+      browserContext,
+      monitor: {
+        eventSourceResponses: 1,
+        eventSourceReady: 1,
+        eventSourceRecords: [],
+        reads: [],
+      },
+      runtimeContext,
+      orderRef: "ord_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      itemRef: "itm_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+      idempotencyKey: "fixture-idempotency-key",
+    }),
+    /G15_BROWSER_STOP_REQUESTED/u,
+  );
+  assert.equal(stopChecks, 1);
+});
+
+void test("G15 browser proof requires the Compose stop capability", async () => {
+  await assert.rejects(
+    proveG15Browser({
+      projectName: "coffee-g15-proof",
+      runId: RUN_ID,
+      candidateSha: CANDIDATE_SHA,
+      ownerEvidence: {
+        snapshot() {},
+        assertAbsent() {},
+        seedInProgress() {},
+        withLookupUnavailable() {},
+      },
+      readRealtimeAuthCloseCount() {},
+      restartCustomerService() {},
+    }),
+    /G15_BROWSER_RUNTIME_CONTEXT_INVALID/u,
+  );
+});
+
+void test("G15 completed-response faults admit only the actual operation statuses", () => {
+  assert.equal(
+    expectedG15CompletedResponse("customer.create", "POST", 201),
+    true,
+  );
+  assert.equal(
+    expectedG15CompletedResponse("orders.draft.create", "POST", 201),
+    true,
+  );
+  assert.equal(
+    expectedG15CompletedResponse("pricing.quote.create", "POST", 201),
+    true,
+  );
+  assert.equal(
+    expectedG15CompletedResponse("orders.item.put", "PUT", 200),
+    true,
+  );
+  assert.equal(
+    expectedG15CompletedResponse("orders.item.put", "PUT", 201),
+    false,
+  );
+  assert.equal(
+    expectedG15CompletedResponse("customer.create", "POST", 200),
+    false,
+  );
+  assert.equal(
+    expectedG15CompletedResponse("orders.item.delete", "DELETE", 204),
+    false,
+  );
+});
+
+void test("G15 generated metrics probe resolves runtime YAML and uses docker exec argv", async () => {
+  const containerId = "a".repeat(64);
+  const invocation = buildG15RealtimeAuthCloseInvocation(containerId);
+  assert.deepEqual(invocation.args.slice(0, 5), [
+    "exec",
+    containerId,
+    "node",
+    "--input-type=module",
+    "-e",
+  ]);
+  assert.equal(invocation.args.includes("-T"), false);
+  const source = invocation.args[5];
+  assert.match(source, /createRequire\("\/app\/package\.json"\)/u);
+  assert.match(source, /runtimeRequire\.resolve\("js-yaml"\)/u);
+  assert.match(
+    source,
+    /runtimeRequire\.resolve\("@coffee-platform\/security"\)/u,
+  );
+  assert.match(
+    source,
+    /document\?\.secrets\?\.security\?\.serviceTransportKeys\?\.\[runtime\]/u,
+  );
+  assert.match(source, /COFFEE_RUNTIME_SECRETS_FILE/u);
+  const documents = [
+    `environment: development\nsecrets:\n  security:\n    serviceTransportKeys:\n      realtime-gateway:\n        caPem: public-ca\n        certPem: client-cert\n        keyPem: client-key\n`,
+    `environment: development\nsecrets: { security: { serviceTransportKeys: { realtime-gateway: { caPem: public-ca, certPem: client-cert, keyPem: client-key } } } }\n`,
+  ];
+  for (const yaml of documents) {
+    const document = load(yaml);
+    assert.equal(document.environment, "development");
+    assert.equal(
+      document.secrets.security.serviceTransportKeys["realtime-gateway"].keyPem,
+      "client-key",
+    );
+  }
+  const directory = await mkdtemp(join(tmpdir(), "g15-metric-probe-"));
+  try {
+    const sourcePath = join(directory, "probe.mjs");
+    await writeFile(sourcePath, source, { mode: 0o600, flag: "wx" });
+    const syntax = spawnSync(process.execPath, ["--check", sourcePath], {
+      encoding: "utf8",
+    });
+    assert.equal(syntax.status, 0, syntax.stderr);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+  assert.throws(
+    () => buildG15RealtimeAuthCloseInvocation("not-a-container-id"),
+    /G15_REALTIME_AUTH_CONTAINER_INVALID/u,
+  );
+});
+
+void test("G15 SSE proof requires an exact post-invalidation read of that order at the announced version", () => {
+  const otherOrder = "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW";
+  const invalidations = [
+    { orderRef: otherOrder, ownerVersion: "11", sequence: 10 },
+    { orderRef: ORDER_REF, ownerVersion: "12", sequence: 12 },
+  ];
+  const otherOrderRead = {
+    orderRef: otherOrder,
+    invalidationSequence: 10,
+    requestSequence: 11,
+    status: 200,
+    responseOrderRef: otherOrder,
+    projectionVersion: "11",
+  };
+  const matchingRead = {
+    orderRef: ORDER_REF,
+    invalidationSequence: 12,
+    requestSequence: 13,
+    status: 200,
+    responseOrderRef: ORDER_REF,
+    projectionVersion: "12",
+  };
+
+  assert.equal(
+    hasG15OrderRealtimeRefetch(invalidations, [otherOrderRead], ORDER_REF, 9),
+    false,
+  );
+  assert.equal(
+    hasG15OrderRealtimeRefetch(
+      invalidations,
+      [{ ...matchingRead, requestSequence: 11 }],
+      ORDER_REF,
+      9,
+    ),
+    false,
+  );
+  assert.equal(
+    hasG15OrderRealtimeRefetch(
+      invalidations,
+      [{ ...matchingRead, projectionVersion: "11" }],
+      ORDER_REF,
+      9,
+    ),
+    false,
+  );
+  assert.equal(
+    hasG15OrderRealtimeRefetch(invalidations, [matchingRead], ORDER_REF, 11),
+    true,
+  );
+});
+
+void test("G15 natural reauthentication proof binds resumed owner GET to the new ready event", () => {
+  const readySequence = 20;
+  const goodRead = {
+    orderRef: ORDER_REF,
+    responseOrderRef: ORDER_REF,
+    status: 200,
+    requestSequence: 22,
+    readySequence,
+    projectionVersion: "15",
+  };
+  assert.equal(
+    hasG15OrderRefetchAfterReady([goodRead], readySequence, ORDER_REF, "15"),
+    true,
+  );
+  assert.equal(
+    hasG15OrderRefetchAfterReady(
+      [{ ...goodRead, orderRef: "ord_01ARZ3NDEKTSV4RRFFQ69G5FAW" }],
+      readySequence,
+      ORDER_REF,
+      "15",
+    ),
+    false,
+  );
+  assert.equal(
+    hasG15OrderRefetchAfterReady(
+      [{ ...goodRead, requestSequence: readySequence }],
+      readySequence,
+      ORDER_REF,
+      "15",
+    ),
+    false,
+  );
+  assert.equal(
+    hasG15OrderRefetchAfterReady(
+      [{ ...goodRead, readySequence: readySequence - 1 }],
+      readySequence,
+      ORDER_REF,
+      "15",
+    ),
+    false,
+  );
+  assert.equal(
+    hasG15OrderRefetchAfterReady(
+      [{ ...goodRead, projectionVersion: "14" }],
+      readySequence,
+      ORDER_REF,
+      "15",
+    ),
+    false,
+  );
+});
+
+void test("G15 stale GET receipt is correlated to the exact held network request", async () => {
+  const cdp = new EventEmitter();
+  cdp.send = async () => ({
+    body: JSON.stringify({ orderRef: ORDER_REF, projectionVersion: "12" }),
+    base64Encoded: false,
+  });
+  const page = new EventEmitter();
+  const monitor = createG15BrowserNetworkMonitor(cdp, page);
+  cdp.emit("Network.requestWillBeSent", {
+    requestId: "held-order-get",
+    request: {
+      url: `https://localhost:8443/api/client-v1/orders/${ORDER_REF}`,
+      method: "GET",
+      headers: {},
+    },
+  });
+  cdp.emit("Network.responseReceived", {
+    requestId: "held-order-get",
+    response: { status: 200 },
+  });
+  cdp.emit("Network.loadingFinished", { requestId: "held-order-get" });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(monitor.reads.length, 1);
+  assert.equal(monitor.reads[0].requestId, "held-order-get");
+  assert.equal(monitor.reads[0].projectionVersion, "12");
+  assert.equal(
+    hasG15ReadForRequest(monitor.reads, "held-order-get", ORDER_REF, "12"),
+    true,
+  );
+  assert.equal(
+    hasG15ReadForRequest(monitor.reads, "different-request", ORDER_REF, "12"),
+    false,
+  );
+});
+
+void test("G15 auth-close metric parser accepts exactly one bounded unlabeled sample", () => {
+  assert.equal(
+    parseG15RealtimeAuthCloseMetric(
+      "# TYPE coffee_realtime_auth_close_total counter\ncoffee_realtime_auth_close_total 7\n",
+    ),
+    7,
+  );
+  assert.equal(
+    parseG15RealtimeAuthCloseMetric(
+      'coffee_realtime_auth_close_total{runtime="realtime-gateway"} 7\n',
+    ),
+    null,
+  );
+  assert.equal(
+    parseG15RealtimeAuthCloseMetric(
+      "coffee_realtime_auth_close_total 7\ncoffee_realtime_auth_close_total 8\n",
+    ),
+    null,
+  );
+  assert.equal(
+    parseG15RealtimeAuthCloseMetric(
+      `coffee_realtime_auth_close_total ${Number.MAX_SAFE_INTEGER + 1}\n`,
+    ),
+    null,
+  );
+});
+
+void test("G15 SSE monitor records the native Last-Event-ID used for reconnect", () => {
+  const cdp = new EventEmitter();
+  cdp.send = async () => ({ body: "", base64Encoded: false });
+  const page = new EventEmitter();
+  const monitor = createG15BrowserNetworkMonitor(cdp, page);
+  cdp.emit("Network.requestWillBeSent", {
+    requestId: "event-source-one",
+    request: {
+      url: "https://localhost:8443/events",
+      method: "GET",
+      headers: {},
+    },
+  });
+  cdp.emit("Network.responseReceived", {
+    requestId: "event-source-one",
+    type: "EventSource",
+    response: { status: 200 },
+  });
+  cdp.emit("Network.eventSourceMessageReceived", {
+    eventName: "stream-ready.v1",
+    eventId: "",
+    data: "{}",
+  });
+  const eventId = "msg_01ARZ3NDEKTSV4RRFFQ69G5FAV";
+  cdp.emit("Network.eventSourceMessageReceived", {
+    eventName: "resource-invalidated.v1",
+    eventId,
+    data: JSON.stringify({
+      subjectType: "order",
+      subjectRef: ORDER_REF,
+      ownerVersion: "15",
+      reason: "OrderChanged",
+      correlationId: "00000000-0000-4000-8000-000000000015",
+    }),
+  });
+  cdp.emit("Network.requestWillBeSent", {
+    requestId: "event-source-two",
+    request: {
+      url: "https://localhost:8443/events",
+      method: "GET",
+      headers: { "Last-Event-ID": eventId },
+    },
+  });
+  cdp.emit("Network.responseReceived", {
+    requestId: "event-source-two",
+    type: "EventSource",
+    response: { status: 200 },
+  });
+  cdp.emit("Network.eventSourceMessageReceived", {
+    eventName: "stream-ready.v1",
+    eventId: "",
+    data: "{}",
+  });
+
+  const resumed = monitor.eventSourceRecords.at(-1);
+  assert.equal(resumed.lastEventId, eventId);
+  assert.equal(resumed.latestEventIdAtRequest, eventId);
+  assert.equal(resumed.readySequence, monitor.lastReadySequence);
+  assert.equal(monitor.eventSourceResponses, 2);
+  assert.equal(monitor.eventSourceReady, 2);
+});
+
+void test("G15 mutation monitor attaches forbidden-write checks to every browser page", () => {
+  const cdp = new EventEmitter();
+  const initialPage = new EventEmitter();
+  const secondPage = new EventEmitter();
+  const monitor = createG15BrowserNetworkMonitor(cdp, initialPage);
+
+  monitor.attachPage(secondPage);
+  secondPage.emit("request", {
+    url: () =>
+      `https://localhost:8443/api/client-v1/orders/${ORDER_REF}/commands/confirm`,
+    method: () => "POST",
+  });
+  secondPage.emit("request", {
+    url: () => `https://localhost:8443/api/client-v1/orders/${ORDER_REF}`,
+    method: () => "GET",
+  });
+
+  assert.equal(monitor.forbiddenMutations, 1);
+  assert.equal(monitor.orderGets, 1);
+
+  cdp.emit("Network.eventSourceMessageReceived", {
+    eventName: "resource-invalidated.v1",
+    data: JSON.stringify({
+      subjectType: "order",
+      subjectRef: ORDER_REF,
+      ownerVersion: "12",
+      reason: "OrderChanged",
+      correlationId: "00000000-0000-4000-8000-000000000012",
+      extra: "must not be accepted",
+    }),
+  });
+  assert.equal(monitor.invalidations, 0);
+  assert.deepEqual(monitor.invalidationRecords, []);
+});
+
+void test("G15 evidence validator binds the complete passed receipt to its run", () => {
+  const evidence = validEvidence();
+  assert.equal(
+    validateG15BrowserEvidence(evidence, {
+      runId: RUN_ID,
+      candidateSha: CANDIDATE_SHA,
+    }),
+    evidence,
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserEvidence(evidence, {
+        runId: "20261025T132300Z-085cdd6",
+        candidateSha: CANDIDATE_SHA,
+      }),
+    /G15_BROWSER_EVIDENCE_IDENTITY_INVALID/u,
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserEvidence(evidence, {
+        runId: RUN_ID,
+        candidateSha: "b".repeat(40),
+      }),
+    /G15_BROWSER_EVIDENCE_IDENTITY_INVALID/u,
+  );
+});
+
+void test("G15 runtime artifact binds full evidence, fixture lineage and cleanup", () => {
+  const lineage = {
+    schemaVersion: 1,
+    profile: "verification-only-pkce-jwks-v1",
+    runId: RUN_ID,
+    baseCandidateSha: "1".repeat(40),
+    candidateSha: CANDIDATE_SHA,
+    candidateTreeSha: "2".repeat(40),
+    baseConfigSha256: "3".repeat(64),
+    configSha256: "4".repeat(64),
+    configBlobSha: "5".repeat(40),
+    issuer: "https://idp.fixture.invalid",
+  };
+  const cleanup = {
+    verified: true,
+    complete: true,
+    failures: [],
+    retainedResources: [],
+    inventory: { containers: [], volumes: [], networks: [] },
+    fixtureRootRemoved: true,
+    secretsDirRemoved: true,
+    composeOverrideRemoved: true,
+  };
+  const artifact = {
+    schemaVersion: 1,
+    gateId: "G15_BROWSER",
+    runId: RUN_ID,
+    candidateSha: CANDIDATE_SHA,
+    baseConfigSha256: "6".repeat(64),
+    status: "PASS",
+    verificationOnly: true,
+    productionLogin: false,
+    lineage,
+    browserEvidence: validEvidence(),
+    cleanup,
+  };
+  const expected = {
+    runId: RUN_ID,
+    candidateSha: CANDIDATE_SHA,
+    baseConfigSha256: artifact.baseConfigSha256,
+    lineage: { ...lineage, receiptPath: "/private/lineage.json" },
+  };
+  assert.equal(validateG15BrowserRuntimeArtifact(artifact, expected), artifact);
+  assert.throws(
+    () =>
+      validateG15BrowserRuntimeArtifact(
+        { ...artifact, candidateSha: "7".repeat(40) },
+        expected,
+      ),
+    /G15_BROWSER_ARTIFACT_IDENTITY_INVALID/u,
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserRuntimeArtifact(
+        {
+          ...artifact,
+          lineage: { ...lineage, baseCandidateSha: "8".repeat(40) },
+        },
+        expected,
+      ),
+    /G15_BROWSER_ARTIFACT_LINEAGE_INVALID/u,
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserRuntimeArtifact(
+        {
+          ...artifact,
+          cleanup: {
+            ...cleanup,
+            retainedResources: [{ kind: "containers", name: "foreign" }],
+          },
+        },
+        expected,
+      ),
+    /G15_BROWSER_ARTIFACT_CLEANUP_INVALID/u,
+  );
+});
+
+void test("G15 parent admits only a joined successful child with matching cleanup receipt", () => {
+  const childContext = { runId: RUN_ID, candidateSha: CANDIDATE_SHA };
+  const callbackProof = {
+    schemaVersion: 1,
+    runId: RUN_ID,
+    candidateSha: CANDIDATE_SHA,
+    status: "passed",
+    verificationOnly: true,
+    productionLogin: false,
+  };
+  const cleanup = {
+    verified: true,
+    complete: true,
+    failures: [],
+    retainedResources: [],
+    inventory: { containers: [], volumes: [], networks: [] },
+    fixtureRootRemoved: true,
+    secretsDirRemoved: true,
+    composeOverrideRemoved: true,
+  };
+  const childRuntime = { status: "PASS", callbackProof, cleanup };
+  const stdoutReceipt = { browserProof: callbackProof, cleanup };
+  const processResult = {
+    exitCode: 0,
+    signal: null,
+    timedOut: false,
+    outputLimitExceeded: false,
+    joined: true,
+  };
+  assert.deepEqual(
+    validateG15BrowserChildProcess(
+      processResult,
+      childContext,
+      childRuntime,
+      stdoutReceipt,
+    ),
+    callbackProof,
+  );
+  for (const invalidResult of [
+    { ...processResult, exitCode: 1 },
+    { ...processResult, signal: "SIGTERM" },
+    { ...processResult, timedOut: true },
+    { ...processResult, joined: false },
+  ]) {
+    assert.throws(
+      () =>
+        validateG15BrowserChildProcess(
+          invalidResult,
+          childContext,
+          childRuntime,
+          stdoutReceipt,
+        ),
+      { code: "G15_CHILD_PROCESS_NOT_ADMITTED" },
+    );
+  }
+  assert.throws(
+    () =>
+      validateG15BrowserChildProcess(
+        processResult,
+        childContext,
+        childRuntime,
+        { ...stdoutReceipt, cleanup: { ...cleanup, verified: false } },
+      ),
+    { code: "G15_CHILD_PROCESS_NOT_ADMITTED" },
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserChildProcess(
+        processResult,
+        childContext,
+        { ...childRuntime, status: "FAIL" },
+        stdoutReceipt,
+      ),
+    { code: "G15_CHILD_PROCESS_NOT_ADMITTED" },
+  );
+});
+
+void test("G15 parent and child configuration identities require SHA-256 hashes", async () => {
+  const parentRoot = "/tmp/g15-parent-candidate";
+  const parentContext = {
+    runId: "20261025T130000Z-1234567",
+    candidateSha: CANDIDATE_SHA,
+    baseConfigSha256: "6".repeat(64),
+    checkoutDir: parentRoot,
+    evidenceDir: `${parentRoot}/evidence/launch/20261025T130000Z-1234567`,
+    acceptedBaseCommit: "b".repeat(40),
+  };
+  const childContext = {
+    schemaVersion: 1,
+    candidateSha: CANDIDATE_SHA,
+    baseConfigSha256: "6".repeat(64),
+    runId: RUN_ID,
+    checkoutDir: `${parentRoot}/.g15-browser-child-${RUN_ID}`,
+    sourceRepoRoot: parentRoot,
+    acceptedBaseCommit: parentContext.acceptedBaseCommit,
+    startedAtUtc: new Date().toISOString(),
+    evidenceDir: `${parentRoot}/evidence/launch/${RUN_ID}`,
+    githubSnapshotPath: null,
+    resources: {
+      composeProject: `coffee-launch-${RUN_ID.toLowerCase()}`,
+      g08PreparationContextPath: `${parentContext.evidenceDir}/context.json`,
+      g15ParentCandidateSha: parentContext.candidateSha,
+      g15ParentCheckoutRoot: parentRoot,
+      g15ParentRunId: parentContext.runId,
+      kafkaPrefix: RUN_ID,
+    },
+  };
+  assert.equal(
+    validateG15BrowserChildContext(childContext, parentContext, parentRoot),
+    undefined,
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserChildContext(
+        { ...childContext, baseConfigSha256: CANDIDATE_SHA },
+        parentContext,
+        parentRoot,
+      ),
+    { code: "G15_CHILD_CONTEXT_INVALID" },
+  );
+
+  const evidenceDir = await mkdtemp(join(tmpdir(), "g15-parent-sha-"));
+  try {
+    await assert.rejects(
+      validateG15BrowserParentRuntime({
+        evidenceDir,
+        parentContext: {
+          ...parentContext,
+          candidateSha: CANDIDATE_SHA,
+          baseConfigSha256: CANDIDATE_SHA,
+        },
+        stdoutReceipt: {},
+      }),
+      { code: "G15_PARENT_CONFIG_HASH_INVALID" },
+    );
+    await assert.rejects(
+      validateG15BrowserParentRuntime({
+        evidenceDir,
+        parentContext: {
+          ...parentContext,
+          candidateSha: CANDIDATE_SHA,
+          baseConfigSha256: "6".repeat(64),
+        },
+        stdoutReceipt: {},
+      }),
+      { code: "ENOENT" },
+    );
+  } finally {
+    await rm(evidenceDir, { recursive: true, force: true });
+  }
+});
+
+void test("G15 child failure receipt keeps only scoped hashes and fixed source location", async () => {
+  const { createG15BrowserChildFailureDiagnostic } =
+    await import("../../tools/compose-smoke.mjs");
+  const parentCandidateSha = "1".repeat(40);
+  const parentContext = {
+    runId: `20261025T130001Z-${parentCandidateSha.slice(0, 7)}`,
+    candidateSha: parentCandidateSha,
+  };
+  const childContext = {
+    runId: RUN_ID,
+    candidateSha: `${RUN_ID.slice(-7)}${"a".repeat(33)}`,
+  };
+  const canary = "G15_RAW_CHILD_ERROR_CANARY";
+  const childFailure = Object.assign(new TypeError(canary), {
+    stack: [
+      `TypeError: ${canary}`,
+      `    at run (${pathToFileURL(join(REPO_ROOT, "tools/compose-smoke.mjs")).href}:1234:17)`,
+    ].join("\n"),
+  });
+  const operationDiagnosticInput = {
+    operation: "runtime-stack-up",
+    failureClass: "nonzero-exit",
+    exitCode: 1,
+    signal: null,
+    timedOut: false,
+    containerSnapshot: {
+      status: "captured",
+      containers: [
+        {
+          service: "orders-service",
+          state: "exited",
+          health: "unhealthy",
+          exitCode: 1,
+          oomKilled: false,
+          name: "container-id-canary",
+          startedAt: "2026-10-26T01:02:03.000Z",
+          raw: canary,
+        },
+      ],
+      raw: canary,
+    },
+    raw: canary,
+  };
+  const diagnostic = createG15BrowserChildFailureDiagnostic({
+    ...childContext,
+    error: childFailure,
+    operationDiagnostic: operationDiagnosticInput,
+  });
+  assert.equal(
+    validateG15BrowserChildFailureDiagnostic(diagnostic, childContext),
+    true,
+  );
+  assert.deepEqual(diagnostic.sourceLocation, {
+    source: "tools/compose-smoke.mjs",
+    line: 1234,
+    column: 17,
+  });
+  assert.deepEqual(diagnostic.operationDiagnostic, {
+    operation: "runtime-stack-up",
+    failureClass: "nonzero-exit",
+    exitCode: 1,
+    signal: null,
+    timedOut: false,
+    containerSnapshot: {
+      status: "captured",
+      containers: [
+        {
+          service: "orders-service",
+          state: "exited",
+          health: "unhealthy",
+          exitCode: 1,
+          oomKilled: false,
+        },
+      ],
+    },
+  });
+  assert.doesNotMatch(JSON.stringify(diagnostic), new RegExp(canary, "u"));
+  assert.doesNotMatch(JSON.stringify(diagnostic), /container-id-canary/u);
+  assert.throws(
+    () =>
+      validateG15BrowserChildFailureDiagnostic(
+        { ...diagnostic, rawStack: childFailure.stack },
+        childContext,
+      ),
+    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserChildFailureDiagnostic(
+        { ...diagnostic, runId: parentContext.runId },
+        childContext,
+      ),
+    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserChildFailureDiagnostic(
+        {
+          ...diagnostic,
+          operationDiagnostic: {
+            ...diagnostic.operationDiagnostic,
+            rawStderr: canary,
+          },
+        },
+        childContext,
+      ),
+    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserChildFailureDiagnostic(
+        {
+          ...diagnostic,
+          operationDiagnostic: {
+            ...diagnostic.operationDiagnostic,
+            failureClass: "not-finite",
+          },
+        },
+        childContext,
+      ),
+    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+  );
+  assert.throws(
+    () =>
+      validateG15BrowserChildFailureDiagnostic(
+        {
+          ...diagnostic,
+          operationDiagnostic: {
+            ...diagnostic.operationDiagnostic,
+            containerSnapshot: {
+              ...diagnostic.operationDiagnostic.containerSnapshot,
+              containers: Array.from(
+                { length: 33 },
+                () =>
+                  diagnostic.operationDiagnostic.containerSnapshot
+                    .containers[0],
+              ),
+            },
+          },
+        },
+        childContext,
+      ),
+    { code: "G15_CHILD_FAILURE_DIAGNOSTIC_INVALID" },
+  );
+
+  const tempRoot = await mkdtemp(join(tmpdir(), "g15-child-failure-"));
+  const evidenceDir = join(tempRoot, "evidence");
+  const artifactsDir = join(evidenceDir, "gates/G15_BROWSER/artifacts");
+  await mkdir(artifactsDir, { recursive: true, mode: 0o700 });
+  try {
+    const error = Object.assign(new Error("child exited"), {
+      result: {
+        code: 1,
+        signal: null,
+        stdout: `${JSON.stringify(diagnostic)}\n`,
+        stderr: canary,
+        joined: true,
+      },
+    });
+    const persisted = await persistG15BrowserFailureFromChild({
+      error,
+      parentContext,
+      childContext,
+      evidenceDir,
+    });
+    assert.ok(persisted);
+    assert.equal((await stat(persisted.path)).mode & 0o777, 0o600);
+    const receiptText = await readFile(persisted.path, "utf8");
+    const receipt = JSON.parse(receiptText);
+    assert.deepEqual(receipt, {
+      schemaVersion: 1,
+      gateId: "G15_BROWSER",
+      outcome: "FAIL",
+      parentRunId: parentContext.runId,
+      parentCandidateSha: parentContext.candidateSha,
+      childRunId: childContext.runId,
+      childCandidateSha: childContext.candidateSha,
+      errorName: diagnostic.errorName,
+      messageSha256: diagnostic.messageSha256,
+      sourceLocation: diagnostic.sourceLocation,
+      operationDiagnostic: diagnostic.operationDiagnostic,
+    });
+    assert.equal(
+      validateG15BrowserFailureReceipt(receipt, {
+        parentContext,
+        childContext,
+      }),
+      true,
+    );
+    assert.doesNotMatch(receiptText, new RegExp(canary, "u"));
+    assert.doesNotMatch(receiptText, /container-id-canary/u);
+    assert.equal(receipt.outcome, "FAIL");
+    assert.throws(
+      () =>
+        validateG15BrowserFailureReceipt(
+          { ...receipt, childCandidateSha: parentCandidateSha },
+          { parentContext, childContext },
+        ),
+      { code: "G15_BROWSER_FAILURE_RECEIPT_INVALID" },
+    );
+    await assert.rejects(
+      persistG15BrowserFailureFromChild({
+        error,
+        parentContext,
+        childContext,
+        evidenceDir,
+      }),
+      { code: "EEXIST" },
+    );
+
+    const invalidIdentityError = Object.assign(new Error("child exited"), {
+      result: {
+        code: 1,
+        signal: null,
+        stdout: `${JSON.stringify({
+          ...diagnostic,
+          candidateSha: parentCandidateSha,
+        })}\n`,
+        joined: true,
+      },
+    });
+    assert.equal(
+      await persistG15BrowserFailureFromChild({
+        error: invalidIdentityError,
+        parentContext,
+        childContext,
+        evidenceDir: join(tempRoot, "missing-evidence"),
+      }),
+      undefined,
+    );
+
+    const invalidError = Object.assign(new Error("child exited"), {
+      result: {
+        code: 1,
+        signal: null,
+        stdout: `${JSON.stringify({
+          ...diagnostic,
+          operationDiagnostic: {
+            ...diagnostic.operationDiagnostic,
+            rawMessage: canary,
+          },
+        })}\n`,
+        joined: true,
+      },
+    });
+    assert.equal(
+      await persistG15BrowserFailureFromChild({
+        error: invalidError,
+        parentContext,
+        childContext,
+        evidenceDir: join(tempRoot, "missing-evidence"),
+      }),
+      undefined,
+    );
+    assert.equal(
+      JSON.parse(await readFile(persisted.path, "utf8")).outcome,
+      "FAIL",
+    );
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+void test("G15 child preparation builds ignored modules before importing the Compose entrypoint", async (t) => {
+  const childRoot = await mkdtemp(join(tmpdir(), "g15-child-module-load-"));
+  const bin = join(childRoot, "bin");
+  const oldPath = process.env.PATH;
+  const commandLog = join(childRoot, "pnpm-commands.log");
+  t.after(async () => {
+    if (oldPath === undefined) delete process.env.PATH;
+    else process.env.PATH = oldPath;
+    delete process.env.G15_PNPM_COMMAND_LOG;
+    await rm(childRoot, { recursive: true, force: true });
+  });
+  await mkdir(join(childRoot, "tools"), { recursive: true });
+  await mkdir(join(childRoot, "config"));
+  const platformConfigPath = join(childRoot, "config/platform.yaml");
+  await writeFile(platformConfigPath, "synthetic config\n");
+  await chmod(platformConfigPath, 0o664);
+  await mkdir(join(childRoot, "secrets"));
+  const secretBundlePath = join(
+    childRoot,
+    "secrets/platform.secrets.sops.yaml",
+  );
+  await writeFile(secretBundlePath, "synthetic encrypted bundle\n");
+  await chmod(secretBundlePath, 0o660);
+  await mkdir(bin);
+  await writeFile(
+    join(childRoot, "tools/compose-smoke.mjs"),
+    "import { built } from '../packages/platform-database/dist/index.js';\nif (!built) throw new Error('missing build');\n",
+  );
+  await writeFile(
+    join(bin, "pnpm"),
+    '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$G15_PNPM_COMMAND_LOG"\nif [ "$1" = exec ]; then mkdir -p packages/platform-database/dist; printf \'export const built = true;\\n\' > packages/platform-database/dist/index.js; fi\n',
+  );
+  await chmod(join(bin, "pnpm"), 0o700);
+  process.env.G15_PNPM_COMMAND_LOG = commandLog;
+  process.env.PATH = `${bin}:${oldPath ?? ""}`;
+
+  await prepareG15BrowserChildCheckout(childRoot);
+  assert.equal((await lstat(platformConfigPath)).mode & 0o777, 0o644);
+  assert.equal((await lstat(secretBundlePath)).mode & 0o777, 0o400);
+
+  assert.equal(
+    await readFile(commandLog, "utf8"),
+    "install --offline --frozen-lockfile\nexec tsc -b --pretty false\n",
+  );
+});
+
+void test("G15 evidence validator rejects extra fields and incomplete checks", () => {
+  const withExtraField = { ...validEvidence(), rawRequest: "must not persist" };
+  assert.throws(
+    () =>
+      validateG15BrowserEvidence(withExtraField, {
+        runId: RUN_ID,
+        candidateSha: CANDIDATE_SHA,
+      }),
+    /G15_BROWSER_EVIDENCE_SCHEMA_INVALID/u,
+  );
+
+  const missingCheck = validEvidence();
+  delete missingCheck.checks.logoutAndActorSwitch;
+  assert.throws(
+    () =>
+      validateG15BrowserEvidence(missingCheck, {
+        runId: RUN_ID,
+        candidateSha: CANDIDATE_SHA,
+      }),
+    /G15_BROWSER_EVIDENCE_INCOMPLETE/u,
+  );
+
+  const failedCheck = validEvidence();
+  failedCheck.checks.optimisticConflict = { passed: false };
+  assert.throws(
+    () =>
+      validateG15BrowserEvidence(failedCheck, {
+        runId: RUN_ID,
+        candidateSha: CANDIDATE_SHA,
+      }),
+    /G15_BROWSER_EVIDENCE_INCOMPLETE/u,
+  );
+
+  const leakedOwnerEvidence = validEvidence();
+  leakedOwnerEvidence.owners.customer.resourceRef = "cus_private_reference";
+  assert.throws(
+    () =>
+      validateG15BrowserEvidence(leakedOwnerEvidence, {
+        runId: RUN_ID,
+        candidateSha: CANDIDATE_SHA,
+      }),
+    /G15_BROWSER_EVIDENCE_OWNER_INVALID/u,
+  );
+});

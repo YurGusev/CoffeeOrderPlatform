@@ -226,6 +226,34 @@ void test("stalled write callback and false-without-drain both hit deadline; fas
     await hub.shutdown();
   }
 });
+void test("a writable stream resumes queued delivery after backpressure drain", async (t) => {
+  const hub = new RealtimeHub({
+    ...config,
+    coalesceMs: 2,
+    writeTimeoutMs: 500,
+  });
+  t.after(() => hub.destroy());
+  const sink = new Sink();
+  hub.open(sink, options());
+  await until(() =>
+    sink.frames.some((frame) => frame.includes("stream-ready.v1")),
+  );
+
+  sink.blocked = true;
+  await publish(hub, envelope());
+  await until(() => sink.listenerCount("drain") === 1);
+  assert.ok(hub.stats().queuedRecords > 0);
+  assert.equal(sink.destroyed, false);
+
+  sink.blocked = false;
+  sink.emit("drain");
+  await until(() => hub.stats().queuedRecords === 0);
+  assert.match(sink.frames.join(""), /event: resource-invalidated.v1/u);
+  assert.equal(sink.destroyed, false);
+  assert.equal(sink.listenerCount("drain"), 0);
+  assert.equal(hub.stats().queuedBytes, 0);
+  await hub.shutdown();
+});
 void test("per-connection record and UTF8 serialized byte budgets close overflow immediately", async () => {
   for (const limits of [{ queueMaxRecords: 1 }, { queueMaxBytes: 250 }]) {
     const hub = new RealtimeHub({

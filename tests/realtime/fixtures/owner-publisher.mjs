@@ -14,9 +14,24 @@ import { createSqlOutboxStore } from "../../../packages/platform-outbox/dist/ind
 import { createKafkaRuntime } from "../../../packages/platform-kafka-runtime/dist/index.js";
 import { createNativeProducer } from "../../../packages/platform-kafka-runtime/dist/native.js";
 import { canonicalJson } from "../../../packages/platform-idempotency/dist/index.js";
+import { assertFixtureKafkaNamespaceBound } from "./setup.mjs";
 
 // A pinned native sender for the real owner Outbox, not a synthetic envelope source.
 const action = process.argv[2];
+const physicalTargets =
+  action === "relay" || action === "publish-orders"
+    ? assertFixtureKafkaNamespaceBound(
+        fixture.config,
+        "orders-aroma-preparation",
+        fixture.launchIdentity,
+      )
+    : action === "replay-original"
+      ? assertFixtureKafkaNamespaceBound(
+          fixture.config,
+          "orders-service",
+          fixture.launchIdentity,
+        )
+      : undefined;
 if (action === "login") {
   await until(
     async () => {
@@ -103,6 +118,7 @@ if (action === "login") {
     password: fixture.credentials.orders.password,
     sslCaPem: fixture.credentials.orders.caPem,
     clientId: `g14-orders-source-${process.pid}`,
+    physicalTargets,
     maxPending: 16,
     maxMessageBytes: 1048576,
     sendTimeoutMs: 5000,
@@ -163,6 +179,7 @@ if (action === "login") {
     config: fixture.config.kafka,
     service,
     credentials: fixture.credentials.publisher,
+    physicalTargets,
   });
   const signal = AbortSignal.timeout(30000);
   let cleanupFailure;

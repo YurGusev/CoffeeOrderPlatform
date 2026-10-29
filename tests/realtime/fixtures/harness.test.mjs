@@ -10,7 +10,7 @@ import {
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { load as yaml } from "js-yaml";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { runInNewContext } from "node:vm";
 import {
@@ -21,6 +21,7 @@ import {
   redact,
   PRODUCT_BUILD_TARGETS,
   productArgs,
+  assertFixtureKafkaNamespaceBound,
   LABEL,
   safeProductStartupFailure,
 } from "./setup.mjs";
@@ -37,6 +38,7 @@ import {
 } from "./protocol.mjs";
 import { render } from "../../../tools/nginx/generate.mjs";
 import { bootstrapOwnedOrdersKafka } from "../soak.test.mjs";
+import { validateLaunchDatabaseIdentity } from "../../../packages/platform-config/dist/index.js";
 
 async function nginxStatusEndpoint() {
   return yaml(
@@ -123,14 +125,26 @@ void test("launch-path initializes offsets only for durable Orders owners on an 
   const reset = [];
   let cliCalls = 0,
     receipt;
+  let activeConfig = config;
+  let activeLaunchIdentity;
+  const definitionForTopic = (physicalName) =>
+    Object.values(activeConfig.kafka.topics).find((definition) =>
+      Object.keys(activeConfig.services).some((runtime) => {
+        const target = assertFixtureKafkaNamespaceBound(
+          activeConfig,
+          runtime,
+          activeLaunchIdentity,
+        );
+        return target.topics[definition.name] === physicalName;
+      }),
+    );
   const runKafka = async (_broker, args) => {
     cliCalls++;
     if (args[0] === "sh") return "mounted\n";
     if (args[0].endsWith("kafka-get-offsets.sh")) {
       const topic = args[args.indexOf("--topic") + 1],
-        definition = Object.values(config.kafka.topics).find(
-          (value) => value.name === topic,
-        );
+        definition = definitionForTopic(topic);
+      assert.ok(definition, `configured topic: ${topic}`);
       return Array.from(
         { length: definition.partitions },
         (_, partition) => `${topic}:${partition}:0`,
@@ -144,9 +158,8 @@ void test("launch-path initializes offsets only for durable Orders owners on an 
     const initialized = reset.filter((item) => item.groupId === groupId);
     return initialized
       .flatMap((item) => {
-        const definition = Object.values(config.kafka.topics).find(
-          (value) => value.name === item.topic,
-        );
+        const definition = definitionForTopic(item.topic);
+        assert.ok(definition, `configured topic: ${item.topic}`);
         return Array.from(
           { length: definition.partitions },
           (_, partition) => `${groupId} ${item.topic} ${partition} 0 0 0 - -`,
@@ -215,6 +228,72 @@ void test("launch-path initializes offsets only for durable Orders owners on an 
         group.partitions.every((partition) => partition.currentOffset === "0"),
     ),
   );
+  const namespaceConfig = structuredClone(config);
+  namespaceConfig.verification.kafkaNamespaceIsolation = true;
+  const namespaceBefore = structuredClone(namespaceConfig);
+  const launchIdentity = {
+    schemaVersion: 1,
+    runId: "20261026T123456Z-abcdef0",
+    candidateSha: `abcdef0${"1".repeat(33)}`,
+    baseConfigSha256: "b".repeat(64),
+  };
+  activeConfig = namespaceConfig;
+  activeLaunchIdentity = launchIdentity;
+  const namespaceReset = [];
+  const namespaceResult = await bootstrapOwnedOrdersKafka({
+    broker: "owned-kafka",
+    runId: "owned-run",
+    config: namespaceConfig,
+    launchIdentity,
+    inspectBroker: async () => state,
+    runKafka: async (_broker, args) => {
+      const output = await runKafka(_broker, args);
+      if (args.includes("--reset-offsets"))
+        namespaceReset.push({
+          groupId: args[args.indexOf("--group") + 1],
+          topic: args[args.indexOf("--topic") + 1],
+        });
+      return output;
+    },
+    writeReceipt: async () => {},
+  });
+  assert.ok(namespaceReset.length > 0);
+  assert.ok(
+    namespaceReset.every(
+      ({ groupId, topic }) =>
+        groupId.startsWith(`${launchIdentity.runId}.`) &&
+        topic.startsWith(`${launchIdentity.runId}.`),
+    ),
+    "broker commands use run-scoped physical topic and group names",
+  );
+  assert.ok(
+    namespaceResult.groups.every(
+      ({ groupId, topic }) =>
+        groupId.startsWith(`${launchIdentity.runId}.`) &&
+        topic.startsWith(`${launchIdentity.runId}.`),
+    ),
+  );
+  assert.deepEqual(namespaceConfig, namespaceBefore);
+  let namespaceBrokerInspections = 0;
+  await assert.rejects(
+    bootstrapOwnedOrdersKafka({
+      broker: "unbound-kafka",
+      runId: "owned-run",
+      config: namespaceConfig,
+      inspectBroker: async () => {
+        namespaceBrokerInspections++;
+        return state;
+      },
+      runKafka,
+      writeReceipt: async () => {},
+    }),
+    /readonly launch identity/u,
+  );
+  assert.equal(
+    namespaceBrokerInspections,
+    0,
+    "enabled namespace mode fails before contacting an unbound broker",
+  );
   const callsBeforeGuard = cliCalls;
   await assert.rejects(
     bootstrapOwnedOrdersKafka({
@@ -268,12 +347,424 @@ void test("launch-path initializes offsets only for durable Orders owners on an 
   );
 });
 
+void test("fixture Kafka namespace maps runtime claims without changing logical config", async () => {
+  const config = yaml(
+    await readFile(
+      new URL("../../../config/platform.yaml", import.meta.url),
+      "utf8",
+    ),
+  );
+  config.verification.kafkaNamespaceIsolation = true;
+  const launchIdentity = {
+    schemaVersion: 1,
+    runId: "20261026T123456Z-abcdef0",
+    candidateSha: `abcdef0${"1".repeat(33)}`,
+    baseConfigSha256: "b".repeat(64),
+  };
+  const before = structuredClone(config);
+  assert.throws(
+    () => assertFixtureKafkaNamespaceBound(config, "orders-service"),
+    /launch identity/u,
+  );
+  const target = assertFixtureKafkaNamespaceBound(
+    config,
+    "orders-service",
+    launchIdentity,
+  );
+  const logicalTopics = config.services["orders-service"].kafka.producers;
+  const logicalGroups = config.services["orders-service"].kafka.consumers.map(
+    ({ groupId }) => groupId,
+  );
+  const preparationTarget = assertFixtureKafkaNamespaceBound(
+    config,
+    "orders-aroma-preparation",
+    launchIdentity,
+  );
+  const preparationTopics = config.services[
+    "orders-aroma-preparation"
+  ].kafka.consumers.flatMap(({ topics }) => topics);
+  assert.deepEqual(
+    [...preparationTopics].sort((left, right) => left.localeCompare(right)),
+    [
+      config.kafka.topics.catalogMapping.name,
+      config.kafka.topics.ordersLifecycle.name,
+      config.kafka.topics.aromaEvents.name,
+    ].sort((left, right) => left.localeCompare(right)),
+  );
+  for (const logicalTopic of preparationTopics)
+    assert.equal(
+      preparationTarget.topics[logicalTopic],
+      `${launchIdentity.runId}.${logicalTopic}`,
+      "preparation claims map through the active child identity",
+    );
+  assert.ok(
+    logicalTopics.every((name) =>
+      target.topics[name]?.startsWith(`${launchIdentity.runId}.`),
+    ),
+  );
+  assert.ok(
+    logicalGroups.every((name) =>
+      target.groups[name]?.startsWith(`${launchIdentity.runId}.`),
+    ),
+  );
+  assert.deepEqual(config, before, "logical config remains unchanged");
+  const realtimeConsumers = config.services["realtime-gateway"].kafka.consumers;
+  assert.equal(realtimeConsumers.length, 1);
+  const realtimeTarget = assertFixtureKafkaNamespaceBound(
+    config,
+    "realtime-gateway",
+    launchIdentity,
+  );
+  assert.equal(
+    realtimeTarget.groups[realtimeConsumers[0].groupId],
+    `${launchIdentity.runId}.${realtimeConsumers[0].groupId}`,
+    "the realtime replay probe uses the launch-scoped physical consumer group",
+  );
+  const ownerBrowserSource = await readFile(
+    new URL("./owner-browser.mjs", import.meta.url),
+    "utf8",
+  );
+  const groupStart = ownerBrowserSource.indexOf(
+    '        const consumers =\n          setup.config.services["realtime-gateway"].kafka.consumers;',
+  );
+  const groupEnd = ownerBrowserSource.indexOf(
+    "        return await bounded(",
+    groupStart,
+  );
+  assert.ok(groupStart >= 0 && groupEnd > groupStart);
+  const replayGroup = runInNewContext(
+    `(()=>{${ownerBrowserSource.slice(groupStart, groupEnd)}return [group, physicalTopic, ack.topic];})()`,
+    {
+      assert,
+      assertFixtureKafkaNamespaceBound,
+      ack: { topic: config.kafka.topics.realtimeInvalidate.name },
+      setup: { config, launchIdentity },
+    },
+  );
+  assert.equal(
+    replayGroup[0],
+    realtimeTarget.groups[realtimeConsumers[0].groupId],
+  );
+  assert.equal(
+    replayGroup[1],
+    `${launchIdentity.runId}.${config.kafka.topics.realtimeInvalidate.name}`,
+  );
+  assert.equal(replayGroup[2], config.kafka.topics.realtimeInvalidate.name);
+
+  const rowStart = ownerBrowserSource.indexOf(
+    "            const row = text",
+    groupEnd,
+  );
+  const rowEnd = ownerBrowserSource.indexOf("\n            if (", rowStart);
+  assert.ok(rowStart >= 0 && rowEnd > rowStart);
+  const findOffset = (text) =>
+    runInNewContext(
+      `(()=>{${ownerBrowserSource.slice(rowStart, rowEnd)}return row;})()`,
+      {
+        group: replayGroup[0],
+        physicalTopic: replayGroup[1],
+        ack: { partition: 1 },
+        text,
+      },
+    );
+  const matchingRow = `${replayGroup[0]} ${replayGroup[1]} 1 0 7 0 - -`;
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(findOffset(matchingRow))),
+    matchingRow.split(/\s+/u),
+  );
+  assert.equal(
+    findOffset(`foreign-group ${replayGroup[1]} 1 0 7 0 - -`),
+    undefined,
+  );
+  assert.equal(
+    findOffset(`${replayGroup[0]} foreign-topic 1 0 7 0 - -`),
+    undefined,
+  );
+});
+
+void test("catalog harness keeps default setup and scopes launch PostgreSQL ownership", async () => {
+  const source = await readFile(
+    new URL("../../../scripts/catalog-live-harness.mjs", import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("export async function withCatalogPostgres(");
+  assert.ok(start >= 0);
+  const implementation = source.slice(start).replace(/^export /u, "");
+  const cid = "a".repeat(64);
+  const imageId = `sha256:${"b".repeat(64)}`;
+  const launchIdentity = validateLaunchDatabaseIdentity({
+    schemaVersion: 1,
+    runId: "20261026T123456Z-abcdef0",
+    candidateSha: `abcdef0${"1".repeat(33)}`,
+    baseConfigSha256: "c".repeat(64),
+  });
+
+  async function execute({
+    skipCatalogInitialization,
+    driftField,
+    launchOutput,
+    identityOverride = launchIdentity,
+    includeLaunchIdentity = true,
+  }) {
+    const calls = [],
+      queries = [],
+      starts = [],
+      stops = [],
+      readiness = [];
+    let inspectCount = 0;
+    let removed = false;
+    let callbackInvoked = false;
+    const expectedName = `coffee-catalog-${process.pid}-00000000`;
+    const expectedLabel = skipCatalogInitialization
+      ? `${identityOverride?.runId ?? launchIdentity.runId}-${"01".repeat(8)}`
+      : `${expectedName}-${"01".repeat(8)}`;
+    const docker = async (...args) => {
+      calls.push(args);
+      if (args[0] === "run") return { stdout: launchOutput ?? `${cid}\n` };
+      if (args[0] === "inspect") {
+        inspectCount++;
+        const fields = [
+          cid,
+          `/${expectedName}`,
+          imageId,
+          "postgres:17.11",
+          expectedLabel,
+          JSON.stringify([{ HostIp: "127.0.0.1", HostPort: "45432" }]),
+        ];
+        if (driftField !== undefined && inspectCount >= 3) {
+          const replacement = {
+            id: ["f".repeat(64), 0],
+            name: ["/foreign-postgres", 1],
+            imageId: [`sha256:${"d".repeat(64)}`, 2],
+            configuredImage: ["postgres:17.10", 3],
+            label: ["foreign-run", 4],
+          }[driftField];
+          if (replacement) fields[replacement[1]] = replacement[0];
+          else
+            fields[5] = JSON.stringify([
+              {
+                HostIp: driftField === "hostIp" ? "0.0.0.0" : "127.0.0.1",
+                HostPort: driftField === "hostPort" ? "5433" : "45432",
+              },
+            ]);
+        }
+        return {
+          stdout: `${fields.join("|")}\n`,
+        };
+      }
+      if (args[0] === "ps") return { stdout: removed ? "" : `${cid}\n` };
+      if (args[0] === "rm") {
+        removed = true;
+        return { stdout: "" };
+      }
+      throw new Error(`unexpected docker command: ${args[0]}`);
+    };
+    class FakeClient {
+      constructor(options) {
+        this.options = options;
+      }
+      async connect() {
+        readiness.push(this.options.database);
+      }
+      async query(sql) {
+        queries.push({ database: this.options.database, sql });
+        return { rows: [] };
+      }
+      async end() {}
+    }
+    const randomBytes = (size) => Buffer.alloc(size, size === 4 ? 0 : 1);
+    const context = {
+      assert,
+      AbortController,
+      AbortSignal,
+      AggregateError,
+      Client: FakeClient,
+      createDatabase: ({ owner, database }) => ({
+        resource: {
+          async start() {
+            starts.push({ owner, database });
+          },
+          async stop() {
+            stops.push({ owner, database });
+          },
+        },
+      }),
+      databaseName: "coffee_platform_catalog",
+      docker,
+      image: "postgres:17.11",
+      migrations: async () => [],
+      password: "fake-only",
+      performance,
+      pool: {},
+      proveMigrations: async () => ({
+        firstApply: [],
+        secondApply: [],
+        migrationProof: { verified: true },
+      }),
+      randomBytes,
+      process,
+      validateLaunchDatabaseIdentity,
+      waitForPostgres: async (_port, database) => readiness.push(database),
+    };
+    const invoke = runInNewContext(
+      `(()=>{${implementation};return withCatalogPostgres;})()`,
+      context,
+    );
+    const callback = async (input) => {
+      callbackInvoked = true;
+      return {
+        ...input,
+        runLabel: input.runLabel,
+      };
+    };
+    const options = skipCatalogInitialization
+      ? {
+          skipCatalogInitialization: true,
+          ...(includeLaunchIdentity
+            ? { launchIdentity: identityOverride }
+            : {}),
+        }
+      : {};
+    try {
+      const result = await invoke(callback, options);
+      return {
+        result,
+        calls,
+        queries,
+        starts,
+        stops,
+        readiness,
+        removed,
+        callbackInvoked,
+      };
+    } catch (error) {
+      return {
+        error,
+        calls,
+        queries,
+        starts,
+        stops,
+        readiness,
+        removed,
+        callbackInvoked,
+      };
+    }
+  }
+
+  const isolated = await execute({ skipCatalogInitialization: true });
+  assert.equal(isolated.error, undefined);
+  assert.equal(isolated.result.catalogInitialized, false);
+  assert.equal(isolated.result.databaseName, "postgres");
+  assert.equal(isolated.result.launchIdentity.runId, launchIdentity.runId);
+  assert.deepEqual(isolated.readiness, ["postgres", "postgres"]);
+  assert.deepEqual(isolated.queries, []);
+  assert.deepEqual(isolated.starts, []);
+  assert.equal(
+    isolated.calls.filter(([command]) => command === "rm").length,
+    1,
+  );
+  assert.equal(isolated.removed, true);
+
+  for (const identityOptions of [
+    { includeLaunchIdentity: false },
+    {
+      identityOverride: {
+        ...launchIdentity,
+        runId: "not-a-launch-run",
+      },
+    },
+  ]) {
+    const invalid = await execute({
+      skipCatalogInitialization: true,
+      ...identityOptions,
+    });
+    assert.ok(invalid.error);
+    assert.equal(invalid.calls.length, 0);
+    assert.equal(invalid.callbackInvoked, false);
+  }
+
+  const ordinary = await execute({ skipCatalogInitialization: false });
+  assert.equal(ordinary.error, undefined);
+  assert.equal(ordinary.result.catalogInitialized, true);
+  assert.equal(ordinary.result.databaseName, "coffee_platform_catalog");
+  assert.ok(ordinary.queries.some(({ sql }) => sql.startsWith("CREATE ROLE")));
+  assert.deepEqual(
+    ordinary.starts
+      .map(({ owner }) => owner)
+      .sort((left, right) => left.localeCompare(right)),
+    ["catalog-migrator-proof", "catalog-supplier-sync"],
+  );
+  assert.equal(ordinary.result.cleanup.containerRemoved, true);
+
+  for (const driftField of [
+    "id",
+    "name",
+    "imageId",
+    "configuredImage",
+    "label",
+    "hostIp",
+    "hostPort",
+  ]) {
+    const drifted = await execute({
+      skipCatalogInitialization: true,
+      driftField,
+    });
+    assert.ok(drifted.error, `${driftField} drift must fail closed`);
+    assert.equal(drifted.callbackInvoked, false);
+    assert.equal(
+      drifted.calls.filter(([command]) => command === "rm").length,
+      0,
+    );
+    assert.equal(drifted.removed, false);
+  }
+  const unknown = await execute({
+    skipCatalogInitialization: true,
+    launchOutput: "short-container-id\n",
+  });
+  assert.ok(unknown.error);
+  assert.equal(unknown.callbackInvoked, false);
+  assert.equal(
+    unknown.calls.some(([command]) => command === "ps"),
+    false,
+  );
+  assert.equal(
+    unknown.calls.some(([command]) => command === "rm"),
+    false,
+  );
+});
+
 void test("operator-1 CLI requires a frozen manifest and never admits old full5000", async () => {
-  const { parse } = await import("../soak.test.mjs");
-  const previousTmpdir = process.env.TMPDIR,
-    portableTmpdir = await mkdtemp(join(tmpdir(), "issue12-operator-cli-"));
-  process.env.TMPDIR = portableTmpdir;
+  const { parse, scratchRoot } = await import("../soak.test.mjs");
+  const previousTmpdir = process.env.TMPDIR;
+  let portableTmpdir;
   try {
+    delete process.env.TMPDIR;
+    const defaultScratch = scratchRoot(),
+      defaultOptions = parse(["--smoke"]);
+    assert.equal(
+      defaultScratch,
+      resolve("/home/yurgusev/.hermes/cache/scratch"),
+    );
+    assert.ok(
+      relative(defaultScratch, defaultOptions.resultDir).startsWith(
+        "issue12-realtime-",
+      ),
+      "unset TMPDIR uses the declared Hermes scratch root",
+    );
+    assert.throws(
+      () =>
+        parse(["--smoke", "--result-dir", `${defaultScratch}-sibling/result`]),
+      /declared Hermes scratch/u,
+      "a prefix-sharing sibling is outside scratch",
+    );
+    portableTmpdir = await mkdtemp(join(tmpdir(), "issue12-operator-cli-"));
+    process.env.TMPDIR = ROOT;
+    assert.throws(
+      () => parse(["--smoke", "--result-dir", join(ROOT, "README.md")]),
+      /outside the repository/u,
+      "TMPDIR cannot authorize tracked repository output",
+    );
+    process.env.TMPDIR = portableTmpdir;
     const dir = join(portableTmpdir, "operator-1-cli-proof");
     const prepared = parse([
       "--prepare",
@@ -285,6 +776,17 @@ void test("operator-1 CLI requires a frozen manifest and never admits old full50
     assert.equal(prepared.profile, "operator-1");
     assert.equal(prepared.mode, "full");
     assert.equal(prepared.prepareOnly, true);
+    assert.equal(
+      parse(["--smoke"]).resultDir.startsWith(`${portableTmpdir}/`),
+      true,
+      "explicit TMPDIR remains the declared scratch root",
+    );
+    assert.throws(
+      () =>
+        parse(["--smoke", "--result-dir", `${portableTmpdir}-sibling/result`]),
+      /declared Hermes scratch/u,
+      "an explicit TMPDIR prefix sibling remains outside scratch",
+    );
     assert.throws(
       () => parse(["--profile", "operator-1", "--result-dir", dir]),
       /first --prepare/u,
@@ -329,7 +831,8 @@ void test("operator-1 CLI requires a frozen manifest and never admits old full50
   } finally {
     if (previousTmpdir === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = previousTmpdir;
-    await rm(portableTmpdir, { recursive: true, force: true });
+    if (portableTmpdir)
+      await rm(portableTmpdir, { recursive: true, force: true });
   }
 });
 
@@ -339,9 +842,9 @@ void test("prepared operator-1 keeps ordinary budgets, 100 subjects, one shard a
     "utf8",
   );
   const start = source.indexOf(
-    "  assert.deepEqual(config.services['realtime-gateway'].realtime,",
+    '  assert.deepEqual(\n    config.services["realtime-gateway"].realtime,',
   );
-  const end = source.indexOf("  config.platform.publicBaseUrl=", start);
+  const end = source.indexOf("\n  const nginxSchema = JSON.parse(", start);
   assert.ok(start >= 0 && end > start);
   const document = yaml(
     await readFile(
@@ -366,6 +869,7 @@ void test("prepared operator-1 keeps ordinary budgets, 100 subjects, one shard a
             ),
         },
         config,
+        launchPath: undefined,
         options: { profile },
         THRESHOLDS,
       },
@@ -376,23 +880,36 @@ void test("prepared operator-1 keeps ordinary budgets, 100 subjects, one shard a
       realtimeRssBytes: memory,
     });
     const expected = structuredClone(document);
+    expected.browserOidc = {
+      issuer: "https://idp.fixture.invalid",
+      clientId: "issue12-fixture",
+      authorizationUrl: "https://idp.fixture.invalid/authorize",
+      tokenUrl: "https://idp.fixture.invalid/token",
+      jwksUrl: "https://idp.fixture.invalid/keys",
+      redirectUri: "https://localhost:8443/auth/callback",
+      allowedAlgorithms: ["RS256"],
+      actorRefClaim: "actor_ref",
+      permissionsClaim: "permissions",
+    };
 
-    assert.deepEqual(config, expected);
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(config)),
+      JSON.parse(JSON.stringify(expected)),
+    );
   }
-  const fixtureStart = source.indexOf(
-    "  const fixture={config,credentials,materials,",
+  const fixtureStart = source.indexOf("  const fixture = {");
+  const fixtureEnd = source.indexOf(
+    "\n  if (options.launchPath)",
+    fixtureStart,
   );
-  const fixtureEnd = source.indexOf(";", fixtureStart);
   assert.ok(fixtureStart >= 0 && fixtureEnd > fixtureStart);
   const driverSource = await readFile(
     new URL("./driver.mjs", import.meta.url),
     "utf8",
   );
-  const distributionStart = driverSource.indexOf(
-    "    const count=Math.floor(fixture.clients/fixture.shards)",
-  );
+  const distributionStart = driverSource.indexOf("    const count =");
   const distributionEnd = driverSource.indexOf(
-    "    const worker=new Worker",
+    "    const worker = new Worker",
     distributionStart,
   );
   assert.ok(distributionStart >= 0 && distributionEnd > distributionStart);
@@ -403,13 +920,14 @@ void test("prepared operator-1 keeps ordinary budgets, 100 subjects, one shard a
     ["full", 1, 1],
   ]) {
     const fixture = runInNewContext(
-      source.slice(fixtureStart, fixtureEnd + 1) + "\nfixture;",
+      source.slice(fixtureStart, fixtureEnd) + "\nfixture;",
       {
         config: {},
         credentials: {},
         materials: {},
         actor: { verification: {} },
         api: { verification: {} },
+        launchPath: undefined,
         thresholds: {},
         FULL,
         options: {
@@ -484,13 +1002,388 @@ void test("prepared operator-1 keeps ordinary budgets, 100 subjects, one shard a
   }
 });
 
+void test("G12 Kafka proof is checked before fixture writes and frozen by immutable ID", async () => {
+  const source = await readFile(
+    new URL("./setup.mjs", import.meta.url),
+    "utf8",
+  );
+  const prepareStart = source.indexOf("export async function prepare("),
+    prepareEnd = source.indexOf(
+      "\nexport function assertFixtureKafkaNamespaceBound",
+      prepareStart,
+    );
+  assert.ok(prepareStart >= 0 && prepareEnd > prepareStart);
+  const effects = [],
+    missingArtifact = new Error("G12 artifact unavailable");
+  const prepare = runInNewContext(
+    `(()=>{${source.slice(prepareStart, prepareEnd).replace(/^export /u, "")};return prepare;})()`,
+    {
+      readFixtureLaunchPath: async () => null,
+      loadVerifiedGateImage: async (options) => {
+        effects.push(["verify", options]);
+        throw missingArtifact;
+      },
+      join: (...parts) => parts.join("/"),
+      mkdir: async (...args) => effects.push(["mkdir", ...args]),
+      docker: async (...args) => effects.push(["docker", ...args]),
+      run: async (...args) => effects.push(["run", ...args]),
+    },
+  );
+  await assert.rejects(prepare("/results", {}), (error) => {
+    assert.equal(error, missingArtifact);
+    return true;
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(effects)), [
+    ["verify", { target: "kafka", loadImage: false }],
+  ]);
+  let childContextProof;
+  const parentRootPrepare = runInNewContext(
+    `(()=>{${source.slice(prepareStart, prepareEnd).replace(/^export /u, "")};return prepare;})()`,
+    {
+      assert,
+      ROOT: "/parent-checkout",
+      readFixtureLaunchPath: async () => ({
+        parentCandidateRoot: "/parent-checkout",
+        candidateRoot: "/child-checkout",
+        contextPath: "/child/evidence/context.json",
+        launchIdentity: {
+          schemaVersion: 1,
+          runId: "20261026T123456Z-abcdef0",
+          candidateSha: `abcdef0${"1".repeat(33)}`,
+          baseConfigSha256: "b".repeat(64),
+        },
+        lineageReceiptSha256: "d".repeat(64),
+      }),
+      loadVerifiedGateImage: async (options) => {
+        childContextProof = options;
+        throw missingArtifact;
+      },
+      join: (...parts) => parts.join("/"),
+    },
+  );
+  await assert.rejects(
+    parentRootPrepare("/results", {
+      launchPath: { launchContextFile: "/child/evidence/context.json" },
+    }),
+    (error) => error === missingArtifact,
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(childContextProof)), {
+    target: "kafka",
+    contextFile: "/child/evidence/context.json",
+    loadImage: false,
+  });
+  assert.match(
+    source,
+    /const kafkaArtifactProof = await loadVerifiedGateImage\(\{\s*target: "kafka",\s*\.\.\.\(launchPath \? \{ contextFile: launchPath\.contextPath \} : \{\}\),\s*loadImage: false,\s*\}\);/u,
+  );
+  assert.match(
+    source,
+    /const images = \{\s*node: nodeImage,\s*nginx: toolchain\.nginxImage,\s*\};/u,
+  );
+  assert.match(source, /images\.kafka = kafkaArtifact\.imageId/u);
+
+  const proofStart = source.indexOf("  const kafkaArtifactProof ="),
+    proofEnd = source.indexOf("  const privateDir", proofStart),
+    importStart = source.indexOf(
+      "  const kafkaArtifact = await loadVerifiedGateImage({",
+    ),
+    compareEnd = source.indexOf("\n    // Immutable IDs", importStart),
+    catchStart = source.indexOf("} catch (error) {", compareEnd),
+    catchEnd = source.indexOf("\n  }\n}", catchStart);
+  assert.ok(
+    proofStart >= 0 &&
+      proofEnd > proofStart &&
+      importStart > proofEnd &&
+      compareEnd > importStart &&
+      catchStart > compareEnd &&
+      catchEnd > catchStart,
+  );
+  const proofSource = source.slice(proofStart, proofEnd),
+    importAndCompareSource = source.slice(importStart, compareEnd),
+    cleanupCatchSource = source.slice(catchStart, catchEnd + 4),
+    fieldValues = (imageId, imported) => ({
+      imageId,
+      manifestDigest: `sha256:${"b".repeat(64)}`,
+      receiptSha256: "c".repeat(64),
+      ociArtifactSha256: "d".repeat(64),
+      baseImage: `apache/kafka:4.3.2@sha256:${"1".repeat(64)}`,
+      candidateSha: "e".repeat(40),
+      runId: "g12-fixture",
+      importTag: "coffee-g12-0123456789ab-kafka:latest",
+      imported,
+    });
+  for (const imported of [true, false]) {
+    const proof = fieldValues(`sha256:${"a".repeat(64)}`, false),
+      importedImage = fieldValues(`sha256:${"f".repeat(64)}`, imported),
+      removals = [],
+      dockerCalls = [],
+      manifests = [],
+      calls = [];
+    const runMismatch = runInNewContext(
+      `(async()=>{${proofSource}${importAndCompareSource}${cleanupCatchSource}})()`,
+      {
+        assert,
+        AggregateError,
+        launchPath: null,
+        loadVerifiedGateImage: async (options) => {
+          calls.push(JSON.parse(JSON.stringify(options)));
+          return options.loadImage === false ? proof : importedImage;
+        },
+        removeVerifiedGateImage: (options) => {
+          removals.push(options);
+          if (!imported) return false;
+          return true;
+        },
+        json: (...args) => manifests.push(args),
+      },
+    );
+    await assert.rejects(
+      runMismatch,
+      /G12 Kafka artifact changed during fixture preparation/u,
+    );
+    assert.deepEqual(calls, [
+      { target: "kafka", loadImage: false },
+      { target: "kafka" },
+    ]);
+    assert.equal(removals.length, 1);
+    assert.equal(removals[0].target, "kafka");
+    assert.deepEqual(removals[0].image, importedImage);
+    assert.deepEqual(manifests, []);
+    if (!imported) assert.deepEqual(dockerCalls, []);
+  }
+
+  const dir = await mkdtemp(join(tmpdir(), "coffee-g12-kafka-freeze-"));
+  const hash = (value) => createHash("sha256").update(value).digest("hex");
+  const imageId = `sha256:${"a".repeat(64)}`;
+  const artifact = {
+    imageId,
+    manifestDigest: `sha256:${"b".repeat(64)}`,
+    receiptSha256: "c".repeat(64),
+    ociArtifactSha256: "d".repeat(64),
+    baseImage: "apache/kafka:4.3.2@sha256:fixture",
+    candidateSha: "e".repeat(40),
+    runId: "g12-fixture",
+    importTag: "coffee-g12-0123456789ab-kafka:latest",
+    imported: false,
+  };
+  try {
+    await mkdir(join(dir, "private/app"), { recursive: true });
+    const profile = "{}",
+      fixture = "{}",
+      platform = "config",
+      nginx = "nginx",
+      native = "native";
+    await writeFile(join(dir, "profile.json"), profile);
+    await writeFile(join(dir, "private/fixture.json"), fixture);
+    await writeFile(join(dir, "private/platform.yaml"), platform);
+    await writeFile(join(dir, "private/nginx.conf"), nginx);
+    await writeFile(join(dir, "private/app/native.bin"), native);
+    const manifest = {
+      mode: "full",
+      profile: "operator-1",
+      profileSha256: hash(profile),
+      fixtureSha256: hash(fixture),
+      sources: {},
+      supportingSources: {},
+      compiled: {},
+      nativeAdapter: { snapshotPath: "native.bin", sha256: hash(native) },
+      configSha256: hash(platform),
+      nginxSha256: hash(nginx),
+      kafkaSupplyChain: artifact,
+      images: { kafka: imageId },
+      imageIds: { kafka: imageId },
+    };
+    const manifestText = JSON.stringify(manifest);
+    await writeFile(join(dir, "profile-manifest.json"), manifestText);
+
+    for (const scenario of ["missing", "foreign-receipt"]) {
+      const dockerCalls = [];
+      const loader =
+        scenario === "missing"
+          ? async () => {
+              throw new Error("G12 receipt missing");
+            }
+          : async () => ({ ...artifact, receiptSha256: "f".repeat(64) });
+      const verify = runInNewContext(
+        `(()=>{${source
+          .slice(
+            source.indexOf("export async function verifyPrepared("),
+            source.indexOf(
+              "\nexport async function erasePrivate(",
+              source.indexOf("export async function verifyPrepared("),
+            ),
+          )
+          .replace(/^export /u, "")};return verifyPrepared;})()`,
+        {
+          assert,
+          join,
+          readFile,
+          hash,
+          docker: async (...args) => {
+            dockerCalls.push(args);
+            return imageId;
+          },
+          loadVerifiedGateImage: loader,
+        },
+      );
+      await assert.rejects(
+        verify(dir, hash(manifestText)),
+        scenario === "missing"
+          ? /G12 receipt missing/u
+          : /prepared G12 Kafka identity drift: receiptSha256/u,
+      );
+      assert.deepEqual(dockerCalls, [], `${scenario} must fail before Docker`);
+    }
+
+    const dockerCalls = [];
+    const verify = runInNewContext(
+      `(()=>{${source
+        .slice(
+          source.indexOf("export async function verifyPrepared("),
+          source.indexOf(
+            "\nexport async function erasePrivate(",
+            source.indexOf("export async function verifyPrepared("),
+          ),
+        )
+        .replace(/^export /u, "")};return verifyPrepared;})()`,
+      {
+        assert,
+        join,
+        readFile,
+        hash,
+        docker: async (...args) => {
+          dockerCalls.push(args);
+          return imageId;
+        },
+        loadVerifiedGateImage: async (options) => {
+          assert.deepEqual(JSON.parse(JSON.stringify(options)), {
+            target: "kafka",
+            loadImage: false,
+          });
+          return artifact;
+        },
+      },
+    );
+    await verify(dir, hash(manifestText));
+    assert.deepEqual(dockerCalls, [
+      ["image", "inspect", "--format", "{{.Id}}", imageId],
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+void test("G12 cleanup does not remove preexisting images or hide preparation failure", async () => {
+  const source = await readFile(
+    new URL("./setup.mjs", import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("export async function erasePrivate("),
+    end = source.indexOf("\n", source.indexOf("\n}", start) + 2);
+  assert.ok(start >= 0 && end > start);
+  const dir = await mkdtemp(join(tmpdir(), "coffee-g12-kafka-cleanup-"));
+  const artifact = {
+    imageId: `sha256:${"a".repeat(64)}`,
+    manifestDigest: `sha256:${"b".repeat(64)}`,
+    receiptSha256: "c".repeat(64),
+    ociArtifactSha256: "d".repeat(64),
+    baseImage: "apache/kafka:4.3.2@sha256:fixture",
+    candidateSha: "e".repeat(40),
+    runId: "g12-fixture",
+    importTag: "coffee-g12-0123456789ab-kafka:latest",
+  };
+  try {
+    await mkdir(join(dir, "private"));
+    await writeFile(
+      join(dir, "profile-manifest.json"),
+      JSON.stringify({ kafkaSupplyChain: { ...artifact, imported: false } }),
+    );
+    const removalCalls = [],
+      dockerRemovalCalls = [],
+      { removeVerifiedGateImage } =
+        await import("../../../tools/verified-infrastructure-image.mjs"),
+      cleanup = runInNewContext(
+        `(()=>{${source.slice(start, end).replace(/^export /u, "")};return erasePrivate;})()`,
+        {
+          assert,
+          join,
+          readFile,
+          rm,
+          loadVerifiedGateImage: async (options) => {
+            assert.deepEqual(JSON.parse(JSON.stringify(options)), {
+              target: "kafka",
+              loadImage: false,
+            });
+            return { ...artifact, imported: false };
+          },
+          removeVerifiedGateImage: (options) => {
+            removalCalls.push(options);
+            return removeVerifiedGateImage({
+              ...options,
+              run: (...args) => dockerRemovalCalls.push(args),
+            });
+          },
+        },
+      );
+    await cleanup(dir);
+    assert.equal(removalCalls.length, 1);
+    assert.equal(removalCalls[0].image.imported, false);
+    assert.deepEqual(dockerRemovalCalls, []);
+
+    await mkdir(join(dir, "private"));
+    await writeFile(
+      join(dir, "profile-manifest.json"),
+      JSON.stringify({
+        kafkaSupplyChain: {
+          ...artifact,
+          receiptSha256: "f".repeat(64),
+          imported: true,
+        },
+      }),
+    );
+    await assert.rejects(
+      cleanup(dir),
+      /realtime Kafka cleanup identity drift/u,
+    );
+    assert.equal(removalCalls.length, 1);
+    await assert.rejects(stat(join(dir, "private")), { code: "ENOENT" });
+
+    const original = new Error("preparation failure");
+    const catchStart = source.indexOf(
+      "catch (error) {",
+      source.indexOf("const kafkaArtifact = await loadVerifiedGateImage"),
+    );
+    const catchEnd = source.indexOf("\n  }\n}", catchStart);
+    assert.ok(catchStart >= 0 && catchEnd > catchStart);
+    const catchBody = source.slice(
+      catchStart + "catch (error) {".length,
+      catchEnd,
+    );
+    const preserveFailure = runInNewContext(`(async(error)=>{${catchBody}})`, {
+      AggregateError,
+      kafkaArtifact: { ...artifact, imported: true },
+      removeVerifiedGateImage: () => {
+        throw new Error("cleanup failure");
+      },
+    });
+    await assert.rejects(preserveFailure(original), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors[0], original);
+      assert.equal(error.errors[1].message, "cleanup failure");
+      return true;
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 void test("operator-1 manifest declares the actual one-subscriber measurement and 100 subjects", async () => {
   const source = await readFile(
     new URL("./setup.mjs", import.meta.url),
     "utf8",
   );
-  const start = source.indexOf("  const manifest={"),
-    end = source.indexOf("\n  if(nativeAdapter", start);
+  const start = source.indexOf("    const manifest = {"),
+    end = source.indexOf("\n    if (nativeAdapter !== undefined)", start);
   assert.ok(start >= 0 && end > start);
   const config = yaml(
     await readFile(
@@ -521,9 +1414,21 @@ void test("operator-1 manifest declares the actual one-subscriber measurement an
       fingerprint: "fixture",
       images: {},
       imageIds: {},
+      kafkaArtifact: {
+        imageId: "sha256:fixture-kafka-image",
+        manifestDigest: "sha256:fixture-kafka-manifest",
+        receiptSha256: "fixture-receipt-sha256",
+        ociArtifactSha256: "fixture-oci-sha256",
+        baseImage: "registry.example/kafka@sha256:fixture-base",
+        candidateSha: "fixture-candidate",
+        runId: "fixture-run",
+        importTag: "fixture-import-tag",
+        imported: false,
+      },
       nginx: "fixture",
       snapshot: { sources: {} },
       compiled: {},
+      launchPath: undefined,
     },
   );
   assert.equal(manifest.subjects, 100);
@@ -542,8 +1447,8 @@ void test("operator-1 admission prephase proves 512/513 and releases the boundar
     new URL("./driver.mjs", import.meta.url),
     "utf8",
   );
-  const start = source.indexOf("async function admissionPrephase(cookie){"),
-    end = source.indexOf("\nasync function preflight(){", start);
+  const start = source.indexOf("async function admissionPrephase(cookie) {"),
+    end = source.indexOf("\nasync function preflight() {", start);
   assert.ok(
     start >= 0 && end > start,
     "separate admission prephase is required for the one-subscriber measurement",
@@ -636,8 +1541,8 @@ void test("operator-1 driver result carries subject count required by classifier
     new URL("./driver.mjs", import.meta.url),
     "utf8",
   );
-  const start = source.indexOf("const result={"),
-    end = source.indexOf("\nconst workers=", start);
+  const start = source.indexOf("const result = {"),
+    end = source.indexOf("\nconst workers =", start);
   assert.ok(start >= 0 && end > start);
   const result = runInNewContext(source.slice(start, end) + "\nresult;", {
     fixture: { mode: "full", profile: "operator-1", ...FULL, subjects: 100 },
@@ -670,9 +1575,9 @@ void test("observer shutdown joins the active monitor promise and suppresses lat
     new URL("../soak.test.mjs", import.meta.url),
     "utf8",
   );
-  const scheduleStart = source.indexOf("  function scheduleObservers(){");
+  const scheduleStart = source.indexOf("  function scheduleObservers() {");
   const stopStart = source.indexOf(
-    "  async function stopObservers(){",
+    "  async function stopObservers() {",
     scheduleStart,
   );
   const end = source.indexOf("\n  let timer;", stopStart);
@@ -738,9 +1643,9 @@ void test("observer shutdown joins monitor after immediate control rejection and
     new URL("../soak.test.mjs", import.meta.url),
     "utf8",
   );
-  const scheduleStart = source.indexOf("  function scheduleObservers(){");
+  const scheduleStart = source.indexOf("  function scheduleObservers() {");
   const stopStart = source.indexOf(
-    "  async function stopObservers(){",
+    "  async function stopObservers() {",
     scheduleStart,
   );
   const end = source.indexOf("\n  let timer;", stopStart);
@@ -798,9 +1703,9 @@ void test("observer shutdown joins monitor after immediate control rejection and
   );
   assert.equal(context.observerRunning, false);
 
-  const monitorStart = source.indexOf("  async function monitor(){"),
+  const monitorStart = source.indexOf("  async function monitor() {"),
     monitorEnd = source.indexOf(
-      "  async function handleControl(){",
+      "  async function handleControl() {",
       monitorStart,
     );
   assert.ok(monitorStart >= 0 && monitorEnd > monitorStart);
@@ -874,16 +1779,16 @@ void test("shutdown close receipt requires a decoded reset frame before the serv
     "utf8",
   );
   const frameStart = source.indexOf(
-    "      if(frame.event==='stream-reset.v1'){",
+    '        if (frame.event === "stream-reset.v1") {',
   );
   const frameEnd = source.indexOf(
-    "\n      if(frame.event!=='resource-invalidated.v1')",
+    '\n        if (frame.event !== "resource-invalidated.v1") return;',
     frameStart,
   );
   const closeStart = source.indexOf(
-    "      if(closed||s.normalClose||!s.established)return;",
+    "        if (closed || s.normalClose || !s.established) return;",
   );
-  const closeEnd = source.indexOf("\n      const age=", closeStart);
+  const closeEnd = source.indexOf("\n        const age =", closeStart);
   assert.ok(
     frameStart >= 0 &&
       frameEnd > frameStart &&
@@ -952,14 +1857,14 @@ void test("prepared fixture pins the official nginx image and freezes its resolv
     new URL("./setup.mjs", import.meta.url),
     "utf8",
   );
-  assert.match(source, /nginx:toolchain\.nginxImage/u);
+  assert.match(source, /nginx:\s*toolchain\.nginxImage/u);
   assert.match(
     source,
-    /imageIds\[name\]=\(await docker\('image','inspect','--format','\{\{\.Id\}\}',image\)\)\.trim\(\)/u,
+    /imageIds\[name\]\s*=\s*\(\s*await docker\(\s*"image",\s*"inspect",\s*"--format",\s*"\{\{\.Id\}\}",\s*image\s*\)\s*\)\.trim\(\)/u,
   );
   assert.match(
     source,
-    /for\(const \[name,image\]of Object\.entries\(manifest\.images\)\)assert\.equal\(\(await docker\('image','inspect','--format','\{\{\.Id\}\}',image\)\)\.trim\(\),manifest\.imageIds\[name\]/u,
+    /for\s*\(const\s*\[name,\s*image\]\s*of\s*Object\.entries\(manifest\.images\)\)\s*assert\.equal\(\s*\(\s*await docker\(\s*"image",\s*"inspect",\s*"--format",\s*"\{\{\.Id\}\}",\s*name === "kafka" \? manifest\.imageIds\.kafka : image,?\s*\)\s*\)\.trim\(\),\s*manifest\.imageIds\[name\]/u,
   );
   assert.doesNotMatch(source, /nginx-native|nativeNginx|verifyNginxBuild/u);
 });
@@ -1012,9 +1917,9 @@ void test("host OOM failure identifies the exact observed role even when its mas
     new URL("../soak.test.mjs", import.meta.url),
     "utf8",
   );
-  const check = source
-    .split("\n")
-    .find((line) => line.includes("assert.equal(s.State.OOMKilled,false"));
+  const check = source.match(
+    /assert\.equal\(\s*s\.State\.OOMKilled,\s*false,\s*`[^`]+`,?\s*\);/u,
+  )?.[0];
   assert.ok(check);
   for (const role of ["edge-nginx", "realtime-gateway"]) {
     assert.throws(
@@ -1039,9 +1944,9 @@ void test("raw cgroup OOM kill rejects a stale clean Docker state", async () => 
     new URL("../soak.test.mjs", import.meta.url),
     "utf8",
   );
-  const check = source
-    .split("\n")
-    .find((line) => line.includes("assert.equal(memory.events.oom_kill,0"));
+  const check = source.match(
+    /assert\.equal\(\s*memory\.events\.oom_kill,\s*0,\s*`[^`]+`,?\s*\);/u,
+  )?.[0];
   assert.ok(check, "raw cgroup OOM kill must remain a failure");
   assert.throws(
     () =>
@@ -1121,9 +2026,9 @@ void test("event-loop sample records the failing maximum before enforcing the un
     new URL("./driver.mjs", import.meta.url),
     "utf8",
   );
-  const sampleStart = source.indexOf("  async function sample(){");
+  const sampleStart = source.indexOf("  async function sample() {");
   const sampleEnd = source.indexOf(
-    "\n  while(performance.now()-start<fixture.durationMs){",
+    "\n  while (performance.now() - start < fixture.durationMs) {",
     sampleStart,
   );
   assert.ok(
@@ -1638,8 +2543,8 @@ void test("checkpoint coverage keeps late maxima pending through the shared abso
     new URL("./clients.mjs", import.meta.url),
     "utf8",
   );
-  const start = source.indexOf("      if(message.type==='checkpoint'){"),
-    end = source.indexOf("\n      if(message.type==='stats'){", start);
+  const start = source.indexOf('      if (message.type === "checkpoint") {'),
+    end = source.indexOf('\n      if (message.type === "stats") {', start);
   assert.ok(start >= 0 && end > start);
   const checkpoint = source.slice(start, end);
   const makeRun = ({ received, states, deadlineAt = 15000 }) => {
@@ -1756,24 +2661,24 @@ void test("checkpoint coverage keeps late maxima pending through the shared abso
   assert.equal(
     (
       driver.match(
-        /deadlineAt:checkpointIssuedAt\+recoveryBudget\+THRESHOLDS\.eventLatencyP95Ms/gu,
+        /deadlineAt:\s*checkpointIssuedAt\s*\+\s*recoveryBudget\s*\+\s*THRESHOLDS\.eventLatencyP95Ms/gu,
       ) ?? []
     ).length,
     2,
     "periodic and final checkpoints share the same deadline",
   );
   const finalWaitStart = driver.indexOf(
-    "  await until(()=>{if(fatal)throw fatal;return covered.size===checkpoint&&[...covered.values()].every(set=>set.size===fixture.shards);",
+    "  await until(\n    () => {\n      if (fatal) throw fatal;\n      return (\n        covered.size === checkpoint",
   );
   const finalWaitEnd = driver.indexOf(
-    "\n  for(const [id,set]of covered)",
+    "\n  for (const [id, set] of covered)",
     finalWaitStart,
   );
   assert.ok(finalWaitStart >= 0 && finalWaitEnd > finalWaitStart);
   const finalWait = driver.slice(finalWaitStart, finalWaitEnd);
   assert.match(
     finalWait,
-    /timeout:recoveryBudget\+THRESHOLDS\.eventLatencyP95Ms/u,
+    /timeout:\s*recoveryBudget\s*\+\s*THRESHOLDS\.eventLatencyP95Ms/u,
     "the complete checkpoint set retains its 14s bound",
   );
   let waitPasses = 0;
@@ -1806,14 +2711,17 @@ void test("checkpoint coverage keeps late maxima pending through the shared abso
     THRESHOLDS,
   });
   assert.equal(waitPasses, 1);
+  const deadlineGuard = checkpoint.indexOf(
+      "if (nowMs() >= message.deadlineAt)",
+    ),
+    waitingClients = checkpoint.indexOf("for (const client of waiting)");
   assert.ok(
-    checkpoint.indexOf("if(nowMs()>=message.deadlineAt)") <
-      checkpoint.indexOf("for(const client of waiting)"),
+    deadlineGuard >= 0 && waitingClients > deadlineGuard,
     "an overdue scan fails closed before observing a late-arriving maximum",
   );
   assert.match(
     source,
-    /later\(scanCoverage,Math\.max\(0,message\.checkAt-nowMs\(\)\)\)/u,
+    /later\(scanCoverage,\s*Math\.max\(0,\s*message\.checkAt\s*-\s*nowMs\(\)\)\)/u,
     "the first scan retains the one-second histogram checkpoint",
   );
 });
@@ -1850,7 +2758,7 @@ void test("client latency diagnostics separate replay without removing it from a
     "utf8",
   );
   const measured = source.match(
-    /if\(measuring\)\{const latency=[^\n]+\}/u,
+    /if \(measuring\) \{\s*const latency = nowMs\(\) - ulidTime\(frame\.id\.slice\(4\)\);[\s\S]*?frames\+\+;\s*\}/u,
   )?.[0];
   assert.ok(measured);
   const context = {
@@ -1942,7 +2850,85 @@ void test("product launch uses the runtime-supported configuration locators", ()
       "--enable-source-maps",
       `apps/${role}/dist/main.js`,
     ]);
+  assert.ok(
+    productArgs("orders-service", true).includes(
+      "COFFEE_LAUNCH_CONTEXT_FILE=/fixture/launch-context.json",
+    ),
+  );
 });
+void test("G15 realtime launch path binds child identity to verified parent lineage", async () => {
+  const source = await readFile(
+    new URL("./setup.mjs", import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("async function readFixtureLaunchPath(");
+  const end = source.indexOf("\n\nfunction assertFixtureLaunchConfig", start);
+  assert.ok(start >= 0 && end > start);
+  const functionSource = source.slice(start, end);
+  const contextPath = "/child/evidence/context.json";
+  const receiptPath =
+    "/child/evidence/gates/G15_BROWSER/artifacts/lineage.json";
+  const baseCandidateSha = "d".repeat(40);
+  const receiptBytes = Buffer.from("synthetic G15 lineage receipt\n");
+  const active = {
+    context: {
+      schemaVersion: 1,
+      runId: "20261026T123456Z-abcdef0",
+      candidateSha: `abcdef0${"1".repeat(33)}`,
+      baseConfigSha256: "b".repeat(64),
+      resources: {
+        g15ParentCandidateSha: baseCandidateSha,
+        g15ParentCheckoutRoot: "/source",
+      },
+    },
+    sourceRoot: "/source",
+    candidateRoot: "/child",
+  };
+  const lineage = {
+    schemaVersion: 1,
+    runId: active.context.runId,
+    candidateSha: active.context.candidateSha,
+    configSha256: active.context.baseConfigSha256,
+    receiptPath,
+  };
+  const launchPath = await runInNewContext(
+    `(async()=>{${functionSource};return await readFixtureLaunchPath({launchContextFile:contextPath})})()`,
+    {
+      assert,
+      resolve,
+      join,
+      contextPath,
+      validateLaunchContext: async (path) => {
+        assert.equal(path, contextPath);
+        return active;
+      },
+      readG15FixtureLineage: async (input) => {
+        assert.deepEqual(JSON.parse(JSON.stringify(input)), {
+          root: "/source",
+          contextPath,
+          baseCandidateSha,
+        });
+        return lineage;
+      },
+      readFile: async (path) => {
+        assert.equal(path, receiptPath);
+        return receiptBytes;
+      },
+      hash: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+    },
+  );
+  assert.equal(launchPath.parentCandidateRoot, "/source");
+  assert.equal(launchPath.candidateRoot, "/child");
+  assert.equal(
+    launchPath.launchIdentity.baseConfigSha256,
+    active.context.baseConfigSha256,
+  );
+  assert.equal(
+    launchPath.lineageReceiptSha256,
+    createHash("sha256").update(receiptBytes).digest("hex"),
+  );
+});
+
 void test("product launch scopes fixture mounts and proves role-local read access", async () => {
   const source = await readFile(
     new URL("../soak.test.mjs", import.meta.url),
@@ -1952,7 +2938,38 @@ void test("product launch scopes fixture mounts and proves role-local read acces
     end = source.indexOf("\n\n  async function inspectRole", start);
   assert.ok(start >= 0 && end > start);
   const launchSource = source.slice(start, end);
-  const invoke = async (role, reportedMounts) => {
+  const driverLaunchContext = {
+    schemaVersion: 1,
+    runId: "20261026T123456Z-abcdef0",
+    candidateSha: `abcdef0${"1".repeat(33)}`,
+    baseConfigSha256: "b".repeat(64),
+    checkoutDir: "/child-checkout",
+    sourceRepoRoot: "/parent-checkout",
+    acceptedBaseCommit: "c".repeat(40),
+    startedAtUtc: "2026-10-26T12:34:56.000Z",
+    evidenceDir: "/parent-checkout/evidence/launch/20261026T123456Z-abcdef0",
+    githubSnapshotPath: null,
+    resources: {
+      composeProject: "coffee-launch-20261026t123456z-abcdef0",
+      kafkaPrefix: "20261026T123456Z-abcdef0",
+    },
+  };
+  const driverIdentity = Object.fromEntries(
+    ["schemaVersion", "runId", "candidateSha", "baseConfigSha256"].map(
+      (key) => [key, driverLaunchContext[key]],
+    ),
+  );
+  const driverPlatformBytes = Buffer.from("synthetic child platform config\n");
+  const driverOwnershipBytes = Buffer.from('{"schemaVersion":1}\n');
+  const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const driverConfigSha256 = digest(driverPlatformBytes);
+  const driverOwnershipSha256 = digest(driverOwnershipBytes);
+  const invoke = async (
+    role,
+    reportedMounts,
+    launchPath = false,
+    driverProbeInputs = {},
+  ) => {
     const calls = [],
       execCalls = [],
       receipts = [],
@@ -1964,8 +2981,20 @@ void test("product launch scopes fixture mounts and proves role-local read acces
       setup: {
         snapshot: "/fixture-snapshot",
         privateDir: "/private",
+        ...(launchPath
+          ? {
+              launchIdentity: driverIdentity,
+              launchContextFile: "/evidence/context.json",
+              databaseOwnershipFile:
+                "/candidate/config/database-ownership.json",
+            }
+          : {}),
         images: { node: "node-image" },
-        manifest: { containerBudgets: {} },
+        manifest: {
+          containerBudgets: {},
+          configSha256: driverConfigSha256,
+          databaseOwnershipSha256: driverOwnershipSha256,
+        },
       },
       dir: "/results",
       owned,
@@ -1995,18 +3024,81 @@ void test("product launch scopes fixture mounts and proves role-local read acces
           ]);
         if (args[0] === "exec") {
           execCalls.push(args);
+          if (role === "driver" && launchPath) {
+            const reads = new Map([
+              [
+                "/fixture/platform.yaml",
+                driverProbeInputs.platformBytes ?? driverPlatformBytes,
+              ],
+              [
+                "/fixture/database-ownership.json",
+                driverProbeInputs.ownershipBytes ?? driverOwnershipBytes,
+              ],
+              [
+                "/fixture/launch-context.json",
+                Buffer.from(
+                  JSON.stringify(
+                    driverProbeInputs.launchContext ?? driverLaunchContext,
+                  ),
+                ),
+              ],
+            ]);
+            let report, failure;
+            await runInNewContext(
+              `(async()=>{${args.at(-1)};await new Promise(setImmediate)})()`,
+              {
+                require: (specifier) => {
+                  if (specifier === "node:fs/promises")
+                    return {
+                      readFile: async (path) => {
+                        if (!reads.has(path))
+                          throw Object.assign(new Error("missing fixture"), {
+                            code: "ENOENT",
+                          });
+                        return reads.get(path);
+                      },
+                    };
+                  if (specifier === "node:crypto") return { createHash };
+                  throw new Error(`unexpected probe import: ${specifier}`);
+                },
+                console: {
+                  log: (value) => {
+                    report = JSON.parse(value);
+                  },
+                  error: (value) => {
+                    failure = value;
+                  },
+                },
+                process: { exitCode: 0 },
+                setImmediate,
+              },
+            );
+            if (failure) throw new Error(String(failure));
+            assert.ok(
+              report,
+              `driver identity and digest probe executes: ${String(failure)}`,
+            );
+            return JSON.stringify(report);
+          }
           return JSON.stringify({
             readablePaths: [
               "/fixture/platform.yaml",
               `/fixture/${role}.yaml`,
+              ...(launchPath
+                ? [
+                    "/fixture/database-ownership.json",
+                    "/fixture/launch-context.json",
+                  ]
+                : []),
               ...(role === "edge-gateway" ? ["/fixture/certs/ca.crt"] : []),
             ],
             deniedPaths: [
               "/fixture/fixture.json",
-              `/fixture/${role === "edge-gateway" ? "realtime-gateway" : "edge-gateway"}.yaml`,
+              `/fixture/${role === "edge-gateway" ? "realtime-gateway" : role === "orders-service" ? "orders-aroma-preparation" : role === "orders-aroma-preparation" ? "orders-service" : "edge-gateway"}.yaml`,
               "/fixture/certs/ca.key",
               "/results/private/fixture.json",
             ],
+            configSha256: context.setup.manifest.configSha256,
           });
         }
         throw new Error(`unexpected docker call: ${args[0]}`);
@@ -2018,15 +3110,50 @@ void test("product launch scopes fixture mounts and proves role-local read acces
     const launchArgs =
       role === "idp"
         ? ["--IMAGE--", "node", "services.mjs", "idp"]
-        : [...productArgs(role)];
+        : role === "driver"
+          ? ["--IMAGE--", "node", "--input-type=module", "-e", "void 0"]
+          : [...productArgs(role, launchPath)];
     await runInNewContext(
       `(async()=>{${launchSource}\nawait launch('${role}','node-image',${JSON.stringify(launchArgs)});})()`,
       context,
     );
     return { calls, execCalls, receipts, owned, context };
   };
-  const expected = (role) =>
-    [
+  const expected = (role, launchPath = false) => {
+    if (role === "driver" && launchPath)
+      return [
+        {
+          Type: "bind",
+          Source: "/fixture-snapshot",
+          Destination: "/app",
+          RW: false,
+        },
+        {
+          Type: "bind",
+          Source: "/private",
+          Destination: "/fixture",
+          RW: false,
+        },
+        {
+          Type: "bind",
+          Source: "/results",
+          Destination: "/results",
+          RW: true,
+        },
+        {
+          Type: "bind",
+          Source: "/candidate/config/database-ownership.json",
+          Destination: "/fixture/database-ownership.json",
+          RW: false,
+        },
+        {
+          Type: "bind",
+          Source: "/evidence/context.json",
+          Destination: "/fixture/launch-context.json",
+          RW: false,
+        },
+      ].sort((a, b) => a.Destination.localeCompare(b.Destination));
+    return [
       {
         Type: "bind",
         Source: "/fixture-snapshot",
@@ -2045,6 +3172,22 @@ void test("product launch scopes fixture mounts and proves role-local read acces
         Destination: `/fixture/${role}.yaml`,
         RW: false,
       },
+      ...(launchPath
+        ? [
+            {
+              Type: "bind",
+              Source: "/candidate/config/database-ownership.json",
+              Destination: "/fixture/database-ownership.json",
+              RW: false,
+            },
+            {
+              Type: "bind",
+              Source: "/evidence/context.json",
+              Destination: "/fixture/launch-context.json",
+              RW: false,
+            },
+          ]
+        : []),
       ...(role === "edge-gateway"
         ? [
             {
@@ -2056,6 +3199,7 @@ void test("product launch scopes fixture mounts and proves role-local read acces
           ]
         : []),
     ].sort((a, b) => a.Destination.localeCompare(b.Destination));
+  };
   for (const role of ["edge-gateway", "api-public", "realtime-gateway"]) {
     const value = await invoke(role, expected(role));
     assert.equal(value.calls.length, 1);
@@ -2087,6 +3231,71 @@ void test("product launch scopes fixture mounts and proves role-local read acces
     ])
       assert.ok(probe.includes(path));
   }
+  for (const role of [
+    "edge-gateway",
+    "api-public",
+    "realtime-gateway",
+    "orders-service",
+  ]) {
+    const value = await invoke(role, expected(role, true), true);
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(value.receipts[0].scopedMounts.readablePaths)),
+      [
+        "/fixture/platform.yaml",
+        `/fixture/${role}.yaml`,
+        "/fixture/database-ownership.json",
+        "/fixture/launch-context.json",
+        ...(role === "edge-gateway" ? ["/fixture/certs/ca.crt"] : []),
+      ],
+    );
+    assert.ok(
+      value.calls[0].includes(
+        "COFFEE_LAUNCH_CONTEXT_FILE=/fixture/launch-context.json",
+      ),
+    );
+    assert.equal(
+      value.receipts[0].scopedMounts.configSha256,
+      driverConfigSha256,
+    );
+  }
+  const launchDriver = await invoke("driver", expected("driver", true), true);
+  assert.equal(launchDriver.execCalls.length, 1);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(launchDriver.receipts[0].scopedMounts)),
+    {
+      readOnly: true,
+      readablePaths: [
+        "/fixture/platform.yaml",
+        "/fixture/database-ownership.json",
+        "/fixture/launch-context.json",
+      ],
+      configSha256: driverConfigSha256,
+      databaseOwnershipSha256: driverOwnershipSha256,
+      launchIdentity: driverIdentity,
+    },
+  );
+  assert.ok(
+    launchDriver.calls[0].includes(
+      "type=bind,src=/candidate/config/database-ownership.json,dst=/fixture/database-ownership.json,readonly",
+    ),
+  );
+  assert.ok(
+    launchDriver.calls[0].includes(
+      "type=bind,src=/evidence/context.json,dst=/fixture/launch-context.json,readonly",
+    ),
+  );
+  await assert.rejects(
+    invoke("driver", expected("driver", true), true, {
+      launchContext: { ...driverLaunchContext, runId: "foreign-run" },
+    }),
+    /driver fixture mount verification failed/u,
+  );
+  await assert.rejects(
+    invoke("driver", expected("driver", true), true, {
+      platformBytes: Buffer.from("changed child config\n"),
+    }),
+    /driver fixture mount verification failed/u,
+  );
   const fixtureMounts = [
     {
       Type: "bind",
@@ -2166,7 +3375,9 @@ void test("cleanup receipts preserve secondary failures when the driver already 
     new URL("../soak.test.mjs", import.meta.url),
     "utf8",
   );
-  const start = source.lastIndexOf("    const cleanupStart=");
+  const start = source.lastIndexOf(
+    "    const cleanupStart = performance.now(),",
+  );
   const end = source.indexOf("\n  }\n  return result;", start);
   assert.ok(start >= 0 && end > start);
   for (const [networkFailed, privateFailed] of [
@@ -2249,11 +3460,11 @@ void test("cleanup receipts preserve secondary failures when the driver already 
     new URL("./owner-browser.mjs", import.meta.url),
     "utf8",
   );
-  const stopStart = ownerSource.indexOf("      const stop=async()=>{"),
+  const stopStart = ownerSource.indexOf("      const stop = async () => {"),
     stopEnd = ownerSource.indexOf("\n      };", stopStart);
   const steps = [];
   const stop = runInNewContext(
-    `(${ownerSource.slice(stopStart, stopEnd).trim().replace("const stop=", "")}\n})`,
+    `(${ownerSource.slice(stopStart, stopEnd).trim().replace("const stop = ", "")}\n})`,
     {
       assert,
       AggregateError,
@@ -2295,15 +3506,14 @@ void test("cleanup receipts preserve secondary failures when the driver already 
   });
   assert.deepEqual(steps, ["owner", "client", "network", "image", "private"]);
   assert.ok(
-    ownerSource.indexOf("registerOwner({stop})") <
-      ownerSource.indexOf("privateDir=await mkdtemp("),
+    ownerSource.indexOf("registerOwner({ stop })") <
+      ownerSource.indexOf("privateDir = await mkdtemp("),
     "owner registration precedes private directory creation",
   );
-  const startup = source
-    .split("\n")
-    .find((line) =>
-      line.includes("if(hooks.startOwner)ownerResource=await hooks.startOwner"),
-    );
+  const startupStart = source.indexOf("      if (hooks.startOwner)"),
+    startupEnd = source.indexOf("\n      const brokerEnv", startupStart);
+  assert.ok(startupStart >= 0 && startupEnd > startupStart);
+  const startup = source.slice(startupStart, startupEnd);
   const artifacts = new Map(),
     primary = new Error("primary owner startup");
   const failed = await runInNewContext(
@@ -2355,9 +3565,9 @@ void test("positive owner browser keeps frozen compiled transport bytes and priv
     "utf8",
   );
   const start = source.indexOf(
-      "      runtimeRelative='apps/realtime-gateway/dist/runtime-composition.js';",
+      '      runtimeRelative = "apps/realtime-gateway/dist/runtime-composition.js";',
     ),
-    end = source.indexOf("      const gateway=", start);
+    end = source.indexOf("      const gateway =", start);
   assert.ok(start >= 0 && end > start);
   const original = await readFile(
     new URL(
@@ -2426,8 +3636,8 @@ void test("owner browser verifies every frozen source before issuing either scen
     new URL("./owner-browser.mjs", import.meta.url),
     "utf8",
   );
-  const start = source.indexOf("        const sourceAfter={};"),
-    end = source.indexOf("        const compiledAfter={};", start);
+  const start = source.indexOf("        const sourceAfter = {};"),
+    end = source.indexOf("        const compiledAfter = {};", start);
   assert.ok(
     start >= 0 && end > start,
     "both owner browser scenarios must verify the entire frozen source manifest",
@@ -2473,7 +3683,7 @@ void test("owner browser verifies every frozen source before issuing either scen
     }
   assert.match(
     source,
-    /proof\.sourceIntegrity=\{before:setup\.manifest\.sources,after:sourceAfter,unchanged:true\}/u,
+    /proof\.sourceIntegrity\s*=\s*\{\s*before:\s*setup\.manifest\.sources,\s*after:\s*sourceAfter,\s*unchanged:\s*true,\s*\}/u,
   );
 });
 
@@ -2483,15 +3693,15 @@ void test("owner browser response body rejection is captured immediately without
     "utf8",
   );
   const start = source.indexOf(
-      "        const captureOwnerResponse=response=>{",
+      "        const captureOwnerResponse = (response) => {",
     ),
-    end = source.indexOf("\n        };", start);
+    end = source.indexOf("\n        };", start) + 10;
   const pending = [],
     responses = [],
     httpFailures = [],
     bodyFailures = [];
   const callback = runInNewContext(
-    `(${source.slice(start, end).trim().replace("const captureOwnerResponse=", "")}\n})`,
+    `(${source.slice(start, end).trim().replace("const captureOwnerResponse = ", "")}\n)`,
     {
       assert,
       URL,
@@ -2515,17 +3725,19 @@ void test("owner browser response body rejection is captured immediately without
   assert.equal(bodyFailures.length, 1);
   assert.equal(bodyFailures[0].message, "synthetic body aborted");
   assert.deepEqual(responses, []);
-  const drain = source
-    .split("\n")
-    .find((line) => line.includes("const drainResponses="));
-  const drainResponses = runInNewContext(
-    `(${drain.trim().replace("const drainResponses=", "").replace(/;$/u, "")})`,
+  const drainStart = source.indexOf(
+      "        const drainResponses = async () => {",
+    ),
+    drainEnd = source.indexOf("\n        };", drainStart) + 10;
+  assert.ok(drainStart >= 0 && drainEnd > drainStart);
+  const drainResponses = await runInNewContext(
+    `(async()=>{${source.slice(drainStart, drainEnd)};return drainResponses;})()`,
     { assert, pending, bodyFailures },
   );
   await assert.rejects(drainResponses(), /owner GET body read failed/u);
   bodyFailures.length = 0;
-  const tailStart = source.indexOf("        const sources={};"),
-    tailEnd = source.indexOf("\n      }finally", tailStart),
+  const tailStart = source.indexOf("        const sources = {};"),
+    tailEnd = source.indexOf("\n      } finally", tailStart),
     published = [];
   const tail = source.slice(tailStart, tailEnd);
   await assert.rejects(

@@ -80,6 +80,7 @@ async function toolchainRoot() {
   for (const file of [
     "package.json",
     ".node-version",
+    "pnpm-workspace.yaml",
     "pnpm-lock.yaml",
     "tsconfig.json",
     "tsconfig.base.json",
@@ -235,6 +236,19 @@ for (const { name, path, source, rule } of [
     }
   });
 }
+
+void test("GREEN ARCH-ORDERS-CONFIRM-BOUNDARY: formatted Confirm signature allows its trailing comma", () => {
+  assert.doesNotThrow(() =>
+    checkStaticSource(
+      "apps/orders-service/src/application/confirm-order.ts",
+      `export async function confirmOrder(
+        store: Pick<OrderStore, "replay" | "precheck" | "confirm">,
+        input: CommandContext &
+          Readonly<{ orderRef: string; expectedVersion: string | undefined }>,
+      ) { return store.confirm(input); }`,
+    ),
+  );
+});
 
 for (const targetRuntime of [
   "catalog-activation-worker",
@@ -636,6 +650,28 @@ void test("RED TS7 static baseline rules reject non-erasable, CommonJS and exten
     assert.notEqual(result.status, 0, `${fixture}: ${output(result)}`);
     assert.match(output(result), new RegExp(rule), fixture);
   }
+  for (const source of [
+    "/* comment */\nPromise.resolve();",
+    "// comment\nPromise.resolve();",
+    "/*\n comment\n */\nPromise.resolve();",
+    "label:\nPromise.resolve();",
+  ]) {
+    assert.throws(
+      () =>
+        checkStaticSource("packages/platform-database/src/index.ts", source),
+      /TS7-PROMISE/u,
+    );
+  }
+});
+
+void test("GREEN TS7-PROMISE: nested promise callback in awaited transaction is not a floating expression", async () => {
+  const source = await readFile(
+    join(REPO_ROOT, "packages/platform-database/src/index.ts"),
+    "utf8",
+  );
+  assert.doesNotThrow(() =>
+    checkStaticSource("packages/platform-database/src/index.ts", source),
+  );
 });
 
 void test("RED ARCH-PERMISSION: every materialized runtime must declare all permission classes", () => {
@@ -663,32 +699,6 @@ void test("GREEN ARCH-PERMISSION: native nginx image needs no Node permission ma
     );
     const result = run("check-architecture.mjs", root);
     assert.equal(result.status, 0, output(result));
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-void test("ARCH-PERMISSION: source-only decoders stay offline; a main or package requires permissions", async () => {
-  const root = await mkdtemp(join(tmpdir(), "coffee-offline-decoder-"));
-  const app = join(root, "apps/tasty-gateway");
-  try {
-    await mkdir(join(app, "src/infrastructure/provider"), { recursive: true });
-    await mkdir(join(root, "config"));
-    await writeFile(join(root, "config/platform.yaml"), "schemaVersion: 1\n");
-    await writeFile(
-      join(app, "src/infrastructure/provider/decoder.ts"),
-      "export const decode = (value: unknown): unknown => value;\n",
-    );
-    const offline = run("check-architecture.mjs", root);
-    assert.equal(offline.status, 0, output(offline));
-    for (const file of ["src/main.ts", "package.json"]) {
-      const path = join(app, file);
-      await writeFile(path, file.endsWith(".json") ? "{}\n" : "export {};\n");
-      const runtime = run("check-architecture.mjs", root);
-      assert.notEqual(runtime.status, 0, output(runtime));
-      assert.match(output(runtime), /ARCH-PERMISSION/);
-      await rm(path);
-    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

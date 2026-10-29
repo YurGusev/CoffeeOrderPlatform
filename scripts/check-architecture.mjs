@@ -540,6 +540,36 @@ function findSwitchBody(source, openingBrace) {
   return source.slice(openingBrace + 1);
 }
 
+function stripLineComments(line) {
+  let code = "";
+  let quote;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    const next = line[index + 1];
+    if (quote) {
+      code += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+      code += character;
+    } else if (character === "/" && next === "/") {
+      break;
+    } else if (character === "/" && next === "*") {
+      const commentEnd = line.indexOf("*/", index + 2);
+      if (commentEnd === -1) break;
+      index = commentEnd + 1;
+    } else {
+      code += character;
+    }
+  }
+  return code.trimEnd();
+}
+
 function checkStaticSource(path, source) {
   const label = path.replaceAll("\\", "/");
   const isUiPackage = label.includes("/packages/platform-ui/");
@@ -560,7 +590,7 @@ function checkStaticSource(path, source) {
     const parameters =
       /\bfunction\s+confirmOrder\s*\(([^)]*)\)/u.exec(source)?.[1] ?? "";
     if (
-      !/^\s*store\s*:\s*Pick<\s*OrderStore\s*,\s*["']replay["']\s*\|\s*["']precheck["']\s*\|\s*["']confirm["']\s*>\s*,\s*input\s*:\s*CommandContext\s*&\s*Readonly<\s*\{[^}]*\}\s*>\s*$/u.test(
+      !/^\s*store\s*:\s*Pick<\s*OrderStore\s*,\s*["']replay["']\s*\|\s*["']precheck["']\s*\|\s*["']confirm["']\s*>\s*,\s*input\s*:\s*CommandContext\s*&\s*Readonly<\s*\{[^}]*\}\s*>\s*,?\s*$/u.test(
         parameters,
       ) ||
       /\b(?:fetch|setTimeout)\s*\(|\.\s*(?:publish|send|getOrderInput|verify)\s*\(/u.test(
@@ -867,10 +897,17 @@ function checkStaticSource(path, source) {
         `${label}: state switch must have an exhaustive default/never branch`,
       );
   }
+  const unhandledPromiseExpression =
+    /^\s*(?:Promise\.(?:resolve|reject)|[A-Za-z_$][\w$]*(?:Async|Promise))\s*\([^;]*\);\s*$/gm;
   if (
-    /^\s*(?:Promise\.(?:resolve|reject)|[A-Za-z_$][\w$]*(?:Async|Promise))\s*\([^;]*\);\s*$/m.test(
-      source,
-    )
+    [...source.matchAll(unhandledPromiseExpression)].some((match) => {
+      const precedingLine = source
+        .slice(0, match.index)
+        .trimEnd()
+        .split(/\r?\n/u)
+        .at(-1);
+      return !/[,(]$/u.test(stripLineComments(precedingLine ?? ""));
+    })
   ) {
     fail(
       "TS7-PROMISE",

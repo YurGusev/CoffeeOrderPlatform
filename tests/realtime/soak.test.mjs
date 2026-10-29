@@ -11,8 +11,7 @@
  */
 import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
-import { resolve, join, relative } from "node:path";
-import { tmpdir } from "node:os";
+import { resolve, join, relative, isAbsolute, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   prepare,
@@ -39,8 +38,14 @@ import {
   ulid,
 } from "./fixtures/protocol.mjs";
 import Ajv2020 from "ajv/dist/2020.js";
+import { assertFixtureKafkaNamespaceBound } from "./fixtures/setup.mjs";
 
-async function verifyBrokerFixture(broker, dir) {
+async function verifyBrokerFixture(broker, dir, config, launchIdentity) {
+  const runtimeTarget = assertFixtureKafkaNamespaceBound(
+    config,
+    "realtime-gateway",
+    launchIdentity,
+  );
   const ajv = new Ajv2020({ strict: true, allErrors: true });
   ajv.addFormat(
     "date-time",
@@ -95,7 +100,7 @@ async function verifyBrokerFixture(broker, dir) {
       "--command-config",
       "/etc/kafka/secrets/publisher.properties",
       "--topic",
-      "coffee.realtime.invalidate.v1",
+      runtimeTarget.topics["coffee.realtime.invalidate.v1"],
       "--property",
       "parse.key=true",
       "--property",
@@ -122,7 +127,7 @@ async function verifyBrokerFixture(broker, dir) {
       "--command-config",
       "/etc/kafka/secrets/client.properties",
       "--topic",
-      "coffee.realtime.invalidate.v1",
+      runtimeTarget.topics["coffee.realtime.invalidate.v1"],
       "--from-beginning",
       "--max-messages",
       "10",
@@ -177,7 +182,14 @@ export async function bootstrapOwnedOrdersKafka({
   runKafka,
   writeReceipt,
   owners = ["orders-service", "orders-aroma-preparation"],
+  launchIdentity,
 }) {
+  const runtimeTargets = new Map(
+    owners.map((owner) => [
+      owner,
+      assertFixtureKafkaNamespaceBound(config, owner, launchIdentity),
+    ]),
+  );
   const inspected = await inspectBroker(broker),
     state = Array.isArray(inspected) ? inspected[0] : inspected;
   assert.ok(
@@ -227,16 +239,21 @@ export async function bootstrapOwnedOrdersKafka({
           (candidate) => candidate.name === topicName,
         );
         assert.ok(topic, `configured durable owner topic exists: ${topicName}`);
+        const runtimeTarget = runtimeTargets.get(serviceName);
+        const physicalTopic = runtimeTarget?.topics[topicName];
+        const physicalGroup = runtimeTarget?.groups[consumer.groupId];
+        assert.equal(typeof physicalTopic, "string");
+        assert.equal(typeof physicalGroup, "string");
         if (
           !groups.some(
             (item) =>
-              item.groupId === consumer.groupId && item.topic === topic.name,
+              item.groupId === physicalGroup && item.topic === physicalTopic,
           )
         )
           groups.push({
             service: serviceName,
-            groupId: consumer.groupId,
-            topic: topic.name,
+            groupId: physicalGroup,
+            topic: physicalTopic,
             partitions: topic.partitions,
           });
       }
@@ -380,6 +397,10 @@ export async function bootstrapOwnedOrdersKafka({
   return receipt;
 }
 
+export function scratchRoot() {
+  return resolve(process.env.TMPDIR ?? "/home/yurgusev/.hermes/cache/scratch");
+}
+
 export function parse(args) {
   const options = {
     mode: "full",
@@ -469,14 +490,19 @@ export function parse(args) {
   );
   options.resultDir ??=
     options.prepared ??
-    join(process.env.TMPDIR ?? tmpdir(), `issue12-realtime-${options.runId}`);
-  const scratch = resolve(
-    process.env.TMPDIR ?? "/home/yurgusev/.hermes/cache/scratch",
-  );
-  const rel = relative(scratch, options.resultDir);
+    join(scratchRoot(), `issue12-realtime-${options.runId}`);
+  const scratch = scratchRoot(),
+    rel = relative(scratch, options.resultDir),
+    repoRelative = relative(ROOT, options.resultDir);
   assert.ok(
     rel && !rel.startsWith("..") && !rel.startsWith("/"),
     "result artifacts must be in declared Hermes scratch, never tracked evidence/docs",
+  );
+  assert.ok(
+    repoRelative === ".." ||
+      repoRelative.startsWith(`..${sep}`) ||
+      isAbsolute(repoRelative),
+    "result artifacts must stay outside the repository",
   );
   return options;
 }
@@ -648,6 +674,8 @@ export async function runTransportFixture(options, hooks = {}) {
       "orders-service",
       "orders-aroma-preparation",
     ].includes(role);
+    const scopedLaunchDriver =
+      role === "driver" && Boolean(setup.launchIdentity);
     const base = [
       "run",
       "--detach",
@@ -691,6 +719,25 @@ export async function runTransportFixture(options, hooks = {}) {
           "--mount",
           `type=bind,src=${setup.privateDir}/${role}.yaml,dst=/fixture/${role}.yaml,readonly`,
         );
+        if (setup.launchIdentity) {
+          base.push(
+            "--mount",
+            `type=bind,src=${setup.databaseOwnershipFile},dst=/fixture/database-ownership.json,readonly`,
+            "--mount",
+            `type=bind,src=${setup.launchContextFile},dst=/fixture/launch-context.json,readonly`,
+          );
+          const contextEnv =
+            "COFFEE_LAUNCH_CONTEXT_FILE=/fixture/launch-context.json";
+          const suppliedContextEnv = args.filter((value) =>
+            value.startsWith("COFFEE_LAUNCH_CONTEXT_FILE="),
+          );
+          assert.ok(
+            suppliedContextEnv.length <= 1 &&
+              suppliedContextEnv.every((value) => value === contextEnv),
+            "runtime launch context locator is exact and unique",
+          );
+          if (suppliedContextEnv.length === 0) base.push("--env", contextEnv);
+        }
         if (scopedProduct && role === "edge-gateway")
           base.push(
             "--mount",
@@ -704,6 +751,13 @@ export async function runTransportFixture(options, hooks = {}) {
           `type=bind,src=${setup.privateDir},dst=/fixture,readonly`,
           "--mount",
           `type=bind,src=${dir},dst=/results`,
+        );
+      if (scopedLaunchDriver)
+        base.push(
+          "--mount",
+          `type=bind,src=${setup.databaseOwnershipFile},dst=/fixture/database-ownership.json,readonly`,
+          "--mount",
+          `type=bind,src=${setup.launchContextFile},dst=/fixture/launch-context.json,readonly`,
         );
       base.push("--workdir", "/app");
     }
@@ -777,6 +831,22 @@ export async function runTransportFixture(options, hooks = {}) {
           Destination: `/fixture/${role}.yaml`,
           RW: false,
         },
+        ...(setup.launchIdentity
+          ? [
+              {
+                Type: "bind",
+                Source: setup.databaseOwnershipFile,
+                Destination: "/fixture/database-ownership.json",
+                RW: false,
+              },
+              {
+                Type: "bind",
+                Source: setup.launchContextFile,
+                Destination: "/fixture/launch-context.json",
+                RW: false,
+              },
+            ]
+          : []),
         ...(scopedProduct && role === "edge-gateway"
           ? [
               {
@@ -812,6 +882,9 @@ export async function runTransportFixture(options, hooks = {}) {
       const readablePaths = [
         "/fixture/platform.yaml",
         `/fixture/${role}.yaml`,
+        ...(setup.launchIdentity
+          ? ["/fixture/database-ownership.json", "/fixture/launch-context.json"]
+          : []),
         ...(scopedProduct && role === "edge-gateway"
           ? ["/fixture/certs/ca.crt"]
           : []),
@@ -822,7 +895,8 @@ export async function runTransportFixture(options, hooks = {}) {
         "/fixture/certs/ca.key",
         "/results/private/fixture.json",
       ];
-      const probe = `const fs=require('node:fs/promises');const readable=${JSON.stringify(readablePaths)},denied=${JSON.stringify(deniedPaths)};(async()=>{const canRead=[];for(const p of readable)try{await fs.readFile(p);canRead.push(p)}catch{}const canReadDenied=[];for(const p of denied)try{await fs.readFile(p);canReadDenied.push(p)}catch{}if(canRead.length!==readable.length||canReadDenied.length)throw new Error('scoped fixture mount access mismatch');console.log(JSON.stringify({readablePaths:canRead,deniedPaths:denied}))})().catch(e=>{console.error(e.message);process.exitCode=1});`;
+      const expectedConfigSha256 = setup.manifest.configSha256;
+      const probe = `const fs=require('node:fs/promises');const crypto=require('node:crypto');const readable=${JSON.stringify(readablePaths)},denied=${JSON.stringify(deniedPaths)},expectedConfigSha256=${JSON.stringify(expectedConfigSha256)};(async()=>{const canRead=[];for(const p of readable)try{await fs.readFile(p);canRead.push(p)}catch{}const canReadDenied=[];for(const p of denied)try{await fs.readFile(p);canReadDenied.push(p)}catch{}const configSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/platform.yaml')).digest('hex');if(canRead.length!==readable.length||canReadDenied.length||configSha256!==expectedConfigSha256)throw new Error('scoped fixture mount access mismatch');console.log(JSON.stringify({readablePaths:canRead,deniedPaths:denied,configSha256}))})().catch(e=>{console.error(e.message);process.exitCode=1});`;
       const scope = JSON.parse(
         await docker(
           "exec",
@@ -837,10 +911,90 @@ export async function runTransportFixture(options, hooks = {}) {
       );
       assert.deepEqual(scope.readablePaths, readablePaths);
       assert.deepEqual(scope.deniedPaths, deniedPaths);
+      assert.equal(scope.configSha256, expectedConfigSha256);
       receipt.scopedMounts = {
         readOnly: true,
         readablePaths: scope.readablePaths,
         deniedPaths: scope.deniedPaths,
+        configSha256: scope.configSha256,
+      };
+    }
+    if (scopedLaunchDriver) {
+      const expectedMounts = [
+        {
+          Type: "bind",
+          Source: join(setup.snapshot),
+          Destination: "/app",
+          RW: false,
+        },
+        {
+          Type: "bind",
+          Source: join(setup.privateDir),
+          Destination: "/fixture",
+          RW: false,
+        },
+        {
+          Type: "bind",
+          Source: join(dir),
+          Destination: "/results",
+          RW: true,
+        },
+        {
+          Type: "bind",
+          Source: setup.databaseOwnershipFile,
+          Destination: "/fixture/database-ownership.json",
+          RW: false,
+        },
+        {
+          Type: "bind",
+          Source: setup.launchContextFile,
+          Destination: "/fixture/launch-context.json",
+          RW: false,
+        },
+      ].sort((a, b) => a.Destination.localeCompare(b.Destination));
+      const actualMounts = inspect.Mounts.map(
+        ({ Type, Source, Destination, RW }) => ({
+          Type,
+          Source,
+          Destination,
+          RW,
+        }),
+      ).sort((a, b) => a.Destination.localeCompare(b.Destination));
+      assert.deepEqual(actualMounts, expectedMounts, "driver fixture mounts");
+      const readablePaths = [
+        "/fixture/platform.yaml",
+        "/fixture/database-ownership.json",
+        "/fixture/launch-context.json",
+      ];
+      const expectedConfigSha256 = setup.manifest.configSha256;
+      const expectedOwnershipSha256 = setup.manifest.databaseOwnershipSha256;
+      const expectedLaunchIdentity = setup.launchIdentity;
+      const probe = `const fs=require('node:fs/promises');const crypto=require('node:crypto');const expectedConfigSha256=${JSON.stringify(expectedConfigSha256)},expectedOwnershipSha256=${JSON.stringify(expectedOwnershipSha256)},expectedLaunchIdentity=${JSON.stringify(expectedLaunchIdentity)};(async()=>{const configSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/platform.yaml')).digest('hex');const ownershipSha256=crypto.createHash('sha256').update(await fs.readFile('/fixture/database-ownership.json')).digest('hex');const context=JSON.parse(await fs.readFile('/fixture/launch-context.json','utf8'));const launchIdentity={schemaVersion:context.schemaVersion,runId:context.runId,candidateSha:context.candidateSha,baseConfigSha256:context.baseConfigSha256};for(const key of ['schemaVersion','runId','candidateSha','baseConfigSha256'])if(launchIdentity[key]!==expectedLaunchIdentity[key])throw new Error('launch identity mismatch');if(configSha256!==expectedConfigSha256||ownershipSha256!==expectedOwnershipSha256)throw new Error('fixture digest mismatch');console.log(JSON.stringify({readablePaths:${JSON.stringify(readablePaths)},configSha256,ownershipSha256,launchIdentity}))})().catch(()=>{console.error('driver fixture mount verification failed');process.exitCode=1});`;
+      const scope = JSON.parse(
+        await docker(
+          "exec",
+          "--user",
+          "1000:1000",
+          id,
+          "node",
+          "--input-type=commonjs",
+          "-e",
+          probe,
+        ),
+      );
+      assert.deepEqual(scope.readablePaths, readablePaths);
+      assert.equal(scope.configSha256, expectedConfigSha256);
+      assert.equal(scope.ownershipSha256, expectedOwnershipSha256);
+      assert.deepEqual(
+        JSON.parse(JSON.stringify(scope.launchIdentity)),
+        JSON.parse(JSON.stringify(expectedLaunchIdentity)),
+      );
+      receipt.scopedMounts = {
+        readOnly: true,
+        readablePaths,
+        configSha256: scope.configSha256,
+        databaseOwnershipSha256: scope.ownershipSha256,
+        launchIdentity: scope.launchIdentity,
       };
     }
     containerReceipts.push(receipt);
@@ -1412,12 +1566,20 @@ export async function runTransportFixture(options, hooks = {}) {
         { timeout: 90000, interval: 500, label: "real SASL_SSL Kafka broker" },
       );
       const realtimeTopic = setup.config.kafka.topics.realtimeInvalidate;
-      const topics = new Map([[realtimeTopic.name, realtimeTopic.partitions]]);
+      const realtimeTarget = assertFixtureKafkaNamespaceBound(
+        setup.config,
+        "realtime-gateway",
+        setup.launchIdentity,
+      );
+      const topics = new Map([
+        [realtimeTarget.topics[realtimeTopic.name], realtimeTopic.partitions],
+      ]);
       if (ownerResource?.startServices)
         for (const service of [
           "orders-service",
           "orders-aroma-preparation",
           "realtime-gateway",
+          "aroma-convergence",
         ])
           for (const name of [
             ...setup.config.services[service].kafka.producers,
@@ -1429,7 +1591,12 @@ export async function runTransportFixture(options, hooks = {}) {
               (item) => item.name === name,
             );
             assert.ok(topic, `configured Kafka topic is defined: ${name}`);
-            topics.set(name, topic.partitions);
+            const runtimeTarget = assertFixtureKafkaNamespaceBound(
+              setup.config,
+              service,
+              setup.launchIdentity,
+            );
+            topics.set(runtimeTarget.topics[name], topic.partitions);
           }
       for (const [topic, partitions] of topics)
         await docker(
@@ -1453,6 +1620,7 @@ export async function runTransportFixture(options, hooks = {}) {
           broker,
           runId: options.runId,
           config: setup.config,
+          launchIdentity: setup.launchIdentity,
           ...(hooks.launchPath
             ? {
                 owners: [
@@ -1499,7 +1667,7 @@ export async function runTransportFixture(options, hooks = {}) {
         await launch(
           "edge-gateway",
           setup.images.node,
-          productArgs("edge-gateway"),
+          productArgs("edge-gateway", Boolean(setup.launchIdentity)),
           { aliases: ["edge-gateway"] },
         );
         await launch(
@@ -1509,14 +1677,14 @@ export async function runTransportFixture(options, hooks = {}) {
             ...(ownerResource?.host
               ? ["--add-host", `orders-service:${ownerResource.host}`]
               : []),
-            ...productArgs("api-public"),
+            ...productArgs("api-public", Boolean(setup.launchIdentity)),
           ],
           { aliases: ["api-public"] },
         );
         await launch(
           "realtime-gateway",
           setup.images.node,
-          productArgs("realtime-gateway"),
+          productArgs("realtime-gateway", Boolean(setup.launchIdentity)),
           {
             memory: setup.manifest.containerBudgets["realtime-gateway"].memory,
             nofile: 12288,
@@ -1583,7 +1751,12 @@ export async function runTransportFixture(options, hooks = {}) {
         });
       }
       if (options.fixtureCheck) {
-        const brokerProof = await verifyBrokerFixture(broker, dir);
+        const brokerProof = await verifyBrokerFixture(
+          broker,
+          dir,
+          setup.config,
+          setup.launchIdentity,
+        );
         result.published = brokerProof.sent;
       }
       await launch(

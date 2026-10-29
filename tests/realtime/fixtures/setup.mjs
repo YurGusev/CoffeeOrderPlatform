@@ -22,6 +22,13 @@ import {
 import { availableParallelism, totalmem, cpus } from "node:os";
 import { load as yaml, dump } from "js-yaml";
 import Ajv2020 from "ajv/dist/2020.js";
+import { deriveRuntimeKafkaTarget } from "../../../packages/platform-config/dist/index.js";
+import { readG15FixtureLineage } from "../../../tools/config-bootstrap/browser-fixture.mjs";
+import {
+  loadVerifiedGateImage,
+  removeVerifiedGateImage,
+} from "../../../tools/verified-infrastructure-image.mjs";
+import { validateLaunchContext } from "../../../verification/launch/v1/report.mjs";
 import { isoNow, FULL, THRESHOLDS } from "./protocol.mjs";
 
 export const ROOT = resolve(import.meta.dirname, "../../..");
@@ -111,12 +118,15 @@ const STARTUP_SQL_STATES = new Set([
   "57P01",
   "57P03",
 ]);
-export function productArgs(role) {
+export function productArgs(role, launchPath = false) {
   return [
     "--env",
     "COFFEE_CONFIG_FILE=/fixture/platform.yaml",
     "--env",
     `COFFEE_RUNTIME_SECRETS_FILE=/fixture/${role}.yaml`,
+    ...(launchPath
+      ? ["--env", "COFFEE_LAUNCH_CONTEXT_FILE=/fixture/launch-context.json"]
+      : []),
     ...(role === "edge-gateway"
       ? ["--env", "NODE_EXTRA_CA_CERTS=/fixture/certs/ca.crt"]
       : []),
@@ -212,6 +222,77 @@ export function safeProductStartupFailure(logs, allowedPaths) {
 }
 
 export const hash = (text) => createHash("sha256").update(text).digest("hex");
+async function readFixtureLaunchPath(launchPath) {
+  if (launchPath?.launchContextFile === undefined) return undefined;
+  assert.ok(
+    Object.keys(launchPath).every((key) =>
+      ["exporterToken", "launchContextFile"].includes(key),
+    ),
+  );
+  const contextPath = resolve(launchPath.launchContextFile);
+  const active = await validateLaunchContext(contextPath);
+  const resources = active.context.resources;
+  assert.equal(typeof resources?.g15ParentCandidateSha, "string");
+  assert.equal(resources.g15ParentCheckoutRoot, active.sourceRoot);
+  const lineage = await readG15FixtureLineage({
+    root: active.sourceRoot,
+    contextPath,
+    baseCandidateSha: resources.g15ParentCandidateSha,
+  });
+  const launchIdentity = {
+    schemaVersion: active.context.schemaVersion,
+    runId: active.context.runId,
+    candidateSha: active.context.candidateSha,
+    baseConfigSha256: active.context.baseConfigSha256,
+  };
+  assert.deepEqual(
+    {
+      schemaVersion: lineage.schemaVersion,
+      runId: lineage.runId,
+      candidateSha: lineage.candidateSha,
+      baseConfigSha256: lineage.configSha256,
+    },
+    launchIdentity,
+  );
+  return {
+    contextPath,
+    candidateRoot: active.candidateRoot,
+    parentCandidateRoot: resources.g15ParentCheckoutRoot,
+    databaseOwnershipFile: join(
+      active.candidateRoot,
+      "config/database-ownership.json",
+    ),
+    launchIdentity,
+    lineageReceiptSha256: hash(await readFile(lineage.receiptPath)),
+  };
+}
+
+function assertFixtureLaunchConfig(config, configBytes, launchPath) {
+  if (!launchPath) return;
+  assert.equal(hash(configBytes), launchPath.launchIdentity.baseConfigSha256);
+  assert.equal(config.environment, "development");
+  assert.equal(config.postgres.host, "coffee_postgres");
+  assert.equal(config.platform.publicBaseUrl, "https://localhost:8443");
+  assert.equal(config.nginxTransport.publicHost, "localhost");
+  assert.equal(
+    config.telemetry.collector.otlpEndpoint,
+    "http://otel-collector:4318",
+  );
+  assert.equal(config.verification.databaseIsolation.enabled, true);
+  assert.equal(config.verification.kafkaNamespaceIsolation, true);
+  assert.deepEqual(config.browserOidc, {
+    issuer: "https://idp.fixture.invalid",
+    clientId: "issue12-fixture",
+    authorizationUrl: "https://idp.fixture.invalid/authorize",
+    tokenUrl: "https://idp.fixture.invalid/token",
+    jwksUrl: "https://idp.fixture.invalid/keys",
+    redirectUri: "https://localhost:8443/auth/callback",
+    allowedAlgorithms: ["RS256"],
+    actorRefClaim: "actor_ref",
+    permissionsClaim: "permissions",
+  });
+}
+
 export async function readCgroupMemory(pid, reader = readFile) {
   assert.ok(Number.isSafeInteger(pid) && pid > 0, "owned host PID");
   const group = /^0::(\/[^\n]*)$/mu.exec(
@@ -636,11 +717,33 @@ function keyset() {
 }
 
 export async function prepare(resultDir, options) {
+  const launchPath = await readFixtureLaunchPath(options.launchPath);
+  if (launchPath) assert.equal(ROOT, launchPath.parentCandidateRoot);
+  // Validate the frozen G12 artifact before generating private credentials or
+  // starting the comparatively expensive native runtime build. This pass is
+  // read-only with respect to Docker; the later import pass repeats validation.
+  const kafkaArtifactProof = await loadVerifiedGateImage({
+    target: "kafka",
+    ...(launchPath ? { contextFile: launchPath.contextPath } : {}),
+    loadImage: false,
+  });
+  if (launchPath) {
+    assert.deepEqual(
+      kafkaArtifactProof.launchIdentity,
+      launchPath.launchIdentity,
+    );
+    assert.equal(
+      kafkaArtifactProof.lineageReceiptSha256,
+      launchPath.lineageReceiptSha256,
+    );
+  }
   const privateDir = join(resultDir, "private");
   await mkdir(privateDir, { mode: 0o700 });
-  const configText = await readFile(join(ROOT, "config/platform.yaml"), "utf8");
+  const configRoot = launchPath?.candidateRoot ?? ROOT;
+  const configBytes = await readFile(join(configRoot, "config/platform.yaml"));
+  const configText = configBytes.toString("utf8");
   const config = yaml(configText, { json: true });
-  if (options.launchPath) {
+  if (options.launchPath && !launchPath) {
     config.postgres.host = "coffee_postgres";
     if (options.launchPath.telemetryConfig) {
       const telemetryConfig =
@@ -652,6 +755,12 @@ export async function prepare(resultDir, options) {
       config.telemetry.collector.otlpEndpoint =
         options.launchPath.telemetryEndpoint;
   }
+  assertFixtureLaunchConfig(config, configBytes, launchPath);
+  assertFixtureKafkaNamespaceBound(
+    config,
+    "realtime-gateway",
+    launchPath?.launchIdentity,
+  );
   assert.equal(
     config.nginxTransport.limits.sseAdmissionConnections,
     512,
@@ -690,19 +799,21 @@ export async function prepare(resultDir, options) {
     "frozen gateway config budgets drift",
   );
   const thresholds = { ...THRESHOLDS };
-  config.platform.publicBaseUrl = "https://localhost:8443";
-  config.nginxTransport.publicHost = "localhost";
-  config.browserOidc = {
-    issuer: "https://idp.fixture.invalid",
-    clientId: "issue12-fixture",
-    authorizationUrl: "https://idp.fixture.invalid/authorize",
-    tokenUrl: "https://idp.fixture.invalid/token",
-    jwksUrl: "https://idp.fixture.invalid/keys",
-    redirectUri: "https://localhost:8443/auth/callback",
-    allowedAlgorithms: ["RS256"],
-    actorRefClaim: "actor_ref",
-    permissionsClaim: "permissions",
-  };
+  if (!launchPath) {
+    config.platform.publicBaseUrl = "https://localhost:8443";
+    config.nginxTransport.publicHost = "localhost";
+    config.browserOidc = {
+      issuer: "https://idp.fixture.invalid",
+      clientId: "issue12-fixture",
+      authorizationUrl: "https://idp.fixture.invalid/authorize",
+      tokenUrl: "https://idp.fixture.invalid/token",
+      jwksUrl: "https://idp.fixture.invalid/keys",
+      redirectUri: "https://localhost:8443/auth/callback",
+      allowedAlgorithms: ["RS256"],
+      actorRefClaim: "actor_ref",
+      permissionsClaim: "permissions",
+    };
+  }
   const nginxSchema = JSON.parse(
     await readFile(join(ROOT, "config/nginx-profile.schema.json"), "utf8"),
   );
@@ -717,10 +828,13 @@ export async function prepare(resultDir, options) {
   const validate = ajv.compile(platformSchema);
   assert.ok(validate(config), ajv.errorsText(validate.errors));
   await json(join(resultDir, "profile.json"), config);
-  await writeFile(
-    join(privateDir, "platform.yaml"),
-    dump(config, { noRefs: true }),
-  );
+  const privateConfigBytes = launchPath
+    ? configBytes
+    : Buffer.from(dump(config, { noRefs: true }));
+  await writeFile(join(privateDir, "platform.yaml"), privateConfigBytes, {
+    mode: 0o400,
+  });
+  await chmod(join(privateDir, "platform.yaml"), 0o400);
   const { render, readRoutes } =
     await import("../../../tools/nginx/generate.mjs");
   assert.equal(
@@ -898,6 +1012,13 @@ export async function prepare(resultDir, options) {
     thresholds,
     resultDir: "/results",
     fixtureCheck: options.fixtureCheck,
+    ...(launchPath
+      ? {
+          launchIdentity: launchPath.launchIdentity,
+          lineageReceiptSha256: launchPath.lineageReceiptSha256,
+          launchContextFile: launchPath.contextPath,
+        }
+      : {}),
   };
   if (options.launchPath)
     fixture.launchPath = {
@@ -920,8 +1041,12 @@ export async function prepare(resultDir, options) {
   const images = {
     node: nodeImage,
     nginx: toolchain.nginxImage,
-    kafka: compose.services.kafka.image,
   };
+  assert.equal(
+    compose.services.kafka.image,
+    "coffee-platform-kafka:verified-artifact-required",
+  );
+  assert.equal(compose.services.kafka.pull_policy, "never");
   const imageIds = {};
   let nativeAdapter;
   if (!options.fixtureCheck) {
@@ -1050,117 +1175,211 @@ export async function prepare(resultDir, options) {
     ))
       if (p.includes("/dist/") && p.endsWith(".js"))
         compiled[relative(snapshot.target, p)] = hash(await readFile(p));
-  const manifest = {
-    schema: "coffee.realtime.transport-soak-manifest/v1",
-    runId: options.runId,
-    createdAt: isoNow(),
-    mode: options.mode,
-    profile: options.profile,
-    claims:
-      options.mode === "full"
-        ? "1 live SSE subscriber, 100 ACKed invalidations/s, 30min TTL-preserving re-auth; separate 512/513 admission prephase"
-        : "smoke-not-launch-proof",
-    measurement: options.mode === "full" ? FULL : options.smoke,
-    subjects: 100,
-    subjectDistribution:
-      "four sequential versions per subject burst, 100 subjects per four seconds; check every subject/client maximum",
-    latencyPath:
-      "wall clock encoded in actual producer messageId immediately before SASL_SSL send -> Kafka ACK/consumer -> real hub -> mTLS nginx upstream -> TLS client decoded frame (includes producer delivery)",
-    thresholds,
-    hardware: {
-      architecture: process.arch,
-      platform: process.platform,
-      availableParallelism: availableParallelism(),
-      cpus: cpus().map((c) => c.model),
-      memoryBytes: totalmem(),
-      node: process.version,
-      driverHostFdLimit: await readFile("/proc/self/limits", "utf8"),
-    },
-    containerBudgets: {
-      "edge-nginx": {
-        cpus: 2,
-        memory: thresholds.nginxRssBytes,
-        nofile: 16384,
+  const kafkaArtifact = await loadVerifiedGateImage({
+    target: "kafka",
+    ...(launchPath ? { contextFile: launchPath.contextPath } : {}),
+  });
+  try {
+    for (const field of [
+      "imageId",
+      "manifestDigest",
+      "receiptSha256",
+      "ociArtifactSha256",
+      "baseImage",
+      "candidateSha",
+      "runId",
+      "importTag",
+    ])
+      assert.equal(
+        kafkaArtifact[field],
+        kafkaArtifactProof[field],
+        "G12 Kafka artifact changed during fixture preparation",
+      );
+    if (launchPath) {
+      assert.deepEqual(kafkaArtifact.launchIdentity, launchPath.launchIdentity);
+      assert.equal(
+        kafkaArtifact.lineageReceiptSha256,
+        launchPath.lineageReceiptSha256,
+      );
+      assert.deepEqual(
+        kafkaArtifactProof.launchIdentity,
+        kafkaArtifact.launchIdentity,
+      );
+      assert.equal(
+        kafkaArtifactProof.lineageReceiptSha256,
+        kafkaArtifact.lineageReceiptSha256,
+      );
+    }
+    // Immutable IDs also handle a preexisting verified image without trusting tags.
+    images.kafka = kafkaArtifact.imageId;
+    imageIds.kafka = kafkaArtifact.imageId;
+    const manifest = {
+      schema: "coffee.realtime.transport-soak-manifest/v1",
+      runId: options.runId,
+      createdAt: isoNow(),
+      mode: options.mode,
+      profile: options.profile,
+      claims:
+        options.mode === "full"
+          ? "1 live SSE subscriber, 100 ACKed invalidations/s, 30min TTL-preserving re-auth; separate 512/513 admission prephase"
+          : "smoke-not-launch-proof",
+      measurement: options.mode === "full" ? FULL : options.smoke,
+      subjects: 100,
+      subjectDistribution:
+        "four sequential versions per subject burst, 100 subjects per four seconds; check every subject/client maximum",
+      latencyPath:
+        "wall clock encoded in actual producer messageId immediately before SASL_SSL send -> Kafka ACK/consumer -> real hub -> mTLS nginx upstream -> TLS client decoded frame (includes producer delivery)",
+      thresholds,
+      hardware: {
+        architecture: process.arch,
+        platform: process.platform,
+        availableParallelism: availableParallelism(),
+        cpus: cpus().map((c) => c.model),
+        memoryBytes: totalmem(),
+        node: process.version,
+        driverHostFdLimit: await readFile("/proc/self/limits", "utf8"),
       },
-      "realtime-gateway": {
-        cpus: 2,
-        memory: thresholds.realtimeRssBytes,
-        nofile: 12288,
+      containerBudgets: {
+        "edge-nginx": {
+          cpus: 2,
+          memory: thresholds.nginxRssBytes,
+          nofile: 16384,
+        },
+        "realtime-gateway": {
+          cpus: 2,
+          memory: thresholds.realtimeRssBytes,
+          nofile: 12288,
+        },
+        "edge-gateway": { cpus: 2, memory: 536870912, nofile: 4096 },
+        "api-public": { cpus: 2, memory: 536870912, nofile: 4096 },
+        driver: { cpus: 8, memory: 2147483648, nofile: 32768 },
+        kafka: { cpus: 2, memory: 2147483648, nofile: 8192 },
       },
-      "edge-gateway": { cpus: 2, memory: 536870912, nofile: 4096 },
-      "api-public": { cpus: 2, memory: 536870912, nofile: 4096 },
-      driver: { cpus: 8, memory: 2147483648, nofile: 32768 },
-      kafka: { cpus: 2, memory: 2147483648, nofile: 8192 },
-    },
-    limits: config.nginxTransport.limits,
-    realtime: config.services["realtime-gateway"].realtime,
-    trustChain: {
-      browserTls: "generated CA -> localhost nginx certificate",
-      authorizer:
-        "actual edge-gateway main + OIDC HTTPS fixture/RS256/PKCE + in-memory sessions; no authority injection",
-      actor:
-        "actual Edge-generated compact Ed25519; generated scoped active/previous verifier",
-      receiver:
-        "actual realtime-gateway main; mTLS SPIFFE edge-nginx independent of actor signature",
-      broker:
-        "apache Kafka KRaft SASL_SSL/PLAIN, different generated broker/realtime/publisher/inspector credentials",
-      apiHeadroom:
-        "actual api-public, mTLS/delegation validated fixture orders-owner 404, not owner/business capacity proof",
-      fingerprints,
-      kafkaCertificate: fingerprint,
-    },
-    authExpiry: {
-      actorMaxTtlSeconds: 60,
-      sessionTtlMs: 900000,
-      sessionLoginIntervalMs: 600000,
-      authSweepMs: config.services["realtime-gateway"].realtime.authCheckMs,
-      retryMs: 3000,
-      readyTimeoutMs: 10000,
-      policy:
-        "no actor or session TTL extension; actual OIDC login before session expiry; measure every auth close/re-auth gap and replay, fail unexpected/pressure close or missing recovery",
-    },
-    images,
-    imageIds,
-    profileSha256: hash(await readFile(join(resultDir, "profile.json"))),
-    fixtureSha256: hash(await readFile(join(privateDir, "fixture.json"))),
-    configSha256: hash(await readFile(join(privateDir, "platform.yaml"))),
-    nginxSha256: hash(nginx),
-    sources: snapshot.sources,
-    compiled,
-    supportingSources: {},
-    resultFiles: [
-      "profile-manifest.json",
-      "profile.json",
-      "build.log",
-      "result.json",
-      "samples.jsonl",
-      "protocol.jsonl",
-      "reauth.jsonl",
-      "worker-results.json",
-      "containers.json",
-      "cleanup.json",
-    ],
-  };
-  if (nativeAdapter !== undefined) manifest.nativeAdapter = nativeAdapter;
-  for (const p of [
-    "Dockerfile",
-    "patches/librdkafka-resume-wakeup.patch",
-    ".dockerignore",
-    "tools/docker-build.mjs",
-    "apps/edge-nginx/Dockerfile",
-    "config/platform.yaml",
-    "config/platform.schema.json",
-    "config/nginx-profile.schema.json",
-    "config/toolchain-versions.json",
-    "compose.yaml",
-    "tools/nginx/generate.mjs",
-    "apps/edge-nginx/snippets/upstream-tls.conf",
-    "apps/edge-nginx/snippets/business-headers.conf",
-    "tests/realtime/soak.test.mjs",
-  ])
-    manifest.supportingSources[p] = hash(await readFile(join(ROOT, p)));
-  await json(join(resultDir, "profile-manifest.json"), manifest);
-  return { manifest, privateDir, snapshot: snapshot.target, images, config };
+      limits: config.nginxTransport.limits,
+      realtime: config.services["realtime-gateway"].realtime,
+      trustChain: {
+        browserTls: "generated CA -> localhost nginx certificate",
+        authorizer:
+          "actual edge-gateway main + OIDC HTTPS fixture/RS256/PKCE + in-memory sessions; no authority injection",
+        actor:
+          "actual Edge-generated compact Ed25519; generated scoped active/previous verifier",
+        receiver:
+          "actual realtime-gateway main; mTLS SPIFFE edge-nginx independent of actor signature",
+        broker:
+          "apache Kafka KRaft SASL_SSL/PLAIN, different generated broker/realtime/publisher/inspector credentials",
+        apiHeadroom:
+          "actual api-public, mTLS/delegation validated fixture orders-owner 404, not owner/business capacity proof",
+        fingerprints,
+        kafkaCertificate: fingerprint,
+      },
+      authExpiry: {
+        actorMaxTtlSeconds: 60,
+        sessionTtlMs: 900000,
+        sessionLoginIntervalMs: 600000,
+        authSweepMs: config.services["realtime-gateway"].realtime.authCheckMs,
+        retryMs: 3000,
+        readyTimeoutMs: 10000,
+        policy:
+          "no actor or session TTL extension; actual OIDC login before session expiry; measure every auth close/re-auth gap and replay, fail unexpected/pressure close or missing recovery",
+      },
+      images,
+      imageIds,
+      kafkaSupplyChain: kafkaArtifact,
+      ...(launchPath
+        ? {
+            launchContextFile: launchPath.contextPath,
+            launchIdentity: launchPath.launchIdentity,
+            lineageReceiptSha256: launchPath.lineageReceiptSha256,
+            databaseOwnershipSha256: hash(
+              await readFile(launchPath.databaseOwnershipFile),
+            ),
+          }
+        : {}),
+      profileSha256: hash(await readFile(join(resultDir, "profile.json"))),
+      fixtureSha256: hash(await readFile(join(privateDir, "fixture.json"))),
+      configSha256: hash(await readFile(join(privateDir, "platform.yaml"))),
+      nginxSha256: hash(nginx),
+      sources: snapshot.sources,
+      compiled,
+      supportingSources: {},
+      resultFiles: [
+        "profile-manifest.json",
+        "profile.json",
+        "build.log",
+        "result.json",
+        "samples.jsonl",
+        "protocol.jsonl",
+        "reauth.jsonl",
+        "worker-results.json",
+        "containers.json",
+        "cleanup.json",
+      ],
+    };
+    if (nativeAdapter !== undefined) manifest.nativeAdapter = nativeAdapter;
+    for (const p of [
+      "Dockerfile",
+      "patches/librdkafka-resume-wakeup.patch",
+      ".dockerignore",
+      "tools/docker-build.mjs",
+      "apps/edge-nginx/Dockerfile",
+      "config/platform.yaml",
+      "config/database-ownership.json",
+      "config/platform.schema.json",
+      "config/nginx-profile.schema.json",
+      "config/toolchain-versions.json",
+      "compose.yaml",
+      "tools/nginx/generate.mjs",
+      "apps/edge-nginx/snippets/upstream-tls.conf",
+      "apps/edge-nginx/snippets/business-headers.conf",
+      "tests/realtime/soak.test.mjs",
+    ])
+      manifest.supportingSources[p] =
+        p === "config/platform.yaml"
+          ? hash(configBytes)
+          : hash(await readFile(join(ROOT, p)));
+    await json(join(resultDir, "profile-manifest.json"), manifest);
+    return {
+      manifest,
+      privateDir,
+      snapshot: snapshot.target,
+      images,
+      config,
+      ...(launchPath
+        ? {
+            launchIdentity: launchPath.launchIdentity,
+            lineageReceiptSha256: launchPath.lineageReceiptSha256,
+            launchContextFile: launchPath.contextPath,
+            databaseOwnershipFile: launchPath.databaseOwnershipFile,
+          }
+        : {}),
+    };
+  } catch (error) {
+    try {
+      removeVerifiedGateImage({ target: "kafka", image: kafkaArtifact });
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "REALTIME_KAFKA_PREPARATION_CLEANUP_FAILED",
+      );
+    }
+    throw error;
+  }
+}
+
+export function assertFixtureKafkaNamespaceBound(
+  config,
+  runtime,
+  launchIdentity,
+) {
+  const service = config.services?.[runtime]?.kafka;
+  assert.ok(service, `configured Kafka runtime exists: ${runtime}`);
+  return deriveRuntimeKafkaTarget({
+    config: config.kafka,
+    service,
+    enabled: config.verification?.kafkaNamespaceIsolation === true,
+    environment: config.environment,
+    ...(launchIdentity ? { launchIdentity } : {}),
+  });
 }
 export async function verifyPrepared(resultDir, approvedSha) {
   const manifestText = await readFile(
@@ -1185,15 +1404,35 @@ export async function verifyPrepared(resultDir, approvedSha) {
     manifest.fixtureSha256,
     "prepared fixture input hash drift",
   );
+  let launchPath;
+  if (manifest.launchContextFile) {
+    launchPath = await readFixtureLaunchPath({
+      launchContextFile: manifest.launchContextFile,
+    });
+    assert.deepEqual(manifest.launchIdentity, launchPath.launchIdentity);
+    assert.equal(
+      manifest.lineageReceiptSha256,
+      launchPath.lineageReceiptSha256,
+    );
+    assert.equal(
+      manifest.databaseOwnershipSha256,
+      hash(await readFile(launchPath.databaseOwnershipFile)),
+    );
+  }
   for (const [p, h] of Object.entries({
     ...manifest.sources,
     ...manifest.supportingSources,
-  }))
+  })) {
+    const sourceRoot =
+      p === "config/platform.yaml" && launchPath
+        ? launchPath.candidateRoot
+        : ROOT;
     assert.equal(
-      hash(await readFile(join(ROOT, p))),
+      hash(await readFile(join(sourceRoot, p))),
       h,
       `source changed since frozen manifest: ${p}`,
     );
+  }
   const privateDir = join(resultDir, "private"),
     snapshot = join(privateDir, "app");
   for (const [p, h] of Object.entries(manifest.sources ?? {}))
@@ -1221,9 +1460,66 @@ export async function verifyPrepared(resultDir, approvedSha) {
     manifest.nativeAdapter.sha256,
     "prepared native adapter hash drift",
   );
+  const currentKafkaArtifact = await loadVerifiedGateImage({
+    target: "kafka",
+    ...(launchPath ? { contextFile: launchPath.contextPath } : {}),
+    loadImage: false,
+  });
+  for (const field of [
+    "imageId",
+    "manifestDigest",
+    "receiptSha256",
+    "ociArtifactSha256",
+    "baseImage",
+    "candidateSha",
+    "runId",
+    "importTag",
+  ])
+    assert.equal(
+      manifest.kafkaSupplyChain?.[field],
+      currentKafkaArtifact[field],
+      `prepared G12 Kafka identity drift: ${field}`,
+    );
+  if (launchPath) {
+    assert.deepEqual(
+      currentKafkaArtifact.launchIdentity,
+      launchPath.launchIdentity,
+    );
+    assert.equal(
+      currentKafkaArtifact.lineageReceiptSha256,
+      launchPath.lineageReceiptSha256,
+    );
+    assert.deepEqual(
+      currentKafkaArtifact.launchIdentity,
+      manifest.launchIdentity,
+    );
+    assert.equal(
+      currentKafkaArtifact.lineageReceiptSha256,
+      manifest.lineageReceiptSha256,
+    );
+  }
+  assert.equal(typeof manifest.kafkaSupplyChain.imported, "boolean");
+  assert.equal(
+    manifest.images?.kafka,
+    currentKafkaArtifact.imageId,
+    "prepared Kafka runtime must use the verified immutable image ID",
+  );
+  assert.equal(
+    manifest.imageIds?.kafka,
+    currentKafkaArtifact.imageId,
+    "prepared Kafka image ID drift",
+  );
   for (const [name, image] of Object.entries(manifest.images))
     assert.equal(
-      (await docker("image", "inspect", "--format", "{{.Id}}", image)).trim(),
+      (
+        await docker(
+          "image",
+          "inspect",
+          "--format",
+          "{{.Id}}",
+          name === "kafka" ? manifest.imageIds.kafka : image,
+        )
+      ).trim(),
       manifest.imageIds[name],
       `prepared image drift: ${name}`,
     );
@@ -1233,8 +1529,78 @@ export async function verifyPrepared(resultDir, approvedSha) {
     snapshot,
     images: manifest.images,
     config: JSON.parse(await readFile(join(resultDir, "profile.json"), "utf8")),
+    ...(launchPath
+      ? {
+          launchIdentity: launchPath.launchIdentity,
+          lineageReceiptSha256: launchPath.lineageReceiptSha256,
+          launchContextFile: launchPath.contextPath,
+          databaseOwnershipFile: launchPath.databaseOwnershipFile,
+        }
+      : {}),
   };
 }
 export async function erasePrivate(resultDir) {
-  await rm(join(resultDir, "private"), { recursive: true, force: true });
+  try {
+    const manifest = await readFile(
+      join(resultDir, "profile-manifest.json"),
+      "utf8",
+    )
+      .then(JSON.parse)
+      .catch((error) => {
+        if (error.code === "ENOENT") return undefined;
+        throw error;
+      });
+    if (manifest?.kafkaSupplyChain) {
+      const launchPath = manifest.launchContextFile
+        ? await readFixtureLaunchPath({
+            launchContextFile: manifest.launchContextFile,
+          })
+        : undefined;
+      if (launchPath) {
+        assert.deepEqual(manifest.launchIdentity, launchPath.launchIdentity);
+        assert.equal(
+          manifest.lineageReceiptSha256,
+          launchPath.lineageReceiptSha256,
+        );
+        assert.equal(
+          manifest.databaseOwnershipSha256,
+          hash(await readFile(launchPath.databaseOwnershipFile)),
+        );
+      }
+      const image = await loadVerifiedGateImage({
+        target: "kafka",
+        ...(launchPath ? { contextFile: launchPath.contextPath } : {}),
+        loadImage: false,
+      });
+      if (launchPath) {
+        assert.deepEqual(image.launchIdentity, launchPath.launchIdentity);
+        assert.equal(
+          image.lineageReceiptSha256,
+          launchPath.lineageReceiptSha256,
+        );
+        assert.deepEqual(image.launchIdentity, manifest.launchIdentity);
+        assert.equal(image.lineageReceiptSha256, manifest.lineageReceiptSha256);
+      }
+      for (const field of [
+        "imageId",
+        "runId",
+        "candidateSha",
+        "receiptSha256",
+        "ociArtifactSha256",
+        "importTag",
+      ])
+        assert.equal(
+          manifest.kafkaSupplyChain[field],
+          image[field],
+          "realtime Kafka cleanup identity drift",
+        );
+      assert.equal(typeof manifest.kafkaSupplyChain.imported, "boolean");
+      removeVerifiedGateImage({
+        target: "kafka",
+        image: { ...image, imported: manifest.kafkaSupplyChain.imported },
+      });
+    }
+  } finally {
+    await rm(join(resultDir, "private"), { recursive: true, force: true });
+  }
 }

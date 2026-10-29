@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import childProcess from "node:child_process";
 import { spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
@@ -216,16 +224,18 @@ void test("smoke removes only images built by this run and preserves keep/no-bui
     assert.deepEqual(calls, []);
     removeBuiltRuntimeImages(images, {});
     assert.deepEqual(calls, [
-      ["docker", ["image", "rm", "coffee-cleanup-proof-first:latest"]],
+      [
+        "docker",
+        ["image", "rm", "--no-prune", "coffee-cleanup-proof-first:latest"],
+      ],
     ]);
     calls.length = 0;
     const complete = [];
     buildRuntimeImages("coffee-cleanup-proof", ["first"], complete);
-    assert.deepEqual(
-      complete,
-      images,
-      "shared nginx must not be scheduled for deletion",
-    );
+    assert.deepEqual(complete, [
+      "coffee-cleanup-proof-first:latest",
+      "coffee-cleanup-proof-edge-nginx:latest",
+    ]);
   } finally {
     t.mock.restoreAll();
     syncBuiltinESMExports();
@@ -938,15 +948,29 @@ void test("observability overlay keeps OpenObserve private and bounds exact Dock
 
 void test("Node production image is exact, non-root, and keeps build tooling out of final stage", async () => {
   const dockerfile = await readFile(join(REPO_ROOT, "Dockerfile"), "utf8");
-  assert.match(
-    dockerfile,
-    /node:26\.8\.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae/,
+  const toolchain = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
   );
+  assert.ok(toolchain.nodeImage.startsWith("node:26.8.1-alpine@sha256:"));
+  assert.ok(dockerfile.includes(`ARG NODE_IMAGE=${toolchain.nodeImage}`));
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS build/);
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS runtime/);
   assert.match(dockerfile, /pnpm --filter .* deploy --prod/);
   assert.match(dockerfile, /USER node/);
   assert.match(dockerfile, /COPY --from=build \/runtime/);
+  const runtimeStage = dockerfile.slice(
+    dockerfile.indexOf("FROM ${NODE_IMAGE} AS runtime"),
+  );
+  assert.match(
+    runtimeStage,
+    /apk add --no-cache --upgrade ca-certificates libcrypto3 libssl3 zlib zstd-libs lz4-libs libsasl libcurl/,
+  );
+  assert.match(runtimeStage, /ENV LD_LIBRARY_PATH=\/usr\/local\/lib/);
+  assert.match(
+    runtimeStage,
+    /COPY --from=librdkafka-build \/usr\/local\/lib\/librdkafka\.so\*/,
+  );
+  assert.doesNotMatch(runtimeStage, /gcompat|libc6-compat|glibc/u);
   assert.match(
     dockerfile,
     /COPY platform\/launch-v1-connectivity-policy\.json \.\/platform\/launch-v1-connectivity-policy\.json/,
@@ -1001,16 +1025,22 @@ void test("recovery proof preserves the body error when orders-aroma-preparation
         bodyError,
         restoreError,
         readinessError,
+        proofLaunchIdentity: undefined,
         projectName: "synthetic-project",
         secretsDir: "synthetic-secrets",
         composeFile: "synthetic-compose",
         recoveryDatabaseProof: { port: 5432 },
         recoveryProofCredentials: {},
         platformConfig: {},
+        recoveryPlatformConfig: {},
+        databaseProofService: () => ({ database: "synthetic-db" }),
         nativeFoundation: undefined,
         prepareKafkaNativeFixture: async () => {
           if (bodyFails) throw bodyError;
-          return { mappingTopic: "synthetic-topic" };
+          return {
+            mappingTopic: "synthetic-topic",
+            kafkaTargets: { orders: {}, preparation: {} },
+          };
         },
         nativeFoundationSource: () => "synthetic-source",
         runCompose: (_project, _secrets, args) => {
@@ -1173,5 +1203,199 @@ void test("Orders recovery reads a complete bounded snapshot from every configur
       failCommand: true,
     });
     assert.throws(failed.reader, (error) => error === commandError);
+  });
+});
+
+void test("verified infrastructure image loader accepts only context-bound Kafka artifacts", async (t) => {
+  const { loadVerifiedGateImage } =
+    await import("../../tools/verified-infrastructure-image.mjs");
+  const root = await mkdtemp("/tmp/coffee-kafka-artifact-proof-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidateRoot = join(root, "candidate");
+  const evidenceDir = join(root, "evidence");
+  const supplyChainDir = join(
+    evidenceDir,
+    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+  );
+  await mkdir(join(candidateRoot, "config"), { recursive: true, mode: 0o700 });
+  await mkdir(join(supplyChainDir, "artifacts"), {
+    recursive: true,
+    mode: 0o700,
+  });
+  const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const runId = "20261029T120000Z-abcdef0";
+  const candidateSha = `abcdef0${"1".repeat(33)}`;
+  const imageId = `sha256:${"2".repeat(64)}`;
+  const manifestDigest = `sha256:${"3".repeat(64)}`;
+  const platformManifestDigest = `sha256:${"4".repeat(64)}`;
+  const platformBytes = Buffer.from("platform config fixture");
+  const index = {
+    schemaVersion: 2,
+    mediaType: "application/vnd.oci.image.index.v1+json",
+    manifests: [
+      {
+        mediaType: "application/vnd.oci.image.manifest.v1+json",
+        digest: platformManifestDigest,
+        size: 123,
+        platform: { os: "linux", architecture: "amd64" },
+      },
+    ],
+  };
+  const indexBytes = Buffer.from(JSON.stringify(index));
+  const toolchainBytes = Buffer.from(
+    JSON.stringify({
+      kafkaImage: `apache/kafka:4.3.2@sha256:${hash(indexBytes)}`,
+    }),
+  );
+  const lockfileBytes = Buffer.from("lock fixture");
+  const context = {
+    schemaVersion: 1,
+    runId,
+    candidateSha,
+    baseConfigSha256: hash(platformBytes),
+  };
+  const environment = {
+    runId,
+    candidateSha,
+    candidatePath: candidateRoot,
+    dirty: false,
+    configSha256: context.baseConfigSha256,
+    treeSha: "5".repeat(40),
+    toolchainVersionsSha256: hash(toolchainBytes),
+    lockfileSha256: hash(lockfileBytes),
+  };
+  for (const [path, bytes] of [
+    [join(candidateRoot, "config/platform.yaml"), platformBytes],
+    [join(candidateRoot, "config/toolchain-versions.json"), toolchainBytes],
+    [join(candidateRoot, "pnpm-lock.yaml"), lockfileBytes],
+  ]) {
+    await writeFile(path, bytes, { mode: 0o644 });
+    await chmod(path, 0o644);
+  }
+  await writeFile(
+    join(evidenceDir, "environment.json"),
+    JSON.stringify(environment),
+    { mode: 0o600 },
+  );
+  const ociArtifact = Buffer.from("mock OCI artifact bytes");
+  const baseMaterial = {
+    sourceRef: `apache/kafka:4.3.2@sha256:${hash(indexBytes)}`,
+    platformManifestDigest,
+    indexArtifact: {
+      path: "artifacts/kafka-base-index.json",
+      sha256: hash(indexBytes),
+      sizeBytes: indexBytes.length,
+    },
+  };
+  const receipt = {
+    schemaVersion: 1,
+    gate: "G12_SUPPLY_CHAIN",
+    status: "PASS",
+    runId,
+    candidateSha,
+    treeSha: environment.treeSha,
+    configSha256: context.baseConfigSha256,
+    toolchainVersionsSha256: environment.toolchainVersionsSha256,
+    lockfileSha256: environment.lockfileSha256,
+    target: "kafka",
+    importTag: `coffee-g12-${hash(Buffer.from(runId)).slice(0, 12)}-kafka:latest`,
+    baseImage: baseMaterial.sourceRef,
+    imageId,
+    manifestDigest,
+    platformManifestDigest,
+    provenanceStatus: "INCOMPLETE_LOCAL_CONTEXT",
+    provenanceSha256: "6".repeat(64),
+    attestationSha256: "7".repeat(64),
+    buildInputBinding: {
+      status: "OBSERVED",
+      sourceCommit: candidateSha,
+      sourceTreeSha: environment.treeSha,
+      archiveSha256: "8".repeat(64),
+      archiveSizeBytes: 123,
+      extractedTreeSha256: "9".repeat(64),
+      extractedBytes: 123,
+      sourceKind: "git-archive-local-context",
+      buildkitMaterialsCompleteness: "INCOMPLETE_LOCAL_CONTEXT",
+      invocation: {
+        entryPoint: "docker buildx build",
+        builder: "coffee-platform-mtu",
+        target: "kafka",
+        platform: "linux/amd64",
+        provenance: "mode=min",
+        output: "oci-layout-directory",
+      },
+    },
+    ociArtifact: {
+      path: "artifacts/kafka.oci.tar",
+      sha256: hash(ociArtifact),
+      sizeBytes: ociArtifact.length,
+      layoutTreeSha256: "a".repeat(64),
+      layoutBytes: 123,
+    },
+    baseMaterial,
+  };
+  const receiptBytes = Buffer.from(JSON.stringify(receipt));
+  const result = {
+    gate: "G12_SUPPLY_CHAIN",
+    status: "PASS",
+    code: "G12_SCAN_CLEAN",
+    runId,
+    candidateSha,
+    kafka: {
+      path: "artifacts/kafka-receipt.json",
+      receiptSha256: hash(receiptBytes),
+      imageId,
+      importTag: receipt.importTag,
+      manifestDigest,
+      ociArtifactPath: "artifacts/kafka.oci.tar",
+      ociArtifactSha256: hash(ociArtifact),
+    },
+    provenance: {
+      status: "PASS",
+      sourceRevision: candidateSha,
+      treeSha: environment.treeSha,
+      configSha256: context.baseConfigSha256,
+      toolchainVersionsSha256: environment.toolchainVersionsSha256,
+      lockfileSha256: environment.lockfileSha256,
+      images: [
+        {
+          service: "kafka",
+          imageId,
+          manifestDigest,
+          platformManifestDigest,
+          provenanceStatus: "PASS",
+          metadataSha256: receipt.provenanceSha256,
+          attestationSha256: receipt.attestationSha256,
+          baseMaterial,
+        },
+      ],
+    },
+  };
+  for (const [path, bytes] of [
+    [join(supplyChainDir, "result.json"), Buffer.from(JSON.stringify(result))],
+    [join(supplyChainDir, "artifacts/kafka-receipt.json"), receiptBytes],
+    [join(supplyChainDir, "artifacts/kafka.oci.tar"), ociArtifact],
+    [join(supplyChainDir, "artifacts/kafka-base-index.json"), indexBytes],
+  ])
+    await writeFile(path, bytes, { mode: 0o600 });
+  const validated = await loadVerifiedGateImage({
+    target: "kafka",
+    contextFile: join(evidenceDir, "context.json"),
+    loadImage: false,
+    validateContext: async () => ({ context, candidateRoot, evidenceDir }),
+  });
+  assert.deepEqual(validated, {
+    imageId,
+    manifestDigest,
+    receiptSha256: hash(receiptBytes),
+    ociArtifactSha256: hash(ociArtifact),
+    baseImage: receipt.baseImage,
+    candidateSha,
+    runId,
+    importTag: receipt.importTag,
+    imported: false,
+  });
+  await assert.rejects(loadVerifiedGateImage({ target: "openobserve" }), {
+    message: "G12_KAFKA_TARGET_INVALID",
   });
 });

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   chmod,
+  mkdir,
   mkdtemp,
   readFile,
   writeFile,
@@ -8,7 +9,6 @@ import {
   stat,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { generateKeyPairSync } from "node:crypto";
 import { chromium } from "playwright";
 import {
@@ -23,7 +23,12 @@ import { createOrdersSecurity } from "../../../apps/orders-service/dist/infrastr
 import { createCustomerOrderInputClient } from "../../../apps/orders-service/dist/infrastructure/customer-client.js";
 import { createPricingQuoteClient } from "../../../apps/orders-service/dist/infrastructure/pricing-client.js";
 import { registerOrdersRoutes } from "../../../apps/orders-service/dist/http/index.js";
-import { parse, runTransportFixture, bounded } from "../soak.test.mjs";
+import {
+  parse,
+  runTransportFixture,
+  bounded,
+  scratchRoot,
+} from "../soak.test.mjs";
 import {
   THRESHOLDS,
   parseMetrics,
@@ -31,7 +36,15 @@ import {
   SSE_RETRY_MS,
   SSE_READY_TIMEOUT_MS,
 } from "./protocol.mjs";
-import { ROOT, docker, run, json, hash, redact } from "./setup.mjs";
+import {
+  ROOT,
+  docker,
+  run,
+  json,
+  hash,
+  redact,
+  assertFixtureKafkaNamespaceBound,
+} from "./setup.mjs";
 
 const summary = (card) => ({
   orderRef: card.orderRef,
@@ -53,10 +66,9 @@ export async function proveOwnerBrowser(
   assert.equal(typeof baseline, "function");
   assert.equal(typeof change, "function");
   assert.equal(typeof finish, "function");
+  await mkdir(scratchRoot(), { recursive: true });
   const dir = join(
-    await mkdtemp(
-      join(process.env.TMPDIR ?? tmpdir(), "issue12-owner-browser-"),
-    ),
+    await mkdtemp(join(scratchRoot(), "issue12-owner-browser-")),
     "transport",
   );
   const options = parse([
@@ -90,8 +102,15 @@ export async function proveOwnerBrowser(
         const source = runtimeOriginal.toString("utf8");
         const compositionAnchor =
           "export function createRealtimeComposition() {";
-        const headerAnchor =
-          'reply.raw.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no", "X-Correlation-ID": correlationId });\n                    const streamSocket = reply.raw.socket;\n                    reply.raw.once("finish", () => streamSocket?.end());';
+        const headerAnchor = `reply.raw.writeHead(200, {
+                        "Content-Type": "text/event-stream; charset=utf-8",
+                        "Cache-Control": "no-cache, no-transform",
+                        Connection: "keep-alive",
+                        "X-Accel-Buffering": "no",
+                        "X-Correlation-ID": correlationId,
+                    });
+                    const streamSocket = reply.raw.socket;
+                    reply.raw.once("finish", () => streamSocket?.end());`;
         assert.equal(
           source.split(compositionAnchor).length - 1,
           1,
@@ -267,10 +286,7 @@ export async function proveOwnerBrowser(
       };
       registerOwner({ stop });
       privateDir = await mkdtemp(
-        join(
-          process.env.TMPDIR ?? tmpdir(),
-          "issue12-owner-publisher-private-",
-        ),
+        join(scratchRoot(), "issue12-owner-publisher-private-"),
       );
       const connectionPath = join(privateDir, "database.json");
       const build = await run(
@@ -443,8 +459,19 @@ export async function proveOwnerBrowser(
         );
         assert.equal(ack.messageId, record.message_id);
         assert.equal(ack.topic, record.topic);
-        const group =
-          setup.config.services["realtime-gateway"].kafka.consumers[0].groupId;
+        const consumers =
+          setup.config.services["realtime-gateway"].kafka.consumers;
+        assert.equal(consumers.length, 1, "one configured realtime consumer");
+        const target = assertFixtureKafkaNamespaceBound(
+          setup.config,
+          "realtime-gateway",
+          setup.launchIdentity,
+        );
+        const logicalGroup = consumers[0].groupId;
+        const group = target.groups[logicalGroup];
+        assert.ok(group, "realtime consumer group has a derived target");
+        const physicalTopic = target.topics[ack.topic];
+        assert.ok(physicalTopic, "replayed topic has a derived target");
         return await bounded(
           async () => {
             const text = await run(
@@ -470,7 +497,7 @@ export async function proveOwnerBrowser(
               .find(
                 (parts) =>
                   parts[0] === group &&
-                  parts[1] === ack.topic &&
+                  parts[1] === physicalTopic &&
                   parts[2] === String(ack.partition),
               );
             if (
