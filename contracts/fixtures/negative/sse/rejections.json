@@ -1,6 +1,30 @@
 [
-  {"case":"ready-has-id","schema":"SseStreamReady","streamFile":"order-invalidations.json","streamIndex":0,"add":[[["id"],"msg_01ARZ3NDEKTSV4RRFFQ69G5FB1"]]},
-  {"case":"reset-has-id","schema":"SseStreamReset","streamFile":"order-invalidations.json","streamIndex":2,"add":[[["id"],"msg_01ARZ3NDEKTSV4RRFFQ69G5FB1"]]},
-  {"case":"invalidation-wrong-retry","schema":"SseResourceInvalidated","streamFile":"order-invalidations.json","streamIndex":1,"set":[[["retry"],1000]]},
-  {"case":"heartbeat-wrong-interval","heartbeat":true,"streamFile":"order-invalidations.json","streamIndex":3,"set":[[["intervalSeconds"],30]]}
+  {
+    "case": "ready-has-id",
+    "schema": "SseStreamReady",
+    "streamFile": "order-invalidations.json",
+    "streamIndex": 0,
+    "add": [[["id"], "msg_01ARZ3NDEKTSV4RRFFQ69G5FB1"]]
+  },
+  {
+    "case": "reset-has-id",
+    "schema": "SseStreamReset",
+    "streamFile": "order-invalidations.json",
+    "streamIndex": 2,
+    "add": [[["id"], "msg_01ARZ3NDEKTSV4RRFFQ69G5FB1"]]
+  },
+  {
+    "case": "invalidation-wrong-retry",
+    "schema": "SseResourceInvalidated",
+    "streamFile": "order-invalidations.json",
+    "streamIndex": 1,
+    "set": [[["retry"], 1000]]
+  },
+  {
+    "case": "heartbeat-wrong-interval",
+    "heartbeat": true,
+    "streamFile": "order-invalidations.json",
+    "streamIndex": 3,
+    "set": [[["intervalSeconds"], 30]]
+  }
 ]

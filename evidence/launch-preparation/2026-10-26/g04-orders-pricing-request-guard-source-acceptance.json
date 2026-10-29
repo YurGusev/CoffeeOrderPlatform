@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-27T00:08:53.664165+00:00",
+  "status": "SOURCE_ACCEPTED_NARROW_TESTS_PASS_FULL_G04_PENDING",
+  "file": "/home/yurgusev/CoffeeOrderPlatform/tests/orders/upstream-clients.test.mjs",
+  "beforeSha256": "5286f76c6c8cc0c3512ac758a3f45deba93b449d7de9938a10706e082c663170",
+  "afterSha256": "d0ffd0ab205d426afc35569ea166c4ff3c04892c34653d7a4567855056d3bec9",
+  "patchSha256": "b091358b5cd6ca6a98aa81f9796a7c6ab9edd6f16ab7edff93656627f034b516",
+  "review": "Root and Astra accepted minimal caller validation: malformed quoteRef and zero quantity rejected before fetch; valid control retained",
+  "independentTests": {
+    "path": "/home/yurgusev/.cache/coffee-issue13/orders-two-test-review-20261027/independent-test-receipt.json",
+    "sha256": "33b70588f433fc90af174f0aec43d88b42912b3fada21e8dab2863d7b19216ce",
+    "passed": 7,
+    "skipped": 0
+  },
+  "limitations": [
+    "No runtime/TLS/provider/PG proof",
+    "No full G04 coverage rerun or threshold attainment claimed"
+  ],
+  "rejectedOtherPatch": {
+    "name": "Preparation MAX_SAFE aggregation fixture",
+    "reason": "Unreachable from canonical Orders quantity and max-lines constraints; not integrated"
+  }
+}

@@ -33,7 +33,8 @@ x-runtime-defaults: &runtime-defaults
 
 services:
   kafka:
-    image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+    image: coffee-platform-kafka:verified-artifact-required
+    pull_policy: never
     hostname: kafka
     init: true
     restart: unless-stopped
@@ -224,7 +225,6 @@ services:
         uid: "1000"
         gid: "1000"
         mode: 0400
-
 
   customer-service:
     <<: *runtime-defaults

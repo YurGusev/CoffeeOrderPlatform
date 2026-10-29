@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "scope": "Actual frontend-only validation on Root WIP, not an image build or G12 PASS",
+  "startedAtUtc": "2026-10-26T09:44:08.409049+00:00",
+  "finishedAtUtc": "2026-10-26T09:44:11.633731+00:00",
+  "command": [
+    "docker",
+    "buildx",
+    "build",
+    "--builder",
+    "coffee-platform-mtu",
+    "--allow",
+    "network.host",
+    "--platform",
+    "linux/amd64",
+    "--call=check",
+    "--target",
+    "runtime",
+    "."
+  ],
+  "exitCode": 0,
+  "watchdogSignalSent": false,
+  "rootHead": "bff183ec8a3503a2caae4debf2abef2539bf58b3",
+  "dirty": true,
+  "dockerfileSha256": "12ffbc38ccdc6c352473c9b84722559c0e077449a73be43ccd7c6ce468fc94a5",
+  "logPath": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/kafka-unused-stage-frontend-20261026T094408Z.log",
+  "logSha256": "d128ee88eb9de8681b2c4105242dfc07fe0f5c9be758fd7b137e666e0b181831",
+  "missingBaseNameObserved": false,
+  "dnsFailureObserved": false,
+  "noBuildExecutionRequested": true
+}

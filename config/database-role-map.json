@@ -1,6 +1,6 @@
 {
   "$schema": "./database-role-map.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "authorityRef": "docs/launch/05_DATA_OWNERSHIP.md",
   "databases": [
     {
@@ -71,6 +71,19 @@
             "availability": ["SELECT", "INSERT"],
             "outbox_messages": ["SELECT", "INSERT", "UPDATE"],
             "offer_binding_acks": ["SELECT", "INSERT", "UPDATE"]
+          },
+          "columnUpdates": {
+            "supplier_snapshots": [
+              "state",
+              "failure_code",
+              "declared_batch_count",
+              "declared_product_count",
+              "declared_variant_count",
+              "declared_offer_count",
+              "content_hash",
+              "received_at"
+            ],
+            "source_identities": ["last_seen_snapshot_ref", "state"]
           }
         }
       ]
@@ -107,10 +120,26 @@
             "orders": ["SELECT", "INSERT", "UPDATE"],
             "order_items": ["SELECT", "INSERT", "UPDATE", "DELETE"],
             "order_history": ["SELECT", "INSERT"],
-            "order_desired_contributions": ["SELECT", "INSERT", "UPDATE"],
-            "order_desired_lines": ["SELECT", "INSERT", "UPDATE"],
+            "order_desired_contributions": ["SELECT", "INSERT"],
+            "order_desired_contribution_lines": ["SELECT", "INSERT"],
             "idempotency_records": ["SELECT", "INSERT", "UPDATE"],
-            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"],
+            "order_aroma_projections": ["SELECT"]
+          },
+          "columnUpdates": {
+            "orders": [
+              "status",
+              "version",
+              "customer_ref",
+              "customer_version",
+              "customer_display_name",
+              "customer_state",
+              "customer_state_proof_hash",
+              "currency",
+              "confirmed_at",
+              "updated_at",
+              "last_modified_by_actor_ref"
+            ]
           }
         },
         {
@@ -121,12 +150,24 @@
             "orders": ["SELECT"],
             "order_items": ["SELECT"],
             "order_desired_contributions": ["SELECT"],
+            "order_desired_contribution_lines": ["SELECT"],
+            "order_history": ["SELECT"],
+            "order_aroma_projections": ["SELECT"],
+            "cart_observed_revisions": ["SELECT"],
+            "cart_observed_lines": ["SELECT"],
+            "convergence_attempts": ["SELECT"],
+            "convergence_leases": ["SELECT"],
+            "mutation_reservations": ["SELECT"],
             "catalog_mapping_projection": ["SELECT", "INSERT", "UPDATE"],
             "cart_desired_revisions": ["SELECT", "INSERT", "UPDATE"],
-            "cart_desired_lines": ["SELECT", "INSERT", "UPDATE"],
-            "cart_desired_blockers": ["SELECT", "INSERT", "UPDATE"],
             "inbox_messages": ["SELECT", "INSERT", "UPDATE"],
-            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"],
+            "cart_desired_lines": ["SELECT", "INSERT"],
+            "cart_desired_blockers": ["SELECT", "INSERT"],
+            "cart_desired_order_facts": ["SELECT", "INSERT"],
+            "inbox_quarantine": ["SELECT", "INSERT"],
+            "order_aroma_projection_history": ["SELECT", "INSERT"],
+            "convergence_work": ["SELECT", "INSERT", "UPDATE"]
           }
         },
         {
@@ -136,11 +177,14 @@
           "tables": {
             "cart_desired_revisions": ["SELECT"],
             "cart_desired_lines": ["SELECT"],
-            "catalog_mapping_projection": ["SELECT"],
+            "cart_desired_order_facts": ["SELECT"],
+            "order_aroma_projections": ["SELECT"],
             "cart_observed_revisions": ["SELECT", "INSERT", "UPDATE"],
-            "cart_observed_lines": ["SELECT", "INSERT", "UPDATE"],
             "inbox_messages": ["SELECT", "INSERT", "UPDATE"],
-            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+            "observation_schedule": ["SELECT", "INSERT", "UPDATE"],
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"],
+            "cart_observed_lines": ["SELECT", "INSERT"],
+            "inbox_quarantine": ["SELECT", "INSERT"]
           }
         },
         {
@@ -151,14 +195,21 @@
             "cart_desired_revisions": ["SELECT"],
             "cart_desired_lines": ["SELECT"],
             "cart_desired_blockers": ["SELECT"],
+            "cart_desired_order_facts": ["SELECT"],
+            "cart_observed_lines": ["SELECT", "INSERT"],
             "catalog_mapping_projection": ["SELECT"],
+            "order_aroma_projections": ["SELECT"],
             "cart_observed_revisions": ["SELECT", "INSERT", "UPDATE"],
-            "cart_observed_lines": ["SELECT", "INSERT", "UPDATE"],
             "convergence_attempts": ["SELECT", "INSERT", "UPDATE"],
             "convergence_leases": ["SELECT", "INSERT", "UPDATE"],
-            "mutation_reservations": ["SELECT", "INSERT", "UPDATE"],
             "inbox_messages": ["SELECT", "INSERT", "UPDATE"],
-            "outbox_messages": ["SELECT", "INSERT", "UPDATE"]
+            "mutation_reservations": ["SELECT", "INSERT", "UPDATE"],
+            "outbox_messages": ["SELECT", "INSERT", "UPDATE"],
+            "inbox_quarantine": ["SELECT", "INSERT"],
+            "convergence_work": ["SELECT", "UPDATE"]
+          },
+          "columnUpdates": {
+            "convergence_work": ["dirty", "next_attempt_at", "updated_at"]
           }
         }
       ]
@@ -174,8 +225,15 @@
           "temporaryTables": true,
           "tables": {
             "provider_sessions": ["SELECT", "INSERT", "UPDATE", "DELETE"],
-            "provider_mutation_journal": ["SELECT", "INSERT", "UPDATE"],
+            "provider_mutation_journal": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE"
+            ],
             "provider_catalog_exports": ["SELECT", "INSERT", "UPDATE"],
+            "provider_export_batches": ["SELECT", "INSERT", "DELETE"],
+            "provider_export_batch_offers": ["SELECT", "INSERT", "DELETE"],
             "provider_source_offers": ["SELECT", "INSERT"],
             "provider_export_offers": ["SELECT", "INSERT"],
             "provider_offer_bindings": ["SELECT", "INSERT"]

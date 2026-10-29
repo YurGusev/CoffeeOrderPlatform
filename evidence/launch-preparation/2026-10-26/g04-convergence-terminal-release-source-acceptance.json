@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "createdAtUtc": "2026-10-26T17:17:12.119921+00:00",
+  "status": "SOURCE_ACCEPTED_RUNTIME_NOT_PROVEN",
+  "file": "/home/yurgusev/CoffeeOrderPlatform/packages/platform-testing/test/platform-packages.test.mjs",
+  "sha256": "0bfa8486314aeb15279b640675d1e76a5fb4d9853c9e5702ff644ea599114200",
+  "ownPatch": "/home/yurgusev/.cache/coffee-issue13/convergence-terminal-release-fence-20261026T165247Z/own.patch",
+  "ownPatchSha256": "7840df077ac1d7e1bc2f40b781b1c6e74a7c20bdb03bbdcbb5bfb7c70d70e333",
+  "checks": {
+    "workerNarrowTests": "PASS 1/1",
+    "rootIndependentNarrowTests": "PASS 1/1, 290.266981ms",
+    "formatLintDiff": "PASS",
+    "astraReview": "Accepted"
+  },
+  "scope": "Existing strict SQL mock: terminal lease release rowCount=0 after terminal Outbox and consume requests ROLLBACK and forbids subsequent COMMIT.",
+  "limitations": [
+    "Does not prove real PostgreSQL rollback durability or concurrent lease expiry.",
+    "Not included in latest full G04 7f66d63."
+  ]
+}

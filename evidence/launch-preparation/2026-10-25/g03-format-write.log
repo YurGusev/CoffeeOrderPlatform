@@ -1,0 +1,637 @@
+.agents/skills/aroma-cart-integration/agents/openai.yaml 38ms (unchanged)
+.agents/skills/artifact-processing/agents/openai.yaml 7ms (unchanged)
+.agents/skills/channel-hermes-platform/agents/openai.yaml 4ms (unchanged)
+.agents/skills/coffee-platform-router/agents/openai.yaml 3ms (unchanged)
+.agents/skills/customer-catalog-pricing/agents/openai.yaml 4ms (unchanged)
+.agents/skills/event-driven-services/agents/openai.yaml 3ms (unchanged)
+.agents/skills/greenfield-microservices/agents/openai.yaml 3ms (unchanged)
+.agents/skills/http-api-contracts/agents/openai.yaml 3ms (unchanged)
+.agents/skills/invoices-service/agents/openai.yaml 3ms (unchanged)
+.agents/skills/issue-authoring/agents/openai.yaml 2ms (unchanged)
+.agents/skills/issue-delivery-closure/agents/openai.yaml 2ms (unchanged)
+.agents/skills/node-service-runtime/agents/openai.yaml 4ms (unchanged)
+.agents/skills/orders-lifecycle/agents/openai.yaml 2ms (unchanged)
+.agents/skills/payments-service/agents/openai.yaml 2ms (unchanged)
+.agents/skills/platform-delivery/agents/openai.yaml 3ms (unchanged)
+.agents/skills/postgres-service-ownership/agents/openai.yaml 2ms (unchanged)
+.agents/skills/react-operator-frontend/agents/openai.yaml 2ms (unchanged)
+.agents/skills/reliability-verification/agents/openai.yaml 2ms (unchanged)
+.agents/skills/work-center-operations/agents/openai.yaml 2ms (unchanged)
+.dependency-cruiser.cjs 83ms
+.sops.yaml 4ms (unchanged)
+apps/api-internal/package.json 4ms
+apps/api-internal/src/index.ts 435ms
+apps/api-internal/src/main.ts 14ms
+apps/api-internal/tsconfig.json 3ms
+apps/api-public/package.json 1ms
+apps/api-public/src/index.ts 275ms
+apps/api-public/src/main.ts 18ms
+apps/api-public/tsconfig.json 3ms
+apps/aroma-convergence/package.json 2ms
+apps/aroma-convergence/src/application/messages.ts 7ms
+apps/aroma-convergence/src/cart-plan.ts 28ms
+apps/aroma-convergence/src/gateway-client.ts 61ms
+apps/aroma-convergence/src/infrastructure/convergence-store.ts 239ms
+apps/aroma-convergence/src/infrastructure/row-schemas.ts 60ms
+apps/aroma-convergence/src/main.ts 3ms
+apps/aroma-convergence/src/observability.ts 22ms
+apps/aroma-convergence/src/runtime-composition.ts 25ms
+apps/aroma-convergence/tsconfig.json 3ms
+apps/aroma-gateway/package.json 1ms
+apps/aroma-gateway/src/application/cart-reader.ts 32ms
+apps/aroma-gateway/src/application/catalog-export.ts 212ms
+apps/aroma-gateway/src/application/provider-cart-mutator.ts 60ms
+apps/aroma-gateway/src/application/provider-catalog-source.ts 54ms
+apps/aroma-gateway/src/application/provider-grinds.ts 15ms
+apps/aroma-gateway/src/domain/mutation-journal.ts 67ms
+apps/aroma-gateway/src/domain/provider-errors.ts 3ms
+apps/aroma-gateway/src/domain/source-identity.ts 22ms
+apps/aroma-gateway/src/infrastructure/database/offer-binding-store.ts 121ms
+apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts 158ms
+apps/aroma-gateway/src/infrastructure/database/provider-session-store.ts 31ms
+apps/aroma-gateway/src/infrastructure/observability.ts 24ms
+apps/aroma-gateway/src/infrastructure/provider/cookie-jar.ts 45ms
+apps/aroma-gateway/src/infrastructure/provider/decoder.ts 81ms
+apps/aroma-gateway/src/infrastructure/provider/http-client.ts 94ms
+apps/aroma-gateway/src/infrastructure/provider/session.ts 126ms
+apps/aroma-gateway/src/main.ts 34ms
+apps/aroma-gateway/src/transport/http/index.ts 89ms
+apps/aroma-gateway/tsconfig.json 3ms
+apps/aroma-observer/package.json 2ms
+apps/aroma-observer/src/gateway-client.ts 24ms
+apps/aroma-observer/src/infrastructure/observation-store.ts 34ms
+apps/aroma-observer/src/infrastructure/row-schemas.ts 14ms
+apps/aroma-observer/src/main.ts 3ms
+apps/aroma-observer/src/observability.ts 15ms
+apps/aroma-observer/src/runtime-composition.ts 23ms
+apps/aroma-observer/tsconfig.json 2ms
+apps/catalog-activation-worker/package.json 1ms
+apps/catalog-activation-worker/src/events.ts 12ms
+apps/catalog-activation-worker/src/gateway-binding-client.ts 11ms
+apps/catalog-activation-worker/src/identity.ts 5ms
+apps/catalog-activation-worker/src/infrastructure/activation-store.ts 78ms
+apps/catalog-activation-worker/src/main.ts 14ms
+apps/catalog-activation-worker/src/verify-generation.ts 25ms
+apps/catalog-activation-worker/tsconfig.json 2ms
+apps/catalog-service/package.json 1ms
+apps/catalog-service/src/application/search-catalog.ts 42ms
+apps/catalog-service/src/http/index.ts 44ms
+apps/catalog-service/src/infrastructure/postgres/catalog-repository.ts 7ms
+apps/catalog-service/src/infrastructure/postgres/catalog-store.ts 9ms
+apps/catalog-service/src/main.ts 22ms
+apps/catalog-service/tsconfig.json 2ms
+apps/catalog-supplier-sync/package.json 1ms
+apps/catalog-supplier-sync/src/hourly-scheduler.ts 12ms
+apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts 90ms
+apps/catalog-supplier-sync/src/internal-api-client.ts 12ms
+apps/catalog-supplier-sync/src/main.ts 23ms
+apps/catalog-supplier-sync/src/ndjson-reader.ts 12ms
+apps/catalog-supplier-sync/src/observability.ts 34ms
+apps/catalog-supplier-sync/src/reconcile-imports.ts 20ms
+apps/catalog-supplier-sync/src/run-catalog-import.ts 23ms
+apps/catalog-supplier-sync/tsconfig.json 2ms
+apps/customer-service/package.json 2ms
+apps/customer-service/src/application/create-customer.ts 8ms
+apps/customer-service/src/application/get-customer-order-input.ts 4ms
+apps/customer-service/src/application/search-customers.ts 50ms
+apps/customer-service/src/domain/customer.ts 53ms
+apps/customer-service/src/http/index.ts 75ms
+apps/customer-service/src/infrastructure/postgres/customer-repository.ts 36ms
+apps/customer-service/src/infrastructure/postgres/customer-row-schema.ts 9ms
+apps/customer-service/src/infrastructure/postgres/customer-store.ts 19ms
+apps/customer-service/src/infrastructure/postgres/idempotency-repository.ts 3ms
+apps/customer-service/src/main.ts 21ms
+apps/customer-service/tsconfig.json 2ms
+apps/edge-gateway/package.json 1ms
+apps/edge-gateway/src/client-operations.gen.ts 7ms
+apps/edge-gateway/src/index.ts 19ms
+apps/edge-gateway/src/main.ts 1ms
+apps/edge-gateway/src/oidc-auth.ts 59ms
+apps/edge-gateway/src/routes.ts 61ms
+apps/edge-gateway/tsconfig.json 1ms
+apps/orders-aroma-preparation/package.json 2ms
+apps/orders-aroma-preparation/src/application/messages.ts 13ms
+apps/orders-aroma-preparation/src/domain/desired.ts 28ms
+apps/orders-aroma-preparation/src/domain/projection.ts 16ms
+apps/orders-aroma-preparation/src/infrastructure/preparation-store.ts 65ms
+apps/orders-aroma-preparation/src/infrastructure/row-schemas.ts 50ms
+apps/orders-aroma-preparation/src/main.ts 2ms
+apps/orders-aroma-preparation/src/observability.ts 10ms
+apps/orders-aroma-preparation/src/runtime-composition.ts 15ms
+apps/orders-aroma-preparation/tsconfig.json 2ms
+apps/orders-service/package.json 1ms
+apps/orders-service/src/application/confirm-order.ts 6ms
+apps/orders-service/src/application/create-draft.ts 16ms
+apps/orders-service/src/application/delete-item.ts 7ms
+apps/orders-service/src/application/get-order-card.ts 5ms
+apps/orders-service/src/application/request-aroma-reconciliation.ts 8ms
+apps/orders-service/src/application/upsert-item.ts 20ms
+apps/orders-service/src/domain/order-card.ts 25ms
+apps/orders-service/src/domain/order-contribution.ts 19ms
+apps/orders-service/src/domain/order-state.ts 5ms
+apps/orders-service/src/http/index.ts 103ms
+apps/orders-service/src/infrastructure/customer-client.ts 19ms
+apps/orders-service/src/infrastructure/database/order-store.ts 158ms
+apps/orders-service/src/infrastructure/database/row-schemas.ts 28ms
+apps/orders-service/src/infrastructure/internal-api-readiness.ts 5ms
+apps/orders-service/src/infrastructure/order-security.ts 20ms
+apps/orders-service/src/infrastructure/pricing-client.ts 30ms
+apps/orders-service/src/main.ts 18ms
+apps/orders-service/src/observability.ts 16ms
+apps/orders-service/tsconfig.json 2ms
+apps/pricing-service/package.json 2ms
+apps/pricing-service/src/application/create-pricing-quote.ts 22ms
+apps/pricing-service/src/domain/pricing-formula.ts 10ms
+apps/pricing-service/src/domain/quote-proof.ts 9ms
+apps/pricing-service/src/http/index.ts 49ms
+apps/pricing-service/src/infrastructure/catalog-client.ts 13ms
+apps/pricing-service/src/infrastructure/database/pricing-store.ts 102ms
+apps/pricing-service/src/main.ts 16ms
+apps/pricing-service/src/observability.ts 17ms
+apps/pricing-service/tsconfig.json 1ms
+apps/realtime-gateway/package.json 1ms (unchanged)
+apps/realtime-gateway/src/contract.ts 9ms
+apps/realtime-gateway/src/hub.ts 82ms
+apps/realtime-gateway/src/index.ts 2ms
+apps/realtime-gateway/src/main.ts 1ms
+apps/realtime-gateway/src/runtime-composition.ts 41ms
+apps/realtime-gateway/tsconfig.json 2ms
+apps/web/index.html 41ms (unchanged)
+apps/web/package.json 1ms (unchanged)
+apps/web/src/browser/api/client.ts 72ms
+apps/web/src/browser/api/format.ts 14ms (unchanged)
+apps/web/src/browser/api/idempotency.ts 37ms
+apps/web/src/browser/api/order-card.ts 20ms
+apps/web/src/browser/api/problem.tsx 15ms
+apps/web/src/browser/api/remote.ts 64ms
+apps/web/src/browser/api/schema.ts 29ms
+apps/web/src/browser/api/session-identity.ts 4ms
+apps/web/src/browser/api/time.ts 12ms
+apps/web/src/browser/api/ulid.ts 7ms
+apps/web/src/browser/app/App.tsx 11ms
+apps/web/src/browser/app/AppShell.tsx 31ms
+apps/web/src/browser/app/OrderRealtime.tsx 30ms
+apps/web/src/browser/app/PageHeader.tsx 6ms
+apps/web/src/browser/app/PendingRecovery.tsx 14ms
+apps/web/src/browser/app/query-client.ts 3ms (unchanged)
+apps/web/src/browser/app/query-keys.ts 3ms
+apps/web/src/browser/app/session.tsx 17ms
+apps/web/src/browser/main.tsx 4ms (unchanged)
+apps/web/src/browser/routes/CatalogPage.tsx 61ms
+apps/web/src/browser/routes/CustomersPage.tsx 47ms
+apps/web/src/browser/routes/NewOrderPage.tsx 8ms
+apps/web/src/browser/routes/NotFoundPage.tsx 2ms
+apps/web/src/browser/routes/OrderCardPage.tsx 59ms
+apps/web/src/browser/styles.css 161ms
+apps/web/src/realtime/order-invalidations.ts 12ms
+apps/web/src/vite-env.d.ts 3ms (unchanged)
+apps/web/test/format.test.ts 4ms (unchanged)
+apps/web/test/idempotency.test.ts 24ms
+apps/web/test/operator-flow.spec.ts 811ms
+apps/web/test/order-cache.test.ts 33ms
+apps/web/test/query-policy.test.ts 17ms
+apps/web/test/realtime.test.ts 36ms
+apps/web/test/schema.test.ts 9ms
+apps/web/test/time.test.ts 3ms
+apps/web/test/ui-foundation.fixture.html 8ms (unchanged)
+apps/web/test/ui-foundation.fixture.tsx 21ms
+apps/web/test/ui-foundation.spec.ts 61ms
+apps/web/test/ulid.test.ts 5ms
+apps/web/tsconfig.json 2ms
+apps/web/vite.config.ts 4ms (unchanged)
+compose.yaml 86ms
+config/database-ownership.json 11ms
+config/database-ownership.schema.json 5ms
+config/database-role-map.json 9ms (unchanged)
+config/database-role-map.schema.json 4ms (unchanged)
+config/nginx-profile.schema.json 5ms
+config/node26-compatibility-matrix.json 5ms (unchanged)
+config/node26-compatibility-matrix.schema.json 5ms (unchanged)
+config/permissions/api-internal.json 1ms
+config/permissions/api-public.json 1ms
+config/permissions/aroma-convergence.json 1ms
+config/permissions/aroma-gateway.json 1ms
+config/permissions/aroma-observer.json 1ms
+config/permissions/catalog-activation-worker.json 1ms
+config/permissions/catalog-service.json 1ms
+config/permissions/catalog-supplier-sync.json 1ms
+config/permissions/customer-service.json 1ms
+config/permissions/edge-gateway.json 1ms
+config/permissions/orders-aroma-preparation.json 1ms
+config/permissions/orders-service.json 1ms
+config/permissions/pricing-service.json 1ms
+config/permissions/realtime-gateway.json 1ms
+config/platform.schema.json 53ms
+config/platform.yaml 142ms
+config/service-catalog.json 13ms
+config/service-catalog.schema.json 5ms
+config/service-interactions.json 9ms
+config/service-interactions.schema.json 3ms
+config/toolchain-versions.json 2ms (unchanged)
+config/toolchain-versions.schema.json 7ms
+contracts/compatibility-evidence.yaml 21ms
+contracts/fixtures/negative/events/aroma-convergence-changed-invalid-enum.v1.json 1ms (unchanged)
+contracts/fixtures/negative/events/aroma-convergence-requested-invalid-traceparent.v1.json 1ms (unchanged)
+contracts/fixtures/negative/events/aroma-observation-changed-invalid-hash.v1.json 1ms (unchanged)
+contracts/fixtures/negative/events/catalog-mapping-changed-invalid-offer-ref.v2.json 1ms
+contracts/fixtures/negative/events/catalog-snapshot-activated-numeric-revision.v1.json 2ms
+contracts/fixtures/negative/events/order-confirmed-additional-field.v1.json 1ms
+contracts/fixtures/negative/events/order-reconciliation-requested-additional-field.v1.json 1ms
+contracts/fixtures/negative/events/realtime-invalidated-invalid-ref.v1.json 1ms
+contracts/fixtures/negative/http/rejections.json 11ms
+contracts/fixtures/negative/sse/rejections.json 2ms
+contracts/fixtures/positive/events/aroma-convergence-changed.v1.json 1ms (unchanged)
+contracts/fixtures/positive/events/aroma-convergence-requested.v1.json 1ms (unchanged)
+contracts/fixtures/positive/events/aroma-observation-changed.v1.json 1ms (unchanged)
+contracts/fixtures/positive/events/catalog-mapping-changed.v2.json 1ms
+contracts/fixtures/positive/events/catalog-snapshot-activated.v1.json 1ms
+contracts/fixtures/positive/events/order-confirmed.v1.json 1ms
+contracts/fixtures/positive/events/order-reconciliation-requested.v1.json 1ms
+contracts/fixtures/positive/events/realtime-invalidated.v1.json 1ms
+contracts/fixtures/positive/http/problems.json 21ms
+contracts/fixtures/positive/http/recovery.json 2ms
+contracts/fixtures/positive/http/success.json 9ms
+contracts/fixtures/positive/sse/order-invalidations.json 2ms
+contracts/manifest.yaml 44ms
+contracts/openapi/client-v1.yaml 193ms
+contracts/openapi/edge-auth-v1.yaml 40ms
+contracts/openapi/internal-v1.yaml 120ms
+contracts/schemas/common/identifiers.v1.schema.json 6ms
+contracts/schemas/common/message-envelope.v1.schema.json 3ms
+contracts/schemas/common/money-version-time.v1.schema.json 2ms
+contracts/schemas/common/problem-details.v1.schema.json 3ms
+contracts/schemas/events/aroma-convergence-changed.v1.schema.json 2ms
+contracts/schemas/events/aroma-convergence-requested.v1.schema.json 3ms
+contracts/schemas/events/aroma-observation-changed.v1.schema.json 2ms
+contracts/schemas/events/catalog-mapping-changed.v2.schema.json 4ms
+contracts/schemas/events/catalog-snapshot-activated.v1.schema.json 3ms
+contracts/schemas/events/order-confirmed.v1.schema.json 3ms
+contracts/schemas/events/order-reconciliation-requested.v1.schema.json 3ms
+contracts/schemas/events/realtime-invalidated.v1.schema.json 3ms
+package.json 2ms (unchanged)
+packages/contracts/aroma-v1/package.json 1ms
+packages/contracts/aroma-v1/src/cart-snapshot.ts 20ms
+packages/contracts/aroma-v1/src/catalog-hash.ts 17ms
+packages/contracts/aroma-v1/src/index.ts 30ms
+packages/contracts/aroma-v1/tsconfig.json 1ms
+packages/contracts/catalog-v1/package.json 1ms
+packages/contracts/catalog-v1/src/index.ts 27ms
+packages/contracts/catalog-v1/tsconfig.json 1ms
+packages/contracts/client-v1/package.json 1ms
+packages/contracts/client-v1/src/index.ts 9ms
+packages/contracts/client-v1/tsconfig.json 1ms
+packages/contracts/customer-v1/package.json 1ms
+packages/contracts/customer-v1/src/index.ts 29ms
+packages/contracts/customer-v1/tsconfig.json 1ms
+packages/contracts/edge-v1/package.json 1ms
+packages/contracts/edge-v1/src/index.ts 2ms
+packages/contracts/edge-v1/tsconfig.json 1ms
+packages/contracts/internal-v1/package.json 1ms
+packages/contracts/internal-v1/src/index.ts 2ms
+packages/contracts/internal-v1/tsconfig.json 1ms
+packages/contracts/orders-v1/package.json 1ms
+packages/contracts/orders-v1/src/index.ts 16ms
+packages/contracts/orders-v1/tsconfig.json 1ms
+packages/contracts/pricing-v1/package.json 1ms
+packages/contracts/pricing-v1/src/index.ts 13ms
+packages/contracts/pricing-v1/tsconfig.json 1ms
+packages/contracts/realtime-v1/package.json 1ms
+packages/contracts/realtime-v1/src/index.ts 3ms
+packages/contracts/realtime-v1/tsconfig.json 2ms
+packages/platform-config/package.json 1ms
+packages/platform-config/src/index.ts 206ms
+packages/platform-config/src/launch-database-target.js 4ms
+packages/platform-config/src/launch-database-target.ts 33ms
+packages/platform-config/src/launch-kafka-target.js 1ms
+packages/platform-config/src/launch-kafka-target.ts 20ms
+packages/platform-config/tsconfig.json 2ms (unchanged)
+packages/platform-database/package.json 1ms (unchanged)
+packages/platform-database/src/index.ts 80ms
+packages/platform-database/src/internal.ts 9ms
+packages/platform-database/src/owner.ts 30ms
+packages/platform-database/tsconfig.json 2ms
+packages/platform-http/package.json 1ms (unchanged)
+packages/platform-http/src/index.ts 25ms
+packages/platform-http/tsconfig.json 1ms (unchanged)
+packages/platform-idempotency/package.json 1ms (unchanged)
+packages/platform-idempotency/src/index.ts 46ms
+packages/platform-idempotency/tsconfig.json 1ms
+packages/platform-inbox/package.json 1ms (unchanged)
+packages/platform-inbox/src/index.ts 88ms
+packages/platform-inbox/tsconfig.json 1ms
+packages/platform-kafka-runtime/package.json 1ms (unchanged)
+packages/platform-kafka-runtime/src/index.ts 186ms
+packages/platform-kafka-runtime/src/native.ts 146ms
+packages/platform-kafka-runtime/tsconfig.json 2ms (unchanged)
+packages/platform-migrations/package.json 1ms (unchanged)
+packages/platform-migrations/src/index.ts 18ms
+packages/platform-migrations/tsconfig.json 1ms
+packages/platform-observability/package.json 1ms (unchanged)
+packages/platform-observability/src/index.ts 109ms
+packages/platform-observability/tsconfig.json 1ms (unchanged)
+packages/platform-outbox/package.json 1ms (unchanged)
+packages/platform-outbox/src/index.ts 91ms
+packages/platform-outbox/tsconfig.json 1ms
+packages/platform-runtime/package.json 1ms (unchanged)
+packages/platform-runtime/src/healthcheck.ts 11ms
+packages/platform-runtime/src/index.ts 156ms
+packages/platform-runtime/tsconfig.json 1ms (unchanged)
+packages/platform-security/package.json 1ms
+packages/platform-security/src/index.ts 91ms
+packages/platform-security/test/actor-context.test.mjs 15ms
+packages/platform-security/tsconfig.json 1ms (unchanged)
+packages/platform-testing/package.json 1ms
+packages/platform-testing/src/index.ts 10ms
+packages/platform-testing/test/platform-packages.test.mjs 438ms
+packages/platform-testing/tsconfig.json 1ms (unchanged)
+packages/platform-time/package.json 1ms (unchanged)
+packages/platform-time/src/index.ts 8ms
+packages/platform-time/tsconfig.json 2ms (unchanged)
+packages/platform-ui/package.json 2ms (unchanged)
+packages/platform-ui/src/cn.ts 2ms (unchanged)
+packages/platform-ui/src/components/alert.tsx 5ms
+packages/platform-ui/src/components/badge.tsx 6ms
+packages/platform-ui/src/components/button.tsx 10ms
+packages/platform-ui/src/components/dialog.tsx 15ms
+packages/platform-ui/src/components/empty.tsx 4ms
+packages/platform-ui/src/components/field.tsx 6ms
+packages/platform-ui/src/components/input.tsx 3ms
+packages/platform-ui/src/components/link.tsx 3ms
+packages/platform-ui/src/components/loading.tsx 3ms
+packages/platform-ui/src/icons.tsx 6ms
+packages/platform-ui/src/index.ts 3ms
+packages/platform-ui/src/styles/font-faces.css 20ms
+packages/platform-ui/src/styles/fonts/prototype-font-manifest.json 3ms (unchanged)
+packages/platform-ui/src/styles/global.css 17ms
+packages/platform-ui/src/styles/index.css 9ms (unchanged)
+packages/platform-ui/src/styles/tokens.css 35ms
+packages/platform-ui/test/components.test.tsx 8ms
+packages/platform-ui/tsconfig.json 1ms (unchanged)
+packages/platform-ui/vitest.config.ts 2ms (unchanged)
+platform/launch-v1-connectivity-policy.json 8ms
+platform/launch-v1-connectivity-policy.schema.json 5ms
+platform/launch-v1-runtime-profile.json 12ms
+platform/launch-v1-runtime-profile.schema.json 14ms
+platform/runtime-foundation-decision.json 2ms (unchanged)
+platform/runtime-foundation-decision.schema.json 5ms
+platform/target-layout.json 4ms
+platform/target-layout.schema.json 4ms
+pnpm-workspace.yaml 3ms
+scripts/aroma-session-live-proof.mjs 29ms
+scripts/catalog-copy-live-proof.mjs 109ms
+scripts/catalog-live-harness.mjs 26ms
+scripts/catalog-recovery-live-proof.mjs 29ms
+scripts/catalog-runtime-live-proof.mjs 29ms
+scripts/check-architecture.mjs 147ms
+scripts/check-browser-bundle.mjs 5ms
+scripts/check-database-ownership.mjs 26ms
+scripts/check-node26-compatibility.mjs 64ms
+scripts/check-platform-config.mjs 3ms
+scripts/check-rule-parity.mjs 16ms
+scripts/check-security-material.mjs 3ms
+scripts/check-service-catalog.mjs 36ms
+scripts/check-toolchain-profiles.mjs 22ms
+scripts/check-toolchain-versions.mjs 59ms
+scripts/config-lib.mjs 60ms
+scripts/contracts-ajv.mjs 4ms
+scripts/contracts-breaking.mjs 78ms
+scripts/contracts-check-generated.mjs 6ms
+scripts/contracts-generate.mjs 19ms
+scripts/contracts-lint.mjs 24ms
+scripts/db-bootstrap.mjs 77ms
+scripts/db-live-proof.mjs 230ms
+scripts/db-smoke.mjs 23ms
+scripts/format.mjs 8ms
+scripts/native-ts-smoke.ts 2ms (unchanged)
+scripts/permission-audit-listener.mjs 3ms
+scripts/permission-audit.mjs 28ms
+scripts/permission-enforce.mjs 2ms
+scripts/verify-clean-clone.mjs 9ms
+tests/architecture/checks.test.mjs 84ms
+tests/architecture/fixtures/invalid-axios-dependency/package.json 2ms (unchanged)
+tests/architecture/fixtures/invalid-axios/apps/http-service/src/bad.ts 1ms
+tests/architecture/fixtures/invalid-browser-transitive-internal/apps/web/src/bad.ts 2ms
+tests/architecture/fixtures/invalid-db-duplicate/case.json 2ms (unchanged)
+tests/architecture/fixtures/invalid-db/runtime-environment.json 2ms
+tests/architecture/fixtures/invalid-generic-retry-dependency/package.json 1ms (unchanged)
+tests/architecture/fixtures/invalid-generic-retry-wrapper/apps/aroma-gateway/src/retry.ts 2ms
+tests/architecture/fixtures/invalid-import-catalog-orders/apps/catalog-service/src/bad.ts 1ms
+tests/architecture/fixtures/invalid-import-catalog-orders/apps/orders-service/infrastructure/db.ts 1ms (unchanged)
+tests/architecture/fixtures/invalid-import-orders-catalog/apps/catalog-service/internal/repository.ts 1ms (unchanged)
+tests/architecture/fixtures/invalid-import-orders-catalog/apps/orders-service/src/bad.ts 1ms
+tests/architecture/fixtures/invalid-interaction/case.json 1ms (unchanged)
+tests/architecture/fixtures/invalid-native-module/apps/native-service/src/bad.ts 1ms
+tests/architecture/fixtures/invalid-native-time/apps/time-service/src/bad.ts 1ms (unchanged)
+tests/architecture/fixtures/invalid-permission-manifest/apps/missing/src/main.ts 2ms
+tests/architecture/fixtures/invalid-permission-manifest/apps/permissioned/permission-manifest.json 1ms (unchanged)
+tests/architecture/fixtures/invalid-permission-manifest/apps/permissioned/src/main.ts 2ms
+tests/architecture/fixtures/invalid-platform-namespace/packages/customer-shared/package.json 1ms (unchanged)
+tests/architecture/fixtures/invalid-postgres-url/apps/orders-service/src/bad.ts 1ms
+tests/architecture/fixtures/invalid-provider-fetch/apps/aroma-gateway/src/bad.ts 2ms (unchanged)
+tests/architecture/fixtures/invalid-provider-proxy/apps/aroma-gateway/src/bad.ts 3ms (unchanged)
+tests/architecture/fixtures/invalid-ts7-any/apps/example-service/src/bad.ts 2ms (unchanged)
+tests/architecture/fixtures/invalid-ts7-baseurl/tsconfig.json 1ms (unchanged)
+tests/architecture/fixtures/invalid-ts7-brand/apps/example-service/src/bad.ts 2ms (unchanged)
+tests/architecture/fixtures/invalid-ts7-commonjs/apps/example-service/src/bad.ts 2ms
+tests/architecture/fixtures/invalid-ts7-enum/apps/example-service/src/bad.ts 3ms (unchanged)
+tests/architecture/fixtures/invalid-ts7-eval/apps/example-service/src/bad.ts 2ms (unchanged)
+tests/architecture/fixtures/invalid-ts7-import/apps/example-service/src/bad.ts 1ms
+tests/architecture/fixtures/invalid-ts7-promise/apps/example-service/src/bad.ts 1ms
+tests/architecture/fixtures/invalid-ts7-switch/apps/example-service/src/bad.ts 2ms
+tests/architecture/fixtures/invalid-ts7-version-mix/apps/example-service/src/bad.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/browser-console-node-helper.ts 1ms
+tests/architecture/fixtures/negative/frontend/browser-console-node-root.ts 2ms (unchanged)
+tests/architecture/fixtures/negative/frontend/browser-node.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/browser-transitive-helper.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/browser-transitive-root.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/node-browser.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/server-ui-relative-root.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/server-ui-relative-target.ts 2ms (unchanged)
+tests/architecture/fixtures/negative/frontend/server-ui.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/ui-network.ts 2ms (unchanged)
+tests/architecture/fixtures/negative/frontend/ui-node-transitive-helper.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/ui-node-transitive-root.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/ui-query-transitive-helper.ts 1ms (unchanged)
+tests/architecture/fixtures/negative/frontend/ui-query-transitive-root.ts 1ms (unchanged)
+tests/architecture/fixtures/valid-db/runtime-environment.json 1ms
+tests/architecture/fixtures/valid-import/apps/orders-service/src/good.ts 2ms
+tests/architecture/fixtures/valid-import/packages/contracts/catalog-v1/index.ts 1ms (unchanged)
+tests/architecture/fixtures/valid-import/packages/contracts/catalog-v1/package.json 1ms
+tests/architecture/fixtures/valid-interaction/case.json 1ms (unchanged)
+tests/architecture/frontend-boundary.test.mjs 8ms
+tests/aroma/api-internal-operations.test.mjs 32ms
+tests/aroma/binding-http.test.mjs 30ms
+tests/aroma/binding-live.test.mjs 53ms
+tests/aroma/cart-reader.test.mjs 25ms
+tests/aroma/catalog-export.test.mjs 96ms
+tests/aroma/convergence-domain.test.mjs 26ms
+tests/aroma/convergence-live.test.mjs 202ms
+tests/aroma/gateway-operations-http.test.mjs 32ms
+tests/aroma/gateway-production-composition.test.mjs 24ms
+tests/aroma/mutation-journal.test.mjs 118ms
+tests/aroma/observer-live.test.mjs 96ms
+tests/aroma/provider-cart-mutator.test.mjs 25ms
+tests/aroma/provider-catalog-source.test.mjs 30ms
+tests/aroma/provider-decoder.test.mjs 19ms
+tests/aroma/provider-http.test.mjs 49ms
+tests/aroma/provider-session.test.mjs 124ms
+tests/aroma/safe-read-http.test.mjs 54ms
+tests/aroma/scoping-provenance.test.mjs 23ms
+tests/aroma/source-identity.test.mjs 14ms
+tests/aroma/worker-gateway-client.test.mjs 44ms
+tests/authority/fixtures/negative/cases.json 10ms
+tests/catalog-pipeline/capacity-child.mjs 14ms
+tests/catalog-pipeline/capacity.test.mjs 4ms
+tests/catalog-pipeline/pipeline-live.test.mjs 36ms
+tests/catalog-pipeline/publisher-child.mjs 12ms
+tests/catalog-pipeline/publisher-live.test.mjs 28ms
+tests/catalog-pipeline/recovery-live.test.mjs 21ms
+tests/catalog-pipeline/security-live.test.mjs 27ms
+tests/catalog/activation-binding-client.test.mjs 8ms
+tests/catalog/activation-contracts.test.mjs 7ms
+tests/catalog/activation-crash-child.mjs 8ms
+tests/catalog/activation-crash-live.test.mjs 27ms
+tests/catalog/activation-events.test.mjs 11ms
+tests/catalog/activation-identity.test.mjs 6ms
+tests/catalog/activation-live.test.mjs 70ms
+tests/catalog/activation-migrations.test.mjs 48ms
+tests/catalog/activation-validation.test.mjs 84ms
+tests/catalog/catalog-owner.test.mjs 73ms
+tests/catalog/catalog-root.test.mjs 43ms
+tests/catalog/composition-proof.mjs 46ms
+tests/catalog/copy-live.test.mjs 14ms
+tests/catalog/fixtures/hash-vectors.json 2ms (unchanged)
+tests/catalog/ingestion.test.mjs 19ms
+tests/catalog/observability-proof.mjs 26ms
+tests/catalog/recovery-live.test.mjs 5ms
+tests/catalog/runtime-child.mjs 6ms
+tests/catalog/stream-capacity-proof.mjs 12ms
+tests/catalog/stream.test.mjs 75ms
+tests/catalog/terminal-capacity-proof.mjs 15ms
+tests/compose/rule-parity.test.mjs 5ms (unchanged)
+tests/compose/topology.test.mjs 223ms
+tests/config/observability-bootstrap.test.mjs 211ms
+tests/config/orders-signing-bootstrap.test.mjs 11ms
+tests/config/platform-config.test.mjs 122ms
+tests/contracts/breaking.test.mjs 77ms
+tests/contracts/catalog-http.test.mjs 13ms
+tests/contracts/generated-types.test.mjs 4ms
+tests/contracts/manifest.test.mjs 7ms
+tests/contracts/openapi-fixtures.test.mjs 79ms
+tests/contracts/recovery.test.mjs 21ms
+tests/contracts/schemas.test.mjs 26ms
+tests/customer/customer-http.test.mjs 77ms
+tests/customer/customer-live.test.mjs 101ms
+tests/customer/customer-normalization.test.mjs 4ms
+tests/customer/customer-schema.test.mjs 21ms
+tests/customer/fixtures/customer-testkit.mjs 25ms
+tests/customer/fixtures/db-adapter-command-observer.mjs 3ms
+tests/database/db-bootstrap.test.mjs 50ms
+tests/database/live-db-proof.test.mjs 19ms
+tests/database/pool-concurrency-live.test.mjs 8ms
+tests/edge-auth/oidc-auth.test.mjs 33ms
+tests/edge-auth/operations.test.mjs 8ms
+tests/edge-auth/routes.test.mjs 50ms
+tests/kafka/orders-inbox-live.test.mjs 79ms
+tests/kafka/runtime.test.mjs 81ms
+tests/nginx/cutover.test.mjs 70ms
+tests/nginx/fixtures/backend.mjs 12ms
+tests/nginx/fixtures/cutover-backend.mjs 12ms
+tests/nginx/fixtures/profile.json 2ms
+tests/nginx/fixtures/served-backend.mjs 42ms
+tests/nginx/image.test.mjs 78ms
+tests/observability/alerts.test.mjs 234ms
+tests/observability/convergence-metrics-proof.mjs 61ms
+tests/observability/fixture.mjs 20ms
+tests/observability/launch-path.mjs 148ms
+tests/observability/orders-fixture.mjs 37ms
+tests/observability/runtime-matrix-probe.mjs 22ms
+tests/observability/runtime-matrix.mjs 99ms
+tests/observability/storage.test.mjs 35ms
+tests/orders/aroma-preparation-live.test.mjs 171ms
+tests/orders/aroma-schema.test.mjs 105ms
+tests/orders/contract.test.mjs 9ms
+tests/orders/observability.test.mjs 33ms
+tests/orders/order-card.test.mjs 20ms
+tests/orders/order-contribution.test.mjs 9ms
+tests/orders/order-store-faults.test.mjs 45ms
+tests/orders/order-store.test.mjs 75ms
+tests/orders/owner-http.test.mjs 61ms
+tests/orders/owner-live.test.mjs 221ms
+tests/orders/public-api.test.mjs 56ms
+tests/orders/reconciliation-live.test.mjs 43ms
+tests/orders/row-schemas.test.mjs 21ms
+tests/orders/security.test.mjs 18ms
+tests/orders/upstream-clients.test.mjs 38ms
+tests/pricing/catalog-client.test.mjs 17ms
+tests/pricing/create-pricing-quote.test.mjs 30ms
+tests/pricing/pricing-formula.test.mjs 14ms
+tests/pricing/pricing-http.test.mjs 23ms
+tests/pricing/pricing-internal-api.test.mjs 19ms
+tests/pricing/pricing-observability.test.mjs 13ms
+tests/pricing/pricing-public-api.test.mjs 28ms
+tests/pricing/pricing-recovery-live.test.mjs 27ms
+tests/pricing/pricing-store.test.mjs 41ms
+tests/pricing/quote-proof.test.mjs 9ms
+tests/realtime/auth.test.mjs 48ms
+tests/realtime/backpressure.test.mjs 54ms
+tests/realtime/contract.test.mjs 14ms
+tests/realtime/fixtures/clients.mjs 28ms
+tests/realtime/fixtures/driver.mjs 80ms
+tests/realtime/fixtures/fixture-check.mjs 12ms
+tests/realtime/fixtures/harness.test.mjs 194ms
+tests/realtime/fixtures/owner-browser.mjs 116ms
+tests/realtime/fixtures/owner-publisher.mjs 19ms
+tests/realtime/fixtures/protocol.mjs 34ms
+tests/realtime/fixtures/services.mjs 30ms
+tests/realtime/fixtures/setup.mjs 88ms
+tests/realtime/fixtures/transport.mjs 35ms
+tests/realtime/helpers.mjs 27ms
+tests/realtime/replay.test.mjs 32ms
+tests/realtime/soak.test.mjs 158ms
+tests/runtime/lifecycle.test.mjs 245ms
+tests/runtime/native-ts-smoke.test.mjs 2ms
+tests/runtime/node26-compatibility.test.mjs 13ms (unchanged)
+tests/runtime/permissions.test.mjs 13ms
+tests/runtime/platform-http.test.mjs 24ms
+tests/runtime/platform-time.test.mjs 7ms
+tests/tools/security-scan.test.mjs 106ms
+tools/compose-smoke.mjs 472ms
+tools/config-bootstrap/index.mjs 135ms
+tools/docker-build.mjs 9ms
+tools/nginx/check-config.mjs 14ms
+tools/nginx/generate-config.mjs 2ms
+tools/nginx/generate.mjs 23ms
+tools/observability/alert-sink.mjs 6ms
+tools/observability/alerts.mjs 19ms
+tools/observability/bootstrap.mjs 24ms
+tools/observability/generate.mjs 59ms
+tools/observability/health.mjs 5ms
+tools/observability/storage.mjs 13ms
+tools/observability/verify.mjs 575ms
+tools/rollback-runtime-proof.mjs 42ms
+tools/security-scan.mjs 146ms
+tsconfig.base.json 1ms (unchanged)
+tsconfig.json 2ms (unchanged)
+types/worker-threads-compat/index.d.ts 2ms (unchanged)
+verification/launch/v1/accepted-handoff-supplement.json 9ms
+verification/launch/v1/matrix.yaml 33ms
+verification/launch/v1/report.mjs 85ms
+verification/launch/v1/run.mjs 88ms
+verification/launch/v1/runner.test.mjs 307ms
+verification/launch/v1/scenarios/aroma-approval.mjs 49ms
+verification/launch/v1/scenarios/aroma-sandbox-catalog.mjs 25ms
+verification/launch/v1/scenarios/aroma-sandbox-resources.mjs 44ms
+verification/launch/v1/scenarios/aroma-sandbox.mjs 177ms
+verification/launch/v1/scenarios/backup-restore-recovery.mjs 76ms
+verification/launch/v1/scenarios/backup-restore.mjs 117ms
+verification/launch/v1/scenarios/backup-restore.test.mjs 93ms
+verification/launch/v1/scenarios/owner-suites.mjs 11ms
+verification/launch/v1/scenarios/preflight.mjs 128ms
+verification/launch/v1/scenarios/preflight.test.mjs 109ms
+verification/launch/v1/scenarios/rollback.mjs 67ms
+verification/launch/v1/scenarios/unit.mjs 41ms
+verification/launch/v1/schemas/accepted-handoff-supplement.schema.json 5ms
+verification/launch/v1/schemas/aroma-approval.schema.json 2ms
+verification/launch/v1/schemas/matrix.schema.json 11ms
+verification/launch/v1/schemas/run-result.schema.json 16ms

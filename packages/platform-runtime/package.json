@@ -13,9 +13,9 @@
     "@coffee-platform/database": "workspace:*",
     "@coffee-platform/observability": "workspace:*",
     "@js-temporal/polyfill": "0.5.1",
-    "fastify": "5.12.1",
-    "js-yaml": "4.2.0",
-    "undici": "8.10.1",
+    "fastify": "5.12.2",
+    "js-yaml": "4.3.2",
+    "undici": "8.12.3",
     "@coffee-platform/kafka-runtime": "workspace:*",
     "@coffee-platform/security": "workspace:*",
     "@opentelemetry/api": "1.9.1"

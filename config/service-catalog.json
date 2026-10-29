@@ -31,9 +31,7 @@
       "owner": "platform",
       "sourceRoot": "apps/edge-gateway",
       "purpose": "Единственный публичный TLS/auth/routing ingress без бизнес-решений",
-      "contractPackages": [
-        "packages/contracts/edge-v1"
-      ],
+      "contractPackages": ["packages/contracts/edge-v1"],
       "incomingHttp": [
         "GET /",
         "GET /assets/**",
@@ -52,9 +50,7 @@
         "security.serviceTransportKeys.edge-gateway",
         "telemetry.exporterToken"
       ],
-      "optionalSecretRefs": [
-        "edge.tlsCaBundle"
-      ],
+      "optionalSecretRefs": ["edge.tlsCaBundle"],
       "publicity": "private-edge-backend",
       "transportMode": "mtls"
     },
@@ -63,12 +59,8 @@
       "owner": "platform",
       "sourceRoot": "apps/api-public",
       "purpose": "Stateless composition root только для client-v1",
-      "contractPackages": [
-        "packages/contracts/client-v1"
-      ],
-      "incomingHttp": [
-        "ANY /api/client-v1/**"
-      ],
+      "contractPackages": ["packages/contracts/client-v1"],
+      "incomingHttp": ["ANY /api/client-v1/**"],
       "incomingEvents": [],
       "schedules": [],
       "outgoingHttp": [
@@ -93,12 +85,8 @@
       "owner": "platform",
       "sourceRoot": "apps/api-internal",
       "purpose": "Stateless mTLS/delegation root только для internal-v1",
-      "contractPackages": [
-        "packages/contracts/internal-v1"
-      ],
-      "incomingHttp": [
-        "ANY /api/internal-v1/**"
-      ],
+      "contractPackages": ["packages/contracts/internal-v1"],
+      "incomingHttp": ["ANY /api/internal-v1/**"],
       "incomingEvents": [],
       "schedules": [],
       "outgoingHttp": [
@@ -128,9 +116,7 @@
       "owner": "customer",
       "sourceRoot": "apps/customer-service",
       "purpose": "Владелец Customer, identity, contacts, addresses и channel links",
-      "contractPackages": [
-        "packages/contracts/customer-v1"
-      ],
+      "contractPackages": ["packages/contracts/customer-v1"],
       "incomingHttp": [
         "POST /api/client-v1/customers",
         "GET /api/client-v1/customers",
@@ -162,9 +148,7 @@
       "owner": "catalog",
       "sourceRoot": "apps/catalog-service",
       "purpose": "Владелец product/variant/active snapshot/mapping/availability reads",
-      "contractPackages": [
-        "packages/contracts/catalog-v1"
-      ],
+      "contractPackages": ["packages/contracts/catalog-v1"],
       "incomingHttp": [
         "GET /api/client-v1/catalog/products",
         "GET /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input"
@@ -198,17 +182,10 @@
         "packages/contracts/catalog-v1",
         "packages/contracts/internal-v1"
       ],
-      "incomingHttp": [
-        "GET /health/live",
-        "GET /health/ready"
-      ],
+      "incomingHttp": ["GET /health/live", "GET /health/ready"],
       "incomingEvents": [],
-      "schedules": [
-        "internal supplier catalog schedule"
-      ],
-      "outgoingHttp": [
-        "api-internal:exportAromaCatalog"
-      ],
+      "schedules": ["internal supplier catalog schedule"],
+      "outgoingHttp": ["api-internal:exportAromaCatalog"],
       "outgoingEvents": [],
       "database": {
         "name": "coffee_platform_catalog",
@@ -228,17 +205,11 @@
       "owner": "catalog",
       "sourceRoot": "apps/catalog-activation-worker",
       "purpose": "Атомарная активация Received generation и запись Catalog Outbox",
-      "contractPackages": [
-        "packages/contracts/catalog-v1"
-      ],
+      "contractPackages": ["packages/contracts/catalog-v1"],
       "incomingHttp": [],
       "incomingEvents": [],
-      "schedules": [
-        "durable Received DB queue"
-      ],
-      "outgoingHttp": [
-        "api-internal:registerAromaOfferBinding"
-      ],
+      "schedules": ["durable Received DB queue"],
+      "outgoingHttp": ["api-internal:registerAromaOfferBinding"],
       "outgoingEvents": [
         "CatalogSnapshotActivated.v1",
         "CatalogMappingChanged.v2"
@@ -272,9 +243,7 @@
       ],
       "incomingEvents": [],
       "schedules": [],
-      "outgoingHttp": [
-        "api-internal:getCatalogPricingInput"
-      ],
+      "outgoingHttp": ["api-internal:getCatalogPricingInput"],
       "outgoingEvents": [],
       "database": {
         "name": "coffee_platform_pricing",
@@ -348,10 +317,7 @@
         "packages/contracts/catalog-v1",
         "packages/contracts/aroma-v1"
       ],
-      "incomingHttp": [
-        "GET /health/live",
-        "GET /health/ready"
-      ],
+      "incomingHttp": ["GET /health/live", "GET /health/ready"],
       "incomingEvents": [
         "OrderConfirmed.v1",
         "OrderReconciliationRequested.v1",
@@ -388,20 +354,11 @@
         "packages/contracts/aroma-v1",
         "packages/contracts/internal-v1"
       ],
-      "incomingHttp": [
-        "GET /health/live",
-        "GET /health/ready"
-      ],
+      "incomingHttp": ["GET /health/live", "GET /health/ready"],
       "incomingEvents": [],
-      "schedules": [
-        "internal durable observation schedule"
-      ],
-      "outgoingHttp": [
-        "api-internal:readAromaCartSnapshot"
-      ],
-      "outgoingEvents": [
-        "AromaObservationChanged.v1"
-      ],
+      "schedules": ["internal durable observation schedule"],
+      "outgoingHttp": ["api-internal:readAromaCartSnapshot"],
+      "outgoingEvents": ["AromaObservationChanged.v1"],
       "database": {
         "name": "coffee_platform_orders",
         "role": "coffee_orders_observer_rw",
@@ -426,13 +383,8 @@
         "packages/contracts/aroma-v1",
         "packages/contracts/internal-v1"
       ],
-      "incomingHttp": [
-        "GET /health/live",
-        "GET /health/ready"
-      ],
-      "incomingEvents": [
-        "AromaConvergenceRequested.v1"
-      ],
+      "incomingHttp": ["GET /health/live", "GET /health/ready"],
+      "incomingEvents": ["AromaConvergenceRequested.v1"],
       "schedules": [],
       "outgoingHttp": [
         "api-internal:readAromaCartSnapshot",
@@ -475,9 +427,7 @@
       ],
       "incomingEvents": [],
       "schedules": [],
-      "outgoingHttp": [
-        "provider:allowlisted AROMA HTTPS origin"
-      ],
+      "outgoingHttp": ["provider:allowlisted AROMA HTTPS origin"],
       "outgoingEvents": [],
       "database": {
         "name": "coffee_platform_integration",
@@ -502,19 +452,11 @@
       "owner": "realtime",
       "sourceRoot": "apps/realtime-gateway",
       "purpose": "Bounded SSE invalidation fanout без business state",
-      "contractPackages": [
-        "packages/contracts/realtime-v1"
-      ],
-      "incomingHttp": [
-        "GET /events"
-      ],
-      "incomingEvents": [
-        "RealtimeInvalidated.v1"
-      ],
+      "contractPackages": ["packages/contracts/realtime-v1"],
+      "incomingHttp": ["GET /events"],
+      "incomingEvents": ["RealtimeInvalidated.v1"],
       "schedules": [],
-      "outgoingHttp": [
-        "browser:SSE sockets"
-      ],
+      "outgoingHttp": ["browser:SSE sockets"],
       "outgoingEvents": [],
       "database": null,
       "secretRefs": [
@@ -533,9 +475,7 @@
       "sourceRoot": "apps/edge-nginx",
       "purpose": "Native TLS transport, static browser assets, and fixed private upstream routing",
       "contractPackages": [],
-      "incomingHttp": [
-        "public TLS :8443"
-      ],
+      "incomingHttp": ["public TLS :8443"],
       "incomingEvents": [],
       "schedules": [],
       "outgoingHttp": [

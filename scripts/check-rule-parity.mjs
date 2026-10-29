@@ -72,7 +72,10 @@ async function assertEvidence(root, row) {
   }
 }
 
-export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) {
+export async function checkRuleParity(
+  root = REPO_ROOT,
+  { admit = false } = {},
+) {
   const markdown = await readFile(join(root, MATRIX_PATH), "utf8");
   const { matrix, table } = extractMatrix(markdown);
   assertExact(matrix.schemaVersion, 1, "schemaVersion");
@@ -101,7 +104,11 @@ export async function checkRuleParity(root = REPO_ROOT, { admit = false } = {}) 
     if (!row || typeof row !== "object") fail("each row must be an object");
     if (!STATUSES.has(row.status))
       fail((row.id ?? "unknown") + ": invalid status " + row.status);
-    if (admit && matrix.uncoveredPolicy === "block-replacement" && row.status !== "COVERED") {
+    if (
+      admit &&
+      matrix.uncoveredPolicy === "block-replacement" &&
+      row.status !== "COVERED"
+    ) {
       fail(row.id + ": status " + row.status + " blocks replacement");
     }
     if (row.uncoveredBlocksReplacement !== true) {

@@ -11,6 +11,12 @@
     "pnpm",
     "typescript",
     "fastify",
+    "fastUri3",
+    "fastUri4",
+    "jsYaml4",
+    "jsYaml5",
+    "sourceMapJs",
+    "undici",
     "postgresql",
     "libphonenumberJs",
     "kafka",
@@ -21,6 +27,8 @@
     "openapi",
     "docker",
     "compose",
+    "trivy",
+    "trivyImage",
     "nodeImage",
     "kafkaImage",
     "nginxImage",
@@ -41,7 +49,8 @@
     "pino",
     "otelCollectorImage",
     "openObserveImage",
-    "bootstrapProbeSha256"
+    "bootstrapProbeSha256",
+    "browserHelperNodeImage"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -51,14 +60,20 @@
     "corepack": { "const": "0.35.0" },
     "pnpm": { "const": "11.24.0" },
     "typescript": { "const": "7.0.2" },
-    "fastify": { "const": "5.12.1" },
+    "fastify": { "const": "5.12.2" },
+    "fastUri3": { "const": "3.1.8" },
+    "fastUri4": { "const": "4.1.5" },
+    "jsYaml4": { "const": "4.3.2" },
+    "jsYaml5": { "const": "5.2.2" },
+    "sourceMapJs": { "const": "1.2.2" },
+    "undici": { "const": "8.12.3" },
     "postgresql": { "const": "17.11" },
     "pg": { "type": "string" },
     "libphonenumberJs": { "const": "1.13.12" },
     "pgCopyStreams": { "const": "7.0.0" },
     "typesPg": { "const": "8.23.1" },
     "typesPgCopyStreams": { "const": "1.2.5" },
-    "kafka": { "const": "4.3.1" },
+    "kafka": { "const": "4.3.2" },
     "confluentKafkaJavaScript": { "type": "string" },
     "librdkafka": { "const": "2.15.0" },
     "librdkafkaSourceSha256": {
@@ -77,7 +92,7 @@
     "typesReact": { "const": "19.2.17" },
     "typesReactDom": { "const": "19.2.7" },
     "axeCorePlaywright": { "const": "4.13.0" },
-    "vite": { "type": "string" },
+    "vite": { "const": "8.2.4" },
     "vitest": { "type": "string" },
     "playwright": { "type": "string" },
     "openapi": { "const": "3.2.0" },
@@ -85,8 +100,8 @@
     "heyApiOpenapiTs": { "const": "0.0.0-next-20260824173136" },
     "spectralCli": { "type": "string" },
     "ajv": { "type": "string" },
-    "pino": { "type": "string" },
-    "opentelemetryApi": { "type": "string" },
+    "pino": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "opentelemetryApi": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "dependencyCruiser": { "const": "18.2.0" },
     "oxlint": { "const": "1.80.0" },
     "oxlintTsgolint": { "const": "7.0.2001" },
@@ -95,25 +110,62 @@
     "age": { "const": "1.3.2" },
     "docker": { "const": "29.7.2" },
     "compose": { "const": "5.4.0" },
-    "nodeImage": {
-      "pattern": "^node:26\\.8\\.1-bookworm-slim@sha256:[0-9a-f]{64}$"
+    "trivy": { "const": "0.76.1" },
+    "trivyImage": {
+      "const": "ghcr.io/aquasecurity/trivy@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c"
     },
-    "kafkaImage": { "pattern": "^apache/kafka:4\\.3\\.1@sha256:[0-9a-f]{64}$" },
-    "nginxImage": { "const": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7" },
+    "nodeImage": {
+      "const": "node:26.8.1-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3"
+    },
+    "kafkaImage": { "pattern": "^apache/kafka:4\\.3\\.2@sha256:[0-9a-f]{64}$" },
+    "nginxImage": {
+      "const": "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+    },
     "nginxVersion": { "const": "1.31.6" },
-    "nginxImageIndexDigest": { "const": "sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7" },
-    "nginxLinuxAmd64Digest": { "const": "sha256:9c0f39aa1c46f5062ba080555a067ebb82d5f63a8cf4d63f6ef2e76fc9ff2d0c" },
-    "nginxSourceRevision": { "const": "a16f1329e13e7273c4103f75d863ca625b75109e" },
-    "opentelemetryApi": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-    "opentelemetrySdkTraceBase": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-    "opentelemetrySdkMetrics": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-    "opentelemetryResources": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-    "opentelemetryContextAsyncHooks": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-    "opentelemetryExporterTraceOtlpHttp": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-    "opentelemetryExporterMetricsOtlpHttp": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-    "pino": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-    "otelCollectorImage": {"type": "string", "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"},
-    "openObserveImage": {"type": "string", "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"},
-    "bootstrapProbeSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    "nginxImageIndexDigest": {
+      "const": "sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7"
+    },
+    "nginxLinuxAmd64Digest": {
+      "const": "sha256:9c0f39aa1c46f5062ba080555a067ebb82d5f63a8cf4d63f6ef2e76fc9ff2d0c"
+    },
+    "nginxSourceRevision": {
+      "const": "a16f1329e13e7273c4103f75d863ca625b75109e"
+    },
+    "opentelemetrySdkTraceBase": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "opentelemetrySdkMetrics": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "opentelemetryResources": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "opentelemetryContextAsyncHooks": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "opentelemetryExporterTraceOtlpHttp": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "opentelemetryExporterMetricsOtlpHttp": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "otelCollectorImage": {
+      "type": "string",
+      "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"
+    },
+    "openObserveImage": {
+      "type": "string",
+      "pattern": "^[a-z0-9./-]+:[a-zA-Z0-9.-]+@sha256:[0-9a-f]{64}$"
+    },
+    "bootstrapProbeSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "browserHelperNodeImage": {
+      "const": "node:26.8.1-trixie-slim@sha256:c0753125a3789977aefe869cbebccf70e3cfd7ea84ca48547458f02e4f1d7146"
+    }
   }
 }

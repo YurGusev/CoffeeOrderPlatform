@@ -6,16 +6,47 @@ import { assertSchema } from "../src/browser/api/schema.js";
 test("runtime validator enforces every allOf branch", () => {
   const schema = {
     allOf: [
-      { required: ["kind"], properties: { kind: { const: "catalog" } }, type: "object" },
-      { required: ["imageUrl"], properties: { imageUrl: { format: "uri", type: "string" } }, type: "object" },
+      {
+        required: ["kind"],
+        properties: { kind: { const: "catalog" } },
+        type: "object",
+      },
+      {
+        required: ["imageUrl"],
+        properties: { imageUrl: { format: "uri", type: "string" } },
+        type: "object",
+      },
     ],
   } as const;
-  assert.deepEqual(assertSchema(schema, { kind: "catalog", imageUrl: "https://example.invalid/image.png" }, "fixture"), {
-    kind: "catalog",
-    imageUrl: "https://example.invalid/image.png",
-  });
-  assert.throws(() => assertSchema(schema, { kind: "catalog", imageUrl: "not a valid uri" }, "fixture"), /некорректный uri/u);
-  assert.throws(() => assertSchema(schema, { kind: "other", imageUrl: "https://example.invalid/image.png" }, "fixture"), /фиксированное значение/u);
+  assert.deepEqual(
+    assertSchema(
+      schema,
+      { kind: "catalog", imageUrl: "https://example.invalid/image.png" },
+      "fixture",
+    ),
+    {
+      kind: "catalog",
+      imageUrl: "https://example.invalid/image.png",
+    },
+  );
+  assert.throws(
+    () =>
+      assertSchema(
+        schema,
+        { kind: "catalog", imageUrl: "not a valid uri" },
+        "fixture",
+      ),
+    /некорректный uri/u,
+  );
+  assert.throws(
+    () =>
+      assertSchema(
+        schema,
+        { kind: "other", imageUrl: "https://example.invalid/image.png" },
+        "fixture",
+      ),
+    /фиксированное значение/u,
+  );
 });
 
 test("OrderItem requires grind hash and display name together", () => {
@@ -34,6 +65,22 @@ test("OrderItem requires grind hash and display name together", () => {
     lineTotalMinor: "100",
   };
   assert.doesNotThrow(() => assertSchema(schema, item, "OrderItem"));
-  assert.throws(() => assertSchema(schema, { ...item, sourceGrindKeyHash: "a".repeat(64) }, "OrderItem"), /обязательное поле отсутствует/u);
-  assert.throws(() => assertSchema(schema, { ...item, grindDisplayName: "Мелкий" }, "OrderItem"), /обязательное поле отсутствует/u);
+  assert.throws(
+    () =>
+      assertSchema(
+        schema,
+        { ...item, sourceGrindKeyHash: "a".repeat(64) },
+        "OrderItem",
+      ),
+    /обязательное поле отсутствует/u,
+  );
+  assert.throws(
+    () =>
+      assertSchema(
+        schema,
+        { ...item, grindDisplayName: "Мелкий" },
+        "OrderItem",
+      ),
+    /обязательное поле отсутствует/u,
+  );
 });

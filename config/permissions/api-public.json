@@ -1,8 +1,22 @@
 {
   "schemaVersion": 1,
   "runtime": "api-public",
-  "allowNet": ["customer-service:4101", "catalog-service:4102", "pricing-service:4103", "orders-service:4104"],
-  "allowFsRead": ["/app/config/platform.yaml", "/app/apps", "/app/dist", "/app/node_modules", "/app/packages", "/app/package.json", "/run/secrets/coffee-platform.yaml"],
+  "allowNet": [
+    "customer-service:4101",
+    "catalog-service:4102",
+    "pricing-service:4103",
+    "orders-service:4104"
+  ],
+  "allowFsRead": [
+    "/app/config/platform.yaml",
+    "/app/apps",
+    "/app/dist",
+    "/app/node_modules",
+    "/app/packages",
+    "/app/package.json",
+    "/run/secrets/coffee-platform.yaml",
+    "/run/coffee-launch/context.json"
+  ],
   "allowFsWrite": [],
   "allowChildProcess": false,
   "allowWorker": false,

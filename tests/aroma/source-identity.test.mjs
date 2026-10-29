@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import {createHmac, createSecretKey} from "node:crypto";
-import {readFile} from "node:fs/promises";
+import { createHmac, createSecretKey } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-import {join, resolve} from "node:path";
-import {fileURLToPath} from "node:url";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   SOURCE_ENTITY_TYPES,
   SOURCE_IDENTITY_SCHEME,
@@ -15,14 +15,18 @@ import {
 } from "../../apps/aroma-gateway/dist/domain/source-identity.js";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const SOURCE_PATH = join(REPO_ROOT, "apps/aroma-gateway/src/domain/source-identity.ts");
+const SOURCE_PATH = join(
+  REPO_ROOT,
+  "apps/aroma-gateway/src/domain/source-identity.ts",
+);
 const KEY = Buffer.from("source-identity-known-vector-key", "utf8");
 const INPUT = {
   supplierRef: "sup_01ARZ3NDEKTSV4RRFFQ69G5FAV",
   entityType: "offer",
   rawProviderIdentifier: "provider-offer-42",
 };
-const KNOWN_VECTOR = "aeabad28ebc816114fddad10a8e57988f51508728001e9199015a0ab900569e6";
+const KNOWN_VECTOR =
+  "aeabad28ebc816114fddad10a8e57988f51508728001e9199015a0ab900569e6";
 
 function independentlyFramed(input) {
   return Buffer.concat([
@@ -50,25 +54,40 @@ void test("source identity framing contains three literal NUL bytes", () => {
   assert.deepEqual(actual, expected);
   assert.deepEqual(
     [...actual].flatMap((byte, index) => (byte === 0x00 ? [index] : [])),
-    ["hmac-sha256-v1".length, "hmac-sha256-v1".length + 1 + INPUT.supplierRef.length, "hmac-sha256-v1".length + 1 + INPUT.supplierRef.length + 1 + INPUT.entityType.length],
+    [
+      "hmac-sha256-v1".length,
+      "hmac-sha256-v1".length + 1 + INPUT.supplierRef.length,
+      "hmac-sha256-v1".length +
+        1 +
+        INPUT.supplierRef.length +
+        1 +
+        INPUT.entityType.length,
+    ],
   );
   assert.equal(actual.includes(Buffer.from("\\0", "utf8")), false);
 });
 
 void test("source identity normalizes provider identifiers to NFC only", () => {
-  const decomposed = {...INPUT, rawProviderIdentifier: "cafe\u0301-provider"};
-  const composed = {...INPUT, rawProviderIdentifier: "café-provider"};
-  assert.equal(computeSourceIdentityHash(decomposed, KEY), computeSourceIdentityHash(composed, KEY));
+  const decomposed = { ...INPUT, rawProviderIdentifier: "cafe\u0301-provider" };
+  const composed = { ...INPUT, rawProviderIdentifier: "café-provider" };
+  assert.equal(
+    computeSourceIdentityHash(decomposed, KEY),
+    computeSourceIdentityHash(composed, KEY),
+  );
 
-  const preserved = {...INPUT, rawProviderIdentifier: " Provider-ID 😀 � "};
+  const preserved = { ...INPUT, rawProviderIdentifier: " Provider-ID 😀 � " };
   assert.deepEqual(
-    Buffer.from(frameSourceIdentityMessage(preserved)).subarray(-Buffer.byteLength(preserved.rawProviderIdentifier)),
+    Buffer.from(frameSourceIdentityMessage(preserved)).subarray(
+      -Buffer.byteLength(preserved.rawProviderIdentifier),
+    ),
     Buffer.from(preserved.rawProviderIdentifier, "utf8"),
   );
 });
 
 void test("product, variant, offer, and grind remain separate HMAC domains", () => {
-  const hashes = SOURCE_ENTITY_TYPES.map((entityType) => computeSourceIdentityHash({...INPUT, entityType}, KEY));
+  const hashes = SOURCE_ENTITY_TYPES.map((entityType) =>
+    computeSourceIdentityHash({ ...INPUT, entityType }, KEY),
+  );
   assert.equal(new Set(hashes).size, SOURCE_ENTITY_TYPES.length);
   assert.equal(isSourceEntityType("product"), true);
   assert.equal(isSourceEntityType("variant"), true);
@@ -81,37 +100,48 @@ void test("product, variant, offer, and grind remain separate HMAC domains", () 
 
 void test("source identity rejects embedded NUL, empty, malformed, and unknown input", () => {
   const invalidInputs = [
-    {...INPUT, supplierRef: ""},
-    {...INPUT, supplierRef: "supplier-not-a-canonical-ref"},
-    {...INPUT, supplierRef: "sup_01ARZ3NDEKTSV4RRFFQ69G5FA\u0000"},
-    {...INPUT, rawProviderIdentifier: ""},
-    ...["\ud800", "offer-\udbff", "\udc00", "\ud800x"].map((rawProviderIdentifier) => ({...INPUT, rawProviderIdentifier})),
-    {...INPUT, rawProviderIdentifier: "provider\u0000offer"},
-    {...INPUT, entityType: "Product"},
-    {...INPUT, entityType: ""},
-    {...INPUT, entityType: "offer\u0000"},
-    {...INPUT, extra: true},
-    {supplierRef: INPUT.supplierRef, entityType: INPUT.entityType},
+    { ...INPUT, supplierRef: "" },
+    { ...INPUT, supplierRef: "supplier-not-a-canonical-ref" },
+    { ...INPUT, supplierRef: "sup_01ARZ3NDEKTSV4RRFFQ69G5FA\u0000" },
+    { ...INPUT, rawProviderIdentifier: "" },
+    ...["\ud800", "offer-\udbff", "\udc00", "\ud800x"].map(
+      (rawProviderIdentifier) => ({ ...INPUT, rawProviderIdentifier }),
+    ),
+    { ...INPUT, rawProviderIdentifier: "provider\u0000offer" },
+    { ...INPUT, entityType: "Product" },
+    { ...INPUT, entityType: "" },
+    { ...INPUT, entityType: "offer\u0000" },
+    { ...INPUT, extra: true },
+    { supplierRef: INPUT.supplierRef, entityType: INPUT.entityType },
   ];
 
   for (const invalid of invalidInputs) {
     assert.throws(
       () => frameSourceIdentityMessage(invalid),
-      (error) => error instanceof SourceIdentityValidationError && error.code.startsWith("INVALID_"),
+      (error) =>
+        error instanceof SourceIdentityValidationError &&
+        error.code.startsWith("INVALID_"),
     );
   }
 
   assert.throws(
     () => computeSourceIdentityHash(INPUT, Buffer.alloc(0)),
-    (error) => error instanceof SourceIdentityValidationError && error.code === "INVALID_KEY",
+    (error) =>
+      error instanceof SourceIdentityValidationError &&
+      error.code === "INVALID_KEY",
   );
   assert.throws(
     () => computeSourceIdentityHash(INPUT, createSecretKey(Buffer.alloc(0))),
-    (error) => error instanceof SourceIdentityValidationError && error.code === "INVALID_KEY",
+    (error) =>
+      error instanceof SourceIdentityValidationError &&
+      error.code === "INVALID_KEY",
   );
   assert.throws(
     () => computeSourceIdentityHash(INPUT, "super-secret-key"),
-    (error) => error instanceof SourceIdentityValidationError && error.code === "INVALID_KEY" && !String(error).includes("super-secret-key"),
+    (error) =>
+      error instanceof SourceIdentityValidationError &&
+      error.code === "INVALID_KEY" &&
+      !String(error).includes("super-secret-key"),
   );
 });
 
@@ -123,7 +153,10 @@ void test("identity creation returns proof only and never creates a variant ID",
   });
   assert.deepEqual(identity, {
     sourceIdentityScheme: SOURCE_IDENTITY_SCHEME,
-    sourceIdentityHash: computeSourceIdentityHash({...INPUT, entityType: "variant"}, KEY),
+    sourceIdentityHash: computeSourceIdentityHash(
+      { ...INPUT, entityType: "variant" },
+      KEY,
+    ),
   });
   assert.equal("variantId" in identity, false);
   assert.equal("variantRef" in identity, false);

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-24T20:04:45.060207+00:00",
+  "scope": "Final local iteration facts and independent Astra review; not launch admission",
+  "latestG04Run": "20261024T195617Z-c5500f0",
+  "g04Status": "FAIL_UNIT_COVERAGE_THRESHOLD",
+  "unitTests": {
+    "passed": 474,
+    "failed": 0,
+    "skipped": 0
+  },
+  "commands": [
+    {
+      "command": "pnpm test:unit -- --coverage",
+      "exitCode": 1,
+      "reason": "declared per-module coverage thresholds remain unmet"
+    },
+    {
+      "command": "pnpm lint",
+      "exitCode": 0,
+      "logSha256": "a2e80da107b2b2be9ead66fa997d2d10d75316f577d908f6279de7cb3fdb6bd3"
+    },
+    {
+      "command": "pnpm security:secrets",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  ],
+  "astra": {
+    "status": "accepted",
+    "scope": "latest G04/G18 JSON and manifests, 29 source-byte comparisons, cleanup boundaries; physical Docker inventory independently checked by root",
+    "g04ManifestVerifiedFiles": 6,
+    "g18ManifestVerifiedFiles": 7,
+    "g04SourceParityFiles": 29
+  },
+  "fullLaunch": "NOT_RERUN_BLOCKED",
+  "decision": "НЕ ДОПУСТИТЬ",
+  "g18Proof": "NOT_ESTABLISHED_AFTER_OPERATOR_DISK_STOP",
+  "g18TemporaryResourcesRemaining": 0,
+  "sharedBuildKitPruned": false,
+  "encryptedBundleUnchanged": true
+}

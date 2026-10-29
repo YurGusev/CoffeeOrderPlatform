@@ -1,1 +1,24 @@
-{"name":"@coffee-platform/orders-aroma-preparation","version":"0.0.0","private":true,"type":"module","scripts":{"start":"node dist/main.js"},"dependencies":{"@coffee-platform/config":"workspace:*","@coffee-platform/contracts-aroma-v1":"workspace:*","@coffee-platform/contracts-orders-v1":"workspace:*","@coffee-platform/database":"workspace:*","@coffee-platform/idempotency":"workspace:*","@coffee-platform/inbox":"workspace:*","@coffee-platform/kafka-runtime":"workspace:*","@coffee-platform/outbox":"workspace:*","@coffee-platform/platform-time":"workspace:*","@coffee-platform/runtime":"workspace:*","@coffee-platform/security":"workspace:*","@opentelemetry/api":"1.9.1","ajv":"8.20.0"}}
+{
+  "name": "@coffee-platform/orders-aroma-preparation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@coffee-platform/config": "workspace:*",
+    "@coffee-platform/contracts-aroma-v1": "workspace:*",
+    "@coffee-platform/contracts-orders-v1": "workspace:*",
+    "@coffee-platform/database": "workspace:*",
+    "@coffee-platform/idempotency": "workspace:*",
+    "@coffee-platform/inbox": "workspace:*",
+    "@coffee-platform/kafka-runtime": "workspace:*",
+    "@coffee-platform/outbox": "workspace:*",
+    "@coffee-platform/platform-time": "workspace:*",
+    "@coffee-platform/runtime": "workspace:*",
+    "@coffee-platform/security": "workspace:*",
+    "@opentelemetry/api": "1.9.1",
+    "ajv": "8.20.0"
+  }
+}

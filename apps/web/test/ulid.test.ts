@@ -6,13 +6,18 @@ const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 function decodedTimestamp(ref: string): number {
   let value = 0;
-  for (const char of ref.slice(4, 14)) value = value * 32 + CROCKFORD.indexOf(char);
+  for (const char of ref.slice(4, 14))
+    value = value * 32 + CROCKFORD.indexOf(char);
   return value;
 }
 
 test("item ref encodes the ULID timestamp and 80 bits of randomness", () => {
   const now = 1_799_999_999_999;
-  const ref = newUlidRef("itm", now, new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]));
+  const ref = newUlidRef(
+    "itm",
+    now,
+    new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+  );
   assert.match(ref, /^itm_[0-7][0-9A-HJKMNP-TV-Z]{25}$/u);
   assert.equal(decodedTimestamp(ref), now);
   const zeroRandomness = newUlidRef("itm", now, new Uint8Array(10));

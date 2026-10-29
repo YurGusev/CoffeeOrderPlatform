@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "G00 corrective accepted handoff supplement",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "purpose", "authorization", "records"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "purpose": {
+      "const": "G00_CORRECTIVE_ACCEPTED_HANDOFF_SUPPLEMENT"
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "date",
+        "authority",
+        "requestText",
+        "proposalReference",
+        "scope"
+      ],
+      "properties": {
+        "date": {
+          "const": "2026-10-24"
+        },
+        "authority": {
+          "const": "explicit-user-approval-in-current-task"
+        },
+        "requestText": {
+          "const": "Разрешаю точный supplement"
+        },
+        "proposalReference": {
+          "const": "evidence/launch-preparation/2026-10-24/remaining-gates-authority-proposal.md"
+        },
+        "scope": {
+          "const": [2, 3, 10, 14, 19, 162]
+        }
+      }
+    },
+    "records": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "issue",
+          "acceptanceSource",
+          "handoff",
+          "artifactSource",
+          "artifacts"
+        ],
+        "properties": {
+          "issue": {
+            "enum": [2, 3, 10, 14, 19, 162]
+          },
+          "acceptanceSource": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["issue", "pullRequest", "mergeCommit"],
+            "properties": {
+              "issue": {
+                "type": "integer"
+              },
+              "pullRequest": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "mergeCommit": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}$"
+              }
+            }
+          },
+          "handoff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "sha256"],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^evidence/handoffs/issue-(2|3|10|19|162)\\.yaml$"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              }
+            ]
+          },
+          "artifactSource": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["issue", "mergeCommit"],
+            "properties": {
+              "issue": {
+                "type": "integer"
+              },
+              "mergeCommit": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}$"
+              }
+            }
+          },
+          "artifacts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\)[^\\u0000]+$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

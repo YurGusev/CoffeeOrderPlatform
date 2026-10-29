@@ -1,0 +1,19 @@
+{
+  "purpose": "read-only first-party shipped UI source discovery",
+  "origin": "https://aromateacoffee.ru",
+  "accountFingerprintVerified": true,
+  "cartMutations": 0,
+  "profileMutations": 0,
+  "page": {
+    "path": "/lk",
+    "statusCode": 200,
+    "bytes": 97292,
+    "sha256": "9456ad79d059837e6449095e0b48787033272eb88c199d731fb182581817e2c1",
+    "verificationChallenge": false
+  },
+  "assets": [],
+  "failureCode": null,
+  "scopedMaterialRemoved": true,
+  "status": "NO_ACCEPTED_SOURCE",
+  "observedAtUtc": "2026-10-24T10:28:08.849Z"
+}

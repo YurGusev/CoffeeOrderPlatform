@@ -1,4 +1,31 @@
-import {readFile} from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+export {
+  CANONICAL_DATABASE_OWNERS,
+  deriveLaunchDatabaseName,
+  deriveRuntimeDatabaseTarget,
+  validateLaunchDatabaseIdentity,
+  validateLaunchRunIdentity,
+  verifyLaunchConfigBytes,
+} from "./launch-database-target.js";
+export type {
+  DatabaseOwnershipDocument,
+  LaunchConfigAttestation,
+  LaunchDatabaseIdentity,
+  LaunchRunIdentity,
+  RuntimeDatabaseTarget,
+} from "./launch-database-target.js";
+export {
+  CANONICAL_KAFKA_TOPIC_NAMES,
+  deriveLaunchKafkaRegistryTarget,
+  deriveRuntimeKafkaTarget,
+  launchKafkaLogicalTopic,
+  launchKafkaPhysicalName,
+} from "./launch-kafka-target.js";
+export type {
+  LaunchKafkaRegistryTarget,
+  LaunchKafkaTarget,
+} from "./launch-kafka-target.js";
 
 export const RUNTIME_NAMES = [
   "edge-gateway",
@@ -67,6 +94,7 @@ export type DatabasePoolConfig = Readonly<{
 }>;
 export type PostgresConfig = Readonly<{
   host: string;
+  bootstrapUsername: "coffeeuser";
   port: number;
   sslMode: "prefer" | "require" | "verify-full";
   maxConnections: number;
@@ -74,8 +102,13 @@ export type PostgresConfig = Readonly<{
   rolloutReplicas: number;
 }>;
 export type DatabaseAdmissionInput = Readonly<{
-  services: Readonly<Record<string, Pick<RuntimeConfig, "replicas" | "dbPool" | "database">>>;
-  postgres: Pick<PostgresConfig, "maxConnections" | "reservedConnections" | "rolloutReplicas">;
+  services: Readonly<
+    Record<string, Pick<RuntimeConfig, "replicas" | "dbPool" | "database">>
+  >;
+  postgres: Pick<
+    PostgresConfig,
+    "maxConnections" | "reservedConnections" | "rolloutReplicas"
+  >;
 }>;
 export type DatabaseAdmissionBudget = Readonly<{
   steadyConnections: number;
@@ -165,10 +198,32 @@ export type CatalogSchedulerConfig = Readonly<{
   startupImport: true;
   overlapPolicy: "skip";
 }>;
-export type CatalogSnapshotProofConfig = Readonly<{maxAgeMs: number}>;
-export type AromaPreparationConfig = Readonly<{pollIntervalMs: number; batchSize: number; maxOrders: number; maxLines: number}>;
-export type AromaObservationConfig = Readonly<{pollIntervalMs: number; intervalMs: number; leaseMs: number; maxSnapshotAgeMs: number; maxLines: number; maxResponseBytes: number}>;
-export type AromaConvergenceConfig = Readonly<{pollIntervalMs: number; leaseMs: number; heartbeatIntervalMs: number; providerDeadlineMs: number; safetyMarginMs: number; retryBackoffMs: number; maxSnapshotAgeMs: number; maxLines: number; maxResponseBytes: number}>;
+export type CatalogSnapshotProofConfig = Readonly<{ maxAgeMs: number }>;
+export type AromaPreparationConfig = Readonly<{
+  pollIntervalMs: number;
+  batchSize: number;
+  maxOrders: number;
+  maxLines: number;
+}>;
+export type AromaObservationConfig = Readonly<{
+  pollIntervalMs: number;
+  intervalMs: number;
+  leaseMs: number;
+  maxSnapshotAgeMs: number;
+  maxLines: number;
+  maxResponseBytes: number;
+}>;
+export type AromaConvergenceConfig = Readonly<{
+  pollIntervalMs: number;
+  leaseMs: number;
+  heartbeatIntervalMs: number;
+  providerDeadlineMs: number;
+  safetyMarginMs: number;
+  retryBackoffMs: number;
+  maxSnapshotAgeMs: number;
+  maxLines: number;
+  maxResponseBytes: number;
+}>;
 export type RealtimeConfig = Readonly<{
   shutdownGraceMs: number;
   maxConnections: number;
@@ -214,7 +269,7 @@ export type RuntimeConfig = Readonly<{
 export type AromaConfig = Readonly<{
   supplierRef: typeof AROMA_SUPPLIER_REF;
   scopeRef: typeof AROMA_SCOPE_REF;
-  origin: Readonly<{scheme: "https"; host: "aromateacoffee.ru"; port: 443}>;
+  origin: Readonly<{ scheme: "https"; host: "aromateacoffee.ru"; port: 443 }>;
   redirectsAllowed: false;
   defaultPacking: typeof AROMA_DEFAULT_PACKING;
 }>;
@@ -245,34 +300,63 @@ export type TelemetryConfig = Readonly<{
   releaseDigest: string;
   nginxStatusEndpoint: string;
   collector: Readonly<{
-    otlpEndpoint: string; healthEndpoint: string; metricsEndpoint: string;
-    memoryLimitMiB: number; memorySpikeMiB: number; containerMemoryMiB: number; memoryCheckIntervalMs: number;
-    batchSize: number; batchTimeoutMs: number; queueCapacity: number; queueConsumers: number;
-    exportTimeoutMs: number; retryInitialMs: number; retryMaxMs: number; retryWindowMs: number;
+    otlpEndpoint: string;
+    healthEndpoint: string;
+    metricsEndpoint: string;
+    memoryLimitMiB: number;
+    memorySpikeMiB: number;
+    containerMemoryMiB: number;
+    memoryCheckIntervalMs: number;
+    batchSize: number;
+    batchTimeoutMs: number;
+    queueCapacity: number;
+    queueConsumers: number;
+    exportTimeoutMs: number;
+    retryInitialMs: number;
+    retryMaxMs: number;
+    retryWindowMs: number;
     maxLogRecordBytes: number;
   }>;
   producer: Readonly<{
-    queueCapacity: number; maxRecordBytes: number; batchSize: number;
-    batchIntervalMs: number; exportTimeoutMs: number; diagnosticIntervalMs: number;
+    queueCapacity: number;
+    maxRecordBytes: number;
+    batchSize: number;
+    batchIntervalMs: number;
+    exportTimeoutMs: number;
+    diagnosticIntervalMs: number;
     flushTimeoutMs: number;
   }>;
-  logging: Readonly<{maxSizeMiB: number; maxFiles: number}>;
+  logging: Readonly<{ maxSizeMiB: number; maxFiles: number }>;
   openObserve: Readonly<{
-    endpoint: string; organization: string; bootstrapEmail: string; validationMarker: "bootstrap-validation-placeholder"; memoryLimitMiB: number;
-    memTableMaxSizeMiB: number; maxFileSizeInMemoryMiB: number; maxFileSizeOnDiskMiB: number;
-    maxFileRetentionSeconds: number; memPersistIntervalSeconds: number;
-    telemetryEnabled: false; mmdbDownloadEnabled: false; modelPricingEnabled: false;
-    streams: Readonly<{logs: string; traces: string; metrics: string}>;
-    retentionDays: number; deleteFilesDelayMinutes: number; maxDiskBytes: number; diskWatermarkPercent: number;
-    compactionIntervalSeconds: number; jobCleanupWaitSeconds: number;
+    endpoint: string;
+    organization: string;
+    bootstrapEmail: string;
+    validationMarker: "bootstrap-validation-placeholder";
+    memoryLimitMiB: number;
+    memTableMaxSizeMiB: number;
+    maxFileSizeInMemoryMiB: number;
+    maxFileSizeOnDiskMiB: number;
+    maxFileRetentionSeconds: number;
+    memPersistIntervalSeconds: number;
+    telemetryEnabled: false;
+    mmdbDownloadEnabled: false;
+    modelPricingEnabled: false;
+    streams: Readonly<{ logs: string; traces: string; metrics: string }>;
+    retentionDays: number;
+    deleteFilesDelayMinutes: number;
+    maxDiskBytes: number;
+    diskWatermarkPercent: number;
+    compactionIntervalSeconds: number;
+    jobCleanupWaitSeconds: number;
   }>;
   alerts: Readonly<{
-    version: 1; evaluationIntervalMs: number;
-    notReady: Readonly<{forMs: number; threshold: number}>;
-    consumerLag: Readonly<{forMs: number; threshold: number}>;
-    outboxOldestAge: Readonly<{forMs: number; threshold: number}>;
-    unknownOutcome: Readonly<{forMs: number; threshold: number}>;
-    sseDropRate: Readonly<{forMs: number; threshold: number}>;
+    version: 1;
+    evaluationIntervalMs: number;
+    notReady: Readonly<{ forMs: number; threshold: number }>;
+    consumerLag: Readonly<{ forMs: number; threshold: number }>;
+    outboxOldestAge: Readonly<{ forMs: number; threshold: number }>;
+    unknownOutcome: Readonly<{ forMs: number; threshold: number }>;
+    sseDropRate: Readonly<{ forMs: number; threshold: number }>;
   }>;
 }>;
 
@@ -288,10 +372,175 @@ export type PlatformConfig = Readonly<{
   pricingPolicy: PricingPolicyConfig;
   telemetry: TelemetryConfig;
   browserOidc: BrowserOidcProfile | null;
+  databaseIsolation: Readonly<{ enabled: boolean }>;
+  kafkaNamespaceIsolation: boolean;
+  unitCoverage: UnitCoverageVerificationConfig | null;
   nginxTransport: Readonly<Record<string, unknown>>;
   security: Readonly<Record<string, unknown>>;
   services: Readonly<Record<RuntimeName, RuntimeConfig>>;
 }>;
+
+export type SecurityScanVerificationConfig = Readonly<{
+  enabled: true;
+  cpu: 2;
+  memoryMiB: 2048;
+  parallel: 1;
+  minimumFreeDiskGiB: 20;
+  maximumDatabaseAgeHours: 24;
+  egressRepositories: readonly [
+    "ghcr.io/aquasecurity/trivy-db",
+    "ghcr.io/aquasecurity/trivy-java-db",
+  ];
+}>;
+
+export type UnitCoverageVerificationConfig = Readonly<{
+  thresholds: Readonly<{ lines: 90; functions: 90; branches: 85 }>;
+  criticalModules: readonly Readonly<{
+    id: string;
+    sourceRoots: readonly string[];
+    coverageRoots: readonly string[];
+    format: "js" | "mjs";
+  }>[];
+  testFiles: readonly string[];
+}>;
+
+const UNIT_COVERAGE_MODULES = [
+  {
+    id: "platform-config",
+    sourceRoots: ["packages/platform-config/src"],
+    coverageRoots: ["packages/platform-config/dist"],
+    format: "js",
+  },
+  {
+    id: "trusted-config-bootstrap",
+    sourceRoots: ["tools/config-bootstrap"],
+    coverageRoots: ["tools/config-bootstrap"],
+    format: "mjs",
+  },
+  {
+    id: "platform-runtime",
+    sourceRoots: ["packages/platform-runtime/src"],
+    coverageRoots: ["packages/platform-runtime/dist"],
+    format: "js",
+  },
+  {
+    id: "persistence-foundation",
+    sourceRoots: [
+      "packages/platform-database/src",
+      "packages/platform-migrations/src",
+    ],
+    coverageRoots: [
+      "packages/platform-database/dist",
+      "packages/platform-migrations/dist",
+    ],
+    format: "js",
+  },
+  {
+    id: "durable-delivery",
+    sourceRoots: [
+      "packages/platform-outbox/src",
+      "packages/platform-inbox/src",
+      "packages/platform-idempotency/src",
+    ],
+    coverageRoots: [
+      "packages/platform-outbox/dist",
+      "packages/platform-inbox/dist",
+      "packages/platform-idempotency/dist",
+    ],
+    format: "js",
+  },
+  {
+    id: "kafka-runtime",
+    sourceRoots: ["packages/platform-kafka-runtime/src"],
+    coverageRoots: ["packages/platform-kafka-runtime/dist"],
+    format: "js",
+  },
+  {
+    id: "security-trust",
+    sourceRoots: [
+      "packages/platform-security/src",
+      "packages/platform-http/src",
+    ],
+    coverageRoots: [
+      "packages/platform-security/dist",
+      "packages/platform-http/dist",
+    ],
+    format: "js",
+  },
+  {
+    id: "customer-service",
+    sourceRoots: ["apps/customer-service/src"],
+    coverageRoots: ["apps/customer-service/dist"],
+    format: "js",
+  },
+  {
+    id: "catalog-service",
+    sourceRoots: [
+      "apps/catalog-service/src",
+      "apps/catalog-supplier-sync/src",
+      "apps/catalog-activation-worker/src",
+    ],
+    coverageRoots: [
+      "apps/catalog-service/dist",
+      "apps/catalog-supplier-sync/dist",
+      "apps/catalog-activation-worker/dist",
+    ],
+    format: "js",
+  },
+  {
+    id: "pricing-service",
+    sourceRoots: ["apps/pricing-service/src"],
+    coverageRoots: ["apps/pricing-service/dist"],
+    format: "js",
+  },
+  {
+    id: "orders-service",
+    sourceRoots: ["apps/orders-service/src"],
+    coverageRoots: ["apps/orders-service/dist"],
+    format: "js",
+  },
+  {
+    id: "aroma-convergence",
+    sourceRoots: ["apps/aroma-convergence/src"],
+    coverageRoots: ["apps/aroma-convergence/dist"],
+    format: "js",
+  },
+  {
+    id: "aroma-preparation",
+    sourceRoots: ["apps/orders-aroma-preparation/src"],
+    coverageRoots: ["apps/orders-aroma-preparation/dist"],
+    format: "js",
+  },
+  {
+    id: "aroma-observer",
+    sourceRoots: ["apps/aroma-observer/src"],
+    coverageRoots: ["apps/aroma-observer/dist"],
+    format: "js",
+  },
+  {
+    id: "aroma-gateway",
+    sourceRoots: ["apps/aroma-gateway/src"],
+    coverageRoots: ["apps/aroma-gateway/dist"],
+    format: "js",
+  },
+  {
+    id: "public-api-trust",
+    sourceRoots: [
+      "apps/api-public/src",
+      "apps/api-internal/src",
+      "apps/edge-gateway/src",
+      "apps/realtime-gateway/src",
+    ],
+    coverageRoots: [
+      "apps/api-public/dist",
+      "apps/api-internal/dist",
+      "apps/edge-gateway/dist",
+      "apps/realtime-gateway/dist",
+    ],
+    format: "js",
+  },
+] as const;
+const UNIT_COVERAGE_TEST_FILE_COUNT = 60;
 
 export class PlatformConfigError extends Error {
   public readonly path: string;
@@ -320,7 +569,8 @@ function exactKeys(
 ): void {
   const expectedSet = new Set([...expected, ...optional]);
   for (const key of Object.keys(value)) {
-    if (!expectedSet.has(key)) throw new PlatformConfigError(`${path}.${key}`, "неизвестный ключ");
+    if (!expectedSet.has(key))
+      throw new PlatformConfigError(`${path}.${key}`, "неизвестный ключ");
   }
   for (const key of expected) {
     if (!Object.hasOwn(value, key))
@@ -332,7 +582,8 @@ function exactKeys(
 }
 
 function stringValue(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) throw new PlatformConfigError(path, "ожидалась непустая строка");
+  if (typeof value !== "string" || value.length === 0)
+    throw new PlatformConfigError(path, "ожидалась непустая строка");
   return value;
 }
 
@@ -348,7 +599,8 @@ function integerValue(value: unknown, path: string): number {
 
 function positiveIntegerValue(value: unknown, path: string): number {
   const result = integerValue(value, path);
-  if (result < 1) throw new PlatformConfigError(path, "ожидалось положительное целое число");
+  if (result < 1)
+    throw new PlatformConfigError(path, "ожидалось положительное целое число");
   return result;
 }
 
@@ -357,8 +609,174 @@ function nullableIntegerValue(value: unknown, path: string): number | null {
 }
 
 function stringArray(value: unknown, path: string): readonly string[] {
-  if (!Array.isArray(value)) throw new PlatformConfigError(path, "ожидался массив строк");
+  if (!Array.isArray(value))
+    throw new PlatformConfigError(path, "ожидался массив строк");
   return value.map((entry, index) => stringValue(entry, `${path}[${index}]`));
+}
+
+export function parseSecurityScanVerification(
+  value: unknown,
+): SecurityScanVerificationConfig {
+  const path = "config.verification.securityScan";
+  const source = record(value, path);
+  exactKeys(
+    source,
+    [
+      "enabled",
+      "cpu",
+      "memoryMiB",
+      "parallel",
+      "minimumFreeDiskGiB",
+      "maximumDatabaseAgeHours",
+      "egressRepositories",
+    ],
+    path,
+  );
+  if (source["enabled"] !== true)
+    throw new PlatformConfigError(
+      `${path}.enabled`,
+      "G12 обязателен и должен быть включён",
+    );
+  const constants = {
+    cpu: [source["cpu"], 2],
+    memoryMiB: [source["memoryMiB"], 2048],
+    parallel: [source["parallel"], 1],
+    minimumFreeDiskGiB: [source["minimumFreeDiskGiB"], 20],
+    maximumDatabaseAgeHours: [source["maximumDatabaseAgeHours"], 24],
+  } as const;
+  for (const [key, [actual, expected]] of Object.entries(constants)) {
+    if (actual !== expected)
+      throw new PlatformConfigError(
+        `${path}.${key}`,
+        `ожидалось нормативное значение ${expected}`,
+      );
+  }
+  const egressRepositories = stringArray(
+    source["egressRepositories"],
+    `${path}.egressRepositories`,
+  );
+  const expectedRepositories = [
+    "ghcr.io/aquasecurity/trivy-db",
+    "ghcr.io/aquasecurity/trivy-java-db",
+  ] as const;
+  if (
+    egressRepositories.length !== expectedRepositories.length ||
+    egressRepositories.some(
+      (entry, index) => entry !== expectedRepositories[index],
+    )
+  ) {
+    throw new PlatformConfigError(
+      `${path}.egressRepositories`,
+      "разрешены только официальные GHCR Trivy vulnerability DB registries",
+    );
+  }
+  return Object.freeze({
+    enabled: true,
+    cpu: 2,
+    memoryMiB: 2048,
+    parallel: 1,
+    minimumFreeDiskGiB: 20,
+    maximumDatabaseAgeHours: 24,
+    egressRepositories: Object.freeze([
+      ...expectedRepositories,
+    ]) as unknown as SecurityScanVerificationConfig["egressRepositories"],
+  });
+}
+
+function parseUnitCoverageVerification(
+  value: unknown,
+): UnitCoverageVerificationConfig {
+  const path = "config.verification.unitCoverage";
+  const source = record(value, path);
+  exactKeys(source, ["thresholds", "criticalModules", "testFiles"], path);
+  const thresholdSource = record(source["thresholds"], `${path}.thresholds`);
+  exactKeys(
+    thresholdSource,
+    ["lines", "functions", "branches"],
+    `${path}.thresholds`,
+  );
+  if (
+    thresholdSource["lines"] !== 90 ||
+    thresholdSource["functions"] !== 90 ||
+    thresholdSource["branches"] !== 85
+  )
+    throw new PlatformConfigError(
+      `${path}.thresholds`,
+      "ожидаются нормативные floors 90/90/85 для lines/functions/branches",
+    );
+  if (!Array.isArray(source["criticalModules"]))
+    throw new PlatformConfigError(
+      `${path}.criticalModules`,
+      "ожидался массив критических модулей",
+    );
+  const criticalModules = source["criticalModules"].map((entry, index) => {
+    const modulePath = `${path}.criticalModules[${index}]`;
+    const item = record(entry, modulePath);
+    exactKeys(
+      item,
+      ["id", "sourceRoots", "coverageRoots", "format"],
+      modulePath,
+    );
+    const id = stringValue(item["id"], `${modulePath}.id`);
+    const expected = UNIT_COVERAGE_MODULES[index];
+    const sourceRoots = stringArray(
+      item["sourceRoots"],
+      `${modulePath}.sourceRoots`,
+    );
+    const coverageRoots = stringArray(
+      item["coverageRoots"],
+      `${modulePath}.coverageRoots`,
+    );
+    if (sourceRoots.length === 0 || coverageRoots.length === 0)
+      throw new PlatformConfigError(
+        modulePath,
+        "каждому модулю нужны source и coverage roots",
+      );
+    const format = item["format"];
+    if (format !== "js" && format !== "mjs")
+      throw new PlatformConfigError(
+        `${modulePath}.format`,
+        "ожидался js или mjs",
+      );
+    if (
+      !expected ||
+      id !== expected.id ||
+      JSON.stringify(sourceRoots) !== JSON.stringify(expected.sourceRoots) ||
+      JSON.stringify(coverageRoots) !==
+        JSON.stringify(expected.coverageRoots) ||
+      format !== expected.format
+    )
+      throw new PlatformConfigError(
+        modulePath,
+        "критический inventory имеет неверный порядок, состав или artifact mapping",
+      );
+    return Object.freeze({ id, sourceRoots, coverageRoots, format });
+  });
+  if (criticalModules.length !== UNIT_COVERAGE_MODULES.length)
+    throw new PlatformConfigError(
+      `${path}.criticalModules`,
+      "неполный критический inventory",
+    );
+  const testFiles = stringArray(source["testFiles"], `${path}.testFiles`);
+  if (
+    testFiles.length !== UNIT_COVERAGE_TEST_FILE_COUNT ||
+    new Set(testFiles).size !== testFiles.length ||
+    testFiles.some(
+      (file) =>
+        !/^(?:(?:tests|packages)\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\.test\.mjs|verification\/launch\/v1\/scenarios\/backup-restore\.test\.mjs)$/u.test(
+          file,
+        ),
+    )
+  )
+    throw new PlatformConfigError(
+      `${path}.testFiles`,
+      `ожидается ровно ${UNIT_COVERAGE_TEST_FILE_COUNT} уникальных путей локальных .test.mjs файлов`,
+    );
+  return Object.freeze({
+    thresholds: Object.freeze({ lines: 90, functions: 90, branches: 85 }),
+    criticalModules: Object.freeze(criticalModules),
+    testFiles,
+  });
 }
 
 function exactStringArray<T extends string>(
@@ -481,23 +899,50 @@ function opaqueObject(
 
 function aromaConfig(value: unknown, path: string): AromaConfig {
   const aroma = record(value, path);
-  exactKeys(aroma, ["supplierRef", "scopeRef", "origin", "redirectsAllowed", "defaultPacking"], path);
+  exactKeys(
+    aroma,
+    ["supplierRef", "scopeRef", "origin", "redirectsAllowed", "defaultPacking"],
+    path,
+  );
   if (aroma["supplierRef"] !== AROMA_SUPPLIER_REF)
-    throw new PlatformConfigError(`${path}.supplierRef`, `ожидался supplierRef ${AROMA_SUPPLIER_REF}`);
+    throw new PlatformConfigError(
+      `${path}.supplierRef`,
+      `ожидался supplierRef ${AROMA_SUPPLIER_REF}`,
+    );
   if (aroma["scopeRef"] !== AROMA_SCOPE_REF)
-    throw new PlatformConfigError(`${path}.scopeRef`, `ожидался scopeRef ${AROMA_SCOPE_REF}`);
+    throw new PlatformConfigError(
+      `${path}.scopeRef`,
+      `ожидался scopeRef ${AROMA_SCOPE_REF}`,
+    );
   const origin = record(aroma["origin"], `${path}.origin`);
   exactKeys(origin, ["scheme", "host", "port"], `${path}.origin`);
-  if (origin["scheme"] !== "https" || origin["host"] !== "aromateacoffee.ru" || origin["port"] !== 443)
-    throw new PlatformConfigError(`${path}.origin`, "origin не совпадает с каноническим AROMA origin");
+  if (
+    origin["scheme"] !== "https" ||
+    origin["host"] !== "aromateacoffee.ru" ||
+    origin["port"] !== 443
+  )
+    throw new PlatformConfigError(
+      `${path}.origin`,
+      "origin не совпадает с каноническим AROMA origin",
+    );
   if (aroma["redirectsAllowed"] !== false)
-    throw new PlatformConfigError(`${path}.redirectsAllowed`, "redirectsAllowed должен быть false");
+    throw new PlatformConfigError(
+      `${path}.redirectsAllowed`,
+      "redirectsAllowed должен быть false",
+    );
   if (aroma["defaultPacking"] !== AROMA_DEFAULT_PACKING)
-    throw new PlatformConfigError(`${path}.defaultPacking`, `ожидался defaultPacking ${AROMA_DEFAULT_PACKING}`);
+    throw new PlatformConfigError(
+      `${path}.defaultPacking`,
+      `ожидался defaultPacking ${AROMA_DEFAULT_PACKING}`,
+    );
   return Object.freeze({
     supplierRef: AROMA_SUPPLIER_REF,
     scopeRef: AROMA_SCOPE_REF,
-    origin: Object.freeze({scheme: "https", host: "aromateacoffee.ru", port: 443}),
+    origin: Object.freeze({
+      scheme: "https",
+      host: "aromateacoffee.ru",
+      port: 443,
+    }),
     redirectsAllowed: false,
     defaultPacking: AROMA_DEFAULT_PACKING,
   });
@@ -834,7 +1279,9 @@ function databasePoolConfig(
   }
   return Object.freeze({
     max: integerValue(pool["max"], `${path}.max`),
-    maxWaiting: Object.hasOwn(pool, "maxWaiting") ? integerValue(pool["maxWaiting"], `${path}.maxWaiting`) : 0,
+    maxWaiting: Object.hasOwn(pool, "maxWaiting")
+      ? integerValue(pool["maxWaiting"], `${path}.maxWaiting`)
+      : 0,
     checkoutTimeoutMs: integerValue(
       pool["checkoutTimeoutMs"],
       `${path}.checkoutTimeoutMs`,
@@ -873,20 +1320,39 @@ function deadlineProfiles(
       "обязательное значение отсутствует",
     );
   const result: Record<string, number | null> = {};
-  for (const [name, deadline] of Object.entries(profiles)) result[name] = nullableIntegerValue(deadline, `${path}.${name}`);
+  for (const [name, deadline] of Object.entries(profiles))
+    result[name] = nullableIntegerValue(deadline, `${path}.${name}`);
   return Object.freeze(result);
 }
 
-function aromaSettings<T extends string>(value: unknown, path: string, names: readonly T[]): Readonly<Record<T, number>> {
+function aromaSettings<T extends string>(
+  value: unknown,
+  path: string,
+  names: readonly T[],
+): Readonly<Record<T, number>> {
   const source = record(value, path);
   exactKeys(source, names, path);
   const result = {} as Record<T, number>;
   for (const name of names) {
     const setting = positiveIntegerValue(source[name], `${path}.${name}`);
     if (name === "maxResponseBytes" && setting !== 2_097_152)
-      throw new PlatformConfigError(`${path}.${name}`, "допустим только лимит ответа 2 MiB");
-    const maximum = name === "maxResponseBytes" ? 2_097_152 : name === "maxLines" || name === "maxOrders" ? 10_000 : name === "batchSize" ? 1000 : 300_000;
-    if (setting > maximum) throw new PlatformConfigError(`${path}.${name}`, "значение превышает допустимый предел");
+      throw new PlatformConfigError(
+        `${path}.${name}`,
+        "допустим только лимит ответа 2 MiB",
+      );
+    const maximum =
+      name === "maxResponseBytes"
+        ? 2_097_152
+        : name === "maxLines" || name === "maxOrders"
+          ? 10_000
+          : name === "batchSize"
+            ? 1000
+            : 300_000;
+    if (setting > maximum)
+      throw new PlatformConfigError(
+        `${path}.${name}`,
+        "значение превышает допустимый предел",
+      );
     result[name] = setting;
   }
   return Object.freeze(result);
@@ -896,23 +1362,44 @@ function realtimeSettings(value: unknown, path: string): RealtimeConfig {
   const source = record(value, path);
   const maxima: RealtimeConfig = {
     shutdownGraceMs: 20000,
-    maxConnections: 512, queueMaxRecords: 64, queueMaxBytes: 262144,
-    totalQueueMaxRecords: 262144, totalQueueMaxBytes: 67108864,
-    ringMaxRecords: 10000, ringMaxBytes: 16777216, ringMaxAgeMs: 300000,
-    coalesceMs: 250, writeTimeoutMs: 5000, heartbeatMs: 15000,
-    authCheckMs: 30000, maxEventDataBytes: 2048, rssBudgetBytes: 536870912, fdBudget: 12288,
+    maxConnections: 512,
+    queueMaxRecords: 64,
+    queueMaxBytes: 262144,
+    totalQueueMaxRecords: 262144,
+    totalQueueMaxBytes: 67108864,
+    ringMaxRecords: 10000,
+    ringMaxBytes: 16777216,
+    ringMaxAgeMs: 300000,
+    coalesceMs: 250,
+    writeTimeoutMs: 5000,
+    heartbeatMs: 15000,
+    authCheckMs: 30000,
+    maxEventDataBytes: 2048,
+    rssBudgetBytes: 536870912,
+    fdBudget: 12288,
   };
   exactKeys(source, Object.keys(maxima), path);
   const result = {} as Record<keyof RealtimeConfig, number>;
   for (const name of Object.keys(maxima) as (keyof RealtimeConfig)[]) {
     const setting = positiveIntegerValue(source[name], `${path}.${name}`);
-    if (setting > maxima[name]) throw new PlatformConfigError(`${path}.${name}`, "значение превышает предел первого запуска");
+    if (setting > maxima[name])
+      throw new PlatformConfigError(
+        `${path}.${name}`,
+        "значение превышает предел первого запуска",
+      );
     result[name] = setting;
   }
-  if (result.totalQueueMaxRecords < result.queueMaxRecords || result.totalQueueMaxBytes < result.queueMaxBytes ||
-    result.totalQueueMaxBytes + result.ringMaxBytes > result.rssBudgetBytes / 4 ||
-    result.fdBudget < result.maxConnections + 64)
-    throw new PlatformConfigError(path, "совокупные queue/ring/RSS/FD бюджеты не оставляют ресурсный запас");
+  if (
+    result.totalQueueMaxRecords < result.queueMaxRecords ||
+    result.totalQueueMaxBytes < result.queueMaxBytes ||
+    result.totalQueueMaxBytes + result.ringMaxBytes >
+      result.rssBudgetBytes / 4 ||
+    result.fdBudget < result.maxConnections + 64
+  )
+    throw new PlatformConfigError(
+      path,
+      "совокупные queue/ring/RSS/FD бюджеты не оставляют ресурсный запас",
+    );
   return Object.freeze(result);
 }
 
@@ -942,66 +1429,194 @@ function runtimeConfig(
       "mutationCapability",
     ],
     path,
-    ["optionalSecretRefs", "scheduler", "catalogSnapshotProof", "mutationsEnabled", "aromaPreparation", "aromaObservation", "aromaConvergence", "realtime"],
+    [
+      "optionalSecretRefs",
+      "scheduler",
+      "catalogSnapshotProof",
+      "mutationsEnabled",
+      "aromaPreparation",
+      "aromaObservation",
+      "aromaConvergence",
+      "realtime",
+    ],
   );
-  if (runtime !== "catalog-service" && Object.hasOwn(source, "catalogSnapshotProof"))
-    throw new PlatformConfigError(`${path}.catalogSnapshotProof`, "настройка разрешена только для catalog-service");
+  if (
+    runtime !== "catalog-service" &&
+    Object.hasOwn(source, "catalogSnapshotProof")
+  )
+    throw new PlatformConfigError(
+      `${path}.catalogSnapshotProof`,
+      "настройка разрешена только для catalog-service",
+    );
   let catalogSnapshotProof: CatalogSnapshotProofConfig | undefined;
   if (source["catalogSnapshotProof"] !== undefined) {
-    const configured = record(source["catalogSnapshotProof"], `${path}.catalogSnapshotProof`);
+    const configured = record(
+      source["catalogSnapshotProof"],
+      `${path}.catalogSnapshotProof`,
+    );
     exactKeys(configured, ["maxAgeMs"], `${path}.catalogSnapshotProof`);
-    catalogSnapshotProof = Object.freeze({maxAgeMs: positiveIntegerValue(configured["maxAgeMs"], `${path}.catalogSnapshotProof.maxAgeMs`)});
+    catalogSnapshotProof = Object.freeze({
+      maxAgeMs: positiveIntegerValue(
+        configured["maxAgeMs"],
+        `${path}.catalogSnapshotProof.maxAgeMs`,
+      ),
+    });
   }
-  const owners = {mutationsEnabled: "aroma-convergence", aromaPreparation: "orders-aroma-preparation",
-    aromaObservation: "aroma-observer", aromaConvergence: "aroma-convergence", realtime: "realtime-gateway"} as const;
+  const owners = {
+    mutationsEnabled: "aroma-convergence",
+    aromaPreparation: "orders-aroma-preparation",
+    aromaObservation: "aroma-observer",
+    aromaConvergence: "aroma-convergence",
+    realtime: "realtime-gateway",
+  } as const;
   for (const [property, owner] of Object.entries(owners)) {
     if (runtime === owner && source[property] === undefined)
-      throw new PlatformConfigError(`${path}.${property}`, "обязательное значение отсутствует");
+      throw new PlatformConfigError(
+        `${path}.${property}`,
+        "обязательное значение отсутствует",
+      );
     if (runtime !== owner && Object.hasOwn(source, property))
-      throw new PlatformConfigError(`${path}.${property}`, "настройка запрещена для этой роли");
+      throw new PlatformConfigError(
+        `${path}.${property}`,
+        "настройка запрещена для этой роли",
+      );
   }
-  if (runtime === "aroma-convergence" && typeof source["mutationsEnabled"] !== "boolean")
-    throw new PlatformConfigError(`${path}.mutationsEnabled`, "ожидался explicit boolean");
-  const aromaPreparation = runtime === "orders-aroma-preparation" ? aromaSettings(source["aromaPreparation"], `${path}.aromaPreparation`,
-    ["pollIntervalMs", "batchSize", "maxOrders", "maxLines"]) : undefined;
-  const aromaObservation = runtime === "aroma-observer" ? aromaSettings(source["aromaObservation"], `${path}.aromaObservation`,
-    ["pollIntervalMs", "intervalMs", "leaseMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"]) : undefined;
-  const aromaConvergence = runtime === "aroma-convergence" ? aromaSettings(source["aromaConvergence"], `${path}.aromaConvergence`,
-    ["pollIntervalMs", "leaseMs", "heartbeatIntervalMs", "providerDeadlineMs", "safetyMarginMs", "retryBackoffMs", "maxSnapshotAgeMs", "maxLines", "maxResponseBytes"]) : undefined;
-  const realtime = runtime === "realtime-gateway" ? realtimeSettings(source["realtime"], `${path}.realtime`) : undefined;
-  if (realtime !== undefined && (source["replicas"] !== 1 || source["database"] !== null || source["dbPool"] !== null ||
-    source["concurrency"] !== realtime.maxConnections || source["mutationCapability"] !== false))
-    throw new PlatformConfigError(path, "realtime требует одну stateless replica и согласованный admission budget");
+  if (
+    runtime === "aroma-convergence" &&
+    typeof source["mutationsEnabled"] !== "boolean"
+  )
+    throw new PlatformConfigError(
+      `${path}.mutationsEnabled`,
+      "ожидался explicit boolean",
+    );
+  const aromaPreparation =
+    runtime === "orders-aroma-preparation"
+      ? aromaSettings(source["aromaPreparation"], `${path}.aromaPreparation`, [
+          "pollIntervalMs",
+          "batchSize",
+          "maxOrders",
+          "maxLines",
+        ])
+      : undefined;
+  const aromaObservation =
+    runtime === "aroma-observer"
+      ? aromaSettings(source["aromaObservation"], `${path}.aromaObservation`, [
+          "pollIntervalMs",
+          "intervalMs",
+          "leaseMs",
+          "maxSnapshotAgeMs",
+          "maxLines",
+          "maxResponseBytes",
+        ])
+      : undefined;
+  const aromaConvergence =
+    runtime === "aroma-convergence"
+      ? aromaSettings(source["aromaConvergence"], `${path}.aromaConvergence`, [
+          "pollIntervalMs",
+          "leaseMs",
+          "heartbeatIntervalMs",
+          "providerDeadlineMs",
+          "safetyMarginMs",
+          "retryBackoffMs",
+          "maxSnapshotAgeMs",
+          "maxLines",
+          "maxResponseBytes",
+        ])
+      : undefined;
+  const realtime =
+    runtime === "realtime-gateway"
+      ? realtimeSettings(source["realtime"], `${path}.realtime`)
+      : undefined;
+  if (
+    realtime !== undefined &&
+    (source["replicas"] !== 1 ||
+      source["database"] !== null ||
+      source["dbPool"] !== null ||
+      source["concurrency"] !== realtime.maxConnections ||
+      source["mutationCapability"] !== false)
+  )
+    throw new PlatformConfigError(
+      path,
+      "realtime требует одну stateless replica и согласованный admission budget",
+    );
   if (realtime !== undefined) {
     const refs = stringArray(source["secretRefs"], `${path}.secretRefs`);
-    if (!refs.includes("security.actorContextEdgeVerificationPublicKeys") || refs.some(ref => /SigningPrivateKey|^postgres\./u.test(ref)))
-      throw new PlatformConfigError(`${path}.secretRefs`, "realtime получает только scoped public actor verifier, не signing/DB material");
+    if (
+      !refs.includes("security.actorContextEdgeVerificationPublicKeys") ||
+      refs.some((ref) => /SigningPrivateKey|^postgres\./u.test(ref))
+    )
+      throw new PlatformConfigError(
+        `${path}.secretRefs`,
+        "realtime получает только scoped public actor verifier, не signing/DB material",
+      );
   }
-  if (aromaObservation !== undefined && aromaObservation.leaseMs <= Number(source["deadlineMs"]))
-    throw new PlatformConfigError(`${path}.aromaObservation.leaseMs`, "lease должен покрывать deadline чтения");
-  if (aromaConvergence !== undefined && (aromaConvergence.leaseMs !== 30_000 || aromaConvergence.heartbeatIntervalMs !== 10_000 ||
-    aromaConvergence.leaseMs <= aromaConvergence.providerDeadlineMs + aromaConvergence.safetyMarginMs ||
-    aromaConvergence.heartbeatIntervalMs * 2 >= aromaConvergence.leaseMs || aromaConvergence.providerDeadlineMs > Number(source["deadlineMs"])))
-    throw new PlatformConfigError(`${path}.aromaConvergence`, "lease/heartbeat/provider deadline не образуют безопасное окно");
+  if (
+    aromaObservation !== undefined &&
+    aromaObservation.leaseMs <= Number(source["deadlineMs"])
+  )
+    throw new PlatformConfigError(
+      `${path}.aromaObservation.leaseMs`,
+      "lease должен покрывать deadline чтения",
+    );
+  if (
+    aromaConvergence !== undefined &&
+    (aromaConvergence.leaseMs !== 30_000 ||
+      aromaConvergence.heartbeatIntervalMs !== 10_000 ||
+      aromaConvergence.leaseMs <=
+        aromaConvergence.providerDeadlineMs + aromaConvergence.safetyMarginMs ||
+      aromaConvergence.heartbeatIntervalMs * 2 >= aromaConvergence.leaseMs ||
+      aromaConvergence.providerDeadlineMs > Number(source["deadlineMs"]))
+  )
+    throw new PlatformConfigError(
+      `${path}.aromaConvergence`,
+      "lease/heartbeat/provider deadline не образуют безопасное окно",
+    );
   const schedulerValue = source["scheduler"];
   if (runtime === "catalog-supplier-sync" && schedulerValue === undefined)
-    throw new PlatformConfigError(`${path}.scheduler`, "scheduler обязателен для catalog-supplier-sync");
+    throw new PlatformConfigError(
+      `${path}.scheduler`,
+      "scheduler обязателен для catalog-supplier-sync",
+    );
   if (runtime !== "catalog-supplier-sync" && schedulerValue !== undefined)
-    throw new PlatformConfigError(`${path}.scheduler`, "scheduler разрешён только catalog-supplier-sync");
+    throw new PlatformConfigError(
+      `${path}.scheduler`,
+      "scheduler разрешён только catalog-supplier-sync",
+    );
   let scheduler: CatalogSchedulerConfig | null = null;
   if (schedulerValue !== undefined) {
     const configured = record(schedulerValue, `${path}.scheduler`);
-    exactKeys(configured, ["intervalMs", "startupImport", "overlapPolicy"], `${path}.scheduler`);
-    if (configured["intervalMs"] !== 3_600_000 || configured["startupImport"] !== true || configured["overlapPolicy"] !== "skip")
-      throw new PlatformConfigError(`${path}.scheduler`, "ожидался hourly single-flight skip scheduler");
-    scheduler = Object.freeze({intervalMs: 3_600_000, startupImport: true, overlapPolicy: "skip"});
+    exactKeys(
+      configured,
+      ["intervalMs", "startupImport", "overlapPolicy"],
+      `${path}.scheduler`,
+    );
+    if (
+      configured["intervalMs"] !== 3_600_000 ||
+      configured["startupImport"] !== true ||
+      configured["overlapPolicy"] !== "skip"
+    )
+      throw new PlatformConfigError(
+        `${path}.scheduler`,
+        "ожидался hourly single-flight skip scheduler",
+      );
+    scheduler = Object.freeze({
+      intervalMs: 3_600_000,
+      startupImport: true,
+      overlapPolicy: "skip",
+    });
   }
   const listen = record(source["listen"], `${path}.listen`);
   exactKeys(listen, ["host", "port"], `${path}.listen`);
   const transportMode = source["transportMode"];
   if (transportMode !== "public-tls" && transportMode !== "mtls")
-    throw new PlatformConfigError(`${path}.transportMode`, "неизвестный режим TLS");
-  const database = source["database"] === null ? null : stringValue(source["database"], `${path}.database`);
+    throw new PlatformConfigError(
+      `${path}.transportMode`,
+      "неизвестный режим TLS",
+    );
+  const database =
+    source["database"] === null
+      ? null
+      : stringValue(source["database"], `${path}.database`);
 
   const kafka = validateKafkaServiceConfig(
     source["kafka"],
@@ -1030,9 +1645,20 @@ function runtimeConfig(
       `${path}.mutationCapability`,
       "ожидался boolean",
     );
-  const dbPool = databasePoolConfig(source["dbPool"], `${path}.dbPool`, shutdownGraceMs);
-  if (dbPool !== null && ((dbPool.maxWaiting ?? 0) > 100 || (runtime !== "orders-service" && (dbPool.maxWaiting ?? 0) > 0)))
-    throw new PlatformConfigError(`${path}.dbPool.maxWaiting`, "очередь до 100 разрешена только для orders-service");
+  const dbPool = databasePoolConfig(
+    source["dbPool"],
+    `${path}.dbPool`,
+    shutdownGraceMs,
+  );
+  if (
+    dbPool !== null &&
+    ((dbPool.maxWaiting ?? 0) > 100 ||
+      (runtime !== "orders-service" && (dbPool.maxWaiting ?? 0) > 0))
+  )
+    throw new PlatformConfigError(
+      `${path}.dbPool.maxWaiting`,
+      "очередь до 100 разрешена только для orders-service",
+    );
   return Object.freeze({
     transportMode,
     listen: Object.freeze({
@@ -1053,7 +1679,10 @@ function runtimeConfig(
     dbPool,
     database,
     secretRefs: stringArray(source["secretRefs"], `${path}.secretRefs`),
-    optionalSecretRefs: stringArray(source["optionalSecretRefs"] ?? [], `${path}.optionalSecretRefs`),
+    optionalSecretRefs: stringArray(
+      source["optionalSecretRefs"] ?? [],
+      `${path}.optionalSecretRefs`,
+    ),
     outbound: stringArray(source["outbound"], `${path}.outbound`),
     kafka,
     permissions: Object.freeze({
@@ -1072,21 +1701,29 @@ function runtimeConfig(
     }),
     mutationCapability: source["mutationCapability"],
     scheduler,
-    ...(catalogSnapshotProof === undefined ? {} : {catalogSnapshotProof}),
-    ...(runtime === "aroma-convergence" ? {mutationsEnabled: source["mutationsEnabled"] as boolean} : {}),
-    ...(aromaPreparation === undefined ? {} : {aromaPreparation}),
-    ...(aromaObservation === undefined ? {} : {aromaObservation}),
-    ...(aromaConvergence === undefined ? {} : {aromaConvergence}),
-    ...(realtime === undefined ? {} : {realtime}),
+    ...(catalogSnapshotProof === undefined ? {} : { catalogSnapshotProof }),
+    ...(runtime === "aroma-convergence"
+      ? { mutationsEnabled: source["mutationsEnabled"] as boolean }
+      : {}),
+    ...(aromaPreparation === undefined ? {} : { aromaPreparation }),
+    ...(aromaObservation === undefined ? {} : { aromaObservation }),
+    ...(aromaConvergence === undefined ? {} : { aromaConvergence }),
+    ...(realtime === undefined ? {} : { realtime }),
   });
 }
 
-function postgresConfig(value: unknown, path: string): PostgresConfig {
+function postgresConfig(
+  value: unknown,
+  path: string,
+  environment: EnvironmentName,
+  databaseIsolationEnabled: boolean,
+): PostgresConfig {
   const postgres = record(value, path);
   exactKeys(
     postgres,
     [
       "host",
+      "bootstrapUsername",
       "port",
       "sslMode",
       "maxConnections",
@@ -1096,7 +1733,11 @@ function postgresConfig(value: unknown, path: string): PostgresConfig {
     path,
   );
   const sslMode = postgres["sslMode"];
-  if (sslMode !== "prefer" && sslMode !== "require" && sslMode !== "verify-full") {
+  if (
+    sslMode !== "prefer" &&
+    sslMode !== "require" &&
+    sslMode !== "verify-full"
+  ) {
     throw new PlatformConfigError(`${path}.sslMode`, "неизвестный sslMode");
   }
   const rolloutReplicas = positiveIntegerValue(
@@ -1109,8 +1750,31 @@ function postgresConfig(value: unknown, path: string): PostgresConfig {
       "первый запуск разрешает только одну serial rollout replica",
     );
   }
+  const host = stringValue(postgres["host"], `${path}.host`);
+  const bootstrapUsername = stringValue(
+    postgres["bootstrapUsername"],
+    `${path}.bootstrapUsername`,
+  );
+  if (bootstrapUsername !== "coffeeuser")
+    throw new PlatformConfigError(
+      `${path}.bootstrapUsername`,
+      "canonical bootstrap LOGIN must be coffeeuser",
+    );
+  if (host !== "coffee_postgres") {
+    if (!/^\/dev\/shm\/coffee-g17-[a-f0-9]{16,64}$/u.test(host))
+      throw new PlatformConfigError(
+        `${path}.host`,
+        "разрешён только canonical endpoint или private G17 Unix socket path",
+      );
+    if (environment === "production" || !databaseIsolationEnabled)
+      throw new PlatformConfigError(
+        `${path}.host`,
+        "G17 Unix socket разрешён только вне production при включённой database isolation",
+      );
+  }
   return Object.freeze({
-    host: stringValue(postgres["host"], `${path}.host`),
+    host,
+    bootstrapUsername,
     port: positiveIntegerValue(postgres["port"], `${path}.port`),
     sslMode,
     maxConnections: positiveIntegerValue(
@@ -1197,7 +1861,8 @@ export function calculateDatabaseAdmissionBudget(
       );
     }
     const hasDbPool = service.dbPool !== null && service.dbPool !== undefined;
-    const hasDatabase = service.database !== null && service.database !== undefined;
+    const hasDatabase =
+      service.database !== null && service.database !== undefined;
     if (hasDbPool !== hasDatabase) {
       throw new PlatformConfigError(
         `config.services.${runtime}`,
@@ -1268,131 +1933,501 @@ export function assertDatabaseAdmissionBudget(
   return budget;
 }
 
-function browserOidcProfile(value: unknown, path: string): BrowserOidcProfile | null {
+function browserOidcProfile(
+  value: unknown,
+  path: string,
+): BrowserOidcProfile | null {
   if (value === null) return null;
   const source = record(value, path);
-  exactKeys(source, [
-    "issuer", "clientId", "authorizationUrl", "tokenUrl", "jwksUrl",
-    "redirectUri", "allowedAlgorithms", "actorRefClaim", "permissionsClaim",
-  ], path);
-  const algorithms = stringArray(source["allowedAlgorithms"], `${path}.allowedAlgorithms`);
+  exactKeys(
+    source,
+    [
+      "issuer",
+      "clientId",
+      "authorizationUrl",
+      "tokenUrl",
+      "jwksUrl",
+      "redirectUri",
+      "allowedAlgorithms",
+      "actorRefClaim",
+      "permissionsClaim",
+    ],
+    path,
+  );
+  const algorithms = stringArray(
+    source["allowedAlgorithms"],
+    `${path}.allowedAlgorithms`,
+  );
   if (algorithms.length !== 1 || algorithms[0] !== "RS256")
-    throw new PlatformConfigError(`${path}.allowedAlgorithms`, "разрешён только RS256");
+    throw new PlatformConfigError(
+      `${path}.allowedAlgorithms`,
+      "разрешён только RS256",
+    );
   return Object.freeze({
     issuer: stringValue(source["issuer"], `${path}.issuer`),
     clientId: stringValue(source["clientId"], `${path}.clientId`),
-    authorizationUrl: stringValue(source["authorizationUrl"], `${path}.authorizationUrl`),
+    authorizationUrl: stringValue(
+      source["authorizationUrl"],
+      `${path}.authorizationUrl`,
+    ),
     tokenUrl: stringValue(source["tokenUrl"], `${path}.tokenUrl`),
     jwksUrl: stringValue(source["jwksUrl"], `${path}.jwksUrl`),
     redirectUri: stringValue(source["redirectUri"], `${path}.redirectUri`),
     allowedAlgorithms: ["RS256"] as const,
-    actorRefClaim: stringValue(source["actorRefClaim"], `${path}.actorRefClaim`),
-    permissionsClaim: stringValue(source["permissionsClaim"], `${path}.permissionsClaim`),
+    actorRefClaim: stringValue(
+      source["actorRefClaim"],
+      `${path}.actorRefClaim`,
+    ),
+    permissionsClaim: stringValue(
+      source["permissionsClaim"],
+      `${path}.permissionsClaim`,
+    ),
   });
 }
 
 function telemetryConfig(value: unknown): TelemetryConfig {
   const path = "config.telemetry";
   const source = record(value, path);
-  exactKeys(source, ["namespace", "releaseDigest", "nginxStatusEndpoint", "collector", "producer", "logging", "openObserve", "alerts"], path);
+  exactKeys(
+    source,
+    [
+      "namespace",
+      "releaseDigest",
+      "nginxStatusEndpoint",
+      "collector",
+      "producer",
+      "logging",
+      "openObserve",
+      "alerts",
+    ],
+    path,
+  );
   const collector = record(source["collector"], `${path}.collector`);
-  exactKeys(collector, ["otlpEndpoint", "healthEndpoint", "metricsEndpoint", "memoryLimitMiB", "memorySpikeMiB", "containerMemoryMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
+  exactKeys(
+    collector,
+    [
+      "otlpEndpoint",
+      "healthEndpoint",
+      "metricsEndpoint",
+      "memoryLimitMiB",
+      "memorySpikeMiB",
+      "containerMemoryMiB",
+      "memoryCheckIntervalMs",
+      "batchSize",
+      "batchTimeoutMs",
+      "queueCapacity",
+      "queueConsumers",
+      "exportTimeoutMs",
+      "retryInitialMs",
+      "retryMaxMs",
+      "retryWindowMs",
+      "maxLogRecordBytes",
+    ],
+    `${path}.collector`,
+  );
   const producer = record(source["producer"], `${path}.producer`);
-  exactKeys(producer, ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], `${path}.producer`);
+  exactKeys(
+    producer,
+    [
+      "queueCapacity",
+      "maxRecordBytes",
+      "batchSize",
+      "batchIntervalMs",
+      "exportTimeoutMs",
+      "diagnosticIntervalMs",
+      "flushTimeoutMs",
+    ],
+    `${path}.producer`,
+  );
   const logging = record(source["logging"], `${path}.logging`);
   exactKeys(logging, ["maxSizeMiB", "maxFiles"], `${path}.logging`);
   const openObserve = record(source["openObserve"], `${path}.openObserve`);
-  exactKeys(openObserve, ["endpoint", "organization", "bootstrapEmail", "validationMarker", "telemetryEnabled", "mmdbDownloadEnabled", "modelPricingEnabled", "memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "streams", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "diskWatermarkPercent", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
+  exactKeys(
+    openObserve,
+    [
+      "endpoint",
+      "organization",
+      "bootstrapEmail",
+      "validationMarker",
+      "telemetryEnabled",
+      "mmdbDownloadEnabled",
+      "modelPricingEnabled",
+      "memoryLimitMiB",
+      "memTableMaxSizeMiB",
+      "maxFileSizeInMemoryMiB",
+      "maxFileSizeOnDiskMiB",
+      "maxFileRetentionSeconds",
+      "memPersistIntervalSeconds",
+      "streams",
+      "retentionDays",
+      "deleteFilesDelayMinutes",
+      "maxDiskBytes",
+      "diskWatermarkPercent",
+      "compactionIntervalSeconds",
+      "jobCleanupWaitSeconds",
+    ],
+    `${path}.openObserve`,
+  );
   const streams = record(openObserve["streams"], `${path}.openObserve.streams`);
-  exactKeys(streams, ["logs", "traces", "metrics"], `${path}.openObserve.streams`);
+  exactKeys(
+    streams,
+    ["logs", "traces", "metrics"],
+    `${path}.openObserve.streams`,
+  );
   for (const key of ["logs", "traces", "metrics"]) {
-    if (!/^[a-z][a-z0-9_]{0,62}$/u.test(stringValue(streams[key], `${path}.openObserve.streams.${key}`)))
-      throw new PlatformConfigError(`${path}.openObserve.streams.${key}`, "ожидалось ограниченное имя stream или префикса metric families");
+    if (
+      !/^[a-z][a-z0-9_]{0,62}$/u.test(
+        stringValue(streams[key], `${path}.openObserve.streams.${key}`),
+      )
+    )
+      throw new PlatformConfigError(
+        `${path}.openObserve.streams.${key}`,
+        "ожидалось ограниченное имя stream или префикса metric families",
+      );
   }
   const alerts = record(source["alerts"], `${path}.alerts`);
-  exactKeys(alerts, ["version", "evaluationIntervalMs", "notReady", "consumerLag", "outboxOldestAge", "unknownOutcome", "sseDropRate"], `${path}.alerts`);
-  const alert = (key: string): Readonly<{forMs: number; threshold: number}> => {
+  exactKeys(
+    alerts,
+    [
+      "version",
+      "evaluationIntervalMs",
+      "notReady",
+      "consumerLag",
+      "outboxOldestAge",
+      "unknownOutcome",
+      "sseDropRate",
+    ],
+    `${path}.alerts`,
+  );
+  const alert = (
+    key: string,
+  ): Readonly<{ forMs: number; threshold: number }> => {
     const item = record(alerts[key], `${path}.alerts.${key}`);
     exactKeys(item, ["forMs", "threshold"], `${path}.alerts.${key}`);
     const threshold = item["threshold"];
-    if (typeof threshold !== "number" || !Number.isFinite(threshold) || threshold < 0)
-      throw new PlatformConfigError(`${path}.alerts.${key}.threshold`, "ожидалось конечное неотрицательное число");
-    return Object.freeze({forMs: positiveIntegerValue(item["forMs"], `${path}.alerts.${key}.forMs`), threshold});
+    if (
+      typeof threshold !== "number" ||
+      !Number.isFinite(threshold) ||
+      threshold < 0
+    )
+      throw new PlatformConfigError(
+        `${path}.alerts.${key}.threshold`,
+        "ожидалось конечное неотрицательное число",
+      );
+    return Object.freeze({
+      forMs: positiveIntegerValue(item["forMs"], `${path}.alerts.${key}.forMs`),
+      threshold,
+    });
   };
   const endpoint = (input: unknown, field: string): string => {
     const result = stringValue(input, field);
     try {
       const parsed = new URL(result);
-      if (parsed.protocol !== "http:" || parsed.username || parsed.password || parsed.hash) throw new Error();
+      if (
+        parsed.protocol !== "http:" ||
+        parsed.username ||
+        parsed.password ||
+        parsed.hash
+      )
+        throw new Error();
     } catch {
-      throw new PlatformConfigError(field, "ожидался внутренний HTTP endpoint без credentials и fragment");
+      throw new PlatformConfigError(
+        field,
+        "ожидался внутренний HTTP endpoint без credentials и fragment",
+      );
     }
     return result;
   };
   const collectorEndpoint = (input: unknown, field: string): string => {
     const result = endpoint(input, field);
     const parsed = new URL(result);
-    if (!result.startsWith("http://otel-collector:") || parsed.hostname !== "otel-collector" || !parsed.port || Number(parsed.port) < 1 || parsed.pathname !== "/" || parsed.search || result.includes("?") || result.includes("#"))
-      throw new PlatformConfigError(field, "ожидался HTTP origin Collector с явным портом 1..65535 и только корневым путём");
+    if (
+      !result.startsWith("http://otel-collector:") ||
+      parsed.hostname !== "otel-collector" ||
+      !parsed.port ||
+      Number(parsed.port) < 1 ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      result.includes("?") ||
+      result.includes("#")
+    )
+      throw new PlatformConfigError(
+        field,
+        "ожидался HTTP origin Collector с явным портом 1..65535 и только корневым путём",
+      );
     return result;
   };
   const openObserveEndpoint = (input: unknown, field: string): string => {
     const result = endpoint(input, field);
     const parsed = new URL(result);
-    if (parsed.hostname !== "openobserve" || !parsed.port || Number(parsed.port) < 1 || parsed.pathname !== "/" || result.endsWith("/") || parsed.search || result.includes("?") || parsed.hash || result.includes("#") || result.includes("@"))
-      throw new PlatformConfigError(field, "ожидался HTTP origin OpenObserve по приватному alias openobserve с явным non-default портом");
+    if (
+      parsed.hostname !== "openobserve" ||
+      !parsed.port ||
+      Number(parsed.port) < 1 ||
+      parsed.pathname !== "/" ||
+      result.endsWith("/") ||
+      parsed.search ||
+      result.includes("?") ||
+      parsed.hash ||
+      result.includes("#") ||
+      result.includes("@")
+    )
+      throw new PlatformConfigError(
+        field,
+        "ожидался HTTP origin OpenObserve по приватному alias openobserve с явным non-default портом",
+      );
     return result;
   };
   const namespace = stringValue(source["namespace"], `${path}.namespace`);
-  const nginxStatusEndpoint = endpoint(source["nginxStatusEndpoint"], `${path}.nginxStatusEndpoint`);
+  const nginxStatusEndpoint = endpoint(
+    source["nginxStatusEndpoint"],
+    `${path}.nginxStatusEndpoint`,
+  );
   const nginxStatusPort = Number(new URL(nginxStatusEndpoint).port);
-  if (!/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(nginxStatusEndpoint) || !nginxStatusPort || nginxStatusPort > 65535 || nginxStatusPort === 8443)
-    throw new PlatformConfigError(`${path}.nginxStatusEndpoint`, "ожидался приватный native nginx status endpoint");
-  const releaseDigest = stringValue(source["releaseDigest"], `${path}.releaseDigest`);
-  if (!/^[a-z][a-z0-9.-]{0,62}$/u.test(namespace) || !/^[a-zA-Z0-9._:-]{1,128}$/u.test(releaseDigest))
-    throw new PlatformConfigError(path, "некорректные namespace или releaseDigest");
-  const positive = (obj: UnknownRecord, keys: readonly string[], prefix: string): Record<string, number> =>
-    Object.fromEntries(keys.map(key => [key, positiveIntegerValue(obj[key], `${prefix}.${key}`)]));
-  const collectorValues = positive(collector, ["memoryLimitMiB", "memorySpikeMiB", "containerMemoryMiB", "memoryCheckIntervalMs", "batchSize", "batchTimeoutMs", "queueCapacity", "queueConsumers", "exportTimeoutMs", "retryInitialMs", "retryMaxMs", "retryWindowMs", "maxLogRecordBytes"], `${path}.collector`);
-  const producerValues = positive(producer, ["queueCapacity", "maxRecordBytes", "batchSize", "batchIntervalMs", "exportTimeoutMs", "diagnosticIntervalMs", "flushTimeoutMs"], `${path}.producer`);
-  const loggingValues = positive(logging, ["maxSizeMiB", "maxFiles"], `${path}.logging`);
-  const storageValues = positive(openObserve, ["memoryLimitMiB", "memTableMaxSizeMiB", "maxFileSizeInMemoryMiB", "maxFileSizeOnDiskMiB", "maxFileRetentionSeconds", "memPersistIntervalSeconds", "retentionDays", "deleteFilesDelayMinutes", "maxDiskBytes", "compactionIntervalSeconds", "jobCleanupWaitSeconds"], `${path}.openObserve`);
-  const diskWatermarkPercent = integerValue(openObserve["diskWatermarkPercent"], `${path}.openObserve.diskWatermarkPercent`);
+  if (
+    !/^http:\/\/edge-nginx:[1-9][0-9]{0,4}\/nginx_status$/u.test(
+      nginxStatusEndpoint,
+    ) ||
+    !nginxStatusPort ||
+    nginxStatusPort > 65535 ||
+    nginxStatusPort === 8443
+  )
+    throw new PlatformConfigError(
+      `${path}.nginxStatusEndpoint`,
+      "ожидался приватный native nginx status endpoint",
+    );
+  const releaseDigest = stringValue(
+    source["releaseDigest"],
+    `${path}.releaseDigest`,
+  );
+  if (
+    !/^[a-z][a-z0-9.-]{0,62}$/u.test(namespace) ||
+    !/^[a-zA-Z0-9._:-]{1,128}$/u.test(releaseDigest)
+  )
+    throw new PlatformConfigError(
+      path,
+      "некорректные namespace или releaseDigest",
+    );
+  const positive = (
+    obj: UnknownRecord,
+    keys: readonly string[],
+    prefix: string,
+  ): Record<string, number> =>
+    Object.fromEntries(
+      keys.map((key) => [
+        key,
+        positiveIntegerValue(obj[key], `${prefix}.${key}`),
+      ]),
+    );
+  const collectorValues = positive(
+    collector,
+    [
+      "memoryLimitMiB",
+      "memorySpikeMiB",
+      "containerMemoryMiB",
+      "memoryCheckIntervalMs",
+      "batchSize",
+      "batchTimeoutMs",
+      "queueCapacity",
+      "queueConsumers",
+      "exportTimeoutMs",
+      "retryInitialMs",
+      "retryMaxMs",
+      "retryWindowMs",
+      "maxLogRecordBytes",
+    ],
+    `${path}.collector`,
+  );
+  const producerValues = positive(
+    producer,
+    [
+      "queueCapacity",
+      "maxRecordBytes",
+      "batchSize",
+      "batchIntervalMs",
+      "exportTimeoutMs",
+      "diagnosticIntervalMs",
+      "flushTimeoutMs",
+    ],
+    `${path}.producer`,
+  );
+  const loggingValues = positive(
+    logging,
+    ["maxSizeMiB", "maxFiles"],
+    `${path}.logging`,
+  );
+  const storageValues = positive(
+    openObserve,
+    [
+      "memoryLimitMiB",
+      "memTableMaxSizeMiB",
+      "maxFileSizeInMemoryMiB",
+      "maxFileSizeOnDiskMiB",
+      "maxFileRetentionSeconds",
+      "memPersistIntervalSeconds",
+      "retentionDays",
+      "deleteFilesDelayMinutes",
+      "maxDiskBytes",
+      "compactionIntervalSeconds",
+      "jobCleanupWaitSeconds",
+    ],
+    `${path}.openObserve`,
+  );
+  const diskWatermarkPercent = integerValue(
+    openObserve["diskWatermarkPercent"],
+    `${path}.openObserve.diskWatermarkPercent`,
+  );
   const openObserveBufferBudgetInvalid =
     storageValues["maxDiskBytes"]! < 268435456 ||
-    storageValues["maxFileSizeInMemoryMiB"]! >= storageValues["memTableMaxSizeMiB"]! ||
+    storageValues["maxFileSizeInMemoryMiB"]! >=
+      storageValues["memTableMaxSizeMiB"]! ||
     storageValues["memTableMaxSizeMiB"]! >= storageValues["memoryLimitMiB"]! ||
-    storageValues["maxFileSizeOnDiskMiB"]! * 1024 * 1024 > storageValues["maxDiskBytes"]! ||
-    storageValues["memPersistIntervalSeconds"]! > storageValues["maxFileRetentionSeconds"]!;
+    storageValues["maxFileSizeOnDiskMiB"]! * 1024 * 1024 >
+      storageValues["maxDiskBytes"]! ||
+    storageValues["memPersistIntervalSeconds"]! >
+      storageValues["maxFileRetentionSeconds"]!;
   if (openObserve["validationMarker"] !== "bootstrap-validation-placeholder")
-    throw new PlatformConfigError(`${path}.openObserve.validationMarker`, "ожидался несекретный startup marker");
-  if (openObserve["telemetryEnabled"] !== false || openObserve["mmdbDownloadEnabled"] !== false || openObserve["modelPricingEnabled"] !== false)
-    throw new PlatformConfigError(`${path}.openObserve`, "в приватной топологии OpenObserve запрещены внешние telemetry, MMDB downloads и model-pricing sync");
-  const bootstrapEmail = stringValue(openObserve["bootstrapEmail"], `${path}.openObserve.bootstrapEmail`);
+    throw new PlatformConfigError(
+      `${path}.openObserve.validationMarker`,
+      "ожидался несекретный startup marker",
+    );
+  if (
+    openObserve["telemetryEnabled"] !== false ||
+    openObserve["mmdbDownloadEnabled"] !== false ||
+    openObserve["modelPricingEnabled"] !== false
+  )
+    throw new PlatformConfigError(
+      `${path}.openObserve`,
+      "в приватной топологии OpenObserve запрещены внешние telemetry, MMDB downloads и model-pricing sync",
+    );
+  const bootstrapEmail = stringValue(
+    openObserve["bootstrapEmail"],
+    `${path}.openObserve.bootstrapEmail`,
+  );
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(bootstrapEmail))
-    throw new PlatformConfigError(`${path}.openObserve.bootstrapEmail`, "ожидался email оператора bootstrap");
-  const organization = stringValue(openObserve["organization"], `${path}.openObserve.organization`);
+    throw new PlatformConfigError(
+      `${path}.openObserve.bootstrapEmail`,
+      "ожидался email оператора bootstrap",
+    );
+  const organization = stringValue(
+    openObserve["organization"],
+    `${path}.openObserve.organization`,
+  );
   if (!/^[A-Za-z0-9_-]+$/u.test(organization))
-    throw new PlatformConfigError(`${path}.openObserve.organization`, "ожидался идентификатор организации OpenObserve из букв, цифр, дефиса или подчёркивания");
-  const collectorGuardMiB = collectorValues["containerMemoryMiB"]! - collectorValues["memorySpikeMiB"]!;
-  const collectorContainerBytes = collectorValues["containerMemoryMiB"]! * 1024 * 1024;
+    throw new PlatformConfigError(
+      `${path}.openObserve.organization`,
+      "ожидался идентификатор организации OpenObserve из букв, цифр, дефиса или подчёркивания",
+    );
+  const collectorGuardMiB =
+    collectorValues["containerMemoryMiB"]! - collectorValues["memorySpikeMiB"]!;
+  const collectorContainerBytes =
+    collectorValues["containerMemoryMiB"]! * 1024 * 1024;
   const collectorPorts = [
-    Number(new URL(collectorEndpoint(collector["otlpEndpoint"], `${path}.collector.otlpEndpoint`)).port),
-    Number(new URL(collectorEndpoint(collector["healthEndpoint"], `${path}.collector.healthEndpoint`)).port),
-    Number(new URL(collectorEndpoint(collector["metricsEndpoint"], `${path}.collector.metricsEndpoint`)).port),
+    Number(
+      new URL(
+        collectorEndpoint(
+          collector["otlpEndpoint"],
+          `${path}.collector.otlpEndpoint`,
+        ),
+      ).port,
+    ),
+    Number(
+      new URL(
+        collectorEndpoint(
+          collector["healthEndpoint"],
+          `${path}.collector.healthEndpoint`,
+        ),
+      ).port,
+    ),
+    Number(
+      new URL(
+        collectorEndpoint(
+          collector["metricsEndpoint"],
+          `${path}.collector.metricsEndpoint`,
+        ),
+      ).port,
+    ),
   ];
   if (new Set(collectorPorts).size !== collectorPorts.length)
-    throw new PlatformConfigError(`${path}.collector`, "порты OTLP, health и metrics Collector должны различаться");
-  if (diskWatermarkPercent < 1 || diskWatermarkPercent > 99 || storageValues["retentionDays"]! < 3 || alerts["evaluationIntervalMs"] !== 60_000 || collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! || collectorGuardMiB <= collectorValues["memoryLimitMiB"]! || !Number.isSafeInteger(collectorContainerBytes) || collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! || collectorValues["batchSize"]! > collectorValues["queueCapacity"]! || producerValues["batchSize"]! > producerValues["queueCapacity"]! || producerValues["exportTimeoutMs"]! > producerValues["batchIntervalMs"]! || openObserveBufferBudgetInvalid)
+    throw new PlatformConfigError(
+      `${path}.collector`,
+      "порты OTLP, health и metrics Collector должны различаться",
+    );
+  if (
+    diskWatermarkPercent < 1 ||
+    diskWatermarkPercent > 99 ||
+    storageValues["retentionDays"]! < 3 ||
+    alerts["evaluationIntervalMs"] !== 60_000 ||
+    collectorValues["memorySpikeMiB"]! > collectorValues["memoryLimitMiB"]! ||
+    collectorGuardMiB <= collectorValues["memoryLimitMiB"]! ||
+    !Number.isSafeInteger(collectorContainerBytes) ||
+    collectorValues["retryInitialMs"]! > collectorValues["retryMaxMs"]! ||
+    collectorValues["batchSize"]! > collectorValues["queueCapacity"]! ||
+    producerValues["batchSize"]! > producerValues["queueCapacity"]! ||
+    producerValues["exportTimeoutMs"]! > producerValues["batchIntervalMs"]! ||
+    openObserveBufferBudgetInvalid
+  )
     throw new PlatformConfigError(path, "telemetry budgets are inconsistent");
-  if (alerts["version"] !== 1) throw new PlatformConfigError(`${path}.alerts.version`, "поддерживается только версия 1");
+  if (alerts["version"] !== 1)
+    throw new PlatformConfigError(
+      `${path}.alerts.version`,
+      "поддерживается только версия 1",
+    );
   return Object.freeze({
-    namespace, releaseDigest, nginxStatusEndpoint,
-    collector: Object.freeze({otlpEndpoint: collectorEndpoint(collector["otlpEndpoint"], `${path}.collector.otlpEndpoint`), healthEndpoint: collectorEndpoint(collector["healthEndpoint"], `${path}.collector.healthEndpoint`), metricsEndpoint: collectorEndpoint(collector["metricsEndpoint"], `${path}.collector.metricsEndpoint`), ...collectorValues} as TelemetryConfig["collector"]),
+    namespace,
+    releaseDigest,
+    nginxStatusEndpoint,
+    collector: Object.freeze({
+      otlpEndpoint: collectorEndpoint(
+        collector["otlpEndpoint"],
+        `${path}.collector.otlpEndpoint`,
+      ),
+      healthEndpoint: collectorEndpoint(
+        collector["healthEndpoint"],
+        `${path}.collector.healthEndpoint`,
+      ),
+      metricsEndpoint: collectorEndpoint(
+        collector["metricsEndpoint"],
+        `${path}.collector.metricsEndpoint`,
+      ),
+      ...collectorValues,
+    } as TelemetryConfig["collector"]),
     producer: Object.freeze(producerValues as TelemetryConfig["producer"]),
     logging: Object.freeze(loggingValues as TelemetryConfig["logging"]),
-    openObserve: Object.freeze({endpoint: openObserveEndpoint(openObserve["endpoint"], `${path}.openObserve.endpoint`), organization, bootstrapEmail, validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, streams: Object.freeze({logs: stringValue(streams["logs"], `${path}.openObserve.streams.logs`), traces: stringValue(streams["traces"], `${path}.openObserve.streams.traces`), metrics: stringValue(streams["metrics"], `${path}.openObserve.streams.metrics`)}), ...storageValues, diskWatermarkPercent} as TelemetryConfig["openObserve"]),
-    alerts: Object.freeze({version: 1, evaluationIntervalMs: 60_000, notReady: alert("notReady"), consumerLag: alert("consumerLag"), outboxOldestAge: alert("outboxOldestAge"), unknownOutcome: alert("unknownOutcome"), sseDropRate: alert("sseDropRate")} as TelemetryConfig["alerts"]),
+    openObserve: Object.freeze({
+      endpoint: openObserveEndpoint(
+        openObserve["endpoint"],
+        `${path}.openObserve.endpoint`,
+      ),
+      organization,
+      bootstrapEmail,
+      validationMarker: "bootstrap-validation-placeholder",
+      telemetryEnabled: false,
+      mmdbDownloadEnabled: false,
+      modelPricingEnabled: false,
+      streams: Object.freeze({
+        logs: stringValue(streams["logs"], `${path}.openObserve.streams.logs`),
+        traces: stringValue(
+          streams["traces"],
+          `${path}.openObserve.streams.traces`,
+        ),
+        metrics: stringValue(
+          streams["metrics"],
+          `${path}.openObserve.streams.metrics`,
+        ),
+      }),
+      ...storageValues,
+      diskWatermarkPercent,
+    } as TelemetryConfig["openObserve"]),
+    alerts: Object.freeze({
+      version: 1,
+      evaluationIntervalMs: 60_000,
+      notReady: alert("notReady"),
+      consumerLag: alert("consumerLag"),
+      outboxOldestAge: alert("outboxOldestAge"),
+      unknownOutcome: alert("unknownOutcome"),
+      sseDropRate: alert("sseDropRate"),
+    } as TelemetryConfig["alerts"]),
   });
 }
 
@@ -1416,8 +2451,45 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       "services",
     ],
     "config",
-    ["browserOidc"],
+    ["browserOidc", "verification"],
   );
+  if (source["verification"] !== undefined) {
+    const verification = record(source["verification"], "config.verification");
+    exactKeys(
+      verification,
+      ["aromaSandbox", "securityScan", "unitCoverage"],
+      "config.verification",
+      ["databaseIsolation", "kafkaNamespaceIsolation"],
+    );
+    if (verification["aromaSandbox"] !== null)
+      record(verification["aromaSandbox"], "config.verification.aromaSandbox");
+    parseSecurityScanVerification(verification["securityScan"]);
+    parseUnitCoverageVerification(verification["unitCoverage"]);
+    if (verification["databaseIsolation"] !== undefined) {
+      const isolation = record(
+        verification["databaseIsolation"],
+        "config.verification.databaseIsolation",
+      );
+      exactKeys(
+        isolation,
+        ["enabled"],
+        "config.verification.databaseIsolation",
+      );
+      if (typeof isolation["enabled"] !== "boolean")
+        throw new PlatformConfigError(
+          "config.verification.databaseIsolation.enabled",
+          "ожидался explicit boolean",
+        );
+    }
+    if (
+      verification["kafkaNamespaceIsolation"] !== undefined &&
+      typeof verification["kafkaNamespaceIsolation"] !== "boolean"
+    )
+      throw new PlatformConfigError(
+        "config.verification.kafkaNamespaceIsolation",
+        "ожидался explicit boolean",
+      );
+  }
   if (source["$schema"] !== "./platform.schema.json")
     throw new PlatformConfigError(
       "config.$schema",
@@ -1440,25 +2512,82 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
   }
   const platform = record(source["platform"], "config.platform");
   if (Object.hasOwn(platform, "realtimeFullProfileMemoryBytes")) {
-    throw new PlatformConfigError("config.platform.realtimeFullProfileMemoryBytes", "устаревший memory override запрещён; используется штатный бюджет realtime");
+    throw new PlatformConfigError(
+      "config.platform.realtimeFullProfileMemoryBytes",
+      "устаревший memory override запрещён; используется штатный бюджет realtime",
+    );
   }
   const pricingSource = record(source["pricingPolicy"], "config.pricingPolicy");
-  exactKeys(pricingSource, ["policyVersionRef", "version", "currency", "markupBasisPoints", "minimumMarginMinor", "quoteTtlSeconds", "quantityScale", "roundingMode"], "config.pricingPolicy");
-  const pricingRef = stringValue(pricingSource["policyVersionRef"], "config.pricingPolicy.policyVersionRef");
-  const pricingVersion = stringValue(pricingSource["version"], "config.pricingPolicy.version");
-  const pricingMargin = stringValue(pricingSource["minimumMarginMinor"], "config.pricingPolicy.minimumMarginMinor");
-  const pricingMarkup = integerValue(pricingSource["markupBasisPoints"], "config.pricingPolicy.markupBasisPoints");
-  const pricingTtl = positiveIntegerValue(pricingSource["quoteTtlSeconds"], "config.pricingPolicy.quoteTtlSeconds");
-  if (!/^pvr_[0-9A-HJKMNP-TV-Z]{26}$/u.test(pricingRef) || !/^[1-9][0-9]*$/u.test(pricingVersion) ||
-    !/^(0|[1-9][0-9]*)$/u.test(pricingMargin) || BigInt(pricingMargin) > 9_223_372_036_854_775_807n ||
-    pricingMarkup > 100_000 || pricingTtl < 60 || pricingTtl > 3_600 ||
-    pricingSource["currency"] !== "RUB" || pricingSource["quantityScale"] !== 3 || pricingSource["roundingMode"] !== "CEILING") {
-    throw new PlatformConfigError("config.pricingPolicy", "некорректные значения версии или формулы Pricing");
+  exactKeys(
+    pricingSource,
+    [
+      "policyVersionRef",
+      "version",
+      "currency",
+      "markupBasisPoints",
+      "minimumMarginMinor",
+      "quoteTtlSeconds",
+      "quantityScale",
+      "roundingMode",
+    ],
+    "config.pricingPolicy",
+  );
+  const pricingRef = stringValue(
+    pricingSource["policyVersionRef"],
+    "config.pricingPolicy.policyVersionRef",
+  );
+  const pricingVersion = stringValue(
+    pricingSource["version"],
+    "config.pricingPolicy.version",
+  );
+  const pricingMargin = stringValue(
+    pricingSource["minimumMarginMinor"],
+    "config.pricingPolicy.minimumMarginMinor",
+  );
+  const pricingMarkup = integerValue(
+    pricingSource["markupBasisPoints"],
+    "config.pricingPolicy.markupBasisPoints",
+  );
+  const pricingTtl = positiveIntegerValue(
+    pricingSource["quoteTtlSeconds"],
+    "config.pricingPolicy.quoteTtlSeconds",
+  );
+  if (
+    !/^pvr_[0-9A-HJKMNP-TV-Z]{26}$/u.test(pricingRef) ||
+    !/^[1-9][0-9]*$/u.test(pricingVersion) ||
+    !/^(0|[1-9][0-9]*)$/u.test(pricingMargin) ||
+    BigInt(pricingMargin) > 9_223_372_036_854_775_807n ||
+    pricingMarkup > 100_000 ||
+    pricingTtl < 60 ||
+    pricingTtl > 3_600 ||
+    pricingSource["currency"] !== "RUB" ||
+    pricingSource["quantityScale"] !== 3 ||
+    pricingSource["roundingMode"] !== "CEILING"
+  ) {
+    throw new PlatformConfigError(
+      "config.pricingPolicy",
+      "некорректные значения версии или формулы Pricing",
+    );
   }
-  const pricingPolicy: PricingPolicyConfig = Object.freeze({policyVersionRef: pricingRef, version: pricingVersion, currency: "RUB", markupBasisPoints: pricingMarkup, minimumMarginMinor: pricingMargin, quoteTtlSeconds: pricingTtl, quantityScale: 3, roundingMode: "CEILING"});
+  const pricingPolicy: PricingPolicyConfig = Object.freeze({
+    policyVersionRef: pricingRef,
+    version: pricingVersion,
+    currency: "RUB",
+    markupBasisPoints: pricingMarkup,
+    minimumMarginMinor: pricingMargin,
+    quoteTtlSeconds: pricingTtl,
+    quantityScale: 3,
+    roundingMode: "CEILING",
+  });
   const telemetry = telemetryConfig(source["telemetry"]);
-  if (source["environment"] !== "development" && !/^sha256:[0-9a-f]{64}$/u.test(telemetry.releaseDigest))
-    throw new PlatformConfigError("config.telemetry.releaseDigest", "staging/production требуют immutable sha256 release digest");
+  if (
+    source["environment"] !== "development" &&
+    !/^sha256:[0-9a-f]{64}$/u.test(telemetry.releaseDigest)
+  )
+    throw new PlatformConfigError(
+      "config.telemetry.releaseDigest",
+      "staging/production требуют immutable sha256 release digest",
+    );
   const shutdownGraceMs = positiveIntegerValue(
     platform["shutdownGraceMs"],
     "config.platform.shutdownGraceMs",
@@ -1491,10 +2620,33 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
       ),
     ]),
   ) as Record<RuntimeName, RuntimeConfig>;
-  const postgres = postgresConfig(source["postgres"], "config.postgres");
-  const browserOidc = browserOidcProfile(source["browserOidc"] ?? null, "config.browserOidc");
-  const nginxTransport = opaqueObject(source["nginxTransport"], "config.nginxTransport");
-  assertDatabaseAdmissionBudget({services: typedServices, postgres});
+  const verification =
+    source["verification"] === undefined
+      ? undefined
+      : record(source["verification"], "config.verification");
+  const isolation =
+    verification?.["databaseIsolation"] === undefined
+      ? undefined
+      : record(
+          verification["databaseIsolation"],
+          "config.verification.databaseIsolation",
+        );
+  const databaseIsolationEnabled = isolation?.["enabled"] === true;
+  const postgres = postgresConfig(
+    source["postgres"],
+    "config.postgres",
+    source["environment"],
+    databaseIsolationEnabled,
+  );
+  const browserOidc = browserOidcProfile(
+    source["browserOidc"] ?? null,
+    "config.browserOidc",
+  );
+  const nginxTransport = opaqueObject(
+    source["nginxTransport"],
+    "config.nginxTransport",
+  );
+  assertDatabaseAdmissionBudget({ services: typedServices, postgres });
   return Object.freeze({
     schemaVersion: 1,
     $schema: "./platform.schema.json",
@@ -1507,6 +2659,14 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
     pricingPolicy,
     telemetry,
     browserOidc,
+    databaseIsolation: Object.freeze({
+      enabled: isolation?.["enabled"] === true,
+    }),
+    kafkaNamespaceIsolation: verification?.["kafkaNamespaceIsolation"] === true,
+    unitCoverage:
+      verification?.["unitCoverage"] === undefined
+        ? null
+        : parseUnitCoverageVerification(verification["unitCoverage"]),
     nginxTransport,
     security: opaqueObject(source["security"], "config.security"),
     services: Object.freeze(typedServices),
@@ -1515,10 +2675,28 @@ export function parsePlatformConfig(value: unknown): PlatformConfig {
 
 export type ConfigParser = (text: string, sourcePath: string) => unknown;
 
+export type LoadedPlatformConfig = Readonly<{
+  config: PlatformConfig;
+  sourceSha256: string;
+  sourceBytes: Uint8Array;
+}>;
+
+export async function loadPlatformConfigWithSource(
+  path: string,
+  parse: ConfigParser = (text) => JSON.parse(text) as unknown,
+): Promise<LoadedPlatformConfig> {
+  const bytes = await readFile(path);
+  const text = bytes.toString("utf8");
+  return Object.freeze({
+    config: parsePlatformConfig(parse(text, path)),
+    sourceSha256: createHash("sha256").update(bytes).digest("hex"),
+    sourceBytes: bytes,
+  });
+}
+
 export async function loadPlatformConfig(
   path: string,
   parse: ConfigParser = (text) => JSON.parse(text) as unknown,
 ): Promise<PlatformConfig> {
-  const text = await readFile(path, "utf8");
-  return parsePlatformConfig(parse(text, path));
+  return (await loadPlatformConfigWithSource(path, parse)).config;
 }

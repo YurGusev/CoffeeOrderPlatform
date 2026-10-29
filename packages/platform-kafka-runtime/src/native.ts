@@ -1,4 +1,9 @@
 import { Buffer } from "node:buffer";
+import {
+  launchKafkaLogicalTopic,
+  launchKafkaPhysicalName,
+  type LaunchKafkaTarget,
+} from "@coffee-platform/config";
 
 const ASSIGN_PARTITIONS = -175;
 const REVOKE_PARTITIONS = -174;
@@ -79,6 +84,7 @@ type NativeCommonOptions = Readonly<{
   receiveTimeoutMs: number;
   commitTimeoutMs: number;
   shutdownTimeoutMs: number;
+  physicalTargets?: LaunchKafkaTarget;
 }>;
 
 export type NativeProducerOptions = NativeCommonOptions &
@@ -321,6 +327,18 @@ function baseConfig(options: NativeCommonOptions): NativeConfig {
   return config;
 }
 
+function brokerTopic(options: NativeCommonOptions, topic: string): string {
+  return options.physicalTargets
+    ? launchKafkaPhysicalName(options.physicalTargets, topic)
+    : topic;
+}
+
+function runtimeTopic(options: NativeCommonOptions, topic: string): string {
+  return options.physicalTargets
+    ? launchKafkaLogicalTopic(options.physicalTargets, topic)
+    : topic;
+}
+
 function producerConfig(options: NativeProducerOptions): NativeConfig {
   return {
     ...baseConfig(options),
@@ -345,13 +363,15 @@ function consumerPollTimeout(options: NativeConsumerOptions): number {
 function consumerConfig(options: NativeConsumerOptions): NativeConfig {
   return {
     ...baseConfig(options),
-    "group.id": options.groupId,
+    "group.id": options.physicalTargets
+      ? launchKafkaPhysicalName(options.physicalTargets, options.groupId)
+      : options.groupId,
     "enable.auto.commit": false,
     "enable.auto.offset.store": false,
     "queued.min.messages": 1,
     "queued.max.messages.kbytes": queueBytes(options),
     "fetch.queue.backoff.ms": consumerPollTimeout(options),
-    "offset_commit_cb": true,
+    offset_commit_cb: true,
     "statistics.interval.ms": options.receiveTimeoutMs,
     // An idle Fetch must not hold broker health traffic for the whole receive
     // deadline. Keep that deadline and broker-confirmed commit ACK unchanged.
@@ -406,7 +426,9 @@ function partitions(value: unknown): readonly NativePartition[] {
   return Object.freeze(value.map((entry) => partition(entry)));
 }
 
-function nativeHeaders(value: unknown): Readonly<Record<string, string | null>> {
+function nativeHeaders(
+  value: unknown,
+): Readonly<Record<string, string | null>> {
   if (value === null || typeof value !== "object")
     throw error("NATIVE_RECORD_INVALID");
   const result: Record<string, string | null> = Object.create(null) as Record<
@@ -645,7 +667,11 @@ function consumerCommitFailureCode(value: unknown): NativeKafkaErrorCode {
   }
 }
 
-function commitKey(topic: string, partitionNumber: number, offset: string): string {
+function commitKey(
+  topic: string,
+  partitionNumber: number,
+  offset: string,
+): string {
   return `${topic}\u0000${partitionNumber}\u0000${offset}`;
 }
 
@@ -693,7 +719,13 @@ export async function createNativeProducer(
       request.reject(error(producerFailureCode(nativeError)));
     else {
       try {
-        request.resolve(delivery(report));
+        const delivered = delivery(report);
+        request.resolve(
+          Object.freeze({
+            ...delivered,
+            topic: runtimeTopic(options, delivered.topic),
+          }),
+        );
       } catch {
         request.reject(error("NATIVE_DELIVERY_FAILED"));
       }
@@ -812,7 +844,15 @@ export async function createNativeProducer(
       signal?.addEventListener("abort", abort, { once: true });
       pending.set(opaque, { resolve, reject, timer, signal, abort, settled });
       try {
-        client.produce(topic, null, bytes, key, null, opaque, nativeHeaders);
+        client.produce(
+          brokerTopic(options, topic),
+          null,
+          bytes,
+          key,
+          null,
+          opaque,
+          nativeHeaders,
+        );
       } catch (cause) {
         const failure = producerFailureCode(cause);
         finish(
@@ -898,7 +938,14 @@ export async function createNativeConsumer(
     }
     let current: readonly NativePartition[] = Object.freeze([]);
     try {
-      current = partitions(rawAssignments);
+      current = Object.freeze(
+        partitions(rawAssignments).map((entry) =>
+          Object.freeze({
+            ...entry,
+            topic: runtimeTopic(options, entry.topic),
+          }),
+        ),
+      );
       const code =
         nativeError === null || nativeError === undefined
           ? undefined
@@ -986,19 +1033,47 @@ export async function createNativeConsumer(
   client.on("disconnected", () => {
     if (state !== "closing" && state !== "closed") state = "failed";
   });
-  if (onStatistics !== undefined) client.on("event.stats", (event: unknown) => {
-    if (event === null || typeof event !== "object" || Array.isArray(event)) return;
-    const message = (event as Record<string, unknown>)["message"];
-    if (typeof message !== "string") return;
-    let snapshot: unknown;
-    try {
-      snapshot = JSON.parse(message) as unknown;
-    } catch {
-      return;
-    }
-    if (snapshot === null || typeof snapshot !== "object" || Array.isArray(snapshot)) return;
-    onStatistics(snapshot);
-  });
+  if (onStatistics !== undefined)
+    client.on("event.stats", (event: unknown) => {
+      if (event === null || typeof event !== "object" || Array.isArray(event))
+        return;
+      const message = (event as Record<string, unknown>)["message"];
+      if (typeof message !== "string") return;
+      let snapshot: unknown;
+      try {
+        snapshot = JSON.parse(message) as unknown;
+      } catch {
+        return;
+      }
+      if (
+        snapshot === null ||
+        typeof snapshot !== "object" ||
+        Array.isArray(snapshot)
+      )
+        return;
+      const source = snapshot as Record<string, unknown>;
+      const sourceTopics = source["topics"];
+      if (
+        onStatistics !== undefined &&
+        options.physicalTargets &&
+        sourceTopics !== null &&
+        typeof sourceTopics === "object" &&
+        !Array.isArray(sourceTopics)
+      ) {
+        const topics: Record<string, unknown> = Object.create(null) as Record<
+          string,
+          unknown
+        >;
+        for (const [topic, value] of Object.entries(sourceTopics)) {
+          try {
+            topics[runtimeTopic(options, topic)] = value;
+          } catch {
+            /* ignore unrelated broker statistics */
+          }
+        }
+        onStatistics({ ...source, topics });
+      } else onStatistics?.(snapshot);
+    });
   const connect = (): Promise<void> => {
     if (state === "connected") return Promise.resolve();
     if (state === "failed")
@@ -1046,7 +1121,7 @@ export async function createNativeConsumer(
         topics.some((topic) => typeof topic !== "string" || topic.length === 0)
       )
         throw error("NATIVE_CONFIG_INVALID");
-      client.subscribe([...topics]);
+      client.subscribe(topics.map((topic) => brokerTopic(options, topic)));
       return Promise.resolve();
     } catch (cause) {
       return Promise.reject(
@@ -1097,7 +1172,15 @@ export async function createNativeConsumer(
       signal,
       "NATIVE_OPERATION_FAILED",
     ).then((messages) =>
-      Object.freeze(messages.map((message) => record(message))),
+      Object.freeze(
+        messages.map((message) => {
+          const received = record(message);
+          return Object.freeze({
+            ...received,
+            topic: runtimeTopic(options, received.topic),
+          });
+        }),
+      ),
     );
   };
 
@@ -1121,7 +1204,8 @@ export async function createNativeConsumer(
     } catch (cause) {
       return Promise.reject(cause);
     }
-    const key = commitKey(topic, partitionNumber, nextOffset);
+    const nativeTopic = brokerTopic(options, topic);
+    const key = commitKey(nativeTopic, partitionNumber, nextOffset);
     if (pendingCommits.size >= options.maxPending || pendingCommits.has(key))
       return Promise.reject(error("NATIVE_QUEUE_FULL"));
     if (signal?.aborted)
@@ -1155,7 +1239,7 @@ export async function createNativeConsumer(
       });
       try {
         commitClient.commitCb(
-          [{ topic, partition: partitionNumber, offset }],
+          [{ topic: nativeTopic, partition: partitionNumber, offset }],
           (nativeError) => {
             const request = pendingCommits.get(key);
             if (request === undefined) return;
@@ -1201,21 +1285,31 @@ export async function createNativeConsumer(
     }
   };
 
+  const brokerPartitions = (
+    target: readonly NativePartition[],
+  ): readonly NativePartition[] =>
+    Object.freeze(
+      target.map((entry) =>
+        Object.freeze({ ...entry, topic: brokerTopic(options, entry.topic) }),
+      ),
+    );
   const pause = (
     value?: readonly NativePartition[],
     signal?: AbortSignal,
-  ): Promise<void> => control((target) => client.pause(target), value, signal);
+  ): Promise<void> =>
+    control((target) => client.pause(brokerPartitions(target)), value, signal);
   const resume = (
     value?: readonly NativePartition[],
     signal?: AbortSignal,
-  ): Promise<void> => control((target) => client.resume(target), value, signal);
+  ): Promise<void> =>
+    control((target) => client.resume(brokerPartitions(target)), value, signal);
   const assign = (
     value: readonly NativePartition[],
     signal?: AbortSignal,
   ): Promise<void> =>
     control(
       (target) => {
-        client.assign(target);
+        client.assign(brokerPartitions(target));
         assigned = target;
       },
       value,
@@ -1255,12 +1349,22 @@ export async function createNativeConsumer(
           // Assignment precedes asynchronous latest-offset resolution. A
           // cached high watermark follows a real Fetch response: readiness
           // before this boundary could silently skip the first live hint.
-          return assigned.length > 0 && assigned.every((target) => {
-            const offsets = client.getWatermarkOffsets(target.topic, target.partition);
-            if (offsets === null || typeof offsets !== "object") return false;
-            const high = (offsets as Record<string, unknown>)["highOffset"];
-            return typeof high === "number" && Number.isSafeInteger(high) && high >= 0;
-          });
+          return (
+            assigned.length > 0 &&
+            assigned.every((target) => {
+              const offsets = client.getWatermarkOffsets(
+                brokerTopic(options, target.topic),
+                target.partition,
+              );
+              if (offsets === null || typeof offsets !== "object") return false;
+              const high = (offsets as Record<string, unknown>)["highOffset"];
+              return (
+                typeof high === "number" &&
+                Number.isSafeInteger(high) &&
+                high >= 0
+              );
+            })
+          );
         }
         return true;
       })

@@ -19,16 +19,20 @@ paths:
         - name: returnTo
           in: query
           required: false
-          schema: {type: string, pattern: '^/app/(?!/)'}
+          schema: { type: string, pattern: "^/app/(?!/)" }
       responses:
-        '303':
+        "303":
           description: Redirect to the single configured OIDC authorization endpoint with server-generated state, nonce and PKCE.
           headers:
-            Location: {schema: {type: string}}
-            Set-Cookie: {schema: {type: string}, description: Ephemeral HttpOnly Secure host-only login-binding cookie; required on callback.}
-            Cache-Control: {$ref: '#/components/headers/NoStore'}
-        '400': {$ref: '#/components/responses/InvalidAuthRequest'}
-        '503': {$ref: '#/components/responses/AuthUnavailable'}
+            Location: { schema: { type: string } }
+            Set-Cookie:
+              {
+                schema: { type: string },
+                description: Ephemeral HttpOnly Secure host-only login-binding cookie; required on callback.,
+              }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+        "400": { $ref: "#/components/responses/InvalidAuthRequest" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
   /auth/callback:
     get:
       operationId: completeBrowserLogin
@@ -36,26 +40,32 @@ paths:
       x-audience: browser
       x-exposure: public
       x-auth: browser-bound-login
-      security: [{loginCookie: []}]
+      security: [{ loginCookie: [] }]
       parameters:
         - name: code
           in: query
           required: false
-          schema: {type: string}
+          schema: { type: string }
         - name: state
           in: query
           required: false
-          schema: {type: string}
+          schema: { type: string }
       responses:
-        '303':
+        "303":
           description: Validated code exchange, ID-token proof and actor mapping; redirect only to the saved local /app/ path.
           headers:
-            Location: {schema: {type: string, pattern: '^/app/'}}
-            Cache-Control: {$ref: '#/components/headers/NoStore'}
-            Set-Cookie: {schema: {type: string}, description: HttpOnly Secure host-only session, separate CSRF cookie, and cleared login-binding cookie.}
-        '400': {$ref: '#/components/responses/InvalidAuthRequest'}
-        '401': {$ref: '#/components/responses/AuthenticationRequired'}
-        '503': {$ref: '#/components/responses/AuthUnavailable'}
+            Location: { schema: { type: string, pattern: "^/app/" } }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Set-Cookie:
+              {
+                schema: { type: string },
+                description: HttpOnly Secure host-only session,
+                separate CSRF cookie,
+                and cleared login-binding cookie.,
+              }
+        "400": { $ref: "#/components/responses/InvalidAuthRequest" }
+        "401": { $ref: "#/components/responses/AuthenticationRequired" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
   /auth/logout:
     post:
       operationId: endBrowserSession
@@ -63,16 +73,16 @@ paths:
       x-audience: browser
       x-exposure: public
       x-auth: session-and-csrf
-      security: [{sessionCookie: []}]
+      security: [{ sessionCookie: [] }]
       responses:
-        '204':
+        "204":
           description: Invalidate current session and clear its browser cookies. Does not settle any pending command.
           headers:
-            Cache-Control: {$ref: '#/components/headers/NoStore'}
-            Set-Cookie: {schema: {type: string}}
-        '401': {$ref: '#/components/responses/AuthenticationRequired'}
-        '403': {$ref: '#/components/responses/CsrfFailed'}
-        '503': {$ref: '#/components/responses/AuthUnavailable'}
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+            Set-Cookie: { schema: { type: string } }
+        "401": { $ref: "#/components/responses/AuthenticationRequired" }
+        "403": { $ref: "#/components/responses/CsrfFailed" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
   /auth/session:
     get:
       operationId: getBrowserSession
@@ -80,17 +90,17 @@ paths:
       x-audience: browser
       x-exposure: public
       x-auth: session
-      security: [{sessionCookie: []}]
+      security: [{ sessionCookie: [] }]
       responses:
-        '200':
+        "200":
           description: Read-only server-derived identity; does not refresh the session or determine the result of a pending command.
           headers:
-            Cache-Control: {$ref: '#/components/headers/NoStore'}
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/BrowserSession'}
-        '401': {$ref: '#/components/responses/AuthenticationRequired'}
-        '503': {$ref: '#/components/responses/AuthUnavailable'}
+              schema: { $ref: "#/components/schemas/BrowserSession" }
+        "401": { $ref: "#/components/responses/AuthenticationRequired" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
   /_edge/authorize:
     get:
       operationId: authorizeBrowserIngress
@@ -98,67 +108,98 @@ paths:
       x-audience: edge-nginx
       x-exposure: private
       x-auth: service-mtls-and-session
-      security: [{serviceMutualTls: []}]
+      security: [{ serviceMutualTls: [] }]
       description: Empty-body internal-only subrequest; original method and raw target are trusted only from the authenticated nginx peer.
       parameters:
-        - {name: X-Original-Method, in: header, required: true, schema: {type: string}}
-        - {name: X-Original-URI, in: header, required: true, schema: {type: string}}
+        - {
+            name: X-Original-Method,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
+        - {
+            name: X-Original-URI,
+            in: header,
+            required: true,
+            schema: { type: string },
+          }
       responses:
-        '204':
+        "204":
           description: Exactly 204 with one signed context; any other 2xx or missing assertion must be rejected by nginx before upstream forwarding.
           headers:
-            X-Actor-Context: {schema: {type: string}}
-            X-Correlation-ID: {schema: {type: string}}
-            Cache-Control: {$ref: '#/components/headers/NoStore'}
-        '401': {$ref: '#/components/responses/AuthenticationRequired'}
-        '403': {$ref: '#/components/responses/AuthorizationForbidden'}
-        '503': {$ref: '#/components/responses/AuthUnavailable'}
+            X-Actor-Context: { schema: { type: string } }
+            X-Correlation-ID: { schema: { type: string } }
+            Cache-Control: { $ref: "#/components/headers/NoStore" }
+        "401": { $ref: "#/components/responses/AuthenticationRequired" }
+        "403": { $ref: "#/components/responses/AuthorizationForbidden" }
+        "503": { $ref: "#/components/responses/AuthUnavailable" }
 components:
   securitySchemes:
-    sessionCookie: {type: apiKey, in: cookie, name: __Host-coffee-session}
-    loginCookie: {type: apiKey, in: cookie, name: __Host-coffee-login}
-    serviceMutualTls: {type: mutualTLS}
+    sessionCookie: { type: apiKey, in: cookie, name: __Host-coffee-session }
+    loginCookie: { type: apiKey, in: cookie, name: __Host-coffee-login }
+    serviceMutualTls: { type: mutualTLS }
   headers:
-    NoStore: {schema: {type: string, const: no-store}}
+    NoStore: { schema: { type: string, const: no-store } }
   responses:
     InvalidAuthRequest:
       description: Invalid local return path, callback state or request shape.
-      headers: {Cache-Control: {$ref: '#/components/headers/NoStore'}}
-      content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+      headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
+      content:
+        {
+          application/problem+json:
+            { schema: { $ref: "#/components/schemas/ProblemDetails" } },
+        }
     AuthenticationRequired:
       description: Missing, expired or invalid session or provider proof.
-      headers: {Cache-Control: {$ref: '#/components/headers/NoStore'}}
-      content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+      headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
+      content:
+        {
+          application/problem+json:
+            { schema: { $ref: "#/components/schemas/ProblemDetails" } },
+        }
     AuthorizationForbidden:
       description: Actor lacks the required operation permission.
-      headers: {Cache-Control: {$ref: '#/components/headers/NoStore'}}
-      content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+      headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
+      content:
+        {
+          application/problem+json:
+            { schema: { $ref: "#/components/schemas/ProblemDetails" } },
+        }
     CsrfFailed:
       description: Invalid Origin or session-bound CSRF proof; never forward a mutation.
-      headers: {Cache-Control: {$ref: '#/components/headers/NoStore'}}
-      content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+      headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
+      content:
+        {
+          application/problem+json:
+            { schema: { $ref: "#/components/schemas/ProblemDetails" } },
+        }
     AuthUnavailable:
       description: IdP, JWKS or authorizer unavailable; no session or actor assertion may be emitted.
-      headers: {Cache-Control: {$ref: '#/components/headers/NoStore'}}
-      content: {application/problem+json: {schema: {$ref: '#/components/schemas/ProblemDetails'}}}
+      headers: { Cache-Control: { $ref: "#/components/headers/NoStore" } }
+      content:
+        {
+          application/problem+json:
+            { schema: { $ref: "#/components/schemas/ProblemDetails" } },
+        }
   schemas:
     BrowserSession:
       type: object
       additionalProperties: false
       required: [actorRef, expiresAt]
       properties:
-        actorRef: {type: string, minLength: 1}
-        expiresAt: {type: string, format: date-time}
+        actorRef: { type: string, minLength: 1 }
+        expiresAt: { type: string, format: date-time }
     ProblemDetails:
       type: object
       additionalProperties: false
-      required: [type, title, status, code, detail, instance, correlationId, errors]
+      required:
+        [type, title, status, code, detail, instance, correlationId, errors]
       properties:
-        type: {type: string}
-        title: {type: string}
-        status: {type: integer, minimum: 400}
-        code: {type: string}
-        detail: {type: string}
-        instance: {type: string}
-        correlationId: {type: string}
-        errors: {type: array, items: {type: object}}
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer, minimum: 400 }
+        code: { type: string }
+        detail: { type: string }
+        instance: { type: string }
+        correlationId: { type: string }
+        errors: { type: array, items: { type: object } }

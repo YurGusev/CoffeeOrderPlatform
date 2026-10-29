@@ -2,6 +2,188 @@ $schema: ./platform.schema.json
 schemaVersion: 1
 environment: development
 toolchainRef: config/toolchain-versions.json
+verification:
+  aromaSandbox: null
+  securityScan:
+    enabled: true
+    cpu: 2
+    memoryMiB: 2048
+    parallel: 1
+    minimumFreeDiskGiB: 20
+    maximumDatabaseAgeHours: 24
+    egressRepositories:
+      - ghcr.io/aquasecurity/trivy-db
+      - ghcr.io/aquasecurity/trivy-java-db
+  databaseIsolation:
+    enabled: false
+  kafkaNamespaceIsolation: false
+  unitCoverage:
+    thresholds:
+      lines: 90
+      functions: 90
+      branches: 85
+    criticalModules:
+      - id: platform-config
+        sourceRoots: [packages/platform-config/src]
+        coverageRoots: [packages/platform-config/dist]
+        format: js
+      - id: trusted-config-bootstrap
+        sourceRoots: [tools/config-bootstrap]
+        coverageRoots: [tools/config-bootstrap]
+        format: mjs
+      - id: platform-runtime
+        sourceRoots: [packages/platform-runtime/src]
+        coverageRoots: [packages/platform-runtime/dist]
+        format: js
+      - id: persistence-foundation
+        sourceRoots:
+          [packages/platform-database/src, packages/platform-migrations/src]
+        coverageRoots:
+          [packages/platform-database/dist, packages/platform-migrations/dist]
+        format: js
+      - id: durable-delivery
+        sourceRoots:
+          [
+            packages/platform-outbox/src,
+            packages/platform-inbox/src,
+            packages/platform-idempotency/src,
+          ]
+        coverageRoots:
+          [
+            packages/platform-outbox/dist,
+            packages/platform-inbox/dist,
+            packages/platform-idempotency/dist,
+          ]
+        format: js
+      - id: kafka-runtime
+        sourceRoots: [packages/platform-kafka-runtime/src]
+        coverageRoots: [packages/platform-kafka-runtime/dist]
+        format: js
+      - id: security-trust
+        sourceRoots:
+          [packages/platform-security/src, packages/platform-http/src]
+        coverageRoots:
+          [packages/platform-security/dist, packages/platform-http/dist]
+        format: js
+      - id: customer-service
+        sourceRoots: [apps/customer-service/src]
+        coverageRoots: [apps/customer-service/dist]
+        format: js
+      - id: catalog-service
+        sourceRoots:
+          [
+            apps/catalog-service/src,
+            apps/catalog-supplier-sync/src,
+            apps/catalog-activation-worker/src,
+          ]
+        coverageRoots:
+          [
+            apps/catalog-service/dist,
+            apps/catalog-supplier-sync/dist,
+            apps/catalog-activation-worker/dist,
+          ]
+        format: js
+      - id: pricing-service
+        sourceRoots: [apps/pricing-service/src]
+        coverageRoots: [apps/pricing-service/dist]
+        format: js
+      - id: orders-service
+        sourceRoots: [apps/orders-service/src]
+        coverageRoots: [apps/orders-service/dist]
+        format: js
+      - id: aroma-convergence
+        sourceRoots: [apps/aroma-convergence/src]
+        coverageRoots: [apps/aroma-convergence/dist]
+        format: js
+      - id: aroma-preparation
+        sourceRoots: [apps/orders-aroma-preparation/src]
+        coverageRoots: [apps/orders-aroma-preparation/dist]
+        format: js
+      - id: aroma-observer
+        sourceRoots: [apps/aroma-observer/src]
+        coverageRoots: [apps/aroma-observer/dist]
+        format: js
+      - id: aroma-gateway
+        sourceRoots: [apps/aroma-gateway/src]
+        coverageRoots: [apps/aroma-gateway/dist]
+        format: js
+      - id: public-api-trust
+        sourceRoots:
+          [
+            apps/api-public/src,
+            apps/api-internal/src,
+            apps/edge-gateway/src,
+            apps/realtime-gateway/src,
+          ]
+        coverageRoots:
+          [
+            apps/api-public/dist,
+            apps/api-internal/dist,
+            apps/edge-gateway/dist,
+            apps/realtime-gateway/dist,
+          ]
+        format: js
+    testFiles:
+      - packages/platform-testing/test/platform-packages.test.mjs
+      - tests/config/platform-config.test.mjs
+      - tests/config/observability-bootstrap.test.mjs
+      - tests/runtime/lifecycle.test.mjs
+      - tests/runtime/platform-http.test.mjs
+      - tests/runtime/permissions.test.mjs
+      - tests/kafka/runtime.test.mjs
+      - tests/edge-auth/oidc-auth.test.mjs
+      - tests/edge-auth/routes.test.mjs
+      - tests/customer/customer-http.test.mjs
+      - tests/catalog/ingestion.test.mjs
+      - tests/catalog/catalog-owner.test.mjs
+      - tests/catalog/catalog-root.test.mjs
+      - tests/catalog/stream.test.mjs
+      - tests/catalog/activation-binding-client.test.mjs
+      - tests/catalog/activation-contracts.test.mjs
+      - tests/catalog/activation-events.test.mjs
+      - tests/catalog/activation-identity.test.mjs
+      - tests/catalog/activation-validation.test.mjs
+      - tests/pricing/pricing-formula.test.mjs
+      - tests/orders/order-card.test.mjs
+      - tests/orders/contract.test.mjs
+      - tests/orders/order-contribution.test.mjs
+      - tests/orders/row-schemas.test.mjs
+      - tests/aroma/provider-decoder.test.mjs
+      - tests/aroma/provider-http.test.mjs
+      - tests/aroma/provider-session.test.mjs
+      - tests/aroma/cart-reader.test.mjs
+      - tests/aroma/api-internal-operations.test.mjs
+      - tests/aroma/safe-read-http.test.mjs
+      - tests/aroma/scoping-provenance.test.mjs
+      - tests/aroma/source-identity.test.mjs
+      - tests/aroma/convergence-domain.test.mjs
+      - tests/aroma/worker-gateway-client.test.mjs
+      - packages/platform-security/test/actor-context.test.mjs
+      - verification/launch/v1/scenarios/backup-restore.test.mjs
+      - tests/pricing/create-pricing-quote.test.mjs
+      - tests/pricing/catalog-client.test.mjs
+      - tests/pricing/pricing-http.test.mjs
+      - tests/orders/owner-http.test.mjs
+      - tests/orders/upstream-clients.test.mjs
+      - tests/customer/customer-normalization.test.mjs
+      - tests/aroma/provider-cart-mutator.test.mjs
+      - tests/aroma/gateway-operations-http.test.mjs
+      - tests/pricing/quote-proof.test.mjs
+      - tests/pricing/pricing-observability.test.mjs
+      - tests/pricing/pricing-public-api.test.mjs
+      - tests/pricing/pricing-internal-api.test.mjs
+      - tests/orders/public-api.test.mjs
+      - tests/orders/security.test.mjs
+      - tests/orders/observability.test.mjs
+      - tests/aroma/provider-catalog-source.test.mjs
+      - tests/aroma/gateway-production-composition.test.mjs
+      - tests/aroma/binding-http.test.mjs
+      - tests/aroma/catalog-export.test.mjs
+      - tests/edge-auth/operations.test.mjs
+      - tests/realtime/auth.test.mjs
+      - tests/realtime/contract.test.mjs
+      - tests/realtime/replay.test.mjs
+      - tests/realtime/backpressure.test.mjs
 
 platform:
   publicBaseUrl: https://localhost:8443
@@ -30,6 +212,7 @@ platform:
 
 postgres:
   host: coffee_postgres
+  bootstrapUsername: coffeeuser
   port: 5432
   sslMode: prefer
   maxConnections: 96
@@ -98,10 +281,10 @@ aroma:
 
 pricingPolicy:
   policyVersionRef: pvr_00000000000000000000000001
-  version: '1'
+  version: "1"
   currency: RUB
   markupBasisPoints: 3000
-  minimumMarginMinor: '0'
+  minimumMarginMinor: "0"
   quoteTtlSeconds: 900
   quantityScale: 3
   roundingMode: CEILING
@@ -165,11 +348,11 @@ telemetry:
   alerts:
     version: 1
     evaluationIntervalMs: 60000
-    notReady: {forMs: 300000, threshold: 0}
-    consumerLag: {forMs: 300000, threshold: 0}
-    outboxOldestAge: {forMs: 300000, threshold: 0}
-    unknownOutcome: {forMs: 120000, threshold: 0}
-    sseDropRate: {forMs: 300000, threshold: 0.05}
+    notReady: { forMs: 300000, threshold: 0 }
+    consumerLag: { forMs: 300000, threshold: 0 }
+    outboxOldestAge: { forMs: 300000, threshold: 0 }
+    unknownOutcome: { forMs: 120000, threshold: 0 }
+    sseDropRate: { forMs: 300000, threshold: 0.05 }
 
 browserOidc: null
 
@@ -210,21 +393,81 @@ security:
     previousKid: transport-v0
     overlapHours: 12
     publicKeys:
-      edge-gateway: {active: ed25519-public-edge-gateway-v1, previous: ed25519-public-edge-gateway-v0}
-      api-public: {active: ed25519-public-api-public-v1, previous: ed25519-public-api-public-v0}
-      api-internal: {active: ed25519-public-api-internal-v1, previous: ed25519-public-api-internal-v0}
-      edge-nginx: {active: ed25519-public-edge-nginx-v1, previous: ed25519-public-edge-nginx-v0}
-      customer-service: {active: ed25519-public-customer-service-v1, previous: ed25519-public-customer-service-v0}
-      catalog-service: {active: ed25519-public-catalog-service-v1, previous: ed25519-public-catalog-service-v0}
-      catalog-supplier-sync: {active: ed25519-public-catalog-supplier-sync-v1, previous: ed25519-public-catalog-supplier-sync-v0}
-      catalog-activation-worker: {active: ed25519-public-catalog-activation-worker-v1, previous: ed25519-public-catalog-activation-worker-v0}
-      pricing-service: {active: ed25519-public-pricing-service-v1, previous: ed25519-public-pricing-service-v0}
-      orders-service: {active: ed25519-public-orders-service-v1, previous: ed25519-public-orders-service-v0}
-      orders-aroma-preparation: {active: ed25519-public-orders-aroma-preparation-v1, previous: ed25519-public-orders-aroma-preparation-v0}
-      aroma-observer: {active: ed25519-public-aroma-observer-v1, previous: ed25519-public-aroma-observer-v0}
-      aroma-convergence: {active: ed25519-public-aroma-convergence-v1, previous: ed25519-public-aroma-convergence-v0}
-      aroma-gateway: {active: ed25519-public-aroma-gateway-v1, previous: ed25519-public-aroma-gateway-v0}
-      realtime-gateway: {active: ed25519-public-realtime-gateway-v1, previous: ed25519-public-realtime-gateway-v0}
+      edge-gateway:
+        {
+          active: ed25519-public-edge-gateway-v1,
+          previous: ed25519-public-edge-gateway-v0,
+        }
+      api-public:
+        {
+          active: ed25519-public-api-public-v1,
+          previous: ed25519-public-api-public-v0,
+        }
+      api-internal:
+        {
+          active: ed25519-public-api-internal-v1,
+          previous: ed25519-public-api-internal-v0,
+        }
+      edge-nginx:
+        {
+          active: ed25519-public-edge-nginx-v1,
+          previous: ed25519-public-edge-nginx-v0,
+        }
+      customer-service:
+        {
+          active: ed25519-public-customer-service-v1,
+          previous: ed25519-public-customer-service-v0,
+        }
+      catalog-service:
+        {
+          active: ed25519-public-catalog-service-v1,
+          previous: ed25519-public-catalog-service-v0,
+        }
+      catalog-supplier-sync:
+        {
+          active: ed25519-public-catalog-supplier-sync-v1,
+          previous: ed25519-public-catalog-supplier-sync-v0,
+        }
+      catalog-activation-worker:
+        {
+          active: ed25519-public-catalog-activation-worker-v1,
+          previous: ed25519-public-catalog-activation-worker-v0,
+        }
+      pricing-service:
+        {
+          active: ed25519-public-pricing-service-v1,
+          previous: ed25519-public-pricing-service-v0,
+        }
+      orders-service:
+        {
+          active: ed25519-public-orders-service-v1,
+          previous: ed25519-public-orders-service-v0,
+        }
+      orders-aroma-preparation:
+        {
+          active: ed25519-public-orders-aroma-preparation-v1,
+          previous: ed25519-public-orders-aroma-preparation-v0,
+        }
+      aroma-observer:
+        {
+          active: ed25519-public-aroma-observer-v1,
+          previous: ed25519-public-aroma-observer-v0,
+        }
+      aroma-convergence:
+        {
+          active: ed25519-public-aroma-convergence-v1,
+          previous: ed25519-public-aroma-convergence-v0,
+        }
+      aroma-gateway:
+        {
+          active: ed25519-public-aroma-gateway-v1,
+          previous: ed25519-public-aroma-gateway-v0,
+        }
+      realtime-gateway:
+        {
+          active: ed25519-public-realtime-gateway-v1,
+          previous: ed25519-public-realtime-gateway-v0,
+        }
   delegation:
     publicActor:
       issuer: api-public
@@ -240,9 +483,24 @@ nginxTransport:
   listen: 8443
   publicHost: localhost
   upstreams:
-    edge: {host: edge-gateway, port: 4000, serverName: edge-gateway.development.svc.coffee-platform.internal}
-    apiPublic: {host: api-public, port: 4050, serverName: api-public.development.svc.coffee-platform.internal}
-    realtime: {host: realtime-gateway, port: 4401, serverName: realtime-gateway.development.svc.coffee-platform.internal}
+    edge:
+      {
+        host: edge-gateway,
+        port: 4000,
+        serverName: edge-gateway.development.svc.coffee-platform.internal,
+      }
+    apiPublic:
+      {
+        host: api-public,
+        port: 4050,
+        serverName: api-public.development.svc.coffee-platform.internal,
+      }
+    realtime:
+      {
+        host: realtime-gateway,
+        port: 4401,
+        serverName: realtime-gateway.development.svc.coffee-platform.internal,
+      }
   tls:
     bufferBytes: 4096
     sessionCacheMiB: 4
@@ -272,7 +530,7 @@ nginxTransport:
 services:
   edge-gateway:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4000}
+    listen: { host: 0.0.0.0, port: 4000 }
     health: &health
       livePath: /health/live
       readyPath: /health/ready
@@ -283,109 +541,281 @@ services:
       failureThreshold: 3
       successThreshold: 1
     deadlineMs: 5000
-    deadlineProfiles: {defaultMs: 5000}
+    deadlineProfiles: { defaultMs: 5000 }
     concurrency: 500
     replicas: 1
     dbPool: null
     database: null
     kafka: { producers: [], consumers: [] }
     outbound: []
-    secretRefs: [edge.oidcClientSecret, security.actorContextEdgeSigningPrivateKey, security.serviceTransportKeys.edge-gateway, telemetry.exporterToken]
+    secretRefs:
+      [
+        edge.oidcClientSecret,
+        security.actorContextEdgeSigningPrivateKey,
+        security.serviceTransportKeys.edge-gateway,
+        telemetry.exporterToken,
+      ]
     optionalSecretRefs: [edge.tlsCaBundle]
-    permissions: {manifest: config/permissions/edge-gateway.json, net: [], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
+    permissions:
+      {
+        manifest: config/permissions/edge-gateway.json,
+        net: [],
+        fsRead: [/app/config/platform.yaml, /app/dist],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   api-public:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4050}
+    listen: { host: 0.0.0.0, port: 4050 }
     health: *health
     deadlineMs: 4500
-    deadlineProfiles: {defaultMs: 4500}
+    deadlineProfiles: { defaultMs: 4500 }
     concurrency: 400
     replicas: 1
     dbPool: null
     database: null
     kafka: { producers: [], consumers: [] }
-    outbound: [customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104]
-    secretRefs: [security.apiPublicDelegationSigningPrivateKey, security.actorContextEdgeVerificationPublicKeys, security.serviceTransportKeys.api-public, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/api-public.json, net: [customer-service:4101, catalog-service:4102, pricing-service:4103, orders-service:4104], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
+    outbound:
+      [
+        customer-service:4101,
+        catalog-service:4102,
+        pricing-service:4103,
+        orders-service:4104,
+      ]
+    secretRefs:
+      [
+        security.apiPublicDelegationSigningPrivateKey,
+        security.actorContextEdgeVerificationPublicKeys,
+        security.serviceTransportKeys.api-public,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/api-public.json,
+        net:
+          [
+            customer-service:4101,
+            catalog-service:4102,
+            pricing-service:4103,
+            orders-service:4104,
+          ],
+        fsRead: [/app/config/platform.yaml, /app/dist],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   api-internal:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4051}
+    listen: { host: 0.0.0.0, port: 4051 }
     health: *health
     deadlineMs: null
-    deadlineProfiles: {defaultMs: null}
+    deadlineProfiles: { defaultMs: null }
     concurrency: 300
     replicas: 1
     dbPool: null
     database: null
     kafka: { producers: [], consumers: [] }
-    outbound: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301]
-    secretRefs: [security.apiInternalDelegationSigningPrivateKey, security.serviceVerificationKeys.orders-service, security.serviceVerificationKeys.pricing-service, security.serviceTransportKeys.api-internal, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/api-internal.json, net: [customer-service:4101, catalog-service:4102, pricing-service:4103, aroma-gateway:4301], fsRead: [/app/config/platform.yaml, /app/dist], fsWrite: [], childProcess: false, workers: false}
+    outbound:
+      [
+        customer-service:4101,
+        catalog-service:4102,
+        pricing-service:4103,
+        aroma-gateway:4301,
+      ]
+    secretRefs:
+      [
+        security.apiInternalDelegationSigningPrivateKey,
+        security.serviceVerificationKeys.orders-service,
+        security.serviceVerificationKeys.pricing-service,
+        security.serviceTransportKeys.api-internal,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/api-internal.json,
+        net:
+          [
+            customer-service:4101,
+            catalog-service:4102,
+            pricing-service:4103,
+            aroma-gateway:4301,
+          ],
+        fsRead: [/app/config/platform.yaml, /app/dist],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   customer-service:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4101}
+    listen: { host: 0.0.0.0, port: 4101 }
     health: *health
     deadlineMs: 2000
-    deadlineProfiles: {defaultMs: 2000}
+    deadlineProfiles: { defaultMs: 2000 }
     concurrency: 100
     replicas: 1
-    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    dbPool:
+      {
+        max: 8,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_customer
     kafka: { producers: [], consumers: [] }
     outbound: []
-    secretRefs: [postgres.customer, security.customerCursorSigningPrivateKey, security.customerCursorVerificationPublicKeys, security.delegationVerificationKeys.api-public, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.customer-service, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/customer-service.json, net: [coffee_postgres:5432], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.customer,
+        security.customerCursorSigningPrivateKey,
+        security.customerCursorVerificationPublicKeys,
+        security.delegationVerificationKeys.api-public,
+        security.delegationVerificationKeys.api-internal,
+        security.serviceTransportKeys.customer-service,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/customer-service.json,
+        net: [coffee_postgres:5432],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   catalog-service:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4102}
+    listen: { host: 0.0.0.0, port: 4102 }
     health: *health
     deadlineMs: 2000
-    deadlineProfiles: {defaultMs: 2000}
+    deadlineProfiles: { defaultMs: 2000 }
     concurrency: 150
     replicas: 1
-    catalogSnapshotProof: {maxAgeMs: 7200000}
-    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    catalogSnapshotProof: { maxAgeMs: 7200000 }
+    dbPool:
+      {
+        max: 8,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_catalog
     kafka: { producers: [], consumers: [] }
     outbound: []
-    secretRefs: [postgres.catalogApi, security.catalogCursorSigningPrivateKey, security.delegationVerificationKeys.api-public, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.catalog-service, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/catalog-service.json, net: [coffee_postgres:5432], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.catalogApi,
+        security.catalogCursorSigningPrivateKey,
+        security.delegationVerificationKeys.api-public,
+        security.delegationVerificationKeys.api-internal,
+        security.serviceTransportKeys.catalog-service,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/catalog-service.json,
+        net: [coffee_postgres:5432],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   catalog-supplier-sync:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4201}
+    listen: { host: 0.0.0.0, port: 4201 }
     health: *health
     deadlineMs: 900000
-    deadlineProfiles: {defaultMs: 900000}
+    deadlineProfiles: { defaultMs: 900000 }
     concurrency: 1
     replicas: 1
-    scheduler: {intervalMs: 3600000, startupImport: true, overlapPolicy: skip}
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    scheduler: { intervalMs: 3600000, startupImport: true, overlapPolicy: skip }
+    dbPool:
+      {
+        max: 4,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_catalog
     kafka: { producers: [], consumers: [] }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.catalogImport, security.serviceTransportKeys.catalog-supplier-sync, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/catalog-supplier-sync.json, net: [coffee_postgres:5432, api-internal:4051], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.catalogImport,
+        security.serviceTransportKeys.catalog-supplier-sync,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/catalog-supplier-sync.json,
+        net: [coffee_postgres:5432, api-internal:4051],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   catalog-activation-worker:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4202}
+    listen: { host: 0.0.0.0, port: 4202 }
     health: *health
     deadlineMs: 5000
-    deadlineProfiles: {defaultMs: 5000}
+    deadlineProfiles: { defaultMs: 5000 }
     concurrency: 1
     replicas: 1
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    dbPool:
+      {
+        max: 4,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_catalog
     kafka:
       {
@@ -393,35 +823,98 @@ services:
         consumers: [],
       }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.catalogActivate, kafka.catalog, security.serviceTransportKeys.catalog-activation-worker, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/catalog-activation-worker.json, net: [coffee_postgres:5432, kafka:9092, api-internal:4051], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.catalogActivate,
+        kafka.catalog,
+        security.serviceTransportKeys.catalog-activation-worker,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/catalog-activation-worker.json,
+        net: [coffee_postgres:5432, kafka:9092, api-internal:4051],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   pricing-service:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4103}
+    listen: { host: 0.0.0.0, port: 4103 }
     health: *health
     deadlineMs: 5000
-    deadlineProfiles: {defaultMs: 5000}
+    deadlineProfiles: { defaultMs: 5000 }
     concurrency: 100
     replicas: 1
-    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    dbPool:
+      {
+        max: 8,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_pricing
     kafka: { producers: [], consumers: [] }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.pricing, security.pricingServiceDelegationSigningPrivateKey, security.delegationVerificationKeys.api-public, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.pricing-service, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/pricing-service.json, net: [coffee_postgres:5432, api-internal:4051], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.pricing,
+        security.pricingServiceDelegationSigningPrivateKey,
+        security.delegationVerificationKeys.api-public,
+        security.delegationVerificationKeys.api-internal,
+        security.serviceTransportKeys.pricing-service,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/pricing-service.json,
+        net: [coffee_postgres:5432, api-internal:4051],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   orders-service:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4104}
+    listen: { host: 0.0.0.0, port: 4104 }
     health: *health
     deadlineMs: 5000
-    deadlineProfiles: {defaultMs: 5000}
+    deadlineProfiles: { defaultMs: 5000 }
     concurrency: 150
     replicas: 1
-    dbPool: {max: 4, maxWaiting: 100, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    dbPool:
+      {
+        max: 4,
+        maxWaiting: 100,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_orders
     kafka:
       {
@@ -434,20 +927,58 @@ services:
         consumers: [],
       }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.ordersService, kafka.orders, security.ordersServiceDelegationSigningPrivateKey, security.delegationVerificationKeys.api-public, security.serviceTransportKeys.orders-service, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/orders-service.json, net: [coffee_postgres:5432, api-internal:4051, kafka:9092], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.ordersService,
+        kafka.orders,
+        security.ordersServiceDelegationSigningPrivateKey,
+        security.delegationVerificationKeys.api-public,
+        security.serviceTransportKeys.orders-service,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/orders-service.json,
+        net: [coffee_postgres:5432, api-internal:4051, kafka:9092],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   orders-aroma-preparation:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4203}
+    listen: { host: 0.0.0.0, port: 4203 }
     health: *health
     deadlineMs: 5000
-    deadlineProfiles: {defaultMs: 5000}
+    deadlineProfiles: { defaultMs: 5000 }
     concurrency: 16
     replicas: 1
-    aromaPreparation: {pollIntervalMs: 1000, batchSize: 100, maxOrders: 10000, maxLines: 10000}
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    aromaPreparation:
+      {
+        pollIntervalMs: 1000,
+        batchSize: 100,
+        maxOrders: 10000,
+        maxLines: 10000,
+      }
+    dbPool:
+      {
+        max: 4,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_orders
     kafka:
       producers: [coffee.aroma.cart.commands.v1, coffee.realtime.invalidate.v1]
@@ -468,38 +999,117 @@ services:
             processing: durable,
           }
     outbound: []
-    secretRefs: [postgres.ordersPreparation, kafka.orders, security.serviceTransportKeys.orders-aroma-preparation, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/orders-aroma-preparation.json, net: [coffee_postgres:5432, kafka:9092], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.ordersPreparation,
+        kafka.orders,
+        security.serviceTransportKeys.orders-aroma-preparation,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/orders-aroma-preparation.json,
+        net: [coffee_postgres:5432, kafka:9092],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   aroma-observer:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4204}
+    listen: { host: 0.0.0.0, port: 4204 }
     health: *health
     deadlineMs: 15000
-    deadlineProfiles: {defaultMs: 15000}
+    deadlineProfiles: { defaultMs: 15000 }
     concurrency: 4
     replicas: 1
-    aromaObservation: {pollIntervalMs: 1000, intervalMs: 5000, leaseMs: 30000, maxSnapshotAgeMs: 15000, maxLines: 10000, maxResponseBytes: 2097152}
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    aromaObservation:
+      {
+        pollIntervalMs: 1000,
+        intervalMs: 5000,
+        leaseMs: 30000,
+        maxSnapshotAgeMs: 15000,
+        maxLines: 10000,
+        maxResponseBytes: 2097152,
+      }
+    dbPool:
+      {
+        max: 4,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_orders
     kafka: { producers: [coffee.aroma.cart.events.v1], consumers: [] }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.aromaObserver, kafka.orders, security.serviceTransportKeys.aroma-observer, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/aroma-observer.json, net: [coffee_postgres:5432, api-internal:4051, kafka:9092], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.aromaObserver,
+        kafka.orders,
+        security.serviceTransportKeys.aroma-observer,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/aroma-observer.json,
+        net: [coffee_postgres:5432, api-internal:4051, kafka:9092],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false
 
   aroma-convergence:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4205}
+    listen: { host: 0.0.0.0, port: 4205 }
     health: *health
     deadlineMs: 30000
-    deadlineProfiles: {defaultMs: 30000}
+    deadlineProfiles: { defaultMs: 30000 }
     concurrency: 4
     replicas: 1
     mutationsEnabled: false
-    aromaConvergence: {pollIntervalMs: 1000, leaseMs: 30000, heartbeatIntervalMs: 10000, providerDeadlineMs: 10000, safetyMarginMs: 5000, retryBackoffMs: 5000, maxSnapshotAgeMs: 15000, maxLines: 10000, maxResponseBytes: 2097152}
-    dbPool: {max: 4, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    aromaConvergence:
+      {
+        pollIntervalMs: 1000,
+        leaseMs: 30000,
+        heartbeatIntervalMs: 10000,
+        providerDeadlineMs: 10000,
+        safetyMarginMs: 5000,
+        retryBackoffMs: 5000,
+        maxSnapshotAgeMs: 15000,
+        maxLines: 10000,
+        maxResponseBytes: 2097152,
+      }
+    dbPool:
+      {
+        max: 4,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_orders
     kafka:
       producers: [coffee.aroma.cart.events.v1, coffee.realtime.invalidate.v1]
@@ -510,32 +1120,86 @@ services:
             processing: durable,
           }
     outbound: [api-internal:4051]
-    secretRefs: [postgres.aromaConvergence, kafka.orders, security.serviceTransportKeys.aroma-convergence, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/aroma-convergence.json, net: [coffee_postgres:5432, api-internal:4051, kafka:9092], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.aromaConvergence,
+        kafka.orders,
+        security.serviceTransportKeys.aroma-convergence,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/aroma-convergence.json,
+        net: [coffee_postgres:5432, api-internal:4051, kafka:9092],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: true
 
   aroma-gateway:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4301}
+    listen: { host: 0.0.0.0, port: 4301 }
     health: *health
     deadlineMs: 10000
-    deadlineProfiles: {defaultMs: 10000, readMs: 900000, cartMs: 10000, mutationMs: 10000}
+    deadlineProfiles:
+      { defaultMs: 10000, readMs: 900000, cartMs: 10000, mutationMs: 10000 }
     concurrency: 8
     replicas: 1
-    dbPool: {max: 8, checkoutTimeoutMs: 250, lockTimeoutMs: 250, interactiveStatementTimeoutMs: 1500, backgroundStatementTimeoutMs: 5000, terminalTimeoutMs: 2000, transactionTimeoutMs: 10000, idleTimeoutMs: 30000, maxLifetimeMs: 1800000}
+    dbPool:
+      {
+        max: 8,
+        checkoutTimeoutMs: 250,
+        lockTimeoutMs: 250,
+        interactiveStatementTimeoutMs: 1500,
+        backgroundStatementTimeoutMs: 5000,
+        terminalTimeoutMs: 2000,
+        transactionTimeoutMs: 10000,
+        idleTimeoutMs: 30000,
+        maxLifetimeMs: 1800000,
+      }
     database: coffee_platform_integration
     kafka: { producers: [], consumers: [] }
     outbound: [aroma.origin.host:443]
-    secretRefs: [postgres.aromaGateway, aroma.email, aroma.password, aroma.sessionEncryptionKey, aroma.catalogIdentityKeyV1, security.delegationVerificationKeys.api-internal, security.serviceTransportKeys.aroma-gateway, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/aroma-gateway.json, net: [coffee_postgres:5432, aroma.origin.host:443], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        postgres.aromaGateway,
+        aroma.email,
+        aroma.password,
+        aroma.sessionEncryptionKey,
+        aroma.catalogIdentityKeyV1,
+        security.delegationVerificationKeys.api-internal,
+        security.serviceTransportKeys.aroma-gateway,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/aroma-gateway.json,
+        net: [coffee_postgres:5432, aroma.origin.host:443],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: true
 
   realtime-gateway:
     transportMode: mtls
-    listen: {host: 0.0.0.0, port: 4401}
+    listen: { host: 0.0.0.0, port: 4401 }
     health: *health
     deadlineMs: null
-    deadlineProfiles: {defaultMs: null}
+    deadlineProfiles: { defaultMs: null }
     concurrency: 512
     replicas: 1
     dbPool: null
@@ -566,6 +1230,25 @@ services:
             processing: realtime,
           }
     outbound: []
-    secretRefs: [kafka.realtime, security.actorContextEdgeVerificationPublicKeys, security.serviceTransportKeys.realtime-gateway, telemetry.exporterToken]
-    permissions: {manifest: config/permissions/realtime-gateway.json, net: [kafka:9092], fsRead: [/app/config/platform.yaml, /app/dist, /run/secrets/coffee-platform.yaml], fsWrite: [], childProcess: false, workers: false}
+    secretRefs:
+      [
+        kafka.realtime,
+        security.actorContextEdgeVerificationPublicKeys,
+        security.serviceTransportKeys.realtime-gateway,
+        telemetry.exporterToken,
+      ]
+    permissions:
+      {
+        manifest: config/permissions/realtime-gateway.json,
+        net: [kafka:9092],
+        fsRead:
+          [
+            /app/config/platform.yaml,
+            /app/dist,
+            /run/secrets/coffee-platform.yaml,
+          ],
+        fsWrite: [],
+        childProcess: false,
+        workers: false,
+      }
     mutationCapability: false

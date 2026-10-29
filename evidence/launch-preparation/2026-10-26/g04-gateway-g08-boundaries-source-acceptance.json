@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-27T00:16:01.959916+00:00",
+  "status": "SOURCE_ACCEPTED_NARROW_TESTS_PASS_FULL_G04_PENDING",
+  "files": [
+    {
+      "path": "tests/aroma/catalog-export.test.mjs",
+      "beforeSha256": "b1664ca33542ba9f55c3dd64b1933bb04d9f4fe1d7dbc8fef257ae7238c370b3",
+      "afterSha256": "ae07c426b54128069e00fefc05b67c68e6261c195c84f15c7b8dbd140e7f557e",
+      "ownPatchSha256": "96b68875cd67f6eac95493fa8b038d3820e4b266d0ad5abfa42fa45361105908",
+      "reverseRestoresOriginalRootBytes": true
+    },
+    {
+      "path": "tests/config/observability-bootstrap.test.mjs",
+      "beforeSha256": "5082775cc2e5b13f3e701b6becceaa040d9c9e31e090053651c160e361223caf",
+      "afterSha256": "14e5d03f7b704837dc5f808f14038a9e8e2d23dc5eb6dcabab01a659c71a95bb",
+      "ownPatchSha256": "2e615670c404794ab63b4ebd356103087335c4bf5556890569ceffbf06ceee82",
+      "reverseRestoresOriginalRootBytes": true
+    }
+  ],
+  "foreignSharedFileChangesPreservedByExactReverseProof": true,
+  "integrationProofSha256": "0d643c6cd37a1b921e64e981b035329826d58920907a6942be23367e3e580e82",
+  "review": "Root and Astra accepted route/auth/deadline/persistence boundaries and G08 source/installed-bundle guards",
+  "checks": [
+    {
+      "command": "env -u SOPS_AGE_KEY_FILE -u SOPS_AGE_KEY node --test tests/aroma/catalog-export.test.mjs",
+      "cwd": "Private exact-source copy; source/dist identity verified",
+      "exitCode": 0,
+      "passed": 24,
+      "skipped": 0,
+      "log": "/home/yurgusev/.cache/coffee-issue13/g04-gateway-catalog-root-independent.log",
+      "logSha256": "3404c4dd0928bd30b2b308670f580956184dcce90eec17151c56aa8684e23e58"
+    },
+    {
+      "command": "env -u SOPS_AGE_KEY_FILE -u SOPS_AGE_KEY node --test --test-name-pattern=G08 admin credential sync refuses|G08 role preparation validates temporary ciphertext tests/config/observability-bootstrap.test.mjs",
+      "cwd": "/home/yurgusev/CoffeeOrderPlatform",
+      "exitCode": 0,
+      "passed": 2,
+      "skipped": 0,
+      "log": "/home/yurgusev/.cache/coffee-issue13/g04-g08-root-independent.log",
+      "logSha256": "4fa2d3e49d8d49e4a849f88fc7e8ee0da3cf2e88b757975d53ed0dbd5b6524ef"
+    }
+  ],
+  "runtimeBootstrapSha256Unchanged": "005cd40b62da0df078644be2c2e08efea12e2f57ea8165902e49ad5810787817",
+  "encryptedSopsSha256Unchanged": "907ee787fa30c904a3770e262eb92cce5e0c8973716bd372c6afc2a7bd84dca2",
+  "limitations": [
+    "Controlled HTTP/iterator and FS/subprocess fixtures only; no live provider/PG/Docker/mTLS or real concurrent attacker proof",
+    "Full G04 coverage not rerun; floors90/90/85 unchanged"
+  ]
+}

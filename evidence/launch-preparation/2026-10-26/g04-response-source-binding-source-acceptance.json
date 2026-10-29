@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "kind": "SOURCE_TEST_ACCEPTANCE_NOT_GATE_ADMISSION",
+  "capturedAtUtc": "2026-10-26T21:50:03.741299+00:00",
+  "status": "ACCEPTED_SOURCE_ONLY",
+  "changes": [
+    {
+      "change": "Gateway binding spoofed actor header",
+      "target": "tests/aroma/binding-http.test.mjs",
+      "fileSha256": "dcabeb49f68a8750dde23a3c207593481ad3da81401d9088ccf528478204d36f",
+      "ownPatch": {
+        "path": "/home/yurgusev/.cache/coffee-issue13/binding-http-trust-regression-20261027/own.patch",
+        "sha256": "81997e7157011ed00701f4015778bd4caaa620415b5ee5603fce3394a60883de"
+      },
+      "workerReceipt": {
+        "path": "/home/yurgusev/.cache/coffee-issue13/binding-http-trust-regression-20261027/receipt.json",
+        "sha256": "1022619ab634e57d576b671ce1b12a7eef0cde30336d10f2c16deda339bcdded"
+      },
+      "rootIndependent": {
+        "status": "PASS",
+        "testsPassed": 4,
+        "testsFailed": 0,
+        "testsSkipped": 0,
+        "durationMs": "1636.172661",
+        "logPath": "/home/yurgusev/.cache/coffee-issue13/binding-http-trust-regression-20261027/root-independent.log",
+        "logSha256": "a7fafa4fd885a6fdbc6d331ad22422c5f7a7f98f6184f1be17397ddfc4e1b9ef"
+      },
+      "astraReview": "Accepted source/test delta; no material findings; reviewer did not run tests"
+    },
+    {
+      "change": "Orders Confirm foreign OrderCard response",
+      "target": "tests/orders/owner-http.test.mjs",
+      "fileSha256": "c3444f77780e0c477f92843e2347cc0e7360f852aa9ba9481ebe047215f1be78",
+      "ownPatch": {
+        "path": "/home/yurgusev/.cache/coffee-issue13/orders-owner-http-response-binding-20261027/own.patch",
+        "sha256": "524971fe9c0e4f58076d2e908bcb7b27a9ee64402d1abb97f01b9fe50c649e2d"
+      },
+      "workerReceipt": {
+        "path": "/home/yurgusev/.cache/coffee-issue13/orders-owner-http-response-binding-20261027/receipt.json",
+        "sha256": "45ee8368f220589eaddd01cdeacd012f3371f02a6fe6fffe67b3ef6cca4d8da9"
+      },
+      "rootIndependent": {
+        "status": "PASS",
+        "testsPassed": 22,
+        "testsFailed": 0,
+        "testsSkipped": 0,
+        "durationMs": "1656.823302",
+        "logPath": "/home/yurgusev/.cache/coffee-issue13/orders-owner-http-response-binding-20261027/root-independent.log",
+        "logSha256": "695e575673c73b1c859e6f81d5752a4e3129a01bc880ba1c086a7227b10519fe"
+      },
+      "astraReview": "Accepted source/test delta; no material findings; reviewer did not run tests"
+    },
+    {
+      "change": "Preparation source binding before owner writes",
+      "target": "packages/platform-testing/test/platform-packages.test.mjs",
+      "fileSha256": "eea379cf8abd04ef53eaeda6b46db9c57f1874e2cb5a6700d9c74274dab9c0ef",
+      "ownPatch": {
+        "path": "/home/yurgusev/.cache/coffee-issue13/preparation-confirm-source-unit-20261027/own.patch",
+        "sha256": "97072916be231d30e0b6efa61521ddaaca14c59f3101256c30bcbfacaec1658a"
+      },
+      "workerReceipt": {
+        "path": "/home/yurgusev/.cache/coffee-issue13/preparation-confirm-source-unit-20261027/receipt.json",
+        "sha256": "d7f83a00a6d48b7d8b6337558e14d7aafbc1d04c46041ac30ce250b89adc373f"
+      },
+      "rootIndependent": {
+        "status": "PASS",
+        "testsPassed": 16,
+        "testsFailed": 0,
+        "testsSkipped": 0,
+        "durationMs": "1939.27285",
+        "logPath": "/home/yurgusev/.cache/coffee-issue13/preparation-confirm-source-unit-20261027/root-independent.log",
+        "logSha256": "4b92ca07171e51fa2ec8da3a6ff384fbcea258dbcfdbaf32214085bb32d31e5e"
+      },
+      "astraReview": "Accepted source/test delta; no material findings; reviewer did not run tests"
+    }
+  ],
+  "cleanDiagnosticCandidate": {
+    "metadataPath": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/alpine-source-binding-candidate.json",
+    "metadataSha256": "01888740db32da70ad6c55f9bb134478853755633b56616ebbff37b5dbc55c27",
+    "candidateRoot": "/home/yurgusev/.cache/coffee-issue13/alpine-source-binding-candidate-20261026T214737Z",
+    "candidateSha": "08dd5da26739bb571204686ebafcd8941e6029a1",
+    "baseSha": "ca13aa4558decacf794a852d6c30f7d956c34994",
+    "offlineFrozenInstallExit": 0,
+    "offlineInstallLogSha256": "b05b1971967ea822ad37310ed5ae7a728ba4278092bfa86c1e64efd7d073799c",
+    "contextCreated": false,
+    "g03": "NOT_RUN",
+    "g04": "NOT_RUN"
+  },
+  "preservation": {
+    "rootEncryptedSecretsSha256": "907ee787fa30c904a3770e262eb92cce5e0c8973716bd372c6afc2a7bd84dca2",
+    "privateEncryptedSecretsSha256": "490f3bcabdf05e1a3f4e81f98f29950bcbfd232e1879875576062cad0c5e46cd",
+    "tastyExcludedFromCandidate": true
+  },
+  "limitations": [
+    "Inject fixtures and strict SQL mocks; no live PostgreSQL, provider or mTLS proof.",
+    "Preparation mock verifies predicates/binds and refusal effects, not PostgreSQL predicate evaluation.",
+    "No branch coverage increase or aggregate G00-G19 admission is claimed; earlier candidate results are not transferred.",
+    "Root reviewer input initially described Orders as 1/1 narrow; actual independent invocation ran the entire file, 22/22 PASS, as verified directly in its log."
+  ]
+}

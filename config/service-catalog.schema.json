@@ -22,11 +22,7 @@
     "authority": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "runtimeProfile",
-        "runtimeCatalog",
-        "contractCatalog"
-      ],
+      "required": ["runtimeProfile", "runtimeCatalog", "contractCatalog"],
       "properties": {
         "runtimeProfile": {
           "const": "platform/launch-v1-runtime-profile.json"
@@ -49,13 +45,16 @@
       "properties": {
         "otel-collector": {
           "const": [
-            {"name": "exporterToken", "ref": "telemetry.exporterToken"},
-            {"name": "openObserveIngestToken", "ref": "telemetry.openObserveIngestToken"}
+            { "name": "exporterToken", "ref": "telemetry.exporterToken" },
+            {
+              "name": "openObserveIngestToken",
+              "ref": "telemetry.openObserveIngestToken"
+            }
           ]
         },
         "openobserve-bootstrap": {
           "const": [
-            {"name": "admin-secret", "ref": "telemetry.openObserveAdmin"}
+            { "name": "admin-secret", "ref": "telemetry.openObserveAdmin" }
           ]
         }
       }
@@ -71,10 +70,7 @@
     "newRuntimeProcedure": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "required",
-        "automaticCatalogExtensionAllowed"
-      ],
+      "required": ["required", "automaticCatalogExtensionAllowed"],
       "properties": {
         "required": {
           "type": "array",
@@ -113,16 +109,9 @@
       ]
     },
     "database": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": ["object", "null"],
       "additionalProperties": false,
-      "required": [
-        "name",
-        "role",
-        "access"
-      ],
+      "required": ["name", "role", "access"],
       "properties": {
         "name": {
           "enum": [
@@ -234,10 +223,7 @@
           ]
         },
         "transportMode": {
-          "enum": [
-            "public-tls",
-            "mtls"
-          ]
+          "enum": ["public-tls", "mtls"]
         },
         "runtimeKind": {
           "const": "native-nginx"

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "status": "SOURCE_ACCEPTED",
+  "file": "/home/yurgusev/CoffeeOrderPlatform/tests/orders/public-api.test.mjs",
+  "sha256": "e1f837a7a63be536cb0e914f18efa8c8d92522165ed17260fc48d70d12afafab",
+  "rootIndependent": "PASS 1/1",
+  "workerTestsFormatLintDiff": "PASS",
+  "astra": "Accepted",
+  "supersedes": "Initial invalid-payload assertions/QA not accepted: body validation could mask protocol/header guard regression.",
+  "scope": "Five upstream protocol/header failures with valid positive DTO, no body consumption, sanitized503; one existing configured fetch-shim test.",
+  "limitations": [
+    "No real TLS handshake.",
+    "Not included in last full G04."
+  ]
+}

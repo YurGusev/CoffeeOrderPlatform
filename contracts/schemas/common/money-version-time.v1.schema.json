@@ -39,7 +39,12 @@
         },
         { "not": { "type": "string", "pattern": "^ff-" } },
         { "not": { "type": "string", "pattern": "^[0-9a-f]{2}-0{32}-" } },
-        { "not": { "type": "string", "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-0{16}-" } }
+        {
+          "not": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-0{16}-"
+          }
+        }
       ]
     }
   }

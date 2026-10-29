@@ -37,32 +37,76 @@ const KAFKA_TOPICS = [
   "coffee.realtime.invalidate.v1",
 ];
 const EXPECTED_KAFKA_PRODUCERS = {
-  "edge-gateway": [], "api-public": [], "api-internal": [],
-  "customer-service": [], "catalog-service": [], "catalog-supplier-sync": [],
-  "catalog-activation-worker": ["coffee.catalog.snapshot.v1", "coffee.catalog.mapping.v2"],
+  "edge-gateway": [],
+  "api-public": [],
+  "api-internal": [],
+  "customer-service": [],
+  "catalog-service": [],
+  "catalog-supplier-sync": [],
+  "catalog-activation-worker": [
+    "coffee.catalog.snapshot.v1",
+    "coffee.catalog.mapping.v2",
+  ],
   "pricing-service": [],
-  "orders-service": ["coffee.orders.lifecycle.v1", "coffee.aroma.cart.commands.v1", "coffee.realtime.invalidate.v1"],
-  "orders-aroma-preparation": ["coffee.aroma.cart.commands.v1", "coffee.realtime.invalidate.v1"],
+  "orders-service": [
+    "coffee.orders.lifecycle.v1",
+    "coffee.aroma.cart.commands.v1",
+    "coffee.realtime.invalidate.v1",
+  ],
+  "orders-aroma-preparation": [
+    "coffee.aroma.cart.commands.v1",
+    "coffee.realtime.invalidate.v1",
+  ],
   "aroma-observer": ["coffee.aroma.cart.events.v1"],
-  "aroma-convergence": ["coffee.aroma.cart.events.v1", "coffee.realtime.invalidate.v1"],
-  "aroma-gateway": [], "realtime-gateway": [],
+  "aroma-convergence": [
+    "coffee.aroma.cart.events.v1",
+    "coffee.realtime.invalidate.v1",
+  ],
+  "aroma-gateway": [],
+  "realtime-gateway": [],
 };
 const EXPECTED_KAFKA_CONSUMERS = {
-  "edge-gateway": [], "api-public": [], "api-internal": [],
-  "customer-service": [], "catalog-service": [], "catalog-supplier-sync": [],
-  "catalog-activation-worker": [], "pricing-service": [], "orders-service": [],
+  "edge-gateway": [],
+  "api-public": [],
+  "api-internal": [],
+  "customer-service": [],
+  "catalog-service": [],
+  "catalog-supplier-sync": [],
+  "catalog-activation-worker": [],
+  "pricing-service": [],
+  "orders-service": [],
   "orders-aroma-preparation": [
-    {groupId: "orders-catalog-mapping-v2", topics: ["coffee.catalog.mapping.v2"], processing: "durable"},
-    {groupId: "orders-aroma-preparation-v1", topics: ["coffee.orders.lifecycle.v1"], processing: "durable"},
-    {groupId: "orders-aroma-projection-v1", topics: ["coffee.aroma.cart.events.v1"], processing: "durable"},
+    {
+      groupId: "orders-catalog-mapping-v2",
+      topics: ["coffee.catalog.mapping.v2"],
+      processing: "durable",
+    },
+    {
+      groupId: "orders-aroma-preparation-v1",
+      topics: ["coffee.orders.lifecycle.v1"],
+      processing: "durable",
+    },
+    {
+      groupId: "orders-aroma-projection-v1",
+      topics: ["coffee.aroma.cart.events.v1"],
+      processing: "durable",
+    },
   ],
   "aroma-observer": [],
   "aroma-convergence": [
-    {groupId: "aroma-convergence-v1", topics: ["coffee.aroma.cart.commands.v1"], processing: "durable"},
+    {
+      groupId: "aroma-convergence-v1",
+      topics: ["coffee.aroma.cart.commands.v1"],
+      processing: "durable",
+    },
   ],
   "aroma-gateway": [],
   "realtime-gateway": [
-    {groupId: "realtime-gateway-v1", topics: ["coffee.realtime.invalidate.v1"], processing: "realtime"},
+    {
+      groupId: "realtime-gateway-v1",
+      topics: ["coffee.realtime.invalidate.v1"],
+      processing: "realtime",
+    },
   ],
 };
 const ALLOWED_SOPS_FILES = new Set([
@@ -271,18 +315,26 @@ function validate(schema, document, label, linkedSchemas = []) {
 
 export async function loadServiceCatalog(root = REPO_ROOT) {
   const path = join(root, "config/service-catalog.json");
-  const schema = await readJson(join(root, "config/service-catalog.schema.json"));
+  const schema = await readJson(
+    join(root, "config/service-catalog.schema.json"),
+  );
   const catalog = await readJson(path);
   validate(schema, catalog, path);
   return catalog;
 }
 
-export async function infrastructureSecretEntries(scope, {root = REPO_ROOT} = {}) {
+export async function infrastructureSecretEntries(
+  scope,
+  { root = REPO_ROOT } = {},
+) {
   const catalog = await loadServiceCatalog(root);
   const scopes = catalog.infrastructureSecretScopes;
   if (typeof scope !== "string" || !Object.hasOwn(scopes, scope))
-    fail("CONFIG-SECRET-SCOPE", `${String(scope)}: unknown infrastructure secret scope`);
-  return scopes[scope].map(({name, ref}) => [name, ref]);
+    fail(
+      "CONFIG-SECRET-SCOPE",
+      `${String(scope)}: unknown infrastructure secret scope`,
+    );
+  return scopes[scope].map(({ name, ref }) => [name, ref]);
 }
 
 function sorted(values) {
@@ -319,7 +371,12 @@ function checkConfigKeys(document) {
   walk(document, (value, path) => {
     const key = path.at(-1);
     if (isNginxPemPath(path, value)) return;
-    if (path.length === 2 && path[0] === "browserOidc" && path[1] === "tokenUrl") return;
+    if (
+      path.length === 2 &&
+      path[0] === "browserOidc" &&
+      path[1] === "tokenUrl"
+    )
+      return;
     if (isSecretLikeKey(key)) {
       fail(
         "CONFIG-PLAINTEXT-KEY",
@@ -330,34 +387,70 @@ function checkConfigKeys(document) {
 }
 
 function checkKafkaConfiguration(config) {
-  const configuredTopics = Object.values(config.kafka.topics).map((topic) => topic.name);
-  if (JSON.stringify(sorted(configuredTopics)) !== JSON.stringify(sorted(KAFKA_TOPICS)))
-    fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", "Kafka topic registry differs from launch allowlist");
+  const configuredTopics = Object.values(config.kafka.topics).map(
+    (topic) => topic.name,
+  );
+  if (
+    JSON.stringify(sorted(configuredTopics)) !==
+    JSON.stringify(sorted(KAFKA_TOPICS))
+  )
+    fail(
+      "CONFIG-KAFKA-TOPIC-ALLOWLIST",
+      "Kafka topic registry differs from launch allowlist",
+    );
   for (const runtime of NODE_RUNTIMES) {
     const access = config.services[runtime].kafka;
     const expectedProducers = EXPECTED_KAFKA_PRODUCERS[runtime];
     if (JSON.stringify(access.producers) !== JSON.stringify(expectedProducers))
-      fail("CONFIG-KAFKA-DIRECTION", `${runtime}.kafka.producers differs from launch mapping`);
+      fail(
+        "CONFIG-KAFKA-DIRECTION",
+        `${runtime}.kafka.producers differs from launch mapping`,
+      );
     for (const topic of access.producers) {
-      if (!KAFKA_TOPICS.includes(topic)) fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", `${runtime}.kafka.producers contains ${topic}`);
+      if (!KAFKA_TOPICS.includes(topic))
+        fail(
+          "CONFIG-KAFKA-TOPIC-ALLOWLIST",
+          `${runtime}.kafka.producers contains ${topic}`,
+        );
     }
     for (const consumer of access.consumers) {
       if (!consumer.topics.every((topic) => KAFKA_TOPICS.includes(topic)))
-        fail("CONFIG-KAFKA-TOPIC-ALLOWLIST", `${runtime}.kafka consumer contains an unknown topic`);
-      if (consumer.processing === "realtime" &&
-          (runtime !== "realtime-gateway" || consumer.groupId !== "realtime-gateway-v1" ||
-            JSON.stringify(consumer.topics) !== JSON.stringify(["coffee.realtime.invalidate.v1"])))
-        fail("CONFIG-KAFKA-REALTIME", `${runtime}.kafka.realtime is outside the sole realtime exception`);
+        fail(
+          "CONFIG-KAFKA-TOPIC-ALLOWLIST",
+          `${runtime}.kafka consumer contains an unknown topic`,
+        );
+      if (
+        consumer.processing === "realtime" &&
+        (runtime !== "realtime-gateway" ||
+          consumer.groupId !== "realtime-gateway-v1" ||
+          JSON.stringify(consumer.topics) !==
+            JSON.stringify(["coffee.realtime.invalidate.v1"]))
+      )
+        fail(
+          "CONFIG-KAFKA-REALTIME",
+          `${runtime}.kafka.realtime is outside the sole realtime exception`,
+        );
     }
-    if (JSON.stringify(access.consumers) !== JSON.stringify(EXPECTED_KAFKA_CONSUMERS[runtime]))
-      fail("CONFIG-KAFKA-DIRECTION", `${runtime}.kafka.consumers differs from launch mapping`);
+    if (
+      JSON.stringify(access.consumers) !==
+      JSON.stringify(EXPECTED_KAFKA_CONSUMERS[runtime])
+    )
+      fail(
+        "CONFIG-KAFKA-DIRECTION",
+        `${runtime}.kafka.consumers differs from launch mapping`,
+      );
   }
 }
 
 function isNginxPemPath(path, value) {
-  if (path.length !== 3 || path[0] !== "nginxTransport" || path[1] !== "tls") return false;
-  return (path[2] === "publicPrivateKey" && value === "/run/secrets/edge-nginx/public.key") ||
-    (path[2] === "clientPrivateKey" && value === "/run/secrets/edge-nginx/client.key");
+  if (path.length !== 3 || path[0] !== "nginxTransport" || path[1] !== "tls")
+    return false;
+  return (
+    (path[2] === "publicPrivateKey" &&
+      value === "/run/secrets/edge-nginx/public.key") ||
+    (path[2] === "clientPrivateKey" &&
+      value === "/run/secrets/edge-nginx/client.key")
+  );
 }
 
 function isSecretLikeKey(key) {
@@ -394,16 +487,34 @@ function checkOpenConfigurationText(text, label) {
     const trimmed = line.trim();
     const indentation = line.length - line.trimStart().length;
     if (label === "config/platform.yaml") {
-      if (line.trim() === "browserOidc:" || line.trim() === "browserOidc: null") browserOidcIndent = indentation;
-      else if (browserOidcIndent !== null && trimmed && indentation <= browserOidcIndent) browserOidcIndent = null;
+      if (line.trim() === "browserOidc:" || line.trim() === "browserOidc: null")
+        browserOidcIndent = indentation;
+      else if (
+        browserOidcIndent !== null &&
+        trimmed &&
+        indentation <= browserOidcIndent
+      )
+        browserOidcIndent = null;
     }
     if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//"))
       continue;
     for (const match of trimmed.matchAll(keyPattern)) {
       const key = match[1] ?? match[2] ?? match[3];
-      if (label === "config/platform.yaml" &&
-          isNginxPemPath(["nginxTransport", "tls", key], trimmed.split(/:\s*/u, 2)[1])) continue;
-      if (label === "config/platform.yaml" && key === "tokenUrl" && browserOidcIndent !== null && indentation > browserOidcIndent) continue;
+      if (
+        label === "config/platform.yaml" &&
+        isNginxPemPath(
+          ["nginxTransport", "tls", key],
+          trimmed.split(/:\s*/u, 2)[1],
+        )
+      )
+        continue;
+      if (
+        label === "config/platform.yaml" &&
+        key === "tokenUrl" &&
+        browserOidcIndent !== null &&
+        indentation > browserOidcIndent
+      )
+        continue;
       if (isSecretLikeKey(key))
         fail(
           "CONFIG-PLAINTEXT-KEY",
@@ -546,19 +657,32 @@ export async function loadPlatformConfig(
 ) {
   const path = configPath;
   const schema = await readJson(join(root, "config/platform.schema.json"));
-  const nginxSchema = await readJson(join(root, "config/nginx-profile.schema.json"));
+  const nginxSchema = await readJson(
+    join(root, "config/nginx-profile.schema.json"),
+  );
   const config = await readYaml(path);
   validate(schema, config, path, [nginxSchema]);
   const openObserve = config.telemetry?.openObserve;
-  if (openObserve?.telemetryEnabled !== false || openObserve?.mmdbDownloadEnabled !== false || openObserve?.modelPricingEnabled !== false)
-    fail("CONFIG-OBSERVABILITY-EGRESS", "OpenObserve telemetry, MMDB downloads, and model-pricing sync must remain disabled in the private platform topology");
+  if (
+    openObserve?.telemetryEnabled !== false ||
+    openObserve?.mmdbDownloadEnabled !== false ||
+    openObserve?.modelPricingEnabled !== false
+  )
+    fail(
+      "CONFIG-OBSERVABILITY-EGRESS",
+      "OpenObserve telemetry, MMDB downloads, and model-pricing sync must remain disabled in the private platform topology",
+    );
   checkConfigKeys(config);
   exactSet(config.services, NODE_RUNTIMES, "platform.yaml Node services");
   checkKafkaConfiguration(config);
   try {
-    assertDatabaseAdmissionBudget({services: config.services, postgres: config.postgres});
+    assertDatabaseAdmissionBudget({
+      services: config.services,
+      postgres: config.postgres,
+    });
   } catch (error) {
-    if (error instanceof PlatformConfigError) fail("CONFIG-DB-ADMISSION", error.message);
+    if (error instanceof PlatformConfigError)
+      fail("CONFIG-DB-ADMISSION", error.message);
     throw error;
   }
 
@@ -572,7 +696,11 @@ export async function loadPlatformConfig(
   const profileByName = new Map(
     profile.runtimes.map((runtime) => [runtime.name, runtime]),
   );
-  exactSet(Object.fromEntries(catalogByName), DEPLOYABLE_RUNTIMES, "service catalog");
+  exactSet(
+    Object.fromEntries(catalogByName),
+    DEPLOYABLE_RUNTIMES,
+    "service catalog",
+  );
   exactSet(
     Object.fromEntries(profileByName),
     DEPLOYABLE_RUNTIMES,
@@ -585,12 +713,21 @@ export async function loadPlatformConfig(
     nginxProfile?.runtimeKind !== "native-nginx" ||
     nginxCatalog.transportMode !== "public-tls" ||
     nginxProfile.transportMode !== "public-tls" ||
-    JSON.stringify(nginxCatalog.secretRefs) !== JSON.stringify(["edge.tlsPrivateKey", "edge.tlsCertificate", "security.serviceTransportKeys.edge-nginx"]) ||
-    JSON.stringify(nginxProfile.secretRefs) !== JSON.stringify(nginxCatalog.secretRefs) ||
+    JSON.stringify(nginxCatalog.secretRefs) !==
+      JSON.stringify([
+        "edge.tlsPrivateKey",
+        "edge.tlsCertificate",
+        "security.serviceTransportKeys.edge-nginx",
+      ]) ||
+    JSON.stringify(nginxProfile.secretRefs) !==
+      JSON.stringify(nginxCatalog.secretRefs) ||
     (nginxCatalog.optionalSecretRefs ?? []).length !== 0 ||
     (nginxProfile.optionalSecretRefs ?? []).length !== 0
   ) {
-    fail("CONFIG-NGINX-RUNTIME", "edge-nginx must be native public TLS with required scoped public TLS and private mTLS material");
+    fail(
+      "CONFIG-NGINX-RUNTIME",
+      "edge-nginx must be native public TLS with required scoped public TLS and private mTLS material",
+    );
   }
   for (const runtime of NODE_RUNTIMES) {
     const configured = config.services[runtime];
@@ -611,8 +748,14 @@ export async function loadPlatformConfig(
     }
     const configuredOptionalRefs = configured.optionalSecretRefs ?? [];
     const acceptedOptionalRefs = accepted.optionalSecretRefs ?? [];
-    if (JSON.stringify(sorted(configuredOptionalRefs)) !== JSON.stringify(sorted(acceptedOptionalRefs))) {
-      fail("CONFIG-SECRET-ALLOWLIST", `${runtime}: optionalSecretRefs differ from service catalog`);
+    if (
+      JSON.stringify(sorted(configuredOptionalRefs)) !==
+      JSON.stringify(sorted(acceptedOptionalRefs))
+    ) {
+      fail(
+        "CONFIG-SECRET-ALLOWLIST",
+        `${runtime}: optionalSecretRefs differ from service catalog`,
+      );
     }
     if (
       configured.database === null &&
@@ -633,8 +776,14 @@ export async function loadPlatformConfig(
       );
     }
     const authorityOptionalRefs = authority.optionalSecretRefs ?? [];
-    if (JSON.stringify(sorted(configuredOptionalRefs)) !== JSON.stringify(sorted(authorityOptionalRefs))) {
-      fail("CONFIG-SECRET-ALLOWLIST", `${runtime}: optionalSecretRefs differ from launch-v1 profile`);
+    if (
+      JSON.stringify(sorted(configuredOptionalRefs)) !==
+      JSON.stringify(sorted(authorityOptionalRefs))
+    ) {
+      fail(
+        "CONFIG-SECRET-ALLOWLIST",
+        `${runtime}: optionalSecretRefs differ from launch-v1 profile`,
+      );
     }
     const baseline = SERVICE_BASELINE[runtime];
     if (
@@ -645,8 +794,10 @@ export async function loadPlatformConfig(
       configured.database !== baseline.database ||
       (configured.dbPool?.max ?? null) !== baseline.pool ||
       (configured.dbPool?.maxWaiting ?? 0) !== (baseline.maxWaiting ?? 0) ||
-      (configured.dbPool?.terminalTimeoutMs ?? null) !== baseline.terminalTimeoutMs ||
-      (configured.dbPool?.transactionTimeoutMs ?? null) !== baseline.transactionTimeoutMs
+      (configured.dbPool?.terminalTimeoutMs ?? null) !==
+        baseline.terminalTimeoutMs ||
+      (configured.dbPool?.transactionTimeoutMs ?? null) !==
+        baseline.transactionTimeoutMs
     ) {
       fail(
         "CONFIG-RUNTIME-POLICY",
@@ -661,24 +812,34 @@ export async function loadPlatformConfig(
   try {
     parsePlatformConfig(config);
   } catch (error) {
-    if (error instanceof PlatformConfigError) fail("CONFIG-PLATFORM-CONFIG", error.message);
+    if (error instanceof PlatformConfigError)
+      fail("CONFIG-PLATFORM-CONFIG", error.message);
     throw error;
   }
   return config;
 }
 
-export async function loadEncryptedSecrets(root = REPO_ROOT) {
-  const path = join(root, "secrets/platform.secrets.sops.yaml");
+export async function validateEncryptedSecretsDocument(
+  root,
+  document,
+  label = join(root, "secrets/platform.secrets.sops.yaml"),
+) {
   const schema = await readJson(
     join(root, "secrets/platform-secrets.schema.json"),
   );
-  const document = await readYaml(path);
-  validate(schema, document, path);
+  validate(schema, document, label);
   checkEncryptedLeaves(document);
   if (!ENC_RE.test(document.sops.mac))
-    fail("CONFIG-SOPS-MAC", `${path}: invalid encrypted SOPS MAC`);
+    fail("CONFIG-SOPS-MAC", `${label}: invalid encrypted SOPS MAC`);
   const rules = await readYaml(join(root, ".sops.yaml"));
   checkSopsRecipients(document, rules);
+  return document;
+}
+
+export async function loadEncryptedSecrets(root = REPO_ROOT) {
+  const path = join(root, "secrets/platform.secrets.sops.yaml");
+  const document = await readYaml(path);
+  await validateEncryptedSecretsDocument(root, document, path);
   verifySopsMacIfRequested(path);
   return document;
 }
@@ -686,14 +847,34 @@ export async function loadEncryptedSecrets(root = REPO_ROOT) {
 export async function checkPlatformConfig(root = REPO_ROOT) {
   await checkForbiddenFiles(root);
   const config = await loadPlatformConfig(root);
-  const seed = await readFile(join(root, "apps/pricing-service/migrations/0001_create_pricing_policy_versions.sql"), "utf8")
-    .catch(() => fail("CONFIG-PRICING-POLICY", "Pricing bootstrap migration is missing"));
-  const values = seed.match(/VALUES\s*\(\s*'(pvr_[0-9A-HJKMNP-TV-Z]{26})'\s*,\s*(\d+)\s*,\s*'([A-Z]{3})'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*'([A-Z]+)'\s*,\s*'Active'/u);
+  const seed = await readFile(
+    join(
+      root,
+      "apps/pricing-service/migrations/0001_create_pricing_policy_versions.sql",
+    ),
+    "utf8",
+  ).catch(() =>
+    fail("CONFIG-PRICING-POLICY", "Pricing bootstrap migration is missing"),
+  );
+  const values = seed.match(
+    /VALUES\s*\(\s*'(pvr_[0-9A-HJKMNP-TV-Z]{26})'\s*,\s*(\d+)\s*,\s*'([A-Z]{3})'\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*'([A-Z]+)'\s*,\s*'Active'/u,
+  );
   const policy = config.pricingPolicy;
-  if (values === null || values[1] !== policy.policyVersionRef || values[2] !== policy.version || values[3] !== policy.currency ||
-      values[4] !== String(policy.markupBasisPoints) || values[5] !== policy.minimumMarginMinor ||
-      values[6] !== String(policy.quoteTtlSeconds) || values[7] !== String(policy.quantityScale) || values[8] !== policy.roundingMode) {
-    fail("CONFIG-PRICING-POLICY", "Pricing bootstrap policy differs from immutable migration seed");
+  if (
+    values === null ||
+    values[1] !== policy.policyVersionRef ||
+    values[2] !== policy.version ||
+    values[3] !== policy.currency ||
+    values[4] !== String(policy.markupBasisPoints) ||
+    values[5] !== policy.minimumMarginMinor ||
+    values[6] !== String(policy.quoteTtlSeconds) ||
+    values[7] !== String(policy.quantityScale) ||
+    values[8] !== policy.roundingMode
+  ) {
+    fail(
+      "CONFIG-PRICING-POLICY",
+      "Pricing bootstrap policy differs from immutable migration seed",
+    );
   }
   const secrets = await loadEncryptedSecrets(root);
   const environment = secrets.environments[config.environment];

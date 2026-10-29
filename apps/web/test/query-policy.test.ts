@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import type { ProblemDetails } from "@coffee-platform/generated-client-v1";
-import { MutationObserver, onlineManager, QueryObserver } from "@tanstack/react-query";
+import {
+  MutationObserver,
+  onlineManager,
+  QueryObserver,
+} from "@tanstack/react-query";
 import { test, vi } from "vitest";
 import { ApiError, ProtocolError } from "../src/browser/api/client.js";
-import { queryClient, safeQueryRetry } from "../src/browser/app/query-client.js";
+import {
+  queryClient,
+  safeQueryRetry,
+} from "../src/browser/app/query-client.js";
 
 function problem(status: number): ProblemDetails {
   return {
@@ -19,12 +26,30 @@ function problem(status: number): ProblemDetails {
 
 test("safe GET retry допускает один повтор только для network/502/503/504", () => {
   assert.equal(safeQueryRetry(0, new TypeError("Failed to fetch")), true);
-  assert.equal(safeQueryRetry(0, new ApiError(problem(502), false, false)), true);
-  assert.equal(safeQueryRetry(0, new ApiError(problem(503), false, false)), true);
-  assert.equal(safeQueryRetry(0, new ApiError(problem(504), false, false)), true);
-  assert.equal(safeQueryRetry(0, new ApiError(problem(500), false, false)), false);
-  assert.equal(safeQueryRetry(0, new ApiError(problem(409), false, true)), false);
-  assert.equal(safeQueryRetry(0, new ProtocolError("malformed response")), false);
+  assert.equal(
+    safeQueryRetry(0, new ApiError(problem(502), false, false)),
+    true,
+  );
+  assert.equal(
+    safeQueryRetry(0, new ApiError(problem(503), false, false)),
+    true,
+  );
+  assert.equal(
+    safeQueryRetry(0, new ApiError(problem(504), false, false)),
+    true,
+  );
+  assert.equal(
+    safeQueryRetry(0, new ApiError(problem(500), false, false)),
+    false,
+  );
+  assert.equal(
+    safeQueryRetry(0, new ApiError(problem(409), false, true)),
+    false,
+  );
+  assert.equal(
+    safeQueryRetry(0, new ProtocolError("malformed response")),
+    false,
+  );
   assert.equal(safeQueryRetry(1, new TypeError("Failed to fetch")), false);
 });
 
@@ -64,7 +89,9 @@ test("два query observer с одинаковым key делят один in-f
   let release: ((value: string) => void) | undefined;
   const queryFn = async (): Promise<string> => {
     calls += 1;
-    return new Promise((resolve) => { release = resolve; });
+    return new Promise((resolve) => {
+      release = resolve;
+    });
   };
   const first = new QueryObserver(queryClient, { queryFn, queryKey });
   const second = new QueryObserver(queryClient, { queryFn, queryKey });

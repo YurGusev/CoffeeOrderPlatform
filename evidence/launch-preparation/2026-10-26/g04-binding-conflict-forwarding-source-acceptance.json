@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "kind": "SOURCE_TEST_ACCEPTANCE_NOT_GATE_ADMISSION",
+  "capturedAtUtc": "2026-10-26T22:30:10.885274+00:00",
+  "status": "ACCEPTED_SOURCE_ONLY",
+  "target": "tests/aroma/api-internal-operations.test.mjs",
+  "fileSha256": "6abf871e96e68ab49df4e69a6f0d846de2ca683117db099204b9152b11004e03",
+  "ownPatch": {
+    "path": "/home/yurgusev/.cache/coffee-issue13/binding-http-conflict-forwarding-20261027/own.patch",
+    "sha256": "ff2786a28c031aa4b75a20ea084672a169efdd54ad26a52e6631c5436f51e6a3"
+  },
+  "rootIndependent": {
+    "command": "env -u SOPS_AGE_KEY_FILE node --test --test-name-pattern=configured Catalog pricing delegation verifies caller claims before owner access tests/aroma/api-internal-operations.test.mjs",
+    "logPath": "/home/yurgusev/.cache/coffee-issue13/binding-http-conflict-forwarding-20261027/root-independent.log",
+    "logSha256": "9fb0d42ffa5799dd8319edf109e7be44ba3803cd3cd6cfc2d08c85a86fdf5bd2",
+    "tests": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": "1297.046965"
+  },
+  "astraReview": "Accepted; real configured client and route guards exercised; reviewer did not run tests.",
+  "observed": [
+    "HTTP409/body409/allowed conflict code -> sanitized409/no-store.",
+    "HTTP409/body503 -> route guard safe503.",
+    "Unknown upstream code -> client rejection safe503.",
+    "Positive binding case preserved; no private upstream canary in output."
+  ],
+  "limitations": [
+    "Fetch and transport identity are fixtures, no live Gateway/TLS/database proof.",
+    "No aggregate coverage increase or launch admission is asserted."
+  ]
+}

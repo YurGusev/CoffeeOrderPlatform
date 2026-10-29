@@ -1,0 +1,264 @@
+version: 1
+gates:
+  - id: G00_PREFLIGHT
+    version: 1
+    mandatory: true
+    owner: Platform
+    predecessors: []
+    command: pnpm launch:verify:preflight
+    timeout: 900
+    inputs: [cleanSourceSha, candidateSha, githubSnapshot]
+    expectedArtifacts:
+      [result.json, stdout.log, stderr.log, artifacts/preflight.json]
+    passCriteria: чистый SHA; принятые GitHub PR/handoff #14/#19/#2–#12/#16–#18/#60–#64; точная authority-репозитория; без цели legacy DB
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G01_INSTALL
+    version: 1
+    mandatory: true
+    owner: Platform
+    predecessors: [G00_PREFLIGHT]
+    command: pnpm install --frozen-lockfile
+    timeout: 900
+    inputs: [lockfile]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: lockfile не меняется; lifecycle/network действия только в allowlist
+    cleanup: candidate-checkout-only
+    rerunPolicy: new-run-id-only
+  - id: G02_GENERATED
+    version: 1
+    mandatory: true
+    owner: Contracts
+    predecessors: [G01_INSTALL]
+    command: pnpm contracts:check-generated
+    timeout: 900
+    inputs: [generated-sources]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: generated tree побайтно совпадает; drift отсутствует
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G03_STATIC
+    version: 1
+    mandatory: true
+    owner: Platform
+    predecessors: [G02_GENERATED]
+    command: pnpm format:check && pnpm lint && pnpm typecheck
+    timeout: 900
+    inputs: [source-tree]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: все команды завершаются с кодом 0; warnings budget равен 0
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G04_UNIT
+    version: 1
+    mandatory: true
+    owner: Domain owners
+    predecessors: [G03_STATIC]
+    command: pnpm test:unit -- --coverage
+    timeout: 900
+    inputs: [source-tree]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: код выхода 0; изменённые критические модули выполняют объявленные thresholds
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G05_CONTRACTS
+    version: 1
+    mandatory: true
+    owner: Contracts
+    predecessors: [G03_STATIC]
+    command: pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test
+    timeout: 900
+    inputs: [contracts, fixtures]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: positive/negative fixtures проходят; breaking change не одобренных контрактов отсутствуют
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G06_ARCHITECTURE
+    version: 1
+    mandatory: true
+    owner: Architecture
+    predecessors: [G05_CONTRACTS]
+    command: pnpm architecture:check
+    timeout: 900
+    inputs: [source-tree]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: все GREEN проходят; каждый RED показывает source/target/rule
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G07_CONFIG_SECURITY
+    version: 1
+    mandatory: true
+    owner: Security
+    predecessors: [G05_CONTRACTS]
+    command: pnpm versions:check && pnpm config:check && pnpm security:secrets
+    timeout: 900
+    inputs: [pins, config, encrypted-secrets]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: точные pins/SOPS/scopes/redaction; plaintext/canary утечек нет
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G12_SUPPLY_CHAIN
+    version: 1
+    mandatory: true
+    owner: Security
+    predecessors: [G07_CONFIG_SECURITY]
+    command: pnpm security:scan
+    timeout: 1800
+    inputs: [lockfile, build-provenance]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: SBOM/provenance созданы; exploitable finding уровня critical/high нет
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G08_MIGRATIONS
+    version: 1
+    mandatory: true
+    owner: DB owners
+    predecessors: [G07_CONFIG_SECURITY]
+    command: pnpm test:migrations:clean && pnpm test:migrations:forward
+    timeout: 1800
+    inputs: [migration-sources, isolated-databases]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: пять пустых DB достигают точной schema; повторный запуск — no-op; legacy не меняется
+    cleanup: exact-run-resources-only
+    rerunPolicy: new-run-id-only
+  - id: G09_DB_BOUNDARIES
+    version: 1
+    mandatory: true
+    owner: DB owners
+    predecessors: [G08_MIGRATIONS]
+    command: pnpm db:smoke
+    timeout: 1800
+    inputs: [isolated-databases, owner-roles]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: allowlisted operations проходят; любой cross-owner доступ отклоняется
+    cleanup: exact-run-resources-only
+    rerunPolicy: new-run-id-only
+  - id: G10_INTEGRATION
+    version: 1
+    mandatory: true
+    owner: Service owners
+    predecessors: [G09_DB_BOUNDARIES, G12_SUPPLY_CHAIN]
+    command: pnpm test:integration
+    timeout: 1800
+    inputs: [source-tree, isolated-databases, kafka-run-resources]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: suites HTTP/DB/Kafka/idempotency/concurrency проходят
+    cleanup: exact-run-resources-only
+    rerunPolicy: new-run-id-only
+  - id: G11_RECOVERY
+    version: 1
+    mandatory: true
+    owner: Reliability
+    predecessors: [G10_INTEGRATION]
+    command: pnpm test:recovery
+    timeout: 1800
+    inputs: [source-tree, isolated-databases, kafka-run-resources]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: matrix duplicate/crash/replay/rebalance/lease/fence/reservation проходит
+    cleanup: exact-run-resources-only
+    rerunPolicy: new-run-id-only
+  - id: G13_COMPOSE
+    version: 1
+    mandatory: true
+    owner: Platform
+    predecessors: [G11_RECOVERY, G12_SUPPLY_CHAIN]
+    command: pnpm test:compose-smoke
+    timeout: 1800
+    inputs: [source-tree, compose-project]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: все runtimes готовы; проверки отказа dependency и graceful stop проходят
+    cleanup: exact-run-resources-only
+    rerunPolicy: new-run-id-only
+  - id: G14_OBSERVABILITY
+    version: 1
+    mandatory: true
+    owner: Operations
+    predecessors: [G13_COMPOSE]
+    command: pnpm test:observability
+    timeout: 1800
+    inputs: [accepted-issue-64-handoff, compose-project]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: проверки health/metrics/traces/correlation/alerts/redaction проходят
+    cleanup: exact-run-resources-only
+    rerunPolicy: new-run-id-only
+  - id: G15_BROWSER
+    version: 1
+    mandatory: true
+    owner: Frontend
+    predecessors: [G14_OBSERVABILITY]
+    command: pnpm test:playwright
+    timeout: 1800
+    inputs: [source-tree, browser]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: проверки Chromium critical/accessibility/deep-link/conflict/realtime проходят
+    cleanup: none
+    rerunPolicy: new-run-id-only
+  - id: G16_AROMA_SANDBOX
+    version: 1
+    mandatory: true
+    owner: Integration+Reliability
+    predecessors: [G15_BROWSER]
+    command: pnpm test:aroma-sandbox -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"
+    timeout: 1800
+    inputs: [signed-sandbox-approval, scoped-sandbox-credentials]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: контролируемые GET→≤1 mutation→GET/lost-response/recovery/restore проходят
+    cleanup: restore-baseline-required
+    rerunPolicy: new-run-id-only
+  - id: G17_BACKUP_RESTORE
+    version: 1
+    mandatory: true
+    owner: DB owners
+    predecessors: [G16_AROMA_SANDBOX]
+    command: pnpm test:backup-restore
+    timeout: 1800
+    inputs: [isolated-databases, encrypted-backups]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: пять dump восстановлены; schema/data/invariants совпадают
+    cleanup: exact-run-resources-only
+    rerunPolicy: new-run-id-only
+  - id: G18_ROLLBACK
+    version: 1
+    mandatory: true
+    owner: Operations
+    predecessors: [G17_BACKUP_RESTORE]
+    command: pnpm test:mutation-disable-rollback
+    timeout: 1800
+    inputs: [source-tree, compose-project]
+    expectedArtifacts: [result.json, stdout.log, stderr.log]
+    passCriteria: mutation выключена; observer/Orders/recovery healthy; потери состояния нет
+    cleanup: exact-run-resources-only
+    rerunPolicy: new-run-id-only
+  - id: G19_REPORT
+    version: 1
+    mandatory: true
+    owner: Release owner
+    predecessors:
+      [
+        G00_PREFLIGHT,
+        G01_INSTALL,
+        G02_GENERATED,
+        G03_STATIC,
+        G04_UNIT,
+        G05_CONTRACTS,
+        G06_ARCHITECTURE,
+        G07_CONFIG_SECURITY,
+        G08_MIGRATIONS,
+        G09_DB_BOUNDARIES,
+        G10_INTEGRATION,
+        G11_RECOVERY,
+        G12_SUPPLY_CHAIN,
+        G13_COMPOSE,
+        G14_OBSERVABILITY,
+        G15_BROWSER,
+        G16_AROMA_SANDBOX,
+        G17_BACKUP_RESTORE,
+        G18_ROLLBACK,
+      ]
+    command: pnpm launch:verify:report
+    timeout: 900
+    inputs: [run-result, gate-evidence]
+    expectedArtifacts: [ОТЧЁТ.md, decision.json, checksums.sha256]
+    passCriteria: русский отчёт, checksums, defects и детерминированное решение валидны
+    cleanup: none
+    rerunPolicy: new-run-id-only

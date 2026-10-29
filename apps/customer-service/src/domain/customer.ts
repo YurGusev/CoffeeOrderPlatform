@@ -1,12 +1,15 @@
-import {createHash, randomBytes} from "node:crypto";
-import {domainToASCII} from "node:url";
-import {parsePhoneNumberFromString} from "libphonenumber-js";
+import { createHash, randomBytes } from "node:crypto";
+import { domainToASCII } from "node:url";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 const ULID_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/u;
-const EMAIL_LOCAL_PATTERN = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/u;
-const EMAIL_DOMAIN_PATTERN = /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u;
+const EMAIL_LOCAL_PATTERN =
+  /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/u;
+const EMAIL_DOMAIN_PATTERN =
+  /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u;
 const ACTOR_PATTERN = /^[\x21-\x7e]{1,128}$/u;
 
 let lastUlidTimestamp = -1;
@@ -114,10 +117,16 @@ function normalizedWhitespace(value: string): string {
   return value.normalize("NFC").trim().replace(/\s+/gu, " ");
 }
 
-function boundedText(value: unknown, field: string, maximum: number, required = true): string {
+function boundedText(
+  value: unknown,
+  field: string,
+  maximum: number,
+  required = true,
+): string {
   if (typeof value !== "string") invalid(`${field} must be a string`);
   const normalized = normalizedWhitespace(value);
-  if (required && normalized.length === 0) invalid(`${field} must not be empty`);
+  if (required && normalized.length === 0)
+    invalid(`${field} must not be empty`);
   if (normalized.length > maximum) invalid(`${field} is too long`);
   return normalized;
 }
@@ -132,7 +141,12 @@ export function normalizePhone(value: string): string {
   if (value.length > 64) invalid("phone is too long");
   const normalized = value.normalize("NFC").trim();
   const parsed = parsePhoneNumberFromString(normalized, "RU");
-  if (parsed === undefined || !parsed.isValid() || !E164_PATTERN.test(parsed.number)) invalid("phone must be a valid number");
+  if (
+    parsed === undefined ||
+    !parsed.isValid() ||
+    !E164_PATTERN.test(parsed.number)
+  )
+    invalid("phone must be a valid number");
   return parsed.number;
 }
 
@@ -140,51 +154,73 @@ export function normalizeEmail(value: string): string {
   const normalized = value.normalize("NFC").trim().toLowerCase();
   if (normalized.length > 254) invalid("email is too long");
   const at = normalized.lastIndexOf("@");
-  if (at <= 0 || at !== normalized.indexOf("@")) invalid("email format is invalid");
+  if (at <= 0 || at !== normalized.indexOf("@"))
+    invalid("email format is invalid");
   const local = normalized.slice(0, at);
   const asciiDomain = domainToASCII(normalized.slice(at + 1));
-  if (!EMAIL_LOCAL_PATTERN.test(local) || !EMAIL_DOMAIN_PATTERN.test(asciiDomain)) invalid("email format is invalid");
+  if (
+    !EMAIL_LOCAL_PATTERN.test(local) ||
+    !EMAIL_DOMAIN_PATTERN.test(asciiDomain)
+  )
+    invalid("email format is invalid");
   const result = `${local}@${asciiDomain.toLowerCase()}`;
   if (result.length > 254) invalid("email is too long");
   return result;
 }
 
-export function normalizeAddress(input: CustomerAddressInput): NormalizedAddress {
+export function normalizeAddress(
+  input: CustomerAddressInput,
+): NormalizedAddress {
   const line1 = boundedText(input.line1, "address.line1", 200);
-  const line2 = boundedText(input.line2 ?? "", "address.line2", 200, false) || null;
+  const line2 =
+    boundedText(input.line2 ?? "", "address.line2", 200, false) || null;
   const city = boundedText(input.city, "address.city", 120);
-  const postalCode = boundedText(input.postalCode ?? "", "address.postalCode", 20, false) || null;
-  const countryCode = (input.countryCode ?? "RU").normalize("NFC").trim().toUpperCase();
-  if (!/^[A-Z]{2}$/u.test(countryCode)) invalid("address.countryCode must be ISO alpha-2");
-  return {kind: "Delivery", line1, line2, city, postalCode, countryCode};
+  const postalCode =
+    boundedText(input.postalCode ?? "", "address.postalCode", 20, false) ||
+    null;
+  const countryCode = (input.countryCode ?? "RU")
+    .normalize("NFC")
+    .trim()
+    .toUpperCase();
+  if (!/^[A-Z]{2}$/u.test(countryCode))
+    invalid("address.countryCode must be ISO alpha-2");
+  return { kind: "Delivery", line1, line2, city, postalCode, countryCode };
 }
 
-export function normalizeCustomerCreate(input: CustomerCreateInput): NormalizedCustomerCreate {
+export function normalizeCustomerCreate(
+  input: CustomerCreateInput,
+): NormalizedCustomerCreate {
   const displayName = normalizeDisplayName(input.displayName);
-  const phoneE164 = input.phone === undefined ? null : normalizePhone(input.phone);
-  const emailNormalized = input.email === undefined ? null : normalizeEmail(input.email);
-  if (phoneE164 === null && emailNormalized === null) invalid("phone or email is required");
+  const phoneE164 =
+    input.phone === undefined ? null : normalizePhone(input.phone);
+  const emailNormalized =
+    input.email === undefined ? null : normalizeEmail(input.email);
+  if (phoneE164 === null && emailNormalized === null)
+    invalid("phone or email is required");
   return {
     displayName,
     displayNameSearch: displayName.toLowerCase(),
     phoneE164,
     emailNormalized,
-    address: input.address === undefined ? null : normalizeAddress(input.address),
+    address:
+      input.address === undefined ? null : normalizeAddress(input.address),
   };
 }
 
 export function normalizeSearchQuery(value: string): CustomerSearch {
   const query = normalizedWhitespace(value);
-  if (query.length < 2 || query.length > 200) invalid("query length must be between 2 and 200");
+  if (query.length < 2 || query.length > 200)
+    invalid("query length must be between 2 and 200");
   const phone = parsePhoneNumberFromString(query, "RU");
-  if (phone !== undefined && phone.isValid() && E164_PATTERN.test(phone.number)) return search("phone", phone.number);
+  if (phone !== undefined && phone.isValid() && E164_PATTERN.test(phone.number))
+    return search("phone", phone.number);
   if (query.includes("@")) return search("email", normalizeEmail(query));
   return search("name", query.toLowerCase());
 }
 
 function search(mode: CustomerSearchMode, value: string): CustomerSearch {
   const queryHash = createHash("sha256").update(value, "utf8").digest("hex");
-  return {mode, value, queryHash};
+  return { mode, value, queryHash };
 }
 
 export function escapeLikePrefix(value: string): string {
@@ -200,19 +236,23 @@ export function maskEmail(value: string): string {
   return `${value.slice(0, 1)}***${value.slice(at)}`;
 }
 
-export function toCustomerSummary(row: Readonly<{
-  customerRef: string;
-  version: string;
-  displayName: string;
-  phoneE164: string | null;
-  emailNormalized: string | null;
-}>): CustomerSummary {
+export function toCustomerSummary(
+  row: Readonly<{
+    customerRef: string;
+    version: string;
+    displayName: string;
+    phoneE164: string | null;
+    emailNormalized: string | null;
+  }>,
+): CustomerSummary {
   return {
     customerRef: row.customerRef,
     version: row.version,
     displayName: row.displayName,
-    ...(row.phoneE164 === null ? {} : {phone: maskPhone(row.phoneE164)}),
-    ...(row.emailNormalized === null ? {} : {email: maskEmail(row.emailNormalized)}),
+    ...(row.phoneE164 === null ? {} : { phone: maskPhone(row.phoneE164) }),
+    ...(row.emailNormalized === null
+      ? {}
+      : { email: maskEmail(row.emailNormalized) }),
   };
 }
 
@@ -225,7 +265,8 @@ export function assertActorRef(value: string): void {
 }
 
 export function assertCustomerRef(value: string): void {
-  if (!/^cus_[0-9A-HJKMNP-TV-Z]{26}$/u.test(value)) invalid("customerRef is invalid");
+  if (!/^cus_[0-9A-HJKMNP-TV-Z]{26}$/u.test(value))
+    invalid("customerRef is invalid");
 }
 
 export function monotonicUlid(): string {
@@ -241,7 +282,8 @@ export function monotonicUlid(): string {
     lastUlidRandom = randomBytes(10);
     lastUlidTimestamp = timestamp;
   }
-  if (lastUlidRandom === undefined) throw new Error("ULID random part was not initialized");
+  if (lastUlidRandom === undefined)
+    throw new Error("ULID random part was not initialized");
   return `${encodeTimestamp(timestamp)}${encodeRandom(lastUlidRandom)}`;
 }
 
@@ -281,6 +323,10 @@ function encodeRandom(value: Uint8Array): string {
   return encoded;
 }
 
-export function auditAfterHash(input: Readonly<{customerRef: string; addressRef?: string}>): string {
-  return createHash("sha256").update(JSON.stringify(input), "utf8").digest("hex");
+export function auditAfterHash(
+  input: Readonly<{ customerRef: string; addressRef?: string }>,
+): string {
+  return createHash("sha256")
+    .update(JSON.stringify(input), "utf8")
+    .digest("hex");
 }

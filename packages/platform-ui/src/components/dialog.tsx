@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type ReactElement, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import {
   Dialog as AriaDialog,
   Heading,
@@ -49,7 +56,8 @@ export function Dialog({
   const previousOpen = useRef(false);
   const closeReason = useRef<DialogCloseReason | null>(null);
 
-  const canClose = (reason: DialogCloseReason): boolean => onRequestClose?.(reason) !== false;
+  const canClose = (reason: DialogCloseReason): boolean =>
+    onRequestClose?.(reason) !== false;
   const commitOpenChange = (nextOpen: boolean): void => {
     if (!controlled) setUncontrolledOpen(nextOpen);
     onOpenChange?.(nextOpen);
@@ -72,7 +80,10 @@ export function Dialog({
     commitOpenChange(false);
   };
   const handleOutsideInteraction = (element: Element): boolean => {
-    if (shouldCloseOnInteractOutside && !shouldCloseOnInteractOutside(element)) {
+    if (
+      shouldCloseOnInteractOutside &&
+      !shouldCloseOnInteractOutside(element)
+    ) {
       closeReason.current = null;
       return false;
     }
@@ -100,17 +111,48 @@ export function Dialog({
       onOpenChange={handleOpenChange}
       shouldCloseOnInteractOutside={handleOutsideInteraction}
     >
-      <Modal className="max-h-[calc(100dvh-32px)] w-full max-w-[640px] overflow-y-auto rounded-panel border border-border bg-surface p-6 shadow-xl sm:max-h-[calc(100dvh-48px)] xl:max-h-[calc(100dvh-64px)]" data-slot="dialog-content">
-        <AriaDialog {...props} aria-label={title} className="grid gap-5 outline-none" data-slot="dialog">
+      <Modal
+        className="max-h-[calc(100dvh-32px)] w-full max-w-[640px] overflow-y-auto rounded-panel border border-border bg-surface p-6 shadow-xl sm:max-h-[calc(100dvh-48px)] xl:max-h-[calc(100dvh-64px)]"
+        data-slot="dialog-content"
+      >
+        <AriaDialog
+          {...props}
+          aria-label={title}
+          className="grid gap-5 outline-none"
+          data-slot="dialog"
+        >
           <div>
-            <Heading className="text-[20px] font-semibold leading-6 text-ink" data-slot="dialog-title" level={2} slot="title">
+            <Heading
+              className="text-[20px] font-semibold leading-6 text-ink"
+              data-slot="dialog-title"
+              level={2}
+              slot="title"
+            >
               {title}
             </Heading>
-            {description ? <p className="mt-2 text-[14px] leading-5 text-muted" data-slot="dialog-description">{description}</p> : null}
+            {description ? (
+              <p
+                className="mt-2 text-[14px] leading-5 text-muted"
+                data-slot="dialog-description"
+              >
+                {description}
+              </p>
+            ) : null}
           </div>
           <div>{children}</div>
-          <div className="flex min-h-[44px] flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end" data-slot="dialog-footer">
-            {footer ?? <Button onPress={() => close("action")} size="touch" variant="secondary">Закрыть</Button>}
+          <div
+            className="flex min-h-[44px] flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end"
+            data-slot="dialog-footer"
+          >
+            {footer ?? (
+              <Button
+                onPress={() => close("action")}
+                size="touch"
+                variant="secondary"
+              >
+                Закрыть
+              </Button>
+            )}
           </div>
         </AriaDialog>
       </Modal>

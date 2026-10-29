@@ -2,7 +2,16 @@
   "schemaVersion": 1,
   "runtime": "edge-gateway",
   "allowNet": [],
-  "allowFsRead": ["/app/config/platform.yaml", "/app/apps", "/app/dist", "/app/node_modules", "/app/packages", "/app/package.json", "/run/secrets/coffee-platform.yaml"],
+  "allowFsRead": [
+    "/app/config/platform.yaml",
+    "/app/apps",
+    "/app/dist",
+    "/app/node_modules",
+    "/app/packages",
+    "/app/package.json",
+    "/run/secrets/coffee-platform.yaml",
+    "/run/coffee-launch/context.json"
+  ],
   "allowFsWrite": [],
   "allowChildProcess": false,
   "allowWorker": false,

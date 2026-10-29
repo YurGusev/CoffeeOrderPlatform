@@ -1,54 +1,85 @@
 #!/usr/bin/env node
-import { readFile, mkdir, writeFile, rename, rm } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
-import { dirname, resolve, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import Ajv2020 from 'ajv/dist/2020.js';
-import { load as loadYaml } from 'js-yaml';
+import { readFile, mkdir, writeFile, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { dirname, resolve, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+import Ajv2020 from "ajv/dist/2020.js";
+import { load as loadYaml } from "js-yaml";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const PIN = 'nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7';
-const METHODS = new Set(['get', 'post', 'put', 'delete']);
-const must = (condition, message) => { if (!condition) throw new Error(message); };
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const PIN =
+  "nginx:1.31.6-trixie@sha256:908dc23e643a1447dbfb2e189ed268bfde6a51a5bf9a34d3dd3440a24f58ccf7";
+const METHODS = new Set(["get", "post", "put", "delete"]);
+const must = (condition, message) => {
+  if (!condition) throw new Error(message);
+};
 
 function parseArgs(argv) {
   const result = {};
   for (let i = 0; i < argv.length; i += 1) {
-    if (['--config', '--fixture', '--output'].includes(argv[i])) result[argv[i].slice(2)] = argv[++i];
+    if (["--config", "--fixture", "--output"].includes(argv[i]))
+      result[argv[i].slice(2)] = argv[++i];
     else throw new Error(`unknown argument: ${argv[i]}`);
   }
-  must(!(result.config && result.fixture), 'choose --config or --fixture');
+  must(!(result.config && result.fixture), "choose --config or --fixture");
   return result;
 }
 
 async function getProfile(args, root) {
   if (args.fixture) {
     const path = resolve(root, args.fixture);
-    must(path.startsWith(`${resolve(root, 'tests/nginx/fixtures')}/`), 'fixture must be under tests/nginx/fixtures');
-    return JSON.parse(await readFile(path, 'utf8'));
+    must(
+      path.startsWith(`${resolve(root, "tests/nginx/fixtures")}/`),
+      "fixture must be under tests/nginx/fixtures",
+    );
+    return JSON.parse(await readFile(path, "utf8"));
   }
-  const path = resolve(root, args.config ?? 'config/platform.yaml');
-  must(path === resolve(root, 'config/platform.yaml'), 'production profile source must be config/platform.yaml');
-  const config = loadYaml(await readFile(path, 'utf8'), { json: true });
-  must(config.nginxTransport, 'config/platform.yaml has no nginxTransport profile yet; active integration belongs to #162');
+  const path = resolve(root, args.config ?? "config/platform.yaml");
+  must(
+    path === resolve(root, "config/platform.yaml"),
+    "production profile source must be config/platform.yaml",
+  );
+  const config = loadYaml(await readFile(path, "utf8"), { json: true });
+  must(
+    config.nginxTransport,
+    "config/platform.yaml has no nginxTransport profile yet; active integration belongs to #162",
+  );
   return config.nginxTransport;
 }
 
 function validateProfile(profile, schema) {
   const ajv = new Ajv2020({ allErrors: true, strict: true });
   const validate = ajv.compile(schema);
-  must(validate(profile), `invalid nginxTransport: ${ajv.errorsText(validate.errors, { separator: '; ' })}`);
+  must(
+    validate(profile),
+    `invalid nginxTransport: ${ajv.errorsText(validate.errors, { separator: "; " })}`,
+  );
   for (const [name, value] of Object.entries(profile.upstreams)) {
-    must(/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(value.host), `${name}: invalid host`);
-    must(/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(value.serverName), `${name}: invalid SNI`);
+    must(
+      /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(value.host),
+      `${name}: invalid host`,
+    );
+    must(
+      /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(value.serverName),
+      `${name}: invalid SNI`,
+    );
   }
 }
 
 function nginxStatusPort(endpoint) {
   const url = new URL(endpoint);
-  must(url.protocol === 'http:' && url.hostname === 'edge-nginx' && !url.username && !url.password && /^[1-9][0-9]{0,4}$/u.test(url.port) &&
-    Number(url.port) <= 65535 && url.pathname === '/nginx_status' && !url.search && !url.hash,
-  'invalid private nginx status endpoint');
+  must(
+    url.protocol === "http:" &&
+      url.hostname === "edge-nginx" &&
+      !url.username &&
+      !url.password &&
+      /^[1-9][0-9]{0,4}$/u.test(url.port) &&
+      Number(url.port) <= 65535 &&
+      url.pathname === "/nginx_status" &&
+      !url.search &&
+      !url.hash,
+    "invalid private nginx status endpoint",
+  );
   return Number(url.port);
 }
 
@@ -57,40 +88,58 @@ export function readRoutes(spec) {
   for (const [path, operations] of Object.entries(spec.paths)) {
     for (const [method, operation] of Object.entries(operations)) {
       if (!METHODS.has(method)) continue;
-      must(/^[A-Za-z][A-Za-z0-9]+$/.test(operation.operationId ?? ''), `invalid operationId at ${method} ${path}`);
+      must(
+        /^[A-Za-z][A-Za-z0-9]+$/.test(operation.operationId ?? ""),
+        `invalid operationId at ${method} ${path}`,
+      );
       result.push({ path, method: method.toUpperCase() });
     }
   }
   const required = [
-    'POST /api/client-v1/customers', 'GET /api/client-v1/customers',
-    'GET /api/client-v1/catalog/products', 'POST /api/client-v1/pricing/quotes',
-    'POST /api/client-v1/orders/drafts',
-    'PUT /api/client-v1/orders/{orderRef}/items/{itemRef}',
-    'DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}',
-    'POST /api/client-v1/orders/{orderRef}/commands/confirm',
-    'POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation',
-    'GET /api/client-v1/orders/{orderRef}', 'GET /events',
+    "POST /api/client-v1/customers",
+    "GET /api/client-v1/customers",
+    "GET /api/client-v1/catalog/products",
+    "POST /api/client-v1/pricing/quotes",
+    "POST /api/client-v1/orders/drafts",
+    "PUT /api/client-v1/orders/{orderRef}/items/{itemRef}",
+    "DELETE /api/client-v1/orders/{orderRef}/items/{itemRef}",
+    "POST /api/client-v1/orders/{orderRef}/commands/confirm",
+    "POST /api/client-v1/orders/{orderRef}/commands/request-aroma-reconciliation",
+    "GET /api/client-v1/orders/{orderRef}",
+    "GET /events",
   ].sort();
-  must(JSON.stringify(result.map(x => `${x.method} ${x.path}`).sort()) === JSON.stringify(required), 'OpenAPI W1 route inventory drift');
+  must(
+    JSON.stringify(result.map((x) => `${x.method} ${x.path}`).sort()) ===
+      JSON.stringify(required),
+    "OpenAPI W1 route inventory drift",
+  );
   return result;
 }
 
-const problem = (status, code, title) => `default_type application/problem+json; add_header Cache-Control no-store always; add_header X-Correlation-Id $request_id always; return ${status} '{"type":"about:blank","title":"${title}","status":${status},"code":"${code}","detail":"The edge transport rejected this request.","instance":"urn:coffee:edge:$request_id","correlationId":"$request_id","errors":[]}';`;
+const problem = (status, code, title) =>
+  `default_type application/problem+json; add_header Cache-Control no-store always; add_header X-Correlation-Id $request_id always; return ${status} '{"type":"about:blank","title":"${title}","status":${status},"code":"${code}","detail":"The edge transport rejected this request.","instance":"urn:coffee:edge:$request_id","correlationId":"$request_id","errors":[]}';`;
 function routeBlock(route, profile) {
   const { upstreams: u, limits: l } = profile;
-  const event = route.path === '/events';
-  const name = event ? 'realtime' : 'apiPublic';
-  const variable = event ? '$realtime_auth_target' : '$api_auth_target';
-  const template = route.path.replaceAll('{orderRef}', 'ORDERREF').replaceAll('{itemRef}', 'ITEMREF');
-  const path = template.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replaceAll('ORDERREF', '[A-Za-z0-9_-]+').replaceAll('ITEMREF', '[A-Za-z0-9_-]+');
-  const location = path.includes('[') ? `~ ^${path}$` : `= ${path}`;
-  const methods = route.methods.sort().join(' ');
-  const rejectImplicitHead = route.methods.includes('GET') ? 'if ($request_method = HEAD) { return 405; }' : '';
+  const event = route.path === "/events";
+  const name = event ? "realtime" : "apiPublic";
+  const variable = event ? "$realtime_auth_target" : "$api_auth_target";
+  const template = route.path
+    .replaceAll("{orderRef}", "ORDERREF")
+    .replaceAll("{itemRef}", "ITEMREF");
+  const path = template
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replaceAll("ORDERREF", "[A-Za-z0-9_-]+")
+    .replaceAll("ITEMREF", "[A-Za-z0-9_-]+");
+  const location = path.includes("[") ? `~ ^${path}$` : `= ${path}`;
+  const methods = route.methods.sort().join(" ");
+  const rejectImplicitHead = route.methods.includes("GET")
+    ? "if ($request_method = HEAD) { return 405; }"
+    : "";
   return `location ${location} {
       limit_except ${methods} { deny all; }
       ${rejectImplicitHead}
       limit_conn ${event ? `edge_sse_admission ${l.sseAdmissionConnections}` : `edge_api_admission ${l.apiAdmissionConnections}`};
-      ${event ? 'limit_conn_status 429;' : ''}
+      ${event ? "limit_conn_status 429;" : ""}
       if ($bad_idempotency_key) { return 400; }
       auth_request /_edge/authorize;
       auth_request_set $edge_auth_status $upstream_status;
@@ -101,7 +150,7 @@ function routeBlock(route, profile) {
       proxy_request_buffering off;
       proxy_buffering off;
       proxy_cache off;
-      ${event ? `gzip off;\n      proxy_pass_header X-Accel-Buffering;` : ''}
+      ${event ? `gzip off;\n      proxy_pass_header X-Accel-Buffering;` : ""}
       proxy_next_upstream off;
       proxy_connect_timeout ${l.apiConnectSeconds}s;
       proxy_read_timeout ${event ? l.sseReadSeconds : l.apiReadSeconds}s;
@@ -109,7 +158,7 @@ function routeBlock(route, profile) {
       proxy_ssl_name ${u[name].serverName};
       proxy_set_header Host ${u[name].serverName};
       proxy_set_header X-Actor-Context $edge_actor_context;
-      ${event ? 'proxy_set_header Last-Event-ID $http_last_event_id;' : ''}
+      ${event ? "proxy_set_header Last-Event-ID $http_last_event_id;" : ""}
       include /etc/nginx/snippets/upstream-tls.conf;
       include /etc/nginx/snippets/business-headers.conf;
     }`;
@@ -118,19 +167,36 @@ function routeBlock(route, profile) {
 export function render(profile, routes, statusEndpoint) {
   const { tls, upstreams: u, limits: l } = profile;
   const statusPort = nginxStatusPort(statusEndpoint);
-  must(statusPort !== profile.listen, 'nginx status listener must not share the public TLS port');
-  must(l.sseAdmissionConnections <= 512, 'SSE admission must not exceed 512');
-  must(l.workerProcesses === 1 || l.workerProcesses === 2, 'worker processes must be 1 or 2');
-  must(l.requestPoolBytes === 2048, 'request pool allocation granularity must match the checked profile');
-  must(l.workerConnections >= 2 * l.sseAdmissionConnections + l.apiAdmissionConnections + l.authAdmissionConnections + 64,
-    'worker slot budget must preserve SSE upstream/downstream and API/auth/health headroom');
+  must(
+    statusPort !== profile.listen,
+    "nginx status listener must not share the public TLS port",
+  );
+  must(l.sseAdmissionConnections <= 512, "SSE admission must not exceed 512");
+  must(
+    l.workerProcesses === 1 || l.workerProcesses === 2,
+    "worker processes must be 1 or 2",
+  );
+  must(
+    l.requestPoolBytes === 2048,
+    "request pool allocation granularity must match the checked profile",
+  );
+  must(
+    l.workerConnections >=
+      2 * l.sseAdmissionConnections +
+        l.apiAdmissionConnections +
+        l.authAdmissionConnections +
+        64,
+    "worker slot budget must preserve SSE upstream/downstream and API/auth/health headroom",
+  );
   const grouped = new Map();
   for (const route of routes) {
     const group = grouped.get(route.path) ?? { path: route.path, methods: [] };
     group.methods.push(route.method);
     grouped.set(route.path, group);
   }
-  const blocks = [...grouped.values()].map(route => routeBlock(route, profile)).join('\n');
+  const blocks = [...grouped.values()]
+    .map((route) => routeBlock(route, profile))
+    .join("\n");
   const authTimeouts = `proxy_connect_timeout ${l.authConnectSeconds}s; proxy_read_timeout ${l.authReadSeconds}s;`;
   return `worker_processes ${l.workerProcesses};
 error_log /dev/null;
@@ -170,7 +236,7 @@ http {
   upstream edge_gateway { server ${u.edge.host}:${u.edge.port}; keepalive 8; }
   upstream api_public { server ${u.apiPublic.host}:${u.apiPublic.port}; keepalive 16; }
   upstream realtime_gateway { zone realtime_tls_state 64k; server ${u.realtime.host}:${u.realtime.port}; }
-  server { listen 127.0.0.1:18080; location / { ${problem(503, 'AUTHORIZER_UNAVAILABLE', 'Authorization unavailable')} } }
+  server { listen 127.0.0.1:18080; location / { ${problem(503, "AUTHORIZER_UNAVAILABLE", "Authorization unavailable")} } }
   server { listen ${statusPort}; server_name edge-nginx; location = /nginx_status { stub_status; access_log off; } location / { return 404; } }
   server {
     listen ${profile.listen} ssl;
@@ -198,8 +264,8 @@ http {
     location = /_edge/authorize { internal; limit_conn edge_auth_admission ${l.authAdmissionConnections}; proxy_pass https://edge_gateway/_edge/authorize; ${authTimeouts} proxy_ssl_name ${u.edge.serverName}; proxy_set_header Host ${u.edge.serverName}; proxy_pass_request_body off; proxy_set_header Content-Length ''; proxy_set_header X-Original-Method $request_method; proxy_set_header X-Original-URI $request_uri; proxy_set_header X-Request-Id $request_id; proxy_set_header X-Correlation-Id $edge_client_correlation; proxy_set_header traceparent $edge_traceparent; proxy_set_header Cookie $edge_allowed_cookie; proxy_set_header Origin $http_origin; proxy_set_header X-CSRF-Token $http_x_csrf_token; proxy_set_header Authorization ''; proxy_set_header X-Actor-Context ''; include /etc/nginx/snippets/upstream-tls.conf; }
     location = /health/ready { return 404; }
     location = /metrics { return 404; }
-    location ^~ /api/internal-v1/ { ${problem(404, 'ROUTE_NOT_FOUND', 'Not found')} }
-    location ^~ /api/agent-v1/ { ${problem(404, 'ROUTE_NOT_FOUND', 'Not found')} }
+    location ^~ /api/internal-v1/ { ${problem(404, "ROUTE_NOT_FOUND", "Not found")} }
+    location ^~ /api/agent-v1/ { ${problem(404, "ROUTE_NOT_FOUND", "Not found")} }
     location ~ ^/(?:api/provider|admin|vk|psp)(?:/|$) { return 404; }
     location ~ ^/auth/ { return 404; }
     ${blocks}
@@ -211,31 +277,55 @@ http {
     error_page 502 = @upstream_502;
     error_page 503 = @upstream_503;
     error_page 504 = @upstream_504;
-    location @auth_401 { ${problem(401, 'AUTHENTICATION_REQUIRED', 'Authentication required')} }
-    location @auth_403 { ${problem(403, 'AUTHORIZATION_FORBIDDEN', 'Forbidden')} }
-    location @auth_503 { ${problem(503, 'AUTHORIZER_UNAVAILABLE', 'Authorization unavailable')} }
-    location @upstream_502 { ${problem(502, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
-    location @upstream_503 { ${problem(503, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
-    location @realtime_capacity { ${problem(503, 'REALTIME_CAPACITY_EXCEEDED', 'Realtime capacity exceeded')} }
-    location @upstream_504 { ${problem(504, 'UPSTREAM_UNAVAILABLE', 'Upstream unavailable')} }
+    location @auth_401 { ${problem(401, "AUTHENTICATION_REQUIRED", "Authentication required")} }
+    location @auth_403 { ${problem(403, "AUTHORIZATION_FORBIDDEN", "Forbidden")} }
+    location @auth_503 { ${problem(503, "AUTHORIZER_UNAVAILABLE", "Authorization unavailable")} }
+    location @upstream_502 { ${problem(502, "UPSTREAM_UNAVAILABLE", "Upstream unavailable")} }
+    location @upstream_503 { ${problem(503, "UPSTREAM_UNAVAILABLE", "Upstream unavailable")} }
+    location @realtime_capacity { ${problem(503, "REALTIME_CAPACITY_EXCEEDED", "Realtime capacity exceeded")} }
+    location @upstream_504 { ${problem(504, "UPSTREAM_UNAVAILABLE", "Upstream unavailable")} }
   }
 }
 `;
 }
 
-export async function generate({ args = parseArgs(process.argv.slice(2)), root = ROOT } = {}) {
+export async function generate({
+  args = parseArgs(process.argv.slice(2)),
+  root = ROOT,
+} = {}) {
   const [schema, spec, toolchain, platformConfig] = await Promise.all([
-    readFile(resolve(root, 'config/nginx-profile.schema.json'), 'utf8').then(JSON.parse),
-    readFile(resolve(root, 'contracts/openapi/client-v1.yaml'), 'utf8').then(text => loadYaml(text, { json: true })),
-    readFile(resolve(root, 'config/toolchain-versions.json'), 'utf8').then(JSON.parse),
-    readFile(resolve(root, 'config/platform.yaml'), 'utf8').then(text => loadYaml(text, { json: true })),
+    readFile(resolve(root, "config/nginx-profile.schema.json"), "utf8").then(
+      JSON.parse,
+    ),
+    readFile(resolve(root, "contracts/openapi/client-v1.yaml"), "utf8").then(
+      (text) => loadYaml(text, { json: true }),
+    ),
+    readFile(resolve(root, "config/toolchain-versions.json"), "utf8").then(
+      JSON.parse,
+    ),
+    readFile(resolve(root, "config/platform.yaml"), "utf8").then((text) =>
+      loadYaml(text, { json: true }),
+    ),
   ]);
-  must(toolchain.nginxImage === PIN && toolchain.nginxVersion === '1.31.6', 'nginx registry pin mismatch');
+  must(
+    toolchain.nginxImage === PIN && toolchain.nginxVersion === "1.31.6",
+    "nginx registry pin mismatch",
+  );
   const profile = await getProfile(args, root);
   validateProfile(profile, schema);
-  const text = render(profile, readRoutes(spec), platformConfig.telemetry?.nginxStatusEndpoint);
-  const output = resolve(root, args.output ?? 'apps/edge-nginx/generated/nginx.conf');
-  must(output.startsWith(`${resolve(root, 'apps/edge-nginx')}/`), 'output must be under apps/edge-nginx');
+  const text = render(
+    profile,
+    readRoutes(spec),
+    platformConfig.telemetry?.nginxStatusEndpoint,
+  );
+  const output = resolve(
+    root,
+    args.output ?? "apps/edge-nginx/generated/nginx.conf",
+  );
+  must(
+    output.startsWith(`${resolve(root, "apps/edge-nginx")}/`),
+    "output must be under apps/edge-nginx",
+  );
   await mkdir(dirname(output), { recursive: true });
   const temporary = `${output}.${process.pid}.${randomUUID()}.tmp`;
   try {
@@ -244,10 +334,19 @@ export async function generate({ args = parseArgs(process.argv.slice(2)), root =
   } finally {
     await rm(temporary, { force: true });
   }
-  return { output: relative(root, output), routes: 11, bytes: Buffer.byteLength(text), source: args.fixture ? 'isolated-fixture' : 'config/platform.yaml' };
+  return {
+    output: relative(root, output),
+    routes: 11,
+    bytes: Buffer.byteLength(text),
+    source: args.fixture ? "isolated-fixture" : "config/platform.yaml",
+  };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  try { console.log(`nginx config generated: ${JSON.stringify(await generate())}`); }
-  catch (error) { console.error(`nginx config generation failed: ${error.message}`); process.exitCode = 1; }
+  try {
+    console.log(`nginx config generated: ${JSON.stringify(await generate())}`);
+  } catch (error) {
+    console.error(`nginx config generation failed: ${error.message}`);
+    process.exitCode = 1;
+  }
 }

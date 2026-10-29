@@ -1,4 +1,4 @@
-import {trace, type Span, SpanStatusCode} from "@opentelemetry/api";
+import { trace, type Span, SpanStatusCode } from "@opentelemetry/api";
 
 export const GATEWAY_METRIC_NAMES = [
   "sessionAttempts",
@@ -22,8 +22,23 @@ export const GATEWAY_METRIC_NAMES = [
 ] as const;
 
 export type GatewayMetricName = (typeof GATEWAY_METRIC_NAMES)[number];
-type ResultMetric = "sessionResult" | "safeReadResult" | "catalogResult" | "journalState" | "mutationOutcome";
-type ResultValue = "cache_hit" | "login" | "failure" | "success" | "reauthenticated" | "reserved" | "dispatched" | "acknowledged" | "rejected" | "unknown";
+type ResultMetric =
+  | "sessionResult"
+  | "safeReadResult"
+  | "catalogResult"
+  | "journalState"
+  | "mutationOutcome";
+type ResultValue =
+  | "cache_hit"
+  | "login"
+  | "failure"
+  | "success"
+  | "reauthenticated"
+  | "reserved"
+  | "dispatched"
+  | "acknowledged"
+  | "rejected"
+  | "unknown";
 
 const ENDED_SPANS = new WeakSet<object>();
 
@@ -31,7 +46,13 @@ const RESULT_VALUES: Readonly<Record<ResultMetric, readonly ResultValue[]>> = {
   sessionResult: ["cache_hit", "login", "failure"],
   safeReadResult: ["success", "reauthenticated", "failure"],
   catalogResult: ["success", "failure"],
-  journalState: ["reserved", "dispatched", "acknowledged", "rejected", "unknown"],
+  journalState: [
+    "reserved",
+    "dispatched",
+    "acknowledged",
+    "rejected",
+    "unknown",
+  ],
   mutationOutcome: ["acknowledged", "rejected", "unknown"],
 };
 
@@ -57,14 +78,18 @@ const COUNTER_METRIC_NAMES: Readonly<Record<GatewayMetricName, string>> = {
   catalogFailures: "aroma_gateway_catalog_failures_total",
   journalAcquire: "aroma_gateway_journal_acquire_total",
   journalDispatch: "aroma_gateway_journal_dispatch_total",
-  journalTerminalPersistence: "aroma_gateway_journal_terminal_persistence_total",
+  journalTerminalPersistence:
+    "aroma_gateway_journal_terminal_persistence_total",
   mutationAcknowledged: "aroma_gateway_mutation_acknowledged_total",
   mutationRejected: "aroma_gateway_mutation_rejected_total",
   mutationUnknown: "aroma_gateway_mutation_unknown_total",
   providerLatencyMs: "aroma_gateway_provider_latency_ms_total",
 };
 
-function finiteResult(metric: ResultMetric, value: string): value is ResultValue {
+function finiteResult(
+  metric: ResultMetric,
+  value: string,
+): value is ResultValue {
   return RESULT_VALUES[metric].includes(value as ResultValue);
 }
 
@@ -76,7 +101,14 @@ export class GatewayMetrics {
     if (!Number.isFinite(amount) || amount < 0) return;
     const metric = COUNTER_METRIC_NAMES[name];
     this.#counters.set(metric, (this.#counters.get(metric) ?? 0) + amount);
-    const outcome = name === "mutationAcknowledged" ? "acknowledged" : name === "mutationRejected" ? "rejected" : name === "mutationUnknown" ? "unknown" : undefined;
+    const outcome =
+      name === "mutationAcknowledged"
+        ? "acknowledged"
+        : name === "mutationRejected"
+          ? "rejected"
+          : name === "mutationUnknown"
+            ? "unknown"
+            : undefined;
     if (outcome !== undefined) this.result("mutationOutcome", outcome);
   }
 
@@ -95,35 +127,60 @@ export class GatewayMetrics {
 
   render(): readonly string[] {
     return [
-      ...Object.values(COUNTER_METRIC_NAMES).map(name => `${name} ${this.#counters.get(name) ?? 0}`),
-      ...Object.entries(RESULT_METRIC_NAMES).flatMap(([metric, name]) => RESULT_VALUES[metric as ResultMetric].map(value => {
-        const labelled = `${name}{result="${value}"}`;
-        return `${labelled} ${this.#counters.get(labelled) ?? 0}`;
-      })),
+      ...Object.values(COUNTER_METRIC_NAMES).map(
+        (name) => `${name} ${this.#counters.get(name) ?? 0}`,
+      ),
+      ...Object.entries(RESULT_METRIC_NAMES).flatMap(([metric, name]) =>
+        RESULT_VALUES[metric as ResultMetric].map((value) => {
+          const labelled = `${name}{result="${value}"}`;
+          return `${labelled} ${this.#counters.get(labelled) ?? 0}`;
+        }),
+      ),
     ];
   }
 }
 
 export type GatewayTelemetry = Readonly<{
   metrics: GatewayMetrics;
-  startSpan(name: string, attributes?: Readonly<Record<string, string | number | boolean>>): Span;
+  startSpan(
+    name: string,
+    attributes?: Readonly<Record<string, string | number | boolean>>,
+  ): Span;
   observeProviderLatency(milliseconds: number): void;
 }>;
 
-export function createGatewayTelemetry(metrics: GatewayMetrics): GatewayTelemetry {
+export function createGatewayTelemetry(
+  metrics: GatewayMetrics,
+): GatewayTelemetry {
   return {
     metrics,
     startSpan(name, attributes = {}) {
-      const span = trace.getTracer("coffee-platform.aroma-gateway").startSpan(name);
+      const span = trace
+        .getTracer("coffee-platform.aroma-gateway")
+        .startSpan(name);
       for (const [key, value] of Object.entries(attributes)) {
-        if (/cookie|password|secret|token|authorization|credential|email|body|pii/i.test(key)) continue;
-        if (typeof value === "string" && /cookie|password|secret|token|authorization|credential|email|body|pii/i.test(value)) continue;
+        if (
+          /cookie|password|secret|token|authorization|credential|email|body|pii/i.test(
+            key,
+          )
+        )
+          continue;
+        if (
+          typeof value === "string" &&
+          /cookie|password|secret|token|authorization|credential|email|body|pii/i.test(
+            value,
+          )
+        )
+          continue;
         span.setAttribute(key, value);
       }
       return span;
     },
     observeProviderLatency(milliseconds) {
-      metrics.increment("providerLatencyMs", Math.max(0, Math.round(milliseconds)));
+      metrics.increment(
+        "providerLatencyMs",
+        Math.max(0, Math.round(milliseconds)),
+      );
     },
   };
 }
@@ -132,8 +189,12 @@ export function finishGatewaySpan(span: Span, error?: unknown): void {
   if (ENDED_SPANS.has(span)) return;
   ENDED_SPANS.add(span);
   if (error !== undefined) {
-    span.recordException(error instanceof Error ? new Error(error.name) : new Error("provider operation failed"));
-    span.setStatus({code: SpanStatusCode.ERROR});
+    span.recordException(
+      error instanceof Error
+        ? new Error(error.name)
+        : new Error("provider operation failed"),
+    );
+    span.setStatus({ code: SpanStatusCode.ERROR });
   }
   span.end();
 }

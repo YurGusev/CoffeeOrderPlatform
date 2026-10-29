@@ -1,18 +1,38 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, generateKeyPairSync } from "node:crypto";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import childProcess from "node:child_process";
+import pg from "pg";
 import { spawnSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
+import { tmpdir } from "node:os";
 import { runInNewContext } from "node:vm";
 import { join, resolve } from "node:path";
 import test from "node:test";
-import {createRuntimeLoggingOverride} from "../../tools/observability/generate.mjs";
-import { fileURLToPath } from "node:url";
+import { createRuntimeLoggingOverride } from "../../tools/observability/generate.mjs";
+import { canonicalRequestHash } from "../../packages/platform-idempotency/dist/index.js";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const COMPOSE_FILE = join(REPO_ROOT, "compose.yaml");
 const OBSERVABILITY_CONFIG = {
-  platform: {shutdownGraceMs: 30000, health: {intervalMs: 5000, timeoutMs: 1000, startupGraceMs: 30000, failureThreshold: 3}},
+  platform: {
+    shutdownGraceMs: 30000,
+    health: {
+      intervalMs: 5000,
+      timeoutMs: 1000,
+      startupGraceMs: 30000,
+      failureThreshold: 3,
+    },
+  },
   telemetry: {
     collector: {
       otlpEndpoint: "http://otel-collector:4318",
@@ -22,36 +42,48 @@ const OBSERVABILITY_CONFIG = {
       memorySpikeMiB: 32,
       containerMemoryMiB: 512,
     },
-    producer: {maxRecordBytes: 16384, queueCapacity: 256},
-    logging: {maxSizeMiB: 8, maxFiles: 3},
+    producer: { maxRecordBytes: 16384, queueCapacity: 256 },
+    logging: { maxSizeMiB: 8, maxFiles: 3 },
   },
 };
 
 void test("programmatic observability hooks require a bounded recovery-proof run", async () => {
-  const {runComposeSmoke} = await import("../../tools/compose-smoke.mjs");
+  const { runComposeSmoke } = await import("../../tools/compose-smoke.mjs");
   const hooks = {
     exporterToken: "fixture-exporter-token",
     onReady: async () => {},
     onCleanup: async () => {},
   };
   await assert.rejects(
-    runComposeSmoke({args: ["--stub-secrets"], observability: hooks}),
+    runComposeSmoke({ args: ["--stub-secrets"], observability: hooks }),
     /require --recovery-proof/,
   );
   await assert.rejects(
-    runComposeSmoke({args: ["--recovery-proof", "--no-build"], observability: hooks}),
+    runComposeSmoke({
+      args: ["--recovery-proof", "--no-build"],
+      observability: hooks,
+    }),
     /require --recovery-proof/,
   );
   await assert.rejects(
-    runComposeSmoke({args: ["--recovery-proof", "--keep"], observability: hooks}),
+    runComposeSmoke({
+      args: ["--recovery-proof", "--keep"],
+      observability: hooks,
+    }),
     /require --recovery-proof/,
   );
   await assert.rejects(
-    runComposeSmoke({args: ["--recovery-proof"], observability: {...hooks, exporterToken: ""}}),
+    runComposeSmoke({
+      args: ["--recovery-proof"],
+      observability: { ...hooks, exporterToken: "" },
+    }),
     /exporterToken must not be empty/,
   );
   await assert.rejects(
-    runComposeSmoke({args: ["--recovery-proof"], observability: {...hooks, onReady: undefined}}),
+    runComposeSmoke({
+      args: ["--recovery-proof"],
+      observability: { ...hooks, onReady: undefined },
+    }),
     /onReady must be a function/,
   );
   let cleanupCalls = 0;
@@ -59,10 +91,13 @@ void test("programmatic observability hooks require a bounded recovery-proof run
   await assert.rejects(
     runComposeSmoke({
       args: ["--recovery-proof", "--project-name", "coffee-platform"],
-      observability: {...hooks, onCleanup: async (context) => {
-        cleanupCalls += 1;
-        cleanupContext = context;
-      }},
+      observability: {
+        ...hooks,
+        onCleanup: async (context) => {
+          cleanupCalls += 1;
+          cleanupContext = context;
+        },
+      },
     }),
     /main platform project/,
   );
@@ -72,48 +107,106 @@ void test("programmatic observability hooks require a bounded recovery-proof run
 
 void test("G14 PostgreSQL proof storage is verified tmpfs while other proof storage stays unchanged", async () => {
   const calls = [];
-  let inspected = {"/var/lib/postgresql/data": "rw,noexec,nosuid,size=536870912"};
+  let inspected = {
+    "/var/lib/postgresql/data": "rw,noexec,nosuid,size=536870912",
+  };
   let stat = "tmpfs|4096|131072";
-  const source = await readFile(new URL("../../tools/compose-smoke.mjs", import.meta.url), "utf8");
+  const source = await readFile(
+    new URL("../../tools/compose-smoke.mjs", import.meta.url),
+    "utf8",
+  );
   const start = source.indexOf("function startDatabaseProofContainer(");
-  const inspect = source.indexOf("function assertEphemeralDatabaseProofStorage(", start);
+  const inspect = source.indexOf(
+    "function assertEphemeralDatabaseProofStorage(",
+    start,
+  );
   const end = source.indexOf("\nfunction bootstrapDatabaseProofRole(", inspect);
   assert.ok(start >= 0 && inspect > start && end > inspect);
-  const helpers = runInNewContext(`(()=>{${source.slice(start, source.indexOf("\nfunction assertEphemeralDatabaseProofStorage(", start))}
+  const helpers = runInNewContext(
+    `(()=>{${source.slice(start, source.indexOf("\nfunction assertEphemeralDatabaseProofStorage(", start))}
 ${source.slice(inspect, end)}
-return {startDatabaseProofContainer, assertEphemeralDatabaseProofStorage};})()`, {
-    assert, DATABASE_PROOF_IMAGE: "fixture-postgres-image",
-    runDocker(args) {
-      calls.push(args);
-      if (args[0] === "inspect") return JSON.stringify(inspected);
-      if (args[0] === "exec") return stat;
-      return "";
+return {startDatabaseProofContainer, assertEphemeralDatabaseProofStorage};})()`,
+    {
+      assert,
+      DATABASE_PROOF_IMAGE: "fixture-postgres-image",
+      runDocker(args) {
+        calls.push(args);
+        if (args[0] === "inspect") return JSON.stringify(inspected);
+        if (args[0] === "exec") return stat;
+        return "";
+      },
     },
-  });
-  assert.equal(helpers.startDatabaseProofContainer("g14-proof", "g14-network", {username: "admin", password: "fixture"}, {ephemeralPgData: true}), "g14-proof-postgres-proof");
+  );
+  assert.equal(
+    helpers.startDatabaseProofContainer(
+      "g14-proof",
+      "g14-network",
+      { username: "admin", password: "fixture" },
+      { ephemeralPgData: true },
+    ),
+    "g14-proof-postgres-proof",
+  );
   assert.ok(calls[0].includes("--tmpfs"));
-  const storage = helpers.assertEphemeralDatabaseProofStorage("g14-proof-postgres-proof");
+  const storage = helpers.assertEphemeralDatabaseProofStorage(
+    "g14-proof-postgres-proof",
+  );
   assert.equal(storage.type, "tmpfs");
   assert.equal(storage.destination, "/var/lib/postgresql/data");
   assert.equal(storage.sizeMiB, 512);
   assert.equal(storage.durability, "ephemeral");
-  assert.deepEqual([...calls[1]], ["inspect", "--format", "{{json .HostConfig.Tmpfs}}", "g14-proof-postgres-proof"]);
-  assert.deepEqual([...calls[2]], ["exec", "g14-proof-postgres-proof", "stat", "-f", "-c", "%T|%S|%b", "/var/lib/postgresql/data"]);
+  assert.deepEqual(
+    [...calls[1]],
+    [
+      "inspect",
+      "--format",
+      "{{json .HostConfig.Tmpfs}}",
+      "g14-proof-postgres-proof",
+    ],
+  );
+  assert.deepEqual(
+    [...calls[2]],
+    [
+      "exec",
+      "g14-proof-postgres-proof",
+      "stat",
+      "-f",
+      "-c",
+      "%T|%S|%b",
+      "/var/lib/postgresql/data",
+    ],
+  );
 
   calls.length = 0;
-  assert.equal(helpers.startDatabaseProofContainer("other-proof", "other-network", {username: "admin", password: "fixture"}), "other-proof-postgres-proof");
+  assert.equal(
+    helpers.startDatabaseProofContainer("other-proof", "other-network", {
+      username: "admin",
+      password: "fixture",
+    }),
+    "other-proof-postgres-proof",
+  );
   assert.equal(calls.length, 1);
   assert.equal(calls[0].includes("--tmpfs"), false);
-  assert.equal(calls.some(args => args[0] === "inspect" || args[0] === "exec"), false);
+  assert.equal(
+    calls.some((args) => args[0] === "inspect" || args[0] === "exec"),
+    false,
+  );
 
-  for (const output of ["ext4|4096|131072", "tmpfs|4096|131071", "tmpfs|4096", "tmpfs|x|131072"]) {
+  for (const output of [
+    "ext4|4096|131072",
+    "tmpfs|4096|131071",
+    "tmpfs|4096",
+    "tmpfs|x|131072",
+  ]) {
     stat = output;
-    assert.throws(() => helpers.assertEphemeralDatabaseProofStorage("bad-proof-postgres-proof"));
+    assert.throws(() =>
+      helpers.assertEphemeralDatabaseProofStorage("bad-proof-postgres-proof"),
+    );
   }
 });
 
-void test("smoke removes only images built by this run and preserves keep/no-build/shared images", async (t) => {
-  const {buildRuntimeImages, removeBuiltRuntimeImages} = await import("../../tools/compose-smoke.mjs");
+void test("smoke removes only project-scoped images built by this run", async (t) => {
+  const { buildRuntimeImages, removeBuiltRuntimeImages } =
+    await import("../../tools/compose-smoke.mjs");
   const calls = [];
   t.mock.method(childProcess, "execFileSync", (command, args) => {
     calls.push([command, args]);
@@ -123,47 +216,133 @@ void test("smoke removes only images built by this run and preserves keep/no-bui
   syncBuiltinESMExports();
   try {
     const images = [];
-    assert.throws(() => buildRuntimeImages("coffee-cleanup-proof", ["first", "second"], images), /interrupted/);
+    assert.throws(
+      () =>
+        buildRuntimeImages("coffee-cleanup-proof", ["first", "second"], images),
+      /interrupted/,
+    );
     assert.deepEqual(images, ["coffee-cleanup-proof-first:latest"]);
     calls.length = 0;
-    removeBuiltRuntimeImages(images, {keep: true});
-    removeBuiltRuntimeImages(images, {noBuild: true});
+    removeBuiltRuntimeImages(images, { keep: true });
+    removeBuiltRuntimeImages(images, { noBuild: true });
     assert.deepEqual(calls, []);
     removeBuiltRuntimeImages(images, {});
-    assert.deepEqual(calls, [["docker", ["image", "rm", "coffee-cleanup-proof-first:latest"]]]);
+    assert.deepEqual(calls, [
+      [
+        "docker",
+        ["image", "rm", "--no-prune", "coffee-cleanup-proof-first:latest"],
+      ],
+    ]);
     calls.length = 0;
     const complete = [];
     buildRuntimeImages("coffee-cleanup-proof", ["first"], complete);
-    assert.deepEqual(complete, images, "shared nginx must not be scheduled for deletion");
+    assert.deepEqual(complete, [
+      "coffee-cleanup-proof-first:latest",
+      "coffee-cleanup-proof-edge-nginx:latest",
+    ]);
+    calls.length = 0;
+    buildRuntimeImages(
+      "coffee-g14-child-proof",
+      ["first"],
+      [],
+      "/private/g14-child-C",
+    );
+    assert.equal(calls[0][1].at(-1), "/private/g14-child-C");
   } finally {
     t.mock.restoreAll();
     syncBuiltinESMExports();
   }
 });
 
-void test("all smoke modes isolate networks while only topology smoke adopts external PostgreSQL", async () => {
-  const {writeScopedComposeOverride} = await import("../../tools/compose-smoke.mjs");
-  for (const [sharedPostgres, recoveryLogging] of [[true, false], [false, false], [false, true]]) {
+void test("all smoke modes isolate networks and can bind a readonly launch context", async (t) => {
+  const { writeScopedComposeOverride } =
+    await import("../../tools/compose-smoke.mjs");
+  const contextPath = join(
+    tmpdir(),
+    `coffee-launch-context-${process.pid}.json`,
+  );
+  await writeFile(contextPath, "{}\n", { mode: 0o400 });
+  t.after(() => rm(contextPath, { force: true }));
+  for (const [sharedPostgres, recoveryLogging] of [
+    [true, false],
+    [false, false],
+    [false, true],
+  ]) {
     const path = await writeScopedComposeOverride("coffee-scope-proof", {
       sharedPostgres,
-      ...(recoveryLogging ? {recoveryProof: true, runtimeLogging: OBSERVABILITY_CONFIG} : {}),
+      launchContextPath: contextPath,
+      kafkaImage: `sha256:${"a".repeat(64)}`,
+      edgeNginxImage: "coffee-scope-proof-edge-nginx:latest",
+      ...(recoveryLogging
+        ? { recoveryProof: true, runtimeLogging: OBSERVABILITY_CONFIG }
+        : {}),
     });
     try {
-      const result = spawnSync("docker", ["compose", "-p", "coffee-scope-proof", "-f", COMPOSE_FILE, "-f", path, "config", "--format", "json"], {
-        encoding: "utf8", env: {...process.env, COFFEE_COMPOSE_SECRETS_DIR: "/dev/shm"},
-      });
+      const result = spawnSync(
+        "docker",
+        [
+          "compose",
+          "-p",
+          "coffee-scope-proof",
+          "-f",
+          COMPOSE_FILE,
+          "-f",
+          path,
+          "config",
+          "--format",
+          "json",
+        ],
+        {
+          encoding: "utf8",
+          env: { ...process.env, COFFEE_COMPOSE_SECRETS_DIR: "/dev/shm" },
+        },
+      );
       assert.equal(result.status, 0, result.stderr);
       const config = JSON.parse(result.stdout);
+      assert.equal(config.services.kafka.image, `sha256:${"a".repeat(64)}`);
+      assert.equal(config.services.kafka.pull_policy, "never");
+      assert.equal(config.services.kafka.build, undefined);
       for (const [name, network] of Object.entries(config.networks)) {
-        assert.equal(network.name, name === "coffee_postgres_data" && sharedPostgres ? name : `coffee-scope-proof_${name}`);
+        assert.equal(
+          network.name,
+          name === "coffee_postgres_data" && sharedPostgres
+            ? name
+            : `coffee-scope-proof_${name}`,
+        );
       }
       assert.equal(config.networks.coffee_postgres_data.external, true);
+      assert.equal(
+        config.services["edge-nginx"].image,
+        "coffee-scope-proof-edge-nginx:latest",
+      );
+      assert.equal(
+        config.services["orders-service"].environment
+          .COFFEE_LAUNCH_CONTEXT_FILE,
+        "/run/coffee-launch/context.json",
+      );
+      assert.ok(
+        config.services["orders-service"].volumes.some(
+          ({ source, target, read_only }) =>
+            source === contextPath &&
+            target === "/run/coffee-launch/context.json" &&
+            read_only,
+        ),
+      );
       if (recoveryLogging) {
-        const expectedLogging = createRuntimeLoggingOverride({config: OBSERVABILITY_CONFIG}).services;
+        const expectedLogging = createRuntimeLoggingOverride({
+          config: OBSERVABILITY_CONFIG,
+        }).services;
         for (const [service, expected] of Object.entries(expectedLogging)) {
-          assert.deepEqual(config.services[service].logging, expected.logging, `${service} Docker logging policy`);
+          assert.deepEqual(
+            config.services[service].logging,
+            expected.logging,
+            `${service} Docker logging policy`,
+          );
         }
-        assert.equal(config.services["aroma-provider-fixture"].logging, undefined);
+        assert.equal(
+          config.services["aroma-provider-fixture"].logging,
+          undefined,
+        );
       } else assert.equal(config.services["edge-gateway"].logging, undefined);
     } finally {
       await rm(path);
@@ -174,7 +353,9 @@ void test("all smoke modes isolate networks while only topology smoke adopts ext
 void test("local container controls exclude shared PostgreSQL and refuse deletion of running groups", async () => {
   const directory = await mkdtemp("/dev/shm/coffee-controls-proof-");
   const docker = join(directory, "docker");
-  await writeFile(docker, `#!/bin/sh
+  await writeFile(
+    docker,
+    `#!/bin/sh
 case "$1" in
   ps)
     case "$*" in
@@ -187,9 +368,19 @@ case "$1" in
   container) echo 'unsafe delete reached' >&2; exit 99 ;;
   *) exit 98 ;;
 esac
-`, "utf8");
+`,
+    "utf8",
+  );
   await chmod(docker, 0o700);
-  const run = (...args) => spawnSync("bash", [join(REPO_ROOT, "tools/coffee-containers.sh"), ...args], {encoding: "utf8", env: {...process.env, PATH: `${directory}:${process.env.PATH}`}});
+  const run = (...args) =>
+    spawnSync(
+      "bash",
+      [join(REPO_ROOT, "tools/coffee-containers.sh"), ...args],
+      {
+        encoding: "utf8",
+        env: { ...process.env, PATH: `${directory}:${process.env.PATH}` },
+      },
+    );
   try {
     const status = run("legacy", "status");
     assert.equal(status.status, 0, status.stderr);
@@ -197,7 +388,11 @@ esac
     assert.doesNotMatch(status.stdout, /db-id/);
     const start = run("legacy", "start");
     assert.equal(start.status, 0);
-    assert.equal(start.stdout.trim(), "start api-id", "disabled UI must remain stopped");
+    assert.equal(
+      start.stdout.trim(),
+      "start api-id",
+      "disabled UI must remain stopped",
+    );
     const stop = run("legacy", "stop");
     assert.equal(stop.status, 0);
     assert.equal(stop.stdout.trim(), "stop --time 30 api-id ui-id");
@@ -208,7 +403,7 @@ esac
     assert.equal(run("legacy", "remove", "--volumes").status, 2);
     assert.equal(run("unknown", "stop").status, 2);
   } finally {
-    await rm(directory, {recursive: true, force: true});
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
@@ -245,7 +440,11 @@ const NETWORKS = {
     "coffee_postgres_data",
   ],
   "catalog-supplier-sync": ["coffee_internal_api", "coffee_postgres_data"],
-  "catalog-activation-worker": ["coffee_postgres_data", "coffee_kafka_event", "coffee_internal_api"],
+  "catalog-activation-worker": [
+    "coffee_postgres_data",
+    "coffee_kafka_event",
+    "coffee_internal_api",
+  ],
   "pricing-service": [
     "coffee_public_api_backend",
     "coffee_internal_api",
@@ -317,34 +516,86 @@ void test("Compose materializes 14 Node runtimes, native nginx, and Kafka", () =
     Object.keys(config.services).sort((left, right) =>
       left.localeCompare(right),
     ),
-    [...RUNTIMES, "edge-nginx", "kafka"].sort((left, right) => left.localeCompare(right)),
+    [...RUNTIMES, "edge-nginx", "kafka"].sort((left, right) =>
+      left.localeCompare(right),
+    ),
   );
   assert.equal(config.services["api-agent"], undefined);
   assert.equal(config.services["config-bootstrap"], undefined);
   assert.equal(config.services.postgres, undefined);
   const nginx = config.services["edge-nginx"];
   assert.equal(nginx.build.dockerfile, "apps/edge-nginx/Dockerfile");
-  assert.deepEqual(Object.keys(nginx.depends_on).sort(), ["api-public", "edge-gateway", "realtime-gateway"]);
-  for (const dependency of Object.values(nginx.depends_on)) assert.equal(dependency.condition, "service_healthy");
+  assert.deepEqual(Object.keys(nginx.depends_on).sort(), [
+    "api-public",
+    "edge-gateway",
+    "realtime-gateway",
+  ]);
+  for (const dependency of Object.values(nginx.depends_on))
+    assert.equal(dependency.condition, "service_healthy");
   assert.equal(nginx.user, "101:101");
   assert.equal(nginx.read_only, true);
   assert.equal(nginx.init, true);
   assert.equal(nginx.volumes, undefined);
   assert.equal(nginx.cpus, 2, "native nginx must have the accepted CPU bound");
-  assert.equal(nginx.mem_limit, "536870912", "native nginx must have the accepted 512 MiB memory bound");
-  assert.deepEqual(nginx.ulimits?.nofile, {soft: 16384, hard: 16384});
+  assert.equal(
+    nginx.mem_limit,
+    "536870912",
+    "native nginx must have the accepted 512 MiB memory bound",
+  );
+  assert.deepEqual(nginx.ulimits?.nofile, { soft: 16384, hard: 16384 });
   assert.deepEqual(nginx.tmpfs, ["/tmp:rw,noexec,nosuid,nodev,size=8m"]);
-  assert.deepEqual(Object.keys(nginx.networks).sort(), ["coffee_edge_backend", "coffee_host_ingress"]);
-  assert.deepEqual(nginx.ports.map(({target, published, host_ip}) => ({target, published, host_ip})), [
-    {target: 8443, published: "8443", host_ip: "127.0.0.1"},
+  assert.deepEqual(Object.keys(nginx.networks).sort(), [
+    "coffee_edge_backend",
+    "coffee_host_ingress",
   ]);
-  assert.deepEqual(nginx.secrets.map(({target, uid, gid, mode}) => ({target, uid, gid, mode})), [
-    {target: "/run/secrets/edge-nginx/public.crt", uid: "101", gid: "101", mode: "0400"},
-    {target: "/run/secrets/edge-nginx/public.key", uid: "101", gid: "101", mode: "0400"},
-    {target: "/run/secrets/edge-nginx/upstream-ca.crt", uid: "101", gid: "101", mode: "0400"},
-    {target: "/run/secrets/edge-nginx/client.crt", uid: "101", gid: "101", mode: "0400"},
-    {target: "/run/secrets/edge-nginx/client.key", uid: "101", gid: "101", mode: "0400"},
-  ]);
+  assert.deepEqual(
+    nginx.ports.map(({ target, published, host_ip }) => ({
+      target,
+      published,
+      host_ip,
+    })),
+    [{ target: 8443, published: "8443", host_ip: "127.0.0.1" }],
+  );
+  assert.deepEqual(
+    nginx.secrets.map(({ target, uid, gid, mode }) => ({
+      target,
+      uid,
+      gid,
+      mode,
+    })),
+    [
+      {
+        target: "/run/secrets/edge-nginx/public.crt",
+        uid: "101",
+        gid: "101",
+        mode: "0400",
+      },
+      {
+        target: "/run/secrets/edge-nginx/public.key",
+        uid: "101",
+        gid: "101",
+        mode: "0400",
+      },
+      {
+        target: "/run/secrets/edge-nginx/upstream-ca.crt",
+        uid: "101",
+        gid: "101",
+        mode: "0400",
+      },
+      {
+        target: "/run/secrets/edge-nginx/client.crt",
+        uid: "101",
+        gid: "101",
+        mode: "0400",
+      },
+      {
+        target: "/run/secrets/edge-nginx/client.key",
+        uid: "101",
+        gid: "101",
+        mode: "0400",
+      },
+    ],
+  );
 
   for (const runtime of RUNTIMES) {
     const service = config.services[runtime];
@@ -454,7 +705,9 @@ void test("Compose networks enforce the launch planes and external PostgreSQL at
   assert.notEqual(config.networks.coffee_host_ingress.internal, true);
   assert.deepEqual(
     Object.entries(config.services)
-      .filter(([, service]) => Object.hasOwn(service.networks, "coffee_host_ingress"))
+      .filter(([, service]) =>
+        Object.hasOwn(service.networks, "coffee_host_ingress"),
+      )
       .map(([name]) => name),
     ["edge-nginx"],
     "only edge-nginx may join the host-reachable ingress network",
@@ -516,12 +769,18 @@ void test("Compose keeps forbidden trust-plane connections absent (negative topo
   assert.deepEqual(providerMembers, ["aroma-gateway"]);
 });
 
-void test("Kafka is pinned and runs as a single-node KRaft broker without host publish", () => {
+void test("Kafka requires the verified G12 artifact and preserves single-node KRaft without host publish", async () => {
   const config = composeConfig();
   const kafka = config.services.kafka;
+  assert.equal(kafka.image, "coffee-platform-kafka:verified-artifact-required");
+  assert.equal(kafka.pull_policy, "never");
+  assert.equal(kafka.build, undefined);
+  const toolchain = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
+  );
   assert.equal(
-    kafka.image,
-    "apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837",
+    toolchain.kafkaImage,
+    "apache/kafka:4.3.2@sha256:852a0d49fc4e656b022e7f23785411802c9a088c78a7c5e39f33969de9c227a7",
   );
   assert.deepEqual(Object.keys(kafka.networks), ["coffee_kafka_event"]);
   assert.equal(kafka.ports, undefined);
@@ -530,8 +789,14 @@ void test("Kafka is pinned and runs as a single-node KRaft broker without host p
     kafka.environment.KAFKA_LISTENER_SECURITY_PROTOCOL_MAP,
     "CONTROLLER:PLAINTEXT,SASL_SSL:SASL_SSL",
   );
-  assert.equal(kafka.environment.KAFKA_LISTENERS, "SASL_SSL://:9092,CONTROLLER://:29093");
-  assert.equal(kafka.environment.KAFKA_ADVERTISED_LISTENERS, "SASL_SSL://kafka:9092");
+  assert.equal(
+    kafka.environment.KAFKA_LISTENERS,
+    "SASL_SSL://:9092,CONTROLLER://:29093",
+  );
+  assert.equal(
+    kafka.environment.KAFKA_ADVERTISED_LISTENERS,
+    "SASL_SSL://kafka:9092",
+  );
   assert.equal(kafka.environment.KAFKA_INTER_BROKER_LISTENER_NAME, "SASL_SSL");
   assert.equal(kafka.environment.KAFKA_AUTO_CREATE_TOPICS_ENABLE, "false");
   assert.match(kafka.healthcheck.test[1], /kafka-broker-api-versions/);
@@ -541,15 +806,18 @@ void test("Kafka data uses a project-scoped named volume", async () => {
   const config = composeConfig();
   const scopedConfig = composeConfig("coffee-topology-volume-scope");
   const kafkaData = config.volumes?.kafka_data;
-  assert.equal(config.services.kafka.environment.KAFKA_LOG_DIRS, "/var/lib/kafka/data");
+  assert.equal(
+    config.services.kafka.environment.KAFKA_LOG_DIRS,
+    "/var/lib/kafka/data",
+  );
   assert.deepEqual(kafkaData, { name: "coffee-platform_kafka_data" });
   assert.equal(
     scopedConfig.volumes?.kafka_data?.name,
     "coffee-topology-volume-scope_kafka_data",
   );
   assert.deepEqual(
-    config.services.kafka.volumes.filter(({ target }) =>
-      target === "/var/lib/kafka/data",
+    config.services.kafka.volumes.filter(
+      ({ target }) => target === "/var/lib/kafka/data",
     ),
     [
       {
@@ -565,66 +833,199 @@ void test("Kafka data uses a project-scoped named volume", async () => {
 });
 
 void test("observability overlay keeps OpenObserve private and bounds exact Docker log mounts", async () => {
-  const {createComposeOverride, createRuntimeLoggingOverride} = await import("../../tools/observability/generate.mjs");
+  const { createComposeOverride, createRuntimeLoggingOverride } =
+    await import("../../tools/observability/generate.mjs");
   const id = "a".repeat(64);
-  const logFiles = [{service: "edge-nginx", containerId: id, logPath: `/var/lib/docker/containers/${id}/${id}-json.log`}];
+  const logFiles = [
+    {
+      service: "edge-nginx",
+      containerId: id,
+      logPath: `/var/lib/docker/containers/${id}/${id}-json.log`,
+    },
+  ];
   const overlay = createComposeOverride({
     config: {
       ...OBSERVABILITY_CONFIG,
-      telemetry: {...OBSERVABILITY_CONFIG.telemetry, openObserve: {endpoint: "http://openobserve:5080", bootstrapEmail: "operations@coffee-platform.internal", validationMarker: "bootstrap-validation-placeholder", telemetryEnabled: false, mmdbDownloadEnabled: false, modelPricingEnabled: false, maxDiskBytes: 1073741824, memoryLimitMiB: 512, memTableMaxSizeMiB: 128, maxFileSizeInMemoryMiB: 8, maxFileSizeOnDiskMiB: 8, maxFileRetentionSeconds: 30, memPersistIntervalSeconds: 2, compactionIntervalSeconds: 60, deleteFilesDelayMinutes: 1, retentionDays: 3, diskWatermarkPercent: 80, jobCleanupWaitSeconds: 60}},
+      telemetry: {
+        ...OBSERVABILITY_CONFIG.telemetry,
+        openObserve: {
+          endpoint: "http://openobserve:5080",
+          bootstrapEmail: "operations@coffee-platform.internal",
+          validationMarker: "bootstrap-validation-placeholder",
+          telemetryEnabled: false,
+          mmdbDownloadEnabled: false,
+          modelPricingEnabled: false,
+          maxDiskBytes: 1073741824,
+          memoryLimitMiB: 512,
+          memTableMaxSizeMiB: 128,
+          maxFileSizeInMemoryMiB: 8,
+          maxFileSizeOnDiskMiB: 8,
+          maxFileRetentionSeconds: 30,
+          memPersistIntervalSeconds: 2,
+          compactionIntervalSeconds: 60,
+          deleteFilesDelayMinutes: 1,
+          retentionDays: 3,
+          diskWatermarkPercent: 80,
+          jobCleanupWaitSeconds: 60,
+        },
+      },
     },
-    imageRefs: {otelCollectorImage: "otel/opentelemetry-collector-contrib@sha256:collector", openObserveImage: "openobserve@sha256:openobserve", bootstrapProbeSha256: "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14"},
+    imageRefs: {
+      otelCollectorImage:
+        "otel/opentelemetry-collector-contrib@sha256:collector",
+      openObserveImage: "openobserve@sha256:openobserve",
+      bootstrapProbeSha256:
+        "dbac288c29ba568459550a2da9e7ae0ded6b1fc728ee9fad3044c44e62d6ac14",
+    },
     logFiles,
     collectorConfigPath: "/dev/shm/observability/collector.yaml",
     openObserveDataVolume: "coffee-topology-openobserve-data",
   });
   const collector = overlay.services["otel-collector"];
   const openObserve = overlay.services.openobserve;
-  assert.deepEqual(openObserve.environment, {ZO_LOCAL_MODE: "true", ZO_DATA_DIR: "/data", ZO_HTTP_PORT: "5080", ZO_ROOT_USER_EMAIL: "operations@coffee-platform.internal", ZO_ROOT_USER_PASSWORD: "bootstrap-validation-placeholder", ZO_TELEMETRY: "false", ZO_MMDB_DISABLE_DOWNLOAD: "true", ZO_MODEL_PRICING_ENABLED: "false", ZO_MEM_TABLE_MAX_SIZE: "128", ZO_MAX_FILE_SIZE_IN_MEMORY: "8", ZO_MAX_FILE_SIZE_ON_DISK: "8", ZO_MAX_FILE_RETENTION_TIME: "30", ZO_MEM_PERSIST_INTERVAL: "2", ZO_COMPACT_INTERVAL: "60", ZO_COMPACT_DATA_RETENTION_INTERVAL: "60", ZO_COMPACT_DATA_RETENTION_DAYS: "3", ZO_COMPACT_DELETE_FILES_DELAY_MINUTES: "1", ZO_COMPACT_JOB_CLEAN_WAIT_TIME: "60", ZO_DISK_CIRCUIT_BREAKER_ENABLED: "true", ZO_DISK_CIRCUIT_BREAKER_THRESHOLD: "80"});
+  assert.deepEqual(openObserve.environment, {
+    ZO_LOCAL_MODE: "true",
+    ZO_DATA_DIR: "/data",
+    ZO_HTTP_PORT: "5080",
+    ZO_ROOT_USER_EMAIL: "operations@coffee-platform.internal",
+    ZO_ROOT_USER_PASSWORD: "bootstrap-validation-placeholder",
+    ZO_TELEMETRY: "false",
+    ZO_MMDB_DISABLE_DOWNLOAD: "true",
+    ZO_MODEL_PRICING_ENABLED: "false",
+    ZO_MEM_TABLE_MAX_SIZE: "128",
+    ZO_MAX_FILE_SIZE_IN_MEMORY: "8",
+    ZO_MAX_FILE_SIZE_ON_DISK: "8",
+    ZO_MAX_FILE_RETENTION_TIME: "30",
+    ZO_MEM_PERSIST_INTERVAL: "2",
+    ZO_COMPACT_INTERVAL: "60",
+    ZO_COMPACT_DATA_RETENTION_INTERVAL: "60",
+    ZO_COMPACT_DATA_RETENTION_DAYS: "3",
+    ZO_COMPACT_DELETE_FILES_DELAY_MINUTES: "1",
+    ZO_COMPACT_JOB_CLEAN_WAIT_TIME: "60",
+    ZO_DISK_CIRCUIT_BREAKER_ENABLED: "true",
+    ZO_DISK_CIRCUIT_BREAKER_THRESHOLD: "80",
+  });
   assert.deepEqual(openObserve.entrypoint, ["/busybox", "sh", "-ceu"]);
   assert.match(openObserve.command[0], /\.coffee-initialized-v1/u);
   assert.match(openObserve.command[0], /test ! -L/u);
   assert.match(openObserve.command[0], /marker_email.*ZO_ROOT_USER_EMAIL/u);
-  assert.ok(openObserve.healthcheck.test.join(" ").includes("/busybox df -P / /data"));
+  assert.ok(
+    openObserve.healthcheck.test.join(" ").includes("/busybox df -P / /data"),
+  );
   assert.deepEqual(openObserve.networks, ["coffee_observability"]);
-  assert.deepEqual(collector.networks, ["coffee_observability", "coffee_edge_backend", "coffee_public_api_backend", "coffee_internal_api", "coffee_kafka_event"]);
+  assert.deepEqual(collector.networks, [
+    "coffee_observability",
+    "coffee_edge_backend",
+    "coffee_public_api_backend",
+    "coffee_internal_api",
+    "coffee_kafka_event",
+  ]);
   assert.equal(collector.ports, undefined);
   assert.equal(openObserve.ports, undefined);
   assert.equal(collector.healthcheck.test[1], "/busybox");
   assert.equal(collector.healthcheck.test[7], "1");
   assert.ok(openObserve.healthcheck.test.join(" ").includes("-T 1 "));
-  assert.ok(openObserve.healthcheck.test.join(" ").includes("http://127.0.0.1:5080/healthz"));
-  assert.ok(collector.volumes.some(({source, target, read_only}) => source === "/usr/bin/busybox" && target === "/busybox" && read_only));
-  assert.ok(openObserve.volumes.some(({source, target, read_only}) => source === "/usr/bin/busybox" && target === "/busybox" && read_only));
-  assert.deepEqual(collector.volumes.filter(({read_only}) => read_only !== true), [
-    {type: "volume", source: "collector_checkpoints", target: "/var/lib/otelcol/file_storage"},
-  ]);
-  assert.ok(collector.volumes.some(({source, target, read_only}) => source === `/var/lib/docker/containers/${id}` && target === `/var/lib/docker/containers/${id}` && read_only));
-  assert.equal(collector.volumes.some(({source}) => source === "/var/run/docker.sock"), false);
+  assert.ok(
+    openObserve.healthcheck.test
+      .join(" ")
+      .includes("http://127.0.0.1:5080/healthz"),
+  );
+  assert.ok(
+    collector.volumes.some(
+      ({ source, target, read_only }) =>
+        source === "/usr/bin/busybox" && target === "/busybox" && read_only,
+    ),
+  );
+  assert.ok(
+    openObserve.volumes.some(
+      ({ source, target, read_only }) =>
+        source === "/usr/bin/busybox" && target === "/busybox" && read_only,
+    ),
+  );
+  assert.deepEqual(
+    collector.volumes.filter(({ read_only }) => read_only !== true),
+    [
+      {
+        type: "volume",
+        source: "collector_checkpoints",
+        target: "/var/lib/otelcol/file_storage",
+      },
+    ],
+  );
+  assert.ok(
+    collector.volumes.some(
+      ({ source, target, read_only }) =>
+        source === `/var/lib/docker/containers/${id}` &&
+        target === `/var/lib/docker/containers/${id}` &&
+        read_only,
+    ),
+  );
+  assert.equal(
+    collector.volumes.some(({ source }) => source === "/var/run/docker.sock"),
+    false,
+  );
   assert.equal(collector.mem_limit, "512m");
   for (const role of ["otel-collector", "openobserve"])
     assert.equal(overlay.services[role].stop_grace_period, "30000ms");
-  assert.deepEqual(overlay.volumes.openobserve_data, {external: true, name: "coffee-topology-openobserve-data"});
-  assert.deepEqual(overlay.networks.coffee_observability, {name: "coffee_observability", internal: true});
+  assert.deepEqual(overlay.volumes.openobserve_data, {
+    external: true,
+    name: "coffee-topology-openobserve-data",
+  });
+  assert.deepEqual(overlay.networks.coffee_observability, {
+    name: "coffee_observability",
+    internal: true,
+  });
 
-  const logging = createRuntimeLoggingOverride({config: OBSERVABILITY_CONFIG});
-  assert.deepEqual(logging.services["edge-gateway"].logging.options, {"max-size": "8m", "max-file": "3", mode: "non-blocking", "max-buffer-size": "4194304"});
-  assert.deepEqual(logging.services.kafka.logging.options, {"max-size": "8m", "max-file": "3", mode: "non-blocking", "max-buffer-size": "4194304"});
+  const logging = createRuntimeLoggingOverride({
+    config: OBSERVABILITY_CONFIG,
+  });
+  assert.deepEqual(logging.services["edge-gateway"].logging.options, {
+    "max-size": "8m",
+    "max-file": "3",
+    mode: "non-blocking",
+    "max-buffer-size": "4194304",
+  });
+  assert.deepEqual(logging.services.kafka.logging.options, {
+    "max-size": "8m",
+    "max-file": "3",
+    mode: "non-blocking",
+    "max-buffer-size": "4194304",
+  });
 });
 
 void test("Node production image is exact, non-root, and keeps build tooling out of final stage", async () => {
   const dockerfile = await readFile(join(REPO_ROOT, "Dockerfile"), "utf8");
-  assert.match(
-    dockerfile,
-    /node:26\.8\.1-bookworm-slim@sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae/,
+  const toolchain = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/toolchain-versions.json"), "utf8"),
   );
+  assert.ok(toolchain.nodeImage.startsWith("node:26.8.1-alpine@sha256:"));
+  assert.ok(dockerfile.includes(`ARG NODE_IMAGE=${toolchain.nodeImage}`));
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS build/);
   assert.match(dockerfile, /FROM \$\{NODE_IMAGE\} AS runtime/);
   assert.match(dockerfile, /pnpm --filter .* deploy --prod/);
   assert.match(dockerfile, /USER node/);
   assert.match(dockerfile, /COPY --from=build \/runtime/);
-  assert.match(dockerfile, /COPY platform\/launch-v1-connectivity-policy\.json \.\/platform\/launch-v1-connectivity-policy\.json/);
-  assert.match(dockerfile, /ENTRYPOINT \["node", "scripts\/permission-enforce\.mjs"\]/);
+  const runtimeStage = dockerfile.slice(
+    dockerfile.indexOf("FROM ${NODE_IMAGE} AS runtime"),
+  );
+  assert.match(
+    runtimeStage,
+    /apk add --no-cache --upgrade ca-certificates libcrypto3 libssl3 zlib zstd-libs lz4-libs libsasl libcurl/,
+  );
+  assert.match(runtimeStage, /ENV LD_LIBRARY_PATH=\/usr\/local\/lib/);
+  assert.match(
+    runtimeStage,
+    /COPY --from=librdkafka-build \/usr\/local\/lib\/librdkafka\.so\*/,
+  );
+  assert.doesNotMatch(runtimeStage, /gcompat|libc6-compat|glibc/u);
+  assert.match(
+    dockerfile,
+    /COPY platform\/launch-v1-connectivity-policy\.json \.\/platform\/launch-v1-connectivity-policy\.json/,
+  );
+  assert.match(
+    dockerfile,
+    /ENTRYPOINT \["node", "scripts\/permission-enforce\.mjs"\]/,
+  );
   assert.match(dockerfile, /CMD \["--entry", "dist\/main\.js"\]/);
 });
 
@@ -643,7 +1044,10 @@ void test("Confluent Node 26 addon links dynamically to separately pinned librdk
 });
 
 void test("recovery proof preserves the body error when orders-aroma-preparation restore also fails", async () => {
-  const source = await readFile(new URL("../../tools/compose-smoke.mjs", import.meta.url), "utf8");
+  const source = await readFile(
+    new URL("../../tools/compose-smoke.mjs", import.meta.url),
+    "utf8",
+  );
   const start = source.indexOf(`        runCompose(
           projectName,
           secretsDir,
@@ -654,55 +1058,115 @@ void test("recovery proof preserves the body error when orders-aroma-preparation
   const bodyError = new Error("BODY_SECRET_CANARY");
   const restoreError = new Error("RESTORE_SECRET_CANARY");
   const readinessError = new Error("READINESS_SECRET_CANARY");
-  const run = ({bodyFails = false, restoreFails = false, readinessFails = false} = {}) => {
+  const run = ({
+    bodyFails = false,
+    restoreFails = false,
+    readinessFails = false,
+  } = {}) => {
     const calls = [];
-    const promise = runInNewContext(`(async()=>{${recoveryBlock};return nativeFoundation;})()`, {
-      AggregateError, assert, bodyError, restoreError, readinessError,
-      projectName: "synthetic-project", secretsDir: "synthetic-secrets", composeFile: "synthetic-compose",
-      recoveryDatabaseProof: {port: 5432}, recoveryProofCredentials: {}, platformConfig: {}, nativeFoundation: undefined,
-      prepareKafkaNativeFixture: async () => {if (bodyFails) throw bodyError;return {mappingTopic: "synthetic-topic"};},
-      nativeFoundationSource: () => "synthetic-source",
-      runCompose: (_project, _secrets, args) => {
-        calls.push(args[0] === "up" ? "restore-up" : args[0]);
-        if (args[0] === "up" && restoreFails) throw restoreError;
-        if (args[0] === "exec") return JSON.stringify({sigterm: {received: true, gateEntered: true, activeAtSignal: {total: 1}, ownerCount: 1, closedMetrics: {consumer: {assigned: 0, active: 0, pending: 0}}}});
-        return "";
+    const promise = runInNewContext(
+      `(async()=>{${recoveryBlock};return nativeFoundation;})()`,
+      {
+        AggregateError,
+        assert,
+        bodyError,
+        restoreError,
+        readinessError,
+        proofLaunchIdentity: undefined,
+        projectName: "synthetic-project",
+        secretsDir: "synthetic-secrets",
+        composeFile: "synthetic-compose",
+        recoveryDatabaseProof: { port: 5432 },
+        recoveryProofCredentials: {},
+        platformConfig: {},
+        recoveryPlatformConfig: {},
+        databaseProofService: () => ({ database: "synthetic-db" }),
+        nativeFoundation: undefined,
+        prepareKafkaNativeFixture: async () => {
+          if (bodyFails) throw bodyError;
+          return {
+            mappingTopic: "synthetic-topic",
+            kafkaTargets: { orders: {}, preparation: {} },
+          };
+        },
+        nativeFoundationSource: () => "synthetic-source",
+        runCompose: (_project, _secrets, args) => {
+          calls.push(args[0] === "up" ? "restore-up" : args[0]);
+          if (args[0] === "up" && restoreFails) throw restoreError;
+          if (args[0] === "exec")
+            return JSON.stringify({
+              sigterm: {
+                received: true,
+                gateEntered: true,
+                activeAtSignal: { total: 1 },
+                ownerCount: 1,
+                closedMetrics: {
+                  consumer: { assigned: 0, active: 0, pending: 0 },
+                },
+              },
+            });
+          return "";
+        },
+        assertOrdersOutboxBrokerRecovery: async () => ({ recovered: true }),
+        runKafkaBlackholeProof: async () => ({ recovered: true }),
+        waitForRuntimeReadiness: async () => {
+          calls.push("readiness");
+          if (readinessFails) throw readinessError;
+        },
       },
-      assertOrdersOutboxBrokerRecovery: async () => ({recovered: true}),
-      runKafkaBlackholeProof: async () => ({recovered: true}),
-      waitForRuntimeReadiness: async () => {calls.push("readiness");if (readinessFails) throw readinessError;},
-    });
-    return {calls, promise};
+    );
+    return { calls, promise };
   };
 
-  const bodyOnly = run({bodyFails: true});
+  const bodyOnly = run({ bodyFails: true });
   await assert.rejects(bodyOnly.promise, (error) => error === bodyError);
   assert.deepEqual(bodyOnly.calls, ["stop", "restore-up", "readiness"]);
-  await assert.rejects(run({restoreFails: true}).promise, (error) => error === restoreError);
-  await assert.rejects(run({readinessFails: true}).promise, (error) => error === readinessError);
-  await assert.rejects(run({bodyFails: true, restoreFails: true}).promise, (error) => {
-    assert.ok(error instanceof AggregateError);
-    assert.deepEqual([...error.errors], [bodyError, restoreError]);
-    assert.equal(error.cause, bodyError);
-    assert.equal(error.message, "Recovery proof and orders-aroma-preparation restoration both failed");
-    assert.doesNotMatch(error.message, /BODY_SECRET_CANARY|RESTORE_SECRET_CANARY/u);
-    return true;
-  });
+  await assert.rejects(
+    run({ restoreFails: true }).promise,
+    (error) => error === restoreError,
+  );
+  await assert.rejects(
+    run({ readinessFails: true }).promise,
+    (error) => error === readinessError,
+  );
+  await assert.rejects(
+    run({ bodyFails: true, restoreFails: true }).promise,
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.deepEqual([...error.errors], [bodyError, restoreError]);
+      assert.equal(error.cause, bodyError);
+      assert.equal(
+        error.message,
+        "Recovery proof and orders-aroma-preparation restoration both failed",
+      );
+      assert.doesNotMatch(
+        error.message,
+        /BODY_SECRET_CANARY|RESTORE_SECRET_CANARY/u,
+      );
+      return true;
+    },
+  );
   const success = run();
   await success.promise;
   assert.deepEqual(success.calls, ["stop", "exec", "restore-up", "readiness"]);
 });
 
 void test("Orders recovery reads a complete bounded snapshot from every configured Kafka partition", () => {
-  const source = readFile(new URL("../../tools/compose-smoke.mjs", import.meta.url), "utf8");
+  const source = readFile(
+    new URL("../../tools/compose-smoke.mjs", import.meta.url),
+    "utf8",
+  );
   return source.then((text) => {
     const start = text.indexOf("function readOrdersBrokerMessages(");
-    const end = text.indexOf("\nasync function assertOrdersOutboxBrokerRecovery", start);
+    const end = text.indexOf(
+      "\nasync function assertOrdersOutboxBrokerRecovery",
+      start,
+    );
     assert.ok(start >= 0 && end > start);
     const readerSource = text.slice(start, end);
-    const topic = {name: "coffee.orders.lifecycle.v1", partitions: 2};
+    const topic = { name: "coffee.orders.lifecycle.v1", partitions: 2 };
     const commandError = new Error("synthetic Kafka command failure");
-    const makeReader = ({offsets, records = {}, failCommand = false}) => {
+    const makeReader = ({ offsets, records = {}, failCommand = false }) => {
       const commands = [];
       const reader = runInNewContext(`(${readerSource})`, {
         assert,
@@ -715,19 +1179,43 @@ void test("Orders recovery reads a complete bounded snapshot from every configur
           return records[partition] ?? "";
         },
       });
-      return {commands, reader: () => reader("synthetic-project", "synthetic-secrets", "synthetic-compose", topic)};
+      return {
+        commands,
+        reader: () =>
+          reader(
+            "synthetic-project",
+            "synthetic-secrets",
+            "synthetic-compose",
+            topic,
+          ),
+      };
     };
 
     const complete = makeReader({
       offsets: `${topic.name}:0:0\n${topic.name}:1:2\n`,
-      records: {1: '{"messageId":"one"}\n{"messageId":"two"}\n'},
+      records: { 1: '{"messageId":"one"}\n{"messageId":"two"}\n' },
     });
-    assert.deepEqual(JSON.parse(JSON.stringify(complete.reader())), [{messageId: "one"}, {messageId: "two"}]);
-    assert.equal(complete.commands.length, 2, "empty partitions need no consumer process");
-    assert.match(complete.commands[1], /--partition 1 --offset 0 --max-messages 2 --timeout-ms 5000/u);
-    assert.doesNotMatch(complete.commands.join(" "), /--group|2>\/dev\/null|\|\| true/u);
+    assert.deepEqual(JSON.parse(JSON.stringify(complete.reader())), [
+      { messageId: "one" },
+      { messageId: "two" },
+    ]);
+    assert.equal(
+      complete.commands.length,
+      2,
+      "empty partitions need no consumer process",
+    );
+    assert.match(
+      complete.commands[1],
+      /--partition 1 --offset 0 --max-messages 2 --timeout-ms 5000/u,
+    );
+    assert.doesNotMatch(
+      complete.commands.join(" "),
+      /--group|2>\/dev\/null|\|\| true/u,
+    );
 
-    const empty = makeReader({offsets: `${topic.name}:0:0\n${topic.name}:1:0\n`});
+    const empty = makeReader({
+      offsets: `${topic.name}:0:0\n${topic.name}:1:0\n`,
+    });
     assert.deepEqual(JSON.parse(JSON.stringify(empty.reader())), []);
     assert.equal(empty.commands.length, 1);
 
@@ -739,18 +1227,3623 @@ void test("Orders recovery reads a complete bounded snapshot from every configur
       `${topic.name}:0:0x1\n${topic.name}:1:0\n`,
       `${topic.name}:0:101\n${topic.name}:1:0\n`,
     ]) {
-      const invalid = makeReader({offsets});
+      const invalid = makeReader({ offsets });
       assert.throws(invalid.reader, /offset snapshot/u);
-      assert.equal(invalid.commands.length, 1, "invalid snapshots must fail before reading records");
+      assert.equal(
+        invalid.commands.length,
+        1,
+        "invalid snapshots must fail before reading records",
+      );
     }
 
     const incomplete = makeReader({
       offsets: `${topic.name}:0:0\n${topic.name}:1:2\n`,
-      records: {1: '{"messageId":"one"}\n'},
+      records: { 1: '{"messageId":"one"}\n' },
     });
-    assert.throws(incomplete.reader, /expected 2 records in partition 1, received 1/u);
+    assert.throws(
+      incomplete.reader,
+      /expected 2 records in partition 1, received 1/u,
+    );
 
-    const failed = makeReader({offsets: `${topic.name}:0:0\n${topic.name}:1:1\n`, failCommand: true});
+    const failed = makeReader({
+      offsets: `${topic.name}:0:0\n${topic.name}:1:1\n`,
+      failCommand: true,
+    });
     assert.throws(failed.reader, (error) => error === commandError);
   });
+});
+
+void test("verified infrastructure image loader accepts only context-bound Kafka artifacts", async (t) => {
+  const { loadVerifiedGateImage } =
+    await import("../../tools/verified-infrastructure-image.mjs");
+  const root = await mkdtemp("/tmp/coffee-kafka-artifact-proof-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const candidateRoot = join(root, "candidate");
+  const evidenceDir = join(root, "evidence");
+  const supplyChainDir = join(
+    evidenceDir,
+    "gates/G12_SUPPLY_CHAIN/artifacts/supply-chain",
+  );
+  await mkdir(join(candidateRoot, "config"), { recursive: true, mode: 0o700 });
+  await mkdir(join(supplyChainDir, "artifacts"), {
+    recursive: true,
+    mode: 0o700,
+  });
+  const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  const runId = "20261029T120000Z-abcdef0";
+  const candidateSha = `abcdef0${"1".repeat(33)}`;
+  const imageId = `sha256:${"2".repeat(64)}`;
+  const manifestDigest = `sha256:${"3".repeat(64)}`;
+  const platformManifestDigest = `sha256:${"4".repeat(64)}`;
+  const platformBytes = Buffer.from("platform config fixture");
+  const index = {
+    schemaVersion: 2,
+    mediaType: "application/vnd.oci.image.index.v1+json",
+    manifests: [
+      {
+        mediaType: "application/vnd.oci.image.manifest.v1+json",
+        digest: platformManifestDigest,
+        size: 123,
+        platform: { os: "linux", architecture: "amd64" },
+      },
+    ],
+  };
+  const indexBytes = Buffer.from(JSON.stringify(index));
+  const toolchainBytes = Buffer.from(
+    JSON.stringify({
+      kafkaImage: `apache/kafka:4.3.2@sha256:${hash(indexBytes)}`,
+    }),
+  );
+  const lockfileBytes = Buffer.from("lock fixture");
+  const context = {
+    schemaVersion: 1,
+    runId,
+    candidateSha,
+    baseConfigSha256: hash(platformBytes),
+  };
+  const environment = {
+    runId,
+    candidateSha,
+    candidatePath: candidateRoot,
+    dirty: false,
+    configSha256: context.baseConfigSha256,
+    treeSha: "5".repeat(40),
+    toolchainVersionsSha256: hash(toolchainBytes),
+    lockfileSha256: hash(lockfileBytes),
+  };
+  for (const [path, bytes] of [
+    [join(candidateRoot, "config/platform.yaml"), platformBytes],
+    [join(candidateRoot, "config/toolchain-versions.json"), toolchainBytes],
+    [join(candidateRoot, "pnpm-lock.yaml"), lockfileBytes],
+  ]) {
+    await writeFile(path, bytes, { mode: 0o644 });
+    await chmod(path, 0o644);
+  }
+  await writeFile(
+    join(evidenceDir, "environment.json"),
+    JSON.stringify(environment),
+    { mode: 0o600 },
+  );
+  const ociArtifact = Buffer.from("mock OCI artifact bytes");
+  const baseMaterial = {
+    sourceRef: `apache/kafka:4.3.2@sha256:${hash(indexBytes)}`,
+    platformManifestDigest,
+    indexArtifact: {
+      path: "artifacts/kafka-base-index.json",
+      sha256: hash(indexBytes),
+      sizeBytes: indexBytes.length,
+    },
+  };
+  const receipt = {
+    schemaVersion: 1,
+    gate: "G12_SUPPLY_CHAIN",
+    status: "PASS",
+    runId,
+    candidateSha,
+    treeSha: environment.treeSha,
+    configSha256: context.baseConfigSha256,
+    toolchainVersionsSha256: environment.toolchainVersionsSha256,
+    lockfileSha256: environment.lockfileSha256,
+    target: "kafka",
+    importTag: `coffee-g12-${hash(Buffer.from(runId)).slice(0, 12)}-kafka:latest`,
+    baseImage: baseMaterial.sourceRef,
+    imageId,
+    manifestDigest,
+    platformManifestDigest,
+    provenanceStatus: "INCOMPLETE_LOCAL_CONTEXT",
+    provenanceSha256: "6".repeat(64),
+    attestationSha256: "7".repeat(64),
+    buildInputBinding: {
+      status: "OBSERVED",
+      sourceCommit: candidateSha,
+      sourceTreeSha: environment.treeSha,
+      archiveSha256: "8".repeat(64),
+      archiveSizeBytes: 123,
+      extractedTreeSha256: "9".repeat(64),
+      extractedBytes: 123,
+      sourceKind: "git-archive-local-context",
+      buildkitMaterialsCompleteness: "INCOMPLETE_LOCAL_CONTEXT",
+      invocation: {
+        entryPoint: "docker buildx build",
+        builder: "coffee-platform-mtu",
+        target: "kafka",
+        platform: "linux/amd64",
+        provenance: "mode=min",
+        output: "oci-layout-directory",
+      },
+    },
+    ociArtifact: {
+      path: "artifacts/kafka.oci.tar",
+      sha256: hash(ociArtifact),
+      sizeBytes: ociArtifact.length,
+      layoutTreeSha256: "a".repeat(64),
+      layoutBytes: 123,
+    },
+    baseMaterial,
+  };
+  const receiptBytes = Buffer.from(JSON.stringify(receipt));
+  const result = {
+    gate: "G12_SUPPLY_CHAIN",
+    status: "PASS",
+    code: "G12_SCAN_CLEAN",
+    runId,
+    candidateSha,
+    kafka: {
+      path: "artifacts/kafka-receipt.json",
+      receiptSha256: hash(receiptBytes),
+      imageId,
+      importTag: receipt.importTag,
+      manifestDigest,
+      ociArtifactPath: "artifacts/kafka.oci.tar",
+      ociArtifactSha256: hash(ociArtifact),
+    },
+    provenance: {
+      status: "PASS",
+      sourceRevision: candidateSha,
+      treeSha: environment.treeSha,
+      configSha256: context.baseConfigSha256,
+      toolchainVersionsSha256: environment.toolchainVersionsSha256,
+      lockfileSha256: environment.lockfileSha256,
+      images: [
+        {
+          service: "kafka",
+          imageId,
+          manifestDigest,
+          platformManifestDigest,
+          provenanceStatus: "PASS",
+          metadataSha256: receipt.provenanceSha256,
+          attestationSha256: receipt.attestationSha256,
+          baseMaterial,
+        },
+      ],
+    },
+  };
+  for (const [path, bytes] of [
+    [join(supplyChainDir, "result.json"), Buffer.from(JSON.stringify(result))],
+    [join(supplyChainDir, "artifacts/kafka-receipt.json"), receiptBytes],
+    [join(supplyChainDir, "artifacts/kafka.oci.tar"), ociArtifact],
+    [join(supplyChainDir, "artifacts/kafka-base-index.json"), indexBytes],
+  ])
+    await writeFile(path, bytes, { mode: 0o600 });
+  const validated = await loadVerifiedGateImage({
+    target: "kafka",
+    contextFile: join(evidenceDir, "context.json"),
+    loadImage: false,
+    validateContext: async () => ({ context, candidateRoot, evidenceDir }),
+  });
+  assert.deepEqual(validated, {
+    imageId,
+    manifestDigest,
+    receiptSha256: hash(receiptBytes),
+    ociArtifactSha256: hash(ociArtifact),
+    baseImage: receipt.baseImage,
+    candidateSha,
+    runId,
+    importTag: receipt.importTag,
+    imported: false,
+  });
+  await assert.rejects(loadVerifiedGateImage({ target: "openobserve" }), {
+    message: "G12_KAFKA_TARGET_INVALID",
+  });
+});
+
+void test("G15 browser CLI mode is isolated and requires its integrated hook", async () => {
+  const { runComposeSmoke } = await import("../../tools/compose-smoke.mjs");
+  for (const args of [
+    ["--browser-proof", "--stub-secrets"],
+    ["--browser-proof", "--no-build"],
+    ["--browser-proof", "--keep"],
+    ["--browser-proof", "--database-proof"],
+    ["--browser-proof", "--customer-proof"],
+    ["--browser-proof", "--recovery-proof"],
+    ["--browser-proof", "--mutation-disable-rollback"],
+    ["--browser-proof", "--aroma-binding-proof"],
+    ["--browser-proof", "--aroma-cart-proof"],
+    ["--browser-proof", "--provision-empty-postgres-network"],
+    ["--browser-proof", "--project-name", "coffee-fixture"],
+  ])
+    await assert.rejects(
+      runComposeSmoke({ args }),
+      /--browser-proof must be the only option/u,
+    );
+  await assert.rejects(
+    runComposeSmoke({ args: ["--browser-proof"] }),
+    /requires the integrated browser hook/u,
+  );
+});
+
+void test("G15 Compose service rows retain the full container ID", async () => {
+  const source = await readFile(
+    new URL("../../tools/compose-smoke.mjs", import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("function parseComposePs(");
+  const end = source.indexOf("\nfunction assertHealthy(", start);
+  assert.ok(start >= 0 && end > start);
+  const fullId = "a".repeat(64);
+  let observed;
+  const { serviceRows } = runInNewContext(
+    `(()=>{${source.slice(start, end)}; return {serviceRows};})()`,
+    {
+      COMPOSE_FILE: "compose.yaml",
+      runCompose(projectName, secretsDir, args, options) {
+        observed = {
+          projectName,
+          secretsDir,
+          args: Array.from(args),
+          composeFile: options.composeFile,
+        };
+        return JSON.stringify({ ID: fullId, Service: "edge-nginx" });
+      },
+    },
+  );
+
+  const rows = serviceRows("coffee-g15-proof", "/dev/shm/secrets");
+  assert.deepEqual(observed, {
+    projectName: "coffee-g15-proof",
+    secretsDir: "/dev/shm/secrets",
+    args: ["ps", "--all", "--no-trunc", "--format", "json"],
+    composeFile: "compose.yaml",
+  });
+  assert.equal(rows.find((row) => row.Service === "edge-nginx")?.ID, fullId);
+});
+
+void test("G18 Compose failure diagnostics preserve the original error and expose only finite process facts", async () => {
+  const { ROLLBACK_COMPOSE_OPERATIONS, withRollbackComposeDiagnostic } =
+    await import("../../tools/compose-smoke.mjs");
+  const { createRollbackFailureReceipt, validateRollbackFailureArtifact } =
+    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const { persistRollbackFailureFromChild } =
+    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  assert.deepEqual(ROLLBACK_COMPOSE_OPERATIONS, [
+    "kafka-up",
+    "kafka-offset-bootstrap",
+    "runtime-stack-up",
+  ]);
+  const sensitiveCanary = "RAW_STDERR_SECRET_CANARY docker command line";
+  for (const operation of ROLLBACK_COMPOSE_OPERATIONS) {
+    const sourceError = Object.assign(new Error(sensitiveCanary), {
+      status: 23,
+      signal: null,
+      stdout: Buffer.from(sensitiveCanary),
+      stderr: Buffer.from(sensitiveCanary),
+    });
+    let diagnostic;
+    assert.throws(
+      () =>
+        withRollbackComposeDiagnostic(
+          operation,
+          () => {
+            throw sourceError;
+          },
+          (value) => {
+            diagnostic = value;
+          },
+        ),
+      (error) => error === sourceError,
+      "diagnostic wrapper must preserve the original phase error",
+    );
+    assert.deepEqual(diagnostic, {
+      operation,
+      exitCode: 23,
+      signal: null,
+      timedOut: false,
+      failureClass: "nonzero-exit",
+    });
+    assert.doesNotMatch(
+      JSON.stringify(diagnostic),
+      /RAW_STDERR_SECRET_CANARY|docker command line/u,
+    );
+  }
+  for (const [properties, expected] of [
+    [
+      { code: "ETIMEDOUT", signal: "SIGTERM", killed: true },
+      {
+        exitCode: null,
+        signal: "SIGTERM",
+        timedOut: true,
+        failureClass: "timeout",
+      },
+    ],
+    [
+      { signal: "SIGKILL", killed: true },
+      {
+        exitCode: null,
+        signal: "SIGKILL",
+        timedOut: false,
+        failureClass: "signal",
+      },
+    ],
+    [
+      { code: "ENOENT" },
+      {
+        exitCode: null,
+        signal: null,
+        timedOut: false,
+        failureClass: "spawn-error",
+      },
+    ],
+  ]) {
+    let diagnostic;
+    const sourceError = Object.assign(new Error(sensitiveCanary), properties);
+    assert.throws(
+      () =>
+        withRollbackComposeDiagnostic(
+          "kafka-up",
+          () => {
+            throw sourceError;
+          },
+          (value) => {
+            diagnostic = value;
+          },
+        ),
+      (error) => error === sourceError,
+    );
+    assert.deepEqual(diagnostic, { operation: "kafka-up", ...expected });
+  }
+  let failureCallbackCalled = false;
+  assert.equal(
+    withRollbackComposeDiagnostic(
+      "runtime-stack-up",
+      () => "ok",
+      () => {
+        failureCallbackCalled = true;
+      },
+    ),
+    "ok",
+  );
+  assert.equal(failureCallbackCalled, false);
+  assert.throws(
+    () =>
+      withRollbackComposeDiagnostic(
+        "untrusted-command",
+        () => {},
+        () => {},
+      ),
+    /G18 Compose operation is not allowlisted/u,
+  );
+
+  const source = await readFile(
+    new URL("../../tools/compose-smoke.mjs", import.meta.url),
+    "utf8",
+  );
+  const start = source.indexOf("function prepareRecoveryKafkaBootstrap(");
+  const end =
+    source.indexOf("\n}\n\nfunction prepareKafkaNamespaceRegistry(", start) + 2;
+  assert.ok(start >= 0 && end > start);
+  const bootstrap = runInNewContext(`(${source.slice(start, end)})`, {
+    runCompose() {
+      assert.fail("bootstrap bypassed the tracked Compose operation");
+    },
+    buildKafkaRegistryBootstrapScript(config, _identity, client) {
+      return Object.values(config.kafka.topics).flatMap(
+        ({ name, dlq, partitions }) =>
+          [name, dlq].map(
+            (topic) =>
+              `/opt/kafka/bin/kafka-topics.sh ${client} --create --if-not-exists --topic ${JSON.stringify(topic)} --partitions ${partitions} --replication-factor 1 >/dev/null`,
+          ),
+      );
+    },
+  });
+  const operations = [];
+  const topicConfigs = Object.fromEntries(
+    [
+      "coffee.catalog.snapshot.v1",
+      "coffee.catalog.mapping.v2",
+      "coffee.orders.lifecycle.v1",
+      "coffee.aroma.cart.commands.v1",
+      "coffee.aroma.cart.events.v1",
+      "coffee.realtime.invalidate.v1",
+    ].map((name, index) => [
+      `topic-${index}`,
+      { name, dlq: `${name}.dlq`, partitions: 1 },
+    ]),
+  );
+  let bootstrapScript = "";
+  bootstrap(
+    "fixture-project",
+    "/fixture-secrets",
+    { kafka: { topics: topicConfigs }, services: {} },
+    "/fixture-compose",
+    (operation, project, secrets, args) => {
+      operations.push(operation);
+      assert.equal(project, "fixture-project");
+      assert.equal(secrets, "/fixture-secrets");
+      assert.equal(args[0], operation === "kafka-up" ? "up" : "exec");
+      if (operation === "kafka-offset-bootstrap") bootstrapScript = args.at(-1);
+    },
+  );
+  assert.deepEqual(operations, ["kafka-up", "kafka-offset-bootstrap"]);
+  assert.equal(
+    (bootstrapScript.match(/--create --if-not-exists --topic/g) ?? []).length,
+    12,
+  );
+  for (const { name, dlq } of Object.values(topicConfigs)) {
+    assert.ok(bootstrapScript.includes(`--topic ${JSON.stringify(name)}`));
+    assert.ok(bootstrapScript.includes(`--topic ${JSON.stringify(dlq)}`));
+  }
+
+  const directory = await mkdtemp(
+    join(tmpdir(), "g18-safe-failure-diagnostic-"),
+  );
+  try {
+    const candidateSha = "1".repeat(40);
+    const runId = `20261024T120000Z-${candidateSha.slice(0, 7)}`;
+    const original = Object.assign(new Error(sensitiveCanary), { status: 17 });
+    let operationDiagnostic;
+    assert.throws(
+      () =>
+        withRollbackComposeDiagnostic(
+          "kafka-offset-bootstrap",
+          () => {
+            throw original;
+          },
+          (value) => {
+            operationDiagnostic = value;
+          },
+        ),
+      (error) => error === original,
+    );
+    const cleanup = {
+      verified: true,
+      complete: true,
+      failures: [],
+      retainedResources: [],
+      inventory: { containers: [], volumes: [], networks: [] },
+    };
+    const composeSourceUrl = pathToFileURL(
+      join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    ).href;
+    original.stack = [
+      `Error: ${sensitiveCanary}`,
+      "    at ignored (/tmp/compose-smoke.mjs:7:9)",
+      `    at run (${composeSourceUrl}:4321:17)`,
+      `    at later (${composeSourceUrl}:7654:21)`,
+    ].join("\n");
+    const receipt = {
+      ...createRollbackFailureReceipt({
+        runId,
+        candidateSha,
+        stage: "up",
+        error: original,
+        cleanup,
+      }),
+      operationDiagnostic,
+    };
+    assert.deepEqual(receipt.sourceLocation, {
+      source: "tools/compose-smoke.mjs",
+      line: 4321,
+      column: 17,
+    });
+    assert.equal(
+      receipt.messageSha256,
+      createHash("sha256").update(original.message).digest("hex"),
+    );
+    assert.equal(
+      validateRollbackFailureArtifact(
+        { ...receipt, lineage: {} },
+        { runId, candidateSha, lineage: {} },
+      ),
+      true,
+    );
+    for (const sourceLocation of [
+      {
+        ...receipt.sourceLocation,
+        source: `${REPO_ROOT}/tools/compose-smoke.mjs`,
+      },
+      { ...receipt.sourceLocation, column: 0 },
+      { ...receipt.sourceLocation, line: 1_000_001 },
+      { ...receipt.sourceLocation, privatePath: REPO_ROOT },
+    ]) {
+      assert.throws(
+        () =>
+          validateRollbackFailureArtifact(
+            { ...receipt, lineage: {}, sourceLocation },
+            { runId, candidateSha, lineage: {} },
+          ),
+        /ROLLBACK_FAILURE_ARTIFACT_INVALID/u,
+      );
+    }
+    for (const stack of [
+      `Error: ${sensitiveCanary}\n    at run (${pathToFileURL("/tmp/compose-smoke.mjs").href}:8:2)`,
+      `Error: ${sensitiveCanary}\n    at run (${composeSourceUrl}.evil:8:2)`,
+      `Error: ${sensitiveCanary}\n    at run (${composeSourceUrl}:0:2)`,
+    ]) {
+      const noLocation = createRollbackFailureReceipt({
+        runId,
+        candidateSha,
+        stage: "up",
+        error: Object.assign(new Error(sensitiveCanary), { stack }),
+        cleanup,
+      });
+      assert.equal(Object.hasOwn(noLocation, "sourceLocation"), false);
+    }
+    const childError = new Error("child exited");
+    childError.result = {
+      stdout: `${JSON.stringify(receipt)}\n`,
+      joined: true,
+    };
+    const persisted = await persistRollbackFailureFromChild({
+      error: childError,
+      identity: { runId, candidateSha },
+      lineage: {},
+      evidenceDir: directory,
+    });
+    assert.deepEqual(
+      persisted.artifact.operationDiagnostic,
+      operationDiagnostic,
+    );
+    const artifactBytes = await readFile(persisted.receipt.path, "utf8");
+    assert.doesNotMatch(
+      artifactBytes,
+      /RAW_STDERR_SECRET_CANARY|docker command line|file:\/\//u,
+    );
+    assert.match(
+      artifactBytes,
+      /"sourceLocation": \{\n\s+"source": "tools\/compose-smoke\.mjs",\n\s+"line": 4321,\n\s+"column": 17/u,
+    );
+    assert.match(artifactBytes, /"operation": "kafka-offset-bootstrap"/u);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+void test("G18 runtime-stack failure snapshots only bounded project container state before cleanup", async () => {
+  const {
+    attachRollbackContainerSnapshot,
+    captureRollbackContainerSnapshot,
+    sanitizeRollbackContainerSnapshot,
+    withRollbackComposeDiagnostic,
+  } = await import("../../tools/compose-smoke.mjs");
+  const { createRollbackFailureReceipt, persistRollbackFailureFromChild } =
+    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const projectName = "coffee-launch-fixture";
+  const postgresName = `${projectName}-postgres-proof`;
+  const canary = "RAW_CONTAINER_ENV_SECRET_CANARY";
+  const rows = [
+    {
+      Id: "container-id-must-not-persist",
+      Name: "/orders-service-1",
+      Config: {
+        Env: [`SECRET=${canary}`],
+        Cmd: [canary],
+        Labels: {
+          "com.docker.compose.project": projectName,
+          "com.docker.compose.service": "orders-service",
+        },
+      },
+      State: {
+        Status: "exited",
+        Health: { Status: "unhealthy" },
+        ExitCode: 1,
+        OOMKilled: true,
+        Error: canary,
+        StartedAt: "2026-10-24T13:13:16.123456789Z",
+        FinishedAt: "2026-10-24T13:14:17Z",
+      },
+    },
+    {
+      Id: canary,
+      Name: "/foreign-container",
+      Config: {
+        Env: [canary],
+        Labels: {
+          "com.docker.compose.project": "foreign-project",
+          "com.docker.compose.service": "foreign-service-name",
+        },
+      },
+      State: { Status: "exited", Error: canary },
+    },
+    {
+      Id: canary,
+      Name: "/unknown-service-name",
+      Config: {
+        Labels: {
+          "com.docker.compose.project": projectName,
+          "com.docker.compose.service": "unrecognized-service-name",
+        },
+      },
+      State: {
+        Status: canary,
+        Health: { Status: canary },
+        ExitCode: 999,
+        OOMKilled: canary,
+        StartedAt: canary,
+        FinishedAt: canary,
+        Error: canary,
+      },
+    },
+    {
+      Id: "postgres-container-id",
+      Name: `/${postgresName}`,
+      Config: { Env: [canary], Labels: {} },
+      State: {
+        Status: "running",
+        Health: { Status: "healthy" },
+        ExitCode: 0,
+        OOMKilled: false,
+      },
+    },
+    {
+      Id: canary,
+      Name: `/${postgresName}-foreign`,
+      Config: { Labels: { "com.docker.compose.project": "foreign-project" } },
+      State: { Status: "running" },
+    },
+  ];
+  const snapshot = sanitizeRollbackContainerSnapshot(
+    projectName,
+    rows,
+    postgresName,
+  );
+  assert.deepEqual(snapshot, {
+    status: "captured",
+    containers: [
+      {
+        service: "orders-service",
+        state: "exited",
+        health: "unhealthy",
+        exitCode: 1,
+        oomKilled: true,
+        startedAt: "2026-10-24T13:13:16.123456789Z",
+        finishedAt: "2026-10-24T13:14:17Z",
+      },
+      {
+        service: "postgres-proof",
+        state: "running",
+        health: "healthy",
+        exitCode: 0,
+        oomKilled: false,
+        startedAt: null,
+        finishedAt: null,
+      },
+      {
+        service: "unknown",
+        state: "unknown",
+        health: null,
+        exitCode: null,
+        oomKilled: false,
+        startedAt: null,
+        finishedAt: null,
+      },
+    ],
+  });
+  assert.ok(snapshot.containers.length <= 32);
+  assert.doesNotMatch(
+    JSON.stringify(snapshot),
+    /RAW_CONTAINER_ENV_SECRET_CANARY|foreign-project|foreign-service-name|container-id|unknown-service-name/u,
+  );
+  const overflow = sanitizeRollbackContainerSnapshot(
+    projectName,
+    Array.from({ length: 33 }, (_, index) => ({
+      Config: {
+        Labels: {
+          "com.docker.compose.project": projectName,
+          "com.docker.compose.service": "invalid-service",
+        },
+      },
+      Name: `/invalid-${index}`,
+      State: { Status: "created" },
+    })),
+  );
+  assert.deepEqual(overflow, { status: "limit-exceeded", containers: [] });
+
+  const inspectFields = [
+    "/orders-service-1",
+    projectName,
+    "orders-service",
+    "exited",
+    "unhealthy",
+    1,
+    true,
+    "2026-10-24T13:13:16Z",
+    "2026-10-24T13:14:17Z",
+  ];
+  const callOptions = [];
+  const captured = captureRollbackContainerSnapshot(
+    projectName,
+    undefined,
+    (args, options) => {
+      callOptions.push(options);
+      if (args[0] === "ps") return `${"a".repeat(64)}\n`;
+      assert.deepEqual(args.slice(0, 2), ["inspect", "--format"]);
+      const format = args[2];
+      assert.match(format, /com\.docker\.compose\.project/u);
+      assert.match(format, /com\.docker\.compose\.service/u);
+      assert.doesNotMatch(format, /Env|Error|Health\.Log|\.Id/u);
+      return `${inspectFields.map((value) => JSON.stringify(value)).join("\t")}\n`;
+    },
+  );
+  assert.deepEqual(
+    captured.containers.map((row) => row.service),
+    ["orders-service"],
+  );
+  assert.ok(callOptions.length <= 2);
+  for (const options of callOptions) {
+    assert.ok(options.timeout > 0 && options.timeout <= 10_000);
+    assert.equal(options.maxBuffer, 64 * 1024);
+    assert.deepEqual(options.stdio, ["ignore", "pipe", "pipe"]);
+  }
+
+  const timeoutCalls = [];
+  const clockValues = [0, 0, 7_000];
+  const timedOutSnapshot = captureRollbackContainerSnapshot(
+    projectName,
+    undefined,
+    (args, options) => {
+      timeoutCalls.push({ args, options });
+      if (args[0] === "ps") return `${"b".repeat(64)}\n`;
+      throw Object.assign(new Error(canary), { code: "ETIMEDOUT" });
+    },
+    () => clockValues.shift() ?? 7_000,
+  );
+  assert.deepEqual(timedOutSnapshot, { status: "unavailable", containers: [] });
+  assert.deepEqual(
+    timeoutCalls.map((call) => call.options.timeout),
+    [10_000, 3_000],
+  );
+  assert.ok(timeoutCalls.every((call) => call.options.maxBuffer === 64 * 1024));
+
+  const original = Object.assign(
+    new Error("phase failure whose body is not persisted"),
+    { status: 19, stderr: Buffer.from(canary) },
+  );
+  let operationDiagnostic;
+  assert.throws(
+    () =>
+      withRollbackComposeDiagnostic(
+        "runtime-stack-up",
+        () => {
+          throw original;
+        },
+        (diagnostic) => {
+          operationDiagnostic = attachRollbackContainerSnapshot(
+            "runtime-stack-up",
+            diagnostic,
+            () => snapshot,
+          );
+        },
+      ),
+    (error) => error === original,
+  );
+  assert.equal(operationDiagnostic.exitCode, 19);
+  assert.equal(operationDiagnostic.operation, "runtime-stack-up");
+  assert.deepEqual(operationDiagnostic.containerSnapshot, snapshot);
+  let cleanupContinued = false;
+  let timedOutOperationDiagnostic;
+  assert.throws(
+    () =>
+      withRollbackComposeDiagnostic(
+        "runtime-stack-up",
+        () => {
+          throw original;
+        },
+        (diagnostic) => {
+          timedOutOperationDiagnostic = attachRollbackContainerSnapshot(
+            "runtime-stack-up",
+            diagnostic,
+            () =>
+              captureRollbackContainerSnapshot(
+                projectName,
+                undefined,
+                (args) => {
+                  if (args[0] === "ps") return `${"c".repeat(64)}\n`;
+                  throw Object.assign(new Error(canary), { code: "ETIMEDOUT" });
+                },
+              ),
+          );
+        },
+      ),
+    (error) => error === original,
+  );
+  cleanupContinued = true;
+  assert.equal(cleanupContinued, true);
+  assert.equal(timedOutOperationDiagnostic.exitCode, 19);
+  assert.deepEqual(timedOutOperationDiagnostic.containerSnapshot, {
+    status: "unavailable",
+    containers: [],
+  });
+  let unavailableDiagnostic;
+  assert.throws(
+    () =>
+      withRollbackComposeDiagnostic(
+        "runtime-stack-up",
+        () => {
+          throw original;
+        },
+        (diagnostic) => {
+          unavailableDiagnostic = attachRollbackContainerSnapshot(
+            "runtime-stack-up",
+            diagnostic,
+            () => {
+              throw new Error(canary);
+            },
+          );
+        },
+      ),
+    (error) => error === original,
+  );
+  assert.deepEqual(unavailableDiagnostic.containerSnapshot, {
+    status: "unavailable",
+    containers: [],
+  });
+
+  const directory = await mkdtemp(
+    join(tmpdir(), "g18-container-failure-diagnostic-"),
+  );
+  try {
+    const candidateSha = "2".repeat(40);
+    const runId = `20261024T120000Z-${candidateSha.slice(0, 7)}`;
+    const cleanup = {
+      verified: true,
+      complete: true,
+      failures: [],
+      retainedResources: [],
+      inventory: { containers: [], volumes: [], networks: [] },
+    };
+    const receipt = {
+      ...createRollbackFailureReceipt({
+        runId,
+        candidateSha,
+        stage: "up",
+        error: original,
+        cleanup,
+      }),
+      operationDiagnostic,
+    };
+    const childError = new Error("proof child failed");
+    childError.result = {
+      stdout: `${JSON.stringify(receipt)}\n`,
+      joined: true,
+    };
+    const persisted = await persistRollbackFailureFromChild({
+      error: childError,
+      identity: { runId, candidateSha },
+      lineage: {},
+      evidenceDir: directory,
+    });
+    assert.equal(persisted.artifact.operationDiagnostic.exitCode, 19);
+    assert.deepEqual(
+      persisted.artifact.operationDiagnostic.containerSnapshot,
+      snapshot,
+    );
+    const artifactBytes = await readFile(persisted.receipt.path, "utf8");
+    assert.doesNotMatch(
+      artifactBytes,
+      /RAW_CONTAINER_ENV_SECRET_CANARY|container-id|unknown-service-name|foreign-service-name/u,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+void test("G18 accepts a nullable startup wake only for the exact current cart revision and processed Inbox message", async () => {
+  const { hasProcessedRollbackWakeForDesiredRevision } =
+    await import("../../tools/rollback-runtime-proof.mjs");
+  const desiredRevision = "7";
+  const payload = {
+    cartScopeRef: "aroma-primary",
+    desiredRevision,
+    reason: "Recovery",
+    orderRef: null,
+  };
+  const envelope = {
+    envelopeVersion: "1",
+    messageId: "wake-7",
+    messageType: "AromaConvergenceRequested.v1",
+    producer: "orders-aroma-preparation",
+    correlationId: "correlation-7",
+    causationId: null,
+    aggregate: { type: "AromaCart", ref: "aroma-primary", version: "12" },
+    payload,
+  };
+  const envelopeHash = canonicalRequestHash(envelope);
+  const payloadHash = canonicalRequestHash(payload);
+  const wake = {
+    message_id: "wake-7",
+    message_type: envelope.messageType,
+    topic: "coffee.aroma.cart.commands.v1",
+    aggregate_ref: "aroma-primary",
+    aggregate_sequence: "12",
+    owner_version: "12",
+    partition_key: "aroma-primary",
+    schema_version: "1",
+    envelope_hash: envelopeHash,
+    payload_hash: envelopeHash,
+    correlation_id: "correlation-7",
+    causation_id: null,
+    payload,
+    envelope,
+    state: "Published",
+  };
+  const delivery = {
+    consumer_name: "aroma-convergence-v1",
+    message_id: "wake-7",
+    message_type: envelope.messageType,
+    partition_key: "aroma-primary",
+    schema_version: "1",
+    owner_version: "12",
+    payload_hash: payloadHash,
+    envelope_hash: envelopeHash,
+    envelope,
+    state: "Processed",
+  };
+  const accepts = (
+    candidateWake = wake,
+    candidateDelivery = delivery,
+    revision = desiredRevision,
+  ) =>
+    hasProcessedRollbackWakeForDesiredRevision({
+      wakes: [candidateWake],
+      wakeInbox: [candidateDelivery],
+      desiredRevision: revision,
+      consumerName: "aroma-convergence-v1",
+    });
+
+  assert.equal(
+    accepts(),
+    true,
+    "a Recovery wake may legitimately have no causation id",
+  );
+  assert.equal(
+    accepts({ ...wake, aggregate_ref: "another-cart" }),
+    false,
+    "a cross-cart wake must not prove this cart",
+  );
+  const wrongRevision = "8";
+  assert.equal(
+    accepts({
+      ...wake,
+      payload: { ...payload, desiredRevision: wrongRevision },
+      envelope: {
+        ...envelope,
+        payload: { ...payload, desiredRevision: wrongRevision },
+      },
+    }),
+    false,
+    "a wake for a different desired revision must not prove the current attempt",
+  );
+  assert.equal(
+    accepts(wake, { ...delivery, message_id: "other-wake" }),
+    false,
+    "a different Inbox message id must not prove delivery of this wake",
+  );
+  assert.equal(
+    accepts(wake, { ...delivery, state: "Processing" }),
+    false,
+    "an unprocessed Inbox row must not prove durable completion",
+  );
+  assert.notEqual(
+    envelopeHash,
+    payloadHash,
+    "the fixture must represent the distinct Outbox/Inbox hash semantics",
+  );
+  assert.equal(
+    accepts(wake, { ...delivery, payload_hash: envelopeHash }),
+    false,
+    "the Inbox payload hash is over the payload, not the full envelope hash stored by Outbox",
+  );
+  assert.equal(
+    accepts(wake, {
+      ...delivery,
+      envelope: {
+        ...envelope,
+        payload: { ...payload, reason: "OperatorRequested" },
+      },
+    }),
+    false,
+    "a changed Inbox envelope must fail even if its message identifiers match",
+  );
+});
+
+void test("G18 initial-unknown timeout persists a run-bound private fact summary and preserves the timeout", async () => {
+  const {
+    createRollbackInitialUnknownTimeoutDiagnostic,
+    waitForRollbackFacts,
+    writeRollbackInitialUnknownTimeoutDiagnostic,
+  } = await import("../../tools/compose-smoke.mjs");
+  const directory = await mkdtemp(
+    join(tmpdir(), "g18-initial-unknown-timeout-"),
+  );
+  try {
+    const candidateSha = "3".repeat(40);
+    const runId = `20261024T120000Z-${candidateSha.slice(0, 7)}`;
+    const evidenceDir = join(directory, "evidence/launch", runId);
+    const launchIdentity = {
+      context: { runId, candidateSha, sourceRepoRoot: directory, evidenceDir },
+      evidenceDir,
+    };
+    const consumer = "orders-aroma-projection-v1";
+    const canary = "PRIVATE_G18_PROVIDER_BODY_CANARY";
+    const facts = {
+      attempts: [{ state: "Started", attempt_ref: canary }],
+      reservations: [
+        { state: "UnknownOutcome", resolved: false, operation_ref: canary },
+      ],
+      gatewayRows: [{ state: "UnknownOutcome", response_body: canary }],
+      orderProjection: { state: "UnknownOutcome", payload: canary },
+      guardedCardState: "OutOfSync",
+      ordersOutbox: [
+        {
+          message_type: "OrderConfirmed.v1",
+          state: "Published",
+          message_id: canary,
+        },
+      ],
+      inboxRows: [
+        {
+          message_type: "OrderConfirmed.v1",
+          consumer_name: "orders-aroma-preparation-v1",
+          state: "Processed",
+          envelope: canary,
+        },
+      ],
+      wakes: [
+        {
+          message_type: "AromaConvergenceRequested.v1",
+          state: "Published",
+          payload: canary,
+        },
+      ],
+      wakeInbox: [
+        {
+          consumer_name: "aroma-convergence-v1",
+          state: "Processed",
+          message_id: canary,
+        },
+      ],
+      convergenceOutbox: [
+        {
+          message_type: "AromaConvergenceChanged.v1",
+          state: "Published",
+          envelope: canary,
+        },
+      ],
+      projectionInbox: [
+        {
+          consumer_name: consumer,
+          message_type: "AromaConvergenceChanged.v1",
+          state: "Failed",
+          envelope: canary,
+        },
+        {
+          consumer_name: consumer,
+          message_type: "AromaConvergenceChanged.v1",
+          state: "Processed",
+          envelope: canary,
+        },
+      ],
+    };
+    const diagnostic = createRollbackInitialUnknownTimeoutDiagnostic({
+      launchIdentity,
+      facts,
+      projectionConsumerGroupId: consumer,
+      correlationId: canary,
+      orderRef: canary,
+    });
+    assert.deepEqual(diagnostic.predicates, {
+      attemptUnknown: false,
+      reservationUnknownUnresolved: true,
+      gatewayUnknown: true,
+      cardUnknown: false,
+      projectionProcessed: true,
+    });
+    assert.deepEqual(diagnostic.operatorWake, {
+      matchedIntentForCorrelation: false,
+      canonicalPublishedIntent: false,
+      exactPreparationInboxProcessed: false,
+      causationLinkedWake: false,
+      correlationRevisionReasonMatched: false,
+      canonicalWake: false,
+      exactConvergenceInboxProcessed: false,
+      operatorWakeProcessed: false,
+    });
+    assert.deepEqual(diagnostic.selection, {
+      currentDesiredUnique: false,
+      unknownAttemptMatchesCurrentDesired: false,
+    });
+    assert.equal(diagnostic.rawProjectionState, "UnknownOutcome");
+    assert.equal(diagnostic.guardedCardState, "OutOfSync");
+    const guardedUnknown = createRollbackInitialUnknownTimeoutDiagnostic({
+      launchIdentity,
+      facts: {
+        ...facts,
+        orderProjection: { state: "OutOfSync" },
+        guardedCardState: "UnknownOutcome",
+      },
+      projectionConsumerGroupId: consumer,
+    });
+    assert.equal(
+      guardedUnknown.predicates.cardUnknown,
+      true,
+      "the timeout fact must report the guarded HTTP Card, not raw projection state",
+    );
+    assert.deepEqual(diagnostic.counts, {
+      attempts: 1,
+      reservations: 1,
+      gatewayRows: 1,
+      ordersOutbox: 1,
+      inboxRows: 1,
+      wakes: 1,
+      wakeInbox: 1,
+      convergenceOutbox: 1,
+      projectionInbox: 2,
+    });
+    assert.deepEqual(diagnostic.deliveryCounts, {
+      orderConfirmedPublished: 1,
+      preparationInboxProcessed: 1,
+      convergenceWakePublished: 1,
+      convergenceInboxProcessed: 1,
+      convergenceResultPublished: 1,
+      projectionInboxProcessed: 1,
+    });
+    assert.equal(diagnostic.runId, runId);
+    assert.equal(diagnostic.candidateSha, candidateSha);
+    assert.equal(diagnostic.stage, "initial-unknown");
+    assert.equal(diagnostic.code, "G18_INITIAL_UNKNOWN_OUTCOME_TIMEOUT");
+
+    const desiredRevision = "7";
+    const orderRef = canary;
+    const correlationId = canary;
+    const intentPayload = {
+      orderRef,
+      orderVersion: "9",
+      requestedAt: "2026-10-24T00:00:00.000Z",
+    };
+    const intentEnvelope = {
+      envelopeVersion: "1",
+      messageId: canary,
+      messageType: "OrderReconciliationRequested.v1",
+      producer: "orders-service",
+      correlationId,
+      causationId: null,
+      aggregate: { type: "Order", ref: orderRef, version: "9" },
+      payload: intentPayload,
+    };
+    const intentHash = canonicalRequestHash(intentEnvelope);
+    const intentPayloadHash = canonicalRequestHash(intentPayload);
+    const intent = {
+      message_id: canary,
+      message_type: intentEnvelope.messageType,
+      topic: "coffee.orders.lifecycle.v1",
+      aggregate_ref: orderRef,
+      aggregate_sequence: "3",
+      owner_version: "9",
+      partition_key: orderRef,
+      schema_version: "1",
+      envelope_hash: intentHash,
+      payload_hash: intentHash,
+      correlation_id: correlationId,
+      causation_id: null,
+      envelope: intentEnvelope,
+      payload: intentPayload,
+      state: "Published",
+    };
+    const preparationDelivery = {
+      consumer_name: "orders-aroma-preparation-v1",
+      message_id: canary,
+      message_type: intent.message_type,
+      partition_key: orderRef,
+      schema_version: "1",
+      owner_version: "9",
+      payload_hash: intentPayloadHash,
+      envelope_hash: intentHash,
+      envelope: intentEnvelope,
+      state: "Processed",
+    };
+    const wakePayload = {
+      cartScopeRef: "aroma-primary",
+      desiredRevision,
+      reason: "OperatorRequested",
+      orderRef,
+    };
+    const wakeEnvelope = {
+      envelopeVersion: "1",
+      messageId: canary,
+      messageType: "AromaConvergenceRequested.v1",
+      producer: "orders-aroma-preparation",
+      correlationId,
+      causationId: canary,
+      aggregate: { type: "AromaCart", ref: "aroma-primary", version: "12" },
+      payload: wakePayload,
+    };
+    const wakeHash = canonicalRequestHash(wakeEnvelope);
+    const wakePayloadHash = canonicalRequestHash(wakePayload);
+    const operatorWake = {
+      message_id: canary,
+      message_type: wakeEnvelope.messageType,
+      topic: "coffee.aroma.cart.commands.v1",
+      aggregate_ref: "aroma-primary",
+      aggregate_sequence: "12",
+      owner_version: "12",
+      partition_key: "aroma-primary",
+      schema_version: "1",
+      envelope_hash: wakeHash,
+      payload_hash: wakeHash,
+      correlation_id: correlationId,
+      causation_id: canary,
+      payload: wakePayload,
+      envelope: wakeEnvelope,
+      state: "Published",
+    };
+    const wakeDelivery = {
+      consumer_name: "aroma-convergence-v1",
+      message_id: canary,
+      message_type: operatorWake.message_type,
+      partition_key: operatorWake.partition_key,
+      schema_version: "1",
+      owner_version: "12",
+      payload_hash: wakePayloadHash,
+      envelope_hash: wakeHash,
+      envelope: wakeEnvelope,
+      state: "Processed",
+    };
+    const operatorFacts = {
+      ...facts,
+      attempts: [
+        ...facts.attempts,
+        { state: "UnknownOutcome", desired_revision: desiredRevision },
+      ],
+      desired: [{ state: "Current", desired_revision: desiredRevision }],
+      ordersOutbox: [intent],
+      inboxRows: [preparationDelivery],
+      wakes: [operatorWake],
+      wakeInbox: [wakeDelivery],
+    };
+    const completeChain = createRollbackInitialUnknownTimeoutDiagnostic({
+      launchIdentity,
+      facts: operatorFacts,
+      projectionConsumerGroupId: consumer,
+      correlationId,
+      orderRef,
+    });
+    assert.deepEqual(completeChain.operatorWake, {
+      matchedIntentForCorrelation: true,
+      canonicalPublishedIntent: true,
+      exactPreparationInboxProcessed: true,
+      causationLinkedWake: true,
+      correlationRevisionReasonMatched: true,
+      canonicalWake: true,
+      exactConvergenceInboxProcessed: true,
+      operatorWakeProcessed: true,
+    });
+    assert.deepEqual(completeChain.selection, {
+      currentDesiredUnique: true,
+      unknownAttemptMatchesCurrentDesired: true,
+    });
+    const partialChain = createRollbackInitialUnknownTimeoutDiagnostic({
+      launchIdentity,
+      facts: {
+        ...operatorFacts,
+        wakes: [
+          {
+            ...operatorWake,
+            causation_id: null,
+            envelope: { ...wakeEnvelope, causationId: null },
+          },
+        ],
+      },
+      projectionConsumerGroupId: consumer,
+      correlationId,
+      orderRef,
+    });
+    assert.deepEqual(partialChain.operatorWake, {
+      matchedIntentForCorrelation: true,
+      canonicalPublishedIntent: true,
+      exactPreparationInboxProcessed: true,
+      causationLinkedWake: false,
+      correlationRevisionReasonMatched: false,
+      canonicalWake: false,
+      exactConvergenceInboxProcessed: false,
+      operatorWakeProcessed: false,
+    });
+    assert.doesNotMatch(
+      JSON.stringify(completeChain),
+      new RegExp(canary, "u"),
+      "timeout proof breakdown must never serialize correlation, order, message or payload canaries",
+    );
+
+    const artifactPath = await writeRollbackInitialUnknownTimeoutDiagnostic({
+      launchIdentity,
+      facts,
+      projectionConsumerGroupId: consumer,
+      correlationId: canary,
+      orderRef: canary,
+    });
+    assert.equal(
+      artifactPath,
+      join(
+        evidenceDir,
+        "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-initial-unknown-timeout.json",
+      ),
+    );
+    const artifactBytes = await readFile(artifactPath, "utf8");
+    assert.deepEqual(JSON.parse(artifactBytes), diagnostic);
+    assert.doesNotMatch(
+      artifactBytes,
+      /PRIVATE_G18_PROVIDER_BODY_CANARY|attempt_ref|operation_ref|message_id|envelope|response_body/u,
+    );
+    assert.equal((await stat(artifactPath)).mode & 0o777, 0o600);
+    await assert.rejects(
+      writeRollbackInitialUnknownTimeoutDiagnostic({
+        launchIdentity,
+        facts,
+        projectionConsumerGroupId: consumer,
+        correlationId: canary,
+        orderRef: canary,
+      }),
+      { code: "EEXIST" },
+    );
+    assert.equal(
+      await readFile(artifactPath, "utf8"),
+      artifactBytes,
+      "existing timeout evidence must never be overwritten",
+    );
+    await assert.rejects(
+      writeRollbackInitialUnknownTimeoutDiagnostic({
+        launchIdentity: { ...launchIdentity, evidenceDir: directory },
+        facts,
+        projectionConsumerGroupId: consumer,
+        correlationId: canary,
+        orderRef: canary,
+      }),
+      /EVIDENCE_SCOPE_INVALID/u,
+    );
+
+    const originalFacts = { private: canary };
+    await assert.rejects(
+      waitForRollbackFacts(
+        async () => originalFacts,
+        () => false,
+        "INITIAL_UNKNOWN_OUTCOME",
+        50,
+        async () => {
+          throw new Error(canary);
+        },
+      ),
+      (error) =>
+        error.message === "G18_INITIAL_UNKNOWN_OUTCOME_TIMEOUT" &&
+        error.cause === originalFacts,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+void test("G18 restored-card timeout records bounded guarded facts only after timeout", async (t) => {
+  const { waitForRollbackFacts, writeRollbackRestoredCardTimeoutDiagnostic } =
+    await import("../../tools/compose-smoke.mjs");
+  const { readRollbackGuardedCardFacts } =
+    await import("../../tools/rollback-runtime-proof.mjs");
+  const pg = (await import("pg")).default;
+  const directory = await mkdtemp(join(tmpdir(), "g18-restored-card-timeout-"));
+  const candidateSha = "4".repeat(40);
+  const maxSnapshotAgeMs = 15_000;
+  const orderRef = "ord_01J8G18TIMEOUTFIXTURE000000000";
+  const canary = "RAW_G18_DATABASE_ROW_CANARY";
+  const platformConfig = {
+    services: {
+      "orders-aroma-preparation": { database: "coffee_platform_orders" },
+      "aroma-convergence": { aromaConvergence: { maxSnapshotAgeMs } },
+    },
+  };
+  const credentials = {
+    databaseCredentialsByRuntime: {
+      "orders-aroma-preparation": {
+        username: "coffee_orders_prepare_rw",
+        password: "SCOPED_PREPARATION_SECRET_CANARY",
+      },
+    },
+  };
+  const row = {
+    projection_state: "InSync",
+    order_present: true,
+    projection_present: true,
+    current_desired_present: true,
+    current_observed_present: true,
+    proof_attempt_present: false,
+    lease_present: true,
+    desired_proof_matches: false,
+    observed_proof_matches: true,
+    observation_complete: true,
+    observation_not_future: true,
+    observation_fresh: false,
+    freshness_enabled: true,
+    attempt_successful: false,
+    attempt_matches_projection: false,
+    attempt_matches_desired: false,
+    attempt_matches_observed: false,
+    fence_matches: false,
+    lease_owner_matches: false,
+    lease_active: true,
+    unknown_outcome_present: true,
+    unresolved_reservation_present: true,
+    current_contribution_matches: false,
+    order_blockers_present: true,
+    exact_lines_match: false,
+    latest_attempt_present: true,
+    latest_attempt_successful: true,
+    latest_attempt_matches_desired: true,
+    latest_attempt_matches_observed_revision: false,
+    latest_attempt_observed_fingerprint_matches_current: true,
+    latest_attempt_fence_matches_lease: true,
+    latest_attempt_owner_matches_lease: true,
+    provider_body: canary,
+    attempt_ref: canary,
+  };
+  const calls = { connections: [], queries: [], ends: 0, failQuery: false };
+  t.mock.method(pg.Client.prototype, "connect", async function () {
+    calls.connections.push({
+      host: this.host,
+      port: this.port,
+      database: this.database,
+      user: this.user,
+      password: this.password,
+      connectionTimeoutMillis: this._connectionTimeoutMillis,
+      query_timeout: this.connectionParameters.query_timeout,
+      statement_timeout: this.connectionParameters.statement_timeout,
+    });
+  });
+  t.mock.method(pg.Client.prototype, "query", async function (sql, values) {
+    calls.queries.push({ sql, values });
+    if (calls.failQuery) throw new Error(canary);
+    return { rows: [row] };
+  });
+  t.mock.method(pg.Client.prototype, "end", async () => {
+    calls.ends += 1;
+  });
+  let dateNowValues = [];
+  let dateNowFallback = 0;
+  t.mock.method(Date, "now", () => dateNowValues.shift() ?? dateNowFallback);
+  const useTimeoutClock = () => {
+    dateNowValues = [2_000, 2_000, 2_001];
+    dateNowFallback = 2_001;
+  };
+
+  const makeIdentity = (stamp) => {
+    const runId = `${stamp}-${candidateSha.slice(0, 7)}`;
+    const evidenceDir = join(directory, "evidence/launch", runId);
+    return {
+      context: {
+        runId,
+        candidateSha,
+        sourceRepoRoot: directory,
+        evidenceDir,
+      },
+      evidenceDir,
+    };
+  };
+  try {
+    dateNowValues = [1_000, 1_000];
+    dateNowFallback = 1_000;
+    await waitForRollbackFacts(
+      async () => ({ state: "InSync" }),
+      (card) => card.state === "InSync",
+      "RESTORED_CARD_IN_SYNC",
+      20,
+      async () =>
+        assert.fail("timeout diagnostics ran on successful Card read"),
+    );
+    assert.deepEqual(calls.queries, []);
+
+    const launchIdentity = makeIdentity("20261026T120000Z");
+    useTimeoutClock();
+    await assert.rejects(
+      waitForRollbackFacts(
+        async () => ({ state: "OutOfSync" }),
+        (card) => card.state === "InSync",
+        "RESTORED_CARD_IN_SYNC",
+        1,
+        async (lastCard) => {
+          const guardedCardFacts = await readRollbackGuardedCardFacts({
+            port: 55432,
+            credentials,
+            platformConfig,
+            orderRef,
+          });
+          await writeRollbackRestoredCardTimeoutDiagnostic({
+            launchIdentity,
+            ownerCardState: lastCard.state,
+            guardedCardFacts,
+          });
+        },
+      ),
+      (error) => error.message === "G18_RESTORED_CARD_IN_SYNC_TIMEOUT",
+    );
+    assert.equal(calls.queries.length, 1);
+    assert.equal(calls.ends, 1);
+    assert.deepEqual(calls.connections[0], {
+      host: "127.0.0.1",
+      port: 55432,
+      database: "coffee_platform_orders",
+      user: "coffee_orders_prepare_rw",
+      password: "SCOPED_PREPARATION_SECRET_CANARY",
+      connectionTimeoutMillis: 1_000,
+      query_timeout: 2_000,
+      statement_timeout: 2_000,
+    });
+    assert.deepEqual(calls.queries[0].values, [orderRef, maxSnapshotAgeMs]);
+    assert.equal(
+      (calls.queries[0].sql.match(/clock_timestamp\(\)/gu) ?? []).length,
+      1,
+    );
+    assert.match(calls.queries[0].sql, /orders\.order_desired_contributions/u);
+    assert.match(calls.queries[0].sql, /orders\.mutation_reservations/u);
+    const latestAttemptQuery = calls.queries[0].sql.match(
+      /LEFT JOIN LATERAL \(([\s\S]*?)\) AS latest_attempt ON true/u,
+    )?.[1];
+    assert.ok(
+      latestAttemptQuery,
+      "latest attempt must be selected independently",
+    );
+    assert.match(
+      latestAttemptQuery,
+      /WHERE attempt\.cart_scope_ref='aroma-primary' AND attempt\.desired_revision=desired\.desired_revision/u,
+    );
+    assert.match(
+      latestAttemptQuery,
+      /ORDER BY attempt\.fence_epoch DESC,attempt\.started_at DESC,attempt\.attempt_ref DESC\s+LIMIT 1/u,
+    );
+    assert.doesNotMatch(latestAttemptQuery, /WHERE[\s\S]*attempt\.state/u);
+    assert.match(
+      calls.queries[0].sql,
+      /latest_attempt_observation\.observed_revision = CASE WHEN latest_attempt\.state='NoOpInSync'\s+THEN latest_attempt\.observed_start_revision ELSE latest_attempt\.observed_end_revision END/u,
+    );
+
+    const artifactPath = join(
+      launchIdentity.evidenceDir,
+      "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+    );
+    const artifactBytes = await readFile(artifactPath, "utf8");
+    const artifact = JSON.parse(artifactBytes);
+    assert.deepEqual(Object.keys(artifact), [
+      "schemaVersion",
+      "gateId",
+      "runId",
+      "candidateSha",
+      "stage",
+      "code",
+      "ownerCardState",
+      "guardedCardFacts",
+    ]);
+    assert.equal(artifact.ownerCardState, "OutOfSync");
+    assert.equal(
+      artifact.guardedCardFacts.projectionState,
+      "InSync",
+      "owner HTTP Card state must come from the last HTTP read, not SQL projection state",
+    );
+    assert.deepEqual(Object.keys(artifact.guardedCardFacts), [
+      "projectionState",
+      "orderPresent",
+      "projectionPresent",
+      "currentDesiredPresent",
+      "currentObservedPresent",
+      "proofAttemptPresent",
+      "leasePresent",
+      "desiredProofMatches",
+      "observedProofMatches",
+      "observationComplete",
+      "observationNotFuture",
+      "observationFresh",
+      "freshnessEnabled",
+      "attemptSuccessful",
+      "attemptMatchesProjection",
+      "attemptMatchesDesired",
+      "attemptMatchesObserved",
+      "fenceMatches",
+      "leaseOwnerMatches",
+      "leaseActive",
+      "unknownOutcomePresent",
+      "unresolvedReservationPresent",
+      "currentContributionMatches",
+      "orderBlockersPresent",
+      "exactLinesMatch",
+      "latestAttemptPresent",
+      "latestAttemptSuccessful",
+      "latestAttemptMatchesDesired",
+      "latestAttemptMatchesObservedRevision",
+      "latestAttemptObservedFingerprintMatchesCurrent",
+      "latestAttemptFenceMatchesLease",
+      "latestAttemptOwnerMatchesLease",
+    ]);
+    for (const [key, value] of Object.entries(artifact.guardedCardFacts)) {
+      if (key === "projectionState")
+        assert.ok(
+          [
+            "Missing",
+            "PendingObservation",
+            "Converging",
+            "InSync",
+            "OutOfSync",
+            "Blocked",
+            "UnknownOutcome",
+            "Other",
+          ].includes(value),
+        );
+      else assert.equal(typeof value, "boolean", key);
+    }
+    assert.equal(artifact.guardedCardFacts.proofAttemptPresent, false);
+    assert.equal(artifact.guardedCardFacts.observationFresh, false);
+    assert.equal(artifact.guardedCardFacts.leaseActive, true);
+    assert.equal(artifact.guardedCardFacts.currentContributionMatches, false);
+    assert.equal(artifact.guardedCardFacts.orderBlockersPresent, true);
+    assert.equal(artifact.guardedCardFacts.latestAttemptPresent, true);
+    assert.equal(artifact.guardedCardFacts.latestAttemptSuccessful, true);
+    assert.equal(artifact.guardedCardFacts.latestAttemptMatchesDesired, true);
+    assert.equal(
+      artifact.guardedCardFacts.latestAttemptMatchesObservedRevision,
+      false,
+    );
+    assert.equal(
+      artifact.guardedCardFacts.latestAttemptObservedFingerprintMatchesCurrent,
+      true,
+      "a new observed revision with the same fingerprint keeps the historical fingerprint match",
+    );
+    assert.equal(
+      artifact.guardedCardFacts.latestAttemptFenceMatchesLease,
+      true,
+    );
+    assert.equal(
+      artifact.guardedCardFacts.latestAttemptOwnerMatchesLease,
+      true,
+    );
+    assert.doesNotMatch(
+      artifactBytes,
+      /RAW_G18_DATABASE_ROW_CANARY|SCOPED_PREPARATION_SECRET_CANARY|ord_01J8G18TIMEOUTFIXTURE/u,
+    );
+    assert.equal((await stat(artifactPath)).mode & 0o777, 0o600);
+    assert.equal(
+      (
+        await stat(
+          join(launchIdentity.evidenceDir, "gates/G18_ROLLBACK/artifacts"),
+        )
+      ).mode & 0o777,
+      0o700,
+    );
+    await assert.rejects(
+      writeRollbackRestoredCardTimeoutDiagnostic({
+        launchIdentity,
+        ownerCardState: "OutOfSync",
+        guardedCardFacts: row,
+      }),
+      { code: "EEXIST" },
+    );
+    assert.equal(await readFile(artifactPath, "utf8"), artifactBytes);
+
+    const latestAttemptScenarios = [
+      {
+        stamp: "20261026T120002Z",
+        fields: {
+          projection_state: "OutOfSync",
+          proof_attempt_present: false,
+          latest_attempt_present: true,
+          latest_attempt_successful: true,
+          latest_attempt_matches_desired: true,
+          latest_attempt_matches_observed_revision: false,
+          latest_attempt_observed_fingerprint_matches_current: false,
+          latest_attempt_fence_matches_lease: false,
+          latest_attempt_owner_matches_lease: false,
+        },
+        expected: {
+          projectionState: "OutOfSync",
+          proofAttemptPresent: false,
+          latestAttemptSuccessful: true,
+          latestAttemptMatchesObservedRevision: false,
+          latestAttemptObservedFingerprintMatchesCurrent: false,
+        },
+      },
+      {
+        stamp: "20261026T120003Z",
+        fields: {
+          projection_state: "OutOfSync",
+          proof_attempt_present: false,
+          attempt_successful: true,
+          latest_attempt_present: true,
+          latest_attempt_successful: false,
+          latest_attempt_matches_desired: true,
+          latest_attempt_matches_observed_revision: true,
+          latest_attempt_observed_fingerprint_matches_current: true,
+          latest_attempt_fence_matches_lease: true,
+          latest_attempt_owner_matches_lease: true,
+        },
+        expected: {
+          projectionState: "OutOfSync",
+          proofAttemptPresent: false,
+          attemptSuccessful: true,
+          latestAttemptSuccessful: false,
+          latestAttemptMatchesObservedRevision: true,
+          latestAttemptObservedFingerprintMatchesCurrent: true,
+        },
+      },
+    ];
+    for (const scenario of latestAttemptScenarios) {
+      Object.assign(row, scenario.fields);
+      const scenarioIdentity = makeIdentity(scenario.stamp);
+      useTimeoutClock();
+      await assert.rejects(
+        waitForRollbackFacts(
+          async () => ({ state: "OutOfSync" }),
+          (card) => card.state === "InSync",
+          "RESTORED_CARD_IN_SYNC",
+          1,
+          async (lastCard) => {
+            const guardedCardFacts = await readRollbackGuardedCardFacts({
+              port: 55432,
+              credentials,
+              platformConfig,
+              orderRef,
+            });
+            await writeRollbackRestoredCardTimeoutDiagnostic({
+              launchIdentity: scenarioIdentity,
+              ownerCardState: lastCard.state,
+              guardedCardFacts,
+            });
+          },
+        ),
+        (error) => error.message === "G18_RESTORED_CARD_IN_SYNC_TIMEOUT",
+      );
+      const scenarioArtifact = JSON.parse(
+        await readFile(
+          join(
+            scenarioIdentity.evidenceDir,
+            "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+          ),
+          "utf8",
+        ),
+      );
+      for (const [key, expected] of Object.entries(scenario.expected))
+        assert.equal(scenarioArtifact.guardedCardFacts[key], expected, key);
+    }
+
+    await assert.rejects(
+      writeRollbackRestoredCardTimeoutDiagnostic({
+        launchIdentity: { ...launchIdentity, evidenceDir: directory },
+        ownerCardState: "OutOfSync",
+        guardedCardFacts: row,
+      }),
+      /G18_RESTORED_CARD_DIAGNOSTIC_EVIDENCE_SCOPE_INVALID/u,
+    );
+
+    const failedIdentity = makeIdentity("20261026T120001Z");
+    calls.failQuery = true;
+    useTimeoutClock();
+    await assert.rejects(
+      waitForRollbackFacts(
+        async () => ({ state: "OutOfSync" }),
+        (card) => card.state === "InSync",
+        "RESTORED_CARD_IN_SYNC",
+        1,
+        async (lastCard) => {
+          const guardedCardFacts = await readRollbackGuardedCardFacts({
+            port: 55432,
+            credentials,
+            platformConfig,
+            orderRef,
+          });
+          await writeRollbackRestoredCardTimeoutDiagnostic({
+            launchIdentity: failedIdentity,
+            ownerCardState: lastCard.state,
+            guardedCardFacts,
+          });
+        },
+      ),
+      (error) => {
+        assert.equal(error.message, "G18_RESTORED_CARD_IN_SYNC_TIMEOUT");
+        assert.doesNotMatch(error.message, new RegExp(canary, "u"));
+        return true;
+      },
+    );
+    assert.equal(calls.queries.length, 4);
+    assert.equal(calls.ends, 4);
+    await assert.rejects(
+      readFile(
+        join(
+          failedIdentity.evidenceDir,
+          "gates/G18_ROLLBACK/artifacts/mutation-disable-rollback-restored-card-timeout.json",
+        ),
+      ),
+      { code: "ENOENT" },
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+void test("G18 initial-unknown failure records only a closed substage and owner HTTP source parses", async () => {
+  const {
+    attachRollbackInitialUnknownSubstage,
+    createRollbackInitialUnknownDiagnostic,
+    ROLLBACK_INITIAL_UNKNOWN_SUBSTAGES,
+  } = await import("../../tools/compose-smoke.mjs");
+  const { rollbackOwnerHttpSource } =
+    await import("../../tools/rollback-runtime-proof.mjs");
+  const receipt = {
+    stage: "initial-unknown",
+    errorName: "Error",
+    messageSha256: "a".repeat(64),
+  };
+  for (const substage of ROLLBACK_INITIAL_UNKNOWN_SUBSTAGES) {
+    const attached = attachRollbackInitialUnknownSubstage(receipt, substage);
+    assert.equal(attached.initialUnknownSubstage, substage);
+    assert.equal(attached.messageSha256, receipt.messageSha256);
+    assert.equal(Object.isFrozen(attached), true);
+  }
+  assert.throws(
+    () => attachRollbackInitialUnknownSubstage(receipt, "raw-error-message"),
+    /not allowlisted/u,
+  );
+  assert.throws(
+    () =>
+      attachRollbackInitialUnknownSubstage(
+        { ...receipt, stage: "up" },
+        "health",
+      ),
+    /requires an initial-unknown/u,
+  );
+  const canary = "PRIVATE_G18_ERROR_BODY_CANARY";
+  const dbDiagnostic = createRollbackInitialUnknownDiagnostic(
+    "owner-db-facts",
+    Object.assign(new Error(canary), { code: "42501" }),
+  );
+  assert.deepEqual(dbDiagnostic, {
+    operation: "owner-db-facts",
+    sqlState: "42501",
+    exitCode: null,
+    signal: null,
+    failureCode: null,
+  });
+  const httpDiagnostic = createRollbackInitialUnknownDiagnostic(
+    "guarded-card-http",
+    Object.assign(new Error(canary), {
+      status: 1,
+      signal: null,
+      stderr: Buffer.from(
+        `${canary}\r\nError: G18_ORDER_CARD_HTTP_INVALID\r\n    at child (file:///private/path)`,
+      ),
+    }),
+  );
+  assert.deepEqual(httpDiagnostic, {
+    operation: "guarded-card-http",
+    sqlState: null,
+    exitCode: 1,
+    signal: null,
+    failureCode: "G18_ORDER_CARD_HTTP_INVALID",
+  });
+  const exactMessageDiagnostic = createRollbackInitialUnknownDiagnostic(
+    "guarded-card-http",
+    Object.assign(new Error("G18_ORDER_CARD_HTTP_INVALID"), {
+      status: 1,
+      stderr: Buffer.from("quoted code is not needed"),
+    }),
+  );
+  assert.equal(
+    exactMessageDiagnostic.failureCode,
+    "G18_ORDER_CARD_HTTP_INVALID",
+    "the exact allowlisted Error.message remains recognized",
+  );
+  for (const stderr of [
+    `const source = "Error: G18_ORDER_CARD_HTTP_INVALID";`,
+    "Other child failure",
+    "Error: G18_ORDER_CARD_HTTP_INVALID extra",
+  ]) {
+    const misleadingDiagnostic = createRollbackInitialUnknownDiagnostic(
+      "guarded-card-http",
+      Object.assign(new Error(canary), {
+        status: 1,
+        stderr: Buffer.from(stderr),
+      }),
+    );
+    assert.equal(
+      misleadingDiagnostic.failureCode,
+      null,
+      "quoted, unrelated, or suffixed stderr must not classify as an error code",
+    );
+  }
+  const unknownChildDiagnostic = createRollbackInitialUnknownDiagnostic(
+    "guarded-card-http",
+    Object.assign(new Error(canary), {
+      status: 1,
+      stderr: Buffer.from(canary),
+    }),
+  );
+  assert.equal(
+    unknownChildDiagnostic.failureCode,
+    null,
+    "unrecognized child output must not enter the finite receipt",
+  );
+  const diagnosed = attachRollbackInitialUnknownSubstage(
+    receipt,
+    "drift-card",
+    httpDiagnostic,
+  );
+  assert.deepEqual(diagnosed.initialUnknownDiagnostic, httpDiagnostic);
+  assert.doesNotMatch(JSON.stringify(diagnosed), new RegExp(canary, "u"));
+  assert.throws(
+    () =>
+      createRollbackInitialUnknownDiagnostic(
+        "arbitrary-operation",
+        new Error(canary),
+      ),
+    /not allowlisted/u,
+  );
+
+  for (const action of ["read", "reconcile"]) {
+    const source = rollbackOwnerHttpSource(
+      "ord_00000000000000000000000001",
+      action,
+    );
+    const checked = spawnSync(
+      process.execPath,
+      ["--check", "--input-type=module"],
+      {
+        input: source,
+        encoding: "utf8",
+      },
+    );
+    assert.equal(
+      checked.status,
+      0,
+      `generated ${action} owner HTTP source must parse as Node ESM`,
+    );
+    assert.match(
+      source,
+      /from '\.\/dist\/index\.js'/u,
+      "owner HTTP source must import the flattened runtime package",
+    );
+    assert.match(
+      source,
+      /runtimeRequire\.resolve\('js-yaml'\)/u,
+      "transitive YAML parser must resolve through the runtime package that owns it",
+    );
+    assert.doesNotMatch(
+      source,
+      /from '\.\/apps\/api-public\/dist\/index\.js'/u,
+    );
+  }
+
+  const dockerfile = await readFile(join(REPO_ROOT, "Dockerfile"), "utf8");
+  assert.match(dockerfile, /WORKDIR \/app/u);
+  assert.match(dockerfile, /COPY --from=build \/runtime \.\//u);
+  assert.match(dockerfile, /CMD \["--entry", "dist\/main\.js"\]/u);
+  const flatRuntime = await mkdtemp(join(tmpdir(), "g18-flat-owner-http-"));
+  try {
+    await mkdir(join(flatRuntime, "dist"), { recursive: true });
+    await writeFile(
+      join(flatRuntime, "dist/index.js"),
+      "export const configuredOrdersOrigin=()=> 'https://orders-service:4104'; export const configuredOrdersTls=()=>({material:{},targetEnvironment:'test',targetRuntime:'orders-service'});\n",
+    );
+    for (const [name, source] of [
+      [
+        "@coffee-platform/platform-http",
+        "export const createHttpClient=()=>({fetch:async()=>new Response(JSON.stringify({orderRef:'ord_00000000000000000000000001',version:'1',aroma:{state:'UnknownOutcome',blockers:[]}}),{status:200}),close:async()=>{}});\n",
+      ],
+      [
+        "@coffee-platform/security",
+        "export const signActorContext=()=> 'synthetic-token';\n",
+      ],
+    ]) {
+      const moduleDirectory = join(flatRuntime, "node_modules", name);
+      await mkdir(moduleDirectory, { recursive: true });
+      await writeFile(
+        join(moduleDirectory, "package.json"),
+        JSON.stringify({ type: "module", exports: "./index.js" }),
+      );
+      await writeFile(join(moduleDirectory, "index.js"), source);
+    }
+    const runtimePackage = join(
+      flatRuntime,
+      "node_modules",
+      "@coffee-platform",
+      "runtime",
+    );
+    const runtimeYaml = join(runtimePackage, "node_modules", "js-yaml");
+    await mkdir(join(runtimePackage, "dist"), { recursive: true });
+    await writeFile(
+      join(runtimePackage, "package.json"),
+      JSON.stringify({ type: "module", exports: "./dist/index.js" }),
+    );
+    await writeFile(join(runtimePackage, "dist/index.js"), "export {};\n");
+    await mkdir(runtimeYaml, { recursive: true });
+    await writeFile(
+      join(runtimeYaml, "package.json"),
+      JSON.stringify({ type: "module", exports: "./index.js" }),
+    );
+    await writeFile(
+      join(runtimeYaml, "index.js"),
+      "export const load=value=>JSON.parse(value);\n",
+    );
+    assert.equal(
+      await stat(join(flatRuntime, "node_modules", "js-yaml")).then(
+        () => true,
+        () => false,
+      ),
+      false,
+      "flat fixture intentionally omits the runtime-transitive YAML parser from API-public top-level dependencies",
+    );
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const configPath = join(flatRuntime, "config.json");
+    const secretsPath = join(flatRuntime, "scoped-secrets.json");
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        services: { "api-public": { outbound: ["orders-service:4104"] } },
+      }),
+    );
+    await writeFile(
+      secretsPath,
+      JSON.stringify({
+        secrets: {
+          security: {
+            apiPublicDelegationSigningPrivateKey: privateKey
+              .export({ type: "pkcs8", format: "pem" })
+              .toString(),
+          },
+        },
+      }),
+    );
+    const execution = spawnSync(process.execPath, ["--input-type=module"], {
+      cwd: flatRuntime,
+      env: {
+        ...process.env,
+        COFFEE_CONFIG_FILE: configPath,
+        COFFEE_RUNTIME_SECRETS_FILE: secretsPath,
+      },
+      input: rollbackOwnerHttpSource("ord_00000000000000000000000001", "read"),
+      encoding: "utf8",
+    });
+    assert.equal(
+      execution.status,
+      0,
+      `generated ESM must resolve from flat /app layout: ${execution.stderr}`,
+    );
+    assert.deepEqual(JSON.parse(execution.stdout.trim()), {
+      status: 200,
+      state: "UnknownOutcome",
+      version: "1",
+      blockerCodes: [],
+    });
+    assert.equal(
+      await stat(join(flatRuntime, "apps")).then(
+        () => true,
+        () => false,
+      ),
+      false,
+      "flat fixture must not accidentally provide the source-workspace path",
+    );
+  } finally {
+    await rm(flatRuntime, { recursive: true, force: true });
+  }
+});
+
+void test("G18 fake provider holds a decoder-invalid HTTP 200 after lost PUT until D attestation release", async () => {
+  const { rollbackRecoveryGetResponse } =
+    await import("../../tools/compose-smoke.mjs");
+  const {
+    applyRollbackArmedCartDrift,
+    shouldLoseFirstRollbackSetQuantityResponse,
+    hasCompleteSafeGetBetweenLostAndApplied,
+  } = await import("../../tools/rollback-runtime-proof.mjs");
+  const { decodeCartSnapshot } =
+    await import("../../apps/aroma-gateway/dist/infrastructure/provider/decoder.js");
+  const { ProviderSessionManager } =
+    await import("../../apps/aroma-gateway/dist/infrastructure/provider/session.js");
+  const { MemoryProviderSessionStore } =
+    await import("../../apps/aroma-gateway/dist/infrastructure/database/provider-session-store.js");
+  const directory = await mkdtemp(join(tmpdir(), "g18-recovery-get-gate-"));
+  try {
+    const lost = {
+      kind: "set-quantity",
+      outcome: "response-lost-before-effect",
+    };
+    const gated = {
+      kind: "safe-get",
+      outcome: "recovery-gated-incomplete-body",
+    };
+    const applied = { kind: "set-quantity", outcome: "applied" };
+    assert.equal(
+      hasCompleteSafeGetBetweenLostAndApplied([lost, gated, applied]),
+      false,
+      "a decoder-gated incomplete response must not prove the recovery GET",
+    );
+    assert.equal(
+      hasCompleteSafeGetBetweenLostAndApplied([
+        lost,
+        gated,
+        { kind: "safe-get", outcome: "complete" },
+        applied,
+      ]),
+      true,
+      "a later complete fresh GET must prove the recovery barrier",
+    );
+    const releaseFile = join(directory, "recovery-get-release");
+    const payload = { quantity: 1 };
+    const completeCart = JSON.parse(
+      await readFile(
+        join(
+          REPO_ROOT,
+          "evidence/aroma-provider/2026-09-12-cart-mutations/add-one-get.json",
+        ),
+        "utf8",
+      ),
+    );
+    assert.equal(completeCart.products.length, 1);
+    completeCart.products[0].quantity = 1;
+    completeCart.products[0].packing = "Aroma";
+    completeCart.products[0].grind_id = "1";
+    let driftApplied = false;
+    driftApplied = applyRollbackArmedCartDrift({
+      rollbackMode: true,
+      faultArmed: false,
+      driftApplied,
+      cart: completeCart,
+    });
+    assert.equal(
+      driftApplied,
+      false,
+      "an unarmed fixture must preserve the confirmed quantity-one baseline",
+    );
+    let firstQuantityWriteDropped = false;
+    const initial = await rollbackRecoveryGetResponse({
+      rollbackMode: true,
+      firstQuantityWriteDropped,
+      releaseFile,
+      cartBody: JSON.stringify(completeCart),
+    });
+    assert.equal(initial.statusCode, 200);
+    assert.equal(
+      decodeCartSnapshot(JSON.parse(initial.body)).lines[0].quantity,
+      1,
+      "initial safe GET must pass before the deliberate lost PUT",
+    );
+
+    for (let get = 0; get < 3; get += 1) {
+      driftApplied = applyRollbackArmedCartDrift({
+        rollbackMode: true,
+        faultArmed: true,
+        driftApplied,
+        cart: completeCart,
+      });
+      assert.equal(
+        driftApplied,
+        true,
+        "the drift latch must stay set across sequential GET assignments",
+      );
+      assert.equal(
+        completeCart.products[0].quantity,
+        2,
+        "an armed repeated GET must not change the physical quantity twice",
+      );
+    }
+    const driftBody = JSON.stringify(completeCart);
+    assert.equal(
+      decodeCartSnapshot(JSON.parse(driftBody)).lines[0].quantity,
+      2,
+      "the first post-arm GET must expose a complete quantity-two cart to the observer",
+    );
+
+    firstQuantityWriteDropped = shouldLoseFirstRollbackSetQuantityResponse(
+      1,
+      payload,
+    );
+    assert.equal(
+      firstQuantityWriteDropped,
+      true,
+      "fixture must drop exactly its first quantity-one PUT",
+    );
+    const held = await rollbackRecoveryGetResponse({
+      rollbackMode: true,
+      firstQuantityWriteDropped,
+      releaseFile,
+      cartBody: driftBody,
+    });
+    assert.deepEqual(
+      held,
+      { gated: true, statusCode: 200, body: "{}" },
+      "post-loss recovery GET must remain decoder-gated before D attestation release",
+    );
+    assert.throws(
+      () => decodeCartSnapshot(JSON.parse(held.body)),
+      (error) =>
+        ["ProviderDecodeInvalid", "ProviderDecodeIncomplete"].includes(
+          error.code,
+        ),
+      "the gate body must be rejected before a provider cart snapshot can be produced",
+    );
+    const manager = new ProviderSessionManager({
+      transport: {
+        login: async () => ({
+          profile: {
+            email: "fixture@example.test",
+            wholesale: true,
+            retail: false,
+          },
+          cookies: [
+            {
+              name: "fixture",
+              value: "synthetic",
+              domain: "provider.test",
+              path: "/",
+              expiresAt: null,
+              secure: true,
+              httpOnly: true,
+              sameSite: "lax",
+            },
+          ],
+        }),
+        read: async function* () {
+          yield Buffer.from(held.body);
+          return [];
+        },
+        mutate: async () => ({ statusCode: 200, body: new Uint8Array() }),
+      },
+      store: new MemoryProviderSessionStore(),
+      encryptionKey: Buffer.alloc(32, 17),
+    });
+    try {
+      const sessionScope = {
+        scopeRef: "aroma-development",
+        email: "fixture@example.test",
+        password: "synthetic",
+      };
+      const chunks = [];
+      for await (const chunk of manager.readSafe(sessionScope, {
+        kind: "cart",
+      }))
+        chunks.push(chunk);
+      const readBody = Buffer.concat(chunks).toString("utf8");
+      assert.equal(readBody, held.body);
+      assert.equal(
+        manager.isReady(),
+        true,
+        "HTTP 200 incomplete body must keep provider transport/session readiness healthy",
+      );
+      assert.throws(
+        () => decodeCartSnapshot(JSON.parse(readBody)),
+        (error) =>
+          ["ProviderDecodeInvalid", "ProviderDecodeIncomplete"].includes(
+            error.code,
+          ),
+      );
+      assert.equal(
+        manager.isReady(),
+        true,
+        "decoder failure must not retroactively degrade a successful provider GET",
+      );
+    } finally {
+      await manager.close();
+    }
+
+    await writeFile(releaseFile, "", {
+      encoding: "utf8",
+      mode: 0o600,
+      flag: "wx",
+    });
+    const released = await rollbackRecoveryGetResponse({
+      rollbackMode: true,
+      firstQuantityWriteDropped,
+      releaseFile,
+      cartBody: driftBody,
+    });
+    assert.deepEqual(
+      released,
+      { gated: false, statusCode: 200, body: driftBody },
+      "D recovery must receive a fresh complete GET after release",
+    );
+    assert.equal(
+      decodeCartSnapshot(JSON.parse(released.body)).lines[0].quantity,
+      2,
+    );
+
+    await rm(releaseFile);
+    const ordinary = await rollbackRecoveryGetResponse({
+      rollbackMode: false,
+      firstQuantityWriteDropped,
+      releaseFile,
+      cartBody: driftBody,
+    });
+    assert.deepEqual(
+      ordinary,
+      { gated: false, statusCode: 200, body: driftBody },
+      "ordinary provider fixtures must not inherit the rollback gate",
+    );
+    assert.equal(
+      applyRollbackArmedCartDrift({
+        rollbackMode: false,
+        faultArmed: true,
+        driftApplied: false,
+        cart: completeCart,
+      }),
+      false,
+      "ordinary provider mode must ignore a fault-arm marker",
+    );
+    completeCart.products[0].quantity = 1;
+    driftApplied = applyRollbackArmedCartDrift({
+      rollbackMode: true,
+      faultArmed: true,
+      driftApplied,
+      cart: completeCart,
+    });
+    assert.equal(
+      driftApplied,
+      true,
+      "the latch must remain set after the real write restores quantity one",
+    );
+    assert.equal(
+      completeCart.products[0].quantity,
+      1,
+      "a later GET must not re-inject drift after recovery",
+    );
+    driftApplied = applyRollbackArmedCartDrift({
+      rollbackMode: true,
+      faultArmed: true,
+      driftApplied,
+      cart: completeCart,
+    });
+    assert.equal(driftApplied, true);
+    assert.equal(
+      completeCart.products[0].quantity,
+      1,
+      "the fault must remain one-shot on every later GET",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+void test("G18 fault is armed only after B health and D recovery GET release follows mounted-config attestation", async () => {
+  const source = await readFile(
+    join(REPO_ROOT, "tools/compose-smoke.mjs"),
+    "utf8",
+  );
+  const start = source.indexOf(
+    "async function runMutationDisableRollbackProof(",
+  );
+  const end = source.indexOf("\nasync function assertDatabaseProof(", start);
+  assert.ok(start >= 0 && end > start, "G18 lifecycle function was not found");
+  const proof = source.slice(start, end);
+  const healthy = proof.indexOf(
+    "const initialRows = assertHealthy(projectName, secretsDir, composeFile)",
+  );
+  const arm = proof.indexOf("writeFile(providerFixture.faultArmFile");
+  const drift = proof.indexOf('"INITIAL_B_DRIFT"');
+  const command = proof.indexOf('"reconcile"', drift);
+  assert.ok(
+    healthy >= 0 && arm > healthy && drift > arm && command > drift,
+    "B must be healthy before host arming, then wait for observed drift before the real owner command",
+  );
+
+  const disabledStage = proof.indexOf('markStage("disabled-reconcile")');
+  const disabledUpMatch =
+    /runCompose\s*\(\s*projectName\s*,\s*secretsDir\s*,\s*\[\s*"up"\s*,/u.exec(
+      proof.slice(disabledStage),
+    );
+  const disabledUpStart =
+    disabledStage < 0 || disabledUpMatch === null
+      ? -1
+      : disabledStage + disabledUpMatch.index;
+  const disabledUpEnd = proof.indexOf(
+    "composeFile: disabledOverride",
+    disabledUpStart,
+  );
+  assert.ok(disabledUpStart >= 0 && disabledUpEnd > disabledUpStart);
+  assert.doesNotMatch(
+    proof.slice(disabledUpStart, disabledUpEnd),
+    /"--wait"/u,
+    "D startup must not block waiting for readiness while its first recovery GET is gated",
+  );
+  const disabledAttestationMatch =
+    /readContainerConfigProof\s*\(\s*projectName\s*,\s*secretsDir\s*,\s*disabledOverride\b/u.exec(
+      proof.slice(disabledUpEnd),
+    );
+  const disabledAttestation =
+    disabledAttestationMatch === null
+      ? -1
+      : disabledUpEnd + disabledAttestationMatch.index;
+  const release = proof.indexOf(
+    "writeFile(providerFixture.recoveryGetReleaseFile",
+    disabledAttestation,
+  );
+  const readinessMatch =
+    /waitForRuntimeReadiness\s*\(\s*projectName\s*,\s*secretsDir\s*,\s*"aroma-convergence"/u.exec(
+      proof.slice(release),
+    );
+  const readiness =
+    readinessMatch === null ? -1 : release + readinessMatch.index;
+  const observerReadinessMatch =
+    /waitForRuntimeReadiness\s*\(\s*projectName\s*,\s*secretsDir\s*,\s*"aroma-observer"/u.exec(
+      proof.slice(readiness),
+    );
+  const observerReadiness =
+    observerReadinessMatch === null
+      ? -1
+      : readiness + observerReadinessMatch.index;
+  const containerRows = proof.indexOf(
+    "const disabledRecoveryRows = serviceRows(",
+    observerReadiness,
+  );
+  const convergenceHealthWait = proof.indexOf(
+    "await waitForDockerHealthy(convergenceContainer)",
+    containerRows,
+  );
+  const observerHealthWait = proof.indexOf(
+    "await waitForDockerHealthy(observerContainer)",
+    convergenceHealthWait,
+  );
+  const allHealthy = proof.indexOf(
+    "const afterDisabledRows = assertHealthy",
+    observerHealthWait,
+  );
+  assert.ok(
+    disabledAttestation > disabledUpEnd &&
+      release > disabledAttestation &&
+      readiness > release &&
+      observerReadiness > readiness &&
+      containerRows > observerReadiness &&
+      convergenceHealthWait > containerRows &&
+      observerHealthWait > convergenceHealthWait &&
+      allHealthy > observerHealthWait,
+    "D must attest config, release GET, await HTTP readiness and both Docker healthchecks before full health",
+  );
+  assert.match(proof, /assert\.ok\(\s*convergenceContainer,/u);
+  assert.match(proof, /assert\.ok\(\s*observerContainer,/u);
+
+  const finalReadStart = proof.indexOf(
+    "const finalCard = await waitForRollbackFacts(",
+  );
+  const finalReadEnd = proof.indexOf(
+    "const { reservation: finalOldReservation",
+    finalReadStart,
+  );
+  assert.ok(finalReadStart >= 0 && finalReadEnd > finalReadStart);
+  const { waitForRollbackFacts } =
+    await import("../../tools/compose-smoke.mjs");
+  const readFinalCard = (readCard, timeoutMs = 1_000) =>
+    runInNewContext(
+      `(async () => { ${proof.slice(finalReadStart, finalReadEnd)} return finalCard; })()`,
+      {
+        assert,
+        projectName: "restored-project",
+        secretsDir: "/fixture/scoped-secrets",
+        restoredOverride: "/fixture/restored-compose.yaml",
+        rollbackOrder: { orderRef: "restored-order" },
+        runRollbackOwnerHttp: (...args) => {
+          assert.deepEqual(args, [
+            "restored-project",
+            "/fixture/scoped-secrets",
+            "/fixture/restored-compose.yaml",
+            "restored-order",
+            "read",
+          ]);
+          return readCard();
+        },
+        waitForRollbackFacts: (readFacts, predicate, description) => {
+          assert.equal(description, "RESTORED_CARD_IN_SYNC");
+          return waitForRollbackFacts(
+            readFacts,
+            predicate,
+            description,
+            timeoutMs,
+          );
+        },
+      },
+    );
+  let cardReads = 0;
+  const acceptedCard = { status: 200, state: "InSync" };
+  assert.equal(
+    await readFinalCard(async () =>
+      ++cardReads === 1 ? { status: 200, state: "OutOfSync" } : acceptedCard,
+    ),
+    acceptedCard,
+    "G18 must return the actual owner HTTP Card after its asynchronous projection catches up",
+  );
+  assert.equal(cardReads, 2);
+  await assert.rejects(
+    readFinalCard(async () => ({ status: 200, state: "OutOfSync" }), 50),
+    { message: "G18_RESTORED_CARD_IN_SYNC_TIMEOUT" },
+    "a permanently guarded Card must still fail G18",
+  );
+  const ownerError = new Error("G18_OWNER_HTTP_READ_FAILED");
+  await assert.rejects(
+    readFinalCard(async () => {
+      throw ownerError;
+    }),
+    (error) => error === ownerError,
+  );
+});
+
+void test("G18 operator wake proves real command correlation, preparation delivery and exact causation", async () => {
+  const { hasProcessedRollbackOperatorWake } =
+    await import("../../tools/rollback-runtime-proof.mjs");
+  const correlationId = "reconcile-correlation";
+  const orderRef = "ord_00000000000000000000000001";
+  const desiredRevision = "7";
+  const intentPayload = {
+    orderRef,
+    orderVersion: "9",
+    requestedAt: "2026-10-24T00:00:00.000Z",
+  };
+  const intentEnvelope = {
+    envelopeVersion: "1",
+    messageId: "intent-message",
+    messageType: "OrderReconciliationRequested.v1",
+    producer: "orders-service",
+    correlationId,
+    causationId: null,
+    aggregate: { type: "Order", ref: orderRef, version: "9" },
+    payload: intentPayload,
+  };
+  const intentHash = canonicalRequestHash(intentEnvelope);
+  const intentPayloadHash = canonicalRequestHash(intentPayload);
+  const intent = {
+    message_id: "intent-message",
+    message_type: intentEnvelope.messageType,
+    topic: "coffee.orders.lifecycle.v1",
+    aggregate_ref: orderRef,
+    aggregate_sequence: "3",
+    owner_version: "9",
+    partition_key: orderRef,
+    schema_version: "1",
+    envelope_hash: intentHash,
+    payload_hash: intentHash,
+    correlation_id: correlationId,
+    causation_id: null,
+    envelope: intentEnvelope,
+    payload: intentPayload,
+    state: "Published",
+  };
+  const preparationDelivery = {
+    consumer_name: "orders-aroma-preparation-v1",
+    message_id: intent.message_id,
+    message_type: intent.message_type,
+    partition_key: intent.partition_key,
+    schema_version: intent.schema_version,
+    owner_version: intent.owner_version,
+    payload_hash: intentPayloadHash,
+    envelope_hash: intentHash,
+    envelope: intentEnvelope,
+    state: "Processed",
+  };
+  const wakePayload = {
+    cartScopeRef: "aroma-primary",
+    desiredRevision,
+    reason: "OperatorRequested",
+    orderRef,
+  };
+  const wakeEnvelope = {
+    envelopeVersion: "1",
+    messageId: "wake-message",
+    messageType: "AromaConvergenceRequested.v1",
+    producer: "orders-aroma-preparation",
+    correlationId,
+    causationId: intent.message_id,
+    aggregate: { type: "AromaCart", ref: "aroma-primary", version: "12" },
+    payload: wakePayload,
+  };
+  const wakeHash = canonicalRequestHash(wakeEnvelope);
+  const wakePayloadHash = canonicalRequestHash(wakePayload);
+  const wake = {
+    message_id: "wake-message",
+    message_type: wakeEnvelope.messageType,
+    topic: "coffee.aroma.cart.commands.v1",
+    aggregate_ref: "aroma-primary",
+    aggregate_sequence: "12",
+    owner_version: "12",
+    partition_key: "aroma-primary",
+    schema_version: "1",
+    envelope_hash: wakeHash,
+    payload_hash: wakeHash,
+    correlation_id: correlationId,
+    causation_id: intent.message_id,
+    payload: wakePayload,
+    envelope: wakeEnvelope,
+    state: "Published",
+  };
+  const convergenceDelivery = {
+    consumer_name: "aroma-convergence-v1",
+    message_id: wake.message_id,
+    message_type: wake.message_type,
+    partition_key: wake.partition_key,
+    schema_version: wake.schema_version,
+    owner_version: wake.owner_version,
+    payload_hash: wakePayloadHash,
+    envelope_hash: wakeHash,
+    envelope: wakeEnvelope,
+    state: "Processed",
+  };
+  const proof = (changes = {}) =>
+    hasProcessedRollbackOperatorWake({
+      ordersOutbox: [intent],
+      inboxRows: [preparationDelivery],
+      wakes: [wake],
+      wakeInbox: [convergenceDelivery],
+      correlationId,
+      desiredRevision,
+      orderRef,
+      consumerName: "aroma-convergence-v1",
+      ...changes,
+    });
+
+  assert.equal(
+    proof(),
+    true,
+    "a matching real operator command and both processed Inbox deliveries must prove causation",
+  );
+  assert.equal(
+    proof({ wakes: [{ ...wake, causation_id: null }] }),
+    false,
+    "startup wake cannot substitute for operator causation",
+  );
+  assert.equal(
+    proof({ correlationId: "other-correlation" }),
+    false,
+    "a different accepted command cannot prove the wake",
+  );
+  assert.equal(
+    proof({ inboxRows: [{ ...preparationDelivery, state: "Processing" }] }),
+    false,
+    "the operator intent must be processed by the preparation Inbox",
+  );
+  assert.equal(
+    proof({
+      wakeInbox: [{ ...convergenceDelivery, message_id: "other-wake" }],
+    }),
+    false,
+    "the exact operator wake must be processed by the convergence Inbox",
+  );
+  assert.equal(
+    proof({
+      inboxRows: [
+        { ...preparationDelivery, payload_hash: intent.payload_hash },
+      ],
+    }),
+    false,
+    "the preparation Inbox payload_hash must hash only the payload, not the Outbox envelope",
+  );
+  assert.equal(
+    proof({
+      wakeInbox: [{ ...convergenceDelivery, payload_hash: wake.payload_hash }],
+    }),
+    false,
+    "the convergence Inbox payload_hash must hash only the payload, not the Outbox envelope",
+  );
+  assert.equal(
+    proof({
+      wakeInbox: [
+        {
+          ...convergenceDelivery,
+          envelope: {
+            ...wakeEnvelope,
+            payload: { ...wakePayload, reason: "Recovery" },
+          },
+        },
+      ],
+    }),
+    false,
+    "corrupt Inbox envelope content must fail despite matching identity fields",
+  );
+  assert.equal(
+    proof({ ordersOutbox: [{ ...intent, aggregate_ref: "another-order" }] }),
+    false,
+    "another Order's reconciliation intent cannot prove this Cart command",
+  );
+});
+
+void test("Kafka namespace inventory proves exact physical claims and rejects canonical broker names", async () => {
+  const {
+    buildKafkaRegistryBootstrapScript,
+    captureKafkaNamespaceInventory,
+    kafkaNamespaceLaunchIdentity,
+  } = await import("../../tools/compose-smoke.mjs");
+  const candidateSha = "a".repeat(40);
+  const contextIdentity = {
+    schemaVersion: 1,
+    runId: `20261024T120000Z-${candidateSha.slice(0, 7)}`,
+    candidateSha,
+    baseConfigSha256: "b".repeat(64),
+  };
+  const platformConfig = {
+    environment: "development",
+    verification: { kafkaNamespaceIsolation: true },
+    kafka: {
+      topics: {
+        catalogSnapshot: {
+          name: "coffee.catalog.snapshot.v1",
+          dlq: "coffee.catalog.snapshot.v1.dlq",
+          partitions: 1,
+        },
+        catalogMapping: {
+          name: "coffee.catalog.mapping.v2",
+          dlq: "coffee.catalog.mapping.v2.dlq",
+          partitions: 1,
+        },
+        ordersLifecycle: {
+          name: "coffee.orders.lifecycle.v1",
+          dlq: "coffee.orders.lifecycle.v1.dlq",
+          partitions: 1,
+        },
+        aromaCartCommands: {
+          name: "coffee.aroma.cart.commands.v1",
+          dlq: "coffee.aroma.cart.commands.v1.dlq",
+          partitions: 1,
+        },
+        aromaCartEvents: {
+          name: "coffee.aroma.cart.events.v1",
+          dlq: "coffee.aroma.cart.events.v1.dlq",
+          partitions: 1,
+        },
+        realtimeInvalidate: {
+          name: "coffee.realtime.invalidate.v1",
+          dlq: "coffee.realtime.invalidate.v1.dlq",
+          partitions: 1,
+        },
+      },
+    },
+    services: {
+      "orders-service": {
+        kafka: {
+          producers: ["coffee.orders.lifecycle.v1"],
+          consumers: [
+            {
+              groupId: "orders-lifecycle-v1",
+              processing: "durable",
+              topics: ["coffee.orders.lifecycle.v1"],
+            },
+          ],
+        },
+      },
+    },
+  };
+  const launchIdentity = kafkaNamespaceLaunchIdentity(platformConfig, {
+    context: contextIdentity,
+  });
+  assert.deepEqual(launchIdentity, contextIdentity);
+  assert.throws(
+    () => kafkaNamespaceLaunchIdentity(platformConfig, undefined),
+    /validated launch context/u,
+  );
+  const runGroup = `${launchIdentity.runId}.orders-lifecycle-v1`;
+  const sortNames = (left, right) => left.localeCompare(right, "en");
+  const expectedTopics = [
+    "coffee.catalog.snapshot.v1",
+    "coffee.catalog.snapshot.v1.dlq",
+    "coffee.catalog.mapping.v2",
+    "coffee.catalog.mapping.v2.dlq",
+    "coffee.orders.lifecycle.v1",
+    "coffee.orders.lifecycle.v1.dlq",
+    "coffee.aroma.cart.commands.v1",
+    "coffee.aroma.cart.commands.v1.dlq",
+    "coffee.aroma.cart.events.v1",
+    "coffee.aroma.cart.events.v1.dlq",
+    "coffee.realtime.invalidate.v1",
+    "coffee.realtime.invalidate.v1.dlq",
+  ]
+    .map((name) => `${launchIdentity.runId}.${name}`)
+    .sort(sortNames);
+  const enabledBootstrap = buildKafkaRegistryBootstrapScript(
+    platformConfig,
+    launchIdentity,
+  );
+  assert.equal(enabledBootstrap.length, 12);
+  assert.deepEqual(
+    enabledBootstrap
+      .map((line) => line.match(/--topic "([^"]+)"/u)?.[1])
+      .sort(sortNames),
+    expectedTopics,
+  );
+  const disabledBootstrap = buildKafkaRegistryBootstrapScript({
+    ...platformConfig,
+    verification: { kafkaNamespaceIsolation: false },
+  });
+  assert.equal(disabledBootstrap.length, 12);
+  assert.deepEqual(
+    disabledBootstrap
+      .map((line) => line.match(/--topic "([^"]+)"/u)?.[1])
+      .sort(sortNames),
+    [
+      "coffee.catalog.snapshot.v1",
+      "coffee.catalog.snapshot.v1.dlq",
+      "coffee.catalog.mapping.v2",
+      "coffee.catalog.mapping.v2.dlq",
+      "coffee.orders.lifecycle.v1",
+      "coffee.orders.lifecycle.v1.dlq",
+      "coffee.aroma.cart.commands.v1",
+      "coffee.aroma.cart.commands.v1.dlq",
+      "coffee.aroma.cart.events.v1",
+      "coffee.aroma.cart.events.v1.dlq",
+      "coffee.realtime.invalidate.v1",
+      "coffee.realtime.invalidate.v1.dlq",
+    ].sort(sortNames),
+  );
+  const receipt = captureKafkaNamespaceInventory({
+    projectName: "coffee-launch-fixture",
+    platformConfig,
+    launchIdentity,
+    actualTopics: expectedTopics,
+    actualGroups: [runGroup],
+  });
+  assert.deepEqual(receipt.topics.expectedPhysical, expectedTopics);
+  assert.deepEqual(receipt.groups.expectedPhysical, [runGroup]);
+  assert.equal(receipt.topics.canonicalNamesAbsent, true);
+  assert.equal(receipt.groups.canonicalNamesAbsent, true);
+  assert.throws(
+    () =>
+      captureKafkaNamespaceInventory({
+        projectName: "coffee-launch-fixture",
+        platformConfig,
+        launchIdentity,
+        actualTopics: [...expectedTopics, "coffee.orders.lifecycle.v1"],
+        actualGroups: [runGroup],
+      }),
+    /canonical business topic/u,
+  );
+  assert.throws(
+    () =>
+      captureKafkaNamespaceInventory({
+        projectName: "coffee-launch-fixture",
+        platformConfig,
+        launchIdentity,
+        actualTopics: expectedTopics.filter(
+          (name) =>
+            name !== `${launchIdentity.runId}.coffee.catalog.snapshot.v1.dlq`,
+        ),
+        actualGroups: [runGroup],
+      }),
+    /missing expected run-scoped topics/u,
+  );
+  assert.throws(
+    () =>
+      captureKafkaNamespaceInventory({
+        projectName: "coffee-launch-fixture",
+        platformConfig,
+        actualTopics: expectedTopics,
+        actualGroups: [runGroup],
+      }),
+    /validated launch identity/u,
+  );
+});
+
+void test("G18 convergence projection delivery requires AromaConvergenceChanged on the configured Orders projection group", async () => {
+  const {
+    hasProcessedConvergenceProjectionEvent,
+    rollbackFactsRequireGuardedCard,
+  } = await import("../../tools/compose-smoke.mjs");
+  const { load } = await import("js-yaml");
+  const platformConfig = load(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
+  const projectionConsumer = platformConfig.services[
+    "orders-aroma-preparation"
+  ].kafka.consumers.find(
+    (consumer) =>
+      consumer.processing === "durable" &&
+      consumer.topics.includes("coffee.aroma.cart.events.v1"),
+  );
+  assert.equal(projectionConsumer?.groupId, "orders-aroma-projection-v1");
+  const convergenceEvent = {
+    message_type: "AromaConvergenceChanged.v1",
+    consumer_name: projectionConsumer.groupId,
+    state: "Processed",
+  };
+  assert.equal(
+    hasProcessedConvergenceProjectionEvent(
+      { projectionInbox: [convergenceEvent] },
+      projectionConsumer.groupId,
+    ),
+    true,
+  );
+  assert.equal(
+    hasProcessedConvergenceProjectionEvent(
+      {
+        projectionInbox: [
+          { ...convergenceEvent, consumer_name: "orders-aroma-preparation-v1" },
+        ],
+      },
+      projectionConsumer.groupId,
+    ),
+    false,
+  );
+  assert.equal(
+    hasProcessedConvergenceProjectionEvent(
+      {
+        projectionInbox: [
+          { ...convergenceEvent, message_type: "AromaConvergenceRequested.v1" },
+        ],
+      },
+      projectionConsumer.groupId,
+    ),
+    false,
+  );
+  const cardFacts = {
+    attempts: [{ state: "UnknownOutcome" }],
+    reservations: [{ state: "UnknownOutcome", resolved: false }],
+    gatewayRows: [{ state: "UnknownOutcome" }],
+    projectionInbox: [convergenceEvent],
+  };
+  assert.equal(
+    rollbackFactsRequireGuardedCard(cardFacts, projectionConsumer.groupId),
+    true,
+    "the guarded HTTP Card is queried after the other four initial predicates are ready",
+  );
+  assert.equal(
+    rollbackFactsRequireGuardedCard(
+      {
+        ...cardFacts,
+        reservations: [{ state: "RecoveredNotApplied", resolved: true }],
+      },
+      projectionConsumer.groupId,
+    ),
+    false,
+  );
+  assert.equal(
+    rollbackFactsRequireGuardedCard(
+      {
+        ...cardFacts,
+        projectionInbox: [{ ...convergenceEvent, state: "Failed" }],
+      },
+      projectionConsumer.groupId,
+    ),
+    false,
+  );
+});
+
+void test("G18 early database projection guard emits a finite bootstrap receipt before resource setup", async (t) => {
+  const {
+    attachRollbackBootstrapSubstage,
+    ROLLBACK_BOOTSTRAP_SUBSTAGES,
+    withEarlyRollbackGuardReceipt,
+  } = await import("../../tools/compose-smoke.mjs");
+  const { deriveRuntimeDatabaseTarget } =
+    await import("../../packages/platform-config/src/launch-database-target.ts");
+  const { createRollbackFailureReceipt, persistRollbackFailureFromChild } =
+    await import("../../verification/launch/v1/scenarios/rollback.mjs");
+  const { load } = await import("js-yaml");
+  const candidateSha = "3".repeat(40);
+  const runId = `20261024T151732Z-${candidateSha.slice(0, 7)}`;
+  const launchIdentity = {
+    context: { runId, candidateSha, baseConfigSha256: "4".repeat(64) },
+  };
+  const config = load(
+    await readFile(join(REPO_ROOT, "config/platform.yaml"), "utf8"),
+  );
+  const ownership = JSON.parse(
+    await readFile(join(REPO_ROOT, "config/database-ownership.json"), "utf8"),
+  );
+  const targetConfig = {
+    environment: config.environment,
+    databaseIsolation: { enabled: false },
+    services: config.services,
+  };
+  let guardError;
+  await assert.rejects(
+    withEarlyRollbackGuardReceipt(
+      { mutationDisableRollback: true, launchIdentity },
+      async () => {
+        const claims = ownership.runtimeClaims.filter(
+          ({ database }) => database !== null,
+        );
+        return claims.map(({ runtime }) =>
+          deriveRuntimeDatabaseTarget({
+            config: targetConfig,
+            runtime,
+            ownership,
+            launchIdentity: {
+              schemaVersion: 1,
+              runId,
+              candidateSha,
+              baseConfigSha256: launchIdentity.context.baseConfigSha256,
+            },
+          }),
+        );
+      },
+    ),
+    (error) => {
+      guardError = error;
+      return true;
+    },
+  );
+  assert.equal(guardError.message, "RUNTIME_DATABASE_TARGET_INVALID");
+  assert.deepEqual(guardError.rollbackFailure.cleanup, {
+    verified: true,
+    complete: true,
+    failures: [],
+    retainedResources: [],
+    inventory: { containers: [], volumes: [], networks: [] },
+  });
+  assert.equal(guardError.rollbackFailure.stage, "bootstrap");
+  assert.equal(
+    guardError.rollbackFailure.bootstrapSubstage,
+    "launch-context-guard",
+  );
+  assert.equal(guardError.rollbackFailure.code, "G18_PHASE_FAILED");
+  assert.equal(
+    guardError.rollbackFailure.messageSha256,
+    createHash("sha256")
+      .update("RUNTIME_DATABASE_TARGET_INVALID")
+      .digest("hex"),
+  );
+  assert.doesNotMatch(
+    JSON.stringify(guardError.rollbackFailure),
+    /launch database isolation|raw|secret/u,
+  );
+
+  const bootstrapReceipt = createRollbackFailureReceipt({
+    runId,
+    candidateSha,
+    stage: "bootstrap",
+    error: new Error("fixture"),
+    cleanup: {
+      verified: true,
+      complete: true,
+      failures: [],
+      retainedResources: [],
+      inventory: { containers: [], volumes: [], networks: [] },
+    },
+  });
+  const canary = "RAW_BOOTSTRAP_DETAIL_CANARY";
+  for (const substage of ROLLBACK_BOOTSTRAP_SUBSTAGES) {
+    const tagged = attachRollbackBootstrapSubstage(bootstrapReceipt, substage);
+    assert.equal(tagged.bootstrapSubstage, substage);
+    assert.deepEqual(
+      Object.keys(tagged).sort(),
+      [...Object.keys(bootstrapReceipt), "bootstrapSubstage"].sort(),
+    );
+    assert.doesNotMatch(JSON.stringify(tagged), new RegExp(canary, "u"));
+  }
+  assert.throws(
+    () =>
+      attachRollbackBootstrapSubstage(
+        bootstrapReceipt,
+        `provider-fixture:${canary}`,
+      ),
+    /G18 bootstrap substage is not allowlisted/u,
+  );
+  assert.throws(
+    () =>
+      attachRollbackBootstrapSubstage(
+        { ...bootstrapReceipt, stage: "up" },
+        "provider-fixture",
+      ),
+    /bootstrap substage requires a bootstrap failure receipt/u,
+  );
+
+  const ordinaryError = new Error("ordinary launch database guard failure");
+  await assert.rejects(
+    withEarlyRollbackGuardReceipt(
+      { mutationDisableRollback: false, launchIdentity },
+      () => {
+        throw ordinaryError;
+      },
+    ),
+    (error) => error === ordinaryError,
+    "non-G18 guard failures must remain unchanged",
+  );
+
+  const evidenceDir = await mkdtemp(join(tmpdir(), "g18-early-guard-receipt-"));
+  t.after(() => rm(evidenceDir, { recursive: true, force: true }));
+  const childError = new Error("child failed before Docker setup");
+  childError.result = {
+    stdout: `${JSON.stringify(guardError.rollbackFailure)}\n`,
+    joined: true,
+  };
+  const persisted = await persistRollbackFailureFromChild({
+    error: childError,
+    identity: { runId, candidateSha },
+    lineage: {},
+    evidenceDir,
+  });
+  assert.equal(persisted.artifact.stage, "bootstrap");
+  assert.equal(persisted.artifact.bootstrapSubstage, "launch-context-guard");
+  assert.equal(persisted.artifact.code, "G18_PHASE_FAILED");
+  assert.equal(persisted.artifact.cleanup.complete, true);
+  assert.deepEqual(persisted.artifact.cleanup.inventory, {
+    containers: [],
+    volumes: [],
+    networks: [],
+  });
+});
+
+void test("G13/G15 external PostgreSQL attachment is exact and keeps the shared data network", async (t) => {
+  const {
+    externalRecoveryMigrationCredentialRequest,
+    externalPostgresConnectArgs,
+    isExternalRecoveryProof,
+    runComposeSmoke,
+    writeScopedComposeOverride,
+  } = await import("../../tools/compose-smoke.mjs");
+  const networkId =
+    "f1e587a5c52948bcf232cdc3e644859a7ed24db7dc4fd84be65f36a397cedf6a";
+  const containerId =
+    "267958ce276e65d96c4a5d2cfc4541de35f9785de3dd15c04c34798cf7b1c85f";
+  assert.deepEqual(externalPostgresConnectArgs(networkId, containerId), [
+    "network",
+    "connect",
+    "--alias",
+    "coffee_postgres",
+    "--gw-priority",
+    "-1",
+    networkId,
+    containerId,
+  ]);
+  assert.throws(
+    () => externalPostgresConnectArgs("coffee_postgres_data", containerId),
+    { name: "AssertionError" },
+  );
+  assert.equal(isExternalRecoveryProof({ recoveryProof: true }), true);
+  assert.equal(
+    isExternalRecoveryProof({
+      recoveryProof: true,
+      mutationDisableRollback: true,
+    }),
+    false,
+    "G18 remains on its separate disposable diagnostic path",
+  );
+  assert.equal(isExternalRecoveryProof({ aromaCartProof: true }), false);
+  assert.deepEqual(
+    externalRecoveryMigrationCredentialRequest(
+      {
+        g08PreparationContextPath: "/parent/evidence/launch/run/context.json",
+        postgres: { systemIdentifier: "7613370342949990434" },
+      },
+      "/child/evidence/launch/run/context.json",
+      "orders",
+    ),
+    {
+      root: REPO_ROOT,
+      contextPath: "/child/evidence/launch/run/context.json",
+      owner: "orders",
+      kind: "migrator",
+      expectedSystemIdentifier: "7613370342949990434",
+      preparationContextPath: "/parent/evidence/launch/run/context.json",
+    },
+  );
+  assert.deepEqual(
+    externalRecoveryMigrationCredentialRequest(
+      { postgres: { systemIdentifier: "7613370342949990434" } },
+      "/g13/evidence/launch/run/context.json",
+      "orders",
+    ),
+    {
+      root: REPO_ROOT,
+      contextPath: "/g13/evidence/launch/run/context.json",
+      owner: "orders",
+      kind: "migrator",
+      expectedSystemIdentifier: "7613370342949990434",
+    },
+  );
+  await assert.rejects(
+    runComposeSmoke({ args: ["--recovery-proof", "--keep"] }),
+    /always requires verified cleanup/u,
+  );
+
+  const contextPath = join(
+    tmpdir(),
+    `coffee-external-pg-context-${process.pid}.json`,
+  );
+  await writeFile(contextPath, "{}\n", { mode: 0o400 });
+  t.after(() => rm(contextPath, { force: true }));
+  const override = await writeScopedComposeOverride("coffee-external-pg", {
+    sharedPostgres: true,
+    recoveryProof: true,
+    launchContextPath: contextPath,
+  });
+  t.after(() => rm(override, { force: true }));
+  const result = spawnSync(
+    "docker",
+    [
+      "compose",
+      "-p",
+      "coffee-external-pg",
+      "-f",
+      COMPOSE_FILE,
+      "-f",
+      override,
+      "config",
+      "--format",
+      "json",
+    ],
+    {
+      encoding: "utf8",
+      env: { ...process.env, COFFEE_COMPOSE_SECRETS_DIR: "/dev/shm" },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(result.stdout);
+  assert.equal(config.networks.coffee_postgres_data.external, true);
+  assert.equal(
+    config.networks.coffee_postgres_data.name,
+    "coffee_postgres_data",
+  );
+  const baseline = composeConfig();
+  for (const runtime of RUNTIMES) {
+    assert.equal(
+      Object.hasOwn(config.services[runtime].networks, "coffee_postgres_data"),
+      Object.hasOwn(
+        baseline.services[runtime].networks,
+        "coffee_postgres_data",
+      ),
+      `${runtime} database network membership must remain canonical`,
+    );
+  }
+});
+
+void test("G13 uses its current G08 context while malformed G15 lineage fails before PostgreSQL", async (t) => {
+  const { readExternalRecoveryProofCredentials } =
+    await import("../../tools/compose-smoke.mjs");
+  const launchIdentity = {
+    schemaVersion: 1,
+    runId: "20261026T000000Z-1234567",
+    candidateSha: `1234567${"0".repeat(33)}`,
+    baseConfigSha256: "a".repeat(64),
+  };
+  let connectCalls = 0;
+  t.mock.method(pg.Client.prototype, "connect", async () => {
+    connectCalls += 1;
+    throw new Error("unexpected PostgreSQL connection");
+  });
+
+  await assert.rejects(
+    readExternalRecoveryProofCredentials(launchIdentity, "/", {
+      candidateRoot: REPO_ROOT,
+      expectedLineage: "G13",
+      resources: {
+        composeProject: "coffee-launch-g13-fixture",
+        kafkaPrefix: "20261026T000000Z-1234567",
+      },
+    }),
+    (error) =>
+      ["CONFIG-G08-BUNDLE", "CONFIG-G08-CONTEXT"].includes(error?.ruleId),
+    "ordinary G13 must enter the current-context G08 reader",
+  );
+
+  for (const resources of [
+    {
+      composeProject: "coffee-launch-g15-fixture",
+      kafkaPrefix: "20261026T000000Z-1234567",
+    },
+    {
+      g15ParentRunId: "20261026T000000Z-1234567",
+    },
+    {
+      g08PreparationContextPath: "/parent/evidence/launch/run/context.json",
+      g15ParentRunId: "20261026T000000Z-1234567",
+    },
+    {
+      g08PreparationContextPath: null,
+      g15ParentRunId: "20261026T000000Z-1234567",
+    },
+  ]) {
+    await assert.rejects(
+      readExternalRecoveryProofCredentials(launchIdentity, "/", {
+        candidateRoot: REPO_ROOT,
+        expectedLineage: "G15",
+        resources,
+      }),
+      /G15 G08 parent preparation reference is missing/u,
+    );
+  }
+  assert.equal(connectCalls, 0, "context failures must precede PostgreSQL");
+});
+
+void test("external PostgreSQL attachment cleanup requires acknowledged ownership and rechecks identity", async (t) => {
+  const {
+    attachApprovedExternalPostgres,
+    cleanupApprovedExternalPostgresAttachment,
+    externalRecoveryCleanupSummary,
+  } = await import("../../tools/compose-smoke.mjs");
+  const containerId =
+    "267958ce276e65d96c4a5d2cfc4541de35f9785de3dd15c04c34798cf7b1c85f";
+  const dataNetworkId =
+    "f1e587a5c52948bcf232cdc3e644859a7ed24db7dc4fd84be65f36a397cedf6a";
+  const legacyNetworkId =
+    "d6e471bdc52437821abc9a060e075a153ad55003daf81eea1782d0a62f70ceb3";
+  const imageId =
+    "sha256:1bea307dfb3ee30541a7acf7de14b58bcd6948da98e5d31a04c627c4d35ec64b";
+  const initialRoute =
+    "00000000:00000000:00000000:00000000:00000000:00000000:0";
+
+  async function exercise(connectOutcome, { badIdentity = false } = {}) {
+    let attached = false;
+    let route = initialRoute;
+    let image = imageId;
+    const calls = [];
+    t.mock.method(childProcess, "execFileSync", (_command, args) => {
+      calls.push([...args]);
+      if (args[0] === "network" && args[1] === "connect") {
+        if (connectOutcome === "failure-after-foreign-attach") {
+          attached = true;
+          throw Object.assign(new Error("connect outcome unknown"), {
+            status: 1,
+          });
+        }
+        attached = true;
+        if (connectOutcome === "wrong-route") route = `${initialRoute}:bad`;
+        if (badIdentity) image = "sha256:foreign";
+        return "";
+      }
+      if (args[0] === "network" && args[1] === "disconnect") {
+        attached = false;
+        route = initialRoute;
+        return "";
+      }
+      if (args[0] === "inspect" && args[1] === containerId) {
+        return JSON.stringify([
+          {
+            Id: containerId,
+            Image: image,
+            Name: "/coffee_postgres",
+            NetworkSettings: {
+              Networks: {
+                coffee_network: { NetworkID: legacyNetworkId },
+                ...(attached
+                  ? {
+                      coffee_postgres_data: {
+                        NetworkID: dataNetworkId,
+                        Aliases: ["coffee_postgres"],
+                      },
+                    }
+                  : {}),
+              },
+            },
+          },
+        ]);
+      }
+      if (args[0] === "inspect" && args[1] === dataNetworkId) {
+        return JSON.stringify([
+          {
+            Id: dataNetworkId,
+            Name: "coffee_postgres_data",
+            Containers: attached ? { [containerId]: {} } : {},
+          },
+        ]);
+      }
+      if (args[0] === "inspect" && args[1] === legacyNetworkId) {
+        return JSON.stringify([
+          {
+            Id: legacyNetworkId,
+            Name: "coffee_network",
+            Containers: { [containerId]: {} },
+          },
+        ]);
+      }
+      if (args[0] === "exec" && args[1] === containerId) return route;
+      throw new Error(`unexpected fake Docker operation: ${args[0]}`);
+    });
+    syncBuiltinESMExports();
+
+    const attachment = {
+      before: {
+        container: {
+          NetworkSettings: {
+            Networks: { coffee_network: { NetworkID: legacyNetworkId } },
+          },
+        },
+        legacyNetwork: { Containers: { [containerId]: {} } },
+      },
+      routeBefore: initialRoute,
+      attached: false,
+      attempted: false,
+    };
+    return {
+      attachment,
+      calls,
+      get attached() {
+        return attached;
+      },
+      runAttach: () => attachApprovedExternalPostgres(attachment),
+      cleanup: () => cleanupApprovedExternalPostgresAttachment(attachment),
+    };
+  }
+
+  try {
+    const failed = await exercise("failure-after-foreign-attach");
+    assert.throws(failed.runAttach, /connect outcome unknown/u);
+    assert.equal(failed.attachment.attached, false);
+    assert.throws(failed.cleanup);
+    assert.equal(failed.attached, true, "foreign attachment must be retained");
+    const failedSummary = externalRecoveryCleanupSummary({
+      databases: { verified: true, removed: [] },
+      attachment: failed.attachment,
+    });
+    assert.equal(failedSummary.attachment.removed, false);
+    assert.equal(failedSummary.verified, false);
+    assert.equal(
+      failed.calls.some(
+        (args) => args[0] === "network" && args[1] === "disconnect",
+      ),
+      false,
+      "a failed connect acknowledgement must never authorize disconnect",
+    );
+
+    const wrongRoute = await exercise("wrong-route");
+    assert.throws(wrongRoute.runAttach, /original default route/u);
+    assert.equal(wrongRoute.attachment.attached, true);
+    wrongRoute.cleanup();
+    assert.equal(wrongRoute.attached, false);
+    assert.equal(wrongRoute.attachment.attached, false);
+    assert.equal(wrongRoute.attachment.absenceConfirmed, true);
+    const successfulSummary = externalRecoveryCleanupSummary({
+      databases: { verified: true, removed: [] },
+      attachment: wrongRoute.attachment,
+    });
+    assert.equal(successfulSummary.attachment.removed, true);
+    assert.equal(successfulSummary.verified, true);
+    assert.equal(
+      wrongRoute.calls.filter(
+        (args) => args[0] === "network" && args[1] === "disconnect",
+      ).length,
+      1,
+      "acknowledged attachment is removed after repeated target guards",
+    );
+
+    const wrongIdentity = await exercise("success", { badIdentity: true });
+    assert.throws(wrongIdentity.runAttach);
+    assert.equal(wrongIdentity.attachment.attached, true);
+    assert.throws(wrongIdentity.cleanup);
+    assert.equal(wrongIdentity.attached, true);
+    assert.equal(
+      wrongIdentity.calls.some(
+        (args) => args[0] === "network" && args[1] === "disconnect",
+      ),
+      false,
+      "identity mismatch must retain the attachment for operator review",
+    );
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+});
+
+void test("external PostgreSQL preflight closes admin clients once and never creates on failure", async (t) => {
+  const { applyExternalRecoveryMigrations } =
+    await import("../../tools/compose-smoke.mjs");
+  const owners = ["customer", "catalog", "pricing", "orders", "integration"];
+  const databases = owners.map((owner) => ({
+    owner,
+    name: `coffee_verify_${owner}`,
+    migratorRole: `coffee_${owner}_migrator`,
+  }));
+  const credentials = {
+    postgres: {
+      host: "coffee_postgres",
+      port: 5432,
+      systemIdentifier: "7613370342949990434",
+    },
+    ownership: { databases },
+    roleMap: { databases },
+    admin: { username: "coffeeuser", password: "fixture-only" },
+    launchIdentity: { context: { runId: "fixture-run" } },
+  };
+  const platformConfig = {
+    postgres: { host: "coffee_postgres", port: 5432 },
+  };
+
+  async function rejectedPreflight({
+    identityError,
+    identityMismatch = false,
+    targetError,
+    existing,
+  }) {
+    const identityFailure = identityError ?? null;
+    const targetFailure = targetError ?? null;
+    const calls = { connect: 0, end: 0, queries: [], create: 0 };
+    const closeFailure = new Error("fixture close failure");
+    t.mock.method(pg.Client.prototype, "connect", async function () {
+      calls.connect += 1;
+    });
+    t.mock.method(pg.Client.prototype, "query", async function (sql) {
+      calls.queries.push(sql);
+      if (sql.includes("system_identifier")) {
+        if (identityFailure) throw identityFailure;
+        return {
+          rows: [
+            {
+              current_database: "postgres",
+              current_user: "coffeeuser",
+              server_version: "17.11",
+              system_identifier: identityMismatch
+                ? "7613370342949990435"
+                : "7613370342949990434",
+              is_superuser: true,
+            },
+          ],
+        };
+      }
+      if (sql.includes("SELECT datname FROM pg_database")) {
+        if (targetFailure) throw targetFailure;
+        return { rows: existing ? [{ datname: databases[0].name }] : [] };
+      }
+      if (/^\s*CREATE\s+DATABASE/iu.test(sql)) calls.create += 1;
+      throw new Error("unexpected fake PostgreSQL query");
+    });
+    t.mock.method(pg.Client.prototype, "end", async function () {
+      calls.end += 1;
+      throw closeFailure;
+    });
+    let error;
+    try {
+      await applyExternalRecoveryMigrations(
+        credentials,
+        platformConfig,
+        "/fixture/context.json",
+        [],
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    assert.ok(error instanceof Error, "preflight is expected to fail");
+    assert.equal(calls.end, 1);
+    assert.equal(calls.create, 0);
+    assert.equal(
+      calls.queries.some((sql) => /^\s*CREATE\s+DATABASE/iu.test(sql)),
+      false,
+    );
+    t.mock.restoreAll();
+    return { calls, error };
+  }
+
+  const identityFailure = new Error("identity query sentinel");
+  const identity = await rejectedPreflight({ identityError: identityFailure });
+  assert.equal(identity.error, identityFailure);
+  assert.equal(identity.calls.connect, 1);
+
+  const mismatchedIdentity = await rejectedPreflight({
+    identityMismatch: true,
+  });
+  assert.match(mismatchedIdentity.error.message, /identity/u);
+  assert.equal(mismatchedIdentity.calls.connect, 1);
+
+  const targetFailure = new Error("preflight query sentinel");
+  const target = await rejectedPreflight({ targetError: targetFailure });
+  assert.equal(target.error, targetFailure);
+  assert.equal(target.calls.connect, 1);
+
+  const existing = await rejectedPreflight({ existing: true });
+  assert.equal(existing.error.name, "AssertionError");
+  assert.equal(existing.calls.connect, 1);
+
+  const { externalRecoveryCleanupSummary } =
+    await import("../../tools/compose-smoke.mjs");
+  const success = externalRecoveryCleanupSummary({
+    databases: { verified: true, removed: databases.map(({ name }) => name) },
+    attachment: {
+      attempted: true,
+      attached: false,
+      absenceConfirmed: true,
+      routeBefore: "default-route",
+      routeAfter: "default-route",
+    },
+  });
+  assert.equal(success.verified, true);
+  assert.equal(success.attachment.removed, true);
+  const failedCleanup = externalRecoveryCleanupSummary({
+    databases: { verified: true, removed: databases.map(({ name }) => name) },
+    attachment: {
+      attempted: true,
+      attached: true,
+      routeBefore: "default-route",
+      routeAfter: "default-route",
+    },
+  });
+  assert.equal(failedCleanup.verified, false);
+  assert.equal(failedCleanup.failure, "POSTGRES_ATTACHMENT_RETAINED");
 });

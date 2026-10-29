@@ -1,0 +1,83 @@
+{
+  "purpose": "read-only first-party shipped UI source discovery",
+  "origin": "https://aromateacoffee.ru",
+  "accountFingerprintVerified": true,
+  "cartMutations": 0,
+  "profileMutations": 0,
+  "page": {
+    "path": "/lk",
+    "statusCode": 200,
+    "bytes": 98344,
+    "sha256": "e00e9a30199940381fc429eefe0e85f494b118b15ea20018579a2c49777997cc",
+    "verificationChallenge": false,
+    "titleClass": "verification-like",
+    "inlineChallengeMarkers": {
+      "documentCookie": true,
+      "atob": true,
+      "eval": false,
+      "fromCharCode": false,
+      "ddosGuard": false
+    }
+  },
+  "assets": [],
+  "failureCode": null,
+  "scopedMaterialRemoved": true,
+  "catalogShape": {
+    "firstPageOnly": true,
+    "productCount": 10,
+    "bytes": 167555,
+    "keyCounts": {
+      "meta_title": 10,
+      "meta_description": 10,
+      "id": 40,
+      "slug": 50,
+      "name": 50,
+      "front_name": 10,
+      "description": 41,
+      "video_link": 10,
+      "root": 10,
+      "composite_slug": 20,
+      "image": 20,
+      "category": 10,
+      "tags": 10,
+      "offers": 10,
+      "vendor_code": 10,
+      "price": 10,
+      "params": 20,
+      "param": 10,
+      "type": 10,
+      "icon": 20,
+      "param_value": 10,
+      "value": 20,
+      "preview": 10,
+      "photos": 10,
+      "path": 11,
+      "title": 11,
+      "full_description": 10,
+      "discount": 10,
+      "show_on_wholesale": 10,
+      "product_on_stop": 10,
+      "sold_by_piece": 10,
+      "override_grinds": 10,
+      "grinds": 10,
+      "disable_volume_discount": 10,
+      "disable_personal_discount": 10
+    },
+    "packingFields": []
+  },
+  "observedScriptSources": [],
+  "inlineScripts": [
+    {
+      "bytes": 1875,
+      "sha256": "be803316d7a6c8b44e88000e62307a16bcc0eb9df98332e65b98b12e47a27bc5",
+      "containsPackingWord": false
+    },
+    {
+      "bytes": 92298,
+      "sha256": "235264f7028f05c0cecc3dd420ca71f0caf23478c8869cb43efcf81321957ba9",
+      "containsPackingWord": false
+    }
+  ],
+  "status": "NO_ACCEPTED_SOURCE",
+  "observedAtUtc": "2026-10-24T10:37:33.209Z"
+}

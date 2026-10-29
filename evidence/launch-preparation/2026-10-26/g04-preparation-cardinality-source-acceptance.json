@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T19:58:44.531102+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "scope": "Preparation bounded-query workload caps maxOrders/maxLines; exact max+1 bind, cardinality error, rollback before Desired/wake/Outbox effects.",
+  "files": {
+    "packages/platform-testing/test/platform-packages.test.mjs": "85177f178a51d6f44cc3311d48428f4ba0853c0e05b01b49fbdce3006b6e848d"
+  },
+  "checks": {
+    "worker": "16/16PASS,format/type-awarelint/diffPASS",
+    "rootIndependent": "16/16PASS1677.667731ms",
+    "astra": "Accepted"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/preparation-cardinality-unit-20261027/own.patch": "7263874a08a4949dff73e88eff5a28d8cf1edcc4d44e2394cb2c6f7b32103521",
+    "/home/yurgusev/.cache/coffee-issue13/preparation-cardinality-unit-20261027/receipt.json": "b2fd87606f5f7cf77699daae979aa012dba0285e97726b09ca02fb56073beee9",
+    "/home/yurgusev/.cache/coffee-issue13/preparation-cardinality-unit-20261027/root-independent.log": "98e9072bcf56ace65ce241758d83487cf806eb734975590b1734e5f1190aa232"
+  },
+  "limitations": [
+    "SQL mock does not prove actual SQL LIMIT or PostgreSQL transactionality; live-PG test is separate.",
+    "Impossible W1 empty-Desired/empty-lock/clock cases were rejected, not added.",
+    "FullG04dab9b36currentlyrunning; noadmissionclaim."
+  ]
+}

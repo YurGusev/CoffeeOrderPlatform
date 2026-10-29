@@ -14,7 +14,7 @@ tags:
 paths:
   /api/internal-v1/customers/{customerRef}/order-input:
     parameters:
-      - $ref: '#/components/parameters/CustomerRef'
+      - $ref: "#/components/parameters/CustomerRef"
     get:
       tags: [customer]
       operationId: getCustomerOrderInput
@@ -30,32 +30,32 @@ paths:
       security:
         - serviceMTLS: []
       parameters:
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Traceparent'
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
       responses:
-        '200':
+        "200":
           description: PII-free Customer order-input snapshot.
           headers:
             X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationResponse'
+              $ref: "#/components/headers/CorrelationResponse"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CustomerOrderInput'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
-        '401':
-          $ref: '#/components/responses/ServiceAuthenticationRequired'
-        '403':
-          $ref: '#/components/responses/ServiceDelegationInvalid'
-        '404':
-          $ref: '#/components/responses/CustomerNotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
+                $ref: "#/components/schemas/CustomerOrderInput"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/ServiceAuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ServiceDelegationInvalid"
+        "404":
+          $ref: "#/components/responses/CustomerNotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
   /api/internal-v1/catalog/products/{productRef}/variants/{variantRef}/pricing-input:
     parameters:
-      - $ref: '#/components/parameters/ProductRef'
-      - $ref: '#/components/parameters/VariantRef'
+      - $ref: "#/components/parameters/ProductRef"
+      - $ref: "#/components/parameters/VariantRef"
     get:
       tags: [catalog]
       operationId: getCatalogPricingInput
@@ -70,34 +70,34 @@ paths:
       security:
         - serviceMTLS: []
       parameters:
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Traceparent'
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
       responses:
-        '200':
+        "200":
           description: Active-generation pricing facts.
           headers:
             X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationResponse'
+              $ref: "#/components/headers/CorrelationResponse"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CatalogPricingInput'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
-        '401':
-          $ref: '#/components/responses/ServiceAuthenticationRequired'
-        '403':
-          $ref: '#/components/responses/ServiceDelegationInvalid'
-        '404':
-          $ref: '#/components/responses/CatalogProductNotFound'
-        '503':
+                $ref: "#/components/schemas/CatalogPricingInput"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/ServiceAuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ServiceDelegationInvalid"
+        "404":
+          $ref: "#/components/responses/CatalogProductNotFound"
+        "503":
           description: Active Catalog snapshot is incomplete or the owner is unavailable.
           content:
             application/problem+json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/ErrorCatalogSnapshotIncomplete'
-                  - $ref: '#/components/schemas/ErrorCatalogUnavailable'
+                  - $ref: "#/components/schemas/ErrorCatalogSnapshotIncomplete"
+                  - $ref: "#/components/schemas/ErrorCatalogUnavailable"
   /api/internal-v1/pricing/quotes:verify:
     post:
       tags: [pricing]
@@ -117,43 +117,43 @@ paths:
       security:
         - serviceMTLS: []
       parameters:
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Traceparent'
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PricingQuoteVerifyRequest'
+              $ref: "#/components/schemas/PricingQuoteVerifyRequest"
       responses:
-        '200':
+        "200":
           description: Authoritative immutable quote facts.
           headers:
             X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationResponse'
+              $ref: "#/components/headers/CorrelationResponse"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PricingQuoteVerificationResponse'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
-        '401':
-          $ref: '#/components/responses/ServiceAuthenticationRequired'
-        '403':
-          $ref: '#/components/responses/ServiceDelegationInvalid'
-        '404':
-          $ref: '#/components/responses/PricingQuoteNotFound'
-        '409':
+                $ref: "#/components/schemas/PricingQuoteVerificationResponse"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/ServiceAuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ServiceDelegationInvalid"
+        "404":
+          $ref: "#/components/responses/PricingQuoteNotFound"
+        "409":
           description: Stored quote facts do not match the request or are expired.
           content:
             application/problem+json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/ErrorPricingQuoteHashMismatch'
-                  - $ref: '#/components/schemas/ErrorPricingQuoteExpired'
-                  - $ref: '#/components/schemas/ErrorPricingQuoteScopeMismatch'
-        '503':
-          $ref: '#/components/responses/PricingPolicyUnavailable'
+                  - $ref: "#/components/schemas/ErrorPricingQuoteHashMismatch"
+                  - $ref: "#/components/schemas/ErrorPricingQuoteExpired"
+                  - $ref: "#/components/schemas/ErrorPricingQuoteScopeMismatch"
+        "503":
+          $ref: "#/components/responses/PricingPolicyUnavailable"
   /api/internal-v1/aroma/catalog-exports:
     post:
       tags: [aroma]
@@ -171,32 +171,32 @@ paths:
       security:
         - serviceMTLS: []
       parameters:
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Traceparent'
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AromaCatalogExportRequest'
+              $ref: "#/components/schemas/AromaCatalogExportRequest"
       responses:
-        '200':
+        "200":
           description: NDJSON stream of exactly four record variants.
           headers:
             X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationResponse'
+              $ref: "#/components/headers/CorrelationResponse"
           content:
             application/x-ndjson:
               schema:
-                $ref: '#/components/schemas/AromaCatalogExportRecord'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
-        '401':
-          $ref: '#/components/responses/ServiceAuthenticationRequired'
-        '403':
-          $ref: '#/components/responses/ServiceDelegationInvalid'
-        '503':
-          $ref: '#/components/responses/AromaProviderUnavailable'
+                $ref: "#/components/schemas/AromaCatalogExportRecord"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/ServiceAuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ServiceDelegationInvalid"
+        "503":
+          $ref: "#/components/responses/AromaProviderUnavailable"
   /api/internal-v1/aroma/offer-bindings:
     post:
       tags: [aroma]
@@ -216,41 +216,41 @@ paths:
       security:
         - serviceMTLS: []
       parameters:
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Traceparent'
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AromaOfferBindingRequest'
+              $ref: "#/components/schemas/AromaOfferBindingRequest"
       responses:
-        '200':
+        "200":
           description: Existing or newly registered immutable binding.
           headers:
             X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationResponse'
+              $ref: "#/components/headers/CorrelationResponse"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AromaOfferBindingResponse'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
-        '401':
-          $ref: '#/components/responses/ServiceAuthenticationRequired'
-        '403':
-          $ref: '#/components/responses/ServiceDelegationInvalid'
-        '409':
+                $ref: "#/components/schemas/AromaOfferBindingResponse"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/ServiceAuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ServiceDelegationInvalid"
+        "409":
           description: Immutable source or snapshot binding conflict.
           content:
             application/problem+json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/ErrorAromaBindingConflict'
-                  - $ref: '#/components/schemas/ErrorAromaBindingSourceNotFound'
-                  - $ref: '#/components/schemas/ErrorAromaBindingSnapshotIncomplete'
-        '503':
-          $ref: '#/components/responses/AromaProviderUnavailable'
+                  - $ref: "#/components/schemas/ErrorAromaBindingConflict"
+                  - $ref: "#/components/schemas/ErrorAromaBindingSourceNotFound"
+                  - $ref: "#/components/schemas/ErrorAromaBindingSnapshotIncomplete"
+        "503":
+          $ref: "#/components/responses/AromaProviderUnavailable"
   /api/internal-v1/aroma/cart-snapshots:read:
     post:
       tags: [aroma]
@@ -272,35 +272,35 @@ paths:
       security:
         - serviceMTLS: []
       parameters:
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Traceparent'
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AromaCartSnapshotReadRequest'
+              $ref: "#/components/schemas/AromaCartSnapshotReadRequest"
       responses:
-        '200':
+        "200":
           description: Complete sanitized cart snapshot.
           headers:
             X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationResponse'
+              $ref: "#/components/headers/CorrelationResponse"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AromaCartSnapshot'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
-        '401':
-          $ref: '#/components/responses/ServiceAuthenticationRequired'
-        '403':
-          $ref: '#/components/responses/ServiceDelegationInvalid'
-        '503':
-          $ref: '#/components/responses/AromaProviderUnavailable'
+                $ref: "#/components/schemas/AromaCartSnapshot"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/ServiceAuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ServiceDelegationInvalid"
+        "503":
+          $ref: "#/components/responses/AromaProviderUnavailable"
   /api/internal-v1/aroma/cart-lines/{offerRef}:set-quantity:
     parameters:
-      - $ref: '#/components/parameters/OfferRef'
+      - $ref: "#/components/parameters/OfferRef"
     post:
       tags: [aroma]
       operationId: setAromaCartLineQuantity
@@ -319,50 +319,50 @@ paths:
       security:
         - serviceMTLS: []
       parameters:
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Traceparent'
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AromaSetQuantityRequest'
+              $ref: "#/components/schemas/AromaSetQuantityRequest"
       responses:
-        '200':
+        "200":
           description: Provider mutation was acknowledged by the typed gateway operation.
           headers:
             X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationResponse'
+              $ref: "#/components/headers/CorrelationResponse"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AromaMutationResponse'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
-        '401':
-          $ref: '#/components/responses/ServiceAuthenticationRequired'
-        '403':
-          $ref: '#/components/responses/ServiceDelegationInvalid'
-        '404':
+                $ref: "#/components/schemas/AromaMutationResponse"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/ServiceAuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ServiceDelegationInvalid"
+        "404":
           description: The requested cart line was absent in the fresh provider snapshot.
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ErrorAromaCartItemNotFound'
-        '409':
+                $ref: "#/components/schemas/ErrorAromaCartItemNotFound"
+        "409":
           description: Operation reference or mutation safety conflict.
           content:
             application/problem+json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/ErrorAromaOperationRefConflict'
-                  - $ref: '#/components/schemas/ErrorAromaOperationInProgress'
-                  - $ref: '#/components/schemas/ErrorAromaOperationUnknownOutcome'
-        '503':
-          $ref: '#/components/responses/AromaProviderUnavailable'
+                  - $ref: "#/components/schemas/ErrorAromaOperationRefConflict"
+                  - $ref: "#/components/schemas/ErrorAromaOperationInProgress"
+                  - $ref: "#/components/schemas/ErrorAromaOperationUnknownOutcome"
+        "503":
+          $ref: "#/components/responses/AromaProviderUnavailable"
   /api/internal-v1/aroma/cart-lines/{offerRef}:remove:
     parameters:
-      - $ref: '#/components/parameters/OfferRef'
+      - $ref: "#/components/parameters/OfferRef"
     post:
       tags: [aroma]
       operationId: removeAromaCartLine
@@ -381,47 +381,47 @@ paths:
       security:
         - serviceMTLS: []
       parameters:
-        - $ref: '#/components/parameters/CorrelationId'
-        - $ref: '#/components/parameters/Traceparent'
+        - $ref: "#/components/parameters/CorrelationId"
+        - $ref: "#/components/parameters/Traceparent"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AromaRemoveLineRequest'
+              $ref: "#/components/schemas/AromaRemoveLineRequest"
       responses:
-        '200':
+        "200":
           description: Provider mutation was acknowledged by the typed gateway operation.
           headers:
             X-Correlation-ID:
-              $ref: '#/components/headers/CorrelationResponse'
+              $ref: "#/components/headers/CorrelationResponse"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AromaMutationResponse'
-        '400':
-          $ref: '#/components/responses/ValidationFailed'
-        '401':
-          $ref: '#/components/responses/ServiceAuthenticationRequired'
-        '403':
-          $ref: '#/components/responses/ServiceDelegationInvalid'
-        '404':
+                $ref: "#/components/schemas/AromaMutationResponse"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/ServiceAuthenticationRequired"
+        "403":
+          $ref: "#/components/responses/ServiceDelegationInvalid"
+        "404":
           description: The requested cart line was absent in the fresh provider snapshot.
           content:
             application/problem+json:
               schema:
-                $ref: '#/components/schemas/ErrorAromaCartItemNotFound'
-        '409':
+                $ref: "#/components/schemas/ErrorAromaCartItemNotFound"
+        "409":
           description: Operation reference or mutation safety conflict.
           content:
             application/problem+json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/ErrorAromaOperationRefConflict'
-                  - $ref: '#/components/schemas/ErrorAromaOperationInProgress'
-                  - $ref: '#/components/schemas/ErrorAromaOperationUnknownOutcome'
-        '503':
-          $ref: '#/components/responses/AromaProviderUnavailable'
+                  - $ref: "#/components/schemas/ErrorAromaOperationRefConflict"
+                  - $ref: "#/components/schemas/ErrorAromaOperationInProgress"
+                  - $ref: "#/components/schemas/ErrorAromaOperationUnknownOutcome"
+        "503":
+          $ref: "#/components/responses/AromaProviderUnavailable"
 components:
   securitySchemes:
     serviceMTLS:
@@ -432,153 +432,153 @@ components:
       in: path
       required: true
       schema:
-        $ref: '#/components/schemas/CustomerRef'
+        $ref: "#/components/schemas/CustomerRef"
     ProductRef:
       name: productRef
       in: path
       required: true
       schema:
-        $ref: '#/components/schemas/ProductRef'
+        $ref: "#/components/schemas/ProductRef"
     VariantRef:
       name: variantRef
       in: path
       required: true
       schema:
-        $ref: '#/components/schemas/VariantRef'
+        $ref: "#/components/schemas/VariantRef"
     OfferRef:
       name: offerRef
       in: path
       required: true
       schema:
-        $ref: '#/components/schemas/OfferRef'
+        $ref: "#/components/schemas/OfferRef"
     CorrelationId:
       name: X-Correlation-ID
       in: header
       required: false
       schema:
-        $ref: '#/components/schemas/UUID'
+        $ref: "#/components/schemas/UUID"
     Traceparent:
       name: traceparent
       in: header
       required: false
       schema:
-        $ref: '#/components/schemas/Traceparent'
+        $ref: "#/components/schemas/Traceparent"
   headers:
     CorrelationResponse:
       description: Correlation id for this request.
       schema:
-        $ref: '#/components/schemas/UUID'
+        $ref: "#/components/schemas/UUID"
   responses:
     ValidationFailed:
       description: Request, path, or signed context validation failed.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorValidationFailed'
+            $ref: "#/components/schemas/ErrorValidationFailed"
     ServiceAuthenticationRequired:
       description: A valid mTLS service identity is required.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorServiceAuthenticationRequired'
+            $ref: "#/components/schemas/ErrorServiceAuthenticationRequired"
     ServiceDelegationInvalid:
       description: Caller, audience, operation, or delegation context is invalid.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorServiceDelegationInvalid'
+            $ref: "#/components/schemas/ErrorServiceDelegationInvalid"
     InternalError:
       description: Safe unexpected error.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorInternalError'
+            $ref: "#/components/schemas/ErrorInternalError"
     CustomerNotFound:
       description: Customer does not exist.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorCustomerNotFound'
+            $ref: "#/components/schemas/ErrorCustomerNotFound"
     CatalogProductNotFound:
       description: Product or variant does not exist in active catalog.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorCatalogProductNotFound'
+            $ref: "#/components/schemas/ErrorCatalogProductNotFound"
     CatalogSnapshotIncomplete:
       description: No complete active catalog snapshot is available.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorCatalogSnapshotIncomplete'
+            $ref: "#/components/schemas/ErrorCatalogSnapshotIncomplete"
     PricingQuoteNotFound:
       description: Pricing quote does not exist.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorPricingQuoteNotFound'
+            $ref: "#/components/schemas/ErrorPricingQuoteNotFound"
     PricingPolicyUnavailable:
       description: Pricing policy or quote owner is unavailable.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorPricingPolicyUnavailable'
+            $ref: "#/components/schemas/ErrorPricingPolicyUnavailable"
     AromaProviderUnavailable:
       description: Provider is unavailable or the safe typed operation timed out.
       content:
         application/problem+json:
           schema:
-            $ref: '#/components/schemas/ErrorAromaProviderUnavailable'
+            $ref: "#/components/schemas/ErrorAromaProviderUnavailable"
   schemas:
     UUID:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/UUID'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/UUID"
     CustomerRef:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/CustomerRef'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/CustomerRef"
     ProductRef:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/ProductRef'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/ProductRef"
     VariantRef:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/VariantRef'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/VariantRef"
     OfferRef:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/OfferRef'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/OfferRef"
     QuoteRef:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/QuoteRef'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/QuoteRef"
     OperationRef:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/OperationRef'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/OperationRef"
     SupplierRef:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/SupplierRef'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/SupplierRef"
     SnapshotRef:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/SnapshotRef'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/SnapshotRef"
     Version:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/Version"
     Revision:
-      $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+      $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/Version"
     MoneyMinor:
-      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/MoneyMinor'
+      $ref: "../schemas/common/money-version-time.v1.schema.json#/$defs/MoneyMinor"
     QuantityDecimal:
-      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/QuantityDecimal'
+      $ref: "../schemas/common/money-version-time.v1.schema.json#/$defs/QuantityDecimal"
     ProviderQuantity:
-      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/ProviderQuantity'
+      $ref: "../schemas/common/money-version-time.v1.schema.json#/$defs/ProviderQuantity"
     QuantityMilli:
-      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/QuantityMilli'
+      $ref: "../schemas/common/money-version-time.v1.schema.json#/$defs/QuantityMilli"
     Currency:
-      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Currency'
+      $ref: "../schemas/common/money-version-time.v1.schema.json#/$defs/Currency"
     Timestamp:
-      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Timestamp'
+      $ref: "../schemas/common/money-version-time.v1.schema.json#/$defs/Timestamp"
     Hash:
-      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Hash'
+      $ref: "../schemas/common/money-version-time.v1.schema.json#/$defs/Hash"
     Traceparent:
-      $ref: '../schemas/common/money-version-time.v1.schema.json#/$defs/Traceparent'
+      $ref: "../schemas/common/money-version-time.v1.schema.json#/$defs/Traceparent"
     ProblemDetails:
-      $ref: '../schemas/common/problem-details.v1.schema.json#/$defs/ProblemDetails'
+      $ref: "../schemas/common/problem-details.v1.schema.json#/$defs/ProblemDetails"
     CustomerOrderInput:
       type: object
       additionalProperties: false
       required: [customerRef, customerVersion, displayName, state]
       properties:
         customerRef:
-          $ref: '#/components/schemas/CustomerRef'
+          $ref: "#/components/schemas/CustomerRef"
         customerVersion:
-          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+          $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/Version"
         displayName:
           type: string
           minLength: 1
@@ -589,20 +589,32 @@ components:
     CatalogPricingInput:
       type: object
       additionalProperties: false
-      required: [productRef, variantRef, offerRef, snapshotRevision, supplierUnitMinor, currency, unit, availability, mappingRevision, displayName]
+      required:
+        [
+          productRef,
+          variantRef,
+          offerRef,
+          snapshotRevision,
+          supplierUnitMinor,
+          currency,
+          unit,
+          availability,
+          mappingRevision,
+          displayName,
+        ]
       properties:
         productRef:
-          $ref: '#/components/schemas/ProductRef'
+          $ref: "#/components/schemas/ProductRef"
         variantRef:
-          $ref: '#/components/schemas/VariantRef'
+          $ref: "#/components/schemas/VariantRef"
         offerRef:
-          $ref: '#/components/schemas/OfferRef'
+          $ref: "#/components/schemas/OfferRef"
         snapshotRevision:
-          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+          $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/Version"
         supplierUnitMinor:
-          $ref: '#/components/schemas/MoneyMinor'
+          $ref: "#/components/schemas/MoneyMinor"
         currency:
-          $ref: '#/components/schemas/Currency'
+          $ref: "#/components/schemas/Currency"
         unit:
           type: string
           enum: [piece, gram, kilogram]
@@ -610,7 +622,7 @@ components:
           type: string
           enum: [Available, Unavailable, Stopped]
         mappingRevision:
-          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+          $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/Version"
         displayName:
           type: string
           minLength: 1
@@ -624,7 +636,7 @@ components:
             required: [sourceGrindKeyHash, displayName]
             properties:
               sourceGrindKeyHash:
-                $ref: '#/components/schemas/Hash'
+                $ref: "#/components/schemas/Hash"
               displayName:
                 type: string
                 minLength: 1
@@ -632,67 +644,91 @@ components:
     PricingQuoteVerifyRequest:
       type: object
       additionalProperties: false
-      required: [quoteRef, hash, customerRef, quoteLineNumber, productRef, variantRef, quantity]
+      required:
+        [
+          quoteRef,
+          hash,
+          customerRef,
+          quoteLineNumber,
+          productRef,
+          variantRef,
+          quantity,
+        ]
       properties:
         quoteRef:
-          $ref: '#/components/schemas/QuoteRef'
+          $ref: "#/components/schemas/QuoteRef"
         hash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         customerRef:
-          $ref: '#/components/schemas/CustomerRef'
+          $ref: "#/components/schemas/CustomerRef"
         quoteLineNumber:
           type: integer
           minimum: 1
           maximum: 100
         productRef:
-          $ref: '#/components/schemas/ProductRef'
+          $ref: "#/components/schemas/ProductRef"
         variantRef:
-          $ref: '#/components/schemas/VariantRef'
+          $ref: "#/components/schemas/VariantRef"
         quantity:
-          $ref: '#/components/schemas/QuantityDecimal'
+          $ref: "#/components/schemas/QuantityDecimal"
         sourceGrindKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
     PricingQuoteAuthoritativeLine:
       type: object
       additionalProperties: false
       dependentRequired:
         sourceGrindKeyHash: [grindDisplayName]
         grindDisplayName: [sourceGrindKeyHash]
-      required: [lineNumber, productRef, variantRef, productDisplayName, offerRef, mappingRevision, quantity, unit, supplierUnitMinor, unitMinor, lineTotalMinor, currency, internalProofHash]
+      required:
+        [
+          lineNumber,
+          productRef,
+          variantRef,
+          productDisplayName,
+          offerRef,
+          mappingRevision,
+          quantity,
+          unit,
+          supplierUnitMinor,
+          unitMinor,
+          lineTotalMinor,
+          currency,
+          internalProofHash,
+        ]
       properties:
         lineNumber:
           type: integer
           minimum: 1
           maximum: 100
         productRef:
-          $ref: '#/components/schemas/ProductRef'
+          $ref: "#/components/schemas/ProductRef"
         variantRef:
-          $ref: '#/components/schemas/VariantRef'
+          $ref: "#/components/schemas/VariantRef"
         productDisplayName:
           type: string
           minLength: 1
           maxLength: 200
         offerRef:
-          $ref: '#/components/schemas/OfferRef'
+          $ref: "#/components/schemas/OfferRef"
         mappingRevision:
-          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+          $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/Version"
         quantity:
-          $ref: '#/components/schemas/QuantityDecimal'
+          $ref: "#/components/schemas/QuantityDecimal"
         unit:
           type: string
           enum: [piece, gram, kilogram]
         supplierUnitMinor:
-          $ref: '#/components/schemas/MoneyMinor'
+          $ref: "#/components/schemas/MoneyMinor"
         unitMinor:
-          $ref: '#/components/schemas/MoneyMinor'
+          $ref: "#/components/schemas/MoneyMinor"
         lineTotalMinor:
-          $ref: '#/components/schemas/MoneyMinor'
+          $ref: "#/components/schemas/MoneyMinor"
         currency:
-          $ref: '#/components/schemas/Currency'
+          $ref: "#/components/schemas/Currency"
         internalProofHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         sourceGrindKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         grindDisplayName:
           type: string
           minLength: 1
@@ -700,71 +736,102 @@ components:
     PricingQuoteVerificationResponse:
       type: object
       additionalProperties: false
-      required: [valid, quoteRef, policyVersionRef, catalogSnapshotRevision, customerRef, expiresAt, currency, line]
+      required:
+        [
+          valid,
+          quoteRef,
+          policyVersionRef,
+          catalogSnapshotRevision,
+          customerRef,
+          expiresAt,
+          currency,
+          line,
+        ]
       properties:
         valid:
           const: true
         quoteRef:
-          $ref: '#/components/schemas/QuoteRef'
+          $ref: "#/components/schemas/QuoteRef"
         policyVersionRef:
-          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/PolicyVersionRef'
+          $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/PolicyVersionRef"
         catalogSnapshotRevision:
-          $ref: '../schemas/common/identifiers.v1.schema.json#/$defs/Version'
+          $ref: "../schemas/common/identifiers.v1.schema.json#/$defs/Version"
         customerRef:
-          $ref: '#/components/schemas/CustomerRef'
+          $ref: "#/components/schemas/CustomerRef"
         expiresAt:
-          $ref: '#/components/schemas/Timestamp'
+          $ref: "#/components/schemas/Timestamp"
         currency:
-          $ref: '#/components/schemas/Currency'
+          $ref: "#/components/schemas/Currency"
         line:
-          $ref: '#/components/schemas/PricingQuoteAuthoritativeLine'
+          $ref: "#/components/schemas/PricingQuoteAuthoritativeLine"
     AromaCatalogExportRequest:
       type: object
       additionalProperties: false
       required: [snapshotRef, supplierRef]
       properties:
         snapshotRef:
-          $ref: '#/components/schemas/SnapshotRef'
+          $ref: "#/components/schemas/SnapshotRef"
         supplierRef:
-          $ref: '#/components/schemas/SupplierRef'
+          $ref: "#/components/schemas/SupplierRef"
     AromaOfferBindingRequest:
       type: object
       additionalProperties: false
-      required: [offerRef, supplierRef, snapshotRef, sourceIdentityScheme, sourceOfferKeyHash]
+      required:
+        [
+          offerRef,
+          supplierRef,
+          snapshotRef,
+          sourceIdentityScheme,
+          sourceOfferKeyHash,
+        ]
       properties:
         offerRef:
-          $ref: '#/components/schemas/OfferRef'
+          $ref: "#/components/schemas/OfferRef"
         supplierRef:
-          $ref: '#/components/schemas/SupplierRef'
+          $ref: "#/components/schemas/SupplierRef"
         snapshotRef:
-          $ref: '#/components/schemas/SnapshotRef'
+          $ref: "#/components/schemas/SnapshotRef"
         sourceIdentityScheme:
           type: string
           const: hmac-sha256-v1
         sourceOfferKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
     AromaOfferBindingResponse:
       type: object
       additionalProperties: false
-      required: [offerRef, supplierRef, sourceIdentityScheme, sourceOfferKeyHash, firstSnapshotRef, state]
+      required:
+        [
+          offerRef,
+          supplierRef,
+          sourceIdentityScheme,
+          sourceOfferKeyHash,
+          firstSnapshotRef,
+          state,
+        ]
       properties:
         offerRef:
-          $ref: '#/components/schemas/OfferRef'
+          $ref: "#/components/schemas/OfferRef"
         supplierRef:
-          $ref: '#/components/schemas/SupplierRef'
+          $ref: "#/components/schemas/SupplierRef"
         sourceIdentityScheme:
           type: string
           const: hmac-sha256-v1
         sourceOfferKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         firstSnapshotRef:
-          $ref: '#/components/schemas/SnapshotRef'
+          $ref: "#/components/schemas/SnapshotRef"
         state:
           const: Bound
     AromaSupplierPromotion:
       type: object
       additionalProperties: false
-      required: [discountBasisPoints, minimumWeightRaw, providerCreatedAt, providerUpdatedAt]
+      required:
+        [
+          discountBasisPoints,
+          minimumWeightRaw,
+          providerCreatedAt,
+          providerUpdatedAt,
+        ]
       properties:
         discountBasisPoints:
           type: integer
@@ -774,20 +841,32 @@ components:
           type: string
           pattern: '^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$'
         providerCreatedAt:
-          $ref: '#/components/schemas/Timestamp'
+          $ref: "#/components/schemas/Timestamp"
         providerUpdatedAt:
-          $ref: '#/components/schemas/Timestamp'
+          $ref: "#/components/schemas/Timestamp"
     AromaCatalogItem:
       type: object
       additionalProperties: false
-      required: [sourceProductKeyHash, sourceVariantKeyHash, sourceOfferKeyHash, displayName, unit, supplierUnitMinor, currency, availability, imageUrl, sourceIdentityScheme]
+      required:
+        [
+          sourceProductKeyHash,
+          sourceVariantKeyHash,
+          sourceOfferKeyHash,
+          displayName,
+          unit,
+          supplierUnitMinor,
+          currency,
+          availability,
+          imageUrl,
+          sourceIdentityScheme,
+        ]
       properties:
         sourceProductKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         sourceVariantKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         sourceOfferKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         displayName:
           type: string
           minLength: 1
@@ -796,20 +875,20 @@ components:
           type: string
           enum: [piece, gram, kilogram]
         supplierUnitMinor:
-          $ref: '#/components/schemas/MoneyMinor'
+          $ref: "#/components/schemas/MoneyMinor"
         currency:
-          $ref: '#/components/schemas/Currency'
+          $ref: "#/components/schemas/Currency"
         availability:
           type: string
           enum: [Available, Unavailable, Stopped]
         imageUrl:
-          type: [string, 'null']
+          type: [string, "null"]
           format: uri
           maxLength: 2048
         supplierPromotions:
           type: array
           items:
-            $ref: '#/components/schemas/AromaSupplierPromotion'
+            $ref: "#/components/schemas/AromaSupplierPromotion"
         grindOptions:
           type: array
           maxItems: 100
@@ -819,7 +898,7 @@ components:
             required: [sourceGrindKeyHash, displayName]
             properties:
               sourceGrindKeyHash:
-                $ref: '#/components/schemas/Hash'
+                $ref: "#/components/schemas/Hash"
               displayName:
                 type: string
                 minLength: 1
@@ -830,29 +909,48 @@ components:
     AromaCatalogStarted:
       type: object
       additionalProperties: false
-      required: [streamVersion, recordType, snapshotRef, supplierRef, providerSnapshotRef, startedAt]
+      required:
+        [
+          streamVersion,
+          recordType,
+          snapshotRef,
+          supplierRef,
+          providerSnapshotRef,
+          startedAt,
+        ]
       properties:
-        streamVersion: { const: '1' }
+        streamVersion: { const: "1" }
         recordType: { const: snapshot-started }
         snapshotRef:
-          $ref: '#/components/schemas/SnapshotRef'
+          $ref: "#/components/schemas/SnapshotRef"
         supplierRef:
-          $ref: '#/components/schemas/SupplierRef'
+          $ref: "#/components/schemas/SupplierRef"
         providerSnapshotRef:
           type: string
           minLength: 1
           maxLength: 256
         startedAt:
-          $ref: '#/components/schemas/Timestamp'
+          $ref: "#/components/schemas/Timestamp"
     AromaCatalogBatch:
       type: object
       additionalProperties: false
-      required: [streamVersion, recordType, snapshotRef, batchNumber, offerCount, uncompressedBytes, batchHash, previousBatchHash, items]
+      required:
+        [
+          streamVersion,
+          recordType,
+          snapshotRef,
+          batchNumber,
+          offerCount,
+          uncompressedBytes,
+          batchHash,
+          previousBatchHash,
+          items,
+        ]
       properties:
-        streamVersion: { const: '1' }
+        streamVersion: { const: "1" }
         recordType: { const: snapshot-batch }
         snapshotRef:
-          $ref: '#/components/schemas/SnapshotRef'
+          $ref: "#/components/schemas/SnapshotRef"
         batchNumber:
           type: integer
           minimum: 0
@@ -865,24 +963,35 @@ components:
           minimum: 0
           maximum: 2097152
         batchHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         previousBatchHash:
-          type: [string, 'null']
-          pattern: '^[a-f0-9]{64}$'
+          type: [string, "null"]
+          pattern: "^[a-f0-9]{64}$"
         items:
           type: array
           maxItems: 500
           items:
-            $ref: '#/components/schemas/AromaCatalogItem'
+            $ref: "#/components/schemas/AromaCatalogItem"
     AromaCatalogCompleted:
       type: object
       additionalProperties: false
-      required: [streamVersion, recordType, snapshotRef, batchCount, productCount, variantCount, offerCount, contentHash, completedAt]
+      required:
+        [
+          streamVersion,
+          recordType,
+          snapshotRef,
+          batchCount,
+          productCount,
+          variantCount,
+          offerCount,
+          contentHash,
+          completedAt,
+        ]
       properties:
-        streamVersion: { const: '1' }
+        streamVersion: { const: "1" }
         recordType: { const: snapshot-completed }
         snapshotRef:
-          $ref: '#/components/schemas/SnapshotRef'
+          $ref: "#/components/schemas/SnapshotRef"
         batchCount:
           type: integer
           minimum: 0
@@ -896,29 +1005,36 @@ components:
           type: integer
           minimum: 0
         contentHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         completedAt:
-          $ref: '#/components/schemas/Timestamp'
+          $ref: "#/components/schemas/Timestamp"
     AromaCatalogFailed:
       type: object
       additionalProperties: false
       required: [streamVersion, recordType, snapshotRef, code, failedAt]
       properties:
-        streamVersion: { const: '1' }
+        streamVersion: { const: "1" }
         recordType: { const: snapshot-failed }
         snapshotRef:
-          $ref: '#/components/schemas/SnapshotRef'
+          $ref: "#/components/schemas/SnapshotRef"
         code:
           type: string
-          enum: [PROVIDER_UNAVAILABLE, PROVIDER_TIMEOUT, INVALID_STREAM, BATCH_HASH_CONFLICT, SOURCE_IDENTITY_COLLISION]
+          enum:
+            [
+              PROVIDER_UNAVAILABLE,
+              PROVIDER_TIMEOUT,
+              INVALID_STREAM,
+              BATCH_HASH_CONFLICT,
+              SOURCE_IDENTITY_COLLISION,
+            ]
         failedAt:
-          $ref: '#/components/schemas/Timestamp'
+          $ref: "#/components/schemas/Timestamp"
     AromaCatalogExportRecord:
       oneOf:
-        - $ref: '#/components/schemas/AromaCatalogStarted'
-        - $ref: '#/components/schemas/AromaCatalogBatch'
-        - $ref: '#/components/schemas/AromaCatalogCompleted'
-        - $ref: '#/components/schemas/AromaCatalogFailed'
+        - $ref: "#/components/schemas/AromaCatalogStarted"
+        - $ref: "#/components/schemas/AromaCatalogBatch"
+        - $ref: "#/components/schemas/AromaCatalogCompleted"
+        - $ref: "#/components/schemas/AromaCatalogFailed"
     AromaCartSnapshotReadRequest:
       type: object
       additionalProperties: false
@@ -933,15 +1049,16 @@ components:
       required: [offerRef, quantity]
       properties:
         offerRef:
-          $ref: '#/components/schemas/OfferRef'
+          $ref: "#/components/schemas/OfferRef"
         quantity:
-          $ref: '#/components/schemas/QuantityDecimal'
+          $ref: "#/components/schemas/QuantityDecimal"
         sourceGrindKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
     AromaCartSnapshot:
       type: object
       additionalProperties: false
-      required: [cartScopeRef, providerSnapshotRef, capturedAt, cartFingerprint, lines]
+      required:
+        [cartScopeRef, providerSnapshotRef, capturedAt, cartFingerprint, lines]
       properties:
         cartScopeRef:
           type: string
@@ -951,200 +1068,200 @@ components:
           minLength: 1
           maxLength: 256
         capturedAt:
-          $ref: '#/components/schemas/Timestamp'
+          $ref: "#/components/schemas/Timestamp"
         cartFingerprint:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         lines:
           type: array
           maxItems: 10000
           uniqueItems: true
           items:
-            $ref: '#/components/schemas/AromaCartLine'
+            $ref: "#/components/schemas/AromaCartLine"
     AromaSetQuantityRequest:
       type: object
       additionalProperties: false
       required: [operationRef, cartScopeRef, quantity]
       properties:
         operationRef:
-          $ref: '#/components/schemas/OperationRef'
+          $ref: "#/components/schemas/OperationRef"
         cartScopeRef:
           type: string
           const: aroma-primary
         quantity:
-          $ref: '#/components/schemas/ProviderQuantity'
+          $ref: "#/components/schemas/ProviderQuantity"
         sourceGrindKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
     AromaRemoveLineRequest:
       type: object
       additionalProperties: false
       required: [operationRef, cartScopeRef]
       properties:
         operationRef:
-          $ref: '#/components/schemas/OperationRef'
+          $ref: "#/components/schemas/OperationRef"
         cartScopeRef:
           type: string
           const: aroma-primary
         sourceGrindKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
     AromaMutationResponse:
       type: object
       additionalProperties: false
       required: [operationRef, cartScopeRef, offerRef, state]
       properties:
         operationRef:
-          $ref: '#/components/schemas/OperationRef'
+          $ref: "#/components/schemas/OperationRef"
         cartScopeRef:
           type: string
           const: aroma-primary
         offerRef:
-          $ref: '#/components/schemas/OfferRef'
+          $ref: "#/components/schemas/OfferRef"
         sourceGrindKeyHash:
-          $ref: '#/components/schemas/Hash'
+          $ref: "#/components/schemas/Hash"
         state:
           const: Acknowledged
     ErrorValidationFailed:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 400 }
             code: { const: VALIDATION_FAILED }
     ErrorServiceAuthenticationRequired:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 401 }
             code: { const: SERVICE_AUTHENTICATION_REQUIRED }
     ErrorServiceDelegationInvalid:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 403 }
             code: { const: SERVICE_DELEGATION_INVALID }
     ErrorCustomerNotFound:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 404 }
             code: { const: CUSTOMER_NOT_FOUND }
     ErrorCatalogProductNotFound:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 404 }
             code: { const: CATALOG_PRODUCT_NOT_FOUND }
     ErrorPricingQuoteNotFound:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 404 }
             code: { const: PRICING_QUOTE_NOT_FOUND }
     ErrorPricingQuoteHashMismatch:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: PRICING_QUOTE_HASH_MISMATCH }
     ErrorPricingQuoteExpired:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: PRICING_QUOTE_EXPIRED }
     ErrorPricingQuoteScopeMismatch:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: PRICING_QUOTE_SCOPE_MISMATCH }
     ErrorCatalogSnapshotIncomplete:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 503 }
             code: { const: CATALOG_SNAPSHOT_INCOMPLETE }
     ErrorCatalogUnavailable:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 503 }
             code: { const: CATALOG_UNAVAILABLE }
     ErrorPricingPolicyUnavailable:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 503 }
             code: { const: PRICING_POLICY_UNAVAILABLE }
     ErrorAromaProviderUnavailable:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 503 }
             code: { const: AROMA_PROVIDER_UNAVAILABLE }
     ErrorAromaCartItemNotFound:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 404 }
             code: { const: AROMA_CART_ITEM_NOT_FOUND }
     ErrorAromaOperationRefConflict:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: AROMA_OPERATION_REF_CONFLICT }
     ErrorAromaOperationInProgress:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: AROMA_OPERATION_IN_PROGRESS }
     ErrorAromaOperationUnknownOutcome:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: AROMA_OPERATION_UNKNOWN_OUTCOME }
     ErrorAromaBindingConflict:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: AROMA_BINDING_CONFLICT }
     ErrorAromaBindingSourceNotFound:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: AROMA_BINDING_SOURCE_NOT_FOUND }
     ErrorAromaBindingSnapshotIncomplete:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 409 }
             code: { const: AROMA_BINDING_SNAPSHOT_INCOMPLETE }
     ErrorInternalError:
       allOf:
-        - $ref: '#/components/schemas/ProblemDetails'
+        - $ref: "#/components/schemas/ProblemDetails"
         - type: object
           properties:
             status: { const: 500 }

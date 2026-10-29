@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Bounded Node built-in coverage reproduction: mock.module query records and include-glob ordering.",
+  "isolation": "Temporary files and process working directory; no repository test suites, database, Docker, provider, or network.",
+  "runtime": {
+    "version": "v26.8.1",
+    "executable": "/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin/node"
+  },
+  "sourceEvidence": {
+    "module": "internal/test_runner/coverage",
+    "sha256": "61b76531e2390d5cb677c7d341934119a77b371e21871b2221d9e088ff5a36e9",
+    "mockFilter": {
+      "lines": "635-647",
+      "excerpt": "    // This check filters out files that do not match the include globs.\n    if (this.#includeMatchers.length > 0) {\n      for (let i = 0; i < this.#includeMatchers.length; ++i) {\n        const matcher = this.#includeMatchers[i];\n        if (matcher.relative.match(relativePath) ||\n            matcher.absolute.match(absolutePath)) return false;\n      }\n      return true;\n    }\n\n    const searchParams = new URL(url).searchParams;\n    if (searchParams.get(kMockSearchParam)) {\n      return true;"
+    },
+    "lcovSourcePath": {
+      "lines": "330-333",
+      "excerpt": "      ArrayPrototypePush(coverageSummary.files, {\n        __proto__: null,\n        path: fileURLToPath(url),\n        totalLineCount: lines.length,"
+    }
+  },
+  "withoutIncludeGlobs": {
+    "flags": [
+      "--test",
+      "--experimental-test-module-mocks",
+      "--experimental-test-coverage",
+      "--test-coverage-include-all",
+      "--test-reporter=lcov"
+    ],
+    "exitCode": 0,
+    "records": 3,
+    "uniqueSourceFiles": 3,
+    "duplicateSourceFiles": 0,
+    "main": {
+      "linesHit": 1,
+      "linesFound": 1,
+      "functionsHit": 1,
+      "functionsFound": 1
+    },
+    "real": {
+      "linesHit": 1,
+      "linesFound": 1,
+      "functionsHit": 1,
+      "functionsFound": 1
+    },
+    "unloaded": {
+      "linesHit": 0,
+      "linesFound": 1
+    }
+  },
+  "withIncludeGlobComparison": {
+    "addedFlag": "--test-coverage-include=**/*.mjs",
+    "exitCode": 0,
+    "records": 4,
+    "uniqueSourceFiles": 3,
+    "duplicateSourceFiles": 1,
+    "note": "The additional record is the mocked URL after LCOV fileURLToPath removes its query; synthetic coverage must never be merged."
+  }
+}

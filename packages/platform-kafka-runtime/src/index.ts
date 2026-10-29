@@ -23,7 +23,11 @@ import {
   canonicalRequestHash,
   type JsonValue,
 } from "@coffee-platform/idempotency";
-import { consumeOnce, InboxProcessingError, type InboxStore } from "@coffee-platform/inbox";
+import {
+  consumeOnce,
+  InboxProcessingError,
+  type InboxStore,
+} from "@coffee-platform/inbox";
 import {
   parseKafkaConfig,
   validateKafkaServiceConfig,
@@ -31,11 +35,23 @@ import {
   type RuntimeName,
   type KafkaConfig,
   type KafkaServiceConfig,
+  type LaunchKafkaTarget,
 } from "@coffee-platform/config";
 import { isTraceparent } from "@coffee-platform/observability";
-import { context as otelContext, metrics, SpanKind, SpanStatusCode, trace, type Histogram, type MeterProvider } from "@opentelemetry/api";
+import {
+  context as otelContext,
+  metrics,
+  SpanKind,
+  SpanStatusCode,
+  trace,
+  type Histogram,
+  type MeterProvider,
+} from "@opentelemetry/api";
 
-const kafkaLagValues = new Map<string, Readonly<{group: string; topic: string; partition: number; lag: number}>>();
+const kafkaLagValues = new Map<
+  string,
+  Readonly<{ group: string; topic: string; partition: number; lag: number }>
+>();
 let kafkaMetricProvider: MeterProvider | undefined;
 let kafkaEventAge: Histogram | undefined;
 
@@ -44,40 +60,78 @@ function initializeKafkaMetrics(): void {
   if (provider === kafkaMetricProvider) return;
   kafkaMetricProvider = provider;
   const meter = provider.getMeter("coffee-platform.kafka-runtime");
-  kafkaEventAge = meter.createHistogram("messaging.kafka.event.age", {unit: "ms"});
-  meter.createObservableGauge("messaging.kafka.consumer.lag", {unit: "messages"}).addCallback((observer) => {
-    for (const value of kafkaLagValues.values()) observer.observe(value.lag, {"messaging.consumer.group": value.group, "messaging.destination.name": value.topic, "messaging.destination.partition.id": String(value.partition)});
+  kafkaEventAge = meter.createHistogram("messaging.kafka.event.age", {
+    unit: "ms",
+  });
+  meter
+    .createObservableGauge("messaging.kafka.consumer.lag", { unit: "messages" })
+    .addCallback((observer) => {
+      for (const value of kafkaLagValues.values())
+        observer.observe(value.lag, {
+          "messaging.consumer.group": value.group,
+          "messaging.destination.name": value.topic,
+          "messaging.destination.partition.id": String(value.partition),
+        });
+    });
+}
+
+function remoteTraceContext(
+  value: string,
+): ReturnType<typeof otelContext.active> {
+  if (!isTraceparent(value)) return otelContext.active();
+  const [, traceId, spanId, flags] = value.split("-");
+  return trace.setSpanContext(otelContext.active(), {
+    traceId: traceId!,
+    spanId: spanId!,
+    traceFlags: Number.parseInt(flags!, 16),
+    isRemote: true,
   });
 }
 
-function remoteTraceContext(value: string): ReturnType<typeof otelContext.active> {
-  if (!isTraceparent(value)) return otelContext.active();
-  const [, traceId, spanId, flags] = value.split("-");
-  return trace.setSpanContext(otelContext.active(), {traceId: traceId!, spanId: spanId!, traceFlags: Number.parseInt(flags!, 16), isRemote: true});
-}
-
-function recordKafkaLag(group: string, topics: readonly string[], stats: unknown, config: KafkaConfig): void {
+function recordKafkaLag(
+  group: string,
+  topics: readonly string[],
+  stats: unknown,
+  config: KafkaConfig,
+): void {
   if (!object(stats) || !object(stats["topics"])) return;
   const sourceTopics = stats["topics"];
   for (const topic of topics) {
-    const partitionCount = Object.values(config.topics).find((candidate) => candidate.name === topic)?.partitions;
+    const partitionCount = Object.values(config.topics).find(
+      (candidate) => candidate.name === topic,
+    )?.partitions;
     if (partitionCount === undefined) continue;
     const sourceTopic = sourceTopics[topic];
-    const partitions = object(sourceTopic) && object(sourceTopic["partitions"]) ? sourceTopic["partitions"] : {};
+    const partitions =
+      object(sourceTopic) && object(sourceTopic["partitions"])
+        ? sourceTopic["partitions"]
+        : {};
     for (let partition = 0; partition < partitionCount; partition++) {
       const key = `${group}\u0000${topic}\u0000${partition}`;
       const value = partitions[String(partition)];
       const lag = object(value) ? value["consumer_lag"] : undefined;
       if (typeof lag === "number" && Number.isSafeInteger(lag) && lag >= 0)
-        kafkaLagValues.set(key, {group, topic, partition, lag});
+        kafkaLagValues.set(key, { group, topic, partition, lag });
       else kafkaLagValues.delete(key);
     }
   }
 }
 
-function clearKafkaLag(group: string, partitions?: readonly Pick<KafkaRecord, "topic" | "partition">[]): void {
+function clearKafkaLag(
+  group: string,
+  partitions?: readonly Pick<KafkaRecord, "topic" | "partition">[],
+): void {
   for (const [key, value] of kafkaLagValues) {
-    if (value.group === group && (partitions === undefined || partitions.some((partition) => partition.topic === value.topic && partition.partition === value.partition))) kafkaLagValues.delete(key);
+    if (
+      value.group === group &&
+      (partitions === undefined ||
+        partitions.some(
+          (partition) =>
+            partition.topic === value.topic &&
+            partition.partition === value.partition,
+        ))
+    )
+      kafkaLagValues.delete(key);
   }
 }
 
@@ -447,9 +501,13 @@ function recordValue(
 ): Readonly<{ wire: JsonValue; decoded: unknown }> {
   let value: unknown = record.value;
   if (record.value instanceof Uint8Array) {
-    if (record.value.byteLength > maxBytes) throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
-    try { value = new TextDecoder("utf-8", { fatal: true }).decode(record.value); }
-    catch { throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID"); }
+    if (record.value.byteLength > maxBytes)
+      throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
+    try {
+      value = new TextDecoder("utf-8", { fatal: true }).decode(record.value);
+    } catch {
+      throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
+    }
   }
   if (typeof value === "string") {
     if (Buffer.byteLength(value) > maxBytes)
@@ -495,8 +553,14 @@ export async function processKafkaRecord(
   } catch (error) {
     // Durable decoder semantics stay unchanged. Only an explicit permanent
     // realtime rejection may advance through quarantine; bugs must fail-stop.
-    if (options.binding.processing === "realtime" &&
-      !(error instanceof KafkaRuntimeError && error.code === "KAFKA_ENVELOPE_INVALID")) throw error;
+    if (
+      options.binding.processing === "realtime" &&
+      !(
+        error instanceof KafkaRuntimeError &&
+        error.code === "KAFKA_ENVELOPE_INVALID"
+      )
+    )
+      throw error;
     envelope = undefined;
     // Oversized/non-JSON inputs keep only a digest in quarantine; raw data is never an error label.
     wire ??= {
@@ -516,146 +580,197 @@ export async function processKafkaRecord(
   if (envelope !== undefined) {
     const eventAgeMs = now - toInstant(envelope.occurredAt).epochMilliseconds;
     if (Number.isSafeInteger(eventAgeMs) && eventAgeMs >= 0)
-      kafkaEventAge?.record(eventAgeMs, {"messaging.destination.name": record.topic, "messaging.consumer.group": options.groupId});
-  }
-  const parent = envelope === undefined ? otelContext.active() : remoteTraceContext(envelope.traceparent);
-  const span = trace.getTracer("coffee-platform.kafka-runtime").startSpan("Kafka.consume", {
-    kind: SpanKind.CONSUMER,
-    attributes: {"messaging.system": "kafka", "messaging.destination.name": record.topic, "messaging.consumer.group": options.groupId},
-  }, parent);
-  try {
-  await otelContext.with(trace.setSpan(parent, span), async () => {
-  if (options.binding.processing === "durable") {
-    const binding = options.binding;
-    const transactionOptions = {
-      mode: "background" as const,
-      signal: options.signal,
-      ...(envelope
-        ? {
-            correlationId: envelope.correlationId,
-            ...(envelope.causationId === null
-              ? {}
-              : { causationId: envelope.causationId }),
-            traceparent: envelope.traceparent,
-          }
-        : {}),
-    };
-    await withTransaction(
-      binding.database,
-      transactionOptions,
-      async (transaction) => {
-        if (!envelope) {
-          await binding.inbox.quarantineRecord(
-            transaction,
-            {
-              topic: record.topic,
-              partition: record.partition,
-              offset: record.offset,
-              envelope: wire ?? null,
-              reason: "KAFKA_ENVELOPE_INVALID",
-            },
-            now,
-          );
-          return;
-        }
-        const payload = JSON.parse(
-          canonicalJson(envelope as unknown as JsonValue),
-        ) as JsonValue;
-        const begin = await consumeOnce(
-          binding.inbox,
-          transaction,
-          {
-            messageId: envelope.messageId,
-            messageType: envelope.messageType,
-            receivedAt: receivedAt.toString(),
-            payloadHash: canonicalRequestHash(payload),
-            payload,
-          },
-          options.groupId,
-          now,
-          options.leaseMs,
-          (tx) =>
-            binding.handle(
-              tx,
-              envelope as KafkaEnvelope,
-              record,
-              options.signal,
-            ),
-          nowInstant().toString(),
-        );
-        if (begin.kind === "in_progress")
-          throw new KafkaRuntimeError("KAFKA_HANDLER_FAILED");
-        if (begin.kind === "conflict") {
-          await binding.inbox.quarantineRecord(
-            transaction,
-            {
-              topic: record.topic,
-              partition: record.partition,
-              offset: record.offset,
-              messageId: envelope.messageId,
-              payloadHash: canonicalRequestHash(payload),
-              envelope: payload,
-              reason: "INBOX_HASH_CONFLICT",
-            },
-            now,
-          );
-          return;
-        }
-        if (begin.kind === "duplicate") return;
-      },
-    ).catch(async (error: unknown) => {
-      const rejected = envelope;
-      if (!(error instanceof InboxProcessingError) ||
-        error.failure.kind === "transient" || !rejected) throw error;
-      // withTransaction rethrows this owner error only after confirmed ROLLBACK.
-      // Never catch it inside consumeOnce: that would commit partial owner effects.
-      // Unknown COMMIT/ROLLBACK outcomes remain database errors, not quarantine.
-      const payload = JSON.parse(canonicalJson(rejected as unknown as JsonValue)) as JsonValue;
-      await withTransaction(binding.database, transactionOptions, async (transaction) => {
-        const begin = await binding.inbox.begin(transaction, {
-          messageId: rejected.messageId,
-          messageType: rejected.messageType,
-          receivedAt: receivedAt.toString(),
-          payloadHash: canonicalRequestHash(payload),
-          payload,
-        }, options.groupId, now, options.leaseMs);
-        if (begin.kind === "in_progress") throw new KafkaRuntimeError("KAFKA_HANDLER_FAILED");
-        if (begin.kind === "acquired") {
-          await binding.inbox.quarantine(transaction, rejected.messageId, options.groupId, error.failure.reason);
-        }
-        const quarantined = await binding.inbox.quarantineRecord(transaction, {
-          topic: record.topic,
-          partition: record.partition,
-          offset: record.offset,
-          messageId: rejected.messageId,
-          messageType: rejected.messageType,
-          payloadHash: canonicalRequestHash(payload),
-          envelope: payload,
-          reason: begin.kind === "conflict" ? "INBOX_HASH_CONFLICT" : error.failure.reason,
-        }, now);
-        if (quarantined === "conflict") throw new KafkaRuntimeError("KAFKA_HANDLER_FAILED");
+      kafkaEventAge?.record(eventAgeMs, {
+        "messaging.destination.name": record.topic,
+        "messaging.consumer.group": options.groupId,
       });
-    });
-  } else if (envelope) {
-    await options.binding.enqueue(envelope, options.signal);
-  } else {
-    if (!options.quarantine)
-      throw new KafkaRuntimeError("KAFKA_CONFIG_INVALID");
-    await options.quarantine(record, "KAFKA_ENVELOPE_INVALID", wire ?? null);
   }
-  if (options.signal.aborted) throw new KafkaRuntimeError("KAFKA_REVOKED");
+  const parent =
+    envelope === undefined
+      ? otelContext.active()
+      : remoteTraceContext(envelope.traceparent);
+  const span = trace.getTracer("coffee-platform.kafka-runtime").startSpan(
+    "Kafka.consume",
+    {
+      kind: SpanKind.CONSUMER,
+      attributes: {
+        "messaging.system": "kafka",
+        "messaging.destination.name": record.topic,
+        "messaging.consumer.group": options.groupId,
+      },
+    },
+    parent,
+  );
   try {
-    await options.commit(record);
-    span.setAttribute("messaging.kafka.result", "committed");
-  } catch (error) {
-    if (error instanceof KafkaRuntimeError && error.code === "KAFKA_REVOKED")
-      throw error;
-    throw new KafkaRuntimeError("OFFSET_COMMIT_OUTCOME_UNKNOWN");
-  }
-  });
+    await otelContext.with(trace.setSpan(parent, span), async () => {
+      if (options.binding.processing === "durable") {
+        const binding = options.binding;
+        const transactionOptions = {
+          mode: "background" as const,
+          signal: options.signal,
+          ...(envelope
+            ? {
+                correlationId: envelope.correlationId,
+                ...(envelope.causationId === null
+                  ? {}
+                  : { causationId: envelope.causationId }),
+                traceparent: envelope.traceparent,
+              }
+            : {}),
+        };
+        await withTransaction(
+          binding.database,
+          transactionOptions,
+          async (transaction) => {
+            if (!envelope) {
+              await binding.inbox.quarantineRecord(
+                transaction,
+                {
+                  topic: record.topic,
+                  partition: record.partition,
+                  offset: record.offset,
+                  envelope: wire ?? null,
+                  reason: "KAFKA_ENVELOPE_INVALID",
+                },
+                now,
+              );
+              return;
+            }
+            const payload = JSON.parse(
+              canonicalJson(envelope as unknown as JsonValue),
+            ) as JsonValue;
+            const begin = await consumeOnce(
+              binding.inbox,
+              transaction,
+              {
+                messageId: envelope.messageId,
+                messageType: envelope.messageType,
+                receivedAt: receivedAt.toString(),
+                payloadHash: canonicalRequestHash(payload),
+                payload,
+              },
+              options.groupId,
+              now,
+              options.leaseMs,
+              (tx) =>
+                binding.handle(
+                  tx,
+                  envelope as KafkaEnvelope,
+                  record,
+                  options.signal,
+                ),
+              nowInstant().toString(),
+            );
+            if (begin.kind === "in_progress")
+              throw new KafkaRuntimeError("KAFKA_HANDLER_FAILED");
+            if (begin.kind === "conflict") {
+              await binding.inbox.quarantineRecord(
+                transaction,
+                {
+                  topic: record.topic,
+                  partition: record.partition,
+                  offset: record.offset,
+                  messageId: envelope.messageId,
+                  payloadHash: canonicalRequestHash(payload),
+                  envelope: payload,
+                  reason: "INBOX_HASH_CONFLICT",
+                },
+                now,
+              );
+              return;
+            }
+            if (begin.kind === "duplicate") return;
+          },
+        ).catch(async (error: unknown) => {
+          const rejected = envelope;
+          if (
+            !(error instanceof InboxProcessingError) ||
+            error.failure.kind === "transient" ||
+            !rejected
+          )
+            throw error;
+          // withTransaction rethrows this owner error only after confirmed ROLLBACK.
+          // Never catch it inside consumeOnce: that would commit partial owner effects.
+          // Unknown COMMIT/ROLLBACK outcomes remain database errors, not quarantine.
+          const payload = JSON.parse(
+            canonicalJson(rejected as unknown as JsonValue),
+          ) as JsonValue;
+          await withTransaction(
+            binding.database,
+            transactionOptions,
+            async (transaction) => {
+              const begin = await binding.inbox.begin(
+                transaction,
+                {
+                  messageId: rejected.messageId,
+                  messageType: rejected.messageType,
+                  receivedAt: receivedAt.toString(),
+                  payloadHash: canonicalRequestHash(payload),
+                  payload,
+                },
+                options.groupId,
+                now,
+                options.leaseMs,
+              );
+              if (begin.kind === "in_progress")
+                throw new KafkaRuntimeError("KAFKA_HANDLER_FAILED");
+              if (begin.kind === "acquired") {
+                await binding.inbox.quarantine(
+                  transaction,
+                  rejected.messageId,
+                  options.groupId,
+                  error.failure.reason,
+                );
+              }
+              const quarantined = await binding.inbox.quarantineRecord(
+                transaction,
+                {
+                  topic: record.topic,
+                  partition: record.partition,
+                  offset: record.offset,
+                  messageId: rejected.messageId,
+                  messageType: rejected.messageType,
+                  payloadHash: canonicalRequestHash(payload),
+                  envelope: payload,
+                  reason:
+                    begin.kind === "conflict"
+                      ? "INBOX_HASH_CONFLICT"
+                      : error.failure.reason,
+                },
+                now,
+              );
+              if (quarantined === "conflict")
+                throw new KafkaRuntimeError("KAFKA_HANDLER_FAILED");
+            },
+          );
+        });
+      } else if (envelope) {
+        await options.binding.enqueue(envelope, options.signal);
+      } else {
+        if (!options.quarantine)
+          throw new KafkaRuntimeError("KAFKA_CONFIG_INVALID");
+        await options.quarantine(
+          record,
+          "KAFKA_ENVELOPE_INVALID",
+          wire ?? null,
+        );
+      }
+      if (options.signal.aborted) throw new KafkaRuntimeError("KAFKA_REVOKED");
+      try {
+        await options.commit(record);
+        span.setAttribute("messaging.kafka.result", "committed");
+      } catch (error) {
+        if (
+          error instanceof KafkaRuntimeError &&
+          error.code === "KAFKA_REVOKED"
+        )
+          throw error;
+        throw new KafkaRuntimeError("OFFSET_COMMIT_OUTCOME_UNKNOWN");
+      }
+    });
   } catch (error) {
     span.setAttribute("messaging.kafka.result", "failed");
-    span.setStatus({code: SpanStatusCode.ERROR});
+    span.setStatus({ code: SpanStatusCode.ERROR });
     throw error;
   } finally {
     span.end();
@@ -672,6 +787,7 @@ export type KafkaRuntimeOptions = Readonly<{
   config: KafkaConfig;
   service: KafkaServiceConfig;
   credentials: KafkaCredentials;
+  physicalTargets?: LaunchKafkaTarget;
 }>;
 export type KafkaSendAck = Readonly<{
   kind: "ack";
@@ -815,6 +931,9 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     receiveTimeoutMs: policy.receiveTimeoutMs,
     commitTimeoutMs: policy.commitTimeoutMs,
     shutdownTimeoutMs: policy.shutdownTimeoutMs,
+    ...(options.physicalTargets
+      ? { physicalTargets: options.physicalTargets }
+      : {}),
   } as const;
   function track<T>(promise: Promise<T>): Promise<T> {
     pending.add(promise);
@@ -849,64 +968,71 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     if (!producer || stopping || shutdown.signal.aborted)
       throw new KafkaRuntimeError("KAFKA_STOPPED");
     const validated = parseEnvelope(envelope, (value) => value);
-    const span = trace.getTracer("coffee-platform.kafka-runtime").startSpan("Kafka.produce", {
-      kind: SpanKind.PRODUCER,
-      attributes: {"messaging.system": "kafka", "messaging.destination.name": topic},
-    }, remoteTraceContext(validated.traceparent));
+    const span = trace.getTracer("coffee-platform.kafka-runtime").startSpan(
+      "Kafka.produce",
+      {
+        kind: SpanKind.PRODUCER,
+        attributes: {
+          "messaging.system": "kafka",
+          "messaging.destination.name": topic,
+        },
+      },
+      remoteTraceContext(validated.traceparent),
+    );
     try {
-    let serialized: string;
-    try {
-      serialized = canonicalJson(validated as unknown as JsonValue);
-    } catch {
-      throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
-    }
-    if (
-      Buffer.byteLength(serialized) > policy.maxMessageBytes ||
-      key.length === 0 ||
-      key.length > 256
-    )
-      throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
-    try {
-      const ack = await deadline(
-        track(
-          producer.send(
-            topic,
-            key,
-            serialized,
-            {
-              messageId: envelope.messageId,
-              correlationId: envelope.correlationId,
-              traceparent: envelope.traceparent,
-              ...(envelope.causationId === null
-                ? {}
-                : { causationId: envelope.causationId }),
-            },
-            signal,
+      let serialized: string;
+      try {
+        serialized = canonicalJson(validated as unknown as JsonValue);
+      } catch {
+        throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
+      }
+      if (
+        Buffer.byteLength(serialized) > policy.maxMessageBytes ||
+        key.length === 0 ||
+        key.length > 256
+      )
+        throw new KafkaRuntimeError("KAFKA_ENVELOPE_INVALID");
+      try {
+        const ack = await deadline(
+          track(
+            producer.send(
+              topic,
+              key,
+              serialized,
+              {
+                messageId: envelope.messageId,
+                correlationId: envelope.correlationId,
+                traceparent: envelope.traceparent,
+                ...(envelope.causationId === null
+                  ? {}
+                  : { causationId: envelope.causationId }),
+              },
+              signal,
+            ),
           ),
-        ),
-        policy.sendTimeoutMs,
-        "KAFKA_SEND_OUTCOME_UNKNOWN",
-        signal,
-      );
-      span.setAttribute("messaging.kafka.result", "ack");
-      return { kind: "ack", ...ack };
-    } catch (error) {
-      if (
-        error instanceof NativeKafkaError &&
-        error.code === "NATIVE_QUEUE_FULL"
-      )
-        throw new KafkaRuntimeError("KAFKA_QUEUE_FULL");
-      if (
-        error instanceof NativeKafkaError &&
-        error.code === "NATIVE_CONFIG_INVALID"
-      )
-        throw new KafkaRuntimeError("KAFKA_CONFIG_INVALID");
-      lastCode = "KAFKA_SEND_OUTCOME_UNKNOWN";
-      throw new KafkaRuntimeError(lastCode);
-    }
+          policy.sendTimeoutMs,
+          "KAFKA_SEND_OUTCOME_UNKNOWN",
+          signal,
+        );
+        span.setAttribute("messaging.kafka.result", "ack");
+        return { kind: "ack", ...ack };
+      } catch (error) {
+        if (
+          error instanceof NativeKafkaError &&
+          error.code === "NATIVE_QUEUE_FULL"
+        )
+          throw new KafkaRuntimeError("KAFKA_QUEUE_FULL");
+        if (
+          error instanceof NativeKafkaError &&
+          error.code === "NATIVE_CONFIG_INVALID"
+        )
+          throw new KafkaRuntimeError("KAFKA_CONFIG_INVALID");
+        lastCode = "KAFKA_SEND_OUTCOME_UNKNOWN";
+        throw new KafkaRuntimeError(lastCode);
+      }
     } catch (error) {
       span.setAttribute("messaging.kafka.result", "failed");
-      span.setStatus({code: SpanStatusCode.ERROR});
+      span.setStatus({ code: SpanStatusCode.ERROR });
       throw error;
     } finally {
       span.end();
@@ -924,11 +1050,12 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     const id = createHash("sha256")
       .update(`${record.topic}:${record.partition}:${record.offset}`)
       .digest("hex");
-    const rawData = typeof record.value === "string"
-      ? record.value
-      : record.value instanceof Uint8Array
+    const rawData =
+      typeof record.value === "string"
         ? record.value
-        : canonicalJson(record.value as JsonValue);
+        : record.value instanceof Uint8Array
+          ? record.value
+          : canonicalJson(record.value as JsonValue);
     const key = record.key && record.key.length <= 256 ? record.key : id;
     const envelope = (quarantinedWire: JsonValue): KafkaEnvelope => ({
       messageId: id,
@@ -954,10 +1081,15 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
     });
     const boundedWire: JsonValue = {
       digest: createHash("sha256").update(rawData).digest("hex"),
-      byteLength: typeof rawData === "string" ? Buffer.byteLength(rawData) : rawData.byteLength,
+      byteLength:
+        typeof rawData === "string"
+          ? Buffer.byteLength(rawData)
+          : rawData.byteLength,
     };
-    const wireIsSummary = object(wire) &&
-      Object.keys(wire).length === 1 && wire["digest"] === boundedWire["digest"];
+    const wireIsSummary =
+      object(wire) &&
+      Object.keys(wire).length === 1 &&
+      wire["digest"] === boundedWire["digest"];
     const rawEnvelope = envelope(wireIsSummary ? boundedWire : wire);
     const serialized = canonicalJson(rawEnvelope as unknown as JsonValue);
     await send(
@@ -1042,17 +1174,29 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
       }
       if (state.revoked && !stopping) {
         // A normal rebalance keeps its group member; reconnecting would trigger another rebalance.
-        await track(port.unassign());
-        executor.resetAssignment();
-        state.current = true;
-        state.restart = false;
-        delete state.revoked;
-        if (state.assignment) {
-          executor.assign(state.assignment);
-          await track(port.assign(state.assignment));
+        try {
+          await track(port.unassign());
+          executor.resetAssignment();
+          state.current = true;
+          state.restart = false;
+          delete state.revoked;
+          if (state.assignment) {
+            executor.assign(state.assignment);
+            await track(port.assign(state.assignment));
+            delete state.assignment;
+          }
+          continue;
+        } catch (error) {
+          lastCode =
+            error instanceof KafkaRuntimeError
+              ? error.code
+              : "KAFKA_CONNECTION_FAILED";
+          state.current = false;
+          state.restart = true;
+          executor.stopIntake();
+          delete state.revoked;
           delete state.assignment;
         }
-        continue;
       }
       await deadline(
         track(port.close()),
@@ -1177,7 +1321,8 @@ export function createKafkaRuntime(input: KafkaRuntimeOptions): KafkaRuntime {
           autoOffsetReset: group.processing === "realtime" ? "latest" : "error",
         },
         rebalance,
-        (stats) => recordKafkaLag(group.groupId, group.topics, stats, options.config),
+        (stats) =>
+          recordKafkaLag(group.groupId, group.topics, stats, options.config),
       ),
     );
     ports.add(port);

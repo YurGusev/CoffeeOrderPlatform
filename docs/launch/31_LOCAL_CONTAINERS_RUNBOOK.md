@@ -5,13 +5,13 @@
 labels, независимо от рабочего каталога терминала и исходного worktree.
 Она не выполняет `up`, сборки, миграции, deployment и не читает секреты.
 
-| Группа | Состав |
-|---|---|
-| `platform` | Compose-проект `coffee-platform` |
-| `legacy` | `coffeeordersystem`, кроме общего PostgreSQL |
-| `db` | Только `coffeeordersystem/postgres` (`coffee_postgres`) |
-| `n8n` | Compose-проект `n8n` |
-| `gitea` | Compose-проект `gitea-test` |
+| Группа     | Состав                                                  |
+| ---------- | ------------------------------------------------------- |
+| `platform` | Compose-проект `coffee-platform`                        |
+| `legacy`   | `coffeeordersystem`, кроме общего PostgreSQL            |
+| `db`       | Только `coffeeordersystem/postgres` (`coffee_postgres`) |
+| `n8n`      | Compose-проект `n8n`                                    |
+| `gitea`    | Compose-проект `gitea-test`                             |
 
 ```bash
 coffee-containers legacy status
@@ -42,6 +42,20 @@ PostgreSQL является зависимостью обеих систем. VP
 labels от старых worktree/tmp-каталогов: их выравнивание требует отдельно
 подготовленного пересоздания с проверкой конфигурации и сохранением volumes.
 Команда управления не пересоздаёт их и не объявляет такое выравнивание выполненным.
+
+Для #13 после готовности разработки требуется постоянная установка на этом
+сервере с проверкой фактического состояния. Проверки disposable-окружения сами
+по себе не подтверждают такую установку. Перед постоянной установкой требуется свежая проверка фактического состояния этого сервера.
+
+При постоянной установке необходимо проверить identity выбранного PostgreSQL,
+15 canonical ролей, пять `coffee_platform_*` БД и их владельцев, owner migration
+ledgers и точные table/column grants. Затем проверить подключение PostgreSQL к
+ожидаемой сети, scoped secrets в tmpfs, Kafka, health/readiness и ingress
+постоянного проекта `coffee-platform`. Результат фиксируется отдельным
+санитизированным attestation без паролей и строк подключения. Временные run DB,
+контейнеры и volumes удаляются после проверок; постоянные роли, БД и ресурсы
+установленной платформы сохраняются. Действующий legacy-сервис и его данные
+не изменяются этим шагом.
 
 `tools/compose-smoke.mjs` выбирает уникальное имя проекта; занятое имя и имена
 основных Coffee-проектов запрещены. Все smoke-режимы используют project-scoped

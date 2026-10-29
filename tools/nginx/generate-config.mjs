@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { generate } from './generate.mjs';
+import { generate } from "./generate.mjs";
 try {
   const result = await generate();
   console.log(`nginx config generated: ${JSON.stringify(result)}`);

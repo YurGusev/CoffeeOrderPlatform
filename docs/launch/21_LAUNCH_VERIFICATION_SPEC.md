@@ -13,6 +13,32 @@ capacity/reload overlap и новый измеренный end-to-end SLA зад
 Статус: нормативная спецификация issue #13. Задача проверяет принятый scope и
 не исправляет найденные дефекты внутри verification PR.
 
+По прямому поручению владельца от 24 октября 2026 в текущий scope дополнительно
+включено устранение таймаута первого импорта Catalog в новую БД и его cold
+regression. Это точечное исключение для Catalog activation; pins, права ролей,
+DB-бюджеты и обязательные критерии допуска сохраняются.
+
+Последующее прямое поручение владельца включает реализацию runtime G18,
+исследование и исправление packing G16 и проверку остальных gates по фактическим
+результатам. Эти работы ведутся в #13; подтверждённые provider semantics,
+разделение trust surfaces, pins, права ролей, DB-бюджеты и критерии допуска
+сохраняются. Read-only исследование поставщика не разрешает новую unsafe
+операцию без предусмотренного G16 approval.
+
+Поручение владельца от 28 октября 2026 довести разработку #13 до merge включает
+исправление блокирующих проверку ZIP guard, остановки дочерних процессов G17,
+режимов private checkout, несогласованных Customer HTTP/Problem статусов
+и проверки точных байтов конфигурации при добавлении или удалении UTF-8 BOM.
+Исправления сохраняют публичные контракты, владельцев данных и пороги допуска;
+unit PASS не заменяет общий G00–G19 на одном чистом кандидате.
+
+Владелец 24 октября 2026 отдельно разрешил точные G12/G17/G00 предложения из
+[remaining-gates-authority-proposal.md](../../evidence/launch-preparation/2026-10-24/remaining-gates-authority-proposal.md):
+Trivy 0.76.1 с exact image digest и verification budgets; потоковый age backup
+только пяти verification DB доверенным bootstrap; закрытый корректирующий
+supplement accepted handoffs. Исторические blobs не меняются, прежний runtime
+PASS не выводится. Эти исключения не означают успешную проверку gates.
+
 ## 1. Решение о допуске
 
 Результат имеет только два значения:
@@ -54,11 +80,22 @@ Runner checkout exact merge-candidate SHA в пустой каталог. До i
 этого run-id. Используются только pinned Node 26 image/digest, Corepack/pnpm,
 lockfile и toolchain registry.
 
-Compose project name `coffee-launch-<run-id>`. Он не создаёт PostgreSQL service
+Compose project name `coffee-launch-<lowercase(run-id)>`: только имя Compose
+использует нижний регистр, поскольку Compose запрещает заглавные символы. UTC
+`run-id`, пути evidence и Kafka сохраняют исходные `T`/`Z`; cleanup
+использует точное имя проекта из runner context. Он не создаёт PostgreSQL service
 и не подключается к legacy `coffeeorderdb`. Verification использует отдельные
-БД `coffee_verify_<run-id>_{customer,catalog,pricing,orders,integration}` и
+БД `coffee_verify_<normalized-run-id>_{customer,catalog,pricing,orders,integration}` и
 отдельные roles; bootstrap проверяет server identity PostgreSQL 17.x. Cleanup
 удаляет только exact run-id databases/roles после сохранения evidence.
+
+Имена DB вычисляются по принятому
+[ADR-0036](../adr/ADR-0036-launch-database-isolation.md): lowercase run-id и
+единственный `-` заменён на `_`. Единственный committed YAML содержит canonical
+owner mapping и явную verification policy; context задаёт только run/SHA/base
+config digest. G00 проверяет derived plan, runtime — те же имена и actual config
+bytes. Отдельная standalone runtime проверка с disposable PostgreSQL может
+диагностировать G18, но не закрывает требование внешнего PostgreSQL для G13.
 
 Kafka topics/groups содержат run-id. AROMA mutation по умолчанию выключена.
 
@@ -66,36 +103,115 @@ Kafka topics/groups содержат run-id. AROMA mutation по умолчан�
 Node/pnpm/Docker/Compose/PostgreSQL/Kafka/browser versions, image digests,
 config hash, encrypted secrets-file hash и run-id resources. Secret values нет.
 
+G03 выполняет `pnpm format:check && pnpm lint && pnpm typecheck`. Formatter
+использует закреплённый Prettier и проверяет существующие обычные tracked и
+non-ignored untracked файлы Git с расширениями `js`, `mjs`, `cjs`, `ts`, `tsx`,
+`mts`, `cts`, `json`, `jsonc`, `yaml`, `yml`, `css`, `scss`, `html`. Пути
+сортируются; symlink и удалённые файлы не включаются. Исключены `docs/`,
+`evidence/`, `secrets/`, `packages/generated/`, `packages/platform-ui/provenance/`,
+`.codex/`, `.git/`, `pnpm-lock.yaml` и любые каталоги `node_modules`, `dist`,
+`coverage`. Единственный путь выбора — `scripts/format.mjs`; обычная команда
+только проверяет, а `node scripts/format.mjs --write` записывает baseline.
+Владелец одобрил эту область и однократное форматирование 25 октября 2026;
+исходный inventory и принятие сохранены в evidence первого запуска. Изменения
+только форматирования не освобождают критические модули от G04.
+
+G04 измеряет emitted JavaScript в `dist` для каждого изменённого критического
+source-модуля; `tools/config-bootstrap` измеряется как исполняемый `.mjs`.
+Изменение определяется относительно `acceptedBaseCommit`, а артефакты включаются
+целиком, в том числе не загруженные тестами файлы. TypeScript и JavaScript
+coverage не сопоставляются по строкам: source maps не включены, а прямой тест
+`.ts` сам по себе не доказывает coverage emitted JS. Порог — минимум 90% lines,
+90% functions и 85% branches отдельно для каждого затронутого модуля. Список
+модулей, pure unit suites и значения находятся в strict
+`verification.unitCoverage`; skip, todo, cancel и неполный LCOV inventory
+завершают gate ошибкой. Основание политики описано в
+[ADR-0037](../adr/ADR-0037-unit-coverage-policy.md).
+
+Inventory G04 включает 60 существующих unit/property suites; дополнительно в
+него включены `tests/aroma/api-internal-operations.test.mjs`,
+`tests/aroma/safe-read-http.test.mjs`, `tests/aroma/scoping-provenance.test.mjs`,
+`tests/aroma/source-identity.test.mjs`, `tests/orders/security.test.mjs`,
+`tests/orders/observability.test.mjs` и `tests/edge-auth/operations.test.mjs`.
+
 ## 4. Версионированная matrix
 
 Каждая строка `matrix.yaml` содержит:
 `id`, `version`, `mandatory`, `owner`, `predecessors`, `command`, `timeout`,
 `inputs`, `expectedArtifacts`, `passCriteria`, `cleanup`, `rerunPolicy`.
 
-| ID | Владелец | Exact command | PASS |
-|---|---|---|---|
-| `G00_PREFLIGHT` | Platform | `pnpm launch:verify:preflight` | clean SHA; accepted GitHub PR/handoffs #14/#19/#2–#12/#16–#18/#60/#61/#62/#63/#64; authority repo exact; no legacy DB target |
-| `G01_INSTALL` | Platform | `pnpm install --frozen-lockfile` | lock unchanged; no lifecycle/network surprise outside allowlist |
-| `G02_GENERATED` | Contracts | `pnpm contracts:check-generated` | generated tree byte-equal, no drift |
-| `G03_STATIC` | Platform | `pnpm format:check && pnpm lint && pnpm typecheck` | все exit 0, warnings budget 0 |
-| `G04_UNIT` | Domain owners | `pnpm test:unit -- --coverage` | exit 0; changed critical modules meet declared thresholds |
-| `G05_CONTRACTS` | Contracts | `pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test` | positive/negative fixtures pass, no unapproved breaking change |
-| `G06_ARCHITECTURE` | Architecture | `pnpm architecture:check` | all GREEN pass; every RED fails with source/target/rule |
-| `G07_CONFIG_SECURITY` | Security | `pnpm versions:check && pnpm config:check && pnpm security:secrets` | exact pins/SOPS/scopes/redaction; zero plaintext/canary leak |
-| `G08_MIGRATIONS` | DB owners | `pnpm test:migrations:clean && pnpm test:migrations:forward` | five empty DBs reach exact schema; rerun no-op; legacy unchanged |
-| `G09_DB_BOUNDARIES` | DB owners | `pnpm db:smoke` | allowlisted operations pass; every cross-owner access denied |
-| `G10_INTEGRATION` | Service owners | `pnpm test:integration` | HTTP/DB/Kafka/idempotency/concurrency suites pass |
-| `G11_RECOVERY` | Reliability | `pnpm test:recovery` | duplicate/crash/replay/rebalance/lease/fence/reservation matrix pass |
-| `G12_SUPPLY_CHAIN` | Security | `pnpm security:scan` | SBOM/provenance produced; zero critical/high exploitable finding |
-| `G13_COMPOSE` | Platform | `pnpm test:compose-smoke` | all runtimes ready, dependency failure/graceful stop pass |
-| `G14_OBSERVABILITY` | Operations | `pnpm test:observability` | health/metrics/traces/correlation/alerts/redaction pass |
-| `G15_BROWSER` | Frontend | `pnpm test:playwright` | Chromium critical/accessibility/deep-link/conflict/realtime pass |
-| `G16_AROMA_SANDBOX` | Integration+Reliability | `pnpm test:aroma-sandbox -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"` | controlled GET→≤1 mutation→GET/lost-response/recovery/restore pass |
-| `G17_BACKUP_RESTORE` | DB owners | `pnpm test:backup-restore` | five dumps restored into new DBs; schema/data/invariants match |
-| `G18_ROLLBACK` | Operations | `pnpm test:mutation-disable-rollback` | mutation off, observer/Orders/recovery remain healthy, no state loss |
-| `G19_REPORT` | Release owner | `pnpm launch:verify:report` | Russian report, checksums, defects and deterministic decision valid |
+| ID                    | Владелец                | Exact command                                                                      | PASS                                                                                                                         |
+| --------------------- | ----------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `G00_PREFLIGHT`       | Platform                | `pnpm launch:verify:preflight`                                                     | clean SHA; accepted GitHub PR/handoffs #14/#19/#2–#12/#16–#18/#60/#61/#62/#63/#64; authority repo exact; no legacy DB target |
+| `G01_INSTALL`         | Platform                | `pnpm install --frozen-lockfile`                                                   | lock unchanged; no lifecycle/network surprise outside allowlist                                                              |
+| `G02_GENERATED`       | Contracts               | `pnpm contracts:check-generated`                                                   | generated tree byte-equal, no drift                                                                                          |
+| `G03_STATIC`          | Platform                | `pnpm format:check && pnpm lint && pnpm typecheck`                                 | все exit 0, warnings budget 0                                                                                                |
+| `G04_UNIT`            | Domain owners           | `pnpm test:unit -- --coverage`                                                     | exit 0; changed critical modules meet per-module floors from `config/platform.yaml`                                          |
+| `G05_CONTRACTS`       | Contracts               | `pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test` | positive/negative fixtures pass, no unapproved breaking change                                                               |
+| `G06_ARCHITECTURE`    | Architecture            | `pnpm architecture:check`                                                          | all GREEN pass; every RED fails with source/target/rule                                                                      |
+| `G07_CONFIG_SECURITY` | Security                | `pnpm versions:check && pnpm config:check && pnpm security:secrets`                | exact pins/SOPS/scopes/redaction; zero plaintext/canary leak                                                                 |
+| `G08_MIGRATIONS`      | DB owners               | `pnpm test:migrations:clean && pnpm test:migrations:forward`                       | five empty DBs reach exact schema; rerun no-op; legacy unchanged                                                             |
+| `G09_DB_BOUNDARIES`   | DB owners               | `pnpm db:smoke`                                                                    | allowlisted operations pass; every cross-owner access denied                                                                 |
+| `G10_INTEGRATION`     | Service owners          | `pnpm test:integration`                                                            | HTTP/DB/Kafka/idempotency/concurrency suites pass                                                                            |
+| `G11_RECOVERY`        | Reliability             | `pnpm test:recovery`                                                               | duplicate/crash/replay/rebalance/lease/fence/reservation matrix pass                                                         |
+| `G12_SUPPLY_CHAIN`    | Security                | `pnpm security:scan`                                                               | SBOM/provenance produced; zero critical/high exploitable finding                                                             |
+| `G13_COMPOSE`         | Platform                | `pnpm test:compose-smoke`                                                          | all runtimes ready, dependency failure/graceful stop pass                                                                    |
+| `G14_OBSERVABILITY`   | Operations              | `pnpm test:observability`                                                          | health/metrics/traces/correlation/alerts/redaction pass                                                                      |
+| `G15_BROWSER`         | Frontend                | `pnpm test:playwright`                                                             | Chromium critical/accessibility/deep-link/conflict/realtime pass                                                             |
+| `G16_AROMA_SANDBOX`   | Integration+Reliability | `pnpm test:aroma-sandbox -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"`        | controlled GET→≤1 mutation→GET/lost-response/recovery/restore pass                                                           |
+| `G17_BACKUP_RESTORE`  | DB owners               | `pnpm test:backup-restore`                                                         | five dumps restored into new DBs; schema/data/invariants match                                                               |
+| `G18_ROLLBACK`        | Operations              | `pnpm test:mutation-disable-rollback`                                              | mutation off, observer/Orders/recovery remain healthy, no state loss                                                         |
+| `G19_REPORT`          | Release owner           | `pnpm launch:verify:report`                                                        | Russian report, checksums, defects and deterministic decision valid                                                          |
 
-Порядок обязателен: G00→G01→G02→G03; затем G04–G12; G13; G14–G18; G19.
+### G08: canonical PostgreSQL и oracle миграций
+
+G08 работает только с PostgreSQL `coffee_postgres:5432` и служебной БД `postgres`;
+для этой проверки `postgres.bootstrapUsername` задан как `coffeeuser`. Существующие
+`coffeeorderdb` и `coffeeorder_staging` не открываются. Trusted bootstrap сначала
+проверяет настроенный credential по свежему TCP-соединению и сверяет версию,
+superuser и утверждённый `systemIdentifier`. Синхронизация admin credential
+разрешена только после точного SQLSTATE `28P01`: читается пароль из контейнера
+`coffee_postgres` с повторной проверкой его закреплённых container/image/network
+identity, затем credential проверяется свежим TCP probe до единственной SOPS
+записи. Другие ошибки подключения, отсутствующая роль или изменившаяся identity
+завершают шаг без записи.
+
+Отдельное разрешение владельца охватывает подготовку пяти migrator credentials
+и создание ровно 15 canonical LOGIN roles; их набор и атрибуты проверяются до
+DDL, роли создаются одной транзакцией. Пароли остаются в SOPS и выдаются только
+выбранному in-process caller через trusted config-bootstrap; их нельзя передавать
+через argv, environment или plaintext-файл. После подтверждённого commit и
+сохранения нового clean candidate создаётся owner-only `0400` proof
+`<validated evidenceDir>/gates/G08_MIGRATIONS/artifacts/canonical-preparation.json`.
+Он содержит только sanitized результат role preparation. G08 связывает proof с
+текущим run/context, exact 15-role map, canonical endpoint/configuration,
+encrypted-bundle SHA-256 и проверкой, что SHA candidate подготовки является
+предком текущего candidate. При ранее разрешённом переходе verification isolation
+bootstrap читает `config/platform.yaml` из commit подготовки, проверяет его хэш
+и допускает только одновременное включение `databaseIsolation.enabled` и
+`kafkaNamespaceIsolation` из `false` в `true`; остальные байты должны совпадать.
+Proof не является G00 attestation.
+
+Clean oracle применяет полный упорядоченный набор миграций к пяти пустым
+run-derived БД. Forward oracle использует те же пять имён после clean cleanup:
+применяет принятый исторический prefix, загружает существующие owner fixtures,
+затем применяет suffix. Обе ветки сравнивают schema fingerprint; дополнительно
+проверяются упорядоченные IDs/checksums migration ledger, точные grants,
+сохранность fixture и повторный no-op. Cleanup разрешён только для принадлежащих
+текущему run derived DB после повторной проверки server identity и владельца;
+неопределённый результат CREATE остаётся retained и завершает проверку ошибкой.
+Статус отдельных запусков фиксируется только в относящемся к нему handoff и
+evidence; этот документ задаёт требования gate и сам не является результатом run.
+
+G17 сравнивает сырые SHA-256 схем источника и восстановления. Он не применяет
+общий SQL normalizer: любое исключение должно быть exact, ограниченным и
+подтверждённым immutable owner artifact в том же run. Полные G17 artifacts не
+переносятся в этой ветке; этот документ не объявляет G17 успешно проверенным.
+
+Порядок обязателен: G00→G01→G02→G03→G04→G05→G06→G07→G12→G08→G09→G10→G11;
+затем G13→G14→G15→G16→G17→G18→G19. Принятая перестановка G12 по
+[ADR-0025](../adr/ADR-0025-fastify-launch-recovery.md) позволяет запускать Kafka
+consumers только после проверки точного OCI artifact.
 Gate не запускается при failed predecessor, кроме G19: отчёт с решением
 `НЕ ДОПУСТИТЬ` формируется и при отказе предыдущих gates.
 
@@ -106,16 +222,26 @@ timeout, peak RSS и artifact hashes. Timeout завершает process group �
 Значения timeout: static/unit/contracts 15m; integration/recovery 30m; Compose,
 browser, sandbox, backup/restore, rollback по 30m; полный run максимум 120m.
 
+`pnpm lint` сначала выполняет штатный `pnpm typecheck`, чтобы создать declarations
+workspace-зависимостей для type-aware анализа после свежей установки. G03 сохраняет
+указанные выше команды, порядок и нулевой бюджет предупреждений.
+
 Retry test command автоматически запрещён. Flaky результат = FAIL и defect.
 Повтор возможен только отдельным новым run-id с причиной в отчёте; предыдущий
 FAIL не удаляется.
 
 ## 6. AROMA sandbox gate
 
-G16 не запускается обычным PR CI. Требуются одновременно:
+G16 не запускается обычным PR CI. По прямому поручению владельца используется
+режим `controlled-live-existing-account` согласно
+[ADR-0034](../adr/ADR-0034-g16-existing-account-verification.md): sandbox —
+изолированный локальный контур приложения, upstream — реальный AROMA с
+существующей учётной записью. Отдельный vendor sandbox не заявляется.
+Требуются одновременно:
 
-- encrypted/scoped sandbox credentials;
-- allowlisted provider origin и account fingerprint;
+- существующие encrypted/scoped development credentials только в Gateway;
+- allowlisted provider origin, фактически проверенный account fingerprint и
+  точное `existingAccountException` с authority `user-2026-10-23`;
 - `services.aroma-convergence.mutationsEnabled=true` в единственном versioned
   `config/platform.yaml` verification run, materialized только convergence; env
   override и config overlay запрещены;
@@ -134,16 +260,90 @@ G16 не запускается обычным PR CI. Требуются одн�
 7. final complete GET/fingerprint equals baseline.
 
 Любое несоответствие allowlist, signature, SHA, expiry, baseline или final
-restore = immediate FAIL, mutation disable и defect. Production origin/account
-закодированы в deny-list. Approval/secrets не попадают в evidence plaintext.
+restore = immediate FAIL, mutation disable и defect. Production targets
+закодированы в deny-list; ADR-0034 разрешает единственное точное исключение
+origin/account для указанного запуска. Environment приложения `production`
+запрещён без исключений. Approval/secrets не попадают в evidence plaintext.
+
+Начальная корзина должна быть пустой. Разрешены один свежий offer без помола
+и количество не больше двух единиц Gateway. Provider checkout, заказы, счета,
+оплата, профиль и credentials не меняются. При чужих изменениях — STOP/FAIL,
+автоматическая очистка чужой корзины запрещена. Контролируемый Desired fixture
+меняет только атомарные монотонные revisions/lines/work в отдельной Orders DB;
+Observed/Attempt/Reservation/lease/fence/recovery пишет только production owner.
+После потери ответа прежний Desired сохраняется до завершения reconciliation.
+Этот сценарий не доказывает Confirm → contribution → aggregate Desired,
+API-internal delegation или Kafka broker transport; их проверяют свои gates.
+
+### Локальная проверка допуска
+
+G16 относится к #13. Закрытая историческая
+[#55](https://github.com/YurGusev/CoffeeOrderPlatform/issues/55) относит provider
+sandbox к #13; [#64](https://github.com/YurGusev/CoffeeOrderPlatform/issues/64)
+явно исключает sandbox mutations из своего scope. Gateway и convergence
+#10/#11 дают безопасные примитивы, но не заменяют этот launch-сценарий.
+
+`verification.aromaSandbox` в единственном `config/platform.yaml` по умолчанию
+равен `null`. Непустая closed policy задаёт mode, exact origin/account MAC,
+`existingAccountException`, production deny-lists, Ed25519 public keys с
+`keyId`/`approver` и existing refs `aroma.email`/`aroma.password`. Значения
+credentials не копируются в отдельную sandbox-ветку. Policy не передаётся в
+runtime-конфигурацию сервисов и сама по себе не включает mutations.
+
+Account MAC определяется ADR-0034 по authenticated email, сравненному в памяти
+с canonical credential, с существующим Gateway identity key и отдельным
+namespace. Пароль в MAC не участвует; открытые hashes email/password,
+profile/cookies и ключи в evidence запрещены. Локальный PostgreSQL ограничен
+policy `resourceLimits`: memory 1024 MiB и tmpfs 512 MiB; runtime DB names и
+resource IDs выводятся из run-id и проверяются перед доступом/cleanup.
+
+Approval проверяется по `schemas/aroma-approval.schema.json` внутри
+`verification/launch/v1/`. Detached signature в `<approval-file>.sig` — base64
+от 64 байт Ed25519; подписываются точные UTF-8 байты approval JSON, включая
+пробелы и переводы строк. Подмена байтов требует новой подписи. Проверяются
+signed mode/exception authority, run-id/SHA, origin/account, keyId/approver,
+срок не более двух часов, offerRef и maximum quantity (`"1"` или `"2"` в
+единицах Gateway). Читаемые policy/schema/inventory должны существовать в
+candidate commit и соответствовать ему; staged/unstaged изменения запрещены.
+Service delegation/transport keys для approval не используются.
+
+```sh
+pnpm launch:verify:aroma-approval -- --approval-file "$AROMA_SANDBOX_APPROVAL_FILE"
+```
+
+Offline проверка требует `COFFEE_LAUNCH_CONTEXT_FILE` текущего запуска.
+Она не расшифровывает SOPS и не выполняет HTTP/SQL/Docker операции.
+Некорректный approval даёт FAIL; отсутствующие входы — NOT_RUN. Даже успешный
+admission возвращает exit 78 и `liveWorkflow: NOT_RUN`: подпись не заменяет
+семь фактических фаз `pnpm test:aroma-sandbox`. Synthetic Gateway recovery
+proofs сохраняют свой отдельный scope. Допуск G16 возможен только после
+реальных provider effects, durable recovery и полного восстановления baseline.
+
+Для disposable Catalog используется production activation без дополнительной
+подготовки planner statistics через migrator. Cold first-import regression
+проверяется отдельно на новой БД с canonical runtime ролью и DB-бюджетами.
+Evidence разделяет `catalogStatisticsPrepared=false` и `coldDatabasePlannerProof=false`: G16
+не проверяет производительность первого импорта в новую БД без статистики.
+Исходные cold failures сохраняются отдельно (ADR-0034).
 
 ## 7. Backup/restore
+
+По явному разрешению владельца используется существующий age 1.3.2 и public
+recipient set из `.sops.yaml`. Только trusted bootstrap получает документированный
+age identity locator: `pg_dump` подаётся прямо в шифрование, расшифрованный поток
+сразу в `pg_restore`. Plaintext dump, новый private key или runtime secret scope
+не создаются. Gate читает source DB; необходимые completed/pending fixtures
+готовятся отдельно до freeze/snapshot. Проверка восстановления выполняет
+production handlers именно на restored DB с локальным provider fixture.
 
 Для каждой из пяти owner DB:
 
 1. зафиксировать migration version, owner counts и invariant hashes;
 2. `pg_dump --format=custom --no-owner --no-acl` в encrypted artifact;
-3. создать новую exact `<db>_restore_<run-id>`;
+3. создать новую exact `coffee_restore_<run-id>_<owner>`, где owner — один из
+   `customer`, `catalog`, `pricing`, `orders`, `integration`. До создания проверить
+   полное совпадение имени с текущими run-id/owner и длину UTF-8 <=63 bytes;
+   исходное длинное имя DB повторно в имя restore не включать;
 4. `pg_restore --single-transaction --exit-on-error`;
 5. запустить migration/schema/constraint/owner invariant checks;
 6. проверить pending Outbox/Inbox/Attempt/Reservation rows и запустить workers;
@@ -238,8 +438,10 @@ image по `config/toolchain-versions.json`. Node 24 считается version 
 Исходное состояние: running stack, одна unfinished reservation/UnknownOutcome и
 доступный safe observer. Процедура:
 
-1. committed/versioned изменением единственного `config/platform.yaml` установить
-   `services.aroma-convergence.mutationsEnabled=false`; overlay запрещён;
+1. создать отдельный config-only commit `D` от product candidate `B` по
+   [ADR-0035](../adr/ADR-0035-launch-rollback-config-lineage.md): в единственном
+   `config/platform.yaml` меняется только
+   `services.aroma-convergence.mutationsEnabled: true → false`; overlay запрещён;
 2. restart только `aroma-convergence`; readiness показывает режим read/recovery-only;
 3. новые mutation commands не отправляются, existing operationRef не replay;
 4. `aroma-observer` продолжает safe GET и Observed events;
@@ -247,8 +449,14 @@ image по `config/toolchain-versions.json`. Node 24 считается version 
 6. Attempt/Reservation/Desired/Observed/Inbox/Outbox сохраняются после restart;
 7. reconciliation wake-up сохраняется durable, но mutation блокируется code
    `AROMA_MUTATIONS_DISABLED`;
-8. возврат прежнего immutable config digest восстанавливает worker только после
-   fresh GET; blind mutation отсутствует.
+8. config-only commit `R` от `D` возвращает прежние байты config из `B` и
+   восстанавливает worker только после fresh GET; blind mutation отсутствует.
+
+В основном run-result остаётся product candidate `B`. Отдельное evidence G18
+обязано доказать lineage `B → D → R`, unchanged product trees, точные config hashes
+и фактическое применение каждого config runtime. Дополнительные source изменения,
+неверные parent/diff или отсутствие receipts не допускаются. Разрешение владельца
+от 24 октября касается этой узкой процедуры; оно не означает PASS G18.
 
 PASS: zero provider mutation while flag false, no durable row loss, observer и
 owner paths healthy, recovery resumes safely.
@@ -445,3 +653,84 @@ G15 также требует изменение/удаление Draft item, с
 карточки, первичный SSE refetch, logout/session switch и deep-link reload через
 Edge. Missing asset/API не возвращает index.html. Fixture evidence #9 дополняется
 интеграционным owner proof #5/#7/#8; один mock не доказывает отсутствие DB writes.
+
+`pnpm test:playwright` запускает родительский сценарий из product candidate с
+проверенным launch context и неизменённым `browserOidc: null`. Сценарий создаёт
+один отдельный дочерний checkout и config-only commit с прямым родителем
+product candidate; меняется только `browserOidc` с `null` на утверждённый
+synthetic профиль. Дочерний checkout запускает `node tools/compose-smoke.mjs
+--browser-proof` напрямую. Родитель связывает собственный context с child
+context, запечатанной lineage, полным browser artifact и cleanup; после
+удаления child checkout восстанавливает его bounded Git bundle во временный
+object store и заново проверяет прямого родителя, единственный изменённый путь
+и точные config blobs. Глобальные G00–G14 остаются привязаны к product candidate
+с `browserOidc: null`. Mock-сценарии UI остаются в `pnpm test:web-operator`.
+
+G15 сохраняет child context, lineage receipt, полный browser runtime artifact,
+оба config blob, Git bundle и parent receipt в
+`gates/G15_BROWSER/artifacts/`. Runner проверяет identities обоих запусков,
+joined exit code 0, восстановленную Git lineage, owner evidence, stdout receipt
+и отсутствие child checkout/evidence, контейнеров, сетей, volumes, временных
+ключей, NSS profile и Compose override. Один exit code 0 не является PASS.
+Synthetic login не подтверждает production IdP; actual runtime status берётся
+только из результата конкретного запуска.
+
+## 17. Запуск runner v1
+
+Из чистого checkout кандидата с установленными зависимостями закреплённых версий:
+
+```sh
+node verification/launch/v1/run.mjs \
+  --candidate-sha <полный-SHA-кандидата> \
+  --accepted-base-commit <принятая-develop-до-начала-работы>
+```
+
+Runner создаёт отдельный пустой detached checkout указанного SHA. Зависимости
+управляющего процесса не копируются в него и не заменяют G01. G00 до install использует
+YAML parser из проверенного исходного checkout; отчёт G19 использует только
+встроенные модули Node. `COFFEE_LAUNCH_CONTEXT_FILE` передаёт служебные пути и identity
+запуска, без настроек приложения и секретов. Необязательный `--github-snapshot`
+задаёт reference artifact; он не заменяет свежую проверку GitHub authority.
+
+Для дочерних gate-команд runner задаёт служебную настройку pnpm
+`pnpm_config_verify_deps_before_run=false`: в pnpm 11 стандартное поведение
+[`verifyDepsBeforeRun=install`](https://pnpm.io/settings/build#verifydepsbeforerun)
+может установить зависимости ещё до G00. Отключается только автоматическая
+проверка/установка перед script; явный `pnpm install --frozen-lockfile` остаётся
+исключительной командой G01. Exact argv gates не меняется. Это настройка
+инструмента проверки, а не override конфигурации приложения.
+
+Результаты сохраняются в `evidence/launch/<run-id>/` и
+`docs/reports/launch/<run-id>/ОТЧЁТ.md`; временный checkout удаляется после
+сохранения результата. При `НЕ ДОПУСТИТЬ` runner возвращает exit 1. Новый запуск
+требует нового run-id; предыдущие evidence сохраняются. G19 создаёт отчёт и
+checksums даже после отказа G00, когда install и все downstream gates не запущены.
+Новый `checksums.sha256` содержит стандартные строки `SHA-256  relative-path`.
+Проверка из корня репозитория:
+
+```sh
+sha256sum -c evidence/launch/<run-id>/checksums.sha256
+```
+
+Размеры файлов хранятся в artifact records и отчёте. Evidence предыдущего run-id
+сохраняет исходный формат и проверяется verifier из его candidate SHA; задним
+числом не преобразуется.
+
+Наличие runner не подтверждает launch acceptance. Отсутствующая exact command,
+непроверенный handoff, несовместимый host или отсутствие sandbox approval
+сохраняют блокировку. Runner не создаёт production/test infrastructure и не
+подменяет недостающие сценарии соседними suites; такие gaps устраняются отдельно
+по defect workflow раздела 10. Запуск закреплённых images, изолированные DB/roles,
+полный native stack и provider admission требуют собственных фактических proofs.
+
+Выявлено противоречие имени Compose project в разделе 3: run-id содержит
+заглавные `T`/`Z`, а Compose принимает только строчные буквы, цифры, `_` и `-`.
+G00 фиксирует `composeProjectSyntaxValid=false`; скрытая нормализация имени
+запрещена. До отдельного согласованного исправления норматива это blocker.
+
+Проверки самого runner и G00 входят в `pnpm test`; узкий запуск:
+
+```sh
+node --test verification/launch/v1/runner.test.mjs \
+  verification/launch/v1/scenarios/preflight.test.mjs
+```

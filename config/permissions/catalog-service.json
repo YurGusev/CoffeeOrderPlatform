@@ -2,7 +2,17 @@
   "schemaVersion": 1,
   "runtime": "catalog-service",
   "allowNet": ["coffee_postgres:5432"],
-  "allowFsRead": ["/app/config/platform.yaml", "/app/apps", "/app/dist", "/app/node_modules", "/app/packages", "/app/package.json", "/run/secrets/coffee-platform.yaml"],
+  "allowFsRead": [
+    "/app/config/platform.yaml",
+    "/app/apps",
+    "/app/dist",
+    "/app/node_modules",
+    "/app/packages",
+    "/app/package.json",
+    "/run/secrets/coffee-platform.yaml",
+    "/run/coffee-launch/context.json",
+    "/app/config/database-ownership.json"
+  ],
   "allowFsWrite": [],
   "allowChildProcess": false,
   "allowWorker": false,

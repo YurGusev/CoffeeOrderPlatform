@@ -22,8 +22,8 @@ NODE_VERSION = "26.8.1"
 NPM_VERSION = "11.19.0"
 COREPACK_VERSION = "0.35.0"
 PNPM_VERSION = "11.24.0"
-IMAGE_INDEX_DIGEST = "sha256:367679cf9792759492a486e4aa4b421764d71a9546a6dae8aab81a99eb797b3e"
-IMAGE_AMD64_DIGEST = "sha256:27f5e13512830beb5d9a574108daa6701a0a0b91528aeaf1ee84ecdcddaeeaae"
+IMAGE_INDEX_DIGEST = "sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3"
+IMAGE_AMD64_DIGEST = "sha256:ad6400dee476b06e82d0ee3a088e2d7555f6e6569c346e61d69e14d0f19e8c2b"
 
 TS7_DECISION = "ADR-COP-TS7-NATIVE-001"
 TS7_PINS = {
@@ -244,20 +244,20 @@ def validate_foundation(doc: dict[str, Any]) -> None:
     require(isinstance(image, dict), "foundation.productionImage: object required")
     required_keys(image, {"repository", "tag", "indexDigest", "platform", "platformManifestDigest", "reference"}, "foundation.productionImage")
     require(image["repository"] == "docker.io/library/node", "foundation.productionImage.repository: wrong image")
-    require(image["tag"] == "26.8.1-bookworm-slim", "foundation.productionImage.tag: floating or wrong image")
+    require(image["tag"] == "26.8.1-alpine", "foundation.productionImage.tag: floating or wrong image")
     require(image["platform"] == "linux/amd64", "foundation.productionImage.platform: target platform must be linux/amd64")
     require(image["indexDigest"] == IMAGE_INDEX_DIGEST, "foundation.productionImage.indexDigest: unverified image index digest")
     require(image["platformManifestDigest"] == IMAGE_AMD64_DIGEST, "foundation.productionImage.platformManifestDigest: unverified target digest")
-    require(image["reference"] == f"node:26.8.1-bookworm-slim@{IMAGE_AMD64_DIGEST}", "foundation.productionImage.reference: image must pin target digest")
+    require(image["reference"] == f"node:26.8.1-alpine@{IMAGE_INDEX_DIGEST}", "foundation.productionImage.reference: image must pin verified index digest")
     for field in ("platformManifestDigest", "indexDigest"):
         require(re.fullmatch(r"sha256:[0-9a-f]{64}", image[field]) is not None, f"foundation.productionImage.{field}: invalid digest")
     require("latest" not in image["tag"] and "24" not in image["tag"], "foundation.productionImage: forbidden floating/Node24 image")
 
     registry = doc["registryVerification"]
     require(registry == {
-        "verifiedAt": "2026-09-01",
-        "command": "docker buildx imagetools inspect node:26.8.1-bookworm-slim",
-        "digestPolicy": "record-index-and-pin-target-platform-manifest",
+        "verifiedAt": "2026-10-29",
+        "command": "docker buildx imagetools inspect node:26.8.1-alpine",
+        "digestPolicy": "pin-index-and-verify-target-platform-manifest",
     }, "foundation.registryVerification: registry evidence changed")
 
     ts7 = doc["toolchainDecision"]

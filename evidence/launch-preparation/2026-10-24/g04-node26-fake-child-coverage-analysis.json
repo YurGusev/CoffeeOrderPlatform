@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "finding": "G04-COVERAGE-004",
+  "recordedAtUtc": "2026-10-24T18:24:24.943459Z",
+  "nodeVersion": "26.8.1",
+  "cause": "Fake child.pid used own process PID without exit status. killTree called process.kill(-own_pid,SIGTERM); Node native Kill invokes RunAtExit before uv_kill, ending V8 collection even when process-group signalling fails.",
+  "productionCleanupChanged": false,
+  "declaredCoverageFloorsChanged": false,
+  "fix": "Fake children set exitCode/signalCode before close; scoped process.kill mock prevents all real signalling through escalation.",
+  "testSourceSha256": "d390b65c26127e76a67919bfb818758a1edde683e6cbe83e46a3df3c30870adb",
+  "independentAfterFix": {
+    "tests": 30,
+    "pass": 30,
+    "fail": 0,
+    "functionCounts": {
+      "readG17BackupCredential": 2,
+      "validateG17SocketDirectoryMetadata": 5,
+      "validateG17SocketDirectory": 15,
+      "validateG17BackupTarget": 5
+    }
+  },
+  "primarySources": [
+    "https://github.com/nodejs/node/blob/v26.8.1/src/node_process_methods.cc#L169-L191",
+    "https://github.com/nodejs/node/blob/v26.8.1/src/inspector_profiler.cc#L419-L465"
+  ],
+  "artifacts": [
+    {
+      "artifact": "evidence/launch-preparation/2026-10-24/g04-coverage-004/before-only.tap",
+      "sha256": "fdf4e02d49130c6f2608001af2c81e73e89a9bc9cc757be45730efc0f4a1eb6d"
+    },
+    {
+      "artifact": "evidence/launch-preparation/2026-10-24/g04-coverage-004/before-only.lcov",
+      "sha256": "54dd88c6aaef040a7670923defaf7b5a44a8eb00e22b56187a3478ebfdcf62f8"
+    },
+    {
+      "artifact": "evidence/launch-preparation/2026-10-24/g04-coverage-004/before-focused.tap",
+      "sha256": "29a283b029e40769f1eac80150c5b442802bdbfc95a03f7408a143e894fa7c13"
+    },
+    {
+      "artifact": "evidence/launch-preparation/2026-10-24/g04-coverage-004/before-focused.lcov",
+      "sha256": "15daf916feec3da1cf685f314816dda5b395df9ebd8d832b60e12f21658c26ee"
+    },
+    {
+      "artifact": "evidence/launch-preparation/2026-10-24/g04-coverage-004/before-failurefocused.tap",
+      "sha256": "e7c504ed13766e9ee43f6e1ee41b11d58655fd1ce394bce33c702c8abab7116d"
+    },
+    {
+      "artifact": "evidence/launch-preparation/2026-10-24/g04-coverage-004/before-failurefocused.lcov",
+      "sha256": "b7011cbac34233341c50766ce482efaff4d749bcc1cafcf257389145d810e1e6"
+    },
+    {
+      "artifact": "evidence/launch-preparation/2026-10-24/g04-coverage-004/after-fixed.tap",
+      "sha256": "80334de26db472bd36aa6f1dd56af369c9d5807cc65796052b583869a6c12ae6"
+    },
+    {
+      "artifact": "evidence/launch-preparation/2026-10-24/g04-coverage-004/after-fixed.lcov",
+      "sha256": "3c2e5f5a0ef4719b25e03da3858bff22151773691ceedd20da43097061371447"
+    }
+  ],
+  "limitations": "Focused native test-runner reproduction only; not G04 gate PASS. A fresh full G04 is required."
+}

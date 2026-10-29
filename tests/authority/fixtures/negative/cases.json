@@ -1,41 +1,419 @@
 [
-  {"id":"missing-nginx-sse-route","manifest":"launch-v1-runtime-profile.json","path":["routeMounts"],"operation":"remove-index","value":1,"expected":{"ruleId":"NGINX_SSE_ROUTE_REQUIRED","message":"routeMounts"}},
-  {"id":"nginx-sse-route-to-api","manifest":"launch-v1-runtime-profile.json","path":["routeMounts",1,"target"],"operation":"replace","value":"api-public","expected":{"ruleId":"NGINX_SSE_ROUTE_EXACT","message":"routeMounts"}},
-  {"id":"node-24","manifest":"runtime-foundation-decision.json","path":["runtime","node"],"operation":"replace","value":"24.0.0","expected":{"ruleId":"FOUNDATION_NODE_VERSION","message":"foundation.node.node"}},
-  {"id":"floating-production-image","manifest":"runtime-foundation-decision.json","path":["productionImage","tag"],"operation":"replace","value":"26-bookworm-slim","expected":{"ruleId":"FOUNDATION_IMAGE_PIN","message":"foundation.productionImage.tag"}},
-  {"id":"wrong-pnpm-pin","manifest":"runtime-foundation-decision.json","path":["runtime","packageManager"],"operation":"replace","value":"pnpm@11.22.0","expected":{"ruleId":"FOUNDATION_PNPM_VERSION","message":"foundation.node.packageManager"}},
-  {"id":"second-typescript-lane","manifest":"runtime-foundation-decision.json","path":["toolchainDecision","compilerLanes"],"operation":"replace","value":2,"expected":{"ruleId":"TS7_SINGLE_COMPILER_LANE","message":"compilerLanes"}},
-  {"id":"runtime-inventory-missing","manifest":"launch-v1-runtime-profile.json","path":["runtimes"],"operation":"remove-index","value":14,"expected":{"ruleId":"PROFILE_EXACT_RUNTIME_SET","message":"exact 15-runtime"}},
-  {"id":"runtime-implemented","manifest":"launch-v1-runtime-profile.json","path":["runtimes",0,"implemented"],"operation":"replace","value":true,"expected":{"ruleId":"PROFILE_IMPLEMENTED_FALSE","message":"implemented: authority"}},
-  {"id":"api-agent-compose","manifest":"launch-v1-runtime-profile.json","path":["specialRoles","api-agent","composeEntryAllowed"],"operation":"replace","value":true,"expected":{"ruleId":"API_AGENT_NO_COMPOSE","message":"api-agent"}},
-  {"id":"config-bootstrap-daemon","manifest":"launch-v1-runtime-profile.json","path":["specialRoles","config-bootstrap","longRunning"],"operation":"replace","value":true,"expected":{"ruleId":"CONFIG_BOOTSTRAP_INIT_ONLY","message":"configBootstrap"}},
-  {"id":"nginx-to-owner","manifest":"launch-v1-runtime-profile.json","path":["routeMounts",0,"target"],"operation":"replace","value":"orders-service","expected":{"ruleId":"NGINX_NO_OWNER_ROUTE","message":"routeMounts"}},
-  {"id":"client-surface-on-internal","manifest":"launch-v1-runtime-profile.json","path":["surfaceIsolation","api-public"],"operation":"replace","value":["internal-v1"],"expected":{"ruleId":"SURFACE_ISOLATION","message":"surfaceIsolation"}},
-  {"id":"api-public-db-secret","manifest":"launch-v1-runtime-profile.json","path":["runtimes",1,"secretRefs"],"operation":"replace","value":["postgres.api-public"],"expected":{"ruleId":"API_ROOT_NO_DB_SECRET","message":"api-public.secretRefs"}},
-  {"id":"provider-egress-observer","manifest":"launch-v1-runtime-profile.json","path":["runtimes",10,"networkZone"],"operation":"replace","value":"provider-egress","expected":{"ruleId":"PROVIDER_EGRESS_GATEWAY_ONLY","message":"aroma-observer.networkZone"}},
-  {"id":"forged-mutation-caller","manifest":"launch-v1-runtime-profile.json","path":["delegation","internalService","gatewayMutationOriginalCaller"],"operation":"replace","value":"aroma-observer","expected":{"ruleId":"MUTATION_ONLY_CONVERGENCE","message":"profile.delegation.internal"}},
-  {"id":"catalog-identity-not-hmac","manifest":"launch-v1-runtime-profile.json","path":["catalogIdentity","algorithm"],"operation":"replace","value":"sha256","expected":{"ruleId":"CATALOG_HMAC_IDENTITY","message":"profile.catalogIdentity"}},
-  {"id":"catalog-identity-wrong-framing","manifest":"launch-v1-runtime-profile.json","path":["catalogIdentity","input"],"operation":"replace","value":["supplierRef"],"expected":{"ruleId":"CATALOG_IDENTITY_FRAMING","message":"profile.catalogIdentity"}},
-  {"id":"catalog-identity-non-nul-separator","manifest":"launch-v1-runtime-profile.json","path":["catalogIdentity","separatorByte"],"operation":"replace","value":1,"expected":{"ruleId":"CATALOG_IDENTITY_NUL_SEPARATOR","message":"profile.catalogIdentity"}},
-  {"id":"catalog-identity-variant-ref-generation","manifest":"launch-v1-runtime-profile.json","path":["catalogIdentity","variantIdPolicy"],"operation":"replace","value":"generate","expected":{"ruleId":"CATALOG_VARIANT_ID_NEVER_GENERATED","message":"profile.catalogIdentity"}},
-  {"id":"catalog-identity-upper-hex","manifest":"launch-v1-runtime-profile.json","path":["catalogIdentity","outputEncoding"],"operation":"replace","value":"hex","expected":{"ruleId":"CATALOG_IDENTITY_LOWER_HEX","message":"profile.catalogIdentity"}},
-  {"id":"catalog-identity-shared-key-input","manifest":"launch-v1-runtime-profile.json","path":["catalogIdentity","keyInput"],"operation":"replace","value":"session-key","expected":{"ruleId":"CATALOG_IDENTITY_DEDICATED_KEY","message":"profile.catalogIdentity"}},
-  {"id":"silent-offer-remap","manifest":"launch-v1-runtime-profile.json","path":["ordersAuthority","confirmedOfferPolicy"],"operation":"replace","value":"automatic-remap","expected":{"ruleId":"FROZEN_OFFER_NO_REMAP","message":"profile.ordersAuthority"}},
-  {"id":"compare-revisions","manifest":"launch-v1-runtime-profile.json","path":["ordersAuthority","desiredObservedComparison"],"operation":"replace","value":"revision-equality","expected":{"ruleId":"PROJECTION_VERSION_SEPARATION","message":"profile.ordersAuthority"}},
-  {"id":"duplicate-transport-san","manifest":"launch-v1-runtime-profile.json","path":["transportIdentity","identities",1],"operation":"replace","value":"edge-gateway","expected":{"ruleId":"IDENTITY_UNIQUE_SAN","message":"profile.transportIdentity"}},
-  {"id":"provider-policy-not-gateway","manifest":"launch-v1-connectivity-policy.json","path":["runtimePolicies",11,"allowedExternalEgress"],"operation":"replace","value":["evil.example:443"],"expected":{"ruleId":"PROVIDER_EGRESS_GATEWAY_ONLY","message":"provider egress is Gateway-only"}},
-  {"id":"target-path-outside-apps","manifest":"target-layout.json","path":["runtimeRoots",3,"path"],"operation":"replace","value":"platform/nginx","expected":{"ruleId":"TARGET_LAYOUT_EXACT_PATH","message":"target-layout.runtimeRoots.edge-nginx"}},
-  {"id":"unknown-profile-field","manifest":"launch-v1-runtime-profile.json","path":["unexpected"],"operation":"replace","value":true,"expected":{"ruleId":"PROFILE_CLOSED_OBJECT","message":"unknown fields"}},
-  {"id":"internal-route-in-public","manifest":"launch-v1-runtime-profile.json","path":["runtimes",1,"httpSurfaces"],"operation":"replace","value":["internal-v1"],"expected":{"ruleId":"PUBLIC_SURFACE_ONLY_CLIENT","message":"api-public.httpSurfaces"}},
-  {"id":"client-route-in-internal","manifest":"launch-v1-runtime-profile.json","path":["runtimes",2,"httpSurfaces"],"operation":"replace","value":["client-v1"],"expected":{"ruleId":"INTERNAL_SURFACE_ONLY_INTERNAL","message":"api-internal.httpSurfaces"}},
-  {"id":"kafka-secret-on-public-root","manifest":"launch-v1-runtime-profile.json","path":["runtimes",1,"secretRefs"],"operation":"replace","value":["kafka.api-public"],"expected":{"ruleId":"API_ROOT_NO_KAFKA_SECRET","message":"api-public.secretRefs"}},
-  {"id":"provider-secret-on-internal-root","manifest":"launch-v1-runtime-profile.json","path":["runtimes",2,"secretRefs"],"operation":"replace","value":["provider.api-internal"],"expected":{"ruleId":"API_ROOT_NO_PROVIDER_SECRET","message":"api-internal.secretRefs"}},
-  {"id":"shared-orders-db-role","manifest":"launch-v1-runtime-profile.json","path":["runtimes",8,"dbPrincipal"],"operation":"replace","value":"coffee_orders_rw","expected":{"ruleId":"ORDERS_DB_PRINCIPAL_EXACT","message":"orders-service.dbPrincipal"}},
-  {"id":"mutation-from-observer-allowlist","manifest":"launch-v1-runtime-profile.json","path":["internalOperationAllowlist",6,"originalCaller"],"operation":"replace","value":"aroma-observer","expected":{"ruleId":"MUTATION_CALLER_CONVERGENCE_ONLY","message":"internalOperationAllowlist"}},
-  {"id":"wrong-public-audience","manifest":"launch-v1-runtime-profile.json","path":["delegation","publicActor","edgeAssertionAudience"],"operation":"replace","value":"api-internal","expected":{"ruleId":"PUBLIC_DELEGATION_AUDIENCE","message":"profile.delegation.publicActor"}},
-  {"id":"wrong-transport-caller","manifest":"launch-v1-runtime-profile.json","path":["delegation","internalService","transportCallerAtTarget"],"operation":"replace","value":"aroma-observer","expected":{"ruleId":"INTERNAL_TRANSPORT_CALLER","message":"profile.delegation.internal"}},
-  {"id":"expired-identity-metadata","manifest":"launch-v1-runtime-profile.json","path":["transportIdentity","certificateTtlHours"],"operation":"replace","value":0,"expected":{"ruleId":"IDENTITY_EXPIRY_POLICY","message":"profile.transportIdentity"}},
-  {"id":"rotation-window-metadata","manifest":"launch-v1-runtime-profile.json","path":["transportIdentity","rotateBeforeExpiryHours"],"operation":"replace","value":24,"expected":{"ruleId":"IDENTITY_ROTATION_POLICY","message":"profile.transportIdentity"}},
-  {"id":"revoked-identity-reissue","manifest":"launch-v1-runtime-profile.json","path":["transportIdentity","revocationMode"],"operation":"replace","value":"none","expected":{"ruleId":"IDENTITY_REVOCATION_POLICY","message":"profile.transportIdentity"}},
-  {"id":"missing-previous-trust-overlap","manifest":"launch-v1-runtime-profile.json","path":["transportIdentity","activePreviousTrustRequired"],"operation":"replace","value":false,"expected":{"ruleId":"IDENTITY_ROTATION_OVERLAP","message":"profile.transportIdentity"}}
+  {
+    "id": "missing-nginx-sse-route",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["routeMounts"],
+    "operation": "remove-index",
+    "value": 1,
+    "expected": {
+      "ruleId": "NGINX_SSE_ROUTE_REQUIRED",
+      "message": "routeMounts"
+    }
+  },
+  {
+    "id": "nginx-sse-route-to-api",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["routeMounts", 1, "target"],
+    "operation": "replace",
+    "value": "api-public",
+    "expected": { "ruleId": "NGINX_SSE_ROUTE_EXACT", "message": "routeMounts" }
+  },
+  {
+    "id": "node-24",
+    "manifest": "runtime-foundation-decision.json",
+    "path": ["runtime", "node"],
+    "operation": "replace",
+    "value": "24.0.0",
+    "expected": {
+      "ruleId": "FOUNDATION_NODE_VERSION",
+      "message": "foundation.node.node"
+    }
+  },
+  {
+    "id": "floating-production-image",
+    "manifest": "runtime-foundation-decision.json",
+    "path": ["productionImage", "tag"],
+    "operation": "replace",
+    "value": "26-bookworm-slim",
+    "expected": {
+      "ruleId": "FOUNDATION_IMAGE_PIN",
+      "message": "foundation.productionImage.tag"
+    }
+  },
+  {
+    "id": "wrong-pnpm-pin",
+    "manifest": "runtime-foundation-decision.json",
+    "path": ["runtime", "packageManager"],
+    "operation": "replace",
+    "value": "pnpm@11.22.0",
+    "expected": {
+      "ruleId": "FOUNDATION_PNPM_VERSION",
+      "message": "foundation.node.packageManager"
+    }
+  },
+  {
+    "id": "second-typescript-lane",
+    "manifest": "runtime-foundation-decision.json",
+    "path": ["toolchainDecision", "compilerLanes"],
+    "operation": "replace",
+    "value": 2,
+    "expected": {
+      "ruleId": "TS7_SINGLE_COMPILER_LANE",
+      "message": "compilerLanes"
+    }
+  },
+  {
+    "id": "runtime-inventory-missing",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes"],
+    "operation": "remove-index",
+    "value": 14,
+    "expected": {
+      "ruleId": "PROFILE_EXACT_RUNTIME_SET",
+      "message": "exact 15-runtime"
+    }
+  },
+  {
+    "id": "runtime-implemented",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes", 0, "implemented"],
+    "operation": "replace",
+    "value": true,
+    "expected": {
+      "ruleId": "PROFILE_IMPLEMENTED_FALSE",
+      "message": "implemented: authority"
+    }
+  },
+  {
+    "id": "api-agent-compose",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["specialRoles", "api-agent", "composeEntryAllowed"],
+    "operation": "replace",
+    "value": true,
+    "expected": { "ruleId": "API_AGENT_NO_COMPOSE", "message": "api-agent" }
+  },
+  {
+    "id": "config-bootstrap-daemon",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["specialRoles", "config-bootstrap", "longRunning"],
+    "operation": "replace",
+    "value": true,
+    "expected": {
+      "ruleId": "CONFIG_BOOTSTRAP_INIT_ONLY",
+      "message": "configBootstrap"
+    }
+  },
+  {
+    "id": "nginx-to-owner",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["routeMounts", 0, "target"],
+    "operation": "replace",
+    "value": "orders-service",
+    "expected": { "ruleId": "NGINX_NO_OWNER_ROUTE", "message": "routeMounts" }
+  },
+  {
+    "id": "client-surface-on-internal",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["surfaceIsolation", "api-public"],
+    "operation": "replace",
+    "value": ["internal-v1"],
+    "expected": { "ruleId": "SURFACE_ISOLATION", "message": "surfaceIsolation" }
+  },
+  {
+    "id": "api-public-db-secret",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes", 1, "secretRefs"],
+    "operation": "replace",
+    "value": ["postgres.api-public"],
+    "expected": {
+      "ruleId": "API_ROOT_NO_DB_SECRET",
+      "message": "api-public.secretRefs"
+    }
+  },
+  {
+    "id": "provider-egress-observer",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes", 10, "networkZone"],
+    "operation": "replace",
+    "value": "provider-egress",
+    "expected": {
+      "ruleId": "PROVIDER_EGRESS_GATEWAY_ONLY",
+      "message": "aroma-observer.networkZone"
+    }
+  },
+  {
+    "id": "forged-mutation-caller",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["delegation", "internalService", "gatewayMutationOriginalCaller"],
+    "operation": "replace",
+    "value": "aroma-observer",
+    "expected": {
+      "ruleId": "MUTATION_ONLY_CONVERGENCE",
+      "message": "profile.delegation.internal"
+    }
+  },
+  {
+    "id": "catalog-identity-not-hmac",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["catalogIdentity", "algorithm"],
+    "operation": "replace",
+    "value": "sha256",
+    "expected": {
+      "ruleId": "CATALOG_HMAC_IDENTITY",
+      "message": "profile.catalogIdentity"
+    }
+  },
+  {
+    "id": "catalog-identity-wrong-framing",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["catalogIdentity", "input"],
+    "operation": "replace",
+    "value": ["supplierRef"],
+    "expected": {
+      "ruleId": "CATALOG_IDENTITY_FRAMING",
+      "message": "profile.catalogIdentity"
+    }
+  },
+  {
+    "id": "catalog-identity-non-nul-separator",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["catalogIdentity", "separatorByte"],
+    "operation": "replace",
+    "value": 1,
+    "expected": {
+      "ruleId": "CATALOG_IDENTITY_NUL_SEPARATOR",
+      "message": "profile.catalogIdentity"
+    }
+  },
+  {
+    "id": "catalog-identity-variant-ref-generation",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["catalogIdentity", "variantIdPolicy"],
+    "operation": "replace",
+    "value": "generate",
+    "expected": {
+      "ruleId": "CATALOG_VARIANT_ID_NEVER_GENERATED",
+      "message": "profile.catalogIdentity"
+    }
+  },
+  {
+    "id": "catalog-identity-upper-hex",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["catalogIdentity", "outputEncoding"],
+    "operation": "replace",
+    "value": "hex",
+    "expected": {
+      "ruleId": "CATALOG_IDENTITY_LOWER_HEX",
+      "message": "profile.catalogIdentity"
+    }
+  },
+  {
+    "id": "catalog-identity-shared-key-input",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["catalogIdentity", "keyInput"],
+    "operation": "replace",
+    "value": "session-key",
+    "expected": {
+      "ruleId": "CATALOG_IDENTITY_DEDICATED_KEY",
+      "message": "profile.catalogIdentity"
+    }
+  },
+  {
+    "id": "silent-offer-remap",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["ordersAuthority", "confirmedOfferPolicy"],
+    "operation": "replace",
+    "value": "automatic-remap",
+    "expected": {
+      "ruleId": "FROZEN_OFFER_NO_REMAP",
+      "message": "profile.ordersAuthority"
+    }
+  },
+  {
+    "id": "compare-revisions",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["ordersAuthority", "desiredObservedComparison"],
+    "operation": "replace",
+    "value": "revision-equality",
+    "expected": {
+      "ruleId": "PROJECTION_VERSION_SEPARATION",
+      "message": "profile.ordersAuthority"
+    }
+  },
+  {
+    "id": "duplicate-transport-san",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["transportIdentity", "identities", 1],
+    "operation": "replace",
+    "value": "edge-gateway",
+    "expected": {
+      "ruleId": "IDENTITY_UNIQUE_SAN",
+      "message": "profile.transportIdentity"
+    }
+  },
+  {
+    "id": "provider-policy-not-gateway",
+    "manifest": "launch-v1-connectivity-policy.json",
+    "path": ["runtimePolicies", 11, "allowedExternalEgress"],
+    "operation": "replace",
+    "value": ["evil.example:443"],
+    "expected": {
+      "ruleId": "PROVIDER_EGRESS_GATEWAY_ONLY",
+      "message": "provider egress is Gateway-only"
+    }
+  },
+  {
+    "id": "target-path-outside-apps",
+    "manifest": "target-layout.json",
+    "path": ["runtimeRoots", 3, "path"],
+    "operation": "replace",
+    "value": "platform/nginx",
+    "expected": {
+      "ruleId": "TARGET_LAYOUT_EXACT_PATH",
+      "message": "target-layout.runtimeRoots.edge-nginx"
+    }
+  },
+  {
+    "id": "unknown-profile-field",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["unexpected"],
+    "operation": "replace",
+    "value": true,
+    "expected": {
+      "ruleId": "PROFILE_CLOSED_OBJECT",
+      "message": "unknown fields"
+    }
+  },
+  {
+    "id": "internal-route-in-public",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes", 1, "httpSurfaces"],
+    "operation": "replace",
+    "value": ["internal-v1"],
+    "expected": {
+      "ruleId": "PUBLIC_SURFACE_ONLY_CLIENT",
+      "message": "api-public.httpSurfaces"
+    }
+  },
+  {
+    "id": "client-route-in-internal",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes", 2, "httpSurfaces"],
+    "operation": "replace",
+    "value": ["client-v1"],
+    "expected": {
+      "ruleId": "INTERNAL_SURFACE_ONLY_INTERNAL",
+      "message": "api-internal.httpSurfaces"
+    }
+  },
+  {
+    "id": "kafka-secret-on-public-root",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes", 1, "secretRefs"],
+    "operation": "replace",
+    "value": ["kafka.api-public"],
+    "expected": {
+      "ruleId": "API_ROOT_NO_KAFKA_SECRET",
+      "message": "api-public.secretRefs"
+    }
+  },
+  {
+    "id": "provider-secret-on-internal-root",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes", 2, "secretRefs"],
+    "operation": "replace",
+    "value": ["provider.api-internal"],
+    "expected": {
+      "ruleId": "API_ROOT_NO_PROVIDER_SECRET",
+      "message": "api-internal.secretRefs"
+    }
+  },
+  {
+    "id": "shared-orders-db-role",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["runtimes", 8, "dbPrincipal"],
+    "operation": "replace",
+    "value": "coffee_orders_rw",
+    "expected": {
+      "ruleId": "ORDERS_DB_PRINCIPAL_EXACT",
+      "message": "orders-service.dbPrincipal"
+    }
+  },
+  {
+    "id": "mutation-from-observer-allowlist",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["internalOperationAllowlist", 6, "originalCaller"],
+    "operation": "replace",
+    "value": "aroma-observer",
+    "expected": {
+      "ruleId": "MUTATION_CALLER_CONVERGENCE_ONLY",
+      "message": "internalOperationAllowlist"
+    }
+  },
+  {
+    "id": "wrong-public-audience",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["delegation", "publicActor", "edgeAssertionAudience"],
+    "operation": "replace",
+    "value": "api-internal",
+    "expected": {
+      "ruleId": "PUBLIC_DELEGATION_AUDIENCE",
+      "message": "profile.delegation.publicActor"
+    }
+  },
+  {
+    "id": "wrong-transport-caller",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["delegation", "internalService", "transportCallerAtTarget"],
+    "operation": "replace",
+    "value": "aroma-observer",
+    "expected": {
+      "ruleId": "INTERNAL_TRANSPORT_CALLER",
+      "message": "profile.delegation.internal"
+    }
+  },
+  {
+    "id": "expired-identity-metadata",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["transportIdentity", "certificateTtlHours"],
+    "operation": "replace",
+    "value": 0,
+    "expected": {
+      "ruleId": "IDENTITY_EXPIRY_POLICY",
+      "message": "profile.transportIdentity"
+    }
+  },
+  {
+    "id": "rotation-window-metadata",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["transportIdentity", "rotateBeforeExpiryHours"],
+    "operation": "replace",
+    "value": 24,
+    "expected": {
+      "ruleId": "IDENTITY_ROTATION_POLICY",
+      "message": "profile.transportIdentity"
+    }
+  },
+  {
+    "id": "revoked-identity-reissue",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["transportIdentity", "revocationMode"],
+    "operation": "replace",
+    "value": "none",
+    "expected": {
+      "ruleId": "IDENTITY_REVOCATION_POLICY",
+      "message": "profile.transportIdentity"
+    }
+  },
+  {
+    "id": "missing-previous-trust-overlap",
+    "manifest": "launch-v1-runtime-profile.json",
+    "path": ["transportIdentity", "activePreviousTrustRequired"],
+    "operation": "replace",
+    "value": false,
+    "expected": {
+      "ruleId": "IDENTITY_ROTATION_OVERLAP",
+      "message": "profile.transportIdentity"
+    }
+  }
 ]

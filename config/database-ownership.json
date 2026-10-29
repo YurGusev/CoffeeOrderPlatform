@@ -3,41 +3,146 @@
   "schemaVersion": 1,
   "authorityRef": "docs/launch/05_DATA_OWNERSHIP.md",
   "databases": [
-    {"name": "coffee_platform_customer", "owner": "customer", "migrationOwner": "customer-service", "migratorRole": "coffee_customer_migrator", "migrationPath": "apps/customer-service/migrations"},
-    {"name": "coffee_platform_catalog", "owner": "catalog", "migrationOwner": "catalog-service", "migratorRole": "coffee_catalog_migrator", "migrationPath": "apps/catalog-service/migrations"},
-    {"name": "coffee_platform_pricing", "owner": "pricing", "migrationOwner": "pricing-service", "migratorRole": "coffee_pricing_migrator", "migrationPath": "apps/pricing-service/migrations"},
-    {"name": "coffee_platform_orders", "owner": "orders", "migrationOwner": "orders-service", "migratorRole": "coffee_orders_migrator", "migrationPath": "apps/orders-service/migrations"},
-    {"name": "coffee_platform_integration", "owner": "integration", "migrationOwner": "aroma-gateway", "migratorRole": "coffee_integration_migrator", "migrationPath": "apps/aroma-gateway/migrations"}
+    {
+      "name": "coffee_platform_customer",
+      "owner": "customer",
+      "migrationOwner": "customer-service",
+      "migratorRole": "coffee_customer_migrator",
+      "migrationPath": "apps/customer-service/migrations"
+    },
+    {
+      "name": "coffee_platform_catalog",
+      "owner": "catalog",
+      "migrationOwner": "catalog-service",
+      "migratorRole": "coffee_catalog_migrator",
+      "migrationPath": "apps/catalog-service/migrations"
+    },
+    {
+      "name": "coffee_platform_pricing",
+      "owner": "pricing",
+      "migrationOwner": "pricing-service",
+      "migratorRole": "coffee_pricing_migrator",
+      "migrationPath": "apps/pricing-service/migrations"
+    },
+    {
+      "name": "coffee_platform_orders",
+      "owner": "orders",
+      "migrationOwner": "orders-service",
+      "migratorRole": "coffee_orders_migrator",
+      "migrationPath": "apps/orders-service/migrations"
+    },
+    {
+      "name": "coffee_platform_integration",
+      "owner": "integration",
+      "migrationOwner": "aroma-gateway",
+      "migratorRole": "coffee_integration_migrator",
+      "migrationPath": "apps/aroma-gateway/migrations"
+    }
   ],
   "runtimeClaims": [
-    {"runtime": "edge-gateway", "database": null, "role": null, "secretRef": null},
-    {"runtime": "api-public", "database": null, "role": null, "secretRef": null},
-    {"runtime": "api-internal", "database": null, "role": null, "secretRef": null},
-    {"runtime": "edge-nginx", "database": null, "role": null, "secretRef": null},
-    {"runtime": "customer-service", "database": "coffee_platform_customer", "role": "coffee_customer_rw", "secretRef": "postgres.customer"},
-    {"runtime": "catalog-service", "database": "coffee_platform_catalog", "role": "coffee_catalog_api_ro", "secretRef": "postgres.catalogApi"},
-    {"runtime": "catalog-supplier-sync", "database": "coffee_platform_catalog", "role": "coffee_catalog_import_rw", "secretRef": "postgres.catalogImport"},
-    {"runtime": "catalog-activation-worker", "database": "coffee_platform_catalog", "role": "coffee_catalog_activate_rw", "secretRef": "postgres.catalogActivate"},
-    {"runtime": "pricing-service", "database": "coffee_platform_pricing", "role": "coffee_pricing_rw", "secretRef": "postgres.pricing"},
-    {"runtime": "orders-service", "database": "coffee_platform_orders", "role": "coffee_orders_service_rw", "secretRef": "postgres.ordersService"},
-    {"runtime": "orders-aroma-preparation", "database": "coffee_platform_orders", "role": "coffee_orders_prepare_rw", "secretRef": "postgres.ordersPreparation"},
-    {"runtime": "aroma-observer", "database": "coffee_platform_orders", "role": "coffee_orders_observer_rw", "secretRef": "postgres.aromaObserver"},
-    {"runtime": "aroma-convergence", "database": "coffee_platform_orders", "role": "coffee_orders_convergence_rw", "secretRef": "postgres.aromaConvergence"},
-    {"runtime": "aroma-gateway", "database": "coffee_platform_integration", "role": "coffee_aroma_gateway_rw", "secretRef": "postgres.aromaGateway"},
-    {"runtime": "realtime-gateway", "database": null, "role": null, "secretRef": null}
+    {
+      "runtime": "edge-gateway",
+      "database": null,
+      "role": null,
+      "secretRef": null
+    },
+    {
+      "runtime": "api-public",
+      "database": null,
+      "role": null,
+      "secretRef": null
+    },
+    {
+      "runtime": "api-internal",
+      "database": null,
+      "role": null,
+      "secretRef": null
+    },
+    {
+      "runtime": "edge-nginx",
+      "database": null,
+      "role": null,
+      "secretRef": null
+    },
+    {
+      "runtime": "customer-service",
+      "database": "coffee_platform_customer",
+      "role": "coffee_customer_rw",
+      "secretRef": "postgres.customer"
+    },
+    {
+      "runtime": "catalog-service",
+      "database": "coffee_platform_catalog",
+      "role": "coffee_catalog_api_ro",
+      "secretRef": "postgres.catalogApi"
+    },
+    {
+      "runtime": "catalog-supplier-sync",
+      "database": "coffee_platform_catalog",
+      "role": "coffee_catalog_import_rw",
+      "secretRef": "postgres.catalogImport"
+    },
+    {
+      "runtime": "catalog-activation-worker",
+      "database": "coffee_platform_catalog",
+      "role": "coffee_catalog_activate_rw",
+      "secretRef": "postgres.catalogActivate"
+    },
+    {
+      "runtime": "pricing-service",
+      "database": "coffee_platform_pricing",
+      "role": "coffee_pricing_rw",
+      "secretRef": "postgres.pricing"
+    },
+    {
+      "runtime": "orders-service",
+      "database": "coffee_platform_orders",
+      "role": "coffee_orders_service_rw",
+      "secretRef": "postgres.ordersService"
+    },
+    {
+      "runtime": "orders-aroma-preparation",
+      "database": "coffee_platform_orders",
+      "role": "coffee_orders_prepare_rw",
+      "secretRef": "postgres.ordersPreparation"
+    },
+    {
+      "runtime": "aroma-observer",
+      "database": "coffee_platform_orders",
+      "role": "coffee_orders_observer_rw",
+      "secretRef": "postgres.aromaObserver"
+    },
+    {
+      "runtime": "aroma-convergence",
+      "database": "coffee_platform_orders",
+      "role": "coffee_orders_convergence_rw",
+      "secretRef": "postgres.aromaConvergence"
+    },
+    {
+      "runtime": "aroma-gateway",
+      "database": "coffee_platform_integration",
+      "role": "coffee_aroma_gateway_rw",
+      "secretRef": "postgres.aromaGateway"
+    },
+    {
+      "runtime": "realtime-gateway",
+      "database": null,
+      "role": null,
+      "secretRef": null
+    }
   ],
   "dataOwners": [
-    {"aggregate": "Customer", "owner": "customer-service"},
-    {"aggregate": "Catalog", "owner": "catalog-service"},
-    {"aggregate": "PricingQuote", "owner": "pricing-service"},
-    {"aggregate": "Order", "owner": "orders-service"},
-    {"aggregate": "Desired", "owner": "orders-aroma-preparation"},
-    {"aggregate": "Observed", "owner": "aroma-observer"},
-    {"aggregate": "ConvergenceAttempt", "owner": "aroma-convergence"},
-    {"aggregate": "MutationReservation", "owner": "aroma-convergence"},
-    {"aggregate": "Outbox", "owner": "local-transaction-owner-runtime"},
-    {"aggregate": "Inbox", "owner": "local-consuming-runtime"},
-    {"aggregate": "ProviderSession", "owner": "aroma-gateway"}
+    { "aggregate": "Customer", "owner": "customer-service" },
+    { "aggregate": "Catalog", "owner": "catalog-service" },
+    { "aggregate": "PricingQuote", "owner": "pricing-service" },
+    { "aggregate": "Order", "owner": "orders-service" },
+    { "aggregate": "Desired", "owner": "orders-aroma-preparation" },
+    { "aggregate": "Observed", "owner": "aroma-observer" },
+    { "aggregate": "ConvergenceAttempt", "owner": "aroma-convergence" },
+    { "aggregate": "MutationReservation", "owner": "aroma-convergence" },
+    { "aggregate": "Outbox", "owner": "local-transaction-owner-runtime" },
+    { "aggregate": "Inbox", "owner": "local-consuming-runtime" },
+    { "aggregate": "ProviderSession", "owner": "aroma-gateway" }
   ],
   "deny": {
     "databases": ["coffeeorderdb", "coffeeorder_staging"],

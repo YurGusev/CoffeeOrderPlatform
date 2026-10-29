@@ -1,1 +1,18 @@
-{"name":"@coffee-platform/aroma-gateway","version":"0.0.0","private":true,"type":"module","scripts":{"start":"node dist/main.js"},"dependencies":{"@coffee-platform/contracts-aroma-v1":"workspace:*","@coffee-platform/database":"workspace:*","@coffee-platform/platform-time":"workspace:*","@coffee-platform/runtime":"workspace:*","@coffee-platform/security":"workspace:*","@opentelemetry/api":"1.9.1","undici":"8.10.1"}}
+{
+  "name": "@coffee-platform/aroma-gateway",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@coffee-platform/contracts-aroma-v1": "workspace:*",
+    "@coffee-platform/database": "workspace:*",
+    "@coffee-platform/platform-time": "workspace:*",
+    "@coffee-platform/runtime": "workspace:*",
+    "@coffee-platform/security": "workspace:*",
+    "@opentelemetry/api": "1.9.1",
+    "undici": "8.12.3"
+  }
+}

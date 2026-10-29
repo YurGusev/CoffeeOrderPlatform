@@ -1,5 +1,8 @@
 import type { ReactElement, Ref } from "react";
-import { Input as AriaInput, type InputProps as AriaInputProps } from "react-aria-components";
+import {
+  Input as AriaInput,
+  type InputProps as AriaInputProps,
+} from "react-aria-components";
 import { cn } from "../cn.js";
 
 /** Adapted from shadcn/ui's React Aria input source. */

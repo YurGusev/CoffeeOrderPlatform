@@ -1,14 +1,22 @@
-import {CATALOG_MAX_BATCH_BYTES as SHARED_MAX_BATCH_BYTES, CATALOG_MAX_OFFERS_PER_BATCH as SHARED_MAX_OFFERS_PER_BATCH, canonicalCatalogJson, catalogSha256} from "@coffee-platform/contracts-aroma-v1";
-import type {CatalogJsonValue as JsonValue} from "@coffee-platform/contracts-aroma-v1";
+import {
+  CATALOG_MAX_BATCH_BYTES as SHARED_MAX_BATCH_BYTES,
+  CATALOG_MAX_OFFERS_PER_BATCH as SHARED_MAX_OFFERS_PER_BATCH,
+  canonicalCatalogJson,
+  catalogSha256,
+} from "@coffee-platform/contracts-aroma-v1";
+import type { CatalogJsonValue as JsonValue } from "@coffee-platform/contracts-aroma-v1";
 import { nowInstant, toInstant } from "@coffee-platform/platform-time";
-import {finishGatewaySpan, type GatewayTelemetry} from "../infrastructure/observability.js";
-import {SOURCE_IDENTITY_SCHEME} from "../domain/source-identity.js";
+import {
+  finishGatewaySpan,
+  type GatewayTelemetry,
+} from "../infrastructure/observability.js";
+import { SOURCE_IDENTITY_SCHEME } from "../domain/source-identity.js";
 
 export const CATALOG_EXPORT_STREAM_VERSION = "1" as const;
 export const CATALOG_SOURCE_IDENTITY_SCHEME = SOURCE_IDENTITY_SCHEME;
 export const CATALOG_MAX_OFFERS_PER_BATCH = SHARED_MAX_OFFERS_PER_BATCH;
 export const CATALOG_MAX_BATCH_BYTES = SHARED_MAX_BATCH_BYTES;
-export {canonicalCatalogJson};
+export { canonicalCatalogJson };
 
 export type Sha256Hash = string;
 export type CatalogUnit = "piece" | "gram" | "kilogram";
@@ -214,7 +222,10 @@ export type CatalogExportPersistence = Readonly<{
     signal: AbortSignal,
   ) => void | Promise<void>;
   /** Discard an interrupted traversal without touching immutable source identities. */
-  abortExport?: (snapshotRef: string, signal: AbortSignal) => void | Promise<void>;
+  abortExport?: (
+    snapshotRef: string,
+    signal: AbortSignal,
+  ) => void | Promise<void>;
 }>;
 
 export type CatalogExportBoundary = Readonly<{
@@ -337,7 +348,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-
 function utf8(value: string): Uint8Array {
   return Buffer.from(value, "utf8");
 }
@@ -441,34 +451,77 @@ function validateRequest(request: CatalogExportRequest): void {
 function validateTimestamp(value: string, field: string): void {
   if (!TIMESTAMP_PATTERN.test(value))
     throw invalid(`${field} is not a UTC timestamp`);
-  try { toInstant(value); } catch { throw invalid(`${field} is not a UTC timestamp`); }
+  try {
+    toInstant(value);
+  } catch {
+    throw invalid(`${field} is not a UTC timestamp`);
+  }
 }
 
-const CANONICAL_NON_NEGATIVE_DECIMAL_PATTERN = /^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/u;
+const CANONICAL_NON_NEGATIVE_DECIMAL_PATTERN =
+  /^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/u;
 
-function validateSupplierPromotions(value: unknown): asserts value is readonly SupplierPromotion[] {
-  if (!Array.isArray(value)) throw invalid("normalized offer supplierPromotions is invalid");
+function validateSupplierPromotions(
+  value: unknown,
+): asserts value is readonly SupplierPromotion[] {
+  if (!Array.isArray(value))
+    throw invalid("normalized offer supplierPromotions is invalid");
   for (const promotion of value) {
-    if (!isPlainObject(promotion)) throw invalid("normalized supplier promotion is invalid");
-    if (typeof promotion["discountBasisPoints"] !== "number" || !Number.isSafeInteger(promotion["discountBasisPoints"]) || promotion["discountBasisPoints"] <= 0 || promotion["discountBasisPoints"] > 10_000) {
-      throw invalid("normalized supplier promotion discountBasisPoints is invalid");
+    if (!isPlainObject(promotion))
+      throw invalid("normalized supplier promotion is invalid");
+    if (
+      typeof promotion["discountBasisPoints"] !== "number" ||
+      !Number.isSafeInteger(promotion["discountBasisPoints"]) ||
+      promotion["discountBasisPoints"] <= 0 ||
+      promotion["discountBasisPoints"] > 10_000
+    ) {
+      throw invalid(
+        "normalized supplier promotion discountBasisPoints is invalid",
+      );
     }
-    if (typeof promotion["minimumWeightRaw"] !== "string" || !CANONICAL_NON_NEGATIVE_DECIMAL_PATTERN.test(promotion["minimumWeightRaw"])) {
-      throw invalid("normalized supplier promotion minimumWeightRaw is invalid");
+    if (
+      typeof promotion["minimumWeightRaw"] !== "string" ||
+      !CANONICAL_NON_NEGATIVE_DECIMAL_PATTERN.test(
+        promotion["minimumWeightRaw"],
+      )
+    ) {
+      throw invalid(
+        "normalized supplier promotion minimumWeightRaw is invalid",
+      );
     }
-    if (typeof promotion["providerCreatedAt"] !== "string") throw invalid("normalized supplier promotion providerCreatedAt is invalid");
+    if (typeof promotion["providerCreatedAt"] !== "string")
+      throw invalid(
+        "normalized supplier promotion providerCreatedAt is invalid",
+      );
     validateTimestamp(promotion["providerCreatedAt"], "providerCreatedAt");
-    if (typeof promotion["providerUpdatedAt"] !== "string") throw invalid("normalized supplier promotion providerUpdatedAt is invalid");
+    if (typeof promotion["providerUpdatedAt"] !== "string")
+      throw invalid(
+        "normalized supplier promotion providerUpdatedAt is invalid",
+      );
     validateTimestamp(promotion["providerUpdatedAt"], "providerUpdatedAt");
   }
 }
 
-function validateGrindOptions(value: unknown): asserts value is readonly CatalogGrindOption[] {
+function validateGrindOptions(
+  value: unknown,
+): asserts value is readonly CatalogGrindOption[] {
   if (value === undefined) return;
-  if (!Array.isArray(value) || value.length === 0 || value.length > 100) throw invalid("normalized offer grindOptions is invalid");
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100)
+    throw invalid("normalized offer grindOptions is invalid");
   const seen = new Set<string>();
   for (const option of value) {
-    if (!isPlainObject(option) || typeof option["sourceGrindKeyHash"] !== "string" || !HASH_PATTERN.test(option["sourceGrindKeyHash"]) || typeof option["displayName"] !== "string" || option["displayName"].length === 0 || option["displayName"].length > 200 || !option["displayName"].isWellFormed() || option["displayName"].includes("\u0000") || seen.has(option["sourceGrindKeyHash"])) throw invalid("normalized offer grindOptions is invalid");
+    if (
+      !isPlainObject(option) ||
+      typeof option["sourceGrindKeyHash"] !== "string" ||
+      !HASH_PATTERN.test(option["sourceGrindKeyHash"]) ||
+      typeof option["displayName"] !== "string" ||
+      option["displayName"].length === 0 ||
+      option["displayName"].length > 200 ||
+      !option["displayName"].isWellFormed() ||
+      option["displayName"].includes("\u0000") ||
+      seen.has(option["sourceGrindKeyHash"])
+    )
+      throw invalid("normalized offer grindOptions is invalid");
     seen.add(option["sourceGrindKeyHash"]);
   }
 }
@@ -506,7 +559,10 @@ function validateNormalizedOffer(
   ) {
     throw invalid("normalized offer availability is invalid");
   }
-  if (value["supplierUnitMinor"] === "0" && value["availability"] === "Available") {
+  if (
+    value["supplierUnitMinor"] === "0" &&
+    value["availability"] === "Available"
+  ) {
     throw invalid("zero-price normalized offer cannot be Available");
   }
   if (
@@ -534,12 +590,10 @@ function validateRawProviderId(
     throw identityCollision(`${field} is invalid`);
 }
 
-
 function validateOptionalProviderIdentity(value: unknown, field: string): void {
   if (value === undefined || value === null) return;
   validateRawProviderId(value, field);
 }
-
 
 function validateHash(
   value: unknown,
@@ -652,13 +706,28 @@ function outputItem(
     currency: offer.currency,
     availability: offer.availability,
     imageUrl: offer.imageUrl,
-    supplierPromotions: Object.freeze(offer.supplierPromotions.map((promotion) => Object.freeze({
-      discountBasisPoints: promotion.discountBasisPoints,
-      minimumWeightRaw: promotion.minimumWeightRaw,
-      providerCreatedAt: promotion.providerCreatedAt,
-      providerUpdatedAt: promotion.providerUpdatedAt,
-    }))),
-    ...(offer.grindOptions === undefined ? {} : {grindOptions: Object.freeze(offer.grindOptions.map((option) => Object.freeze({sourceGrindKeyHash: option.sourceGrindKeyHash, displayName: option.displayName})))}),
+    supplierPromotions: Object.freeze(
+      offer.supplierPromotions.map((promotion) =>
+        Object.freeze({
+          discountBasisPoints: promotion.discountBasisPoints,
+          minimumWeightRaw: promotion.minimumWeightRaw,
+          providerCreatedAt: promotion.providerCreatedAt,
+          providerUpdatedAt: promotion.providerUpdatedAt,
+        }),
+      ),
+    ),
+    ...(offer.grindOptions === undefined
+      ? {}
+      : {
+          grindOptions: Object.freeze(
+            offer.grindOptions.map((option) =>
+              Object.freeze({
+                sourceGrindKeyHash: option.sourceGrindKeyHash,
+                displayName: option.displayName,
+              }),
+            ),
+          ),
+        }),
     sourceIdentityScheme: CATALOG_SOURCE_IDENTITY_SCHEME,
   });
 }
@@ -753,10 +822,13 @@ function cancellableSourceIterator(
   iterator: SourceIterator,
   signal: AbortSignal,
 ): SourceIterator {
-  let returnPromise: Promise<IteratorResult<NormalizedCatalogOffer>> | undefined;
+  let returnPromise:
+    Promise<IteratorResult<NormalizedCatalogOffer>> | undefined;
   const close = (): Promise<IteratorResult<NormalizedCatalogOffer>> => {
     returnPromise ??= Promise.resolve(iterator.return?.()).then(
-      result => result ?? ({done: true, value: undefined} as IteratorReturnResult<undefined>),
+      (result) =>
+        result ??
+        ({ done: true, value: undefined } as IteratorReturnResult<undefined>),
     );
     return returnPromise;
   };
@@ -772,13 +844,13 @@ function cancellableSourceIterator(
         void close().catch(() => undefined);
         reject(asAbortError(signal.reason));
       };
-      signal.addEventListener("abort", onAbort, {once: true});
+      signal.addEventListener("abort", onAbort, { once: true });
       nextPromise.then(
-        value => {
+        (value) => {
           signal.removeEventListener("abort", onAbort);
           resolve(value);
         },
-        error => {
+        (error) => {
           signal.removeEventListener("abort", onAbort);
           reject(error);
         },
@@ -852,8 +924,8 @@ function freezeIdentity(identity: CatalogOfferIdentity): CatalogOfferIdentity {
     rawProviderProductId: identity.rawProviderProductId,
     rawProviderVariantId: identity.rawProviderVariantId,
     rawProviderOfferId: identity.rawProviderOfferId,
-    ...(identity.packing === undefined ? {} : {packing: identity.packing}),
-    ...(identity.grindId === undefined ? {} : {grindId: identity.grindId}),
+    ...(identity.packing === undefined ? {} : { packing: identity.packing }),
+    ...(identity.grindId === undefined ? {} : { grindId: identity.grindId }),
   });
 }
 
@@ -1276,7 +1348,10 @@ async function* runExport(
       batchBytes = 2;
     } catch (error) {
       spanError = error;
-      span?.setAttribute("result", isExternalCancellation(error, state) ? "cancelled" : "error");
+      span?.setAttribute(
+        "result",
+        isExternalCancellation(error, state) ? "cancelled" : "error",
+      );
       throw error;
     } finally {
       if (!spanCompleted && spanError === undefined) {
@@ -1485,12 +1560,21 @@ async function* runExport(
   } finally {
     if (totalTimer !== undefined) clearTimeout(totalTimer);
     if (!state.internalController.signal.aborted)
-      state.internalController.abort(asAbortError(new Error("catalog export closed")));
-    if (streamStarted && !terminal && boundary.persistence.abortExport !== undefined) {
+      state.internalController.abort(
+        asAbortError(new Error("catalog export closed")),
+      );
+    if (
+      streamStarted &&
+      !terminal &&
+      boundary.persistence.abortExport !== undefined
+    ) {
       try {
         // External cancellation may already be aborted; cleanup is durable work
         // and therefore receives its own bounded, non-aborted signal.
-        await boundary.persistence.abortExport(request.snapshotRef, new AbortController().signal);
+        await boundary.persistence.abortExport(
+          request.snapshotRef,
+          new AbortController().signal,
+        );
       } catch {
         // Preserve the original cancellation/consumer-close outcome.
       }

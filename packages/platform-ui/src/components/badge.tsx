@@ -15,6 +15,20 @@ const toneClasses: Record<NonNullable<BadgeProps["tone"]>, string> = {
   warning: "bg-warning-bg text-warning-text",
 };
 
-export function Badge({ children, className, tone = "neutral" }: BadgeProps): ReactElement {
-  return <span className={cn("inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-semibold", toneClasses[tone], className)}>{children}</span>;
+export function Badge({
+  children,
+  className,
+  tone = "neutral",
+}: BadgeProps): ReactElement {
+  return (
+    <span
+      className={cn(
+        "inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-semibold",
+        toneClasses[tone],
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
 }

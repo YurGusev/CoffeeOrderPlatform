@@ -1,1 +1,21 @@
-{"name":"@coffee-platform/pricing-service","version":"0.0.0","private":true,"type":"module","scripts":{"start":"node dist/main.js"},"dependencies":{"@coffee-platform/contracts-catalog-v1":"workspace:*","@coffee-platform/contracts-pricing-v1":"workspace:*","@coffee-platform/database":"workspace:*","@coffee-platform/idempotency":"workspace:*","@coffee-platform/platform-http":"workspace:*","@coffee-platform/runtime":"workspace:*","@coffee-platform/security":"workspace:*","@js-temporal/polyfill":"0.5.1","@opentelemetry/api":"1.9.1","ajv":"8.20.0"}}
+{
+  "name": "@coffee-platform/pricing-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@coffee-platform/contracts-catalog-v1": "workspace:*",
+    "@coffee-platform/contracts-pricing-v1": "workspace:*",
+    "@coffee-platform/database": "workspace:*",
+    "@coffee-platform/idempotency": "workspace:*",
+    "@coffee-platform/platform-http": "workspace:*",
+    "@coffee-platform/runtime": "workspace:*",
+    "@coffee-platform/security": "workspace:*",
+    "@js-temporal/polyfill": "0.5.1",
+    "@opentelemetry/api": "1.9.1",
+    "ajv": "8.20.0"
+  }
+}

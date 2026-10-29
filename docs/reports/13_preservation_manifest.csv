@@ -1,0 +1,924 @@
+source_status,path,group,disposition
+ M,.agents/skills/astra-orchestrator/SKILL.md,skills_codex,ported_exact
+ M,.agents/skills/astra-orchestrator/references/codex.md,skills_codex,ported_exact
+ M,.codex/README.md,skills_codex,ported_exact
+ M,.codex/agents/explorer.toml,skills_codex,ported_exact
+ D,.codex/agents/luna-worker.toml,skills_codex,preserved_deletion
+ M,.codex/agents/researcher.toml,skills_codex,ported_exact
+ M,.codex/agents/reviewer.toml,skills_codex,ported_exact
+ M,.codex/agents/tester.toml,skills_codex,ported_exact
+ M,.codex/agents/worker.toml,skills_codex,ported_exact
+ M,.codex/config.toml,skills_codex,ported_exact
+ M,.dependency-cruiser.cjs,platform_application,ported_exact
+ M,.dockerignore,platform_application,ported_exact
+ M,.gitignore,platform_application,ported_adapted_to_develop_or_accepted_candidate
+ M,AGENTS.md,skills_codex,ported_exact
+ M,Dockerfile,platform_application,shared_changes_ported_openobserve_parts_deferred
+ M,apps/api-internal/package.json,platform_application,ported_exact
+ M,apps/api-internal/src/index.ts,platform_application,ported_exact
+ M,apps/api-internal/src/main.ts,platform_application,ported_exact
+ M,apps/api-internal/tsconfig.json,platform_application,ported_exact
+ M,apps/api-public/package.json,platform_application,ported_exact
+ M,apps/api-public/src/index.ts,platform_application,ported_exact
+ M,apps/api-public/src/main.ts,platform_application,ported_exact
+ M,apps/api-public/tsconfig.json,platform_application,ported_exact
+ M,apps/aroma-convergence/package.json,platform_application,ported_exact
+ M,apps/aroma-convergence/src/application/messages.ts,platform_application,ported_exact
+ M,apps/aroma-convergence/src/cart-plan.ts,platform_application,ported_exact
+ M,apps/aroma-convergence/src/gateway-client.ts,platform_application,ported_exact
+ M,apps/aroma-convergence/src/infrastructure/convergence-store.ts,platform_application,ported_exact
+ M,apps/aroma-convergence/src/infrastructure/row-schemas.ts,platform_application,ported_exact
+ M,apps/aroma-convergence/src/main.ts,platform_application,ported_exact
+ M,apps/aroma-convergence/src/observability.ts,platform_application,ported_exact
+ M,apps/aroma-convergence/src/runtime-composition.ts,platform_application,ported_exact
+ M,apps/aroma-convergence/tsconfig.json,platform_application,ported_exact
+ M,apps/aroma-gateway/package.json,platform_application,ported_exact
+ M,apps/aroma-gateway/src/application/cart-reader.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/application/catalog-export.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/application/provider-cart-mutator.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/application/provider-catalog-source.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/application/provider-grinds.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/domain/mutation-journal.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/domain/provider-errors.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/domain/source-identity.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/infrastructure/database/offer-binding-store.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/infrastructure/database/provider-session-store.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/infrastructure/observability.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/infrastructure/provider/cookie-jar.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/infrastructure/provider/decoder.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/infrastructure/provider/http-client.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/infrastructure/provider/session.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/main.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/src/transport/http/index.ts,platform_application,ported_exact
+ M,apps/aroma-gateway/tsconfig.json,platform_application,ported_exact
+ M,apps/aroma-observer/package.json,platform_application,ported_exact
+ M,apps/aroma-observer/src/gateway-client.ts,platform_application,ported_exact
+ M,apps/aroma-observer/src/infrastructure/observation-store.ts,platform_application,ported_exact
+ M,apps/aroma-observer/src/infrastructure/row-schemas.ts,platform_application,ported_exact
+ M,apps/aroma-observer/src/main.ts,platform_application,ported_exact
+ M,apps/aroma-observer/src/observability.ts,platform_application,ported_exact
+ M,apps/aroma-observer/src/runtime-composition.ts,platform_application,ported_exact
+ M,apps/aroma-observer/tsconfig.json,platform_application,ported_exact
+ M,apps/catalog-activation-worker/package.json,platform_application,ported_exact
+ M,apps/catalog-activation-worker/src/events.ts,platform_application,ported_exact
+ M,apps/catalog-activation-worker/src/gateway-binding-client.ts,platform_application,ported_exact
+ M,apps/catalog-activation-worker/src/identity.ts,platform_application,ported_exact
+ M,apps/catalog-activation-worker/src/infrastructure/activation-store.ts,platform_application,ported_exact
+ M,apps/catalog-activation-worker/src/main.ts,platform_application,ported_exact
+ M,apps/catalog-activation-worker/src/verify-generation.ts,platform_application,ported_exact
+ M,apps/catalog-activation-worker/tsconfig.json,platform_application,ported_exact
+ M,apps/catalog-service/package.json,platform_application,ported_exact
+ M,apps/catalog-service/src/application/search-catalog.ts,platform_application,ported_exact
+ M,apps/catalog-service/src/http/index.ts,platform_application,ported_exact
+ M,apps/catalog-service/src/infrastructure/postgres/catalog-repository.ts,platform_application,ported_exact
+ M,apps/catalog-service/src/infrastructure/postgres/catalog-store.ts,platform_application,ported_exact
+ M,apps/catalog-service/src/main.ts,platform_application,ported_exact
+ M,apps/catalog-service/tsconfig.json,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/package.json,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/src/hourly-scheduler.ts,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/src/infrastructure/catalog-import-store.ts,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/src/internal-api-client.ts,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/src/main.ts,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/src/ndjson-reader.ts,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/src/observability.ts,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/src/reconcile-imports.ts,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/src/run-catalog-import.ts,platform_application,ported_exact
+ M,apps/catalog-supplier-sync/tsconfig.json,platform_application,ported_exact
+ M,apps/customer-service/package.json,platform_application,ported_exact
+ M,apps/customer-service/src/application/create-customer.ts,platform_application,ported_exact
+ M,apps/customer-service/src/application/get-customer-order-input.ts,platform_application,ported_exact
+ M,apps/customer-service/src/application/search-customers.ts,platform_application,ported_exact
+ M,apps/customer-service/src/domain/customer.ts,platform_application,ported_exact
+ M,apps/customer-service/src/http/index.ts,platform_application,ported_exact
+ M,apps/customer-service/src/infrastructure/postgres/customer-repository.ts,platform_application,ported_exact
+ M,apps/customer-service/src/infrastructure/postgres/customer-row-schema.ts,platform_application,ported_exact
+ M,apps/customer-service/src/infrastructure/postgres/customer-store.ts,platform_application,ported_exact
+ M,apps/customer-service/src/infrastructure/postgres/idempotency-repository.ts,platform_application,ported_exact
+ M,apps/customer-service/src/main.ts,platform_application,ported_exact
+ M,apps/customer-service/tsconfig.json,platform_application,ported_exact
+ M,apps/edge-gateway/package.json,platform_application,ported_exact
+ M,apps/edge-gateway/src/index.ts,platform_application,ported_exact
+ M,apps/edge-gateway/src/main.ts,platform_application,ported_exact
+ M,apps/edge-gateway/src/oidc-auth.ts,platform_application,ported_exact
+ M,apps/edge-gateway/src/routes.ts,platform_application,ported_exact
+ M,apps/edge-gateway/tsconfig.json,platform_application,ported_exact
+ M,apps/edge-nginx/Dockerfile,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/package.json,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/src/application/messages.ts,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/src/domain/desired.ts,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/src/domain/projection.ts,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/src/infrastructure/preparation-store.ts,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/src/infrastructure/row-schemas.ts,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/src/main.ts,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/src/observability.ts,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/src/runtime-composition.ts,platform_application,ported_exact
+ M,apps/orders-aroma-preparation/tsconfig.json,platform_application,ported_exact
+??,apps/orders-service/migrations/0024_restrict_runtime_order_delete.sql,platform_application,ported_exact
+ M,apps/orders-service/package.json,platform_application,ported_exact
+ M,apps/orders-service/src/application/confirm-order.ts,platform_application,ported_exact
+ M,apps/orders-service/src/application/create-draft.ts,platform_application,ported_exact
+ M,apps/orders-service/src/application/delete-item.ts,platform_application,ported_exact
+ M,apps/orders-service/src/application/get-order-card.ts,platform_application,ported_exact
+ M,apps/orders-service/src/application/request-aroma-reconciliation.ts,platform_application,ported_exact
+ M,apps/orders-service/src/application/upsert-item.ts,platform_application,ported_exact
+ M,apps/orders-service/src/domain/order-card.ts,platform_application,ported_exact
+ M,apps/orders-service/src/domain/order-contribution.ts,platform_application,ported_exact
+ M,apps/orders-service/src/domain/order-state.ts,platform_application,ported_exact
+ M,apps/orders-service/src/http/index.ts,platform_application,ported_exact
+ M,apps/orders-service/src/infrastructure/customer-client.ts,platform_application,ported_exact
+ M,apps/orders-service/src/infrastructure/database/order-store.ts,platform_application,ported_exact
+ M,apps/orders-service/src/infrastructure/database/row-schemas.ts,platform_application,ported_exact
+ M,apps/orders-service/src/infrastructure/internal-api-readiness.ts,platform_application,ported_exact
+ M,apps/orders-service/src/infrastructure/order-security.ts,platform_application,ported_exact
+ M,apps/orders-service/src/infrastructure/pricing-client.ts,platform_application,ported_exact
+ M,apps/orders-service/src/main.ts,platform_application,ported_exact
+ M,apps/orders-service/src/observability.ts,platform_application,ported_exact
+ M,apps/orders-service/tsconfig.json,platform_application,ported_exact
+ M,apps/pricing-service/package.json,platform_application,ported_exact
+ M,apps/pricing-service/src/application/create-pricing-quote.ts,platform_application,ported_exact
+ M,apps/pricing-service/src/domain/pricing-formula.ts,platform_application,ported_exact
+ M,apps/pricing-service/src/domain/quote-proof.ts,platform_application,ported_exact
+ M,apps/pricing-service/src/http/index.ts,platform_application,ported_exact
+ M,apps/pricing-service/src/infrastructure/catalog-client.ts,platform_application,ported_exact
+ M,apps/pricing-service/src/infrastructure/database/pricing-store.ts,platform_application,ported_exact
+ M,apps/pricing-service/src/main.ts,platform_application,ported_exact
+ M,apps/pricing-service/src/observability.ts,platform_application,ported_exact
+ M,apps/pricing-service/tsconfig.json,platform_application,ported_exact
+ M,apps/realtime-gateway/src/contract.ts,platform_application,ported_exact
+ M,apps/realtime-gateway/src/hub.ts,platform_application,ported_exact
+ M,apps/realtime-gateway/src/index.ts,platform_application,ported_exact
+ M,apps/realtime-gateway/src/main.ts,platform_application,ported_exact
+ M,apps/realtime-gateway/src/runtime-composition.ts,platform_application,ported_exact
+ M,apps/realtime-gateway/tsconfig.json,platform_application,ported_exact
+ M,apps/web/package.json,platform_application,ported_exact
+ M,apps/web/src/browser/api/client.ts,platform_application,ported_exact
+ M,apps/web/src/browser/api/idempotency.ts,platform_application,ported_exact
+ M,apps/web/src/browser/api/order-card.ts,platform_application,ported_exact
+ M,apps/web/src/browser/api/problem.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/api/remote.ts,platform_application,ported_exact
+ M,apps/web/src/browser/api/schema.ts,platform_application,ported_exact
+ M,apps/web/src/browser/api/session-identity.ts,platform_application,ported_exact
+ M,apps/web/src/browser/api/time.ts,platform_application,ported_exact
+ M,apps/web/src/browser/api/ulid.ts,platform_application,ported_exact
+ M,apps/web/src/browser/app/App.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/app/AppShell.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/app/OrderRealtime.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/app/PageHeader.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/app/PendingRecovery.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/app/query-keys.ts,platform_application,ported_exact
+ M,apps/web/src/browser/app/session.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/routes/CatalogPage.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/routes/CustomersPage.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/routes/NewOrderPage.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/routes/NotFoundPage.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/routes/OrderCardPage.tsx,platform_application,ported_exact
+ M,apps/web/src/browser/styles.css,platform_application,ported_exact
+ M,apps/web/src/realtime/order-invalidations.ts,platform_application,ported_exact
+ M,apps/web/test/idempotency.test.ts,platform_application,ported_exact
+ M,apps/web/test/operator-flow.spec.ts,platform_application,ported_exact
+ M,apps/web/test/order-cache.test.ts,platform_application,ported_exact
+ M,apps/web/test/query-policy.test.ts,platform_application,ported_exact
+ M,apps/web/test/realtime.test.ts,platform_application,ported_exact
+ M,apps/web/test/schema.test.ts,platform_application,ported_exact
+ M,apps/web/test/time.test.ts,platform_application,ported_exact
+ M,apps/web/test/ui-foundation.fixture.tsx,platform_application,ported_exact
+ M,apps/web/test/ui-foundation.spec.ts,platform_application,ported_exact
+ M,apps/web/test/ulid.test.ts,platform_application,ported_exact
+ M,apps/web/tsconfig.json,platform_application,ported_exact
+ M,compose.yaml,platform_application,shared_changes_ported_openobserve_parts_deferred
+ M,config/database-ownership.json,platform_application,ported_exact
+ M,config/database-ownership.schema.json,platform_application,ported_exact
+ M,config/database-role-map.json,platform_application,ported_exact
+ M,config/database-role-map.schema.json,platform_application,ported_exact
+ M,config/nginx-profile.schema.json,platform_application,ported_exact
+ M,config/node26-compatibility-matrix.json,platform_application,ported_exact
+ M,config/permissions/api-internal.json,platform_application,ported_exact
+ M,config/permissions/api-public.json,platform_application,ported_exact
+ M,config/permissions/aroma-convergence.json,platform_application,ported_exact
+ M,config/permissions/aroma-gateway.json,platform_application,ported_exact
+ M,config/permissions/aroma-observer.json,platform_application,ported_exact
+ M,config/permissions/catalog-activation-worker.json,platform_application,ported_exact
+ M,config/permissions/catalog-service.json,platform_application,ported_exact
+ M,config/permissions/catalog-supplier-sync.json,platform_application,ported_exact
+ M,config/permissions/customer-service.json,platform_application,ported_exact
+ M,config/permissions/edge-gateway.json,platform_application,ported_exact
+ M,config/permissions/orders-aroma-preparation.json,platform_application,ported_exact
+ M,config/permissions/orders-service.json,platform_application,ported_exact
+ M,config/permissions/pricing-service.json,platform_application,ported_exact
+ M,config/permissions/realtime-gateway.json,platform_application,ported_exact
+ M,config/platform.schema.json,platform_application,ported_exact
+ M,config/platform.yaml,platform_application,shared_changes_ported_openobserve_parts_deferred
+ M,config/service-catalog.json,platform_application,ported_exact
+ M,config/service-catalog.schema.json,platform_application,ported_exact
+ M,config/service-interactions.json,platform_application,ported_exact
+ M,config/service-interactions.schema.json,platform_application,ported_exact
+ M,config/toolchain-versions.json,platform_application,shared_changes_ported_openobserve_parts_deferred
+ M,config/toolchain-versions.schema.json,platform_application,shared_changes_ported_openobserve_parts_deferred
+ M,contracts/compatibility-evidence.yaml,platform_application,ported_exact
+ M,contracts/fixtures/negative/events/catalog-mapping-changed-invalid-offer-ref.v2.json,platform_application,ported_exact
+ M,contracts/fixtures/negative/events/catalog-snapshot-activated-numeric-revision.v1.json,platform_application,ported_exact
+ M,contracts/fixtures/negative/events/order-confirmed-additional-field.v1.json,platform_application,ported_exact
+ M,contracts/fixtures/negative/events/order-reconciliation-requested-additional-field.v1.json,platform_application,ported_exact
+ M,contracts/fixtures/negative/events/realtime-invalidated-invalid-ref.v1.json,platform_application,ported_exact
+ M,contracts/fixtures/negative/http/rejections.json,platform_application,ported_exact
+ M,contracts/fixtures/negative/sse/rejections.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/events/catalog-mapping-changed.v2.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/events/catalog-snapshot-activated.v1.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/events/order-confirmed.v1.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/events/order-reconciliation-requested.v1.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/events/realtime-invalidated.v1.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/http/problems.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/http/recovery.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/http/success.json,platform_application,ported_exact
+ M,contracts/fixtures/positive/sse/order-invalidations.json,platform_application,ported_exact
+ M,contracts/manifest.yaml,platform_application,ported_exact
+ M,contracts/openapi/client-v1.yaml,platform_application,ported_exact
+ M,contracts/openapi/edge-auth-v1.yaml,platform_application,ported_exact
+ M,contracts/openapi/internal-v1.yaml,platform_application,ported_exact
+ M,contracts/schemas/common/identifiers.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/common/message-envelope.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/common/money-version-time.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/common/problem-details.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/events/aroma-convergence-changed.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/events/aroma-convergence-requested.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/events/aroma-observation-changed.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/events/catalog-mapping-changed.v2.schema.json,platform_application,ported_exact
+ M,contracts/schemas/events/catalog-snapshot-activated.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/events/order-confirmed.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/events/order-reconciliation-requested.v1.schema.json,platform_application,ported_exact
+ M,contracts/schemas/events/realtime-invalidated.v1.schema.json,platform_application,ported_exact
+ M,docs/adr/ADR-0019-greenfield-node26-and-service-topology.md,documentation,ported_adapted_to_develop_or_accepted_candidate
+ M,docs/adr/ADR-0025-fastify-launch-recovery.md,documentation,shared_changes_ported_openobserve_parts_deferred
+ M,docs/adr/ADR-0034-g16-existing-account-verification.md,documentation,ported_exact
+ M,docs/adr/ADR-0035-launch-rollback-config-lineage.md,documentation,ported_exact
+??,docs/adr/ADR-0036-launch-database-isolation.md,documentation,ported_adapted_to_develop_or_accepted_candidate
+??,docs/adr/ADR-0037-unit-coverage-policy.md,documentation,ported_exact
+ M,docs/launch/09_EXISTING_DATABASE_AND_VERSIONS.md,documentation,ported_adapted_to_develop_or_accepted_candidate
+ M,docs/launch/11_CONFIGURATION_AND_SECRETS.md,documentation,ported_adapted_to_develop_or_accepted_candidate
+ M,docs/launch/21_LAUNCH_VERIFICATION_SPEC.md,documentation,shared_changes_ported_openobserve_parts_deferred
+ M,docs/launch/27_AROMA_PROVIDER_PROTOCOL.md,documentation,ported_adapted_to_develop_or_accepted_candidate
+ M,docs/launch/30_FRONTEND_OPERATOR_RUNBOOK.md,documentation,shared_changes_ported_openobserve_parts_deferred
+ M,docs/launch/31_LOCAL_CONTAINERS_RUNBOOK.md,documentation,ported_adapted_to_develop_or_accepted_candidate
+ M,docs/operations/observability.md,openobserve_deferred,deferred_openobserve_or_g14
+ M,docs/platform/LOCAL_PLATFORM.md,documentation,ported_exact
+??,docs/reports/system-naming-audit.md,documentation,ported_exact
+??,docs/reports/system-naming-occurrences.csv,documentation,ported_exact
+??,evidence/aroma-provider/2026-10-24-packing/README.md,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/authenticated-catalog-shape-receipt.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/authenticated-ui-metadata-receipt.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/authenticated-ui-source-receipt.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/checksums.sha256,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/conclusions.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/fresh-catalog-offers-receipt.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing-probe-24efc3a4-b49e-4b6c-943d-905ec733a7a8-pre-provider-failure.marker,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing-probe-24efc3a4-b49e-4b6c-943d-905ec733a7a8.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing-probe-94dc4950-4c10-4c7c-ab2d-62e46ccb9d46.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing-probe-authorization-setup-correction.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing-probe-authorization.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing-probe-consumed.marker,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing-probe-plan.md,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing-wire-facts.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing_readonly.sql,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/aroma-provider/2026-10-24-packing/packing_sanitized_receipt.json,historical_evidence,copied_exact_historical_non_oo_artifact
+ M,evidence/handoffs/issue-13.yaml,historical_evidence,deferred_missing_current_full_run_product_decision_blocked
+??,evidence/launch-preparation/2026-10-24/current-verification-facts.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-24/database-namespace-authority-proposal.md,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/launch-preparation/2026-10-24/external-postgres-readonly.json,historical_evidence,deferred_host_private_database_identity_or_capacity
+??,evidence/launch-preparation/2026-10-24/g03-format-policy-authority-proposal.md,historical_evidence,formatter_source_inventory_or_historical_acceptance
+??,evidence/launch-preparation/2026-10-24/g03-format-scope-inventory.json,historical_evidence,formatter_source_inventory_or_historical_acceptance
+??,evidence/launch-preparation/2026-10-24/g04-cli-coverage-observation.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-24/g04-coverage-004/after-fixed.lcov,historical_evidence,deferred_generated_g04_coverage_output_including_openobserve_sources
+??,evidence/launch-preparation/2026-10-24/g04-coverage-004/after-fixed.tap,historical_evidence,deferred_generated_g04_coverage_output_including_openobserve_sources
+??,evidence/launch-preparation/2026-10-24/g04-coverage-004/before-failurefocused.lcov,historical_evidence,deferred_generated_g04_coverage_output_including_openobserve_sources
+??,evidence/launch-preparation/2026-10-24/g04-coverage-004/before-failurefocused.tap,historical_evidence,deferred_generated_g04_coverage_output_including_openobserve_sources
+??,evidence/launch-preparation/2026-10-24/g04-coverage-004/before-focused.lcov,historical_evidence,deferred_generated_g04_coverage_output_including_openobserve_sources
+??,evidence/launch-preparation/2026-10-24/g04-coverage-004/before-focused.tap,historical_evidence,deferred_generated_g04_coverage_output_including_openobserve_sources
+??,evidence/launch-preparation/2026-10-24/g04-coverage-004/before-only.lcov,historical_evidence,deferred_generated_g04_coverage_output_including_openobserve_sources
+??,evidence/launch-preparation/2026-10-24/g04-coverage-004/before-only.tap,historical_evidence,deferred_generated_g04_coverage_output_including_openobserve_sources
+??,evidence/launch-preparation/2026-10-24/g04-current-source-parity.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-24/g04-node26-fake-child-coverage-analysis.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-24/g04-node26-mock-coverage-analysis.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-24/g04-threshold-authority-search.json,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-24/g08-migration-oracle-authority-proposal.md,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-24/g17-native-socket-authority-proposal.md,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-24/issue-10-accepted-handoff-audit.json,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/launch-preparation/2026-10-24/iteration-final-checksums.sha256,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-24/iteration-final-verification.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-24/kafka-namespace-authority-proposal.md,historical_evidence,kafka_authority_or_source_calibration
+??,evidence/launch-preparation/2026-10-24/local-candidate-archive.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-24/native-artifact-cleanup.json,historical_evidence,deferred_native_openobserve_collector_or_storage_candidate_context
+??,evidence/launch-preparation/2026-10-24/native-observability-prerequisite.json,historical_evidence,deferred_native_openobserve_collector_or_storage_candidate_context
+??,evidence/launch-preparation/2026-10-24/native-postgres-feasibility.json,historical_evidence,deferred_native_openobserve_collector_or_storage_candidate_context
+??,evidence/launch-preparation/2026-10-24/owner-peak-contract-queue.json,historical_evidence,historical_owner_workload_shape_not_current_capacity_proof
+??,evidence/launch-preparation/2026-10-24/post-cleanup-prerequisites.json,historical_evidence,deferred_host_private_database_identity_or_capacity
+??,evidence/launch-preparation/2026-10-24/remaining-gates-authority-proposal.md,historical_evidence,copied_exact_historical_non_oo_artifact
+??,evidence/launch-preparation/2026-10-24/retired-dependency-cleanup.json,historical_evidence,deferred_host_or_candidate_generated_cleanup_calibration_receipt
+??,evidence/launch-preparation/2026-10-25/approved-authority-20261025T123634Z.json,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-25/authority-acceptance-20261026T012717Z.json,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-25/current-source-parity.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/current-verification-facts.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/formatter-scratch-cleanup.json,historical_evidence,deferred_host_or_candidate_generated_cleanup_calibration_receipt
+??,evidence/launch-preparation/2026-10-25/g03-baseline-inventory.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/g03-first-check-failed.log,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/g03-format-second-pass.log,historical_evidence,formatter_source_inventory_or_historical_acceptance
+??,evidence/launch-preparation/2026-10-25/g03-format-write.log,historical_evidence,formatter_source_inventory_or_historical_acceptance
+??,evidence/launch-preparation/2026-10-25/g03-formatter-acceptance.json,historical_evidence,formatter_source_inventory_or_historical_acceptance
+??,evidence/launch-preparation/2026-10-25/g03-working-tree-static.log,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/g04-pricing-audit-negative-proof.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/g08-bootstrap-authority-proposal.md,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-25/g08-existing-admin-authority-proposal.md,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-25/g08-role-map-authority-proposal.md,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-25/g12-alpine-base-readonly-inventory.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/g12-alpine-native-build-compatibility.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-alpine-native-rea-evidence.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-alpine-network-calibration-20261025T232454Z.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/g12-alpine-network-calibration-20261025T232510Z.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/g12-alpine-research-registry.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-approved-image-registry-observation.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-approved-pin-propagation-initial.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-convert-runtime-independent-analysis.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-convert-runtime-probe-v2.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-convert-runtime-probe-v3.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-convert-runtime-probe-v3/customer-converted.sbom.cdx.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-convert-runtime-probe.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-empty-cache-conversion-20261026T004416Z-independent-audit.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-empty-cache-conversion-20261026T004416Z.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-hash-buffer-readonly-calibration.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-musl-calibration-authority-proposal.md,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-25/g12-old-buildcache-prune-v5-operator-analysis.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-old-cache-only-cleanup-20261026T014817Z.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-runtime-binary-dependencies.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/g12-runtime-images-authority-proposal.md,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-runtime-images-owner-approval.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-scoped-builder-cache-cleanup-20261025T214527Z.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-scoped-builder-cache-cleanup-20261025T220644Z.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-scoped-builder-cache-cleanup-20261025T233321Z.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-scoped-builder-cache-cleanup-20261026T010623Z.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-scoped-builder-cache-cleanup-20261026T071134Z.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-scoped-builder-cache-cleanup-20261026T105033Z.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-security-patches-authority-proposal.md,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-storage-helper-authority-proposal.md,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/g12-trixie-native-compatibility.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g12-trixie-storage-tools-inventory.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-25/g13-g15-external-postgres-authority-proposal.md,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-25/g15-oidc-authority-proposal.md,historical_evidence,non_oo_authority_or_approval
+??,evidence/launch-preparation/2026-10-25/g15-remote-browser-independent-cleanup.json,historical_evidence,deferred_ephemeral_browser_or_host_identity
+??,evidence/launch-preparation/2026-10-25/g15-remote-browser-spike-late-cleanup.json,historical_evidence,deferred_ephemeral_browser_or_host_identity
+??,evidence/launch-preparation/2026-10-25/g15-remote-browser-spike-result.json,historical_evidence,deferred_ephemeral_browser_or_host_identity
+??,evidence/launch-preparation/2026-10-25/g15-remote-browser-spike-v2-result.json,historical_evidence,deferred_ephemeral_browser_or_host_identity
+??,evidence/launch-preparation/2026-10-25/gate-generated-cleanup-execution.json,historical_evidence,deferred_host_or_candidate_generated_cleanup_calibration_receipt
+??,evidence/launch-preparation/2026-10-25/gate-suites-final.log,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/healthcheck-import-calibration-20261026T004840Z-independent-audit-v2.json,historical_evidence,deferred_host_or_candidate_generated_cleanup_calibration_receipt
+??,evidence/launch-preparation/2026-10-25/healthcheck-import-calibration-20261026T004840Z-independent-audit.json,historical_evidence,deferred_host_or_candidate_generated_cleanup_calibration_receipt
+??,evidence/launch-preparation/2026-10-25/healthcheck-import-calibration-20261026T004840Z.json,historical_evidence,deferred_host_or_candidate_generated_cleanup_calibration_receipt
+??,evidence/launch-preparation/2026-10-25/historical-g12-test-temp-cleanup.json,historical_evidence,deferred_host_or_candidate_generated_cleanup_calibration_receipt
+??,evidence/launch-preparation/2026-10-25/host-prerequisites-and-cleanup.json,historical_evidence,deferred_host_private_database_identity_or_capacity
+??,evidence/launch-preparation/2026-10-25/issue13-current-checklist-audit-v2.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/issue13-current-checklist-audit-v3.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/issue13-current-checklist-audit-v4.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/issue13-current-checklist-audit.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/iteration-final-checksums.sha256,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/iteration-final-verification.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/local-candidate-archive.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/node26-lcov-nested-functions-analysis.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-25/rea-nss-shipped-symbols.json,historical_evidence,non_oo_nss_symbol_inventory_for_browser_trust_helper
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T100544Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T111437Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T120429Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T123120Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T125752Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T132716Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T135718Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T142613Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T144705Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T150815Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T153107Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T160847Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T165119Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T172252Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T181334Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T182556Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T185653Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T192255Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T200104Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T202433Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T203431Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T210733Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T212311Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T215548Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T221417Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T223607Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T225257Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T231117Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T232753Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261025T235317Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261026T002109Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261026T011407Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261026T015909Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261026T071954Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/runtime-results-20261026T074403Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-25/server-canonical-state-20261025T1613Z.json,historical_evidence,deferred_host_private_database_identity_or_capacity
+??,evidence/launch-preparation/2026-10-25/server-installation-audit.md,historical_evidence,deferred_host_private_database_identity_or_capacity
+??,evidence/launch-preparation/2026-10-25/server-role-attestation-20261025T121242Z.json,historical_evidence,deferred_host_private_database_identity_or_capacity
+??,evidence/launch-preparation/2026-10-26/g00-ca13-standalone-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/g02-architecture-standalone-result.json,historical_evidence,historical_standalone_non_oo_diagnostic_not_full_admission
+??,evidence/launch-preparation/2026-10-26/g03-g04-165fcb0-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/g03-g04-flat-62c-preparation-correction.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/g04-binding-conflict-forwarding-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-bootstrap-g15-parent-boundaries-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-bootstrap-heartbeat-source-acceptance.json,historical_evidence,deferred_g14_root_fixture_source_acceptance
+??,evidence/launch-preparation/2026-10-26/g04-bootstrap-snapshot-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-cleanup-public-identity-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-convergence-terminal-release-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-customer-create-acceptance-erratum.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-customer-create-g17-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-customer-status-preparation-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-empty-json-cookie-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-flat-62c-repeat-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/g04-g08-saved-roundtrip-g15-nss-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-gateway-g08-boundaries-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-gateway-instrumentation-export-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-gateway-intermediate-page-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-gateway-mutation-redirect-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-gateway-operation-claim-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-gateway-session-boundaries-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-gateway-startup-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-http-disconnect-customer-outage-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-offerbinding-failure-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-orders-gateway-http-source-integration.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-orders-overflow-preparation-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-orders-pricing-request-guard-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-orders-spoof-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-orders-upstream-body-boundaries-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-outbox-cancellation-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-preparation-cardinality-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-preparation-orders-boundaries-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-pricing-422-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-public-input-gateway-fence-source-acceptance.json,historical_evidence,deferred_g14_root_fixture_source_acceptance
+??,evidence/launch-preparation/2026-10-26/g04-public-orders-response-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-response-source-binding-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g04-scoped-output-orders-verifier-source-acceptance.json,historical_evidence,deferred_g14_root_fixture_source_acceptance
+??,evidence/launch-preparation/2026-10-26/g04-security-regressions-source-acceptance.json,historical_evidence,deferred_g14_root_fixture_source_acceptance
+??,evidence/launch-preparation/2026-10-26/g05-ca13-before-build-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/g05-ca13-missing-baseline-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/g05-flat846-standalone-result.json,historical_evidence,historical_standalone_non_oo_diagnostic_not_full_admission
+??,evidence/launch-preparation/2026-10-26/g06-ca13-standalone-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/g06-fixture-gate-source-acceptance.json,historical_evidence,source_acceptance_non_oo
+??,evidence/launch-preparation/2026-10-26/g06-flat846-standalone-result.json,historical_evidence,historical_standalone_non_oo_diagnostic_not_full_admission
+??,evidence/launch-preparation/2026-10-26/g07-architecture-standalone-result.json,historical_evidence,historical_standalone_non_oo_diagnostic_not_full_admission
+??,evidence/launch-preparation/2026-10-26/g07-ca13-standalone-result.json,historical_evidence,historical_standalone_non_oo_diagnostic_not_full_admission
+??,evidence/launch-preparation/2026-10-26/g12-before-kafka-consumers-authority-proposal.md,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g12-kafka-alpine-cves-options.md,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g12-kafka-runtime-authority-proposal-v2.md,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g12-kafka-runtime-authority-proposal-v3.md,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g12-kafka-runtime-authority-proposal.md,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g12-oci-classic-compatibility-implementation-plan.md,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g12-oci-classic-compatibility-scope-decision.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g12-oci-compatibility-final.patch,historical_evidence,deferred_generated_log_or_superseded_patch
+??,evidence/launch-preparation/2026-10-26/g12-oci-compatibility-source-acceptance.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g12-order-authority-acceptance.json,historical_evidence,deferred_mixed_g12_candidate_report_includes_openobserve_or_collector
+??,evidence/launch-preparation/2026-10-26/g14-canonical-qa-invalidation.json,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-evidence-cleanliness-authority-acceptance.json,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-evidence-cleanliness-authority-proposal.md,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-evidence-cleanliness-proposal-review.json,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-evidence-cleanliness-source-acceptance.json,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-fixture-context-authority-proposal-v2.md,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-fixture-context-authority-proposal.md,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-fixture-context-authority-supplement.md,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-root-config-helper-calibration-first-attempt.json,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-root-config-helper-calibration.json,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-supplement-authority-acceptance.json,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g14-v2-authority-acceptance.json,historical_evidence,deferred_g14_root_fixture_or_evidence_scope
+??,evidence/launch-preparation/2026-10-26/g18-proof-identity-fix.patch,historical_evidence,deferred_generated_log_or_superseded_patch
+??,evidence/launch-preparation/2026-10-26/g18-proof-identity-source-acceptance.json,historical_evidence,historical_g18_source_acceptance_only
+??,evidence/launch-preparation/2026-10-26/kafka-index-cli-byte-calibration.json,historical_evidence,kafka_authority_or_source_calibration
+??,evidence/launch-preparation/2026-10-26/kafka-unused-stage-frontend-20261026T094408Z.json,historical_evidence,kafka_authority_or_source_calibration
+??,evidence/launch-preparation/2026-10-26/kafka-v3-authority-acceptance.json,historical_evidence,kafka_authority_or_source_calibration
+??,evidence/launch-preparation/2026-10-26/native-openobserve-work-start-20261026T160418Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt1-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt2-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt2-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt3-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt3-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt4-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt4-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt5-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt5-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt6-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt6-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt6-start.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt7-compile-observation.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt7-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt7-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-attempt7-start.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-cargo-v6-attempt1-preservation.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-cargo-v6-attempt1-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-cargo-v6-execution-plan-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-cargo-v6c-execution-plan-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-cargo-v6c-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-compatibility-plan.md,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-integration-map.md,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-intermediate-qa-invalidation.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-portable-source-v5-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-portable-source-v6-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-source-reader-integration.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-telemetry-scope-authority-proposal.md,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-toolchain-integration.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native-trial-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native7-npm-cache-cleanup.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native8-v3-lifecycle-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native8-v3-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native8-v4-attempt1-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native8-v4-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native8-v5-controlled-stop-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-native8-v5-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-obsolete-source-snapshots-cleanup.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-telemetry-assembler-integration.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-telemetry-cargo-resolution-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-telemetry-cargo-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-telemetry-composition-scan-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-telemetry-input-reader-source-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-telemetry-native-operator-integration.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-transport-probes-preservation.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-v6-composition-scan-v2-execution-plan-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-v6-composition-scan-v2-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-v6-composition-scan-v3-execution-plan-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-v6-composition-scan-v3-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-v6-composition-scan-v4-execution-plan-acceptance.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/openobserve-v6-composition-scan-v4-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/rea-dockerd-go-binary.json,historical_evidence,deferred_host_dockerd_binary_reverse_engineering
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T090746Z-erratum.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T090746Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T094622Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T101922Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T104027Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T113536Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T122107Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T123616Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T132347Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T135152Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T145622Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T152130Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T154211Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T163001Z.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T1728-native-running.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/runtime-results-20261026T1845-native5-running.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/scoped-output-clean-candidate.json,historical_evidence,deferred_candidate_snapshot_includes_openobserve_paths
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-67dfaca/calibration-receipt.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-67dfaca/command-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-67dfaca/command.log,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-67dfaca/independent-cleanup.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/calibration-receipt.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-actual-import-diagnostic.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-command-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-command.log,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-import-diagnostic-cleanup.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-independent-cleanup.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-post-import-diagnostic-inventory.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-post-inventory.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-pre-inventory.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-26/storage-helper-calibration-f6ee04a/operator-readonly-import-trace.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-28/g03-g04-5b5105f-result.json,historical_evidence,deferred_full_candidate_or_OO_G14_run_artifact
+??,evidence/launch-preparation/2026-10-28/native-01-oom.json,historical_evidence,deferred_openobserve_native_build_candidate_artifact
+??,evidence/launch-preparation/2026-10-28/native-02-built.json,historical_evidence,deferred_openobserve_native_build_candidate_artifact
+??,evidence/launch-preparation/2026-10-28/native-02-preproof.json,historical_evidence,deferred_openobserve_native_build_candidate_artifact
+??,evidence/launch-preparation/2026-10-28/rea-report-server-static.json,historical_evidence,deferred_host_private_database_identity_or_capacity
+ M,package.json,platform_application,ported_adapted_to_develop_or_accepted_candidate
+ M,packages/contracts/aroma-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/aroma-v1/src/cart-snapshot.ts,platform_application,ported_exact
+ M,packages/contracts/aroma-v1/src/catalog-hash.ts,platform_application,ported_exact
+ M,packages/contracts/aroma-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/aroma-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/contracts/catalog-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/catalog-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/catalog-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/contracts/client-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/client-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/client-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/contracts/customer-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/customer-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/customer-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/contracts/edge-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/edge-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/edge-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/contracts/internal-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/internal-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/internal-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/contracts/orders-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/orders-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/orders-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/contracts/pricing-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/pricing-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/pricing-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/contracts/realtime-v1/package.json,platform_application,ported_exact
+ M,packages/contracts/realtime-v1/src/index.ts,platform_application,ported_exact
+ M,packages/contracts/realtime-v1/tsconfig.json,platform_application,ported_exact
+ M,packages/platform-config/package.json,platform_application,ported_exact
+ M,packages/platform-config/src/index.ts,platform_application,ported_exact
+??,packages/platform-config/src/launch-database-target.js,platform_application,ported_exact
+??,packages/platform-config/src/launch-database-target.ts,platform_application,ported_exact
+??,packages/platform-config/src/launch-kafka-target.js,platform_application,ported_exact
+??,packages/platform-config/src/launch-kafka-target.ts,platform_application,ported_exact
+ M,packages/platform-database/src/index.ts,platform_application,ported_exact
+ M,packages/platform-database/src/internal.ts,platform_application,ported_exact
+ M,packages/platform-database/src/owner.ts,platform_application,ported_exact
+ M,packages/platform-database/tsconfig.json,platform_application,ported_exact
+ M,packages/platform-http/package.json,platform_application,ported_exact
+ M,packages/platform-http/src/index.ts,platform_application,ported_exact
+ M,packages/platform-idempotency/src/index.ts,platform_application,ported_exact
+ M,packages/platform-idempotency/tsconfig.json,platform_application,ported_exact
+ M,packages/platform-inbox/src/index.ts,platform_application,ported_exact
+ M,packages/platform-inbox/tsconfig.json,platform_application,ported_exact
+ M,packages/platform-kafka-runtime/src/index.ts,platform_application,ported_exact
+ M,packages/platform-kafka-runtime/src/native.ts,platform_application,ported_exact
+ M,packages/platform-migrations/src/index.ts,platform_application,ported_exact
+ M,packages/platform-migrations/tsconfig.json,platform_application,ported_exact
+ M,packages/platform-observability/src/index.ts,platform_application,ported_exact
+ M,packages/platform-outbox/src/index.ts,platform_application,ported_exact
+ M,packages/platform-outbox/tsconfig.json,platform_application,ported_exact
+ M,packages/platform-runtime/package.json,platform_application,ported_exact
+ M,packages/platform-runtime/src/healthcheck.ts,platform_application,ported_exact
+ M,packages/platform-runtime/src/index.ts,platform_application,ported_exact
+ M,packages/platform-security/package.json,platform_application,ported_exact
+ M,packages/platform-security/src/index.ts,platform_application,ported_exact
+ M,packages/platform-security/test/actor-context.test.mjs,platform_application,ported_exact
+ M,packages/platform-testing/package.json,platform_application,ported_exact
+ M,packages/platform-testing/src/index.ts,platform_application,ported_exact
+ M,packages/platform-testing/test/platform-packages.test.mjs,platform_application,ported_exact
+ M,packages/platform-time/src/index.ts,platform_application,ported_exact
+ M,packages/platform-ui/src/components/alert.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/components/badge.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/components/button.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/components/dialog.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/components/empty.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/components/field.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/components/input.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/components/link.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/components/loading.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/icons.tsx,platform_application,ported_exact
+ M,packages/platform-ui/src/index.ts,platform_application,ported_exact
+ M,packages/platform-ui/src/styles/font-faces.css,platform_application,ported_exact
+ M,packages/platform-ui/src/styles/global.css,platform_application,ported_exact
+ M,packages/platform-ui/src/styles/tokens.css,platform_application,ported_exact
+ M,packages/platform-ui/test/components.test.tsx,platform_application,ported_exact
+ M,platform/launch-v1-connectivity-policy.json,platform_application,ported_exact
+ M,platform/launch-v1-connectivity-policy.schema.json,platform_application,ported_exact
+ M,platform/launch-v1-runtime-profile.json,platform_application,ported_exact
+ M,platform/launch-v1-runtime-profile.schema.json,platform_application,ported_exact
+ M,platform/runtime-foundation-decision.json,platform_application,ported_adapted_to_develop_or_accepted_candidate
+ M,platform/runtime-foundation-decision.schema.json,platform_application,ported_adapted_to_develop_or_accepted_candidate
+ M,platform/target-layout.json,platform_application,ported_exact
+ M,platform/target-layout.schema.json,platform_application,ported_exact
+ M,pnpm-lock.yaml,platform_application,ported_adapted_to_develop_or_accepted_candidate
+ M,pnpm-workspace.yaml,platform_application,ported_exact
+ M,scripts/aroma-session-live-proof.mjs,platform_application,ported_exact
+ M,scripts/catalog-copy-live-proof.mjs,platform_application,ported_exact
+ M,scripts/catalog-live-harness.mjs,platform_application,ported_exact
+ M,scripts/catalog-recovery-live-proof.mjs,platform_application,ported_exact
+ M,scripts/catalog-runtime-live-proof.mjs,platform_application,ported_exact
+ M,scripts/check-architecture.mjs,platform_application,ported_adapted_to_develop_or_accepted_candidate
+ M,scripts/check-browser-bundle.mjs,platform_application,ported_exact
+ M,scripts/check-database-ownership.mjs,platform_application,ported_exact
+ M,scripts/check-node26-compatibility.mjs,platform_application,ported_exact
+ M,scripts/check-platform-config.mjs,platform_application,ported_exact
+ M,scripts/check-rule-parity.mjs,platform_application,ported_exact
+ M,scripts/check-security-material.mjs,platform_application,ported_exact
+ M,scripts/check-service-catalog.mjs,platform_application,ported_exact
+ M,scripts/check-toolchain-profiles.mjs,platform_application,ported_exact
+ M,scripts/check-toolchain-versions.mjs,platform_application,ported_adapted_to_develop_or_accepted_candidate
+ M,scripts/config-lib.mjs,platform_application,ported_exact
+ M,scripts/contracts-ajv.mjs,platform_application,ported_exact
+ M,scripts/contracts-breaking.mjs,platform_application,ported_exact
+ M,scripts/contracts-check-generated.mjs,platform_application,ported_exact
+ M,scripts/contracts-generate.mjs,platform_application,ported_exact
+ M,scripts/contracts-lint.mjs,platform_application,ported_exact
+ M,scripts/db-bootstrap.mjs,platform_application,ported_exact
+ M,scripts/db-live-proof.mjs,platform_application,ported_exact
+ M,scripts/db-smoke.mjs,platform_application,ported_exact
+??,scripts/format.mjs,platform_application,ported_exact
+ M,scripts/permission-audit-listener.mjs,platform_application,ported_exact
+ M,scripts/permission-audit.mjs,platform_application,ported_exact
+ M,scripts/permission-enforce.mjs,platform_application,ported_exact
+ M,scripts/validate-launch-authority.py,platform_application,ported_adapted_to_develop_or_accepted_candidate
+ M,scripts/verify-clean-clone.mjs,platform_application,ported_exact
+ M,secrets/platform-secrets.schema.json,secrets_tasty,ported_adapted_to_develop_or_accepted_candidate
+ M,secrets/platform.secrets.sops.yaml,secrets_tasty,ported_exact
+ M,tests/architecture/checks.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/architecture/fixtures/invalid-axios/apps/http-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-browser-transitive-internal/apps/web/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-db/runtime-environment.json,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-final-image/Dockerfile,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-generic-retry-wrapper/apps/aroma-gateway/src/retry.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-import-catalog-orders/apps/catalog-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-import-orders-catalog/apps/orders-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-native-module/apps/native-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-permission-manifest/apps/missing/src/main.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-permission-manifest/apps/permissioned/src/main.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-postgres-url/apps/orders-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-ts7-commonjs/apps/example-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-ts7-import/apps/example-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-ts7-promise/apps/example-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/invalid-ts7-switch/apps/example-service/src/bad.ts,verification,ported_exact
+ M,tests/architecture/fixtures/negative/frontend/browser-console-node-helper.ts,verification,ported_exact
+ M,tests/architecture/fixtures/valid-db/runtime-environment.json,verification,ported_exact
+ M,tests/architecture/fixtures/valid-import/apps/orders-service/src/good.ts,verification,ported_exact
+ M,tests/architecture/fixtures/valid-import/packages/contracts/catalog-v1/package.json,verification,ported_exact
+ M,tests/architecture/frontend-boundary.test.mjs,verification,ported_exact
+ M,tests/aroma/api-internal-operations.test.mjs,verification,ported_exact
+ M,tests/aroma/binding-http.test.mjs,verification,ported_exact
+ M,tests/aroma/binding-live.test.mjs,verification,ported_exact
+ M,tests/aroma/cart-reader.test.mjs,verification,ported_exact
+ M,tests/aroma/catalog-export.test.mjs,verification,ported_exact
+ M,tests/aroma/convergence-domain.test.mjs,verification,ported_exact
+ M,tests/aroma/convergence-live.test.mjs,verification,ported_exact
+ M,tests/aroma/gateway-operations-http.test.mjs,verification,ported_exact
+ M,tests/aroma/gateway-production-composition.test.mjs,verification,ported_exact
+ M,tests/aroma/mutation-journal.test.mjs,verification,ported_exact
+ M,tests/aroma/observer-live.test.mjs,verification,ported_exact
+ M,tests/aroma/provider-cart-mutator.test.mjs,verification,ported_exact
+ M,tests/aroma/provider-catalog-source.test.mjs,verification,ported_exact
+ M,tests/aroma/provider-decoder.test.mjs,verification,ported_exact
+ M,tests/aroma/provider-http.test.mjs,verification,ported_exact
+ M,tests/aroma/provider-session.test.mjs,verification,ported_exact
+ M,tests/aroma/safe-read-http.test.mjs,verification,ported_exact
+ M,tests/aroma/scoping-provenance.test.mjs,verification,ported_exact
+ M,tests/aroma/source-identity.test.mjs,verification,ported_exact
+ M,tests/aroma/worker-gateway-client.test.mjs,verification,ported_exact
+ M,tests/authority/fixtures/negative/cases.json,verification,ported_exact
+ M,tests/authority/test_launch_authority.py,verification,ported_exact
+ M,tests/catalog-pipeline/capacity-child.mjs,verification,ported_exact
+ M,tests/catalog-pipeline/capacity.test.mjs,verification,ported_exact
+ M,tests/catalog-pipeline/pipeline-live.test.mjs,verification,ported_exact
+ M,tests/catalog-pipeline/publisher-child.mjs,verification,ported_exact
+ M,tests/catalog-pipeline/publisher-live.test.mjs,verification,ported_exact
+ M,tests/catalog-pipeline/recovery-live.test.mjs,verification,ported_exact
+ M,tests/catalog-pipeline/security-live.test.mjs,verification,ported_exact
+ M,tests/catalog/activation-binding-client.test.mjs,verification,ported_exact
+ M,tests/catalog/activation-contracts.test.mjs,verification,ported_exact
+ M,tests/catalog/activation-crash-child.mjs,verification,ported_exact
+ M,tests/catalog/activation-crash-live.test.mjs,verification,ported_exact
+ M,tests/catalog/activation-events.test.mjs,verification,ported_exact
+ M,tests/catalog/activation-identity.test.mjs,verification,ported_exact
+ M,tests/catalog/activation-live.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/catalog/activation-migrations.test.mjs,verification,ported_exact
+ M,tests/catalog/activation-validation.test.mjs,verification,ported_exact
+ M,tests/catalog/catalog-owner.test.mjs,verification,ported_exact
+ M,tests/catalog/catalog-root.test.mjs,verification,ported_exact
+ M,tests/catalog/composition-proof.mjs,verification,ported_exact
+ M,tests/catalog/copy-live.test.mjs,verification,ported_exact
+ M,tests/catalog/ingestion.test.mjs,verification,ported_exact
+ M,tests/catalog/observability-proof.mjs,verification,ported_exact
+ M,tests/catalog/recovery-live.test.mjs,verification,ported_exact
+ M,tests/catalog/runtime-child.mjs,verification,ported_exact
+ M,tests/catalog/stream-capacity-proof.mjs,verification,ported_exact
+ M,tests/catalog/stream.test.mjs,verification,ported_exact
+ M,tests/catalog/terminal-capacity-proof.mjs,verification,ported_exact
+ M,tests/compose/topology.test.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+ M,tests/config/observability-bootstrap.test.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+ M,tests/config/orders-signing-bootstrap.test.mjs,verification,ported_exact
+ M,tests/config/platform-config.test.mjs,verification,ported_exact
+ M,tests/contracts/breaking.test.mjs,verification,ported_exact
+ M,tests/contracts/catalog-http.test.mjs,verification,ported_exact
+ M,tests/contracts/generated-types.test.mjs,verification,ported_exact
+ M,tests/contracts/manifest.test.mjs,verification,ported_exact
+ M,tests/contracts/openapi-fixtures.test.mjs,verification,ported_exact
+ M,tests/contracts/recovery.test.mjs,verification,ported_exact
+ M,tests/contracts/schemas.test.mjs,verification,ported_exact
+ M,tests/customer/customer-http.test.mjs,verification,ported_exact
+ M,tests/customer/customer-live.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/customer/customer-normalization.test.mjs,verification,ported_exact
+ M,tests/customer/customer-schema.test.mjs,verification,ported_exact
+ M,tests/customer/fixtures/customer-testkit.mjs,verification,ported_exact
+ M,tests/customer/fixtures/db-adapter-command-observer.mjs,verification,ported_exact
+ M,tests/database/db-bootstrap.test.mjs,verification,ported_exact
+ M,tests/database/live-db-proof.test.mjs,verification,ported_exact
+ M,tests/database/pool-concurrency-live.test.mjs,verification,ported_exact
+ M,tests/edge-auth/oidc-auth.test.mjs,verification,ported_exact
+ M,tests/edge-auth/operations.test.mjs,verification,ported_exact
+ M,tests/edge-auth/routes.test.mjs,verification,ported_exact
+ M,tests/kafka/orders-inbox-live.test.mjs,verification,ported_exact
+ M,tests/kafka/runtime.test.mjs,verification,ported_exact
+ M,tests/nginx/cutover.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/nginx/fixtures/Dockerfile,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/nginx/fixtures/Dockerfile.cutover,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/nginx/fixtures/backend.mjs,verification,ported_exact
+ M,tests/nginx/fixtures/cutover-backend.mjs,verification,ported_exact
+ M,tests/nginx/fixtures/profile.json,verification,ported_exact
+ M,tests/nginx/fixtures/served-backend.mjs,verification,ported_exact
+ M,tests/nginx/image.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/observability/alerts.test.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tests/observability/convergence-metrics-proof.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tests/observability/fixture.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tests/observability/launch-path.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tests/observability/orders-fixture.mjs,verification,ported_exact
+ M,tests/observability/runtime-matrix-probe.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tests/observability/runtime-matrix.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tests/observability/storage.test.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tests/orders/aroma-preparation-live.test.mjs,verification,ported_exact
+ M,tests/orders/aroma-schema.test.mjs,verification,ported_exact
+ M,tests/orders/contract.test.mjs,verification,ported_exact
+ M,tests/orders/observability.test.mjs,verification,ported_exact
+ M,tests/orders/order-card.test.mjs,verification,ported_exact
+ M,tests/orders/order-contribution.test.mjs,verification,ported_exact
+ M,tests/orders/order-store-faults.test.mjs,verification,ported_exact
+ M,tests/orders/order-store.test.mjs,verification,ported_exact
+ M,tests/orders/owner-http.test.mjs,verification,ported_exact
+ M,tests/orders/owner-live.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/orders/public-api.test.mjs,verification,ported_exact
+ M,tests/orders/reconciliation-live.test.mjs,verification,ported_exact
+ M,tests/orders/row-schemas.test.mjs,verification,ported_exact
+ M,tests/orders/security.test.mjs,verification,ported_exact
+ M,tests/orders/upstream-clients.test.mjs,verification,ported_exact
+ M,tests/pricing/catalog-client.test.mjs,verification,ported_exact
+ M,tests/pricing/create-pricing-quote.test.mjs,verification,ported_exact
+ M,tests/pricing/pricing-formula.test.mjs,verification,ported_exact
+ M,tests/pricing/pricing-http.test.mjs,verification,ported_exact
+ M,tests/pricing/pricing-internal-api.test.mjs,verification,ported_exact
+ M,tests/pricing/pricing-observability.test.mjs,verification,ported_exact
+ M,tests/pricing/pricing-public-api.test.mjs,verification,ported_exact
+ M,tests/pricing/pricing-recovery-live.test.mjs,verification,ported_exact
+ M,tests/pricing/pricing-store.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/pricing/quote-proof.test.mjs,verification,ported_exact
+ M,tests/realtime/auth.test.mjs,verification,ported_exact
+ M,tests/realtime/backpressure.test.mjs,verification,ported_exact
+ M,tests/realtime/contract.test.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/clients.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/driver.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/fixture-check.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/harness.test.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+??,tests/realtime/fixtures/oidc-provider.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/owner-browser.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/owner-publisher.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/protocol.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/services.mjs,verification,ported_exact
+ M,tests/realtime/fixtures/setup.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+ M,tests/realtime/fixtures/transport.mjs,verification,ported_exact
+ M,tests/realtime/helpers.mjs,verification,ported_exact
+ M,tests/realtime/replay.test.mjs,verification,ported_exact
+ M,tests/realtime/soak.test.mjs,verification,ported_exact
+ M,tests/runtime/lifecycle.test.mjs,verification,ported_exact
+ M,tests/runtime/native-ts-smoke.test.mjs,verification,ported_exact
+ M,tests/runtime/node26-compatibility.test.mjs,verification,ported_exact
+ M,tests/runtime/permissions.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,tests/runtime/platform-http.test.mjs,verification,ported_exact
+ M,tests/runtime/platform-time.test.mjs,verification,ported_exact
+??,tests/tools/g15-browser-driver.test.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+??,tests/tools/g15-browser-proof.test.mjs,verification,ported_exact
+??,tests/tools/g15-owner-evidence.test.mjs,verification,ported_exact
+??,tests/tools/security-scan.test.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tools/compose-smoke.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+??,tools/config-bootstrap/browser-fixture.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+??,tools/config-bootstrap/g15-nss-trust.py,verification,ported_exact
+ M,tools/config-bootstrap/index.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+??,tools/config-bootstrap/store-tasty-credentials.py,secrets_tasty,ported_exact
+ M,tools/docker-build.mjs,verification,ported_exact
+??,tools/g15-browser-driver.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+??,tools/g15-browser-proof.mjs,verification,ported_exact
+??,tools/g15-owner-evidence.mjs,verification,ported_exact
+ M,tools/nginx/check-config.mjs,verification,ported_exact
+ M,tools/nginx/generate-config.mjs,verification,ported_exact
+ M,tools/nginx/generate.mjs,verification,ported_exact
+ M,tools/observability/alert-sink.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tools/observability/alerts.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tools/observability/bootstrap.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tools/observability/generate.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tools/observability/health.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tools/observability/storage.mjs,openobserve_deferred,deferred_openobserve_or_g14
+ M,tools/observability/verify.mjs,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/README.ru.md,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/assemble.py,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/build.sh,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/datasource-generated-files.json,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/inputs.json,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/inspect-container-guard.py,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/patches/01-openobserve-telemetry.patch,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/patches/02-object-store-quick-xml.patch,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/patches/03-utoipa-swagger-ui-zip9.patch,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/patches/04-rust-embed-memory.patch,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/openobserve-native/qa-native.sh,openobserve_deferred,deferred_openobserve_or_g14
+??,tools/rollback-runtime-proof.mjs,verification,ported_exact
+??,tools/security-scan.mjs,openobserve_deferred,deferred_openobserve_or_g14
+??,verification/launch/v1/accepted-handoff-supplement.json,verification,ported_exact
+ M,verification/launch/v1/matrix.yaml,verification,ported_exact
+ M,verification/launch/v1/report.mjs,verification,ported_exact
+ M,verification/launch/v1/run.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+ M,verification/launch/v1/runner.test.mjs,verification,shared_changes_ported_openobserve_parts_deferred
+ M,verification/launch/v1/scenarios/aroma-approval.mjs,verification,ported_exact
+ M,verification/launch/v1/scenarios/aroma-sandbox-catalog.mjs,verification,ported_exact
+ M,verification/launch/v1/scenarios/aroma-sandbox-resources.mjs,verification,ported_exact
+ M,verification/launch/v1/scenarios/aroma-sandbox.mjs,verification,ported_exact
+??,verification/launch/v1/scenarios/backup-restore-recovery.mjs,verification,ported_exact
+??,verification/launch/v1/scenarios/backup-restore.mjs,verification,ported_exact
+??,verification/launch/v1/scenarios/backup-restore.test.mjs,verification,ported_exact
+??,verification/launch/v1/scenarios/browser.mjs,verification,ported_exact
+??,verification/launch/v1/scenarios/migrations.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+ M,verification/launch/v1/scenarios/owner-suites.mjs,verification,ported_exact
+ M,verification/launch/v1/scenarios/preflight.mjs,verification,ported_exact
+ M,verification/launch/v1/scenarios/preflight.test.mjs,verification,ported_exact
+ M,verification/launch/v1/scenarios/rollback.mjs,verification,ported_exact
+??,verification/launch/v1/scenarios/unit.mjs,verification,ported_adapted_to_develop_or_accepted_candidate
+??,verification/launch/v1/schemas/accepted-handoff-supplement.schema.json,verification,ported_exact
+ M,verification/launch/v1/schemas/aroma-approval.schema.json,verification,ported_exact
+ M,verification/launch/v1/schemas/matrix.schema.json,verification,ported_exact
+ M,verification/launch/v1/schemas/run-result.schema.json,verification,ported_exact

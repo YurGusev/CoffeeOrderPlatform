@@ -1,13 +1,30 @@
 #!/usr/bin/env node
-import { readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const RUNTIME_FIELDS = new Set(['name', 'owner', 'sourceRoot', 'purpose', 'contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'database', 'secretRefs', 'publicity', 'transportMode']);
-const CATALOG_DIGEST = '9f65073da602ff012c7920a4c1ff217e165c4a738f808fa2fbaf3a693da606f8';
-const INTERACTIONS_DIGEST = '3bfe1143f7f31cfae8262eed6f8d8bdb467a35d786ac0d143b8e0b75d806220b';
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const RUNTIME_FIELDS = new Set([
+  "name",
+  "owner",
+  "sourceRoot",
+  "purpose",
+  "contractPackages",
+  "incomingHttp",
+  "incomingEvents",
+  "schedules",
+  "outgoingHttp",
+  "outgoingEvents",
+  "database",
+  "secretRefs",
+  "publicity",
+  "transportMode",
+]);
+const CATALOG_DIGEST =
+  "9f65073da602ff012c7920a4c1ff217e165c4a738f808fa2fbaf3a693da606f8";
+const INTERACTIONS_DIGEST =
+  "3bfe1143f7f31cfae8262eed6f8d8bdb467a35d786ac0d143b8e0b75d806220b";
 
 function fail(rule, message) {
   const error = new Error(`${rule} ${message}`);
@@ -17,9 +34,9 @@ function fail(rule, message) {
 
 async function readJson(path) {
   try {
-    return JSON.parse(await readFile(path, 'utf8'));
+    return JSON.parse(await readFile(path, "utf8"));
   } catch (error) {
-    fail('BOUND-CATALOG', `${path}: cannot read strict JSON: ${error.message}`);
+    fail("BOUND-CATALOG", `${path}: cannot read strict JSON: ${error.message}`);
   }
 }
 
@@ -28,122 +45,334 @@ function exactKeys(value, expected, label, optional = []) {
   const missing = [...expected].filter((key) => !actual.has(key));
   const allowed = new Set([...expected, ...optional]);
   const unknown = [...actual].filter((key) => !allowed.has(key));
-  if (missing.length || unknown.length) fail('BOUND-CATALOG', `${label}: missing=[${missing.join(',')}] unknown=[${unknown.join(',')}]`);
+  if (missing.length || unknown.length)
+    fail(
+      "BOUND-CATALOG",
+      `${label}: missing=[${missing.join(",")}] unknown=[${unknown.join(",")}]`,
+    );
 }
 
 function uniqueMap(items, key, rule, label) {
   const result = new Map();
   for (const item of items) {
-    if (result.has(item[key])) fail(rule, `${label}: duplicate ${key} ${item[key]}`);
+    if (result.has(item[key]))
+      fail(rule, `${label}: duplicate ${key} ${item[key]}`);
     result.set(item[key], item);
   }
   return result;
 }
 
 function stringArray(value, label) {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string') || new Set(value).size !== value.length) {
-    fail('BOUND-CATALOG', `${label}: explicit unique string array required`);
+  if (
+    !Array.isArray(value) ||
+    value.some((item) => typeof item !== "string") ||
+    new Set(value).size !== value.length
+  ) {
+    fail("BOUND-CATALOG", `${label}: explicit unique string array required`);
   }
 }
 
 function stable(value) {
-  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
-  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`;
+  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
+  if (value && typeof value === "object")
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stable(value[key])}`)
+      .join(",")}}`;
   return JSON.stringify(value);
 }
 
 function digest(value) {
-  return createHash('sha256').update(stable(value)).digest('hex');
+  return createHash("sha256").update(stable(value)).digest("hex");
 }
 
 export async function checkServiceCatalog(root = REPO_ROOT) {
-  const catalog = await readJson(join(root, 'config/service-catalog.json'));
-  const ownership = await readJson(join(root, 'config/database-ownership.json'));
-  const policy = await readJson(join(root, 'config/service-interactions.json'));
-  const profile = await readJson(join(root, 'platform/launch-v1-runtime-profile.json'));
+  const catalog = await readJson(join(root, "config/service-catalog.json"));
+  const ownership = await readJson(
+    join(root, "config/database-ownership.json"),
+  );
+  const policy = await readJson(join(root, "config/service-interactions.json"));
+  const profile = await readJson(
+    join(root, "platform/launch-v1-runtime-profile.json"),
+  );
 
-  if (catalog.exactRuntimeCount !== 15 || catalog.runtimes.length !== 15) fail('BOUND-CATALOG', 'exact 15 runtime catalog required');
-  const catalogByName = uniqueMap(catalog.runtimes, 'name', 'BOUND-CATALOG', 'service catalog');
-  const profileByName = uniqueMap(profile.runtimes, 'name', 'BOUND-CATALOG', 'runtime profile');
-  const claimsByName = uniqueMap(ownership.runtimeClaims, 'runtime', 'BOUND-DB-CLAIM', 'database claims');
+  if (catalog.exactRuntimeCount !== 15 || catalog.runtimes.length !== 15)
+    fail("BOUND-CATALOG", "exact 15 runtime catalog required");
+  const catalogByName = uniqueMap(
+    catalog.runtimes,
+    "name",
+    "BOUND-CATALOG",
+    "service catalog",
+  );
+  const profileByName = uniqueMap(
+    profile.runtimes,
+    "name",
+    "BOUND-CATALOG",
+    "runtime profile",
+  );
+  const claimsByName = uniqueMap(
+    ownership.runtimeClaims,
+    "runtime",
+    "BOUND-DB-CLAIM",
+    "database claims",
+  );
   const expectedNames = new Set(profileByName.keys());
-  if (catalogByName.size !== expectedNames.size || [...expectedNames].some((name) => !catalogByName.has(name))) fail('BOUND-CATALOG', 'runtime set differs from #19 profile');
+  if (
+    catalogByName.size !== expectedNames.size ||
+    [...expectedNames].some((name) => !catalogByName.has(name))
+  )
+    fail("BOUND-CATALOG", "runtime set differs from #19 profile");
 
   for (const [name, runtime] of catalogByName) {
-    exactKeys(runtime, RUNTIME_FIELDS, `runtime ${name}`, ['optionalSecretRefs', 'runtimeKind']);
+    exactKeys(runtime, RUNTIME_FIELDS, `runtime ${name}`, [
+      "optionalSecretRefs",
+      "runtimeKind",
+    ]);
     const profileRuntime = profileByName.get(name);
-    if (name === 'edge-nginx') {
-      if (runtime.runtimeKind !== 'native-nginx' || profileRuntime.runtimeKind !== 'native-nginx') fail('BOUND-CATALOG', 'edge-nginx must be the sole native-nginx runtime');
-      if (runtime.transportMode !== 'public-tls' || profileRuntime.transportMode !== 'public-tls' || runtime.publicity !== 'public-ingress') fail('BOUND-CATALOG', 'edge-nginx must be public TLS ingress with private mTLS upstream transport');
-      if (runtime.database !== null || profileRuntime.dbPrincipal !== null) fail('BOUND-DB-CLAIM', 'edge-nginx must remain DB-less');
-      if (JSON.stringify(runtime.secretRefs) !== JSON.stringify(['edge.tlsPrivateKey', 'edge.tlsCertificate', 'security.serviceTransportKeys.edge-nginx']) || (runtime.optionalSecretRefs ?? []).length !== 0) fail('BOUND-SECRET', 'edge-nginx requires only its scoped public TLS pair and private mTLS identity');
-    } else if (runtime.runtimeKind !== undefined || profileRuntime.runtimeKind !== undefined) {
-      fail('BOUND-CATALOG', `${name}: native runtime marker is forbidden for Node runtimes`);
+    if (name === "edge-nginx") {
+      if (
+        runtime.runtimeKind !== "native-nginx" ||
+        profileRuntime.runtimeKind !== "native-nginx"
+      )
+        fail(
+          "BOUND-CATALOG",
+          "edge-nginx must be the sole native-nginx runtime",
+        );
+      if (
+        runtime.transportMode !== "public-tls" ||
+        profileRuntime.transportMode !== "public-tls" ||
+        runtime.publicity !== "public-ingress"
+      )
+        fail(
+          "BOUND-CATALOG",
+          "edge-nginx must be public TLS ingress with private mTLS upstream transport",
+        );
+      if (runtime.database !== null || profileRuntime.dbPrincipal !== null)
+        fail("BOUND-DB-CLAIM", "edge-nginx must remain DB-less");
+      if (
+        JSON.stringify(runtime.secretRefs) !==
+          JSON.stringify([
+            "edge.tlsPrivateKey",
+            "edge.tlsCertificate",
+            "security.serviceTransportKeys.edge-nginx",
+          ]) ||
+        (runtime.optionalSecretRefs ?? []).length !== 0
+      )
+        fail(
+          "BOUND-SECRET",
+          "edge-nginx requires only its scoped public TLS pair and private mTLS identity",
+        );
+    } else if (
+      runtime.runtimeKind !== undefined ||
+      profileRuntime.runtimeKind !== undefined
+    ) {
+      fail(
+        "BOUND-CATALOG",
+        `${name}: native runtime marker is forbidden for Node runtimes`,
+      );
     }
-    if (runtime.owner !== profileRuntime.owner) fail('BOUND-CATALOG', `${name}: owner ${runtime.owner} differs from #19 ${profileRuntime.owner}`);
-    if (runtime.transportMode !== profileRuntime.transportMode) fail('BOUND-CATALOG', `${name}: transportMode differs from #19 profile`);
-    if (runtime.sourceRoot !== `apps/${name}`) fail('BOUND-CATALOG', `${name}: sourceRoot must be apps/${name}`);
-    for (const field of ['contractPackages', 'incomingHttp', 'incomingEvents', 'schedules', 'outgoingHttp', 'outgoingEvents', 'secretRefs']) stringArray(runtime[field], `${name}.${field}`);
+    if (runtime.owner !== profileRuntime.owner)
+      fail(
+        "BOUND-CATALOG",
+        `${name}: owner ${runtime.owner} differs from #19 ${profileRuntime.owner}`,
+      );
+    if (runtime.transportMode !== profileRuntime.transportMode)
+      fail("BOUND-CATALOG", `${name}: transportMode differs from #19 profile`);
+    if (runtime.sourceRoot !== `apps/${name}`)
+      fail("BOUND-CATALOG", `${name}: sourceRoot must be apps/${name}`);
+    for (const field of [
+      "contractPackages",
+      "incomingHttp",
+      "incomingEvents",
+      "schedules",
+      "outgoingHttp",
+      "outgoingEvents",
+      "secretRefs",
+    ])
+      stringArray(runtime[field], `${name}.${field}`);
     stringArray(runtime.optionalSecretRefs ?? [], `${name}.optionalSecretRefs`);
     for (const packageRoot of runtime.contractPackages) {
-      if (!/^packages\/contracts\/[a-z0-9-]+-v[0-9]+$/.test(packageRoot)) fail('BOUND-IMPORT', `${name}: unversioned or non-contract package ${packageRoot}`);
+      if (!/^packages\/contracts\/[a-z0-9-]+-v[0-9]+$/.test(packageRoot))
+        fail(
+          "BOUND-IMPORT",
+          `${name}: unversioned or non-contract package ${packageRoot}`,
+        );
     }
-    const actualSecrets = [...runtime.secretRefs].sort((left, right) => left.localeCompare(right));
-    const expectedSecrets = [...profileRuntime.secretRefs].sort((left, right) => left.localeCompare(right));
-    if (JSON.stringify(actualSecrets) !== JSON.stringify(expectedSecrets)) fail('BOUND-SECRET', `${name}: secretRefs differ from accepted #19 profile`);
-    const actualOptionalSecrets = [...(runtime.optionalSecretRefs ?? [])].sort((left, right) => left.localeCompare(right));
-    const expectedOptionalSecrets = [...(profileRuntime.optionalSecretRefs ?? [])].sort((left, right) => left.localeCompare(right));
-    if (JSON.stringify(actualOptionalSecrets) !== JSON.stringify(expectedOptionalSecrets)) fail('BOUND-SECRET', `${name}: optionalSecretRefs differ from accepted #19 profile`);
+    const actualSecrets = [...runtime.secretRefs].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    const expectedSecrets = [...profileRuntime.secretRefs].sort((left, right) =>
+      left.localeCompare(right),
+    );
+    if (JSON.stringify(actualSecrets) !== JSON.stringify(expectedSecrets))
+      fail(
+        "BOUND-SECRET",
+        `${name}: secretRefs differ from accepted #19 profile`,
+      );
+    const actualOptionalSecrets = [...(runtime.optionalSecretRefs ?? [])].sort(
+      (left, right) => left.localeCompare(right),
+    );
+    const expectedOptionalSecrets = [
+      ...(profileRuntime.optionalSecretRefs ?? []),
+    ].sort((left, right) => left.localeCompare(right));
+    if (
+      JSON.stringify(actualOptionalSecrets) !==
+      JSON.stringify(expectedOptionalSecrets)
+    )
+      fail(
+        "BOUND-SECRET",
+        `${name}: optionalSecretRefs differ from accepted #19 profile`,
+      );
     const claim = claimsByName.get(name);
-    if (!claim) fail('BOUND-DB-CLAIM', `${name}: database claim missing`);
+    if (!claim) fail("BOUND-DB-CLAIM", `${name}: database claim missing`);
     if (runtime.database === null) {
-      if (profileRuntime.dbPrincipal !== null || claim.database !== null) fail('BOUND-DB-CLAIM', `${name}: DB-less authority mismatch`);
+      if (profileRuntime.dbPrincipal !== null || claim.database !== null)
+        fail("BOUND-DB-CLAIM", `${name}: DB-less authority mismatch`);
     } else {
-      if (runtime.database.role !== profileRuntime.dbPrincipal) fail('BOUND-DB-CLAIM', `${name}: DB role differs from #19 profile`);
-      if (claim.database !== runtime.database.name || claim.role !== runtime.database.role) fail('BOUND-DB-CLAIM', `${name}: service catalog and ownership claim differ`);
+      if (runtime.database.role !== profileRuntime.dbPrincipal)
+        fail("BOUND-DB-CLAIM", `${name}: DB role differs from #19 profile`);
+      if (
+        claim.database !== runtime.database.name ||
+        claim.role !== runtime.database.role
+      )
+        fail(
+          "BOUND-DB-CLAIM",
+          `${name}: service catalog and ownership claim differ`,
+        );
     }
   }
 
-  if (policy.defaultPolicy !== 'deny' || policy.databaseEdgesAcrossOwnersAllowed !== false) fail('BOUND-INTERACTION', 'interaction policy must be default-deny with no cross-owner DB edge');
-  const interactions = uniqueMap(policy.interactions, 'id', 'BOUND-INTERACTION', 'interaction matrix');
+  if (
+    policy.defaultPolicy !== "deny" ||
+    policy.databaseEdgesAcrossOwnersAllowed !== false
+  )
+    fail(
+      "BOUND-INTERACTION",
+      "interaction policy must be default-deny with no cross-owner DB edge",
+    );
+  const interactions = uniqueMap(
+    policy.interactions,
+    "id",
+    "BOUND-INTERACTION",
+    "interaction matrix",
+  );
   for (const interaction of interactions.values()) {
-    if (!catalogByName.has(interaction.from)) fail('BOUND-INTERACTION', `${interaction.id}: unknown source ${interaction.from}`);
-    if (!catalogByName.has(interaction.to) && interaction.to !== 'external:aroma-origin') fail('BOUND-INTERACTION', `${interaction.id}: unknown target ${interaction.to}`);
-    if (!['http', 'event', 'provider-http'].includes(interaction.mode)) fail('BOUND-INTERACTION', `${interaction.id}: forbidden mode ${interaction.mode}`);
-    if (interaction.to === 'external:aroma-origin' && (interaction.from !== 'aroma-gateway' || interaction.mode !== 'provider-http')) fail('BOUND-INTERACTION', `${interaction.id}: provider egress is Gateway-only`);
-    if (interaction.mode === 'provider-http' && interaction.to !== 'external:aroma-origin') fail('BOUND-INTERACTION', `${interaction.id}: provider edge target changed`);
+    if (!catalogByName.has(interaction.from))
+      fail(
+        "BOUND-INTERACTION",
+        `${interaction.id}: unknown source ${interaction.from}`,
+      );
+    if (
+      !catalogByName.has(interaction.to) &&
+      interaction.to !== "external:aroma-origin"
+    )
+      fail(
+        "BOUND-INTERACTION",
+        `${interaction.id}: unknown target ${interaction.to}`,
+      );
+    if (!["http", "event", "provider-http"].includes(interaction.mode))
+      fail(
+        "BOUND-INTERACTION",
+        `${interaction.id}: forbidden mode ${interaction.mode}`,
+      );
+    if (
+      interaction.to === "external:aroma-origin" &&
+      (interaction.from !== "aroma-gateway" ||
+        interaction.mode !== "provider-http")
+    )
+      fail(
+        "BOUND-INTERACTION",
+        `${interaction.id}: provider egress is Gateway-only`,
+      );
+    if (
+      interaction.mode === "provider-http" &&
+      interaction.to !== "external:aroma-origin"
+    )
+      fail(
+        "BOUND-INTERACTION",
+        `${interaction.id}: provider edge target changed`,
+      );
   }
 
   const internalProfile = profile.internalOperationAllowlist;
   for (const operation of internalProfile) {
-    const callerEdge = [...interactions.values()].some((edge) => edge.from === operation.originalCaller && edge.to === 'api-internal' && edge.operations.includes(operation.operationId));
-    const targetEdge = [...interactions.values()].some((edge) => edge.from === 'api-internal' && edge.to === operation.target && edge.contract === `internal-v1:${operation.operationId}`);
-    if (!callerEdge || !targetEdge) fail('BOUND-INTERACTION', `${operation.originalCaller} -> ${operation.target} ${operation.operationId}: delegation edge missing`);
+    const callerEdge = [...interactions.values()].some(
+      (edge) =>
+        edge.from === operation.originalCaller &&
+        edge.to === "api-internal" &&
+        edge.operations.includes(operation.operationId),
+    );
+    const targetEdge = [...interactions.values()].some(
+      (edge) =>
+        edge.from === "api-internal" &&
+        edge.to === operation.target &&
+        edge.contract === `internal-v1:${operation.operationId}`,
+    );
+    if (!callerEdge || !targetEdge)
+      fail(
+        "BOUND-INTERACTION",
+        `${operation.originalCaller} -> ${operation.target} ${operation.operationId}: delegation edge missing`,
+      );
   }
 
   for (const runtime of catalog.runtimes) {
     for (const event of runtime.incomingEvents) {
-      if (![...interactions.values()].some((edge) => edge.mode === 'event' && edge.to === runtime.name && edge.contract === event)) fail('BOUND-INTERACTION', `${runtime.name}: incoming event ${event} has no producer edge`);
+      if (
+        ![...interactions.values()].some(
+          (edge) =>
+            edge.mode === "event" &&
+            edge.to === runtime.name &&
+            edge.contract === event,
+        )
+      )
+        fail(
+          "BOUND-INTERACTION",
+          `${runtime.name}: incoming event ${event} has no producer edge`,
+        );
     }
     for (const event of runtime.outgoingEvents) {
-      if (event === 'CatalogSnapshotActivated.v1') continue;
-      if (![...interactions.values()].some((edge) => edge.mode === 'event' && edge.from === runtime.name && edge.contract === event)) fail('BOUND-INTERACTION', `${runtime.name}: outgoing event ${event} has no consumer edge`);
+      if (event === "CatalogSnapshotActivated.v1") continue;
+      if (
+        ![...interactions.values()].some(
+          (edge) =>
+            edge.mode === "event" &&
+            edge.from === runtime.name &&
+            edge.contract === event,
+        )
+      )
+        fail(
+          "BOUND-INTERACTION",
+          `${runtime.name}: outgoing event ${event} has no consumer edge`,
+        );
     }
   }
-  if (digest(catalog) !== CATALOG_DIGEST) fail('BOUND-CATALOG', 'service catalog differs from the accepted exact authority');
-  if (digest(policy) !== INTERACTIONS_DIGEST) fail('BOUND-INTERACTION', 'interaction matrix contains an unknown or changed edge');
-  return { runtimeCount: catalogByName.size, interactionCount: interactions.size };
+  if (digest(catalog) !== CATALOG_DIGEST)
+    fail(
+      "BOUND-CATALOG",
+      "service catalog differs from the accepted exact authority",
+    );
+  if (digest(policy) !== INTERACTIONS_DIGEST)
+    fail(
+      "BOUND-INTERACTION",
+      "interaction matrix contains an unknown or changed edge",
+    );
+  return {
+    runtimeCount: catalogByName.size,
+    interactionCount: interactions.size,
+  };
 }
 
 function parseRoot(argv) {
-  const index = argv.indexOf('--root');
+  const index = argv.indexOf("--root");
   return index === -1 ? REPO_ROOT : resolve(argv[index + 1]);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const result = await checkServiceCatalog(parseRoot(process.argv.slice(2)));
-    console.log(`service catalog: passed (${result.runtimeCount} runtime, ${result.interactionCount} interactions)`);
+    console.log(
+      `service catalog: passed (${result.runtimeCount} runtime, ${result.interactionCount} interactions)`,
+    );
   } catch (error) {
     console.error(`service catalog: FAIL: ${error.message}`);
     process.exitCode = 1;

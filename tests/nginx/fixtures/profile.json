@@ -2,9 +2,21 @@
   "listen": 8443,
   "publicHost": "edge-fixture.invalid",
   "upstreams": {
-    "edge": {"host": "edge.fixture.internal", "port": 9443, "serverName": "edge.fixture.internal"},
-    "apiPublic": {"host": "api.fixture.internal", "port": 9444, "serverName": "api.fixture.internal"},
-    "realtime": {"host": "realtime.fixture.internal", "port": 9445, "serverName": "realtime.fixture.internal"}
+    "edge": {
+      "host": "edge.fixture.internal",
+      "port": 9443,
+      "serverName": "edge.fixture.internal"
+    },
+    "apiPublic": {
+      "host": "api.fixture.internal",
+      "port": 9444,
+      "serverName": "api.fixture.internal"
+    },
+    "realtime": {
+      "host": "realtime.fixture.internal",
+      "port": 9445,
+      "serverName": "realtime.fixture.internal"
+    }
   },
   "tls": {
     "bufferBytes": 4096,

@@ -1,0 +1,241 @@
+{
+  "scope": "Orders routes/application/OrderStore/PostgreSQL/Outbox; synthetic Customer/Pricing/public delegation, Fastify inject, not client-v1 ingress or VK/Agent/LLM E2E",
+  "requestedFlows": 100,
+  "positionsPerFlow": 10,
+  "started": 100,
+  "completed": 100,
+  "failed": 0,
+  "peakConcurrentFlows": 100,
+  "pool": {
+    "max": 4,
+    "maxWaiting": 100,
+    "checkoutTimeoutMs": 250,
+    "lockTimeoutMs": 250,
+    "interactiveStatementTimeoutMs": 1500,
+    "backgroundStatementTimeoutMs": 5000,
+    "terminalTimeoutMs": 2000,
+    "transactionTimeoutMs": 10000,
+    "idleTimeoutMs": 30000,
+    "maxLifetimeMs": 1800000
+  },
+  "deadlineMs": 5000,
+  "concurrency": 150,
+  "callerRetries": 0,
+  "peakDatabaseMetrics": {
+    "active": 4,
+    "waiting": 95,
+    "pending": 7
+  },
+  "elapsedMs": 12626.576389999998,
+  "databaseMetrics": {
+    "active": 0,
+    "idle": 4,
+    "waiting": 0,
+    "saturationTotal": 0,
+    "pending": 0
+  },
+  "eventLoopDelayMs": {
+    "mean": 10.693,
+    "p95": 12.55,
+    "max": 42.402
+  },
+  "throughputOrdersPerSecond": 7.919803192193732,
+  "latencyMs": {
+    "p50": 12521.148765000002,
+    "p95": 12596.451494,
+    "p99": 12602.530166
+  },
+  "poolOrLockFailures": [],
+  "commandCounts": {
+    "total": 1400,
+    "successes": 1400,
+    "refusals": 0,
+    "statusCodes": {
+      "201:success": 200,
+      "200:success": 1200
+    }
+  },
+  "draftCounts": {
+    "total": 100,
+    "successes": 100,
+    "refusals": 0,
+    "statusCodes": {
+      "201:success": 100
+    }
+  },
+  "rejectedCommandCount": 0,
+  "workloadResult": {
+    "complete": true,
+    "completedFlows": 100,
+    "failedFlows": 0,
+    "commands": 1400
+  },
+  "diagnosticCoverage": {
+    "expectedPhaseCalls": {
+      "precheck": 200,
+      "preflightPut": 1000,
+      "putItem": 1000
+    },
+    "observedPhaseCalls": {
+      "precheck": 200,
+      "preflightPut": 1000,
+      "putItem": 1000
+    },
+    "correlatedPhaseCalls": {
+      "precheck": 200,
+      "preflightPut": 1000,
+      "putItem": 1000
+    },
+    "phaseOutcomes": {
+      "fulfilled": 2200,
+      "rejected": 0
+    },
+    "acquiredConnections": 2200,
+    "heldLeases": 2200,
+    "queryRecords": 30200,
+    "commitRecords": 2200,
+    "commandContextsRemaining": 0
+  },
+  "durable": {
+    "orders": 100,
+    "customers": 100,
+    "positions": 1000,
+    "history": 1200,
+    "contributions": 100,
+    "contribution_lines": 1000,
+    "outbox": 100,
+    "idempotency": 1200
+  },
+  "counters": {
+    "customer": 100,
+    "pricing": 1000
+  },
+  "verified": true,
+  "poolTimingDefinitions": {
+    "phaseStartToClient": "phase start through owner prelude/FIFO admission and pg pool queue/physical client acquisition until connect resolves; not pure FIFO",
+    "poolConnect": "original pg.Pool.connect invocation through Promise resolution; may include pool queue and physical connection setup",
+    "leaseHeld": "client connect resolution through client.release invocation"
+  },
+  "poolTimingLatencyMs": {
+    "phaseStartToClient": {
+      "count": 2200,
+      "p50": 450.263,
+      "p95": 703.08,
+      "max": 808.588
+    },
+    "poolConnect": {
+      "count": 2200,
+      "p50": 0.42,
+      "p95": 0.704,
+      "max": 85.471
+    },
+    "acquired": {
+      "count": 2200,
+      "p50": 450.263,
+      "p95": 703.08,
+      "max": 808.588
+    },
+    "leaseHeld": {
+      "count": 2200,
+      "p50": 13.399,
+      "p95": 38.49,
+      "max": 158.431
+    },
+    "queries": {
+      "precheck:BEGIN:fulfilled": {
+        "count": 200,
+        "p50": 0.955,
+        "p95": 2.666,
+        "max": 51.508
+      },
+      "precheck:SET:fulfilled": {
+        "count": 600,
+        "p50": 0.734,
+        "p95": 2.068,
+        "max": 8.745
+      },
+      "precheck:SELECT:fulfilled": {
+        "count": 200,
+        "p50": 1.19,
+        "p95": 2.737,
+        "max": 9.968
+      },
+      "precheck:COMMIT:fulfilled": {
+        "count": 200,
+        "p50": 0.845,
+        "p95": 2.09,
+        "max": 4.664
+      },
+      "preflightPut:BEGIN:fulfilled": {
+        "count": 1000,
+        "p50": 0.818,
+        "p95": 1.972,
+        "max": 34.843
+      },
+      "preflightPut:SET:fulfilled": {
+        "count": 3000,
+        "p50": 0.613,
+        "p95": 1.516,
+        "max": 37.213
+      },
+      "preflightPut:SELECT:fulfilled": {
+        "count": 4000,
+        "p50": 0.993,
+        "p95": 1.941,
+        "max": 36.118
+      },
+      "preflightPut:COMMIT:fulfilled": {
+        "count": 1000,
+        "p50": 1.571,
+        "p95": 2.883,
+        "max": 38.524
+      },
+      "putItem:BEGIN:fulfilled": {
+        "count": 1000,
+        "p50": 0.928,
+        "p95": 2.925,
+        "max": 20.913
+      },
+      "putItem:SET:fulfilled": {
+        "count": 3000,
+        "p50": 0.68,
+        "p95": 2.76,
+        "max": 21.833
+      },
+      "putItem:SELECT:fulfilled": {
+        "count": 10000,
+        "p50": 0.909,
+        "p95": 2.775,
+        "max": 21.017
+      },
+      "putItem:INSERT:fulfilled": {
+        "count": 3000,
+        "p50": 1.054,
+        "p95": 2.926,
+        "max": 20.882
+      },
+      "putItem:UPDATE:fulfilled": {
+        "count": 2000,
+        "p50": 1.223,
+        "p95": 3.371,
+        "max": 19.31
+      },
+      "putItem:COMMIT:fulfilled": {
+        "count": 1000,
+        "p50": 1.708,
+        "p95": 4.64,
+        "max": 138.733
+      }
+    }
+  },
+  "schemaVersion": 1,
+  "status": "PASS",
+  "launchProof": false,
+  "commandCount": 1400,
+  "flowCount": 100,
+  "sourceReceiptSha256": "9ff8c5cdd99f9d355aa08cef03e4eaf2c203b13f9d8e9ebd409556b2d59999d0",
+  "command": "COFFEE_DB_LIVE_PROOF=1 node --test --test-concurrency=1 --test-name-pattern='owner peak 100 concurrent buyers' tests/orders/owner-live.test.mjs",
+  "workingTreeDiagnostic": true,
+  "recordedAtUtc": "2026-10-24T11:51:14.493524+00:00",
+  "sourceHead": "bff183ec8a3503a2caae4debf2abef2539bf58b3"
+}

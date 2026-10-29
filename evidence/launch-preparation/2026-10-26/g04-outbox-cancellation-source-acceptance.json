@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "capturedAtUtc": "2026-10-26T15:03:32.238041+00:00",
+  "scope": "Independent narrow QA and Astra source acceptance, not live DB/HTTP or complete G04 PASS",
+  "status": "ACCEPTED",
+  "acceptedSnapshotHashes": {
+    "packages/platform-testing/test/platform-packages.test.mjs": "0c9f1c6db98a5b507a40c052f6048155164936f7cc93c6b75f7bf9115a5bb7e7",
+    "tests/orders/upstream-clients.test.mjs": "782dd90d3e8cdc0443df6b2ac0fc9a6180a789254c03ff6588dad5fc47a33251"
+  },
+  "preparation": {
+    "independentUnitPass": 12,
+    "patchPath": "/home/yurgusev/.cache/coffee-issue13/preparation-outbox-conflict-20261026/own.patch",
+    "patchSha256": "56a4cd608bddfce9b8d0bc4fdba576182d91ca88d2eaa2c1a009c0c4c45db24f",
+    "guarantee": "Outbox insert race conflict aborts transaction and downstream projection writes"
+  },
+  "ordersCancellation": {
+    "independentUnitPass": 7,
+    "patchPath": "/home/yurgusev/.cache/coffee-issue13/orders-upstream-cancel-20261026/own.patch",
+    "patchSha256": "fbaa214637907ac9f90e7736bae5625cb54ece865e6dffee88c2d16891544668",
+    "guarantee": "caller cancellation while reading body preserves original reason and cancels stream; rejected Pricing media cancels body"
+  },
+  "fullG04AfterDelta": "NOT_RUN"
+}

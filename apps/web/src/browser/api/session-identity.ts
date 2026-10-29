@@ -10,7 +10,9 @@ export function currentApplicationActor(): string | undefined {
   return actorRef;
 }
 
-export function setApplicationSession(nextActorRef: string | undefined): number {
+export function setApplicationSession(
+  nextActorRef: string | undefined,
+): number {
   if (actorRef !== nextActorRef) {
     actorRef = nextActorRef;
     generation += 1;
@@ -18,8 +20,11 @@ export function setApplicationSession(nextActorRef: string | undefined): number 
   return generation;
 }
 
-export function captureApplicationSession(expectedActorRef: string): ApplicationSessionToken {
-  if (actorRef !== expectedActorRef) throw new Error("Сессия оператора изменилась");
+export function captureApplicationSession(
+  expectedActorRef: string,
+): ApplicationSessionToken {
+  if (actorRef !== expectedActorRef)
+    throw new Error("Сессия оператора изменилась");
   return { actorRef: expectedActorRef, generation };
 }
 

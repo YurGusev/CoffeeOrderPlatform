@@ -8,7 +8,10 @@
       "additionalProperties": false,
       "required": ["type", "ref", "version"],
       "properties": {
-        "type": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" },
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"
+        },
         "ref": { "type": "string", "minLength": 1, "maxLength": 128 },
         "version": {
           "$ref": "identifiers.v1.schema.json#/$defs/Version"

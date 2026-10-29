@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T18:42:36.955799+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "file": "/home/yurgusev/CoffeeOrderPlatform/tests/orders/owner-http.test.mjs",
+  "fileSha256": "d14bc9c5e0e5d77a548a13955e7d1731be00d5debabe51cbd2c7cbdd52bcbe91",
+  "ownPatchSha256": "e20d792446b4ae73cdc3593c32bcd87ff8b3614009d6800015e553ea93df1106",
+  "scope": "After positive201 create, actor-prefix/provenance/service-auth spoofed header classes must produce403/no-store before further owner/upstream calls.",
+  "checks": {
+    "worker": "PASS1/1;format/typeawarelint/diffPASS",
+    "rootIndependent": "PASS1/1",
+    "astra": "Accepted"
+  },
+  "rootLogSha256": "21e42a9145ecf27b534300cb42758bc5518f7dd1324bd0eb5622b08a0c5db38d",
+  "limitations": [
+    "Existing verifier stub; not cryptographic signature/mTLS proof.",
+    "Included in candidatef330ccf; fullG04 is still running."
+  ]
+}

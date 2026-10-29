@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T19:23:39.780297+00:00",
+  "status": "PRIOR_CUSTOMER_ACCEPTANCE_INVALIDATED_AND_SOURCE_CORRECTED",
+  "supersededArtifact": "/home/yurgusev/CoffeeOrderPlatform/evidence/launch-preparation/2026-10-26/g04-customer-create-g17-source-acceptance.json",
+  "supersededArtifactSha256": "64f15c023f2458eb3b48b78cbb0988e4b676779ae7889f8de7b17c62edba1d08",
+  "invalidScope": "Only Customer create pairedcaller delta SHA4a9e193a; oldnarrowpattern didnotexecute misplacedtable.",
+  "unchangedValidScope": "G17 TOCTOU independent1/1 and Astra acceptance remainvalid.",
+  "detectedBy": "/home/yurgusev/CoffeeOrderPlatform/evidence/launch/20261026T191224Z-fd0fdcc/gates/G04_UNIT/artifacts/unit-diagnostics.json",
+  "correction": {
+    "beforeSha256": "4a9e193a6ecca3b20cfd77417a2338458937ebd1bed95a7b9378ea062aa90cab",
+    "afterSha256": "472c9be0476aa58cfb8272ecff80223015b1461f2947f07f51bb276b0c4f33a8",
+    "ownPatchSha256": "67be951eb1bd89999f2838010f0ff168af106fc2937e5b1745862e9d8676d959",
+    "scope": "Exacttable moved into intended publiccase; Prettier blankline normalization only."
+  },
+  "checks": {
+    "rootCompleteFiles": "Customer24+Pricing6=30/30PASS;beforePrettierblanklineonly normalization",
+    "astra": "Correct enclosing testcase/headers and actual30test logreviewed;Accepted a1d5f1f6 source beforeblanklinenormalization",
+    "rootFormatLintDiff": "PASS final472c9be0"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/customer-create-guard-placement-20261026T192106Z/own.patch": "0436d2f6608d378fc4f720110cac0a3d55d493f7c542e936511fef9d951dbe89",
+    "/home/yurgusev/.cache/coffee-issue13/customer-create-guard-placement-20261026T192106Z/format-adjusted-own.patch": "67be951eb1bd89999f2838010f0ff168af106fc2937e5b1745862e9d8676d959",
+    "/home/yurgusev/.cache/coffee-issue13/customer-create-guard-placement-20261026T192106Z/root-complete-customer-pricing.log": "30f5a07685bc52020e84f4b13786d6c5bd0769a0c12cefebbd24beb5e629ca40",
+    "/home/yurgusev/.cache/coffee-issue13/customer-create-guard-placement-20261026T192106Z/final-source-metadata.json": "c00180d90ef78303ac178278e264d81f776939c3882bc9f0a4e333edb5f223bb"
+  },
+  "limits": [
+    "CurrentfullG04fd0 remainsFAIL942/943; a newclean candidate/run isrequired.",
+    "HTTPowner mocks, notliveTLS/network."
+  ]
+}

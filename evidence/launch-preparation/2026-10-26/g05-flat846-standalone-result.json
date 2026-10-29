@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS_STANDALONE",
+  "scope": "Actual command success on same flat846 candidate; not ordered G00-G19 admission",
+  "commandResult": {
+    "command": [
+      "env",
+      "-u",
+      "SOPS_AGE_KEY_FILE",
+      "bash",
+      "-c",
+      "pnpm contracts:check-generated && pnpm contracts:breaking && pnpm contracts:test"
+    ],
+    "exitCode": 0,
+    "startedAtUtc": "2026-10-26T23:01:09.089445+00:00",
+    "finishedAtUtc": "2026-10-26T23:01:22.006081+00:00",
+    "runId": "20261026T225308Z-846858a",
+    "candidateSha": "846858acf97b559de3884d18d54c55695d5a2d6d",
+    "watchdogSignalSent": false,
+    "watchdogTarget": {
+      "pid": 3501875,
+      "startTicks": "40214705"
+    },
+    "logPath": "/home/yurgusev/.cache/coffee-issue13/resume-20261025T082058Z/g05-flat-846-command.log",
+    "logSha256": "5a59b7b2d4f427328b342837cdb4effb79835faa4258258b9b6928787755d429",
+    "scope": "Standalone G05_CONTRACTS on same-SHA flat846858a checkout; prior nested-clone FAIL preserved; no admission"
+  },
+  "testCounts": {
+    "passed": 49,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "limitations": [
+    "Other gate results are not inherited from older SHA/run",
+    "Runtime/provider/CPU behavior not established by this static gate"
+  ],
+  "observedFacts": {
+    "generated": "byte-identical",
+    "breaking": "PASS against origin/develop e6439599be85a5fc8b83d99293064e877a2ff012",
+    "contractTests": 49
+  }
+}

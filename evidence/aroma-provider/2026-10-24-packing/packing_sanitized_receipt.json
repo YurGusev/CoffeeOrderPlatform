@@ -1,0 +1,180 @@
+{
+  "purpose": "sanitized Aroma packing candidate facts for later fresh read; no authorization to mutate provider state",
+  "database": "coffeeorderdb",
+  "queried_at_utc": "2026-10-24T10:55:11Z",
+  "read_only": true,
+  "source_columns": {
+    "orders.AromaCartCurrentLines": [
+      "SnapshotId bigint NOT NULL",
+      "ProfileName varchar NOT NULL",
+      "ReadAtUtc timestamptz NOT NULL"
+    ],
+    "orders.AromaCartObservedItems": [
+      "ProfileName varchar NOT NULL",
+      "ObservedSnapshotId bigint NOT NULL",
+      "ObservedAtUtc timestamptz NOT NULL",
+      "Freshness integer NOT NULL",
+      "CreatedAtUtc timestamptz NOT NULL",
+      "UpdatedAtUtc timestamptz NOT NULL"
+    ],
+    "provenance_note": "No source/provenance column was present in this allowlisted metadata search; values for ProfileName were not read."
+  },
+  "freshness": [
+    {
+      "source": "cart_current",
+      "packing": "Aroma",
+      "line_occurrences": 19844,
+      "snapshots": 774,
+      "latest_utc": "2026-09-25T11:08:46.457291Z",
+      "age_days_at_query": 28.99
+    },
+    {
+      "source": "cart_current",
+      "packing": "<null>",
+      "line_occurrences": 103,
+      "snapshots": 67,
+      "latest_utc": "2026-09-24T18:16:13.778525Z",
+      "age_days_at_query": 29.69
+    },
+    {
+      "source": "cart_observed",
+      "packing": "Aroma",
+      "line_occurrences": 155,
+      "snapshots": 1,
+      "latest_utc": "2026-09-25T11:08:46.457291Z",
+      "age_days_at_query": 28.99
+    },
+    {
+      "source": "cart_observed",
+      "packing": "<null>",
+      "line_occurrences": 2,
+      "snapshots": 1,
+      "latest_utc": "2026-09-25T11:08:46.457291Z",
+      "age_days_at_query": 28.99
+    },
+    {
+      "source": "catalog_current",
+      "packing": "all",
+      "offers": 809,
+      "snapshots": 1,
+      "latest_utc": "2026-09-25T09:05:48.575809Z",
+      "age_days_at_query": 29.08
+    }
+  ],
+  "candidate_filter": {
+    "packing": "Aroma in current and observed lines",
+    "catalog": "current offer with weight parameter and coffee category slug",
+    "mapping": "IsActive=true, NeedsManualReview=false, ReviewStatus=1, WeightGrams=provider weight",
+    "eligible_offer_ids_by_weight_g": {
+      "1000": 23
+    }
+  },
+  "candidates": [
+    {
+      "external_offer_id": 441,
+      "category_slug": "espresso-smesi-dlia-avtomaticeskix-kofemasin-i-vendinga",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 147,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 443,
+      "category_slug": "espresso-smesi-dlia-avtomaticeskix-kofemasin-i-vendinga",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 64,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 445,
+      "category_slug": "espresso-smesi",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 213,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 447,
+      "category_slug": "espresso-smesi",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 381,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 453,
+      "category_slug": "espresso-smesi",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 25,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 473,
+      "category_slug": "espresso-smesi",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 68,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 475,
+      "category_slug": "espresso-smesi",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 150,
+      "observed_line_occurrences": 2,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 479,
+      "category_slug": "espresso-smesi",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 49,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 485,
+      "category_slug": "espresso-smesi-dlia-avtomaticeskix-kofemasin-i-vendinga",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 307,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    },
+    {
+      "external_offer_id": 487,
+      "category_slug": "espresso-smesi-dlia-avtomaticeskix-kofemasin-i-vendinga",
+      "weight_g": 1000,
+      "packing": "Aroma",
+      "current_line_occurrences": 206,
+      "observed_line_occurrences": 1,
+      "observed_latest_utc": "2026-09-25T11:08:46.457291Z",
+      "catalog_observed_utc": "2026-09-25T09:05:48.575809Z"
+    }
+  ],
+  "limitations": [
+    "line_occurrences aggregate across persisted rows; they are not cart/user counts",
+    "all candidate observations are about 29 days old and require a fresh provider read before use",
+    "no checkout lines/snapshots/allocations were present in the separate aggregate inspection",
+    "packing is recorded but no explicit source/provenance field identifies whether historical current rows came from configured default or direct observation"
+  ]
+}

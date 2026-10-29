@@ -8,6 +8,9 @@ Supersedes: `ADR-0018` в части production Node authority, физическ
 только внутри репозитория `CoffeeOrderPlatform`.
 Does not modify: неизменяемые канонические revision roots.
 
+Уточнение: [ADR-0039](ADR-0039-node-alpine-runtime.md) частично supersede-ит
+только решение о production image; остальные решения ADR-0019 сохраняются.
+
 Compiler, linting, ESM/erasable syntax, project references и contract-codegen
 authority определяет [ADR-0022](ADR-0022-ts7-native-toolchain.md). #19 фиксирует
 в foundation authority только decision ref, exact pin identity и запрет TS5/6
@@ -35,13 +38,21 @@ companion artifacts под `platform/**`, которых в новом репо�
 
 Единая runtime identity первого запуска:
 
-| Компонент | Значение |
-|---|---|
-| Node.js | `26.8.1` |
-| npm | `11.19.0` |
-| Corepack | `0.35.0` |
-| pnpm | `11.24.0` |
-| Production image | `node:26.8.1-bookworm-slim@sha256:<verified-real-digest>` |
+| Компонент        | Значение                                           |
+| ---------------- | -------------------------------------------------- |
+| Node.js          | `26.8.1`                                           |
+| npm              | `11.19.0`                                          |
+| Corepack         | `0.35.0`                                           |
+| pnpm             | `11.24.0`                                          |
+| Production image | `node:26.8.1-alpine@sha256:<verified-real-digest>` |
+
+Уточнение #13 от 25.10.2026: владелец разрешил переход на Trixie по
+`g12-runtime-images-authority-proposal.md`. Registry index закреплён в
+`config/toolchain-versions.json`; foundation manifest дополнительно фиксирует
+проверенный `linux/amd64` manifest. npm остаётся инструментом build stages и
+удаляется из final runtime вместе с `npm`/`npx` launcher links. Этот выбор не
+означает успешную native compatibility или security scan: их подтверждают
+фактические gates нового candidate SHA.
 
 Placeholder digest не допускается в materialized #3. Один exact digest
 используется в development build, CI и production images. `node:24`, floating

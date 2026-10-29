@@ -1,11 +1,26 @@
-import {defineStatement, type OwnerStatement} from "@coffee-platform/database/owner";
-import type {Database, Transaction} from "@coffee-platform/database";
-import type {CatalogAvailability, CatalogCursorPosition, CatalogPricingInputRow, CatalogSearchRow} from "../../application/search-catalog.js";
+import {
+  defineStatement,
+  type OwnerStatement,
+} from "@coffee-platform/database/owner";
+import type { Database, Transaction } from "@coffee-platform/database";
+import type {
+  CatalogAvailability,
+  CatalogCursorPosition,
+  CatalogPricingInputRow,
+  CatalogSearchRow,
+} from "../../application/search-catalog.js";
 
 export type CatalogPricingRow = CatalogPricingInputRow;
-type SearchParameters = readonly [string, CatalogAvailability | null, string | null, string | null, string | null, number];
+type SearchParameters = readonly [
+  string,
+  CatalogAvailability | null,
+  string | null,
+  string | null,
+  string | null,
+  number,
+];
 type PricingParameters = readonly [string, string, number | null];
-type SearchDbRow = CatalogSearchRow & Readonly<{cursorValid: boolean}>;
+type SearchDbRow = CatalogSearchRow & Readonly<{ cursorValid: boolean }>;
 type PricingDbRow = CatalogPricingRow;
 
 const SEARCH_SQL = `WITH metadata AS (
@@ -72,15 +87,47 @@ export class CatalogRepository {
   readonly #search: OwnerStatement<SearchDbRow, SearchParameters>;
   readonly #pricing: OwnerStatement<PricingDbRow, PricingParameters>;
   public constructor(database: Database) {
-    this.#search = defineStatement<SearchDbRow, SearchParameters>(database, SEARCH_SQL);
-    this.#pricing = defineStatement<PricingDbRow, PricingParameters>(database, PRICING_SQL);
+    this.#search = defineStatement<SearchDbRow, SearchParameters>(
+      database,
+      SEARCH_SQL,
+    );
+    this.#pricing = defineStatement<PricingDbRow, PricingParameters>(
+      database,
+      PRICING_SQL,
+    );
   }
-  public async search(transaction: Transaction, input: Readonly<{query: string; availability: CatalogAvailability | null; after: CatalogCursorPosition | null; limit: number}>): Promise<readonly SearchDbRow[]> {
+  public async search(
+    transaction: Transaction,
+    input: Readonly<{
+      query: string;
+      availability: CatalogAvailability | null;
+      after: CatalogCursorPosition | null;
+      limit: number;
+    }>,
+  ): Promise<readonly SearchDbRow[]> {
     const after = input.after;
-    const result = await this.#search(transaction, [input.query, input.availability, after?.sortKeyHash ?? null, after?.productRef ?? null, after?.variantRef ?? null, input.limit] as SearchParameters);
+    const result = await this.#search(transaction, [
+      input.query,
+      input.availability,
+      after?.sortKeyHash ?? null,
+      after?.productRef ?? null,
+      after?.variantRef ?? null,
+      input.limit,
+    ] as SearchParameters);
     return result.rows;
   }
-  public async pricingInput(transaction: Transaction, productRef: string, variantRef: string, maxSnapshotAgeMs?: number): Promise<PricingDbRow | undefined> {
-    return (await this.#pricing(transaction, [productRef, variantRef, maxSnapshotAgeMs ?? null])).rows[0];
+  public async pricingInput(
+    transaction: Transaction,
+    productRef: string,
+    variantRef: string,
+    maxSnapshotAgeMs?: number,
+  ): Promise<PricingDbRow | undefined> {
+    return (
+      await this.#pricing(transaction, [
+        productRef,
+        variantRef,
+        maxSnapshotAgeMs ?? null,
+      ])
+    ).rows[0];
   }
 }

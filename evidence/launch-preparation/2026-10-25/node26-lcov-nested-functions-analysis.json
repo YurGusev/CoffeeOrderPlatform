@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "analysis": "Node.js test-runner LCOV function-count variability in two existing G04_UNIT evidence runs",
+  "conclusion": {
+    "status": "confirmed_native_v8_coverage_behavior; no_lcov_merge_bug_evidence",
+    "summary": "The Node v26.8.1 bundled test-runner source explicitly says V8 may produce different function lists depending on executed code paths, such as dynamically created functions absent until the path runs; function totals therefore cannot be guaranteed 100% accurate. The LCOV reporter serializes that summary. New nested FN records in the newer G04 are consistent with newly executed paths exposing closures; FNF/FNH drift alone is not evidence of duplicate source or an LCOV defect.",
+    "causal_attribution": "Strongly consistent but not proven per function: the newer candidate adds a customer-http test that constructs createConfiguredInternalAdapters and exercises the order-input path; LCOV adds callbacks nested in those factories. Other candidate and test inputs also differ."
+  },
+  "runtime": {
+    "node": "v26.8.1",
+    "v8": "14.6.202.34-node.28",
+    "platform": "linux-x64",
+    "executable": "/home/yurgusev/.local/lib/nodejs/node-v26.8.1-linux-x64/bin/node",
+    "executableSha256": "19235a9b678f84729464c52623f92de130a165452747c6826d3fdc13df3abcc3",
+    "sourceIdentity": "process.binding('natives') at the installed Node v26.8.1 runtime; hashes below identify exact extracted bundled JS source"
+  },
+  "evidence": {
+    "runs": [
+      {
+        "runId": "20261025T181523Z-7043845",
+        "candidateSha": "70438453f93b35dad38c5373c0cc8896c9a6da56",
+        "candidatePath": "/home/yurgusev/.cache/coffee-issue13/combined-coverage-candidate-20261025T180833Z",
+        "distIndexSha256": "f43202592de57d9bf8519b332b60a61b151df2e70edabbdd74ea56578c05a35d",
+        "coverageLcovSha256": "8b2d479887424c1f85685d6f583bb90da339a7669277f0054de4b21812a8faaa",
+        "apiInternalIndex": {"FNF": 68, "FNH": 44, "LF": 936, "LH": 616},
+        "tap": {"tests": 886, "pass": 886, "fail": 0}
+      },
+      {
+        "runId": "20261025T184814Z-bf1ec14",
+        "candidateSha": "bf1ec147bebb6e640ba6ecce9becf1aa1940acf8",
+        "candidatePath": "/home/yurgusev/.cache/coffee-issue13/g04-g18-health-candidate-20261025T184803Z",
+        "distIndexSha256": "f43202592de57d9bf8519b332b60a61b151df2e70edabbdd74ea56578c05a35d",
+        "coverageLcovSha256": "99acb6513f644fa4f0caf8d99b4b3554820d2929747b6e587988c1cfafa4195a",
+        "apiInternalIndex": {"FNF": 90, "FNH": 64, "LF": 936, "LH": 833},
+        "tap": {"tests": 902, "pass": 902, "fail": 0},
+        "newlyListedNestedFunctionExamples": ["orderInput", "verifyTransport", "verifyCallerDelegation", "signDelegation", "fetch"]
+      }
+    ],
+    "candidateDistIndexBytesIdentical": true,
+    "sameNodeVersionInRunEnvironmentEvidence": true,
+    "sameAcceptedBaseCommitAndConfigSha256": true,
+    "candidateSourceAndTestInputsIdentical": false,
+    "candidateTestDiffEvidence": "The newer candidate adds `api-internal configured Customer client forwards and validates order-input safely` in tests/customer/customer-http.test.mjs; that test calls createConfiguredInternalAdapters and requests the configured Customer order-input client."
+  },
+  "bundledSource": [
+    {
+      "module": "internal/test_runner/coverage",
+      "privateCachePath": "/home/yurgusev/.cache/coffee-issue13/internal_test_runner_coverage.js",
+      "sha256": "61b76531e2390d5cb677c7d341934119a77b371e21871b2221d9e088ff5a36e9",
+      "relevantBehavior": "mergeCoverageScripts appends function records missing from previous V8 snapshots; its source comment says V8 function lists can differ by executed code paths and function totals cannot be guaranteed fully accurate. Coverage summary derives total/covered function counts from this merged list."
+    },
+    {
+      "module": "internal/test_runner/reporter/lcov",
+      "privateCachePath": "/home/yurgusev/.cache/coffee-issue13/internal_test_runner_reporter_lcov.js",
+      "sha256": "3347e1c043f70aba7605cbcb228ca2a0066e612de6244be65963c7fb58e89df0",
+      "relevantBehavior": "LCOV emits FN/FNDA from summary.files[].functions and emits FNF/FNH directly from totalFunctionCount/coveredFunctionCount; it does not independently discover or deduplicate functions."
+    }
+  ],
+  "interpretationForVerification": {
+    "confirmed": [
+      "The observed FNF/FNH change is compatible with native V8 coverage enumeration and Node's documented-in-source limitations.",
+      "The same emitted JS bytes rule out changed apps/api-internal/dist/index.js as the explanation for this denominator difference.",
+      "LCOV FNF/FNH reflect the Node test-runner summary values; no reporter-side deduplication defect is visible in the shipped source."
+    ],
+    "recommendedUse": "Treat function coverage as execution evidence for collected paths, not a stable static inventory of every syntactic function. Select small tests by behavior and assertions (for example configured-client success, malformed response, abort/redaction, transport/delegation behavior); review changed FN records against executed paths. Do not infer a need to lower thresholds, deduplicate callbacks, or rewrite production code from FNF/FNH drift alone.",
+    "uncertainties": [
+      "The two G04 runs have different candidate SHAs, tree hashes, and test sets; the full difference in covered paths is not isolated to one test.",
+      "The evidence proves the class of behavior and matches newly listed nested callback names to compiled-source factories, but does not prove which test process first caused each callback to enter V8 coverage.",
+      "No independent controlled reproduction was run; the conclusion relies on installed-runtime bundled source, official upstream source at the exact tag, and retained G04 artifacts.",
+      "This evidence does not establish behavior for other Node/V8 versions or different reporter invocation modes."
+    ]
+  },
+  "primarySources": [
+    {"title": "Node.js v26.8.1 internal/test_runner/coverage.js", "url": "https://github.com/nodejs/node/blob/v26.8.1/lib/internal/test_runner/coverage.js", "relevantLines": "mergeCoverageScripts; V8 function-list variability and function-count limitation"},
+    {"title": "Node.js v26.8.1 internal/test_runner/reporter/lcov.js", "url": "https://github.com/nodejs/node/blob/v26.8.1/lib/internal/test_runner/reporter/lcov.js", "relevantLines": "FN/FNDA serialization and FNF/FNH copied from coverage summary"},
+    {"title": "Node.js test runner coverage documentation", "url": "https://nodejs.org/download/release/v26.8.1/docs/api/test.html#collecting-code-coverage", "version": "v26.8.1"}
+  ],
+  "scopeAndLimitations": {
+    "readOnlyRepositoryAnalysis": true,
+    "repositoryRuntimeCodeChanged": false,
+    "testsOrDockerRunDuringThisAnalysis": false,
+    "nativeRizinAttempted": false,
+    "secretsIncluded": false,
+    "note": "Node built-in JS was extracted read-only from the installed runtime into private cache solely for exact-source hashing and inspection."
+  }
+}

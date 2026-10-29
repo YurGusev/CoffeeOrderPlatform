@@ -1,0 +1,462 @@
+{
+  "schemaVersion": 1,
+  "purpose": "G00_CORRECTIVE_ACCEPTED_HANDOFF_SUPPLEMENT",
+  "authorization": {
+    "date": "2026-10-24",
+    "authority": "explicit-user-approval-in-current-task",
+    "requestText": "Разрешаю точный supplement",
+    "proposalReference": "evidence/launch-preparation/2026-10-24/remaining-gates-authority-proposal.md",
+    "scope": [2, 3, 10, 14, 19, 162]
+  },
+  "records": [
+    {
+      "issue": 2,
+      "acceptanceSource": {
+        "issue": 2,
+        "pullRequest": 21,
+        "mergeCommit": "327638d4494269a151ee7c0ac945ac0053c3e0d4"
+      },
+      "handoff": {
+        "path": "evidence/handoffs/issue-2.yaml",
+        "sha256": "7ea123b3e666e3a95b4b71ce58696478449b32b0070521fd6d12c135a7d84d33"
+      },
+      "artifactSource": {
+        "issue": 2,
+        "mergeCommit": "327638d4494269a151ee7c0ac945ac0053c3e0d4"
+      },
+      "artifacts": [
+        {
+          "path": "config/service-catalog.json",
+          "sha256": "a75b43ae1be1f12440e413083fd7f0271c8c68377881a77d082754dc7ad4ef10"
+        },
+        {
+          "path": "config/service-catalog.schema.json",
+          "sha256": "4a25ebe55f5675c4614a35bbdb54e94547a0b6f0c10697a632ac62d556ce1a68"
+        },
+        {
+          "path": "config/database-ownership.json",
+          "sha256": "0e9a9f4574a0fd3930dc1e6ec9ff37a8ba08615cb50b21000062d011d3ba76b3"
+        },
+        {
+          "path": "config/database-ownership.schema.json",
+          "sha256": "f22eb173a55ef7073960acfe9971f1276d29c6ca38202ee3cb148fa944daa093"
+        },
+        {
+          "path": "config/service-interactions.json",
+          "sha256": "f2b537e11963a2802b1280d490fe0d0f084d649901aff67ec0de2e3f5a0c35d6"
+        },
+        {
+          "path": "config/service-interactions.schema.json",
+          "sha256": "8aaebc824c579cfaf8269f89adb75ded92ff34fb10e56f97db134b8c6010d5ed"
+        },
+        {
+          "path": ".dependency-cruiser.cjs",
+          "sha256": "c1b9c90d656ca8f378d61a69e7068b793039d53ca6fcd9e1b1ce5ea63b3c54d3"
+        },
+        {
+          "path": "scripts/check-service-catalog.mjs",
+          "sha256": "a835bbaaecd8e0b84c518b42f320d19490419cf21b33180e704cefe9722f3632"
+        },
+        {
+          "path": "scripts/check-database-ownership.mjs",
+          "sha256": "e623be1f67e3108a0d45def03867e75bcf125c3e83612aba567ac96c35e7b185"
+        },
+        {
+          "path": "scripts/check-architecture.mjs",
+          "sha256": "ab259ac0c1411b69277785ffe8bdd0cc6b4939032dc3f25b651e6a231c4c77c9"
+        },
+        {
+          "path": "tests/architecture/checks.test.mjs",
+          "sha256": "804ae792843bf80469f4392bd3bd219383b5210c22215b94abe6b661d6a75e75"
+        }
+      ]
+    },
+    {
+      "issue": 3,
+      "acceptanceSource": {
+        "issue": 3,
+        "pullRequest": 22,
+        "mergeCommit": "91c6ed927029604c82a25b2208371a98c4b62237"
+      },
+      "handoff": {
+        "path": "evidence/handoffs/issue-3.yaml",
+        "sha256": "890fa7da030702bab6c858d8069e0d50336e41d16ce1b628b96ecc2816ec09e2"
+      },
+      "artifactSource": {
+        "issue": 3,
+        "mergeCommit": "91c6ed927029604c82a25b2208371a98c4b62237"
+      },
+      "artifacts": [
+        {
+          "path": "config/platform.yaml",
+          "sha256": "b1ecfa9a4c22830558e816774cacdcbd224a3dc9d1ef92e86b94e88c244a6936"
+        },
+        {
+          "path": "secrets/platform.secrets.sops.yaml",
+          "sha256": "7787c2d2b8a3ff48179581c6a3c217a45f83c039ff0b2043eb77741edb3e83e3"
+        },
+        {
+          "path": "compose.yaml",
+          "sha256": "28c23c17e81122a8c0d2ac044eca418248757b2d335a1e8340ded907f324135c"
+        },
+        {
+          "path": "config/toolchain-versions.json",
+          "sha256": "317ba88e1414996441e3332219bb9b84705c7ddd608c91cc370f87c1fb149667"
+        },
+        {
+          "path": "evidence/handoffs/issue-3-toolchain-parity.json",
+          "sha256": "1adff09881887d88698f1f25ca1e3f0d138b8d831e90b2933ecdfbb76aeee063"
+        }
+      ]
+    },
+    {
+      "issue": 10,
+      "acceptanceSource": {
+        "issue": 10,
+        "pullRequest": 143,
+        "mergeCommit": "4b2cad1dab30af66ad0b2fe64da280222e506574"
+      },
+      "handoff": {
+        "path": "evidence/handoffs/issue-10.yaml",
+        "sha256": "4d23f7ca941bbfbe3d02505a887d6750babfd04ed7ced7b398ccd46fdad67b37"
+      },
+      "artifactSource": {
+        "issue": 10,
+        "mergeCommit": "4b2cad1dab30af66ad0b2fe64da280222e506574"
+      },
+      "artifacts": [
+        {
+          "path": "apps/aroma-gateway/migrations/0006_provider_mutation_retention.sql",
+          "sha256": "9590251d2b8889843e0a2f84e14dacc659d81279a9cc1f97c64afafcf231ccd9"
+        },
+        {
+          "path": "apps/aroma-gateway/package.json",
+          "sha256": "5609b9f725d5b32c1d88e9637f1cb7f1dd8cd2fa5759c3f8386ec3941722c530"
+        },
+        {
+          "path": "apps/aroma-gateway/src/application/cart-reader.ts",
+          "sha256": "ce266bb3126cb3eb6e66b262c54c9eb231cd360bc3796d6020dbe98a2ba462da"
+        },
+        {
+          "path": "apps/aroma-gateway/src/application/catalog-export.ts",
+          "sha256": "2c664c06bbb84052ead913ef425db338859dce88d5eca10fdef8e440fe642249"
+        },
+        {
+          "path": "apps/aroma-gateway/src/application/provider-cart-mutator.ts",
+          "sha256": "236ff6bf7e24785499f9d9b81d3bacc1de56e1e4979749460ede8481e6672a82"
+        },
+        {
+          "path": "apps/aroma-gateway/src/application/provider-catalog-source.ts",
+          "sha256": "fdc4a2cd2f0de02b8d6491dd8239f19b1406c7fa82b68708da47a5fd55c9916c"
+        },
+        {
+          "path": "apps/aroma-gateway/src/infrastructure/database/provider-mutation-journal.ts",
+          "sha256": "679171a3fb570be7dc25ae70c027baa734d4bbbfb68e77ebb1e671f93f3646a9"
+        },
+        {
+          "path": "apps/aroma-gateway/src/infrastructure/observability.ts",
+          "sha256": "8f4ca1a34f75b4d4f5a74fa1077ec4bbf9207fe1d4cae45183eb3eb190c6ec0e"
+        },
+        {
+          "path": "apps/aroma-gateway/src/infrastructure/provider/decoder.ts",
+          "sha256": "394075596e804164fc770ad9c591bcb327d2599788020b68896255193eca2467"
+        },
+        {
+          "path": "apps/aroma-gateway/src/infrastructure/provider/http-client.ts",
+          "sha256": "8e54bfa607339d305d39d307230d2eb772a9613548a22c673abbef44cd4dddc7"
+        },
+        {
+          "path": "apps/aroma-gateway/src/infrastructure/provider/session.ts",
+          "sha256": "1d76679f4d7030774d609b1355a3b539315cdd535f82e0e6bb2d6a995cd124f9"
+        },
+        {
+          "path": "apps/aroma-gateway/src/main.ts",
+          "sha256": "5baba8fcd3c78fba27a858bde59e80df929bcbe297178193212efa749c426266"
+        },
+        {
+          "path": "apps/aroma-gateway/src/transport/http/index.ts",
+          "sha256": "84b9a56a325ee178c9f92c740fe9e3cb5832861bbba75206495f9f9681903a2e"
+        },
+        {
+          "path": "docs/launch/22_AROMA_GATEWAY_OPERATION_JOURNAL.md",
+          "sha256": "98c969094686c548d8b5627b24e14c589d27f43234647ea578488fccc09b44d1"
+        },
+        {
+          "path": "docs/launch/28_AROMA_CATALOG_PRICING_POLICY.md",
+          "sha256": "e6edd67b49613c194b7e3158f7e6bc06e4e1f1cc3cdaa9396e62e2c8c5237ebf"
+        },
+        {
+          "path": "evidence/aroma-provider/2026-09-14-pricing-observations.json",
+          "sha256": "c581596331eb1d248a965ef3979bcb5a904e647090f72775ecea4d9a6e642c92"
+        },
+        {
+          "path": "packages/platform-runtime/src/index.ts",
+          "sha256": "a8326986c8e6d68b09038f4c46d7c0cf68b1a0fef1d765a87d00688967c35272"
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "5d1b9090bdf13d5e30a05fe342eed9e5020692afc926991ab278ff4d6895dc62"
+        },
+        {
+          "path": "scripts/check-architecture.mjs",
+          "sha256": "dbc74cff5d8d91f2185fa5249ee7d65d34921b9c723a76dafe99cc12682b86ed"
+        },
+        {
+          "path": "tests/architecture/checks.test.mjs",
+          "sha256": "da6033d35a00703b1556169b0c811a00983f9e680fb61eb01b812d8430b3ddd6"
+        },
+        {
+          "path": "tests/architecture/fixtures/invalid-generic-retry-dependency/package.json",
+          "sha256": "daf1731cf14bef60cc7951d3af4fe520913b7c5ada51a060c0f012b896c1ad41"
+        },
+        {
+          "path": "tests/architecture/fixtures/invalid-generic-retry-wrapper/apps/aroma-gateway/src/retry.ts",
+          "sha256": "f5ee2b74f46a79882d1d11b35d6338d927448c3776fb651e2ba1ea49639da4ae"
+        },
+        {
+          "path": "tests/architecture/fixtures/invalid-postgres-url/apps/orders-service/src/bad.ts",
+          "sha256": "ed98b1737137adff9c754da63df2b77fdc7fd60e665f9adf0dd41cf291b6edc9"
+        },
+        {
+          "path": "tests/architecture/fixtures/invalid-provider-fetch/apps/aroma-gateway/src/bad.ts",
+          "sha256": "e8421d5ef4bd749a972cd8c799ee36d3b34a8a58604c16aed6bb6ee3eed2f96d"
+        },
+        {
+          "path": "tests/architecture/fixtures/invalid-provider-proxy/apps/aroma-gateway/src/bad.ts",
+          "sha256": "c9bdb37566e72a5630274fdfdb0dce091a22b6293ba35de556bd9652a6ac739d"
+        },
+        {
+          "path": "tests/aroma/catalog-export.test.mjs",
+          "sha256": "907014d961b36f4a6892a1ca2b34f9ef8dc51ed5ff1a43cc17ff8fb50b69d9b2"
+        },
+        {
+          "path": "tests/aroma/gateway-production-composition.test.mjs",
+          "sha256": "b26b43570bc42deac1bec738c1a29e121c6534d171d45e06abe618926aada50f"
+        },
+        {
+          "path": "tests/aroma/mutation-journal.test.mjs",
+          "sha256": "0661cc2f3ca067e8d4a71cf06a888b31ec8e780d8fc83b23e850ffe45ca222b6"
+        },
+        {
+          "path": "tests/aroma/provider-catalog-source.test.mjs",
+          "sha256": "9caa9e0d9e2e26abccbdc01abbbc72a56600759b8cfd9e7a09b1d8fe13d527f2"
+        },
+        {
+          "path": "tests/aroma/provider-decoder.test.mjs",
+          "sha256": "d9ceb307fd7aa707bc1185286c7865b9b50f7578b0745b125e131ecfb6b73a1b"
+        },
+        {
+          "path": "tests/aroma/provider-http.test.mjs",
+          "sha256": "3f14c018e72de502b72d2811605ea7e6350590506ca32401416960c9e58dee5d"
+        },
+        {
+          "path": "tests/aroma/provider-session.test.mjs",
+          "sha256": "2412f613985f2fb29412ebdec95ea066d6421ba3a992f3931aad6742227e9c5a"
+        },
+        {
+          "path": "tests/runtime/lifecycle.test.mjs",
+          "sha256": "9e68b0e240e4fdb75434a520256ab3a6415a524360cdae3b31c3b2e1a180b6ac"
+        },
+        {
+          "path": "tools/compose-smoke.mjs",
+          "sha256": "e26002e2e28e424acea3391422348456225770f1809dd0f704d715225e924010"
+        }
+      ]
+    },
+    {
+      "issue": 14,
+      "acceptanceSource": {
+        "issue": 14,
+        "pullRequest": 15,
+        "mergeCommit": "9b5a320b936cecafcb74de2d6a1253e3d0a155ce"
+      },
+      "handoff": null,
+      "artifactSource": {
+        "issue": 19,
+        "mergeCommit": "81aa403e682478ebdf3fb6b555ebcc969d4273f0"
+      },
+      "artifacts": [
+        {
+          "path": "docs/adr/ADR-0019-greenfield-node26-and-service-topology.md",
+          "sha256": "606dcd5ac4ca63c8c2f1b1b3625eee5400f241c8095a264a7cad85c2b9e65029"
+        },
+        {
+          "path": "docs/adr/ADR-0020-launch-contract-closure.md",
+          "sha256": "599335dcc7ebdbbdddcd17b7027caa6661a0b446ddc087b34f7ef369f6f67ee8"
+        },
+        {
+          "path": "docs/adr/ADR-0022-ts7-native-toolchain.md",
+          "sha256": "df0edcdb47683fc00bb6448c99175f51c65eecca1a17bc46518a83963cd77831"
+        },
+        {
+          "path": "docs/launch/10_RUNTIME_CATALOG.md",
+          "sha256": "34b3e05019ba325c47cdb0597ac1348b87fd04882aa5e35fe1ed32a91acf3588"
+        },
+        {
+          "path": "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md",
+          "sha256": "711e3abb75cd274bd29d46809968bc77905cef2fa4e3ad428b66ce9c71649afb"
+        },
+        {
+          "path": "docs/launch/24_SERVICE_IDENTITY_AND_DELEGATION.md",
+          "sha256": "2e722954a11ac95f9e7498c1ef13ade1e06fcdbcbf1b6e1e882d8f229bc77694"
+        }
+      ]
+    },
+    {
+      "issue": 19,
+      "acceptanceSource": {
+        "issue": 19,
+        "pullRequest": 20,
+        "mergeCommit": "81aa403e682478ebdf3fb6b555ebcc969d4273f0"
+      },
+      "handoff": {
+        "path": "evidence/handoffs/issue-19.yaml",
+        "sha256": "9e5b43b80792a95417a3ef8db56243cadc9e0879e7a03243564700ddcde49c3d"
+      },
+      "artifactSource": {
+        "issue": 19,
+        "mergeCommit": "81aa403e682478ebdf3fb6b555ebcc969d4273f0"
+      },
+      "artifacts": [
+        {
+          "path": "platform/runtime-foundation-decision.json",
+          "sha256": "6a60486a87c6eaf680db3d450590610ec34f4c276456521373490ca6ad6570f8"
+        },
+        {
+          "path": "platform/launch-v1-runtime-profile.json",
+          "sha256": "5b5019dfb2d88912f8854b16fb2d97accb8301fd1bdecc1f8b6f7767384e1671"
+        },
+        {
+          "path": "platform/launch-v1-connectivity-policy.json",
+          "sha256": "458b139c29c43f7a94756a330d85b7757abb3c628acc71cb68c398ae60b8a76b"
+        },
+        {
+          "path": "platform/target-layout.json",
+          "sha256": "190e957364352967959ab505e8dfdf740648b0f31e2acb573755c8cf375633bb"
+        },
+        {
+          "path": "platform/runtime-foundation-decision.schema.json",
+          "sha256": "7acde4408acc9e0128f1067da33bec11bef796eafa2493fce4f78cf5e56ddb5f"
+        },
+        {
+          "path": "platform/launch-v1-runtime-profile.schema.json",
+          "sha256": "8e98dd39c2f8990f423c0787dcbab7bf13bc2c7d8d409231e70830eecd018a9b"
+        },
+        {
+          "path": "platform/launch-v1-connectivity-policy.schema.json",
+          "sha256": "1d687ce71f670ccc67e1ac031ad1f76e7fa8bdba57f104ef54fb0ce01d7beda8"
+        },
+        {
+          "path": "platform/target-layout.schema.json",
+          "sha256": "00c7aa7ebf448819c183236f9fb860d53b0587fa8da9a8b0e0a6763338366452"
+        },
+        {
+          "path": "scripts/validate-launch-authority.py",
+          "sha256": "cef1b1d7e119ded76585be32fe8015128959e25ffc7efd18c4751da6d351e260"
+        },
+        {
+          "path": "tests/authority/test_launch_authority.py",
+          "sha256": "b8e6517326975640c5a4f9cf5c6607ecbf8473fa6e36b51d5ed4d9509464cb73"
+        },
+        {
+          "path": "tests/authority/fixtures/negative/cases.json",
+          "sha256": "7d98a2173a466792d51d6d46fe57f23dfcdb066498d974d435ed324874024a73"
+        }
+      ]
+    },
+    {
+      "issue": 162,
+      "acceptanceSource": {
+        "issue": 162,
+        "pullRequest": 168,
+        "mergeCommit": "327474d917e1f3f1dfd9d12da8a1273775f8591f"
+      },
+      "handoff": {
+        "path": "evidence/handoffs/issue-162.yaml",
+        "sha256": "f7ba488cc54b5abc44d9e160a2815baf4abfbdaa4a99db70b5946a007f843a54"
+      },
+      "artifactSource": {
+        "issue": 162,
+        "mergeCommit": "327474d917e1f3f1dfd9d12da8a1273775f8591f"
+      },
+      "artifacts": [
+        {
+          "path": ".dockerignore",
+          "sha256": "4778c2694804c4ecc33e97b808d8e4cabafc6b31c601ae3381db7e1fbd8afbbd"
+        },
+        {
+          "path": "compose.yaml",
+          "sha256": "4bf84397a21eeee19baf753aaa378e336d5b6c48f7552d5e7f759ae605e61203"
+        },
+        {
+          "path": "config/platform.yaml",
+          "sha256": "05389a59a1e024cf32bc9b33945c8e7b48598bb0939ed093dce10abb96ba39ae"
+        },
+        {
+          "path": "config/service-catalog.json",
+          "sha256": "1de9fc43d38f73d66c92ea5a2ea880624fcf4d3f44ad6cbffa053a85bd767bf4"
+        },
+        {
+          "path": "config/service-interactions.json",
+          "sha256": "e0fb87adb843b1c2542070e1972642d77798471a1641d415e21dad10a75e2b18"
+        },
+        {
+          "path": "config/database-ownership.json",
+          "sha256": "3acd204a9f87660a3c8268be58f886ebe34901e1e7993949b6471532690cba0a"
+        },
+        {
+          "path": "platform/launch-v1-runtime-profile.json",
+          "sha256": "79df5fc60515ce63decf13a9d2e94b8dcf485bfbc1085733bda3676f932d1749"
+        },
+        {
+          "path": "platform/launch-v1-connectivity-policy.json",
+          "sha256": "4b9c320c30767d902cb0fa54dade16606b68d0ca6bf7fa535b5988647f82c368"
+        },
+        {
+          "path": "secrets/platform-secrets.schema.json",
+          "sha256": "46a94e4c7b963567e4ea394b43f1eca73d0ed86ec3ae0d0f27031d442aa279b4"
+        },
+        {
+          "path": "tools/config-bootstrap/index.mjs",
+          "sha256": "771593fc6bc6014f3676007964b3343fac6cf6a2550801f62ca4ba6ee66ec35a"
+        },
+        {
+          "path": "tools/compose-smoke.mjs",
+          "sha256": "a8a16fa6aab5dc93b802411799c0a2cb023d5582c036b6679f0d13d615943527"
+        },
+        {
+          "path": "tools/nginx/check-config.mjs",
+          "sha256": "d082784d5937cded9dfcf42367b235b2be392161e4f469b115e44546a37de7be"
+        },
+        {
+          "path": "tools/nginx/generate.mjs",
+          "sha256": "ed352b8dd9fe6ed1984451a1bdb5f5a1f775dc010ba02a66925997ce8bbcd8ce"
+        },
+        {
+          "path": "apps/edge-nginx/Dockerfile",
+          "sha256": "1153e839670da79466b1f0e22f89afdf0c0a49f55c0a039790ec5cf3f253db54"
+        },
+        {
+          "path": "apps/edge-gateway/src/index.ts",
+          "sha256": "6eb39d439179415f1fb75b9f7902ed86bc90e96a10553c35cb760bf0de7fdd96"
+        },
+        {
+          "path": "docs/launch/29_NGINX_TRANSPORT_AND_AUTH.md",
+          "sha256": "6dc1da71791137a3dda5d36c1c8ae6099012e4d210e4eeddcf224e7e9214f43f"
+        },
+        {
+          "path": "docs/launch/11_CONFIGURATION_AND_SECRETS.md",
+          "sha256": "69f5184c127eb17585e4979a43fa77b2b7e5f898853d2f46dd603a1df262a0cc"
+        },
+        {
+          "path": "docs/platform/LOCAL_PLATFORM.md",
+          "sha256": "a0152154a9408bfa1aa3c601739fafec1e1eaed143bff617d20a44d71eff506d"
+        },
+        {
+          "path": "Dockerfile",
+          "sha256": "f876f3a78bfdf05cea9ab8d4e75eada718fdcd3fa0dbd89c9cae8e75dcad2516"
+        }
+      ]
+    }
+  ]
+}

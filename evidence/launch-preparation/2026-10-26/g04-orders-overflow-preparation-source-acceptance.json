@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-10-26T19:11:46.928065+00:00",
+  "status": "SOURCE_ACCEPTED",
+  "files": {
+    "packages/platform-testing/test/platform-packages.test.mjs": "33c46b0933f3bf55a70c75ccb288b91d00011111729d0782bb0610564e579a2c"
+  },
+  "scope": [
+    "OrderStore individually valid5e18 lines aggregate overflow reaches ORDER_STATE_INCONSISTENT postcondition and rolls back version/items/history/idempotency effects.",
+    "Preparation COMMIT-applied/reply-lost model requires unknownoutcome/norollback/destroyrelease and subsequent idle retry without duplicate Desired/wake/Outbox."
+  ],
+  "checks": {
+    "worker": "Orders1/1,Prep13/13;format/typeawarelint/diffPASS",
+    "rootIndependent": "Orders1/1PASS1627.55ms;Prep13/13PASS1717.80ms",
+    "astra": "Acceptedboth"
+  },
+  "artifacts": {
+    "/home/yurgusev/.cache/coffee-issue13/orders-aggregate-overflow-20261026/root-independent.log": "b2aa59a40374b3c54c10974e75dcfc274c3cc3e9cfcdb771b836043c2369ccc8",
+    "/home/yurgusev/.cache/coffee-issue13/orders-aggregate-overflow-20261026/result.json": "0dfebacf447817b7de499404d24580f91742e8d17686b39c666795abd3381681",
+    "/home/yurgusev/.cache/coffee-issue13/preparation-commit-unknown-20261026/root-independent.log": "2ee735696ab1c17263bc90125dd59b5ca50e95b63f9ea5aaaf1dbb3da7edd426",
+    "/home/yurgusev/.cache/coffee-issue13/preparation-commit-unknown-20261026/receipt.json": "e0dcc22d24027537400c9c1caaa81eb523b0b4b3f6cd730e5e4c280106ba874a"
+  },
+  "limitations": [
+    "StrictSQLmocks; no livePG atomicity/durability or actual pool physicalconnection replacement.",
+    "Prep assumes one possible applied-COMMIT outcome, not proof of whether ambiguous commitapplied.",
+    "Not included in fullG04f330ccf."
+  ]
+}

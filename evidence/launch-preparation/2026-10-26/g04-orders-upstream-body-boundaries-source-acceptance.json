@@ -1,0 +1,57 @@
+{
+  "kind": "test-only-source-acceptance",
+  "recordedAtUtc": "2026-10-26T23:21:16.504496+00:00",
+  "file": "tests/orders/upstream-clients.test.mjs",
+  "beforeRootSha256": "782dd90d3e8cdc0443df6b2ac0fc9a6180a789254c03ff6588dad5fc47a33251",
+  "afterRootSha256": "5286f76c6c8cc0c3512ac758a3f45deba93b449d7de9938a10706e082c663170",
+  "patches": [
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/orders-upstream-body-boundaries-20261027/own.patch",
+      "sha256": "4eb93872af037f840b2a3a9a4131fca6b331c6c4e66a887f1a1d21960bb897a4"
+    },
+    {
+      "path": "/home/yurgusev/.cache/coffee-issue13/orders-upstream-early-length-20261027/own.patch",
+      "sha256": "0b4f7f5111a674508988f1722ae0703387ebc135c89a8392d95bc4b72c1cb66b"
+    }
+  ],
+  "checks": {
+    "worker": "2/2PASS format/typeawarelint/diff PASS",
+    "root": {
+      "command": [
+        "/home/yurgusev/.local/usr/bin/node",
+        "--experimental-strip-types",
+        "--test",
+        "--test-name-pattern=Customer client rejects inactive|Pricing client rejects quote",
+        "/home/yurgusev/CoffeeOrderPlatform/tests/orders/upstream-clients.test.mjs"
+      ],
+      "startedAtUtc": "2026-10-26T23:21:15.979111+00:00",
+      "finishedAtUtc": "2026-10-26T23:21:16.503905+00:00",
+      "exitCode": 0,
+      "logSha256": "2b0ccb93352213dcf2f239aa3a9c0c7dc8ace953421ee56b33549be3782633bd"
+    },
+    "astra": "ORDERS-UPSTREAM001 resolved; final Accepted",
+    "mutantProof": {
+      "customer": {
+        "stdoutSha256": "93c16ec481b36a7e18c3de9ad9f39e96b7e8802a8a826e0b1bdb543b887f859e",
+        "exitCode": 1,
+        "expectedFailedAssertion": "declaredBodyReaderCalled must remain false",
+        "otherCase": "PASS"
+      },
+      "pricing": {
+        "stdoutSha256": "68bb2cd722a227ed5c2f3a4aa754a05bf00d1357b00d59771e5c3e5fd12f077f",
+        "exitCode": 1,
+        "expectedFailedAssertion": "declaredBodyReaderCalled must remain false",
+        "otherCase": "PASS"
+      }
+    }
+  },
+  "observedBehavior": [
+    "Invalid Customer reference causes no fetch",
+    "Null response body fails closed",
+    "Declared oversize rejects before body reader and cancels stream"
+  ],
+  "limitations": [
+    "WHATWG fake response streams and fetch stub; no live HTTP/PG",
+    "FullG04 not repeated after these test deltas"
+  ]
+}

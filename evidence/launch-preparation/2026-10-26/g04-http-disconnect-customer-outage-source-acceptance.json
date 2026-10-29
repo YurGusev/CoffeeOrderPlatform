@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "SOURCE_TEST_ACCEPTANCE_NOT_GATE_ADMISSION",
+  "capturedAtUtc": "2026-10-26T22:17:49.230024+00:00",
+  "status": "ACCEPTED_SOURCE_ONLY",
+  "changes": [
+    {
+      "target": "tests/orders/owner-http.test.mjs",
+      "fileSha256": "23f0641296a2ed9a276000e1f0753c39e36821ed8b083dd9bfd24970b42fcec9",
+      "ownPatchPath": "/home/yurgusev/.cache/coffee-issue13/owner-http-customer-outage-20261027/own.patch",
+      "ownPatchSha256": "bf30364a75f459e7ecf3f12f6818ac8952231becd2fc3fac45d14b0ee66be4f1",
+      "rootIndependent": {
+        "logPath": "/home/yurgusev/.cache/coffee-issue13/owner-http-customer-outage-20261027/root-independent.log",
+        "logSha256": "6235751fe06db6a63fead17cb4512d46762f1d416dba96458482f05448a9b8e8",
+        "tests": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "durationMs": "1460.152388"
+      },
+      "astraReview": "Accepted test-only delta; reviewer did not run tests."
+    },
+    {
+      "target": "tests/aroma/catalog-export.test.mjs",
+      "fileSha256": "b1664ca33542ba9f55c3dd64b1933bb04d9f4fe1d7dbc8fef257ae7238c370b3",
+      "ownPatchPath": "/home/yurgusev/.cache/coffee-issue13/catalog-export-http-disconnect-20261027/own.patch",
+      "ownPatchSha256": "eacd2bce53e7d36e5ade04066cdd4c1f31dfc78e606760cbf32d3a59bb923eaf",
+      "rootIndependent": {
+        "logPath": "/home/yurgusev/.cache/coffee-issue13/catalog-export-http-disconnect-20261027/root-independent.log",
+        "logSha256": "5c7218032cb99b7b1be3da3510da75dfc83da216ee7b7d24f6d43bc7d33cd0de",
+        "tests": 1,
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "durationMs": "3605.107893"
+      },
+      "astraReview": "Accepted test-only delta; reviewer did not run tests."
+    }
+  ],
+  "observed": [
+    "Типизированный Customer outage даёт503/no-store без приватного сообщения и без owner createDraft.",
+    "Реальный локальный HTTP client disconnect приводит к RUNTIME_CLIENT_DISCONNECTED у provider signal, закрытию source iterator и вызову abortExport с новым неотменённым signal; дополнительный batch/complete отсутствует."
+  ],
+  "limitations": [
+    "HTTP client/runtime реальны, provider fetch/identity и persistence spy контролируются fixture.",
+    "Вызов abortExport не доказывает долговечность PostgreSQL cleanup; Customer HTTP/TLS и live provider не проверены.",
+    "Текущий frozen2b9 не содержит этих дельт; aggregate coverage/admission и результаты прежнегоSHA не переносятся."
+  ]
+}

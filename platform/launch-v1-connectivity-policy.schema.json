@@ -4,42 +4,86 @@
   "title": "CoffeeOrderPlatform launch v1 connectivity policy",
   "type": "object",
   "additionalProperties": false,
-  "required": ["$schema", "schemaVersion", "authorityRef", "logicalZones", "dockerNetworks", "forbiddenNetworks", "runtimePolicies", "globalDenyAssertions"],
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "authorityRef",
+    "logicalZones",
+    "dockerNetworks",
+    "forbiddenNetworks",
+    "runtimePolicies",
+    "globalDenyAssertions"
+  ],
   "properties": {
     "$schema": { "const": "./launch-v1-connectivity-policy.schema.json" },
     "schemaVersion": { "const": 1 },
-    "authorityRef": { "const": "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md" },
+    "authorityRef": {
+      "const": "docs/launch/23_RUNTIME_CONFIGURATION_MATRIX.md"
+    },
     "logicalZones": {
-      "type": "array", "minItems": 5, "maxItems": 5, "uniqueItems": true,
-      "items": { "enum": ["public-ingress", "private-edge-backend", "public-api-backend", "internal-api", "provider-egress"] }
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "public-ingress",
+          "private-edge-backend",
+          "public-api-backend",
+          "internal-api",
+          "provider-egress"
+        ]
+      }
     },
     "dockerNetworks": {
-      "type": "array", "minItems": 7, "maxItems": 7,
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
       "items": { "$ref": "#/$defs/dockerNetwork" }
     },
     "forbiddenNetworks": { "const": ["coffee_network"] },
     "runtimePolicies": {
-      "type": "array", "minItems": 15, "maxItems": 15,
+      "type": "array",
+      "minItems": 15,
+      "maxItems": 15,
       "items": { "$ref": "#/$defs/runtimePolicy" }
     },
     "globalDenyAssertions": {
-      "type": "array", "minItems": 7, "maxItems": 7, "uniqueItems": true,
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     }
   },
   "$defs": {
     "runtimeName": {
       "enum": [
-        "edge-gateway", "api-public", "api-internal", "edge-nginx", "customer-service",
-        "catalog-service", "catalog-supplier-sync", "catalog-activation-worker",
-        "pricing-service", "orders-service", "orders-aroma-preparation",
-        "aroma-observer", "aroma-convergence", "aroma-gateway", "realtime-gateway"
+        "edge-gateway",
+        "api-public",
+        "api-internal",
+        "edge-nginx",
+        "customer-service",
+        "catalog-service",
+        "catalog-supplier-sync",
+        "catalog-activation-worker",
+        "pricing-service",
+        "orders-service",
+        "orders-aroma-preparation",
+        "aroma-observer",
+        "aroma-convergence",
+        "aroma-gateway",
+        "realtime-gateway"
       ]
     },
     "networkName": {
       "enum": [
-        "coffee_host_ingress", "coffee_edge_backend", "coffee_public_api_backend",
-        "coffee_internal_api", "coffee_postgres_data", "coffee_kafka_event",
+        "coffee_host_ingress",
+        "coffee_edge_backend",
+        "coffee_public_api_backend",
+        "coffee_internal_api",
+        "coffee_postgres_data",
+        "coffee_kafka_event",
         "coffee_provider_egress"
       ]
     },
@@ -56,11 +100,20 @@
     "runtimePolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["runtime", "dockerNetworks", "hostPortPolicy", "allowedHostPorts", "allowedExternalEgress", "denyAssertions"],
+      "required": [
+        "runtime",
+        "dockerNetworks",
+        "hostPortPolicy",
+        "allowedHostPorts",
+        "allowedExternalEgress",
+        "denyAssertions"
+      ],
       "properties": {
         "runtime": { "$ref": "#/$defs/runtimeName" },
         "dockerNetworks": {
-          "type": "array", "minItems": 1, "uniqueItems": true,
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/networkName" }
         },
         "hostPortPolicy": {
@@ -70,21 +123,32 @@
           "properties": {
             "default": { "const": "deny" },
             "allowedPublishedHostPorts": {
-              "type": "array", "uniqueItems": true,
+              "type": "array",
+              "uniqueItems": true,
               "items": { "type": "integer", "minimum": 1, "maximum": 65535 }
             }
           }
         },
         "allowedHostPorts": {
-          "type": "array", "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[A-Za-z0-9${}._-]+:[0-9]+$" }
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9${}._-]+:[0-9]+$"
+          }
         },
         "allowedExternalEgress": {
-          "type": "array", "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[A-Za-z0-9${}._-]+:[0-9]+$" }
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9${}._-]+:[0-9]+$"
+          }
         },
         "denyAssertions": {
-          "type": "array", "minItems": 3, "uniqueItems": true,
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }
         }
       }

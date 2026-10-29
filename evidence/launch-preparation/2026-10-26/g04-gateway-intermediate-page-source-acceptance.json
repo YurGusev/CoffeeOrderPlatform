@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "atUtc": "2026-10-26T16:50:25.200382+00:00",
+  "status": "ACCEPTED_SOURCE_UNIT_ONLY",
+  "file": "tests/aroma/provider-catalog-source.test.mjs",
+  "sha256": "1af4a34a98665c07378fa53dbf55a98b93177b1cb02042bd194bd6f804b8ea2a",
+  "ownPatchPath": "/home/yurgusev/.cache/coffee-issue13/gateway-empty-intermediate-page-20261026T163433Z/own.patch",
+  "ownPatchSha256": "23c63e091ba3d149c9203af235322b7548c0d62b313f901e2f9fb6e9ad999f60",
+  "rootIndependentCommand": "env -u SOPS_AGE_KEY_FILE pnpm_config_verify_deps_before_run=false node --experimental-strip-types --test --test-name-pattern='catalog source fails closed on metadata drift and when no explicit normalizer is supplied' tests/aroma/provider-catalog-source.test.mjs",
+  "rootIndependentResult": "1/1 PASS;12.416554ms;0fail/skip/cancel",
+  "reviewer": "bootstrap_archive_review Astra Accepted",
+  "guarantee": "empty intermediate page rejects ProviderReadIncomplete before page3; exactcalls[1,2]",
+  "limitation": "Mock provider/emitted dist only;live provider and fullG04 on thisdelta NOT_RUN"
+}

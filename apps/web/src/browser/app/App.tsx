@@ -16,7 +16,10 @@ export function App(): ReactElement {
       <BrowserRouter>
         <SessionBoundary>
           <Routes>
-            <Route element={<Navigate replace to="/app/customers" />} path="/" />
+            <Route
+              element={<Navigate replace to="/app/customers" />}
+              path="/"
+            />
             <Route element={<AppShell />} path="/app">
               <Route element={<Navigate replace to="/app/customers" />} index />
               <Route element={<CustomersPage />} path="customers" />

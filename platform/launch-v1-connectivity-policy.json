@@ -83,8 +83,15 @@
     {
       "runtime": "edge-nginx",
       "dockerNetworks": ["coffee_host_ingress", "coffee_edge_backend"],
-      "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [8443] },
-      "allowedHostPorts": ["edge-gateway:4000", "api-public:4050", "realtime-gateway:4401"],
+      "hostPortPolicy": {
+        "default": "deny",
+        "allowedPublishedHostPorts": [8443]
+      },
+      "allowedHostPorts": [
+        "edge-gateway:4000",
+        "api-public:4050",
+        "realtime-gateway:4401"
+      ],
       "allowedExternalEgress": [],
       "denyAssertions": [
         "no-provider-egress",
@@ -135,9 +142,17 @@
     },
     {
       "runtime": "catalog-activation-worker",
-      "dockerNetworks": ["coffee_postgres_data", "coffee_kafka_event", "coffee_internal_api"],
+      "dockerNetworks": [
+        "coffee_postgres_data",
+        "coffee_kafka_event",
+        "coffee_internal_api"
+      ],
       "hostPortPolicy": { "default": "deny", "allowedPublishedHostPorts": [] },
-      "allowedHostPorts": ["coffee_postgres:5432", "kafka:9092", "api-internal:4051"],
+      "allowedHostPorts": [
+        "coffee_postgres:5432",
+        "kafka:9092",
+        "api-internal:4051"
+      ],
       "allowedExternalEgress": [],
       "denyAssertions": [
         "no-http-business-route",
